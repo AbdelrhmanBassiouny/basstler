@@ -4,10 +4,10 @@ set -euo pipefail
 # Generic personal Claude Code notes hook.
 #
 # Populates CLAUDE.local.md (gitignored, never committed on any branch) from a
-# personal branch on `origin`. No-op in effect for anyone who never creates
-# that branch (default or overridden), and collision-free for multiple
-# contributors sharing one origin remote if each overrides the branch name via
-# local config instead of relying on the shared default.
+# personal branch on a remote (default: `origin`). No-op in effect for anyone
+# who never creates that branch (default or overridden), and collision-free
+# for multiple contributors sharing one remote if each overrides the branch
+# name via local config instead of relying on the shared default.
 #
 # Works out of the box, zero config: it looks for a branch named
 # `claude/personal-notes` on `origin` and, if found, reads
@@ -15,20 +15,30 @@ set -euo pipefail
 # ./create-personal-notes-branch.sh creates that branch (with an empty notes
 # file) for anyone who doesn't have it yet.
 #
-# Override the branch/path per clone, locally (never committed):
+# Override the remote/branch/path per clone, locally (never committed):
+#   git config claude.personalNotesRemote <remote-name-or-url>   # optional
 #   git config claude.personalNotesBranch <your-branch-name>
 #   git config claude.personalNotesPath   <path-on-that-branch>   # optional
+#
+# The remote defaults to `origin`, but only matters when your own notes live
+# somewhere other than the clone's `origin` - e.g. some session environments
+# name the upstream repo `origin` and your own fork something else. Set it to
+# either a remote already configured in this clone (by name) or a raw git URL
+# (`https://github.com/<you>/<repo>`) - `git fetch`/`git push` accept both, and
+# a URL needs no `git remote add` first, so it works even in a clone that's
+# never heard of your fork. See ./README.md for when to use which form.
 #
 # git config is per-clone, so it's the wrong mechanism anywhere sessions start
 # from a fresh clone every time (e.g. cloud/web sessions) - there's no
 # persistent .git/config for it to live in. For that case, override via
 # persistent environment variables instead (configured once at the environment
 # level, outside the repo, so they survive every fresh clone):
+#   CLAUDE_PERSONAL_NOTES_REMOTE=<remote-name-or-url>   # optional
 #   CLAUDE_PERSONAL_NOTES_BRANCH=<your-branch-name>
 #   CLAUDE_PERSONAL_NOTES_PATH=<path-on-that-branch>   # optional
 # See ./README.md for exactly how to wire these into a cloud environment.
-# Precedence: git config > environment variable > the `claude/personal-notes`
-# default, so a local or environment-level override always wins over it.
+# Precedence: git config > environment variable > the zero-config default, so
+# a local or environment-level override always wins over it.
 #
 # Safe to re-run: it only ever overwrites CLAUDE.local.md, and does nothing if
 # the configured (or default) branch or path isn't reachable (e.g. a fresh
@@ -58,9 +68,12 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
-git fetch origin "${NOTES_BRANCH}" --quiet 2>/dev/null || exit 0
+git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet 2>/dev/null || exit 0
 
-if git cat-file -e "origin/${NOTES_BRANCH}:${NOTES_PATH}" 2>/dev/null; then
+# FETCH_HEAD, not "${NOTES_REMOTE}/${NOTES_BRANCH}": a URL-form NOTES_REMOTE
+# creates no remote-tracking ref, but FETCH_HEAD always points at what was
+# just fetched, whether NOTES_REMOTE was a remote name or a raw URL.
+if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
   {
     cat <<HEADER
 <!--
@@ -72,6 +85,6 @@ every session from git config/environment/default - editing it has no effect.
 -->
 <!-- END-PERSONAL-NOTES-HEADER -->
 HEADER
-    git show "origin/${NOTES_BRANCH}:${NOTES_PATH}"
+    git show "FETCH_HEAD:${NOTES_PATH}"
   } > CLAUDE.local.md
 fi

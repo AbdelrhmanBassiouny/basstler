@@ -2,29 +2,46 @@
 
 An opt-in `SessionStart` hook that populates `CLAUDE.local.md` — which Claude Code already loads
 automatically as project memory, and which is gitignored — from a personal branch you name for
-yourself on `origin`, so your own workflow preferences ("always open my PRs as drafts," "never
-touch branch X directly," etc.) persist across sessions without ever being committed to a shared
-branch.
+yourself on a remote (`origin` by default), so your own workflow preferences ("always open my PRs
+as drafts," "never touch branch X directly," etc.) persist across sessions without ever being
+committed to a shared branch.
 
 It works out of the box with no config at all: it reads from a branch named `claude/personal-notes`
 on `origin` unless you tell it otherwise. Run [`create-personal-notes-branch.sh`](./create-personal-notes-branch.sh)
 once to create that branch with an empty notes file, and every session from then on picks it up
-automatically. It is collision-free for multiple contributors sharing one `origin` remote if you
-each override the branch name via your own config instead of relying on the shared default.
+automatically. It is collision-free for multiple contributors sharing one remote if you each
+override the branch name via your own config instead of relying on the shared default.
 
 ## How it decides what to read
 
-`session-start.sh` looks for a branch name in this order, first one found wins:
+`session-start.sh` looks for a remote in this order, first one found wins:
 
-1. **`git config claude.personalNotesBranch`** — local to one clone's `.git/config`.
-2. **`CLAUDE_PERSONAL_NOTES_BRANCH` environment variable** — used only if the git config isn't set.
-3. **`claude/personal-notes`** — the zero-config default, used if neither of the above is set.
+1. **`git config claude.personalNotesRemote`** — local to one clone's `.git/config`.
+2. **`CLAUDE_PERSONAL_NOTES_REMOTE` environment variable** — used only if the git config isn't set.
+3. **`origin`** — the zero-config default, used if neither of the above is set.
 
-The path on that branch follows the same precedence (`claude.personalNotesPath` git config, then
+The branch name on that remote follows the same precedence (`claude.personalNotesBranch` git
+config, then `CLAUDE_PERSONAL_NOTES_BRANCH` env var, then the default `claude/personal-notes`), and
+so does the path on that branch (`claude.personalNotesPath` git config, then
 `CLAUDE_PERSONAL_NOTES_PATH` env var, then the default `.claude/personal/cram-notes.md`).
 
 The hook is still a no-op in effect for anyone who never creates the branch it resolves to: `git
 fetch` finds nothing, so it exits without writing `CLAUDE.local.md`.
+
+### When you need to override the remote
+
+The remote only needs overriding when your own notes don't live on this clone's `origin` — for
+example, some session environments name the upstream repo `origin` and give your own fork a
+different remote name, or don't add your fork as a remote at all. The value can be either form,
+and `git fetch`/`git push` accept both identically:
+
+- **A remote name already configured in the clone** (e.g. `myfork`) — the natural choice for a
+  persistent local clone where you've already added your fork as a remote.
+- **A raw git URL** (e.g. `https://github.com/<you>/<repo>`) — needs no `git remote add` first, so
+  it works even in a clone that's never heard of your fork (a session environment that only added
+  the upstream repo, or a fresh clone every session). This is usually the right choice for
+  overriding the remote specifically, since it has no dependency on a particular remote alias
+  existing.
 
 Whether you need to override the default branch name depends on how your sessions start:
 
@@ -81,33 +98,37 @@ It resolves the branch/path exactly like `session-start.sh` does, strips the hea
 pushes only your actual notes content — in a scratch worktree, so your current branch and working
 tree are untouched, and as a no-op if nothing actually changed.
 
-## Setup: overriding the default branch/path
+## Setup: overriding the default remote/branch/path
 
-Skip this section if the zero-config default above is all you need.
+Skip this section if the zero-config default above is all you need. The three settings are
+independent — override only the one(s) you actually need (e.g. just the remote, if your fork isn't
+this clone's `origin` but the default branch/path are fine).
 
 ### Persistent local clone
 
 Once per clone, never committed:
 
 ```bash
+git config claude.personalNotesRemote <remote-name-or-url>   # optional, defaults to origin
 git config claude.personalNotesBranch <your-branch-name>
 git config claude.personalNotesPath   <path-on-that-branch>   # optional, defaults to
                                                                  # .claude/personal/cram-notes.md
 ```
 
-Push your notes file to that branch on `origin` (any branch name, any path — it never merges
+Push your notes file to that branch on that remote (any branch name, any path — it never merges
 anywhere), e.g. by running the branch-creation script with overrides:
 
 ```bash
-CLAUDE_PERSONAL_NOTES_BRANCH=<your-branch-name> CLAUDE_PERSONAL_NOTES_PATH=<path-on-that-branch> \
+CLAUDE_PERSONAL_NOTES_REMOTE=<remote-name-or-url> \
+  CLAUDE_PERSONAL_NOTES_BRANCH=<your-branch-name> CLAUDE_PERSONAL_NOTES_PATH=<path-on-that-branch> \
   "$CLAUDE_PROJECT_DIR/.claude/hooks/create-personal-notes-branch.sh"
 ```
 
 ### Cloud/web sessions (fresh clone every time)
 
-Push your notes file to `origin` exactly as above first. Then wire the environment variable into
-your session environment's configuration — which of the two options below applies depends on what
-your specific environment offers:
+Push your notes file exactly as above first. Then wire the environment variables into your session
+environment's configuration — which of the two options below applies depends on what your specific
+environment offers:
 
 ### Option A: your environment has a persistent environment-variable list
 
@@ -115,6 +136,7 @@ Copy [`personal-notes.env.example`](./personal-notes.env.example) into that list
 values substituted:
 
 ```
+CLAUDE_PERSONAL_NOTES_REMOTE=<remote-name-or-url>
 CLAUDE_PERSONAL_NOTES_BRANCH=<your-branch-name>
 CLAUDE_PERSONAL_NOTES_PATH=<path-on-that-branch>
 ```
@@ -123,19 +145,20 @@ CLAUDE_PERSONAL_NOTES_PATH=<path-on-that-branch>
 
 ### Option B: your environment has a "setup script" (arbitrary commands run on every fresh clone)
 
-Set the same two variables however that setup script can see them (its own env-var mechanism, or
+Set the same variables however that setup script can see them (its own env-var mechanism, or
 literal `export` lines above the call), then run
 [`configure-personal-notes.sh`](./configure-personal-notes.sh), e.g.:
 
 ```bash
+export CLAUDE_PERSONAL_NOTES_REMOTE=<remote-name-or-url>   # optional
 export CLAUDE_PERSONAL_NOTES_BRANCH=<your-branch-name>
 export CLAUDE_PERSONAL_NOTES_PATH=<path-on-that-branch>   # optional
 "$CLAUDE_PROJECT_DIR/.claude/hooks/configure-personal-notes.sh"
 ```
 
 This seeds the fresh clone's git config from those variables, so `session-start.sh` finds them
-exactly as it would for a persistent local clone. It's a no-op if
-`CLAUDE_PERSONAL_NOTES_BRANCH` isn't set, so it's safe to include even before you've opted in.
+exactly as it would for a persistent local clone. It's a no-op if none of the three are set, so
+it's safe to include even before you've opted in.
 
 See your environment provider's docs for exactly where to paste a setup script or persistent
 environment variables (for Claude Code on the web: <https://code.claude.com/docs/en/claude-code-on-the-web>).
@@ -154,12 +177,13 @@ directly:
 
 - No-op in effect for anyone who never creates the `claude/personal-notes` branch (or an override
   target): `git fetch` finds nothing, so nothing gets written.
-- Never merges anything: the hook only ever *reads* the resolved branch via `git show`. It never
-  checks it out or merges it into your working branch.
+- Never merges anything: the hook only ever *reads* the resolved branch, off `FETCH_HEAD` via `git
+  show` (not a `<remote>/<branch>` ref, since a URL-form remote creates no tracking ref for one). It
+  never checks the branch out or merges it into your working branch.
 - `create-personal-notes-branch.sh` and `save-personal-notes.sh` never touch your current branch or
   working tree either — both do their work in a scratch worktree.
   `create-personal-notes-branch.sh` refuses to run if the target branch already exists locally or
-  on `origin`; `save-personal-notes.sh` is a no-op if there's nothing new to push.
+  on the resolved remote; `save-personal-notes.sh` is a no-op if there's nothing new to push.
 - The sync header `session-start.sh` writes is never itself pushed back: `save-personal-notes.sh`
   strips everything up to and including the `END-PERSONAL-NOTES-HEADER` marker before committing,
   so only your actual notes content ever lands on the notes branch.
