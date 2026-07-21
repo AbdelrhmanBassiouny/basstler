@@ -1,7 +1,7 @@
 ---
 name: plan-create
 description: Create (or migrate an existing bespoke roadmap doc into) a new multi-PR/multi-session plan under .claude/personal/plans/<plan-id>/plan.yaml on claude/personal-notes, cross-checked against live GitHub, then bootstrap and publish it. Invoke as "/plan-create <plan-id>". Use when the user asks to start tracking something as a plan, set up a new plan/roadmap, or migrate an existing roadmap doc into the plan-dashboard system.
-allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__search_pull_requests
+allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__search_pull_requests, mcp__github__issue_write, mcp__github__create_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
 # Plan Create
@@ -93,34 +93,39 @@ GitHub disagree, that disagreement itself is worth a line in the item's
 `notes` — it's exactly the kind of drift this system exists to catch, and
 noting it once at creation time is cheaper than rediscovering it later.
 
-## 5. Create the tracking PR (coordination mailbox for structural changes)
+## 5. Create the tracking issue (coordination mailbox for structural changes)
 
 Ask whether the plan wants one (default yes for anything with more than one
 session/track likely to touch it — skip only for something so small a
 single session will obviously own it end to end). If yes:
 
-1. Cut a branch off `main` named `plan-tracking-<plan-id>` and make a
-   single **empty commit** (`git commit --allow-empty`) — this branch
-   carries no file changes, ever; it exists only so GitHub has something to
-   open a PR from.
-2. Open it as a **draft** PR, base `main`, titled `[plan-tracking]
-   <plan-id>`, with a body explaining its purpose (not a code change,
-   here's how proposals/replies work — see `plans/README.md`'s "Proposing
-   structural changes" section, and `rdr-refactor`'s tracking PR for a
-   worked example to copy from). It stays open indefinitely.
-3. Subscribe to it (same PR-activity subscription any other PR gets).
-4. Record its number as `tracking_pr` in the manifest you're about to write
-   in step 6.
+1. Create a GitHub **issue** titled `[plan-tracking] <plan-id>`, with a body
+   explaining its purpose (not a work item — here's how proposals/replies
+   work; see `plans/README.md`'s "Proposing structural changes" section,
+   and `rdr-refactor`'s tracking issue for a worked example to copy from).
+2. Subscribe to it (the same PR-activity subscription tool also works on a
+   plain issue number — confirmed empirically, not assumed; there is no
+   separate issue-subscription tool).
+3. Record its number as `tracking_issue` in the manifest you're about to
+   write in step 6.
 
-This exists because GitHub Issues are disabled on this repo — a PR is the
-only native, commentable, subscribable artifact available, not a stylistic
-choice. If Issues are ever enabled here, a tracking Issue would be the more
-natural fit and this step should switch to that instead.
+**Fallback if issue creation fails with a `410`** (Issues disabled on this
+repo — check by trying, don't assume): cut a branch off `main` named
+`plan-tracking-<plan-id>`, make a single **empty commit**
+(`git commit --allow-empty` — the branch carries no file changes, ever),
+open it as a **draft** PR (base `main`, same title, a body noting *why* it's
+a PR and not an issue), subscribe to that instead, and still record its
+number as `tracking_issue` — the field names the mailbox's role, not the
+literal GitHub object type, since which one applies is a per-repo fact
+that can change (this repo's own `rdr-refactor` plan moved from a fallback
+PR to a real issue once Issues were enabled - see its `roadmap.md`
+addendum). Whoever later builds a link to it should check which kind it
+actually is rather than assuming `/issues/`.
 
 ## 6. Write and validate `plan.yaml` + `roadmap.md`
 
 Follow the schema in `plans/README.md` exactly: `schema_version: 1`, `id`,
-`title`, `description`, `default_repo`, `tracking_pr` (if step 5 created
+`title`, `description`, `default_repo`, `tracking_issue` (if step 5 created
 one), `waves[]`, `tracks[]` (each tagged with a `wave`), `items[]` (flat,
 each tagged with a `track`, `status` from the thin enum `not_started |
 in_progress | blocked | deferred | done`, `depends_on` by item id, optional
@@ -178,7 +183,7 @@ did, so anyone still reading the old path finds the new one immediately.
 
 ## 9. Report back
 
-Plan id, item/wave/track counts, the dashboard URL, the tracking PR link
+Plan id, item/wave/track counts, the dashboard URL, the tracking issue link
 if one was created, and — explicitly, not buried — every judgment call you
 made or flagged along the way (structural assumptions, any live-vs-source
 disagreement found in step 4) so the user can sanity-check them before
