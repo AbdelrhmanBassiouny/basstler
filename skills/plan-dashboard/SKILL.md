@@ -126,10 +126,19 @@ ends up needing real charts/sparklines, load `dataviz` too).
 
 **Single-plan mode**, structure the page by wave → track → items:
 
-- Header: plan title, description, a link to `roadmap.md`'s content isn't
-  publishable as a link (it's not on GitHub) — instead render its content
-  inline in a collapsible "background/history" section, or summarize it
-  and note full detail lives in `roadmap.md`.
+- Header: plan title, description, and `roadmap.md`'s content rendered
+  inline in a collapsed-by-default `<details>` section ("Background &
+  history") — it isn't publishable as its own link (it's not on GitHub), so
+  the dashboard is the only place it's readable without a session. Convert
+  it with a small, dependency-free markdown-to-HTML pass (headings,
+  paragraphs, unordered/ordered lists with wrapped-continuation-line
+  joining, fenced code, GFM tables) rather than pulling in a `pip install
+  markdown` just for this — see the `rdr-refactor` dashboard's
+  `build_dashboard.py` for a working implementation to start from. Do not
+  just summarize or truncate `roadmap.md` instead of rendering it — the
+  whole point of the manifest/roadmap split is that structured facts live
+  in `plan.yaml` and everything else lives in `roadmap.md`, so the
+  dashboard has to actually show the second half, not just gesture at it.
 - Per item: title, id, branch, a real `https://github.com/<repo>/pull/<n>`
   link when `pr` is set (never fabricate a link when `pr` is null — just
   show "no PR yet"), the manual `status`, the live GitHub state, session
