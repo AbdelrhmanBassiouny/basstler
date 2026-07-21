@@ -76,6 +76,20 @@ set -euo pipefail
 # nothing's been saved yet) on such a branch, so the agent is nudged to
 # initialize and maintain it from the start. See ./save-pr-progress.sh.
 #
+# Plan auto-discovery: if the current branch appears as an item in some
+# multi-PR/multi-session plan (see .claude/personal/plans/README.md and
+# .claude/skills/plan-dashboard/SKILL.md, on the personal-notes branch and
+# main respectively), CLAUDE.local.md also gets that plan's manifest
+# (plan.yaml) and narrative (roadmap.md) pulled in - so a session picks up
+# the wider initiative its branch belongs to without anyone having to ask it
+# to go read a roadmap doc by hand. Looked up via the generated
+# branch->plan-id reverse index (plan_id_for_branch in
+# ./resolve-personal-notes-config.sh), never hand-maintained, so it can't
+# drift out of sync with the plans it's derived from. Unlike PR progress
+# above, there is no scaffold for a branch with no plan - most branches
+# don't belong to one, and that's normal. See ./save-plan.sh to push edits
+# back (regenerating the reverse index too).
+#
 # How this script gets invoked (see ../settings.json): Claude Code registers it
 # as a SessionStart hook via `$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh`.
 # CLAUDE_PROJECT_DIR is an env var Claude Code itself injects into every hook
@@ -151,6 +165,49 @@ SCAFFOLD
   fi
   echo "<!-- END-PR-PROGRESS -->" >> "${OUTPUT_FILE}"
   WROTE_ANYTHING=1
+fi
+
+PLAN_ID="$(plan_id_for_branch "$(git rev-parse --abbrev-ref HEAD)" || true)"
+if [ -n "${PLAN_ID}" ]; then
+  PLAN_MANIFEST_PATH=".claude/personal/plans/${PLAN_ID}/plan.yaml"
+  PLAN_ROADMAP_PATH=".claude/personal/plans/${PLAN_ID}/roadmap.md"
+  if git cat-file -e "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
+    [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
+    cat <<PLAN_HEADER >> "${OUTPUT_FILE}"
+<!--
+Plan manifest for '${PLAN_ID}', synced from '${NOTES_BRANCH}'
+(${PLAN_MANIFEST_PATH}) on remote '${ACTIVE_NOTES_REMOTE}' by
+session-start.sh. This branch is tracked as an item in this plan - see
+.claude/personal/plans/README.md for the schema and
+.claude/skills/plan-dashboard/SKILL.md for how it's used and refreshed.
+To edit: change the manifest between the markers below, then run
+  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh"
+to push the change back (this also regenerates the branch index), then run
+/plan-dashboard ${PLAN_ID} to refresh its dashboard - save-plan.sh can't call
+the Artifact tool itself. This header and the markers are regenerated every
+session - editing them has no effect; only content between the markers is
+ever saved.
+-->
+<!-- BEGIN-PLAN-MANIFEST: ${PLAN_ID} -->
+PLAN_HEADER
+    git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" >> "${OUTPUT_FILE}"
+    echo "<!-- END-PLAN-MANIFEST -->" >> "${OUTPUT_FILE}"
+
+    printf '\n' >> "${OUTPUT_FILE}"
+    cat <<ROADMAP_HEADER >> "${OUTPUT_FILE}"
+<!--
+Plan roadmap (narrative) for '${PLAN_ID}' - the "why", history, and design
+decisions behind the manifest above. Same edit/save mechanism: change
+between the markers below, then run save-plan.sh.
+-->
+<!-- BEGIN-PLAN-ROADMAP: ${PLAN_ID} -->
+ROADMAP_HEADER
+    if git cat-file -e "FETCH_HEAD:${PLAN_ROADMAP_PATH}" 2>/dev/null; then
+      git show "FETCH_HEAD:${PLAN_ROADMAP_PATH}" >> "${OUTPUT_FILE}"
+    fi
+    echo "<!-- END-PLAN-ROADMAP -->" >> "${OUTPUT_FILE}"
+    WROTE_ANYTHING=1
+  fi
 fi
 
 if [ "${WROTE_ANYTHING}" = "1" ]; then
