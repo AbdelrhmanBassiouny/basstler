@@ -192,7 +192,8 @@ session.
 reverse index in the same commit (scanning every plan, so the index can't drift). The plan id is
 optional if the current branch already resolves to one; pass it explicitly to save a plan from a
 branch that isn't itself one of its tracked items, or to bootstrap a brand-new plan (see
-`save-plan.sh`'s own header comment for that flow — there is no separate create-plan.sh).
+`save-plan.sh`'s own header comment for that flow — there is still no separate create-plan.sh, but
+see "Creating a new plan" below for the automated version of doing it by hand).
 
 **Publishing the dashboard.** `save-plan.sh` only pushes data — it can't call the `Artifact` tool
 itself (only a live Claude session can), so it prints a reminder to run `/plan-dashboard <plan-id>`
@@ -200,6 +201,15 @@ afterward. That skill re-reads the manifest, cross-checks every item against liv
 state (so a manifest can never silently go stale the way a hand-maintained roadmap doc could), and
 publishes/updates the dashboard Artifact. Run `/plan-dashboard` with no argument to publish the
 master index listing every plan.
+
+**Creating a new plan.** [`.claude/skills/plan-create/SKILL.md`](../skills/plan-create/SKILL.md)
+(`/plan-create <plan-id>`) automates the bootstrap flow above end to end: it gathers the plan's
+scope (from an existing freeform roadmap doc to migrate, from named branches/PRs to cross-check
+live, or from conversation), drafts a schema-conformant `plan.yaml`/`roadmap.md`, validates it the
+same way `plan-dashboard` does, surfaces any structural judgment calls to you via a question rather
+than guessing, then runs `save-plan.sh` and `/plan-dashboard` itself. Doing it by hand (the marker +
+`save-plan.sh` flow above) still works — the skill is a convenience over that same path, not a
+different one.
 
 ## Setup: overriding the default remote/branch/path
 
