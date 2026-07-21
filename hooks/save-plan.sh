@@ -28,7 +28,11 @@ set -euo pipefail
 # from a branch that isn't itself one of its tracked items (e.g. a steward
 # session coordinating the whole plan rather than working one item).
 #
-# Creating a brand-new plan: there is no separate create-plan.sh. Add the
+# Creating a brand-new plan: there is still no separate create-plan.sh -
+# .claude/skills/plan-create/SKILL.md (invoke as /plan-create <plan-id>)
+# automates exactly this flow (drafting a schema-conformant manifest,
+# cross-checking live GitHub, then bootstrapping and publishing it), so
+# reach for that first. Doing it by hand is still just as valid: add the
 # BEGIN-PLAN-MANIFEST/END-PLAN-MANIFEST and BEGIN-PLAN-ROADMAP/END-PLAN-ROADMAP
 # marker pairs to CLAUDE.local.md yourself (session-start.sh only ever
 # scaffolds them for a branch the index already resolves, which a brand-new
