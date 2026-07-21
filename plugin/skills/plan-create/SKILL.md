@@ -41,9 +41,12 @@ Ask, don't assume, which of these applies (they can combine — the
 `rdr-refactor` reference plan did all three):
 
 - **Migrating an existing freeform doc** (a roadmap markdown file, a
-  planning doc on some branch, notes pasted into the conversation). Read it
-  in full before drafting anything structured from it — see step 3's
-  "preserve, don't summarize-then-lose" rule.
+  planning doc on some branch, notes pasted into the conversation, **or an
+  already-approved Claude Code plan-mode plan from earlier in this same
+  conversation** — it counts just as much as a file on disk; there's
+  nothing to "find," just use it directly). Read it in full before drafting
+  anything structured from it — see step 3's "preserve, don't
+  summarize-then-lose" rule.
 - **Naming existing branches/PRs to track.** Don't take the user's verbal
   description of what state they're in at face value if it's checkable —
   cross-check live per step 4 before it ever goes in the manifest. A plan
