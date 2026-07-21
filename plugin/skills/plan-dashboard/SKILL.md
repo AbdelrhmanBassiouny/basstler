@@ -136,7 +136,50 @@ ends up needing real charts/sparklines, load `dataviz` too).
   link if present, notes, blockers. Visually distinguish any item flagged
   in step 3 as drifted — that's the single most important signal this
   dashboard exists to surface, it should not read as just another badge.
-- A summary strip: counts by status, count of drift flags, count blocked.
+
+### Stack items within a track by dependency depth (indent, cap at 4, wrap with an arrow)
+
+Within each track, items form a dependency chain/tree via `depends_on`
+(restricted to same-track ids — a `depends_on` pointing at another track is
+still shown as a small chip reference, it just doesn't drive indentation,
+since the two items aren't rendered near each other). Render each track as
+an indented stack rather than a flat list:
+
+1. Roots = items with no same-track `depends_on`. Root indent level = 0.
+2. A child's indent level = its (same-track) parent's level + 1.
+3. **Cap at level 4.** If a child's computed level would exceed 4, reset it
+   to level 0 instead of indenting further, and mark it as a "wrapped"
+   item.
+4. Render a wrapped item with a small left-edge arrow/connector (e.g. "◄
+   continues from `<parent id>`") pointing at its actual parent, since it's
+   no longer visually nested under it. Do not attempt to draw an absolutely-
+   positioned line/SVG connector between two arbitrary DOM nodes — that's
+   fragile in a static artifact with reflowing content; a legible inline
+   arrow chip naming the parent is the robust version of "an arrow from the
+   left of the child to its parent."
+5. A long linear stack (a straight PR chain, the common case for a
+   steward-style track) will wrap repeatedly — level 0,1,2,3,4, then back to
+   0,1,2,3,4, etc. This is expected, not a bug.
+
+### Summary sidebar: statuses + what to do next
+
+Give the page a sticky summary sidebar (collapses to a stacked section
+above the content on narrow viewports) containing:
+
+- **Status counts** (done/in_progress/blocked/deferred/not_started) and the
+  drift count from step 3.
+- **What to do next** — computed, not hand-authored, in this priority order:
+  1. Every drifted item from step 3 (fix the manifest — highest priority,
+     it means the plan doesn't reflect reality).
+  2. **Ready to start**: items with `status` `not_started` or `blocked`
+     whose *every* `depends_on` item has live/manual status `done` — these
+     have nothing left blocking them structurally.
+  3. **Blocker possibly cleared**: `blocked` items where at least one
+     `depends_on` item is `done` but not all of them are — worth a manual
+     check of whether the blocker text is still accurate.
+  Keep this list short and concrete (item title + one-line reason) — it's
+  the "what do I do when I open this dashboard" answer, not a restatement
+  of the full item list already below it.
 
 **Master-index mode**, one row per plan: title, description, `done`/total
 item count, and a link to that plan's own dashboard (its `dashboard_url`
