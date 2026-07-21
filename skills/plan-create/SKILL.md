@@ -93,13 +93,38 @@ GitHub disagree, that disagreement itself is worth a line in the item's
 `notes` — it's exactly the kind of drift this system exists to catch, and
 noting it once at creation time is cheaper than rediscovering it later.
 
-## 5. Write and validate `plan.yaml` + `roadmap.md`
+## 5. Create the tracking PR (coordination mailbox for structural changes)
+
+Ask whether the plan wants one (default yes for anything with more than one
+session/track likely to touch it — skip only for something so small a
+single session will obviously own it end to end). If yes:
+
+1. Cut a branch off `main` named `plan-tracking-<plan-id>` and make a
+   single **empty commit** (`git commit --allow-empty`) — this branch
+   carries no file changes, ever; it exists only so GitHub has something to
+   open a PR from.
+2. Open it as a **draft** PR, base `main`, titled `[plan-tracking]
+   <plan-id>`, with a body explaining its purpose (not a code change,
+   here's how proposals/replies work — see `plans/README.md`'s "Proposing
+   structural changes" section, and `rdr-refactor`'s tracking PR for a
+   worked example to copy from). It stays open indefinitely.
+3. Subscribe to it (same PR-activity subscription any other PR gets).
+4. Record its number as `tracking_pr` in the manifest you're about to write
+   in step 6.
+
+This exists because GitHub Issues are disabled on this repo — a PR is the
+only native, commentable, subscribable artifact available, not a stylistic
+choice. If Issues are ever enabled here, a tracking Issue would be the more
+natural fit and this step should switch to that instead.
+
+## 6. Write and validate `plan.yaml` + `roadmap.md`
 
 Follow the schema in `plans/README.md` exactly: `schema_version: 1`, `id`,
-`title`, `description`, `default_repo`, `waves[]`, `tracks[]` (each tagged
-with a `wave`), `items[]` (flat, each tagged with a `track`, `status` from
-the thin enum `not_started | in_progress | blocked | deferred | done`,
-`depends_on` by item id, optional `pr`/`session`/`notes`/`blockers`).
+`title`, `description`, `default_repo`, `tracking_pr` (if step 5 created
+one), `waves[]`, `tracks[]` (each tagged with a `wave`), `items[]` (flat,
+each tagged with a `track`, `status` from the thin enum `not_started |
+in_progress | blocked | deferred | done`, `depends_on` by item id, optional
+`pr`/`session`/`notes`/`blockers`).
 
 Before saving, validate exactly what `plan-dashboard` step 2 validates —
 do not diverge from that checklist, since a manifest this skill produces
@@ -114,7 +139,7 @@ Parse with Python's `yaml` module to check this mechanically rather than
 eyeballing it — the same tooling `save-plan.sh` and `plan-dashboard` both
 already require.
 
-## 6. Bootstrap it through the existing write path — don't invent a new one
+## 7. Bootstrap it through the existing write path — don't invent a new one
 
 This skill does not push directly. It uses exactly the flow
 `save-plan.sh`'s own header comment documents for a brand-new plan (there
@@ -138,7 +163,7 @@ convenient, not a replacement for it):
    `claude/personal-notes` and regenerates the branch→plan-id index in the
    same commit.
 
-## 7. Publish
+## 8. Publish
 
 Invoke the `plan-dashboard` skill for `<plan-id>` to publish its first
 dashboard Artifact. Ask the user whether they also want the master index
@@ -151,9 +176,10 @@ unprompted — to replace that old doc with a short pointer stub at its
 original location, the same way the `rdr-roadmap.md` reference migration
 did, so anyone still reading the old path finds the new one immediately.
 
-## 8. Report back
+## 9. Report back
 
-Plan id, item/wave/track counts, the dashboard URL, and — explicitly, not
-buried — every judgment call you made or flagged along the way (structural
-assumptions, any live-vs-source disagreement found in step 4) so the user
-can sanity-check them before relying on the plan.
+Plan id, item/wave/track counts, the dashboard URL, the tracking PR link
+if one was created, and — explicitly, not buried — every judgment call you
+made or flagged along the way (structural assumptions, any live-vs-source
+disagreement found in step 4) so the user can sanity-check them before
+relying on the plan.
