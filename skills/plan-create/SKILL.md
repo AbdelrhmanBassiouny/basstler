@@ -37,8 +37,8 @@ inventing one — it's the directory name and the reverse-index key forever.
 
 ## 2. Figure out where the plan's content comes from
 
-Ask, don't assume, which of these applies (they can combine — the
-`rdr-refactor` reference plan did all three):
+Ask, don't assume, which of these applies (they can combine — a real plan
+might draw on all three):
 
 - **Migrating an existing freeform doc** (a roadmap markdown file, a
   planning doc on some branch, notes pasted into the conversation, **or an
@@ -104,8 +104,8 @@ single session will obviously own it end to end). If yes:
 
 1. Create a GitHub **issue** titled `[plan-tracking] <plan-id>`, with a body
    explaining its purpose (not a work item — here's how proposals/replies
-   work; see `plans/README.md`'s "Proposing structural changes" section,
-   and `rdr-refactor`'s tracking issue for a worked example to copy from).
+   work; see `plans/README.md`'s "Proposing structural changes" section for
+   the convention to describe).
 2. Subscribe to it (the same PR-activity subscription tool also works on a
    plain issue number — confirmed empirically, not assumed; there is no
    separate issue-subscription tool).
@@ -120,10 +120,9 @@ open it as a **draft** PR (base `main`, same title, a body noting *why* it's
 a PR and not an issue), subscribe to that instead, and still record its
 number as `tracking_issue` — the field names the mailbox's role, not the
 literal GitHub object type, since which one applies is a per-repo fact
-that can change (this repo's own `rdr-refactor` plan moved from a fallback
-PR to a real issue once Issues were enabled - see its `roadmap.md`
-addendum). Whoever later builds a link to it should check which kind it
-actually is rather than assuming `/issues/`.
+that can change if Issues get enabled later. Whoever later builds a link
+to it should check which kind it actually is rather than assuming
+`/issues/`.
 
 ## 6. Write and validate `plan.yaml` + `roadmap.md`
 
