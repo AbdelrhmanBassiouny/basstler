@@ -112,3 +112,37 @@ pr_progress_path() {
   esac
   printf '.claude/personal/pr-progress/%s.md\n' "${branch}"
 }
+
+# PLAN_BRANCH_INDEX_PATH: the generated reverse index mapping every plan
+# item's branch to the plan id that tracks it (see
+# .claude/personal/plans/README.md on the personal-notes branch for the
+# full plan-dashboard schema this feeds). Fixed convention, like
+# pr_progress_path's directory above - never overridden, since it's
+# plural/generated data, not a per-clone preference.
+PLAN_BRANCH_INDEX_PATH=".claude/personal/plans/_generated/branch-index.yaml"
+
+# plan_id_for_branch: prints the plan id that tracks the given branch, per
+# PLAN_BRANCH_INDEX_PATH on FETCH_HEAD, and returns 0. Returns 1 (prints
+# nothing) if the index doesn't exist yet, or the branch isn't in it. Caller
+# must have already fetched NOTES_BRANCH successfully (see
+# fetch_personal_notes_branch) - this reads FETCH_HEAD directly rather than
+# fetching again itself, so session-start.sh and save-plan.sh each fetch
+# exactly once per run.
+#
+# Deliberately grep/sed rather than a real YAML parser: session-start.sh
+# runs unconditionally on every session start and must not gain a hard
+# dependency on python3/PyYAML being present just to check whether the
+# current branch belongs to a plan. The generated index's format is always
+# exactly "  <branch>: <plan-id>" (one per line, two-space indent, single
+# space after the colon) - a format only ./save-plan.sh's generator writes -
+# so a plain fixed-string match is unambiguous even between branches that
+# prefix one another (e.g. "D-core-aid" vs "D-core-aid-extra"), because the
+# trailing ": " only ever immediately follows a complete branch name.
+plan_id_for_branch() {
+  local branch="$1"
+  git cat-file -e "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null || return 1
+  git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
+    | grep -F -- "  ${branch}: " \
+    | head -1 \
+    | sed -E 's/^  [^:]+: //'
+}
