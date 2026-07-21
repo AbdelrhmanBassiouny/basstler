@@ -90,12 +90,12 @@ set -euo pipefail
 # don't belong to one, and that's normal. See ./save-plan.sh to push edits
 # back (regenerating the reverse index too).
 #
-# If the plan has a `tracking_pr` set, the written header also reminds a
+# If the plan has a `tracking_issue` set, the written header also reminds a
 # session that isn't the plan's designated planning/steward session to
 # comment-propose structural changes (new phases, deferring a track, etc.)
-# on that PR rather than editing the manifest directly - see
-# plans/README.md's "Proposing structural changes" section for why (single-
-# writer coordination, since GitHub Issues are disabled on this repo).
+# there rather than editing the manifest directly - see plans/README.md's
+# "Proposing structural changes" section for why (single-writer
+# coordination via a subscribable comment mailbox).
 #
 # How this script gets invoked (see ../settings.json): Claude Code registers it
 # as a SessionStart hook via `$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh`.
@@ -180,23 +180,25 @@ if [ -n "${PLAN_ID}" ]; then
   PLAN_ROADMAP_PATH=".claude/personal/plans/${PLAN_ID}/roadmap.md"
   if git cat-file -e "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
     [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
-    # TRACKING_PR: a plain top-level scalar, so grep/sed suffices here too -
+    # TRACKING_ISSUE: a plain top-level scalar, so grep/sed suffices here too -
     # same dependency-free reasoning as plan_id_for_branch above. Empty if
-    # the plan has no tracking_pr set (nothing to extract, not an error).
-    TRACKING_PR="$(git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null \
-      | grep -E '^tracking_pr:' | head -1 | sed -E 's/^tracking_pr:[[:space:]]*([0-9]+).*/\1/')"
-    if [ -n "${TRACKING_PR}" ]; then
-      TRACKING_PR_NOTE="Structural changes (a new wave/phase, deferring a track, splitting an
+    # the plan has no tracking_issue set (nothing to extract, not an error).
+    # Named for the mailbox's role, not necessarily a literal GitHub Issue -
+    # see plans/README.md's PR-fallback note for repos with Issues disabled.
+    TRACKING_ISSUE="$(git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null \
+      | grep -E '^tracking_issue:' | head -1 | sed -E 's/^tracking_issue:[[:space:]]*([0-9]+).*/\1/')"
+    if [ -n "${TRACKING_ISSUE}" ]; then
+      TRACKING_ISSUE_NOTE="Structural changes (a new wave/phase, deferring a track, splitting an
 item, reprioritizing) are a different kind of edit from status/notes on the
 item you're working: if you are not explicitly this plan's designated
-planning/steward session, comment on tracking PR #${TRACKING_PR} proposing
-the change instead of editing the manifest directly - see plans/README.md's
+planning/steward session, comment on the tracking issue (#${TRACKING_ISSUE})
+proposing the change instead of editing the manifest directly - see plans/README.md's
 'Proposing structural changes' section. If you ARE the designated session
 (the user told you to manage this plan), read new comments there and apply
 what you agree with, replying-and-resolving each one."
     else
-      TRACKING_PR_NOTE="This plan has no tracking_pr set, so there is no coordination mailbox
-for structural changes yet - edit the manifest directly as usual."
+      TRACKING_ISSUE_NOTE="This plan has no tracking_issue set, so there is no coordination
+mailbox for structural changes yet - edit the manifest directly as usual."
     fi
     cat <<PLAN_HEADER >> "${OUTPUT_FILE}"
 <!--
@@ -213,7 +215,7 @@ the Artifact tool itself. This header and the markers are regenerated every
 session - editing them has no effect; only content between the markers is
 ever saved.
 
-${TRACKING_PR_NOTE}
+${TRACKING_ISSUE_NOTE}
 -->
 <!-- BEGIN-PLAN-MANIFEST: ${PLAN_ID} -->
 PLAN_HEADER

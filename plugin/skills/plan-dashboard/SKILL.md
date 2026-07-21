@@ -139,9 +139,11 @@ ends up needing real charts/sparklines, load `dataviz` too).
   whole point of the manifest/roadmap split is that structured facts live
   in `plan.yaml` and everything else lives in `roadmap.md`, so the
   dashboard has to actually show the second half, not just gesture at it.
-  If `tracking_pr` is set, also link it plainly in the header ("Propose a
-  structural change") — see `plans/README.md`'s "Proposing structural
-  changes" section for what that PR is.
+  If `tracking_issue` is set, also link it plainly in the header ("Propose
+  a structural change") — see `plans/README.md`'s "Proposing structural
+  changes" section for what it is. It's usually a GitHub issue
+  (`/issues/<n>`), but check rather than assume: a repo with Issues
+  disabled falls back to a PR (`/pull/<n>`) under the same field.
 - Per item: title, id, branch, a real `https://github.com/<repo>/pull/<n>`
   link when `pr` is set (never fabricate a link when `pr` is null — just
   show "no PR yet"), the manual `status`, the live GitHub state, session
