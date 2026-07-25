@@ -74,9 +74,9 @@
 {% if plans %}
 {% for plan in plans %}
     {% if plan.dashboard_url %}
-    <a class="plan-card{{ ' complete' if plan.is_complete else '' }}" href="{{ plan.dashboard_url }}" target="_blank" rel="noopener">
+    <a class="{{ plan.css_class }}" href="{{ plan.dashboard_url }}" target="_blank" rel="noopener">
     {% else %}
-    <div class="plan-card{{ ' complete' if plan.is_complete else '' }}">
+    <div class="{{ plan.css_class }}">
     {% endif %}
       <div class="plan-head">
         <h2 class="plan-title">{{ plan.title }}</h2>
@@ -86,7 +86,7 @@
       {% if not plan.dashboard_url %}
       <p class="no-dashboard">Not published yet — run /plan-dashboard on it.</p>
       {% endif %}
-      <div class="bar"><div class="bar-fill" style="width: {{ '%.1f' | format(plan.completion_percentage) }}%"></div></div>
+      <div class="bar"><div class="bar-fill" style="width: {{ plan.completion_percentage_label }}"></div></div>
     {% if plan.dashboard_url %}
     </a>
     {% else %}

@@ -210,9 +210,10 @@ same way `plan-dashboard` does, surfaces any structural judgment calls to you vi
 than guessing, then runs `save-plan.sh` and `/plan-dashboard` itself. Doing it by hand (the marker +
 `save-plan.sh` flow above) still works — the skill is a convenience over that same path, not a
 different one. It also creates a **tracking issue** as a coordination mailbox: any session can make
-a structural change (new phase, deferring a track, etc.) directly to `plan.yaml`, but always also
-comments on the tracking issue describing it — that's the shared record other sessions working the
-plan can check, and the user reviews structural changes there. (Falls back to an empty-commit,
+a structural change (new phase, deferring a track, etc.) directly to `plan.yaml`, but should ask the
+user in the session first (e.g. via `AskUserQuestion`) rather than deciding unilaterally, and always
+also comments on the tracking issue describing it once confirmed — that's the shared record other
+sessions working the plan can check, and the user reviews structural changes there. (Falls back to an empty-commit,
 permanently-draft PR instead if a repo has Issues disabled.) See `.claude/personal/plans/README.md`'s
 "Proposing structural changes" section for the full convention. `session-start.sh`'s written header
 reminds a session actively working an item to subscribe to the tracking issue too, so a change

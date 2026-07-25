@@ -20,9 +20,23 @@ TEMPLATES_DIRECTORY = Path(__file__).parent / "templates"
 Where every page template (dashboard.html, index.html) lives.
 """
 
+# Matches one opening or closing HTML heading tag, e.g. "<h1>"/"</h1>" through
+# "<h6>"/"</h6>". _shift_heading_level() shifts each match down by
+# _HEADING_LEVEL_SHIFT and caps it at _MAXIMUM_HEADING_LEVEL, so a roadmap's
+# own "<h1>Title</h1>" becomes "<h4>Title</h4>" once embedded in a dashboard
+# page, and a roadmap's "<h5>Deep</h5>" becomes "<h6>Deep</h6>" - shifted but
+# capped, rather than overflowing to a nonexistent "<h8>".
 _HEADING_TAG_PATTERN = re.compile(r"<(/?)h([1-6])>")
+
 _HEADING_LEVEL_SHIFT = 3
+"""
+How many levels to push a roadmap's own headings down by, so they nest below the
+embedding dashboard page's own h1-h3.
+"""
+
 _MAXIMUM_HEADING_LEVEL = 6
+"""The deepest valid HTML heading level - shifting never produces anything
+past this, even for an already-deep roadmap heading."""
 
 
 def create_template_environment() -> jinja2.Environment:

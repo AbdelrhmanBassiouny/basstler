@@ -17,6 +17,7 @@ from build_dashboard import (
     Plan,
     PlanValidationError,
     PullRequestRecord,
+    StackedItem,
     Track,
     UnknownDependency,
     UnknownStatus,
@@ -191,6 +192,44 @@ def test_live_state_display_labels_including_no_pull_request():
     assert LiveState.MERGED.display_label == "Merged"
 
 
+# %% Item / StackedItem - precomputed template values
+
+
+def test_status_and_drift_css_class_without_drift():
+    plain_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS
+    )
+    assert plain_item.status_and_drift_css_class == "status-in_progress"
+
+
+def test_status_and_drift_css_class_with_drift():
+    drifted_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
+    drifted_item.drift_description = "marked done, but PR #1 is still open"
+    assert drifted_item.status_and_drift_css_class == "status-done has-drift"
+
+
+def test_stacked_item_indent_style_scales_with_indent_level():
+    stacked = StackedItem(
+        item=Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE),
+        indent_level=2,
+        wrap_parent=None,
+    )
+    assert stacked.indent_style == "margin-left: 3.5rem;"
+
+
+def test_plan_repository_url():
+    plan = Plan(
+        id="p",
+        title="P",
+        description="d",
+        default_repository="owner/repo",
+        waves=[],
+        tracks=[],
+        items=[],
+    )
+    assert plan.repository_url == "https://github.com/owner/repo"
+
+
 # %% DashboardRenderer - live state + drift
 
 
@@ -199,7 +238,7 @@ def make_renderer(items, pull_requests_by_repository=None):
         id="test-plan",
         title="Test Plan",
         description="desc",
-        default_repo="owner/repo",
+        default_repository="owner/repo",
         waves=[],
         tracks=[],
         items=items,
@@ -345,7 +384,7 @@ def test_render_wires_an_item_into_its_wave_and_track_sections():
         id="test-plan",
         title="Test Plan",
         description="desc",
-        default_repo="owner/repo",
+        default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
         items=[item("a", "not_started")],
@@ -364,7 +403,7 @@ def test_render_shows_placeholder_for_a_track_with_no_items():
         id="test-plan",
         title="Test Plan",
         description="desc",
-        default_repo="owner/repo",
+        default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[
             Track(
@@ -391,7 +430,7 @@ def test_render_shows_pull_request_link_when_item_has_one():
         id="test-plan",
         title="Test Plan",
         description="desc",
-        default_repo="owner/repo",
+        default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
         items=[item("a", "in_progress", pull_request_number=5)],
@@ -412,7 +451,7 @@ def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
         id="test-plan",
         title="Test Plan",
         description="desc",
-        default_repo="owner/repo",
+        default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
         items=[

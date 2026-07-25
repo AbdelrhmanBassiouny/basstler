@@ -52,6 +52,18 @@ def test_from_mapping_defaults_missing_description_to_empty_string():
     assert plan.description == ""
 
 
+def test_completion_percentage_label_is_formatted_to_one_decimal_place():
+    assert summary(done=1, total=3).completion_percentage_label == "33.3%"
+
+
+def test_css_class_is_plain_for_an_incomplete_plan():
+    assert summary(done=1, total=4).css_class == "plan-card"
+
+
+def test_css_class_marks_a_complete_plan():
+    assert summary(done=4, total=4).css_class == "plan-card complete"
+
+
 # %% render_index_page - per-card rendering
 
 
