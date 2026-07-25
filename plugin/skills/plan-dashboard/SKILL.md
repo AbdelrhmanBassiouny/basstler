@@ -1,18 +1,19 @@
 ---
 name: plan-dashboard
-description: Publish a live status dashboard Artifact for a multi-PR/multi-session initiative tracked under .claude/personal/plans/<plan-id>/plan.yaml on claude/personal-notes, cross-checked against live GitHub PR/CI/review state. Invoke as "/plan-dashboard <plan-id>" for one plan, or "/plan-dashboard" with no argument to publish the master index of every plan. Use when the user asks to see, refresh, or generate a plan dashboard, or asks "what's the status of <plan>".
+description: Publish a live status dashboard Artifact for a multi-PR/multi-session initiative tracked under .claude/personal/plans/<plan-id>/plan.yaml on the personal-notes branch, cross-checked against live GitHub PR/CI/review state. Invoke as "/plan-dashboard <plan-id>" for one plan, or "/plan-dashboard" with no argument to publish the master index of every plan. Use when the user asks to see, refresh, or generate a plan dashboard, or asks "what's the status of <plan>".
 allowed-tools: Bash, Read, Write, Grep, Glob, Artifact, Skill
 ---
 
 # Plan Dashboard
 
 Generic, plan-agnostic tooling — nothing in this file may hardcode a
-specific plan's id, branches, or PRs. All plan data lives on
-`claude/personal-notes` (`.claude/personal/plans/<plan-id>/plan.yaml` +
-`roadmap.md`), never on `main`; this skill only reads it. See
-`.claude/personal/plans/README.md` (on `claude/personal-notes`) for the full
-`plan.yaml` schema reference — read it if anything below is unclear about a
-field's meaning, rather than guessing.
+specific plan's id, branches, or PRs. All plan data lives on the
+personal-notes branch (`claude/personal-notes` by default — see
+`resolve-personal-notes-config.sh` for how it's resolved) at
+`.claude/personal/plans/<plan-id>/plan.yaml` + `roadmap.md`, never on
+`main`; this skill only reads it. See `.claude/personal/plans/README.md`
+(on that branch) for the full `plan.yaml` schema reference — read it if
+anything below is unclear about a field's meaning, rather than guessing.
 
 **Everything deterministic — schema validation, live-state classification,
 drift detection, HTML rendering — lives in the committed scripts next to
