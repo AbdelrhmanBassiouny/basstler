@@ -344,6 +344,9 @@ class Wave:
     name: str
     """The wave's display name."""
 
+    description: str | None = None
+    """An optional one-line note about the wave, shown in the dashboard header."""
+
 
 @dataclass
 class Track:

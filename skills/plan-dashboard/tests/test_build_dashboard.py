@@ -230,6 +230,18 @@ def test_plan_repository_url():
     assert plan.repository_url == "https://github.com/owner/repo"
 
 
+def test_plan_from_mapping_reads_optional_wave_description():
+    plan = Plan.from_mapping(
+        minimal_plan(waves=[{"id": "wave-1", "name": "Wave 1", "description": "why"}])
+    )
+    assert plan.waves[0].description == "why"
+
+
+def test_plan_from_mapping_defaults_missing_wave_description_to_none():
+    plan = Plan.from_mapping(minimal_plan())
+    assert plan.waves[0].description is None
+
+
 # %% DashboardRenderer - live state + drift
 
 
