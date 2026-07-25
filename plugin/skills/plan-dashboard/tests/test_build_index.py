@@ -2,7 +2,7 @@
 Tests for build_index.py's master-index rendering.
 """
 
-from build_index import PlanSummary, render_index_page, render_plan_card
+from build_index import PlanSummary, render_index_page
 
 
 def summary(**overrides):
@@ -52,12 +52,12 @@ def test_from_mapping_defaults_missing_description_to_empty_string():
     assert plan.description == ""
 
 
-# %% render_plan_card
+# %% render_index_page - per-card rendering
 
 
 def test_card_links_to_dashboard_when_published():
-    rendered = render_plan_card(
-        summary(dashboard_url="https://claude.ai/code/artifact/abc")
+    rendered = render_index_page(
+        [summary(dashboard_url="https://claude.ai/code/artifact/abc")]
     )
     assert '<a class="plan-card' in rendered
     assert 'href="https://claude.ai/code/artifact/abc"' in rendered
@@ -65,17 +65,17 @@ def test_card_links_to_dashboard_when_published():
 
 
 def test_card_shows_unpublished_notice_when_no_dashboard_url():
-    rendered = render_plan_card(summary(dashboard_url=None))
+    rendered = render_index_page([summary(dashboard_url=None)])
     assert '<div class="plan-card' in rendered
     assert "Not published yet" in rendered
 
 
 def test_card_marks_complete_plans():
-    rendered = render_plan_card(summary(done=4, total=4))
+    rendered = render_index_page([summary(done=4, total=4)])
     assert "plan-card complete" in rendered
 
 
-# %% render_index_page
+# %% render_index_page - full page
 
 
 def test_index_page_shows_placeholder_when_no_plans():

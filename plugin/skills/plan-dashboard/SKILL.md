@@ -99,7 +99,8 @@ per item — with ~30+ items per plan this matters:
 Assemble this into the `pr_data.json` shape `build_dashboard.py` expects —
 see its own `--help` / docstring for the exact format (keyed by
 `"owner/repo"`, then by PR number as a string, each holding `state`,
-`draft`, `merged_at`). Then run it:
+`draft`, `merged_at`). Then run it (requires PyYAML, Jinja2, and the
+`markdown` package — `pip install pyyaml jinja2 markdown` if any are missing):
 
 ```bash
 python3 .claude/skills/plan-dashboard/build_dashboard.py \

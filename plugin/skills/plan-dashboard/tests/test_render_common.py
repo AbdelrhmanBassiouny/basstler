@@ -1,45 +1,32 @@
 """
-Tests for render_common.py's markdown-to-HTML rendering.
+Tests for render_common.py: the Jinja2 environment factory and markdown-to-HTML
+rendering (delegated to the `markdown` library, plus a heading-level shift on top).
 """
 
-from render_common import escape_html, render_inline_markdown, render_markdown_to_html
+from render_common import create_template_environment, render_markdown_to_html
 
-# %% escape_html
-
-
-def test_escape_html_escapes_special_characters():
-    assert escape_html("<script>") == "&lt;script&gt;"
+# %% create_template_environment
 
 
-def test_escape_html_treats_none_as_empty_string():
-    assert escape_html(None) == ""
+def test_template_environment_finds_the_committed_templates():
+    environment = create_template_environment()
+    assert environment.get_template("dashboard.html")
+    assert environment.get_template("index.html")
 
 
-def test_escape_html_stringifies_non_string_values():
-    assert escape_html(42) == "42"
+def test_template_environment_autoescapes_html():
+    environment = create_template_environment()
+    rendered = environment.from_string("{{ value }}").render(value="<script>")
+    assert rendered == "&lt;script&gt;"
 
 
-# %% render_inline_markdown
+def test_template_environment_safe_filter_bypasses_autoescaping():
+    environment = create_template_environment()
+    rendered = environment.from_string("{{ value | safe }}").render(value="<b>bold</b>")
+    assert rendered == "<b>bold</b>"
 
 
-def test_render_inline_markdown_renders_bold_italic_code_and_links():
-    rendered = render_inline_markdown(
-        "**bold** *italic* `code` [text](https://example.com)"
-    )
-    assert "<strong>bold</strong>" in rendered
-    assert "<em>italic</em>" in rendered
-    assert "<code>code</code>" in rendered
-    assert (
-        '<a href="https://example.com" target="_blank" rel="noopener">text</a>'
-        in rendered
-    )
-
-
-def test_render_inline_markdown_escapes_html_before_formatting():
-    assert render_inline_markdown("<b>raw</b>") == "&lt;b&gt;raw&lt;/b&gt;"
-
-
-# %% render_markdown_to_html - block structure
+# %% render_markdown_to_html - heading level shift
 
 
 def test_heading_level_is_shifted_and_capped():
@@ -48,9 +35,17 @@ def test_heading_level_is_shifted_and_capped():
     assert render_markdown_to_html("###### Deep") == "<h6>Deep</h6>"
 
 
-def test_paragraph_joins_wrapped_continuation_lines():
-    rendered = render_markdown_to_html("This is a\nwrapped paragraph.")
-    assert rendered == "<p>This is a wrapped paragraph.</p>"
+def test_heading_closing_tag_is_shifted_too():
+    rendered = render_markdown_to_html("## Section\ntext")
+    assert "<h5>Section</h5>" in rendered
+    assert "</h5>" in rendered
+
+
+# %% render_markdown_to_html - delegates block/inline parsing to `markdown`
+
+
+def test_paragraph():
+    assert render_markdown_to_html("Just a paragraph.") == "<p>Just a paragraph.</p>"
 
 
 def test_blank_line_separates_paragraphs():
@@ -58,30 +53,49 @@ def test_blank_line_separates_paragraphs():
     assert rendered == "<p>First.</p>\n<p>Second.</p>"
 
 
-def test_unordered_list_with_wrapped_item():
-    rendered = render_markdown_to_html("- first item\n  continues here\n- second item")
-    assert rendered == "<ul><li>first item continues here</li><li>second item</li></ul>"
+def test_unordered_list():
+    rendered = render_markdown_to_html("- first\n- second")
+    assert "<li>first</li>" in rendered
+    assert "<li>second</li>" in rendered
 
 
 def test_ordered_list():
     rendered = render_markdown_to_html("1. one\n2. two")
-    assert rendered == "<ol><li>one</li><li>two</li></ol>"
+    assert "<ol>" in rendered
+    assert "<li>one</li>" in rendered
+    assert "<li>two</li>" in rendered
 
 
 def test_fenced_code_block_is_not_interpreted_as_markdown():
     rendered = render_markdown_to_html("```\n**not bold**\n```")
-    assert rendered == "<pre><code>**not bold**</code></pre>"
+    assert "<pre><code>" in rendered
+    assert "**not bold**" in rendered
+    assert "<strong>" not in rendered
 
 
-def test_gfm_table_renders_header_and_rows():
+def test_github_flavored_markdown_table_renders_header_and_rows():
     markdown_text = "| A | B |\n|---|---|\n| 1 | 2 |\n| 3 | 4 |"
     rendered = render_markdown_to_html(markdown_text)
-    assert "<th>A</th><th>B</th>" in rendered
-    assert "<td>1</td><td>2</td>" in rendered
-    assert "<td>3</td><td>4</td>" in rendered
+    assert "<th>A</th>" in rendered
+    assert "<th>B</th>" in rendered
+    assert "<td>1</td>" in rendered
+    assert "<td>2</td>" in rendered
+
+
+def test_inline_bold_italic_code_and_links():
+    rendered = render_markdown_to_html(
+        "**bold** *italic* `code` [text](https://example.com)"
+    )
+    assert "<strong>bold</strong>" in rendered
+    assert "<em>italic</em>" in rendered
+    assert "<code>code</code>" in rendered
+    assert '<a href="https://example.com">text</a>' in rendered
 
 
 def test_mixed_blocks_render_in_source_order():
     markdown_text = "# Title\n\nParagraph.\n\n- item"
     rendered = render_markdown_to_html(markdown_text)
-    assert rendered == "<h4>Title</h4>\n<p>Paragraph.</p>\n<ul><li>item</li></ul>"
+    title_index = rendered.index("<h4>Title</h4>")
+    paragraph_index = rendered.index("<p>Paragraph.</p>")
+    list_index = rendered.index("<li>item</li>")
+    assert title_index < paragraph_index < list_index

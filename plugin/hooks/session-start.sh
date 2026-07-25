@@ -91,11 +91,13 @@ set -euo pipefail
 # back (regenerating the reverse index too).
 #
 # If the plan has a `tracking_issue` set, the written header also reminds a
-# session that isn't the plan's designated planning/steward session to
-# comment-propose structural changes (new phases, deferring a track, etc.)
-# there rather than editing the manifest directly - see plans/README.md's
-# "Proposing structural changes" section for why (single-writer
-# coordination via a subscribable comment mailbox).
+# session to always comment there when it makes a structural change (new
+# phases, deferring a track, etc.) in addition to editing the manifest
+# directly - any session may make structural changes, there is no
+# designated steward - and to subscribe to the tracking issue itself while
+# actively working an item, so another session's structural change reaches
+# it in real time - see plans/README.md's "Proposing structural changes"
+# section for the full convention.
 #
 # How this script gets invoked (see ../settings.json): Claude Code registers it
 # as a SessionStart hook via `$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh`.
@@ -199,13 +201,15 @@ if [ -n "${PLAN_ID}" ]; then
       | grep -E '^tracking_issue:' | head -1 | sed -E 's/^tracking_issue:[[:space:]]*([0-9]+).*/\1/')"
     if [ -n "${TRACKING_ISSUE}" ]; then
       TRACKING_ISSUE_NOTE="Structural changes (a new wave/phase, deferring a track, splitting an
-item, reprioritizing) are a different kind of edit from status/notes on the
-item you're working: if you are not explicitly this plan's designated
-planning/steward session, comment on the tracking issue (#${TRACKING_ISSUE})
-proposing the change instead of editing the manifest directly - see plans/README.md's
-'Proposing structural changes' section. If you ARE the designated session
-(the user told you to manage this plan), read new comments there and apply
-what you agree with, replying-and-resolving each one."
+item, reprioritizing) can be made directly to the manifest by any session -
+there is no designated steward gatekeeping them. Always also leave a comment
+on the tracking issue (#${TRACKING_ISSUE}) describing the change, since the
+user reviews structural changes there and it is the shared record other
+sessions working this plan can check - see plans/README.md's 'Proposing
+structural changes' section. If this session is actively working an item in
+this plan, also subscribe to the tracking issue itself (in addition to your
+own item's PR) so a structural change another session makes reaches you
+while you're still working, not just next session start."
     else
       TRACKING_ISSUE_NOTE="This plan has no tracking_issue set, so there is no coordination
 mailbox for structural changes yet - edit the manifest directly as usual."

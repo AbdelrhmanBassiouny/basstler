@@ -209,13 +209,14 @@ live, or from conversation), drafts a schema-conformant `plan.yaml`/`roadmap.md`
 same way `plan-dashboard` does, surfaces any structural judgment calls to you via a question rather
 than guessing, then runs `save-plan.sh` and `/plan-dashboard` itself. Doing it by hand (the marker +
 `save-plan.sh` flow above) still works — the skill is a convenience over that same path, not a
-different one. It also creates a **tracking issue** as a coordination mailbox: a session that isn't
-the plan's designated planning/steward session comments there to propose a structural change (new
-phase, deferring a track, etc.) instead of editing `plan.yaml` directly. (Falls back to an
-empty-commit, permanently-draft PR instead if a repo has Issues disabled.) See
-`.claude/personal/plans/README.md`'s "Proposing structural changes" section for the full
-convention. `session-start.sh`'s written header reminds a session which side of that it's on,
-based on the plan's `tracking_issue` field.
+different one. It also creates a **tracking issue** as a coordination mailbox: any session can make
+a structural change (new phase, deferring a track, etc.) directly to `plan.yaml`, but always also
+comments on the tracking issue describing it — that's the shared record other sessions working the
+plan can check, and the user reviews structural changes there. (Falls back to an empty-commit,
+permanently-draft PR instead if a repo has Issues disabled.) See `.claude/personal/plans/README.md`'s
+"Proposing structural changes" section for the full convention. `session-start.sh`'s written header
+reminds a session actively working an item to subscribe to the tracking issue too, so a change
+another session makes reaches it in real time.
 
 ## Setup: overriding the default remote/branch/path
 
