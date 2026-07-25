@@ -130,13 +130,13 @@ to it should check which kind it actually is rather than assuming
 ## 6. Write and validate `plan.yaml` + `roadmap.md`
 
 Follow the schema in `plans/README.md` exactly: `schema_version: 1`, `id`,
-`title`, `description`, `default_repo`, `tracking_issue` (if step 5 created
+`title`, `description`, `default_repository`, `tracking_issue` (if step 5 created
 one), `waves[]`, `tracks[]` (each tagged with a `wave`), `items[]` (flat,
 each tagged with a `track`, `status` from the thin enum `not_started |
 in_progress | blocked | deferred | done`, `depends_on` — a *list* of item
 ids, so an item can depend on more than one prerequisite (e.g. a track that
 only starts once two other tracks have both landed) — and optional
-`pr`/`session`/`notes`/`blockers`).
+`pull_request_number`/`session`/`notes`/`blockers`).
 
 Before saving, validate exactly what `plan-dashboard` step 2 validates —
 do not diverge from that checklist, since a manifest this skill produces

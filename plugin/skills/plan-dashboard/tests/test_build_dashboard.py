@@ -34,7 +34,7 @@ def minimal_plan(**overrides):
         "id": "test-plan",
         "title": "Test Plan",
         "description": "A plan.",
-        "default_repo": "owner/repo",
+        "default_repository": "owner/repo",
         "waves": [{"id": "wave-1", "name": "Wave 1"}],
         "tracks": [{"id": "track-1", "name": "Track 1", "wave": "wave-1"}],
         "items": [

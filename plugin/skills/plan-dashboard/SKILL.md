@@ -86,13 +86,13 @@ when the fallback applies.
 
 ## 2. Cross-check every item's PR against live GitHub state, then run the script
 
-For each distinct repo referenced (`items[].repo` if set, else the plan's
-`default_repo`), fetch PR state **once, in bulk**, rather than one API call
+For each distinct repository referenced (`items[].repository` if set, else the plan's
+`default_repository`), fetch PR state **once, in bulk**, rather than one API call
 per item — with ~30+ items per plan this matters:
 
 1. `mcp__github__list_pull_requests` with `state: "all"`, `perPage: 100`,
    paginating (`page`) until a page comes back short of 100.
-2. For any item whose `pr` isn't in that result set (older than the
+2. For any item whose `pull_request_number` isn't in that result set (older than the
    pagination window covered), fall back to `mcp__github__pull_request_read`
    with `method: "get"` for that specific `pullNumber`.
 
