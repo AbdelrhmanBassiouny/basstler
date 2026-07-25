@@ -113,13 +113,37 @@ pr_progress_path() {
   printf '.claude/personal/pr-progress/%s.md\n' "${branch}"
 }
 
+# PLANS_DIR / PLAN_MANIFEST_FILENAME / PLAN_ROADMAP_FILENAME: the one,
+# shared definition of where a plan's files live, so no caller re-derives
+# these path fragments itself (session-start.sh and save-plan.sh both used
+# to build ".claude/personal/plans/<id>/plan.yaml" inline - two independent
+# copies of the same literal that could silently drift apart). Fixed
+# convention, never overridden - plan storage is plural/generated data, not
+# a per-clone preference like NOTES_PATH.
+PLANS_DIR=".claude/personal/plans"
+PLAN_MANIFEST_FILENAME="plan.yaml"
+PLAN_ROADMAP_FILENAME="roadmap.md"
+
+# plan_directory_path / plan_manifest_path / plan_roadmap_path: the
+# deterministic per-plan paths for the given plan id. Shared by
+# session-start.sh and save-plan.sh so both agree on exactly the same
+# layout - see pr_progress_path above for the same reasoning applied to
+# PR-progress files.
+plan_directory_path() {
+  printf '%s/%s\n' "${PLANS_DIR}" "$1"
+}
+plan_manifest_path() {
+  printf '%s/%s/%s\n' "${PLANS_DIR}" "$1" "${PLAN_MANIFEST_FILENAME}"
+}
+plan_roadmap_path() {
+  printf '%s/%s/%s\n' "${PLANS_DIR}" "$1" "${PLAN_ROADMAP_FILENAME}"
+}
+
 # PLAN_BRANCH_INDEX_PATH: the generated reverse index mapping every plan
 # item's branch to the plan id that tracks it (see
 # .claude/personal/plans/README.md on the personal-notes branch for the
-# full plan-dashboard schema this feeds). Fixed convention, like
-# pr_progress_path's directory above - never overridden, since it's
-# plural/generated data, not a per-clone preference.
-PLAN_BRANCH_INDEX_PATH=".claude/personal/plans/_generated/branch-index.yaml"
+# full plan-dashboard schema this feeds).
+PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
 # plan_id_for_branch: prints the plan id that tracks the given branch, per
 # PLAN_BRANCH_INDEX_PATH on FETCH_HEAD, and returns 0. Returns 1 (prints
@@ -129,20 +153,20 @@ PLAN_BRANCH_INDEX_PATH=".claude/personal/plans/_generated/branch-index.yaml"
 # fetching again itself, so session-start.sh and save-plan.sh each fetch
 # exactly once per run.
 #
-# Deliberately grep/sed rather than a real YAML parser: session-start.sh
-# runs unconditionally on every session start and must not gain a hard
-# dependency on python3/PyYAML being present just to check whether the
-# current branch belongs to a plan. The generated index's format is always
-# exactly "  <branch>: <plan-id>" (one per line, two-space indent, single
-# space after the colon) - a format only ./save-plan.sh's generator writes -
-# so a plain fixed-string match is unambiguous even between branches that
-# prefix one another (e.g. "D-core-aid" vs "D-core-aid-extra"), because the
-# trailing ": " only ever immediately follows a complete branch name.
+# The index is tab-separated values (TSV): one "<branch><TAB><plan-id>" line
+# per branch, generated fresh in full by ./save-plan.sh on every run (never
+# hand-edited or incrementally patched). TSV rather than a hand-rolled
+# YAML-lookalike matched by fixed-string grep: it's an unambiguous, widely
+# understood interchange format - a tab can never appear inside a branch
+# name or plan id, so a field-based match can't misfire the way a
+# substring/prefix match on a YAML-shaped string could - while still
+# needing nothing beyond `awk`, which every session-start environment
+# already has (see the module docstring: session-start.sh must not gain a
+# hard dependency on python3/PyYAML just to check whether the current
+# branch belongs to a plan).
 plan_id_for_branch() {
   local branch="$1"
   git cat-file -e "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null || return 1
   git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
-    | grep -F -- "  ${branch}: " \
-    | head -1 \
-    | sed -E 's/^  [^:]+: //'
+    | awk -F'\t' -v branch="${branch}" '$1 == branch { print $2; exit }'
 }

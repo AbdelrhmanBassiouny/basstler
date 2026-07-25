@@ -212,10 +212,10 @@ than guessing, then runs `save-plan.sh` and `/plan-dashboard` itself. Doing it b
 different one. It also creates a **tracking issue** as a coordination mailbox: a session that isn't
 the plan's designated planning/steward session comments there to propose a structural change (new
 phase, deferring a track, etc.) instead of editing `plan.yaml` directly. (Falls back to an
-empty-commit, permanently-draft PR instead if a repo has Issues disabled — this repo briefly did,
-which is why `rdr-refactor`'s history mentions one.) See `.claude/personal/plans/README.md`'s
-"Proposing structural changes" section for the full convention. `session-start.sh`'s written header
-reminds a session which side of that it's on, based on the plan's `tracking_issue` field.
+empty-commit, permanently-draft PR instead if a repo has Issues disabled.) See
+`.claude/personal/plans/README.md`'s "Proposing structural changes" section for the full
+convention. `session-start.sh`'s written header reminds a session which side of that it's on,
+based on the plan's `tracking_issue` field.
 
 ## Setup: overriding the default remote/branch/path
 

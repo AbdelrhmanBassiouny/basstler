@@ -1,6 +1,6 @@
 ---
 name: plan-create
-description: Create (or migrate an existing bespoke roadmap doc into) a new multi-PR/multi-session plan under .claude/personal/plans/<plan-id>/plan.yaml on claude/personal-notes, cross-checked against live GitHub, then bootstrap and publish it. Invoke as "/plan-create <plan-id>". Use when the user asks to start tracking something as a plan, set up a new plan/roadmap, or migrate an existing roadmap doc into the plan-dashboard system.
+description: Create (or migrate an existing bespoke roadmap doc into) a new multi-PR/multi-session plan under .claude/personal/plans/<plan-id>/plan.yaml on the personal-notes branch, cross-checked against live GitHub, then bootstrap and publish it. Invoke as "/plan-create <plan-id>". Use when the user asks to start tracking something as a plan, set up a new plan/roadmap, or migrate an existing roadmap doc into the plan-dashboard system.
 allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__search_pull_requests, mcp__github__issue_write, mcp__github__create_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -9,8 +9,8 @@ allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__githu
 Generic, plan-agnostic tooling — nothing in this file may hardcode a
 specific plan's id, branches, or PRs. This is the authoring half of the
 plan-dashboard system; `.claude/skills/plan-dashboard/SKILL.md` is the
-reading/publishing half. Read `.claude/personal/plans/README.md` (on
-`claude/personal-notes`) for the full `plan.yaml` schema before drafting
+reading/publishing half. Read `.claude/personal/plans/README.md` (on the
+personal-notes branch) for the full `plan.yaml` schema before drafting
 anything — this skill must produce manifests that pass the exact same
 validation `plan-dashboard` step 2 runs, not a close approximation.
 
@@ -54,8 +54,11 @@ might draw on all three):
 - **Building from scratch via conversation.** Ask for: title, a one-line
   description, the repo (default to this one unless told otherwise), and
   whether the work has natural waves/phases and parallel tracks, or is
-  simple enough to be one track with a flat item list. Don't force a
-  wave/track structure onto something that doesn't have one — an
+  simple enough to be one track with a flat item list. A **wave** is a
+  sequential phase of the initiative (wave 2 generally starts once wave 1
+  has landed); a **track** is a parallel line of work within a wave — its
+  items can proceed independently of other tracks in the same wave. Don't
+  force a wave/track structure onto something that doesn't have one — an
   over-modelled plan is worse than a flat one; see `plans/README.md` on
   why items are flat and tagged rather than nested.
 
@@ -130,7 +133,9 @@ Follow the schema in `plans/README.md` exactly: `schema_version: 1`, `id`,
 `title`, `description`, `default_repo`, `tracking_issue` (if step 5 created
 one), `waves[]`, `tracks[]` (each tagged with a `wave`), `items[]` (flat,
 each tagged with a `track`, `status` from the thin enum `not_started |
-in_progress | blocked | deferred | done`, `depends_on` by item id, optional
+in_progress | blocked | deferred | done`, `depends_on` — a *list* of item
+ids, so an item can depend on more than one prerequisite (e.g. a track that
+only starts once two other tracks have both landed) — and optional
 `pr`/`session`/`notes`/`blockers`).
 
 Before saving, validate exactly what `plan-dashboard` step 2 validates —
@@ -140,7 +145,8 @@ must pass that same check the first time `/plan-dashboard` runs against it:
 - Every `items[].id` (defaulting to `branch` if omitted) is unique.
 - Every `items[].track` resolves to a declared `tracks[].id`.
 - Every `tracks[].wave` resolves to a declared `waves[].id`.
-- Every id in `items[].depends_on` resolves to another `items[].id`.
+- Every id in `items[].depends_on` (which may list more than one id)
+  resolves to another `items[].id`.
 
 Parse with Python's `yaml` module to check this mechanically rather than
 eyeballing it — the same tooling `save-plan.sh` and `plan-dashboard` both
@@ -151,24 +157,19 @@ already require.
 This skill does not push directly. It uses exactly the flow
 `save-plan.sh`'s own header comment documents for a brand-new plan (there
 is still no separate create-plan.sh; this skill is what makes that flow
-convenient, not a replacement for it):
+convenient, not a replacement for it): write the drafted `plan.yaml` and
+`roadmap.md` content to two temporary files, then run
 
-1. Add the marker pairs to `CLAUDE.local.md` yourself, matching
-   `session-start.sh`'s exact format:
-   ```
-   <!-- BEGIN-PLAN-MANIFEST: <plan-id> -->
-   <drafted plan.yaml content>
-   <!-- END-PLAN-MANIFEST -->
+```
+.claude/hooks/save-plan.sh <plan-id> --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
+```
 
-   <!-- BEGIN-PLAN-ROADMAP: <plan-id> -->
-   <drafted roadmap.md content>
-   <!-- END-PLAN-ROADMAP -->
-   ```
-2. Run `.claude/hooks/save-plan.sh <plan-id>` — the id must be explicit
-   here, since a brand-new plan has no entry in the reverse index yet for
-   `save-plan.sh` to auto-derive it from. This pushes both files to
-   `claude/personal-notes` and regenerates the branch→plan-id index in the
-   same commit.
+The id must be explicit here, since a brand-new plan has no entry in the
+reverse index yet for `save-plan.sh` to auto-derive it from. This reads the
+manifest/roadmap directly from the given files (no need to round-trip them
+through `CLAUDE.local.md`'s markers first), pushes both to the
+personal-notes branch, and regenerates the branch→plan-id index in the same
+commit.
 
 ## 8. Publish
 
@@ -180,8 +181,8 @@ republishes a second, separate page.
 
 If this was a migration from an existing freeform doc, offer — don't do it
 unprompted — to replace that old doc with a short pointer stub at its
-original location, the same way the `rdr-roadmap.md` reference migration
-did, so anyone still reading the old path finds the new one immediately.
+original location, so anyone still reading the old path finds the new one
+immediately.
 
 ## 9. Report back
 

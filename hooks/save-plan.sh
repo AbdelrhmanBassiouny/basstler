@@ -5,7 +5,7 @@ set -euo pipefail
 # sections back onto the personal-notes branch, at
 # .claude/personal/plans/<plan-id>/{plan.yaml,roadmap.md} - and regenerates
 # the generated branch->plan-id reverse index
-# (.claude/personal/plans/_generated/branch-index.yaml) in the same commit,
+# (.claude/personal/plans/_generated/branch-index.tsv) in the same commit,
 # scanning every plan's plan.yaml so it can never drift out of sync with
 # the manifests it's derived from. See
 # .claude/personal/plans/README.md (on the personal-notes branch) for the
@@ -28,16 +28,21 @@ set -euo pipefail
 # from a branch that isn't itself one of its tracked items (e.g. a steward
 # session coordinating the whole plan rather than working one item).
 #
-# Creating a brand-new plan: there is still no separate create-plan.sh -
-# .claude/skills/plan-create/SKILL.md (invoke as /plan-create <plan-id>)
-# automates exactly this flow (drafting a schema-conformant manifest,
-# cross-checking live GitHub, then bootstrapping and publishing it), so
-# reach for that first. Doing it by hand is still just as valid: add the
-# BEGIN-PLAN-MANIFEST/END-PLAN-MANIFEST and BEGIN-PLAN-ROADMAP/END-PLAN-ROADMAP
-# marker pairs to CLAUDE.local.md yourself (session-start.sh only ever
-# scaffolds them for a branch the index already resolves, which a brand-new
-# plan by definition isn't in yet), write your plan.yaml/roadmap.md content
-# between them, then run this script with the new plan's id explicitly.
+# Bootstrapping a brand-new plan - two equivalent ways:
+#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id> \
+#     --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
+# reads the manifest/roadmap directly from the given files instead of
+# extracting them from CLAUDE.local.md's markers - the plan id must still be
+# explicit, since a brand-new plan has no entry in the reverse index yet to
+# auto-derive it from. This is what .claude/skills/plan-create/SKILL.md
+# uses, since it already has the drafted content in hand and gains nothing
+# from round-tripping it through CLAUDE.local.md first. Doing it by hand is
+# still just as valid: add the BEGIN-PLAN-MANIFEST/END-PLAN-MANIFEST and
+# BEGIN-PLAN-ROADMAP/END-PLAN-ROADMAP marker pairs to CLAUDE.local.md
+# yourself (session-start.sh only ever scaffolds them for a branch the index
+# already resolves, which a brand-new plan by definition isn't in yet),
+# write your plan.yaml/roadmap.md content between them, then run this
+# script with the new plan's id and no --manifest/--roadmap flags.
 #
 # This script pushes data only. It never calls the Artifact tool (only a
 # live Claude session can), so it does not regenerate the dashboard itself -
@@ -45,7 +50,7 @@ set -euo pipefail
 #
 # Requires python3 with PyYAML to parse/validate manifests and regenerate
 # the reverse index (unlike session-start.sh's read path, which is
-# grep/sed-only so it stays dependency-free on every session start - this
+# grep/awk-only so it stays dependency-free on every session start - this
 # script only runs when a session is actively editing a plan, where python3
 # is a safe assumption in this repo).
 #
@@ -74,18 +79,58 @@ if ! python3 -c "import yaml" > /dev/null 2>&1; then
   exit 1
 fi
 
-if [ ! -f "${CLAUDE_LOCAL_MD}" ]; then
-  echo "No CLAUDE.local.md at the project root (${CLAUDE_LOCAL_MD}) - nothing to save." >&2
+PLAN_ID=""
+MANIFEST_SOURCE_FILE=""
+ROADMAP_SOURCE_FILE=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --manifest)
+      MANIFEST_SOURCE_FILE="$2"
+      shift 2
+      ;;
+    --roadmap)
+      ROADMAP_SOURCE_FILE="$2"
+      shift 2
+      ;;
+    *)
+      PLAN_ID="$1"
+      shift
+      ;;
+  esac
+done
+
+if [ -n "${MANIFEST_SOURCE_FILE}" ] && [ -z "${ROADMAP_SOURCE_FILE}" ]; then
+  echo "--manifest was given without --roadmap - they must be passed together." >&2
   exit 1
 fi
-
-if ! grep -q '^<!-- BEGIN-PLAN-MANIFEST:' "${CLAUDE_LOCAL_MD}" \
-    || ! grep -q '^<!-- BEGIN-PLAN-ROADMAP:' "${CLAUDE_LOCAL_MD}"; then
-  echo "CLAUDE.local.md has no plan-manifest/plan-roadmap section to extract." >&2
-  echo "Run session-start.sh first (on a branch a plan already tracks), or add" >&2
-  echo "the marker pairs yourself when bootstrapping a brand-new plan - see the" >&2
-  echo "header comment in this script." >&2
+if [ -z "${MANIFEST_SOURCE_FILE}" ] && [ -n "${ROADMAP_SOURCE_FILE}" ]; then
+  echo "--roadmap was given without --manifest - they must be passed together." >&2
   exit 1
+fi
+BOOTSTRAP_FROM_FILES=0
+if [ -n "${MANIFEST_SOURCE_FILE}" ]; then
+  BOOTSTRAP_FROM_FILES=1
+  if [ -z "${PLAN_ID}" ]; then
+    echo "<plan-id> is required alongside --manifest/--roadmap - a brand-new" >&2
+    echo "plan has no entry in the reverse index yet to auto-derive it from." >&2
+    exit 1
+  fi
+fi
+
+if [ "${BOOTSTRAP_FROM_FILES}" = "0" ]; then
+  if [ ! -f "${CLAUDE_LOCAL_MD}" ]; then
+    echo "No CLAUDE.local.md at the project root (${CLAUDE_LOCAL_MD}) - nothing to save." >&2
+    exit 1
+  fi
+  if ! grep -q '^<!-- BEGIN-PLAN-MANIFEST:' "${CLAUDE_LOCAL_MD}" \
+      || ! grep -q '^<!-- BEGIN-PLAN-ROADMAP:' "${CLAUDE_LOCAL_MD}"; then
+    echo "CLAUDE.local.md has no plan-manifest/plan-roadmap section to extract." >&2
+    echo "Run session-start.sh first (on a branch a plan already tracks), pass" >&2
+    echo "--manifest/--roadmap file paths instead, or add the marker pairs" >&2
+    echo "yourself when bootstrapping a brand-new plan - see the header" >&2
+    echo "comment in this script." >&2
+    exit 1
+  fi
 fi
 
 if ! fetch_personal_notes_branch; then
@@ -94,7 +139,6 @@ if ! fetch_personal_notes_branch; then
   exit 1
 fi
 
-PLAN_ID="${1:-}"
 if [ -z "${PLAN_ID}" ]; then
   PLAN_ID="$(plan_id_for_branch "$(git rev-parse --abbrev-ref HEAD)" || true)"
 fi
@@ -115,13 +159,18 @@ cleanup() {
 }
 trap cleanup EXIT
 
-awk '/^<!-- BEGIN-PLAN-MANIFEST:/{flag=1; next} /^<!-- END-PLAN-MANIFEST -->$/{flag=0} flag' \
-  "${CLAUDE_LOCAL_MD}" > "${MANIFEST_FILE}"
-awk '/^<!-- BEGIN-PLAN-ROADMAP:/{flag=1; next} /^<!-- END-PLAN-ROADMAP -->$/{flag=0} flag' \
-  "${CLAUDE_LOCAL_MD}" > "${ROADMAP_FILE}"
+if [ "${BOOTSTRAP_FROM_FILES}" = "1" ]; then
+  cp "${MANIFEST_SOURCE_FILE}" "${MANIFEST_FILE}"
+  cp "${ROADMAP_SOURCE_FILE}" "${ROADMAP_FILE}"
+else
+  awk '/^<!-- BEGIN-PLAN-MANIFEST:/{flag=1; next} /^<!-- END-PLAN-MANIFEST -->$/{flag=0} flag' \
+    "${CLAUDE_LOCAL_MD}" > "${MANIFEST_FILE}"
+  awk '/^<!-- BEGIN-PLAN-ROADMAP:/{flag=1; next} /^<!-- END-PLAN-ROADMAP -->$/{flag=0} flag' \
+    "${CLAUDE_LOCAL_MD}" > "${ROADMAP_FILE}"
+fi
 
 if [ ! -s "${MANIFEST_FILE}" ]; then
-  echo "The plan-manifest section is empty - nothing to save." >&2
+  echo "The plan manifest is empty - nothing to save." >&2
   exit 1
 fi
 
@@ -132,33 +181,31 @@ with open('${MANIFEST_FILE}') as f:
 print(plan.get('id', ''))
 ")"
 if [ "${MANIFEST_PLAN_ID}" != "${PLAN_ID}" ]; then
-  echo "CLAUDE.local.md's plan-manifest 'id: ${MANIFEST_PLAN_ID}' does not match" >&2
-  echo "the plan being saved ('${PLAN_ID}') - refusing to save under a mismatched key." >&2
+  echo "The plan manifest's 'id: ${MANIFEST_PLAN_ID}' does not match the plan" >&2
+  echo "being saved ('${PLAN_ID}') - refusing to save under a mismatched key." >&2
   exit 1
 fi
 
 git branch -D __save-plan-tmp > /dev/null 2>&1 || true
 git worktree add -b __save-plan-tmp "${SCRATCH_DIR}" FETCH_HEAD --quiet
 
-PLAN_DIR="${SCRATCH_DIR}/.claude/personal/plans/${PLAN_ID}"
+PLAN_DIR="${SCRATCH_DIR}/$(plan_directory_path "${PLAN_ID}")"
+MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
+ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
 mkdir -p "${PLAN_DIR}"
-cp "${MANIFEST_FILE}" "${PLAN_DIR}/plan.yaml"
-cp "${ROADMAP_FILE}" "${PLAN_DIR}/roadmap.md"
+cp "${MANIFEST_FILE}" "${SCRATCH_DIR}/${MANIFEST_PATH}"
+cp "${ROADMAP_FILE}" "${SCRATCH_DIR}/${ROADMAP_PATH}"
 
-INDEX_PATH=".claude/personal/plans/_generated/branch-index.yaml"
-mkdir -p "$(dirname "${SCRATCH_DIR}/${INDEX_PATH}")"
+mkdir -p "$(dirname "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}")"
 python3 -c "
 import glob, os, yaml
 
 scratch = '${SCRATCH_DIR}'
-lines = [
-    '# Generated by save-plan.sh from every plans/*/plan.yaml - do not hand-edit.',
-    '# Maps each item branch to the plan id that tracks it, so session-start.sh',
-    '# can auto-load the parent plan for whatever branch is checked out.',
-    'branches:',
-]
+plans_dir = '${PLANS_DIR}'
+manifest_filename = '${PLAN_MANIFEST_FILENAME}'
+lines = []
 seen = set()
-for path in sorted(glob.glob(os.path.join(scratch, '.claude/personal/plans/*/plan.yaml'))):
+for path in sorted(glob.glob(os.path.join(scratch, plans_dir, '*', manifest_filename))):
     with open(path) as f:
         plan = yaml.safe_load(f)
     plan_id = plan['id']
@@ -167,16 +214,16 @@ for path in sorted(glob.glob(os.path.join(scratch, '.claude/personal/plans/*/pla
         if not branch or branch in seen:
             continue
         seen.add(branch)
-        lines.append(f'  {branch}: {plan_id}')
+        lines.append(f'{branch}\t{plan_id}')
 
-with open(os.path.join(scratch, '${INDEX_PATH}'), 'w') as f:
-    f.write('\n'.join(lines) + '\n')
+with open(os.path.join(scratch, '${PLAN_BRANCH_INDEX_PATH}'), 'w') as f:
+    f.write('\n'.join(lines) + ('\n' if lines else ''))
 "
 
 git -C "${SCRATCH_DIR}" add \
-  ".claude/personal/plans/${PLAN_ID}/plan.yaml" \
-  ".claude/personal/plans/${PLAN_ID}/roadmap.md" \
-  "${INDEX_PATH}"
+  "${MANIFEST_PATH}" \
+  "${ROADMAP_PATH}" \
+  "${PLAN_BRANCH_INDEX_PATH}"
 
 if git -C "${SCRATCH_DIR}" diff --cached --quiet; then
   echo "No changes to save - plan '${PLAN_ID}' on '${NOTES_BRANCH}' (remote '${ACTIVE_NOTES_REMOTE}') is already up to date."

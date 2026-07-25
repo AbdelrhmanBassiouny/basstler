@@ -1,151 +1,337 @@
-"""Shared, dependency-free rendering helpers for the plan-dashboard scripts.
+"""
+Shared, dependency-free rendering helpers for the plan-dashboard scripts.
 
 No plan-specific content belongs here - this module only knows how to turn
 generic markdown into HTML fragments. build_dashboard.py and build_index.py
 both import it rather than duplicating the logic.
 """
 
+from __future__ import annotations
+
 import html
 import re
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 
 
-def esc(value):
-    """HTML-escape a value, treating None as an empty string."""
-    return html.escape(str(value)) if value is not None else ''
-
-
-def markdown_inline(text):
-    """Minimal inline markdown: links, bold, italic, inline code.
-
-    Not a full CommonMark implementation - deliberately just enough for a
-    plan's roadmap.md, which is plain prose/lists/tables, not full Markdown
-    with nested emphasis or reference-style links.
+def escape_html(value: object) -> str:
     """
-    text = esc(text)
-    text = re.sub(r'`([^`]+)`', r'<code>\1</code>', text)
-    text = re.sub(r'\*\*([^*]+)\*\*', r'<strong>\1</strong>', text)
-    text = re.sub(r'(?<!\*)\*([^*]+)\*(?!\*)', r'<em>\1</em>', text)
-    text = re.sub(r'\[([^\]]+)\]\(([^)]+)\)', r'<a href="\2" target="_blank" rel="noopener">\1</a>', text)
+    HTML-escape a value.
+
+    :param value: The value to escape. Rendered via ``str()`` first; ``None`` becomes an
+        empty string rather than the literal ``"None"``.
+    :return: The HTML-escaped string.
+    """
+    return html.escape(str(value)) if value is not None else ""
+
+
+def render_inline_markdown(text: str) -> str:
+    """
+    Render a single line of minimal inline markdown to HTML.
+
+    Supports links, bold, italic and inline code - not a full CommonMark
+    implementation, deliberately just enough for a plan's roadmap.md, which
+    is plain prose/lists/tables, not full Markdown with nested emphasis or
+    reference-style links.
+
+    :param text: The raw markdown line (not yet HTML-escaped).
+    :return: The rendered HTML fragment.
+    """
+    text = escape_html(text)
+    text = re.sub(r"`([^`]+)`", r"<code>\1</code>", text)
+    text = re.sub(r"\*\*([^*]+)\*\*", r"<strong>\1</strong>", text)
+    text = re.sub(r"(?<!\*)\*([^*]+)\*(?!\*)", r"<em>\1</em>", text)
+    text = re.sub(
+        r"\[([^\]]+)\]\(([^)]+)\)",
+        r'<a href="\2" target="_blank" rel="noopener">\1</a>',
+        text,
+    )
     return text
 
 
-def markdown_to_html(text):
-    """Minimal block-level markdown: headings, paragraphs, unordered/ordered
-    lists, fenced code, GFM tables. Not full CommonMark - see markdown_inline
-    for the same trade-off on inline formatting.
-
-    Continuation lines (a paragraph or list item wrapped across multiple
-    source lines, ended by a blank line or a new block starting) are joined
-    into their block BEFORE inline formatting runs, so a `**bold**` span or
-    a list item's sentence can cross a wrapped line without breaking.
+class MarkdownBlock(ABC):
     """
-    lines = text.split('\n')
-    blocks = []  # ('heading', (level, text)) | ('para'|'ul'|'ol', [line, ...]) | ('code', [line, ...]) | ('table', (header_cells, rows))
-    current = None
+    A single block-level markdown element, able to render itself to HTML.
 
-    def push_current():
-        nonlocal current
-        if current is not None:
-            blocks.append(current)
-            current = None
+    Polymorphic rendering (one ``render_to_html`` per concrete block type) replaces a
+    central dispatch-by-tag switch, so adding a new block kind never means touching
+    every other block's rendering code.
+    """
 
-    i = 0
-    while i < len(lines):
-        line = lines[i]
-        stripped = line.rstrip()
+    @abstractmethod
+    def render_to_html(self) -> str:
+        """
+        Render this block to its HTML representation.
+        """
 
-        if stripped.startswith('```'):
-            if current is not None and current[0] == 'code':
-                push_current()
-            else:
-                push_current()
-                current = ('code', [])
-            i += 1
-            continue
-        if current is not None and current[0] == 'code':
-            current[1].append(line)
-            i += 1
-            continue
 
-        heading = re.match(r'^(#{1,6})\s+(.*)$', stripped)
-        if heading:
-            push_current()
-            blocks.append(('heading', (len(heading.group(1)), heading.group(2))))
-            i += 1
-            continue
+@dataclass
+class Heading(MarkdownBlock):
+    """
+    A markdown heading (``#`` through ``######``).
+    """
 
-        table_header = re.match(r'^\s*\|(.+)\|\s*$', stripped)
-        if (table_header and i + 1 < len(lines)
-                and re.match(r'^\s*\|?[\s:|-]+\|?\s*$', lines[i + 1].strip())
-                and '-' in lines[i + 1]):
-            push_current()
-            header_cells = [c.strip() for c in table_header.group(1).split('|')]
-            rows = []
-            i += 2  # skip the header row and the --- separator row
-            while i < len(lines) and re.match(r'^\s*\|(.+)\|\s*$', lines[i].rstrip()):
-                row_cells = [c.strip() for c in lines[i].strip().strip('|').split('|')]
-                rows.append(row_cells)
-                i += 1
-            blocks.append(('table', (header_cells, rows)))
-            continue
+    level: int
+    """
+    The number of leading ``#`` characters (1-6) in the source markdown.
+    """
 
-        if not stripped:
-            push_current()
-            i += 1
-            continue
+    text: str
+    """
+    The heading's raw (not yet HTML-escaped) text.
+    """
 
-        bullet = re.match(r'^\s*[-*]\s+(.*)$', line)
-        if bullet:
-            if current is not None and current[0] == 'ul':
-                current[1].append(bullet.group(1))
-            else:
-                push_current()
-                current = ('ul', [bullet.group(1)])
-            i += 1
-            continue
+    def render_to_html(self) -> str:
+        # +3, capped at 6: a roadmap's own h1 renders as the embedding
+        # dashboard page's h4, staying below the dashboard's own h1-h3.
+        heading_level = min(self.level + 3, 6)
+        rendered_text = render_inline_markdown(self.text)
+        return f"<h{heading_level}>{rendered_text}</h{heading_level}>"
 
-        numbered = re.match(r'^\s*\d+\.\s+(.*)$', line)
-        if numbered:
-            if current is not None and current[0] == 'ol':
-                current[1].append(numbered.group(1))
-            else:
-                push_current()
-                current = ('ol', [numbered.group(1)])
-            i += 1
-            continue
 
-        # continuation of whatever block is open (list item or paragraph)
-        if current is not None and current[0] in ('ul', 'ol'):
-            current[1][-1] += ' ' + stripped
-        elif current is not None and current[0] == 'para':
-            current[1].append(stripped)
-        else:
-            push_current()
-            current = ('para', [stripped])
-        i += 1
+@dataclass
+class Paragraph(MarkdownBlock):
+    """
+    A paragraph: one or more wrapped source lines joined into one block.
+    """
 
-    push_current()
+    lines: list[str] = field(default_factory=list)
+    """
+    The paragraph's source lines, joined with a space at render time.
+    """
 
-    html_parts = []
-    for kind, data in blocks:
-        if kind == 'heading':
-            level, heading_text = data
-            level = min(level + 3, 6)  # roadmap h1 -> page h4, staying below the dashboard's own h1-h3
-            html_parts.append(f'<h{level}>{markdown_inline(heading_text)}</h{level}>')
-        elif kind == 'para':
-            html_parts.append('<p>' + markdown_inline(' '.join(data)) + '</p>')
-        elif kind in ('ul', 'ol'):
-            items = ''.join(f'<li>{markdown_inline(item)}</li>' for item in data)
-            html_parts.append(f'<{kind}>{items}</{kind}>')
-        elif kind == 'code':
-            html_parts.append('<pre><code>' + esc('\n'.join(data)) + '</code></pre>')
-        elif kind == 'table':
-            header_cells, rows = data
-            thead = '<tr>' + ''.join(f'<th>{markdown_inline(c)}</th>' for c in header_cells) + '</tr>'
-            tbody = ''.join(
-                '<tr>' + ''.join(f'<td>{markdown_inline(c)}</td>' for c in row) + '</tr>'
-                for row in rows
+    def render_to_html(self) -> str:
+        return "<p>" + render_inline_markdown(" ".join(self.lines)) + "</p>"
+
+
+@dataclass
+class UnorderedList(MarkdownBlock):
+    """
+    A bullet (``-``/``*``) list.
+    """
+
+    items: list[str] = field(default_factory=list)
+    """
+    Each list item's raw text, one wrapped-continuation-joined string per item.
+    """
+
+    def render_to_html(self) -> str:
+        list_items = "".join(
+            f"<li>{render_inline_markdown(item)}</li>" for item in self.items
+        )
+        return f"<ul>{list_items}</ul>"
+
+
+@dataclass
+class OrderedList(MarkdownBlock):
+    """
+    A numbered (``1.``, ``2.``, ...) list.
+    """
+
+    items: list[str] = field(default_factory=list)
+    """
+    Each list item's raw text, one wrapped-continuation-joined string per item.
+    """
+
+    def render_to_html(self) -> str:
+        list_items = "".join(
+            f"<li>{render_inline_markdown(item)}</li>" for item in self.items
+        )
+        return f"<ol>{list_items}</ol>"
+
+
+@dataclass
+class CodeBlock(MarkdownBlock):
+    """
+    A fenced (``` ```) code block, rendered verbatim (no syntax highlighting).
+    """
+
+    lines: list[str] = field(default_factory=list)
+    """
+    The code block's raw source lines, escaped but otherwise unmodified.
+    """
+
+    def render_to_html(self) -> str:
+        return "<pre><code>" + escape_html("\n".join(self.lines)) + "</code></pre>"
+
+
+@dataclass
+class Table(MarkdownBlock):
+    """
+    A GitHub-flavored-markdown pipe table.
+    """
+
+    header_cells: list[str]
+    """
+    The header row's cell texts, in column order.
+    """
+
+    rows: list[list[str]]
+    """
+    The body rows, each a list of cell texts in column order.
+    """
+
+    def render_to_html(self) -> str:
+        header_row = (
+            "<tr>"
+            + "".join(
+                f"<th>{render_inline_markdown(cell)}</th>" for cell in self.header_cells
             )
-            html_parts.append(f'<div class="roadmap-table-wrap"><table><thead>{thead}</thead><tbody>{tbody}</tbody></table></div>')
+            + "</tr>"
+        )
+        body_rows = "".join(
+            "<tr>"
+            + "".join(f"<td>{render_inline_markdown(cell)}</td>" for cell in row)
+            + "</tr>"
+            for row in self.rows
+        )
+        return f'<div class="roadmap-table-wrap"><table><thead>{header_row}</thead><tbody>{body_rows}</tbody></table></div>'
 
-    return '\n'.join(html_parts)
+
+class _MarkdownBlockParser:
+    """
+    Parses plain-text markdown into a list of :class:`MarkdownBlock` objects.
+
+    Not full CommonMark - see :func:`render_inline_markdown` for the same
+    trade-off on inline formatting. Continuation lines (a paragraph or list
+    item wrapped across multiple source lines, ended by a blank line or a
+    new block starting) are joined into their block *before* inline
+    formatting runs, so a ``**bold**`` span or a list item's sentence can
+    cross a wrapped line without breaking.
+    """
+
+    _HEADING_PATTERN = re.compile(r"^(#{1,6})\s+(.*)$")
+    _TABLE_HEADER_PATTERN = re.compile(r"^\s*\|(.+)\|\s*$")
+    _TABLE_SEPARATOR_PATTERN = re.compile(r"^\s*\|?[\s:|-]+\|?\s*$")
+    _TABLE_ROW_PATTERN = re.compile(r"^\s*\|(.+)\|\s*$")
+    _BULLET_PATTERN = re.compile(r"^\s*[-*]\s+(.*)$")
+    _NUMBERED_PATTERN = re.compile(r"^\s*\d+\.\s+(.*)$")
+
+    def __init__(self, markdown_text: str) -> None:
+        self._lines = markdown_text.split("\n")
+        self._blocks: list[MarkdownBlock] = []
+        self._open_block: MarkdownBlock | None = None
+
+    def parse(self) -> list[MarkdownBlock]:
+        """
+        Parse the full input and return its blocks in source order.
+        """
+        line_index = 0
+        while line_index < len(self._lines):
+            line_index = self._parse_one_line(line_index)
+        self._close_open_block()
+        return self._blocks
+
+    def _parse_one_line(self, line_index: int) -> int:
+        line = self._lines[line_index]
+        stripped_line = line.rstrip()
+
+        if stripped_line.startswith("```"):
+            return self._parse_code_fence(line_index)
+        if isinstance(self._open_block, CodeBlock):
+            self._open_block.lines.append(line)
+            return line_index + 1
+
+        heading_match = self._HEADING_PATTERN.match(stripped_line)
+        if heading_match:
+            self._close_open_block()
+            self._blocks.append(
+                Heading(level=len(heading_match.group(1)), text=heading_match.group(2))
+            )
+            return line_index + 1
+
+        table_end_index = self._try_parse_table(line_index, stripped_line)
+        if table_end_index is not None:
+            return table_end_index
+
+        if not stripped_line:
+            self._close_open_block()
+            return line_index + 1
+
+        bullet_match = self._BULLET_PATTERN.match(line)
+        if bullet_match:
+            self._append_list_item(UnorderedList, bullet_match.group(1))
+            return line_index + 1
+
+        numbered_match = self._NUMBERED_PATTERN.match(line)
+        if numbered_match:
+            self._append_list_item(OrderedList, numbered_match.group(1))
+            return line_index + 1
+
+        self._append_continuation_or_paragraph(stripped_line)
+        return line_index + 1
+
+    def _parse_code_fence(self, line_index: int) -> int:
+        if isinstance(self._open_block, CodeBlock):
+            self._close_open_block()
+        else:
+            self._close_open_block()
+            self._open_block = CodeBlock()
+        return line_index + 1
+
+    def _try_parse_table(self, line_index: int, stripped_line: str) -> int | None:
+        is_table_header = self._TABLE_HEADER_PATTERN.match(stripped_line)
+        has_separator_row = (
+            line_index + 1 < len(self._lines)
+            and self._TABLE_SEPARATOR_PATTERN.match(self._lines[line_index + 1].strip())
+            and "-" in self._lines[line_index + 1]
+        )
+        if not (is_table_header and has_separator_row):
+            return None
+
+        self._close_open_block()
+        header_cells = [cell.strip() for cell in is_table_header.group(1).split("|")]
+        rows: list[list[str]] = []
+        next_line_index = (
+            line_index + 2
+        )  # skip the header row and the --- separator row
+        while next_line_index < len(self._lines) and self._TABLE_ROW_PATTERN.match(
+            self._lines[next_line_index].rstrip()
+        ):
+            row_cells = [
+                cell.strip()
+                for cell in self._lines[next_line_index].strip().strip("|").split("|")
+            ]
+            rows.append(row_cells)
+            next_line_index += 1
+        self._blocks.append(Table(header_cells=header_cells, rows=rows))
+        return next_line_index
+
+    def _append_list_item(
+        self, list_type: type[UnorderedList] | type[OrderedList], item_text: str
+    ) -> None:
+        if isinstance(self._open_block, list_type):
+            self._open_block.items.append(item_text)
+        else:
+            self._close_open_block()
+            self._open_block = list_type(items=[item_text])
+
+    def _append_continuation_or_paragraph(self, stripped_line: str) -> None:
+        # .strip(), not just the already-rstripped stripped_line: a
+        # continuation line indented to align under its list marker (a
+        # common markdown style) must not leak that leading whitespace into
+        # the joined text as literal double spaces.
+        content = stripped_line.strip()
+        if isinstance(self._open_block, (UnorderedList, OrderedList)):
+            self._open_block.items[-1] += " " + content
+        elif isinstance(self._open_block, Paragraph):
+            self._open_block.lines.append(content)
+        else:
+            self._close_open_block()
+            self._open_block = Paragraph(lines=[content])
+
+    def _close_open_block(self) -> None:
+        if self._open_block is not None:
+            self._blocks.append(self._open_block)
+            self._open_block = None
+
+
+def render_markdown_to_html(markdown_text: str) -> str:
+    """
+    Render block-level markdown (headings, lists, code, GFM tables) to HTML.
+
+    :param markdown_text: The raw markdown source (typically a plan's ``roadmap.md``).
+    :return: The rendered HTML, one block's output per line.
+    """
+    blocks = _MarkdownBlockParser(markdown_text).parse()
+    return "\n".join(block.render_to_html() for block in blocks)

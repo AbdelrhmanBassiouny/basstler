@@ -123,6 +123,13 @@ fetch_personal_notes_branch || exit 0
 OUTPUT_FILE="$(mktemp)"
 WROTE_ANYTHING=0
 
+# SUMMARY_*: what this run actually found/wrote, printed as a deterministic
+# report at the end (see the bottom of this script) instead of leaving a
+# session to describe secondhand, in its own prose, what the hook did.
+SUMMARY_NOTES="not found"
+SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
+SUMMARY_PLAN="none"
+
 if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
   cat <<HEADER >> "${OUTPUT_FILE}"
 <!--
@@ -140,6 +147,7 @@ HEADER
   git show "FETCH_HEAD:${NOTES_PATH}" >> "${OUTPUT_FILE}"
   echo "<!-- END-PERSONAL-NOTES -->" >> "${OUTPUT_FILE}"
   WROTE_ANYTHING=1
+  SUMMARY_NOTES="loaded from '${NOTES_BRANCH}' (${NOTES_PATH}) on '${ACTIVE_NOTES_REMOTE}'"
 fi
 
 PROGRESS_PATH="$(pr_progress_path || true)"
@@ -164,11 +172,13 @@ ever saved.
 PROGRESS_HEADER
   if git cat-file -e "FETCH_HEAD:${PROGRESS_PATH}" 2>/dev/null; then
     git show "FETCH_HEAD:${PROGRESS_PATH}" >> "${OUTPUT_FILE}"
+    SUMMARY_PROGRESS="loaded for branch '$(git rev-parse --abbrev-ref HEAD)' (${PROGRESS_PATH})"
   else
     cat <<'SCAFFOLD' >> "${OUTPUT_FILE}"
 No progress recorded yet for this branch. Initialize it now: a short plan,
 what's done so far, and what's next. Keep it current as you work.
 SCAFFOLD
+    SUMMARY_PROGRESS="no saved progress yet for branch '$(git rev-parse --abbrev-ref HEAD)' - scaffold written"
   fi
   echo "<!-- END-PR-PROGRESS -->" >> "${OUTPUT_FILE}"
   WROTE_ANYTHING=1
@@ -176,8 +186,8 @@ fi
 
 PLAN_ID="$(plan_id_for_branch "$(git rev-parse --abbrev-ref HEAD)" || true)"
 if [ -n "${PLAN_ID}" ]; then
-  PLAN_MANIFEST_PATH=".claude/personal/plans/${PLAN_ID}/plan.yaml"
-  PLAN_ROADMAP_PATH=".claude/personal/plans/${PLAN_ID}/roadmap.md"
+  PLAN_MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
+  PLAN_ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
   if git cat-file -e "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
     [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
     # TRACKING_ISSUE: a plain top-level scalar, so grep/sed suffices here too -
@@ -236,6 +246,7 @@ ROADMAP_HEADER
     fi
     echo "<!-- END-PLAN-ROADMAP -->" >> "${OUTPUT_FILE}"
     WROTE_ANYTHING=1
+    SUMMARY_PLAN="'${PLAN_ID}' (tracking issue: ${TRACKING_ISSUE:-none})"
   fi
 fi
 
@@ -244,3 +255,16 @@ if [ "${WROTE_ANYTHING}" = "1" ]; then
 else
   rm -f "${OUTPUT_FILE}"
 fi
+
+# Deterministic session-start report: what this run found and wrote, printed
+# once by the script itself rather than left for a session to notice and
+# describe secondhand from CLAUDE.local.md's content. SessionStart hook
+# stdout is surfaced as context for the session, so this is the guaranteed
+# confirmation of what got loaded - not something the model has to remember
+# to summarize on its own.
+cat <<SUMMARY
+session-start.sh summary:
+  personal notes:  ${SUMMARY_NOTES}
+  PR progress:     ${SUMMARY_PROGRESS}
+  plan:            ${SUMMARY_PLAN}
+SUMMARY
