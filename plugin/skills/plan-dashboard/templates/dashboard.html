@@ -299,6 +299,7 @@
     border-radius: 5px;
     margin-bottom: 1.1rem;
   }
+  .wave-description { margin: -0.6rem 0 1.1rem; color: var(--text-muted); font-size: 0.85rem; }
 
   .track { margin-top: 1.4rem; }
   .track-title {
@@ -505,6 +506,9 @@
       {% for wave_section in waves %}
       <section class="wave" id="wave-{{ wave_section.wave.id }}">
         <div class="wave-eyebrow">{{ wave_section.wave.name }}</div>
+        {% if wave_section.wave.description %}
+        <p class="wave-description">{{ wave_section.wave.description }}</p>
+        {% endif %}
         {% for track_section in wave_section.tracks %}
         <section class="track">
           <h3 class="track-title">{{ track_section.track.name }}</h3>
