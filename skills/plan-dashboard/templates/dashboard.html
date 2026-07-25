@@ -1,4 +1,4 @@
-<title>{{TITLE}}</title>
+<title>{{ title }}</title>
 <style>
   :root {
     --bg: #F4F6F7;
@@ -427,30 +427,160 @@
   }
 </style>
 
+{% macro dependency_chip(dependency_identifier, items_by_identifier) %}
+{% set dependency = items_by_identifier.get(dependency_identifier) %}
+<span class="chip" title="{{ dependency.title if dependency else dependency_identifier }}">{{ dependency.identifier if dependency else dependency_identifier }}</span>
+{% endmacro %}
+
+{% macro item_card(stacked, items_by_identifier, default_repo) %}
+{% set item = stacked.item %}
+    <article class="item status-{{ item.status.value }}{{ ' has-drift' if item.drift_description else '' }}" style="margin-left: {{ stacked.indent_level * 1.75 }}rem;">
+      {% if stacked.wrap_parent %}
+      <div class="wrap-arrow">◄ continues from <span class="mono">{{ stacked.wrap_parent.identifier }}</span> <span class="wrap-parent-title">({{ stacked.wrap_parent.title }})</span></div>
+      {% endif %}
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">{{ item.title }}</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-{{ item.status.value }}">{{ item.status.display_label }}</span>
+              <span class="badge live-badge live-{{ item.live_state.value }}">{{ item.live_state.display_label }}</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">{{ item.identifier }}</span>
+            <span class="mono branch">{{ item.branch }}</span>
+            {% if item.pull_request_number %}
+            <a class="pr-link" href="https://github.com/{{ item.repo or default_repo }}/pull/{{ item.pull_request_number }}" target="_blank" rel="noopener">#{{ item.pull_request_number }}</a>
+            {% else %}
+            <span class="muted">no PR yet</span>
+            {% endif %}
+            {% if item.session %}
+            <a class="session-link" href="{{ item.session }}" target="_blank" rel="noopener">session ↗</a>
+            {% endif %}
+          </div>
+          {% if item.drift_description %}
+          <div class="drift">⚠ {{ item.drift_description }}</div>
+          {% endif %}
+          {% if item.notes %}
+          <div class="notes">{{ item.notes.strip() }}</div>
+          {% endif %}
+          {% if item.depends_on %}
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            {% for dependency_identifier in item.depends_on %}
+            {{ dependency_chip(dependency_identifier, items_by_identifier) }}
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if item.blockers %}
+          <div class="blockers">
+            {% for blocker in item.blockers %}
+            <div class="blocker">▸ {{ blocker }}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </article>
+{% endmacro %}
+
 <div class="page">
   <header class="masthead">
     <p class="eyebrow">Plan Dashboard</p>
-    <h1>{{TITLE}}</h1>
-    <p class="description">{{DESCRIPTION}}</p>
-    <p class="repo-line">{{TOTAL}} tracked items · <a href="https://github.com/{{REPO}}" target="_blank" rel="noopener">{{REPO}}</a>{{TRACKING_PR_LINK}}</p>
+    <h1>{{ title }}</h1>
+    <p class="description">{{ description }}</p>
+    <p class="repo-line">
+      {{ total_items }} tracked items · <a href="https://github.com/{{ repo }}" target="_blank" rel="noopener">{{ repo }}</a>
+      {% if tracking_url %}<a class="tracking-link" href="{{ tracking_url }}" target="_blank" rel="noopener">Propose a structural change →</a>{% endif %}
+    </p>
     <details class="roadmap-details">
       <summary>Background &amp; history (roadmap.md)</summary>
-      <div class="roadmap-body">{{ROADMAP_HTML}}</div>
+      <div class="roadmap-body">{{ roadmap_html | safe }}</div>
     </details>
   </header>
 
   <div class="layout">
-    <main>{{WAVES_HTML}}</main>
+    <main>
+      {% for wave_section in waves %}
+      <section class="wave" id="wave-{{ wave_section.wave.id }}">
+        <div class="wave-eyebrow">{{ wave_section.wave.name }}</div>
+        {% for track_section in wave_section.tracks %}
+        <section class="track">
+          <h3 class="track-title">{{ track_section.track.name }}</h3>
+          {% if track_section.stacked_items %}
+          <div class="item-list">
+            {% for stacked in track_section.stacked_items %}
+            {{ item_card(stacked, items_by_identifier, repo) }}
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="track-empty">{{ track_section.track.description or 'No tracked items.' }}</p>
+          {% endif %}
+        </section>
+        {% endfor %}
+      </section>
+      {% endfor %}
+    </main>
 
     <aside class="sidebar">
       <div class="sidebar-card">
         <h3>Status</h3>
-        <div class="summary-strip">{{SUMMARY_PILLS}}</div>
-        {{ALERT_HTML}}
+        <div class="summary-strip">
+          {% for status in item_statuses %}
+          <div class="stat"><span class="stat-num">{{ status_counts[status] }}</span><span class="stat-label">{{ status.display_label }}</span></div>
+          {% endfor %}
+        </div>
+        {% if drift_items %}
+        <div class="alert-banner drift-banner">
+          <strong>{{ drift_items | length }} drift flag(s)</strong>
+          <ul>
+          {% for item in drift_items %}
+            <li>{{ item.title }} — {{ item.drift_description }}</li>
+          {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+        {% endif %}
       </div>
       <div class="sidebar-card">
         <h3>What to do next</h3>
-        {{NEXT_HTML}}
+        {% if drift_items or ready_to_start or blocker_maybe_cleared %}
+          {% if drift_items %}
+          <div class="next-group next-drift">
+            <h4>Fix the manifest ({{ drift_items | length }})</h4>
+            <ul>
+            {% for item in drift_items %}
+              <li><strong>{{ item.title }}</strong><br><span class="next-reason">{{ item.drift_description }}</span></li>
+            {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if ready_to_start %}
+          <div class="next-group next-ready">
+            <h4>Ready to start ({{ ready_to_start | length }})</h4>
+            <ul>
+            {% for item in ready_to_start %}
+              <li><strong>{{ item.title }}</strong><br><span class="next-reason">all dependencies done — nothing structurally blocking it</span></li>
+            {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if blocker_maybe_cleared %}
+          <div class="next-group next-recheck">
+            <h4>Blocker may be cleared ({{ blocker_maybe_cleared | length }})</h4>
+            <ul>
+            {% for item in blocker_maybe_cleared %}
+              <li><strong>{{ item.title }}</strong><br><span class="next-reason">some (not all) dependencies are done — worth re-checking the blocker</span></li>
+            {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+        {% else %}
+        <p class="next-empty">Nothing actionable right now — every item is either in progress, fully blocked, or done.</p>
+        {% endif %}
       </div>
     </aside>
   </div>

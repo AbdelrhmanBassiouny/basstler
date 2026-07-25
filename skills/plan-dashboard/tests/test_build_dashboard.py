@@ -7,6 +7,9 @@ import pytest
 
 from build_dashboard import (
     DashboardRenderer,
+    DuplicateItemId,
+    InvalidDependsOn,
+    InvalidSchemaVersion,
     Item,
     ItemStatus,
     LiveState,
@@ -15,9 +18,11 @@ from build_dashboard import (
     PlanValidationError,
     PullRequestRecord,
     Track,
-    ValidationProblemKind,
+    UnknownDependency,
+    UnknownStatus,
+    UnknownTrack,
+    UnknownWave,
     Wave,
-    live_state_display_label,
     validate_plan,
 )
 
@@ -55,7 +60,8 @@ def test_validate_plan_accepts_a_well_formed_manifest():
 def test_validate_plan_rejects_wrong_schema_version():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(schema_version=2))
-    assert error.value.problems[0].kind is ValidationProblemKind.INVALID_SCHEMA_VERSION
+    assert isinstance(error.value.problems[0], InvalidSchemaVersion)
+    assert error.value.problems[0].actual_value == 2
 
 
 def test_validate_plan_rejects_duplicate_item_ids():
@@ -77,10 +83,10 @@ def test_validate_plan_rejects_duplicate_item_ids():
     ]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
-    assert any(
-        problem.kind is ValidationProblemKind.DUPLICATE_ITEM_ID
-        for problem in error.value.problems
-    )
+    duplicate_problems = [
+        p for p in error.value.problems if isinstance(p, DuplicateItemId)
+    ]
+    assert duplicate_problems == [DuplicateItemId(["a"])]
 
 
 def test_validate_plan_rejects_unknown_track():
@@ -95,20 +101,14 @@ def test_validate_plan_rejects_unknown_track():
     ]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
-    assert any(
-        problem.kind is ValidationProblemKind.UNKNOWN_TRACK
-        for problem in error.value.problems
-    )
+    assert any(isinstance(problem, UnknownTrack) for problem in error.value.problems)
 
 
 def test_validate_plan_rejects_unknown_wave():
     tracks = [{"id": "track-1", "name": "Track 1", "wave": "no-such-wave"}]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(tracks=tracks))
-    assert any(
-        problem.kind is ValidationProblemKind.UNKNOWN_WAVE
-        for problem in error.value.problems
-    )
+    assert any(isinstance(problem, UnknownWave) for problem in error.value.problems)
 
 
 def test_validate_plan_rejects_unknown_depends_on():
@@ -125,8 +125,7 @@ def test_validate_plan_rejects_unknown_depends_on():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
     assert any(
-        problem.kind is ValidationProblemKind.UNKNOWN_DEPENDENCY
-        for problem in error.value.problems
+        isinstance(problem, UnknownDependency) for problem in error.value.problems
     )
 
 
@@ -146,8 +145,7 @@ def test_validate_plan_rejects_depends_on_that_is_not_a_list():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
     assert any(
-        problem.kind is ValidationProblemKind.INVALID_DEPENDS_ON
-        for problem in error.value.problems
+        isinstance(problem, InvalidDependsOn) for problem in error.value.problems
     )
 
 
@@ -163,18 +161,21 @@ def test_validate_plan_rejects_unknown_status():
     ]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
-    assert any(
-        problem.kind is ValidationProblemKind.UNKNOWN_STATUS
-        for problem in error.value.problems
-    )
+    assert any(isinstance(problem, UnknownStatus) for problem in error.value.problems)
 
 
 def test_validate_plan_collects_every_problem_not_just_the_first():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(schema_version=2, tracks=[]))
-    kinds = {problem.kind for problem in error.value.problems}
-    assert ValidationProblemKind.INVALID_SCHEMA_VERSION in kinds
-    assert ValidationProblemKind.UNKNOWN_TRACK in kinds
+    problem_types = {type(problem) for problem in error.value.problems}
+    assert InvalidSchemaVersion in problem_types
+    assert UnknownTrack in problem_types
+
+
+def test_plan_validation_error_message_joins_every_problem_description():
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(minimal_plan(schema_version=2))
+    assert str(error.value) == "schema_version must be 1, got 2"
 
 
 # %% ItemStatus / LiveState labels
@@ -185,15 +186,15 @@ def test_item_status_display_labels():
     assert ItemStatus.DONE.display_label == "Done"
 
 
-def test_live_state_display_label_handles_no_pr_yet():
-    assert live_state_display_label(None) == "No PR yet"
-    assert live_state_display_label(LiveState.MERGED) == "Merged"
+def test_live_state_display_labels_including_no_pull_request():
+    assert LiveState.NO_PULL_REQUEST.display_label == "No PR yet"
+    assert LiveState.MERGED.display_label == "Merged"
 
 
 # %% DashboardRenderer - live state + drift
 
 
-def make_renderer(items, pr_data=None):
+def make_renderer(items, pull_requests_by_repository=None):
     plan = Plan(
         id="test-plan",
         title="Test Plan",
@@ -204,56 +205,72 @@ def make_renderer(items, pr_data=None):
         items=items,
     )
     return DashboardRenderer(
-        plan=plan, roadmap_text="", pr_data=pr_data or {}, tracking_url=None
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository=pull_requests_by_repository or {},
+        tracking_url=None,
     )
 
 
-def item(identifier, status, pr=None, depends_on=None):
+def item(identifier, status, pull_request_number=None, depends_on=None):
     return Item(
         title=identifier,
         branch=identifier,
         track="track-1",
         status=ItemStatus(status),
         id=identifier,
-        pr=pr,
+        pull_request_number=pull_request_number,
         depends_on=depends_on or [],
     )
 
 
-def test_item_with_no_pr_has_no_live_state_and_no_drift():
+def test_item_with_no_pr_has_no_pull_request_live_state_and_no_drift():
     renderer = make_renderer([item("a", "not_started")])
     output, summary = renderer.render()
-    assert renderer.plan.items[0].live_state is None
+    assert renderer.plan.items[0].live_state is LiveState.NO_PULL_REQUEST
     assert summary.drift_items == []
 
 
 def test_merged_pr_marks_not_started_item_as_drifted():
-    pr_data = {
+    pull_requests_by_repository = {
         "owner/repo": {"1": PullRequestRecord(state="closed", merged_at="2026-01-01")}
     }
-    renderer = make_renderer([item("a", "not_started", pr=1)], pr_data=pr_data)
+    renderer = make_renderer(
+        [item("a", "not_started", pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
     _, summary = renderer.render()
     assert summary.drift_items == ["a"]
     assert renderer.plan.items[0].live_state is LiveState.MERGED
 
 
 def test_open_pr_marks_done_item_as_drifted():
-    pr_data = {"owner/repo": {"1": PullRequestRecord(state="open", draft=False)}}
-    renderer = make_renderer([item("a", "done", pr=1)], pr_data=pr_data)
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
+    }
+    renderer = make_renderer(
+        [item("a", "done", pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
     _, summary = renderer.render()
     assert summary.drift_items == ["a"]
 
 
 def test_pr_missing_from_live_data_is_not_found_and_drifted():
-    renderer = make_renderer([item("a", "not_started", pr=999)], pr_data={})
+    renderer = make_renderer([item("a", "not_started", pull_request_number=999)])
     _, summary = renderer.render()
     assert renderer.plan.items[0].live_state is LiveState.NOT_FOUND
     assert summary.drift_items == ["a"]
 
 
 def test_matching_status_and_live_state_is_not_drifted():
-    pr_data = {"owner/repo": {"1": PullRequestRecord(state="open", draft=True)}}
-    renderer = make_renderer([item("a", "in_progress", pr=1)], pr_data=pr_data)
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+    }
+    renderer = make_renderer(
+        [item("a", "in_progress", pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
     _, summary = renderer.render()
     assert summary.drift_items == []
 
@@ -304,7 +321,9 @@ def test_track_stack_wraps_past_the_maximum_level():
             item(f"item-{index}", "not_started", depends_on=[f"item-{index - 1}"])
         )
     renderer = make_renderer(items)
-    assert "continues from" in renderer._render_track_stack(items)
+    stacked_items = renderer._build_track_stack(items)
+    assert [stacked.indent_level for stacked in stacked_items] == [0, 1, 2, 3, 4, 0]
+    assert stacked_items[-1].wrap_parent.identifier == "item-4"
 
 
 def test_track_stack_does_not_wrap_within_the_maximum_level():
@@ -314,7 +333,8 @@ def test_track_stack_does_not_wrap_within_the_maximum_level():
             item(f"item-{index}", "not_started", depends_on=[f"item-{index - 1}"])
         )
     renderer = make_renderer(items)
-    assert "continues from" not in renderer._render_track_stack(items)
+    stacked_items = renderer._build_track_stack(items)
+    assert all(stacked.wrap_parent is None for stacked in stacked_items)
 
 
 # %% end-to-end wave/track/item wiring
@@ -331,7 +351,7 @@ def test_render_wires_an_item_into_its_wave_and_track_sections():
         items=[item("a", "not_started")],
     )
     renderer = DashboardRenderer(
-        plan=plan, roadmap_text="", pr_data={}, tracking_url=None
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
     assert "Wave One" in output
@@ -357,10 +377,67 @@ def test_render_shows_placeholder_for_a_track_with_no_items():
         items=[],
     )
     renderer = DashboardRenderer(
-        plan=plan, roadmap_text="", pr_data={}, tracking_url=None
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
     assert "Nothing here yet." in output
+
+
+def test_render_shows_pull_request_link_when_item_has_one():
+    pull_requests_by_repository = {
+        "owner/repo": {"5": PullRequestRecord(state="open", draft=False)}
+    }
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repo="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "in_progress", pull_request_number=5)],
+    )
+    renderer = DashboardRenderer(
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository=pull_requests_by_repository,
+        tracking_url=None,
+    )
+    output, _ = renderer.render()
+    assert 'href="https://github.com/owner/repo/pull/5"' in output
+    assert "#5" in output
+
+
+def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repo="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[
+            Item(
+                title="Item A",
+                branch="a",
+                track="track-1",
+                status=ItemStatus.DONE,
+                id="a",
+            ),
+            Item(
+                title="Item B",
+                branch="b",
+                track="track-1",
+                status=ItemStatus.NOT_STARTED,
+                id="b",
+                depends_on=["a"],
+            ),
+        ],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    assert 'title="Item A"' in output
 
 
 # %% status counts

@@ -71,7 +71,31 @@
   </header>
 
   <div class="plan-list">
-{{PLAN_CARDS}}
+{% if plans %}
+{% for plan in plans %}
+    {% if plan.dashboard_url %}
+    <a class="plan-card{{ ' complete' if plan.is_complete else '' }}" href="{{ plan.dashboard_url }}" target="_blank" rel="noopener">
+    {% else %}
+    <div class="plan-card{{ ' complete' if plan.is_complete else '' }}">
+    {% endif %}
+      <div class="plan-head">
+        <h2 class="plan-title">{{ plan.title }}</h2>
+        <span class="plan-progress mono">{{ plan.progress_label }}</span>
+      </div>
+      <p class="plan-desc">{{ plan.description }}</p>
+      {% if not plan.dashboard_url %}
+      <p class="no-dashboard">Not published yet — run /plan-dashboard on it.</p>
+      {% endif %}
+      <div class="bar"><div class="bar-fill" style="width: {{ '%.1f' | format(plan.completion_percentage) }}%"></div></div>
+    {% if plan.dashboard_url %}
+    </a>
+    {% else %}
+    </div>
+    {% endif %}
+{% endfor %}
+{% else %}
+    <p class="empty">No plans found under .claude/personal/plans/*/plan.yaml.</p>
+{% endif %}
   </div>
 
   <footer>

@@ -25,8 +25,8 @@ set -euo pipefail
 # same as it did to populate CLAUDE.local.md in the first place) - pass it
 # explicitly when creating a brand-new plan (not yet in the generated
 # index, so there's nothing to auto-derive from), or when saving a plan
-# from a branch that isn't itself one of its tracked items (e.g. a steward
-# session coordinating the whole plan rather than working one item).
+# from a branch that isn't itself one of its tracked items (e.g. a session
+# coordinating the whole plan rather than working one item).
 #
 # Bootstrapping a brand-new plan - two equivalent ways:
 #   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id> \
@@ -159,6 +159,11 @@ cleanup() {
 }
 trap cleanup EXIT
 
+# BOOTSTRAP_FROM_FILES was set above from whether --manifest/--roadmap were
+# passed (see the argument-parsing block): "1" reads the manifest/roadmap
+# straight from the given files, "0" extracts them from CLAUDE.local.md's
+# markers instead - see this script's own header comment for when each
+# path applies.
 if [ "${BOOTSTRAP_FROM_FILES}" = "1" ]; then
   cp "${MANIFEST_SOURCE_FILE}" "${MANIFEST_FILE}"
   cp "${ROADMAP_SOURCE_FILE}" "${ROADMAP_FILE}"
@@ -174,12 +179,7 @@ if [ ! -s "${MANIFEST_FILE}" ]; then
   exit 1
 fi
 
-MANIFEST_PLAN_ID="$(python3 -c "
-import sys, yaml
-with open('${MANIFEST_FILE}') as f:
-    plan = yaml.safe_load(f)
-print(plan.get('id', ''))
-")"
+MANIFEST_PLAN_ID="$(python3 "${SCRIPT_DIR}/plan_manifest_tools.py" read-id "${MANIFEST_FILE}")"
 if [ "${MANIFEST_PLAN_ID}" != "${PLAN_ID}" ]; then
   echo "The plan manifest's 'id: ${MANIFEST_PLAN_ID}' does not match the plan" >&2
   echo "being saved ('${PLAN_ID}') - refusing to save under a mismatched key." >&2
@@ -197,28 +197,11 @@ cp "${MANIFEST_FILE}" "${SCRATCH_DIR}/${MANIFEST_PATH}"
 cp "${ROADMAP_FILE}" "${SCRATCH_DIR}/${ROADMAP_PATH}"
 
 mkdir -p "$(dirname "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}")"
-python3 -c "
-import glob, os, yaml
-
-scratch = '${SCRATCH_DIR}'
-plans_dir = '${PLANS_DIR}'
-manifest_filename = '${PLAN_MANIFEST_FILENAME}'
-lines = []
-seen = set()
-for path in sorted(glob.glob(os.path.join(scratch, plans_dir, '*', manifest_filename))):
-    with open(path) as f:
-        plan = yaml.safe_load(f)
-    plan_id = plan['id']
-    for item in plan.get('items', []):
-        branch = item.get('branch')
-        if not branch or branch in seen:
-            continue
-        seen.add(branch)
-        lines.append(f'{branch}\t{plan_id}')
-
-with open(os.path.join(scratch, '${PLAN_BRANCH_INDEX_PATH}'), 'w') as f:
-    f.write('\n'.join(lines) + ('\n' if lines else ''))
-"
+python3 "${SCRIPT_DIR}/plan_manifest_tools.py" regenerate-branch-index \
+  --scratch-dir "${SCRATCH_DIR}" \
+  --plans-dir "${PLANS_DIR}" \
+  --manifest-filename "${PLAN_MANIFEST_FILENAME}" \
+  --output "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}"
 
 git -C "${SCRATCH_DIR}" add \
   "${MANIFEST_PATH}" \

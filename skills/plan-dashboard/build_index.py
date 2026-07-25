@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from render_common import escape_html
+from render_common import create_template_environment
 
 
 @dataclass
@@ -40,7 +40,11 @@ class PlanSummary:
     """
 
     id: str
-    """The plan's stable identifier."""
+    """The plan's stable identifier: a short kebab-case slug (e.g.
+    ``rdr-refactor``), not a UUID - it is chosen by whoever bootstraps the
+    plan, doubles as its directory name, and is what a person types as the
+    ``<plan-id>`` argument to ``/plan-dashboard``/``/plan-create``, so it
+    needs to stay human-readable and human-typable."""
 
     title: str
     """
@@ -100,36 +104,6 @@ class PlanSummary:
         return f"{self.done} / {self.total} done" if self.total else "no items yet"
 
 
-def render_plan_card(plan: PlanSummary) -> str:
-    """
-    Render one plan's card for the master index.
-
-    :param plan: The plan to render a card for.
-    :return: The rendered HTML fragment.
-    """
-    card_classes = "plan-card" + (" complete" if plan.is_complete else "")
-    if plan.dashboard_url:
-        open_tag = f'<a class="{card_classes}" href="{escape_html(plan.dashboard_url)}" target="_blank" rel="noopener">'
-        close_tag = "</a>"
-        not_yet_published_html = ""
-    else:
-        open_tag = f'<div class="{card_classes}">'
-        close_tag = "</div>"
-        not_yet_published_html = (
-            '<p class="no-dashboard">Not published yet — run /plan-dashboard on it.</p>'
-        )
-
-    return f"""    {open_tag}
-      <div class="plan-head">
-        <h2 class="plan-title">{escape_html(plan.title)}</h2>
-        <span class="plan-progress mono">{escape_html(plan.progress_label)}</span>
-      </div>
-      <p class="plan-desc">{escape_html(plan.description)}</p>
-      {not_yet_published_html}
-      <div class="bar"><div class="bar-fill" style="width: {plan.completion_percentage:.1f}%"></div></div>
-    {close_tag}"""
-
-
 def render_index_page(plans: list[PlanSummary]) -> str:
     """
     Render the full master-index page for every known plan.
@@ -137,13 +111,8 @@ def render_index_page(plans: list[PlanSummary]) -> str:
     :param plans: Every plan to list, in the order they should appear.
     :return: The rendered HTML page.
     """
-    if plans:
-        cards_html = "\n".join(render_plan_card(plan) for plan in plans)
-    else:
-        cards_html = '    <p class="empty">No plans found under .claude/personal/plans/*/plan.yaml.</p>'
-
-    template = (Path(__file__).parent / "index_template.html").read_text()
-    return template.replace("{{PLAN_CARDS}}", cards_html)
+    template = create_template_environment().get_template("index.html")
+    return template.render(plans=plans)
 
 
 def main() -> int:
