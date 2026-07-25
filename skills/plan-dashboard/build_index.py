@@ -103,6 +103,23 @@ class PlanSummary:
         """
         return f"{self.done} / {self.total} done" if self.total else "no items yet"
 
+    @property
+    def completion_percentage_label(self) -> str:
+        """
+        :attr:`completion_percentage`, formatted to one decimal place with a
+        trailing ``%`` - ready to drop straight into the progress bar's
+        ``width`` style without the template doing any formatting itself.
+        """
+        return f"{self.completion_percentage:.1f}%"
+
+    @property
+    def css_class(self) -> str:
+        """
+        The plan card's CSS class list: ``"plan-card"``, plus ``"complete"`` once every
+        item is done.
+        """
+        return "plan-card complete" if self.is_complete else "plan-card"
+
 
 def render_index_page(plans: list[PlanSummary]) -> str:
     """

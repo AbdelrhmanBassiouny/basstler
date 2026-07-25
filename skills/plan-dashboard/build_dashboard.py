@@ -364,6 +364,22 @@ class Track:
 
 
 @dataclass
+class DependencyChip:
+    """One ready-to-render ``needs`` chip on an item's card - see
+    :attr:`Item.dependency_chips`. Precomputed so the template never has to
+    look a dependency identifier up in ``items_by_identifier`` or fall back
+    to the raw identifier itself."""
+
+    identifier: str
+    """The chip's display text: the dependency's own effective identifier,
+    or the raw ``depends_on`` entry if it doesn't resolve to a known item."""
+
+    tooltip: str
+    """The chip's hover title: the dependency's title, or its identifier
+    again if it doesn't resolve to a known item."""
+
+
+@dataclass
 class Item:
     """One tracked unit of work (typically one branch/PR) within a plan."""
 
@@ -385,8 +401,8 @@ class Item:
     pull_request_number: int | None = None
     """The PR number tracking this item, if one exists yet."""
 
-    repo: str | None = None
-    """Overrides the plan's ``default_repo`` for this item, if set."""
+    repository: str | None = None
+    """Overrides the plan's ``default_repository`` for this item, if set."""
 
     session: str | None = None
     """A link to the session that produced this item, if any."""
@@ -406,16 +422,32 @@ class Item:
     drift_description: str | None = field(default=None, init=False)
     """Why :attr:`status` disagrees with :attr:`live_state`, if it does."""
 
+    pull_request_url: str | None = field(default=None, init=False)
+    """This item's PR URL on GitHub, filled in by
+    :meth:`DashboardRenderer.render` - ``None`` if it has no PR yet."""
+
+    dependency_chips: list[DependencyChip] = field(default_factory=list, init=False)
+    """Ready-to-render chips for :attr:`depends_on`, filled in by
+    :meth:`DashboardRenderer.render`."""
+
     @property
     def identifier(self) -> str:
         """The item's effective identifier: :attr:`id`, or :attr:`branch` if unset."""
         return self.id or self.branch
+
+    @property
+    def status_and_drift_css_class(self) -> str:
+        """The item card's dynamic CSS class suffix: ``status-<value>``,
+        plus ``has-drift`` once :attr:`drift_description` is set."""
+        drift_suffix = " has-drift" if self.drift_description else ""
+        return f"status-{self.status.value}{drift_suffix}"
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Item:
         """Build an item from one entry of plan.yaml's ``items[]`` - only
         called after :func:`validate_plan` has already confirmed the data
         is well-formed."""
+        notes = data.get("notes")
         return cls(
             title=data["title"],
             branch=data["branch"],
@@ -423,9 +455,9 @@ class Item:
             status=ItemStatus(data["status"]),
             id=data.get("id"),
             pull_request_number=data.get("pr"),
-            repo=data.get("repo"),
+            repository=data.get("repo"),
             session=data.get("session"),
-            notes=data.get("notes"),
+            notes=notes.strip() if notes else None,
             depends_on=list(data.get("depends_on") or []),
             blockers=list(data.get("blockers") or []),
         )
@@ -448,7 +480,7 @@ class Plan:
     description: str
     """A one-line description shown under the title."""
 
-    default_repo: str
+    default_repository: str
     """The ``"owner/repo"`` items resolve PRs against unless they override it."""
 
     waves: list[Wave]
@@ -463,6 +495,11 @@ class Plan:
     tracking_issue: int | None = None
     """The coordination-mailbox issue/PR number for structural changes, if any."""
 
+    @property
+    def repository_url(self) -> str:
+        """:attr:`default_repository`'s GitHub URL, ready for the masthead link."""
+        return f"https://github.com/{self.default_repository}"
+
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Plan:
         """Build a plan from a freshly-loaded plan.yaml - only called after
@@ -471,7 +508,7 @@ class Plan:
             id=data["id"],
             title=data["title"],
             description=data["description"],
-            default_repo=data["default_repo"],
+            default_repository=data["default_repo"],
             waves=[Wave(**wave) for wave in data.get("waves", [])],
             tracks=[Track(**track) for track in data.get("tracks", [])],
             items=[Item.from_mapping(item) for item in data.get("items", [])],
@@ -524,6 +561,11 @@ class StackedItem:
     """The item this one visually continues from, if the chain wrapped back
     to indent level 0 past the cap; ``None`` otherwise."""
 
+    @property
+    def indent_style(self) -> str:
+        """The card's ``style`` attribute value for its indent level."""
+        return f"margin-left: {self.indent_level * 1.75}rem;"
+
 
 @dataclass
 class TrackSection:
@@ -535,6 +577,12 @@ class TrackSection:
 
     stacked_items: list[StackedItem]
     """The track's items, stacked - empty if the track has none yet."""
+
+    @property
+    def empty_state_message(self) -> str:
+        """What to show in place of an item list when the track has none yet:
+        the track's own :attr:`Track.description`, or a generic fallback."""
+        return self.track.description or "No tracked items."
 
 
 @dataclass
@@ -592,7 +640,8 @@ class DashboardRenderer:
         output = template.render(
             title=self.plan.title,
             description=self.plan.description,
-            repo=self.plan.default_repo,
+            repository=self.plan.default_repository,
+            repository_url=self.plan.repository_url,
             total_items=len(self.plan.items),
             tracking_url=self.tracking_url,
             item_statuses=list(ItemStatus),
@@ -602,7 +651,6 @@ class DashboardRenderer:
             blocker_maybe_cleared=blocker_maybe_cleared,
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             waves=self._build_wave_sections(),
-            items_by_identifier=self.items_by_identifier,
         )
 
         summary = DashboardSummary(
@@ -614,18 +662,49 @@ class DashboardRenderer:
         return output, summary
 
     def _classify_items(self) -> None:
-        """Fill in every item's :attr:`Item.live_state` and
-        :attr:`Item.drift_description` from live PR data, in place."""
+        """Fill in every item's :attr:`Item.live_state`,
+        :attr:`Item.drift_description`, :attr:`Item.pull_request_url`, and
+        :attr:`Item.dependency_chips` from live PR data and the plan's other
+        items, in place."""
         for item in self.plan.items:
             item.live_state = self._live_state_of(item)
             item.drift_description = self._drift_description_of(item)
+            item.pull_request_url = self._pull_request_url_of(item)
+            item.dependency_chips = self._dependency_chips_of(item)
+
+    def _pull_request_url_of(self, item: Item) -> str | None:
+        """Build one item's PR URL on GitHub, or ``None`` if it has no PR yet."""
+        if item.pull_request_number is None:
+            return None
+        repository = item.repository or self.plan.default_repository
+        return f"https://github.com/{repository}/pull/{item.pull_request_number}"
+
+    def _dependency_chips_of(self, item: Item) -> list[DependencyChip]:
+        """Build one ready-to-render :class:`DependencyChip` per entry in
+        :attr:`Item.depends_on`, resolving each against :attr:`items_by_identifier`."""
+        chips: list[DependencyChip] = []
+        for dependency_identifier in item.depends_on:
+            dependency = self.items_by_identifier.get(dependency_identifier)
+            if dependency is None:
+                chips.append(
+                    DependencyChip(
+                        identifier=dependency_identifier, tooltip=dependency_identifier
+                    )
+                )
+            else:
+                chips.append(
+                    DependencyChip(
+                        identifier=dependency.identifier, tooltip=dependency.title
+                    )
+                )
+        return chips
 
     def _live_state_of(self, item: Item) -> LiveState:
         """Classify one item's live GitHub state from :attr:`pull_requests_by_repository`."""
         if item.pull_request_number is None:
             return LiveState.NO_PULL_REQUEST
         repository_pull_requests = self.pull_requests_by_repository.get(
-            item.repo or self.plan.default_repo, {}
+            item.repository or self.plan.default_repository, {}
         )
         pull_request = repository_pull_requests.get(str(item.pull_request_number))
         if pull_request is None:

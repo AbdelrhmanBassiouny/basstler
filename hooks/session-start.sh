@@ -202,9 +202,13 @@ if [ -n "${PLAN_ID}" ]; then
     if [ -n "${TRACKING_ISSUE}" ]; then
       TRACKING_ISSUE_NOTE="Structural changes (a new wave/phase, deferring a track, splitting an
 item, reprioritizing) can be made directly to the manifest by any session -
-there is no designated steward gatekeeping them. Always also leave a comment
-on the tracking issue (#${TRACKING_ISSUE}) describing the change, since the
-user reviews structural changes there and it is the shared record other
+there is no designated steward gatekeeping them. Before making one, ask the
+user in this session (e.g. via AskUserQuestion) rather than deciding
+unilaterally - a structural change is the user's call, not something to
+infer and apply silently just because editing the manifest directly is
+technically allowed. Once they confirm, make the edit and always also leave
+a comment on the tracking issue (#${TRACKING_ISSUE}) describing it, since
+the user reviews structural changes there and it is the shared record other
 sessions working this plan can check - see plans/README.md's 'Proposing
 structural changes' section. If this session is actively working an item in
 this plan, also subscribe to the tracking issue itself (in addition to your

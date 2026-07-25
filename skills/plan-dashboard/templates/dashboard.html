@@ -427,14 +427,13 @@
   }
 </style>
 
-{% macro dependency_chip(dependency_identifier, items_by_identifier) %}
-{% set dependency = items_by_identifier.get(dependency_identifier) %}
-<span class="chip" title="{{ dependency.title if dependency else dependency_identifier }}">{{ dependency.identifier if dependency else dependency_identifier }}</span>
+{% macro dependency_chip(chip) %}
+<span class="chip" title="{{ chip.tooltip }}">{{ chip.identifier }}</span>
 {% endmacro %}
 
-{% macro item_card(stacked, items_by_identifier, default_repo) %}
+{% macro item_card(stacked) %}
 {% set item = stacked.item %}
-    <article class="item status-{{ item.status.value }}{{ ' has-drift' if item.drift_description else '' }}" style="margin-left: {{ stacked.indent_level * 1.75 }}rem;">
+    <article class="item {{ item.status_and_drift_css_class }}" style="{{ stacked.indent_style }}">
       {% if stacked.wrap_parent %}
       <div class="wrap-arrow">◄ continues from <span class="mono">{{ stacked.wrap_parent.identifier }}</span> <span class="wrap-parent-title">({{ stacked.wrap_parent.title }})</span></div>
       {% endif %}
@@ -451,8 +450,8 @@
           <div class="item-meta">
             <span class="mono id">{{ item.identifier }}</span>
             <span class="mono branch">{{ item.branch }}</span>
-            {% if item.pull_request_number %}
-            <a class="pr-link" href="https://github.com/{{ item.repo or default_repo }}/pull/{{ item.pull_request_number }}" target="_blank" rel="noopener">#{{ item.pull_request_number }}</a>
+            {% if item.pull_request_url %}
+            <a class="pr-link" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">#{{ item.pull_request_number }}</a>
             {% else %}
             <span class="muted">no PR yet</span>
             {% endif %}
@@ -464,13 +463,13 @@
           <div class="drift">⚠ {{ item.drift_description }}</div>
           {% endif %}
           {% if item.notes %}
-          <div class="notes">{{ item.notes.strip() }}</div>
+          <div class="notes">{{ item.notes }}</div>
           {% endif %}
-          {% if item.depends_on %}
+          {% if item.dependency_chips %}
           <div class="deps">
             <span class="deps-label">needs</span>
-            {% for dependency_identifier in item.depends_on %}
-            {{ dependency_chip(dependency_identifier, items_by_identifier) }}
+            {% for chip in item.dependency_chips %}
+            {{ dependency_chip(chip) }}
             {% endfor %}
           </div>
           {% endif %}
@@ -492,7 +491,7 @@
     <h1>{{ title }}</h1>
     <p class="description">{{ description }}</p>
     <p class="repo-line">
-      {{ total_items }} tracked items · <a href="https://github.com/{{ repo }}" target="_blank" rel="noopener">{{ repo }}</a>
+      {{ total_items }} tracked items · <a href="{{ repository_url }}" target="_blank" rel="noopener">{{ repository }}</a>
       {% if tracking_url %}<a class="tracking-link" href="{{ tracking_url }}" target="_blank" rel="noopener">Propose a structural change →</a>{% endif %}
     </p>
     <details class="roadmap-details">
@@ -512,11 +511,11 @@
           {% if track_section.stacked_items %}
           <div class="item-list">
             {% for stacked in track_section.stacked_items %}
-            {{ item_card(stacked, items_by_identifier, repo) }}
+            {{ item_card(stacked) }}
             {% endfor %}
           </div>
           {% else %}
-          <p class="track-empty">{{ track_section.track.description or 'No tracked items.' }}</p>
+          <p class="track-empty">{{ track_section.empty_state_message }}</p>
           {% endif %}
         </section>
         {% endfor %}
