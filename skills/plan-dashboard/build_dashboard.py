@@ -483,6 +483,12 @@ class Item:
     """Ready-to-render chips for :attr:`depends_on`, filled in by
     :meth:`DashboardRenderer.render`."""
 
+    kickoff_command: str | None = field(default=None, init=False)
+    """The ``/plan-item-kickoff <plan-id> <item-id>`` command for this
+    item's "Start now" affordance, filled in by
+    :meth:`DashboardRenderer.render` - ``None`` unless the item hasn't been
+    started yet, since kicking off work only makes sense before any exists."""
+
     @property
     def identifier(self) -> str:
         """The item's effective identifier: :attr:`id`, or :attr:`branch` if unset."""
@@ -725,14 +731,15 @@ class DashboardRenderer:
 
     def _classify_items(self) -> None:
         """Fill in every item's :attr:`Item.live_state`,
-        :attr:`Item.drift_description`, :attr:`Item.pull_request_url`, and
-        :attr:`Item.dependency_chips` from live PR data and the plan's other
-        items, in place."""
+        :attr:`Item.drift_description`, :attr:`Item.pull_request_url`,
+        :attr:`Item.dependency_chips`, and :attr:`Item.kickoff_command` from
+        live PR data and the plan's other items, in place."""
         for item in self.plan.items:
             item.live_state = self._live_state_of(item)
             item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
             item.dependency_chips = self._dependency_chips_of(item)
+            item.kickoff_command = self._kickoff_command_of(item)
 
     def _pull_request_url_of(self, item: Item) -> str | None:
         """Build one item's PR URL on GitHub, or ``None`` if it has no PR yet."""
@@ -740,6 +747,15 @@ class DashboardRenderer:
             return None
         repository = item.repository or self.plan.default_repository
         return f"https://github.com/{repository}/pull/{item.pull_request_number}"
+
+    def _kickoff_command_of(self, item: Item) -> str | None:
+        """Build one item's ``/plan-item-kickoff`` command, or ``None`` if
+        it isn't applicable - only a not-started item has a "Start now"
+        affordance, since anything further along already has real state
+        (a branch, a PR, prior work) the kickoff skill would just rediscover."""
+        if item.status is not ItemStatus.NOT_STARTED:
+            return None
+        return f"/plan-item-kickoff {self.plan.id} {item.identifier}"
 
     def _dependency_chips_of(self, item: Item) -> list[DependencyChip]:
         """Build one ready-to-render :class:`DependencyChip` per entry in
