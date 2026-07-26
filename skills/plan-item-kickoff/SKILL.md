@@ -1,7 +1,7 @@
 ---
 name: plan-item-kickoff
 description: Gather everything available about one tracked plan item (its plan.yaml entry, roadmap.md history/design context, its dependency chain's live GitHub state, and patterns from already-landed sibling items in the same track) and propose a concrete implementation plan via plan mode, without writing any code. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use when starting work on a specific item from a plan-dashboard's "Start now" link, or when the user asks to "start", "kick off", or "plan out" a specific tracked item.
-allowed-tools: Bash, Read, Grep, Glob, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__search_code
+allowed-tools: Bash, Read, Grep, Glob, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__search_code, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
 # Plan Item Kickoff
@@ -25,6 +25,20 @@ re-deriving it). Find the item by `id` (or `branch` if `id` is unset) among
 If the plan id or item id doesn't resolve, stop and list what's actually
 available (every plan id under `plans/*/plan.yaml`, or every item id in the
 named plan) rather than guessing which one was meant.
+
+If the plan has a `tracking_issue`, subscribe to it now via
+`mcp__Claude_Code_Remote__subscribe_pr_activity` (it takes a plain issue
+number the same way it takes a PR number). This session may go on to create
+this item's branch and PR without a fresh session ever starting — the
+subscription `session-start.sh` sets up for an already-checked-out item
+branch never fires in that case — so subscribing here, before gathering
+context, is what actually covers a kickoff that turns into an
+uninterrupted implementation session. Skip this step entirely if the plan
+has no `tracking_issue`. The call is idempotent, so it's safe to run even
+if something already subscribed this session. If it errors, don't let that
+fail the skill: mention it in passing when presenting the plan (step 5) and
+continue — subscribing is a convenience for staying aware of concurrent
+structural changes, not a precondition for planning this item.
 
 ## 2. Gather the item's own context
 
