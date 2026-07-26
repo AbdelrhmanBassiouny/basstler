@@ -390,6 +390,29 @@
   .item-meta .branch::before { content: "⎇ "; }
   .pr-link, .session-link { font-weight: 600; }
   .muted { color: var(--text-muted); font-style: italic; }
+  .start-now-button {
+    margin-left: auto;
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--accent);
+    background: var(--accent-tint);
+    color: var(--accent-strong);
+    font-family: inherit;
+    font-size: 0.72rem;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .start-now-button:hover { background: var(--accent); color: var(--surface); }
+  .start-now-button.start-now-button-copied {
+    border-color: var(--status-done);
+    background: var(--status-done-tint);
+    color: var(--status-done);
+  }
+  .start-now-button.start-now-button-failed {
+    border-color: var(--drift);
+    background: var(--drift-tint);
+    color: var(--drift);
+  }
 
   .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
   .drift {
@@ -458,6 +481,9 @@
             {% endif %}
             {% if item.session %}
             <a class="session-link" href="{{ item.session }}" target="_blank" rel="noopener">session ↗</a>
+            {% endif %}
+            {% if item.kickoff_command %}
+            <button type="button" class="start-now-button" data-kickoff-command="{{ item.kickoff_command }}" onclick="planDashboardCopyKickoffCommand(this)">▸ Start now</button>
             {% endif %}
           </div>
           {% if item.drift_description %}
@@ -593,3 +619,57 @@
     Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
   </footer>
 </div>
+
+<script>
+  function planDashboardCopyKickoffCommand(button) {
+    var command = button.getAttribute("data-kickoff-command");
+    var originalLabel = button.textContent;
+    var resetTimeoutMilliseconds = 1800;
+
+    function showResult(className, label) {
+      button.classList.remove("start-now-button-copied", "start-now-button-failed");
+      button.classList.add(className);
+      button.textContent = label;
+      setTimeout(function () {
+        button.classList.remove(className);
+        button.textContent = originalLabel;
+      }, resetTimeoutMilliseconds);
+    }
+
+    function onCopySucceeded() {
+      showResult("start-now-button-copied", "Copied!");
+    }
+
+    function onCopyFailed() {
+      showResult("start-now-button-failed", "Copy failed");
+    }
+
+    function copyViaTemporaryTextarea() {
+      var textarea = document.createElement("textarea");
+      textarea.value = command;
+      textarea.style.position = "fixed";
+      textarea.style.opacity = "0";
+      document.body.appendChild(textarea);
+      textarea.focus();
+      textarea.select();
+      var succeeded = false;
+      try {
+        succeeded = document.execCommand("copy");
+      } catch (error) {
+        succeeded = false;
+      }
+      document.body.removeChild(textarea);
+      if (succeeded) {
+        onCopySucceeded();
+      } else {
+        onCopyFailed();
+      }
+    }
+
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(command).then(onCopySucceeded, copyViaTemporaryTextarea);
+    } else {
+      copyViaTemporaryTextarea();
+    }
+  }
+</script>

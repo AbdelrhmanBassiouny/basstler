@@ -1,0 +1,89 @@
+---
+name: plan-item-kickoff
+description: Gather everything available about one tracked plan item (its plan.yaml entry, roadmap.md history/design context, its dependency chain's live GitHub state, and patterns from already-landed sibling items in the same track) and propose a concrete implementation plan via plan mode, without writing any code. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use when starting work on a specific item from a plan-dashboard's "Start now" link, or when the user asks to "start", "kick off", or "plan out" a specific tracked item.
+allowed-tools: Bash, Read, Grep, Glob, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__search_code
+---
+
+# Plan Item Kickoff
+
+Generic, plan-agnostic — nothing here may hardcode a specific plan id, item,
+or branch. Gathers everything a session doing this item's work would
+actually want before starting, then hands the user a concrete
+implementation plan via plan mode. **This skill never writes code, creates a
+branch, or pushes anything** — it is a research-and-planning skill, not an
+implementation one. Whether to implement the approved plan in this session
+or a fresh one is the user's call, made after they see it.
+
+## 1. Resolve the item
+
+Fetch the personal-notes branch and load `<plan-id>/plan.yaml` +
+`roadmap.md` (same resolution `.claude/skills/plan-dashboard/SKILL.md` step
+1 uses — read that file if the precedence is unclear rather than
+re-deriving it). Find the item by `id` (or `branch` if `id` is unset) among
+`items[]`.
+
+If the plan id or item id doesn't resolve, stop and list what's actually
+available (every plan id under `plans/*/plan.yaml`, or every item id in the
+named plan) rather than guessing which one was meant.
+
+## 2. Gather the item's own context
+
+- `title`, `notes`, `blockers`, `track` (and that track's own `name` +
+  `description`), `wave`.
+- `depends_on`: resolve each id to its own item, and cross-check its live
+  GitHub state the same way `build_dashboard.py` does (bulk-fetch every
+  referenced PR via `mcp__github__list_pull_requests`, falling back to
+  `mcp__github__pull_request_read` for anything outside that page window).
+  The plan needs to know exactly what branch to base new work on, and
+  whether it's actually safe to build on yet: a dependency that's done or
+  has an open, non-draft PR is fine to stack on (this repo's normal
+  workflow — see `plans/README.md`); a dependency that's still
+  `not_started` or only has a draft PR is **not** — flag that explicitly in
+  the proposed plan's assumptions instead of quietly proceeding as if it
+  were ready.
+- Every place `roadmap.md` mentions this item by id, branch, or title
+  (`grep`, don't skim the whole file for it) — design rationale, "why", and
+  standing conventions usually live there, not in `plan.yaml`'s thin
+  structured fields.
+
+## 3. Gather sibling context from the codebase
+
+For other items in the **same track** that are already `done` (merged),
+read what they actually changed — `mcp__github__pull_request_read` for the
+diff/description, or `mcp__github__get_file_contents` for the merged
+result — to learn the real pattern this item should follow, rather than
+inventing a shape from roadmap prose alone. Note file layout, testing
+conventions, and any review-driven design decisions recorded in those PRs'
+descriptions that this item should also honor (a later sibling in a stack
+often encodes a correction the reviewer made on an earlier one).
+
+If the item's own branch already exists (partial work, e.g. from a false
+start), read what's actually there via `mcp__github__get_file_contents` or
+a local `git fetch` + `git show` before proposing anything — the plan must
+build on real state, not restate a fresh start over existing work.
+
+## 4. Cross-check the standing conventions
+
+Read `roadmap.md`'s standing-conventions section (however it's titled in
+this plan) and this repository's own `AGENTS.md`. Every step in the
+proposed plan must honor both — SOLID, TDD, no abbreviations, dataclasses,
+docstring conventions, whatever the repo's own rules are — not just what
+the item's own `notes` happen to mention.
+
+## 5. Propose the plan — plan mode, no code
+
+Enter plan mode and present, via `ExitPlanMode`, a concrete implementation
+plan: what changes, in which files, in what order, and how each part will
+be verified (tests first, per TDD). Cite where each part of the plan came
+from (the item's own notes, a specific sibling PR, a `roadmap.md` section)
+so the user can sanity-check it against the source instead of just trusting
+it. Flag explicitly, never silently paper over:
+
+- Any dependency that isn't actually ready to build on yet (step 2).
+- Any conflict between the item's `notes` and what a sibling PR or
+  `roadmap.md` actually says.
+- Anything the gathered context left genuinely unresolved — say so rather
+  than filling the gap with an assumption.
+
+Do not touch git, create a branch, or write any code in this skill — its
+only output is the plan itself.

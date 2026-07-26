@@ -461,6 +461,21 @@ def test_not_started_item_with_partial_dependencies_is_neither_list():
     assert summary.blocker_maybe_cleared == []
 
 
+# %% DashboardRenderer - kickoff command
+
+
+def test_kickoff_command_set_for_a_not_started_item():
+    renderer = make_renderer([item("a", "not_started")])
+    renderer.render()
+    assert renderer.plan.items[0].kickoff_command == "/plan-item-kickoff test-plan a"
+
+
+def test_kickoff_command_none_once_an_item_has_started():
+    renderer = make_renderer([item("a", "in_progress")])
+    renderer.render()
+    assert renderer.plan.items[0].kickoff_command is None
+
+
 # %% DashboardRenderer - dependency stacking / wrap-around
 
 
@@ -557,6 +572,46 @@ def test_render_shows_pull_request_link_when_item_has_one():
     output, _ = renderer.render()
     assert 'href="https://github.com/owner/repo/pull/5"' in output
     assert "#5" in output
+
+
+def test_render_shows_start_now_button_for_a_not_started_item():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "not_started")],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    assert 'data-kickoff-command="/plan-item-kickoff test-plan a"' in output
+    assert "Start now" in output
+
+
+def test_render_omits_start_now_button_for_items_already_underway():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[
+            item("a", "in_progress"),
+            item("b", "blocked"),
+            item("c", "deferred"),
+            item("d", "done"),
+        ],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    assert 'data-kickoff-command="' not in output
 
 
 def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
