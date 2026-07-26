@@ -566,7 +566,7 @@
             <h4>Ready to start ({{ ready_to_start | length }})</h4>
             <ul>
             {% for item in ready_to_start %}
-              <li><strong>{{ item.title }}</strong><br><span class="next-reason">all dependencies done — nothing structurally blocking it</span></li>
+              <li><strong>{{ item.title }}</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></li>
             {% endfor %}
             </ul>
           </div>
@@ -576,7 +576,7 @@
             <h4>Blocker may be cleared ({{ blocker_maybe_cleared | length }})</h4>
             <ul>
             {% for item in blocker_maybe_cleared %}
-              <li><strong>{{ item.title }}</strong><br><span class="next-reason">some (not all) dependencies are done — worth re-checking the blocker</span></li>
+              <li><strong>{{ item.title }}</strong><br><span class="next-reason">some (not all) dependencies are at least ready for review — worth re-checking the blocker</span></li>
             {% endfor %}
             </ul>
           </div>
