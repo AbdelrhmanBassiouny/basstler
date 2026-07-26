@@ -110,75 +110,47 @@ button — never gets `merged_at` set, and this repo's convention is to add a
 `"merged"` label by hand in exactly that case; `build_dashboard.py` treats
 that label as equivalent to `merged_at` being set.
 
-**Sync the manifest before rendering.** `status` is a manually-maintained
-field for everything except one direction: once GitHub confirms a PR is
-merged, the item is done, and that's not a judgment call - unlike every
-other kind of drift (a bad PR number, "done" while still open, closed
-unmerged against an active status), there's no ambiguity to leave for a
-human. Run `sync_manifest_status.py` against the same `/tmp/pr_data.json`
-before generating the dashboard, so the dashboard reflects corrected data
-instead of reporting the same "merged but not marked done" drift forever:
+Everything from here on is deterministic - **run `refresh_dashboard.sh`**
+rather than reproducing its steps by hand:
 
 ```bash
-python3 .claude/skills/plan-dashboard/sync_manifest_status.py \
-  --plan /tmp/plan.yaml \
-  --pr-data /tmp/pr_data.json
-```
-
-It patches `/tmp/plan.yaml` in place (only the exact `status:` line of each
-corrected item - nothing else in the file changes) and prints
-`{"corrected": [...]}`. If that list is non-empty, push the correction back
-to `claude/personal-notes` **before** running `build_dashboard.py` - same
-disposable-worktree pattern as step 3's URL-cache write (fetch, worktree add
-on `FETCH_HEAD`, copy the patched `/tmp/plan.yaml` over the plan's real
-path, commit, push, clean up):
-
-```bash
-# sketch — adapt paths/remote/branch to what step 1 resolved
-SCRATCH="$(mktemp -d)"
-git worktree add -b __plan-dashboard-sync-tmp "$SCRATCH" FETCH_HEAD --quiet
-cp /tmp/plan.yaml "$SCRATCH/.claude/personal/plans/<plan-id>/plan.yaml"
-git -C "$SCRATCH" add .claude/personal/plans/<plan-id>/plan.yaml
-git -C "$SCRATCH" commit --quiet -m "Auto-sync <plan-id>: N item(s) to done (merged on GitHub)"
-git -C "$SCRATCH" push "${ACTIVE_NOTES_REMOTE}" "HEAD:${NOTES_BRANCH}"
-git worktree remove --force "$SCRATCH"
-git branch -D __plan-dashboard-sync-tmp
-```
-
-Skip the push entirely (and the worktree dance) if `corrected` is empty -
-nothing changed, nothing to push. In master-index mode, run this sync step
-for every plan before building that plan's index entry.
-
-Then run the dashboard script itself (requires PyYAML, Jinja2, and the
-`markdown` package — `pip install pyyaml jinja2 markdown` if any are missing):
-
-```bash
-python3 .claude/skills/plan-dashboard/build_dashboard.py \
+bash .claude/skills/plan-dashboard/refresh_dashboard.sh \
+  --plan-id <plan-id> \
   --plan /tmp/plan.yaml \
   --roadmap /tmp/roadmap.md \
   --pr-data /tmp/pr_data.json \
   --output /tmp/dashboard.html \
-  --tracking-url "<html_url from step 1, if any>"
+  --tracking-url "<html_url from step 1, if any>"   # omit if the plan has no tracking_issue
 ```
 
-The script validates the manifest (schema version, unique ids, track/wave/
-depends_on references — the exact checks `plan-create` must also satisfy),
-classifies every item's live state (`merged` | `open_draft` | `open_ready` |
-`closed_unmerged` | `not_found`), computes drift, builds the "ready to
-start"/"blocker may be cleared" lists (a blocked item whose dependency
-becomes ready always lands in "blocker may be cleared", never "ready to
-start" — it's still blocked, not fresh), stacks items by dependency depth
-(indented, capped at 4 levels, wrapping with a left-edge arrow past the
-cap). `done` items are hidden by default behind a sidebar toggle ("Show
-done / merged items") — done client-side via CSS custom properties, so a
-dependent item's indentation dedents to whatever it would be if its done
-dependencies weren't dependencies at all, not just one level shallower.
-Every not-`done` item gets a dashboard action button, worded to match its
-status — "Start now" (`plan-item-kickoff`) for not-started once every
-dependency is ready, "Resolve"/"Resume"/"Reconsider" (`plan-item-resolve`)
-for blocked/in-progress/deferred respectively — plus a model dropdown
-beside it; a page can't spawn a session itself, so these are
-copy-to-clipboard affordances (the dropdown's choice is prepended as a
+It runs `sync_manifest_status.py` first - `status` is a manually-maintained
+field for everything except one direction: once GitHub confirms a PR is
+merged, the item is done, and that's not a judgment call - unlike every
+other kind of drift (a bad PR number, "done" while still open, closed
+unmerged against an active status), there's no ambiguity to leave for a
+human. If that finds anything to correct, it pushes the patched
+`plan.yaml` back to the personal-notes branch resolved in step 1 (via
+`.claude/hooks/write-personal-notes-file.sh`) *before* rendering, so the
+dashboard reflects corrected data instead of reporting the same "merged but
+not marked done" drift forever; if nothing needed correcting, nothing is
+pushed. It then runs `build_dashboard.py`, which validates the manifest
+(schema version, unique ids, track/wave/depends_on references — the exact
+checks `plan-create` must also satisfy), classifies every item's live state
+(`merged` | `open_draft` | `open_ready` | `closed_unmerged` | `not_found`),
+computes drift, builds the "ready to start"/"blocker may be cleared" lists
+(a blocked item whose dependency becomes ready always lands in "blocker may
+be cleared", never "ready to start" — it's still blocked, not fresh),
+stacks items by dependency depth (indented, capped at 4 levels, wrapping
+with a left-edge arrow past the cap). `done` items are hidden by default
+behind a sidebar toggle ("Show done / merged items") — done client-side via
+CSS custom properties, so a dependent item's indentation dedents to
+whatever it would be if its done dependencies weren't dependencies at all,
+not just one level shallower. Every not-`done` item gets a dashboard action
+button, worded to match its status — "Start now" (`plan-item-kickoff`) for
+not-started once every dependency is ready, "Resolve"/"Resume"/"Reconsider"
+(`plan-item-resolve`) for blocked/in-progress/deferred respectively — plus
+a model dropdown beside it; a page can't spawn a session itself, so these
+are copy-to-clipboard affordances (the dropdown's choice is prepended as a
 `/model <id>` line ahead of the skill command), not live triggers. An item
 whose PR is open and still a draft also gets a "Review" button linking
 straight to the PR on GitHub — this plan's convention keeps every PR in
@@ -186,22 +158,28 @@ draft until its own author has reviewed it, so a draft PR is exactly the
 population still needing that review, and flipping it to ready for review
 *is* the record of having done so. The sidebar's "Ready to review" list
 narrows that population to what's actually worth reviewing right now: not
-blocked, and every dependency (if any) already has its own open PR too
-(the dependency need not itself be past review — just open — so a whole
-reviewable stack can surface before its base has merged). Renders the
-final HTML — including `roadmap.md` converted to HTML and shown in a
-collapsed `<details>` section, and the tracking-issue link if one was
-passed. None of that is this document's job to describe further; read the
-script if you need the specifics.
+blocked, not deferred, and every dependency (if any) already has its own
+open PR too (the dependency need not itself be past review — just open —
+so a whole reviewable stack can surface before its base has merged).
+Renders the final HTML — including `roadmap.md` converted to HTML and
+shown in a collapsed `<details>` section, and the tracking-issue link if
+one was passed. None of that is this document's job to describe further;
+read the scripts if you need the specifics.
 
-If it exits non-zero, the manifest failed validation — its stderr says
-exactly what's wrong (which field, which value). Report that to the user
-instead of trying to patch around it yourself; a broken manifest is
-something they need to know about, not paper over.
+If `refresh_dashboard.sh` exits non-zero, the manifest failed validation —
+its stderr says exactly what's wrong (which field, which value). Report
+that to the user instead of trying to patch around it yourself; a broken
+manifest is something they need to know about, not paper over. Requires
+PyYAML, Jinja2, and the `markdown` package —
+`pip install -r .claude/skills/plan-dashboard/requirements.txt` if any are
+missing.
 
-On success it prints a one-line JSON summary (status counts, drift count,
-drifted/ready/recheck item titles) on stdout — keep it, you need it for
-step 4's report without re-parsing the HTML you just wrote.
+On success it prints one merged JSON summary on stdout: `sync_manifest_status.py`'s
+own `{"corrected": [...]}` plus `build_dashboard.py`'s status counts, drift
+count, and drifted/ready/recheck item titles - keep it, you need it for
+step 4's report without re-parsing the HTML you just wrote or re-deriving
+what got auto-corrected. In master-index mode, run `refresh_dashboard.sh`
+for every plan before building that plan's index entry.
 
 **Master-index mode** instead assembles one summary object per plan (`id`,
 `title`, `description`, `done`/`total` counts from each plan's own
@@ -232,30 +210,23 @@ index — pick your own if these clash with something already published, but
 keep whichever you pick fixed for that artifact going forward.
 
 If this was a first publish, or the returned URL differs from the cache,
-update the cache and push it back — a small scratch-worktree commit,
-matching every other write in this system (see
-`.claude/hooks/save-personal-notes.sh` for the exact pattern: fetch, worktree
-add on `FETCH_HEAD`, write the file, commit, push, clean up the worktree and
-temp branch). Do not touch the user's current branch or working tree to do
-this.
+merge your updated url(s) into the existing `dashboard-urls.yaml` content
+(write the result to a scratch file, e.g. `/tmp/updated-dashboard-urls.yaml`),
+then push it back with the same helper `refresh_dashboard.sh` uses
+internally for the manifest correction:
 
 ```bash
-# sketch — adapt paths/remote/branch to what step 1 resolved
-SCRATCH="$(mktemp -d)"
-git worktree add -b __plan-dashboard-tmp "$SCRATCH" FETCH_HEAD --quiet
-mkdir -p "$SCRATCH/.claude/personal/plans/_generated"
-# merge your updated url(s) into the existing dashboard-urls.yaml content, then:
-cp /tmp/updated-dashboard-urls.yaml "$SCRATCH/.claude/personal/plans/_generated/dashboard-urls.yaml"
-git -C "$SCRATCH" add .claude/personal/plans/_generated/dashboard-urls.yaml
-git -C "$SCRATCH" commit --quiet -m "Record dashboard URL for <plan-id or _index>"
-git -C "$SCRATCH" push "${ACTIVE_NOTES_REMOTE}" "HEAD:${NOTES_BRANCH}"
-git worktree remove --force "$SCRATCH"
-git branch -D __plan-dashboard-tmp
+bash .claude/hooks/write-personal-notes-file.sh \
+  --source /tmp/updated-dashboard-urls.yaml \
+  --destination .claude/personal/plans/_generated/dashboard-urls.yaml \
+  --message "Record dashboard URL for <plan-id or _index>"
 ```
 
-Skip this whole step if the URL you already had matches what `Artifact`
-returned — nothing changed, nothing to push (same "safe to re-run,
-no-op-if-unchanged" convention as the other scripts here).
+It does its work in a scratch worktree and never touches the current branch
+or working tree. Skip this whole step if the URL you already had matches
+what `Artifact` returned — nothing changed, nothing to push (the script is
+a no-op in that case anyway, but there's no reason to write the scratch
+file at all).
 
 ## 4. Report back
 

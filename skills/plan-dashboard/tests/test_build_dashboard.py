@@ -3,6 +3,8 @@ Tests for build_dashboard.py's validation, live-state classification, drift dete
 and rendering.
 """
 
+from datetime import datetime
+
 import pytest
 
 from build_dashboard import (
@@ -18,6 +20,7 @@ from build_dashboard import (
     Plan,
     PlanValidationError,
     PullRequestRecord,
+    PullRequestState,
     StackedItem,
     Track,
     UnknownDependency,
@@ -197,24 +200,28 @@ def test_live_state_display_labels_including_no_pull_request():
 
 
 def test_was_merged_true_when_github_recorded_a_merge():
-    record = PullRequestRecord(state="closed", merged_at="2026-01-01")
+    record = PullRequestRecord(
+        state=PullRequestState.CLOSED, merged_at=datetime(2026, 1, 1)
+    )
     assert record.was_merged
 
 
 def test_was_merged_true_for_an_out_of_band_merge_marked_by_label():
     # merged_at is never set for a PR merged by pushing its branch directly
     # and closing by hand - this repo's convention is a "merged" label instead.
-    record = PullRequestRecord(state="closed", labels=["in-review", "merged"])
+    record = PullRequestRecord(
+        state=PullRequestState.CLOSED, labels=["in-review", "merged"]
+    )
     assert record.was_merged
 
 
-def test_was_merged_false_for_a_plain_closed_pr():
-    record = PullRequestRecord(state="closed", labels=["in-review"])
+def test_was_merged_false_for_a_plain_closed_pull_request():
+    record = PullRequestRecord(state=PullRequestState.CLOSED, labels=["in-review"])
     assert not record.was_merged
 
 
-def test_was_merged_false_for_an_open_pr():
-    record = PullRequestRecord(state="open")
+def test_was_merged_false_for_an_open_pull_request():
+    record = PullRequestRecord(state=PullRequestState.OPEN)
     assert not record.was_merged
 
 
@@ -319,31 +326,44 @@ def make_renderer(items, pull_requests_by_repository=None):
     )
 
 
-def item(identifier, status, pull_request_number=None, depends_on=None):
+def item(identifier, status: ItemStatus, pull_request_number=None, depends_on=None):
+    """
+    Build one :class:`Item` for a test, filling in the boilerplate
+    (``title``/``branch``/``id`` all equal to *identifier*, a fixed.
+
+    ``track``) that every one of this file's ~90 items would otherwise
+    repeat - a plain :class:`Item` constructor call remains available and
+    used directly wherever a test needs a field this shortcut doesn't
+    expose.
+    """
     return Item(
         title=identifier,
         branch=identifier,
         track="track-1",
-        status=ItemStatus(status),
+        status=status,
         id=identifier,
         pull_request_number=pull_request_number,
         depends_on=depends_on or [],
     )
 
 
-def test_item_with_no_pr_has_no_pull_request_live_state_and_no_drift():
-    renderer = make_renderer([item("a", "not_started")])
+def test_item_with_no_pull_request_has_no_pull_request_live_state_and_no_drift():
+    renderer = make_renderer([item("a", ItemStatus.NOT_STARTED)])
     output, summary = renderer.render()
     assert renderer.plan.items[0].live_state is LiveState.NO_PULL_REQUEST
     assert summary.drift_items == []
 
 
-def test_merged_pr_marks_not_started_item_as_drifted():
+def test_merged_pull_request_marks_not_started_item_as_drifted():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="closed", merged_at="2026-01-01")}
+        "owner/repo": {
+            "1": PullRequestRecord(
+                state=PullRequestState.CLOSED, merged_at=datetime(2026, 1, 1)
+            )
+        }
     }
     renderer = make_renderer(
-        [item("a", "not_started", pull_request_number=1)],
+        [item("a", ItemStatus.NOT_STARTED, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     _, summary = renderer.render()
@@ -351,14 +371,16 @@ def test_merged_pr_marks_not_started_item_as_drifted():
     assert renderer.plan.items[0].live_state is LiveState.MERGED
 
 
-def test_closed_pr_with_merged_label_is_merged_not_closed_unmerged():
+def test_closed_pull_request_with_merged_label_is_merged_not_closed_unmerged():
     # merged_at is unset here on purpose - this is the out-of-band-merge case
     # PullRequestRecord.was_merged exists for.
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="closed", labels=["merged"])}
+        "owner/repo": {
+            "1": PullRequestRecord(state=PullRequestState.CLOSED, labels=["merged"])
+        }
     }
     renderer = make_renderer(
-        [item("a", "in_progress", pull_request_number=1)],
+        [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     _, summary = renderer.render()
@@ -366,20 +388,22 @@ def test_closed_pr_with_merged_label_is_merged_not_closed_unmerged():
     assert summary.drift_items == ["a"]
 
 
-def test_open_pr_marks_done_item_as_drifted():
+def test_open_pull_request_marks_done_item_as_drifted():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     renderer = make_renderer(
-        [item("a", "done", pull_request_number=1)],
+        [item("a", ItemStatus.DONE, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     _, summary = renderer.render()
     assert summary.drift_items == ["a"]
 
 
-def test_pr_missing_from_live_data_is_not_found_and_drifted():
-    renderer = make_renderer([item("a", "not_started", pull_request_number=999)])
+def test_pull_request_missing_from_live_data_is_not_found_and_drifted():
+    renderer = make_renderer(
+        [item("a", ItemStatus.NOT_STARTED, pull_request_number=999)]
+    )
     _, summary = renderer.render()
     assert renderer.plan.items[0].live_state is LiveState.NOT_FOUND
     assert summary.drift_items == ["a"]
@@ -387,10 +411,10 @@ def test_pr_missing_from_live_data_is_not_found_and_drifted():
 
 def test_matching_status_and_live_state_is_not_drifted():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     renderer = make_renderer(
-        [item("a", "in_progress", pull_request_number=1)],
+        [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     _, summary = renderer.render()
@@ -401,7 +425,10 @@ def test_matching_status_and_live_state_is_not_drifted():
 
 
 def test_item_becomes_ready_to_start_once_all_dependencies_are_done():
-    items = [item("a", "done"), item("b", "not_started", depends_on=["a"])]
+    items = [
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+    ]
     renderer = make_renderer(items)
     _, summary = renderer.render()
     assert summary.ready_to_start == ["b"]
@@ -409,9 +436,9 @@ def test_item_becomes_ready_to_start_once_all_dependencies_are_done():
 
 def test_blocked_item_with_partial_dependencies_done_is_recheck_candidate():
     items = [
-        item("a", "done"),
-        item("b", "not_started"),
-        item("c", "blocked", depends_on=["a", "b"]),
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.NOT_STARTED),
+        item("c", ItemStatus.BLOCKED, depends_on=["a", "b"]),
     ]
     renderer = make_renderer(items)
     _, summary = renderer.render()
@@ -424,7 +451,10 @@ def test_blocked_item_with_every_dependency_done_is_recheck_not_ready_to_start()
     # it belongs in "blocker may be cleared" (actionable: resolve it), never
     # in "ready to start" (that implies starting fresh, which is wrong for
     # an item that already has real state).
-    items = [item("a", "done"), item("b", "blocked", depends_on=["a"])]
+    items = [
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.BLOCKED, depends_on=["a"]),
+    ]
     renderer = make_renderer(items)
     _, summary = renderer.render()
     assert summary.blocker_maybe_cleared == ["b"]
@@ -436,11 +466,11 @@ def test_item_becomes_ready_to_start_once_dependency_is_open_and_ready_for_revie
     # out of draft is this repo's normal workflow - waiting for a full merge
     # first would be stricter than how the stack is actually built.
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     items = [
-        item("a", "in_progress", pull_request_number=1),
-        item("b", "not_started", depends_on=["a"]),
+        item("a", ItemStatus.IN_PROGRESS, pull_request_number=1),
+        item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
     ]
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
@@ -451,11 +481,11 @@ def test_item_becomes_ready_to_start_once_dependency_is_open_and_ready_for_revie
 
 def test_item_not_ready_to_start_while_dependency_is_still_a_draft():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     items = [
-        item("a", "in_progress", pull_request_number=1),
-        item("b", "not_started", depends_on=["a"]),
+        item("a", ItemStatus.IN_PROGRESS, pull_request_number=1),
+        item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
     ]
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
@@ -466,9 +496,9 @@ def test_item_not_ready_to_start_while_dependency_is_still_a_draft():
 
 def test_not_started_item_with_partial_dependencies_is_neither_list():
     items = [
-        item("a", "done"),
-        item("b", "not_started"),
-        item("c", "not_started", depends_on=["a", "b"]),
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.NOT_STARTED),
+        item("c", ItemStatus.NOT_STARTED, depends_on=["a", "b"]),
     ]
     renderer = make_renderer(items)
     _, summary = renderer.render()
@@ -481,10 +511,10 @@ def test_not_started_item_with_partial_dependencies_is_neither_list():
 
 def test_needs_review_true_for_an_open_draft_pull_request():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     renderer = make_renderer(
-        [item("a", "in_progress", pull_request_number=1)],
+        [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     renderer.render()
@@ -493,10 +523,10 @@ def test_needs_review_true_for_an_open_draft_pull_request():
 
 def test_needs_review_false_once_marked_ready_for_review():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     renderer = make_renderer(
-        [item("a", "in_progress", pull_request_number=1)],
+        [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     renderer.render()
@@ -504,17 +534,17 @@ def test_needs_review_false_once_marked_ready_for_review():
 
 
 def test_needs_review_false_with_no_pull_request():
-    renderer = make_renderer([item("a", "not_started")])
+    renderer = make_renderer([item("a", ItemStatus.NOT_STARTED)])
     renderer.render()
     assert not renderer.plan.items[0].needs_review
 
 
 def test_needs_review_false_for_a_deferred_item_with_an_open_draft_pull_request():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     renderer = make_renderer(
-        [item("a", "deferred", pull_request_number=1)],
+        [item("a", ItemStatus.DEFERRED, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     renderer.render()
@@ -522,52 +552,52 @@ def test_needs_review_false_for_a_deferred_item_with_an_open_draft_pull_request(
 
 
 def test_has_open_pull_request_true_for_draft_and_ready():
-    draft_item = item("a", "in_progress", pull_request_number=1)
+    draft_item = item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)
     draft_item.live_state = LiveState.OPEN_DRAFT
-    ready_item = item("b", "in_progress", pull_request_number=2)
+    ready_item = item("b", ItemStatus.IN_PROGRESS, pull_request_number=2)
     ready_item.live_state = LiveState.OPEN_READY
     assert draft_item.has_open_pull_request
     assert ready_item.has_open_pull_request
 
 
 def test_has_open_pull_request_false_when_merged_or_absent():
-    merged_item = item("a", "done", pull_request_number=1)
+    merged_item = item("a", ItemStatus.DONE, pull_request_number=1)
     merged_item.live_state = LiveState.MERGED
-    no_pr_item = item("b", "not_started")
+    no_pull_request_item = item("b", ItemStatus.NOT_STARTED)
     assert not merged_item.has_open_pull_request
-    assert not no_pr_item.has_open_pull_request
+    assert not no_pull_request_item.has_open_pull_request
 
 
-def test_item_with_no_dependency_and_draft_pr_is_ready_to_review():
+def test_item_with_no_dependency_and_draft_pull_request_is_ready_to_review():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     renderer = make_renderer(
-        [item("a", "in_progress", pull_request_number=1)],
+        [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     _, summary = renderer.render()
     assert summary.ready_to_review == ["a"]
 
 
-def test_blocked_item_with_draft_pr_is_not_ready_to_review():
+def test_blocked_item_with_draft_pull_request_is_not_ready_to_review():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     renderer = make_renderer(
-        [item("a", "blocked", pull_request_number=1)],
+        [item("a", ItemStatus.BLOCKED, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     _, summary = renderer.render()
     assert summary.ready_to_review == []
 
 
-def test_deferred_item_with_draft_pr_is_not_ready_to_review():
+def test_deferred_item_with_draft_pull_request_is_not_ready_to_review():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     renderer = make_renderer(
-        [item("a", "deferred", pull_request_number=1)],
+        [item("a", ItemStatus.DEFERRED, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     _, summary = renderer.render()
@@ -576,11 +606,11 @@ def test_deferred_item_with_draft_pr_is_not_ready_to_review():
 
 def test_item_not_ready_to_review_while_dependency_has_no_pull_request():
     pull_requests_by_repository = {
-        "owner/repo": {"2": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"2": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     items = [
-        item("a", "not_started"),
-        item("b", "in_progress", pull_request_number=2, depends_on=["a"]),
+        item("a", ItemStatus.NOT_STARTED),
+        item("b", ItemStatus.IN_PROGRESS, pull_request_number=2, depends_on=["a"]),
     ]
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
@@ -594,13 +624,13 @@ def test_item_ready_to_review_once_dependency_has_an_open_pull_request():
     # open, so a whole reviewable stack can surface before its base merges.
     pull_requests_by_repository = {
         "owner/repo": {
-            "1": PullRequestRecord(state="open", draft=True),
-            "2": PullRequestRecord(state="open", draft=True),
+            "1": PullRequestRecord(state=PullRequestState.OPEN, draft=True),
+            "2": PullRequestRecord(state=PullRequestState.OPEN, draft=True),
         }
     }
     items = [
-        item("a", "in_progress", pull_request_number=1),
-        item("b", "in_progress", pull_request_number=2, depends_on=["a"]),
+        item("a", ItemStatus.IN_PROGRESS, pull_request_number=1),
+        item("b", ItemStatus.IN_PROGRESS, pull_request_number=2, depends_on=["a"]),
     ]
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
@@ -613,7 +643,7 @@ def test_item_ready_to_review_once_dependency_has_an_open_pull_request():
 
 
 def test_action_is_start_now_for_a_not_started_item():
-    renderer = make_renderer([item("a", "not_started")])
+    renderer = make_renderer([item("a", ItemStatus.NOT_STARTED)])
     renderer.render()
     action = renderer.plan.items[0].action
     assert action.label == "Start now"
@@ -621,14 +651,20 @@ def test_action_is_start_now_for_a_not_started_item():
 
 
 def test_action_none_for_a_not_started_item_while_a_dependency_is_not_ready():
-    items = [item("a", "not_started"), item("b", "not_started", depends_on=["a"])]
+    items = [
+        item("a", ItemStatus.NOT_STARTED),
+        item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+    ]
     renderer = make_renderer(items)
     renderer.render()
     assert renderer.items_by_identifier["b"].action is None
 
 
 def test_action_set_once_every_dependency_is_ready():
-    items = [item("a", "done"), item("b", "not_started", depends_on=["a"])]
+    items = [
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+    ]
     renderer = make_renderer(items)
     renderer.render()
     assert (
@@ -639,11 +675,11 @@ def test_action_set_once_every_dependency_is_ready():
 
 def test_action_set_when_dependency_is_open_and_ready_for_review():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     items = [
-        item("a", "in_progress", pull_request_number=1),
-        item("b", "not_started", depends_on=["a"]),
+        item("a", ItemStatus.IN_PROGRESS, pull_request_number=1),
+        item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
     ]
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
@@ -654,11 +690,11 @@ def test_action_set_when_dependency_is_open_and_ready_for_review():
 
 def test_action_none_for_a_not_started_item_when_dependency_is_still_a_draft():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     items = [
-        item("a", "in_progress", pull_request_number=1),
-        item("b", "not_started", depends_on=["a"]),
+        item("a", ItemStatus.IN_PROGRESS, pull_request_number=1),
+        item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
     ]
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
@@ -671,7 +707,10 @@ def test_action_ready_check_is_order_independent():
     # "b" depends on "a", but "a" appears later in plan.items - the
     # dependency's live_state must still be classified before "b"'s
     # action is computed.
-    items = [item("b", "not_started", depends_on=["a"]), item("a", "done")]
+    items = [
+        item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+        item("a", ItemStatus.DONE),
+    ]
     renderer = make_renderer(items)
     renderer.render()
     assert (
@@ -681,13 +720,13 @@ def test_action_ready_check_is_order_independent():
 
 
 def test_action_none_for_a_done_item():
-    renderer = make_renderer([item("a", "done")])
+    renderer = make_renderer([item("a", ItemStatus.DONE)])
     renderer.render()
     assert renderer.plan.items[0].action is None
 
 
 def test_action_is_resolve_for_a_blocked_item():
-    renderer = make_renderer([item("a", "blocked")])
+    renderer = make_renderer([item("a", ItemStatus.BLOCKED)])
     renderer.render()
     action = renderer.plan.items[0].action
     assert action.label == "Resolve"
@@ -695,7 +734,7 @@ def test_action_is_resolve_for_a_blocked_item():
 
 
 def test_action_is_resume_for_an_in_progress_item():
-    renderer = make_renderer([item("a", "in_progress")])
+    renderer = make_renderer([item("a", ItemStatus.IN_PROGRESS)])
     renderer.render()
     action = renderer.plan.items[0].action
     assert action.label == "Resume"
@@ -703,7 +742,7 @@ def test_action_is_resume_for_an_in_progress_item():
 
 
 def test_action_is_reconsider_for_a_deferred_item():
-    renderer = make_renderer([item("a", "deferred")])
+    renderer = make_renderer([item("a", ItemStatus.DEFERRED)])
     renderer.render()
     action = renderer.plan.items[0].action
     assert action.label == "Reconsider"
@@ -716,10 +755,14 @@ def test_action_is_reconsider_for_a_deferred_item():
 def test_track_stack_wraps_past_the_maximum_level():
     # A chain one longer than the cap: item N depends on item N-1.
     chain_length = MAXIMUM_DEPENDENCY_STACK_LEVEL + 2
-    items = [item("item-0", "not_started")]
+    items = [item("item-0", ItemStatus.NOT_STARTED)]
     for index in range(1, chain_length):
         items.append(
-            item(f"item-{index}", "not_started", depends_on=[f"item-{index - 1}"])
+            item(
+                f"item-{index}",
+                ItemStatus.NOT_STARTED,
+                depends_on=[f"item-{index - 1}"],
+            )
         )
     renderer = make_renderer(items)
     stacked_items = renderer._build_track_stack(items)
@@ -728,10 +771,14 @@ def test_track_stack_wraps_past_the_maximum_level():
 
 
 def test_track_stack_does_not_wrap_within_the_maximum_level():
-    items = [item("item-0", "not_started")]
+    items = [item("item-0", ItemStatus.NOT_STARTED)]
     for index in range(1, MAXIMUM_DEPENDENCY_STACK_LEVEL):
         items.append(
-            item(f"item-{index}", "not_started", depends_on=[f"item-{index - 1}"])
+            item(
+                f"item-{index}",
+                ItemStatus.NOT_STARTED,
+                depends_on=[f"item-{index - 1}"],
+            )
         )
     renderer = make_renderer(items)
     stacked_items = renderer._build_track_stack(items)
@@ -742,7 +789,10 @@ def test_track_stack_does_not_wrap_within_the_maximum_level():
 
 
 def test_hidden_done_indent_dedents_a_dependent_of_a_done_item_to_zero():
-    items = [item("a", "done"), item("b", "not_started", depends_on=["a"])]
+    items = [
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+    ]
     renderer = make_renderer(items)
     stacked_items = renderer._build_track_stack(items)
     stacked_b = next(s for s in stacked_items if s.item.identifier == "b")
@@ -752,7 +802,10 @@ def test_hidden_done_indent_dedents_a_dependent_of_a_done_item_to_zero():
 
 
 def test_hidden_done_indent_unaffected_when_dependency_is_not_done():
-    items = [item("a", "in_progress"), item("b", "not_started", depends_on=["a"])]
+    items = [
+        item("a", ItemStatus.IN_PROGRESS),
+        item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+    ]
     renderer = make_renderer(items)
     stacked_items = renderer._build_track_stack(items)
     stacked_b = next(s for s in stacked_items if s.item.identifier == "b")
@@ -765,9 +818,9 @@ def test_hidden_done_indent_only_dedents_the_immediate_done_dependency():
     # removes b's own dependency on it - c still indents under the still-
     # visible b, one level, not zero.
     items = [
-        item("a", "done"),
-        item("b", "in_progress", depends_on=["a"]),
-        item("c", "not_started", depends_on=["b"]),
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.IN_PROGRESS, depends_on=["a"]),
+        item("c", ItemStatus.NOT_STARTED, depends_on=["b"]),
     ]
     renderer = make_renderer(items)
     stacked_items = renderer._build_track_stack(items)
@@ -779,9 +832,9 @@ def test_hidden_done_indent_only_dedents_the_immediate_done_dependency():
 
 def test_hidden_done_indent_skips_a_chain_of_done_dependencies():
     items = [
-        item("a", "done"),
-        item("b", "done", depends_on=["a"]),
-        item("c", "not_started", depends_on=["b"]),
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.DONE, depends_on=["a"]),
+        item("c", ItemStatus.NOT_STARTED, depends_on=["b"]),
     ]
     renderer = make_renderer(items)
     stacked_items = renderer._build_track_stack(items)
@@ -797,14 +850,14 @@ def test_hidden_done_wrap_parent_is_never_a_done_item():
     # never from a done item, even though the full (unhidden) chain would
     # wrap earlier and reference a different, done, parent.
     items = [
-        item("a", "done"),
-        item("b", "done", depends_on=["a"]),
-        item("c", "not_started", depends_on=["b"]),
-        item("d", "not_started", depends_on=["c"]),
-        item("e", "not_started", depends_on=["d"]),
-        item("f", "not_started", depends_on=["e"]),
-        item("g", "not_started", depends_on=["f"]),
-        item("h", "not_started", depends_on=["g"]),
+        item("a", ItemStatus.DONE),
+        item("b", ItemStatus.DONE, depends_on=["a"]),
+        item("c", ItemStatus.NOT_STARTED, depends_on=["b"]),
+        item("d", ItemStatus.NOT_STARTED, depends_on=["c"]),
+        item("e", ItemStatus.NOT_STARTED, depends_on=["d"]),
+        item("f", ItemStatus.NOT_STARTED, depends_on=["e"]),
+        item("g", ItemStatus.NOT_STARTED, depends_on=["f"]),
+        item("h", ItemStatus.NOT_STARTED, depends_on=["g"]),
     ]
     renderer = make_renderer(items)
     stacked_items = renderer._build_track_stack(items)
@@ -824,7 +877,7 @@ def test_render_wires_an_item_into_its_wave_and_track_sections():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "not_started")],
+        items=[item("a", ItemStatus.NOT_STARTED)],
     )
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
@@ -861,7 +914,7 @@ def test_render_shows_placeholder_for_a_track_with_no_items():
 
 def test_render_shows_pull_request_link_when_item_has_one():
     pull_requests_by_repository = {
-        "owner/repo": {"5": PullRequestRecord(state="open", draft=False)}
+        "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     plan = Plan(
         id="test-plan",
@@ -870,7 +923,7 @@ def test_render_shows_pull_request_link_when_item_has_one():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "in_progress", pull_request_number=5)],
+        items=[item("a", ItemStatus.IN_PROGRESS, pull_request_number=5)],
     )
     renderer = DashboardRenderer(
         plan=plan,
@@ -891,7 +944,7 @@ def test_render_shows_start_now_button_for_a_not_started_item():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "not_started")],
+        items=[item("a", ItemStatus.NOT_STARTED)],
     )
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
@@ -910,9 +963,9 @@ def test_render_shows_resolve_resume_reconsider_buttons_for_underway_items():
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
         items=[
-            item("a", "in_progress"),
-            item("b", "blocked"),
-            item("c", "deferred"),
+            item("a", ItemStatus.IN_PROGRESS),
+            item("b", ItemStatus.BLOCKED),
+            item("c", ItemStatus.DEFERRED),
         ],
     )
     renderer = DashboardRenderer(
@@ -929,7 +982,7 @@ def test_render_shows_resolve_resume_reconsider_buttons_for_underway_items():
 
 def test_render_shows_review_button_for_an_item_with_a_draft_pull_request():
     pull_requests_by_repository = {
-        "owner/repo": {"5": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     plan = Plan(
         id="test-plan",
@@ -938,7 +991,7 @@ def test_render_shows_review_button_for_an_item_with_a_draft_pull_request():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "in_progress", pull_request_number=5)],
+        items=[item("a", ItemStatus.IN_PROGRESS, pull_request_number=5)],
     )
     renderer = DashboardRenderer(
         plan=plan,
@@ -953,7 +1006,7 @@ def test_render_shows_review_button_for_an_item_with_a_draft_pull_request():
 
 def test_render_omits_review_button_once_pull_request_is_ready_for_review():
     pull_requests_by_repository = {
-        "owner/repo": {"5": PullRequestRecord(state="open", draft=False)}
+        "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     plan = Plan(
         id="test-plan",
@@ -962,7 +1015,7 @@ def test_render_omits_review_button_once_pull_request_is_ready_for_review():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "in_progress", pull_request_number=5)],
+        items=[item("a", ItemStatus.IN_PROGRESS, pull_request_number=5)],
     )
     renderer = DashboardRenderer(
         plan=plan,
@@ -976,7 +1029,7 @@ def test_render_omits_review_button_once_pull_request_is_ready_for_review():
 
 def test_render_omits_review_button_for_a_deferred_item_with_a_draft_pull_request():
     pull_requests_by_repository = {
-        "owner/repo": {"5": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     plan = Plan(
         id="test-plan",
@@ -985,7 +1038,7 @@ def test_render_omits_review_button_for_a_deferred_item_with_a_draft_pull_reques
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "deferred", pull_request_number=5)],
+        items=[item("a", ItemStatus.DEFERRED, pull_request_number=5)],
     )
     renderer = DashboardRenderer(
         plan=plan,
@@ -999,7 +1052,7 @@ def test_render_omits_review_button_for_a_deferred_item_with_a_draft_pull_reques
 
 def test_render_shows_ready_to_review_sidebar_section():
     pull_requests_by_repository = {
-        "owner/repo": {"5": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     plan = Plan(
         id="test-plan",
@@ -1008,7 +1061,7 @@ def test_render_shows_ready_to_review_sidebar_section():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "in_progress", pull_request_number=5)],
+        items=[item("a", ItemStatus.IN_PROGRESS, pull_request_number=5)],
     )
     renderer = DashboardRenderer(
         plan=plan,
@@ -1025,7 +1078,7 @@ def test_render_shows_ready_to_review_sidebar_section():
 
 def test_render_shows_ready_to_review_section_last_in_the_sidebar():
     pull_requests_by_repository = {
-        "owner/repo": {"5": PullRequestRecord(state="open", draft=True)}
+        "owner/repo": {"5": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
     }
     plan = Plan(
         id="test-plan",
@@ -1035,9 +1088,9 @@ def test_render_shows_ready_to_review_section_last_in_the_sidebar():
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
         items=[
-            item("a", "in_progress", pull_request_number=5),
-            item("b", "done"),
-            item("c", "not_started", depends_on=["b"]),
+            item("a", ItemStatus.IN_PROGRESS, pull_request_number=5),
+            item("b", ItemStatus.DONE),
+            item("c", ItemStatus.NOT_STARTED, depends_on=["b"]),
         ],
     )
     renderer = DashboardRenderer(
@@ -1058,7 +1111,7 @@ def test_render_omits_action_button_for_a_done_item():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "done")],
+        items=[item("a", ItemStatus.DONE)],
     )
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
@@ -1075,7 +1128,7 @@ def test_render_hides_done_items_by_default_with_a_sidebar_toggle():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "done")],
+        items=[item("a", ItemStatus.DONE)],
     )
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
@@ -1094,7 +1147,7 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "not_started")],
+        items=[item("a", ItemStatus.NOT_STARTED)],
     )
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
@@ -1115,7 +1168,10 @@ def test_render_exposes_both_indent_levels_as_css_variables_on_the_item():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "done"), item("b", "not_started", depends_on=["a"])],
+        items=[
+            item("a", ItemStatus.DONE),
+            item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+        ],
     )
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
@@ -1168,7 +1224,7 @@ def test_render_gives_each_item_card_a_stable_id_anchor():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "not_started")],
+        items=[item("a", ItemStatus.NOT_STARTED)],
     )
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
@@ -1185,7 +1241,10 @@ def test_render_links_a_ready_to_start_sidebar_entry_to_its_item_card():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "done"), item("b", "not_started", depends_on=["a"])],
+        items=[
+            item("a", ItemStatus.DONE),
+            item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+        ],
     )
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
@@ -1198,7 +1257,7 @@ def test_render_links_a_ready_to_start_sidebar_entry_to_its_item_card():
 
 def test_render_links_a_drift_sidebar_entry_to_its_item_card():
     pull_requests_by_repository = {
-        "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     plan = Plan(
         id="test-plan",
@@ -1207,7 +1266,7 @@ def test_render_links_a_drift_sidebar_entry_to_its_item_card():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", "done", pull_request_number=1)],
+        items=[item("a", ItemStatus.DONE, pull_request_number=1)],
     )
     renderer = DashboardRenderer(
         plan=plan,
@@ -1224,14 +1283,14 @@ def test_render_links_a_drift_sidebar_entry_to_its_item_card():
 
 
 def test_status_counts_cover_every_status_even_when_zero():
-    renderer = make_renderer([item("a", "done")])
+    renderer = make_renderer([item("a", ItemStatus.DONE)])
     _, summary = renderer.render()
     assert summary.status_counts[ItemStatus.DONE] == 1
     assert summary.status_counts[ItemStatus.BLOCKED] == 0
 
 
 def test_summary_to_json_dict_uses_plain_string_status_keys():
-    renderer = make_renderer([item("a", "done")])
+    renderer = make_renderer([item("a", ItemStatus.DONE)])
     _, summary = renderer.render()
     json_dict = summary.to_json_dict()
     assert json_dict["counts"]["done"] == 1
