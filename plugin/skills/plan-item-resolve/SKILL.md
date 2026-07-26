@@ -1,7 +1,7 @@
 ---
 name: plan-item-resolve
 description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, roadmap.md history, the real state of its branch/PR - conflicts, CI, review comments - and any relevant discussion on its plan's tracking issue) and propose a concrete plan to resolve whatever is stalling it, via plan mode, without writing any code. Invoke as "/plan-item-resolve <plan-id> <item-id>". Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
-allowed-tools: Bash, Read, Grep, Glob, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__search_code
+allowed-tools: Bash, Read, Grep, Glob, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__search_code, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
 # Plan Item Resolve
@@ -26,6 +26,20 @@ re-deriving it). Find the item by `id` (or `branch` if `id` is unset) among
 If the plan id or item id doesn't resolve, stop and list what's actually
 available (every plan id under `plans/*/plan.yaml`, or every item id in the
 named plan) rather than guessing which one was meant.
+
+If the plan has a `tracking_issue`, subscribe to it now via
+`mcp__Claude_Code_Remote__subscribe_pr_activity` (it takes a plain issue
+number the same way it takes a PR number). A resolve session may go on to
+push a fix directly, without a fresh session ever starting - the
+subscription `session-start.sh` sets up for an already-checked-out item
+branch never fires in that case - so subscribing here, before gathering any
+state, is what actually covers a resolve that turns into an uninterrupted
+fix. Skip this step entirely if the plan has no `tracking_issue`. The call
+is idempotent, so it's safe to run even if something already subscribed
+this session. If it errors, don't let that fail the skill: mention it in
+passing when presenting the plan (step 5) and continue - subscribing is a
+convenience for staying aware of concurrent structural changes, not a
+precondition for resolving this item.
 
 ## 2. Gather the item's own state
 
