@@ -44,17 +44,20 @@ structural changes, not a precondition for planning this item.
 
 - `title`, `notes`, `blockers`, `track` (and that track's own `name` +
   `description`), `wave`.
-- `depends_on`: resolve each id to its own item, and cross-check its live
-  GitHub state the same way `build_dashboard.py` does (bulk-fetch every
-  referenced PR via `mcp__github__list_pull_requests`, falling back to
-  `mcp__github__pull_request_read` for anything outside that page window).
-  The plan needs to know exactly what branch to base new work on, and
-  whether it's actually safe to build on yet: a dependency that's done or
-  has an open, non-draft PR is fine to stack on (this repo's normal
-  workflow — see `plans/README.md`); a dependency that's still
-  `not_started` or only has a draft PR is **not** — flag that explicitly in
-  the proposed plan's assumptions instead of quietly proceeding as if it
-  were ready.
+- `depends_on`: bulk-fetch every referenced PR (`mcp__github__list_pull_requests`,
+  falling back to `mcp__github__pull_request_read` for anything outside that
+  page window) into the same `pr_data.json` shape `build_dashboard.py`
+  expects, then run
+  `python3 .claude/skills/plan-dashboard/check_dependency_readiness.py --plan /tmp/plan.yaml --pr-data /tmp/pr_data.json --item <item-id>`
+  rather than re-deriving the readiness rule here — it reuses
+  `build_dashboard.py`'s own `Item.is_ready_to_unblock_dependents()`, so this
+  skill and the dashboard can never silently disagree about what counts as
+  safe to build on. The plan needs to know exactly what branch to base new
+  work on, and whether it's actually safe to build on yet: flag any
+  dependency the script reports `"is_ready": false` for explicitly in the
+  proposed plan's assumptions, instead of quietly proceeding as if it were
+  ready (see `plans/README.md` for why an open, non-draft PR already counts
+  as ready — this repo's normal workflow stacks on it before it merges).
 - Read `roadmap.md` **in full** — do not stop at grepping for this item's
   id/branch/title. A roadmap routinely records decisions, conventions, and
   design rationale in sections that don't name every item individually

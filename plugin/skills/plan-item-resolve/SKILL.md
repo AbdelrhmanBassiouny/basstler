@@ -65,13 +65,17 @@ precondition for resolving this item.
   that mentions this item by id, branch, or title — a structural change
   proposed there (a dependency change, a scope split) can be exactly why
   an item stalled.
-- `depends_on`: resolve each id to its own item and cross-check its live
-  GitHub state the same way `build_dashboard.py` does (bulk-fetch every
-  referenced PR via `mcp__github__list_pull_requests`, falling back to
-  `mcp__github__pull_request_read` for anything outside that page window).
-  A dependency that regressed (was ready, is now blocked or closed
-  unmerged) is a real, common cause of a stall — check this even if
-  `blockers` doesn't mention it.
+- `depends_on`: bulk-fetch every referenced PR (`mcp__github__list_pull_requests`,
+  falling back to `mcp__github__pull_request_read` for anything outside that
+  page window) into the same `pr_data.json` shape `build_dashboard.py`
+  expects, then run
+  `python3 .claude/skills/plan-dashboard/check_dependency_readiness.py --plan /tmp/plan.yaml --pr-data /tmp/pr_data.json --item <item-id>`
+  rather than re-deriving the readiness rule here — it reuses
+  `build_dashboard.py`'s own `Item.is_ready_to_unblock_dependents()`, so this
+  skill and the dashboard can never silently disagree about what counts as
+  ready. A dependency the script reports `"is_ready": false` for (was ready,
+  is now blocked or closed unmerged) is a real, common cause of a stall —
+  check this even if `blockers` doesn't mention it.
 - Read `roadmap.md` **in full** — do not stop at grepping for this item's
   id/branch/title. A roadmap routinely records decisions, conventions, and
   design rationale in sections that don't name every item individually

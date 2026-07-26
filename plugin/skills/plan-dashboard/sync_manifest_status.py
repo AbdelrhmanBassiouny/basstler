@@ -61,6 +61,12 @@ _ITEM_START_PATTERN = re.compile(r"^- id:")
 _STATUS_LINE_PATTERN = re.compile(r"^(\s*status:\s*)(\S+)\s*$")
 
 
+class MissingStatusLineError(ValueError):
+    """Raised when an item slated for correction has no ``status:`` line in
+    its manifest block - the manifest text and the parsed data have gone out
+    of sync."""
+
+
 @dataclass
 class StatusCorrection:
     """
@@ -72,7 +78,7 @@ class StatusCorrection:
     The corrected item's effective id (``id``, or ``branch`` if unset).
     """
 
-    previous_status: str
+    previous_status: ItemStatus
     """
     The status the manifest held before correction.
     """
@@ -149,12 +155,15 @@ def apply_status_corrections(
             None,
         )
         if status_line_index is None:
-            raise ValueError(f"item {item_identifier!r} has no status: line to correct")
+            raise MissingStatusLineError(
+                f"item {item_identifier!r} has no status: line to correct"
+            )
         line_index = start + status_line_index
         match = _STATUS_LINE_PATTERN.match(lines[line_index])
         corrections.append(
             StatusCorrection(
-                item_identifier=item_identifier, previous_status=match.group(2)
+                item_identifier=item_identifier,
+                previous_status=ItemStatus(match.group(2)),
             )
         )
         lines[line_index] = f"{match.group(1)}{ItemStatus.DONE.value}"

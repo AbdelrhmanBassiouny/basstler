@@ -38,6 +38,7 @@ import json
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -112,6 +113,13 @@ class LiveState(StrEnum):
                 return "Closed (unmerged)"
             case LiveState.NOT_FOUND:
                 return "Not found on GitHub"
+
+
+class PullRequestState(StrEnum):
+    """GitHub's own coarse-grained pull request state, as returned by its API."""
+
+    OPEN = "open"
+    CLOSED = "closed"
 
 
 class ValidationProblem(ABC):
@@ -307,17 +315,28 @@ def validate_plan(plan: dict[str, Any]) -> None:
         raise PlanValidationError(problems)
 
 
+OUT_OF_BAND_MERGE_LABEL = "merged"
+"""The GitHub label this repo's convention adds by hand to a pull request
+merged out-of-band (its branch pushed directly, then the PR closed without
+GitHub ever recording a merge - see :meth:`PullRequestRecord.was_merged`).
+Not a :class:`~enum.StrEnum` member: :attr:`PullRequestRecord.labels` holds
+whatever arbitrary labels a real GitHub pull request carries, an open-ended,
+repo-defined vocabulary this codebase doesn't control - only this one label
+is ever inspected, so it gets a single named, documented constant instead of
+a bare string literal at its one call site."""
+
+
 @dataclass
 class PullRequestRecord:
     """The live GitHub state of one pull request, as gathered by the skill."""
 
-    state: str
-    """GitHub's own PR state string: ``"open"`` or ``"closed"``."""
+    state: PullRequestState
+    """GitHub's own coarse-grained state."""
 
     draft: bool = False
     """Whether the PR is currently a draft."""
 
-    merged_at: str | None = None
+    merged_at: datetime | None = None
     """The PR's merge timestamp, or ``None`` if GitHub never recorded a merge
     through its own merge API."""
 
@@ -326,16 +345,17 @@ class PullRequestRecord:
     a real case in this repo's history: a PR merged out-of-band (its branch
     pushed directly, then the PR closed by hand rather than through GitHub's
     merge button) never gets ``merged_at`` set, so the closer manually adds
-    a ``"merged"`` label to record what actually happened - see
-    :meth:`PullRequestRecord.was_merged`."""
+    the :data:`OUT_OF_BAND_MERGE_LABEL` label to record what actually
+    happened - see :meth:`PullRequestRecord.was_merged`."""
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> PullRequestRecord:
         """Build a record from one entry of ``pr_data.json``."""
+        merged_at = data.get("merged_at")
         return cls(
-            state=data["state"],
+            state=PullRequestState(data["state"]),
             draft=data.get("draft", False),
-            merged_at=data.get("merged_at"),
+            merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
             labels=list(data.get("labels") or []),
         )
 
@@ -343,8 +363,9 @@ class PullRequestRecord:
     def was_merged(self) -> bool:
         """Whether this PR's changes actually landed - GitHub's own
         :attr:`merged_at`, or (for an out-of-band merge GitHub never
-        recorded) a manually-applied ``"merged"`` label."""
-        return self.merged_at is not None or "merged" in self.labels
+        recorded) the manually-applied :data:`OUT_OF_BAND_MERGE_LABEL`
+        label."""
+        return self.merged_at is not None or OUT_OF_BAND_MERGE_LABEL in self.labels
 
 
 PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
@@ -376,7 +397,7 @@ def classify_live_state(
         return LiveState.NOT_FOUND
     if pull_request.was_merged:
         return LiveState.MERGED
-    if pull_request.state == "closed":
+    if pull_request.state is PullRequestState.CLOSED:
         return LiveState.CLOSED_UNMERGED
     if pull_request.draft:
         return LiveState.OPEN_DRAFT
@@ -432,19 +453,60 @@ class DependencyChip:
     again if it doesn't resolve to a known item."""
 
 
-@dataclass
-class ItemAction:
+@dataclass(frozen=True)
+class ItemAction(ABC):
     """One not-done item's actionable dashboard button - see
     :attr:`Item.action`. The label matches what the status actually calls
     for (starting fresh work reads differently from resolving a blocker),
     but every non-``done`` status gets one: there's always something
-    actionable to do next besides waiting."""
+    actionable to do next besides waiting.
+
+    Not a plain enum: each action carries the plan/item it targets, so its
+    members can't be fixed singletons - one subclass per ``/plan-item-...``
+    skill instead, each contributing only the skill name; :attr:`command`
+    assembles the full clipboard text once, here, so every subclass gets it
+    for free."""
 
     label: str
     """The button's text, e.g. ``"Start now"`` or ``"Resolve"``."""
 
-    command: str
-    """The ``/plan-item-...`` command copied to the clipboard when clicked."""
+    plan_id: str
+    """The plan this action's command targets."""
+
+    item_identifier: str
+    """The item this action's command targets."""
+
+    @property
+    @abstractmethod
+    def skill_command_name(self) -> str:
+        """The ``/plan-item-...`` skill this action invokes."""
+
+    @property
+    def command(self) -> str:
+        """The full command copied to the clipboard when the button is
+        clicked."""
+        return f"{self.skill_command_name} {self.plan_id} {self.item_identifier}"
+
+
+@dataclass(frozen=True)
+class StartNowAction(ItemAction):
+    """Routes a not-started item, once every dependency is ready, to
+    ``plan-item-kickoff``."""
+
+    @property
+    def skill_command_name(self) -> str:
+        return "/plan-item-kickoff"
+
+
+@dataclass(frozen=True)
+class ResolveAction(ItemAction):
+    """Routes a blocked, in-progress, or deferred item to
+    ``plan-item-resolve`` - :attr:`ItemAction.label` is worded to match
+    which of those three it actually is."""
+
+    @property
+    def skill_command_name(self) -> str:
+        return "/plan-item-resolve"
 
 
 @dataclass(frozen=True)
@@ -866,9 +928,10 @@ class DashboardRenderer:
             case ItemStatus.NOT_STARTED:
                 if not self._dependencies_are_ready(item):
                     return None
-                return ItemAction(
+                return StartNowAction(
                     label="Start now",
-                    command=f"/plan-item-kickoff {self.plan.id} {item.identifier}",
+                    plan_id=self.plan.id,
+                    item_identifier=item.identifier,
                 )
             case ItemStatus.BLOCKED:
                 label = "Resolve"
@@ -876,9 +939,10 @@ class DashboardRenderer:
                 label = "Resume"
             case ItemStatus.DEFERRED:
                 label = "Reconsider"
-        return ItemAction(
+        return ResolveAction(
             label=label,
-            command=f"/plan-item-resolve {self.plan.id} {item.identifier}",
+            plan_id=self.plan.id,
+            item_identifier=item.identifier,
         )
 
     def _dependencies_are_ready(self, item: Item) -> bool:
