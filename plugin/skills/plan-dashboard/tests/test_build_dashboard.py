@@ -476,6 +476,115 @@ def test_not_started_item_with_partial_dependencies_is_neither_list():
     assert summary.blocker_maybe_cleared == []
 
 
+# %% DashboardRenderer - ready-to-review
+
+
+def test_needs_review_true_for_an_open_draft_pull_request():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+    }
+    renderer = make_renderer(
+        [item("a", "in_progress", pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    renderer.render()
+    assert renderer.plan.items[0].needs_review
+
+
+def test_needs_review_false_once_marked_ready_for_review():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
+    }
+    renderer = make_renderer(
+        [item("a", "in_progress", pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    renderer.render()
+    assert not renderer.plan.items[0].needs_review
+
+
+def test_needs_review_false_with_no_pull_request():
+    renderer = make_renderer([item("a", "not_started")])
+    renderer.render()
+    assert not renderer.plan.items[0].needs_review
+
+
+def test_has_open_pull_request_true_for_draft_and_ready():
+    draft_item = item("a", "in_progress", pull_request_number=1)
+    draft_item.live_state = LiveState.OPEN_DRAFT
+    ready_item = item("b", "in_progress", pull_request_number=2)
+    ready_item.live_state = LiveState.OPEN_READY
+    assert draft_item.has_open_pull_request
+    assert ready_item.has_open_pull_request
+
+
+def test_has_open_pull_request_false_when_merged_or_absent():
+    merged_item = item("a", "done", pull_request_number=1)
+    merged_item.live_state = LiveState.MERGED
+    no_pr_item = item("b", "not_started")
+    assert not merged_item.has_open_pull_request
+    assert not no_pr_item.has_open_pull_request
+
+
+def test_item_with_no_dependency_and_draft_pr_is_ready_to_review():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+    }
+    renderer = make_renderer(
+        [item("a", "in_progress", pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == ["a"]
+
+
+def test_blocked_item_with_draft_pr_is_not_ready_to_review():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+    }
+    renderer = make_renderer(
+        [item("a", "blocked", pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == []
+
+
+def test_item_not_ready_to_review_while_dependency_has_no_pull_request():
+    pull_requests_by_repository = {
+        "owner/repo": {"2": PullRequestRecord(state="open", draft=True)}
+    }
+    items = [
+        item("a", "not_started"),
+        item("b", "in_progress", pull_request_number=2, depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == []
+
+
+def test_item_ready_to_review_once_dependency_has_an_open_pull_request():
+    # The dependency need not itself be past review - it just needs a PR
+    # open, so a whole reviewable stack can surface before its base merges.
+    pull_requests_by_repository = {
+        "owner/repo": {
+            "1": PullRequestRecord(state="open", draft=True),
+            "2": PullRequestRecord(state="open", draft=True),
+        }
+    }
+    items = [
+        item("a", "in_progress", pull_request_number=1),
+        item("b", "in_progress", pull_request_number=2, depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == ["a", "b"]
+
+
 # %% DashboardRenderer - item action button
 
 
@@ -792,6 +901,79 @@ def test_render_shows_resolve_resume_reconsider_buttons_for_underway_items():
     assert "Resume" in output
     assert "Resolve" in output
     assert "Reconsider" in output
+
+
+def test_render_shows_review_button_for_an_item_with_a_draft_pull_request():
+    pull_requests_by_repository = {
+        "owner/repo": {"5": PullRequestRecord(state="open", draft=True)}
+    }
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "in_progress", pull_request_number=5)],
+    )
+    renderer = DashboardRenderer(
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository=pull_requests_by_repository,
+        tracking_url=None,
+    )
+    output, _ = renderer.render()
+    assert 'class="review-button" href="https://github.com/owner/repo/pull/5"' in output
+    assert "Review" in output
+
+
+def test_render_omits_review_button_once_pull_request_is_ready_for_review():
+    pull_requests_by_repository = {
+        "owner/repo": {"5": PullRequestRecord(state="open", draft=False)}
+    }
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "in_progress", pull_request_number=5)],
+    )
+    renderer = DashboardRenderer(
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository=pull_requests_by_repository,
+        tracking_url=None,
+    )
+    output, _ = renderer.render()
+    assert 'class="review-button"' not in output
+
+
+def test_render_shows_ready_to_review_sidebar_section():
+    pull_requests_by_repository = {
+        "owner/repo": {"5": PullRequestRecord(state="open", draft=True)}
+    }
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "in_progress", pull_request_number=5)],
+    )
+    renderer = DashboardRenderer(
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository=pull_requests_by_repository,
+        tracking_url=None,
+    )
+    output, _ = renderer.render()
+    assert "Ready to review (1)" in output
+    assert (
+        'class="next-review-link" href="https://github.com/owner/repo/pull/5"' in output
+    )
 
 
 def test_render_omits_action_button_for_a_done_item():

@@ -530,6 +530,23 @@ class Item:
     all ready yet (starting now would build on unsafe state). Every other
     status always gets one: something is always actionable next."""
 
+    needs_review: bool = field(default=False, init=False)
+    """Whether this item's PR is open and still a draft, filled in by
+    :meth:`DashboardRenderer.render`. This plan's convention keeps every PR
+    in draft until its author has reviewed it themselves - so a draft PR is
+    exactly the population that still needs that review, and flipping it to
+    "ready for review" *is* the record of having done so. Drives the
+    dashboard's "Review" button and the "ready to review" sidebar list -
+    distinct from :attr:`Item.action`, since reviewing a draft PR and
+    resuming/resolving the underlying work are different next steps that
+    can both apply to the same item at once."""
+
+    @property
+    def has_open_pull_request(self) -> bool:
+        """Whether this item currently has an open (draft or ready) PR -
+        used to decide whether a dependent's PR is safe to review yet."""
+        return self.live_state in (LiveState.OPEN_DRAFT, LiveState.OPEN_READY)
+
     @property
     def identifier(self) -> str:
         """The item's effective identifier: :attr:`id`, or :attr:`branch` if unset."""
@@ -636,10 +653,14 @@ class DashboardSummary:
     """Titles of items whose manifest status disagrees with live GitHub state."""
 
     ready_to_start: list[str]
-    """Titles of not-started/blocked items whose dependencies are all done."""
+    """Titles of not-started items whose dependencies are all ready."""
 
     blocker_maybe_cleared: list[str]
-    """Titles of blocked items with some (not all) dependencies done."""
+    """Titles of blocked items with at least one dependency ready."""
+
+    ready_to_review: list[str]
+    """Titles of items with an open draft PR, not blocked, whose
+    dependencies (if any) already have their own open PR."""
 
     def to_json_dict(self) -> dict[str, Any]:
         """Render to the plain-dict shape the calling skill expects."""
@@ -651,6 +672,7 @@ class DashboardSummary:
             "drift_items": self.drift_items,
             "ready_to_start": self.ready_to_start,
             "blocker_maybe_cleared": self.blocker_maybe_cleared,
+            "ready_to_review": self.ready_to_review,
         }
 
 
@@ -764,6 +786,7 @@ class DashboardRenderer:
         self._classify_items()
         drift_items = [item for item in self.plan.items if item.drift_description]
         ready_to_start, blocker_maybe_cleared = self._compute_next_steps()
+        ready_to_review = self._compute_ready_to_review()
 
         template = create_template_environment().get_template("dashboard.html")
         output = template.render(
@@ -778,6 +801,7 @@ class DashboardRenderer:
             drift_items=drift_items,
             ready_to_start=ready_to_start,
             blocker_maybe_cleared=blocker_maybe_cleared,
+            ready_to_review=ready_to_review,
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             waves=self._build_wave_sections(),
             available_models=AVAILABLE_MODELS,
@@ -788,14 +812,16 @@ class DashboardRenderer:
             drift_items=[item.title for item in drift_items],
             ready_to_start=[item.title for item in ready_to_start],
             blocker_maybe_cleared=[item.title for item in blocker_maybe_cleared],
+            ready_to_review=[item.title for item in ready_to_review],
         )
         return output, summary
 
     def _classify_items(self) -> None:
         """Fill in every item's :attr:`Item.live_state`,
         :attr:`Item.drift_description`, :attr:`Item.pull_request_url`,
-        :attr:`Item.dependency_chips`, and :attr:`Item.action` from live PR
-        data and the plan's other items, in place.
+        :attr:`Item.needs_review`, :attr:`Item.dependency_chips`, and
+        :attr:`Item.action` from live PR data and the plan's other items,
+        in place.
 
         Runs in two passes: :attr:`Item.live_state` must be filled in for
         every item before :meth:`_action_for` can check whether *another*
@@ -805,6 +831,7 @@ class DashboardRenderer:
             item.live_state = self._live_state_of(item)
             item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
+            item.needs_review = item.live_state is LiveState.OPEN_DRAFT
         for item in self.plan.items:
             item.dependency_chips = self._dependency_chips_of(item)
             item.action = self._action_for(item)
@@ -945,6 +972,25 @@ class DashboardRenderer:
             elif item.status is ItemStatus.BLOCKED and ready_count > 0:
                 blocker_maybe_cleared.append(item)
         return ready_to_start, blocker_maybe_cleared
+
+    def _compute_ready_to_review(self) -> list[Item]:
+        """Items with an open draft PR that are actually reviewable right
+        now: not blocked, and every dependency (if any) already has its own
+        open PR - reviewing a stacked PR before its base even has one open
+        yet is premature, even though the base need not itself be past
+        review."""
+        ready_to_review: list[Item] = []
+        for item in self.plan.items:
+            if not item.needs_review or item.status is ItemStatus.BLOCKED:
+                continue
+            dependencies = [
+                self.items_by_identifier[identifier]
+                for identifier in item.depends_on
+                if identifier in self.items_by_identifier
+            ]
+            if all(dependency.has_open_pull_request for dependency in dependencies):
+                ready_to_review.append(item)
+        return ready_to_review
 
     def _status_counts(self) -> dict[ItemStatus, int]:
         """Count the plan's items by :class:`ItemStatus`, including zero counts."""
