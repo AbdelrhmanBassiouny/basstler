@@ -279,12 +279,21 @@
   .next-ready h4 { color: var(--status-done); }
   .next-recheck h4 { color: var(--status-blocked); }
   .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
-  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); padding-left: 0.6rem; }
+  .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
   .next-drift li { border-color: var(--drift); }
   .next-ready li { border-color: var(--status-done); }
   .next-recheck li { border-color: var(--status-blocked); }
   .next-reason { color: var(--text-muted); font-size: 0.78rem; }
   .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
+  .next-item-link {
+    display: block;
+    padding: 0.15rem 0.6rem;
+    color: inherit;
+    text-decoration: none;
+    border-radius: 0 4px 4px 0;
+    cursor: pointer;
+  }
+  .next-item-link:hover { background: var(--surface-alt); }
 
   .wave { margin-top: 2.5rem; }
   .wave-eyebrow {
@@ -344,6 +353,11 @@
   .item.status-deferred .item-spine { background: var(--status-deferred); }
   .item.status-not_started .item-spine { background: var(--status-notstarted); }
   .item.has-drift { box-shadow: 0 0 0 1px var(--drift) inset; }
+  .item.item-highlighted { animation: plan-dashboard-highlight-pulse 2.2s ease-out; }
+  @keyframes plan-dashboard-highlight-pulse {
+    0% { box-shadow: 0 0 0 3px var(--accent); background: var(--accent-tint); }
+    100% { box-shadow: 0 0 0 0 transparent; background: var(--surface); }
+  }
 
   .item-body { padding: 0.75rem 1rem; flex: 1; min-width: 0; }
   .item-head {
@@ -457,7 +471,7 @@
 
 {% macro item_card(stacked) %}
 {% set item = stacked.item %}
-    <article class="item {{ item.status_and_drift_css_class }}" style="{{ stacked.indent_style }}">
+    <article id="item-{{ item.identifier }}" class="item {{ item.status_and_drift_css_class }}" style="{{ stacked.indent_style }}">
       {% if stacked.wrap_parent %}
       <div class="wrap-arrow">◄ continues from <span class="mono">{{ stacked.wrap_parent.identifier }}</span> <span class="wrap-parent-title">({{ stacked.wrap_parent.title }})</span></div>
       {% endif %}
@@ -582,7 +596,7 @@
             <h4>Fix the manifest ({{ drift_items | length }})</h4>
             <ul>
             {% for item in drift_items %}
-              <li><strong>{{ item.title }}</strong><br><span class="next-reason">{{ item.drift_description }}</span></li>
+              <li><a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong><br><span class="next-reason">{{ item.drift_description }}</span></a></li>
             {% endfor %}
             </ul>
           </div>
@@ -592,7 +606,7 @@
             <h4>Ready to start ({{ ready_to_start | length }})</h4>
             <ul>
             {% for item in ready_to_start %}
-              <li><strong>{{ item.title }}</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></li>
+              <li><a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong><br><span class="next-reason">every dependency is at least ready for review — nothing structurally blocking it</span></a></li>
             {% endfor %}
             </ul>
           </div>
@@ -602,7 +616,7 @@
             <h4>Blocker may be cleared ({{ blocker_maybe_cleared | length }})</h4>
             <ul>
             {% for item in blocker_maybe_cleared %}
-              <li><strong>{{ item.title }}</strong><br><span class="next-reason">some (not all) dependencies are at least ready for review — worth re-checking the blocker</span></li>
+              <li><a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong><br><span class="next-reason">some (not all) dependencies are at least ready for review — worth re-checking the blocker</span></a></li>
             {% endfor %}
             </ul>
           </div>
@@ -671,5 +685,22 @@
     } else {
       copyViaTemporaryTextarea();
     }
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    var target = document.getElementById("item-" + identifier);
+    var highlightMilliseconds = 2200;
+    if (!target) {
+      return;
+    }
+    event.preventDefault();
+    target.scrollIntoView({behavior: "smooth", block: "center"});
+    target.classList.remove("item-highlighted");
+    void target.offsetWidth;
+    target.classList.add("item-highlighted");
+    window.setTimeout(function () {
+      target.classList.remove("item-highlighted");
+    }, highlightMilliseconds);
   }
 </script>
