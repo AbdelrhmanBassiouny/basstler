@@ -29,6 +29,10 @@ manually-maintained `status` and GitHub's actual live state** (a session
 forgot to update a note after a PR shipped, a PR merged without anyone
 updating the manifest, a PR number that no longer resolves). Never trust
 `plan.yaml`'s `status` field alone — always cross-check live, every run.
+One direction of drift (merged on GitHub but not marked `done`) gets
+corrected automatically, in the manifest itself, every run — see step 2;
+everything else stays a flag for a human to interpret, since GitHub's state
+alone can't tell you *why* an item is blocked, deferred, or still open.
 
 ## 1. Resolve mode and fetch the plan data
 
@@ -84,7 +88,7 @@ returned `html_url` verbatim; don't construct `/issues/<n>` yourself, since
 guessing the path is exactly the kind of assumption that breaks silently
 when the fallback applies.
 
-## 2. Cross-check every item's PR against live GitHub state, then run the script
+## 2. Cross-check every item's PR against live GitHub state, sync, then run the script
 
 For each distinct repository referenced (`items[].repository` if set, else the plan's
 `default_repository`), fetch PR state **once, in bulk**, rather than one API call
@@ -106,8 +110,47 @@ button — never gets `merged_at` set, and this repo's convention is to add a
 `"merged"` label by hand in exactly that case; `build_dashboard.py` treats
 that label as equivalent to `merged_at` being set.
 
-Then run it (requires PyYAML, Jinja2, and the `markdown` package —
-`pip install pyyaml jinja2 markdown` if any are missing):
+**Sync the manifest before rendering.** `status` is a manually-maintained
+field for everything except one direction: once GitHub confirms a PR is
+merged, the item is done, and that's not a judgment call - unlike every
+other kind of drift (a bad PR number, "done" while still open, closed
+unmerged against an active status), there's no ambiguity to leave for a
+human. Run `sync_manifest_status.py` against the same `/tmp/pr_data.json`
+before generating the dashboard, so the dashboard reflects corrected data
+instead of reporting the same "merged but not marked done" drift forever:
+
+```bash
+python3 .claude/skills/plan-dashboard/sync_manifest_status.py \
+  --plan /tmp/plan.yaml \
+  --pr-data /tmp/pr_data.json
+```
+
+It patches `/tmp/plan.yaml` in place (only the exact `status:` line of each
+corrected item - nothing else in the file changes) and prints
+`{"corrected": [...]}`. If that list is non-empty, push the correction back
+to `claude/personal-notes` **before** running `build_dashboard.py` - same
+disposable-worktree pattern as step 3's URL-cache write (fetch, worktree add
+on `FETCH_HEAD`, copy the patched `/tmp/plan.yaml` over the plan's real
+path, commit, push, clean up):
+
+```bash
+# sketch — adapt paths/remote/branch to what step 1 resolved
+SCRATCH="$(mktemp -d)"
+git worktree add -b __plan-dashboard-sync-tmp "$SCRATCH" FETCH_HEAD --quiet
+cp /tmp/plan.yaml "$SCRATCH/.claude/personal/plans/<plan-id>/plan.yaml"
+git -C "$SCRATCH" add .claude/personal/plans/<plan-id>/plan.yaml
+git -C "$SCRATCH" commit --quiet -m "Auto-sync <plan-id>: N item(s) to done (merged on GitHub)"
+git -C "$SCRATCH" push "${ACTIVE_NOTES_REMOTE}" "HEAD:${NOTES_BRANCH}"
+git worktree remove --force "$SCRATCH"
+git branch -D __plan-dashboard-sync-tmp
+```
+
+Skip the push entirely (and the worktree dance) if `corrected` is empty -
+nothing changed, nothing to push. In master-index mode, run this sync step
+for every plan before building that plan's index entry.
+
+Then run the dashboard script itself (requires PyYAML, Jinja2, and the
+`markdown` package — `pip install pyyaml jinja2 markdown` if any are missing):
 
 ```bash
 python3 .claude/skills/plan-dashboard/build_dashboard.py \
@@ -194,10 +237,12 @@ no-op-if-unchanged" convention as the other scripts here).
 
 ## 4. Report back
 
-Summarize for the user from the JSON summary step 2 printed: item counts by
-status, and call out every drift flag by name — this is the actionable
-output, don't bury it under a wall of "here's the dashboard" text. Give the
-Artifact link(s).
+Summarize for the user from the JSON summaries step 2 printed: item counts by
+status, every item `sync_manifest_status.py` auto-corrected to done (by
+name, since that's a manifest edit the user didn't ask for line by line),
+and every remaining drift flag by name — this is the actionable output,
+don't bury it under a wall of "here's the dashboard" text. Give the Artifact
+link(s).
 
 If you're in single-plan mode and the master index already exists (its URL
 is in the cache), mention that it wasn't refreshed automatically and the
