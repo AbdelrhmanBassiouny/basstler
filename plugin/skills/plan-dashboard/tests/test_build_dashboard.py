@@ -476,6 +476,66 @@ def test_kickoff_command_none_once_an_item_has_started():
     assert renderer.plan.items[0].kickoff_command is None
 
 
+def test_kickoff_command_none_while_a_dependency_is_not_ready():
+    items = [item("a", "not_started"), item("b", "not_started", depends_on=["a"])]
+    renderer = make_renderer(items)
+    renderer.render()
+    assert renderer.items_by_identifier["b"].kickoff_command is None
+
+
+def test_kickoff_command_set_once_every_dependency_is_ready():
+    items = [item("a", "done"), item("b", "not_started", depends_on=["a"])]
+    renderer = make_renderer(items)
+    renderer.render()
+    assert (
+        renderer.items_by_identifier["b"].kickoff_command
+        == "/plan-item-kickoff test-plan b"
+    )
+
+
+def test_kickoff_command_set_when_dependency_is_open_and_ready_for_review():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
+    }
+    items = [
+        item("a", "in_progress", pull_request_number=1),
+        item("b", "not_started", depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    renderer.render()
+    assert renderer.items_by_identifier["b"].kickoff_command is not None
+
+
+def test_kickoff_command_none_when_dependency_is_still_a_draft():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+    }
+    items = [
+        item("a", "in_progress", pull_request_number=1),
+        item("b", "not_started", depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    renderer.render()
+    assert renderer.items_by_identifier["b"].kickoff_command is None
+
+
+def test_kickoff_command_ready_check_is_order_independent():
+    # "b" depends on "a", but "a" appears later in plan.items - the
+    # dependency's live_state must still be classified before "b"'s
+    # kickoff command is computed.
+    items = [item("b", "not_started", depends_on=["a"]), item("a", "done")]
+    renderer = make_renderer(items)
+    renderer.render()
+    assert (
+        renderer.items_by_identifier["b"].kickoff_command
+        == "/plan-item-kickoff test-plan b"
+    )
+
+
 # %% DashboardRenderer - dependency stacking / wrap-around
 
 
