@@ -167,10 +167,12 @@ classifies every item's live state (`merged` | `open_draft` | `open_ready` |
 `closed_unmerged` | `not_found`), computes drift, builds the "ready to
 start"/"blocker may be cleared" lists, stacks items by dependency depth
 (indented, capped at 4 levels, wrapping with a left-edge arrow past the
-cap), gives every not-yet-started item a "Start now" button that copies the
-invoking command for the `plan-item-kickoff` skill (a page can't spawn a
-session itself, so this is a copy-to-clipboard affordance, not a live
-trigger), and renders the final HTML — including `roadmap.md` converted to
+cap), gives every not-yet-started item whose dependencies are all at least
+ready for review a "Start now" button that copies the invoking command for
+the `plan-item-kickoff` skill (a page can't spawn a session itself, so this
+is a copy-to-clipboard affordance, not a live trigger — and the button is
+withheld while a dependency isn't actually safe to build on yet), and
+renders the final HTML — including `roadmap.md` converted to
 HTML and shown in a collapsed `<details>` section, and the tracking-issue
 link if one was passed. None of that is this document's job to describe
 further; read the script if you need the specifics.

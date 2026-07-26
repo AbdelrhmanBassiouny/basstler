@@ -487,7 +487,9 @@ class Item:
     """The ``/plan-item-kickoff <plan-id> <item-id>`` command for this
     item's "Start now" affordance, filled in by
     :meth:`DashboardRenderer.render` - ``None`` unless the item hasn't been
-    started yet, since kicking off work only makes sense before any exists."""
+    started yet and every dependency is itself ready to be built upon,
+    since kicking off work only makes sense before any exists, and only
+    once it's actually safe to start stacking a branch on its dependencies."""
 
     @property
     def identifier(self) -> str:
@@ -733,11 +735,17 @@ class DashboardRenderer:
         """Fill in every item's :attr:`Item.live_state`,
         :attr:`Item.drift_description`, :attr:`Item.pull_request_url`,
         :attr:`Item.dependency_chips`, and :attr:`Item.kickoff_command` from
-        live PR data and the plan's other items, in place."""
+        live PR data and the plan's other items, in place.
+
+        Runs in two passes: :attr:`Item.live_state` must be filled in for
+        every item before :meth:`_kickoff_command_of` can check whether
+        *another* item's dependencies are ready, since dependencies can
+        appear later in :attr:`Plan.items` than their dependents."""
         for item in self.plan.items:
             item.live_state = self._live_state_of(item)
             item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
+        for item in self.plan.items:
             item.dependency_chips = self._dependency_chips_of(item)
             item.kickoff_command = self._kickoff_command_of(item)
 
@@ -750,12 +758,29 @@ class DashboardRenderer:
 
     def _kickoff_command_of(self, item: Item) -> str | None:
         """Build one item's ``/plan-item-kickoff`` command, or ``None`` if
-        it isn't applicable - only a not-started item has a "Start now"
-        affordance, since anything further along already has real state
-        (a branch, a PR, prior work) the kickoff skill would just rediscover."""
+        it isn't applicable. Only a not-started item has a "Start now"
+        affordance at all, since anything further along already has real
+        state (a branch, a PR, prior work) the kickoff skill would just
+        rediscover - and even a not-started item doesn't get one while any
+        of its dependencies isn't actually safe to build on yet."""
         if item.status is not ItemStatus.NOT_STARTED:
             return None
+        if not self._dependencies_are_ready(item):
+            return None
         return f"/plan-item-kickoff {self.plan.id} {item.identifier}"
+
+    def _dependencies_are_ready(self, item: Item) -> bool:
+        """Whether every entry in :attr:`Item.depends_on` names an item
+        that's itself ready to be built upon
+        (:meth:`Item.is_ready_to_unblock_dependents`) - vacuously true for
+        an item with no dependencies."""
+        return all(
+            self.items_by_identifier[
+                dependency_identifier
+            ].is_ready_to_unblock_dependents()
+            for dependency_identifier in item.depends_on
+            if dependency_identifier in self.items_by_identifier
+        )
 
     def _dependency_chips_of(self, item: Item) -> list[DependencyChip]:
         """Build one ready-to-render :class:`DependencyChip` per entry in
@@ -828,7 +853,7 @@ class DashboardRenderer:
                 dependency.is_ready_to_unblock_dependents()
                 for dependency in dependencies
             )
-            if ready_count == len(dependencies):
+            if self._dependencies_are_ready(item):
                 ready_to_start.append(item)
             elif item.status is ItemStatus.BLOCKED and ready_count > 0:
                 blocker_maybe_cleared.append(item)
