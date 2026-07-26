@@ -531,15 +531,18 @@ class Item:
     status always gets one: something is always actionable next."""
 
     needs_review: bool = field(default=False, init=False)
-    """Whether this item's PR is open and still a draft, filled in by
-    :meth:`DashboardRenderer.render`. This plan's convention keeps every PR
-    in draft until its author has reviewed it themselves - so a draft PR is
-    exactly the population that still needs that review, and flipping it to
-    "ready for review" *is* the record of having done so. Drives the
-    dashboard's "Review" button and the "ready to review" sidebar list -
-    distinct from :attr:`Item.action`, since reviewing a draft PR and
-    resuming/resolving the underlying work are different next steps that
-    can both apply to the same item at once."""
+    """Whether this item's PR is open, still a draft, and actually worth
+    reviewing right now, filled in by :meth:`DashboardRenderer.render`.
+    This plan's convention keeps every PR in draft until its author has
+    reviewed it themselves - so a draft PR is exactly the population that
+    still needs that review, and flipping it to "ready for review" *is*
+    the record of having done so. False for a ``deferred`` item even with
+    an open draft PR - deferred means intentionally paused or superseded,
+    so there is nothing to actually review yet. Drives the dashboard's
+    "Review" button and the "ready to review" sidebar list - distinct from
+    :attr:`Item.action`, since reviewing a draft PR and resuming/resolving
+    the underlying work are different next steps that can both apply to
+    the same item at once."""
 
     @property
     def has_open_pull_request(self) -> bool:
@@ -831,7 +834,10 @@ class DashboardRenderer:
             item.live_state = self._live_state_of(item)
             item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
-            item.needs_review = item.live_state is LiveState.OPEN_DRAFT
+            item.needs_review = (
+                item.live_state is LiveState.OPEN_DRAFT
+                and item.status is not ItemStatus.DEFERRED
+            )
         for item in self.plan.items:
             item.dependency_chips = self._dependency_chips_of(item)
             item.action = self._action_for(item)
@@ -978,7 +984,8 @@ class DashboardRenderer:
         now: not blocked, and every dependency (if any) already has its own
         open PR - reviewing a stacked PR before its base even has one open
         yet is premature, even though the base need not itself be past
-        review."""
+        review. A deferred item never reaches here in the first place -
+        :attr:`Item.needs_review` is already ``False`` for it."""
         ready_to_review: list[Item] = []
         for item in self.plan.items:
             if not item.needs_review or item.status is ItemStatus.BLOCKED:
