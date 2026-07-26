@@ -486,6 +486,15 @@ class Item:
         """Whether this item can unblock a dependent, by manifest status or live state."""
         return self.status is ItemStatus.DONE or self.live_state is LiveState.MERGED
 
+    def is_ready_to_unblock_dependents(self) -> bool:
+        """Whether a dependent item can safely start stacking its own branch
+        on this one: done, merged, or its PR is open and out of draft (ready
+        for review). Stacking on a same-track dependency is this repo's
+        normal workflow well before that dependency merges - a still-open
+        draft is the one state that isn't safe to build on top of, since it
+        can still see heavy rework."""
+        return self.is_effectively_done() or self.live_state is LiveState.OPEN_READY
+
 
 @dataclass
 class Plan:
@@ -776,12 +785,13 @@ class DashboardRenderer:
                 ItemStatus.BLOCKED,
             ):
                 continue
-            done_count = sum(
-                dependency.is_effectively_done() for dependency in dependencies
+            ready_count = sum(
+                dependency.is_ready_to_unblock_dependents()
+                for dependency in dependencies
             )
-            if done_count == len(dependencies):
+            if ready_count == len(dependencies):
                 ready_to_start.append(item)
-            elif item.status is ItemStatus.BLOCKED and done_count > 0:
+            elif item.status is ItemStatus.BLOCKED and ready_count > 0:
                 blocker_maybe_cleared.append(item)
         return ready_to_start, blocker_maybe_cleared
 

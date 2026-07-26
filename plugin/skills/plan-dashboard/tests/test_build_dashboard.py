@@ -233,6 +233,34 @@ def test_status_and_drift_css_class_with_drift():
     assert drifted_item.status_and_drift_css_class == "status-done has-drift"
 
 
+def test_is_ready_to_unblock_dependents_true_when_done():
+    done_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
+    assert done_item.is_ready_to_unblock_dependents()
+
+
+def test_is_ready_to_unblock_dependents_true_when_open_and_ready_for_review():
+    open_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS
+    )
+    open_item.live_state = LiveState.OPEN_READY
+    assert open_item.is_ready_to_unblock_dependents()
+
+
+def test_is_ready_to_unblock_dependents_false_while_still_a_draft():
+    draft_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS
+    )
+    draft_item.live_state = LiveState.OPEN_DRAFT
+    assert not draft_item.is_ready_to_unblock_dependents()
+
+
+def test_is_ready_to_unblock_dependents_false_when_not_started():
+    fresh_item = Item(
+        title="A", branch="a", track="track-1", status=ItemStatus.NOT_STARTED
+    )
+    assert not fresh_item.is_ready_to_unblock_dependents()
+
+
 def test_stacked_item_indent_style_scales_with_indent_level():
     stacked = StackedItem(
         item=Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE),
@@ -385,6 +413,39 @@ def test_blocked_item_with_partial_dependencies_done_is_recheck_candidate():
     renderer = make_renderer(items)
     _, summary = renderer.render()
     assert summary.blocker_maybe_cleared == ["c"]
+    assert summary.ready_to_start == []
+
+
+def test_item_becomes_ready_to_start_once_dependency_is_open_and_ready_for_review():
+    # Stacking a branch on a same-track dependency that's already open and
+    # out of draft is this repo's normal workflow - waiting for a full merge
+    # first would be stricter than how the stack is actually built.
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
+    }
+    items = [
+        item("a", "in_progress", pull_request_number=1),
+        item("b", "not_started", depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_start == ["b"]
+
+
+def test_item_not_ready_to_start_while_dependency_is_still_a_draft():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+    }
+    items = [
+        item("a", "in_progress", pull_request_number=1),
+        item("b", "not_started", depends_on=["a"]),
+    ]
+    renderer = make_renderer(
+        items, pull_requests_by_repository=pull_requests_by_repository
+    )
+    _, summary = renderer.render()
     assert summary.ready_to_start == []
 
 
