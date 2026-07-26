@@ -58,9 +58,19 @@ named plan) rather than guessing which one was meant.
   A dependency that regressed (was ready, is now blocked or closed
   unmerged) is a real, common cause of a stall — check this even if
   `blockers` doesn't mention it.
-- Every place `roadmap.md` mentions this item by id, branch, or title —
-  design rationale and prior decisions usually live there, not in
-  `plan.yaml`'s thin structured fields.
+- Read `roadmap.md` **in full** — do not stop at grepping for this item's
+  id/branch/title. A roadmap routinely records decisions, conventions, and
+  design rationale in sections that don't name every item individually
+  (e.g. "Finalized design decisions", "Decisions locked in", a track's own
+  design notes, a prior review round's resolution) — those decisions bind
+  this item just as much as a direct mention would, and missing one means
+  proposing a resolution that contradicts an already-settled call, or
+  asking the user something they've already answered. After the full read,
+  also grep for the item's id/branch/title specifically, to catch any
+  focused mention a full read might skim past. If `roadmap.md` is large
+  enough that a full read is genuinely impractical, say so explicitly and
+  name which sections you read in full versus grepped — don't silently
+  read only part of it and present the plan as if it were comprehensive.
 
 ## 3. Read the item's actual existing work
 
@@ -82,6 +92,17 @@ turns out to be, it must honor both.
 
 ## 5. Propose the plan — plan mode, no code
 
+Before drafting the plan or raising any open question with the user, check
+whether the question is already answered: re-read the relevant part of
+`roadmap.md`, the item's own `notes`/`blockers`, and the PR's/tracking
+issue's comment history — a design call, a naming convention, or a scope
+boundary is very often already decided somewhere in that material. Only
+surface something as an open question if, after that check, it's genuinely
+still unresolved; asking the user something the roadmap or the discussion
+already answered means the read wasn't thorough enough. If you do ask, say
+what you checked and why it still looks open, so the user can correct you
+quickly with a pointer if you missed it.
+
 Enter plan mode and present, via `ExitPlanMode`, a concrete plan to
 resolve the item: what's actually wrong (cite the specific failing check,
 review comment, blocker text, or regressed dependency that's the real
@@ -94,8 +115,8 @@ over:
 - Any dependency that regressed or still isn't safe to build on.
 - Any conflict between what `blockers`/`notes` says and what the PR's own
   review threads or the tracking issue actually say.
-- Anything genuinely unresolved after gathering all of the above — say so
-  rather than filling the gap with an assumption.
+- Anything genuinely unresolved after the check above — say so rather
+  than filling the gap with an assumption.
 
 Do not touch git, create a branch, or write any code in this skill — its
 only output is the plan itself.

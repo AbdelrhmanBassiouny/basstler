@@ -41,10 +41,19 @@ named plan) rather than guessing which one was meant.
   `not_started` or only has a draft PR is **not** — flag that explicitly in
   the proposed plan's assumptions instead of quietly proceeding as if it
   were ready.
-- Every place `roadmap.md` mentions this item by id, branch, or title
-  (`grep`, don't skim the whole file for it) — design rationale, "why", and
-  standing conventions usually live there, not in `plan.yaml`'s thin
-  structured fields.
+- Read `roadmap.md` **in full** — do not stop at grepping for this item's
+  id/branch/title. A roadmap routinely records decisions, conventions, and
+  design rationale in sections that don't name every item individually
+  (e.g. "Finalized design decisions", "Decisions locked in", a track's own
+  design notes, a prior review round's resolution) — those decisions bind
+  this item just as much as a direct mention would, and missing one means
+  either proposing a plan that contradicts an already-settled call or
+  asking the user something they've already answered. After the full read,
+  also grep for the item's id/branch/title specifically, to catch any
+  focused mention a full read might skim past. If `roadmap.md` is large
+  enough that a full read is genuinely impractical, say so explicitly and
+  name which sections you read in full versus grepped — don't silently
+  read only part of it and present the plan as if it were comprehensive.
 
 ## 3. Gather sibling context from the codebase
 
@@ -72,6 +81,16 @@ the item's own `notes` happen to mention.
 
 ## 5. Propose the plan — plan mode, no code
 
+Before drafting the plan or raising any open question with the user, check
+whether the question is already answered: re-read the relevant part of
+`roadmap.md`, the item's own `notes`, and any cited sibling PR — a design
+call, a naming convention, or a scope boundary is very often already
+decided somewhere in that material. Only surface something as an open
+question if, after that check, it's genuinely still unresolved; asking the
+user something the roadmap already answered means the read wasn't thorough
+enough. If you do ask, say what you checked and why it still looks open, so
+the user can correct you quickly with a pointer if you missed it.
+
 Enter plan mode and present, via `ExitPlanMode`, a concrete implementation
 plan: what changes, in which files, in what order, and how each part will
 be verified (tests first, per TDD). Cite where each part of the plan came
@@ -82,8 +101,8 @@ it. Flag explicitly, never silently paper over:
 - Any dependency that isn't actually ready to build on yet (step 2).
 - Any conflict between the item's `notes` and what a sibling PR or
   `roadmap.md` actually says.
-- Anything the gathered context left genuinely unresolved — say so rather
-  than filling the gap with an assumption.
+- Anything the gathered context left genuinely unresolved after the check
+  above — say so rather than filling the gap with an assumption.
 
 Do not touch git, create a branch, or write any code in this skill — its
 only output is the plan itself.
