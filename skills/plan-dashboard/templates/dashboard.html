@@ -287,17 +287,29 @@
     letter-spacing: 0.05em;
   }
   .next-drift h4 { color: var(--drift); }
+  .next-review h4 { color: var(--status-progress); }
   .next-ready h4 { color: var(--status-done); }
   .next-recheck h4 { color: var(--status-blocked); }
   .next-group ul { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 0.5rem; }
   .next-group li { font-size: 0.82rem; border-left: 2px solid var(--border); }
   .next-drift li { border-color: var(--drift); }
+  .next-review li { border-color: var(--status-progress); display: flex; align-items: flex-start; justify-content: space-between; gap: 0.4rem; }
   .next-ready li { border-color: var(--status-done); }
   .next-recheck li { border-color: var(--status-blocked); }
   .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+  .next-review-link {
+    flex-shrink: 0;
+    margin: 0.15rem 0.6rem 0 0;
+    font-size: 0.72rem;
+    font-weight: 700;
+    color: var(--status-progress);
+    white-space: nowrap;
+  }
   .next-empty { color: var(--text-muted); font-size: 0.85rem; font-style: italic; margin: 0; }
   .next-item-link {
     display: block;
+    flex: 1;
+    min-width: 0;
     padding: 0.15rem 0.6rem;
     color: inherit;
     text-decoration: none;
@@ -490,6 +502,17 @@
     background: var(--drift-tint);
     color: var(--drift);
   }
+  .review-button {
+    padding: 0.18rem 0.6rem;
+    border-radius: 999px;
+    border: 1px solid var(--status-progress);
+    background: var(--status-progress-tint);
+    color: var(--status-progress);
+    font-weight: 700;
+    font-size: 0.72rem;
+    text-decoration: none;
+  }
+  .review-button:hover { background: var(--status-progress); color: var(--surface); }
 
   .notes { margin-top: 0.5rem; font-size: 0.86rem; color: var(--text-muted); white-space: pre-line; }
   .drift {
@@ -577,6 +600,9 @@
             {% endif %}
             {% if item.session %}
             <a class="session-link" href="{{ item.session }}" target="_blank" rel="noopener">session ↗</a>
+            {% endif %}
+            {% if item.needs_review %}
+            <a class="review-button" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">↗ Review</a>
             {% endif %}
             {{ action_button(item) }}
           </div>
@@ -674,13 +700,26 @@
       </div>
       <div class="sidebar-card">
         <h3>What to do next</h3>
-        {% if drift_items or ready_to_start or blocker_maybe_cleared %}
+        {% if drift_items or ready_to_review or ready_to_start or blocker_maybe_cleared %}
           {% if drift_items %}
           <div class="next-group next-drift">
             <h4>Fix the manifest ({{ drift_items | length }})</h4>
             <ul>
             {% for item in drift_items %}
               <li><a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong><br><span class="next-reason">{{ item.drift_description }}</span></a></li>
+            {% endfor %}
+            </ul>
+          </div>
+          {% endif %}
+          {% if ready_to_review %}
+          <div class="next-group next-review">
+            <h4>Ready to review ({{ ready_to_review | length }})</h4>
+            <ul>
+            {% for item in ready_to_review %}
+              <li>
+                <a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong><br><span class="next-reason">open draft PR, ready for your review</span></a>
+                <a class="next-review-link" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">Review ↗</a>
+              </li>
             {% endfor %}
             </ul>
           </div>

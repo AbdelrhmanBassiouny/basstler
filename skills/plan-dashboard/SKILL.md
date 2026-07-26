@@ -179,8 +179,17 @@ dependency is ready, "Resolve"/"Resume"/"Reconsider" (`plan-item-resolve`)
 for blocked/in-progress/deferred respectively — plus a model dropdown
 beside it; a page can't spawn a session itself, so these are
 copy-to-clipboard affordances (the dropdown's choice is prepended as a
-`/model <id>` line ahead of the skill command), not live triggers. Renders
-the final HTML — including `roadmap.md` converted to HTML and shown in a
+`/model <id>` line ahead of the skill command), not live triggers. An item
+whose PR is open and still a draft also gets a "Review" button linking
+straight to the PR on GitHub — this plan's convention keeps every PR in
+draft until its own author has reviewed it, so a draft PR is exactly the
+population still needing that review, and flipping it to ready for review
+*is* the record of having done so. The sidebar's "Ready to review" list
+narrows that population to what's actually worth reviewing right now: not
+blocked, and every dependency (if any) already has its own open PR too
+(the dependency need not itself be past review — just open — so a whole
+reviewable stack can surface before its base has merged). Renders the
+final HTML — including `roadmap.md` converted to HTML and shown in a
 collapsed `<details>` section, and the tracking-issue link if one was
 passed. None of that is this document's job to describe further; read the
 script if you need the specifics.
@@ -253,9 +262,9 @@ no-op-if-unchanged" convention as the other scripts here).
 Summarize for the user from the JSON summaries step 2 printed: item counts by
 status, every item `sync_manifest_status.py` auto-corrected to done (by
 name, since that's a manifest edit the user didn't ask for line by line),
-and every remaining drift flag by name — this is the actionable output,
-don't bury it under a wall of "here's the dashboard" text. Give the Artifact
-link(s).
+every remaining drift flag by name, and every item now ready to review by
+name — this is the actionable output, don't bury it under a wall of
+"here's the dashboard" text. Give the Artifact link(s).
 
 If you're in single-plan mode and the master index already exists (its URL
 is in the cache), mention that it wasn't refreshed automatically and the
