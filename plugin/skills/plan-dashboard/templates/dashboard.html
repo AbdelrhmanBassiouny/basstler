@@ -424,14 +424,49 @@
   .pr-link, .session-link { font-weight: 600; }
   .muted { color: var(--text-muted); font-style: italic; }
   .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
-  .model-select {
-    padding: 0.15rem 0.35rem;
+  /* A hand-built dropdown, not a native <select> - a published Artifact page
+     runs inside a sandboxed iframe, where native select popups are known
+     not to open; position: fixed keeps the list from being clipped by
+     .item's own overflow: hidden regardless of where its button sits. */
+  .model-picker { position: relative; }
+  .model-picker-toggle {
+    padding: 0.15rem 0.5rem;
     border-radius: 6px;
     border: 1px solid var(--border);
     background: var(--surface-alt);
     color: var(--text-muted);
     font-family: inherit;
     font-size: 0.7rem;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-toggle:hover { border-color: var(--accent); color: var(--text); }
+  .model-picker-list {
+    display: none;
+    position: fixed;
+    min-width: 9.5rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+    padding: 0.3rem;
+    margin: 0;
+    list-style: none;
+    z-index: 50;
+  }
+  .model-picker.model-picker-open .model-picker-list { display: block; }
+  .model-picker-list li {
+    padding: 0.3rem 0.55rem;
+    border-radius: 5px;
+    font-size: 0.76rem;
+    color: var(--text);
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  .model-picker-list li:hover,
+  .model-picker-list li.model-picker-option-selected {
+    background: var(--accent-tint);
+    color: var(--accent-strong);
   }
   .action-button {
     padding: 0.18rem 0.6rem;
@@ -500,11 +535,14 @@
 {% macro action_button(item) %}
 {% if item.action %}
 <span class="action-group">
-  <select class="model-select" aria-label="Model for {{ item.action.label }}">
-    {% for model in available_models %}
-    <option value="{{ model.value }}">{{ model.label }}</option>
-    {% endfor %}
-  </select>
+  <span class="model-picker" data-model="" aria-label="Model for {{ item.action.label }}">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">{{ available_models[0].label }} ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      {% for model in available_models %}
+      <li role="option" data-value="{{ model.value }}" onclick="planDashboardSelectModel(event, this)"{% if loop.first %} class="model-picker-option-selected"{% endif %}>{{ model.label }}</li>
+      {% endfor %}
+    </ul>
+  </span>
   <button type="button" class="action-button" data-action-command="{{ item.action.command }}" onclick="planDashboardCopyActionCommand(this)">▸ {{ item.action.label }}</button>
 </span>
 {% endif %}
@@ -683,8 +721,10 @@
 <script>
   function planDashboardCopyActionCommand(button) {
     var baseCommand = button.getAttribute("data-action-command");
-    var modelSelect = button.previousElementSibling;
-    var model = modelSelect && modelSelect.tagName === "SELECT" ? modelSelect.value : "";
+    var modelPicker = button.previousElementSibling;
+    var model = modelPicker && modelPicker.classList.contains("model-picker")
+      ? modelPicker.getAttribute("data-model")
+      : "";
     var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
     var originalLabel = button.textContent;
     var resetTimeoutMilliseconds = 1800;
@@ -752,4 +792,45 @@
       target.classList.remove("item-highlighted");
     }, highlightMilliseconds);
   }
+
+  function planDashboardCloseModelPickers() {
+    document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
+      picker.classList.remove("model-picker-open");
+    });
+  }
+
+  function planDashboardToggleModelPicker(event, toggleButton) {
+    event.stopPropagation();
+    var picker = toggleButton.closest(".model-picker");
+    var wasOpen = picker.classList.contains("model-picker-open");
+    planDashboardCloseModelPickers();
+    if (wasOpen) {
+      return;
+    }
+    var list = picker.querySelector(".model-picker-list");
+    var toggleRect = toggleButton.getBoundingClientRect();
+    list.style.top = (toggleRect.bottom + 4) + "px";
+    list.style.left = toggleRect.left + "px";
+    picker.classList.add("model-picker-open");
+  }
+
+  function planDashboardSelectModel(event, optionElement) {
+    event.stopPropagation();
+    var picker = optionElement.closest(".model-picker");
+    var toggleButton = picker.querySelector(".model-picker-toggle");
+    picker.setAttribute("data-model", optionElement.getAttribute("data-value"));
+    toggleButton.textContent = optionElement.textContent + " ▾";
+    picker.querySelectorAll(".model-picker-option-selected").forEach(function (selected) {
+      selected.classList.remove("model-picker-option-selected");
+    });
+    optionElement.classList.add("model-picker-option-selected");
+    planDashboardCloseModelPickers();
+  }
+
+  document.addEventListener("click", planDashboardCloseModelPickers);
+  document.addEventListener("keydown", function (event) {
+    if (event.key === "Escape") {
+      planDashboardCloseModelPickers();
+    }
+  });
 </script>
