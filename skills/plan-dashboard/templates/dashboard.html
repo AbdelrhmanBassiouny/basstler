@@ -257,6 +257,17 @@
   .stat-num { font-weight: 700; font-size: 1.05rem; }
   .stat-label { font-size: 0.74rem; color: var(--text-muted); }
 
+  .done-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.85rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .done-toggle input { accent-color: var(--accent); cursor: pointer; }
+
   .alert-banner {
     border-radius: 8px;
     padding: 0.7rem 0.85rem;
@@ -336,7 +347,12 @@
     border: 1px solid var(--border);
     border-radius: 8px;
     overflow: hidden;
+    margin-left: calc(var(--indent-level, 0) * 1.75rem);
   }
+  .page.hide-done .item {
+    margin-left: calc(var(--indent-level-hidden-done, 0) * 1.75rem);
+  }
+  .page.hide-done .item.status-done { display: none; }
   .wrap-arrow {
     font-size: 0.72rem;
     color: var(--accent-strong);
@@ -344,6 +360,9 @@
     padding: 0.3rem 0.75rem;
     border-bottom: 1px solid var(--border);
   }
+  .wrap-arrow.wrap-arrow-hidden-done { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-all { display: none; }
+  .page.hide-done .wrap-arrow.wrap-arrow-hidden-done { display: block; }
   .wrap-parent-title { color: var(--text-muted); }
   .item-row { display: flex; }
   .item-spine { width: 4px; flex-shrink: 0; background: var(--status-notstarted); }
@@ -404,8 +423,17 @@
   .item-meta .branch::before { content: "⎇ "; }
   .pr-link, .session-link { font-weight: 600; }
   .muted { color: var(--text-muted); font-style: italic; }
-  .start-now-button {
-    margin-left: auto;
+  .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
+  .model-select {
+    padding: 0.15rem 0.35rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface-alt);
+    color: var(--text-muted);
+    font-family: inherit;
+    font-size: 0.7rem;
+  }
+  .action-button {
     padding: 0.18rem 0.6rem;
     border-radius: 999px;
     border: 1px solid var(--accent);
@@ -416,13 +444,13 @@
     font-weight: 700;
     cursor: pointer;
   }
-  .start-now-button:hover { background: var(--accent); color: var(--surface); }
-  .start-now-button.start-now-button-copied {
+  .action-button:hover { background: var(--accent); color: var(--surface); }
+  .action-button.action-button-copied {
     border-color: var(--status-done);
     background: var(--status-done-tint);
     color: var(--status-done);
   }
-  .start-now-button.start-now-button-failed {
+  .action-button.action-button-failed {
     border-color: var(--drift);
     background: var(--drift-tint);
     color: var(--drift);
@@ -469,11 +497,27 @@
 <span class="chip" title="{{ chip.tooltip }}">{{ chip.identifier }}</span>
 {% endmacro %}
 
+{% macro action_button(item) %}
+{% if item.action %}
+<span class="action-group">
+  <select class="model-select" aria-label="Model for {{ item.action.label }}">
+    {% for model in available_models %}
+    <option value="{{ model.value }}">{{ model.label }}</option>
+    {% endfor %}
+  </select>
+  <button type="button" class="action-button" data-action-command="{{ item.action.command }}" onclick="planDashboardCopyActionCommand(this)">▸ {{ item.action.label }}</button>
+</span>
+{% endif %}
+{% endmacro %}
+
 {% macro item_card(stacked) %}
 {% set item = stacked.item %}
     <article id="item-{{ item.identifier }}" class="item {{ item.status_and_drift_css_class }}" style="{{ stacked.indent_style }}">
       {% if stacked.wrap_parent %}
-      <div class="wrap-arrow">◄ continues from <span class="mono">{{ stacked.wrap_parent.identifier }}</span> <span class="wrap-parent-title">({{ stacked.wrap_parent.title }})</span></div>
+      <div class="wrap-arrow wrap-arrow-all">◄ continues from <span class="mono">{{ stacked.wrap_parent.identifier }}</span> <span class="wrap-parent-title">({{ stacked.wrap_parent.title }})</span></div>
+      {% endif %}
+      {% if stacked.wrap_parent_with_done_hidden %}
+      <div class="wrap-arrow wrap-arrow-hidden-done">◄ continues from <span class="mono">{{ stacked.wrap_parent_with_done_hidden.identifier }}</span> <span class="wrap-parent-title">({{ stacked.wrap_parent_with_done_hidden.title }})</span></div>
       {% endif %}
       <div class="item-row">
         <div class="item-spine"></div>
@@ -496,9 +540,7 @@
             {% if item.session %}
             <a class="session-link" href="{{ item.session }}" target="_blank" rel="noopener">session ↗</a>
             {% endif %}
-            {% if item.kickoff_command %}
-            <button type="button" class="start-now-button" data-kickoff-command="{{ item.kickoff_command }}" onclick="planDashboardCopyKickoffCommand(this)">▸ Start now</button>
-            {% endif %}
+            {{ action_button(item) }}
           </div>
           {% if item.drift_description %}
           <div class="drift">⚠ {{ item.drift_description }}</div>
@@ -526,7 +568,7 @@
     </article>
 {% endmacro %}
 
-<div class="page">
+<div class="page hide-done" id="plan-dashboard-page">
   <header class="masthead">
     <p class="eyebrow">Plan Dashboard</p>
     <h1>{{ title }}</h1>
@@ -575,6 +617,10 @@
           <div class="stat"><span class="stat-num">{{ status_counts[status] }}</span><span class="stat-label">{{ status.display_label }}</span></div>
           {% endfor %}
         </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
         {% if drift_items %}
         <div class="alert-banner drift-banner">
           <strong>{{ drift_items | length }} drift flag(s)</strong>
@@ -616,7 +662,7 @@
             <h4>Blocker may be cleared ({{ blocker_maybe_cleared | length }})</h4>
             <ul>
             {% for item in blocker_maybe_cleared %}
-              <li><a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong><br><span class="next-reason">some (not all) dependencies are at least ready for review — worth re-checking the blocker</span></a></li>
+              <li><a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong><br><span class="next-reason">at least one dependency is now ready for review — worth resolving the blocker</span></a></li>
             {% endfor %}
             </ul>
           </div>
@@ -635,13 +681,16 @@
 </div>
 
 <script>
-  function planDashboardCopyKickoffCommand(button) {
-    var command = button.getAttribute("data-kickoff-command");
+  function planDashboardCopyActionCommand(button) {
+    var baseCommand = button.getAttribute("data-action-command");
+    var modelSelect = button.previousElementSibling;
+    var model = modelSelect && modelSelect.tagName === "SELECT" ? modelSelect.value : "";
+    var command = model ? "/model " + model + "\n" + baseCommand : baseCommand;
     var originalLabel = button.textContent;
     var resetTimeoutMilliseconds = 1800;
 
     function showResult(className, label) {
-      button.classList.remove("start-now-button-copied", "start-now-button-failed");
+      button.classList.remove("action-button-copied", "action-button-failed");
       button.classList.add(className);
       button.textContent = label;
       setTimeout(function () {
@@ -651,11 +700,11 @@
     }
 
     function onCopySucceeded() {
-      showResult("start-now-button-copied", "Copied!");
+      showResult("action-button-copied", "Copied!");
     }
 
     function onCopyFailed() {
-      showResult("start-now-button-failed", "Copy failed");
+      showResult("action-button-failed", "Copy failed");
     }
 
     function copyViaTemporaryTextarea() {

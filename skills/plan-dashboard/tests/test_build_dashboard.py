@@ -6,6 +6,7 @@ and rendering.
 import pytest
 
 from build_dashboard import (
+    AVAILABLE_MODELS,
     DashboardRenderer,
     DuplicateItemId,
     InvalidDependsOn,
@@ -261,13 +262,15 @@ def test_is_ready_to_unblock_dependents_false_when_not_started():
     assert not fresh_item.is_ready_to_unblock_dependents()
 
 
-def test_stacked_item_indent_style_scales_with_indent_level():
+def test_stacked_item_indent_style_exposes_both_indent_levels_as_css_variables():
     stacked = StackedItem(
         item=Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE),
         indent_level=2,
         wrap_parent=None,
+        indent_level_with_done_hidden=0,
+        wrap_parent_with_done_hidden=None,
     )
-    assert stacked.indent_style == "margin-left: 3.5rem;"
+    assert stacked.indent_style == "--indent-level: 2; --indent-level-hidden-done: 0;"
 
 
 def test_plan_repository_url():
@@ -416,6 +419,18 @@ def test_blocked_item_with_partial_dependencies_done_is_recheck_candidate():
     assert summary.ready_to_start == []
 
 
+def test_blocked_item_with_every_dependency_done_is_recheck_not_ready_to_start():
+    # A blocked item is still blocked even once its dependencies clear -
+    # it belongs in "blocker may be cleared" (actionable: resolve it), never
+    # in "ready to start" (that implies starting fresh, which is wrong for
+    # an item that already has real state).
+    items = [item("a", "done"), item("b", "blocked", depends_on=["a"])]
+    renderer = make_renderer(items)
+    _, summary = renderer.render()
+    assert summary.blocker_maybe_cleared == ["b"]
+    assert summary.ready_to_start == []
+
+
 def test_item_becomes_ready_to_start_once_dependency_is_open_and_ready_for_review():
     # Stacking a branch on a same-track dependency that's already open and
     # out of draft is this repo's normal workflow - waiting for a full merge
@@ -461,39 +476,35 @@ def test_not_started_item_with_partial_dependencies_is_neither_list():
     assert summary.blocker_maybe_cleared == []
 
 
-# %% DashboardRenderer - kickoff command
+# %% DashboardRenderer - item action button
 
 
-def test_kickoff_command_set_for_a_not_started_item():
+def test_action_is_start_now_for_a_not_started_item():
     renderer = make_renderer([item("a", "not_started")])
     renderer.render()
-    assert renderer.plan.items[0].kickoff_command == "/plan-item-kickoff test-plan a"
+    action = renderer.plan.items[0].action
+    assert action.label == "Start now"
+    assert action.command == "/plan-item-kickoff test-plan a"
 
 
-def test_kickoff_command_none_once_an_item_has_started():
-    renderer = make_renderer([item("a", "in_progress")])
-    renderer.render()
-    assert renderer.plan.items[0].kickoff_command is None
-
-
-def test_kickoff_command_none_while_a_dependency_is_not_ready():
+def test_action_none_for_a_not_started_item_while_a_dependency_is_not_ready():
     items = [item("a", "not_started"), item("b", "not_started", depends_on=["a"])]
     renderer = make_renderer(items)
     renderer.render()
-    assert renderer.items_by_identifier["b"].kickoff_command is None
+    assert renderer.items_by_identifier["b"].action is None
 
 
-def test_kickoff_command_set_once_every_dependency_is_ready():
+def test_action_set_once_every_dependency_is_ready():
     items = [item("a", "done"), item("b", "not_started", depends_on=["a"])]
     renderer = make_renderer(items)
     renderer.render()
     assert (
-        renderer.items_by_identifier["b"].kickoff_command
+        renderer.items_by_identifier["b"].action.command
         == "/plan-item-kickoff test-plan b"
     )
 
 
-def test_kickoff_command_set_when_dependency_is_open_and_ready_for_review():
+def test_action_set_when_dependency_is_open_and_ready_for_review():
     pull_requests_by_repository = {
         "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
     }
@@ -505,10 +516,10 @@ def test_kickoff_command_set_when_dependency_is_open_and_ready_for_review():
         items, pull_requests_by_repository=pull_requests_by_repository
     )
     renderer.render()
-    assert renderer.items_by_identifier["b"].kickoff_command is not None
+    assert renderer.items_by_identifier["b"].action is not None
 
 
-def test_kickoff_command_none_when_dependency_is_still_a_draft():
+def test_action_none_for_a_not_started_item_when_dependency_is_still_a_draft():
     pull_requests_by_repository = {
         "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
     }
@@ -520,20 +531,50 @@ def test_kickoff_command_none_when_dependency_is_still_a_draft():
         items, pull_requests_by_repository=pull_requests_by_repository
     )
     renderer.render()
-    assert renderer.items_by_identifier["b"].kickoff_command is None
+    assert renderer.items_by_identifier["b"].action is None
 
 
-def test_kickoff_command_ready_check_is_order_independent():
+def test_action_ready_check_is_order_independent():
     # "b" depends on "a", but "a" appears later in plan.items - the
     # dependency's live_state must still be classified before "b"'s
-    # kickoff command is computed.
+    # action is computed.
     items = [item("b", "not_started", depends_on=["a"]), item("a", "done")]
     renderer = make_renderer(items)
     renderer.render()
     assert (
-        renderer.items_by_identifier["b"].kickoff_command
+        renderer.items_by_identifier["b"].action.command
         == "/plan-item-kickoff test-plan b"
     )
+
+
+def test_action_none_for_a_done_item():
+    renderer = make_renderer([item("a", "done")])
+    renderer.render()
+    assert renderer.plan.items[0].action is None
+
+
+def test_action_is_resolve_for_a_blocked_item():
+    renderer = make_renderer([item("a", "blocked")])
+    renderer.render()
+    action = renderer.plan.items[0].action
+    assert action.label == "Resolve"
+    assert action.command == "/plan-item-resolve test-plan a"
+
+
+def test_action_is_resume_for_an_in_progress_item():
+    renderer = make_renderer([item("a", "in_progress")])
+    renderer.render()
+    action = renderer.plan.items[0].action
+    assert action.label == "Resume"
+    assert action.command == "/plan-item-resolve test-plan a"
+
+
+def test_action_is_reconsider_for_a_deferred_item():
+    renderer = make_renderer([item("a", "deferred")])
+    renderer.render()
+    action = renderer.plan.items[0].action
+    assert action.label == "Reconsider"
+    assert action.command == "/plan-item-resolve test-plan a"
 
 
 # %% DashboardRenderer - dependency stacking / wrap-around
@@ -562,6 +603,81 @@ def test_track_stack_does_not_wrap_within_the_maximum_level():
     renderer = make_renderer(items)
     stacked_items = renderer._build_track_stack(items)
     assert all(stacked.wrap_parent is None for stacked in stacked_items)
+
+
+# %% DashboardRenderer - dependency stacking / hidden-done dedent
+
+
+def test_hidden_done_indent_dedents_a_dependent_of_a_done_item_to_zero():
+    items = [item("a", "done"), item("b", "not_started", depends_on=["a"])]
+    renderer = make_renderer(items)
+    stacked_items = renderer._build_track_stack(items)
+    stacked_b = next(s for s in stacked_items if s.item.identifier == "b")
+    assert stacked_b.indent_level == 1
+    assert stacked_b.indent_level_with_done_hidden == 0
+    assert stacked_b.wrap_parent_with_done_hidden is None
+
+
+def test_hidden_done_indent_unaffected_when_dependency_is_not_done():
+    items = [item("a", "in_progress"), item("b", "not_started", depends_on=["a"])]
+    renderer = make_renderer(items)
+    stacked_items = renderer._build_track_stack(items)
+    stacked_b = next(s for s in stacked_items if s.item.identifier == "b")
+    assert stacked_b.indent_level == 1
+    assert stacked_b.indent_level_with_done_hidden == 1
+
+
+def test_hidden_done_indent_only_dedents_the_immediate_done_dependency():
+    # c depends on b (in progress), b depends on a (done). Hiding a only
+    # removes b's own dependency on it - c still indents under the still-
+    # visible b, one level, not zero.
+    items = [
+        item("a", "done"),
+        item("b", "in_progress", depends_on=["a"]),
+        item("c", "not_started", depends_on=["b"]),
+    ]
+    renderer = make_renderer(items)
+    stacked_items = renderer._build_track_stack(items)
+    stacked_b = next(s for s in stacked_items if s.item.identifier == "b")
+    stacked_c = next(s for s in stacked_items if s.item.identifier == "c")
+    assert stacked_b.indent_level_with_done_hidden == 0
+    assert stacked_c.indent_level_with_done_hidden == 1
+
+
+def test_hidden_done_indent_skips_a_chain_of_done_dependencies():
+    items = [
+        item("a", "done"),
+        item("b", "done", depends_on=["a"]),
+        item("c", "not_started", depends_on=["b"]),
+    ]
+    renderer = make_renderer(items)
+    stacked_items = renderer._build_track_stack(items)
+    stacked_c = next(s for s in stacked_items if s.item.identifier == "c")
+    assert stacked_c.indent_level == 2
+    assert stacked_c.indent_level_with_done_hidden == 0
+
+
+def test_hidden_done_wrap_parent_is_never_a_done_item():
+    # A chain of dependencies just long enough to wrap once the two done
+    # items at its base are hidden: after hiding, c is the effective root
+    # (level 0), d=1, e=2, f=3, g=4, h wraps back to 0 continuing from g -
+    # never from a done item, even though the full (unhidden) chain would
+    # wrap earlier and reference a different, done, parent.
+    items = [
+        item("a", "done"),
+        item("b", "done", depends_on=["a"]),
+        item("c", "not_started", depends_on=["b"]),
+        item("d", "not_started", depends_on=["c"]),
+        item("e", "not_started", depends_on=["d"]),
+        item("f", "not_started", depends_on=["e"]),
+        item("g", "not_started", depends_on=["f"]),
+        item("h", "not_started", depends_on=["g"]),
+    ]
+    renderer = make_renderer(items)
+    stacked_items = renderer._build_track_stack(items)
+    stacked_h = next(s for s in stacked_items if s.item.identifier == "h")
+    assert stacked_h.indent_level_with_done_hidden == 0
+    assert stacked_h.wrap_parent_with_done_hidden.identifier == "g"
 
 
 # %% end-to-end wave/track/item wiring
@@ -648,11 +764,11 @@ def test_render_shows_start_now_button_for_a_not_started_item():
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    assert 'data-kickoff-command="/plan-item-kickoff test-plan a"' in output
+    assert 'data-action-command="/plan-item-kickoff test-plan a"' in output
     assert "Start now" in output
 
 
-def test_render_omits_start_now_button_for_items_already_underway():
+def test_render_shows_resolve_resume_reconsider_buttons_for_underway_items():
     plan = Plan(
         id="test-plan",
         title="Test Plan",
@@ -664,14 +780,89 @@ def test_render_omits_start_now_button_for_items_already_underway():
             item("a", "in_progress"),
             item("b", "blocked"),
             item("c", "deferred"),
-            item("d", "done"),
         ],
     )
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    assert 'data-kickoff-command="' not in output
+    assert 'data-action-command="/plan-item-resolve test-plan a"' in output
+    assert 'data-action-command="/plan-item-resolve test-plan b"' in output
+    assert 'data-action-command="/plan-item-resolve test-plan c"' in output
+    assert "Resume" in output
+    assert "Resolve" in output
+    assert "Reconsider" in output
+
+
+def test_render_omits_action_button_for_a_done_item():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "done")],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    assert 'data-action-command="' not in output
+
+
+def test_render_hides_done_items_by_default_with_a_sidebar_toggle():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "done")],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    assert 'id="plan-dashboard-page"' in output
+    assert 'class="page hide-done"' in output
+    assert 'id="show-done-toggle"' in output
+
+
+def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "not_started")],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    for model in AVAILABLE_MODELS:
+        assert f'<option value="{model.value}">{model.label}</option>' in output
+
+
+def test_render_exposes_both_indent_levels_as_css_variables_on_the_item():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "done"), item("b", "not_started", depends_on=["a"])],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    assert "--indent-level: 1; --indent-level-hidden-done: 0;" in output
 
 
 def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
