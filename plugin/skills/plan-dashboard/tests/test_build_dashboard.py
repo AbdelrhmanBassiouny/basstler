@@ -976,6 +976,33 @@ def test_render_shows_ready_to_review_sidebar_section():
     )
 
 
+def test_render_shows_ready_to_review_section_last_in_the_sidebar():
+    pull_requests_by_repository = {
+        "owner/repo": {"5": PullRequestRecord(state="open", draft=True)}
+    }
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[
+            item("a", "in_progress", pull_request_number=5),
+            item("b", "done"),
+            item("c", "not_started", depends_on=["b"]),
+        ],
+    )
+    renderer = DashboardRenderer(
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository=pull_requests_by_repository,
+        tracking_url=None,
+    )
+    output, _ = renderer.render()
+    assert output.index("Ready to review") > output.index("Ready to start")
+
+
 def test_render_omits_action_button_for_a_done_item():
     plan = Plan(
         id="test-plan",
