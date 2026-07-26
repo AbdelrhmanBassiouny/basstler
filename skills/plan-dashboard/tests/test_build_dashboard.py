@@ -509,6 +509,18 @@ def test_needs_review_false_with_no_pull_request():
     assert not renderer.plan.items[0].needs_review
 
 
+def test_needs_review_false_for_a_deferred_item_with_an_open_draft_pull_request():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+    }
+    renderer = make_renderer(
+        [item("a", "deferred", pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    renderer.render()
+    assert not renderer.plan.items[0].needs_review
+
+
 def test_has_open_pull_request_true_for_draft_and_ready():
     draft_item = item("a", "in_progress", pull_request_number=1)
     draft_item.live_state = LiveState.OPEN_DRAFT
@@ -544,6 +556,18 @@ def test_blocked_item_with_draft_pr_is_not_ready_to_review():
     }
     renderer = make_renderer(
         [item("a", "blocked", pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == []
+
+
+def test_deferred_item_with_draft_pr_is_not_ready_to_review():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=True)}
+    }
+    renderer = make_renderer(
+        [item("a", "deferred", pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
     _, summary = renderer.render()
@@ -939,6 +963,29 @@ def test_render_omits_review_button_once_pull_request_is_ready_for_review():
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
         items=[item("a", "in_progress", pull_request_number=5)],
+    )
+    renderer = DashboardRenderer(
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository=pull_requests_by_repository,
+        tracking_url=None,
+    )
+    output, _ = renderer.render()
+    assert 'class="review-button"' not in output
+
+
+def test_render_omits_review_button_for_a_deferred_item_with_a_draft_pull_request():
+    pull_requests_by_repository = {
+        "owner/repo": {"5": PullRequestRecord(state="open", draft=True)}
+    }
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "deferred", pull_request_number=5)],
     )
     renderer = DashboardRenderer(
         plan=plan,
