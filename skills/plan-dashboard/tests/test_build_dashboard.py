@@ -707,6 +707,69 @@ def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
     assert 'title="Item A"' in output
 
 
+# %% sidebar next-step links
+
+
+def test_render_gives_each_item_card_a_stable_id_anchor():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "not_started")],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    assert 'id="item-a"' in output
+
+
+def test_render_links_a_ready_to_start_sidebar_entry_to_its_item_card():
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "done"), item("b", "not_started", depends_on=["a"])],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output, _ = renderer.render()
+    assert 'href="#item-b"' in output
+    assert 'data-item-identifier="b"' in output
+    assert 'onclick="planDashboardHighlightItem(event, this)"' in output
+
+
+def test_render_links_a_drift_sidebar_entry_to_its_item_card():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="open", draft=False)}
+    }
+    plan = Plan(
+        id="test-plan",
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", "done", pull_request_number=1)],
+    )
+    renderer = DashboardRenderer(
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository=pull_requests_by_repository,
+        tracking_url=None,
+    )
+    output, _ = renderer.render()
+    assert 'href="#item-a"' in output
+    assert 'data-item-identifier="a"' in output
+
+
 # %% status counts
 
 
