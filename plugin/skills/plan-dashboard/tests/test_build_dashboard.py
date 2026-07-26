@@ -192,6 +192,31 @@ def test_live_state_display_labels_including_no_pull_request():
     assert LiveState.MERGED.display_label == "Merged"
 
 
+# %% PullRequestRecord.was_merged
+
+
+def test_was_merged_true_when_github_recorded_a_merge():
+    record = PullRequestRecord(state="closed", merged_at="2026-01-01")
+    assert record.was_merged
+
+
+def test_was_merged_true_for_an_out_of_band_merge_marked_by_label():
+    # merged_at is never set for a PR merged by pushing its branch directly
+    # and closing by hand - this repo's convention is a "merged" label instead.
+    record = PullRequestRecord(state="closed", labels=["in-review", "merged"])
+    assert record.was_merged
+
+
+def test_was_merged_false_for_a_plain_closed_pr():
+    record = PullRequestRecord(state="closed", labels=["in-review"])
+    assert not record.was_merged
+
+
+def test_was_merged_false_for_an_open_pr():
+    record = PullRequestRecord(state="open")
+    assert not record.was_merged
+
+
 # %% Item / StackedItem - precomputed template values
 
 
@@ -293,6 +318,21 @@ def test_merged_pr_marks_not_started_item_as_drifted():
     _, summary = renderer.render()
     assert summary.drift_items == ["a"]
     assert renderer.plan.items[0].live_state is LiveState.MERGED
+
+
+def test_closed_pr_with_merged_label_is_merged_not_closed_unmerged():
+    # merged_at is unset here on purpose - this is the out-of-band-merge case
+    # PullRequestRecord.was_merged exists for.
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state="closed", labels=["merged"])}
+    }
+    renderer = make_renderer(
+        [item("a", "in_progress", pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    _, summary = renderer.render()
+    assert renderer.plan.items[0].live_state is LiveState.MERGED
+    assert summary.drift_items == ["a"]
 
 
 def test_open_pr_marks_done_item_as_drifted():

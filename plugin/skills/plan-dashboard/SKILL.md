@@ -99,8 +99,15 @@ per item — with ~30+ items per plan this matters:
 Assemble this into the `pr_data.json` shape `build_dashboard.py` expects —
 see its own `--help` / docstring for the exact format (keyed by
 `"owner/repo"`, then by PR number as a string, each holding `state`,
-`draft`, `merged_at`). Then run it (requires PyYAML, Jinja2, and the
-`markdown` package — `pip install pyyaml jinja2 markdown` if any are missing):
+`draft`, `merged_at`, and `labels`). Include `labels` even though most
+callers never look at it: a PR merged out-of-band — its branch pushed
+directly, then the PR closed by hand rather than through GitHub's merge
+button — never gets `merged_at` set, and this repo's convention is to add a
+`"merged"` label by hand in exactly that case; `build_dashboard.py` treats
+that label as equivalent to `merged_at` being set.
+
+Then run it (requires PyYAML, Jinja2, and the `markdown` package —
+`pip install pyyaml jinja2 markdown` if any are missing):
 
 ```bash
 python3 .claude/skills/plan-dashboard/build_dashboard.py \

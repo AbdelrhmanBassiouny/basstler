@@ -17,8 +17,8 @@ Usage:
         [--tracking-url "https://github.com/<owner>/<repo>/issues/<n>"]
 
 pr_data.json shape: {"<owner>/<repo>": {"<pr_number>": {"state": "open"|
-"closed", "draft": bool, "merged_at": str|null}}} - one entry per PR number
-referenced by any item, gathered by the skill via
+"closed", "draft": bool, "merged_at": str|null, "labels": [str, ...]}}} -
+one entry per PR number referenced by any item, gathered by the skill via
 mcp__github__list_pull_requests (bulk, paginated) before falling back to
 mcp__github__pull_request_read for anything outside that page window.
 
@@ -318,7 +318,16 @@ class PullRequestRecord:
     """Whether the PR is currently a draft."""
 
     merged_at: str | None = None
-    """The PR's merge timestamp, or ``None`` if it was never merged."""
+    """The PR's merge timestamp, or ``None`` if GitHub never recorded a merge
+    through its own merge API."""
+
+    labels: list[str] = field(default_factory=list)
+    """The PR's GitHub labels. Needed because :attr:`merged_at` alone misses
+    a real case in this repo's history: a PR merged out-of-band (its branch
+    pushed directly, then the PR closed by hand rather than through GitHub's
+    merge button) never gets ``merged_at`` set, so the closer manually adds
+    a ``"merged"`` label to record what actually happened - see
+    :meth:`PullRequestRecord.was_merged`."""
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> PullRequestRecord:
@@ -327,7 +336,15 @@ class PullRequestRecord:
             state=data["state"],
             draft=data.get("draft", False),
             merged_at=data.get("merged_at"),
+            labels=list(data.get("labels") or []),
         )
+
+    @property
+    def was_merged(self) -> bool:
+        """Whether this PR's changes actually landed - GitHub's own
+        :attr:`merged_at`, or (for an out-of-band merge GitHub never
+        recorded) a manually-applied ``"merged"`` label."""
+        return self.merged_at is not None or "merged" in self.labels
 
 
 PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
@@ -712,7 +729,7 @@ class DashboardRenderer:
         pull_request = repository_pull_requests.get(str(item.pull_request_number))
         if pull_request is None:
             return LiveState.NOT_FOUND
-        if pull_request.merged_at:
+        if pull_request.was_merged:
             return LiveState.MERGED
         if pull_request.state == "closed":
             return LiveState.CLOSED_UNMERGED
