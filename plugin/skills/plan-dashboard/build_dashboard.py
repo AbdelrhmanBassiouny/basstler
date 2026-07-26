@@ -433,6 +433,46 @@ class DependencyChip:
 
 
 @dataclass
+class ItemAction:
+    """One not-done item's actionable dashboard button - see
+    :attr:`Item.action`. The label matches what the status actually calls
+    for (starting fresh work reads differently from resolving a blocker),
+    but every non-``done`` status gets one: there's always something
+    actionable to do next besides waiting."""
+
+    label: str
+    """The button's text, e.g. ``"Start now"`` or ``"Resolve"``."""
+
+    command: str
+    """The ``/plan-item-...`` command copied to the clipboard when clicked."""
+
+
+@dataclass(frozen=True)
+class ModelOption:
+    """One choice in a dashboard action button's model dropdown."""
+
+    value: str
+    """The model id to prepend as ``/model <value>`` before the copied
+    command, or ``""`` to copy the command alone and inherit whatever
+    model the pasted-into session is already running."""
+
+    label: str
+    """The human-readable label shown in the dropdown."""
+
+
+AVAILABLE_MODELS: list[ModelOption] = [
+    ModelOption(value="", label="Session default"),
+    ModelOption(value="claude-opus-5", label="Opus 5"),
+    ModelOption(value="claude-sonnet-5", label="Sonnet 5"),
+    ModelOption(value="claude-haiku-4-5-20251001", label="Haiku 4.5"),
+    ModelOption(value="claude-fable-5", label="Fable 5"),
+]
+"""Every model offered in an action button's dropdown, dashboard-wide - not
+plan-specific, so declared once at module level rather than threaded through
+:class:`Plan`."""
+
+
+@dataclass
 class Item:
     """One tracked unit of work (typically one branch/PR) within a plan."""
 
@@ -483,13 +523,12 @@ class Item:
     """Ready-to-render chips for :attr:`depends_on`, filled in by
     :meth:`DashboardRenderer.render`."""
 
-    kickoff_command: str | None = field(default=None, init=False)
-    """The ``/plan-item-kickoff <plan-id> <item-id>`` command for this
-    item's "Start now" affordance, filled in by
-    :meth:`DashboardRenderer.render` - ``None`` unless the item hasn't been
-    started yet and every dependency is itself ready to be built upon,
-    since kicking off work only makes sense before any exists, and only
-    once it's actually safe to start stacking a branch on its dependencies."""
+    action: ItemAction | None = field(default=None, init=False)
+    """This item's dashboard action button, filled in by
+    :meth:`DashboardRenderer.render` - ``None`` only for a ``done`` item
+    (nothing left to do) or a not-started item whose dependencies aren't
+    all ready yet (starting now would build on unsafe state). Every other
+    status always gets one: something is always actionable next."""
 
     @property
     def identifier(self) -> str:
@@ -618,7 +657,14 @@ class DashboardSummary:
 @dataclass
 class StackedItem:
     """One item's position within its track's dependency stack, for the
-    ``item_card`` template macro to render."""
+    ``item_card`` template macro to render.
+
+    Carries two independent indent computations - as normally shown, and as
+    shown once done items are hidden - so the page can switch between them
+    client-side (see ``hide-done`` in dashboard.html) without a re-render:
+    a done dependency, once hidden, no longer visually justifies indenting
+    its dependents, so they dedent as if they had no dependency on it at
+    all rather than merely one level shallower."""
 
     item: Item
     """The item itself."""
@@ -631,10 +677,23 @@ class StackedItem:
     """The item this one visually continues from, if the chain wrapped back
     to indent level 0 past the cap; ``None`` otherwise."""
 
+    indent_level_with_done_hidden: int
+    """:attr:`indent_level`, recomputed as if every ``done`` item in the
+    same-track dependency chain weren't a dependency at all."""
+
+    wrap_parent_with_done_hidden: Item | None
+    """:attr:`wrap_parent`, recomputed the same way - never itself a
+    ``done`` item, since a done wrap-parent would be invisible in that view."""
+
     @property
     def indent_style(self) -> str:
-        """The card's ``style`` attribute value for its indent level."""
-        return f"margin-left: {self.indent_level * 1.75}rem;"
+        """The card's ``style`` attribute value: both indent levels as CSS
+        custom properties, so plain CSS (keyed off the page's ``hide-done``
+        class) picks whichever applies without any per-toggle re-render."""
+        return (
+            f"--indent-level: {self.indent_level}; "
+            f"--indent-level-hidden-done: {self.indent_level_with_done_hidden};"
+        )
 
 
 @dataclass
@@ -721,6 +780,7 @@ class DashboardRenderer:
             blocker_maybe_cleared=blocker_maybe_cleared,
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             waves=self._build_wave_sections(),
+            available_models=AVAILABLE_MODELS,
         )
 
         summary = DashboardSummary(
@@ -734,20 +794,20 @@ class DashboardRenderer:
     def _classify_items(self) -> None:
         """Fill in every item's :attr:`Item.live_state`,
         :attr:`Item.drift_description`, :attr:`Item.pull_request_url`,
-        :attr:`Item.dependency_chips`, and :attr:`Item.kickoff_command` from
-        live PR data and the plan's other items, in place.
+        :attr:`Item.dependency_chips`, and :attr:`Item.action` from live PR
+        data and the plan's other items, in place.
 
         Runs in two passes: :attr:`Item.live_state` must be filled in for
-        every item before :meth:`_kickoff_command_of` can check whether
-        *another* item's dependencies are ready, since dependencies can
-        appear later in :attr:`Plan.items` than their dependents."""
+        every item before :meth:`_action_for` can check whether *another*
+        item's dependencies are ready, since dependencies can appear later
+        in :attr:`Plan.items` than their dependents."""
         for item in self.plan.items:
             item.live_state = self._live_state_of(item)
             item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
         for item in self.plan.items:
             item.dependency_chips = self._dependency_chips_of(item)
-            item.kickoff_command = self._kickoff_command_of(item)
+            item.action = self._action_for(item)
 
     def _pull_request_url_of(self, item: Item) -> str | None:
         """Build one item's PR URL on GitHub, or ``None`` if it has no PR yet."""
@@ -756,18 +816,37 @@ class DashboardRenderer:
         repository = item.repository or self.plan.default_repository
         return f"https://github.com/{repository}/pull/{item.pull_request_number}"
 
-    def _kickoff_command_of(self, item: Item) -> str | None:
-        """Build one item's ``/plan-item-kickoff`` command, or ``None`` if
-        it isn't applicable. Only a not-started item has a "Start now"
-        affordance at all, since anything further along already has real
-        state (a branch, a PR, prior work) the kickoff skill would just
-        rediscover - and even a not-started item doesn't get one while any
-        of its dependencies isn't actually safe to build on yet."""
-        if item.status is not ItemStatus.NOT_STARTED:
-            return None
-        if not self._dependencies_are_ready(item):
-            return None
-        return f"/plan-item-kickoff {self.plan.id} {item.identifier}"
+    def _action_for(self, item: Item) -> ItemAction | None:
+        """Build one item's dashboard action button, or ``None`` if it
+        isn't applicable.
+
+        A ``done`` item has nothing left to do. A not-started item only
+        gets a button once every dependency is actually safe to build on -
+        starting now against an unready dependency would build on unsafe
+        state. Every other status (blocked, in progress, deferred) always
+        gets one: there's always something actionable to investigate next,
+        so each routes to the same ``/plan-item-resolve`` skill, worded to
+        match what that status actually calls for."""
+        match item.status:
+            case ItemStatus.DONE:
+                return None
+            case ItemStatus.NOT_STARTED:
+                if not self._dependencies_are_ready(item):
+                    return None
+                return ItemAction(
+                    label="Start now",
+                    command=f"/plan-item-kickoff {self.plan.id} {item.identifier}",
+                )
+            case ItemStatus.BLOCKED:
+                label = "Resolve"
+            case ItemStatus.IN_PROGRESS:
+                label = "Resume"
+            case ItemStatus.DEFERRED:
+                label = "Reconsider"
+        return ItemAction(
+            label=label,
+            command=f"/plan-item-resolve {self.plan.id} {item.identifier}",
+        )
 
     def _dependencies_are_ready(self, item: Item) -> bool:
         """Whether every entry in :attr:`Item.depends_on` names an item
@@ -834,6 +913,12 @@ class DashboardRenderer:
         """Compute the "ready to start" and "blocker may be cleared" lists
         for the sidebar, from each item's dependencies' effective status.
 
+        A blocked item never lands in "ready to start", even once every
+        dependency is ready - it's still blocked, and its actionable next
+        step is to resolve that blocker, not to start fresh. It always
+        lands in "blocker may be cleared" instead once at least one
+        dependency is ready, whether that's all of them or only some.
+
         :return: ``(ready_to_start, blocker_maybe_cleared)``.
         """
         ready_to_start: list[Item] = []
@@ -853,7 +938,9 @@ class DashboardRenderer:
                 dependency.is_ready_to_unblock_dependents()
                 for dependency in dependencies
             )
-            if self._dependencies_are_ready(item):
+            if item.status is ItemStatus.NOT_STARTED and self._dependencies_are_ready(
+                item
+            ):
                 ready_to_start.append(item)
             elif item.status is ItemStatus.BLOCKED and ready_count > 0:
                 blocker_maybe_cleared.append(item)
@@ -898,22 +985,50 @@ class DashboardRenderer:
         """Order a track's items into a dependency stack (same-track
         depends_on only), assign an indent level per item capped at
         :data:`MAXIMUM_DEPENDENCY_STACK_LEVEL`, wrapping back to level 0
-        (with a reference back to the real parent) past the cap."""
+        (with a reference back to the real parent) past the cap. Also
+        computes each item's indent as it would be with done items hidden -
+        see :class:`StackedItem`."""
         items_by_identifier = {item.identifier: item for item in track_items}
+
+        def same_track_parent(item: Item) -> Item | None:
+            """The first same-track entry in :attr:`Item.depends_on`, if any."""
+            for dependency_identifier in item.depends_on:
+                dependency = items_by_identifier.get(dependency_identifier)
+                if dependency is not None:
+                    return dependency
+            return None
+
         children_by_parent: dict[str, list[Item]] = {}
         roots: list[Item] = []
         for item in track_items:
-            same_track_dependencies = [
-                dependency
-                for dependency in item.depends_on
-                if dependency in items_by_identifier
-            ]
-            if same_track_dependencies:
-                children_by_parent.setdefault(same_track_dependencies[0], []).append(
-                    item
-                )
-            else:
+            parent = same_track_parent(item)
+            if parent is None:
                 roots.append(item)
+            else:
+                children_by_parent.setdefault(parent.identifier, []).append(item)
+
+        visible_stack_cache: dict[str, tuple[int, Item | None]] = {}
+
+        def visible_stack_position(item: Item) -> tuple[int, Item | None]:
+            """This item's indent level and wrap-parent once ``done`` items
+            are excluded from the same-track dependency chain entirely - a
+            done dependency is treated exactly as if it weren't a
+            dependency at all, so its dependents dedent back to level 0
+            rather than merely one level shallower."""
+            if item.identifier in visible_stack_cache:
+                return visible_stack_cache[item.identifier]
+            parent = same_track_parent(item)
+            if parent is None or parent.status is ItemStatus.DONE:
+                result = (0, None)
+            else:
+                parent_level, parent_wrap_parent = visible_stack_position(parent)
+                next_level = parent_level + 1
+                if next_level > MAXIMUM_DEPENDENCY_STACK_LEVEL:
+                    result = (0, parent)
+                else:
+                    result = (next_level, parent_wrap_parent)
+            visible_stack_cache[item.identifier] = result
+            return result
 
         stacked_items: list[StackedItem] = []
 
@@ -925,8 +1040,15 @@ class DashboardRenderer:
             if next_level > MAXIMUM_DEPENDENCY_STACK_LEVEL:
                 next_level = 0
                 wrap_for_children = item
+            visible_level, visible_wrap_parent = visible_stack_position(item)
             stacked_items.append(
-                StackedItem(item=item, indent_level=level, wrap_parent=wrap_parent)
+                StackedItem(
+                    item=item,
+                    indent_level=level,
+                    wrap_parent=wrap_parent,
+                    indent_level_with_done_hidden=visible_level,
+                    wrap_parent_with_done_hidden=visible_wrap_parent,
+                )
             )
             for child in children_by_parent.get(item.identifier, []):
                 walk(child, next_level, wrap_for_children)

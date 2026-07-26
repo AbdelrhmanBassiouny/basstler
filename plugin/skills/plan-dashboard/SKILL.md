@@ -165,17 +165,25 @@ The script validates the manifest (schema version, unique ids, track/wave/
 depends_on references — the exact checks `plan-create` must also satisfy),
 classifies every item's live state (`merged` | `open_draft` | `open_ready` |
 `closed_unmerged` | `not_found`), computes drift, builds the "ready to
-start"/"blocker may be cleared" lists, stacks items by dependency depth
+start"/"blocker may be cleared" lists (a blocked item whose dependency
+becomes ready always lands in "blocker may be cleared", never "ready to
+start" — it's still blocked, not fresh), stacks items by dependency depth
 (indented, capped at 4 levels, wrapping with a left-edge arrow past the
-cap), gives every not-yet-started item whose dependencies are all at least
-ready for review a "Start now" button that copies the invoking command for
-the `plan-item-kickoff` skill (a page can't spawn a session itself, so this
-is a copy-to-clipboard affordance, not a live trigger — and the button is
-withheld while a dependency isn't actually safe to build on yet), and
-renders the final HTML — including `roadmap.md` converted to
-HTML and shown in a collapsed `<details>` section, and the tracking-issue
-link if one was passed. None of that is this document's job to describe
-further; read the script if you need the specifics.
+cap). `done` items are hidden by default behind a sidebar toggle ("Show
+done / merged items") — done client-side via CSS custom properties, so a
+dependent item's indentation dedents to whatever it would be if its done
+dependencies weren't dependencies at all, not just one level shallower.
+Every not-`done` item gets a dashboard action button, worded to match its
+status — "Start now" (`plan-item-kickoff`) for not-started once every
+dependency is ready, "Resolve"/"Resume"/"Reconsider" (`plan-item-resolve`)
+for blocked/in-progress/deferred respectively — plus a model dropdown
+beside it; a page can't spawn a session itself, so these are
+copy-to-clipboard affordances (the dropdown's choice is prepended as a
+`/model <id>` line ahead of the skill command), not live triggers. Renders
+the final HTML — including `roadmap.md` converted to HTML and shown in a
+collapsed `<details>` section, and the tracking-issue link if one was
+passed. None of that is this document's job to describe further; read the
+script if you need the specifics.
 
 If it exits non-zero, the manifest failed validation — its stderr says
 exactly what's wrong (which field, which value). Report that to the user
