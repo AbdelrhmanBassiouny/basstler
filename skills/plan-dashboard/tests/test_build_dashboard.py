@@ -845,7 +845,10 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
     )
     output, _ = renderer.render()
     for model in AVAILABLE_MODELS:
-        assert f'<option value="{model.value}">{model.label}</option>' in output
+        assert f'data-value="{model.value}"' in output
+        assert f">{model.label}</li>" in output
+    assert 'class="model-picker-toggle"' in output
+    assert 'class="model-select"' not in output
 
 
 def test_render_exposes_both_indent_levels_as_css_variables_on_the_item():
