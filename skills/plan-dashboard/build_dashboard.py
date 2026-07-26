@@ -350,6 +350,39 @@ class PullRequestRecord:
 PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
 
 
+def classify_live_state(
+    pull_request_number: int | None,
+    repository: str,
+    pull_requests_by_repository: PullRequestsByRepository,
+) -> LiveState:
+    """Classify one item's live GitHub state from its PR number and repository.
+
+    Standalone so callers other than :class:`DashboardRenderer` (notably
+    ``sync_manifest_status.py``, which needs the same classification to
+    decide what to auto-correct) don't have to duplicate this logic.
+
+    :param pull_request_number: The item's tracked PR number, or ``None`` if
+        it has no PR yet.
+    :param repository: The ``"owner/repo"`` to look the PR up under.
+    :param pull_requests_by_repository: Live PR state for every repository
+        referenced by the plan's items.
+    :return: The classified state.
+    """
+    if pull_request_number is None:
+        return LiveState.NO_PULL_REQUEST
+    repository_pull_requests = pull_requests_by_repository.get(repository, {})
+    pull_request = repository_pull_requests.get(str(pull_request_number))
+    if pull_request is None:
+        return LiveState.NOT_FOUND
+    if pull_request.was_merged:
+        return LiveState.MERGED
+    if pull_request.state == "closed":
+        return LiveState.CLOSED_UNMERGED
+    if pull_request.draft:
+        return LiveState.OPEN_DRAFT
+    return LiveState.OPEN_READY
+
+
 @dataclass
 class Wave:
     """A sequential phase of the initiative - wave 2 generally starts once
@@ -730,21 +763,11 @@ class DashboardRenderer:
 
     def _live_state_of(self, item: Item) -> LiveState:
         """Classify one item's live GitHub state from :attr:`pull_requests_by_repository`."""
-        if item.pull_request_number is None:
-            return LiveState.NO_PULL_REQUEST
-        repository_pull_requests = self.pull_requests_by_repository.get(
-            item.repository or self.plan.default_repository, {}
+        return classify_live_state(
+            item.pull_request_number,
+            item.repository or self.plan.default_repository,
+            self.pull_requests_by_repository,
         )
-        pull_request = repository_pull_requests.get(str(item.pull_request_number))
-        if pull_request is None:
-            return LiveState.NOT_FOUND
-        if pull_request.was_merged:
-            return LiveState.MERGED
-        if pull_request.state == "closed":
-            return LiveState.CLOSED_UNMERGED
-        if pull_request.draft:
-            return LiveState.OPEN_DRAFT
-        return LiveState.OPEN_READY
 
     @staticmethod
     def _drift_description_of(item: Item) -> str | None:
@@ -873,7 +896,7 @@ class DashboardRenderer:
         return stacked_items
 
 
-def _load_pull_requests_by_repository(
+def load_pull_requests_by_repository(
     raw_pull_request_data: dict[str, Any],
 ) -> PullRequestsByRepository:
     """Parse ``pr_data.json``'s raw JSON into :class:`PullRequestRecord`\\ s.
@@ -927,7 +950,7 @@ def main() -> int:
         return 1
 
     plan = Plan.from_mapping(raw_plan)
-    pull_requests_by_repository = _load_pull_requests_by_repository(
+    pull_requests_by_repository = load_pull_requests_by_repository(
         raw_pull_request_data
     )
     renderer = DashboardRenderer(
