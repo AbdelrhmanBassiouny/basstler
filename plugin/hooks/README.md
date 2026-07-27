@@ -175,7 +175,10 @@ doesn't belong in structured data. Both live only on the personal-notes branch, 
 everything else in this document. See
 [`.claude/personal/plans/README.md`](../personal/plans/README.md) (on the personal-notes branch) for
 the full schema, and [`.claude/skills/plan-dashboard/SKILL.md`](../skills/plan-dashboard/SKILL.md)
-for how a plan gets turned into a live Artifact dashboard.
+for how a plan gets turned into a live Artifact dashboard. New to this - want to see it end to end
+before diving into the schema reference? See
+[`plan-dashboard/EXAMPLE_WALKTHROUGH.md`](../skills/plan-dashboard/EXAMPLE_WALKTHROUGH.md): a short,
+worked example with screenshots, from a plan-mode idea to a published dashboard.
 
 **Auto-discovery.** If the branch you're on appears as an item in some plan, `CLAUDE.local.md` also
 gets that plan's `plan.yaml` and `roadmap.md` pulled in — the same idea as PR progress above, but for
