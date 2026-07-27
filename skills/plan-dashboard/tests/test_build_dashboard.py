@@ -3,9 +3,12 @@ Tests for build_dashboard.py's validation, live-state classification, drift dete
 and rendering.
 """
 
+import json
 from datetime import datetime
+from pathlib import Path
 
 import pytest
+import yaml
 
 from build_dashboard import (
     AVAILABLE_MODELS,
@@ -29,8 +32,13 @@ from build_dashboard import (
     UnknownTrack,
     UnknownWave,
     Wave,
+    load_pull_requests_by_repository,
     validate_plan,
 )
+
+EXAMPLE_DIRECTORY = Path(__file__).parent.parent / "example"
+"""The EXAMPLE_WALKTHROUGH.md doc's committed sample plan.yaml/roadmap.md/
+pr_data.json - see the tests at the bottom of this file for why."""
 
 
 def minimal_plan(**overrides):
@@ -1334,3 +1342,44 @@ def test_summary_to_json_dict_uses_plain_string_status_keys():
     json_dict = summary.to_json_dict()
     assert json_dict["counts"]["done"] == 1
     assert json_dict["drift_count"] == 0
+
+
+# %% EXAMPLE_WALKTHROUGH.md's committed sample plan
+
+
+def _render_example_plan():
+    plan_mapping = yaml.safe_load((EXAMPLE_DIRECTORY / "plan.yaml").read_text())
+    validate_plan(plan_mapping)
+    plan = Plan.from_mapping(plan_mapping)
+    pull_requests_by_repository = load_pull_requests_by_repository(
+        json.loads((EXAMPLE_DIRECTORY / "pr_data.json").read_text())
+    )
+    renderer = DashboardRenderer(
+        plan=plan,
+        roadmap_text=(EXAMPLE_DIRECTORY / "roadmap.md").read_text(),
+        pull_requests_by_repository=pull_requests_by_repository,
+        tracking_url=None,
+    )
+    return renderer.render()
+
+
+def test_example_plan_passes_the_same_validation_plan_create_must_satisfy():
+    plan_mapping = yaml.safe_load((EXAMPLE_DIRECTORY / "plan.yaml").read_text())
+    validate_plan(plan_mapping)  # raises PlanValidationError on any problem
+
+
+def test_example_plan_renders_the_counts_and_sections_the_walkthrough_describes():
+    """Locks EXAMPLE_WALKTHROUGH.md's screenshots and prose to the actual
+    schema/logic - a future change to either would fail this test instead of
+    silently leaving the doc showing stale numbers."""
+    _, summary = _render_example_plan()
+    assert summary.status_counts[ItemStatus.NOT_STARTED] == 1
+    assert summary.status_counts[ItemStatus.IN_PROGRESS] == 2
+    assert summary.status_counts[ItemStatus.BLOCKED] == 1
+    assert summary.status_counts[ItemStatus.DONE] == 2
+    assert summary.drift_items == ["Dead-letter queue for exhausted retries"]
+    assert summary.ready_to_start == ["Retry metrics dashboard"]
+    assert summary.blocker_maybe_cleared == [
+        "Load-test the retry path under failure injection"
+    ]
+    assert summary.ready_to_review == ["Feature flag for the new retry behavior"]
