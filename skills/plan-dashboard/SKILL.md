@@ -95,25 +95,9 @@ when the fallback applies.
 
 ## 2. Cross-check every item's PR against live GitHub state, sync, then run the script
 
-For each distinct repository referenced (`items[].repository` if set, else the plan's
-`default_repository`), fetch PR state **once, in bulk**, rather than one API call
-per item — with ~30+ items per plan this matters:
-
-1. `mcp__github__list_pull_requests` with `state: "all"`, `perPage: 100`,
-   paginating (`page`) until a page comes back short of 100.
-2. For any item whose `pull_request_number` isn't in that result set (older than the
-   pagination window covered), fall back to `mcp__github__pull_request_read`
-   with `method: "get"` for that specific `pullNumber`.
-
-Assemble this into the `pr_data.json` shape `build_dashboard.py` expects —
-see its own `--help` / docstring for the exact format (keyed by
-`"owner/repo"`, then by PR number as a string, each holding `state`,
-`draft`, `merged_at`, and `labels`). Include `labels` even though most
-callers never look at it: a PR merged out-of-band — its branch pushed
-directly, then the PR closed by hand rather than through GitHub's merge
-button — never gets `merged_at` set, and this repo's convention is to add a
-`"merged"` label by hand in exactly that case; `build_dashboard.py` treats
-that label as equivalent to `merged_at` being set.
+Follow `pr-data-fetching.md`'s procedure (next to this file) to assemble
+`/tmp/pr_data.json` for every pull request referenced by any item in this
+plan.
 
 Everything from here on is deterministic - **run `refresh_dashboard.sh`**
 rather than reproducing its steps by hand:

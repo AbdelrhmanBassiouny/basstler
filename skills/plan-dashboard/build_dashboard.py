@@ -18,9 +18,9 @@ Usage:
 
 pr_data.json shape: {"<owner>/<repo>": {"<pr_number>": {"state": "open"|
 "closed", "draft": bool, "merged_at": str|null, "labels": [str, ...]}}} -
-one entry per pull request number referenced by any item, gathered by the skill via
-mcp__github__list_pull_requests (bulk, paginated) before falling back to
-mcp__github__pull_request_read for anything outside that page window.
+one entry per pull request number referenced by any item. See
+pr-data-fetching.md (next to this script) for how a session should gather
+it.
 
 Prints a one-line JSON summary to stdout (status counts, drift count,
 ready-to-start/blocker-maybe-cleared item titles) so the calling skill can

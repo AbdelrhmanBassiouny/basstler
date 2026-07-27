@@ -17,11 +17,19 @@ current session; it does not try to detect or resume any other session.
 
 ## 1. Resolve the item
 
-Fetch the personal-notes branch and load `<plan-id>/plan.yaml` +
-`roadmap.md` (same resolution `.claude/skills/plan-dashboard/SKILL.md` step
-1 uses — read that file if the precedence is unclear rather than
-re-deriving it). Find the item by `id` (or `branch` if `id` is unset) among
-`items[]`.
+Source the shared config script — it resolves the personal-notes
+remote/branch precedence and defines `DEPENDENCY_READINESS_DOC` (used in
+step 2):
+
+```bash
+source .claude/hooks/resolve-personal-notes-config.sh
+git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+```
+
+Load `<plan-id>/plan.yaml` + `roadmap.md` off `FETCH_HEAD` (same resolution
+`plan-dashboard`'s own step 1 uses — read `resolve-personal-notes-config.sh`
+if the precedence is unclear rather than re-deriving it). Find the item by
+`id` (or `branch` if `id` is unset) among `items[]`.
 
 If the plan id or item id doesn't resolve, stop and list what's actually
 available (every plan id under `plans/*/plan.yaml`, or every item id in the
@@ -65,8 +73,7 @@ precondition for resolving this item.
   that mentions this item by id, branch, or title — a structural change
   proposed there (a dependency change, a scope split) can be exactly why
   an item stalled.
-- `depends_on`: follow
-  `.claude/skills/plan-dashboard/dependency-readiness.md`'s bulk-fetch-and-check
+- `depends_on`: follow `${DEPENDENCY_READINESS_DOC}`'s bulk-fetch-and-check
   procedure, for `--item <item-id>`. A dependency the script reports not
   ready for (was ready, is now blocked or closed unmerged) is a real,
   common cause of a stall — check this even if `blockers` doesn't mention

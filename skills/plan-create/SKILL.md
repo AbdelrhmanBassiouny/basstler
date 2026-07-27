@@ -23,9 +23,17 @@ takes a shortcut a hand-written manifest wouldn't also have to clear.
 
 ## 1. Establish the plan id and refuse to silently overwrite
 
-Resolve the personal-notes remote/branch and fetch it (see
-`resolve-personal-notes-config.sh`), then check whether
-`.claude/personal/plans/<plan-id>/plan.yaml` already exists on `FETCH_HEAD`.
+Source the shared config script — it resolves the personal-notes
+remote/branch precedence into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines
+`SAVE_PLAN_SCRIPT` (used in step 7):
+
+```bash
+source .claude/hooks/resolve-personal-notes-config.sh
+git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+```
+
+Then check whether `.claude/personal/plans/<plan-id>/plan.yaml` already
+exists on `FETCH_HEAD`.
 If it does, stop and tell the user — point them at editing the existing
 plan (`plan-dashboard`'s doc, or just ask a session to edit it) instead of
 silently clobbering it with a fresh draft. Recreating over an existing plan
@@ -160,8 +168,8 @@ is still no separate create-plan.sh; this skill is what makes that flow
 convenient, not a replacement for it): write the drafted `plan.yaml` and
 `roadmap.md` content to two temporary files, then run
 
-```
-.claude/hooks/save-plan.sh <plan-id> --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
+```bash
+bash "${SAVE_PLAN_SCRIPT}" <plan-id> --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
 ```
 
 The id must be explicit here, since a brand-new plan has no entry in the

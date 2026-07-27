@@ -5,27 +5,19 @@ own context" steps — both need to answer the exact same question ("is it
 actually safe to stack new work on top of item X's dependencies?"), so
 this procedure lives here once instead of being restated in each skill.
 
-Source the shared config script if you haven't already this session (see
-`.claude/skills/plan-dashboard/SKILL.md` step 1 — it defines
-`CHECK_DEPENDENCY_READINESS_SCRIPT`, used below):
+Source the shared config script if you haven't already this session in
+this same bash call — it defines `CHECK_DEPENDENCY_READINESS_SCRIPT`, used
+below (this has to stay a literal path: it's the one file that defines
+every other constant referenced by name in this system, so nothing "more
+shared" exists yet for it to point at):
 
 ```bash
 source .claude/hooks/resolve-personal-notes-config.sh
 ```
 
-For the item's `depends_on` list, bulk-fetch every referenced pull
-request's live state (per repository referenced):
-
-1. `mcp__github__list_pull_requests` with `state: "all"`, `perPage: 100`,
-   paginating (`page`) until a page comes back short of 100.
-2. For any dependency whose `pull_request_number` isn't in that result set
-   (older than the pagination window covered), fall back to
-   `mcp__github__pull_request_read` with `method: "get"` for that specific
-   `pullNumber`.
-
-Assemble this into the `pr_data.json` shape `build_dashboard.py` expects —
-see its own `--help` / module docstring for the exact format (keyed by
-`"owner/repo"`, then by pull request number as a string). Then run:
+For the item's `depends_on` list, follow `pr-data-fetching.md`'s procedure
+(next to this file) to bulk-fetch every referenced pull request's live
+state into `/tmp/pr_data.json`. Then run:
 
 ```bash
 python3 "${CHECK_DEPENDENCY_READINESS_SCRIPT}" \
