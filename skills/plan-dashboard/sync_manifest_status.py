@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 """
 Auto-correct a plan.yaml's item statuses to ``done`` wherever GitHub confirms the item's
-PR is merged.
+pull request is merged.
 
 This is the one direction plan.yaml's manually-maintained ``status`` field
 can be corrected without human judgment. Every other kind of drift
-build_dashboard.py's drift banner can report - a PR number that doesn't
-resolve, an item marked done while its PR is still open, a closed-but-
-unmerged PR against an active status - means something happened that only a
+build_dashboard.py's drift banner can report - a pull request number that doesn't
+resolve, an item marked done while its pull request is still open, a closed-but-
+unmerged pull request against an active status - means something happened that only a
 person can interpret (abandoned? reverted? mistyped?), and stays a drift
 flag for a human to read, exactly as before. "merged on GitHub" has no such
 ambiguity, so leaving it as a standing drift flag would just mean the same
@@ -94,11 +94,11 @@ def find_items_to_correct(
     plan: dict[str, Any],
     pull_requests_by_repository: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """Find every item whose PR is merged on GitHub but whose manifest
+    """Find every item whose pull request is merged on GitHub but whose manifest
     ``status`` isn't already ``done``.
 
     :param plan: The raw, freshly-``yaml.safe_load``-ed plan.yaml content.
-    :param pull_requests_by_repository: Live PR state for every repository
+    :param pull_requests_by_repository: Live pull request state for every repository
         referenced by the plan's items.
     :return: The raw item mappings that need correcting, in manifest order.
     """

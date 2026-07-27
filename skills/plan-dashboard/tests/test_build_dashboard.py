@@ -19,6 +19,7 @@ from build_dashboard import (
     MAXIMUM_DEPENDENCY_STACK_LEVEL,
     Plan,
     PlanValidationError,
+    PullRequestLabel,
     PullRequestRecord,
     PullRequestState,
     StackedItem,
@@ -192,7 +193,7 @@ def test_item_status_display_labels():
 
 
 def test_live_state_display_labels_including_no_pull_request():
-    assert LiveState.NO_PULL_REQUEST.display_label == "No PR yet"
+    assert LiveState.NO_PULL_REQUEST.display_label == "No pull request yet"
     assert LiveState.MERGED.display_label == "Merged"
 
 
@@ -207,7 +208,7 @@ def test_was_merged_true_when_github_recorded_a_merge():
 
 
 def test_was_merged_true_for_an_out_of_band_merge_marked_by_label():
-    # merged_at is never set for a PR merged by pushing its branch directly
+    # merged_at is never set for a pull request merged by pushing its branch directly
     # and closing by hand - this repo's convention is a "merged" label instead.
     record = PullRequestRecord(
         state=PullRequestState.CLOSED, labels=["in-review", "merged"]
@@ -225,6 +226,31 @@ def test_was_merged_false_for_an_open_pull_request():
     assert not record.was_merged
 
 
+# %% PullRequestRecord.identified_labels
+
+
+def test_identified_labels_recognizes_known_labels():
+    record = PullRequestRecord(
+        state=PullRequestState.OPEN, labels=["in-review", "merged"]
+    )
+    assert record.identified_labels == {
+        PullRequestLabel.IN_REVIEW,
+        PullRequestLabel.MERGED,
+    }
+
+
+def test_identified_labels_silently_excludes_an_unrecognized_label():
+    # cram2-link-sent is real label traffic on this repo's own PRs (added by
+    # other automation) that this codebase has no reason to recognize.
+    record = PullRequestRecord(state=PullRequestState.OPEN, labels=["cram2-link-sent"])
+    assert record.identified_labels == frozenset()
+
+
+def test_identified_labels_empty_when_no_labels():
+    record = PullRequestRecord(state=PullRequestState.OPEN)
+    assert record.identified_labels == frozenset()
+
+
 # %% Item / StackedItem - precomputed template values
 
 
@@ -237,7 +263,7 @@ def test_status_and_drift_css_class_without_drift():
 
 def test_status_and_drift_css_class_with_drift():
     drifted_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
-    drifted_item.drift_description = "marked done, but PR #1 is still open"
+    drifted_item.drift_description = "marked done, but pull request #1 is still open"
     assert drifted_item.status_and_drift_css_class == "status-done has-drift"
 
 
@@ -307,6 +333,14 @@ def test_plan_from_mapping_defaults_missing_wave_description_to_none():
 
 # %% DashboardRenderer - live state + drift
 
+# "Drift" is a manifest item's manually-maintained :class:`ItemStatus`
+# disagreeing with its live GitHub :class:`LiveState` - see
+# :meth:`DashboardRenderer._drift_description_of` for the exact rules. It
+# flags a manifest that's gone stale (e.g. marked ``done`` while its pull
+# request is still open - was it marked done too early, or has something
+# regressed?) so a human can look, not something this code silently corrects
+# (except the one unambiguous direction ``sync_manifest_status.py`` handles).
+
 
 def make_renderer(items, pull_requests_by_repository=None):
     plan = Plan(
@@ -326,7 +360,12 @@ def make_renderer(items, pull_requests_by_repository=None):
     )
 
 
-def item(identifier, status: ItemStatus, pull_request_number=None, depends_on=None):
+def item(
+    identifier: str,
+    status: ItemStatus,
+    pull_request_number: int | None = None,
+    depends_on: list[str] | None = None,
+) -> Item:
     """
     Build one :class:`Item` for a test, filling in the boilerplate
     (``title``/``branch``/``id`` all equal to *identifier*, a fixed.
@@ -620,8 +659,8 @@ def test_item_not_ready_to_review_while_dependency_has_no_pull_request():
 
 
 def test_item_ready_to_review_once_dependency_has_an_open_pull_request():
-    # The dependency need not itself be past review - it just needs a PR
-    # open, so a whole reviewable stack can surface before its base merges.
+    # The dependency need not itself be past review - it just needs a pull
+    # request open, so a whole reviewable stack can surface before its base merges.
     pull_requests_by_repository = {
         "owner/repo": {
             "1": PullRequestRecord(state=PullRequestState.OPEN, draft=True),

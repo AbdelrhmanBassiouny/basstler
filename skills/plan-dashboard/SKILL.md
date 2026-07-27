@@ -39,14 +39,19 @@ alone can't tell you *why* an item is blocked, deferred, or still open.
 Determine mode from the invocation argument: a `<plan-id>` argument means
 single-plan mode; no argument means master-index mode.
 
-Resolve the personal-notes remote/branch with the exact same precedence
-`.claude/hooks/resolve-personal-notes-config.sh` uses (read that file if you
-need the precise logic): `git config claude.personalNotesRemote` → env var
-→ default `origin`; branch likewise defaults to `claude/personal-notes`.
-Then:
+Source the shared config script — it resolves the personal-notes
+remote/branch precedence (`git config claude.personalNotesRemote` → env var
+→ default `origin`; branch likewise defaults to `claude/personal-notes`)
+into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines every other script/hook path
+this document references below (`BUILD_INDEX_SCRIPT`,
+`REFRESH_DASHBOARD_SCRIPT`, `WRITE_PERSONAL_NOTES_FILE_SCRIPT`,
+`PLAN_DASHBOARD_REQUIREMENTS_FILE`, ...) — read that file if you need the
+precise logic or the full list of what it defines. Every bash block in this
+document assumes it's already been sourced once per session:
 
 ```bash
-git fetch "${NOTES_REMOTE:-origin}" "${NOTES_BRANCH:-claude/personal-notes}" --quiet
+source .claude/hooks/resolve-personal-notes-config.sh
+git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 ```
 
 Work off `FETCH_HEAD`, not `<remote>/<branch>` — a URL-form remote creates
@@ -114,7 +119,7 @@ Everything from here on is deterministic - **run `refresh_dashboard.sh`**
 rather than reproducing its steps by hand:
 
 ```bash
-bash .claude/skills/plan-dashboard/refresh_dashboard.sh \
+bash "${REFRESH_DASHBOARD_SCRIPT}" \
   --plan-id <plan-id> \
   --plan /tmp/plan.yaml \
   --roadmap /tmp/roadmap.md \
@@ -171,8 +176,7 @@ its stderr says exactly what's wrong (which field, which value). Report
 that to the user instead of trying to patch around it yourself; a broken
 manifest is something they need to know about, not paper over. Requires
 PyYAML, Jinja2, and the `markdown` package —
-`pip install -r .claude/skills/plan-dashboard/requirements.txt` if any are
-missing.
+`pip install -r "${PLAN_DASHBOARD_REQUIREMENTS_FILE}"` if any are missing.
 
 On success it prints one merged JSON summary on stdout: `sync_manifest_status.py`'s
 own `{"corrected": [...]}` plus `build_dashboard.py`'s status counts, drift
@@ -188,7 +192,7 @@ for every plan before building that plan's index entry.
 list, then:
 
 ```bash
-python3 .claude/skills/plan-dashboard/build_index.py \
+python3 "${BUILD_INDEX_SCRIPT}" \
   --plans /tmp/plans.json \
   --output /tmp/index.html
 ```
@@ -216,9 +220,9 @@ then push it back with the same helper `refresh_dashboard.sh` uses
 internally for the manifest correction:
 
 ```bash
-bash .claude/hooks/write-personal-notes-file.sh \
+bash "${WRITE_PERSONAL_NOTES_FILE_SCRIPT}" \
   --source /tmp/updated-dashboard-urls.yaml \
-  --destination .claude/personal/plans/_generated/dashboard-urls.yaml \
+  --destination "${PLANS_DIR}/_generated/dashboard-urls.yaml" \
   --message "Record dashboard URL for <plan-id or _index>"
 ```
 

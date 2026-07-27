@@ -598,7 +598,7 @@
             {% if item.pull_request_url %}
             <a class="pr-link" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">#{{ item.pull_request_number }}</a>
             {% else %}
-            <span class="muted">no PR yet</span>
+            <span class="muted">no pull request yet</span>
             {% endif %}
             {% if item.session %}
             <a class="session-link" href="{{ item.session }}" target="_blank" rel="noopener">session ↗</a>
@@ -739,7 +739,7 @@
             <ul>
             {% for item in ready_to_review %}
               <li>
-                <a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong><br><span class="next-reason">open draft PR, ready for your review</span></a>
+                <a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong><br><span class="next-reason">open draft pull request, ready for your review</span></a>
                 <a class="next-review-link" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">Review ↗</a>
               </li>
             {% endfor %}

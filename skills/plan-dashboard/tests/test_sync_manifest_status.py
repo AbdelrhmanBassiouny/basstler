@@ -5,6 +5,7 @@ wherever GitHub confirms the item's pull request is merged.
 
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -17,7 +18,12 @@ from sync_manifest_status import (
 )
 
 
-def plan(**overrides):
+def plan(**overrides: Any) -> dict[str, Any]:
+    """
+    Build one raw, plan.yaml-shaped ``dict`` for a test - the same shape
+    ``yaml.safe_load`` would produce, since ``find_items_to_correct``
+    operates directly on that raw structure, never on a parsed :class:`Plan`.
+    """
     data = {
         "schema_version": 1,
         "id": "test-plan",
@@ -32,7 +38,20 @@ def plan(**overrides):
     return data
 
 
-def item(identifier, status, pull_request_number=None, repository=None):
+def item(
+    identifier: str,
+    status: str,
+    pull_request_number: int | None = None,
+    repository: str | None = None,
+) -> dict[str, Any]:
+    """
+    Build one raw, plan.yaml-shaped item ``dict`` for a test.
+
+    ``status`` is a plain ``str``, not :class:`ItemStatus`: this mirrors exactly what
+    ``yaml.safe_load`` hands back before any parsing into typed dataclasses happens,
+    since ``find_items_to_correct`` and ``apply_status_corrections`` both work directly
+    on that raw structure.
+    """
     entry = {
         "id": identifier,
         "title": identifier,
@@ -115,7 +134,10 @@ def test_uses_the_item_repository_override_over_the_plan_default():
 
 # %% apply_status_corrections - real manifest text
 
-
+# A real plan.yaml's raw text (two items, one due for correction) - loaded
+# once and shared read-only by every test below, since apply_status_corrections
+# patches text in place and each test asserts against its own fresh copy of
+# the return value rather than mutating this constant.
 MANIFEST_TEXT = (Path(__file__).parent / "fixtures" / "manifest.yaml").read_text()
 
 

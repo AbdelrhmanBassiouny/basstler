@@ -40,6 +40,7 @@ import yaml
 from build_dashboard import (
     Plan,
     PlanValidationError,
+    PullRequestsByRepository,
     classify_live_state,
     load_pull_requests_by_repository,
     validate_plan,
@@ -55,7 +56,7 @@ class UnknownItemError(ValueError):
 def dependency_readiness(
     plan: Plan,
     item_identifier: str,
-    pull_requests_by_repository: dict[str, dict[str, Any]],
+    pull_requests_by_repository: PullRequestsByRepository,
 ) -> list[dict[str, Any]]:
     """
     Classify every dependency of ``item_identifier`` as ready or not.
@@ -63,8 +64,8 @@ def dependency_readiness(
     :param plan: The already-validated plan.
     :param item_identifier: The effective identifier (``id`` or ``branch``) of the item
         whose dependencies should be checked.
-    :param pull_requests_by_repository: Live PR state for every repository referenced by
-        the plan's items.
+    :param pull_requests_by_repository: Live pull request state for every repository
+        referenced by the plan's items.
     :raises UnknownItemError: If ``item_identifier`` isn't in the plan.
     :return: One ready-to-serialize dict per entry in the item's ``depends_on``, in that
         order.

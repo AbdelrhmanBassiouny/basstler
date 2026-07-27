@@ -145,6 +145,27 @@ plan_roadmap_path() {
 # full plan-dashboard schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
+# PLAN_DASHBOARD_DIR / *_SCRIPT / *_FILE: the canonical location of every
+# script, hook, and requirements file the plan-dashboard/plan-item-*/CI
+# tooling invokes - defined once, here, so refresh_dashboard.sh, every
+# plan-*/SKILL.md, and .github/workflows/ci.yml source this file and use
+# these variables instead of each carrying its own separately-typed literal
+# path (exactly the drift risk a reviewer flagged after those paths had
+# already been duplicated across all of them). Relative to the project
+# root, which sourcing this file already `cd`s into (see PROJECT_ROOT
+# above) - so every caller can use these directly, with no further path
+# arithmetic of its own.
+PLAN_DASHBOARD_DIR=".claude/skills/plan-dashboard"
+BUILD_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIR}/build_dashboard.py"
+BUILD_INDEX_SCRIPT="${PLAN_DASHBOARD_DIR}/build_index.py"
+SYNC_MANIFEST_STATUS_SCRIPT="${PLAN_DASHBOARD_DIR}/sync_manifest_status.py"
+CHECK_DEPENDENCY_READINESS_SCRIPT="${PLAN_DASHBOARD_DIR}/check_dependency_readiness.py"
+REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIR}/refresh_dashboard.sh"
+REFRESH_DASHBOARD_SUPPORT_SCRIPT="${PLAN_DASHBOARD_DIR}/refresh_dashboard_support.py"
+PLAN_DASHBOARD_REQUIREMENTS_FILE="${PLAN_DASHBOARD_DIR}/requirements.txt"
+PLAN_DASHBOARD_TESTS_DIR="${PLAN_DASHBOARD_DIR}/tests"
+WRITE_PERSONAL_NOTES_FILE_SCRIPT=".claude/hooks/write-personal-notes-file.sh"
+
 # plan_id_for_branch: prints the plan id that tracks the given branch, per
 # PLAN_BRANCH_INDEX_PATH on FETCH_HEAD, and returns 0. Returns 1 (prints
 # nothing) if the index doesn't exist yet, or the branch isn't in it. Caller

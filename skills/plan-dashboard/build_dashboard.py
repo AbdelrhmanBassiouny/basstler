@@ -18,7 +18,7 @@ Usage:
 
 pr_data.json shape: {"<owner>/<repo>": {"<pr_number>": {"state": "open"|
 "closed", "draft": bool, "merged_at": str|null, "labels": [str, ...]}}} -
-one entry per PR number referenced by any item, gathered by the skill via
+one entry per pull request number referenced by any item, gathered by the skill via
 mcp__github__list_pull_requests (bulk, paginated) before falling back to
 mcp__github__pull_request_read for anything outside that page window.
 
@@ -41,7 +41,7 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
 import yaml
 
@@ -54,7 +54,7 @@ MAXIMUM_DEPENDENCY_STACK_LEVEL = 4
 class ItemStatus(StrEnum):
     """The thin, manually-maintained status a plan.yaml item carries.
 
-    Deliberately thin: everything about a PR's actual GitHub state
+    Deliberately thin: everything about a pull request's actual GitHub state
     (open/draft/merged/CI/review) is never stored here - it is always
     live-fetched and represented separately by :class:`LiveState`.
     """
@@ -82,10 +82,10 @@ class ItemStatus(StrEnum):
 
 
 class LiveState(StrEnum):
-    """An item's live GitHub PR state, classified fresh on every run.
+    """An item's live GitHub pull request state, classified fresh on every run.
 
     :attr:`NO_PULL_REQUEST` is a real member, not represented as ``None``:
-    "this item has no PR yet" is itself a meaningful, displayable state
+    "this item has no pull request yet" is itself a meaningful, displayable state
     (with its own label and CSS class) rather than an absence value every
     caller would otherwise have to special-case around the enum.
     """
@@ -102,7 +102,7 @@ class LiveState(StrEnum):
         """The human-readable label shown in the dashboard UI for this state."""
         match self:
             case LiveState.NO_PULL_REQUEST:
-                return "No PR yet"
+                return "No pull request yet"
             case LiveState.MERGED:
                 return "Merged"
             case LiveState.OPEN_DRAFT:
@@ -120,6 +120,25 @@ class PullRequestState(StrEnum):
 
     OPEN = "open"
     CLOSED = "closed"
+
+
+class PullRequestLabel(StrEnum):
+    """The GitHub labels this repo's own convention attaches to a pull
+    request by hand, that this codebase's logic or a session cares about
+    recognizing.
+
+    Not exhaustive of every label a real pull request can carry - GitHub's
+    own label vocabulary is open-ended, and other automation on this repo
+    may add labels this dashboard never needs to know about. See
+    :attr:`PullRequestRecord.identified_labels` for how an unrecognized
+    label is handled (silently excluded, not an error), and
+    ``.claude/hooks/README.md``'s "pull request labels this tooling relies on"
+    section for what each member means and who applies it.
+    """
+
+    MERGED = "merged"
+    IN_REVIEW = "in-review"
+    BUG = "bug"
 
 
 class ValidationProblem(ABC):
@@ -315,17 +334,6 @@ def validate_plan(plan: dict[str, Any]) -> None:
         raise PlanValidationError(problems)
 
 
-OUT_OF_BAND_MERGE_LABEL = "merged"
-"""The GitHub label this repo's convention adds by hand to a pull request
-merged out-of-band (its branch pushed directly, then the PR closed without
-GitHub ever recording a merge - see :meth:`PullRequestRecord.was_merged`).
-Not a :class:`~enum.StrEnum` member: :attr:`PullRequestRecord.labels` holds
-whatever arbitrary labels a real GitHub pull request carries, an open-ended,
-repo-defined vocabulary this codebase doesn't control - only this one label
-is ever inspected, so it gets a single named, documented constant instead of
-a bare string literal at its one call site."""
-
-
 @dataclass
 class PullRequestRecord:
     """The live GitHub state of one pull request, as gathered by the skill."""
@@ -334,19 +342,36 @@ class PullRequestRecord:
     """GitHub's own coarse-grained state."""
 
     draft: bool = False
-    """Whether the PR is currently a draft."""
+    """Whether the pull request is currently a draft."""
 
     merged_at: datetime | None = None
-    """The PR's merge timestamp, or ``None`` if GitHub never recorded a merge
-    through its own merge API."""
+    """The pull request's merge timestamp, or ``None`` if GitHub never
+    recorded a merge through its own merge API."""
 
     labels: list[str] = field(default_factory=list)
-    """The PR's GitHub labels. Needed because :attr:`merged_at` alone misses
-    a real case in this repo's history: a PR merged out-of-band (its branch
-    pushed directly, then the PR closed by hand rather than through GitHub's
-    merge button) never gets ``merged_at`` set, so the closer manually adds
-    the :data:`OUT_OF_BAND_MERGE_LABEL` label to record what actually
-    happened - see :meth:`PullRequestRecord.was_merged`."""
+    """The pull request's raw GitHub labels, exactly as GitHub reports them.
+    Kept as ``list[str]`` rather than ``list[PullRequestLabel]``: a real pull
+    request can carry labels this codebase has no reason to know about (other
+    automation's own labels, GitHub's defaults), so this field must tolerate
+    anything - see :attr:`identified_labels` for the subset this codebase
+    actually recognizes. Needed because :attr:`merged_at` alone misses a real
+    case in this repo's history: a pull request merged out-of-band (its
+    branch pushed directly, then the pull request closed by hand rather than
+    through GitHub's merge button) never gets ``merged_at`` set, so the
+    closer manually adds the :attr:`PullRequestLabel.MERGED` label to record
+    what actually happened - see :meth:`was_merged`."""
+
+    @property
+    def identified_labels(self) -> frozenset[PullRequestLabel]:
+        """The subset of :attr:`labels` that match a known
+        :class:`PullRequestLabel` - any other raw label this pull request
+        happens to carry is silently excluded, not an error, since
+        :attr:`labels` is deliberately not limited to labels this codebase
+        recognizes."""
+        known_values = {member.value for member in PullRequestLabel}
+        return frozenset(
+            PullRequestLabel(label) for label in self.labels if label in known_values
+        )
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> PullRequestRecord:
@@ -361,11 +386,14 @@ class PullRequestRecord:
 
     @property
     def was_merged(self) -> bool:
-        """Whether this PR's changes actually landed - GitHub's own
+        """Whether this pull request's changes actually landed - GitHub's own
         :attr:`merged_at`, or (for an out-of-band merge GitHub never
-        recorded) the manually-applied :data:`OUT_OF_BAND_MERGE_LABEL`
+        recorded) the manually-applied :attr:`PullRequestLabel.MERGED`
         label."""
-        return self.merged_at is not None or OUT_OF_BAND_MERGE_LABEL in self.labels
+        return (
+            self.merged_at is not None
+            or PullRequestLabel.MERGED in self.identified_labels
+        )
 
 
 PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
@@ -376,16 +404,16 @@ def classify_live_state(
     repository: str,
     pull_requests_by_repository: PullRequestsByRepository,
 ) -> LiveState:
-    """Classify one item's live GitHub state from its PR number and repository.
+    """Classify one item's live GitHub state from its pull request number and repository.
 
     Standalone so callers other than :class:`DashboardRenderer` (notably
     ``sync_manifest_status.py``, which needs the same classification to
     decide what to auto-correct) don't have to duplicate this logic.
 
-    :param pull_request_number: The item's tracked PR number, or ``None`` if
-        it has no PR yet.
-    :param repository: The ``"owner/repo"`` to look the PR up under.
-    :param pull_requests_by_repository: Live PR state for every repository
+    :param pull_request_number: The item's tracked pull request number, or ``None`` if
+        it has no pull request yet.
+    :param repository: The ``"owner/repo"`` to look the pull request up under.
+    :param pull_requests_by_repository: Live pull request state for every repository
         referenced by the plan's items.
     :return: The classified state.
     """
@@ -463,9 +491,8 @@ class ItemAction(ABC):
 
     Not a plain enum: each action carries the plan/item it targets, so its
     members can't be fixed singletons - one subclass per ``/plan-item-...``
-    skill instead, each contributing only the skill name; :attr:`command`
-    assembles the full clipboard text once, here, so every subclass gets it
-    for free."""
+    skill instead. Not instantiated directly - see :class:`StartNowAction`/
+    :class:`ResolveAction`."""
 
     label: str
     """The button's text, e.g. ``"Start now"`` or ``"Resolve"``."""
@@ -476,10 +503,11 @@ class ItemAction(ABC):
     item_identifier: str
     """The item this action's command targets."""
 
-    @property
-    @abstractmethod
-    def skill_command_name(self) -> str:
-        """The ``/plan-item-...`` skill this action invokes."""
+    skill_command_name: ClassVar[str]
+    """The ``/plan-item-...`` skill this action invokes - fixed per
+    subclass, since which skill an action routes to never varies per
+    instance (only :attr:`label` does, e.g. ``"Resolve"`` vs. ``"Resume"``
+    for the same :class:`ResolveAction`)."""
 
     @property
     def command(self) -> str:
@@ -493,9 +521,7 @@ class StartNowAction(ItemAction):
     """Routes a not-started item, once every dependency is ready, to
     ``plan-item-kickoff``."""
 
-    @property
-    def skill_command_name(self) -> str:
-        return "/plan-item-kickoff"
+    skill_command_name: ClassVar[str] = "/plan-item-kickoff"
 
 
 @dataclass(frozen=True)
@@ -504,9 +530,7 @@ class ResolveAction(ItemAction):
     ``plan-item-resolve`` - :attr:`ItemAction.label` is worded to match
     which of those three it actually is."""
 
-    @property
-    def skill_command_name(self) -> str:
-        return "/plan-item-resolve"
+    skill_command_name: ClassVar[str] = "/plan-item-resolve"
 
 
 @dataclass(frozen=True)
@@ -536,7 +560,7 @@ plan-specific, so declared once at module level rather than threaded through
 
 @dataclass
 class Item:
-    """One tracked unit of work (typically one branch/PR) within a plan."""
+    """One tracked unit of work (typically one branch/pull request) within a plan."""
 
     title: str
     """The item's display title."""
@@ -554,7 +578,7 @@ class Item:
     """The item's stable identifier, defaulting to :attr:`branch` if unset."""
 
     pull_request_number: int | None = None
-    """The PR number tracking this item, if one exists yet."""
+    """The pull request number tracking this item, if one exists yet."""
 
     repository: str | None = None
     """Overrides the plan's ``default_repository`` for this item, if set."""
@@ -578,8 +602,8 @@ class Item:
     """Why :attr:`status` disagrees with :attr:`live_state`, if it does."""
 
     pull_request_url: str | None = field(default=None, init=False)
-    """This item's PR URL on GitHub, filled in by
-    :meth:`DashboardRenderer.render` - ``None`` if it has no PR yet."""
+    """This item's pull request URL on GitHub, filled in by
+    :meth:`DashboardRenderer.render` - ``None`` if it has no pull request yet."""
 
     dependency_chips: list[DependencyChip] = field(default_factory=list, init=False)
     """Ready-to-render chips for :attr:`depends_on`, filled in by
@@ -593,23 +617,23 @@ class Item:
     status always gets one: something is always actionable next."""
 
     needs_review: bool = field(default=False, init=False)
-    """Whether this item's PR is open, still a draft, and actually worth
+    """Whether this item's pull request is open, still a draft, and actually worth
     reviewing right now, filled in by :meth:`DashboardRenderer.render`.
-    This plan's convention keeps every PR in draft until its author has
-    reviewed it themselves - so a draft PR is exactly the population that
+    This plan's convention keeps every pull request in draft until its author has
+    reviewed it themselves - so a draft pull request is exactly the population that
     still needs that review, and flipping it to "ready for review" *is*
     the record of having done so. False for a ``deferred`` item even with
-    an open draft PR - deferred means intentionally paused or superseded,
+    an open draft pull request - deferred means intentionally paused or superseded,
     so there is nothing to actually review yet. Drives the dashboard's
     "Review" button and the "ready to review" sidebar list - distinct from
-    :attr:`Item.action`, since reviewing a draft PR and resuming/resolving
+    :attr:`Item.action`, since reviewing a draft pull request and resuming/resolving
     the underlying work are different next steps that can both apply to
     the same item at once."""
 
     @property
     def has_open_pull_request(self) -> bool:
-        """Whether this item currently has an open (draft or ready) PR -
-        used to decide whether a dependent's PR is safe to review yet."""
+        """Whether this item currently has an open (draft or ready) pull request -
+        used to decide whether a dependent's pull request is safe to review yet."""
         return self.live_state in (LiveState.OPEN_DRAFT, LiveState.OPEN_READY)
 
     @property
@@ -650,7 +674,7 @@ class Item:
 
     def is_ready_to_unblock_dependents(self) -> bool:
         """Whether a dependent item can safely start stacking its own branch
-        on this one: done, merged, or its PR is open and out of draft (ready
+        on this one: done, merged, or its pull request is open and out of draft (ready
         for review). Stacking on a same-track dependency is this repo's
         normal workflow well before that dependency merges - a still-open
         draft is the one state that isn't safe to build on top of, since it
@@ -660,7 +684,7 @@ class Item:
 
 @dataclass
 class Plan:
-    """A full multi-PR/multi-session initiative, as read from plan.yaml."""
+    """A full initiative spanning multiple pull requests and sessions, as read from plan.yaml."""
 
     id: str
     """The plan's stable identifier - the directory name under ``plans/``."""
@@ -672,7 +696,7 @@ class Plan:
     """A one-line description shown under the title."""
 
     default_repository: str
-    """The ``"owner/repo"`` items resolve PRs against unless they override it."""
+    """The ``"owner/repo"`` items resolve pull requests against unless they override it."""
 
     waves: list[Wave]
     """The plan's sequential phases, in order."""
@@ -684,7 +708,7 @@ class Plan:
     """The plan's tracked units of work, each tagged with a track."""
 
     tracking_issue: int | None = None
-    """The coordination-mailbox issue/PR number for structural changes, if any."""
+    """The coordination-mailbox issue or pull request number for structural changes, if any."""
 
     @property
     def repository_url(self) -> str:
@@ -724,8 +748,8 @@ class DashboardSummary:
     """Titles of blocked items with at least one dependency ready."""
 
     ready_to_review: list[str]
-    """Titles of items with an open draft PR, not blocked, whose
-    dependencies (if any) already have their own open PR."""
+    """Titles of items with an open draft pull request, not blocked, whose
+    dependencies (if any) already have their own open pull request."""
 
     def to_json_dict(self) -> dict[str, Any]:
         """Render to the plain-dict shape the calling skill expects."""
@@ -814,7 +838,7 @@ class WaveSection:
 
 @dataclass
 class DashboardRenderer:
-    """Renders one :class:`Plan` (plus its live PR data and roadmap text)
+    """Renders one :class:`Plan` (plus its live pull request data and roadmap text)
     into the dashboard's HTML.
 
     A dataclass rather than a bag of closures over shared state: each
@@ -832,10 +856,10 @@ class DashboardRenderer:
     """The plan's ``roadmap.md`` narrative content."""
 
     pull_requests_by_repository: PullRequestsByRepository
-    """Live PR state for every repository referenced by the plan's items."""
+    """Live pull request state for every repository referenced by the plan's items."""
 
     tracking_url: str | None
-    """The tracking issue/PR's ``html_url``, if the plan has one."""
+    """The tracking issue's or pull request's ``html_url``, if the plan has one."""
 
     items_by_identifier: dict[str, Item] = field(init=False)
     """Every item, keyed by :attr:`Item.identifier`."""
@@ -885,7 +909,7 @@ class DashboardRenderer:
         """Fill in every item's :attr:`Item.live_state`,
         :attr:`Item.drift_description`, :attr:`Item.pull_request_url`,
         :attr:`Item.needs_review`, :attr:`Item.dependency_chips`, and
-        :attr:`Item.action` from live PR data and the plan's other items,
+        :attr:`Item.action` from live pull request data and the plan's other items,
         in place.
 
         Runs in two passes: :attr:`Item.live_state` must be filled in for
@@ -905,7 +929,7 @@ class DashboardRenderer:
             item.action = self._action_for(item)
 
     def _pull_request_url_of(self, item: Item) -> str | None:
-        """Build one item's PR URL on GitHub, or ``None`` if it has no PR yet."""
+        """Build one item's pull request URL on GitHub, or ``None`` if it has no pull request yet."""
         if item.pull_request_number is None:
             return None
         repository = item.repository or self.plan.default_repository
@@ -992,17 +1016,17 @@ class DashboardRenderer:
         live_state = item.live_state
         match live_state, item.status:
             case LiveState.NOT_FOUND, _:
-                return f"PR #{item.pull_request_number} not found on GitHub"
+                return f"pull request #{item.pull_request_number} not found on GitHub"
             case (LiveState.OPEN_DRAFT | LiveState.OPEN_READY), ItemStatus.DONE:
-                return f"marked done, but PR #{item.pull_request_number} is still open"
+                return f"marked done, but pull request #{item.pull_request_number} is still open"
             case LiveState.MERGED, (
                 ItemStatus.NOT_STARTED | ItemStatus.BLOCKED | ItemStatus.DEFERRED
             ):
-                return f"marked {item.status.value}, but PR #{item.pull_request_number} is already merged"
+                return f"marked {item.status.value}, but pull request #{item.pull_request_number} is already merged"
             case (LiveState.MERGED | LiveState.CLOSED_UNMERGED), (
                 ItemStatus.IN_PROGRESS | ItemStatus.BLOCKED
             ):
-                return f"marked {item.status.value}, but PR #{item.pull_request_number} is {live_state.value.replace('_', ' ')}"
+                return f"marked {item.status.value}, but pull request #{item.pull_request_number} is {live_state.value.replace('_', ' ')}"
             case _:
                 return None
 
@@ -1044,9 +1068,9 @@ class DashboardRenderer:
         return ready_to_start, blocker_maybe_cleared
 
     def _compute_ready_to_review(self) -> list[Item]:
-        """Items with an open draft PR that are actually reviewable right
+        """Items with an open draft pull request that are actually reviewable right
         now: not blocked, and every dependency (if any) already has its own
-        open PR - reviewing a stacked PR before its base even has one open
+        open pull request - reviewing a stacked pull request before its base even has one open
         yet is premature, even though the base need not itself be past
         review. A deferred item never reaches here in the first place -
         :attr:`Item.needs_review` is already ``False`` for it."""
@@ -1182,7 +1206,7 @@ def load_pull_requests_by_repository(
     """Parse ``pr_data.json``'s raw JSON into :class:`PullRequestRecord`\\ s.
 
     :param raw_pull_request_data: The parsed JSON, keyed by ``"owner/repo"``
-        then by PR number as a string - see the module docstring for the
+        then by pull request number as a string - see the module docstring for the
         exact shape.
     :return: The same structure, with each leaf mapping parsed into a
         :class:`PullRequestRecord`.
