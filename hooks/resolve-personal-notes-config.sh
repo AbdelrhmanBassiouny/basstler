@@ -183,12 +183,12 @@ PLAN_DASHBOARD_TESTS_DIRECTORY="${PLAN_DASHBOARD_DIRECTORY}/tests"
 # dependency-readiness.md: the shared bulk-fetch-and-check procedure
 # plan-item-kickoff and plan-item-resolve both reference instead of each
 # restating it.
-DEPENDENCY_READINESS_DOC="${PLAN_DASHBOARD_DIRECTORY}/dependency-readiness.md"
+DEPENDENCY_READINESS_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/dependency-readiness.md"
 # pr-data-fetching.md: the shared "how to bulk-fetch pull request state
 # into pr_data.json" procedure - referenced by dependency-readiness.md and
 # every plan-*/SKILL.md that assembles pr_data.json, instead of each
 # restating the GitHub API calls involved.
-PR_DATA_FETCHING_DOC="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetching.md"
+PULL_REQUEST_DATA_FETCHING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetching.md"
 # write-personal-notes-file.sh: generic commit-and-push-one-file-to-the
 # personal-notes-branch helper, used by refresh_dashboard.sh (the manifest
 # auto-sync correction) and plan-dashboard/SKILL.md (the dashboard-URL

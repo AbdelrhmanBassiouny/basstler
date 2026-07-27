@@ -32,8 +32,9 @@ source .claude/hooks/resolve-personal-notes-config.sh
 git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 ```
 
-Then check whether `.claude/personal/plans/<plan-id>/plan.yaml` already
-exists on `FETCH_HEAD`.
+Then check whether `${PLANS_DIR}/<plan-id>/plan.yaml` already
+exists on `FETCH_HEAD` (`PLANS_DIR` is defined by the config script sourced
+above).
 If it does, stop and tell the user — point them at editing the existing
 plan (`plan-dashboard`'s doc, or just ask a session to edit it) instead of
 silently clobbering it with a fresh draft. Recreating over an existing plan
