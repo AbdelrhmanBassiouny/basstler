@@ -17,7 +17,7 @@ or a fresh one is the user's call, made after they see it.
 ## 1. Resolve the item
 
 Source the shared config script — it resolves the personal-notes
-remote/branch precedence and defines `DEPENDENCY_READINESS_DOC` (used in
+remote/branch precedence and defines `DEPENDENCY_READINESS_DOCUMENT` (used in
 step 2):
 
 ```bash
@@ -52,7 +52,7 @@ structural changes, not a precondition for planning this item.
 
 - `title`, `notes`, `blockers`, `track` (and that track's own `name` +
   `description`), `wave`.
-- `depends_on`: follow `${DEPENDENCY_READINESS_DOC}`'s bulk-fetch-and-check
+- `depends_on`: follow `${DEPENDENCY_READINESS_DOCUMENT}`'s bulk-fetch-and-check
   procedure, for `--item <item-id>`. The plan needs to know exactly what
   branch to base new work on, and whether it's actually safe to build on
   yet: flag any dependency the script reports not ready for explicitly in

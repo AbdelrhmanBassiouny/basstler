@@ -18,7 +18,7 @@ current session; it does not try to detect or resume any other session.
 ## 1. Resolve the item
 
 Source the shared config script — it resolves the personal-notes
-remote/branch precedence and defines `DEPENDENCY_READINESS_DOC` (used in
+remote/branch precedence and defines `DEPENDENCY_READINESS_DOCUMENT` (used in
 step 2):
 
 ```bash
@@ -73,7 +73,7 @@ precondition for resolving this item.
   that mentions this item by id, branch, or title — a structural change
   proposed there (a dependency change, a scope split) can be exactly why
   an item stalled.
-- `depends_on`: follow `${DEPENDENCY_READINESS_DOC}`'s bulk-fetch-and-check
+- `depends_on`: follow `${DEPENDENCY_READINESS_DOCUMENT}`'s bulk-fetch-and-check
   procedure, for `--item <item-id>`. A dependency the script reports not
   ready for (was ready, is now blocked or closed unmerged) is a real,
   common cause of a stall — check this even if `blockers` doesn't mention
