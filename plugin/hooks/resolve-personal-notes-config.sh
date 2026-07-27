@@ -145,26 +145,76 @@ plan_roadmap_path() {
 # full plan-dashboard schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
-# PLAN_DASHBOARD_DIR / *_SCRIPT / *_FILE: the canonical location of every
-# script, hook, and requirements file the plan-dashboard/plan-item-*/CI
-# tooling invokes - defined once, here, so refresh_dashboard.sh, every
-# plan-*/SKILL.md, and .github/workflows/ci.yml source this file and use
-# these variables instead of each carrying its own separately-typed literal
-# path (exactly the drift risk a reviewer flagged after those paths had
-# already been duplicated across all of them). Relative to the project
-# root, which sourcing this file already `cd`s into (see PROJECT_ROOT
-# above) - so every caller can use these directly, with no further path
-# arithmetic of its own.
-PLAN_DASHBOARD_DIR=".claude/skills/plan-dashboard"
-BUILD_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIR}/build_dashboard.py"
-BUILD_INDEX_SCRIPT="${PLAN_DASHBOARD_DIR}/build_index.py"
-SYNC_MANIFEST_STATUS_SCRIPT="${PLAN_DASHBOARD_DIR}/sync_manifest_status.py"
-CHECK_DEPENDENCY_READINESS_SCRIPT="${PLAN_DASHBOARD_DIR}/check_dependency_readiness.py"
-REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIR}/refresh_dashboard.sh"
-REFRESH_DASHBOARD_SUPPORT_SCRIPT="${PLAN_DASHBOARD_DIR}/refresh_dashboard_support.py"
-PLAN_DASHBOARD_REQUIREMENTS_FILE="${PLAN_DASHBOARD_DIR}/requirements.txt"
-PLAN_DASHBOARD_TESTS_DIR="${PLAN_DASHBOARD_DIR}/tests"
+# PLAN_DASHBOARD_DIRECTORY / *_SCRIPT / *_FILE / *_DOC: the canonical
+# location of every script, hook, requirements file, and reference doc the
+# plan-dashboard/plan-item-*/CI tooling invokes or reads - defined once,
+# here, so refresh_dashboard.sh, every plan-*/SKILL.md, and
+# .github/workflows/ci.yml source this file and use these variables instead
+# of each carrying its own separately-typed literal path (exactly the drift
+# risk a reviewer flagged after those paths had already been duplicated
+# across all of them). Relative to the project root, which sourcing this
+# file already `cd`s into (see PROJECT_ROOT above) - so every caller can
+# use these directly, with no further path arithmetic of its own.
+PLAN_DASHBOARD_DIRECTORY=".claude/skills/plan-dashboard"
+# build_dashboard.py: renders one plan's dashboard HTML from its manifest
+# and live GitHub data - see the script's own module docstring.
+BUILD_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_dashboard.py"
+# build_index.py: renders the master index page listing every plan.
+BUILD_INDEX_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/build_index.py"
+# sync_manifest_status.py: auto-corrects a plan.yaml's item statuses to
+# "done" wherever GitHub confirms the item's pull request is merged.
+SYNC_MANIFEST_STATUS_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/sync_manifest_status.py"
+# check_dependency_readiness.py: classifies one item's dependencies as
+# ready or not-ready to build on - see dependency-readiness.md below.
+CHECK_DEPENDENCY_READINESS_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/check_dependency_readiness.py"
+# refresh_dashboard.sh: orchestrates sync_manifest_status.py, the
+# conditional push of its correction, then build_dashboard.py - the whole
+# refresh sequence /plan-dashboard runs for one plan.
+REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
+# refresh_dashboard_support.py: the JSON-plumbing helpers
+# refresh_dashboard.sh calls between its two script calls.
+REFRESH_DASHBOARD_SUPPORT_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard_support.py"
+# requirements.txt: the PyYAML/Jinja2/markdown dependencies every script
+# above needs - installed by both CI and a session running them directly.
+PLAN_DASHBOARD_REQUIREMENTS_FILE="${PLAN_DASHBOARD_DIRECTORY}/requirements.txt"
+# tests/: the pytest suite covering every script above - the exact
+# directory CI and a session both run against.
+PLAN_DASHBOARD_TESTS_DIRECTORY="${PLAN_DASHBOARD_DIRECTORY}/tests"
+# dependency-readiness.md: the shared bulk-fetch-and-check procedure
+# plan-item-kickoff and plan-item-resolve both reference instead of each
+# restating it.
+DEPENDENCY_READINESS_DOC="${PLAN_DASHBOARD_DIRECTORY}/dependency-readiness.md"
+# pr-data-fetching.md: the shared "how to bulk-fetch pull request state
+# into pr_data.json" procedure - referenced by dependency-readiness.md and
+# every plan-*/SKILL.md that assembles pr_data.json, instead of each
+# restating the GitHub API calls involved.
+PR_DATA_FETCHING_DOC="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetching.md"
+# write-personal-notes-file.sh: generic commit-and-push-one-file-to-the
+# personal-notes-branch helper, used by refresh_dashboard.sh (the manifest
+# auto-sync correction) and plan-dashboard/SKILL.md (the dashboard-URL
+# cache) alike.
 WRITE_PERSONAL_NOTES_FILE_SCRIPT=".claude/hooks/write-personal-notes-file.sh"
+
+# SAVE_PLAN_SCRIPT: same reasoning as the block above, extended to
+# save-plan.sh - unlike the other hook scripts in this directory (which are
+# always run directly by a human, once, per hooks/README.md's own setup
+# instructions), save-plan.sh is invoked from plan-create/SKILL.md's own
+# bootstrap step, i.e. a real caller this codebase controls - the same
+# duplication risk, just for a hook script instead of a plan-dashboard one.
+SAVE_PLAN_SCRIPT=".claude/hooks/save-plan.sh"
+
+# GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
+# MCP tools every pr_data.json-gathering procedure in this system calls
+# (see pr-data-fetching.md), named once here so every doc references the
+# same constant instead of retyping the literal identifier. Documentation
+# aliases only, not live substitutions: Claude Code's tool-calling
+# mechanism has no notion of a shell-expanded tool name, so an actual call
+# always still has to type the literal name below - but a session that has
+# sourced this file can read `${GITHUB_LIST_PULL_REQUESTS_TOOL}` in a doc
+# and know exactly which tool that refers to, the same way it already does
+# for every script path above.
+GITHUB_LIST_PULL_REQUESTS_TOOL="mcp__github__list_pull_requests"
+GITHUB_PULL_REQUEST_READ_TOOL="mcp__github__pull_request_read"
 
 # plan_id_for_branch: prints the plan id that tracks the given branch, per
 # PLAN_BRANCH_INDEX_PATH on FETCH_HEAD, and returns 0. Returns 1 (prints
