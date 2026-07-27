@@ -202,6 +202,24 @@ state (so a manifest can never silently go stale the way a hand-maintained roadm
 publishes/updates the dashboard Artifact. Run `/plan-dashboard` with no argument to publish the
 master index listing every plan.
 
+**Pull request labels this tooling relies on.** These are the only labels
+[`build_dashboard.py`'s `PullRequestLabel`](../skills/plan-dashboard/build_dashboard.py) recognizes —
+every one of them is a label this repo's own convention applies by hand, never one GitHub sets
+itself:
+
+- `merged` — applied when a pull request's changes actually landed but GitHub's own merge API never
+  recorded it (its branch was pushed directly, then the pull request closed by hand rather than
+  through GitHub's merge button). `build_dashboard.py`'s drift/status logic treats this exactly like
+  `merged_at` being set — see `PullRequestRecord.was_merged`.
+- `in-review` and `bug` — established conventions (a pull request under active review; a bug-fix
+  pull request, per this file's personal PR-conventions precedent) that no script currently reads,
+  documented here so they're recognized (via `PullRequestRecord.identified_labels`) rather than
+  silently falling through as an arbitrary, unrecognized label.
+
+Any other label a real pull request carries is preserved in `PullRequestRecord.labels` (GitHub's own
+label vocabulary is open-ended, and other automation on this repo may add labels this dashboard has
+no reason to know about) but isn't specially interpreted.
+
 **Creating a new plan.** [`.claude/skills/plan-create/SKILL.md`](../skills/plan-create/SKILL.md)
 (`/plan-create <plan-id>`) automates the bootstrap flow above end to end: it gathers the plan's
 scope (from an existing freeform roadmap doc to migrate, from named branches/PRs to cross-check

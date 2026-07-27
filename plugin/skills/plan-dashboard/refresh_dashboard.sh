@@ -27,6 +27,12 @@ set -euo pipefail
 # Requires PyYAML, Jinja2, and the markdown package - see requirements.txt
 # next to this script.
 
+# Locating resolve-personal-notes-config.sh is the one irreducible hardcoded
+# path here: it's the file that defines every other shared path constant
+# used below (BUILD_DASHBOARD_SCRIPT, WRITE_PERSONAL_NOTES_FILE_SCRIPT, ...),
+# so it can't itself be referenced through one of them. Sourcing it also
+# `cd`s to the project root, so every one of its path constants below can be
+# used exactly as written - no further path arithmetic needed.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/../../hooks/resolve-personal-notes-config.sh"
 
@@ -75,18 +81,15 @@ if [ -z "${PLAN_ID}" ] || [ -z "${PLAN_FILE}" ] || [ -z "${ROADMAP_FILE}" ] \
   exit 1
 fi
 
-SYNC_SUMMARY="$(python3 "${SCRIPT_DIR}/sync_manifest_status.py" \
+SYNC_SUMMARY="$(python3 "${SYNC_MANIFEST_STATUS_SCRIPT}" \
   --plan "${PLAN_FILE}" \
   --pr-data "${PULL_REQUEST_DATA_FILE}")"
 
-CORRECTED_COUNT="$(python3 -c "
-import json, sys
-print(len(json.loads(sys.argv[1])['corrected']))
-" "${SYNC_SUMMARY}")"
+CORRECTED_COUNT="$(python3 "${REFRESH_DASHBOARD_SUPPORT_SCRIPT}" count-corrected "${SYNC_SUMMARY}")"
 
 if [ "${CORRECTED_COUNT}" != "0" ]; then
   DESTINATION_PATH="$(plan_manifest_path "${PLAN_ID}")"
-  "${SCRIPT_DIR}/../../hooks/write-personal-notes-file.sh" \
+  "${WRITE_PERSONAL_NOTES_FILE_SCRIPT}" \
     --source "${PLAN_FILE}" \
     --destination "${DESTINATION_PATH}" \
     --message "Auto-sync ${PLAN_ID}: ${CORRECTED_COUNT} item(s) to done (merged on GitHub)"
@@ -101,11 +104,6 @@ BUILD_ARGUMENTS=(
 if [ -n "${TRACKING_URL}" ]; then
   BUILD_ARGUMENTS+=(--tracking-url "${TRACKING_URL}")
 fi
-BUILD_SUMMARY="$(python3 "${SCRIPT_DIR}/build_dashboard.py" "${BUILD_ARGUMENTS[@]}")"
+BUILD_SUMMARY="$(python3 "${BUILD_DASHBOARD_SCRIPT}" "${BUILD_ARGUMENTS[@]}")"
 
-python3 -c "
-import json, sys
-sync_summary = json.loads(sys.argv[1])
-build_summary = json.loads(sys.argv[2])
-print(json.dumps({**sync_summary, **build_summary}))
-" "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"
+python3 "${REFRESH_DASHBOARD_SUPPORT_SCRIPT}" merge-summaries "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"
