@@ -3,10 +3,6 @@
 Stand-in for sync_manifest_status.py used by test_refresh_dashboard_sh.py: echoes back
 whatever the test wrote into --pr-data's file as the "corrected" list, instead of
 reading a real plan.yaml and computing a correction from live pull request state.
-
-Reusing --pr-data (an argument the real script already takes) plumbs the test's desired
-output through the same CLI interface a real invocation uses, with no extra environment
-variable.
 """
 
 import argparse
