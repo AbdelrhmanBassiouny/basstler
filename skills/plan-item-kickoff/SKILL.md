@@ -1,7 +1,7 @@
 ---
 name: plan-item-kickoff
 description: Gather everything available about one tracked plan item (its plan.yaml entry, roadmap.md history/design context, its dependency chain's live GitHub state, and patterns from already-landed sibling items in the same track) and propose a concrete implementation plan via plan mode, without writing any code. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use when starting work on a specific item from a plan-dashboard's "Start now" link, or when the user asks to "start", "kick off", or "plan out" a specific tracked item.
-allowed-tools: Bash, Read, Grep, Glob, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__search_code, mcp__Claude_Code_Remote__subscribe_pr_activity
+allowed-tools: Bash, Read, Grep, Glob, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
 # Plan Item Kickoff

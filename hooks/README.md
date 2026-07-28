@@ -177,14 +177,14 @@ everything else in this document. See
 the full schema, and [`.claude/skills/plan-dashboard/SKILL.md`](../skills/plan-dashboard/SKILL.md)
 for how a plan gets turned into a live Artifact dashboard. New to this - want to see it end to end
 before diving into the schema reference? See
-[`plan-dashboard/EXAMPLE_WALKTHROUGH.md`](../skills/plan-dashboard/EXAMPLE_WALKTHROUGH.md): a short,
+[`plan-dashboard/example-walkthrough.md`](../skills/plan-dashboard/example-walkthrough.md): a short,
 worked example with screenshots, from a plan-mode idea to a published dashboard.
 
 **Auto-discovery.** If the branch you're on appears as an item in some plan, `CLAUDE.local.md` also
 gets that plan's `plan.yaml` and `roadmap.md` pulled in — the same idea as PR progress above, but for
 the wider initiative your branch belongs to, so you don't have to go find and read a roadmap doc by
 hand. This is looked up via a generated branch→plan-id reverse index
-(`.claude/personal/plans/_generated/branch-index.yaml`), never hand-maintained, so it can't drift out
+(`.claude/personal/plans/_generated/branch-index.tsv`), never hand-maintained, so it can't drift out
 of sync with the plans it's derived from. Unlike PR progress, there's no scaffold for a branch with
 no plan — most branches don't belong to one, and `CLAUDE.local.md` simply gets no plan section that
 session.

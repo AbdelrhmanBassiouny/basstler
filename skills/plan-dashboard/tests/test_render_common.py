@@ -3,7 +3,11 @@ Tests for render_common.py: the Jinja2 environment factory and markdown-to-HTML
 rendering (delegated to the `markdown` library, plus a heading-level shift on top).
 """
 
-from render_common import create_template_environment, render_markdown_to_html
+from render_common import (
+    create_template_environment,
+    render_markdown_to_html,
+    sanitize_http_url,
+)
 
 # %% create_template_environment
 
@@ -99,3 +103,46 @@ def test_mixed_blocks_render_in_source_order():
     paragraph_index = rendered.index("<p>Paragraph.</p>")
     list_index = rendered.index("<li>item</li>")
     assert title_index < paragraph_index < list_index
+
+
+# %% render_markdown_to_html - sanitizes raw HTML in the source
+
+
+def test_script_tag_is_stripped():
+    rendered = render_markdown_to_html("<script>alert('xss')</script>\n\nsafe text")
+    assert "<script>" not in rendered
+    assert "alert" not in rendered
+    assert "safe text" in rendered
+
+
+def test_event_handler_attribute_is_stripped():
+    rendered = render_markdown_to_html('<img src="x" onerror="alert(1)">')
+    assert "onerror" not in rendered
+
+
+def test_javascript_url_is_stripped():
+    rendered = render_markdown_to_html("[click me](javascript:alert(1))")
+    assert "javascript:" not in rendered
+
+
+# %% sanitize_http_url
+
+
+def test_sanitize_http_url_keeps_an_http_url():
+    assert sanitize_http_url("http://example.com") == "http://example.com"
+
+
+def test_sanitize_http_url_keeps_an_https_url():
+    assert sanitize_http_url("https://example.com/plan") == "https://example.com/plan"
+
+
+def test_sanitize_http_url_rejects_a_javascript_url():
+    assert sanitize_http_url("javascript:alert(1)") is None
+
+
+def test_sanitize_http_url_rejects_a_data_url():
+    assert sanitize_http_url("data:text/html,<script>alert(1)</script>") is None
+
+
+def test_sanitize_http_url_passes_through_none():
+    assert sanitize_http_url(None) is None

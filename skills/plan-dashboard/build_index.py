@@ -30,7 +30,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from render_common import create_template_environment
+from render_common import create_template_environment, sanitize_http_url
 
 
 @dataclass
@@ -79,7 +79,7 @@ class PlanSummary:
             description=data.get("description", ""),
             done=data["done"],
             total=data["total"],
-            dashboard_url=data.get("dashboard_url"),
+            dashboard_url=sanitize_http_url(data.get("dashboard_url")),
         )
 
     @property

@@ -2,10 +2,19 @@
 Tests for build_index.py's master-index rendering.
 """
 
-from build_index import PlanSummary, render_index_page
+import json
+import sys
+from typing import Any
+
+from build_index import PlanSummary, main, render_index_page
 
 
-def summary(**overrides):
+def summary(**overrides: Any) -> PlanSummary:
+    """
+    Build one :class:`PlanSummary` for a test, with sensible defaults for every field.
+
+    :param overrides: Fields to replace on the returned summary.
+    """
     fields = {
         "id": "plan-a",
         "title": "Plan A",
@@ -46,10 +55,35 @@ def test_progress_label_shows_done_over_total():
 
 
 def test_from_mapping_defaults_missing_description_to_empty_string():
-    plan = PlanSummary.from_mapping(
-        {"id": "x", "title": "X", "done": 0, "total": 0, "dashboard_url": None}
-    )
+    plan = PlanSummary.from_mapping({"id": "x", "title": "X", "done": 0, "total": 0})
     assert plan.description == ""
+    assert plan.dashboard_url is None
+
+
+def test_from_mapping_keeps_an_http_dashboard_url():
+    plan = PlanSummary.from_mapping(
+        {
+            "id": "x",
+            "title": "X",
+            "done": 0,
+            "total": 0,
+            "dashboard_url": "https://claude.ai/code/artifact/abc",
+        }
+    )
+    assert plan.dashboard_url == "https://claude.ai/code/artifact/abc"
+
+
+def test_from_mapping_rejects_a_non_http_dashboard_url():
+    plan = PlanSummary.from_mapping(
+        {
+            "id": "x",
+            "title": "X",
+            "done": 0,
+            "total": 0,
+            "dashboard_url": "javascript:alert(1)",
+        }
+    )
+    assert plan.dashboard_url is None
 
 
 def test_completion_percentage_label_is_formatted_to_one_decimal_place():
@@ -101,3 +135,39 @@ def test_index_page_renders_every_plan_card():
     )
     assert "Plan A" in rendered
     assert "Plan B" in rendered
+
+
+# %% main
+
+
+def test_main_renders_every_plan_from_the_plans_json_file(tmp_path, monkeypatch):
+    plans_path = tmp_path / "plans.json"
+    plans_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "a",
+                    "title": "Plan A",
+                    "description": "desc",
+                    "done": 1,
+                    "total": 2,
+                    "dashboard_url": "https://claude.ai/code/artifact/abc",
+                }
+            ]
+        )
+    )
+    output_path = tmp_path / "index.html"
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "build_index.py",
+            "--plans",
+            str(plans_path),
+            "--output",
+            str(output_path),
+        ],
+    )
+    exit_code = main()
+    assert exit_code == 0
+    assert "Plan A" in output_path.read_text()

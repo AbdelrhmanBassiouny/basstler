@@ -92,6 +92,10 @@ while [ $# -gt 0 ]; do
       ROADMAP_SOURCE_FILE="$2"
       shift 2
       ;;
+    -*)
+      echo "Unrecognized argument: $1" >&2
+      exit 1
+      ;;
     *)
       PLAN_ID="$1"
       shift
@@ -148,13 +152,22 @@ if [ -z "${PLAN_ID}" ]; then
   echo "  ${BASH_SOURCE[0]} <plan-id>" >&2
   exit 1
 fi
+if ! printf '%s' "${PLAN_ID}" | grep -qE '^[A-Za-z0-9][A-Za-z0-9_-]*$'; then
+  echo "Invalid plan id '${PLAN_ID}' - must match ^[A-Za-z0-9][A-Za-z0-9_-]*\$" >&2
+  echo "(no path separators, no '..', no leading dot/dash) - it is used directly" >&2
+  echo "as a path component." >&2
+  exit 1
+fi
 
 MANIFEST_FILE="$(mktemp)"
 ROADMAP_FILE="$(mktemp)"
 SCRATCH_DIR="$(mktemp -d)"
+# Suffixed with $$ (this process's PID) so two concurrent invocations never
+# race over the same worktree branch name.
+SCRATCH_BRANCH="__save-plan-tmp-$$"
 cleanup() {
   git worktree remove --force "${SCRATCH_DIR}" 2>/dev/null || rm -rf "${SCRATCH_DIR}"
-  git branch -D __save-plan-tmp > /dev/null 2>&1 || true
+  git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
   rm -f "${MANIFEST_FILE}" "${ROADMAP_FILE}"
 }
 trap cleanup EXIT
@@ -186,8 +199,8 @@ if [ "${MANIFEST_PLAN_ID}" != "${PLAN_ID}" ]; then
   exit 1
 fi
 
-git branch -D __save-plan-tmp > /dev/null 2>&1 || true
-git worktree add -b __save-plan-tmp "${SCRATCH_DIR}" FETCH_HEAD --quiet
+git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
+git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" FETCH_HEAD --quiet
 
 PLAN_DIR="${SCRATCH_DIR}/$(plan_directory_path "${PLAN_ID}")"
 MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"

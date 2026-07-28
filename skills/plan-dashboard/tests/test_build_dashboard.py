@@ -4,8 +4,10 @@ and rendering.
 """
 
 import json
+import sys
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 import pytest
 import yaml
@@ -13,17 +15,21 @@ import yaml
 from build_dashboard import (
     AVAILABLE_MODELS,
     DashboardRenderer,
+    DependencyCycle,
     DuplicateItemId,
     InvalidDependsOn,
+    InvalidManifestRoot,
     InvalidSchemaVersion,
     Item,
     ItemStatus,
     LiveState,
+    MalformedPullRequestDataError,
     MAXIMUM_DEPENDENCY_STACK_LEVEL,
     Plan,
     PlanValidationError,
     PullRequestLabel,
     PullRequestRecord,
+    PullRequestsByRepository,
     PullRequestState,
     StackedItem,
     Track,
@@ -32,16 +38,25 @@ from build_dashboard import (
     UnknownTrack,
     UnknownWave,
     Wave,
+    classify_live_state,
     load_pull_requests_by_repository,
+    main,
     validate_plan,
 )
 
 EXAMPLE_DIRECTORY = Path(__file__).parent.parent / "example"
-"""The EXAMPLE_WALKTHROUGH.md doc's committed sample plan.yaml/roadmap.md/
+"""The example-walkthrough.md doc's committed sample plan.yaml/roadmap.md/
 pr_data.json - see the tests at the bottom of this file for why."""
 
 
-def minimal_plan(**overrides):
+def minimal_plan(**overrides: Any) -> dict[str, Any]:
+    """
+    Build one raw, plan.yaml-shaped ``dict`` with a single not-started item - the
+    smallest input :func:`validate_plan`/:meth:`Plan.from_mapping` accept, for tests
+    that only care about one specific field.
+
+    :param overrides: Top-level keys to replace in the returned mapping.
+    """
     plan = {
         "schema_version": 1,
         "id": "test-plan",
@@ -192,6 +207,50 @@ def test_plan_validation_error_message_joins_every_problem_description():
     assert str(error.value) == "schema_version must be 1, got 2"
 
 
+def test_validate_plan_rejects_an_empty_manifest_instead_of_crashing():
+    # yaml.safe_load returns None for an empty file - validate_plan must
+    # report this as a PlanValidationError, not crash with an AttributeError
+    # from calling .get() on None.
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(None)
+    assert isinstance(error.value.problems[0], InvalidManifestRoot)
+    assert error.value.problems[0].actual_value is None
+
+
+def test_validate_plan_rejects_a_non_mapping_manifest_instead_of_crashing():
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(["not", "a", "mapping"])
+    assert isinstance(error.value.problems[0], InvalidManifestRoot)
+
+
+def test_validate_plan_rejects_a_same_track_dependency_cycle():
+    # A same-track cycle (a depends on b, b depends on a) must not pass
+    # validation - without this check the cycle silently drops both items
+    # (and anything depending on them) out of the rendered track later, with
+    # no indication data was lost.
+    items = [
+        {
+            "id": "a",
+            "title": "A",
+            "branch": "a",
+            "track": "track-1",
+            "status": "not_started",
+            "depends_on": ["b"],
+        },
+        {
+            "id": "b",
+            "title": "B",
+            "branch": "b",
+            "track": "track-1",
+            "status": "not_started",
+            "depends_on": ["a"],
+        },
+    ]
+    with pytest.raises(PlanValidationError) as error:
+        validate_plan(minimal_plan(items=items))
+    assert any(isinstance(problem, DependencyCycle) for problem in error.value.problems)
+
+
 # %% ItemStatus / LiveState labels
 
 
@@ -203,6 +262,19 @@ def test_item_status_display_labels():
 def test_live_state_display_labels_including_no_pull_request():
     assert LiveState.NO_PULL_REQUEST.display_label == "No pull request yet"
     assert LiveState.MERGED.display_label == "Merged"
+
+
+# %% classify_live_state
+
+
+def test_classify_live_state_is_closed_unmerged_for_a_closed_unlabeled_pull_request():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.CLOSED)}
+    }
+    assert (
+        classify_live_state(1, "owner/repo", pull_requests_by_repository)
+        is LiveState.CLOSED_UNMERGED
+    )
 
 
 # %% PullRequestRecord.was_merged
@@ -257,6 +329,28 @@ def test_identified_labels_silently_excludes_an_unrecognized_label():
 def test_identified_labels_empty_when_no_labels():
     record = PullRequestRecord(state=PullRequestState.OPEN)
     assert record.identified_labels == frozenset()
+
+
+# %% load_pull_requests_by_repository
+
+
+def test_load_pull_requests_by_repository_parses_every_repository_and_number():
+    pull_requests_by_repository = load_pull_requests_by_repository(
+        {"owner/repo": {"1": {"state": "open", "draft": True}}}
+    )
+    assert pull_requests_by_repository["owner/repo"]["1"] == PullRequestRecord(
+        state=PullRequestState.OPEN, draft=True
+    )
+
+
+def test_load_pull_requests_by_repository_reports_repository_and_number_for_a_missing_state():
+    with pytest.raises(MalformedPullRequestDataError, match="owner/repo#1"):
+        load_pull_requests_by_repository({"owner/repo": {"1": {"draft": True}}})
+
+
+def test_load_pull_requests_by_repository_reports_repository_and_number_for_an_invalid_state():
+    with pytest.raises(MalformedPullRequestDataError, match="owner/repo#7"):
+        load_pull_requests_by_repository({"owner/repo": {"7": {"state": "sideways"}}})
 
 
 # %% Item / StackedItem - precomputed template values
@@ -339,6 +433,112 @@ def test_plan_from_mapping_defaults_missing_wave_description_to_none():
     assert plan.waves[0].description is None
 
 
+def test_plan_from_mapping_ignores_an_unexpected_wave_key_instead_of_crashing():
+    plan = Plan.from_mapping(
+        minimal_plan(
+            waves=[{"id": "wave-1", "name": "Wave 1", "future_field": "unused"}]
+        )
+    )
+    assert plan.waves[0].id == "wave-1"
+
+
+def test_plan_from_mapping_ignores_an_unexpected_track_key_instead_of_crashing():
+    plan = Plan.from_mapping(
+        minimal_plan(
+            tracks=[
+                {
+                    "id": "track-1",
+                    "name": "Track 1",
+                    "wave": "wave-1",
+                    "future_field": "unused",
+                }
+            ]
+        )
+    )
+    assert plan.tracks[0].id == "track-1"
+
+
+def test_item_from_mapping_keeps_an_http_session_url():
+    plan = Plan.from_mapping(
+        minimal_plan(
+            items=[
+                {
+                    "id": "a",
+                    "title": "Item A",
+                    "branch": "a",
+                    "track": "track-1",
+                    "status": "not_started",
+                    "session": "https://claude.ai/code/session/abc",
+                }
+            ]
+        )
+    )
+    assert plan.items[0].session == "https://claude.ai/code/session/abc"
+
+
+def test_item_from_mapping_rejects_a_non_http_session_url():
+    plan = Plan.from_mapping(
+        minimal_plan(
+            items=[
+                {
+                    "id": "a",
+                    "title": "Item A",
+                    "branch": "a",
+                    "track": "track-1",
+                    "status": "not_started",
+                    "session": "javascript:alert(1)",
+                }
+            ]
+        )
+    )
+    assert plan.items[0].session is None
+
+
+def test_item_from_mapping_reads_required_and_optional_fields():
+    item_instance = Item.from_mapping(
+        {
+            "id": "a",
+            "title": "Item A",
+            "branch": "a",
+            "track": "track-1",
+            "status": "in_progress",
+            "pull_request_number": 7,
+            "repository": "owner/other-repo",
+            "notes": "  some notes  ",
+            "depends_on": ["b"],
+            "blockers": ["waiting on design review"],
+        }
+    )
+    assert item_instance.id == "a"
+    assert item_instance.title == "Item A"
+    assert item_instance.branch == "a"
+    assert item_instance.track == "track-1"
+    assert item_instance.status is ItemStatus.IN_PROGRESS
+    assert item_instance.pull_request_number == 7
+    assert item_instance.repository == "owner/other-repo"
+    assert item_instance.notes == "some notes"
+    assert item_instance.depends_on == ["b"]
+    assert item_instance.blockers == ["waiting on design review"]
+
+
+def test_item_from_mapping_defaults_every_optional_field_when_omitted():
+    item_instance = Item.from_mapping(
+        {
+            "title": "Item A",
+            "branch": "a",
+            "track": "track-1",
+            "status": "not_started",
+        }
+    )
+    assert item_instance.id is None
+    assert item_instance.pull_request_number is None
+    assert item_instance.repository is None
+    assert item_instance.session is None
+    assert item_instance.notes is None
+    assert item_instance.depends_on == []
+    assert item_instance.blockers == []
+
+
 # %% DashboardRenderer - live state + drift
 
 # "Drift" is a manifest item's manually-maintained :class:`ItemStatus`
@@ -350,7 +550,18 @@ def test_plan_from_mapping_defaults_missing_wave_description_to_none():
 # (except the one unambiguous direction ``sync_manifest_status.py`` handles).
 
 
-def make_renderer(items, pull_requests_by_repository=None):
+def make_renderer(
+    items: list[Item],
+    pull_requests_by_repository: PullRequestsByRepository | None = None,
+) -> DashboardRenderer:
+    """
+    Build one :class:`DashboardRenderer` over a fixed, otherwise-empty test
+    plan holding *items* - the shared entry point every live-state/drift test
+    in this file renders through.
+
+    :param items: The plan's items.
+    :param pull_requests_by_repository: Live pull request state, or ``{}`` if omitted.
+    """
     plan = Plan(
         id="test-plan",
         title="Test Plan",
@@ -375,13 +586,12 @@ def item(
     depends_on: list[str] | None = None,
 ) -> Item:
     """
-    Build one :class:`Item` for a test, filling in the boilerplate
-    (``title``/``branch``/``id`` all equal to *identifier*, a fixed.
+    Build one :class:`Item` for a test, filling in the boilerplate.
 
-    ``track``) that every one of this file's ~90 items would otherwise
-    repeat - a plain :class:`Item` constructor call remains available and
-    used directly wherever a test needs a field this shortcut doesn't
-    expose.
+    (``title``/``branch``/``id`` all equal to *identifier*, a fixed ``track``)
+    that every one of this file's ~90 items would otherwise repeat - a plain
+    :class:`Item` constructor call remains available and used directly
+    wherever a test needs a field this shortcut doesn't expose.
     """
     return Item(
         title=identifier,
@@ -453,6 +663,34 @@ def test_pull_request_missing_from_live_data_is_not_found_and_drifted():
     )
     _, summary = renderer.render()
     assert renderer.plan.items[0].live_state is LiveState.NOT_FOUND
+    assert summary.drift_items == ["a"]
+
+
+def test_closed_unmerged_pull_request_marks_done_item_as_drifted():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.CLOSED)}
+    }
+    renderer = make_renderer(
+        [item("a", ItemStatus.DONE, pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    _, summary = renderer.render()
+    assert renderer.plan.items[0].live_state is LiveState.CLOSED_UNMERGED
+    assert summary.drift_items == ["a"]
+
+
+@pytest.mark.parametrize("status", [ItemStatus.IN_PROGRESS, ItemStatus.BLOCKED])
+def test_closed_unmerged_pull_request_marks_in_progress_or_blocked_item_as_drifted(
+    status,
+):
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.CLOSED)}
+    }
+    renderer = make_renderer(
+        [item("a", status, pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    _, summary = renderer.render()
     assert summary.drift_items == ["a"]
 
 
@@ -1260,6 +1498,14 @@ def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
     assert 'title="Item A"' in output
 
 
+def test_dependency_chip_falls_back_to_the_raw_identifier_when_unresolved():
+    renderer = make_renderer([item("a", ItemStatus.NOT_STARTED, depends_on=["ghost"])])
+    renderer.render()
+    chip = renderer.plan.items[0].dependency_chips[0]
+    assert chip.identifier == "ghost"
+    assert chip.tooltip == "ghost"
+
+
 # %% sidebar next-step links
 
 
@@ -1344,7 +1590,107 @@ def test_summary_to_json_dict_uses_plain_string_status_keys():
     assert json_dict["drift_count"] == 0
 
 
-# %% EXAMPLE_WALKTHROUGH.md's committed sample plan
+# %% main
+
+
+def _write_minimal_plan_files(directory: Path) -> tuple[Path, Path, Path, Path]:
+    """
+    Write a well-formed plan.yaml/roadmap.md/pr_data.json trio to *directory*, for a
+    ``main()`` end-to-end test.
+
+    :param directory: Where to write the files.
+    :return:``(plan_path, roadmap_path, pull_request_data_path, output_path)``.
+    """
+    plan_path = directory / "plan.yaml"
+    plan_path.write_text(yaml.dump(minimal_plan()))
+    roadmap_path = directory / "roadmap.md"
+    roadmap_path.write_text("# Roadmap\n")
+    pull_request_data_path = directory / "pr_data.json"
+    pull_request_data_path.write_text("{}")
+    output_path = directory / "dashboard.html"
+    return plan_path, roadmap_path, pull_request_data_path, output_path
+
+
+def test_main_renders_the_dashboard_and_prints_the_summary(
+    tmp_path, monkeypatch, capsys
+):
+    plan_path, roadmap_path, pull_request_data_path, output_path = (
+        _write_minimal_plan_files(tmp_path)
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "build_dashboard.py",
+            "--plan",
+            str(plan_path),
+            "--roadmap",
+            str(roadmap_path),
+            "--pr-data",
+            str(pull_request_data_path),
+            "--output",
+            str(output_path),
+        ],
+    )
+    exit_code = main()
+    assert exit_code == 0
+    assert "<title>Test Plan</title>" in output_path.read_text()
+
+
+def test_main_prints_the_status_summary_as_json(tmp_path, monkeypatch, capsys):
+    plan_path, roadmap_path, pull_request_data_path, output_path = (
+        _write_minimal_plan_files(tmp_path)
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "build_dashboard.py",
+            "--plan",
+            str(plan_path),
+            "--roadmap",
+            str(roadmap_path),
+            "--pr-data",
+            str(pull_request_data_path),
+            "--output",
+            str(output_path),
+        ],
+    )
+    main()
+    summary = json.loads(capsys.readouterr().out)
+    assert summary["counts"]["not_started"] == 1
+
+
+def test_main_rejects_an_invalid_manifest_instead_of_crashing(
+    tmp_path, monkeypatch, capsys
+):
+    plan_path = tmp_path / "plan.yaml"
+    plan_path.write_text("")  # yaml.safe_load("") -> None, not a mapping
+    roadmap_path = tmp_path / "roadmap.md"
+    roadmap_path.write_text("")
+    pull_request_data_path = tmp_path / "pr_data.json"
+    pull_request_data_path.write_text("{}")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "build_dashboard.py",
+            "--plan",
+            str(plan_path),
+            "--roadmap",
+            str(roadmap_path),
+            "--pr-data",
+            str(pull_request_data_path),
+            "--output",
+            str(tmp_path / "dashboard.html"),
+        ],
+    )
+    exit_code = main()
+    assert exit_code == 1
+    assert "failed validation" in capsys.readouterr().err
+
+
+# %% example-walkthrough.md's committed sample plan
 
 
 def _render_example_plan():
@@ -1369,7 +1715,7 @@ def test_example_plan_passes_the_same_validation_plan_create_must_satisfy():
 
 
 def test_example_plan_renders_the_counts_and_sections_the_walkthrough_describes():
-    """Locks EXAMPLE_WALKTHROUGH.md's screenshots and prose to the actual
+    """Locks example-walkthrough.md's screenshots and prose to the actual
     schema/logic - a future change to either would fail this test instead of
     silently leaving the doc showing stale numbers."""
     _, summary = _render_example_plan()

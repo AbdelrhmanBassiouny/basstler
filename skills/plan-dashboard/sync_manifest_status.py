@@ -53,11 +53,13 @@ import yaml
 from build_dashboard import (
     ItemStatus,
     LiveState,
+    PlanValidationError,
     classify_live_state,
     load_pull_requests_by_repository,
+    validate_plan,
 )
 
-_ITEM_START_PATTERN = re.compile(r"^- id:")
+_ITEM_START_PATTERN = re.compile(r"^\s*- id:")
 _STATUS_LINE_PATTERN = re.compile(r"^(\s*status:\s*)(\S+)\s*$")
 
 
@@ -143,7 +145,7 @@ def apply_status_corrections(
 
     corrections: list[StatusCorrection] = []
     for start, end in zip(item_starts, item_starts[1:]):
-        item_identifier = lines[start].removeprefix("- id:").strip()
+        item_identifier = lines[start].strip().removeprefix("- id:").strip()
         if item_identifier not in identifiers_to_correct:
             continue
         status_line_index = next(
@@ -196,6 +198,13 @@ def main() -> int:
     plan_path = Path(arguments.plan)
     plan_text = plan_path.read_text()
     plan = yaml.safe_load(plan_text)
+
+    try:
+        validate_plan(plan)
+    except PlanValidationError as error:
+        print(f"plan.yaml failed validation: {error}", file=sys.stderr)
+        return 1
+
     raw_pull_request_data = json.loads(Path(arguments.pr_data).read_text())
     pull_requests_by_repository = load_pull_requests_by_repository(
         raw_pull_request_data

@@ -92,14 +92,40 @@ fetch_personal_notes_branch() {
   return 1
 }
 
+# default_branch_name: prints the repo's actual default branch name, with no
+# network access - resolved from origin's local HEAD ref
+# (refs/remotes/origin/HEAD, set by a normal `git clone` or `git remote
+# set-head`) when available, otherwise whichever of main/master actually
+# exists as a local or origin-tracking branch, otherwise "main". Used by
+# pr_progress_path below so a repo whose default branch is neither main nor
+# master (e.g. "develop") is still recognized, instead of being silently
+# treated as an ordinary per-branch PR-progress branch.
+default_branch_name() {
+  local remote_head candidate
+  remote_head="$(git symbolic-ref -q refs/remotes/origin/HEAD 2>/dev/null)"
+  if [ -n "${remote_head}" ]; then
+    printf '%s\n' "${remote_head#refs/remotes/origin/}"
+    return 0
+  fi
+  for candidate in main master; do
+    if git show-ref --verify --quiet "refs/heads/${candidate}" \
+        || git show-ref --verify --quiet "refs/remotes/origin/${candidate}"; then
+      printf '%s\n' "${candidate}"
+      return 0
+    fi
+  done
+  printf 'main\n'
+}
+
 # pr_progress_path: prints the deterministic per-branch PR-progress file path
 # (.claude/personal/pr-progress/<branch>.md) for whichever branch is currently
 # checked out, and returns 0. Returns 1 (prints nothing) if there's no
 # sensible "current PR" to track progress for: detached HEAD, the repo's
-# default branch (main/master), or the personal-notes branch itself. The
-# directory is a fixed convention, independent of NOTES_PATH - PR progress is
-# inherently plural/keyed, unlike the single personal-notes file, so it isn't
-# tied to wherever NOTES_PATH happens to be overridden to.
+# default branch (see default_branch_name above), or the personal-notes
+# branch itself. The directory is a fixed convention, independent of
+# NOTES_PATH - PR progress is inherently plural/keyed, unlike the single
+# personal-notes file, so it isn't tied to wherever NOTES_PATH happens to be
+# overridden to.
 #
 # Shared by session-start.sh and save-pr-progress.sh so both agree on exactly
 # the same key for exactly the same branch - there is no other place this
@@ -108,7 +134,7 @@ pr_progress_path() {
   local branch
   branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
   case "${branch}" in
-    HEAD|main|master|"${NOTES_BRANCH}"|"") return 1 ;;
+    HEAD|"$(default_branch_name)"|"${NOTES_BRANCH}"|"") return 1 ;;
   esac
   printf '.claude/personal/pr-progress/%s.md\n' "${branch}"
 }
@@ -180,6 +206,9 @@ PLAN_DASHBOARD_REQUIREMENTS_FILE="${PLAN_DASHBOARD_DIRECTORY}/requirements.txt"
 # tests/: the pytest suite covering every script above - the exact
 # directory CI and a session both run against.
 PLAN_DASHBOARD_TESTS_DIRECTORY="${PLAN_DASHBOARD_DIRECTORY}/tests"
+# hooks/tests/: the pytest suite covering plan_manifest_tools.py (the one
+# hook-directory script with non-trivial logic worth testing the same way).
+HOOKS_TESTS_DIRECTORY=".claude/hooks/tests"
 # dependency-readiness.md: the shared bulk-fetch-and-check procedure
 # plan-item-kickoff and plan-item-resolve both reference instead of each
 # restating it.

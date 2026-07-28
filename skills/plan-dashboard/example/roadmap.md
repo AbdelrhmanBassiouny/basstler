@@ -1,7 +1,7 @@
 # Notification Retry Overhaul — Roadmap
 
 This is a **fictional example plan**, written to accompany
-`EXAMPLE_WALKTHROUGH.md`. Nothing here describes a real initiative, branch,
+`example-walkthrough.md`. Nothing here describes a real initiative, branch,
 or pull request.
 
 ## Why
