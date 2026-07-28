@@ -230,7 +230,9 @@ def test_main_rejects_an_invalid_manifest_instead_of_crashing(
     )
     exit_code = main()
     assert exit_code == 1
-    assert capsys.readouterr().err
+    assert capsys.readouterr().err == (
+        "plan.yaml must parse to a mapping, got NoneType: None\n"
+    )
 
 
 def test_main_rejects_an_unknown_item_id(tmp_path, monkeypatch, capsys):

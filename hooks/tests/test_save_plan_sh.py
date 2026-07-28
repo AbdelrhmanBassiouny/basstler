@@ -13,28 +13,10 @@ import pytest
 
 REPOSITORY_ROOT = Path(__file__).parent.parent.parent.parent
 HOOKS_SOURCE_DIRECTORY = REPOSITORY_ROOT / ".claude" / "hooks"
+FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
 
-PLAN_MANIFEST = """schema_version: 1
-id: test-plan
-title: Test Plan
-description: A plan.
-default_repository: owner/repo
-waves:
-  - id: wave-1
-    name: Wave 1
-tracks:
-  - id: track-1
-    name: Track 1
-    wave: wave-1
-items:
-  - id: a
-    title: Item A
-    branch: item-a-branch
-    track: track-1
-    status: not_started
-"""
-
-PLAN_ROADMAP = "# Test Plan Roadmap\n\nSome roadmap content.\n"
+PLAN_MANIFEST = (FIXTURES_DIRECTORY / "plan.yaml").read_text()
+PLAN_ROADMAP = (FIXTURES_DIRECTORY / "roadmap.md").read_text()
 
 
 def _run_git(*arguments: str, cwd: Path) -> subprocess.CompletedProcess[str]:
@@ -67,6 +49,10 @@ def scratch_repo(tmp_path: Path) -> Path:
         shutil.copy(HOOKS_SOURCE_DIRECTORY / script, hooks_directory / script)
 
     _run_git("init", "--quiet", cwd=project_root)
+    # A CI runner has no ambient git identity configured - set one locally so
+    # the commits below don't depend on the environment already having one.
+    _run_git("config", "user.name", "Scratch Repo", cwd=project_root)
+    _run_git("config", "user.email", "scratch-repo@example.com", cwd=project_root)
     (project_root / "README.md").write_text("scratch repo\n")
     _run_git("add", ".", cwd=project_root)
     _run_git("commit", "--quiet", "-m", "initial commit", cwd=project_root)
@@ -119,7 +105,9 @@ def test_manifest_without_roadmap_fails(scratch_repo: Path):
     manifest_path.write_text(PLAN_MANIFEST)
     result = run_save_plan(scratch_repo, "test-plan", "--manifest", str(manifest_path))
     assert result.returncode == 1
-    assert "--manifest was given without --roadmap" in result.stderr
+    assert result.stderr == (
+        "--manifest was given without --roadmap - they must be passed together.\n"
+    )
 
 
 def test_roadmap_without_manifest_fails(scratch_repo: Path):
@@ -127,7 +115,9 @@ def test_roadmap_without_manifest_fails(scratch_repo: Path):
     roadmap_path.write_text(PLAN_ROADMAP)
     result = run_save_plan(scratch_repo, "test-plan", "--roadmap", str(roadmap_path))
     assert result.returncode == 1
-    assert "--roadmap was given without --manifest" in result.stderr
+    assert result.stderr == (
+        "--roadmap was given without --manifest - they must be passed together.\n"
+    )
 
 
 # %% CLAUDE.local.md marker-block extraction
@@ -148,7 +138,14 @@ def test_saves_the_manifest_and_roadmap_extracted_from_claude_local_md_markers(
 
     result = run_save_plan(scratch_repo, "test-plan")
     assert result.returncode == 0, result.stderr
-    assert "Saved plan 'test-plan'" in result.stdout
+    bare_repository_path = scratch_repo.parent / "personal-notes.git"
+    assert result.stdout == (
+        "Saved plan 'test-plan' (plan.yaml, roadmap.md, and the branch index) "
+        f"back to 'claude/personal-notes' on '{bare_repository_path}'.\n"
+        "Run /plan-dashboard test-plan to refresh its dashboard Artifact - "
+        "this script only pushes data, it can't call the Artifact tool "
+        "itself.\n"
+    )
 
     verify_checkout = scratch_repo.parent / "verify-checkout"
     _run_git(
@@ -184,4 +181,10 @@ def test_missing_marker_pair_fails_with_a_clear_message(scratch_repo: Path):
     (scratch_repo / "CLAUDE.local.md").write_text("no markers here\n")
     result = run_save_plan(scratch_repo, "test-plan")
     assert result.returncode == 1
-    assert "no plan-manifest/plan-roadmap section" in result.stderr
+    assert result.stderr == (
+        "CLAUDE.local.md has no plan-manifest/plan-roadmap section to extract.\n"
+        "Run session-start.sh first (on a branch a plan already tracks), pass\n"
+        "--manifest/--roadmap file paths instead, or add the marker pairs\n"
+        "yourself when bootstrapping a brand-new plan - see the header\n"
+        "comment in this script.\n"
+    )

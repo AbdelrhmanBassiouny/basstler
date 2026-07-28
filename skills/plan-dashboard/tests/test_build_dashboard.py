@@ -248,7 +248,7 @@ def test_validate_plan_rejects_a_same_track_dependency_cycle():
     ]
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
-    assert any(isinstance(problem, DependencyCycle) for problem in error.value.problems)
+    assert error.value.problems == [DependencyCycle(["a", "b", "a"])]
 
 
 # %% ItemStatus / LiveState labels
@@ -1687,7 +1687,10 @@ def test_main_rejects_an_invalid_manifest_instead_of_crashing(
     )
     exit_code = main()
     assert exit_code == 1
-    assert "failed validation" in capsys.readouterr().err
+    assert capsys.readouterr().err == (
+        "plan.yaml failed validation: plan.yaml must parse to a mapping, "
+        "got NoneType: None\n"
+    )
 
 
 # %% example-walkthrough.md's committed sample plan

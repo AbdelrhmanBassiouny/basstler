@@ -211,7 +211,10 @@ def test_main_rejects_an_invalid_manifest_instead_of_crashing(
     )
     exit_code = main()
     assert exit_code == 1
-    assert "failed validation" in capsys.readouterr().err
+    assert capsys.readouterr().err == (
+        "plan.yaml failed validation: plan.yaml must parse to a mapping, "
+        "got NoneType: None\n"
+    )
 
 
 # %% main - file read/write round trip
