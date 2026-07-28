@@ -19,9 +19,6 @@ import pytest
 
 import refresh_dashboard_support
 
-# refresh_dashboard_support is a real module (conftest.py puts plan-dashboard
-# on sys.path), so its own location gives this directory - no fixed count of
-# .parent hops from this test file.
 PLAN_DASHBOARD_DIRECTORY = Path(refresh_dashboard_support.__file__).parent
 
 
@@ -113,8 +110,7 @@ def run_refresh_dashboard(
 
     :param scratch_project_root: A fixture-built scratch project root.
     :param corrected_ids: Item ids the sync_manifest_status.py stub should report as
-        corrected. Written into --pr-data's file, which the stub echoes back verbatim -
-        the same CLI argument a real invocation passes it, so no side channel is needed.
+        corrected. Written into --pr-data's file, which the stub echoes back verbatim.
     :param extra_arguments: Additional CLI arguments to pass through.
     :return: The finished subprocess.
     """
@@ -161,11 +157,6 @@ def test_missing_required_argument_fails_with_usage(scratch_project_root: Path):
         text=True,
     )
     assert result.returncode == 1
-    # This test is about a missing required argument producing a usage
-    # message, not about the exact wording of every listed flag - so it
-    # checks the message's identity (it names this script) rather than the
-    # full flag-by-flag text, which would make this test fail on a change to
-    # unrelated flag documentation.
     assert result.stderr.startswith(f"Usage: {script_path} ")
 
 
@@ -205,11 +196,6 @@ def test_a_correction_pushes_to_personal_notes(scratch_project_root: Path):
         scratch_project_root / "write_personal_notes_file_invocation.txt"
     ).read_text()
     plan_path = scratch_project_root / "plan.yaml"
-    # This test is about a correction triggering a push with the right source,
-    # destination, and item count - not write-personal-notes-file.sh's exact
-    # argument-array formatting or commit-message prose, both already the
-    # write-personal-notes-file.sh stub's and refresh_dashboard.sh's own
-    # concern respectively.
     assert f"--source\n{plan_path}\n" in invocation
     assert "--destination\n.claude/personal/plans/test-plan/plan.yaml\n" in invocation
     assert "1 item(s) to done" in invocation

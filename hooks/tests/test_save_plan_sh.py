@@ -13,9 +13,6 @@ import pytest
 
 import plan_manifest_tools
 
-# plan_manifest_tools is a real module (conftest.py puts .claude/hooks on
-# sys.path), so its own location - not a fixed count of .parent hops from
-# this test file - gives the directory the scripts below are copied from.
 HOOKS_SOURCE_DIRECTORY = Path(plan_manifest_tools.__file__).parent
 FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
 
@@ -143,11 +140,6 @@ def test_saves_the_manifest_and_roadmap_extracted_from_claude_local_md_markers(
     result = run_save_plan(scratch_repo, "test-plan")
     assert result.returncode == 0, result.stderr
     bare_repository_path = scratch_repo.parent / "personal-notes.git"
-    # This test is about the save actually reaching the right plan and
-    # destination (verified below by cloning and reading back the pushed
-    # content) - the confirmation message's own prose beyond those two facts
-    # (e.g. the "run /plan-dashboard" follow-up tip) isn't this test's
-    # concern.
     assert "Saved plan 'test-plan'" in result.stdout
     assert str(bare_repository_path) in result.stdout
 
@@ -185,9 +177,6 @@ def test_missing_marker_pair_fails_with_a_clear_message(scratch_repo: Path):
     (scratch_repo / "CLAUDE.local.md").write_text("no markers here\n")
     result = run_save_plan(scratch_repo, "test-plan")
     assert result.returncode == 1
-    # This test is about the missing-markers condition itself being detected
-    # and reported - the exact wording of the follow-up alternatives isn't
-    # this test's concern, so only the first, load-bearing line is pinned.
     assert result.stderr.startswith(
         "CLAUDE.local.md has no plan-manifest/plan-roadmap section to extract.\n"
     )
