@@ -1,7 +1,7 @@
 ---
 name: plan-create
 description: Create (or migrate an existing bespoke roadmap doc into) a new multi-PR/multi-session plan under .claude/personal/plans/<plan-id>/plan.yaml on the personal-notes branch, cross-checked against live GitHub, then bootstrap and publish it. Invoke as "/plan-create <plan-id>". Use when the user asks to start tracking something as a plan, set up a new plan/roadmap, or migrate an existing roadmap doc into the plan-dashboard system.
-allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__search_pull_requests, mcp__github__issue_write, mcp__github__create_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
+allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
 # Plan Create
@@ -96,7 +96,7 @@ duplicating it.
 
 ## 4. Cross-check every named branch/PR against live GitHub state
 
-Same mechanism as `plan-dashboard` step 3, applied before the item is ever
+Same mechanism as `plan-dashboard` step 2, applied before the item is ever
 written down rather than after: bulk-fetch `mcp__github__list_pull_requests`
 (`state: "all"`, paginated) for the repo, and use `mcp__github__pull_request_read`
 for anything outside that page window or referenced by number in the source

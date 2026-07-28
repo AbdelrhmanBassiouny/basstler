@@ -18,6 +18,12 @@ import sys
 from typing import Any
 
 
+class SummaryKeyCollisionError(ValueError):
+    """Raised when sync_manifest_status.py's and build_dashboard.py's printed
+    summaries share a key - merge_summaries can no longer assume a plain
+    dict merge is safe once that holds."""
+
+
 def count_corrected(sync_summary_json: str) -> int:
     """
     The number of items ``sync_manifest_status.py`` corrected, from its ``{"corrected":
@@ -34,12 +40,19 @@ def merge_summaries(sync_summary_json: str, build_summary_json: str) -> dict[str
     Merge ``sync_manifest_status.py``'s and ``build_dashboard.py``'s printed JSON
     summaries into the one object the calling skill reports from.
 
-    :param sync_summary_json: ``sync_manifest_status.py``'s printed JSON summary.
-    :param build_summary_json: ``build_dashboard.py``'s printed JSON summary.
-    :return: The two summaries merged into one dict - the two never share a
-        key, so merge order doesn't matter.
+    :param sync_summary_json:``sync_manifest_status.py``'s printed JSON summary.
+    :param build_summary_json:``build_dashboard.py``'s printed JSON summary.
+    :raises SummaryKeyCollisionError: If the two summaries share a key.
+    :return: The two summaries merged into one dict.
     """
-    return {**json.loads(sync_summary_json), **json.loads(build_summary_json)}
+    sync_summary = json.loads(sync_summary_json)
+    build_summary = json.loads(build_summary_json)
+    shared_keys = sync_summary.keys() & build_summary.keys()
+    if shared_keys:
+        raise SummaryKeyCollisionError(
+            f"sync and build summaries share key(s): {', '.join(sorted(shared_keys))}"
+        )
+    return {**sync_summary, **build_summary}
 
 
 def main() -> int:

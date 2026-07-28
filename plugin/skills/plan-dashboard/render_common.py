@@ -11,9 +11,13 @@ from __future__ import annotations
 
 import re
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import jinja2
 import markdown as markdown_library
+import nh3
+
+_ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
 
 TEMPLATES_DIRECTORY = Path(__file__).parent / "templates"
 """
@@ -65,17 +69,40 @@ def render_markdown_to_html(markdown_text: str) -> str:
     Render GitHub-flavored markdown (headings, lists, code, tables) to HTML.
 
     Delegates to the ``markdown`` library (with its ``tables`` and
-    ``fenced_code`` extensions) rather than a hand-rolled parser.
+    ``fenced_code`` extensions) rather than a hand-rolled parser, then
+    sanitizes the result with ``nh3`` - the ``markdown`` library passes raw
+    HTML embedded in its source through unchanged, and this function's
+    output is later marked ``| safe`` and embedded directly into a published
+    page, so a ``<script>`` tag or an event-handler attribute in a
+    contributor-authored ``roadmap.md`` must not survive to here.
 
     :param markdown_text: The raw markdown source (typically a plan's
         ``roadmap.md``).
-    :return: The rendered HTML. Callers embedding this into a Jinja2
-        template must mark it ``| safe`` - it is HTML, not text to escape.
+    :return: The rendered, sanitized HTML. Callers embedding this into a
+        Jinja2 template must mark it ``| safe`` - it is HTML, not text to
+        escape.
     """
     html_text = markdown_library.markdown(
         markdown_text, extensions=["tables", "fenced_code"]
     )
-    return _HEADING_TAG_PATTERN.sub(_shift_heading_level, html_text)
+    sanitized_html_text = nh3.clean(html_text, link_rel=None)
+    return _HEADING_TAG_PATTERN.sub(_shift_heading_level, sanitized_html_text)
+
+
+def sanitize_http_url(url: str | None) -> str | None:
+    """
+    Reject a manifest- or index-authored URL that isn't ``http``/``https``
+    before it reaches an ``<a href>`` - a ``javascript:`` or ``data:`` value
+    would otherwise render as a clickable, script-executing link.
+
+    :param url: A raw URL from plan.yaml (``session``) or plans.json
+        (``dashboard_url``), or ``None`` if unset.
+    :return: *url* unchanged if its scheme is ``http`` or ``https``;
+        ``None`` otherwise.
+    """
+    if url is None or urlsplit(url).scheme.lower() not in _ALLOWED_URL_SCHEMES:
+        return None
+    return url
 
 
 def _shift_heading_level(heading_tag_match: re.Match[str]) -> str:

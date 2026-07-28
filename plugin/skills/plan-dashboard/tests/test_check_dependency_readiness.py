@@ -3,7 +3,11 @@ Tests for check_dependency_readiness.py: classifying one item's dependencies as 
 not-ready to build on, via build_dashboard.py's own live-state rule.
 """
 
+import json
+import sys
+
 import pytest
+import yaml
 
 from build_dashboard import (
     Item,
@@ -14,10 +18,16 @@ from build_dashboard import (
     Track,
     Wave,
 )
-from check_dependency_readiness import UnknownItemError, dependency_readiness
+from check_dependency_readiness import UnknownItemError, dependency_readiness, main
 
 
-def make_plan(items):
+def make_plan(items: list[Item]) -> Plan:
+    """
+    Build one :class:`Plan` for a test, with a single wave/track and *items*
+    - the shared entry point every test in this file builds a plan through.
+
+    :param items: The plan's items.
+    """
     return Plan(
         id="test-plan",
         title="Test Plan",
@@ -29,7 +39,17 @@ def make_plan(items):
     )
 
 
-def item(identifier, status: ItemStatus, pull_request_number=None, depends_on=None):
+def item(
+    identifier: str,
+    status: ItemStatus,
+    pull_request_number: int | None = None,
+    depends_on: list[str] | None = None,
+) -> Item:
+    """
+    Build one :class:`Item` for a test, filling in the boilerplate
+    (``title``/``branch``/``id`` all equal to *identifier*, a fixed ``track``) every
+    item in this file would otherwise repeat.
+    """
     return Item(
         title=identifier,
         branch=identifier,
@@ -126,3 +146,111 @@ def test_multiple_dependencies_reported_in_order():
     results = dependency_readiness(plan, "c", {})
     assert [entry["identifier"] for entry in results] == ["b", "a"]
     assert [entry["is_ready"] for entry in results] == [False, True]
+
+
+# %% main
+
+
+def _minimal_plan_mapping():
+    return {
+        "schema_version": 1,
+        "id": "test-plan",
+        "title": "Test Plan",
+        "description": "A plan.",
+        "default_repository": "owner/repo",
+        "waves": [{"id": "wave-1", "name": "Wave 1"}],
+        "tracks": [{"id": "track-1", "name": "Track 1", "wave": "wave-1"}],
+        "items": [
+            {
+                "id": "a",
+                "title": "Item A",
+                "branch": "a",
+                "track": "track-1",
+                "status": "done",
+            },
+            {
+                "id": "b",
+                "title": "Item B",
+                "branch": "b",
+                "track": "track-1",
+                "status": "not_started",
+                "depends_on": ["a"],
+            },
+        ],
+    }
+
+
+def test_main_prints_the_dependency_readiness_of_the_requested_item(
+    tmp_path, monkeypatch, capsys
+):
+    plan_path = tmp_path / "plan.yaml"
+    plan_path.write_text(yaml.dump(_minimal_plan_mapping()))
+    pull_request_data_path = tmp_path / "pr_data.json"
+    pull_request_data_path.write_text("{}")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "check_dependency_readiness.py",
+            "--plan",
+            str(plan_path),
+            "--pr-data",
+            str(pull_request_data_path),
+            "--item",
+            "b",
+        ],
+    )
+    exit_code = main()
+    assert exit_code == 0
+    results = json.loads(capsys.readouterr().out)
+    assert results == [
+        {"identifier": "a", "title": "Item A", "live_state": "none", "is_ready": True}
+    ]
+
+
+def test_main_rejects_an_invalid_manifest_instead_of_crashing(
+    tmp_path, monkeypatch, capsys
+):
+    plan_path = tmp_path / "plan.yaml"
+    plan_path.write_text("")  # yaml.safe_load("") -> None, not a mapping
+    pull_request_data_path = tmp_path / "pr_data.json"
+    pull_request_data_path.write_text("{}")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "check_dependency_readiness.py",
+            "--plan",
+            str(plan_path),
+            "--pr-data",
+            str(pull_request_data_path),
+            "--item",
+            "b",
+        ],
+    )
+    exit_code = main()
+    assert exit_code == 1
+    assert capsys.readouterr().err
+
+
+def test_main_rejects_an_unknown_item_id(tmp_path, monkeypatch, capsys):
+    plan_path = tmp_path / "plan.yaml"
+    plan_path.write_text(yaml.dump(_minimal_plan_mapping()))
+    pull_request_data_path = tmp_path / "pr_data.json"
+    pull_request_data_path.write_text("{}")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "check_dependency_readiness.py",
+            "--plan",
+            str(plan_path),
+            "--pr-data",
+            str(pull_request_data_path),
+            "--item",
+            "ghost",
+        ],
+    )
+    exit_code = main()
+    assert exit_code == 1
+    assert "ghost" in capsys.readouterr().err

@@ -24,16 +24,49 @@ from pathlib import Path
 import yaml
 
 
+class YamlBooleanCoercionError(ValueError):
+    """
+    Raised when a plan.yaml field that must be a string was parsed as a ``bool``
+    instead. PyYAML's YAML 1.1 resolver treats bare tokens like.
+
+    ``no``/``yes``/``on``/``off`` as booleans, silently discarding the
+    original text - quoting the value in plan.yaml (e.g. ``id: "no"``)
+    avoids this.
+    """
+
+
+def _require_string_field(value: object, field_name: str, manifest_path: object) -> str:
+    """
+    Guard against PyYAML's YAML 1.1 boolean coercion silently corrupting a plan/branch
+    identifier that happens to read as a bare ``no``/``yes``/ ``on``/``off`` token.
+
+    :param value: The field's already-parsed value.
+    :param field_name: The field's name, for the error message.
+    :param manifest_path: The manifest this field was read from, for the error message.
+    :raises YamlBooleanCoercionError: If *value* was coerced to ``bool``.
+    :return: *value* as a ``str``.
+    """
+    if isinstance(value, bool):
+        raise YamlBooleanCoercionError(
+            f"{manifest_path}: field {field_name!r} was parsed as the boolean "
+            f"{value!r} instead of a string - quote its value in plan.yaml "
+            f'(e.g. {field_name}: "no") to avoid PyYAML\'s YAML 1.1 bare-token '
+            "coercion."
+        )
+    return str(value)
+
+
 def read_manifest_id(manifest_path: Path) -> str:
     """
     Read the ``id`` field out of a plan.yaml manifest.
 
     :param manifest_path: Path to the manifest file.
+    :raises YamlBooleanCoercionError: If ``id`` was parsed as a boolean.
     :return: The manifest's ``id`` field, or an empty string if it has none.
     """
     with manifest_path.open() as manifest_file:
         manifest = yaml.safe_load(manifest_file)
-    return manifest.get("id", "")
+    return _require_string_field(manifest.get("id", ""), "id", manifest_path)
 
 
 def regenerate_branch_index(
@@ -52,6 +85,8 @@ def regenerate_branch_index(
     :param plans_directory: The plans directory, relative to ``scratch_directory`` (e.g.
         ``.claude/personal/plans``).
     :param manifest_filename: The manifest's fixed filename (e.g. ``plan.yaml``).
+    :raises YamlBooleanCoercionError: If a plan's ``id`` or an item's ``branch`` was
+        parsed as a boolean.
     :return: The regenerated index content, ready to write to disk.
     """
     lines = []
@@ -62,10 +97,21 @@ def regenerate_branch_index(
     for manifest_path in sorted(glob.glob(manifest_pattern)):
         with open(manifest_path) as manifest_file:
             plan = yaml.safe_load(manifest_file)
-        plan_id = plan["id"]
+        plan_id = _require_string_field(plan["id"], "id", manifest_path)
         for item in plan.get("items", []):
-            branch = item.get("branch")
-            if not branch or branch in seen_branches:
+            raw_branch = item.get("branch")
+            if raw_branch is None:
+                continue
+            branch = _require_string_field(raw_branch, "branch", manifest_path)
+            if not branch:
+                continue
+            if branch in seen_branches:
+                print(
+                    f"plan_manifest_tools.py: duplicate branch {branch!r} in "
+                    f"{manifest_path} - keeping the first plan it was seen "
+                    "under, dropping this one.",
+                    file=sys.stderr,
+                )
                 continue
             seen_branches.add(branch)
             lines.append(f"{branch}\t{plan_id}")

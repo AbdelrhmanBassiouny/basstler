@@ -45,7 +45,11 @@ from typing import Any, ClassVar
 
 import yaml
 
-from render_common import create_template_environment, render_markdown_to_html
+from render_common import (
+    create_template_environment,
+    render_markdown_to_html,
+    sanitize_http_url,
+)
 
 MAXIMUM_DEPENDENCY_STACK_LEVEL = 4
 """Same-track dependency chains deeper than this wrap back to indent level 0."""
@@ -160,6 +164,19 @@ class ValidationProblem(ABC):
 
 
 @dataclass
+class InvalidManifestRoot(ValidationProblem):
+    """The manifest didn't parse to a mapping - an empty file (``yaml.safe_load``
+    returns ``None``) or a manifest whose top level is a list or scalar."""
+
+    actual_value: Any
+    """Whatever the manifest actually parsed to."""
+
+    def describe(self) -> str:
+        """See :meth:`ValidationProblem.describe`."""
+        return f"plan.yaml must parse to a mapping, got {type(self.actual_value).__name__}: {self.actual_value!r}"
+
+
+@dataclass
 class InvalidSchemaVersion(ValidationProblem):
     """The manifest's ``schema_version`` is missing or not ``1``."""
 
@@ -263,6 +280,22 @@ class UnknownWave(ValidationProblem):
         return f"track {self.track_identifier!r} has unknown wave {self.wave!r}"
 
 
+@dataclass
+class DependencyCycle(ValidationProblem):
+    """A ``depends_on`` chain loops back on itself.
+
+    Undetected, a cycle causes affected items to silently disappear from
+    the rendered dependency stack instead of being reported."""
+
+    cycle_identifiers: list[str]
+    """The item ids forming the cycle, in order, with the first id repeated
+    at the end to show where it closes."""
+
+    def describe(self) -> str:
+        """See :meth:`ValidationProblem.describe`."""
+        return f"depends_on cycle: {' -> '.join(self.cycle_identifiers)}"
+
+
 class PlanValidationError(Exception):
     """Raised when a plan.yaml fails schema validation - see plans/README.md."""
 
@@ -274,6 +307,48 @@ class PlanValidationError(Exception):
         something the user needs the full picture of, not a single
         symptom they have to rediscover the rest of by trial and error."""
         super().__init__("; ".join(problem.describe() for problem in problems))
+
+
+def _find_dependency_cycle(
+    item_identifiers: list[str], depends_on_by_identifier: dict[str, list[str]]
+) -> list[str] | None:
+    """Find one cycle in the ``depends_on`` graph, if any exists.
+
+    :param item_identifiers: Every item's effective id.
+    :param depends_on_by_identifier: Each item id's own ``depends_on`` list,
+        already known-valid list ids (an id naming something outside
+        ``item_identifiers`` is a separate, already-reported problem and is
+        skipped here rather than followed).
+    :return: The cycle's item ids in order, with the first id repeated at
+        the end, or ``None`` if the graph is acyclic.
+    """
+    UNVISITED, IN_PROGRESS, DONE = 0, 1, 2
+    state = {identifier: UNVISITED for identifier in item_identifiers}
+    path: list[str] = []
+
+    def visit(identifier: str) -> list[str] | None:
+        state[identifier] = IN_PROGRESS
+        path.append(identifier)
+        for dependency_identifier in depends_on_by_identifier.get(identifier, []):
+            if dependency_identifier not in state:
+                continue
+            if state[dependency_identifier] == IN_PROGRESS:
+                cycle_start = path.index(dependency_identifier)
+                return [*path[cycle_start:], dependency_identifier]
+            if state[dependency_identifier] == UNVISITED:
+                cycle = visit(dependency_identifier)
+                if cycle is not None:
+                    return cycle
+        path.pop()
+        state[identifier] = DONE
+        return None
+
+    for identifier in item_identifiers:
+        if state[identifier] == UNVISITED:
+            cycle = visit(identifier)
+            if cycle is not None:
+                return cycle
+    return None
 
 
 def validate_plan(plan: dict[str, Any]) -> None:
@@ -289,6 +364,9 @@ def validate_plan(plan: dict[str, Any]) -> None:
     :raises PlanValidationError: If any rule is violated, carrying every
         problem found.
     """
+    if not isinstance(plan, dict):
+        raise PlanValidationError([InvalidManifestRoot(plan)])
+
     problems: list[ValidationProblem] = []
 
     if plan.get("schema_version") != 1:
@@ -309,6 +387,7 @@ def validate_plan(plan: dict[str, Any]) -> None:
     track_identifiers = {track["id"] for track in plan.get("tracks", [])}
     wave_identifiers = {wave["id"] for wave in plan.get("waves", [])}
     item_identifier_set = set(item_identifiers)
+    depends_on_by_identifier: dict[str, list[str]] = {}
 
     for item in plan.get("items", []):
         item_identifier = item.get("id") or item.get("branch")
@@ -320,11 +399,16 @@ def validate_plan(plan: dict[str, Any]) -> None:
         if depends_on is not None and not isinstance(depends_on, list):
             problems.append(InvalidDependsOn(item_identifier, type(depends_on)))
         else:
+            depends_on_by_identifier[item_identifier] = list(depends_on or [])
             for dependency_identifier in depends_on or []:
                 if dependency_identifier not in item_identifier_set:
                     problems.append(
                         UnknownDependency(item_identifier, dependency_identifier)
                     )
+
+    cycle = _find_dependency_cycle(item_identifiers, depends_on_by_identifier)
+    if cycle is not None:
+        problems.append(DependencyCycle(cycle))
 
     for track in plan.get("tracks", []):
         if track.get("wave") not in wave_identifiers:
@@ -396,6 +480,12 @@ class PullRequestRecord:
         )
 
 
+class MalformedPullRequestDataError(ValueError):
+    """Raised when one entry of ``pr_data.json`` cannot be parsed into a
+    :class:`PullRequestRecord` - a missing or invalid ``state`` field, or an
+    unparsable ``merged_at`` timestamp."""
+
+
 PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
 
 
@@ -446,6 +536,17 @@ class Wave:
     description: str | None = None
     """An optional one-line note about the wave, shown in the dashboard header."""
 
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> Wave:
+        """Build a wave from one entry of plan.yaml's ``waves[]`` - only
+        called after :func:`validate_plan` has already confirmed the data
+        is well-formed."""
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            description=data.get("description"),
+        )
+
 
 @dataclass
 class Track:
@@ -463,6 +564,18 @@ class Track:
 
     description: str | None = None
     """Shown in place of an item list when the track has no items yet."""
+
+    @classmethod
+    def from_mapping(cls, data: dict[str, Any]) -> Track:
+        """Build a track from one entry of plan.yaml's ``tracks[]`` - only
+        called after :func:`validate_plan` has already confirmed the data
+        is well-formed."""
+        return cls(
+            id=data["id"],
+            name=data["name"],
+            wave=data["wave"],
+            description=data.get("description"),
+        )
 
 
 @dataclass
@@ -662,7 +775,7 @@ class Item:
             id=data.get("id"),
             pull_request_number=data.get("pull_request_number"),
             repository=data.get("repository"),
-            session=data.get("session"),
+            session=sanitize_http_url(data.get("session")),
             notes=notes.strip() if notes else None,
             depends_on=list(data.get("depends_on") or []),
             blockers=list(data.get("blockers") or []),
@@ -724,8 +837,8 @@ class Plan:
             title=data["title"],
             description=data["description"],
             default_repository=data["default_repository"],
-            waves=[Wave(**wave) for wave in data.get("waves", [])],
-            tracks=[Track(**track) for track in data.get("tracks", [])],
+            waves=[Wave.from_mapping(wave) for wave in data.get("waves", [])],
+            tracks=[Track.from_mapping(track) for track in data.get("tracks", [])],
             items=[Item.from_mapping(item) for item in data.get("items", [])],
             tracking_issue=data.get("tracking_issue"),
         )
@@ -1027,6 +1140,8 @@ class DashboardRenderer:
                 ItemStatus.IN_PROGRESS | ItemStatus.BLOCKED
             ):
                 return f"marked {item.status.value}, but pull request #{item.pull_request_number} is {live_state.value.replace('_', ' ')}"
+            case LiveState.CLOSED_UNMERGED, ItemStatus.DONE:
+                return f"marked done, but pull request #{item.pull_request_number} was closed without merging"
             case _:
                 return None
 
@@ -1208,16 +1323,24 @@ def load_pull_requests_by_repository(
     :param raw_pull_request_data: The parsed JSON, keyed by ``"owner/repo"``
         then by pull request number as a string - see the module docstring for the
         exact shape.
+    :raises MalformedPullRequestDataError: If any entry can't be parsed into
+        a :class:`PullRequestRecord`.
     :return: The same structure, with each leaf mapping parsed into a
         :class:`PullRequestRecord`.
     """
-    return {
-        repository: {
-            pull_request_number: PullRequestRecord.from_mapping(record)
-            for pull_request_number, record in pull_requests.items()
-        }
-        for repository, pull_requests in raw_pull_request_data.items()
-    }
+    pull_requests_by_repository: PullRequestsByRepository = {}
+    for repository, pull_requests in raw_pull_request_data.items():
+        pull_requests_by_repository[repository] = {}
+        for pull_request_number, record in pull_requests.items():
+            try:
+                pull_requests_by_repository[repository][pull_request_number] = (
+                    PullRequestRecord.from_mapping(record)
+                )
+            except (KeyError, ValueError) as error:
+                raise MalformedPullRequestDataError(
+                    f"{repository}#{pull_request_number}: {error}"
+                ) from error
+    return pull_requests_by_repository
 
 
 def main() -> int:

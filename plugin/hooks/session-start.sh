@@ -122,7 +122,15 @@ fetch_personal_notes_branch || exit 0
 # creates no remote-tracking ref, but FETCH_HEAD always points at what was
 # just fetched, whether the serving remote was a name or a raw URL.
 
+CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+# Sanitized copy for embedding into this script's <!-- ... --> HTML comment
+# headers: a branch name containing "-->" would otherwise let it break out
+# of the comment. Lookups (pr_progress_path, plan_id_for_branch) still use
+# the unsanitized ${CURRENT_BRANCH}.
+CURRENT_BRANCH_FOR_COMMENT="${CURRENT_BRANCH//-->/}"
+
 OUTPUT_FILE="$(mktemp)"
+trap 'rm -f "${OUTPUT_FILE}"' EXIT
 WROTE_ANYTHING=0
 
 # SUMMARY_*: what this run actually found/wrote, printed as a deterministic
@@ -157,7 +165,7 @@ if [ -n "${PROGRESS_PATH}" ]; then
   [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
   cat <<PROGRESS_HEADER >> "${OUTPUT_FILE}"
 <!--
-PR progress for branch '$(git rev-parse --abbrev-ref HEAD)', synced from
+PR progress for branch '${CURRENT_BRANCH_FOR_COMMENT}', synced from
 '${NOTES_BRANCH}' (${PROGRESS_PATH}) on remote '${ACTIVE_NOTES_REMOTE}' by
 session-start.sh. Maintain the current plan, what's done, and what's next
 here throughout work on this PR. It is never merged: it lives only on
@@ -174,19 +182,19 @@ ever saved.
 PROGRESS_HEADER
   if git cat-file -e "FETCH_HEAD:${PROGRESS_PATH}" 2>/dev/null; then
     git show "FETCH_HEAD:${PROGRESS_PATH}" >> "${OUTPUT_FILE}"
-    SUMMARY_PROGRESS="loaded for branch '$(git rev-parse --abbrev-ref HEAD)' (${PROGRESS_PATH})"
+    SUMMARY_PROGRESS="loaded for branch '${CURRENT_BRANCH}' (${PROGRESS_PATH})"
   else
     cat <<'SCAFFOLD' >> "${OUTPUT_FILE}"
 No progress recorded yet for this branch. Initialize it now: a short plan,
 what's done so far, and what's next. Keep it current as you work.
 SCAFFOLD
-    SUMMARY_PROGRESS="no saved progress yet for branch '$(git rev-parse --abbrev-ref HEAD)' - scaffold written"
+    SUMMARY_PROGRESS="no saved progress yet for branch '${CURRENT_BRANCH}' - scaffold written"
   fi
   echo "<!-- END-PR-PROGRESS -->" >> "${OUTPUT_FILE}"
   WROTE_ANYTHING=1
 fi
 
-PLAN_ID="$(plan_id_for_branch "$(git rev-parse --abbrev-ref HEAD)" || true)"
+PLAN_ID="$(plan_id_for_branch "${CURRENT_BRANCH}" || true)"
 if [ -n "${PLAN_ID}" ]; then
   PLAN_MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
   PLAN_ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
@@ -198,7 +206,7 @@ if [ -n "${PLAN_ID}" ]; then
     # Named for the mailbox's role, not necessarily a literal GitHub Issue -
     # see plans/README.md's PR-fallback note for repos with Issues disabled.
     TRACKING_ISSUE="$(git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null \
-      | grep -E '^tracking_issue:' | head -1 | sed -E 's/^tracking_issue:[[:space:]]*([0-9]+).*/\1/')"
+      | grep -oE '^tracking_issue:[[:space:]]*[0-9]+' | head -1 | grep -oE '[0-9]+$')"
     if [ -n "${TRACKING_ISSUE}" ]; then
       TRACKING_ISSUE_NOTE="Structural changes (a new wave/phase, deferring a track, splitting an
 item, reprioritizing) can be made directly to the manifest by any session -
