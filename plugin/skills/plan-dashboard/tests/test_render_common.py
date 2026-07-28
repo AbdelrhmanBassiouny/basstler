@@ -110,19 +110,17 @@ def test_mixed_blocks_render_in_source_order():
 
 def test_script_tag_is_stripped():
     rendered = render_markdown_to_html("<script>alert('xss')</script>\n\nsafe text")
-    assert "<script>" not in rendered
-    assert "alert" not in rendered
-    assert "safe text" in rendered
+    assert rendered == "\n\n<p>safe text</p>"
 
 
 def test_event_handler_attribute_is_stripped():
     rendered = render_markdown_to_html('<img src="x" onerror="alert(1)">')
-    assert "onerror" not in rendered
+    assert rendered == '<p><img src="x"></p>'
 
 
 def test_javascript_url_is_stripped():
     rendered = render_markdown_to_html("[click me](javascript:alert(1))")
-    assert "javascript:" not in rendered
+    assert rendered == "<p><a>click me</a></p>"
 
 
 # %% sanitize_http_url

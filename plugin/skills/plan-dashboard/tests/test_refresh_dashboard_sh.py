@@ -20,26 +20,7 @@ import pytest
 
 PLAN_DASHBOARD_DIRECTORY = Path(__file__).parent.parent
 REPOSITORY_ROOT = PLAN_DASHBOARD_DIRECTORY.parent.parent.parent
-
-_SYNC_MANIFEST_STATUS_STUB = """#!/usr/bin/env python3
-import json
-import os
-print(json.dumps({"corrected": json.loads(os.environ["SYNC_STUB_CORRECTED_JSON"])}))
-"""
-
-_BUILD_DASHBOARD_STUB = """#!/usr/bin/env python3
-import json
-import sys
-from pathlib import Path
-
-Path("build_dashboard_invocation.json").write_text(json.dumps(sys.argv[1:]))
-print(json.dumps({"drift_count": 0}))
-"""
-
-_WRITE_PERSONAL_NOTES_FILE_STUB = """#!/bin/bash
-set -euo pipefail
-printf '%s\\n' "$@" > write_personal_notes_file_invocation.txt
-"""
+STUBS_DIRECTORY = Path(__file__).parent / "fixtures" / "stubs"
 
 
 @pytest.fixture
@@ -70,18 +51,38 @@ def scratch_project_root(tmp_path: Path) -> Path:
         hooks_directory / "resolve-personal-notes-config.sh",
     )
 
-    (plan_dashboard_directory / "sync_manifest_status.py").write_text(
-        _SYNC_MANIFEST_STATUS_STUB
+    shutil.copy(
+        STUBS_DIRECTORY / "sync_manifest_status_stub.py",
+        plan_dashboard_directory / "sync_manifest_status.py",
     )
-    (plan_dashboard_directory / "build_dashboard.py").write_text(_BUILD_DASHBOARD_STUB)
-    (hooks_directory / "write-personal-notes-file.sh").write_text(
-        _WRITE_PERSONAL_NOTES_FILE_STUB
+    shutil.copy(
+        STUBS_DIRECTORY / "build_dashboard_stub.py",
+        plan_dashboard_directory / "build_dashboard.py",
+    )
+    shutil.copy(
+        STUBS_DIRECTORY / "write_personal_notes_file_stub.sh",
+        hooks_directory / "write-personal-notes-file.sh",
     )
     for stub in ("sync_manifest_status.py", "build_dashboard.py"):
         (plan_dashboard_directory / stub).chmod(0o755)
     (hooks_directory / "write-personal-notes-file.sh").chmod(0o755)
 
     return tmp_path
+
+
+def _refresh_dashboard_script_path(scratch_project_root: Path) -> Path:
+    """
+    The scratch layout's copy of refresh_dashboard.sh.
+
+    :param scratch_project_root: A fixture-built scratch project root.
+    """
+    return (
+        scratch_project_root
+        / ".claude"
+        / "skills"
+        / "plan-dashboard"
+        / "refresh_dashboard.sh"
+    )
 
 
 def run_refresh_dashboard(
@@ -107,13 +108,7 @@ def run_refresh_dashboard(
     return subprocess.run(
         [
             "bash",
-            str(
-                scratch_project_root
-                / ".claude"
-                / "skills"
-                / "plan-dashboard"
-                / "refresh_dashboard.sh"
-            ),
+            str(_refresh_dashboard_script_path(scratch_project_root)),
             "--plan-id",
             "test-plan",
             "--plan",
@@ -143,47 +138,31 @@ def run_refresh_dashboard(
 
 def test_missing_required_argument_fails_with_usage(scratch_project_root: Path):
     (scratch_project_root / "roadmap.md").write_text("")
+    script_path = _refresh_dashboard_script_path(scratch_project_root)
     result = subprocess.run(
-        [
-            "bash",
-            str(
-                scratch_project_root
-                / ".claude"
-                / "skills"
-                / "plan-dashboard"
-                / "refresh_dashboard.sh"
-            ),
-            "--plan-id",
-            "test-plan",
-        ],
+        ["bash", str(script_path), "--plan-id", "test-plan"],
         cwd=scratch_project_root,
         capture_output=True,
         text=True,
     )
     assert result.returncode == 1
-    assert "Usage:" in result.stderr
+    assert result.stderr == (
+        f"Usage: {script_path} --plan-id <id> --plan <plan.yaml> "
+        "--roadmap <roadmap.md> --pr-data <pr_data.json> --output "
+        "<dashboard.html> [--tracking-url <url>]\n"
+    )
 
 
 def test_unrecognized_argument_fails(scratch_project_root: Path):
+    script_path = _refresh_dashboard_script_path(scratch_project_root)
     result = subprocess.run(
-        [
-            "bash",
-            str(
-                scratch_project_root
-                / ".claude"
-                / "skills"
-                / "plan-dashboard"
-                / "refresh_dashboard.sh"
-            ),
-            "--not-a-real-flag",
-            "value",
-        ],
+        ["bash", str(script_path), "--not-a-real-flag", "value"],
         cwd=scratch_project_root,
         capture_output=True,
         text=True,
     )
     assert result.returncode == 1
-    assert "Unrecognized argument" in result.stderr
+    assert result.stderr == "Unrecognized argument: --not-a-real-flag\n"
 
 
 # %% correction-triggers-a-push gate
@@ -209,10 +188,13 @@ def test_a_correction_pushes_to_personal_notes(scratch_project_root: Path):
     invocation = (
         scratch_project_root / "write_personal_notes_file_invocation.txt"
     ).read_text()
-    assert "--destination" in invocation
-    assert "test-plan/plan.yaml" in invocation
-    assert "--message" in invocation
-    assert "1 item(s) to done" in invocation
+    plan_path = scratch_project_root / "plan.yaml"
+    assert invocation == (
+        f"--source\n{plan_path}\n--destination\n"
+        ".claude/personal/plans/test-plan/plan.yaml\n"
+        "--message\nAuto-sync test-plan: 1 item(s) to done (merged on "
+        "GitHub)\n"
+    )
 
 
 # %% --tracking-url passthrough

@@ -96,8 +96,12 @@ def test_warns_on_stderr_when_a_duplicate_branch_is_dropped(tmp_path, capsys):
     _write_plan(plans_directory, "plan-a", "  - branch: shared\n")
     _write_plan(plans_directory, "plan-b", "  - branch: shared\n")
     regenerate_branch_index(tmp_path, "plans", "plan.yaml")
-    error_output = capsys.readouterr().err
-    assert "duplicate branch 'shared'" in error_output
+    duplicate_manifest_path = plans_directory / "plan-b" / "plan.yaml"
+    assert capsys.readouterr().err == (
+        f"plan_manifest_tools.py: duplicate branch 'shared' in "
+        f"{duplicate_manifest_path} - keeping the first plan it was seen "
+        "under, dropping this one.\n"
+    )
 
 
 def test_raises_when_plan_id_is_coerced_to_a_boolean(tmp_path):
