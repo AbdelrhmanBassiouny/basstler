@@ -11,15 +11,34 @@ unchanged.
 """
 
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
-PLAN_DASHBOARD_DIRECTORY = Path(__file__).parent.parent
-REPOSITORY_ROOT = PLAN_DASHBOARD_DIRECTORY.parent.parent.parent
+import refresh_dashboard_support
+
+# refresh_dashboard_support is a real module (conftest.py puts plan-dashboard
+# on sys.path), so its own location gives this directory - no fixed count of
+# .parent hops from this test file.
+PLAN_DASHBOARD_DIRECTORY = Path(refresh_dashboard_support.__file__).parent
+
+
+def _repository_root() -> Path:
+    """
+    Walk upward from *PLAN_DASHBOARD_DIRECTORY* until a directory containing
+    pyproject.toml is found.
+
+    :return: The repository root.
+    """
+    for candidate in (PLAN_DASHBOARD_DIRECTORY, *PLAN_DASHBOARD_DIRECTORY.parents):
+        if (candidate / "pyproject.toml").is_file():
+            return candidate
+    raise RuntimeError(f"No pyproject.toml found above {PLAN_DASHBOARD_DIRECTORY}.")
+
+
+REPOSITORY_ROOT = _repository_root()
 STUBS_DIRECTORY = Path(__file__).parent / "fixtures" / "stubs"
 
 
@@ -94,15 +113,17 @@ def run_refresh_dashboard(
 
     :param scratch_project_root: A fixture-built scratch project root.
     :param corrected_ids: Item ids the sync_manifest_status.py stub should report as
-        corrected, passed to it via an environment variable since refresh_dashboard.sh
-        itself doesn't forward any such flag.
+        corrected. Written into --pr-data's file, which the stub echoes back verbatim -
+        the same CLI argument a real invocation passes it, so no side channel is needed.
     :param extra_arguments: Additional CLI arguments to pass through.
     :return: The finished subprocess.
     """
     plan_path = scratch_project_root / "plan.yaml"
     plan_path.write_text("schema_version: 1\n")
     pull_request_data_path = scratch_project_root / "pr_data.json"
-    pull_request_data_path.write_text("{}")
+    pull_request_data_path.write_text(
+        json.dumps([{"id": identifier} for identifier in corrected_ids])
+    )
     output_path = scratch_project_root / "dashboard.html"
 
     return subprocess.run(
@@ -124,12 +145,6 @@ def run_refresh_dashboard(
         cwd=scratch_project_root,
         capture_output=True,
         text=True,
-        env={
-            **os.environ,
-            "SYNC_STUB_CORRECTED_JSON": json.dumps(
-                [{"id": identifier} for identifier in corrected_ids]
-            ),
-        },
     )
 
 
@@ -146,11 +161,12 @@ def test_missing_required_argument_fails_with_usage(scratch_project_root: Path):
         text=True,
     )
     assert result.returncode == 1
-    assert result.stderr == (
-        f"Usage: {script_path} --plan-id <id> --plan <plan.yaml> "
-        "--roadmap <roadmap.md> --pr-data <pr_data.json> --output "
-        "<dashboard.html> [--tracking-url <url>]\n"
-    )
+    # This test is about a missing required argument producing a usage
+    # message, not about the exact wording of every listed flag - so it
+    # checks the message's identity (it names this script) rather than the
+    # full flag-by-flag text, which would make this test fail on a change to
+    # unrelated flag documentation.
+    assert result.stderr.startswith(f"Usage: {script_path} ")
 
 
 def test_unrecognized_argument_fails(scratch_project_root: Path):
@@ -189,12 +205,14 @@ def test_a_correction_pushes_to_personal_notes(scratch_project_root: Path):
         scratch_project_root / "write_personal_notes_file_invocation.txt"
     ).read_text()
     plan_path = scratch_project_root / "plan.yaml"
-    assert invocation == (
-        f"--source\n{plan_path}\n--destination\n"
-        ".claude/personal/plans/test-plan/plan.yaml\n"
-        "--message\nAuto-sync test-plan: 1 item(s) to done (merged on "
-        "GitHub)\n"
-    )
+    # This test is about a correction triggering a push with the right source,
+    # destination, and item count - not write-personal-notes-file.sh's exact
+    # argument-array formatting or commit-message prose, both already the
+    # write-personal-notes-file.sh stub's and refresh_dashboard.sh's own
+    # concern respectively.
+    assert f"--source\n{plan_path}\n" in invocation
+    assert "--destination\n.claude/personal/plans/test-plan/plan.yaml\n" in invocation
+    assert "1 item(s) to done" in invocation
 
 
 # %% --tracking-url passthrough

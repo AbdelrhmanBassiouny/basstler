@@ -1,10 +1,5 @@
 # A worked example: idea to dashboard
 
-This doc is a narrated, second-person tutorial - deliberately, unlike this
-system's other docs, which are third-person and prescriptive. Walking through
-one concrete conversation end to end is the point; rewriting it in the
-neutral register would lose exactly what makes it useful as an example.
-
 A short, concrete walkthrough of the plan-dashboard system end to end, using
 a small **fictional** example plan — no real branches, PRs, or GitHub calls
 involved. If you haven't done the one-time setup yet, start with

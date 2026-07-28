@@ -12,7 +12,13 @@ from typing import Any
 import pytest
 import yaml
 
-from build_dashboard import ItemStatus, PullRequestRecord, PullRequestState
+from build_dashboard import (
+    ItemStatus,
+    PlanValidationError,
+    PullRequestRecord,
+    PullRequestState,
+    validate_plan,
+)
 from sync_manifest_status import (
     MissingStatusLineError,
     apply_status_corrections,
@@ -211,9 +217,15 @@ def test_main_rejects_an_invalid_manifest_instead_of_crashing(
     )
     exit_code = main()
     assert exit_code == 1
+    # Only main()'s own contribution (the "failed validation:" prefix) is
+    # asserted directly; the message it wraps is derived from validate_plan
+    # itself rather than a second hardcoded copy of the exact wording
+    # build_dashboard's own equivalent test already asserts, so a wording
+    # change breaks one test, not two.
+    with pytest.raises(PlanValidationError) as expected_error:
+        validate_plan(None)
     assert capsys.readouterr().err == (
-        "plan.yaml failed validation: plan.yaml must parse to a mapping, "
-        "got NoneType: None\n"
+        f"plan.yaml failed validation: {expected_error.value}\n"
     )
 
 

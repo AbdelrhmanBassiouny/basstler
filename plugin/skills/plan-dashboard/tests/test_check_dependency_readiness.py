@@ -13,10 +13,12 @@ from build_dashboard import (
     Item,
     ItemStatus,
     Plan,
+    PlanValidationError,
     PullRequestRecord,
     PullRequestState,
     Track,
     Wave,
+    validate_plan,
 )
 from check_dependency_readiness import UnknownItemError, dependency_readiness, main
 
@@ -230,9 +232,14 @@ def test_main_rejects_an_invalid_manifest_instead_of_crashing(
     )
     exit_code = main()
     assert exit_code == 1
-    assert capsys.readouterr().err == (
-        "plan.yaml must parse to a mapping, got NoneType: None\n"
-    )
+    # check_dependency_readiness.py's main() adds no prefix of its own here,
+    # so the expected message is derived from validate_plan itself rather
+    # than a second hardcoded copy of the exact wording build_dashboard's own
+    # equivalent test already asserts, so a wording change breaks one test,
+    # not two.
+    with pytest.raises(PlanValidationError) as expected_error:
+        validate_plan(None)
+    assert capsys.readouterr().err == f"{expected_error.value}\n"
 
 
 def test_main_rejects_an_unknown_item_id(tmp_path, monkeypatch, capsys):
