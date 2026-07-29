@@ -722,7 +722,7 @@ def test_item_becomes_ready_to_start_once_all_dependencies_are_done():
 def test_blocked_item_with_partial_dependencies_done_is_recheck_candidate():
     items = [
         item("a", ItemStatus.DONE),
-        item("b", ItemStatus.NOT_STARTED),
+        item("b", ItemStatus.BLOCKED),
         item("c", ItemStatus.BLOCKED, depends_on=["a", "b"]),
     ]
     renderer = make_renderer(items)
@@ -782,9 +782,24 @@ def test_item_not_ready_to_start_while_dependency_is_still_a_draft():
 def test_not_started_item_with_partial_dependencies_is_neither_list():
     items = [
         item("a", ItemStatus.DONE),
-        item("b", ItemStatus.NOT_STARTED),
+        item("b", ItemStatus.BLOCKED),
         item("c", ItemStatus.NOT_STARTED, depends_on=["a", "b"]),
     ]
+    renderer = make_renderer(items)
+    _, summary = renderer.render()
+    assert summary.ready_to_start == []
+    assert summary.blocker_maybe_cleared == []
+
+
+def test_dependency_free_not_started_item_is_ready_to_start():
+    items = [item("a", ItemStatus.NOT_STARTED)]
+    renderer = make_renderer(items)
+    _, summary = renderer.render()
+    assert summary.ready_to_start == ["a"]
+
+
+def test_dependency_free_blocked_item_is_neither_list():
+    items = [item("a", ItemStatus.BLOCKED)]
     renderer = make_renderer(items)
     _, summary = renderer.render()
     assert summary.ready_to_start == []
