@@ -136,8 +136,8 @@ class PullRequestLabel(StrEnum):
     may add labels this dashboard never needs to know about. See
     :attr:`PullRequestRecord.identified_labels` for how an unrecognized
     label is handled (silently excluded, not an error), and
-    ``.claude/hooks/README.md``'s "pull request labels this tooling relies on"
-    section for what each member means and who applies it.
+    ``.claude/hooks/README.md``'s "labels the dashboard reads" list for what
+    each member means and who applies it.
     """
 
     MERGED = "merged"
