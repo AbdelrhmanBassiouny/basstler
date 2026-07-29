@@ -2,8 +2,7 @@
 """Stacked-PR helper for the fork-staging / cram2-review workflow.
 
 GitHub is the single source of truth. The stack is **not** declared in a ledger: it is read from a
-``board.json`` export of the fork's pull requests, refreshed via the GitHub MCP, combined with plain
-``git``:
+``board.json`` export of the fork's pull requests, combined with plain ``git``:
 
   * dependency tree = each fork PR's **base branch** (base = parent);
   * ``draft`` <-> ``ready`` = the fork PR's draft flag;
