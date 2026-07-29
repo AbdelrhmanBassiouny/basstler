@@ -76,22 +76,10 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 - **Restack only after the parent has landed/updated.** Restacking onto a still-conflicting,
   unmerged parent is premature - land the parent first.
 - **Refresh `board.json` before acting.** It's a snapshot; the routine brings it current with
-  GitHub. `restack.js` takes its stack from `args` (via `restack-plan`), so there is nothing to
-  keep in sync by hand.
+  GitHub.
 - **CI is the validator; validate ROS-free first.** Cloud containers have no ROS, so never try
   to run the coraplex/SDT suites locally - poll a PR's CI with the GitHub MCP and treat its
   red/green as the oracle (leave `subscribe_pr_activity` to an interactive session babysitting
-  that one PR - the automated Routine never subscribes; see `ROUTINE.md`'s HARD RULES). Before
-  deferring anything to a ROS session, get around ROS as far as you can locally: reproduce the
-  failure's *mechanism* in the ROS-free layer (`krrood`, which runs locally) with a meaningful
-  failing test - mimicking the offending pattern in the `krrood` test datasets per `AGENTS.md`
-  when the trigger lives in another package - fix it there, and validate by running the local
-  `krrood` suite before pushing. Then let fork CI confirm the ROS-gated end-to-end behaviour.
-  Only the residue that genuinely cannot be reproduced or validated without ROS is handed to a
-  ROS session. Never disable a leak/CI check to go green.
-
-## The board and the restack workflow
-
-Board rendering (`board.html`, the `stack-board` Pages site) and `.claude/workflows/restack.js`
-are not part of this directory yet - they still live on `claude/stack-workflow-tooling` and land
-here in later stack-tooling-track items once the shared PR-state module exists.
+  that one PR - the automated Routine never subscribes; see `ROUTINE.md`'s HARD RULES). See
+  `ROUTINE.md`'s Phase 2 for how to get around a ROS dependency before handing anything to a ROS
+  session. Never disable a leak/CI check to go green.

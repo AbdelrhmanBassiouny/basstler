@@ -2,8 +2,8 @@
 """Stacked-PR helper for the fork-staging / cram2-review workflow.
 
 GitHub is the single source of truth. The stack is **not** declared in a ledger: it is read from a
-``board.json`` export of the fork's pull requests (refreshed by the routine via the GitHub MCP) combined
-with plain ``git``:
+``board.json`` export of the fork's pull requests, refreshed via the GitHub MCP, combined with plain
+``git``:
 
   * dependency tree = each fork PR's **base branch** (base = parent);
   * ``draft`` <-> ``ready`` = the fork PR's draft flag;
@@ -55,8 +55,7 @@ class Config:
     """Fork-PR label opting a branch into the rebase strategy instead of the default merge."""
 
     needs_resolution_label: str
-    """Fork-PR label marking a branch the routine could not restack and delegated to its owning
-    session; such a branch is withheld from promotion until the label is cleared."""
+    """Fork-PR label marking a branch withheld from promotion pending conflict resolution."""
 
     fork_remote: str
     """Git remote for the fork that holds the full stack."""
@@ -213,13 +212,13 @@ class Stack:
 
     def needs_resolution(self, branch: Branch) -> bool:
         """:param branch: The branch to check.
-        :return: Whether the routine has delegated a restack conflict on it to its owning session.
+        :return: Whether the branch is withheld from promotion pending conflict resolution.
         """
         return self.config.needs_resolution_label in branch.labels
 
 
 class BoardUnavailable(RuntimeError):
-    """Raised when ``board.json`` is missing - refreshed by the routine via the GitHub MCP."""
+    """Raised when ``board.json`` is missing."""
 
 
 def load_board(path: Path = BOARD_PATH) -> list[PullRequest]:
