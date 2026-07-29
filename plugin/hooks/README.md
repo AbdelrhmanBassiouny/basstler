@@ -5,6 +5,11 @@ Claude Code already loads as project memory, and which is gitignored — from a 
 you own. Your notes ("always open my PRs as drafts") follow you across sessions and are never
 committed to a shared branch.
 
+> **Rather see it than read about it?**
+> [`example-walkthrough.md`](../skills/plan-dashboard/example-walkthrough.md) is a short worked
+> example of the whole thing in use, from a plan-mode idea to a published dashboard. Or just run
+> `/setup-personal-notes` in a session and come back here when you want the details.
+
 Three kinds of content, stored the same way and never merged anywhere:
 
 | Section in `CLAUDE.local.md` | Holds | Stored on the notes branch at | Saved by |
@@ -97,8 +102,7 @@ you'd otherwise write up as a one-off master-roadmap doc — a **plan** is a `pl
 tracks, and items with branch, PR number, status and dependencies) plus a sibling `roadmap.md` for
 the narrative that doesn't belong in structured data.
 
-- New to it → [`example-walkthrough.md`](../skills/plan-dashboard/example-walkthrough.md), a short
-  worked example from a plan-mode idea to a published dashboard.
+- Worked example → [`example-walkthrough.md`](../skills/plan-dashboard/example-walkthrough.md).
 - Field reference → [`plan-schema.md`](../skills/plan-dashboard/plan-schema.md).
 - Create one → `/plan-create <plan-id>`.
 - Publish or refresh → `/plan-dashboard [<plan-id>]`; no argument publishes the master index of

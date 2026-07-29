@@ -182,8 +182,8 @@ prepended so the pasted session starts on that model.
 
 ## Where to go from here
 
-- [`.claude/hooks/README.md`](../../hooks/README.md) — the setup guide this
-  walkthrough assumes you've already followed.
+- [`.claude/hooks/README.md`](../../hooks/README.md) — the setup guide: what
+  `/setup-personal-notes` configures, and how to change any of it.
 - [`plan-schema.md`](./plan-schema.md) — the full `plan.yaml` schema
   reference.
 - [`plan-dashboard/SKILL.md`](./SKILL.md),
