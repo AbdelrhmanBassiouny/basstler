@@ -31,8 +31,9 @@ set -euo pipefail
 #
 # The one thing it deliberately does not check is GitHub API access, which
 # /plan-dashboard needs for live pull request state: that is reachable only
-# through a session's MCP tools, not from a shell. .claude/skills/cram-setup
-# covers it as its own step.
+# through a session's MCP tools, not from a shell. The same goes for the pull
+# request labels the dashboard reads. .claude/skills/setup-personal-notes
+# covers both as their own steps.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
