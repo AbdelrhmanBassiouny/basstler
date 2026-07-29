@@ -74,7 +74,22 @@ Whether you need to override the default branch name depends on how your session
 
 ## Setup: quick start (works for both persistent and fresh-clone sessions)
 
-Once, from any clone with push access to `origin`:
+In any Claude Code session on this repo:
+
+```
+/setup-personal-notes
+```
+
+The [`setup-personal-notes`](../skills/setup-personal-notes/SKILL.md) skill inspects what's already
+in place, asks about anything genuinely yours to decide (chiefly: which remote your notes should
+live on, if this clone's `origin` isn't your own fork), and does the rest itself — creating the
+branch, offering starter notes, installing the plan-dashboard dependencies, and populating
+`CLAUDE.local.md` for the current session. On a clone that's already set up it reports what it found
+and exits without asking anything, so it's safe to run any time you're unsure. You don't need to run
+it first, either: `/plan-create`, `/plan-dashboard`, `/plan-item-kickoff` and `/plan-item-resolve`
+each check the same prerequisites and offer to run it for you if something's missing.
+
+To do the same thing by hand, once, from any clone with push access to `origin`:
 
 ```bash
 "$CLAUDE_PROJECT_DIR/.claude/hooks/create-personal-notes-branch.sh"
@@ -84,6 +99,15 @@ This creates `claude/personal-notes` on `origin` with a single empty
 `.claude/personal/cram-notes.md`, without touching your current branch or working tree. Every new
 Claude Code session — local or fresh-clone — now runs the hook automatically and writes
 `CLAUDE.local.md` from that branch, with no further configuration needed.
+
+To check the state of any clone without changing it, run the same read-only inspection the skill
+uses:
+
+```bash
+"$CLAUDE_PROJECT_DIR/.claude/hooks/check-setup.sh"
+```
+
+It prints one row per check and exits non-zero if anything still needs doing.
 
 ## Editing your notes
 
@@ -173,7 +197,7 @@ one-off master-roadmap doc. For that, a **plan** is a structured
 dependencies) plus a sibling `roadmap.md` for the narrative ("why", history, design decisions) that
 doesn't belong in structured data. Both live only on the personal-notes branch, exactly like
 everything else in this document. See
-[`.claude/personal/plans/README.md`](../personal/plans/README.md) (on the personal-notes branch) for
+[`.claude/skills/plan-dashboard/plan-schema.md`](../skills/plan-dashboard/plan-schema.md) for
 the full schema, and [`.claude/skills/plan-dashboard/SKILL.md`](../skills/plan-dashboard/SKILL.md)
 for how a plan gets turned into a live Artifact dashboard. New to this - want to see it end to end
 before diving into the schema reference? See
@@ -235,7 +259,7 @@ a structural change (new phase, deferring a track, etc.) directly to `plan.yaml`
 user in the session first (e.g. via `AskUserQuestion`) rather than deciding unilaterally, and always
 also comments on the tracking issue describing it once confirmed — that's the shared record other
 sessions working the plan can check, and the user reviews structural changes there. (Falls back to an empty-commit,
-permanently-draft PR instead if a repo has Issues disabled.) See `.claude/personal/plans/README.md`'s
+permanently-draft PR instead if a repo has Issues disabled.) See `.claude/skills/plan-dashboard/plan-schema.md`'s
 "Proposing structural changes" section for the full convention. `session-start.sh`'s written header
 reminds a session actively working an item to subscribe to the tracking issue too, so a change
 another session makes reaches it in real time.

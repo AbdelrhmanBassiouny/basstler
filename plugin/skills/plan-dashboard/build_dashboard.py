@@ -146,7 +146,7 @@ class PullRequestLabel(StrEnum):
 
 
 class ValidationProblem(ABC):
-    """A single problem found while validating a plan.yaml - see plans/README.md.
+    """A single problem found while validating a plan.yaml - see plan-schema.md.
 
     One dataclass subclass per validation rule, each carrying the specific
     fields that rule cares about rather than a pre-formatted string - so a
@@ -297,7 +297,7 @@ class DependencyCycle(ValidationProblem):
 
 
 class PlanValidationError(Exception):
-    """Raised when a plan.yaml fails schema validation - see plans/README.md."""
+    """Raised when a plan.yaml fails schema validation - see plan-schema.md."""
 
     def __init__(self, problems: list[ValidationProblem]) -> None:
         self.problems = problems
