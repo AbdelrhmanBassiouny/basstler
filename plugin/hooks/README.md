@@ -2,10 +2,10 @@
 
 A `SessionStart` hook that writes your own workflow preferences into `CLAUDE.local.md` — which
 Claude Code already loads as project memory, and which is gitignored — from a branch on a remote
-you own. Your notes ("always open my PRs as drafts") follow you across sessions and are never
+you own. Your notes (e.g. "always open my PRs as drafts") follow you across sessions and are never
 committed to a shared branch.
 
-> **Rather see it than read about it?**
+> **Rather see it in action than read about it?**
 > [`example-walkthrough.md`](../skills/plan-dashboard/example-walkthrough.md) is a short worked
 > example of the whole thing in use, from a plan-mode idea to a published dashboard. Or just run
 > `/setup-personal-notes` in a session and come back here when you want the details.
@@ -18,9 +18,8 @@ Three kinds of content, stored the same way and never merged anywhere:
 | PR progress | Plan, progress and next steps for the current branch's PR | `.claude/personal/pr-progress/<branch>.md` | [`save-pr-progress.sh`](./save-pr-progress.sh) |
 | Plan | A multi-PR initiative's manifest and roadmap | `.claude/personal/plans/<plan-id>/` | [`save-plan.sh`](./save-plan.sh) |
 
-The PR-progress section appears on any branch with a sensible "current PR" — not the default
-branch, a detached `HEAD`, or the notes branch itself — as an empty scaffold even before anything
-has been saved.
+The PR-progress section appears on any branch that isn't the default branch, a detached `HEAD`, or
+the notes branch itself, as an empty scaffold even before anything has been saved.
 
 ## Quick start
 

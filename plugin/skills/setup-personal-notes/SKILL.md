@@ -1,7 +1,7 @@
 ---
 name: setup-personal-notes
 description: One-time setup for this repo's personal-notes tooling - the personal-notes branch, its remote/branch/path resolution, the plan-dashboard dependencies, and the CLAUDE.local.md the SessionStart hook writes. Invoke as "/setup-personal-notes". Use when someone is setting up this repo for Claude Code for the first time, when personal notes/PR progress/plan dashboards aren't working, or when another skill's prerequisite check reports the setup is incomplete.
-allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__get_me
+allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__get_me, mcp__github__get_label
 ---
 
 # Set up personal notes
@@ -10,11 +10,11 @@ Gets a clone from "I have a fork of this repo and nothing else" to "personal
 notes, PR progress and plan dashboards all work," asking one question per
 decision that is genuinely the user's, with a default they can accept as-is.
 
-**Fast path first.** Everything here is conditional on
-[`check-setup.sh`](../../hooks/check-setup.sh) reporting something missing. If
-it reports nothing, this skill asks nothing, changes nothing, and finishes at
-step 1 — a re-run on an already-set-up clone must be a no-op, not an
-interrogation.
+**Fast path first.** Steps 2 to 7 are each conditional on
+[`check-setup.sh`](../../hooks/check-setup.sh) reporting that specific thing
+missing. If it reports nothing missing, go straight to step 8 — the label check
+the script can't perform — and stop there. A re-run on an already-set-up clone
+must be a near-no-op, not an interrogation.
 
 **Never guess a value that is the user's to choose.** Where their notes live
 and what goes in them are personal; ask, with a default. Everything else
@@ -33,10 +33,10 @@ check and exits non-zero if any row is `needs-setup` (`|| true` above keeps a
 non-zero exit from ending the block early — the rows are the point, not the
 status). Read its own header comment for what each check means.
 
-**If it exited 0:** tell the user everything is already set up, list what was
-found (the remote, branch and path in play, and that dependencies and
-`CLAUDE.local.md` are in place), and stop. Do not ask anything. Do not
-re-verify by hand what the script just verified.
+**If it exited 0:** tell the user everything it covers is already set up, list
+what was found (the remote, branch and path in play, and that dependencies and
+`CLAUDE.local.md` are in place), then go to step 8 and stop. Do not ask
+anything else. Do not re-verify by hand what the script just verified.
 
 **Otherwise:** work through the `needs-setup` rows in the order printed —
 they're ordered so an earlier fix can be a prerequisite of a later one — using
@@ -167,7 +167,48 @@ that the notes it just wrote are not yet in this conversation's context — this
 session will pick them up on its next start, while everything else is usable
 right away.
 
-## 8. Confirm, by re-running the check
+## 8. The pull request labels this tooling applies
+
+`check-setup.sh` can't see this one — labels live behind the GitHub API, which
+is reachable only from a session — so it is checked here instead.
+
+A fresh fork starts with GitHub's own default labels and none of the ones this
+tooling uses. That matters in two different ways, and only the first is
+cosmetic:
+
+- `merged` is *read* by `build_dashboard.py`, which treats it as proof a pull
+  request landed even when GitHub's merge API never recorded it. Without the
+  label, such an item reads as closed-unmerged on every dashboard.
+- `bug` and `in-review` are *applied* by the conventions in
+  [`starter-notes.md`](./starter-notes.md) ("bug-fix PRs must always carry the
+  `bug` label"). Applying a label a repository doesn't have fails, so a session
+  following those notes hits an error at the worst moment — mid-way through
+  opening a pull request.
+
+Check all three against the repository the user opens pull requests against —
+their fork, normally this clone's `origin`, and the same repository step 4
+settled on if that differed:
+
+```
+mcp__github__get_label   # per label: merged, bug, in-review
+```
+
+A `404` means it's missing. If any are, say which and offer to create them —
+ask first, since this writes to their repository.
+
+There is no create-label tool in the GitHub MCP server, so create them through
+the `gh` CLI when it's available:
+
+```bash
+gh label create <name> --repo <owner>/<repo> --description "<what it means>"
+```
+
+If `gh` isn't installed, don't pretend it is: give the user the exact names and
+point them at `https://github.com/<owner>/<repo>/labels`, and say which of the
+three are missing. Missing labels don't block anything else in this setup —
+report and carry on.
+
+## 9. Confirm, by re-running the check
 
 ```bash
 bash "${CHECK_SETUP_SCRIPT}" || true
@@ -193,3 +234,5 @@ worked example.
 - **Never touch an existing personal-notes branch's contents.** Every write
   here is either creating a branch that provably doesn't exist yet, or a
   no-op-if-unchanged push of a file the user just asked for.
+- **Never create labels in someone's repository unasked.** Labels are visible
+  to everyone who sees the repository; report what's missing and offer.
