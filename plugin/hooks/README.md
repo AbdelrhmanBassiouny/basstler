@@ -6,6 +6,10 @@ yourself on a remote (`origin` by default), so your own workflow preferences ("a
 as drafts," "never touch branch X directly," etc.) persist across sessions without ever being
 committed to a shared branch.
 
+The same branch carries the rest of your per-user state too: this project's local Claude Code
+settings (see below), a per-branch PR-progress note, and any multi-PR plans you track — all
+gitignored, none of it ever committed on a shared branch.
+
 It works out of the box with no config at all: it reads from a branch named `claude/personal-notes`
 on `origin` unless you tell it otherwise. Run [`create-personal-notes-branch.sh`](./create-personal-notes-branch.sh)
 once to create that branch with an empty notes file, and every session from then on picks it up
@@ -122,6 +126,34 @@ To do it by hand instead: edit `CLAUDE.local.md` between those two marker lines,
 It resolves the branch/path exactly like `session-start.sh` does, extracts only what's between the
 markers, and pushes just that — in a scratch worktree, so your current branch and working tree are
 untouched, and as a no-op if nothing actually changed.
+
+## Syncing your personal Claude Code settings
+
+The same branch can also carry your personal `.claude/settings.local.json` — the file Claude Code
+itself reads as this project's local settings (permission rules, environment variables, and
+anything else in its settings schema). Store it on the personal-notes branch at
+`.claude/personal/settings.local.json` and `session-start.sh` copies it verbatim into the project
+root's `.claude/settings.local.json` every session, so settings you'd otherwise re-grant in every
+fresh clone follow you around exactly like your notes do. It's gitignored, so it can never be
+committed on any branch — the committed `.claude/settings.json` remains the shared, team-wide one.
+
+Unlike the notes, it gets no header or markers: strict JSON has no comment syntax to put them in,
+so the file is copied and pushed whole.
+
+**Local edits are never overwritten.** Claude Code writes to this same file whenever you grant a
+permission with "don't ask again", so a blind copy each session start would silently drop those
+grants. The hook only writes when the file is missing or still identical to what it last synced
+(tracked in the gitignored `.claude/.personal-settings-sync-hash`); otherwise it keeps your version
+and says so in its session-start summary. To push local edits up and let syncing resume:
+
+```bash
+"$CLAUDE_PROJECT_DIR/.claude/hooks/save-personal-settings.sh"
+```
+
+Ask Claude to do it in any session — *"save my Claude settings"* — the same way as your notes.
+
+Settings written this way apply as soon as Claude Code picks the file up; if a session was already
+running when it first appeared, open `/hooks` or restart to be sure it's loaded.
 
 ## Tracking a PR's plan and progress
 
@@ -315,6 +347,9 @@ directly:
 "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh" && cat CLAUDE.local.md
 ```
 
+The script also prints a summary of exactly what it found and wrote that run — your notes, local
+settings, PR progress, and plan — so a session never has to infer it from the file's content.
+
 ## Safety
 
 - No-op in effect for anyone who never creates the `claude/personal-notes` branch (or an override
@@ -323,11 +358,15 @@ directly:
 - Never merges anything: the hook only ever *reads* the resolved branch, off `FETCH_HEAD` via `git
   show` (not a `<remote>/<branch>` ref, since a URL-form remote creates no tracking ref for one). It
   never checks the branch out or merges it into your working branch.
-- `create-personal-notes-branch.sh`, `save-personal-notes.sh` and `save-pr-progress.sh` never touch
-  your current branch or working tree either — all three do their work in a scratch worktree.
+- `create-personal-notes-branch.sh` and every save script (`save-personal-notes.sh`,
+  `save-personal-settings.sh`, `save-pr-progress.sh`, `save-plan.sh`) never touch your current
+  branch or working tree either — they all do their work in a scratch worktree.
   `create-personal-notes-branch.sh` refuses to run if the target branch already exists locally, on
-  the resolved remote, or on the upstream-tracking fallback remote (see above); the two save scripts
-  are each a no-op if there's nothing new to push.
+  the resolved remote, or on the upstream-tracking fallback remote (see above); each save script is
+  a no-op if there's nothing new to push.
+- Synced settings never silently replace local ones: `.claude/settings.local.json` is only written
+  when it's missing or unchanged since the hook last synced it, so permission grants Claude Code
+  appended to it are kept until you run `save-personal-settings.sh` yourself.
 - The sync headers `session-start.sh` writes are never themselves pushed back: `save-personal-notes.sh`
   and `save-pr-progress.sh` each extract only the content between their own markers
   (`BEGIN-PERSONAL-NOTES`/`END-PERSONAL-NOTES` and `BEGIN-PR-PROGRESS`/`END-PR-PROGRESS`
@@ -336,9 +375,9 @@ directly:
 - PR-progress content is never merged, by construction: it is written only to the branch-keyed path
   on the personal-notes branch, never to any file tracked on the PR branch itself, so there is no
   code path by which it could end up in a commit that gets merged.
-- `CLAUDE.local.md` is gitignored, so populated notes can't accidentally end up in a commit on any
-  branch, including this one.
-- All four scripts always operate on *this* repo's project root specifically, never wherever they
+- `CLAUDE.local.md` and `.claude/settings.local.json` are both gitignored, so populated notes and
+  synced settings can't accidentally end up in a commit on any branch, including this one.
+- Every script here always operates on *this* repo's project root specifically, never wherever they
   happen to be invoked from: a `SessionStart` hook's cwd isn't guaranteed to be the project root,
   and these scripts are also meant to be run directly. Each resolves its own location on disk
   (`resolve-personal-notes-config.sh`'s own path, not `$CLAUDE_PROJECT_DIR` or the caller's cwd,
