@@ -102,14 +102,31 @@ REPARENT EVERY ORPHANED CHILD - the ancestry test decides this, never the board.
 on the BASE branch of every open fork PR whose base is neither `main` nor the head of another open fork
 PR: those bases have no board entry of their own, so nothing else in this phase would ever look at them.
 Whenever such a base has landed, retarget its child's base to `main` on GitHub. A parent whose own PR
-was CLOSED rather than merged is exactly this case, and leaving it unreparented strands the child on a
-base whose content is already in main - which inflates that PR's diff by everything main gained since,
-and is how PR #41 ended up showing 268 changed files.
-- If retargeting is refused with `422 - Cannot change the base branch because the pull request is part
-  of a stack`, the child belongs to a GitHub stack and PATCH base cannot move it. Do NOT unstack to
-  force it through: dissolving a stack touches every PR in it, which is far outside a mechanical
-  restack. Leave the base as it is, report the PR in the FINISH summary as needing a manual retarget,
-  and carry on - Phase 2 still merges `main` into the branch, so only the diff view is affected.
+was CLOSED rather than merged is exactly this case, and it is how PR #41 came to sit on a base whose
+content had long since landed. The reparent is not cosmetic and is never optional: a child left on a
+landed base cannot reach `main`, and it is closed outright the moment that base branch is deleted.
+The inflated diff such a child shows is a symptom, not the problem.
+
+NATIVE-STACK MEMBERS. `PATCH`-ing the base of a PR that belongs to a GitHub stack fails with
+`422 - Cannot change the base branch because the pull request is part of a stack`, so the plain
+retarget above cannot move it. A PR is a stack member iff its REST JSON carries a non-null `stack`
+object when fetched with the header `X-GitHub-Api-Version: 2026-03-10`; the stacks endpoints are not
+in the GitHub MCP server, so call them with curl and `GH_TOKEN`, always with that version header. For
+exactly those children, the reparent becomes:
+1. `GET /repos/{owner}/{repo}/stacks` and record the affected stack's full PR list, bottom to top. Do
+   not proceed without the recorded list - dissolving is destructive and there is no undo.
+2. `POST /repos/{owner}/{repo}/stacks/{number}/unstack` (no body) to dissolve it. There is no
+   selective removal: this drops every open, draft and closed member, leaving merged ones in place.
+3. `PATCH` each orphaned child's base to `main`, which succeeds once the stack is gone.
+4. Restack normally (Phase 2's local merge/rebase + push).
+5. Re-create the stack: `POST /repos/{owner}/{repo}/stacks` with `{"pull_requests": [...]}` - the
+   recorded list minus landed and closed members, bottom to top - then `GET` it back and confirm every
+   member reports the stack.
+Do NOT fast-forward the landed base branch to `main` as a way around this. It moves the merge-base, so
+the diff looks right, but the child still targets a branch that is about to disappear - and when that
+base is a stack's trunk, moving it desynchronises the stack's recorded `base.sha` from its real head.
+If any call in this sequence fails or answers with something not described here, stop work on that
+stack, leave the rest untouched, and report it - this is a preview API, so never improvise around it.
 
 For each OPEN fork PR (head branch B) that is merged by the ancestry test:
 - REPARENT its children first - for every OTHER open fork PR whose BASE is B, retarget that child's base
@@ -224,8 +241,9 @@ Right after them, list every branch you DELEGATED this run (Phase 2): its PR num
 conflicting files or the failing check, the session link you addressed the comment to (or "no session
 link found in the PR body" if none), and a link to the comment you posted - this section is REQUIRED
 whenever you delegated anything, for the same reason as create-links: it's how I find out. Then list
-every PR whose Phase 1 reparent was refused with the stack-member 422: its number, the base it is stuck
-on, and the base it should have - I retarget those by hand, and nothing else surfaces them. Then
+every PR whose Phase 1 reparent you could not complete - its number, the base it is stuck on, the base
+it should have, and which step of the native-stack sequence stopped you - since a stack left dissolved
+or half-rebuilt needs my attention immediately, and nothing else surfaces it. Then
 summarise: what you closed, restacked, and promoted, and anything you stopped on. The board Action has
 already republished Pages from your state changes - you do not touch `board.html` or any Artifact.
 ```
