@@ -29,6 +29,7 @@ import os
 import subprocess
 import sys
 import tomllib
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -209,11 +210,26 @@ class Stack:
     branches: list[Branch]
     """The derived stack nodes."""
 
+    is_merged: Callable[[str], bool]
+    """Maps any branch name - tracked by this stack or not - to whether it has landed
+    upstream."""
+
     def needs_resolution(self, branch: Branch) -> bool:
         """:param branch: The branch to check.
         :return: Whether the branch is withheld from promotion pending conflict resolution.
         """
         return self.config.needs_resolution_label in branch.labels
+
+    def has_landed_upstream(self, branch_name: str) -> bool:
+        """Whether a branch's commits are already in the upstream base.
+
+        Answered from git ancestry, so it holds for any branch name - including one no open
+        pull request describes, which the board therefore never mentions.
+
+        :param branch_name: The branch to check.
+        :return: Whether its commits are in the upstream base.
+        """
+        return branch_name == self.config.upstream_base or self.is_merged(branch_name)
 
 
 class BoardUnavailable(RuntimeError):
@@ -262,7 +278,9 @@ def derive_status(draft: bool, merged: bool, in_review: bool) -> BranchStatus:
     return BranchStatus.DRAFT if draft else BranchStatus.READY
 
 
-def build_stack(config: Config, prs: list[PullRequest], is_merged) -> Stack:
+def build_stack(
+    config: Config, prs: list[PullRequest], is_merged: Callable[[str], bool]
+) -> Stack:
     """Assemble the :class:`Stack` from the PR export and a merged-branch predicate.
 
     :param config: The static configuration.
@@ -290,7 +308,7 @@ def build_stack(config: Config, prs: list[PullRequest], is_merged) -> Stack:
         )
         for pr in prs
     ]
-    return Stack(config=config, branches=branches)
+    return Stack(config=config, branches=branches, is_merged=is_merged)
 
 
 # %% git plumbing
@@ -393,7 +411,9 @@ def order(stack: Stack) -> list[Branch]:
 def parent_landed(stack: Stack, branch: Branch, by_name: dict[str, Branch]) -> bool:
     """Whether a branch's parent has reached the upstream (merged or in-review), so it can promote.
 
-    A root branch (base is the upstream base, so it has no tracked parent PR) is always unblocked.
+    A parent no open pull request describes cannot carry an in-review label, so git ancestry is the
+    only evidence available for it - and absence from the board is not itself evidence of a root
+    branch.
 
     :param stack: The stack the branch belongs to.
     :param branch: The branch to check.
@@ -401,7 +421,9 @@ def parent_landed(stack: Stack, branch: Branch, by_name: dict[str, Branch]) -> b
     :return: Whether the branch's parent has landed.
     """
     parent = by_name.get(branch.parent)
-    return parent is None or parent.status in {
+    if parent is None:
+        return stack.has_landed_upstream(branch.parent)
+    return parent.status in {
         BranchStatus.IN_REVIEW,
         BranchStatus.MERGED,
     }
@@ -449,20 +471,20 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
     When a branch's parent has **merged** into the upstream, its commits are already in the base, so
     the child is reparented onto the upstream base: the restack rebases it there and it stops
     depending on a landed (and about-to-be-closed) branch. The routine mirrors this by retargeting
-    the child PR's base to the upstream base on GitHub.
+    the child PR's base to the upstream base on GitHub. This holds however the parent landed -
+    including when its own pull request was closed rather than merged, leaving the board with no
+    entry for it at all.
 
     :param stack: The stack to plan.
     :return: The restack plan, one entry per not-yet-merged branch.
     """
-    by_name = {b.name: b for b in stack.branches}
     plan: list[dict[str, str]] = []
     for branch in order(stack):
         if branch.status == BranchStatus.MERGED:
             continue
-        parent = by_name.get(branch.parent)
         effective_parent = (
             stack.config.upstream_base
-            if parent is not None and parent.status == BranchStatus.MERGED
+            if stack.has_landed_upstream(branch.parent)
             else branch.parent
         )
         plan.append(

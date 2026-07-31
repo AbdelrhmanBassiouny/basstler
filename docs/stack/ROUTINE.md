@@ -96,14 +96,29 @@ PHASE 1 - LANDED PARENTS: REPARENT, LABEL `merged`, THEN CLOSE
 cram2 always merges with a merge commit (never squash/rebase), so a landed branch is always an ancestor
 of cram2/main. A branch B is MERGED (not merely closed) iff
 `git merge-base --is-ancestor origin/B cram2/main` succeeds - that git-ancestry test, NOT the PR's
-open/closed state, is how you know B actually landed in main. For each OPEN fork PR (head branch B) that
-is merged this way:
+open/closed state, is how you know B actually landed in main.
+
+REPARENT EVERY ORPHANED CHILD - the ancestry test decides this, never the board. Run the ancestry test
+on the BASE branch of every open fork PR whose base is neither `main` nor the head of another open fork
+PR: those bases have no board entry of their own, so nothing else in this phase would ever look at them.
+Whenever such a base has landed, retarget its child's base to `main` on GitHub. A parent whose own PR
+was CLOSED rather than merged is exactly this case, and leaving it unreparented strands the child on a
+base whose content is already in main - which inflates that PR's diff by everything main gained since,
+and is how PR #41 ended up showing 268 changed files.
+- If retargeting is refused with `422 - Cannot change the base branch because the pull request is part
+  of a stack`, the child belongs to a GitHub stack and PATCH base cannot move it. Do NOT unstack to
+  force it through: dissolving a stack touches every PR in it, which is far outside a mechanical
+  restack. Leave the base as it is, report the PR in the FINISH summary as needing a manual retarget,
+  and carry on - Phase 2 still merges `main` into the branch, so only the diff view is affected.
+
+For each OPEN fork PR (head branch B) that is merged by the ancestry test:
 - REPARENT its children first - for every OTHER open fork PR whose BASE is B, retarget that child's base
   to `main` on GitHub (B's commits are in main now, so the child stacks on main, not on a branch about
   to disappear). Do this BEFORE closing B so no child is ever orphaned. `.claude/stack/stack.py
   restack-plan` already emits `parent: main` for these children, so Phase 2 rebases them onto main to
-  match. (Only when B is merged by the ancestry test - a PR merely CLOSED without merging leaves its
-  children alone.)
+  match. (Only when B is merged by the ancestry test - a PR merely CLOSED without merging leaves B's own
+  label/close state alone, but NOT its children: they are reparented by the rule above, which keys off
+  the branch's ancestry rather than its PR's state.)
 - LABEL it `merged` - ALWAYS add the `merged` label to B's fork PR as the durable "this landed"
   indicator, even when you then close it.
 - CLOSE it - close B's fork PR with a comment noting it merged into cram2/main. If you cannot close it,
@@ -208,7 +223,9 @@ new links were built this run, as long as any pending ones exist - that is how I
 Right after them, list every branch you DELEGATED this run (Phase 2): its PR number and branch, the
 conflicting files or the failing check, the session link you addressed the comment to (or "no session
 link found in the PR body" if none), and a link to the comment you posted - this section is REQUIRED
-whenever you delegated anything, for the same reason as create-links: it's how I find out. Then
+whenever you delegated anything, for the same reason as create-links: it's how I find out. Then list
+every PR whose Phase 1 reparent was refused with the stack-member 422: its number, the base it is stuck
+on, and the base it should have - I retarget those by hand, and nothing else surfaces them. Then
 summarise: what you closed, restacked, and promoted, and anything you stopped on. The board Action has
 already republished Pages from your state changes - you do not touch `board.html` or any Artifact.
 ```
