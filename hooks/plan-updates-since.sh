@@ -29,12 +29,25 @@ set -euo pipefail
 # credential/request logic below is a small, deliberately temporary copy of
 # that same pattern, not a new one.
 #
+# Every user-facing message string, and the comment-JSON parsing, live in
+# plan_updates_since_support.py rather than inline here - so this script
+# never carries its own copy of text the test suite also has to check
+# against, and the comment-parsing logic is real, testable Python rather
+# than an inline `python3 -c` snippet. See that module's own docstring.
+#
 # Finishes by advancing PLAN_STATE_SYNC_STAMP to the commit it just diffed
 # up to, so the next recheck starts from here.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
+if ! command -v python3 > /dev/null 2>&1; then
+  echo "python3 is required (it prints this script's messages and parses" >&2
+  echo "GitHub's tracking-issue-comments response)." >&2
+  exit 1
+fi
+
+SUPPORT_SCRIPT="${SCRIPT_DIR}/plan_updates_since_support.py"
 GITHUB_API_BASE_URL="https://api.github.com"
 
 # github_api_token: prints GH_TOKEN, else GITHUB_TOKEN, and fails with a
@@ -52,9 +65,8 @@ github_api_token() {
 
 # print_issue_comments_since: prints every comment on
 # repository#issue_number created or updated at or after since_timestamp_utc
-# (an "YYYY-MM-DDTHH:MM:SSZ" string), one per
-# "[<login> @ <created_at>]"-then-body block, or "No new comments." if there
-# are none.
+# (an "YYYY-MM-DDTHH:MM:SSZ" string), formatted by
+# plan_updates_since_support.py's format_issue_comments.
 print_issue_comments_since() {
   local repository="$1" issue_number="$2" since_timestamp_utc="$3"
   local path="repos/${repository}/issues/${issue_number}/comments?since=${since_timestamp_utc}&per_page=100"
@@ -71,20 +83,7 @@ print_issue_comments_since() {
       "${GITHUB_API_BASE_URL}/${path}")"
   fi
 
-  printf '%s' "${response}" | python3 -c '
-import json, sys
-
-comments = json.loads(sys.stdin.read())
-if not comments:
-    print("No new comments.")
-    sys.exit(0)
-for comment in comments:
-    login = comment["user"]["login"]
-    created_at = comment["created_at"]
-    print(f"[{login} @ {created_at}]")
-    print(comment["body"])
-    print("---")
-'
+  printf '%s' "${response}" | python3 "${SUPPORT_SCRIPT}" print-comments
 }
 
 PLAN_ID=""
@@ -142,7 +141,7 @@ PLAN_DIRECTORY="$(plan_directory_path "${PLAN_ID}")"
 echo "=== Changes to ${PLAN_DIRECTORY} (${SINCE_SHA}..${NEW_SHA}) ==="
 DELTA="$(git diff "${SINCE_SHA}" "${NEW_SHA}" -- "${PLAN_DIRECTORY}")"
 if [ -z "${DELTA}" ]; then
-  echo "No changes."
+  python3 "${SUPPORT_SCRIPT}" print-no-changes-message
 else
   printf '%s\n' "${DELTA}"
 fi
@@ -153,14 +152,14 @@ TRACKING_ISSUE="$(git show "FETCH_HEAD:${MANIFEST_PATH}" \
 
 if [ -z "${TRACKING_ISSUE}" ]; then
   echo "=== Tracking issue ==="
-  echo "This plan has no tracking_issue set - nothing to check for new comments."
+  python3 "${SUPPORT_SCRIPT}" print-no-tracking-issue-message
 else
   DEFAULT_REPOSITORY="$(git show "FETCH_HEAD:${MANIFEST_PATH}" \
     | grep -oE '^default_repository:[[:space:]]*.+$' | head -1 \
     | sed -E 's/^default_repository:[[:space:]]*//' || true)"
   if [ -z "${DEFAULT_REPOSITORY}" ]; then
-    echo "Plan '${PLAN_ID}' has tracking_issue set (#${TRACKING_ISSUE}) but no" >&2
-    echo "default_repository - cannot tell which GitHub repository to query." >&2
+    python3 "${SUPPORT_SCRIPT}" print-no-default-repository-message \
+      "${PLAN_ID}" "${TRACKING_ISSUE}"
     exit 1
   fi
 
