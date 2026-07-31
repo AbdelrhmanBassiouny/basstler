@@ -39,6 +39,12 @@ rejected outright (`MissingMergeTimestampError`) rather than silently read as
 unmerged, so record `merged_at` for closed pull requests explicitly, `null`
 included.
 
+`${GITHUB_LIST_PULL_REQUESTS_TOOL}` omits null-valued fields from its
+response entirely, so a genuinely unmerged pull request comes back with no
+`merged_at` key at all - indistinguishable, in its output, from a field you
+never asked for. Write the `null` in yourself for those; transcribing the
+response as-is is what the rejection above catches.
+
 `labels` matters even though most callers never look at it: a pull request
 merged out-of-band never gets `merged_at` set, and this repo's convention
 is to add a `"merged"` label by hand in that case - see
