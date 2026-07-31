@@ -1165,7 +1165,7 @@ class DashboardRenderer:
                 for identifier in item.depends_on
                 if identifier in self.items_by_identifier
             ]
-            if not dependencies or item.status not in (
+            if item.status not in (
                 ItemStatus.NOT_STARTED,
                 ItemStatus.BLOCKED,
             ):
