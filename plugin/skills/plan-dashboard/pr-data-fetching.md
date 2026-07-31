@@ -25,7 +25,24 @@ this matters:
    the pagination window), fall back to `${GITHUB_PULL_REQUEST_READ_TOOL}`
    with `method: "get"` for that specific `pullNumber`.
 
-Include `labels` even though most callers never look at it: a pull request
+## Fields
+
+Every entry needs `state`, `draft`, `merged_at` and `labels`. If you narrow
+the response with `fields`, that is the minimum set to ask for - narrowing
+it further is what breaks this data, not what makes it cheaper.
+
+`merged_at` is the only thing that distinguishes a merged pull request from
+one closed unmerged: `state` is `"closed"` for both. Dropping it turns every
+merged pull request into a phantom "marked done, but pull request #N was
+closed without merging" drift flag. A closed entry built without it is
+rejected outright (`MissingMergeTimestampError`) rather than silently read as
+unmerged, so record `merged_at` for closed pull requests explicitly, `null`
+included.
+
+`labels` matters even though most callers never look at it: a pull request
 merged out-of-band never gets `merged_at` set, and this repo's convention
 is to add a `"merged"` label by hand in that case - see
-`build_dashboard.py`'s `PullRequestLabel`/`was_merged`.
+`build_dashboard.py`'s `PullRequestLabel`/`was_merged`. That label is a
+fallback for a real merge GitHub never recorded, not a substitute for
+`merged_at` - only pull requests that happen to carry it survive a fetch
+that dropped the timestamp.
