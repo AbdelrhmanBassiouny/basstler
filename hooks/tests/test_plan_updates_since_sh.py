@@ -3,7 +3,7 @@ Integration tests for plan-updates-since.sh: the recheck-deltas helper that diff
 plan's directory since a baseline commit and prints tracking-issue comments newer than
 that commit's timestamp.
 
-Run against a local `git init --bare` fixture standing in for the personal-notes remote,
+Run against the shared ScratchRepository fixture (see conftest.py/scratch_repository.py)
 and stubbed `gh`/`curl` executables standing in for the two GitHub backends - no network
 access, no real personal-notes branch, no real GitHub credentials.
 """
@@ -25,12 +25,7 @@ from plan_updates_since_support import (
     PlanUpdatesSinceOption,
     no_default_repository_message,
 )
-
-HOOKS_SOURCE_DIRECTORY = Path(__file__).parent.parent
-"""
-Unlike save-plan.sh's tests, this script needs no PyYAML - it never imports
-plan_manifest_tools, only resolving the same directory that module already lives in.
-"""
+from scratch_repository import ScratchRepository
 
 FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
 STUBS_DIRECTORY = Path(__file__).parent / "stubs"
@@ -83,70 +78,38 @@ def _run_git(*arguments: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return result
 
 
-def _init_base_project(tmp_path: Path) -> Path:
+def install_plan_updates_since(repository: ScratchRepository) -> None:
     """
-    Create a fresh git repository carrying the real resolve-personal-notes-config.sh,
-    plan-updates-since.sh and plan_updates_since_support.py, with one initial commit -
-    the common setup shared by every scratch layout below, whether or not it goes on to
-    carry a personal-notes branch.
+    Copy plan-updates-since.sh and its dependencies into *repository*, then commit an
+    initial commit - the common setup every test below builds on, whether or not it
+    goes on to bootstrap a personal-notes branch too.
 
-    :param tmp_path: pytest's per-test temporary directory.
-    :return: The new project root.
+    :param repository: A fixture-built scratch repository.
     """
-    project_root = tmp_path / "project"
-    hooks_directory = project_root / ".claude" / "hooks"
-    hooks_directory.mkdir(parents=True)
-    for script in (
+    repository.install_hook_scripts(
         "resolve-personal-notes-config.sh",
         "plan-updates-since.sh",
         "plan_updates_since_support.py",
-    ):
-        shutil.copy(HOOKS_SOURCE_DIRECTORY / script, hooks_directory / script)
-
-    _run_git("init", "--quiet", cwd=project_root)
-    # A CI runner has no ambient git identity configured - set one locally so
-    # the commits below don't depend on the environment already having one.
-    _run_git("config", "user.name", "Scratch Repo", cwd=project_root)
-    _run_git("config", "user.email", "scratch-repo@example.com", cwd=project_root)
-    (project_root / "README.md").write_text("scratch repo\n")
-    _run_git("add", ".", cwd=project_root)
-    _run_git("commit", "--quiet", "-m", "initial commit", cwd=project_root)
-    return project_root
+    )
+    repository.write("README.md", "scratch repo\n")
+    repository.commit_everything("initial commit")
 
 
 @pytest.fixture
-def scratch_repo(tmp_path: Path) -> Path:
+def scratch_repo(scratch_repository: ScratchRepository) -> ScratchRepository:
     """
-    Build a scratch project root with the real resolve-personal-notes-config.sh/ plan-
-    updates-since.sh, a local `git init --bare` fixture standing in for the personal-
-    notes remote (already carrying an empty `claude/personal-notes` branch), and the
-    notes remote pointed at that fixture via local git config.
+    scratch_repository with plan-updates-since.sh installed and a personal-notes branch
+    bootstrapped with a placeholder file, checked out on a throwaway work branch.
 
-    :param tmp_path: pytest's per-test temporary directory.
-    :return: The scratch project root, checked out on a throwaway work branch.
+    :param scratch_repository: The shared scratch repository fixture.
+    :return: The prepared repository.
     """
-    project_root = _init_base_project(tmp_path)
-
-    bare_repository_path = tmp_path / "personal-notes.git"
-    _run_git("init", "--quiet", "--bare", str(bare_repository_path), cwd=tmp_path)
-
-    _run_git("checkout", "--quiet", "-b", "claude/personal-notes", cwd=project_root)
-    (project_root / ".claude" / "personal").mkdir(parents=True)
-    (project_root / ".claude" / "personal" / "placeholder.md").write_text("notes\n")
-    _run_git("add", ".claude/personal/placeholder.md", cwd=project_root)
-    _run_git("commit", "--quiet", "-m", "bootstrap personal-notes", cwd=project_root)
-    _run_git(
-        "push", str(bare_repository_path), "claude/personal-notes", cwd=project_root
+    install_plan_updates_since(scratch_repository)
+    scratch_repository.publish_notes_branch(
+        {".claude/personal/placeholder.md": "notes\n"}
     )
-    _run_git("checkout", "--quiet", "-b", "some-work-branch", cwd=project_root)
-
-    _run_git(
-        "config",
-        "claude.personalNotesRemote",
-        str(bare_repository_path),
-        cwd=project_root,
-    )
-    return project_root
+    scratch_repository.resolve_notes_remote_to()
+    return scratch_repository
 
 
 @pytest.fixture
@@ -230,31 +193,37 @@ def clean_environment() -> dict[str, str]:
 
 
 def write_plan_commit(
-    scratch_repo: Path, plan_id: str, manifest: str, roadmap: str, message: str
+    repository: ScratchRepository,
+    plan_id: str,
+    manifest: str,
+    roadmap: str,
+    message: str,
 ) -> str:
     """
     Commit *manifest*/*roadmap* at ``.claude/personal/plans/<plan_id>/`` onto the
-    personal-notes branch, via a throwaway clone so the scratch repo's own checked-out
+    personal-notes branch, via a throwaway clone so the repository's own checked-out
     branch and working tree are untouched.
 
-    :param scratch_repo: A fixture-built scratch project root.
+    :param repository: A fixture-built scratch repository whose notes branch already
+        exists (see ScratchRepository.publish_notes_branch).
     :param plan_id: The plan id to write under.
     :param manifest: The plan.yaml content to commit.
     :param roadmap: The roadmap.md content to commit.
     :param message: The commit message.
     :return: The new commit's SHA.
     """
-    bare_repository_path = scratch_repo.parent / "personal-notes.git"
-    checkout = scratch_repo.parent / f"seed-checkout-{message.replace(' ', '-')}"
+    checkout = (
+        repository.project_root.parent / f"seed-checkout-{message.replace(' ', '-')}"
+    )
     shutil.rmtree(checkout, ignore_errors=True)
     _run_git(
         "clone",
         "--quiet",
         "--branch",
         "claude/personal-notes",
-        str(bare_repository_path),
+        str(repository.notes_remote_path),
         str(checkout),
-        cwd=scratch_repo.parent,
+        cwd=repository.project_root.parent,
     )
     _run_git("config", "user.name", "Scratch Repo", cwd=checkout)
     _run_git("config", "user.email", "scratch-repo@example.com", cwd=checkout)
@@ -271,12 +240,12 @@ def write_plan_commit(
 
 
 def run_plan_updates_since(
-    scratch_repo: Path, *arguments: str, env: dict[str, str] | None = None
+    repository: ScratchRepository, *arguments: str, env: dict[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     """
-    Run the scratch layout's plan-updates-since.sh with *arguments*.
+    Run the scratch repository's plan-updates-since.sh with *arguments*.
 
-    :param scratch_repo: A fixture-built scratch project root.
+    :param repository: A fixture-built scratch repository.
     :param arguments: CLI arguments to pass to plan-updates-since.sh.
     :param env: Environment overrides applied on top of a cleaned copy of this process's
         own environment (see clean_environment).
@@ -286,10 +255,12 @@ def run_plan_updates_since(
     return subprocess.run(
         [
             "bash",
-            str(scratch_repo / ".claude" / "hooks" / "plan-updates-since.sh"),
+            str(
+                repository.project_root / ".claude" / "hooks" / "plan-updates-since.sh"
+            ),
             *arguments,
         ],
-        cwd=scratch_repo,
+        cwd=repository.project_root,
         capture_output=True,
         text=True,
         env=full_environment,
@@ -299,37 +270,34 @@ def run_plan_updates_since(
 # %% argument validation
 
 
-def test_missing_plan_id_fails_with_a_clear_message(scratch_repo: Path):
+def test_missing_plan_id_fails_with_a_clear_message(scratch_repo: ScratchRepository):
     result = run_plan_updates_since(scratch_repo)
     assert result.returncode == 1
     assert result.stderr.startswith("Usage:")
 
 
-def test_unreachable_personal_notes_branch_fails_clearly(tmp_path: Path):
-    project_root = _init_base_project(tmp_path)
-    empty_bare_repository = tmp_path / "empty.git"
-    _run_git("init", "--quiet", "--bare", str(empty_bare_repository), cwd=tmp_path)
-    _run_git(
-        "config",
-        "claude.personalNotesRemote",
-        str(empty_bare_repository),
-        cwd=project_root,
-    )
+def test_unreachable_personal_notes_branch_fails_clearly(
+    scratch_repository: ScratchRepository,
+):
+    install_plan_updates_since(scratch_repository)
+    scratch_repository.resolve_notes_remote_to()
 
-    result = run_plan_updates_since(project_root, PLAN_ID)
+    result = run_plan_updates_since(scratch_repository, PLAN_ID)
 
     assert result.returncode == 1
     assert "doesn't exist yet" in result.stderr
 
 
-def test_unknown_plan_id_fails_clearly(scratch_repo: Path):
+def test_unknown_plan_id_fails_clearly(scratch_repo: ScratchRepository):
     result = run_plan_updates_since(scratch_repo, "no-such-plan")
 
     assert result.returncode == 1
     assert "No such plan 'no-such-plan'" in result.stderr
 
 
-def test_no_since_and_no_stamp_fails_with_a_clear_message(scratch_repo: Path):
+def test_no_since_and_no_stamp_fails_with_a_clear_message(
+    scratch_repo: ScratchRepository,
+):
     write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_NOT_STARTED, PLAN_ROADMAP, "seed"
     )
@@ -343,7 +311,7 @@ def test_no_since_and_no_stamp_fails_with_a_clear_message(scratch_repo: Path):
 # %% diffing the plan directory
 
 
-def test_explicit_since_diffs_the_plan_directory(scratch_repo: Path):
+def test_explicit_since_diffs_the_plan_directory(scratch_repo: ScratchRepository):
     sha_before = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_NOT_STARTED, PLAN_ROADMAP, "v1"
     )
@@ -360,7 +328,9 @@ def test_explicit_since_diffs_the_plan_directory(scratch_repo: Path):
     assert "+    status: in_progress" in result.stdout
 
 
-def test_no_changes_since_the_baseline_prints_a_clear_message(scratch_repo: Path):
+def test_no_changes_since_the_baseline_prints_a_clear_message(
+    scratch_repo: ScratchRepository,
+):
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_NOT_STARTED, PLAN_ROADMAP, "v1"
     )
@@ -376,11 +346,11 @@ def test_no_changes_since_the_baseline_prints_a_clear_message(scratch_repo: Path
 # %% the recheck stamp
 
 
-def test_uses_the_recorded_stamp_when_since_is_omitted(scratch_repo: Path):
+def test_uses_the_recorded_stamp_when_since_is_omitted(scratch_repo: ScratchRepository):
     sha_before = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_NOT_STARTED, PLAN_ROADMAP, "v1"
     )
-    (scratch_repo / STAMP_RELATIVE_PATH).write_text(f"{sha_before}\n")
+    (scratch_repo.project_root / STAMP_RELATIVE_PATH).write_text(f"{sha_before}\n")
     write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_IN_PROGRESS, PLAN_ROADMAP, "v2"
     )
@@ -391,7 +361,7 @@ def test_uses_the_recorded_stamp_when_since_is_omitted(scratch_repo: Path):
     assert "+    status: in_progress" in result.stdout
 
 
-def test_stamp_is_updated_after_running(scratch_repo: Path):
+def test_stamp_is_updated_after_running(scratch_repo: ScratchRepository):
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_NOT_STARTED, PLAN_ROADMAP, "v1"
     )
@@ -400,7 +370,7 @@ def test_stamp_is_updated_after_running(scratch_repo: Path):
         scratch_repo, PLAN_ID, PlanUpdatesSinceOption.SINCE, sha
     )
     assert result.returncode == 0, result.stderr
-    assert (scratch_repo / STAMP_RELATIVE_PATH).read_text().strip() == sha
+    assert (scratch_repo.project_root / STAMP_RELATIVE_PATH).read_text().strip() == sha
 
     second_result = run_plan_updates_since(scratch_repo, PLAN_ID)
     assert second_result.returncode == 0, second_result.stderr
@@ -410,7 +380,7 @@ def test_stamp_is_updated_after_running(scratch_repo: Path):
 # %% tracking-issue comments
 
 
-def test_no_tracking_issue_skips_the_comments_step(scratch_repo: Path):
+def test_no_tracking_issue_skips_the_comments_step(scratch_repo: ScratchRepository):
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_NOT_STARTED, PLAN_ROADMAP, "v1"
     )
@@ -423,7 +393,9 @@ def test_no_tracking_issue_skips_the_comments_step(scratch_repo: Path):
     assert NO_TRACKING_ISSUE_MESSAGE in result.stdout
 
 
-def test_tracking_issue_without_default_repository_fails_clearly(scratch_repo: Path):
+def test_tracking_issue_without_default_repository_fails_clearly(
+    scratch_repo: ScratchRepository,
+):
     sha = write_plan_commit(
         scratch_repo,
         PLAN_ID,
@@ -443,13 +415,13 @@ def test_tracking_issue_without_default_repository_fails_clearly(scratch_repo: P
 
 
 def test_prints_tracking_issue_comments_via_the_gh_backend(
-    scratch_repo: Path, stub_bin: Path
+    scratch_repo: ScratchRepository, stub_bin: Path, tmp_path: Path
 ):
     install_stub(stub_bin, "gh")
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
-    call_log = scratch_repo.parent / "gh-calls.txt"
+    call_log = tmp_path / "gh-calls.txt"
     comment = IssueComment(
         author_login="octocat", created_at="2026-08-01T00:00:00Z", body="Looks good"
     )
@@ -472,19 +444,19 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
     logged_call = call_log.read_text()
     assert (
         f"repos/{TRACKING_ISSUE_REPOSITORY}/issues/{TRACKING_ISSUE_NUMBER}/comments"
-        in (logged_call)
+        in logged_call
     )
     assert "since=" in logged_call
 
 
 def test_prints_tracking_issue_comments_via_the_curl_fallback(
-    scratch_repo: Path, stub_bin: Path, tmp_path: Path
+    scratch_repo: ScratchRepository, stub_bin: Path, tmp_path: Path
 ):
     install_stub(stub_bin, "curl")
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
-    call_log = scratch_repo.parent / "curl-calls.txt"
+    call_log = tmp_path / "curl-calls.txt"
     comment = IssueComment(
         author_login="hubot", created_at="2026-08-01T01:00:00Z", body="Ship it"
     )
@@ -509,12 +481,12 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
     logged_call = call_log.read_text()
     assert (
         f"repos/{TRACKING_ISSUE_REPOSITORY}/issues/{TRACKING_ISSUE_NUMBER}/comments"
-        in (logged_call)
+        in logged_call
     )
 
 
 def test_fails_when_neither_gh_nor_a_token_is_available(
-    scratch_repo: Path, tmp_path: Path
+    scratch_repo: ScratchRepository, tmp_path: Path
 ):
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
