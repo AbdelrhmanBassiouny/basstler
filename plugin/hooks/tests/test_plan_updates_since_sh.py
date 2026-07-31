@@ -10,12 +10,21 @@ access, no real personal-notes branch, no real GitHub credentials.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
+
+from plan_updates_since_support import (
+    NO_CHANGES_MESSAGE,
+    NO_TRACKING_ISSUE_MESSAGE,
+    IssueComment,
+    PlanUpdatesSinceOption,
+    no_default_repository_message,
+)
 
 HOOKS_SOURCE_DIRECTORY = Path(__file__).parent.parent
 """
@@ -38,6 +47,16 @@ PLAN_ROADMAP = (FIXTURES_DIRECTORY / "roadmap.md").read_text()
 
 PLAN_ID = "test-plan"
 STAMP_RELATIVE_PATH = ".claude/.plan-state-sync-sha"
+
+TRACKING_ISSUE_REPOSITORY = "octo-org/octo-repo"
+"""
+The default_repository plan-with-tracking-issue.yaml sets.
+"""
+
+TRACKING_ISSUE_NUMBER = "55"
+"""
+The tracking_issue plan-with-tracking-issue.yaml sets.
+"""
 
 CREDENTIAL_VARIABLE_NAMES = ("GH_TOKEN", "GITHUB_TOKEN", "GH_HOST")
 """
@@ -66,10 +85,10 @@ def _run_git(*arguments: str, cwd: Path) -> subprocess.CompletedProcess[str]:
 
 def _init_base_project(tmp_path: Path) -> Path:
     """
-    Create a fresh git repository carrying the real resolve-personal-notes-config.sh
-    and plan-updates-since.sh, with one initial commit - the common setup shared by
-    every scratch layout below, whether or not it goes on to carry a personal-notes
-    branch.
+    Create a fresh git repository carrying the real resolve-personal-notes-config.sh,
+    plan-updates-since.sh and plan_updates_since_support.py, with one initial commit -
+    the common setup shared by every scratch layout below, whether or not it goes on to
+    carry a personal-notes branch.
 
     :param tmp_path: pytest's per-test temporary directory.
     :return: The new project root.
@@ -77,7 +96,11 @@ def _init_base_project(tmp_path: Path) -> Path:
     project_root = tmp_path / "project"
     hooks_directory = project_root / ".claude" / "hooks"
     hooks_directory.mkdir(parents=True)
-    for script in ("resolve-personal-notes-config.sh", "plan-updates-since.sh"):
+    for script in (
+        "resolve-personal-notes-config.sh",
+        "plan-updates-since.sh",
+        "plan_updates_since_support.py",
+    ):
         shutil.copy(HOOKS_SOURCE_DIRECTORY / script, hooks_directory / script)
 
     _run_git("init", "--quiet", cwd=project_root)
@@ -328,7 +351,9 @@ def test_explicit_since_diffs_the_plan_directory(scratch_repo: Path):
         scratch_repo, PLAN_ID, PLAN_MANIFEST_IN_PROGRESS, PLAN_ROADMAP, "v2"
     )
 
-    result = run_plan_updates_since(scratch_repo, PLAN_ID, "--since", sha_before)
+    result = run_plan_updates_since(
+        scratch_repo, PLAN_ID, PlanUpdatesSinceOption.SINCE, sha_before
+    )
 
     assert result.returncode == 0, result.stderr
     assert "-    status: not_started" in result.stdout
@@ -340,10 +365,12 @@ def test_no_changes_since_the_baseline_prints_a_clear_message(scratch_repo: Path
         scratch_repo, PLAN_ID, PLAN_MANIFEST_NOT_STARTED, PLAN_ROADMAP, "v1"
     )
 
-    result = run_plan_updates_since(scratch_repo, PLAN_ID, "--since", sha)
+    result = run_plan_updates_since(
+        scratch_repo, PLAN_ID, PlanUpdatesSinceOption.SINCE, sha
+    )
 
     assert result.returncode == 0, result.stderr
-    assert "No changes." in result.stdout
+    assert NO_CHANGES_MESSAGE in result.stdout
 
 
 # %% the recheck stamp
@@ -369,13 +396,15 @@ def test_stamp_is_updated_after_running(scratch_repo: Path):
         scratch_repo, PLAN_ID, PLAN_MANIFEST_NOT_STARTED, PLAN_ROADMAP, "v1"
     )
 
-    result = run_plan_updates_since(scratch_repo, PLAN_ID, "--since", sha)
+    result = run_plan_updates_since(
+        scratch_repo, PLAN_ID, PlanUpdatesSinceOption.SINCE, sha
+    )
     assert result.returncode == 0, result.stderr
     assert (scratch_repo / STAMP_RELATIVE_PATH).read_text().strip() == sha
 
     second_result = run_plan_updates_since(scratch_repo, PLAN_ID)
     assert second_result.returncode == 0, second_result.stderr
-    assert "No changes." in second_result.stdout
+    assert NO_CHANGES_MESSAGE in second_result.stdout
 
 
 # %% tracking-issue comments
@@ -386,10 +415,12 @@ def test_no_tracking_issue_skips_the_comments_step(scratch_repo: Path):
         scratch_repo, PLAN_ID, PLAN_MANIFEST_NOT_STARTED, PLAN_ROADMAP, "v1"
     )
 
-    result = run_plan_updates_since(scratch_repo, PLAN_ID, "--since", sha)
+    result = run_plan_updates_since(
+        scratch_repo, PLAN_ID, PlanUpdatesSinceOption.SINCE, sha
+    )
 
     assert result.returncode == 0, result.stderr
-    assert "This plan has no tracking_issue set" in result.stdout
+    assert NO_TRACKING_ISSUE_MESSAGE in result.stdout
 
 
 def test_tracking_issue_without_default_repository_fails_clearly(scratch_repo: Path):
@@ -401,11 +432,14 @@ def test_tracking_issue_without_default_repository_fails_clearly(scratch_repo: P
         "v1",
     )
 
-    result = run_plan_updates_since(scratch_repo, PLAN_ID, "--since", sha)
+    result = run_plan_updates_since(
+        scratch_repo, PLAN_ID, PlanUpdatesSinceOption.SINCE, sha
+    )
 
     assert result.returncode == 1
-    assert "tracking_issue set (#55)" in result.stderr
-    assert "default_repository" in result.stderr
+    assert no_default_repository_message(PLAN_ID, TRACKING_ISSUE_NUMBER) in (
+        result.stderr
+    )
 
 
 def test_prints_tracking_issue_comments_via_the_gh_backend(
@@ -416,15 +450,15 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
     call_log = scratch_repo.parent / "gh-calls.txt"
-    comments_json = (
-        '[{"user": {"login": "octocat"}, '
-        '"created_at": "2026-08-01T00:00:00Z", "body": "Looks good"}]'
+    comment = IssueComment(
+        author_login="octocat", created_at="2026-08-01T00:00:00Z", body="Looks good"
     )
+    comments_json = json.dumps([comment.to_api_response()])
 
     result = run_plan_updates_since(
         scratch_repo,
         PLAN_ID,
-        "--since",
+        PlanUpdatesSinceOption.SINCE,
         sha,
         env={
             "PATH": f"{stub_bin}{os.pathsep}{os.environ.get('PATH', '')}",
@@ -434,10 +468,12 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
     )
 
     assert result.returncode == 0, result.stderr
-    assert "[octocat @ 2026-08-01T00:00:00Z]" in result.stdout
-    assert "Looks good" in result.stdout
+    assert comment.formatted() in result.stdout
     logged_call = call_log.read_text()
-    assert "repos/octo-org/octo-repo/issues/55/comments" in logged_call
+    assert (
+        f"repos/{TRACKING_ISSUE_REPOSITORY}/issues/{TRACKING_ISSUE_NUMBER}/comments"
+        in (logged_call)
+    )
     assert "since=" in logged_call
 
 
@@ -449,16 +485,16 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
     call_log = scratch_repo.parent / "curl-calls.txt"
-    comments_json = (
-        '[{"user": {"login": "hubot"}, '
-        '"created_at": "2026-08-01T01:00:00Z", "body": "Ship it"}]'
+    comment = IssueComment(
+        author_login="hubot", created_at="2026-08-01T01:00:00Z", body="Ship it"
     )
+    comments_json = json.dumps([comment.to_api_response()])
     hidden_gh_path = path_hiding_executable("gh", tmp_path)
 
     result = run_plan_updates_since(
         scratch_repo,
         PLAN_ID,
-        "--since",
+        PlanUpdatesSinceOption.SINCE,
         sha,
         env={
             "PATH": f"{stub_bin}{os.pathsep}{hidden_gh_path}",
@@ -469,10 +505,12 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
     )
 
     assert result.returncode == 0, result.stderr
-    assert "[hubot @ 2026-08-01T01:00:00Z]" in result.stdout
-    assert "Ship it" in result.stdout
+    assert comment.formatted() in result.stdout
     logged_call = call_log.read_text()
-    assert "repos/octo-org/octo-repo/issues/55/comments" in logged_call
+    assert (
+        f"repos/{TRACKING_ISSUE_REPOSITORY}/issues/{TRACKING_ISSUE_NUMBER}/comments"
+        in (logged_call)
+    )
 
 
 def test_fails_when_neither_gh_nor_a_token_is_available(
@@ -486,7 +524,7 @@ def test_fails_when_neither_gh_nor_a_token_is_available(
     result = run_plan_updates_since(
         scratch_repo,
         PLAN_ID,
-        "--since",
+        PlanUpdatesSinceOption.SINCE,
         sha,
         env={"PATH": hidden_gh_path},
     )
