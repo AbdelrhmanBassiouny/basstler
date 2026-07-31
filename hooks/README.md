@@ -240,6 +240,16 @@ permanently-draft PR instead if a repo has Issues disabled.) See `.claude/person
 reminds a session actively working an item to subscribe to the tracking issue too, so a change
 another session makes reaches it in real time.
 
+**Rechecking for updates without rereading everything.** Every `session-start.sh` run stamps the
+personal-notes commit it just fetched (gitignored, at `.claude/.plan-state-sync-sha`) — regardless
+of whether the current branch tracks a plan. [`plan-updates-since.sh`](./plan-updates-since.sh)
+`<plan-id> [--since <sha>]` uses that stamp as a baseline (or an explicit `--since <sha>`) to print
+only what changed in that plan's directory since then, plus any tracking-issue comments newer than
+that commit's timestamp, instead of rereading the whole manifest and roadmap by hand. It needs no
+Claude Code session for the GitHub lookup — like `github-api.sh`, it prefers the `gh` CLI when
+installed, otherwise `GH_TOKEN`/`GITHUB_TOKEN` with `curl`. It advances the stamp itself when it
+finishes, so the next recheck starts from where this one left off.
+
 ## Setup: overriding the default remote/branch/path
 
 Skip this section if the zero-config default above is all you need. The three settings are
@@ -338,6 +348,10 @@ directly:
   code path by which it could end up in a commit that gets merged.
 - `CLAUDE.local.md` is gitignored, so populated notes can't accidentally end up in a commit on any
   branch, including this one.
+- `plan-updates-since.sh` never pushes anything or touches your current branch or working tree
+  either: it only reads `FETCH_HEAD` and writes the gitignored recheck stamp
+  (`.claude/.plan-state-sync-sha`) locally, so like `CLAUDE.local.md` that stamp can never end up in
+  a commit on any branch.
 - All four scripts always operate on *this* repo's project root specifically, never wherever they
   happen to be invoked from: a `SessionStart` hook's cwd isn't guaranteed to be the project root,
   and these scripts are also meant to be run directly. Each resolves its own location on disk
