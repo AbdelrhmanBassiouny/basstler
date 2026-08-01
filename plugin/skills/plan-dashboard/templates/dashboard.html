@@ -303,6 +303,26 @@
   .next-ready li { border-color: var(--status-done); }
   .next-recheck li { border-color: var(--status-blocked); }
   .next-reason { color: var(--text-muted); font-size: 0.78rem; }
+
+  /* The bug-fixes-only filter. Both counts are rendered up front and swapped
+     here, rather than recomputed in script when the box is ticked - the same
+     approach the done-items toggle takes with its two indent levels. */
+  .bug-filter-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin: -0.25rem 0 0.75rem;
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    cursor: pointer;
+  }
+  .bug-filter-toggle input { accent-color: var(--bug); cursor: pointer; }
+  .next-count-bug { display: none; }
+  .bug-fixes-only .next-count-all { display: none; }
+  .bug-fixes-only .next-count-bug { display: inline; }
+  .bug-fixes-only .next-group:not(.next-group-has-bugs) { display: none; }
+  .bug-fixes-only .next-entry:not(.next-entry-bug) { display: none; }
+
   .next-bug-chip {
     display: inline-block;
     margin-left: 0.35rem;
@@ -733,11 +753,12 @@
 #}
 {% macro next_step_group(group_class, heading, items, show_review_link=false) %}
 {%- if items %}
-          <div class="next-group {{ group_class }}">
-            <h4>{{ heading }} ({{ items | length }})</h4>
+{%- set bug_fixes = items | selectattr("is_bug_fix") | list %}
+          <div class="next-group {{ group_class }}{% if bug_fixes %} next-group-has-bugs{% endif %}">
+            <h4>{{ heading }} <span class="next-count-all">({{ items | length }})</span><span class="next-count-bug">({{ bug_fixes | length }})</span></h4>
             <ul>
             {% for item in items %}
-              <li>
+              <li class="next-entry{% if item.is_bug_fix %} next-entry-bug{% endif %}">
                 <a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong>{% if item.is_bug_fix %} <span class="next-bug-chip">bug</span>{% endif %}<br><span class="next-reason">{{ caller(item) }}</span></a>
                 {%- if show_review_link %}
                 <a class="next-review-link" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">Review ↗</a>
@@ -748,8 +769,14 @@
           </div>
 {% endif %}
 {%- endmacro %}
-      <div class="sidebar-card">
+      <div class="sidebar-card" id="next-steps-card">
         <h3>What to do next</h3>
+        {% if has_bug_fix_next_steps %}
+        <label class="bug-filter-toggle">
+          <input type="checkbox" id="bug-fixes-only-toggle" onchange="document.getElementById('next-steps-card').classList.toggle('bug-fixes-only', this.checked)">
+          Bug fixes only
+        </label>
+        {% endif %}
         {% if drift_items or ready_to_review or ready_to_start or blocker_maybe_cleared %}
           {% call(item) next_step_group("next-drift", "Fix the manifest", drift_items) %}{{ item.drift_description }}{% endcall %}
           {% call(item) next_step_group("next-ready", "Ready to start", ready_to_start) %}every dependency is at least ready for review — nothing structurally blocking it{% endcall %}

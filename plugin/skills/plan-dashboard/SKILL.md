@@ -161,7 +161,10 @@ open PR too (the dependency need not itself be past review — just open —
 so a whole reviewable stack can surface before its base has merged). Any
 sidebar entry whose PR carries the `bug` label is marked with a `bug` chip
 where it already sits: a bug fix is a property of the work rather than an
-action of its own, so it is never grouped or ordered separately.
+action of its own, so it is never grouped or ordered separately. A "Bug
+fixes only" checkbox — shown only when some entry is a bug fix — filters the
+sidebar down to them, client-side, with each group's shown count swapped in
+alongside its total the same way the done-items toggle swaps indent levels.
 Renders the final HTML — including `roadmap.md` converted to HTML and
 shown in a collapsed `<details>` section, and the tracking-issue link if
 one was passed. None of that is this document's job to describe further;
