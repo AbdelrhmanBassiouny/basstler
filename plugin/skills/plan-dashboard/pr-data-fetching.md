@@ -25,7 +25,7 @@ this matters:
    the pagination window), fall back to `${GITHUB_PULL_REQUEST_READ_TOOL}`
    with `method: "get"` for that specific `pullNumber`.
 
-Include `labels` even though most callers never look at it: a pull request
-merged out-of-band never gets `merged_at` set, and this repo's convention
-is to add a `"merged"` label by hand in that case - see
-`build_dashboard.py`'s `PullRequestLabel`/`was_merged`.
+Include `labels`: a pull request merged out-of-band never gets `merged_at`
+set, and this repo's convention is to add a `"merged"` label by hand in that
+case, while a `"bug"` label marks the item as a bug fix in the sidebar - see
+`build_dashboard.py`'s `PullRequestLabel`/`was_merged`/`Item.is_bug_fix`.
