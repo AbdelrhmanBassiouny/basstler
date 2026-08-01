@@ -50,15 +50,14 @@ the command:
     branch, and NEVER map a mismatched refspec - use `git push origin <branch>` or `<branch>:<branch>`
     with identical names. A `git push origin HEAD:<other-branch>` or a `<src>:<dst>` where src≠dst is
     FORBIDDEN unless you have explicitly written out and verified both sides.
-  - INTO (destination): the exact remote + branch (e.g. `origin/eql-core-prep`). Confirm the remote is
+  - INTO (destination): the exact remote + branch (e.g. `origin/<branch>`). Confirm the remote is
     the fork (`origin`), never `cram2`. If force-pushing, confirm no open cram2 PR (or it carries
     `rebase`) and use `--force-with-lease`.
   - WHY: one sentence - what you are integrating and why it belongs on that destination branch.
 Then INTENT-CHECK the parentage before pushing: run `git log --oneline -5 <source>` and
 `git log --oneline -3 origin/<destination>`; the only new commits about to land on the destination must
 be the ones you expect. If a CHILD branch's commits would become ancestors of its PARENT, GitHub will
-auto-mark the child PR as merged - a false merge. STOP and do not push. (This exact mistake once pushed
-`rdr-engine`'s HEAD onto `eql-core-prep` and falsely merged the child PR #29.)
+auto-mark the child PR as merged - a false merge. STOP and do not push.
 
 SETUP
 0. Ensure remotes match the config: `origin` must be the fork
@@ -102,10 +101,9 @@ REPARENT EVERY ORPHANED CHILD - the ancestry test decides this, never the board.
 on the BASE branch of every open fork PR whose base is neither `main` nor the head of another open fork
 PR: those bases have no board entry of their own, so nothing else in this phase would ever look at them.
 Whenever such a base has landed, retarget its child's base to `main` on GitHub. A parent whose own PR
-was CLOSED rather than merged is exactly this case, and it is how PR #41 came to sit on a base whose
-content had long since landed. The reparent is not cosmetic and is never optional: a child left on a
-landed base cannot reach `main`, and it is closed outright the moment that base branch is deleted.
-The inflated diff such a child shows is a symptom, not the problem.
+was CLOSED rather than merged is exactly this case. The reparent is not cosmetic and is never optional:
+a child left on a landed base cannot reach `main`, and it is closed outright the moment that base
+branch is deleted. The inflated diff such a child shows is a symptom, not the problem.
 
 NATIVE-STACK MEMBERS. `PATCH`-ing the base of a PR that belongs to a GitHub stack fails with
 `422 - Cannot change the base branch because the pull request is part of a stack`, so the plain

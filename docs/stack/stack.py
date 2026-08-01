@@ -11,7 +11,7 @@ GitHub is the single source of truth. The stack is **not** declared in a ledger:
 
 ``stack.toml`` carries the committed defaults (label names, remotes); a
 ``.claude/personal/stack.toml`` on the personal-notes branch, if present, layers per-user overrides on
-top of them (see :func:`load_config`).
+top of them (see :func:`load_configuration`).
 
 Commands (run from the repo root)::
 
@@ -36,16 +36,16 @@ from pathlib import Path
 
 # %% configuration
 
-CONFIG_PATH = Path(__file__).with_name("stack.toml")
+CONFIGURATION_PATH = Path(__file__).with_name("stack.toml")
 BOARD_PATH = Path(__file__).with_name("board.json")
 
-PERSONAL_STACK_CONFIG_PATH = ".claude/personal/stack.toml"
-"""Path, relative to the project root, of the per-user config override file on the personal-notes
-branch (see :func:`_personal_config_overrides`)."""
+PERSONAL_STACK_CONFIGURATION_PATH = ".claude/personal/stack.toml"
+"""Path, relative to the project root, of the per-user configuration override file on the personal-notes
+branch (see :func:`_personal_configuration_overrides`)."""
 
 
 @dataclass
-class Config:
+class Configuration:
     """Static configuration for the workflow (everything that is not derivable from GitHub)."""
 
     in_review_label: str
@@ -67,8 +67,8 @@ class Config:
     """The upstream base branch every stack ultimately targets."""
 
 
-def load_config(path: Path = CONFIG_PATH) -> Config:
-    """Parse the layered configuration into a :class:`Config`.
+def load_configuration(path: Path = CONFIGURATION_PATH) -> Configuration:
+    """Parse the layered configuration into a :class:`Configuration`.
 
     Values from the committed *path* are the defaults; any key present in
     ``.claude/personal/stack.toml`` on the personal-notes branch overrides them, so a user's own
@@ -78,8 +78,8 @@ def load_config(path: Path = CONFIG_PATH) -> Config:
     :return: The layered configuration.
     """
     values = tomllib.loads(path.read_text())
-    values.update(_personal_config_overrides())
-    return Config(
+    values.update(_personal_configuration_overrides())
+    return Configuration(
         in_review_label=values.get("in_review_label", "in-review"),
         rebase_label=values.get("rebase_label", "rebase"),
         needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
@@ -110,8 +110,8 @@ def _resolve_personal_notes_branch() -> str:
     )
 
 
-def _personal_config_overrides() -> dict[str, object]:
-    """Fetch the personal-notes branch and parse its config override file, if any.
+def _personal_configuration_overrides() -> dict[str, object]:
+    """Fetch the personal-notes branch and parse its configuration override file, if any.
 
     :return: The parsed contents of ``.claude/personal/stack.toml`` on the personal-notes branch, or
         an empty mapping if the branch or the file doesn't exist (e.g. before it has ever been
@@ -121,9 +121,13 @@ def _personal_config_overrides() -> dict[str, object]:
     branch = _resolve_personal_notes_branch()
     if not _git_succeeds("fetch", remote, branch, "--quiet"):
         return {}
-    if not _git_succeeds("cat-file", "-e", f"FETCH_HEAD:{PERSONAL_STACK_CONFIG_PATH}"):
+    if not _git_succeeds(
+        "cat-file", "-e", f"FETCH_HEAD:{PERSONAL_STACK_CONFIGURATION_PATH}"
+    ):
         return {}
-    return tomllib.loads(_git("show", f"FETCH_HEAD:{PERSONAL_STACK_CONFIG_PATH}"))
+    return tomllib.loads(
+        _git("show", f"FETCH_HEAD:{PERSONAL_STACK_CONFIGURATION_PATH}")
+    )
 
 
 # %% domain model
@@ -204,7 +208,7 @@ class Branch:
 class Stack:
     """The whole stack: configuration plus the branches derived from GitHub and git."""
 
-    config: Config
+    configuration: Configuration
     """The static configuration."""
 
     branches: list[Branch]
@@ -218,7 +222,7 @@ class Stack:
         """:param branch: The branch to check.
         :return: Whether the branch is withheld from promotion pending conflict resolution.
         """
-        return self.config.needs_resolution_label in branch.labels
+        return self.configuration.needs_resolution_label in branch.labels
 
     def has_landed_upstream(self, branch_name: str) -> bool:
         """Whether a branch's commits are already in the upstream base.
@@ -229,7 +233,9 @@ class Stack:
         :param branch_name: The branch to check.
         :return: Whether its commits are in the upstream base.
         """
-        return branch_name == self.config.upstream_base or self.is_merged(branch_name)
+        return branch_name == self.configuration.upstream_base or self.is_merged(
+            branch_name
+        )
 
 
 class BoardUnavailable(RuntimeError):
@@ -279,11 +285,13 @@ def derive_status(draft: bool, merged: bool, in_review: bool) -> BranchStatus:
 
 
 def build_stack(
-    config: Config, prs: list[PullRequest], is_merged: Callable[[str], bool]
+    configuration: Configuration,
+    prs: list[PullRequest],
+    is_merged: Callable[[str], bool],
 ) -> Stack:
     """Assemble the :class:`Stack` from the PR export and a merged-branch predicate.
 
-    :param config: The static configuration.
+    :param configuration: The static configuration.
     :param prs: The exported pull requests.
     :param is_merged: Maps a branch name to whether it has landed upstream; injected so the pure
         assembly logic can be tested without git.
@@ -295,11 +303,11 @@ def build_stack(
             parent=pr.base,
             pull_request_number=pr.number,
             status=derive_status(
-                pr.draft, is_merged(pr.head), config.in_review_label in pr.labels
+                pr.draft, is_merged(pr.head), configuration.in_review_label in pr.labels
             ),
             strategy=(
                 IntegrationStrategy.REBASE
-                if config.rebase_label in pr.labels
+                if configuration.rebase_label in pr.labels
                 else IntegrationStrategy.MERGE
             ),
             labels=pr.labels,
@@ -308,7 +316,7 @@ def build_stack(
         )
         for pr in prs
     ]
-    return Stack(config=config, branches=branches, is_merged=is_merged)
+    return Stack(configuration=configuration, branches=branches, is_merged=is_merged)
 
 
 # %% git plumbing
@@ -338,42 +346,42 @@ def _git_succeeds(*args: str) -> bool:
     return result.returncode == 0
 
 
-def _merged_predicate(config: Config):
-    """:param config: The static configuration.
+def _merged_predicate(configuration: Configuration):
+    """:param configuration: The static configuration.
     :return: A predicate testing whether a fork branch is an ancestor of the upstream base.
     """
-    upstream = f"{config.upstream_remote}/{config.upstream_base}"
+    upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
 
     def is_merged(name: str) -> bool:
-        ref = f"{config.fork_remote}/{name}"
+        ref = f"{configuration.fork_remote}/{name}"
         return _git_succeeds("merge-base", "--is-ancestor", ref, upstream)
 
     return is_merged
 
 
 def load_stack() -> Stack:
-    """:return: the full live stack: config + board export + git merged-detection."""
-    config = load_config()
+    """:return: the full live stack: configuration + board export + git merged-detection."""
+    configuration = load_configuration()
     prs = load_board()
-    fetch(config, [pr.head for pr in prs])
-    return build_stack(config, prs, _merged_predicate(config))
+    fetch(configuration, [pr.head for pr in prs])
+    return build_stack(configuration, prs, _merged_predicate(configuration))
 
 
-def resolve_ref(config: Config, name: str) -> str:
-    """:param config: The static configuration.
+def resolve_ref(configuration: Configuration, name: str) -> str:
+    """:param configuration: The static configuration.
     :param name: A branch or parent name.
     :return: Its ref on the fork remote."""
-    return f"{config.fork_remote}/{name}"
+    return f"{configuration.fork_remote}/{name}"
 
 
-def fetch(config: Config, branches: list[str]) -> None:
+def fetch(configuration: Configuration, branches: list[str]) -> None:
     """Refresh the refs the stack references so drift and merged-detection are current.
 
-    :param config: The static configuration.
+    :param configuration: The static configuration.
     :param branches: The fork branch names to fetch.
     """
-    _git("fetch", config.upstream_remote, config.upstream_base, "-q")
-    _git("fetch", config.fork_remote, "-q", *branches)
+    _git("fetch", configuration.upstream_remote, configuration.upstream_base, "-q")
+    _git("fetch", configuration.fork_remote, "-q", *branches)
 
 
 def _count(rev_range: str) -> int | None:
@@ -483,7 +491,7 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
         if branch.status == BranchStatus.MERGED:
             continue
         effective_parent = (
-            stack.config.upstream_base
+            stack.configuration.upstream_base
             if stack.has_landed_upstream(branch.parent)
             else branch.parent
         )
@@ -505,14 +513,14 @@ def print_status(stack: Stack) -> None:
 
     :param stack: The stack to report.
     """
-    config = stack.config
-    upstream = f"{config.upstream_remote}/{config.upstream_base}"
+    configuration = stack.configuration
+    upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
     print(f"Stack ({len(stack.branches)} branches) vs {upstream}\n")
     print(f"{'branch':<38} {'state':<10} {'PR':>4}  ahead/behind parent   behind base")
     print("-" * 92)
     for branch in order(stack):
-        ref = resolve_ref(config, branch.name)
-        parent_ref = resolve_ref(config, branch.parent)
+        ref = resolve_ref(configuration, branch.name)
+        parent_ref = resolve_ref(configuration, branch.parent)
         ahead = _count(f"{parent_ref}..{ref}")
         behind_parent = _count(f"{ref}..{parent_ref}")
         behind_base = _count(f"{ref}..{upstream}")
@@ -527,13 +535,13 @@ def print_check(stack: Stack) -> None:
 
     :param stack: The stack to probe.
     """
-    config = stack.config
+    configuration = stack.configuration
     print(
         "Integration probe - would each branch merge cleanly onto its parent right now?\n"
     )
     for branch in order(stack):
-        ref = resolve_ref(config, branch.name)
-        parent_ref = resolve_ref(config, branch.parent)
+        ref = resolve_ref(configuration, branch.name)
+        parent_ref = resolve_ref(configuration, branch.parent)
         result = subprocess.run(
             ["git", "merge-tree", "--write-tree", parent_ref, ref],
             capture_output=True,
@@ -553,7 +561,7 @@ def print_next(stack: Stack) -> None:
 
     :param stack: The stack to report.
     """
-    config = stack.config
+    configuration = stack.configuration
     by_name = {b.name: b for b in stack.branches}
     promotable = promotion_order(stack)
     withheld = [
@@ -573,7 +581,7 @@ def print_next(stack: Stack) -> None:
     if promotable:
         plural = "es" if len(promotable) != 1 else ""
         print(
-            f"NEXT to submit to {config.upstream_remote} ({len(promotable)} branch{plural}):"
+            f"NEXT to submit to {configuration.upstream_remote} ({len(promotable)} branch{plural}):"
         )
         for branch in promotable:
             print(

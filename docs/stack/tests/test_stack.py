@@ -1,10 +1,10 @@
 """
 Tests for the stacked-PR helper's pure logic (no git, no network) and its personal-notes
-config layering (real scratch git repositories, no network).
+configuration layering (real scratch git repositories, no network).
 
 The data layer is injected - :func:`build_stack` takes a merged-branch predicate - so
 status derivation, topological ordering, promotion policy, and the restack plan are all
-exercised against in-memory pull-request exports. Config layering genuinely needs a git
+exercised against in-memory pull-request exports. Configuration layering genuinely needs a git
 remote, so those tests run against a :class:`ScratchRepository` instead.
 """
 
@@ -16,12 +16,12 @@ from scratch_repository import ScratchRepository
 
 from stack import (
     BranchStatus,
-    Config,
+    Configuration,
     IntegrationStrategy,
     PullRequest,
     build_stack,
     derive_status,
-    load_config,
+    load_configuration,
     next_to_promote,
     order,
     promotion_order,
@@ -29,8 +29,8 @@ from stack import (
 )
 
 
-def make_config() -> Config:
-    return Config(
+def make_configuration() -> Configuration:
+    return Configuration(
         in_review_label="in-review",
         rebase_label="rebase",
         needs_resolution_label="needs-resolution",
@@ -41,7 +41,7 @@ def make_config() -> Config:
 
 
 def build(prs: list[PullRequest], merged: frozenset[str] = frozenset()):
-    return build_stack(make_config(), prs, lambda name: name in merged)
+    return build_stack(make_configuration(), prs, lambda name: name in merged)
 
 
 # %% derive_status
@@ -245,7 +245,7 @@ def test_ready_child_promotable_when_its_off_board_parent_has_landed():
     assert next_to_promote(build(prs, merged={"landed-elsewhere"})).name == "child"
 
 
-# %% config layering (personal-notes overrides)
+# %% configuration layering (personal-notes overrides)
 
 DEFAULT_STACK_TOML = """\
 in_review_label = "in-review"
@@ -257,54 +257,54 @@ upstream_base = "main"
 """
 
 
-def _committed_config_path(scratch_repository: ScratchRepository) -> Path:
+def _committed_configuration_path(scratch_repository: ScratchRepository) -> Path:
     """
     Write and commit the repo-default ``stack.toml`` into a scratch repository.
 
     :param scratch_repository: The scratch repository to write into.
-    :return: The path :func:`load_config` should be pointed at.
+    :return: The path :func:`load_configuration` should be pointed at.
     """
     path = scratch_repository.write(".claude/stack/stack.toml", DEFAULT_STACK_TOML)
     scratch_repository.commit_everything("add stack.toml")
     return path
 
 
-def test_load_config_uses_committed_defaults_when_no_personal_notes_branch(
+def test_load_configuration_uses_committed_defaults_when_no_personal_notes_branch(
     scratch_repository: ScratchRepository, monkeypatch
 ):
-    config_path = _committed_config_path(scratch_repository)
+    configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    config = load_config(config_path)
+    configuration = load_configuration(configuration_path)
 
-    assert config.upstream_remote == "cram2"
+    assert configuration.upstream_remote == "cram2"
 
 
-def test_load_config_layers_personal_notes_override_on_top_of_defaults(
+def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
     scratch_repository: ScratchRepository, monkeypatch
 ):
-    config_path = _committed_config_path(scratch_repository)
+    configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.publish_notes_branch(
         {".claude/personal/stack.toml": 'upstream_remote = "my-fork-cram2"\n'}
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    config = load_config(config_path)
+    configuration = load_configuration(configuration_path)
 
-    assert config.upstream_remote == "my-fork-cram2"
-    assert config.fork_remote == "origin"  # untouched default
+    assert configuration.upstream_remote == "my-fork-cram2"
+    assert configuration.fork_remote == "origin"  # untouched default
 
 
-def test_load_config_ignores_personal_notes_branch_without_a_stack_file(
+def test_load_configuration_ignores_personal_notes_branch_without_a_stack_file(
     scratch_repository: ScratchRepository, monkeypatch
 ):
-    config_path = _committed_config_path(scratch_repository)
+    configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.publish_notes_branch({"README.md": "unrelated\n"})
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    config = load_config(config_path)
+    configuration = load_configuration(configuration_path)
 
-    assert config.upstream_remote == "cram2"
+    assert configuration.upstream_remote == "cram2"
