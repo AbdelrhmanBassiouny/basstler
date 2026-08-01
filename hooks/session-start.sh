@@ -96,7 +96,10 @@ set -euo pipefail
 # branch" are different answers, and reporting both as one bare "none" is
 # what let a session read the second as the first and start work without
 # recording an item. They are reported separately, along with the case where
-# the index names a plan whose manifest has since gone missing.
+# the index names a plan whose manifest has since gone missing, and the case
+# where no plan item could ever track this branch at all (the default branch,
+# the notes branch, a detached HEAD - see branch_can_hold_plan_item), where
+# the right answer is silence rather than a prompt.
 #
 # Setup: the summary also carries ./check-setup.sh's verdict, naming any
 # check that still needs setup. It is reported rather than left to be run on
@@ -212,14 +215,19 @@ fi
 
 PLAN_ID="$(plan_id_for_branch "${CURRENT_BRANCH}" || true)"
 
-# A branch with no plan item is three different situations, and reporting all
-# three as a bare "none" is what let a session read "the plan you were told
+# A branch with no plan item is several different situations, and reporting
+# them all as a bare "none" is what let a session read "the plan you were told
 # about has no item for this branch yet" as "no plan applies here" and start
 # work without recording an item. Each one now says which it is; the wording
 # is deliberately even-handed, because belonging to no plan is a perfectly
 # ordinary state for most branches and must not read as a reprimand.
+#
+# The first case answers a different question than the rest: on a branch no
+# plan item could ever track, there is nothing to prompt about at all.
 if [ -z "${PLAN_ID}" ]; then
-  if plan_branch_index_exists; then
+  if ! branch_can_hold_plan_item "${CURRENT_BRANCH}"; then
+    SUMMARY_PLAN="not applicable (this branch never holds a plan item)"
+  elif plan_branch_index_exists; then
     SUMMARY_PLAN="no item tracks branch '${CURRENT_BRANCH}' ($(tracked_plan_count) plan(s) tracked) - if this session's work belongs to one of them, add its item before starting; if it belongs to none, there is nothing to do"
   else
     SUMMARY_PLAN="no plans tracked on '${NOTES_BRANCH}' yet"
