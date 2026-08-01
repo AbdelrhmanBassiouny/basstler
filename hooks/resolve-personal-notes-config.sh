@@ -296,3 +296,22 @@ plan_id_for_branch() {
   git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
     | awk -F'\t' -v branch="${branch}" '$1 == branch { print $2; exit }'
 }
+
+# plan_branch_index_exists / tracked_plan_count: whether any plan is tracked on
+# the notes branch at all, and how many distinct ones there are. Same FETCH_HEAD
+# precondition as plan_id_for_branch above.
+#
+# These exist so a caller can tell apart the two situations plan_id_for_branch
+# collapses into a single "no": nobody tracks plans here, versus plans exist and
+# this branch is in none of them. Only the second is worth a word to a session,
+# and only these two functions know which is which, since the index path is
+# theirs alone to read.
+plan_branch_index_exists() {
+  git cat-file -e "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null
+}
+
+tracked_plan_count() {
+  plan_branch_index_exists || { printf '0\n'; return 0; }
+  git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
+    | awk -F'\t' 'NF >= 2 { seen[$2] = 1 } END { print length(seen) }'
+}
