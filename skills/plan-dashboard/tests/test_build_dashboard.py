@@ -939,6 +939,101 @@ def test_item_ready_to_review_once_dependency_has_an_open_pull_request():
     assert summary.ready_to_review == ["a", "b"]
 
 
+# %% DashboardRenderer - bug-fix marking
+
+
+def test_item_is_a_bug_fix_when_its_pull_request_carries_the_bug_label():
+    pull_requests_by_repository = {
+        "owner/repo": {
+            "1": PullRequestRecord(
+                state=PullRequestState.OPEN,
+                draft=True,
+                labels=[PullRequestLabel.BUG.value],
+            )
+        }
+    }
+    renderer = make_renderer(
+        [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    renderer.render()
+    assert renderer.plan.items[0].is_bug_fix is True
+
+
+def test_item_is_not_a_bug_fix_when_its_pull_request_carries_other_labels():
+    pull_requests_by_repository = {
+        "owner/repo": {
+            "1": PullRequestRecord(
+                state=PullRequestState.OPEN,
+                draft=True,
+                labels=[PullRequestLabel.IN_REVIEW.value, "enhancement"],
+            )
+        }
+    }
+    renderer = make_renderer(
+        [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    renderer.render()
+    assert renderer.plan.items[0].is_bug_fix is False
+
+
+def test_item_without_a_pull_request_is_not_a_bug_fix():
+    renderer = make_renderer([item("a", ItemStatus.NOT_STARTED)])
+    renderer.render()
+    assert renderer.plan.items[0].is_bug_fix is False
+
+
+def test_bug_fix_stays_in_its_ordinary_action_group():
+    # A bug fix is an attribute of an item, not an action of its own: it must
+    # not be lifted out of the action group it already belongs to.
+    pull_requests_by_repository = {
+        "owner/repo": {
+            "1": PullRequestRecord(
+                state=PullRequestState.OPEN,
+                draft=True,
+                labels=[PullRequestLabel.BUG.value],
+            )
+        }
+    }
+    renderer = make_renderer(
+        [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    _, summary = renderer.render()
+    assert summary.ready_to_review == ["a"]
+
+
+def test_render_marks_a_bug_fix_sidebar_entry_with_a_bug_chip():
+    pull_requests_by_repository = {
+        "owner/repo": {
+            "1": PullRequestRecord(
+                state=PullRequestState.OPEN,
+                draft=True,
+                labels=[PullRequestLabel.BUG.value],
+            )
+        }
+    }
+    renderer = make_renderer(
+        [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    output, _ = renderer.render()
+    assert '<span class="next-bug-chip">bug</span>' in output
+
+
+def test_render_leaves_a_non_bug_sidebar_entry_without_a_bug_chip():
+    pull_requests_by_repository = {
+        "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=True)}
+    }
+    renderer = make_renderer(
+        [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
+        pull_requests_by_repository=pull_requests_by_repository,
+    )
+    output, _ = renderer.render()
+    assert '<span class="next-bug-chip">bug</span>' not in output
+
+
 # %% DashboardRenderer - item action button
 
 

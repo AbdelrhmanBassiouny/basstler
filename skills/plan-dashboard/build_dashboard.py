@@ -736,6 +736,13 @@ class Item:
     all ready yet (starting now would build on unsafe state). Every other
     status always gets one: something is always actionable next."""
 
+    is_bug_fix: bool = field(default=False, init=False)
+    """Whether this item's pull request carries :attr:`PullRequestLabel.BUG`,
+    filled in by :meth:`DashboardRenderer.render`. Marks the item wherever it
+    already appears rather than grouping it separately: fixing a bug is a
+    property of the work, not a distinct next action, and it can apply to an
+    item in any of the sidebar's action groups."""
+
     needs_review: bool = field(default=False, init=False)
     """Whether this item's pull request is open, still a draft, and actually worth
     reviewing right now, filled in by :meth:`DashboardRenderer.render`.
@@ -1028,9 +1035,9 @@ class DashboardRenderer:
     def _classify_items(self) -> None:
         """Fill in every item's :attr:`Item.live_state`,
         :attr:`Item.drift_description`, :attr:`Item.pull_request_url`,
-        :attr:`Item.needs_review`, :attr:`Item.dependency_chips`, and
-        :attr:`Item.action` from live pull request data and the plan's other items,
-        in place.
+        :attr:`Item.is_bug_fix`, :attr:`Item.needs_review`,
+        :attr:`Item.dependency_chips`, and :attr:`Item.action` from live pull
+        request data and the plan's other items, in place.
 
         Runs in two passes: :attr:`Item.live_state` must be filled in for
         every item before :meth:`_action_for` can check whether *another*
@@ -1040,6 +1047,7 @@ class DashboardRenderer:
             item.live_state = self._live_state_of(item)
             item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
+            item.is_bug_fix = self._is_bug_fix(item)
             item.needs_review = (
                 item.live_state is LiveState.OPEN_DRAFT
                 and item.status is not ItemStatus.DEFERRED
@@ -1132,6 +1140,23 @@ class DashboardRenderer:
             item.pull_request_number,
             item.repository or self.plan.default_repository,
             self.pull_requests_by_repository,
+        )
+
+    def _pull_request_record_of(self, item: Item) -> PullRequestRecord | None:
+        """Look up one item's live pull request record, or ``None`` if it has
+        no pull request yet or GitHub returned nothing for the one it names."""
+        if item.pull_request_number is None:
+            return None
+        repository = item.repository or self.plan.default_repository
+        repository_pull_requests = self.pull_requests_by_repository.get(repository, {})
+        return repository_pull_requests.get(str(item.pull_request_number))
+
+    def _is_bug_fix(self, item: Item) -> bool:
+        """Whether one item's pull request is labelled as a bug fix."""
+        pull_request = self._pull_request_record_of(item)
+        return (
+            pull_request is not None
+            and PullRequestLabel.BUG in pull_request.identified_labels
         )
 
     @staticmethod
