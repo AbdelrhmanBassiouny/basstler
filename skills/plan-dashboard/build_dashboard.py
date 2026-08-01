@@ -1003,6 +1003,9 @@ class DashboardRenderer:
         drift_items = [item for item in self.plan.items if item.drift_description]
         ready_to_start, blocker_maybe_cleared = self._compute_next_steps()
         ready_to_review = self._compute_ready_to_review()
+        next_step_items = (
+            drift_items + ready_to_start + blocker_maybe_cleared + ready_to_review
+        )
 
         template = create_template_environment().get_template("dashboard.html")
         output = template.render(
@@ -1018,6 +1021,7 @@ class DashboardRenderer:
             ready_to_start=ready_to_start,
             blocker_maybe_cleared=blocker_maybe_cleared,
             ready_to_review=ready_to_review,
+            has_bug_fix_next_steps=any(item.is_bug_fix for item in next_step_items),
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             waves=self._build_wave_sections(),
             available_models=AVAILABLE_MODELS,
