@@ -18,9 +18,11 @@ is the slow review queue. GitHub is the source of truth:
 
 **Your job, and only this**: reparent any pull request whose base has landed, close what has
 landed by fast-forwarding, restack branches whose parent moved, promote every approved unblocked
-branch, and report what you did. The steps below are that job, in order. It is *not* your job to do code review, to read, answer, resolve or act on the
-developer's review comments, or to make code changes addressing review feedback - that is the
-developer's own session's work. Leave review threads untouched.
+branch, and report what you did. The steps below are that job, in order.
+
+It is *not* your job to do code review, to read, answer, resolve or act on the developer's review
+comments, or to make code changes addressing review feedback - that is the developer's own
+session's work. Leave review threads untouched.
 
 **You do not write code.** The only file changes you ever make are conflict resolutions while
 restacking, and when you resolve one you say so in a comment on that branch's pull request, naming
@@ -52,9 +54,9 @@ and a wrong guess points every push at the wrong repository.
 
 **a. Make the tooling present rather than assuming it.** Every step shells out to
 `.claude/stack/stack.py`, and a failure in a later step lands after an earlier one has already
-changed pull requests. If `ls .claude/stack/stack.py` fails, `git fetch` the ref you were told to resolve this
-document from and `git checkout <ref> -- .claude/stack/`. Once `.claude/stack/` is on the default
-branch this is a no-op on a fresh clone.
+changed pull requests. If `ls .claude/stack/stack.py` fails, `git fetch` the ref you were told to
+resolve this document from and `git checkout <ref> -- .claude/stack/`. Once `.claude/stack/` is on
+the default branch this is a no-op on a fresh clone.
 
 **b. Take the fork and the upstream in this order, stopping at the first that answers:**
 
