@@ -1,15 +1,18 @@
 # The stacked-PR Routine (canonical doctrine)
 
-This is the single canonical copy of the cloud Routine's prompt (paste into
-claude.ai/code/routines). `README.md` in this directory points here instead of embedding a
-second copy - a prior duplicate on `dev/README.md` had already drifted from the live Routine
-by the time this was written, which is exactly the failure mode having one copy prevents.
+**This file is live.** The cloud Routine reads it from git at the start of every run and
+executes the fenced text block below, so an edit here changes the running workflow as soon as
+it is pushed - there is no separate deploy step and no copy to keep in sync.
 
-**Not live yet.** The Routine actually running today still points at `claude/stack-workflow-
-tooling`'s `dev/` copy. This file becomes the one to paste into claude.ai/code/routines at the
-`routine-cutover` step of the `workflow-unification` plan, once this repository's `main` branch
-is the checkout the Routine already uses (no separate tooling-branch pull needed - see SETUP
-step 0 below).
+What is registered at claude.ai/code/routines is only a short pointer: it resolves this file
+(`origin/main` first, falling back to the review branch until `.claude/stack/` lands on `main`)
+and carries the HARD RULES inline, because those must bind before any file is read - a webhook
+event can arrive before the first tool call. Everything else lives here.
+
+`README.md` in this directory points here rather than embedding a second copy. A prior duplicate
+on `dev/README.md` had already drifted from the live Routine by the time this was written, which
+is exactly the failure mode one copy prevents; that copy is no longer read by anything and dies
+with `tooling-branch-retirement`.
 
 ```text
 You maintain a stacked-PR fork-staging workflow. `origin` is my fork (the full stack); `cram2` is the
@@ -63,8 +66,14 @@ SETUP
 0. Ensure remotes match the config: `origin` must be the fork
    (AbdelrhmanBassiouny/cognitive_robot_abstract_machine) and `cram2` the upstream. A fresh cloud
    clone may have them named differently - check `git remote -v` and rename/add so `origin`=fork,
-   `cram2`=upstream before continuing. `.claude/stack/stack.py` and `stack.toml` are already on this
-   checkout - they live on `main`, so there is nothing to pull from another branch first.
+   `cram2`=upstream before continuing. Then make sure the tooling is actually present, rather than
+   assuming it: every later phase shells out to `.claude/stack/stack.py`, and a Phase 2 failure
+   lands after Phase 1 has already mutated pull requests. If `ls .claude/stack/stack.py` fails, take
+   it from the same ref you read this file from, e.g.
+   `git fetch origin claude/stack-landed-parent-detection && git checkout
+   origin/claude/stack-landed-parent-detection -- .claude/stack/`. Once `.claude/stack/` is on
+   `main` this is a no-op on a fresh clone, and both this fallback and the matching one in the
+   Routine's own prompt can be deleted.
 1. UPDATE FORK MAIN FIRST - before anything else. Every `base=main` comparison (both GitHub's PR
    diffs and the board's LOC/conflict chips) is measured against `origin/main`, so a stale fork main
    inflates every root branch's diff. Fork main is a pristine mirror of the upstream trunk - keep it

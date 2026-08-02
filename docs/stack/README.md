@@ -46,8 +46,9 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
     pick up a moved parent via a conflict-free `merge`). Feed straight into the `restack`
     workflow's `args`.
-- **`ROUTINE.md`** - the canonical cloud-Routine prompt; paste it (or its successor) into
-  claude.ai/code/routines rather than re-embedding a copy here.
+- **`ROUTINE.md`** - the cloud Routine's live prompt. The Routine reads it from git each run, so
+  editing it changes the running workflow on push; only a short pointer is registered at
+  claude.ai/code/routines. Never re-embed a copy here.
 
 ## The state machine (your approval gate)
 

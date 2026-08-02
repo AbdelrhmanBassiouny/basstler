@@ -1,10 +1,13 @@
 """
-Contract tests for the reparent doctrine in ``ROUTINE.md``.
+Contract tests for ``ROUTINE.md``, which the live cloud Routine reads and executes.
 
-A pull request's base branch can only be changed through the GitHub MCP server: the same
-request issued through the session git proxy is refused. The doctrine is the only place
-that rule is written down, and it is prose rather than code, so these tests pin the
-properties a later edit could silently undo.
+Two things are pinned here. First, the base-change rule: a pull request's base branch
+can only be changed through the GitHub MCP server, since the same request issued through
+the session git proxy is refused. Second, the document's shape, because the Routine's
+prompt locates what to execute by the fenced block rather than by reading the whole
+file.
+
+Both are prose rather than code, so nothing else would catch an edit that undid them.
 """
 
 from __future__ import annotations
@@ -12,6 +15,11 @@ from __future__ import annotations
 from pathlib import Path
 
 ROUTINE_DOCUMENT = Path(__file__).parent.parent / "ROUTINE.md"
+
+EXECUTABLE_PROMPT_FENCE = "```text"
+"""
+Opening fence of the block the Routine executes; the surrounding prose is commentary.
+"""
 
 BASE_CHANGE_RULE_HEADING = "BASE CHANGES GO THROUGH THE GITHUB MCP SERVER."
 """
@@ -43,6 +51,57 @@ def phase_one() -> str:
     routine = read_routine()
     start = routine.index("PHASE 1 - LANDED PARENTS")
     return routine[start : routine.index("PHASE 2 - RESTACK", start)]
+
+
+def executable_prompt() -> str:
+    """
+    Extract the block the Routine executes, the way the Routine's own prompt does.
+
+    :return: The text between the opening and closing fences.
+    """
+    routine = read_routine()
+    start = routine.index(EXECUTABLE_PROMPT_FENCE) + len(EXECUTABLE_PROMPT_FENCE)
+    return routine[start : routine.index("\n```", start)]
+
+
+# %% the shape the Routine's prompt depends on
+
+
+def test_document_has_exactly_one_executable_prompt_block():
+    """
+    The Routine is told to execute the fenced block, so a second one would make that
+    instruction ambiguous and none would leave it with nothing to run.
+    """
+    routine = read_routine()
+
+    assert routine.count(EXECUTABLE_PROMPT_FENCE) == 1
+    assert "\n```" in routine[routine.index(EXECUTABLE_PROMPT_FENCE) :]
+
+
+def test_hard_rules_stay_inside_the_executable_block():
+    """
+    Commentary outside the fence is not executed, so moving the hard rules out would
+    silently drop them from what the Routine actually runs.
+    """
+    prompt = executable_prompt()
+
+    assert "HARD RULES" in prompt
+    assert "NEVER call `subscribe_pr_activity`" in prompt
+
+
+def test_setup_obtains_the_tooling_rather_than_assuming_it():
+    """
+    Setup must make ``stack.py`` present rather than assert that it is.
+
+    Every later phase shells out to it, so a false assumption strands the Routine
+    mid-run - and a Phase 2 failure lands after Phase 1 has already mutated pull
+    requests.
+    """
+    setup = executable_prompt()
+    setup = setup[setup.index("SETUP") : setup.index("1. UPDATE FORK MAIN FIRST")]
+
+    assert "git fetch" in setup
+    assert ".claude/stack/" in setup
 
 
 # %% the base-change client
