@@ -5,7 +5,7 @@ in-flight branches; **cram2** is the slow review queue. You promote approved bra
 cram2 as their parents land. Claude does the mechanical restacking so the tower never rots
 and you keep coding.
 
-## The doctrine (why)
+## The rationale (why)
 
 The reviewers are the constraint. Throughput dies from big PRs and unbounded work in review,
 so: keep each PR small and single-concern, and make stack maintenance free. (Stacked diffs +
@@ -51,10 +51,11 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   claude.ai/code/routines. Never re-embed a copy here.
 - **`POINTER.md`** - that short pointer, as a template. It is the only part of the workflow that
   lives outside git, so a copy is kept here to keep the running prompt from becoming its own only
-  record; its HARD RULES are pinned against `ROUTINE.md`'s by `tests/test_routine_doctrine.py`.
+  record; its HARD RULES are pinned against `ROUTINE.md`'s by `tests/test_prompt_documents.py`.
   Editing it does not change the running Routine - re-register it by hand.
-- **`doctrine.py`** - the landmarks and vocabulary `ROUTINE.md` and `POINTER.md` are required to
-  use, so the contract tests assert against declared text rather than restating the documents.
+- **`prompt_model.py`** - the landmarks, rules and vocabulary `ROUTINE.md` and `POINTER.md` are
+  required to use, so the contract tests assert against declared text rather than restating the
+  documents.
 
 ## The state machine (your approval gate)
 

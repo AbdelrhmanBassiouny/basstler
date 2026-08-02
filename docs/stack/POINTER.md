@@ -1,13 +1,13 @@
 # The registered pointer prompt
 
-What is registered at claude.ai/code/routines is not the doctrine itself but the short prompt
+What is registered at claude.ai/code/routines is not the routine document itself but the short prompt
 below. It resolves `.claude/stack/ROUTINE.md` out of git and executes what it finds there, so the
 workflow is changed by pushing rather than by re-pasting into the Routine settings page.
 
 The prompt is kept here because it is the one piece of the workflow that lives outside the
 repository. Without a canonical copy the running prompt would be its own only record - the drift
 this directory exists to prevent, one level up. Its HARD RULES are pinned by
-`tests/test_routine_doctrine.py` against the doctrine's own copy, so the two cannot diverge.
+`tests/test_prompt_documents.py` against `ROUTINE.md`'s own copy, so the two cannot diverge.
 
 **Editing this file does not change the running Routine.** The block below has to be re-registered
 by hand when it changes; that is the cost of the rules having to bind before any file is read, since
@@ -22,10 +22,10 @@ Run the stacked-PR maintenance routine for <FORK_REPOSITORY>.
 Read `.claude/stack/ROUTINE.md` from git and execute the fenced text block inside it as your
 instructions for this run - it is the whole job, and everything past the rules below is in there.
 Resolve it from `origin/main`. If `.claude/stack/` is not on `main` yet, resolve it from
-<TOOLING_BRANCH> instead; either way, remember which ref you resolved it from, because the
-doctrine's SETUP step 0 asks you for it. (Delete this fallback once `.claude/stack/` is on `main`.)
+<TOOLING_BRANCH> instead; either way, remember which ref you resolved it from, because that
+document's SETUP step 0 asks you for it. (Delete this fallback once `.claude/stack/` is on `main`.)
 
-Do not summarise the doctrine back to me, do not ask which phase to begin with, and do not wait for
+Do not summarise it back to me, do not ask which phase to begin with, and do not wait for
 confirmation - read it and run it.
 
 HARD RULES so you never drift into review work:

@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Machine-readable landmarks of the prompt documents the cloud Routine runs on.
+Machine-readable model of the prompt documents the cloud Routine runs on.
 
-``ROUTINE.md`` is the doctrine the Routine executes and ``POINTER.md`` is the short
-prompt registered at claude.ai/code/routines that resolves it. Both are prose, so
-nothing in them can be imported and asserted against directly. This module declares the
-landmarks they are required to contain and owns the extraction their contract tests
+``ROUTINE.md`` is the prompt the Routine executes and ``POINTER.md`` is the short prompt
+registered at claude.ai/code/routines that resolves it. Both are prose, so nothing in
+them can be imported and asserted against directly. This module declares the landmarks
+and rules they are required to contain and owns the extraction their contract tests
 need, so renaming a section is one edit here rather than one per assertion.
 """
 
@@ -14,22 +14,19 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
+from typing import ClassVar
 
 # %% documents
 
-DOCTRINE_DOCUMENT = Path(__file__).with_name("ROUTINE.md")
+ROUTINE_DOCUMENT = Path(__file__).with_name("ROUTINE.md")
 """
-The doctrine the Routine reads from git and executes each run.
+The prompt the Routine reads from git and executes each run.
 """
 
 POINTER_DOCUMENT = Path(__file__).with_name("POINTER.md")
 """
-The pointer prompt registered with the cloud Routine, which resolves the doctrine.
-"""
-
-PARAGRAPH_BREAK = "\n\n"
-"""
-Separator ending the paragraph :meth:`PromptDocument.paragraph` returns.
+The pointer prompt registered with the cloud Routine, which resolves the routine
+document.
 """
 
 # %% vocabulary the documents are required to use
@@ -80,7 +77,29 @@ class LandmarkSpecification:
     """
 
 
-class DoctrineLandmark(LandmarkSpecification, Enum):
+@dataclass(frozen=True, eq=False)
+class RuleSpecification(LandmarkSpecification):
+    """
+    A rule the prompt documents state, together with the refusal that motivates it.
+
+    A rule that exists only to steer a session away from a failing client is not fully
+    specified by its heading: the status code and the client that earns it are what a
+    session actually meets, and the document has to name both for the rule to be
+    recognisable when it happens.
+    """
+
+    refused_client: str
+    """
+    The client whose attempt at this operation is rejected.
+    """
+
+    refusal_status_code: str
+    """
+    The status the refused client receives, as it appears in the document.
+    """
+
+
+class PromptLandmark(LandmarkSpecification, Enum):
     """
     The structural landmarks the prompt documents are located by.
 
@@ -120,10 +139,6 @@ class DoctrineLandmark(LandmarkSpecification, Enum):
         "PHASE 2 - RESTACK",
         "Heads the restack phase, and so ends Phase 1.",
     )
-    BASE_CHANGE_RULE = (
-        "BASE CHANGES GO THROUGH THE GITHUB MCP SERVER.",
-        "Opens the rule naming the one client able to retarget a base.",
-    )
     ORPHANED_CHILD_SWEEP = (
         "REPARENT EVERY ORPHANED CHILD",
         "Opens the first of the two reparent sites.",
@@ -138,13 +153,32 @@ class DoctrineLandmark(LandmarkSpecification, Enum):
     )
 
 
+class PromptRule(RuleSpecification, Enum):
+    """
+    The rules the prompt documents are required to state, and what refusal each avoids.
+    """
+
+    BASE_CHANGE = (
+        "BASE CHANGES GO THROUGH THE GITHUB MCP SERVER.",
+        "Opens the rule naming the one client able to retarget a base.",
+        "curl",
+        "403",
+    )
+
+
+DocumentLandmark = PromptLandmark | PromptRule
+"""
+Any text a prompt document can be located by, whether a plain landmark or a rule.
+"""
+
+
 class LandmarkNotFoundError(LookupError):
     """
     Raised when a prompt document no longer contains a landmark it is required to
     contain.
     """
 
-    def __init__(self, landmark: DoctrineLandmark, document: Path) -> None:
+    def __init__(self, landmark: DocumentLandmark, document: Path) -> None:
         super().__init__(
             f"{document.name} no longer contains {landmark.name}: {landmark.text!r} "
             f"({landmark.purpose})"
@@ -169,6 +203,11 @@ class PromptDocument:
     assert on.
     """
 
+    PARAGRAPH_BREAK: ClassVar[str] = "\n\n"
+    """
+    Separator ending the paragraph :meth:`paragraph` returns.
+    """
+
     text: str
     """
     The document's full text.
@@ -180,7 +219,7 @@ class PromptDocument:
     """
 
     @classmethod
-    def load(cls, path: Path = DOCTRINE_DOCUMENT) -> PromptDocument:
+    def load(cls, path: Path = ROUTINE_DOCUMENT) -> PromptDocument:
         """
         Read a prompt document from disk.
 
@@ -189,7 +228,7 @@ class PromptDocument:
         """
         return cls(path.read_text(), path)
 
-    def position(self, landmark: DoctrineLandmark, start: int = 0) -> int:
+    def position(self, landmark: DocumentLandmark, start: int = 0) -> int:
         """
         Locate a landmark.
 
@@ -203,7 +242,7 @@ class PromptDocument:
             raise LandmarkNotFoundError(landmark, self.path)
         return index
 
-    def occurrences(self, landmark: DoctrineLandmark) -> int:
+    def occurrences(self, landmark: DocumentLandmark) -> int:
         """
         Count how often a landmark appears.
 
@@ -213,7 +252,7 @@ class PromptDocument:
         return self.text.count(landmark.text)
 
     def section(
-        self, start: DoctrineLandmark, end: DoctrineLandmark | None = None
+        self, start: DocumentLandmark, end: DocumentLandmark | None = None
     ) -> str:
         """
         Extract the text between two landmarks.
@@ -229,7 +268,7 @@ class PromptDocument:
             return self.text[begin:]
         return self.text[begin : self.position(end, begin)]
 
-    def paragraph(self, landmark: DoctrineLandmark) -> str:
+    def paragraph(self, landmark: DocumentLandmark) -> str:
         """
         Extract the single paragraph a landmark opens.
 
@@ -238,7 +277,7 @@ class PromptDocument:
         :raises LandmarkNotFoundError: If the landmark is missing.
         """
         begin = self.position(landmark)
-        return self.text[begin : self.text.index(PARAGRAPH_BREAK, begin)]
+        return self.text[begin : self.text.index(self.PARAGRAPH_BREAK, begin)]
 
     def executable_prompt(self) -> str:
         """
@@ -247,9 +286,9 @@ class PromptDocument:
         :return: The text between the opening and closing fences.
         :raises LandmarkNotFoundError: If either fence is missing.
         """
-        fence = DoctrineLandmark.EXECUTABLE_PROMPT_FENCE
+        fence = PromptLandmark.EXECUTABLE_PROMPT_FENCE
         begin = self.position(fence) + len(fence.text)
-        return self.text[begin : self.position(DoctrineLandmark.CLOSING_FENCE, begin)]
+        return self.text[begin : self.position(PromptLandmark.CLOSING_FENCE, begin)]
 
     def hard_rules(self) -> str:
         """
@@ -261,7 +300,7 @@ class PromptDocument:
         :return: The heading line and its bullets.
         :raises LandmarkNotFoundError: If the block is missing.
         """
-        lines = self.section(DoctrineLandmark.HARD_RULES).splitlines()
+        lines = self.section(PromptLandmark.HARD_RULES).splitlines()
         block = [lines[0]]
         for line in lines[1:]:
             if not line.startswith(("- ", "  ")):

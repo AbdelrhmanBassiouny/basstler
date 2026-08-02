@@ -1,4 +1,4 @@
-# The stacked-PR Routine (canonical doctrine)
+# The stacked-PR Routine (canonical prompt)
 
 **This file is live.** The cloud Routine reads it from git at the start of every run and
 executes the fenced text block below, so an edit here changes the running workflow as soon as
