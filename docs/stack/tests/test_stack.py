@@ -571,3 +571,138 @@ def test_nothing_is_printed_for_a_setup_command_that_is_not_needed(capsys):
     print_configuration(make_configuration())
 
     assert "upstream_setup_command" not in capsys.readouterr().out
+
+
+# %% a whole stack through its lifecycle
+
+# The unit tests above each exercise one function against one or two pull requests.
+# These walk a single realistic stack through the transitions the README describes -
+# approve, promote, land, restack - asserting the derived state at each step, because
+# the interactions between those stages are what a per-function test cannot reach.
+
+
+def a_stack_of_two_towers(
+    approved: frozenset[str] = frozenset(),
+    promoted: frozenset[str] = frozenset(),
+    withheld: frozenset[str] = frozenset(),
+    landed: frozenset[str] = frozenset(),
+):
+    """
+    Two independent towers off `main`, the first three deep and the second one deep.
+
+    :param approved: Branches the developer has un-drafted.
+    :param promoted: Branches carrying the in-review label.
+    :param withheld: Branches delegated for conflict resolution.
+    :param landed: Branches that are ancestors of the upstream base.
+    :return: The stack as the tooling derives it.
+    """
+    tower = [("engine", "main"), ("engine-ui", "engine"), ("engine-docs", "engine-ui")]
+    aside = [("parser", "main")]
+    pull_requests = [
+        PullRequest(
+            number,
+            name,
+            parent,
+            draft=name not in approved,
+            labels=(["in-review"] if name in promoted else [])
+            + (["needs-resolution"] if name in withheld else []),
+        )
+        for number, (name, parent) in enumerate([*tower, *aside], start=1)
+    ]
+    return build(pull_requests, merged=landed)
+
+
+def test_nothing_promotes_while_the_whole_stack_is_still_draft():
+    assert promotion_order(a_stack_of_two_towers()) == []
+
+
+def test_approving_a_root_promotes_it_and_nothing_above_it():
+    """
+    Un-drafting is the approval gate, and it approves one branch rather than a tower.
+    """
+    stack = a_stack_of_two_towers(approved=frozenset({"engine", "engine-ui"}))
+
+    assert [branch.name for branch in promotion_order(stack)] == ["engine"]
+
+
+def test_promoting_a_parent_unblocks_the_child_behind_it():
+    """
+    A child may follow its parent upstream once the parent is in review - it does not
+    wait for the parent to merge.
+    """
+    stack = a_stack_of_two_towers(
+        approved=frozenset({"engine", "engine-ui"}), promoted=frozenset({"engine"})
+    )
+
+    assert [branch.name for branch in promotion_order(stack)] == ["engine-ui"]
+
+
+def test_both_towers_promote_together_since_they_do_not_depend_on_each_other():
+    stack = a_stack_of_two_towers(approved=frozenset({"engine", "parser"}))
+
+    assert [branch.name for branch in promotion_order(stack)] == ["engine", "parser"]
+
+
+def test_a_branch_delegated_for_conflict_resolution_is_held_back_alone():
+    """
+    Withholding one branch must not withhold an unrelated tower.
+    """
+    stack = a_stack_of_two_towers(
+        approved=frozenset({"engine", "parser"}), withheld=frozenset({"engine"})
+    )
+
+    assert [branch.name for branch in promotion_order(stack)] == ["parser"]
+
+
+def test_landing_a_root_reparents_only_its_own_child():
+    """
+    The landed branch drops out of the plan and its child moves onto the base, while the
+    branch above keeps the parent it still has and the untouched tower keeps its own.
+    """
+    stack = a_stack_of_two_towers(landed=frozenset({"engine"}))
+
+    assert restack_plan(stack) == [
+        {"branch": "engine-ui", "parent": "main", "strategy": "merge"},
+        {"branch": "engine-docs", "parent": "engine-ui", "strategy": "merge"},
+        {"branch": "parser", "parent": "main", "strategy": "merge"},
+    ]
+
+
+def test_landing_a_root_that_no_open_pull_request_describes_still_reparents():
+    """
+    The case that motivated deciding `merged` by git ancestry: a parent whose own pull
+    request was closed rather than merged is absent from the board entirely, and the
+    child must still be moved off it.
+    """
+    orphaned = build(
+        [PullRequest(2, "engine-ui", "engine", draft=True)], merged={"engine"}
+    )
+
+    assert restack_plan(orphaned) == [
+        {"branch": "engine-ui", "parent": "main", "strategy": "merge"}
+    ]
+    assert orphaned.has_landed_upstream("engine")
+
+
+def test_a_tower_lands_bottom_up_over_successive_runs():
+    """
+    Each branch reaches the base only after the one below it has, so the plan shortens
+    from the bottom as the stack drains.
+    """
+    after_first = a_stack_of_two_towers(landed=frozenset({"engine"}))
+    after_second = a_stack_of_two_towers(landed=frozenset({"engine", "engine-ui"}))
+
+    assert [entry["branch"] for entry in restack_plan(after_first)] == [
+        "engine-ui",
+        "engine-docs",
+        "parser",
+    ]
+    assert [entry["branch"] for entry in restack_plan(after_second)] == [
+        "engine-docs",
+        "parser",
+    ]
+    assert restack_plan(after_second)[0] == {
+        "branch": "engine-docs",
+        "parent": "main",
+        "strategy": "merge",
+    }
