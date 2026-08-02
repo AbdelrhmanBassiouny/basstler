@@ -49,6 +49,12 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 - **`ROUTINE.md`** - the cloud Routine's live prompt. The Routine reads it from git each run, so
   editing it changes the running workflow on push; only a short pointer is registered at
   claude.ai/code/routines. Never re-embed a copy here.
+- **`POINTER.md`** - that short pointer, as a template. It is the only part of the workflow that
+  lives outside git, so a copy is kept here to keep the running prompt from becoming its own only
+  record; its HARD RULES are pinned against `ROUTINE.md`'s by `tests/test_routine_doctrine.py`.
+  Editing it does not change the running Routine - re-register it by hand.
+- **`doctrine.py`** - the landmarks and vocabulary `ROUTINE.md` and `POINTER.md` are required to
+  use, so the contract tests assert against declared text rather than restating the documents.
 
 ## The state machine (your approval gate)
 

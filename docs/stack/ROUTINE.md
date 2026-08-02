@@ -4,10 +4,11 @@
 executes the fenced text block below, so an edit here changes the running workflow as soon as
 it is pushed - there is no separate deploy step and no copy to keep in sync.
 
-What is registered at claude.ai/code/routines is only a short pointer: it resolves this file
-(`origin/main` first, falling back to the review branch until `.claude/stack/` lands on `main`)
-and carries the HARD RULES inline, because those must bind before any file is read - a webhook
-event can arrive before the first tool call. Everything else lives here.
+What is registered at claude.ai/code/routines is only a short pointer: it resolves this file and
+carries the HARD RULES inline, because those must bind before any file is read - a webhook event
+can arrive before the first tool call. Everything else lives here. That pointer is kept in
+`POINTER.md` beside this file, which is also where the fork and branch it names are recorded, so
+nothing here has to be edited to run on another fork.
 
 `README.md` in this directory points here rather than embedding a second copy. A prior duplicate
 on `dev/README.md` had already drifted from the live Routine by the time this was written, which
@@ -68,12 +69,11 @@ SETUP
    clone may have them named differently - check `git remote -v` and rename/add so `origin`=fork,
    `cram2`=upstream before continuing. Then make sure the tooling is actually present, rather than
    assuming it: every later phase shells out to `.claude/stack/stack.py`, and a Phase 2 failure
-   lands after Phase 1 has already mutated pull requests. If `ls .claude/stack/stack.py` fails, take
-   it from the same ref you read this file from, e.g.
-   `git fetch origin claude/stack-landed-parent-detection && git checkout
-   origin/claude/stack-landed-parent-detection -- .claude/stack/`. Once `.claude/stack/` is on
-   `main` this is a no-op on a fresh clone, and both this fallback and the matching one in the
-   Routine's own prompt can be deleted.
+   lands after Phase 1 has already mutated pull requests. If `ls .claude/stack/stack.py` fails,
+   `git fetch` that ref and `git checkout <ref> -- .claude/stack/`, where `<ref>` is the one you
+   resolved this file from - your pointer prompt is what named it. Once
+   `.claude/stack/` is on `main` this is a no-op on a fresh clone, and both this fallback and the
+   pointer's can be deleted.
 1. UPDATE FORK MAIN FIRST - before anything else. Every `base=main` comparison (both GitHub's PR
    diffs and the board's LOC/conflict chips) is measured against `origin/main`, so a stale fork main
    inflates every root branch's diff. Fork main is a pristine mirror of the upstream trunk - keep it

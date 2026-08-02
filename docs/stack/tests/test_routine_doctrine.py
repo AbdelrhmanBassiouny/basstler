@@ -1,81 +1,43 @@
 """
-Contract tests for ``ROUTINE.md``, which the live cloud Routine reads and executes.
+Contract tests for the prompt documents the live cloud Routine runs on.
 
-Two things are pinned here. First, the base-change rule: a pull request's base branch
-can only be changed through the GitHub MCP server, since the same request issued through
-the session git proxy is refused. Second, the document's shape, because the Routine's
-prompt locates what to execute by the fenced block rather than by reading the whole
-file.
+``ROUTINE.md`` is read from git and executed at the start of every run; ``POINTER.md``
+is the prompt registered with the Routine that resolves it. Three things are pinned.
+First, the base-change rule: a pull request's base branch can only be changed through
+the GitHub MCP server, since the same request issued through the session git proxy is
+refused. Second, each document's shape, because the Routine locates what to execute by
+the fenced block rather than by reading the whole file. Third, that the rules duplicated
+into the pointer stay identical to the doctrine's.
 
-Both are prose rather than code, so nothing else would catch an edit that undid them.
+All three are prose rather than code, so nothing else would catch an edit that undid
+them. The text being asserted on is declared in ``doctrine.py`` rather than here, so
+that renaming a section is one edit rather than one per assertion.
 """
 
 from __future__ import annotations
 
-from pathlib import Path
-
-ROUTINE_DOCUMENT = Path(__file__).parent.parent / "ROUTINE.md"
-
-EXECUTABLE_PROMPT_FENCE = "```text"
-"""
-Opening fence of the block the Routine executes; the surrounding prose is commentary.
-"""
-
-BASE_CHANGE_RULE_HEADING = "BASE CHANGES GO THROUGH THE GITHUB MCP SERVER."
-"""
-Opening words of the doctrine paragraph that names the one client able to retarget a
-base.
-"""
-
-MCP_BASE_CHANGE_TOOL = "update_pull_request"
-"""
-The MCP tool that performs the retarget.
-"""
-
-
-def read_routine() -> str:
-    """
-    Read the doctrine document.
-
-    :return: The full text of ``ROUTINE.md``.
-    """
-    return ROUTINE_DOCUMENT.read_text()
-
-
-def phase_one() -> str:
-    """
-    Extract the Phase 1 section, which owns every reparent instruction.
-
-    :return: The text from the Phase 1 heading up to the Phase 2 heading.
-    """
-    routine = read_routine()
-    start = routine.index("PHASE 1 - LANDED PARENTS")
-    return routine[start : routine.index("PHASE 2 - RESTACK", start)]
-
-
-def executable_prompt() -> str:
-    """
-    Extract the block the Routine executes, the way the Routine's own prompt does.
-
-    :return: The text between the opening and closing fences.
-    """
-    routine = read_routine()
-    start = routine.index(EXECUTABLE_PROMPT_FENCE) + len(EXECUTABLE_PROMPT_FENCE)
-    return routine[start : routine.index("\n```", start)]
-
+from doctrine import (
+    DOCTRINE_DOCUMENT,
+    POINTER_DOCUMENT,
+    DoctrineLandmark,
+    GitHubMcpTool,
+    PointerPlaceholder,
+    PromptDirective,
+    PromptDocument,
+)
 
 # %% the shape the Routine's prompt depends on
 
 
-def test_document_has_exactly_one_executable_prompt_block():
+def test_doctrine_has_exactly_one_executable_prompt_block():
     """
     The Routine is told to execute the fenced block, so a second one would make that
     instruction ambiguous and none would leave it with nothing to run.
     """
-    routine = read_routine()
+    doctrine = PromptDocument.load(DOCTRINE_DOCUMENT)
 
-    assert routine.count(EXECUTABLE_PROMPT_FENCE) == 1
-    assert "\n```" in routine[routine.index(EXECUTABLE_PROMPT_FENCE) :]
+    assert doctrine.occurrences(DoctrineLandmark.EXECUTABLE_PROMPT_FENCE) == 1
+    assert doctrine.executable_prompt()
 
 
 def test_hard_rules_stay_inside_the_executable_block():
@@ -83,10 +45,13 @@ def test_hard_rules_stay_inside_the_executable_block():
     Commentary outside the fence is not executed, so moving the hard rules out would
     silently drop them from what the Routine actually runs.
     """
-    prompt = executable_prompt()
+    prompt = PromptDocument.load(DOCTRINE_DOCUMENT).executable_prompt()
 
-    assert "HARD RULES" in prompt
-    assert "NEVER call `subscribe_pr_activity`" in prompt
+    assert PromptDirective.HARD_RULES in prompt
+    assert (
+        f"{PromptDirective.NEVER} call "
+        f"`{GitHubMcpTool.SUBSCRIBE_PULL_REQUEST_ACTIVITY}`" in prompt
+    )
 
 
 def test_setup_obtains_the_tooling_rather_than_assuming_it():
@@ -97,11 +62,88 @@ def test_setup_obtains_the_tooling_rather_than_assuming_it():
     mid-run - and a Phase 2 failure lands after Phase 1 has already mutated pull
     requests.
     """
-    setup = executable_prompt()
-    setup = setup[setup.index("SETUP") : setup.index("1. UPDATE FORK MAIN FIRST")]
+    doctrine = PromptDocument.load(DOCTRINE_DOCUMENT)
 
-    assert "git fetch" in setup
-    assert ".claude/stack/" in setup
+    step_zero = doctrine.section(
+        DoctrineLandmark.SETUP, DoctrineLandmark.FORK_MAIN_UPDATE
+    )
+
+    assert "fetch" in step_zero
+    assert ".claude/stack/" in step_zero
+
+
+# %% the fork-specific parts stay in the pointer
+
+
+def test_setup_takes_the_tooling_ref_from_the_pointer():
+    """
+    Naming the branch here would bake one fork's in-flight branch into the shared
+    doctrine.
+
+    The pointer already had to name a ref to resolve this document at all, so deferring
+    to it keeps that name in one place and leaves the doctrine usable by any fork
+    unchanged.
+    """
+    doctrine = PromptDocument.load(DOCTRINE_DOCUMENT)
+
+    step_zero = doctrine.section(
+        DoctrineLandmark.SETUP, DoctrineLandmark.FORK_MAIN_UPDATE
+    )
+
+    assert "pointer" in step_zero
+
+
+def test_doctrine_carries_no_placeholder_a_run_would_have_to_resolve():
+    """
+    The doctrine is executed verbatim, so an unsubstituted placeholder would reach the
+    Routine as an instruction it cannot follow.
+
+    Everything fork-specific belongs in the pointer, which is substituted by hand at
+    registration time.
+    """
+    doctrine = PromptDocument.load(DOCTRINE_DOCUMENT)
+
+    unresolved = [
+        placeholder
+        for placeholder in PointerPlaceholder
+        if placeholder.value in doctrine.text
+    ]
+
+    assert unresolved == []
+
+
+def test_pointer_marks_every_fork_specific_value_as_a_placeholder():
+    """
+    The pointer is the one document that must name a fork and a branch, so it is also
+    the one that has to be templated for anyone else to register it.
+    """
+    pointer = PromptDocument.load(POINTER_DOCUMENT)
+
+    prompt = pointer.executable_prompt()
+
+    assert PointerPlaceholder.FORK_REPOSITORY in prompt
+    assert PointerPlaceholder.TOOLING_BRANCH in prompt
+
+
+def test_pointer_sends_the_routine_to_the_doctrine_document():
+    """
+    The pointer's whole purpose is to delegate, so it must name the file to resolve;
+    carrying instructions of its own is how the two drift apart.
+    """
+    prompt = PromptDocument.load(POINTER_DOCUMENT).executable_prompt()
+
+    assert str(DOCTRINE_DOCUMENT.relative_to(DOCTRINE_DOCUMENT.parents[2])) in prompt
+
+
+def test_pointer_hard_rules_match_the_doctrine_exactly():
+    """
+    The rules must bind before any file is read, so the pointer carries its own copy - the one
+    duplication in this workflow, and the only place drift can reappear.
+    """
+    doctrine = PromptDocument.load(DOCTRINE_DOCUMENT)
+    pointer = PromptDocument.load(POINTER_DOCUMENT)
+
+    assert pointer.hard_rules() == doctrine.hard_rules()
 
 
 # %% the base-change client
@@ -111,11 +153,12 @@ def test_doctrine_names_the_one_client_that_can_change_a_base():
     """
     The rule exists, is stated once, and names the tool that actually works.
     """
-    routine = read_routine()
+    doctrine = PromptDocument.load(DOCTRINE_DOCUMENT)
 
-    assert routine.count(BASE_CHANGE_RULE_HEADING) == 1
-    rule = routine[routine.index(BASE_CHANGE_RULE_HEADING) :]
-    assert MCP_BASE_CHANGE_TOOL in rule[: rule.index("\n\n")]
+    assert doctrine.occurrences(DoctrineLandmark.BASE_CHANGE_RULE) == 1
+    assert GitHubMcpTool.UPDATE_PULL_REQUEST in doctrine.paragraph(
+        DoctrineLandmark.BASE_CHANGE_RULE
+    )
 
 
 def test_doctrine_records_that_the_git_proxy_refuses_a_base_change():
@@ -124,9 +167,9 @@ def test_doctrine_records_that_the_git_proxy_refuses_a_base_change():
     it as the known, documented case rather than an unexplained failure to improvise
     around.
     """
-    rule = read_routine()
-    rule = rule[rule.index(BASE_CHANGE_RULE_HEADING) :]
-    rule = rule[: rule.index("\n\n")]
+    rule = PromptDocument.load(DOCTRINE_DOCUMENT).paragraph(
+        DoctrineLandmark.BASE_CHANGE_RULE
+    )
 
     assert "403" in rule
     assert "curl" in rule
@@ -143,11 +186,14 @@ def test_native_stack_reparent_changes_the_base_rather_than_replacing_the_pull_r
     was believed impossible from a session; it is not, so the sequence must not drift
     back to it.
     """
-    sequence = phase_one()
-    sequence = sequence[sequence.index("NATIVE-STACK MEMBERS.") :]
+    phase_one = PromptDocument.load(DOCTRINE_DOCUMENT).section(
+        DoctrineLandmark.PHASE_ONE, DoctrineLandmark.PHASE_TWO
+    )
 
-    assert MCP_BASE_CHANGE_TOOL in sequence
-    assert "create_pull_request" not in sequence
+    sequence = phase_one[phase_one.index(DoctrineLandmark.NATIVE_STACK_MEMBERS.text) :]
+
+    assert GitHubMcpTool.UPDATE_PULL_REQUEST in sequence
+    assert GitHubMcpTool.CREATE_PULL_REQUEST not in sequence
 
 
 def test_every_reparent_instruction_points_at_the_base_change_rule():
@@ -155,16 +201,18 @@ def test_every_reparent_instruction_points_at_the_base_change_rule():
     Both reparent sites - the orphaned-child sweep and the per-merged-parent list - defer
     to the one rule, so neither can prescribe a client of its own.
     """
-    section = phase_one()
+    phase_one = PromptDocument.load(DOCTRINE_DOCUMENT).section(
+        DoctrineLandmark.PHASE_ONE, DoctrineLandmark.PHASE_TWO
+    )
 
-    orphan_sweep = section[
-        section.index("REPARENT EVERY ORPHANED CHILD") : section.index(
-            "NATIVE-STACK MEMBERS."
+    orphan_sweep = phase_one[
+        phase_one.index(DoctrineLandmark.ORPHANED_CHILD_SWEEP.text) : phase_one.index(
+            DoctrineLandmark.NATIVE_STACK_MEMBERS.text
         )
     ]
-    merged_parent_list = section[
-        section.index("For each OPEN fork PR (head branch B)") :
+    merged_parent_list = phase_one[
+        phase_one.index(DoctrineLandmark.MERGED_PARENT_LIST.text) :
     ]
 
-    assert MCP_BASE_CHANGE_TOOL in orphan_sweep
-    assert MCP_BASE_CHANGE_TOOL in merged_parent_list
+    assert GitHubMcpTool.UPDATE_PULL_REQUEST in orphan_sweep
+    assert GitHubMcpTool.UPDATE_PULL_REQUEST in merged_parent_list
