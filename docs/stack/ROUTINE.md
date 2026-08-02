@@ -70,7 +70,7 @@ SETUP
    `fork_remote`, or the fork outright via `fork_repository`, but normally neither is set.) Ensure
    the remotes are named as expected: `origin` the fork and `cram2` the upstream. A fresh cloud
    clone may have them named differently - check `git remote -v` and rename/add so `origin`=fork,
-   `cram2`=upstream before continuing. Then make sure the tooling is present, not assumed:
+   `cram2`=upstream before continuing. Then make sure the tooling is present, rather than
    assuming it: every later phase shells out to `.claude/stack/stack.py`, and a Phase 2 failure
    lands after Phase 1 has already mutated pull requests. If `ls .claude/stack/stack.py` fails,
    `git fetch` that ref and `git checkout <ref> -- .claude/stack/`, where `<ref>` is the one you
