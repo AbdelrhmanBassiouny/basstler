@@ -14,7 +14,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import ClassVar
+from typing import ClassVar, Protocol
 
 # %% documents
 
@@ -166,31 +166,54 @@ class PromptRule(RuleSpecification, Enum):
     )
 
 
-DocumentLandmark = PromptLandmark | PromptRule
-"""
-Any text a prompt document can be located by, whether a plain landmark or a rule.
-"""
+class DocumentLandmark(Protocol):
+    """
+    Anything a prompt document can be located by, named so a failure can report it.
+
+    Declared structurally so a new kind of landmark needs no edit here.
+    """
+
+    name: str
+    """
+    The identifier the declaring enum gives it.
+    """
+
+    text: str
+    """
+    The literal text to find in the document.
+    """
+
+    purpose: str
+    """
+    What the document's contract depends on it for.
+    """
 
 
+@dataclass
 class LandmarkNotFoundError(LookupError):
     """
     Raised when a prompt document no longer contains a landmark it is required to
     contain.
     """
 
-    def __init__(self, landmark: DocumentLandmark, document: Path) -> None:
-        super().__init__(
-            f"{document.name} no longer contains {landmark.name}: {landmark.text!r} "
-            f"({landmark.purpose})"
+    landmark: DocumentLandmark
+    """
+    The landmark that could not be located.
+    """
+
+    document: Path
+    """
+    The document that was searched.
+    """
+
+    def __str__(self) -> str:
+        """
+        :return: The missing landmark and what the contract needed it for.
+        """
+        return (
+            f"{self.document.name} no longer contains {self.landmark.name}: "
+            f"{self.landmark.text!r} ({self.landmark.purpose})"
         )
-        self.landmark = landmark
-        """
-        The landmark that could not be located.
-        """
-        self.document = document
-        """
-        The document that was searched.
-        """
 
 
 # %% the documents themselves

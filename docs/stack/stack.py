@@ -44,13 +44,16 @@ PERSONAL_STACK_CONFIGURATION_PATH = ".claude/personal/stack.toml"
 branch (see :func:`_personal_configuration_overrides`)."""
 
 
+@dataclass
 class MalformedRepositoryError(ValueError):
-    """Raised when a configured repository is not in ``owner/name`` form."""
+    """Raised when a repository reference is not in ``owner/name`` form."""
 
-    def __init__(self, text: str) -> None:
-        super().__init__(f"expected a repository as 'owner/name', got {text!r}")
-        self.text = text
-        """The value that could not be parsed."""
+    text: str
+    """The value that could not be parsed."""
+
+    def __str__(self) -> str:
+        """:return: What was expected and what arrived instead."""
+        return f"expected a repository as 'owner/name', got {self.text!r}"
 
 
 @dataclass(frozen=True)
@@ -75,6 +78,28 @@ class Repository:
         if not (owner and separator and name):
             raise MalformedRepositoryError(text)
         return cls(owner, name)
+
+    @classmethod
+    def from_remote_url(cls, url: str) -> Repository:
+        """Read the repository a git remote URL points at.
+
+        Accepts every form a fork remote takes - HTTPS, SSH, and the local proxy a cloud
+        session is given - by discarding the host and taking the last two path segments.
+
+        :param url: The remote URL to read.
+        :return: The repository it names.
+        :raises MalformedRepositoryError: If *url* names no ``owner/name`` pair.
+        """
+        reference = url.removesuffix(".git").rstrip("/")
+        if "://" in reference:
+            _, _, host_and_path = reference.partition("://")
+            _, _, path = host_and_path.partition("/")
+        else:
+            _, _, path = reference.rpartition(":")
+        segments = [segment for segment in path.split("/") if segment]
+        if len(segments) < 2:
+            raise MalformedRepositoryError(url)
+        return cls.parse("/".join(segments[-2:]))
 
     def __str__(self) -> str:
         """:return: The ``owner/name`` form GitHub uses."""
@@ -119,15 +144,34 @@ def load_configuration(path: Path = CONFIGURATION_PATH) -> Configuration:
     """
     values = tomllib.loads(path.read_text())
     values.update(_personal_configuration_overrides())
+    fork_remote = values.get("fork_remote", "origin")
     return Configuration(
         in_review_label=values.get("in_review_label", "in-review"),
         rebase_label=values.get("rebase_label", "rebase"),
         needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
-        fork_repository=Repository.parse(values["fork_repository"]),
-        fork_remote=values.get("fork_remote", "origin"),
+        fork_repository=_fork_repository(values, fork_remote),
+        fork_remote=fork_remote,
         upstream_remote=values.get("upstream_remote", "cram2"),
         upstream_base=values.get("upstream_base", "main"),
     )
+
+
+def _fork_repository(values: dict[str, str], fork_remote: str) -> Repository:
+    """Resolve which repository the fork is.
+
+    A checkout already knows its own fork - it is whatever the fork remote points at -
+    so the reference is only read from configuration when one is set, which is what a
+    checkout whose remote is not the fork needs.
+
+    :param values: The layered configuration values.
+    :param fork_remote: The git remote for the fork.
+    :return: The fork repository.
+    :raises MalformedRepositoryError: If neither source names an ``owner/name`` pair.
+    """
+    configured = values.get("fork_repository")
+    if configured:
+        return Repository.parse(configured)
+    return Repository.from_remote_url(_git("remote", "get-url", fork_remote))
 
 
 def _resolve_personal_notes_remote() -> str:

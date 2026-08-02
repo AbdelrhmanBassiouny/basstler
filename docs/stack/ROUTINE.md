@@ -64,13 +64,13 @@ be the ones you expect. If a CHILD branch's commits would become ancestors of it
 auto-mark the child PR as merged - a false merge. STOP and do not push.
 
 SETUP
-0. Read `.claude/stack/stack.toml` first: `fork_repository` is the `owner/name` of the fork you
-   operate on, and every `<fork owner>` below means its owner. That file is the only place the fork
-   is named - never assume one, and if the key is missing, STOP and report rather than guessing.
-   Then ensure remotes match it: `origin` must be `fork_repository` and `cram2` the upstream. A
-   fresh cloud clone may have them named differently - check `git remote -v` and rename/add so
-   `origin`=fork, `cram2`=upstream before continuing. Then make sure the tooling is present, not
-   assumed:
+0. Establish which fork you operate on, never assume it: it is whatever the fork remote points at,
+   so `git remote get-url origin` gives you `<fork owner>/<fork name>`, and every `<fork owner>`
+   below means that owner. (`.claude/stack/stack.toml` can override the remote's name via
+   `fork_remote`, or the fork outright via `fork_repository`, but normally neither is set.) Ensure
+   the remotes are named as expected: `origin` the fork and `cram2` the upstream. A fresh cloud
+   clone may have them named differently - check `git remote -v` and rename/add so `origin`=fork,
+   `cram2`=upstream before continuing. Then make sure the tooling is present, not assumed:
    assuming it: every later phase shells out to `.claude/stack/stack.py`, and a Phase 2 failure
    lands after Phase 1 has already mutated pull requests. If `ls .claude/stack/stack.py` fails,
    `git fetch` that ref and `git checkout <ref> -- .claude/stack/`, where `<ref>` is the one you
