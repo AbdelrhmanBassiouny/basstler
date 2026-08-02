@@ -32,7 +32,7 @@ import sys
 import tomllib
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 # %% configuration
@@ -929,7 +929,29 @@ BOARDLESS_COMMANDS = frozenset({"configuration"})
 # %% entry point
 
 
-def _print_configuration_or_report() -> int:
+class ExitCode(IntEnum):
+    """What this tool's exit status tells a caller.
+
+    A distinct status per failure lets a caller - a shell script, or a Routine acting on
+    what it gets back - tell "you asked for something that does not exist" from "the
+    checkout is not in a state I can read", without parsing stderr.
+    """
+
+    SUCCESS = 0
+    """The command ran and printed its result."""
+
+    USAGE = 2
+    """No such command, or the wrong number of arguments; the conventional status for a
+    usage error, as `argparse` also uses."""
+
+    BOARD_UNAVAILABLE = 3
+    """`board.json` is missing or unreadable, so the stack cannot be derived."""
+
+    REMOTES_UNRESOLVED = 4
+    """The fork could not be identified from this checkout's remotes."""
+
+
+def _print_configuration_or_report() -> ExitCode:
     """Print the resolved configuration, or report why the remotes could not be resolved.
 
     :return: The process exit code, non-zero when resolution is not deterministic.
@@ -938,12 +960,12 @@ def _print_configuration_or_report() -> int:
         configuration = load_configuration()
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
         print(f"{error}", file=sys.stderr)
-        return 4
+        return ExitCode.REMOTES_UNRESOLVED
     print_configuration(configuration)
-    return 0
+    return ExitCode.SUCCESS
 
 
-def main() -> int:
+def main() -> ExitCode:
     """Dispatch the command-line invocation.
 
     :return: The process exit code.
@@ -959,7 +981,7 @@ def main() -> int:
             "  --porcelain (with `next`): print only 'name<TAB>pr' per branch to promote.",
             file=sys.stderr,
         )
-        return 2
+        return ExitCode.USAGE
 
     if arguments[0] in BOARDLESS_COMMANDS:
         return _print_configuration_or_report()
@@ -968,13 +990,13 @@ def main() -> int:
         stack = load_stack()
     except BoardUnavailable as error:
         print(f"{error}", file=sys.stderr)
-        return 3
+        return ExitCode.BOARD_UNAVAILABLE
 
     if porcelain and arguments[0] == "next":
         print_next_porcelain(stack)
     else:
         COMMANDS[arguments[0]](stack)
-    return 0
+    return ExitCode.SUCCESS
 
 
 if __name__ == "__main__":
