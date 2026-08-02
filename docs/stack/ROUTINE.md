@@ -74,13 +74,14 @@ SETUP
       `git checkout <ref> -- .claude/stack/` - your pointer prompt is what named that ref. Once
       `.claude/stack/` is on `main` this is a no-op on a fresh clone, and both this fallback and
       the pointer's can be deleted.
-   b. Run `python .claude/stack/stack.py remotes`. It prints one `key<TAB>value` per line -
-      `fork-remote`, `fork-repository`, `upstream-remote`, `upstream-repository` - deciding which
-      remote is which by the repository each URL names, not by what it is called. Use those values
-      everywhere this document writes <fork-remote>, <fork owner>, <upstream-remote> or
-      <upstream-repository>. If an `upstream-setup` line appears, run exactly that command and
-      re-run `remotes`. If the command exits non-zero, STOP and report: it could not tell which
-      remote is the fork, and there is no safe guess.
+   b. Run `python .claude/stack/stack.py configuration`. It prints every resolved setting as one
+      `key<TAB>value` line - among them `fork_remote`, `fork_repository`, `upstream_remote` and
+      `upstream_repository`, deciding which remote is which by the repository each URL names, not
+      by what it is called. Use those values everywhere this document writes <fork-remote>,
+      <fork owner>, <upstream-remote> or <upstream-repository>. If an `upstream_setup_command`
+      line appears, run exactly that command and re-run `configuration`. If the command exits
+      non-zero, STOP and report: it could not tell which remote is the fork, and there is no safe
+      guess.
 1. UPDATE FORK MAIN FIRST - before anything else. Every `base=main` comparison (both GitHub's PR
    diffs and the board's LOC/conflict chips) is measured against `<fork-remote>/main`, so a stale
    fork main inflates every root branch's diff. Fork main is a pristine mirror of the upstream trunk

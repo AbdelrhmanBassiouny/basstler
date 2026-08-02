@@ -20,7 +20,7 @@ Commands (run from the repo root)::
     python .claude/stack/stack.py next          # which branches to submit to cram2 next
     python .claude/stack/stack.py next --porcelain   # machine-readable: one 'name<TAB>pr' line per branch
     python .claude/stack/stack.py restack-plan  # bottom-up restack plan as JSON, for the `restack` workflow
-    python .claude/stack/stack.py remotes       # which remote is the fork, which is the upstream
+    python .claude/stack/stack.py configuration # every resolved setting, including the remotes
 """
 
 from __future__ import annotations
@@ -271,7 +271,7 @@ def _select_fork(
 
 @dataclass
 class Configuration:
-    """Static configuration for the workflow (everything that is not derivable from GitHub)."""
+    """Everything this checkout runs on: the layered settings and the remotes they resolve to."""
 
     in_review_label: str
     """Fork-PR label marking a branch as promoted to the upstream and under review."""
@@ -297,6 +297,9 @@ class Configuration:
     upstream_base: str
     """The upstream base branch every stack ultimately targets."""
 
+    upstream_setup_command: str | None
+    """The command adding the upstream remote, or ``None`` once this checkout has one."""
+
 
 def load_configuration(path: Path = CONFIGURATION_PATH) -> Configuration:
     """Parse the layered configuration into a :class:`Configuration`.
@@ -320,6 +323,7 @@ def load_configuration(path: Path = CONFIGURATION_PATH) -> Configuration:
         upstream_repository=upstream_repository,
         upstream_remote=resolution.upstream_name,
         upstream_base=values.get("upstream_base", "main"),
+        upstream_setup_command=resolution.upstream_setup_command,
     )
 
 
@@ -896,20 +900,19 @@ def print_restack_plan(stack: Stack) -> None:
     print(json.dumps(restack_plan(stack), indent=2))
 
 
-def print_remotes(resolution: RemoteResolution) -> None:
-    """Print the resolved remotes as ``key<TAB>value`` lines.
+def print_configuration(configuration: Configuration) -> None:
+    """Print the resolved configuration as one ``field<TAB>value`` line per setting.
 
-    An ``upstream-setup`` line appears only when no remote points at the upstream yet, and
-    carries the exact command that adds one.
+    Keys are :class:`Configuration`'s own field names, so a caller reading one by name cannot
+    be reading a name this module never prints. A setting with no value is omitted rather than
+    printed empty, which is what keeps ``upstream_setup_command`` readable as "run this".
 
-    :param resolution: The resolved remotes.
+    :param configuration: The configuration to report.
     """
-    print(f"fork-remote\t{resolution.fork.name}")
-    print(f"fork-repository\t{resolution.fork.repository}")
-    print(f"upstream-remote\t{resolution.upstream_name}")
-    print(f"upstream-repository\t{resolution.upstream_repository}")
-    if resolution.upstream_setup_command:
-        print(f"upstream-setup\t{resolution.upstream_setup_command}")
+    for name, value in vars(configuration).items():
+        if value is None:
+            continue
+        print(f"{name}\t{value}")
 
 
 COMMANDS = {
@@ -919,24 +922,24 @@ COMMANDS = {
     "restack-plan": print_restack_plan,
 }
 
-BOARDLESS_COMMANDS = frozenset({"remotes"})
+BOARDLESS_COMMANDS = frozenset({"configuration"})
 """Commands answerable from git alone, which must run before ``board.json`` exists."""
 
 
 # %% entry point
 
 
-def _print_remotes_or_report() -> int:
-    """Print the resolved remotes, or report why they could not be resolved.
+def _print_configuration_or_report() -> int:
+    """Print the resolved configuration, or report why the remotes could not be resolved.
 
     :return: The process exit code, non-zero when resolution is not deterministic.
     """
     try:
-        resolution = resolved_remotes()
+        configuration = load_configuration()
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
         print(f"{error}", file=sys.stderr)
         return 4
-    print_remotes(resolution)
+    print_configuration(configuration)
     return 0
 
 
@@ -959,7 +962,7 @@ def main() -> int:
         return 2
 
     if arguments[0] in BOARDLESS_COMMANDS:
-        return _print_remotes_or_report()
+        return _print_configuration_or_report()
 
     try:
         stack = load_stack()

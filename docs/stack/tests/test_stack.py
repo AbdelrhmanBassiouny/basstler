@@ -30,6 +30,7 @@ from stack import (
     derive_status,
     load_configuration,
     next_to_promote,
+    print_configuration,
     resolve_remotes,
     order,
     promotion_order,
@@ -37,7 +38,7 @@ from stack import (
 )
 
 
-def make_configuration() -> Configuration:
+def make_configuration(upstream_setup_command: str | None = None) -> Configuration:
     return Configuration(
         in_review_label="in-review",
         rebase_label="rebase",
@@ -47,6 +48,7 @@ def make_configuration() -> Configuration:
         upstream_repository=Repository("an-upstream-owner", "a-project"),
         upstream_remote="cram2",
         upstream_base="main",
+        upstream_setup_command=upstream_setup_command,
     )
 
 
@@ -523,3 +525,49 @@ def test_a_remote_that_names_no_repository_is_ignored():
     )
 
     assert resolution.fork == Remote("origin", FORK)
+
+
+# %% the configuration the shell tooling reads
+
+
+def test_every_setting_is_printed_under_its_own_field_name(capsys):
+    """
+    Callers read one setting by name out of this output, so a key that is not a field name
+    is a key nobody can look up - and a field that never prints is a setting nobody can read.
+    """
+    print_configuration(make_configuration())
+
+    printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
+
+    assert printed == {
+        "in_review_label": "in-review",
+        "rebase_label": "rebase",
+        "needs_resolution_label": "needs-resolution",
+        "fork_repository": "a-fork-owner/a-fork",
+        "fork_remote": "origin",
+        "upstream_repository": "an-upstream-owner/a-project",
+        "upstream_remote": "cram2",
+        "upstream_base": "main",
+    }
+
+
+def test_a_checkout_missing_its_upstream_remote_is_printed_the_command_that_adds_it(
+    capsys,
+):
+    print_configuration(
+        make_configuration(upstream_setup_command="git remote add cram2 a-url")
+    )
+
+    printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
+
+    assert printed["upstream_setup_command"] == "git remote add cram2 a-url"
+
+
+def test_nothing_is_printed_for_a_setup_command_that_is_not_needed(capsys):
+    """
+    An empty value would read as a command to run, so the line is absent rather than
+    blank.
+    """
+    print_configuration(make_configuration())
+
+    assert "upstream_setup_command" not in capsys.readouterr().out

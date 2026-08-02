@@ -50,11 +50,14 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
     pick up a moved parent via a conflict-free `merge`). Feed straight into the `restack`
     workflow's `args`.
-  - `python .claude/stack/stack.py remotes` - which remote is the fork and which is the
-    upstream, as `key<TAB>value` lines, plus the exact `git remote add` command when no
-    upstream remote exists yet. Answerable from git alone, so it runs before `board.json`
+  - `python .claude/stack/stack.py configuration` - every resolved setting as `key<TAB>value`
+    lines, keyed by `Configuration`'s own field names: the labels, the upstream base, which
+    remote is the fork and which is the upstream, plus the exact `git remote add` command when
+    no upstream remote exists yet. Answerable from git alone, so it runs before `board.json`
     exists; it exits non-zero rather than guessing when the fork is ambiguous. `ROUTINE.md`'s
-    SETUP runs this instead of inspecting or renaming remotes itself.
+    SETUP runs this instead of inspecting or renaming remotes itself, and it is the one surface
+    shell tooling reads configuration through - parsing `stack.toml` directly would miss the
+    personal override.
 - **`ROUTINE.md`** - the cloud Routine's live prompt. The Routine reads it from git each run, so
   editing it changes the running workflow on push; only a short pointer is registered at
   claude.ai/code/routines. Never re-embed a copy here.
