@@ -91,6 +91,33 @@ they run in parallel?") — the same way the plan-dashboard system's own
 design was worked out via up-front questions before anything was written,
 not after.
 
+### Is it a new item, or a change to one already in flight?
+
+Ask this of every item before adding it, and prefer the change. An item is
+genuinely new only if it still stands on its own once the items before it
+land. If instead it *modifies* what an unlanded item introduces, it is that
+item's work, and stacking it is an artifact of the order the work was
+written in rather than a real dependency.
+
+The test is mechanical rather than a matter of taste — compare the files
+the work touches against the base the plan ultimately targets:
+
+    git ls-tree <base-branch> -- <paths the work touches>
+
+Empty output means those files do not exist there yet, so the item that
+introduces them is the one that owns them. From the base's point of view
+the two are a single addition.
+
+Splitting anyway costs more than the tidiness buys. The earlier item ships
+a state nobody should ever run; the later one spends its review
+re-explaining the first; and if either is live infrastructure, landing the
+earlier one alone regresses it until the later one follows. Two items that
+both touch unlanded files can also independently build the same thing
+without either noticing.
+
+Prefer one item with a coherent story over two that only make sense read
+in order. Split on *what the work is*, not on when it was thought of.
+
 If migrating a source doc: preserve its detail rather than compressing it
 away. Structured facts (branch, PR, base, status, blockers) become
 `plan.yaml` items; everything else (design rationale, history, "why",
