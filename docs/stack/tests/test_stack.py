@@ -10,6 +10,8 @@ remote, so those tests run against a :class:`ScratchRepository` instead.
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from collections.abc import Container
 from pathlib import Path
 
@@ -19,24 +21,40 @@ from scratch_repository import ScratchRepository
 
 from stack import (
     AmbiguousForkRemoteError,
+    BranchMove,
+    BranchMoveAction,
     BranchStatus,
     Configuration,
+    ContradictoryLabelWriteError,
+    ExitCode,
     ForkRemoteNotFoundError,
+    LabelWrite,
     MalformedRepositoryError,
     IntegrationStrategy,
+    PreFlight,
+    PromotionLink,
+    PromotionLinkTooLongError,
     PullRequest,
     Remote,
+    Reparent,
     Repository,
     build_stack,
     derive_status,
+    landed_branches,
     load_configuration,
     next_to_promote,
     print_configuration,
+    reparents,
     resolve_remotes,
     order,
     promotion_order,
     restack_plan,
 )
+
+STACK_SCRIPT = Path(__file__).parent.parent / "stack.py"
+"""
+The tool under test, invoked as a subprocess wherever an exit status is the assertion.
+"""
 
 
 def make_configuration(upstream_setup_command: str | None = None) -> Configuration:
@@ -703,3 +721,460 @@ def test_a_tower_lands_bottom_up_over_successive_runs():
         "parent": "main",
         "strategy": "merge",
     }
+
+
+# %% label writes
+
+
+def test_adding_a_label_keeps_every_label_the_pull_request_already_carries():
+    """
+    The label write replaces the whole set, so computing it from the addition alone
+    silently wipes the rest - which has happened, stripping `in-review` off branches that
+    were already promoted.
+    """
+    write = LabelWrite.replacing(["in-review", "bug"], added=["needs-resolution"])
+
+    assert write.labels == ("in-review", "bug", "needs-resolution")
+
+
+def test_removing_a_label_keeps_every_other_label():
+    write = LabelWrite.replacing(
+        ["in-review", "cram2-link-sent"], removed=["cram2-link-sent"]
+    )
+
+    assert write.labels == ("in-review",)
+
+
+def test_adding_a_label_already_carried_leaves_the_set_unchanged():
+    write = LabelWrite.replacing(["in-review"], added=["in-review"])
+
+    assert write.labels == ("in-review",)
+
+
+def test_removing_a_label_that_is_not_there_leaves_the_set_unchanged():
+    write = LabelWrite.replacing(["in-review"], removed=["rebase"])
+
+    assert write.labels == ("in-review",)
+
+
+def test_asking_to_add_and_remove_one_label_at_once_is_refused():
+    """
+    Either outcome would be a guess at what the caller meant, and the wrong guess is a
+    label silently kept or silently dropped.
+    """
+    with pytest.raises(ContradictoryLabelWriteError):
+        LabelWrite.replacing(["in-review"], added=["rebase"], removed=["rebase"])
+
+
+# %% pre-flight
+
+
+def a_move(
+    source: str = "engine",
+    destination: str = "engine",
+    destination_remote: str = "origin",
+) -> BranchMove:
+    """
+    A proposed push, defaulting to the one shape that is always allowed.
+
+    :param source: The branch whose commits would move.
+    :param destination: The branch they would land on.
+    :param destination_remote: The remote holding the destination.
+    :return: The proposed move.
+    """
+    return BranchMove(
+        action=BranchMoveAction.PUSH,
+        source=source,
+        destination=destination,
+        destination_remote=destination_remote,
+    )
+
+
+def a_preflight(
+    checked_out_branch: str = "engine", ancestors: Container[str] = frozenset()
+) -> PreFlight:
+    """
+    A pre-flight over the two-tower stack.
+
+    :param checked_out_branch: What ``git branch --show-current`` would report.
+    :param ancestors: Branches already contained in the move's source.
+    :return: The pre-flight to ask for refusals.
+    """
+    return PreFlight(
+        stack=a_stack_of_two_towers(),
+        checked_out_branch=checked_out_branch,
+        is_ancestor=lambda candidate, _descendant: candidate in ancestors,
+    )
+
+
+def test_pushing_the_checked_out_branch_onto_itself_is_allowed():
+    assert a_preflight().refusals(a_move()) == []
+
+
+def test_pushing_while_another_branch_is_checked_out_is_refused():
+    """
+    The checked-out branch is the one whose content actually moves, so a mismatch moves
+    something other than what was intended.
+    """
+    refusals = a_preflight(checked_out_branch="parser").refusals(a_move())
+
+    assert len(refusals) == 1
+    assert "parser" in refusals[0].reason
+
+
+def test_a_refspec_naming_a_different_branch_on_each_side_is_refused():
+    refusals = a_preflight().refusals(a_move(destination="engine-ui"))
+
+    assert [refusal.reason for refusal in refusals] == [
+        "refspec maps 'engine' onto 'engine-ui'; both sides must name the same branch"
+    ]
+
+
+def test_a_destination_on_the_upstream_remote_is_refused():
+    """
+    Every push in this workflow goes to the fork; the upstream is written only by
+    opening a pull request against it.
+    """
+    refusals = a_preflight().refusals(a_move(destination_remote="cram2"))
+
+    assert len(refusals) == 1
+    assert "cram2" in refusals[0].reason
+
+
+def test_a_push_that_would_make_a_child_an_ancestor_of_its_parent_is_refused():
+    """
+    GitHub reads a pull request whose head is contained in its base as merged, so this
+    push would falsely close the child.
+    """
+    refusals = a_preflight(ancestors={"engine-ui"}).refusals(a_move())
+
+    assert len(refusals) == 1
+    assert "engine-ui" in refusals[0].reason
+
+
+def test_an_unrelated_branch_contained_in_the_source_is_not_a_false_merge():
+    """
+    Only a child of the destination can be falsely merged by pushing to it.
+    """
+    assert a_preflight(ancestors={"parser"}).refusals(a_move()) == []
+
+
+def test_every_reason_to_refuse_is_reported_rather_than_only_the_first():
+    """
+    Fixing one problem and re-running to discover the next is how a half-applied move
+    gets made.
+    """
+    refusals = a_preflight(checked_out_branch="parser").refusals(
+        a_move(destination="engine-ui", destination_remote="cram2")
+    )
+
+    assert len(refusals) == 3
+
+
+# %% promotion links
+
+
+def a_promotion_link(title: str = "A title", body: str = "A body") -> PromotionLink:
+    """
+    The compare-and-create link for the two-tower stack's root branch.
+
+    :param title: The title to prefill.
+    :param body: The body to prefill.
+    :return: The built link.
+    """
+    return PromotionLink.build(make_configuration(), "engine", title, body)
+
+
+def test_the_link_compares_the_upstream_base_against_the_fork_branch():
+    assert a_promotion_link().url.startswith(
+        "https://github.com/an-upstream-owner/a-project/compare/"
+        "main...a-fork-owner:engine?expand=1"
+    )
+
+
+def test_the_title_and_body_are_encoded_rather_than_pasted_in_raw():
+    """
+    An unencoded ``&`` or ``#`` truncates the query string at that character, so the
+    prefill silently loses everything after it.
+    """
+    url = a_promotion_link(title="Fix A & B", body="see #106").url
+
+    assert "title=Fix%20A%20%26%20B" in url
+    assert "body=see%20%23106" in url
+
+
+def test_a_body_within_the_limit_is_left_whole():
+    link = a_promotion_link(body="short")
+
+    assert not link.body_was_truncated
+    assert "body=short" in link.url
+
+
+def test_an_oversized_body_is_truncated_rather_than_silently_dropped():
+    """
+    Over the limit the whole prefill is discarded by the server, so the link arrives
+    with an empty description and nobody is told.
+    """
+    link = a_promotion_link(body="x" * 20000)
+
+    assert link.body_was_truncated
+    assert link.url.endswith(PromotionLink.TRUNCATION_MARKER)
+    assert len(link.url) <= PromotionLink.URL_CHARACTER_LIMIT
+
+
+def test_a_link_that_cannot_fit_even_without_a_description_is_refused():
+    """
+    Returning a link known to be over the limit would be the silent failure this class
+    exists to prevent, so the one input that cannot be fixed by shortening the body says
+    so.
+    """
+    with pytest.raises(PromotionLinkTooLongError):
+        a_promotion_link(title="t" * 20000, body="")
+
+
+# %% landed parents
+
+
+def test_a_child_of_a_landed_parent_is_named_with_the_base_it_should_get():
+    stack = a_stack_of_two_towers(landed={"engine"})
+
+    assert reparents(stack) == [
+        Reparent(
+            branch="engine-ui",
+            pull_request_number=2,
+            current_base="engine",
+            target_base="main",
+        )
+    ]
+
+
+def test_a_child_already_based_on_the_upstream_base_needs_no_reparent():
+    assert reparents(a_stack_of_two_towers()) == []
+
+
+def test_a_child_of_a_landed_parent_with_no_open_pull_request_is_still_named():
+    """
+    The board carries only open pull requests, so a parent whose own was closed is absent
+    from it entirely - the case that orphaned a real pull request for six days.
+    """
+    orphaned = build(
+        [PullRequest(2, "engine-ui", "engine", draft=True)], merged={"engine"}
+    )
+
+    assert [reparent.branch for reparent in reparents(orphaned)] == ["engine-ui"]
+
+
+def test_a_branch_that_has_landed_is_named_for_labelling_and_closing():
+    stack = a_stack_of_two_towers(landed={"engine"})
+
+    assert [branch.name for branch in landed_branches(stack)] == ["engine"]
+
+
+def test_nothing_has_landed_while_the_whole_stack_is_still_open():
+    assert landed_branches(a_stack_of_two_towers()) == []
+
+
+# %% configuration named rather than inferred
+
+
+def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
+    scratch_repository: ScratchRepository, monkeypatch
+):
+    """
+    Two candidate remotes are ambiguous to inference; naming the fork settles it without
+    anything being written to the checkout.
+    """
+    configuration_path = _committed_configuration_path(scratch_repository)
+    scratch_repository.run_git(
+        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
+    )
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+
+    with pytest.raises(AmbiguousForkRemoteError):
+        load_configuration(configuration_path)
+
+    configuration = load_configuration(
+        configuration_path, fork_repository=Repository("someone-else", "their-fork")
+    )
+
+    assert configuration.fork_repository == Repository("someone-else", "their-fork")
+    assert configuration.fork_remote == "another"
+
+
+def test_a_named_upstream_replaces_the_committed_default(
+    scratch_repository: ScratchRepository, monkeypatch
+):
+    configuration_path = _committed_configuration_path(scratch_repository)
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+
+    configuration = load_configuration(
+        configuration_path,
+        upstream_repository=Repository("a-different-upstream", "a-project"),
+    )
+
+    assert configuration.upstream_repository == Repository(
+        "a-different-upstream", "a-project"
+    )
+    assert configuration.upstream_setup_command == (
+        "git remote add cram2 https://github.com/a-different-upstream/a-project.git"
+    )
+
+
+# %% the command line a caller acts on the exit status of
+
+
+@pytest.fixture
+def offline_checkout(scratch_repository: ScratchRepository) -> ScratchRepository:
+    """
+    A checkout whose personal-notes remote is a local bare repository.
+
+    Resolving configuration fetches that branch, so pointing it at a local path is what
+    keeps these tests off the network.
+
+    :param scratch_repository: The scratch repository to point.
+    :return: The same repository, now resolving its notes remote locally.
+    """
+    scratch_repository.resolve_notes_remote_to()
+    return scratch_repository
+
+
+def run_stack(
+    checkout: ScratchRepository, *arguments: str
+) -> subprocess.CompletedProcess[str]:
+    """
+    Invoke the tool as a caller does, so its exit status is exercised rather than
+    assumed.
+
+    :param checkout: The repository to run in.
+    :param arguments: The command and its flags.
+    :return: The finished subprocess.
+    """
+    return subprocess.run(
+        [sys.executable, str(STACK_SCRIPT), *arguments],
+        capture_output=True,
+        text=True,
+        cwd=checkout.project_root,
+    )
+
+
+def test_an_unknown_command_is_a_usage_error(offline_checkout: ScratchRepository):
+    assert run_stack(offline_checkout, "not-a-command").returncode == ExitCode.USAGE
+
+
+def test_a_label_write_prints_the_complete_set_one_label_per_line(
+    offline_checkout: ScratchRepository,
+):
+    """
+    One per line rather than a joined list: a label may contain whatever a separator
+    would have been.
+    """
+    result = run_stack(
+        offline_checkout,
+        "labels",
+        "--current",
+        "in-review",
+        "--current",
+        "bug",
+        "--add",
+        "rebase",
+    )
+
+    assert result.returncode == ExitCode.SUCCESS
+    assert result.stdout.splitlines() == ["in-review", "bug", "rebase"]
+
+
+def test_a_contradictory_label_write_is_refused_rather_than_guessed_at(
+    offline_checkout: ScratchRepository,
+):
+    result = run_stack(
+        offline_checkout, "labels", "--add", "rebase", "--remove", "rebase"
+    )
+
+    assert result.returncode == ExitCode.USAGE
+    assert "rebase" in result.stderr
+
+
+def test_a_checkout_whose_fork_cannot_be_identified_says_so_by_status(
+    offline_checkout: ScratchRepository,
+):
+    """
+    A caller has to tell "I cannot know which remote is yours" from every other failure
+    without reading stderr, because that one is the question it can put to the user.
+    """
+    result = run_stack(offline_checkout, "configuration")
+
+    assert result.returncode == ExitCode.REMOTES_UNRESOLVED
+
+
+def test_a_readable_checkout_with_no_board_reports_the_missing_board_instead(
+    offline_checkout: ScratchRepository,
+):
+    offline_checkout.run_git(
+        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
+    )
+
+    result = run_stack(offline_checkout, "status")
+
+    assert result.returncode == ExitCode.BOARD_UNAVAILABLE
+
+
+def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
+    offline_checkout: ScratchRepository,
+):
+    """
+    Two candidate remotes are ambiguous, so a caller that already knows the answer must
+    be able to say so rather than be blocked by the guess it does not need.
+    """
+    offline_checkout.run_git(
+        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
+    )
+    offline_checkout.run_git(
+        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
+    )
+
+    assert (
+        run_stack(offline_checkout, "configuration").returncode
+        == ExitCode.REMOTES_UNRESOLVED
+    )
+
+    result = run_stack(
+        offline_checkout,
+        "configuration",
+        "--fork",
+        "a-fork-owner/a-fork",
+        "--upstream",
+        "an-upstream-owner/a-project",
+    )
+
+    assert result.returncode == ExitCode.SUCCESS
+    printed = dict(line.split("\t") for line in result.stdout.splitlines())
+    assert printed["fork_repository"] == "a-fork-owner/a-fork"
+    assert printed["fork_remote"] == "whatever"
+    assert printed["upstream_repository"] == "an-upstream-owner/a-project"
+
+
+def test_a_fork_that_is_not_owner_and_name_is_a_usage_error(
+    offline_checkout: ScratchRepository,
+):
+    result = run_stack(offline_checkout, "configuration", "--fork", "not-a-repository")
+
+    assert result.returncode == ExitCode.USAGE
+
+
+def test_a_promotion_link_is_built_from_the_resolved_repositories(
+    offline_checkout: ScratchRepository,
+):
+    offline_checkout.run_git(
+        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
+    )
+
+    result = run_stack(
+        offline_checkout, "promotion-link", "--branch", "engine", "--title", "A title"
+    )
+
+    assert result.returncode == ExitCode.SUCCESS
+    assert result.stdout.strip().endswith(
+        "...a-fork-owner:engine?expand=1&title=A%20title&body="
+    )

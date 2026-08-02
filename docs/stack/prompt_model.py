@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Machine-readable model of the prompt documents the cloud Routine runs on.
+Machine-readable model of the prompt documents the stacked-PR maintenance pass runs on.
 
-``ROUTINE.md`` is the prompt the Routine executes and ``POINTER.md`` is the short prompt
-registered at claude.ai/code/routines that resolves it. Both are prose, so nothing in
-them can be imported and asserted against directly. This module declares the landmarks
-and rules they are required to contain and owns the extraction their contract tests
-need, so renaming a section is one edit here rather than one per assertion.
+The maintenance skill is the doctrine a run executes, and ``POINTER.md`` is the short
+prompt registered at claude.ai/code/routines that resolves it. Both are prose, so
+nothing in them can be imported and asserted against directly. This module declares the
+landmarks and rules they are required to contain and owns the extraction their contract
+tests need, so renaming a section is one edit here rather than one per assertion.
 """
 
 from __future__ import annotations
@@ -18,15 +18,28 @@ from typing import ClassVar, Protocol
 
 # %% documents
 
-ROUTINE_DOCUMENT = Path(__file__).with_name("ROUTINE.md")
+PROJECT_ROOT = Path(__file__).parents[2]
 """
-The prompt the Routine reads from git and executes each run.
+The repository root, two directories above this file, so a document outside this
+directory is located without depending on where a caller runs from.
+"""
+
+MAINTENANCE_SKILL_PATH = Path(".claude/skills/stacked-pr-maintenance/SKILL.md")
+"""
+Where the maintenance doctrine lives, relative to the repository root - the same form the
+pointer prompt has to name it in, since the pointer resolves it out of git.
+"""
+
+MAINTENANCE_SKILL_DOCUMENT = PROJECT_ROOT / MAINTENANCE_SKILL_PATH
+"""
+The doctrine a maintenance pass executes, invoked as a skill or read from git by the
+pointer prompt while it is not yet on the default branch.
 """
 
 POINTER_DOCUMENT = Path(__file__).with_name("POINTER.md")
 """
-The pointer prompt registered with the cloud Routine, which resolves the routine
-document.
+The pointer prompt registered with the cloud Routine, which resolves the maintenance
+skill.
 """
 
 # %% vocabulary the documents are required to use
@@ -57,6 +70,7 @@ class PointerPlaceholder(StrEnum):
     """
 
     FORK_REPOSITORY = "<FORK_REPOSITORY>"
+    UPSTREAM_REPOSITORY = "<UPSTREAM_REPOSITORY>"
     TOOLING_BRANCH = "<TOOLING_BRANCH>"
 
 
@@ -109,46 +123,46 @@ class PromptLandmark(LandmarkSpecification, Enum):
 
     EXECUTABLE_PROMPT_FENCE = (
         "```text",
-        "Opens the block the Routine executes; surrounding prose is commentary.",
+        "Opens the block registered with the Routine; surrounding prose is commentary.",
     )
     CLOSING_FENCE = (
         "\n```",
-        "Closes the executable block.",
+        "Closes the registered block.",
     )
     HARD_RULES = (
         f"{PromptDirective.HARD_RULES} so you never drift into review work:",
         "Heads the rules that must bind before any file is read.",
     )
-    PRE_FLIGHT = (
-        "PRE-FLIGHT",
-        "Heads the checks that precede every push, and so ends the hard rules.",
-    )
-    SETUP = (
-        "\nSETUP\n",
-        "Heads the steps that make the run's preconditions true.",
+    CONTEXT_RESOLUTION = (
+        "## Step 0 - resolve which repositories this runs on",
+        "Heads the step deciding the fork and the upstream for the whole run.",
     )
     FORK_MAIN_UPDATE = (
-        "1. UPDATE FORK MAIN FIRST",
-        "First numbered setup step, and so ends step 0.",
+        "## Step 1 - update fork main first",
+        "Heads the first step that acts, and so ends step 0.",
+    )
+    PRE_FLIGHT = (
+        "## Pre-flight",
+        "Heads the checks that precede every push.",
     )
     PHASE_ONE = (
-        "PHASE 1 - LANDED PARENTS",
+        "## Phase 1 - landed parents",
         "Heads the phase owning every reparent instruction.",
     )
     PHASE_TWO = (
-        "PHASE 2 - RESTACK",
-        "Heads the restack phase, and so ends Phase 1.",
+        "## Phase 2 - restack",
+        "Heads the restack phase, and so ends phase 1.",
     )
     ORPHANED_CHILD_SWEEP = (
-        "REPARENT EVERY ORPHANED CHILD",
+        "**Reparent every orphaned child first.**",
         "Opens the first of the two reparent sites.",
     )
     NATIVE_STACK_MEMBERS = (
-        "NATIVE-STACK MEMBERS.",
+        "**NATIVE-STACK MEMBERS.**",
         "Opens the sequence for children the plain retarget cannot move.",
     )
     MERGED_PARENT_LIST = (
-        "For each OPEN fork PR (head branch B)",
+        "**For each open fork pull request whose branch has landed**",
         "Opens the second of the two reparent sites.",
     )
 
@@ -242,9 +256,12 @@ class PromptDocument:
     """
 
     @classmethod
-    def load(cls, path: Path = ROUTINE_DOCUMENT) -> PromptDocument:
+    def load(cls, path: Path) -> PromptDocument:
         """
         Read a prompt document from disk.
+
+        Named rather than defaulted: two documents are modelled here and asserting the
+        wrong one would pass silently.
 
         :param path: The document to read.
         :return: The loaded document.
@@ -304,7 +321,7 @@ class PromptDocument:
 
     def executable_prompt(self) -> str:
         """
-        Extract the fenced block, the way the Routine's own prompt does.
+        Extract the fenced block that is registered verbatim, without its commentary.
 
         :return: The text between the opening and closing fences.
         :raises LandmarkNotFoundError: If either fence is missing.

@@ -18,7 +18,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 
 | What | Where it lives | You set it by |
 |---|---|---|
-| dependency **tree** (parent) | each fork PR's **base branch** (`base = parent`) | retargeting the PR base on GitHub - from a session, only via the GitHub MCP `update_pull_request` tool (see `ROUTINE.md`) |
+| dependency **tree** (parent) | each fork PR's **base branch** (`base = parent`) | retargeting the PR base on GitHub - from a session, only via the GitHub MCP `update_pull_request` tool (see the maintenance skill) |
 | `draft` ↔ `ready` | the fork PR's **draft toggle** | un-drafting when you approve it |
 | `in-review` | the **`in-review` label** on the fork PR | labelling at promote time (cram2 isn't readable from the cloud) |
 | `merged` | branch is an ancestor of `cram2/main` | nothing - pure git |
@@ -36,8 +36,8 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   (see `stack.py`'s `load_configuration`), including a `fork_repository` to pick between remotes
   when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
-  `session`) that `stack.py` reads. Written by the routine (via the GitHub MCP) as scratch -
-  never committed, and not produced by anything in this directory; see `ROUTINE.md`.
+  `session`) that `stack.py` reads. Written from GitHub as scratch by whatever refreshes it -
+  never committed, and not produced by anything in this directory.
 - **`stack.py`** - read-only status tool (never mutates branches). Reads `board.json` + git:
   - `python .claude/stack/stack.py status` - the whole stack, with ahead/behind drift per parent.
   - `python .claude/stack/stack.py check` - would each branch integrate cleanly onto its parent
@@ -54,20 +54,40 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     lines, keyed by `Configuration`'s own field names: the labels, the upstream base, which
     remote is the fork and which is the upstream, plus the exact `git remote add` command when
     no upstream remote exists yet. Answerable from git alone, so it runs before `board.json`
-    exists; it exits non-zero rather than guessing when the fork is ambiguous. `ROUTINE.md`'s
-    SETUP runs this instead of inspecting or renaming remotes itself, and it is the one surface
-    shell tooling reads configuration through - parsing `stack.toml` directly would miss the
-    personal override.
-- **`ROUTINE.md`** - the cloud Routine's live prompt. The Routine reads it from git each run, so
-  editing it changes the running workflow on push; only a short pointer is registered at
-  claude.ai/code/routines. Never re-embed a copy here.
-- **`POINTER.md`** - that short pointer, as a template. It is the only part of the workflow that
-  lives outside git, so a copy is kept here to keep the running prompt from becoming its own only
-  record; its HARD RULES are pinned against `ROUTINE.md`'s by `tests/test_prompt_documents.py`.
-  Editing it does not change the running Routine - re-register it by hand.
-- **`prompt_model.py`** - the landmarks, rules and vocabulary `ROUTINE.md` and `POINTER.md` are
-  required to use, so the contract tests assert against declared text rather than restating the
-  documents.
+    exists. It takes `--fork`/`--upstream` for a caller that already knows the answer, and exits
+    `4` rather than guessing when nothing does. This is the one surface shell tooling reads
+    configuration through - parsing `stack.toml` directly would miss the personal override.
+  - `python .claude/stack/stack.py labels --current <label> --add <label> --remove <label>` - the
+    **complete** label set to write back, one per line. GitHub's label write replaces the whole set,
+    so computing it from the intended change alone silently strips the rest; this is what the
+    maintenance skill passes to every label write rather than working it out itself.
+  - `python .claude/stack/stack.py preflight --action push --source B --destination B
+    --destination-remote <remote>` - exits `0` when the move is safe and `5` with its reasons on
+    stderr when it is not: wrong branch checked out, a refspec naming different branches on each
+    side, a destination that is not the fork, or a push that would make a child an ancestor of its
+    own parent (which GitHub reads as a merged pull request).
+  - `python .claude/stack/stack.py promotion-link --branch B --title T --body ...` - the upstream
+    compare-and-create URL, encoded and within the length limit, warning on stderr when the body had
+    to be shortened.
+  - `python .claude/stack/stack.py reparents` - one `branch<TAB>pr<TAB>current base<TAB>target base`
+    line per open PR whose base has already landed, including a base whose own PR was *closed* and
+    which is therefore absent from `board.json`.
+  - `python .claude/stack/stack.py landed` - one `name<TAB>pr` line per open fork PR whose branch is
+    already in the upstream base: the ones to label and close, after `reparents` has moved their
+    children.
+- **`.claude/skills/stacked-pr-maintenance/SKILL.md`** - the maintenance doctrine, invocable as
+  `/stacked-pr-maintenance` from any session and resolved from git by the registered pointer. It
+  takes `fork=` / `upstream=` arguments, falls back to `configuration`, and asks (or, with
+  `--non-interactive`, stops) when neither answers.
+- **`POINTER.md`** - the short prompt registered at claude.ai/code/routines, as a template. It
+  resolves `.claude/skills/stacked-pr-maintenance/SKILL.md` and runs it, so the workflow changes
+  by pushing rather than by re-pasting. It is the only part of the workflow living outside git,
+  so a copy is kept here to keep the running prompt from becoming its own only record; its HARD
+  RULES are pinned against the skill's by `tests/test_prompt_documents.py`. Editing it does not
+  change the running Routine - re-register it by hand.
+- **`prompt_model.py`** - the landmarks, rules and vocabulary the maintenance skill and
+  `POINTER.md` are required to use, so the contract tests assert against declared text rather
+  than restating the documents.
 
 ## The state machine (your approval gate)
 
@@ -100,6 +120,6 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 - **CI is the validator; validate ROS-free first.** Cloud containers have no ROS, so never try
   to run the coraplex/SDT suites locally - poll a PR's CI with the GitHub MCP and treat its
   red/green as the oracle (leave `subscribe_pr_activity` to an interactive session babysitting
-  that one PR - the automated Routine never subscribes; see `ROUTINE.md`'s HARD RULES). See
-  `ROUTINE.md`'s Phase 2 for how to get around a ROS dependency before handing anything to a ROS
-  session. Never disable a leak/CI check to go green.
+  that one PR - a scheduled run never subscribes; see the maintenance skill's HARD RULES). See
+  its phase 2 for how to get around a ROS dependency before handing anything to a ROS session.
+  Never disable a leak/CI check to go green.
