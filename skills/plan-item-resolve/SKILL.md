@@ -123,12 +123,17 @@ changes against the base its branch targets:
 
     git ls-tree <base-branch> -- <paths this item touches>
 
-Empty output means it only modifies files another unlanded item
-introduces, and folding it into that item is often the resolution — an
-item stuck behind its own parent is sometimes stuck because it was never
-really a separate item. Folding is also the answer when two items turn out
-to have built the same thing; decide which copy survives before either
-lands, since afterwards it is a merge conflict instead of a choice.
+Empty output means it touches files another unlanded item introduces. Ask
+what would remain if those edits were removed: if nothing substantial
+does, folding it into that item is often the resolution — an item stuck
+behind its own parent is sometimes stuck because it was never really a
+separate item.
+
+Folding is also the answer when two items turn out to have built the same
+thing. That will not show up as an overlapping path if they named it
+differently, so compare by *purpose* as well as by file — and decide which
+copy survives before either lands, since afterwards it is a merge conflict
+instead of a choice.
 
 ## 5. Propose the plan — plan mode, no code
 

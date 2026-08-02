@@ -110,10 +110,13 @@ targets:
 
     git ls-tree <base-branch> -- <paths this item touches>
 
-Empty output means the item modifies files an earlier, unlanded item
-introduces — so the work belongs on that item's branch, not on a new one
-stacked above it. Say so and propose folding rather than opening a branch
-that will have to be folded later.
+Empty output means the item touches files an earlier, unlanded item
+introduces. Then ask what would be left if those edits were removed: if
+nothing substantial remains, the work belongs on that item's branch, so
+propose folding rather than opening a branch that will have to be folded
+later. If something substantial remains, the item is real and the edits are
+ordinary work on top of an unlanded parent — carry on, but say which files
+overlap so the two branches do not build the same thing twice.
 
 ## 5. Propose the plan — plan mode, no code
 

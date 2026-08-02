@@ -105,8 +105,14 @@ the work touches against the base the plan ultimately targets:
     git ls-tree <base-branch> -- <paths the work touches>
 
 Empty output means those files do not exist there yet, so the item that
-introduces them is the one that owns them. From the base's point of view
-the two are a single addition.
+introduces them is a candidate owner of this work.
+
+That is a trigger to look, not a verdict. Ask what the item would be if
+those edits were removed: if what remains is substantial and stands on its
+own, the edits are ordinary work on top of an unlanded parent and the item
+is real. If what remains is nothing — the item exists *only* to change what
+the parent introduces — it is not a separate item. Weighing the two parts
+usually settles it at a glance.
 
 Splitting anyway costs more than the tidiness buys. The earlier item ships
 a state nobody should ever run; the later one spends its review
