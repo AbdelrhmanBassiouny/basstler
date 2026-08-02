@@ -93,36 +93,13 @@ not after.
 
 ### Is it a new item, or a change to one already in flight?
 
-Ask this of every item before adding it, and prefer the change. An item is
-genuinely new only if it still stands on its own once the items before it
-land. If instead it *modifies* what an unlanded item introduces, it is that
-item's work, and stacking it is an artifact of the order the work was
-written in rather than a real dependency.
+Ask this of every item before adding it, and prefer the change: an item that
+only modifies what an unlanded item introduces is that item's work, not a
+separate one. Follow `${SCOPE_DECISION_DOCUMENT}` — it holds the check and how
+to read it.
 
-The test is mechanical rather than a matter of taste — compare the files
-the work touches against the base the plan ultimately targets:
-
-    git ls-tree <base-branch> -- <paths the work touches>
-
-Empty output means those files do not exist there yet, so the item that
-introduces them is a candidate owner of this work.
-
-That is a trigger to look, not a verdict. Ask what the item would be if
-those edits were removed: if what remains is substantial and stands on its
-own, the edits are ordinary work on top of an unlanded parent and the item
-is real. If what remains is nothing — the item exists *only* to change what
-the parent introduces — it is not a separate item. Weighing the two parts
-usually settles it at a glance.
-
-Splitting anyway costs more than the tidiness buys. The earlier item ships
-a state nobody should ever run; the later one spends its review
-re-explaining the first; and if either is live infrastructure, landing the
-earlier one alone regresses it until the later one follows. Two items that
-both touch unlanded files can also independently build the same thing
-without either noticing.
-
-Prefer one item with a coherent story over two that only make sense read
-in order. Split on *what the work is*, not on when it was thought of.
+For a single piece of work rather than a whole plan, `/add-plan-item` runs that
+same decision on its own and is the lighter-weight way in.
 
 If migrating a source doc: preserve its detail rather than compressing it
 away. Structured facts (branch, PR, base, status, blockers) become
