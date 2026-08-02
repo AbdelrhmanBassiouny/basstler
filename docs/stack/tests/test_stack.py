@@ -21,8 +21,7 @@ from scratch_repository import ScratchRepository
 
 from stack import (
     AmbiguousForkRemoteError,
-    BranchMove,
-    BranchMoveAction,
+    CommitMoveAction,
     BranchStatus,
     Configuration,
     ContradictoryLabelWriteError,
@@ -32,6 +31,8 @@ from stack import (
     MalformedRepositoryError,
     IntegrationStrategy,
     PreFlight,
+    ProposedCommitMove,
+    RefusalReason,
     PromotionLink,
     PromotionLinkTooLongError,
     PullRequest,
@@ -50,6 +51,12 @@ from stack import (
     promotion_order,
     restack_plan,
 )
+
+A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
+"""
+Stands for whatever else a pull request happens to carry - the labels a write must
+preserve precisely because this tool knows nothing about them.
+"""
 
 STACK_SCRIPT = Path(__file__).parent.parent / "stack.py"
 """
@@ -732,29 +739,47 @@ def test_adding_a_label_keeps_every_label_the_pull_request_already_carries():
     silently wipes the rest - which has happened, stripping `in-review` off branches that
     were already promoted.
     """
-    write = LabelWrite.replacing(["in-review", "bug"], added=["needs-resolution"])
+    configuration = make_configuration()
 
-    assert write.labels == ("in-review", "bug", "needs-resolution")
+    write = LabelWrite.replacing(
+        [configuration.in_review_label, A_LABEL_THIS_TOOL_NEVER_WRITES],
+        added=[configuration.needs_resolution_label],
+    )
+
+    assert write.labels == (
+        configuration.in_review_label,
+        A_LABEL_THIS_TOOL_NEVER_WRITES,
+        configuration.needs_resolution_label,
+    )
 
 
 def test_removing_a_label_keeps_every_other_label():
+    configuration = make_configuration()
+
     write = LabelWrite.replacing(
-        ["in-review", "cram2-link-sent"], removed=["cram2-link-sent"]
+        [configuration.in_review_label, A_LABEL_THIS_TOOL_NEVER_WRITES],
+        removed=[A_LABEL_THIS_TOOL_NEVER_WRITES],
     )
 
-    assert write.labels == ("in-review",)
+    assert write.labels == (configuration.in_review_label,)
 
 
 def test_adding_a_label_already_carried_leaves_the_set_unchanged():
-    write = LabelWrite.replacing(["in-review"], added=["in-review"])
+    carried = make_configuration().in_review_label
 
-    assert write.labels == ("in-review",)
+    write = LabelWrite.replacing([carried], added=[carried])
+
+    assert write.labels == (carried,)
 
 
 def test_removing_a_label_that_is_not_there_leaves_the_set_unchanged():
-    write = LabelWrite.replacing(["in-review"], removed=["rebase"])
+    configuration = make_configuration()
 
-    assert write.labels == ("in-review",)
+    write = LabelWrite.replacing(
+        [configuration.in_review_label], removed=[configuration.rebase_label]
+    )
+
+    assert write.labels == (configuration.in_review_label,)
 
 
 def test_asking_to_add_and_remove_one_label_at_once_is_refused():
@@ -762,18 +787,24 @@ def test_asking_to_add_and_remove_one_label_at_once_is_refused():
     Either outcome would be a guess at what the caller meant, and the wrong guess is a
     label silently kept or silently dropped.
     """
+    configuration = make_configuration()
+
     with pytest.raises(ContradictoryLabelWriteError):
-        LabelWrite.replacing(["in-review"], added=["rebase"], removed=["rebase"])
+        LabelWrite.replacing(
+            [configuration.in_review_label],
+            added=[configuration.rebase_label],
+            removed=[configuration.rebase_label],
+        )
 
 
 # %% pre-flight
 
 
-def a_move(
+def a_proposed_push(
     source: str = "engine",
     destination: str = "engine",
     destination_remote: str = "origin",
-) -> BranchMove:
+) -> ProposedCommitMove:
     """
     A proposed push, defaulting to the one shape that is always allowed.
 
@@ -782,15 +813,15 @@ def a_move(
     :param destination_remote: The remote holding the destination.
     :return: The proposed move.
     """
-    return BranchMove(
-        action=BranchMoveAction.PUSH,
+    return ProposedCommitMove(
+        action=CommitMoveAction.PUSH,
         source=source,
         destination=destination,
         destination_remote=destination_remote,
     )
 
 
-def a_preflight(
+def a_preflight_over_two_towers(
     checked_out_branch: str = "engine", ancestors: Container[str] = frozenset()
 ) -> PreFlight:
     """
@@ -808,7 +839,7 @@ def a_preflight(
 
 
 def test_pushing_the_checked_out_branch_onto_itself_is_allowed():
-    assert a_preflight().refusals(a_move()) == []
+    assert a_preflight_over_two_towers().refusals(a_proposed_push()) == []
 
 
 def test_pushing_while_another_branch_is_checked_out_is_refused():
@@ -816,17 +847,21 @@ def test_pushing_while_another_branch_is_checked_out_is_refused():
     The checked-out branch is the one whose content actually moves, so a mismatch moves
     something other than what was intended.
     """
-    refusals = a_preflight(checked_out_branch="parser").refusals(a_move())
+    refusals = a_preflight_over_two_towers(checked_out_branch="parser").refusals(
+        a_proposed_push()
+    )
 
-    assert len(refusals) == 1
-    assert "parser" in refusals[0].reason
+    assert [refusal.reason for refusal in refusals] == [RefusalReason.NOT_CHECKED_OUT]
+    assert "parser" in refusals[0].explanation
 
 
 def test_a_refspec_naming_a_different_branch_on_each_side_is_refused():
-    refusals = a_preflight().refusals(a_move(destination="engine-ui"))
+    refusals = a_preflight_over_two_towers().refusals(
+        a_proposed_push(destination="engine-ui")
+    )
 
     assert [refusal.reason for refusal in refusals] == [
-        "refspec maps 'engine' onto 'engine-ui'; both sides must name the same branch"
+        RefusalReason.MISMATCHED_REFSPEC
     ]
 
 
@@ -835,10 +870,12 @@ def test_a_destination_on_the_upstream_remote_is_refused():
     Every push in this workflow goes to the fork; the upstream is written only by
     opening a pull request against it.
     """
-    refusals = a_preflight().refusals(a_move(destination_remote="cram2"))
+    refusals = a_preflight_over_two_towers().refusals(
+        a_proposed_push(destination_remote="cram2")
+    )
 
-    assert len(refusals) == 1
-    assert "cram2" in refusals[0].reason
+    assert [refusal.reason for refusal in refusals] == [RefusalReason.NOT_THE_FORK]
+    assert "cram2" in refusals[0].explanation
 
 
 def test_a_push_that_would_make_a_child_an_ancestor_of_its_parent_is_refused():
@@ -846,17 +883,22 @@ def test_a_push_that_would_make_a_child_an_ancestor_of_its_parent_is_refused():
     GitHub reads a pull request whose head is contained in its base as merged, so this
     push would falsely close the child.
     """
-    refusals = a_preflight(ancestors={"engine-ui"}).refusals(a_move())
+    refusals = a_preflight_over_two_towers(ancestors={"engine-ui"}).refusals(
+        a_proposed_push()
+    )
 
-    assert len(refusals) == 1
-    assert "engine-ui" in refusals[0].reason
+    assert [refusal.reason for refusal in refusals] == [RefusalReason.FALSE_MERGE]
+    assert "engine-ui" in refusals[0].explanation
 
 
 def test_an_unrelated_branch_contained_in_the_source_is_not_a_false_merge():
     """
     Only a child of the destination can be falsely merged by pushing to it.
     """
-    assert a_preflight(ancestors={"parser"}).refusals(a_move()) == []
+    assert (
+        a_preflight_over_two_towers(ancestors={"parser"}).refusals(a_proposed_push())
+        == []
+    )
 
 
 def test_every_reason_to_refuse_is_reported_rather_than_only_the_first():
@@ -864,11 +906,15 @@ def test_every_reason_to_refuse_is_reported_rather_than_only_the_first():
     Fixing one problem and re-running to discover the next is how a half-applied move
     gets made.
     """
-    refusals = a_preflight(checked_out_branch="parser").refusals(
-        a_move(destination="engine-ui", destination_remote="cram2")
+    refusals = a_preflight_over_two_towers(checked_out_branch="parser").refusals(
+        a_proposed_push(destination="engine-ui", destination_remote="cram2")
     )
 
-    assert len(refusals) == 3
+    assert [refusal.reason for refusal in refusals] == [
+        RefusalReason.NOT_CHECKED_OUT,
+        RefusalReason.MISMATCHED_REFSPEC,
+        RefusalReason.NOT_THE_FORK,
+    ]
 
 
 # %% promotion links

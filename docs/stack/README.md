@@ -21,10 +21,10 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 | dependency **tree** (parent) | each fork PR's **base branch** (`base = parent`) | retargeting the PR base on GitHub - from a session, only via the GitHub MCP `update_pull_request` tool (see the maintenance skill) |
 | `draft` ↔ `ready` | the fork PR's **draft toggle** | un-drafting when you approve it |
 | `in-review` | the **`in-review` label** on the fork PR | labelling at promote time (cram2 isn't readable from the cloud) |
-| `merged` | branch is an ancestor of `cram2/main` | nothing - pure git |
+| `merged` | branch is an ancestor of `cram2/main` | nothing - GitHub marks the PR merged itself once its head is contained in its base |
 | `merge` vs `rebase` | the **`rebase`** label; default `merge` | labelling on GitHub |
-| cram2 create-link emailed | the **`cram2-link-sent`** marker | nothing - the routine sets it when it emails you a create-link, and clears it once you promote (add `in-review`) |
-| conflict/CI-red delegated | the **`needs-resolution`** label | nothing - the routine sets it when it delegates a restack conflict to the branch's owning session, and clears it once the restack goes clean again |
+| cram2 create-link built | the **`cram2-link-sent`** marker | nothing - a maintenance pass sets it when it puts a create-link in the PR description, and clears it once you promote (add `in-review`) |
+| conflict/CI-red reported | the **`needs-resolution`** label | nothing - a maintenance pass sets it when it reports a restack conflict to the branch's owning session, and clears it once the branch stops conflicting |
 
 ## Files
 
@@ -45,11 +45,10 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   - `python .claude/stack/stack.py next` - every branch ready to submit to cram2 next: approved,
     parent landed, not withheld. **This is your "what goes to cram2 next" answer.**
   - `python .claude/stack/stack.py next --porcelain` - machine-readable `next`: one
-    `name<TAB>pr` line per branch to promote (or nothing). For the autonomous promote Routine.
+    `name<TAB>pr` line per branch to promote (or nothing).
   - `python .claude/stack/stack.py restack-plan` - the bottom-up restack plan as JSON (one
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
-    pick up a moved parent via a conflict-free `merge`). Feed straight into the `restack`
-    workflow's `args`.
+    pick up a moved parent via a conflict-free `merge`).
   - `python .claude/stack/stack.py configuration` - every resolved setting as `key<TAB>value`
     lines, keyed by `Configuration`'s own field names: the labels, the upstream base, which
     remote is the fork and which is the upstream, plus the exact `git remote add` command when
@@ -72,22 +71,13 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
   - `python .claude/stack/stack.py reparents` - one `branch<TAB>pr<TAB>current base<TAB>target base`
     line per open PR whose base has already landed, including a base whose own PR was *closed* and
     which is therefore absent from `board.json`.
-  - `python .claude/stack/stack.py landed` - one `name<TAB>pr` line per open fork PR whose branch is
-    already in the upstream base: the ones to label and close, after `reparents` has moved their
-    children.
-- **`.claude/skills/stacked-pr-maintenance/SKILL.md`** - the maintenance doctrine, invocable as
-  `/stacked-pr-maintenance` from any session and resolved from git by the registered pointer. It
-  takes `fork=` / `upstream=` arguments, falls back to `configuration`, and asks (or, with
+  - `python .claude/stack/stack.py landed` - one `name<TAB>pr` line per open fork PR whose branch
+    is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
+    upstream base is what actually closes them.
+- **`.claude/skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
+  as `/stacked-pr-maintenance` from any session and the whole of what a scheduled run executes.
+  It takes `fork=` / `upstream=` arguments, falls back to `configuration`, and asks (or, with
   `--non-interactive`, stops) when neither answers.
-- **`POINTER.md`** - the short prompt registered at claude.ai/code/routines, as a template. It
-  resolves `.claude/skills/stacked-pr-maintenance/SKILL.md` and runs it, so the workflow changes
-  by pushing rather than by re-pasting. It is the only part of the workflow living outside git,
-  so a copy is kept here to keep the running prompt from becoming its own only record; its HARD
-  RULES are pinned against the skill's by `tests/test_prompt_documents.py`. Editing it does not
-  change the running Routine - re-register it by hand.
-- **`prompt_model.py`** - the landmarks, rules and vocabulary the maintenance skill and
-  `POINTER.md` are required to use, so the contract tests assert against declared text rather
-  than restating the documents.
 
 ## The state machine (your approval gate)
 
@@ -120,6 +110,6 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 - **CI is the validator; validate ROS-free first.** Cloud containers have no ROS, so never try
   to run the coraplex/SDT suites locally - poll a PR's CI with the GitHub MCP and treat its
   red/green as the oracle (leave `subscribe_pr_activity` to an interactive session babysitting
-  that one PR - a scheduled run never subscribes; see the maintenance skill's HARD RULES). See
-  its phase 2 for how to get around a ROS dependency before handing anything to a ROS session.
+  that one PR - a scheduled run never subscribes; see the maintenance skill's HARD RULES). A
+  maintenance pass never fixes a failing check: it reports the branch to its owner and moves on.
   Never disable a leak/CI check to go green.

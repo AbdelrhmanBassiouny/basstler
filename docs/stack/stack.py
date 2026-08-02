@@ -30,7 +30,8 @@ Commands (run from the repo root; ``--help`` on any of them for its flags)::
 The last five exist so the steps most easily got wrong by hand are computed rather than
 recalled: a label write replaces the whole set, a mismatched refspec moves the wrong commits, an
 unencoded compare URL loses its prefill, and a landed parent is decided by git ancestry rather
-than by pull-request state.
+than by pull-request state. ``landed`` reports only - GitHub closes a pull request as merged by
+itself once its head is contained in its base, so nothing here has to close one.
 """
 
 from __future__ import annotations
@@ -1006,7 +1007,7 @@ def landed_branches(stack: Stack) -> list[Branch]:
 # %% pre-flight
 
 
-class BranchMoveAction(StrEnum):
+class CommitMoveAction(StrEnum):
     """What a proposed move would do to the destination branch."""
 
     PUSH = "push"
@@ -1015,10 +1016,10 @@ class BranchMoveAction(StrEnum):
 
 
 @dataclass(frozen=True)
-class BranchMove:
+class ProposedCommitMove:
     """Commits a caller proposes to move onto a branch, before anything is run."""
 
-    action: BranchMoveAction
+    action: CommitMoveAction
     """What the move would do."""
 
     source: str
@@ -1031,11 +1032,34 @@ class BranchMove:
     """The remote holding the destination branch."""
 
 
+class RefusalReason(StrEnum):
+    """Why a proposed move must not be made.
+
+    Each names a move that has gone wrong in practice, so a caller can act on which one
+    it hit without reading the sentence explaining it.
+    """
+
+    NOT_CHECKED_OUT = "not-checked-out"
+    """The source is not the branch whose content a push would actually move."""
+
+    MISMATCHED_REFSPEC = "mismatched-refspec"
+    """The two sides of the refspec name different branches."""
+
+    NOT_THE_FORK = "not-the-fork"
+    """The destination remote is not the fork the stack lives on."""
+
+    FALSE_MERGE = "false-merge"
+    """A child would become an ancestor of its own parent, which GitHub reads as merged."""
+
+
 @dataclass(frozen=True)
 class PreFlightRefusal:
     """One reason a proposed move must not be made."""
 
-    reason: str
+    reason: RefusalReason
+    """Which refusal this is, for a caller deciding what to do about it."""
+
+    explanation: str
     """What is wrong, in terms of the branches the caller named."""
 
 
@@ -1043,10 +1067,8 @@ class PreFlightRefusal:
 class PreFlight:
     """Checks a proposed move against the checkout it would run in.
 
-    Every refusal here describes a move that has gone wrong in practice: pushing while a
-    different branch is checked out, mapping a refspec across two branch names, aiming at
-    the review repository, and pushing commits that make a child branch an ancestor of its
-    own parent - which GitHub reads as a merged pull request and closes.
+    Every refusal describes a move that has gone wrong in practice - see
+    :class:`RefusalReason`.
     """
 
     stack: Stack
@@ -1059,7 +1081,7 @@ class PreFlight:
     """Maps a candidate ancestor branch and a descendant branch to whether the first is
     contained in the second; injected so the checks are testable without git."""
 
-    def refusals(self, move: BranchMove) -> list[PreFlightRefusal]:
+    def refusals(self, move: ProposedCommitMove) -> list[PreFlightRefusal]:
         """Every reason the move must not be made.
 
         All of them are reported together: fixing one and re-running to discover the next
@@ -1072,28 +1094,31 @@ class PreFlight:
         if move.source != self.checked_out_branch:
             found.append(
                 PreFlightRefusal(
-                    f"'{move.source}' is not checked out; "
-                    f"'{self.checked_out_branch}' is, and its content is what would move"
+                    RefusalReason.NOT_CHECKED_OUT,
+                    f"'{move.source}' is not checked out; '{self.checked_out_branch}' is, "
+                    f"and its content is what would move",
                 )
             )
         if move.source != move.destination:
             found.append(
                 PreFlightRefusal(
-                    f"refspec maps '{move.source}' onto '{move.destination}'; "
-                    f"both sides must name the same branch"
+                    RefusalReason.MISMATCHED_REFSPEC,
+                    f"refspec maps '{move.source}' onto '{move.destination}'; both sides "
+                    f"must name the same branch",
                 )
             )
         if move.destination_remote != self.stack.configuration.fork_remote:
             found.append(
                 PreFlightRefusal(
+                    RefusalReason.NOT_THE_FORK,
                     f"'{move.destination_remote}' is not the fork remote "
-                    f"'{self.stack.configuration.fork_remote}'"
+                    f"'{self.stack.configuration.fork_remote}'",
                 )
             )
         found.extend(self._false_merges(move))
         return found
 
-    def _false_merges(self, move: BranchMove) -> list[PreFlightRefusal]:
+    def _false_merges(self, move: ProposedCommitMove) -> list[PreFlightRefusal]:
         """The children of the destination this move would make GitHub call merged.
 
         :param move: The proposed move.
@@ -1101,9 +1126,10 @@ class PreFlight:
         """
         return [
             PreFlightRefusal(
+                RefusalReason.FALSE_MERGE,
                 f"'{child.name}' is already contained in '{move.source}', so this would "
                 f"make it an ancestor of its own parent '{move.destination}' and GitHub "
-                f"would close pull request #{child.pull_request_number} as merged"
+                f"would close pull request #{child.pull_request_number} as merged",
             )
             for child in self.stack.branches
             if child.parent == move.destination
@@ -1279,7 +1305,7 @@ def print_landed(stack: Stack) -> None:
         print(f"{branch.name}\t{branch.pull_request_number}")
 
 
-def print_preflight(pre_flight: PreFlight, move: BranchMove) -> ExitCode:
+def print_preflight(pre_flight: PreFlight, move: ProposedCommitMove) -> ExitCode:
     """Print whether a move may be made, and every reason it may not.
 
     :param pre_flight: The checks to run.
@@ -1294,7 +1320,7 @@ def print_preflight(pre_flight: PreFlight, move: BranchMove) -> ExitCode:
         )
         return ExitCode.SUCCESS
     for refusal in refusals:
-        print(refusal.reason, file=sys.stderr)
+        print(f"{refusal.reason}: {refusal.explanation}", file=sys.stderr)
     return ExitCode.PREFLIGHT_REFUSED
 
 
@@ -1313,11 +1339,34 @@ def print_configuration(configuration: Configuration) -> None:
         print(f"{name}\t{value}")
 
 
-CONFIGURATION_COMMAND = "configuration"
-"""Command reporting every resolved setting, including which remote is the fork."""
+class Command(StrEnum):
+    """Every command this tool answers, named once so no caller spells one out."""
 
-BOARDLESS_COMMANDS = frozenset({CONFIGURATION_COMMAND, "labels", "promotion-link"})
-"""Commands answerable without ``board.json``, so they run before one has been exported."""
+    STATUS = "status"
+    CHECK = "check"
+    NEXT = "next"
+    RESTACK_PLAN = "restack-plan"
+    REPARENTS = "reparents"
+    LANDED = "landed"
+    PREFLIGHT = "preflight"
+    CONFIGURATION = "configuration"
+    LABELS = "labels"
+    PROMOTION_LINK = "promotion-link"
+
+    @property
+    def needs_a_board(self) -> bool:
+        """Whether answering this command means deriving the stack.
+
+        The ones that do not are answerable from git and configuration alone, so they
+        run before a board has ever been exported.
+
+        :return: Whether ``board.json`` must exist.
+        """
+        return self not in {
+            Command.CONFIGURATION,
+            Command.LABELS,
+            Command.PROMOTION_LINK,
+        }
 
 
 # %% entry point
@@ -1357,22 +1406,28 @@ def _argument_parser() -> argparse.ArgumentParser:
     parser.set_defaults(porcelain=False)
     commands = parser.add_subparsers(dest="command", required=True)
 
-    commands.add_parser("status", help="the whole stack: parent, state, drift")
-    commands.add_parser("check", help="would each branch merge cleanly onto its parent")
-    promote = commands.add_parser("next", help="which branches to submit upstream next")
+    commands.add_parser(Command.STATUS, help="the whole stack: parent, state, drift")
+    commands.add_parser(
+        Command.CHECK, help="would each branch merge cleanly onto its parent"
+    )
+    promote = commands.add_parser(
+        Command.NEXT, help="which branches to submit upstream next"
+    )
     promote.add_argument(
         "--porcelain",
         action="store_true",
         help="print only 'name<TAB>pr' per branch to promote",
     )
-    commands.add_parser("restack-plan", help="the bottom-up restack plan as JSON")
+    commands.add_parser(Command.RESTACK_PLAN, help="the bottom-up restack plan as JSON")
     commands.add_parser(
-        "reparents", help="children whose base has landed, and the base they need"
+        Command.REPARENTS, help="children whose base has landed, and the base they need"
     )
-    commands.add_parser("landed", help="open pull requests whose branch has landed")
+    commands.add_parser(
+        Command.LANDED, help="open pull requests whose branch has landed"
+    )
 
     configuration = commands.add_parser(
-        CONFIGURATION_COMMAND, help="every resolved setting, including the remotes"
+        Command.CONFIGURATION, help="every resolved setting, including the remotes"
     )
     configuration.add_argument(
         "--fork",
@@ -1386,7 +1441,7 @@ def _argument_parser() -> argparse.ArgumentParser:
     )
 
     labels = commands.add_parser(
-        "labels", help="the complete label set a label write must send"
+        Command.LABELS, help="the complete label set a label write must send"
     )
     labels.add_argument(
         "--current",
@@ -1411,20 +1466,20 @@ def _argument_parser() -> argparse.ArgumentParser:
     )
 
     link = commands.add_parser(
-        "promotion-link", help="the upstream compare-and-create URL for a branch"
+        Command.PROMOTION_LINK, help="the upstream compare-and-create URL for a branch"
     )
     link.add_argument("--branch", required=True, help="the fork branch to promote")
     link.add_argument("--title", required=True, help="title to prefill")
     link.add_argument("--body", default="", help="description to prefill")
 
     preflight = commands.add_parser(
-        "preflight", help="may these commits move onto that branch?"
+        Command.PREFLIGHT, help="may these commits move onto that branch?"
     )
     preflight.add_argument(
         "--action",
         required=True,
-        type=BranchMoveAction,
-        choices=list(BranchMoveAction),
+        type=CommitMoveAction,
+        choices=list(CommitMoveAction),
         help="what the move would do",
     )
     preflight.add_argument(
@@ -1439,18 +1494,19 @@ def _argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_without_a_board(arguments: argparse.Namespace) -> ExitCode:
+def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> ExitCode:
     """Run a command that needs no ``board.json``.
 
+    :param command: The command to run.
     :param arguments: The parsed command line.
     :return: The process exit code.
     """
-    if arguments.command == "labels":
+    if command is Command.LABELS:
         print_label_write(
             LabelWrite.replacing(arguments.current, arguments.add, arguments.remove)
         )
         return ExitCode.SUCCESS
-    if arguments.command == CONFIGURATION_COMMAND:
+    if command is Command.CONFIGURATION:
         print_configuration(
             load_configuration(
                 fork_repository=arguments.fork,
@@ -1466,21 +1522,24 @@ def _run_without_a_board(arguments: argparse.Namespace) -> ExitCode:
     return ExitCode.SUCCESS
 
 
-def _run_against_the_board(arguments: argparse.Namespace, stack: Stack) -> ExitCode:
+def _run_against_the_board(
+    command: Command, arguments: argparse.Namespace, stack: Stack
+) -> ExitCode:
     """Run a command that reads the derived stack.
 
+    :param command: The command to run.
     :param arguments: The parsed command line.
     :param stack: The derived stack.
     :return: The process exit code.
     """
-    if arguments.command == "preflight":
+    if command is Command.PREFLIGHT:
         return print_preflight(
             PreFlight(
                 stack=stack,
                 checked_out_branch=_git("branch", "--show-current"),
                 is_ancestor=_ancestry_predicate(stack.configuration),
             ),
-            BranchMove(
+            ProposedCommitMove(
                 action=arguments.action,
                 source=arguments.source,
                 destination=arguments.destination,
@@ -1488,14 +1547,14 @@ def _run_against_the_board(arguments: argparse.Namespace, stack: Stack) -> ExitC
             ),
         )
     reporters = {
-        "status": print_status,
-        "check": print_check,
-        "next": print_next_porcelain if arguments.porcelain else print_next,
-        "restack-plan": print_restack_plan,
-        "reparents": print_reparents,
-        "landed": print_landed,
+        Command.STATUS: print_status,
+        Command.CHECK: print_check,
+        Command.NEXT: print_next_porcelain if arguments.porcelain else print_next,
+        Command.RESTACK_PLAN: print_restack_plan,
+        Command.REPARENTS: print_reparents,
+        Command.LANDED: print_landed,
     }
-    reporters[arguments.command](stack)
+    reporters[command](stack)
     return ExitCode.SUCCESS
 
 
@@ -1521,10 +1580,11 @@ def main() -> ExitCode:
     :return: The process exit code.
     """
     arguments = _argument_parser().parse_args()
+    command = Command(arguments.command)
     try:
-        if arguments.command in BOARDLESS_COMMANDS:
-            return _run_without_a_board(arguments)
-        return _run_against_the_board(arguments, load_stack())
+        if not command.needs_a_board:
+            return _run_without_a_board(command, arguments)
+        return _run_against_the_board(command, arguments, load_stack())
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
         print(f"{error}", file=sys.stderr)
         return ExitCode.REMOTES_UNRESOLVED
