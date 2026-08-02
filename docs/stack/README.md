@@ -28,9 +28,11 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 
 ## Files
 
-- **`stack.toml`** - the committed defaults: label names and remotes. A
-  `.claude/personal/stack.toml` on the personal-notes branch, if present, layers your own
-  overrides on top (see `stack.py`'s `load_configuration`) - you rarely touch either file directly.
+- **`stack.toml`** - the committed defaults: `fork_repository` (the `owner/name` the workflow
+  operates on), label names and remotes. A `.claude/personal/stack.toml` on the personal-notes
+  branch, if present, layers your own overrides on top (see `stack.py`'s `load_configuration`) -
+  which is how you point this at your own fork without editing the checked-in file. `ROUTINE.md`
+  reads `fork_repository` from here rather than naming an owner, since it is executed verbatim.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
   `session`) that `stack.py` reads. Written by the routine (via the GitHub MCP) as scratch -
   never committed, and not produced by anything in this directory; see `ROUTINE.md`.

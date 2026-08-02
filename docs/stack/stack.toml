@@ -2,7 +2,7 @@
 #
 # This file carries the committed defaults only. A `.claude/personal/stack.toml` on the
 # personal-notes branch, if present, layers per-user overrides on top of these values (see
-# `stack.py`'s `load_config`) - so a contributor whose fork/remotes differ never has to hand-edit
+# `stack.py`'s `load_configuration`) - so a contributor whose fork/remotes differ never has to hand-edit
 # this checked-in file.
 #
 # The stack itself (which branches exist, how they depend on each other, and their review state) is
@@ -20,6 +20,7 @@
 in_review_label = "in-review"  # fork-PR label marking "promoted to cram2, under review"
 rebase_label = "rebase"        # fork-PR label opting a branch into rebase instead of the default merge
 needs_resolution_label = "needs-resolution"  # set by the routine on a delegated restack conflict
+fork_repository = "AbdelrhmanBassiouny/cognitive_robot_abstract_machine"  # the fork holding the stack; ROUTINE.md reads it rather than naming an owner
 fork_remote = "origin"
 upstream_remote = "cram2"
 upstream_base = "main"

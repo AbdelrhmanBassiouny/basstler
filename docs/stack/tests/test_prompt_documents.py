@@ -26,6 +26,7 @@ from prompt_model import (
     PromptLandmark,
     PromptRule,
 )
+from stack import load_configuration
 
 # %% the shape the Routine's prompt depends on
 
@@ -106,6 +107,22 @@ def test_routine_carries_no_placeholder_a_run_would_have_to_resolve():
     ]
 
     assert unresolved == []
+
+
+def test_routine_names_no_fork_of_its_own():
+    """
+    The fork is configuration, so the routine document has to read it rather than spell
+    it out.
+
+    It is executed verbatim on whichever fork registered it, so an owner named here is
+    an instruction to operate on somebody else's repository.
+    """
+    routine = PromptDocument.load(ROUTINE_DOCUMENT)
+
+    fork = load_configuration().fork_repository
+
+    assert fork.owner not in routine.text
+    assert str(fork) not in routine.text
 
 
 def test_pointer_marks_every_fork_specific_value_as_a_placeholder():

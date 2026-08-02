@@ -64,10 +64,13 @@ be the ones you expect. If a CHILD branch's commits would become ancestors of it
 auto-mark the child PR as merged - a false merge. STOP and do not push.
 
 SETUP
-0. Ensure remotes match the config: `origin` must be the fork
-   (AbdelrhmanBassiouny/cognitive_robot_abstract_machine) and `cram2` the upstream. A fresh cloud
-   clone may have them named differently - check `git remote -v` and rename/add so `origin`=fork,
-   `cram2`=upstream before continuing. Then make sure the tooling is actually present, rather than
+0. Read `.claude/stack/stack.toml` first: `fork_repository` is the `owner/name` of the fork you
+   operate on, and every `<fork owner>` below means its owner. That file is the only place the fork
+   is named - never assume one, and if the key is missing, STOP and report rather than guessing.
+   Then ensure remotes match it: `origin` must be `fork_repository` and `cram2` the upstream. A
+   fresh cloud clone may have them named differently - check `git remote -v` and rename/add so
+   `origin`=fork, `cram2`=upstream before continuing. Then make sure the tooling is present, not
+   assumed:
    assuming it: every later phase shells out to `.claude/stack/stack.py`, and a Phase 2 failure
    lands after Phase 1 has already mutated pull requests. If `ls .claude/stack/stack.py` fails,
    `git fetch` that ref and `git checkout <ref> -- .claude/stack/`, where `<ref>` is the one you
@@ -227,11 +230,11 @@ others.
 
 For each collected fork PR (head branch B):
 1. Try to open its cram2 PR directly via the GitHub MCP - base `cram2/main`, head
-   `AbdelrhmanBassiouny:B`, with a filled title and description. If it succeeds, add the `in-review`
+   `<fork owner>:B`, with a filled title and description. If it succeeds, add the `in-review`
    label to the fork PR and you're done with B.
 2. If opening it fails (the usual case - the GitHub app has no write access to cram2), build the
    compare-and-create URL instead:
-     `https://github.com/cram2/cognitive_robot_abstract_machine/compare/main...AbdelrhmanBassiouny:B?expand=1&title=<url-encoded title>&body=<url-encoded description>`
+     `https://github.com/cram2/cognitive_robot_abstract_machine/compare/main...<fork owner>:B?expand=1&title=<url-encoded title>&body=<url-encoded description>`
    Keep the prefilled body SHORT - one paragraph plus a link back to the fork PR for the full detail;
    a compare URL has a length cap and a long body is silently dropped. Collect this link and add the
    `cram2-link-sent` label to B so later runs don't re-send it. Do NOT add `in-review` - the cram2 PR

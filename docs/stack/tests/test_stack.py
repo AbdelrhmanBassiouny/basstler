@@ -12,13 +12,17 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from scratch_repository import ScratchRepository
 
 from stack import (
     BranchStatus,
     Configuration,
+    MalformedRepositoryError,
     IntegrationStrategy,
     PullRequest,
+    Repository,
     build_stack,
     derive_status,
     load_configuration,
@@ -34,6 +38,7 @@ def make_configuration() -> Configuration:
         in_review_label="in-review",
         rebase_label="rebase",
         needs_resolution_label="needs-resolution",
+        fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_remote="cram2",
         upstream_base="main",
@@ -251,6 +256,7 @@ DEFAULT_STACK_TOML = """\
 in_review_label = "in-review"
 rebase_label = "rebase"
 needs_resolution_label = "needs-resolution"
+fork_repository = "a-fork-owner/a-fork"
 fork_remote = "origin"
 upstream_remote = "cram2"
 upstream_base = "main"
@@ -308,3 +314,43 @@ def test_load_configuration_ignores_personal_notes_branch_without_a_stack_file(
     configuration = load_configuration(configuration_path)
 
     assert configuration.upstream_remote == "cram2"
+
+
+def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
+    scratch_repository: ScratchRepository, monkeypatch
+):
+    """
+    A contributor names their own fork without editing the committed defaults.
+    """
+    configuration_path = _committed_configuration_path(scratch_repository)
+    scratch_repository.publish_notes_branch(
+        {".claude/personal/stack.toml": 'fork_repository = "someone-else/their-fork"\n'}
+    )
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+
+    configuration = load_configuration(configuration_path)
+
+    assert configuration.fork_repository == Repository("someone-else", "their-fork")
+
+
+# %% repository references
+
+
+def test_repository_splits_a_reference_into_owner_and_name():
+    assert Repository.parse("an-owner/a-repository") == Repository(
+        "an-owner", "a-repository"
+    )
+
+
+def test_repository_round_trips_through_the_form_github_uses():
+    assert str(Repository.parse("an-owner/a-repository")) == "an-owner/a-repository"
+
+
+@pytest.mark.parametrize("malformed", ["no-separator", "/no-owner", "no-name/"])
+def test_repository_rejects_a_reference_that_is_not_owner_and_name(malformed: str):
+    """
+    A half-parsed reference would silently target the wrong repository.
+    """
+    with pytest.raises(MalformedRepositoryError):
+        Repository.parse(malformed)

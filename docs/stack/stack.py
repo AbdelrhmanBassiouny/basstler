@@ -44,6 +44,43 @@ PERSONAL_STACK_CONFIGURATION_PATH = ".claude/personal/stack.toml"
 branch (see :func:`_personal_configuration_overrides`)."""
 
 
+class MalformedRepositoryError(ValueError):
+    """Raised when a configured repository is not in ``owner/name`` form."""
+
+    def __init__(self, text: str) -> None:
+        super().__init__(f"expected a repository as 'owner/name', got {text!r}")
+        self.text = text
+        """The value that could not be parsed."""
+
+
+@dataclass(frozen=True)
+class Repository:
+    """A GitHub repository, identified the way GitHub itself writes it."""
+
+    owner: str
+    """The user or organization the repository belongs to."""
+
+    name: str
+    """The repository's own name."""
+
+    @classmethod
+    def parse(cls, text: str) -> Repository:
+        """Parse an ``owner/name`` repository reference.
+
+        :param text: The reference to parse.
+        :return: The parsed repository.
+        :raises MalformedRepositoryError: If *text* is not ``owner/name``.
+        """
+        owner, separator, name = text.partition("/")
+        if not (owner and separator and name):
+            raise MalformedRepositoryError(text)
+        return cls(owner, name)
+
+    def __str__(self) -> str:
+        """:return: The ``owner/name`` form GitHub uses."""
+        return f"{self.owner}/{self.name}"
+
+
 @dataclass
 class Configuration:
     """Static configuration for the workflow (everything that is not derivable from GitHub)."""
@@ -56,6 +93,9 @@ class Configuration:
 
     needs_resolution_label: str
     """Fork-PR label marking a branch withheld from promotion pending conflict resolution."""
+
+    fork_repository: Repository
+    """The fork that holds the full stack, as GitHub names it."""
 
     fork_remote: str
     """Git remote for the fork that holds the full stack."""
@@ -83,6 +123,7 @@ def load_configuration(path: Path = CONFIGURATION_PATH) -> Configuration:
         in_review_label=values.get("in_review_label", "in-review"),
         rebase_label=values.get("rebase_label", "rebase"),
         needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
+        fork_repository=Repository.parse(values["fork_repository"]),
         fork_remote=values.get("fork_remote", "origin"),
         upstream_remote=values.get("upstream_remote", "cram2"),
         upstream_base=values.get("upstream_base", "main"),
