@@ -18,7 +18,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 
 | What | Where it lives | You set it by |
 |---|---|---|
-| dependency **tree** (parent) | each fork PR's **base branch** (`base = parent`) | retargeting the PR base on GitHub |
+| dependency **tree** (parent) | each fork PR's **base branch** (`base = parent`) | retargeting the PR base on GitHub - from a session, only via the GitHub MCP `update_pull_request` tool (see `ROUTINE.md`) |
 | `draft` ↔ `ready` | the fork PR's **draft toggle** | un-drafting when you approve it |
 | `in-review` | the **`in-review` label** on the fork PR | labelling at promote time (cram2 isn't readable from the cloud) |
 | `merged` | branch is an ancestor of `cram2/main` | nothing - pure git |

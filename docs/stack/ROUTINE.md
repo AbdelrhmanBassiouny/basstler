@@ -97,25 +97,37 @@ of cram2/main. A branch B is MERGED (not merely closed) iff
 `git merge-base --is-ancestor origin/B cram2/main` succeeds - that git-ancestry test, NOT the PR's
 open/closed state, is how you know B actually landed in main.
 
+BASE CHANGES GO THROUGH THE GITHUB MCP SERVER. Retarget a base with the MCP `update_pull_request`
+tool and nothing else. The same request issued as a raw `PATCH /repos/{owner}/{repo}/pulls/{number}`
+with curl and `GH_TOKEN` is refused with `403 - Changing a pull request's base branch is not permitted
+for this session type`, however the body is formed - the block is on that credential, not on the
+operation, so retrying it or reshaping the request cannot get past it. That 403 is a known, documented
+outcome: if you see it, you used the wrong client, so switch rather than report it as a stuck reparent.
+The stacks endpoints below are the mirror image - they have no MCP tool, so they do need curl.
+
 REPARENT EVERY ORPHANED CHILD - the ancestry test decides this, never the board. Run the ancestry test
 on the BASE branch of every open fork PR whose base is neither `main` nor the head of another open fork
 PR: those bases have no board entry of their own, so nothing else in this phase would ever look at them.
-Whenever such a base has landed, retarget its child's base to `main` on GitHub. A parent whose own PR
-was CLOSED rather than merged is exactly this case. The reparent is not cosmetic and is never optional:
-a child left on a landed base cannot reach `main`, and it is closed outright the moment that base
-branch is deleted. The inflated diff such a child shows is a symptom, not the problem.
+Whenever such a base has landed, retarget its child's base to `main` with `update_pull_request`. A
+parent whose own PR was CLOSED rather than merged is exactly this case. The reparent is not cosmetic
+and is never optional: a child left on a landed base cannot reach `main`, and it is closed outright the
+moment that base branch is deleted. The inflated diff such a child shows is a symptom, not the problem.
 
-NATIVE-STACK MEMBERS. `PATCH`-ing the base of a PR that belongs to a GitHub stack fails with
+NATIVE-STACK MEMBERS. Changing the base of a PR that belongs to a GitHub stack fails with
 `422 - Cannot change the base branch because the pull request is part of a stack`, so the plain
-retarget above cannot move it. A PR is a stack member iff its REST JSON carries a non-null `stack`
-object when fetched with the header `X-GitHub-Api-Version: 2026-03-10`; the stacks endpoints are not
-in the GitHub MCP server, so call them with curl and `GH_TOKEN`, always with that version header. For
-exactly those children, the reparent becomes:
+retarget above cannot move it. This is a different refusal from the 403 above and has a different
+cure: the 422 is GitHub protecting the stack's structure, and dissolving the stack clears it. A PR is
+a stack member iff its REST JSON carries a non-null `stack` object when fetched with the header
+`X-GitHub-Api-Version: 2026-03-10`; the stacks endpoints are not in the GitHub MCP server, so call
+them with curl and `GH_TOKEN`, always with that version header. For exactly those children, the
+reparent becomes:
 1. `GET /repos/{owner}/{repo}/stacks` and record the affected stack's full PR list, bottom to top. Do
    not proceed without the recorded list - dissolving is destructive and there is no undo.
 2. `POST /repos/{owner}/{repo}/stacks/{number}/unstack` (no body) to dissolve it. There is no
    selective removal: this drops every open, draft and closed member, leaving merged ones in place.
-3. `PATCH` each orphaned child's base to `main`, which succeeds once the stack is gone.
+3. `update_pull_request` each orphaned child's base to `main`, which succeeds once the stack is gone.
+   The child keeps its number, its labels and its review thread - never close it and open a
+   replacement, which loses all three for a base change that is available to you.
 4. Restack normally (Phase 2's local merge/rebase + push).
 5. Re-create the stack: `POST /repos/{owner}/{repo}/stacks` with `{"pull_requests": [...]}` - the
    recorded list minus landed and closed members, bottom to top - then `GET` it back and confirm every
@@ -128,8 +140,8 @@ stack, leave the rest untouched, and report it - this is a preview API, so never
 
 For each OPEN fork PR (head branch B) that is merged by the ancestry test:
 - REPARENT its children first - for every OTHER open fork PR whose BASE is B, retarget that child's base
-  to `main` on GitHub (B's commits are in main now, so the child stacks on main, not on a branch about
-  to disappear). Do this BEFORE closing B so no child is ever orphaned. `.claude/stack/stack.py
+  to `main` with `update_pull_request` (B's commits are in main now, so the child stacks on main, not on
+  a branch about to disappear). Do this BEFORE closing B so no child is ever orphaned. `.claude/stack/stack.py
   restack-plan` already emits `parent: main` for these children, so Phase 2 rebases them onto main to
   match. (Only when B is merged by the ancestry test - a PR merely CLOSED without merging leaves B's own
   label/close state alone, but NOT its children: they are reparented by the rule above, which keys off
