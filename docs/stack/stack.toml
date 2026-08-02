@@ -24,5 +24,6 @@ needs_resolution_label = "needs-resolution"  # set by the routine on a delegated
 # names nobody's fork. Set it (here or in a personal override) only for a checkout whose fork remote
 # is not the fork. `ROUTINE.md` reads the resolved value rather than naming an owner.
 fork_remote = "origin"
-upstream_remote = "cram2"
+upstream_repository = "cram2/cognitive_robot_abstract_machine"  # constant for every contributor; the fork is whichever remote is not this
+upstream_remote = "cram2"        # name to give the upstream remote when one has to be added
 upstream_base = "main"

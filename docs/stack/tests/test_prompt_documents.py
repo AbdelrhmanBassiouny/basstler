@@ -26,7 +26,7 @@ from prompt_model import (
     PromptLandmark,
     PromptRule,
 )
-from stack import load_configuration
+from stack import BOARDLESS_COMMANDS, load_configuration
 
 # %% the shape the Routine's prompt depends on
 
@@ -107,6 +107,23 @@ def test_routine_carries_no_placeholder_a_run_would_have_to_resolve():
     ]
 
     assert unresolved == []
+
+
+def test_setup_asks_the_tool_which_remote_is_which():
+    """
+    A checkout may call the fork anything, so names decide nothing.
+
+    The document asks the tooling rather than writing remote names into git commands,
+    which is what keeps a run from pointing pushes at the review repository.
+    """
+    routine = PromptDocument.load(ROUTINE_DOCUMENT)
+
+    step_zero = routine.section(PromptLandmark.SETUP, PromptLandmark.FORK_MAIN_UPDATE)
+    configuration = load_configuration()
+
+    assert all(command in step_zero for command in BOARDLESS_COMMANDS)
+    assert f"{configuration.fork_remote}/" not in routine.text
+    assert f"{configuration.upstream_remote}/" not in routine.text
 
 
 def test_routine_names_no_fork_of_its_own():

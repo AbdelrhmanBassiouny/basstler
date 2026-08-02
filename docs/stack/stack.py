@@ -9,7 +9,7 @@ GitHub is the single source of truth. The stack is **not** declared in a ledger:
   * ``in-review`` = the ``in_review_label`` on the fork PR (cram2 is not readable from the cloud);
   * ``merged`` = the branch is an ancestor of ``<upstream_remote>/<upstream_base>``.
 
-``stack.toml`` carries the committed defaults (label names, remotes); a
+``stack.toml`` carries the committed defaults (label names, the upstream repository); a
 ``.claude/personal/stack.toml`` on the personal-notes branch, if present, layers per-user overrides on
 top of them (see :func:`load_configuration`).
 
@@ -20,6 +20,7 @@ Commands (run from the repo root)::
     python .claude/stack/stack.py next          # which branches to submit to cram2 next
     python .claude/stack/stack.py next --porcelain   # machine-readable: one 'name<TAB>pr' line per branch
     python .claude/stack/stack.py restack-plan  # bottom-up restack plan as JSON, for the `restack` workflow
+    python .claude/stack/stack.py remotes       # which remote is the fork, which is the upstream
 """
 
 from __future__ import annotations
@@ -29,7 +30,7 @@ import os
 import subprocess
 import sys
 import tomllib
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -79,6 +80,32 @@ class Repository:
             raise MalformedRepositoryError(text)
         return cls(owner, name)
 
+    @staticmethod
+    def _remote_url_segments(url: str) -> list[str]:
+        """Split a remote URL into its path segments, discarding scheme and host.
+
+        :param url: The remote URL to split.
+        :return: The path segments, which name a repository when there are two or more.
+        """
+        reference = url.removesuffix(".git").rstrip("/")
+        if "://" in reference:
+            _, _, host_and_path = reference.partition("://")
+            _, _, path = host_and_path.partition("/")
+        elif ":" in reference:
+            _, _, path = reference.rpartition(":")
+        else:
+            return []
+        return [segment for segment in path.split("/") if segment]
+
+    @classmethod
+    def names_a_repository(cls, url: str) -> bool:
+        """Test whether a remote URL points at a repository at all.
+
+        :param url: The remote URL to test.
+        :return: Whether it names an ``owner/name`` pair.
+        """
+        return len(cls._remote_url_segments(url)) >= 2
+
     @classmethod
     def from_remote_url(cls, url: str) -> Repository:
         """Read the repository a git remote URL points at.
@@ -90,13 +117,7 @@ class Repository:
         :return: The repository it names.
         :raises MalformedRepositoryError: If *url* names no ``owner/name`` pair.
         """
-        reference = url.removesuffix(".git").rstrip("/")
-        if "://" in reference:
-            _, _, host_and_path = reference.partition("://")
-            _, _, path = host_and_path.partition("/")
-        else:
-            _, _, path = reference.rpartition(":")
-        segments = [segment for segment in path.split("/") if segment]
+        segments = cls._remote_url_segments(url)
         if len(segments) < 2:
             raise MalformedRepositoryError(url)
         return cls.parse("/".join(segments[-2:]))
@@ -104,6 +125,148 @@ class Repository:
     def __str__(self) -> str:
         """:return: The ``owner/name`` form GitHub uses."""
         return f"{self.owner}/{self.name}"
+
+
+@dataclass(frozen=True)
+class Remote:
+    """A git remote, identified by the repository its URL names rather than by its name."""
+
+    name: str
+    """What this checkout calls the remote."""
+
+    repository: Repository
+    """The repository the remote points at."""
+
+
+@dataclass
+class ForkRemoteNotFoundError(LookupError):
+    """Raised when no remote points at a repository other than the upstream."""
+
+    upstream_repository: Repository
+    """The upstream every candidate turned out to be."""
+
+    def __str__(self) -> str:
+        """:return: What was searched for and why nothing qualified."""
+        return (
+            f"no remote points at a fork: every remote is {self.upstream_repository}. "
+            f"Add a remote for your fork, or set fork_repository in stack.toml."
+        )
+
+
+@dataclass
+class AmbiguousForkRemoteError(LookupError):
+    """Raised when several remotes could each be the fork."""
+
+    candidates: tuple[Remote, ...]
+    """The remotes that are not the upstream, in the order git reported them."""
+
+    def __str__(self) -> str:
+        """:return: The candidates and how to disambiguate them."""
+        listed = ", ".join(
+            f"{remote.name} -> {remote.repository}" for remote in self.candidates
+        )
+        return (
+            f"several remotes could be the fork ({listed}). "
+            f"Set fork_repository in stack.toml to say which."
+        )
+
+
+@dataclass(frozen=True)
+class RemoteResolution:
+    """Which remote is the fork and which is the upstream, decided without trusting names."""
+
+    fork: Remote
+    """The remote holding the stack."""
+
+    upstream: Remote | None
+    """The remote for the upstream review repository, absent if the checkout has none."""
+
+    upstream_repository: Repository
+    """The upstream, whether or not a remote points at it yet."""
+
+    preferred_upstream_name: str
+    """What to call the upstream remote when one has to be added."""
+
+    @property
+    def upstream_name(self) -> str:
+        """:return: The upstream remote's name, or the name it will get when added."""
+        return self.upstream.name if self.upstream else self.preferred_upstream_name
+
+    @property
+    def upstream_setup_command(self) -> str | None:
+        """:return: The command adding the missing upstream remote, or ``None`` if present."""
+        if self.upstream:
+            return None
+        return (
+            f"git remote add {self.preferred_upstream_name} "
+            f"https://github.com/{self.upstream_repository}.git"
+        )
+
+
+def resolve_remotes(
+    remote_urls: Mapping[str, str],
+    upstream_repository: Repository,
+    preferred_upstream_name: str,
+    fork_repository: Repository | None = None,
+) -> RemoteResolution:
+    """Decide which remote is the fork and which is the upstream.
+
+    Remotes are matched by the repository their URL names, so a checkout whose remotes are
+    called anything at all resolves the same way.
+
+    :param remote_urls: Remote name to URL, as git reports them.
+    :param upstream_repository: The repository every fork is forked from.
+    :param preferred_upstream_name: What to call the upstream remote if one must be added.
+    :param fork_repository: The fork, when configuration names it outright.
+    :return: The resolved remotes.
+    :raises ForkRemoteNotFoundError: If no remote points at a fork.
+    :raises AmbiguousForkRemoteError: If several do and configuration does not disambiguate.
+    """
+    remotes = [
+        Remote(name, Repository.from_remote_url(url))
+        for name, url in remote_urls.items()
+        if Repository.names_a_repository(url)
+    ]
+    upstream = next(
+        (remote for remote in remotes if remote.repository == upstream_repository), None
+    )
+    candidates = tuple(
+        remote for remote in remotes if remote.repository != upstream_repository
+    )
+    return RemoteResolution(
+        fork=_select_fork(candidates, fork_repository, upstream_repository),
+        upstream=upstream,
+        upstream_repository=upstream_repository,
+        preferred_upstream_name=preferred_upstream_name,
+    )
+
+
+def _select_fork(
+    candidates: tuple[Remote, ...],
+    fork_repository: Repository | None,
+    upstream_repository: Repository,
+) -> Remote:
+    """Pick the fork from the remotes that are not the upstream.
+
+    :param candidates: The non-upstream remotes.
+    :param fork_repository: The fork, when configuration names it outright.
+    :param upstream_repository: The upstream, for reporting when nothing qualifies.
+    :return: The fork's remote.
+    :raises ForkRemoteNotFoundError: If no candidate qualifies.
+    :raises AmbiguousForkRemoteError: If several do and configuration does not disambiguate.
+    """
+    if fork_repository:
+        named = [
+            remote for remote in candidates if remote.repository == fork_repository
+        ]
+        if not named:
+            raise ForkRemoteNotFoundError(upstream_repository)
+        return named[0]
+    if not candidates:
+        raise ForkRemoteNotFoundError(upstream_repository)
+    if len(candidates) > 1:
+        raise AmbiguousForkRemoteError(candidates)
+    return candidates[0]
 
 
 @dataclass
@@ -125,6 +288,9 @@ class Configuration:
     fork_remote: str
     """Git remote for the fork that holds the full stack."""
 
+    upstream_repository: Repository
+    """The repository every fork is forked from, and the only one constant across contributors."""
+
     upstream_remote: str
     """Git remote for the upstream review repository."""
 
@@ -142,36 +308,54 @@ def load_configuration(path: Path = CONFIGURATION_PATH) -> Configuration:
     :param path: The committed defaults file.
     :return: The layered configuration.
     """
-    values = tomllib.loads(path.read_text())
-    values.update(_personal_configuration_overrides())
-    fork_remote = values.get("fork_remote", "origin")
+    values = _configuration_values(path)
+    upstream_repository = Repository.parse(values["upstream_repository"])
+    resolution = resolved_remotes(path)
     return Configuration(
         in_review_label=values.get("in_review_label", "in-review"),
         rebase_label=values.get("rebase_label", "rebase"),
         needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
-        fork_repository=_fork_repository(values, fork_remote),
-        fork_remote=fork_remote,
-        upstream_remote=values.get("upstream_remote", "cram2"),
+        fork_repository=resolution.fork.repository,
+        fork_remote=resolution.fork.name,
+        upstream_repository=upstream_repository,
+        upstream_remote=resolution.upstream_name,
         upstream_base=values.get("upstream_base", "main"),
     )
 
 
-def _fork_repository(values: dict[str, str], fork_remote: str) -> Repository:
-    """Resolve which repository the fork is.
+def _configuration_values(path: Path) -> dict[str, str]:
+    """Read the committed defaults with any personal-notes overrides layered on top.
 
-    A checkout already knows its own fork - it is whatever the fork remote points at -
-    so the reference is only read from configuration when one is set, which is what a
-    checkout whose remote is not the fork needs.
-
-    :param values: The layered configuration values.
-    :param fork_remote: The git remote for the fork.
-    :return: The fork repository.
-    :raises MalformedRepositoryError: If neither source names an ``owner/name`` pair.
+    :param path: The committed defaults file.
+    :return: The layered values.
     """
-    configured = values.get("fork_repository")
-    if configured:
-        return Repository.parse(configured)
-    return Repository.from_remote_url(_git("remote", "get-url", fork_remote))
+    values = tomllib.loads(path.read_text())
+    values.update(_personal_configuration_overrides())
+    return values
+
+
+def resolved_remotes(path: Path = CONFIGURATION_PATH) -> RemoteResolution:
+    """Resolve this checkout's fork and upstream remotes.
+
+    :param path: The committed defaults file.
+    :return: The resolved remotes.
+    :raises ForkRemoteNotFoundError: If no remote points at a fork.
+    :raises AmbiguousForkRemoteError: If several do and configuration does not disambiguate.
+    """
+    values = _configuration_values(path)
+    configured_fork = values.get("fork_repository")
+    return resolve_remotes(
+        _remote_urls(),
+        Repository.parse(values["upstream_repository"]),
+        values.get("upstream_remote", "cram2"),
+        Repository.parse(configured_fork) if configured_fork else None,
+    )
+
+
+def _remote_urls() -> dict[str, str]:
+    """:return: Every remote in this checkout, mapped to its fetch URL."""
+    listed = _git("remote").splitlines()
+    return {name: _git("remote", "get-url", name) for name in listed if name}
 
 
 def _resolve_personal_notes_remote() -> str:
@@ -712,6 +896,22 @@ def print_restack_plan(stack: Stack) -> None:
     print(json.dumps(restack_plan(stack), indent=2))
 
 
+def print_remotes(resolution: RemoteResolution) -> None:
+    """Print the resolved remotes as ``key<TAB>value`` lines.
+
+    An ``upstream-setup`` line appears only when no remote points at the upstream yet, and
+    carries the exact command that adds one.
+
+    :param resolution: The resolved remotes.
+    """
+    print(f"fork-remote\t{resolution.fork.name}")
+    print(f"fork-repository\t{resolution.fork.repository}")
+    print(f"upstream-remote\t{resolution.upstream_name}")
+    print(f"upstream-repository\t{resolution.upstream_repository}")
+    if resolution.upstream_setup_command:
+        print(f"upstream-setup\t{resolution.upstream_setup_command}")
+
+
 COMMANDS = {
     "status": print_status,
     "check": print_check,
@@ -719,8 +919,25 @@ COMMANDS = {
     "restack-plan": print_restack_plan,
 }
 
+BOARDLESS_COMMANDS = frozenset({"remotes"})
+"""Commands answerable from git alone, which must run before ``board.json`` exists."""
+
 
 # %% entry point
+
+
+def _print_remotes_or_report() -> int:
+    """Print the resolved remotes, or report why they could not be resolved.
+
+    :return: The process exit code, non-zero when resolution is not deterministic.
+    """
+    try:
+        resolution = resolved_remotes()
+    except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
+        print(f"{error}", file=sys.stderr)
+        return 4
+    print_remotes(resolution)
+    return 0
 
 
 def main() -> int:
@@ -732,13 +949,17 @@ def main() -> int:
     porcelain = "--porcelain" in arguments
     arguments = [argument for argument in arguments if argument != "--porcelain"]
 
-    if len(arguments) != 1 or arguments[0] not in COMMANDS:
+    known = [*COMMANDS, *BOARDLESS_COMMANDS]
+    if len(arguments) != 1 or arguments[0] not in known:
         print(
-            f"usage: python stack.py [{' | '.join(COMMANDS)}] [--porcelain]\n"
+            f"usage: python stack.py [{' | '.join(known)}] [--porcelain]\n"
             "  --porcelain (with `next`): print only 'name<TAB>pr' per branch to promote.",
             file=sys.stderr,
         )
         return 2
+
+    if arguments[0] in BOARDLESS_COMMANDS:
+        return _print_remotes_or_report()
 
     try:
         stack = load_stack()

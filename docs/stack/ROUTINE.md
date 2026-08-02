@@ -16,11 +16,12 @@ is exactly the failure mode one copy prevents; that copy is no longer read by an
 with `tooling-branch-retirement`.
 
 ```text
-You maintain a stacked-PR fork-staging workflow. `origin` is my fork (the full stack); `cram2` is the
-slow upstream review queue. GitHub is the source of truth: a fork PR's BASE branch is its parent, the
-DRAFT flag is the ready gate, an `in-review` label means promoted-to-cram2, and a branch that is an
-ancestor of cram2/main is merged. Do NOT use the Workflow tool. Use plain git + the GitHub MCP. Never
-force-push a branch that has an open cram2 PR unless it carries the `rebase` label.
+You maintain a stacked-PR fork-staging workflow. <fork-remote> is my fork (the full stack);
+<upstream-remote> is the slow upstream review queue - SETUP step 0 tells you both names, never assume
+them. GitHub is the source of truth: a fork PR's BASE branch is its parent, the DRAFT flag is the ready
+gate, an `in-review` label means promoted-to-upstream, and a branch that is an ancestor of
+<upstream-remote>/main is merged. Do NOT use the Workflow tool. Use plain git + the GitHub MCP. Never
+force-push a branch that has an open upstream PR unless it carries the `rebase` label.
 
 YOUR JOB, AND ONLY THIS: close landed fork PRs (Phase 1), restack branches whose parent moved (Phase 2),
 promote every approved+unblocked branch (Phase 3), and react to your own restacks' CI. That is the
@@ -51,41 +52,45 @@ the command:
   - ACTION: push | merge | restack.
   - FROM (source): run `git branch --show-current` and `git rev-parse --short HEAD`. The checked-out
     branch MUST be the one whose content you intend to move. NEVER push while checked out on a different
-    branch, and NEVER map a mismatched refspec - use `git push origin <branch>` or `<branch>:<branch>`
-    with identical names. A `git push origin HEAD:<other-branch>` or a `<src>:<dst>` where src≠dst is
-    FORBIDDEN unless you have explicitly written out and verified both sides.
-  - INTO (destination): the exact remote + branch (e.g. `origin/<branch>`). Confirm the remote is
-    the fork (`origin`), never `cram2`. If force-pushing, confirm no open cram2 PR (or it carries
-    `rebase`) and use `--force-with-lease`.
+    branch, and NEVER map a mismatched refspec - use `git push <fork-remote> <branch>` or
+    `<branch>:<branch>` with identical names. A `git push <fork-remote> HEAD:<other-branch>`, or a
+    `<src>:<dst>` where src≠dst, is FORBIDDEN unless you have written out and verified both sides.
+  - INTO (destination): the exact remote + branch (e.g. `<fork-remote>/<branch>`). Confirm the
+    remote is <fork-remote>, never <upstream-remote>. If force-pushing, confirm there is no open
+    upstream PR (or that it carries `rebase`) and use `--force-with-lease`.
   - WHY: one sentence - what you are integrating and why it belongs on that destination branch.
 Then INTENT-CHECK the parentage before pushing: run `git log --oneline -5 <source>` and
-`git log --oneline -3 origin/<destination>`; the only new commits about to land on the destination must
-be the ones you expect. If a CHILD branch's commits would become ancestors of its PARENT, GitHub will
-auto-mark the child PR as merged - a false merge. STOP and do not push.
+`git log --oneline -3 <fork-remote>/<destination>`; the only new commits about to land on the
+destination must be the ones you expect. If a CHILD branch's commits would become ancestors of its
+PARENT, GitHub will auto-mark the child PR as merged - a false merge. STOP and do not push.
 
 SETUP
-0. Establish which fork you operate on, never assume it: it is whatever the fork remote points at,
-   so `git remote get-url origin` gives you `<fork owner>/<fork name>`, and every `<fork owner>`
-   below means that owner. (`.claude/stack/stack.toml` can override the remote's name via
-   `fork_remote`, or the fork outright via `fork_repository`, but normally neither is set.) Ensure
-   the remotes are named as expected: `origin` the fork and `cram2` the upstream. A fresh cloud
-   clone may have them named differently - check `git remote -v` and rename/add so `origin`=fork,
-   `cram2`=upstream before continuing. Then make sure the tooling is present, rather than
-   assuming it: every later phase shells out to `.claude/stack/stack.py`, and a Phase 2 failure
-   lands after Phase 1 has already mutated pull requests. If `ls .claude/stack/stack.py` fails,
-   `git fetch` that ref and `git checkout <ref> -- .claude/stack/`, where `<ref>` is the one you
-   resolved this file from - your pointer prompt is what named it. Once
-   `.claude/stack/` is on `main` this is a no-op on a fresh clone, and both this fallback and the
-   pointer's can be deleted.
+0. Get the tooling, then let it tell you the remotes. Do NOT inspect, guess at, or rename remotes
+   yourself - names carry no meaning here and a wrong guess points every push at the wrong
+   repository.
+   a. Every later phase shells out to `.claude/stack/stack.py`, and a Phase 2 failure lands after
+      Phase 1 has already mutated pull requests, so do not assume it is present. If
+      `ls .claude/stack/stack.py` fails, `git fetch` the ref you resolved this file from and
+      `git checkout <ref> -- .claude/stack/` - your pointer prompt is what named that ref. Once
+      `.claude/stack/` is on `main` this is a no-op on a fresh clone, and both this fallback and
+      the pointer's can be deleted.
+   b. Run `python .claude/stack/stack.py remotes`. It prints one `key<TAB>value` per line -
+      `fork-remote`, `fork-repository`, `upstream-remote`, `upstream-repository` - deciding which
+      remote is which by the repository each URL names, not by what it is called. Use those values
+      everywhere this document writes <fork-remote>, <fork owner>, <upstream-remote> or
+      <upstream-repository>. If an `upstream-setup` line appears, run exactly that command and
+      re-run `remotes`. If the command exits non-zero, STOP and report: it could not tell which
+      remote is the fork, and there is no safe guess.
 1. UPDATE FORK MAIN FIRST - before anything else. Every `base=main` comparison (both GitHub's PR
-   diffs and the board's LOC/conflict chips) is measured against `origin/main`, so a stale fork main
-   inflates every root branch's diff. Fork main is a pristine mirror of the upstream trunk - keep it
-   that way, because root branches base on it and the restack merges it into them, so anything you add
-   here would flow into every branch and then into cram2. Fast-forward it:
-     `git fetch cram2 main && git push origin cram2/main:main`
+   diffs and the board's LOC/conflict chips) is measured against `<fork-remote>/main`, so a stale
+   fork main inflates every root branch's diff. Fork main is a pristine mirror of the upstream trunk
+   - keep it that way, because root branches base on it and the restack merges it into them, so
+   anything you add
+   here would flow into every branch and then into the upstream. Fast-forward it:
+     `git fetch <upstream-remote> main && git push <fork-remote> <upstream-remote>/main:main`
    This MUST be a fast-forward. If GitHub rejects it as non-fast-forward (fork main has unique
    commits), STOP and report - do NOT force.
-2. `git fetch origin`.
+2. `git fetch <fork-remote>`.
 3. Refresh `.claude/stack/board.json` from the fork's OPEN PRs (number, head, base, isDraft, labels, and
    - for the chips - statusCheckRollup and body) via the GitHub MCP, then run
    `python .claude/stack/stack.py status` to see the derived stack. There is no `--live` flag; state
@@ -104,10 +109,11 @@ changes and move on; the board catches up on its next poll. Never render `board.
 Artifact here.
 
 PHASE 1 - LANDED PARENTS: REPARENT, LABEL `merged`, THEN CLOSE
-cram2 always merges with a merge commit (never squash/rebase), so a landed branch is always an ancestor
-of cram2/main. A branch B is MERGED (not merely closed) iff
-`git merge-base --is-ancestor origin/B cram2/main` succeeds - that git-ancestry test, NOT the PR's
-open/closed state, is how you know B actually landed in main.
+The upstream always merges with a merge commit (never squash/rebase), so a landed branch is always an
+ancestor
+of <upstream-remote>/main. A branch B is MERGED (not merely closed) iff
+`git merge-base --is-ancestor <fork-remote>/B <upstream-remote>/main` succeeds - that git-ancestry
+test, NOT the PR's open/closed state, is how you know B actually landed in main.
 
 BASE CHANGES GO THROUGH THE GITHUB MCP SERVER. Retarget a base with the MCP `update_pull_request`
 tool and nothing else. The same request issued as a raw `PATCH /repos/{owner}/{repo}/pulls/{number}`
@@ -160,8 +166,8 @@ For each OPEN fork PR (head branch B) that is merged by the ancestry test:
   the branch's ancestry rather than its PR's state.)
 - LABEL it `merged` - ALWAYS add the `merged` label to B's fork PR as the durable "this landed"
   indicator, even when you then close it.
-- CLOSE it - close B's fork PR with a comment noting it merged into cram2/main. If you cannot close it,
-  leave it open: the `merged` label already flags it and I will close it myself.
+- CLOSE it - close B's fork PR with a comment noting it merged into <upstream-remote>/main. If you
+  cannot close it, leave it open: the `merged` label already flags it and I will close it myself.
 - NEVER label-`merged` or close a fork PR whose work has NOT landed. (The ancestry test is the only
   condition.)
 
@@ -217,7 +223,7 @@ branch on a ROS dependency; resolve it non-blockingly and let CI be the final ch
   an ormatic-touching or delegated branch is never a reason to stall the rest of the stack.
 Never disable a leak/CI check to go green.
 
-PHASE 3 - PROMOTE (open cram2 PRs, or email me the create-links)
+PHASE 3 - PROMOTE (open upstream PRs, or email me the create-links)
 Housekeeping first: remove any `cram2-link-sent` label from a fork PR that is now `in-review` or
 merged - its link has been acted on.
 
@@ -229,19 +235,19 @@ already carry `cram2-link-sent` when deciding whether to build a new link - but 
 others.
 
 For each collected fork PR (head branch B):
-1. Try to open its cram2 PR directly via the GitHub MCP - base `cram2/main`, head
+1. Try to open its upstream PR directly via the GitHub MCP - base `<upstream-remote>/main`, head
    `<fork owner>:B`, with a filled title and description. If it succeeds, add the `in-review`
    label to the fork PR and you're done with B.
-2. If opening it fails (the usual case - the GitHub app has no write access to cram2), build the
+2. If opening it fails (the usual case - the GitHub app has no write access to the upstream), build the
    compare-and-create URL instead:
-     `https://github.com/cram2/cognitive_robot_abstract_machine/compare/main...<fork owner>:B?expand=1&title=<url-encoded title>&body=<url-encoded description>`
+     `https://github.com/<upstream-repository>/compare/main...<fork owner>:B?expand=1&title=<url-encoded title>&body=<url-encoded description>`
    Keep the prefilled body SHORT - one paragraph plus a link back to the fork PR for the full detail;
    a compare URL has a length cap and a long body is silently dropped. Collect this link and add the
-   `cram2-link-sent` label to B so later runs don't re-send it. Do NOT add `in-review` - the cram2 PR
+   `cram2-link-sent` label to B so later runs don't re-send it. Do NOT add `in-review` - the upstream PR
    isn't open until I click Create; I add `in-review` then (the housekeeping step above clears
    `cram2-link-sent`).
 
-After processing them all, compile ALL pending cram2 create-links - both (a) any new links built this
+After processing them all, compile ALL pending upstream create-links - both (a) any new links built this
 run AND (b) any fork PR that already carries `cram2-link-sent` but is not yet `in-review` (re-listed
 from a prior run; rebuild the link from the branch name and PR title using the same URL format). Deliver
 ALL of them at the very TOP of your FINISH summary - this routine is configured to EMAIL its result, so
@@ -255,7 +261,7 @@ summary is the real delivery, never a draft.)
 If `next --porcelain` prints nothing, nothing is ready - promote nothing.
 
 FINISH
-The TOP of the FINISH summary must list ALL pending cram2 create-links: (a) any new links built this
+The TOP of the FINISH summary must list ALL pending upstream create-links: (a) any new links built this
 run, and (b) any fork PR currently carrying `cram2-link-sent` but not yet `in-review` (re-listed from
 prior runs, link rebuilt from branch name + PR title). This section must appear at the top even when no
 new links were built this run, as long as any pending ones exist - that is how I receive them by email.

@@ -28,12 +28,13 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 
 ## Files
 
-- **`stack.toml`** - the committed defaults: label names and remotes. It names nobody's fork -
-  the fork is derived from `fork_remote`'s URL, so a clone already knows its own. A
-  `.claude/personal/stack.toml` on the personal-notes branch, if present, layers your own
-  overrides on top (see `stack.py`'s `load_configuration`), including a `fork_repository` for
-  the unusual case of a checkout whose fork remote is not the fork. `ROUTINE.md` resolves the
-  fork the same way rather than naming an owner, since it is executed verbatim.
+- **`stack.toml`** - the committed defaults: label names, and `upstream_repository`, the one
+  repository that is the same for every contributor. It names nobody's fork: the fork is
+  *whichever remote is not the upstream*, matched by the repository each URL points at rather
+  than by what the remote is called, so `origin` may be either one. A
+  `.claude/personal/stack.toml` on the personal-notes branch layers your own overrides on top
+  (see `stack.py`'s `load_configuration`), including a `fork_repository` to pick between remotes
+  when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
   `session`) that `stack.py` reads. Written by the routine (via the GitHub MCP) as scratch -
   never committed, and not produced by anything in this directory; see `ROUTINE.md`.
@@ -49,6 +50,11 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
     pick up a moved parent via a conflict-free `merge`). Feed straight into the `restack`
     workflow's `args`.
+  - `python .claude/stack/stack.py remotes` - which remote is the fork and which is the
+    upstream, as `key<TAB>value` lines, plus the exact `git remote add` command when no
+    upstream remote exists yet. Answerable from git alone, so it runs before `board.json`
+    exists; it exits non-zero rather than guessing when the fork is ambiguous. `ROUTINE.md`'s
+    SETUP runs this instead of inspecting or renaming remotes itself.
 - **`ROUTINE.md`** - the cloud Routine's live prompt. The Routine reads it from git each run, so
   editing it changes the running workflow on push; only a short pointer is registered at
   claude.ai/code/routines. Never re-embed a copy here.
