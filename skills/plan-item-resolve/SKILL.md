@@ -118,22 +118,13 @@ Read `roadmap.md`'s standing-conventions section (however it's titled in
 this plan) and this repository's own `AGENTS.md`. Whatever the resolution
 turns out to be, it must honor both.
 
-Also ask whether the item should still exist separately. Compare what it
-changes against the base its branch targets:
-
-    git ls-tree <base-branch> -- <paths this item touches>
-
-Empty output means it touches files another unlanded item introduces. Ask
-what would remain if those edits were removed: if nothing substantial
-does, folding it into that item is often the resolution — an item stuck
-behind its own parent is sometimes stuck because it was never really a
-separate item.
-
-Folding is also the answer when two items turn out to have built the same
-thing. That will not show up as an overlapping path if they named it
-differently, so compare by *purpose* as well as by file — and decide which
-copy survives before either lands, since afterwards it is a merge conflict
-instead of a choice.
+Also ask whether the item should still exist separately: follow
+`${SCOPE_DECISION_DOCUMENT}`. If nothing substantial would remain once the
+overlapping edits are removed, folding it into that item is often the
+resolution — an item stuck behind its own parent is sometimes stuck because it
+was never really a separate item. The same goes when two items turn out to have
+built the same thing, which that document's purpose comparison is there to
+catch.
 
 ## 5. Propose the plan — plan mode, no code
 

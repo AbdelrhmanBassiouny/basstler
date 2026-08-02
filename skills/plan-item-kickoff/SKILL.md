@@ -104,19 +104,12 @@ proposed plan must honor both — SOLID, TDD, no abbreviations, dataclasses,
 docstring conventions, whatever the repo's own rules are — not just what
 the item's own `notes` happen to mention.
 
-Then check the item is still the right unit of work. Once you know which
-files it will touch, compare them against the base its branch ultimately
-targets:
-
-    git ls-tree <base-branch> -- <paths this item touches>
-
-Empty output means the item touches files an earlier, unlanded item
-introduces. Then ask what would be left if those edits were removed: if
-nothing substantial remains, the work belongs on that item's branch, so
-propose folding rather than opening a branch that will have to be folded
-later. If something substantial remains, the item is real and the edits are
-ordinary work on top of an unlanded parent — carry on, but say which files
-overlap so the two branches do not build the same thing twice.
+Then check the item is still the right unit of work, now that you know which
+files it will touch: follow `${SCOPE_DECISION_DOCUMENT}`. If nothing
+substantial would remain once the overlapping edits are removed, propose
+folding rather than opening a branch that will have to be folded later.
+Otherwise carry on, but say which files overlap so the two branches do not
+build the same thing twice.
 
 ## 5. Propose the plan — plan mode, no code
 
