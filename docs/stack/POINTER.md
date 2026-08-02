@@ -16,10 +16,9 @@ a webhook event can arrive before the first tool call.
 To use this workflow on your own fork, substitute `<FORK_REPOSITORY>` with your `owner/repository`
 and `<TOOLING_BRANCH>` with the branch carrying `.claude/stack/`, then register the block.
 
-These stay placeholders rather than being read from `stack.toml`, because this prompt runs *before*
-the repository is readable - resolving the routine document is the first thing it does. What can
-read your configuration is the command that renders this block for you, which fills
-`<FORK_REPOSITORY>` in from the same place `stack.py` gets it.
+They are substituted here, in the copy you paste, rather than read from `stack.toml` at run time:
+this prompt runs *before* the repository is readable - resolving the routine document is the first
+thing it does - so it cannot look anything up.
 
 ```text
 Run the stacked-PR maintenance routine for <FORK_REPOSITORY>.
