@@ -46,6 +46,8 @@ MANIFEST_PATH = f".claude/personal/plans/{PLAN_IDENTIFIER}/plan.yaml"
 
 CLAUDE_LOCAL_MD = "CLAUDE.local.md"
 
+NOT_APPLICABLE_PLAN = "not applicable (this branch never holds a plan item)"
+
 
 def branch_index(plan_identifier_by_branch: Mapping[str, str]) -> str:
     """
@@ -225,6 +227,45 @@ def test_reports_a_tracked_branch_whose_manifest_is_missing(
         f"'{PLAN_IDENTIFIER}' tracks this branch, but {MANIFEST_PATH} is missing "
         f"on '{NOTES_BRANCH}'"
     )
+
+
+# %% branches no plan item can ever track
+
+
+def test_reports_plan_as_not_applicable_on_the_default_branch(
+    session_start_repository: ScratchRepository,
+):
+    session_start_repository.publish_notes_branch(
+        {
+            NOTES_PATH: "personal notes\n",
+            BRANCH_INDEX_PATH: branch_index({WORK_BRANCH: PLAN_IDENTIFIER}),
+            MANIFEST_PATH: PLAN_MANIFEST,
+        }
+    )
+    session_start_repository.run_git("checkout", "--quiet", "-b", "main")
+
+    result = run_session_start(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "plan") == NOT_APPLICABLE_PLAN
+
+
+def test_reports_plan_as_not_applicable_on_the_notes_branch(
+    session_start_repository: ScratchRepository,
+):
+    session_start_repository.publish_notes_branch(
+        {
+            NOTES_PATH: "personal notes\n",
+            BRANCH_INDEX_PATH: branch_index({WORK_BRANCH: PLAN_IDENTIFIER}),
+            MANIFEST_PATH: PLAN_MANIFEST,
+        }
+    )
+    session_start_repository.run_git("checkout", "--quiet", NOTES_BRANCH)
+
+    result = run_session_start(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "plan") == NOT_APPLICABLE_PLAN
 
 
 # %% the setup line
