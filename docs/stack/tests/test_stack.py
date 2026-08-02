@@ -10,6 +10,7 @@ remote, so those tests run against a :class:`ScratchRepository` instead.
 
 from __future__ import annotations
 
+from collections.abc import Container
 from pathlib import Path
 
 import pytest
@@ -52,7 +53,7 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
     )
 
 
-def build(prs: list[PullRequest], merged: frozenset[str] = frozenset()):
+def build(prs: list[PullRequest], merged: Container[str] = frozenset()):
     return build_stack(make_configuration(), prs, lambda name: name in merged)
 
 
@@ -582,10 +583,10 @@ def test_nothing_is_printed_for_a_setup_command_that_is_not_needed(capsys):
 
 
 def a_stack_of_two_towers(
-    approved: frozenset[str] = frozenset(),
-    promoted: frozenset[str] = frozenset(),
-    withheld: frozenset[str] = frozenset(),
-    landed: frozenset[str] = frozenset(),
+    approved: Container[str] = frozenset(),
+    promoted: Container[str] = frozenset(),
+    withheld: Container[str] = frozenset(),
+    landed: Container[str] = frozenset(),
 ):
     """
     Two independent towers off `main`, the first three deep and the second one deep.
@@ -620,7 +621,7 @@ def test_approving_a_root_promotes_it_and_nothing_above_it():
     """
     Un-drafting is the approval gate, and it approves one branch rather than a tower.
     """
-    stack = a_stack_of_two_towers(approved=frozenset({"engine", "engine-ui"}))
+    stack = a_stack_of_two_towers(approved={"engine", "engine-ui"})
 
     assert [branch.name for branch in promotion_order(stack)] == ["engine"]
 
@@ -630,15 +631,13 @@ def test_promoting_a_parent_unblocks_the_child_behind_it():
     A child may follow its parent upstream once the parent is in review - it does not
     wait for the parent to merge.
     """
-    stack = a_stack_of_two_towers(
-        approved=frozenset({"engine", "engine-ui"}), promoted=frozenset({"engine"})
-    )
+    stack = a_stack_of_two_towers(approved={"engine", "engine-ui"}, promoted={"engine"})
 
     assert [branch.name for branch in promotion_order(stack)] == ["engine-ui"]
 
 
 def test_both_towers_promote_together_since_they_do_not_depend_on_each_other():
-    stack = a_stack_of_two_towers(approved=frozenset({"engine", "parser"}))
+    stack = a_stack_of_two_towers(approved={"engine", "parser"})
 
     assert [branch.name for branch in promotion_order(stack)] == ["engine", "parser"]
 
@@ -647,9 +646,7 @@ def test_a_branch_delegated_for_conflict_resolution_is_held_back_alone():
     """
     Withholding one branch must not withhold an unrelated tower.
     """
-    stack = a_stack_of_two_towers(
-        approved=frozenset({"engine", "parser"}), withheld=frozenset({"engine"})
-    )
+    stack = a_stack_of_two_towers(approved={"engine", "parser"}, withheld={"engine"})
 
     assert [branch.name for branch in promotion_order(stack)] == ["parser"]
 
@@ -659,7 +656,7 @@ def test_landing_a_root_reparents_only_its_own_child():
     The landed branch drops out of the plan and its child moves onto the base, while the
     branch above keeps the parent it still has and the untouched tower keeps its own.
     """
-    stack = a_stack_of_two_towers(landed=frozenset({"engine"}))
+    stack = a_stack_of_two_towers(landed={"engine"})
 
     assert restack_plan(stack) == [
         {"branch": "engine-ui", "parent": "main", "strategy": "merge"},
@@ -689,8 +686,8 @@ def test_a_tower_lands_bottom_up_over_successive_runs():
     Each branch reaches the base only after the one below it has, so the plan shortens
     from the bottom as the stack drains.
     """
-    after_first = a_stack_of_two_towers(landed=frozenset({"engine"}))
-    after_second = a_stack_of_two_towers(landed=frozenset({"engine", "engine-ui"}))
+    after_first = a_stack_of_two_towers(landed={"engine"})
+    after_second = a_stack_of_two_towers(landed={"engine", "engine-ui"})
 
     assert [entry["branch"] for entry in restack_plan(after_first)] == [
         "engine-ui",
