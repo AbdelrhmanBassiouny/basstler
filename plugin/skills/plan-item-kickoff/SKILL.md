@@ -104,6 +104,17 @@ proposed plan must honor both — SOLID, TDD, no abbreviations, dataclasses,
 docstring conventions, whatever the repo's own rules are — not just what
 the item's own `notes` happen to mention.
 
+Then check the item is still the right unit of work. Once you know which
+files it will touch, compare them against the base its branch ultimately
+targets:
+
+    git ls-tree <base-branch> -- <paths this item touches>
+
+Empty output means the item modifies files an earlier, unlanded item
+introduces — so the work belongs on that item's branch, not on a new one
+stacked above it. Say so and propose folding rather than opening a branch
+that will have to be folded later.
+
 ## 5. Propose the plan — plan mode, no code
 
 Before drafting the plan or raising any open question with the user, check
