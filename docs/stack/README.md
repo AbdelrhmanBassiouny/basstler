@@ -77,7 +77,8 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 - **`.claude/skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
   as `/stacked-pr-maintenance` from any session and the whole of what a scheduled run executes.
   It takes `fork=` / `upstream=` arguments, falls back to `configuration`, and asks (or, with
-  `--non-interactive`, stops) when neither answers.
+  `--non-interactive`, stops) when neither answers. Its `routine-prompt.md` is the template to
+  register when you want the pass to run unattended.
 
 ## The state machine (your approval gate)
 
@@ -95,8 +96,30 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 2. **Self-review the bottom fork PR.** If good, **un-draft it** on GitHub. ← the gate.
 3. `python .claude/stack/stack.py next` → it names every approved, unblocked branch. Open its
    cram2 PR and add the **`in-review`** label to the fork PR.
-4. When cram2 merges it: nothing to edit - it becomes `merged` automatically. Run the `restack`
-   workflow to cascade the new base up the stack; `status`/`check` confirm it's clean again.
+4. When cram2 merges it: nothing to edit - it becomes `merged` automatically. Run a maintenance
+   pass to cascade the new base up the stack; `status`/`check` confirm it's clean again.
+
+## Running a maintenance pass
+
+Everything in step 4 - reparenting a pull request whose base has landed, fast-forwarding the
+fork's copy of the upstream base, restacking whatever the move left behind, and building the
+promotion links for whatever is now ready - is one skill. From any session:
+
+```text
+/stacked-pr-maintenance
+```
+
+With no arguments it resolves the fork and the upstream from your checkout, and asks once if it
+cannot; the answer is saved to `.claude/personal/stack.toml` on your personal-notes branch, so it
+never asks twice. Pass them explicitly to skip resolution entirely:
+
+```text
+/stacked-pr-maintenance fork=<owner/repo> upstream=<owner/repo>
+```
+
+To run it unattended, register it as a scheduled Routine - the prompt to paste, and the two
+settings the Routine itself has to get right, are in
+[`routine-prompt.md`](../skills/stacked-pr-maintenance/routine-prompt.md).
 
 ## Rules of hygiene
 
