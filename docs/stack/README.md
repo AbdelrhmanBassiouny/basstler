@@ -117,8 +117,7 @@ never asks twice. Pass them explicitly to skip resolution entirely:
 /stacked-pr-maintenance fork=<owner/repo> upstream=<owner/repo>
 ```
 
-To run it unattended, register it as a scheduled Routine - the prompt to paste, and the two
-settings the Routine itself has to get right, are in
+To run it unattended, register it as a scheduled Routine; the prompt to paste is in
 [`routine-prompt.md`](../skills/stacked-pr-maintenance/routine-prompt.md).
 
 ## Rules of hygiene
