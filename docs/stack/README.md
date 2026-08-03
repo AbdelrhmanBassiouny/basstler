@@ -2,7 +2,7 @@
 
 High-velocity, review-constrained workflow. This fork (`origin`) holds the **full stack** of
 in-flight branches; **cram2** is the slow review queue. You promote approved branches to
-cram2 as their parents land. Claude does the mechanical restacking so the tower never rots
+cram2 as their parents land. Claude does the mechanical restacking so the stack never rots
 and you keep coding.
 
 ## The rationale (why)
@@ -62,7 +62,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
     maintenance skill passes to every label write rather than working it out itself.
   - `python .claude/stack/stack.py preflight --action push --source B --destination B
     --destination-remote <remote>` - exits `0` when the move is safe and `5` with its reasons on
-    stderr when it is not: wrong branch checked out, a refspec naming different branches on each
+    stderr when it is not: wrong branch checked out, a push naming different branches on each
     side, a destination that is not the fork, or a push that would make a child an ancestor of its
     own parent (which GitHub reads as a merged pull request).
   - `python .claude/stack/stack.py promotion-link --branch B --title T --body ...` - the upstream

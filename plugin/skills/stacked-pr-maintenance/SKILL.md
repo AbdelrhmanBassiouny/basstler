@@ -189,7 +189,7 @@ python .claude/stack/stack.py preflight \
 ```
 
 Exit 0 means the move is clear. Exit 5 means it must not be made, and every reason is on stderr,
-each tagged with which refusal it is: `not-checked-out`, `mismatched-refspec`, `not-the-fork`, or
+each tagged with which refusal it is: `not-checked-out`, `mismatched-branch-names`, `not-the-fork`, or
 `false-merge` - a push that would make a child branch an ancestor of its own parent, which GitHub
 reads as a merged pull request and closes. Fix the cause and ask again; never push past a refusal.
 

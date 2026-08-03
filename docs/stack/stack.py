@@ -27,11 +27,11 @@ Commands (run from the repo root; ``--help`` on any of them for its flags)::
     python .claude/stack/stack.py reparents      # children whose base has landed, and the base they need
     python .claude/stack/stack.py landed         # open fork pull requests whose branch has landed
 
-The last five exist so the steps most easily got wrong by hand are computed rather than
-recalled: a label write replaces the whole set, a mismatched refspec moves the wrong commits, an
-unencoded compare URL loses its prefill, and a landed parent is decided by git ancestry rather
-than by pull-request state. ``landed`` reports only - GitHub closes a pull request as merged by
-itself once its head is contained in its base, so nothing here has to close one.
+The last five exist so the steps most easily got wrong by hand are computed rather than recalled: a
+label write replaces the whole set, a push whose two sides name different branches moves the wrong
+commits, an unencoded compare URL loses its prefill, and a landed parent is decided by git ancestry
+rather than by pull-request state. ``landed`` reports only - GitHub closes a pull request as merged
+by itself once its head is contained in its base, so nothing here has to close one.
 """
 
 from __future__ import annotations
@@ -1042,8 +1042,8 @@ class RefusalReason(StrEnum):
     NOT_CHECKED_OUT = "not-checked-out"
     """The source is not the branch whose content a push would actually move."""
 
-    MISMATCHED_REFSPEC = "mismatched-refspec"
-    """The two sides of the refspec name different branches."""
+    MISMATCHED_BRANCH_NAMES = "mismatched-branch-names"
+    """The source and the destination of the push are different branches."""
 
     NOT_THE_FORK = "not-the-fork"
     """The destination remote is not the fork the stack lives on."""
@@ -1102,9 +1102,9 @@ class PreFlight:
         if move.source != move.destination:
             found.append(
                 PreFlightRefusal(
-                    RefusalReason.MISMATCHED_REFSPEC,
-                    f"refspec maps '{move.source}' onto '{move.destination}'; both sides "
-                    f"must name the same branch",
+                    RefusalReason.MISMATCHED_BRANCH_NAMES,
+                    f"this would move '{move.source}' onto '{move.destination}'; the "
+                    f"source and the destination must be the same branch",
                 )
             )
         if move.destination_remote != self.stack.configuration.fork_remote:

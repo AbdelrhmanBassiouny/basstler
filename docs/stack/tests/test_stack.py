@@ -607,14 +607,15 @@ def test_nothing_is_printed_for_a_setup_command_that_is_not_needed(capsys):
 # the interactions between those stages are what a per-function test cannot reach.
 
 
-def a_stack_of_two_towers(
+def a_deep_stack_beside_an_independent_branch(
     approved: Container[str] = frozenset(),
     promoted: Container[str] = frozenset(),
     withheld: Container[str] = frozenset(),
     landed: Container[str] = frozenset(),
 ):
     """
-    Two independent towers off `main`, the first three deep and the second one deep.
+    Two independent stacks off `main`, the first three deep and the second a single
+    branch.
 
     :param approved: Branches the developer has un-drafted.
     :param promoted: Branches carrying the in-review label.
@@ -622,7 +623,7 @@ def a_stack_of_two_towers(
     :param landed: Branches that are ancestors of the upstream base.
     :return: The stack as the tooling derives it.
     """
-    tower = [("engine", "main"), ("engine-ui", "engine"), ("engine-docs", "engine-ui")]
+    deep = [("engine", "main"), ("engine-ui", "engine"), ("engine-docs", "engine-ui")]
     aside = [("parser", "main")]
     pull_requests = [
         PullRequest(
@@ -633,20 +634,21 @@ def a_stack_of_two_towers(
             labels=(["in-review"] if name in promoted else [])
             + (["needs-resolution"] if name in withheld else []),
         )
-        for number, (name, parent) in enumerate([*tower, *aside], start=1)
+        for number, (name, parent) in enumerate([*deep, *aside], start=1)
     ]
     return build(pull_requests, merged=landed)
 
 
 def test_nothing_promotes_while_the_whole_stack_is_still_draft():
-    assert promotion_order(a_stack_of_two_towers()) == []
+    assert promotion_order(a_deep_stack_beside_an_independent_branch()) == []
 
 
 def test_approving_a_root_promotes_it_and_nothing_above_it():
     """
-    Un-drafting is the approval gate, and it approves one branch rather than a tower.
+    Un-drafting is the approval gate, and it approves one branch rather than a whole
+    stack.
     """
-    stack = a_stack_of_two_towers(approved={"engine", "engine-ui"})
+    stack = a_deep_stack_beside_an_independent_branch(approved={"engine", "engine-ui"})
 
     assert [branch.name for branch in promotion_order(stack)] == ["engine"]
 
@@ -656,22 +658,26 @@ def test_promoting_a_parent_unblocks_the_child_behind_it():
     A child may follow its parent upstream once the parent is in review - it does not
     wait for the parent to merge.
     """
-    stack = a_stack_of_two_towers(approved={"engine", "engine-ui"}, promoted={"engine"})
+    stack = a_deep_stack_beside_an_independent_branch(
+        approved={"engine", "engine-ui"}, promoted={"engine"}
+    )
 
     assert [branch.name for branch in promotion_order(stack)] == ["engine-ui"]
 
 
-def test_both_towers_promote_together_since_they_do_not_depend_on_each_other():
-    stack = a_stack_of_two_towers(approved={"engine", "parser"})
+def test_both_stacks_promote_together_since_they_do_not_depend_on_each_other():
+    stack = a_deep_stack_beside_an_independent_branch(approved={"engine", "parser"})
 
     assert [branch.name for branch in promotion_order(stack)] == ["engine", "parser"]
 
 
 def test_a_branch_delegated_for_conflict_resolution_is_held_back_alone():
     """
-    Withholding one branch must not withhold an unrelated tower.
+    Withholding one branch must not withhold an unrelated stack.
     """
-    stack = a_stack_of_two_towers(approved={"engine", "parser"}, withheld={"engine"})
+    stack = a_deep_stack_beside_an_independent_branch(
+        approved={"engine", "parser"}, withheld={"engine"}
+    )
 
     assert [branch.name for branch in promotion_order(stack)] == ["parser"]
 
@@ -679,9 +685,9 @@ def test_a_branch_delegated_for_conflict_resolution_is_held_back_alone():
 def test_landing_a_root_reparents_only_its_own_child():
     """
     The landed branch drops out of the plan and its child moves onto the base, while the
-    branch above keeps the parent it still has and the untouched tower keeps its own.
+    branch above keeps the parent it still has and the untouched stack keeps its own.
     """
-    stack = a_stack_of_two_towers(landed={"engine"})
+    stack = a_deep_stack_beside_an_independent_branch(landed={"engine"})
 
     assert restack_plan(stack) == [
         {"branch": "engine-ui", "parent": "main", "strategy": "merge"},
@@ -706,13 +712,15 @@ def test_landing_a_root_that_no_open_pull_request_describes_still_reparents():
     assert orphaned.has_landed_upstream("engine")
 
 
-def test_a_tower_lands_bottom_up_over_successive_runs():
+def test_a_stack_lands_bottom_up_over_successive_runs():
     """
     Each branch reaches the base only after the one below it has, so the plan shortens
     from the bottom as the stack drains.
     """
-    after_first = a_stack_of_two_towers(landed={"engine"})
-    after_second = a_stack_of_two_towers(landed={"engine", "engine-ui"})
+    after_first = a_deep_stack_beside_an_independent_branch(landed={"engine"})
+    after_second = a_deep_stack_beside_an_independent_branch(
+        landed={"engine", "engine-ui"}
+    )
 
     assert [entry["branch"] for entry in restack_plan(after_first)] == [
         "engine-ui",
@@ -821,25 +829,25 @@ def a_proposed_push(
     )
 
 
-def a_preflight_over_two_towers(
+def a_preflight_over_that_stack(
     checked_out_branch: str = "engine", ancestors: Container[str] = frozenset()
 ) -> PreFlight:
     """
-    A pre-flight over the two-tower stack.
+    A pre-flight over the stack above.
 
     :param checked_out_branch: What ``git branch --show-current`` would report.
     :param ancestors: Branches already contained in the move's source.
     :return: The pre-flight to ask for refusals.
     """
     return PreFlight(
-        stack=a_stack_of_two_towers(),
+        stack=a_deep_stack_beside_an_independent_branch(),
         checked_out_branch=checked_out_branch,
         is_ancestor=lambda candidate, _descendant: candidate in ancestors,
     )
 
 
 def test_pushing_the_checked_out_branch_onto_itself_is_allowed():
-    assert a_preflight_over_two_towers().refusals(a_proposed_push()) == []
+    assert a_preflight_over_that_stack().refusals(a_proposed_push()) == []
 
 
 def test_pushing_while_another_branch_is_checked_out_is_refused():
@@ -847,7 +855,7 @@ def test_pushing_while_another_branch_is_checked_out_is_refused():
     The checked-out branch is the one whose content actually moves, so a mismatch moves
     something other than what was intended.
     """
-    refusals = a_preflight_over_two_towers(checked_out_branch="parser").refusals(
+    refusals = a_preflight_over_that_stack(checked_out_branch="parser").refusals(
         a_proposed_push()
     )
 
@@ -855,13 +863,13 @@ def test_pushing_while_another_branch_is_checked_out_is_refused():
     assert "parser" in refusals[0].explanation
 
 
-def test_a_refspec_naming_a_different_branch_on_each_side_is_refused():
-    refusals = a_preflight_over_two_towers().refusals(
+def test_a_push_naming_a_different_branch_on_each_side_is_refused():
+    refusals = a_preflight_over_that_stack().refusals(
         a_proposed_push(destination="engine-ui")
     )
 
     assert [refusal.reason for refusal in refusals] == [
-        RefusalReason.MISMATCHED_REFSPEC
+        RefusalReason.MISMATCHED_BRANCH_NAMES
     ]
 
 
@@ -870,7 +878,7 @@ def test_a_destination_on_the_upstream_remote_is_refused():
     Every push in this workflow goes to the fork; the upstream is written only by
     opening a pull request against it.
     """
-    refusals = a_preflight_over_two_towers().refusals(
+    refusals = a_preflight_over_that_stack().refusals(
         a_proposed_push(destination_remote="cram2")
     )
 
@@ -883,7 +891,7 @@ def test_a_push_that_would_make_a_child_an_ancestor_of_its_parent_is_refused():
     GitHub reads a pull request whose head is contained in its base as merged, so this
     push would falsely close the child.
     """
-    refusals = a_preflight_over_two_towers(ancestors={"engine-ui"}).refusals(
+    refusals = a_preflight_over_that_stack(ancestors={"engine-ui"}).refusals(
         a_proposed_push()
     )
 
@@ -896,7 +904,7 @@ def test_an_unrelated_branch_contained_in_the_source_is_not_a_false_merge():
     Only a child of the destination can be falsely merged by pushing to it.
     """
     assert (
-        a_preflight_over_two_towers(ancestors={"parser"}).refusals(a_proposed_push())
+        a_preflight_over_that_stack(ancestors={"parser"}).refusals(a_proposed_push())
         == []
     )
 
@@ -906,13 +914,13 @@ def test_every_reason_to_refuse_is_reported_rather_than_only_the_first():
     Fixing one problem and re-running to discover the next is how a half-applied move
     gets made.
     """
-    refusals = a_preflight_over_two_towers(checked_out_branch="parser").refusals(
+    refusals = a_preflight_over_that_stack(checked_out_branch="parser").refusals(
         a_proposed_push(destination="engine-ui", destination_remote="cram2")
     )
 
     assert [refusal.reason for refusal in refusals] == [
         RefusalReason.NOT_CHECKED_OUT,
-        RefusalReason.MISMATCHED_REFSPEC,
+        RefusalReason.MISMATCHED_BRANCH_NAMES,
         RefusalReason.NOT_THE_FORK,
     ]
 
@@ -922,7 +930,7 @@ def test_every_reason_to_refuse_is_reported_rather_than_only_the_first():
 
 def a_promotion_link(title: str = "A title", body: str = "A body") -> PromotionLink:
     """
-    The compare-and-create link for the two-tower stack's root branch.
+    The compare-and-create link for that stack's root branch.
 
     :param title: The title to prefill.
     :param body: The body to prefill.
@@ -982,7 +990,7 @@ def test_a_link_that_cannot_fit_even_without_a_description_is_refused():
 
 
 def test_a_child_of_a_landed_parent_is_named_with_the_base_it_should_get():
-    stack = a_stack_of_two_towers(landed={"engine"})
+    stack = a_deep_stack_beside_an_independent_branch(landed={"engine"})
 
     assert reparents(stack) == [
         Reparent(
@@ -995,7 +1003,7 @@ def test_a_child_of_a_landed_parent_is_named_with_the_base_it_should_get():
 
 
 def test_a_child_already_based_on_the_upstream_base_needs_no_reparent():
-    assert reparents(a_stack_of_two_towers()) == []
+    assert reparents(a_deep_stack_beside_an_independent_branch()) == []
 
 
 def test_a_child_of_a_landed_parent_with_no_open_pull_request_is_still_named():
@@ -1011,13 +1019,13 @@ def test_a_child_of_a_landed_parent_with_no_open_pull_request_is_still_named():
 
 
 def test_a_branch_that_has_landed_is_named_for_labelling_and_closing():
-    stack = a_stack_of_two_towers(landed={"engine"})
+    stack = a_deep_stack_beside_an_independent_branch(landed={"engine"})
 
     assert [branch.name for branch in landed_branches(stack)] == ["engine"]
 
 
 def test_nothing_has_landed_while_the_whole_stack_is_still_open():
-    assert landed_branches(a_stack_of_two_towers()) == []
+    assert landed_branches(a_deep_stack_beside_an_independent_branch()) == []
 
 
 # %% configuration named rather than inferred
