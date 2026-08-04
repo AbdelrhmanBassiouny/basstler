@@ -135,7 +135,10 @@ the narrative that doesn't belong in structured data.
   every plan. It cross-checks every item against live GitHub PR/CI/review state, so a manifest
   can't silently go stale the way a hand-maintained roadmap doc could.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
-  `/plan-item-resolve <plan-id> <item-id>`.
+  `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
+  marks it `in_progress` as soon as its plan is approved — via
+  [`plan_item_bootstrap.py`](./plan_item_bootstrap.py), which you can also run by hand — so the
+  manifest never says `not_started` while the work is underway.
 
 **Auto-discovery.** If your branch is an item in some plan, that plan's `plan.yaml` and `roadmap.md`
 are pulled into `CLAUDE.local.md` too, via a generated branch-to-plan index that `save-plan.sh`
