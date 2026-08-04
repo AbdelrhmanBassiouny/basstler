@@ -1148,12 +1148,20 @@ class MaintenanceReport:
         return json.dumps(asdict(self), indent=2)
 
     @property
-    def needs_attention(self) -> bool:
-        """:return: Whether any branch was left unpublished for somebody to look at."""
-        return any(
-            outcome.outcome is not RestackOutcome.PUSHED
-            and outcome.outcome is not RestackOutcome.UP_TO_DATE
+    def branches_left_unpublished(self) -> tuple[BranchOutcome, ...]:
+        """:return: Every branch the pass could not leave in the state it wanted."""
+        return tuple(
+            outcome
             for outcome in self.restacked
+            if outcome.outcome not in {RestackOutcome.PUSHED, RestackOutcome.UP_TO_DATE}
+        )
+
+    @property
+    def fast_forward_was_refused(self) -> bool:
+        """:return: Whether the fork's base was left behind the upstream."""
+        return (
+            self.fast_forward is not None
+            and self.fast_forward.outcome is FastForwardOutcome.REFUSED_NOT_FAST_FORWARD
         )
 
 
@@ -1290,6 +1298,31 @@ class MaintenanceExitCode(IntEnum):
     """The API refused a call this pass depends on; its status and reason are on
     stderr."""
 
+    BRANCH_NEEDS_ATTENTION = 10
+    """The pass itself ran, but left at least one branch unpublished for somebody to
+    act on - a conflict, a withheld branch, or a push the fork rejected. Distinct from
+    a pre-flight refusal, which is a fault in the move rather than in the branch."""
+
+
+def exit_code_for(report: MaintenanceReport) -> MaintenanceExitCode:
+    """Decide one pass's exit status from what it actually left behind.
+
+    Shared by every command that produces a report, so none of them can disagree about
+    what counts as a clean pass - a refused fast-forward reported as success is exactly
+    the kind of silence this exists to prevent.
+
+    :param report: What the pass did.
+    :return: The process exit code.
+    """
+    if report.fast_forward_was_refused:
+        return MaintenanceExitCode.NOT_FAST_FORWARD
+    unpublished = report.branches_left_unpublished
+    if any(outcome.outcome is RestackOutcome.REFUSED for outcome in unpublished):
+        return MaintenanceExitCode.PREFLIGHT_REFUSED
+    if unpublished:
+        return MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+    return MaintenanceExitCode.SUCCESS
+
 
 def _argument_parser() -> argparse.ArgumentParser:
     """:return: The parser for every command and its own flags."""
@@ -1361,9 +1394,7 @@ def _run_restack(
     :return: The process exit code."""
     outcomes = restack(stack, git, fork)
     print_restack(outcomes)
-    if any(outcome.outcome is RestackOutcome.REFUSED for outcome in outcomes):
-        return MaintenanceExitCode.PREFLIGHT_REFUSED
-    return MaintenanceExitCode.SUCCESS
+    return exit_code_for(build_report(stack, None, outcomes))
 
 
 def _run_promote(stack: Stack, fork: GitHubRepository) -> MaintenanceExitCode:
@@ -1399,9 +1430,7 @@ def _run_report(
         print_fast_forward(fast_forward_report)
         print_restack(report.restacked)
         print_promotions(report.promoted, report.promotion_labels_cleared)
-    if report.needs_attention:
-        return MaintenanceExitCode.PREFLIGHT_REFUSED
-    return MaintenanceExitCode.SUCCESS
+    return exit_code_for(report)
 
 
 def main() -> MaintenanceExitCode:

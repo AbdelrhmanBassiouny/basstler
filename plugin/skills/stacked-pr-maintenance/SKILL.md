@@ -238,8 +238,12 @@ pushes. It prints one `<branch><TAB><outcome><TAB><detail>` line per branch:
 | `push-rejected` | the fork rejected the push, so the branch moved under you | re-run the pass |
 
 Nothing is force-pushed unless the branch's own pull request carries the `rebase` label, and even
-then the push carries a lease, so a branch somebody else has moved is never overwritten. If any
-branch comes back as anything other than `up-to-date` or `pushed`, the command exits `5`.
+then the push carries a lease, so a branch somebody else has moved is never overwritten.
+
+The exit status says which kind of outcome you got, so a scheduled run can act on it without
+reading the lines: `0` when every branch is `up-to-date` or `pushed`, `10` when at least one was
+left unpublished for its owner, and `5` when pre-flight refused a move - which is a fault in the
+move rather than in the branch, and the one that means stop and look.
 
 **A conflict is handled end to end, so you do not do any of it by hand.** For each one the
 executor labels the pull request `needs-resolution` (computing the complete label set, so nothing
@@ -312,6 +316,10 @@ three - including every conflict report's comment URL and every link built - plu
 list, which is the one thing left for you: retargeting a base is the single write GitHub refuses to
 this credential, so it is reported rather than performed. Render the document into the summary
 below rather than re-deriving any of it.
+
+Its exit status carries the same meanings as step 4's, with one more: `7` when the fast-forward was
+refused, which outranks the rest because the fork's base being behind the upstream affects every
+branch measured against it.
 
 The **top** of the finish summary must list all pending upstream create-links: any built this run,
 and any fork pull request still carrying `cram2-link-sent` but not yet `in-review` (re-listed from

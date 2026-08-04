@@ -40,17 +40,21 @@ from stack import (
 from maintenance import (
     CREDENTIAL_VARIABLES,
     BoardExport,
+    BranchOutcome,
     Command,
     FastForwardOutcome,
+    FastForwardReport,
     GitCommandFailed,
     GitCommandRunner,
     MaintenanceExitCode,
+    MaintenanceReport,
     MissingPullRequestFieldError,
     PullRequestField,
     RestackOutcome,
     build_report,
     clear_spent_promotion_labels,
     description_with_promotion_link,
+    exit_code_for,
     fast_forward,
     promote,
     push_arguments,
@@ -895,6 +899,80 @@ def test_the_report_serialises_every_command_s_outcome(fork_checkout: ForkChecko
     assert document["promotable"] == ["a-parent"]
     assert document["landed"] == []
     assert document["reparents"] == []
+
+
+# %% the exit status every command derives from what it left behind
+
+
+def a_report(
+    fast_forward_outcome: FastForwardOutcome = FastForwardOutcome.ALREADY_CURRENT,
+    restack_outcome: RestackOutcome = RestackOutcome.PUSHED,
+) -> MaintenanceReport:
+    """
+    :param fast_forward_outcome: What became of the fork's base branch.
+    :param restack_outcome: What became of the one branch in the pass.
+    :return: A report carrying exactly those two outcomes.
+    """
+    return MaintenanceReport(
+        fast_forward=FastForwardReport(
+            fast_forward_outcome, "cram2/main", "origin/main", "a-commit"
+        ),
+        restacked=(
+            BranchOutcome(
+                "a-branch", "main", IntegrationStrategy.MERGE, restack_outcome
+            ),
+        ),
+        promoted=(),
+        promotion_labels_cleared=(),
+        reparents=(),
+        landed=(),
+        promotable=(),
+    )
+
+
+def test_a_pass_that_published_everything_is_a_success():
+    assert exit_code_for(a_report()) == MaintenanceExitCode.SUCCESS
+    assert (
+        exit_code_for(a_report(restack_outcome=RestackOutcome.UP_TO_DATE))
+        == MaintenanceExitCode.SUCCESS
+    )
+
+
+def test_a_refused_fast_forward_is_never_reported_as_a_clean_pass():
+    """
+    Observed exiting zero against the live fork: the fork's base was left behind the
+    upstream and the run said nothing was wrong, which is the one thing a status is for.
+    """
+    refused = a_report(fast_forward_outcome=FastForwardOutcome.REFUSED_NOT_FAST_FORWARD)
+
+    assert exit_code_for(refused) == MaintenanceExitCode.NOT_FAST_FORWARD
+
+
+@pytest.mark.parametrize(
+    "left_behind",
+    [RestackOutcome.CONFLICT, RestackOutcome.WITHHELD, RestackOutcome.PUSH_REJECTED],
+)
+def test_a_branch_left_unpublished_is_never_reported_as_a_clean_pass(
+    left_behind: RestackOutcome,
+):
+    """
+    Also observed against the live fork: a conflict exited zero, so a caller acting on
+    the status alone would have read the pass as having nothing outstanding.
+    """
+    assert (
+        exit_code_for(a_report(restack_outcome=left_behind))
+        == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+    )
+
+
+def test_a_preflight_refusal_keeps_its_own_status():
+    """
+    Distinct from a branch needing attention: the branch is fine and the move was wrong.
+    """
+    assert (
+        exit_code_for(a_report(restack_outcome=RestackOutcome.REFUSED))
+        == MaintenanceExitCode.PREFLIGHT_REFUSED
+    )
 
 
 # %% the command line a caller acts on the exit status of
