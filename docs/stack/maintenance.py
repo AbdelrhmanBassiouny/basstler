@@ -1416,10 +1416,16 @@ def main() -> MaintenanceExitCode:
         configuration = load_configuration()
         if command is Command.FAST_FORWARD:
             return _run_fast_forward(configuration, git)
-        fork = GitHubRepository.from_environment(configuration.fork_repository)
         if command is Command.BOARD:
-            return _run_board(fork, arguments.write)
+            return _run_board(
+                GitHubRepository.from_environment(configuration.fork_repository),
+                arguments.write,
+            )
+        # The board is derived before the credential is resolved so a caller missing
+        # both is sent after the board - the thing the previous command produces -
+        # rather than after a token that would not help them yet.
         stack = load_stack()
+        fork = GitHubRepository.from_environment(configuration.fork_repository)
         if command is Command.RESTACK:
             return _run_restack(stack, git, fork)
         if command is Command.PROMOTE:

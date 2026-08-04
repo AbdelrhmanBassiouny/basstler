@@ -38,6 +38,7 @@ from stack import (
 )
 
 from maintenance import (
+    CREDENTIAL_VARIABLES,
     BoardExport,
     Command,
     FastForwardOutcome,
@@ -905,6 +906,11 @@ def run_maintenance(
     """
     Invoke the executor as a caller does, so its exit status is exercised.
 
+    The credential is stripped from the environment for every one of these, so no
+    assertion about an exit status can come out differently on a machine that happens to
+    have a token exported. A run that needed one is exactly the case worth asserting
+    about, and it cannot be asserted at all if the ambient environment answers it.
+
     :param checkout: The checkout to run in.
     :param arguments: The command and its flags.
     :return: The finished subprocess.
@@ -914,6 +920,11 @@ def run_maintenance(
         capture_output=True,
         text=True,
         cwd=checkout.project_root,
+        env={
+            name: value
+            for name, value in os.environ.items()
+            if name not in CREDENTIAL_VARIABLES
+        },
     )
 
 
@@ -934,32 +945,26 @@ def test_every_command_is_reachable_from_the_command_line(fork_checkout: ForkChe
         assert result.returncode == MaintenanceExitCode.SUCCESS, result.stderr
 
 
-def test_a_run_with_no_credential_is_its_own_exit_status(fork_checkout: ForkCheckout):
+def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
+    fork_checkout: ForkCheckout,
+):
     """
     Distinguishable from a missing board, since the fix is a token rather than a fetch.
     """
     fork_checkout.run_git("remote", "remove", "cram2")
-    without_a_token = {
-        name: value
-        for name, value in os.environ.items()
-        if name not in {"GH_TOKEN", "GITHUB_TOKEN"}
-    }
 
-    result = subprocess.run(
-        [sys.executable, str(MAINTENANCE_SCRIPT), Command.BOARD],
-        capture_output=True,
-        text=True,
-        cwd=fork_checkout.project_root,
-        env=without_a_token,
+    assert (
+        run_maintenance(fork_checkout, Command.BOARD).returncode
+        == MaintenanceExitCode.CREDENTIAL_UNAVAILABLE
     )
 
-    assert result.returncode == MaintenanceExitCode.CREDENTIAL_UNAVAILABLE
 
-
-def test_a_missing_board_is_its_own_exit_status(fork_checkout: ForkCheckout):
+def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
+    fork_checkout: ForkCheckout,
+):
     """
-    Distinguishable from a usage error, so a caller can export the board and retry
-    rather than reporting a broken invocation.
+    ``restack`` needs both, and the board is the one its caller fixes with the previous
+    command - so reporting the credential first would send them after the wrong thing.
 
     The upstream remote is dropped first because a subprocess reads the committed
     ``stack.toml``, whose upstream is this repository's own - against which both of the
