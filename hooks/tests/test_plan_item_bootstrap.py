@@ -459,6 +459,57 @@ def test_a_refused_pull_request_leaves_the_branch_it_already_published(
     assert "claude/a-new-branch" in published.stdout
 
 
+def test_a_supplied_pull_request_number_is_recorded_without_creating_one(
+    bootstrap_repository: ScratchRepository,
+):
+    opener = RecordingPullRequestOpener()
+
+    result = open_work(
+        open_request(pull_request_number=57),
+        project_root=bootstrap_repository.project_root,
+        pull_request_opener=opener,
+    )
+
+    assert opener.requests == []
+    assert result.pull_request_number == 57
+    manifest, _ = published_plan(bootstrap_repository)
+    assert "    pull_request_number: 57\n" in manifest
+
+
+def test_creating_a_pull_request_without_a_title_or_body_is_refused_before_publishing(
+    bootstrap_repository: ScratchRepository,
+):
+    with pytest.raises(plan_item_bootstrap.PullRequestDetailsMissingError):
+        open_work(
+            open_request(pull_request_title=None, pull_request_body=None),
+            project_root=bootstrap_repository.project_root,
+            pull_request_opener=RecordingPullRequestOpener(),
+        )
+
+    published = bootstrap_repository.run_git(
+        "ls-remote", "--heads", str(bootstrap_repository.work_remote_path)
+    )
+    assert "claude/a-new-branch" not in published.stdout
+
+
+def test_a_supplied_pull_request_number_adopts_the_branch_its_caller_published(
+    bootstrap_repository: ScratchRepository,
+):
+    open_work(
+        open_request(),
+        project_root=bootstrap_repository.project_root,
+        pull_request_opener=RecordingPullRequestOpener(number=99),
+    )
+
+    result = open_work(
+        open_request(pull_request_number=57),
+        project_root=bootstrap_repository.project_root,
+        pull_request_opener=RecordingPullRequestOpener(),
+    )
+
+    assert result.pull_request_number == 57
+
+
 # %% exit statuses
 
 
@@ -473,6 +524,9 @@ def test_each_refusal_carries_its_own_exit_code():
         UnknownItemError: ExitCode.UNKNOWN_ITEM,
         plan_item_bootstrap.IncompleteNewItemError: ExitCode.INCOMPLETE_NEW_ITEM,
         plan_item_bootstrap.BranchAlreadyPublishedError: ExitCode.BRANCH_ALREADY_PUBLISHED,
+        plan_item_bootstrap.PullRequestDetailsMissingError: (
+            ExitCode.PULL_REQUEST_DETAILS_MISSING
+        ),
         plan_item_bootstrap.PullRequestRefusedError: ExitCode.PULL_REQUEST_REFUSED,
     }
     assert {error: error.exit_code for error in codes} == codes

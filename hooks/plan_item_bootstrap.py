@@ -18,7 +18,8 @@ Two operations, so each caller depends only on the surface it uses:
 ``open``
     Create the branch, publish it, open the draft pull request, then write ``branch``,
     ``session`` and ``pull_request_number`` back onto the item and flip it to
-    ``in_progress``.
+    ``in_progress``. A caller that has already created the pull request passes
+    ``--pull-request-number`` and only the recording happens.
 
 ``open`` runs before ``record`` when both are wanted: the pull request number does not
 exist until the pull request does.
@@ -133,6 +134,7 @@ class ExitCode(IntEnum):
     UNKNOWN_ITEM = 4
     INCOMPLETE_NEW_ITEM = 5
     BRANCH_ALREADY_PUBLISHED = 6
+    PULL_REQUEST_DETAILS_MISSING = 7
     PULL_REQUEST_REFUSED = 8
 
     @property
@@ -192,6 +194,15 @@ class BranchAlreadyPublishedError(BootstrapError):
     """
 
     exit_code = ExitCode.BRANCH_ALREADY_PUBLISHED
+
+
+class PullRequestDetailsMissingError(BootstrapError):
+    """
+    Raised when opening the work must create a pull request but was given neither a
+    title nor a body to create it from.
+    """
+
+    exit_code = ExitCode.PULL_REQUEST_DETAILS_MISSING
 
 
 class PullRequestRefusedError(BootstrapError):
@@ -768,9 +779,9 @@ class CreatedPullRequest:
     Its number.
     """
 
-    html_url: str
+    html_url: str | None
     """
-    Where to read it.
+    Where to read it, unset when the caller supplied the number and already has it.
     """
 
 
@@ -894,14 +905,24 @@ class WorkOpenRequest:
     it is, and a script that guessed would record something wrong in silence.
     """
 
-    pull_request_title: str
+    pull_request_title: str | None = None
     """
-    The pull request's title.
+    The pull request's title, needed only when this module creates it.
     """
 
-    pull_request_body: str
+    pull_request_body: str | None = None
     """
-    The pull request's description.
+    The pull request's description, needed only when this module creates it.
+    """
+
+    pull_request_number: int | None = None
+    """
+    A pull request the caller has already created, recorded instead of creating one.
+
+    A pull request this module creates is attributed to the app the request is proxied
+    through rather than to the person running it, so a caller that can create one under
+    its own identity should, and hand the number here. Left unset, the module creates it
+    - which is what an unattended run with no session has to do.
     """
 
 
@@ -995,24 +1016,36 @@ def open_work(
     :return: What was opened.
     """
     opener = pull_request_opener or GitHubPullRequestOpener()
+    if request.pull_request_number is None and not (
+        request.pull_request_title and request.pull_request_body
+    ):
+        raise PullRequestDetailsMissingError(
+            "opening the work has to create the pull request, so it needs a title and "
+            "a body - or a --pull-request-number for one already created"
+        )
     documents = PlanDocuments.load(request.plan_identifier, project_root)
     repository = documents.repository_for(request.item_identifier)
 
     work = WorkOpener(project_root=project_root, remote=remote)
-    if work.branch_is_published(request.branch):
+    if not work.branch_is_published(request.branch):
+        work.publish(request)
+    elif request.pull_request_number is None:
         raise BranchAlreadyPublishedError(
             f"branch {request.branch!r} already exists on {remote!r} - it is already "
             "being worked, and republishing it would discard those commits"
         )
 
-    work.publish(request)
-    created = opener.open_pull_request(
-        PullRequestRequest(
-            repository=repository,
-            title=request.pull_request_title,
-            body=request.pull_request_body,
-            head=request.branch,
-            base=request.base_branch,
+    created = (
+        CreatedPullRequest(number=request.pull_request_number, html_url=None)
+        if request.pull_request_number is not None
+        else opener.open_pull_request(
+            PullRequestRequest(
+                repository=repository,
+                title=request.pull_request_title,
+                body=request.pull_request_body,
+                head=request.branch,
+                base=request.base_branch,
+            )
         )
     )
 
@@ -1069,8 +1102,19 @@ def build_parser() -> argparse.ArgumentParser:
     open_command.add_argument("--branch", required=True)
     open_command.add_argument("--base", required=True)
     open_command.add_argument("--session", required=True)
-    open_command.add_argument("--pull-request-title", required=True)
-    open_command.add_argument("--pull-request-body", required=True, type=Path)
+    open_command.add_argument(
+        "--pull-request-title", help="Required unless --pull-request-number is given"
+    )
+    open_command.add_argument(
+        "--pull-request-body",
+        type=Path,
+        help="Required unless --pull-request-number is given",
+    )
+    open_command.add_argument(
+        "--pull-request-number",
+        type=int,
+        help="Record a pull request the caller already created, instead of creating one",
+    )
     open_command.add_argument("--remote", default="origin")
 
     return parser
@@ -1107,7 +1151,12 @@ def main() -> int:
                     base_branch=arguments.base,
                     session_url=arguments.session,
                     pull_request_title=arguments.pull_request_title,
-                    pull_request_body=arguments.pull_request_body.read_text(),
+                    pull_request_body=(
+                        arguments.pull_request_body.read_text()
+                        if arguments.pull_request_body
+                        else None
+                    ),
+                    pull_request_number=arguments.pull_request_number,
                 ),
                 project_root=project_root,
                 remote=arguments.remote,
