@@ -107,7 +107,17 @@ the request cannot get past it. If you see that 403 you
 used the wrong client, so switch rather than report it as a stuck reparent. The stacks endpoints
 below are the mirror image: they have no MCP tool, so they do need curl.
 
-Run:
+Export the board first - every step below derives from it, and this one is no exception:
+
+```bash
+python .claude/stack/maintenance.py board --write
+```
+
+It fetches the fork's open pull requests itself and writes `.claude/stack/board.json`. Do not
+assemble that file by hand: a fetch that drops a field produces a board that is wrong rather than
+incomplete, and nothing downstream can tell the difference. It refuses such a fetch instead.
+
+Then run:
 
 ```bash
 python .claude/stack/stack.py reparents
@@ -152,12 +162,13 @@ ancestor of its base, so fast-forwarding the fork's base branch closes every pul
 has landed, in one operation and with no label to write:
 
 ```bash
-git fetch <upstream-remote> <upstream-base> \
-  && git push <fork-remote> <upstream-remote>/<upstream-base>:<upstream-base>
+python .claude/stack/maintenance.py fast-forward
 ```
 
-This must be a fast-forward. If GitHub rejects it as non-fast-forward, stop and report - do not
-force. Keep that branch a pristine mirror of the upstream trunk: root branches base on it and the
+It prints `<ref><TAB><outcome><TAB><commit>`, where the outcome is `pushed`, `already-current`, or
+`refused-not-fast-forward` (its own exit status, `7`). A refusal means the fork's base carries
+commits the upstream does not; report it and move on - the command will not force, and neither will
+you. Keep that branch a pristine mirror of the upstream trunk: root branches base on it and the
 restack merges it into them, so anything added here flows into every branch and then into the
 upstream.
 
@@ -168,10 +179,15 @@ than closing it by hand.
 
 ## Step 3 - refresh the derived stack
 
-`git fetch <fork-remote>`, then refresh `.claude/stack/board.json` from the fork's **open** pull
-requests (number, head, base, isDraft, labels, statusCheckRollup and body) via the GitHub MCP, and
-run `python .claude/stack/stack.py status`. There is no live mode; state comes from `board.json` plus
-git.
+The fast-forward moved a branch every pull request is measured against, so re-export the board and
+look at the result:
+
+```bash
+python .claude/stack/maintenance.py board --write \
+  && python .claude/stack/stack.py status
+```
+
+There is no live mode; state comes from `board.json` plus git.
 
 **CI is the validator - poll it, never subscribe.** When you need a branch's verdict, poll with
 `pull_request_read` → `get_check_runs` / `get_status` and read only the success/failure conclusion. A
@@ -181,7 +197,9 @@ turns into review work.
 
 ## Pre-flight - before every push, merge or restack, no exceptions
 
-Never move commits from memory, and never judge the move yourself. Ask:
+Never move commits from memory, and never judge the move yourself. Step 4's executor runs this
+check itself before every push it makes, so you only invoke it directly for a push you are making
+by hand:
 
 ```bash
 python .claude/stack/stack.py preflight \
@@ -202,14 +220,30 @@ forcing.
 
 ## Step 4 - restack and validate
 
-Run `python .claude/stack/stack.py restack-plan` for the bottom-up plan. For each entry whose parent
-moved, integrate the parent using its `strategy` (merge is the default and needs no force-push;
-rebase force-pushes with lease) **only if the merge is clean**, run pre-flight, then push. CI is the
-validator.
+```bash
+python .claude/stack/maintenance.py restack
+```
 
-**If you resolved any conflict while integrating**, comment on that branch's pull request saying so:
-which files conflicted, and what you took for each. A conflict resolution is a change to somebody
-else's branch that they did not make, so it is never allowed to be silent.
+It walks `restack-plan` bottom up and, for each branch whose parent moved, starts from that
+branch's **published** tip, integrates the parent by its own `strategy`, runs pre-flight, and
+pushes. It prints one `<branch><TAB><outcome><TAB><detail>` line per branch:
+
+| outcome | what it means | what you do |
+|---|---|---|
+| `up-to-date` | the parent's tip was already contained in it | nothing |
+| `pushed` | integrated and published; the detail is the commit | nothing |
+| `conflict` | the parent would not merge cleanly; the detail names the files | report it, below |
+| `refused` | pre-flight refused the push; the detail names the reasons | report it, below |
+| `push-rejected` | the fork rejected the push, so the branch moved under you | re-run the pass |
+
+Nothing is force-pushed unless the branch's own pull request carries the `rebase` label, and even
+then the push carries a lease, so a branch somebody else has moved is never overwritten. If any
+branch comes back as anything other than `up-to-date` or `pushed`, the command exits `5`.
+
+**If you resolved any conflict while integrating by hand**, comment on that branch's pull request
+saying so: which files conflicted, and what you took for each. A conflict resolution is a change to
+somebody else's branch that they did not make, so it is never allowed to be silent. The executor
+never resolves one - it reports and moves on.
 
 **Do not block on CI.** After pushing a branch, move on to the next independent branch and keep
 restacking and promoting in parallel - never sit idle waiting on a long run. Poll the checks of the
@@ -274,6 +308,18 @@ Then, for that branch:
   Create, and they add the label then.
 
 ## Finish
+
+Steps 2 to 4 can be run as one operation, which is also the form a scheduled job with no model in
+the loop emits directly:
+
+```bash
+python .claude/stack/maintenance.py run-report --json
+```
+
+It performs the fast-forward and the restack, and emits one document carrying both, plus the
+`reparents`, `landed` and `promotable` lists - the work that is still yours, because a base change
+needs the GitHub MCP server and a promotion needs a judgement about what to say. Render it into the
+summary below rather than re-deriving any of it.
 
 The **top** of the finish summary must list all pending upstream create-links: any built this run,
 and any fork pull request still carrying `cram2-link-sent` but not yet `in-review` (re-listed from
