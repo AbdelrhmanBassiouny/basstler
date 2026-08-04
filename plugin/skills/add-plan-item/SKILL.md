@@ -121,6 +121,11 @@ changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}
 and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn,
 so no published dashboard is older than the manifest behind it.
 
+**If the outcome is a new item**, `.claude/hooks/plan_item_bootstrap.py`'s `record`
+operation writes its `plan.yaml` entry and `roadmap.md` section and runs the save
+for you — `record` only, never `open`, which creates the branch and pull request
+this skill does not.
+
 Flag explicitly, never silently paper over:
 
 - A candidate branch that could not be fetched, so its overlap is unknown
