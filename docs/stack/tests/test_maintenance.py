@@ -965,6 +965,53 @@ def test_a_branch_left_unpublished_is_never_reported_as_a_clean_pass(
     )
 
 
+def test_every_status_names_itself_distinctly():
+    """
+    The name is derived from the member rather than written beside it, so a status
+    cannot end up with a name that belongs to a different one.
+    """
+    named = {code: code.name_for_a_caller for code in MaintenanceExitCode}
+
+    assert named[MaintenanceExitCode.BRANCH_NEEDS_ATTENTION] == "branch-needs-attention"
+    assert named[MaintenanceExitCode.SUCCESS] == "success"
+    assert len(set(named.values())) == len(MaintenanceExitCode)
+
+
+def test_the_report_carries_what_its_status_means(fork_checkout: ForkCheckout):
+    """
+    A scheduled run reads this document rather than the process status, so the meaning
+    has to be in it - mapping an integer back to a meaning is a step it should not have.
+    """
+    document = json.loads(a_report(restack_outcome=RestackOutcome.CONFLICT).as_json())
+
+    assert document["status"] == "branch-needs-attention"
+    assert document["exit_code"] == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+
+
+def test_a_non_zero_status_says_what_it_means_on_the_way_out(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A caller reading a bare number has to look it up; the executor already knows.
+    """
+    fork_checkout.run_git("remote", "remove", "cram2")
+
+    result = run_maintenance(fork_checkout, Command.RESTACK)
+
+    assert result.returncode == MaintenanceExitCode.BOARD_UNAVAILABLE
+    assert "board-unavailable" in result.stderr
+
+
+def test_a_clean_run_says_nothing_about_its_status(fork_checkout: ForkCheckout):
+    """
+    Success is the absence of news; announcing it would make every run noisy.
+    """
+    result = run_maintenance(fork_checkout, Command.BOARD, "--help")
+
+    assert result.returncode == MaintenanceExitCode.SUCCESS
+    assert "success" not in result.stderr
+
+
 def test_a_preflight_refusal_keeps_its_own_status():
     """
     Distinct from a branch needing attention: the branch is fine and the move was wrong.

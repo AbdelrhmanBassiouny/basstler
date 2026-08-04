@@ -1145,7 +1145,15 @@ class MaintenanceReport:
 
     def as_json(self) -> str:
         """:return: The report as one machine-readable document."""
-        return json.dumps(asdict(self), indent=2)
+        status = exit_code_for(self)
+        return json.dumps(
+            {
+                "status": status.name_for_a_caller,
+                "exit_code": int(status),
+                **asdict(self),
+            },
+            indent=2,
+        )
 
     @property
     def branches_left_unpublished(self) -> tuple[BranchOutcome, ...]:
@@ -1303,6 +1311,18 @@ class MaintenanceExitCode(IntEnum):
     act on - a conflict, a withheld branch, or a push the fork rejected. Distinct from
     a pre-flight refusal, which is a fault in the move rather than in the branch."""
 
+    @property
+    def name_for_a_caller(self) -> str:
+        """What this status means, in words rather than as a number to be looked up.
+
+        A process exit status can only ever be an integer, so this accompanies the
+        number rather than replacing it. Derived from the member itself, so a status
+        can never end up carrying a name that belongs to a different one.
+
+        :return: The status's name, in the form a caller reads or matches on.
+        """
+        return self.name.lower().replace("_", "-")
+
 
 def exit_code_for(report: MaintenanceReport) -> MaintenanceExitCode:
     """Decide one pass's exit status from what it actually left behind.
@@ -1434,7 +1454,25 @@ def _run_report(
 
 
 def main() -> MaintenanceExitCode:
-    """Dispatch the command-line invocation, mapping every refusal to its own status.
+    """Run the command line and say, in words, what its status means.
+
+    The status itself can only be a number, so the name accompanies it on stderr for
+    anything other than a clean run - success stays silent, since announcing it would
+    make every run noisy.
+
+    :return: The process exit code.
+    """
+    status = _dispatch()
+    if status is not MaintenanceExitCode.SUCCESS:
+        print(
+            f"maintenance.py: {status.name_for_a_caller} ({int(status)})",
+            file=sys.stderr,
+        )
+    return status
+
+
+def _dispatch() -> MaintenanceExitCode:
+    """Run the requested command, mapping every refusal to its own status.
 
     :return: The process exit code.
     """

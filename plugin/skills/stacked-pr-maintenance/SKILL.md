@@ -245,6 +245,10 @@ reading the lines: `0` when every branch is `up-to-date` or `pushed`, `10` when 
 left unpublished for its owner, and `5` when pre-flight refused a move - which is a fault in the
 move rather than in the branch, and the one that means stop and look.
 
+You never have to look a number up. Every command prints its status in words on the way out -
+`maintenance.py: branch-needs-attention (10)` - for anything other than a clean run, which stays
+silent.
+
 **A conflict is handled end to end, so you do not do any of it by hand.** For each one the
 executor labels the pull request `needs-resolution` (computing the complete label set, so nothing
 already there is stripped) and posts a comment prefixed `🔴 ROUTINE - NEEDS RESOLUTION:` naming the
@@ -317,9 +321,10 @@ list, which is the one thing left for you: retargeting a base is the single writ
 this credential, so it is reported rather than performed. Render the document into the summary
 below rather than re-deriving any of it.
 
-Its exit status carries the same meanings as step 4's, with one more: `7` when the fast-forward was
-refused, which outranks the rest because the fork's base being behind the upstream affects every
-branch measured against it.
+The document leads with `status` and `exit_code` - `"status": "not-fast-forward"` beside `7` - so
+whatever consumes it reads the meaning rather than mapping the number. The statuses are step 4's
+plus one: `7` when the fast-forward was refused, which outranks the rest because the fork's base
+being behind the upstream affects every branch measured against it.
 
 The **top** of the finish summary must list all pending upstream create-links: any built this run,
 and any fork pull request still carrying `cram2-link-sent` but not yet `in-review` (re-listed from
