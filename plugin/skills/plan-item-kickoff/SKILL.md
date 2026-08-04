@@ -185,9 +185,20 @@ skip.
 
 The branch name and the base branch are this skill's judgment, not the
 script's: the base comes from step 2's dependency readiness, and the branch
-from whatever this session is designated to develop on. The roadmap section
-is the approved plan written up — what was decided and why, not a restatement
-of the diff.
+from whatever this session is designated to develop on.
+
+**Write the approved plan down in both places it belongs**, rather than
+leaving it only in the conversation that produced it:
+
+- **`roadmap.md`**, via `record`'s `--roadmap-section` — the durable record of
+  what was decided and *why*, including any assumption or open question the
+  plan carries. Not a restatement of the diff.
+- **The PR-progress note** — the plan, what is done, and what is next, kept
+  current as the work goes. Write it between `CLAUDE.local.md`'s
+  `BEGIN-PR-PROGRESS`/`END-PR-PROGRESS` markers and run
+  `.claude/hooks/save-pr-progress.sh` to push it. Do this as soon as the
+  branch exists, not at the end: a note written afterwards is a summary, and
+  the point of it is that another session can pick the work up mid-flight.
 
 Then republish the dashboard yourself:
 
