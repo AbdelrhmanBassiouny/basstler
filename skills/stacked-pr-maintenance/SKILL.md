@@ -232,94 +232,86 @@ pushes. It prints one `<branch><TAB><outcome><TAB><detail>` line per branch:
 |---|---|---|
 | `up-to-date` | the parent's tip was already contained in it | nothing |
 | `pushed` | integrated and published; the detail is the commit | nothing |
-| `conflict` | the parent would not merge cleanly; the detail names the files | report it, below |
-| `refused` | pre-flight refused the push; the detail names the reasons | report it, below |
+| `conflict` | the parent would not merge cleanly; the detail names the files | nothing - already reported and labelled |
+| `withheld` | still conflicted from an earlier pass, so it was skipped | nothing |
+| `refused` | pre-flight refused the push; the detail names the reasons | carry it into the summary |
 | `push-rejected` | the fork rejected the push, so the branch moved under you | re-run the pass |
 
 Nothing is force-pushed unless the branch's own pull request carries the `rebase` label, and even
 then the push carries a lease, so a branch somebody else has moved is never overwritten. If any
 branch comes back as anything other than `up-to-date` or `pushed`, the command exits `5`.
 
-**If you resolved any conflict while integrating by hand**, comment on that branch's pull request
-saying so: which files conflicted, and what you took for each. A conflict resolution is a change to
-somebody else's branch that they did not make, so it is never allowed to be silent. The executor
-never resolves one - it reports and moves on.
+**A conflict is handled end to end, so you do not do any of it by hand.** For each one the
+executor labels the pull request `needs-resolution` (computing the complete label set, so nothing
+already there is stripped) and posts a comment prefixed `🔴 ROUTINE - NEEDS RESOLUTION:` naming the
+conflicting files and addressing the session link in the description. On the next pass it reads
+each labelled branch's `mergeable_state`: still `dirty` means `withheld` and untouched, anything
+else means the owner has resolved it, so the label is cleared and the branch rejoins the pass.
+
+It never *resolves* a conflict - that is a change to somebody else's branch. If you resolve one
+yourself, outside the executor, comment saying which files conflicted and what you took.
 
 **Do not block on CI.** After pushing a branch, move on to the next independent branch and keep
 restacking and promoting in parallel - never sit idle waiting on a long run. Poll the checks of the
 branches you pushed at the start of each pass, and react then.
 
-**A conflict you cannot merge cleanly, or a red check, is not yours to resolve.** You do not debug it
-and you do not fix it. Report it to the branch's owner and move on:
+**A red check is not yours to resolve.** You do not debug it and you do not fix it. Report it to
+the branch's owner the same way the executor reports a conflict: find the session link in the fork
+pull request's description, post a comment prefixed `🔴 ROUTINE - NEEDS RESOLUTION:` stating the
+failing check and its conclusion, and label the pull request `needs-resolution` via
+`stack.py labels` so the rest of its labels survive. That comment is the only channel available to
+you; if the branch's session is still subscribed, it arrives there as a live event.
 
-1. Find the session: search the fork pull request body for a `https://claude.ai/code/session_...`
-   link.
-2. Post a comment on the fork pull request, prefixed `🔴 ROUTINE - NEEDS RESOLUTION:`, stating what
-   you were doing, what happened (the conflicting files, or the failing check and its conclusion),
-   and the ask - that they resolve and push, and you will pick the branch back up once it restacks
-   clean. This comment is the only channel available to you; if that session is still subscribed to
-   its own pull request, it arrives there as a live event rather than text sitting on GitHub.
-3. Label the pull request `needs-resolution` (via `stack.py labels`, so the rest of its labels
-   survive) so the state is visible even if no session is listening, and so you never re-attempt the
-   same failing restack every run.
-4. At the start of every restack pass, fetch each `needs-resolution` branch's `mergeable_state`
-   (`pull_request_read` → `get`). GitHub reports `dirty` when the branch has merge conflicts against
-   its base; anything else (`clean`, `unstable`, `blocked`, `behind`, `has_hooks`, `unknown`) means
-   there are no conflicts, whatever else may be true of it. So: clear the label and restack the
-   branch normally unless `mergeable_state` is `dirty`, and skip it only while it is.
-
-Record every branch you report on - the finish summary must list it, since a comment is not
-guaranteed to be seen.
+Record every branch reported on this run - the finish summary must list it, since a comment is not
+guaranteed to be seen. `run-report --json` carries the conflict reports with their comment URLs.
 
 Keep restacking and promoting the other branches while CI works through the ones you pushed. Never
 disable a check to go green.
 
 ## Step 5 - promote
 
-Housekeeping first: remove any `cram2-link-sent` label from a fork pull request that is now
-`in-review` or landed - its link has been acted on.
-
-Collect what to promote: `python .claude/stack/stack.py next --porcelain` prints one `name<TAB>pr`
-line per branch that is approved (out of draft), whose parent has reached in-review or landed, and
-that is not withheld by `needs-resolution`. There is no admission cap and no ordering beyond
-dependency order: every such branch promotes in the same run. Skip any already carrying
-`cram2-link-sent` when deciding whether to build a *new* link, but still process the others. If it
-prints nothing, promote nothing.
-
-For each collected pull request, build the compare-and-create link. Do **not** try to open the
-upstream pull request through the API first - the GitHub app has no write access to the upstream, so
-that call is a wasted round trip that fails every time:
-
 ```bash
-python .claude/stack/stack.py promotion-link \
-  --branch <branch> --title <title> --body <one paragraph plus a link back to the fork PR>
+python .claude/stack/maintenance.py promote
 ```
 
-It owns the URL encoding and the length limit, so the prefill cannot be silently lost - keep the body
-short anyway, and note that it warns on stderr when it had to shorten one.
+For every branch that is approved (out of draft), whose parent has reached in-review or landed, and
+that is not withheld by `needs-resolution`, it builds the upstream compare-and-create link and
+records it. There is no admission cap and no ordering beyond dependency order: every such branch
+promotes in the same run. Per branch it:
 
-Then, for that branch:
-
-- **Put the link in the fork pull request's own description**, under a `## Promote` heading, replacing
-  any link already there. The summary is delivered once and then gone; the description persists, so
-  this is where the link is still findable a week later.
-- Add `cram2-link-sent` so later runs do not rebuild it.
-- Do **not** add `in-review`: the upstream pull request is not open until the developer clicks
+- prefills the link with the pull request's own title and the first paragraph of its description,
+  plus a link back to the fork pull request for the rest - the URL has a length limit and an
+  oversized prefill is discarded silently, so it is truncated deliberately and warns on stderr when
+  it had to;
+- **writes the link into the fork pull request's own description**, under a `## Promote` heading,
+  replacing any link already there. The summary is delivered once and then gone; the description
+  persists, so this is where the link is still findable a week later;
+- adds `cram2-link-sent` so a later pass does not rebuild it, and skips any branch already carrying
+  it;
+- does **not** add `in-review`: the upstream pull request is not open until the developer clicks
   Create, and they add the label then.
+
+It also does the housekeeping in the same run - dropping `cram2-link-sent` from any pull request
+that has since reached `in-review` or landed, since its link has been acted on.
+
+It prints one `<branch><TAB>#<pr><TAB><url>` line per link built, and one
+`<branch><TAB>link-label-cleared` line per label dropped. The upstream pull request is never opened
+through the API: the app has no write access there, so that call fails every time.
 
 ## Finish
 
-Steps 2 to 4 can be run as one operation, which is also the form a scheduled job with no model in
+Steps 2 to 5 can be run as one operation, which is also the form a scheduled job with no model in
 the loop emits directly:
 
 ```bash
 python .claude/stack/maintenance.py run-report --json
 ```
 
-It performs the fast-forward and the restack, and emits one document carrying both, plus the
-`reparents`, `landed` and `promotable` lists - the work that is still yours, because a base change
-needs the GitHub MCP server and a promotion needs a judgement about what to say. Render it into the
-summary below rather than re-deriving any of it.
+It performs the fast-forward, the restack and the promotion, and emits one document carrying all
+three - including every conflict report's comment URL and every link built - plus the `reparents`
+list, which is the one thing left for you: retargeting a base is the single write GitHub refuses to
+this credential, so it is reported rather than performed. Render the document into the summary
+below rather than re-deriving any of it.
 
 The **top** of the finish summary must list all pending upstream create-links: any built this run,
 and any fork pull request still carrying `cram2-link-sent` but not yet `in-review` (re-listed from
