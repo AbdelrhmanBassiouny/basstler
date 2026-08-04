@@ -14,9 +14,12 @@ The board export and the report are pure, and are tested as such.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 import sys
+from collections.abc import Sequence
 from dataclasses import dataclass
+from dataclasses import field as dataclasses_field
 from pathlib import Path
 
 import pytest
@@ -45,7 +48,10 @@ from maintenance import (
     PullRequestField,
     RestackOutcome,
     build_report,
+    clear_spent_promotion_labels,
+    description_with_promotion_link,
     fast_forward,
+    promote,
     push_arguments,
     restack,
     session_link_in,
@@ -455,7 +461,9 @@ def test_a_branch_whose_parent_has_not_moved_is_reported_up_to_date(
 ):
     a_parent_and_child(fork_checkout)
 
-    outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git)
+    outcomes = restack(
+        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+    )
 
     assert [outcome.outcome for outcome in outcomes] == [
         RestackOutcome.UP_TO_DATE,
@@ -470,7 +478,9 @@ def test_a_branch_whose_parent_moved_is_integrated_and_pushed(
     fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
     before = fork_checkout.published_commit("origin", "a-child")
 
-    outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git)
+    outcomes = restack(
+        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+    )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
     assert child.outcome == RestackOutcome.PUSHED
@@ -487,7 +497,9 @@ def test_a_conflicting_integration_pushes_nothing_and_names_the_files(
     fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
     before = fork_checkout.published_commit("origin", "a-child")
 
-    outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git)
+    outcomes = restack(
+        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+    )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
     assert child.outcome == RestackOutcome.CONFLICT
@@ -506,7 +518,9 @@ def test_a_rebase_labelled_branch_is_rebased_rather_than_merged(
     fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board(labels=["rebase"])), fork_checkout.git
+        a_stack(fork_checkout, the_board(labels=["rebase"])),
+        fork_checkout.git,
+        RecordingPullRequests(),
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -546,7 +560,9 @@ def test_a_branch_that_moved_under_the_pass_is_incorporated_rather_than_overwrit
     fork_checkout.run_git("push", "--quiet", "origin", "a-side-line:a-child")
     fork_checkout.run_git("fetch", "--quiet", "origin")
 
-    outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git)
+    outcomes = restack(
+        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+    )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
     assert child.outcome == RestackOutcome.PUSHED
@@ -573,7 +589,9 @@ def test_a_rebase_whose_lease_has_expired_is_rejected_rather_than_forced_through
     fork_checkout.run_git("update-ref", "refs/remotes/origin/a-child", stale)
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board(labels=["rebase"])), fork_checkout.git
+        a_stack(fork_checkout, the_board(labels=["rebase"])),
+        fork_checkout.git,
+        RecordingPullRequests(),
     )
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
@@ -595,12 +613,262 @@ def test_a_push_the_preflight_refuses_is_not_made(fork_checkout: ForkCheckout):
     fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "the base moved\n")
     before = fork_checkout.published_commit("origin", "a-parent")
 
-    outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git)
+    outcomes = restack(
+        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+    )
 
     parent = next(outcome for outcome in outcomes if outcome.branch == "a-parent")
     assert parent.outcome == RestackOutcome.REFUSED
     assert RefusalReason.FALSE_MERGE in parent.refusals
     assert fork_checkout.published_commit("origin", "a-parent") == before
+
+
+# %% reporting a branch back to its owner
+
+
+@dataclass
+class RecordingPullRequests:
+    """
+    Stands in for the fork, recording every write instead of making it.
+
+    The three writes it records were each probed against the live API before this existed
+    - a label replace, an issue comment and a body-only description write all succeed on
+    the credential a session carries - so what is faked here is the network, not the
+    permission.
+    """
+
+    states: dict[int, str] = dataclasses_field(default_factory=dict)
+    """
+    What ``mergeable_state`` to report per pull request number.
+    """
+
+    descriptions: dict[int, str] = dataclasses_field(default_factory=dict)
+    """
+    What description to report per pull request number.
+    """
+
+    titles: dict[int, str] = dataclasses_field(default_factory=dict)
+    """
+    What title to report per pull request number.
+    """
+
+    label_writes: list[tuple[int, tuple[str, ...]]] = dataclasses_field(
+        default_factory=list
+    )
+    """
+    Every label set written, in order.
+    """
+
+    comments: list[tuple[int, str]] = dataclasses_field(default_factory=list)
+    """
+    Every comment posted, in order.
+    """
+
+    description_writes: list[tuple[int, str]] = dataclasses_field(default_factory=list)
+    """
+    Every description written, in order.
+    """
+
+    def pull_request(self, number: int) -> dict:
+        """
+        :param number: The pull request to read.
+        :return: The fields the executor reads off one pull request.
+        """
+        return {
+            "number": number,
+            "mergeable_state": self.states.get(number, "clean"),
+            "body": self.descriptions.get(number, ""),
+            "title": self.titles.get(number, f"Pull request {number}"),
+        }
+
+    def replace_labels(self, number: int, labels: Sequence[str]) -> None:
+        """
+        :param number: The pull request to write.
+        :param labels: The complete label set to write.
+        """
+        self.label_writes.append((number, tuple(labels)))
+
+    def add_comment(self, number: int, body: str) -> str:
+        """
+        :param number: The pull request to comment on.
+        :param body: The comment.
+        :return: A stand-in for the comment's URL.
+        """
+        self.comments.append((number, body))
+        return f"https://example.invalid/comment/{len(self.comments)}"
+
+    def set_description(self, number: int, body: str) -> None:
+        """
+        :param number: The pull request to write.
+        :param body: The new description.
+        """
+        self.description_writes.append((number, body))
+        self.descriptions[number] = body
+
+
+def test_a_conflict_labels_the_branch_and_tells_its_owner(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A conflict this pass cannot resolve is somebody else's to fix, and a report that
+    only reaches a run summary reaches nobody.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-contested-file", "the parent's version\n")
+    fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
+    board = the_board()
+    board[1].session = "https://claude.ai/code/session_01ABCdef"
+    fork = RecordingPullRequests()
+
+    outcomes = restack(a_stack(fork_checkout, board), fork_checkout.git, fork)
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.CONFLICT
+    assert fork.label_writes == [(41, ("needs-resolution",))]
+    commented_on, comment = fork.comments[0]
+    assert commented_on == 41
+    assert "a-contested-file" in comment
+    assert "https://claude.ai/code/session_01ABCdef" in comment
+    assert child.reported_at == "https://example.invalid/comment/1"
+
+
+def test_a_label_write_keeps_every_label_the_branch_already_carried(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The write replaces the whole set, so a label this pass knows nothing about has to be
+    sent back with it.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-contested-file", "the parent's version\n")
+    fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
+    fork = RecordingPullRequests()
+
+    restack(
+        a_stack(fork_checkout, the_board(labels=["a-label-somebody-else-put-here"])),
+        fork_checkout.git,
+        fork,
+    )
+
+    assert fork.label_writes == [
+        (41, ("a-label-somebody-else-put-here", "needs-resolution"))
+    ]
+
+
+def test_a_branch_still_conflicting_is_withheld_without_being_relabelled(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Re-reporting the same conflict every run is what the label exists to prevent, so a
+    branch already carrying it is left entirely alone while it is still dirty.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    fork = RecordingPullRequests(states={41: "dirty"})
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_board(labels=["needs-resolution"])),
+        fork_checkout.git,
+        fork,
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.WITHHELD
+    assert fork.label_writes == []
+    assert fork.comments == []
+
+
+def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacked(
+    fork_checkout: ForkCheckout,
+):
+    """
+    GitHub reports ``dirty`` only while there are conflicts, so anything else means the
+    owner has resolved it and the branch rejoins the pass.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    fork = RecordingPullRequests(states={41: "clean"})
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_board(labels=["needs-resolution"])),
+        fork_checkout.git,
+        fork,
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork.label_writes == [(41, ())]
+
+
+# %% promotion
+
+
+def test_the_promotion_link_goes_into_the_description_and_the_branch_is_labelled(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    fork = RecordingPullRequests(
+        descriptions={40: "What this branch does.\n\nMore detail.\n"},
+        titles={40: "A parent branch"},
+    )
+
+    promoted = promote(a_stack(fork_checkout, the_board()), fork)
+
+    assert [entry.branch for entry in promoted] == ["a-parent"]
+    written_to, description = fork.description_writes[0]
+    assert written_to == 40
+    assert "## Promote" in description
+    assert promoted[0].url in description
+    assert "What this branch does." in description
+    assert fork.label_writes == [(40, ("cram2-link-sent",))]
+
+
+def test_a_branch_already_carrying_the_link_label_is_not_promoted_again(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    board = the_board()
+    board[0].labels = ["cram2-link-sent"]
+    fork = RecordingPullRequests()
+
+    promoted = promote(a_stack(fork_checkout, board), fork)
+
+    assert promoted == []
+    assert fork.description_writes == []
+
+
+def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
+    """
+    The description is rewritten on every run that rebuilds a link, so the section has to
+    be replaced in place - two Promote headings would leave a reader guessing which link
+    is current.
+    """
+    first = description_with_promotion_link("Prose.\n", "https://example.invalid/first")
+
+    second = description_with_promotion_link(first, "https://example.invalid/second")
+
+    assert second.count("## Promote") == 1
+    assert "https://example.invalid/second" in second
+    assert "https://example.invalid/first" not in second
+    assert second.startswith("Prose.")
+
+
+def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The label exists to stop a link being rebuilt; once the branch is in review the link
+    has been acted on, so leaving it would misreport the branch forever.
+    """
+    a_parent_and_child(fork_checkout)
+    board = the_board()
+    board[0].labels = ["cram2-link-sent", "in-review"]
+    fork = RecordingPullRequests()
+
+    cleared = clear_spent_promotion_labels(a_stack(fork_checkout, board), fork)
+
+    assert cleared == ("a-parent",)
+    assert fork.label_writes == [(40, ("in-review",))]
 
 
 # %% the report
@@ -614,7 +882,7 @@ def test_the_report_serialises_every_command_s_outcome(fork_checkout: ForkChecko
     report = build_report(
         stack,
         fast_forward(make_configuration(), fork_checkout.git),
-        restack(stack, fork_checkout.git),
+        restack(stack, fork_checkout.git, RecordingPullRequests()),
     )
     document = json.loads(report.as_json())
 
@@ -664,6 +932,28 @@ def test_every_command_is_reachable_from_the_command_line(fork_checkout: ForkChe
     for command in Command:
         result = run_maintenance(fork_checkout, command, "--help")
         assert result.returncode == MaintenanceExitCode.SUCCESS, result.stderr
+
+
+def test_a_run_with_no_credential_is_its_own_exit_status(fork_checkout: ForkCheckout):
+    """
+    Distinguishable from a missing board, since the fix is a token rather than a fetch.
+    """
+    fork_checkout.run_git("remote", "remove", "cram2")
+    without_a_token = {
+        name: value
+        for name, value in os.environ.items()
+        if name not in {"GH_TOKEN", "GITHUB_TOKEN"}
+    }
+
+    result = subprocess.run(
+        [sys.executable, str(MAINTENANCE_SCRIPT), Command.BOARD],
+        capture_output=True,
+        text=True,
+        cwd=fork_checkout.project_root,
+        env=without_a_token,
+    )
+
+    assert result.returncode == MaintenanceExitCode.CREDENTIAL_UNAVAILABLE
 
 
 def test_a_missing_board_is_its_own_exit_status(fork_checkout: ForkCheckout):
