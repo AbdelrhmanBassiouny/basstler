@@ -148,24 +148,40 @@ dashboard, kickoff and resolve run downstream reads as truth.
 
 So run this first, before the first edit:
 
+Create the branch and its draft pull request yourself, then hand the number
+over:
+
 ```bash
+git checkout -b <branch> <base-branch>
+git commit --allow-empty -m "Bootstrap <item-id>"
+git push -u origin <branch>
+# then create the draft pull request with your GitHub tool, and:
 source .claude/hooks/resolve-personal-notes-config.sh
 python3 "${PLAN_ITEM_BOOTSTRAP_SCRIPT}" open \
     --plan <plan-id> --item <item-id> \
     --branch <branch> --base <base-branch> \
     --session <this session's url> \
-    --pull-request-title <title> --pull-request-body <file>
+    --pull-request-number <number>
 python3 "${PLAN_ITEM_BOOTSTRAP_SCRIPT}" record \
     --plan <plan-id> --item <item-id> \
     --status in_progress --roadmap-section <file>
 ```
 
-`open` before `record`: the pull request number does not exist until the
-pull request does. `open` creates and publishes the branch, opens the draft
-pull request, and writes the branch, session and pull request number back
-onto the item as `in_progress`; `record` appends the approved plan to
+`open` before `record`: the pull request number does not exist until the pull
+request does. `open` writes the branch, session and pull request number onto
+the item and flips it to `in_progress`; `record` appends the approved plan to
 `roadmap.md`. Both print a one-line JSON report led by `status` and
 `exit_code`.
+
+**Why a session creates the pull request rather than the script.** The script
+can create one — with `--pull-request-title`/`--pull-request-body` instead of
+`--pull-request-number`, verified live — but a pull request it creates is
+attributed to the app its requests are proxied through rather than to the
+person whose work it is, the same authorship problem `AGENTS.md` rules out for
+commits. Creating it yourself keeps your identity on it. The creating path is
+there for an unattended run whose credential is a real one; if you use it,
+`open` publishes the branch too, so the three git commands above are yours to
+skip.
 
 The branch name and the base branch are this skill's judgment, not the
 script's: the base comes from step 2's dependency readiness, and the branch
