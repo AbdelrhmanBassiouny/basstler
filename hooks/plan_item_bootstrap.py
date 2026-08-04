@@ -29,7 +29,8 @@ Usage:
         --status <status> --roadmap-section <file> [--title <title>] [--track <track>]
     python3 plan_item_bootstrap.py open --plan <plan-id> --item <item-id> \\
         --branch <branch> --base <branch> --session <url> \\
-        --pull-request-title <title> --pull-request-body <file>
+        (--pull-request-number <number> | --pull-request-title <title> \\
+         --pull-request-body <file>)
 
 Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller acting on
 the document never has to decode an integer back into a meaning.
@@ -43,7 +44,10 @@ the document never has to decode an integer back into a meaning.
    The manifest is edited by patching only the lines that change. A full YAML
    load-mutate-dump round trip is rejected for the reason ``sync_manifest_status.py``
    records: even a format-preserving library re-flows wrapped strings, turning a
-   one-field edit into an unreadable diff across the whole file.
+   one-field edit into an unreadable diff across the whole file. Every key, filename and
+   status this module writes is named once in :class:`PlanField`, :class:`PlanDocument`
+   and :class:`ItemStatus`, and rendered through :class:`ItemFieldLine`, so no caller -
+   tests included - writes a second copy of a manifest line by hand.
 """
 
 from __future__ import annotations
@@ -57,10 +61,11 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 import yaml
 
@@ -69,20 +74,164 @@ GITHUB_API_ROOT = "https://api.github.com"
 Where pull requests are created, overridable for a GitHub Enterprise host.
 """
 
-CONFIGURATION_SCRIPT = ".claude/hooks/resolve-personal-notes-config.sh"
+HOOKS_DIRECTORY = ".claude/hooks"
 """
-The shell script that owns personal-notes remote/branch resolution, sourced rather than
-reimplemented so the two can never disagree.
-"""
-
-SAVE_PLAN_SCRIPT = ".claude/hooks/save-plan.sh"
-"""
-The script that pushes an edited manifest and roadmap to the personal-notes branch.
+Where this repository keeps the scripts that read and write personal-notes data.
 """
 
-ITEM_START_PATTERN = re.compile(r"^\s*- id:")
+
+# %% the vocabulary a plan manifest is written in
+
+
+class HookScript(StrEnum):
+    """
+    The hook scripts this module drives, named once so a caller - a test installing them
+    into a scratch layout, or this module invoking one - never spells a filename itself.
+    """
+
+    CONFIGURATION = "resolve-personal-notes-config.sh"
+    SAVE_PLAN = "save-plan.sh"
+    PLAN_ITEM_BOOTSTRAP = "plan_item_bootstrap.py"
+
+    @property
+    def path(self) -> str:
+        """
+        The script's path from the project root.
+        """
+        return f"{HOOKS_DIRECTORY}/{self.value}"
+
+
+class PlanDocument(StrEnum):
+    """
+    The two files a plan is kept in, beside each other on the personal-notes branch.
+
+    ``roadmap.md`` is a fixed sibling filename rather than a configurable one, so both
+    names belong together here.
+    """
+
+    MANIFEST = "plan.yaml"
+    ROADMAP = "roadmap.md"
+
+
+class PlanField(StrEnum):
+    """
+    The ``plan.yaml`` keys this module reads or writes.
+
+    Naming them once is what lets a manifest line be rendered rather than typed: see
+    :class:`ItemFieldLine`. The full schema is documented in ``plan-schema.md``; this
+    enum carries the subset bootstrapping an item touches.
+    """
+
+    IDENTIFIER = "id"
+    TITLE = "title"
+    BRANCH = "branch"
+    REPOSITORY = "repository"
+    DEFAULT_REPOSITORY = "default_repository"
+    PULL_REQUEST_NUMBER = "pull_request_number"
+    TRACK = "track"
+    DEPENDS_ON = "depends_on"
+    STATUS = "status"
+    SESSION = "session"
+    NOTES = "notes"
+    BLOCKERS = "blockers"
+    ITEMS = "items"
+
+    @property
+    def spans_following_lines(self) -> bool:
+        """
+        Whether this field's value may continue over the lines beneath it.
+
+        A folded or list value swallows anything inserted after it, so a new field is
+        inserted before the first such field in the block rather than at its end.
+        """
+        return self in FOLDED_PLAN_FIELDS
+
+
+FOLDED_PLAN_FIELDS = frozenset({PlanField.NOTES, PlanField.BLOCKERS})
 """
-Matches the first line of an item block in ``plan.yaml``.
+The item fields whose values routinely run over several lines.
+"""
+
+
+class ItemStatus(StrEnum):
+    """
+    The statuses ``plan.yaml``'s ``status`` field accepts.
+
+    Mirrors ``build_dashboard.py``'s own enum, which lives in the plan-dashboard skill
+    directory and needs jinja2 and markdown to import, so a hook cannot reach it. The one
+    definition both share arrives with the package migration that gives them a home.
+    """
+
+    NOT_STARTED = "not_started"
+    IN_PROGRESS = "in_progress"
+    BLOCKED = "blocked"
+    DEFERRED = "deferred"
+    DONE = "done"
+
+
+ITEM_FIELD_INDENT = "    "
+"""
+The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
+"""
+
+ITEM_MARKER = "  - "
+"""
+What opens an item block, the list marker its first field sits behind.
+"""
+
+
+@dataclass(frozen=True)
+class ItemFieldLine:
+    """
+    One ``<field>: <value>`` line of an item block, as it is written in the manifest.
+
+    Rendering a line rather than writing one is what keeps this module's output and every
+    assertion about it derived from the same place.
+    """
+
+    field: PlanField
+    """
+    The key this line sets.
+    """
+
+    value: str
+    """
+    The value, already in the form YAML should carry it - see :meth:`quoting`.
+    """
+
+    @classmethod
+    def quoting(cls, field: PlanField, value: str) -> ItemFieldLine:
+        """
+        Build a line whose value is written as a double-quoted string.
+
+        :param field: The key to set.
+        :param value: The value to quote.
+        :return: The line.
+        """
+        return cls(field, f'"{value}"')
+
+    def render(self, opening_the_item: bool = False) -> str:
+        """
+        The line as it appears in the manifest, newline included.
+
+        :param opening_the_item: Whether this is the item block's first line, which
+            carries the list marker instead of the field indent.
+        :return: The rendered line.
+        """
+        prefix = ITEM_MARKER if opening_the_item else ITEM_FIELD_INDENT
+        return f"{prefix}{self.field.value}: {self.value}\n"
+
+    @property
+    def pattern(self) -> re.Pattern[str]:
+        """
+        Matches this line's field wherever it already appears in an item block.
+        """
+        return re.compile(rf"^\s*{re.escape(self.field.value)}:\s*.*$")
+
+
+ITEM_START_PATTERN = re.compile(rf"^\s*- {re.escape(PlanField.IDENTIFIER.value)}:")
+"""
+Matches the first line of an item block, which is always its ``id``.
 
 Same anchor ``sync_manifest_status.py`` uses to find item boundaries in raw text.
 """
@@ -92,32 +241,13 @@ TOP_LEVEL_KEY_PATTERN = re.compile(r"^\S")
 Matches a top-level ``plan.yaml`` key, which is where the last item block ends.
 """
 
-FOLDED_FIELD_PATTERN = re.compile(r"^\s*(notes|blockers):")
+FOLDED_FIELD_PATTERN = re.compile(
+    rf"^\s*({'|'.join(sorted(field.value for field in FOLDED_PLAN_FIELDS))}):"
+)
 """
-Matches an item field whose value may run over several following lines, so a new field
-is inserted before it rather than after.
+Matches an item field whose value may run over the following lines, derived from
+:data:`FOLDED_PLAN_FIELDS` rather than listing those field names a second time.
 """
-
-ITEM_FIELD_INDENT = "    "
-"""
-The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
-"""
-
-
-class ItemStatus(StrEnum):
-    """
-    The statuses ``plan.yaml``'s ``status`` field accepts.
-
-    Mirrors ``build_dashboard.py``'s own enum, which lives in the plan-dashboard skill
-    directory and is not importable from here until ``development_tooling`` gives both a
-    shared home.
-    """
-
-    NOT_STARTED = "not_started"
-    IN_PROGRESS = "in_progress"
-    BLOCKED = "blocked"
-    DEFERRED = "deferred"
-    DONE = "done"
 
 
 class ExitCode(IntEnum):
@@ -151,75 +281,238 @@ class ExitCode(IntEnum):
 # %% failures
 
 
-class BootstrapError(Exception):
+@dataclass
+class BootstrapError(Exception, ABC):
     """
     Base for every refusal this tool reports, each carrying its own exit status.
+
+    Subclasses hold the context that explains the refusal as typed fields and compose it
+    into the message at construction, so no call site formats one. Mirrors ``krrood``'s
+    ``DataclassException`` idiom in a stdlib-only base, which is the boundary decision 12
+    records for this tooling.
     """
 
-    exit_code = ExitCode.SUCCESS
+    exit_code: ClassVar[ExitCode] = ExitCode.SUCCESS
     """
     The process status this refusal exits with.
     """
 
+    def __post_init__(self) -> None:
+        """
+        Compose the message from the subclass's own description and advice.
+        """
+        correction = self.suggest_correction()
+        message = self.error_message()
+        super().__init__(f"{message}\n{correction}" if correction else message)
 
+    def __str__(self) -> str:
+        """
+        The composed message, rather than a repr of the dataclass fields.
+        """
+        return Exception.__str__(self)
+
+    @abstractmethod
+    def error_message(self) -> str:
+        """
+        :return: What went wrong.
+        """
+
+    @abstractmethod
+    def suggest_correction(self) -> str:
+        """
+        :return: What to do about it, or an empty string when there is nothing to add.
+        """
+
+
+@dataclass
 class UnknownPlanError(BootstrapError):
     """
     Raised when the named plan has no manifest on the personal-notes branch.
     """
 
-    exit_code = ExitCode.UNKNOWN_PLAN
+    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_PLAN
+
+    plan_identifier: str
+    """
+    The plan that could not be found.
+    """
+
+    manifest_path: str
+    """
+    Where its manifest was looked for.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"no plan {self.plan_identifier!r} on the personal-notes branch "
+            f"({self.manifest_path} is not there)"
+        )
+
+    def suggest_correction(self) -> str:
+        return "Run /plan-create to bootstrap it, or check the plan id for a typo."
 
 
+@dataclass
 class UnknownItemError(BootstrapError):
     """
     Raised when the named item is absent from an otherwise resolvable plan.
     """
 
-    exit_code = ExitCode.UNKNOWN_ITEM
+    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_ITEM
+
+    plan_identifier: str
+    """
+    The plan that was searched.
+    """
+
+    item_identifier: str
+    """
+    The item that is not in it.
+    """
+
+    def error_message(self) -> str:
+        return f"no item {self.item_identifier!r} in plan {self.plan_identifier!r}"
+
+    def suggest_correction(self) -> str:
+        return (
+            "Record the item first - /add-plan-item decides where new work belongs, and "
+            "this tool's record operation writes the entry."
+        )
 
 
+@dataclass
 class IncompleteNewItemError(BootstrapError):
     """
     Raised when an item that does not exist yet is recorded without the fields needed to
     write its entry.
     """
 
-    exit_code = ExitCode.INCOMPLETE_NEW_ITEM
+    exit_code: ClassVar[ExitCode] = ExitCode.INCOMPLETE_NEW_ITEM
+
+    item_identifier: str
+    """
+    The item that would have been created.
+    """
+
+    missing_fields: tuple[PlanField, ...]
+    """
+    The fields a new entry cannot omit that were not supplied.
+    """
+
+    def error_message(self) -> str:
+        missing = ", ".join(field.value for field in self.missing_fields)
+        return (
+            f"item {self.item_identifier!r} is not in the plan yet, so recording it "
+            f"needs {missing}"
+        )
+
+    def suggest_correction(self) -> str:
+        return "Pass " + " and ".join(
+            f"--{field.value.replace('_', '-')}" for field in self.missing_fields
+        )
 
 
+@dataclass
 class BranchAlreadyPublishedError(BootstrapError):
     """
     Raised when the branch to open already exists on the remote, which means work is
     underway and overwriting it would discard someone's commits.
     """
 
-    exit_code = ExitCode.BRANCH_ALREADY_PUBLISHED
+    exit_code: ClassVar[ExitCode] = ExitCode.BRANCH_ALREADY_PUBLISHED
+
+    branch: str
+    """
+    The branch that is already published.
+    """
+
+    remote: str
+    """
+    The remote carrying it.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"branch {self.branch!r} already exists on {self.remote!r} - it is already "
+            "being worked, and republishing it would discard those commits"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Pass --pull-request-number if its pull request already exists, or choose a "
+            "branch name that is not taken."
+        )
 
 
+@dataclass
 class PullRequestDetailsMissingError(BootstrapError):
     """
-    Raised when opening the work must create a pull request but was given neither a
-    title nor a body to create it from.
+    Raised when opening the work must create a pull request but was given nothing to
+    create it from.
     """
 
-    exit_code = ExitCode.PULL_REQUEST_DETAILS_MISSING
+    exit_code: ClassVar[ExitCode] = ExitCode.PULL_REQUEST_DETAILS_MISSING
+
+    item_identifier: str
+    """
+    The item whose work was being opened.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"opening {self.item_identifier!r} has to create a pull request, but was "
+            "given neither a title nor a body to create one from"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Pass --pull-request-number for one you already created - which keeps your "
+            "identity on it - or --pull-request-title and --pull-request-body."
+        )
 
 
+@dataclass
 class PullRequestRefusedError(BootstrapError):
     """
     Raised when the remote declines to create the pull request.
     """
 
-    exit_code = ExitCode.PULL_REQUEST_REFUSED
+    exit_code: ClassVar[ExitCode] = ExitCode.PULL_REQUEST_REFUSED
+
+    detail: str
+    """
+    What the remote said.
+    """
+
+    def error_message(self) -> str:
+        return f"the remote refused to create the pull request: {self.detail}"
+
+    def suggest_correction(self) -> str:
+        return (
+            "The branch is published, so create the pull request yourself and re-run "
+            "with --pull-request-number."
+        )
 
 
+@dataclass
 class NotesBranchUnavailableError(BootstrapError):
     """
     Raised when the personal-notes branch cannot be fetched, so there is no plan data to
     read or write.
     """
 
-    exit_code = ExitCode.UNKNOWN_PLAN
+    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_PLAN
+
+    detail: str
+    """
+    Why the fetch failed.
+    """
+
+    def error_message(self) -> str:
+        return f"could not fetch the personal-notes branch: {self.detail}"
+
+    def suggest_correction(self) -> str:
+        return f"Run {HOOKS_DIRECTORY}/create-personal-notes-branch.sh first."
 
 
 # %% the plan on the personal-notes branch
@@ -247,17 +540,12 @@ def run_git(*arguments: str, project_root: Path) -> str:
 @dataclass(frozen=True)
 class PlanLocation:
     """
-    Where one plan's manifest and roadmap live, as the shell configuration resolves it.
+    Where one plan's documents live, as the shell configuration resolves it.
     """
 
-    manifest_path: str
+    paths: dict[PlanDocument, str]
     """
-    The manifest's path within the personal-notes branch.
-    """
-
-    roadmap_path: str
-    """
-    The roadmap's path within the personal-notes branch.
+    Each document's path within the personal-notes branch.
     """
 
     @classmethod
@@ -265,9 +553,10 @@ class PlanLocation:
         """
         Fetch the personal-notes branch and resolve *plan_identifier*'s paths within it.
 
-        Sources the shell configuration and calls its own fetch function rather than
-        re-deriving the remote/branch precedence, so this and the hook scripts can never
-        disagree about which branch a plan is on.
+        Sources the shell configuration and calls its own resolution functions rather
+        than re-deriving where a plan lives, so this and the hook scripts can never
+        disagree - which is also why a test asserting on those paths asks this rather
+        than spelling them out.
 
         :param plan_identifier: The plan's id.
         :param project_root: The repository to resolve within.
@@ -278,7 +567,8 @@ class PlanLocation:
             [
                 "bash",
                 "-c",
-                f'source "{CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch && '
+                f'source "{HookScript.CONFIGURATION.path}" && '
+                "fetch_personal_notes_branch && "
                 'printf "%s\\n%s\\n" '
                 '"$(plan_manifest_path "$1")" "$(plan_roadmap_path "$1")"',
                 "plan_item_bootstrap",
@@ -290,11 +580,24 @@ class PlanLocation:
         )
         if probe.returncode != 0:
             raise NotesBranchUnavailableError(
-                "could not fetch the personal-notes branch: "
-                f"{probe.stderr.strip() or 'no personal-notes branch found'}"
+                detail=probe.stderr.strip() or "no personal-notes branch found"
             )
         manifest_path, roadmap_path = probe.stdout.strip().split("\n")
-        return cls(manifest_path=manifest_path, roadmap_path=roadmap_path)
+        return cls(
+            paths={
+                PlanDocument.MANIFEST: manifest_path,
+                PlanDocument.ROADMAP: roadmap_path,
+            }
+        )
+
+    def path_of(self, document: PlanDocument) -> str:
+        """
+        One document's path within the personal-notes branch.
+
+        :param document: The document wanted.
+        :return: Its path.
+        """
+        return self.paths[document]
 
 
 @dataclass(frozen=True)
@@ -332,24 +635,22 @@ class PlanDocuments:
         :return: The loaded documents.
         """
         location = PlanLocation.resolve(plan_identifier, project_root)
-        try:
-            manifest_text = run_git(
-                "show",
-                f"FETCH_HEAD:{location.manifest_path}",
-                project_root=project_root,
-            )
-            roadmap_text = run_git(
-                "show", f"FETCH_HEAD:{location.roadmap_path}", project_root=project_root
-            )
-        except subprocess.CalledProcessError as error:
-            raise UnknownPlanError(
-                f"no plan {plan_identifier!r} on the personal-notes branch "
-                f"({location.manifest_path} is not there)"
-            ) from error
+        contents = {}
+        for document in PlanDocument:
+            path = location.path_of(document)
+            try:
+                contents[document] = (
+                    run_git("show", f"FETCH_HEAD:{path}", project_root=project_root)
+                    + "\n"
+                )
+            except subprocess.CalledProcessError as error:
+                raise UnknownPlanError(
+                    plan_identifier=plan_identifier, manifest_path=path
+                ) from error
         return cls(
             plan_identifier=plan_identifier,
-            manifest_text=manifest_text + "\n",
-            roadmap_text=roadmap_text + "\n",
+            manifest_text=contents[PlanDocument.MANIFEST],
+            roadmap_text=contents[PlanDocument.ROADMAP],
         )
 
     @property
@@ -365,10 +666,13 @@ class PlanDocuments:
 
         :param item_identifier: The item's id.
         :raises UnknownItemError: If no item carries that id.
-        :return: The item's own ``repository``, or the plan's ``default_repository``.
+        :return: The item's own repository, or the plan's default one.
         """
         item = self.item(item_identifier)
-        return item.get("repository") or self.manifest["default_repository"]
+        return (
+            item.get(PlanField.REPOSITORY)
+            or self.manifest[PlanField.DEFAULT_REPOSITORY]
+        )
 
     def item(self, item_identifier: str) -> dict[str, Any]:
         """
@@ -378,11 +682,14 @@ class PlanDocuments:
         :raises UnknownItemError: If no item matches.
         :return: The item's mapping.
         """
-        for candidate in self.manifest.get("items", []):
-            if (candidate.get("id") or candidate.get("branch")) == item_identifier:
+        for candidate in self.manifest.get(PlanField.ITEMS, []):
+            identifier = candidate.get(PlanField.IDENTIFIER) or candidate.get(
+                PlanField.BRANCH
+            )
+            if identifier == item_identifier:
                 return candidate
         raise UnknownItemError(
-            f"no item {item_identifier!r} in plan {self.plan_identifier!r}"
+            plan_identifier=self.plan_identifier, item_identifier=item_identifier
         )
 
     def has_item(self, item_identifier: str) -> bool:
@@ -409,19 +716,21 @@ class PlanDocuments:
         """
         with tempfile.TemporaryDirectory() as scratch_directory:
             scratch = Path(scratch_directory)
-            manifest_file = scratch / "plan.yaml"
-            roadmap_file = scratch / "roadmap.md"
-            manifest_file.write_text(manifest_text)
-            roadmap_file.write_text(roadmap_text)
+            written = {
+                PlanDocument.MANIFEST: manifest_text,
+                PlanDocument.ROADMAP: roadmap_text,
+            }
+            for document, content in written.items():
+                (scratch / document.value).write_text(content)
             subprocess.run(
                 [
                     "bash",
-                    SAVE_PLAN_SCRIPT,
+                    HookScript.SAVE_PLAN.path,
                     self.plan_identifier,
                     "--manifest",
-                    str(manifest_file),
+                    str(scratch / PlanDocument.MANIFEST.value),
                     "--roadmap",
-                    str(roadmap_file),
+                    str(scratch / PlanDocument.ROADMAP.value),
                 ],
                 cwd=project_root,
                 capture_output=True,
@@ -455,56 +764,67 @@ def item_block_bounds(manifest_lines: list[str]) -> list[tuple[int, int]]:
         ),
         len(manifest_lines),
     )
-    boundaries = starts[1:] + [end_of_items]
-    return list(zip(starts, boundaries))
+    return list(zip(starts, starts[1:] + [end_of_items]))
 
 
 def locate_item_block(
-    manifest_lines: list[str], item_identifier: str
+    manifest_lines: list[str], plan_identifier: str, item_identifier: str
 ) -> tuple[int, int]:
     """
     Find one item's block within the manifest text.
 
     :param manifest_lines: The manifest, split into lines.
+    :param plan_identifier: The plan being edited, for the error message.
     :param item_identifier: The item's id.
     :raises UnknownItemError: If no block starts with that id.
     :return: The block's half-open line range.
     """
+    opener = f"- {PlanField.IDENTIFIER.value}:"
     for start, end in item_block_bounds(manifest_lines):
-        if manifest_lines[start].strip().removeprefix("- id:").strip() == (
-            item_identifier
+        if (
+            manifest_lines[start].strip().removeprefix(opener).strip()
+            == item_identifier
         ):
             return start, end
     raise UnknownItemError(
-        f"no item block for {item_identifier!r} in the manifest text"
+        plan_identifier=plan_identifier, item_identifier=item_identifier
     )
 
 
 def apply_item_fields(
-    manifest_text: str, item_identifier: str, fields: dict[str, str]
+    manifest_text: str,
+    plan_identifier: str,
+    item_identifier: str,
+    lines_to_set: list[ItemFieldLine],
 ) -> str:
     """
-    Set each of *fields* on one item, patching an existing line or inserting a new one.
+    Set each of *lines_to_set* on one item, patching an existing line or inserting a new
+    one.
 
     Every other line is left byte-for-byte untouched, so comments, key order, string
     wrapping and quoting all survive.
 
     :param manifest_text: The manifest's raw text.
+    :param plan_identifier: The plan being edited.
     :param item_identifier: The item to patch.
-    :param fields: Field names mapped to their rendered YAML values.
+    :param lines_to_set: The field lines to write.
     :raises UnknownItemError: If the item has no block in the text.
     :return: The patched manifest text.
     """
     lines = manifest_text.split("\n")
-    start, end = locate_item_block(lines, item_identifier)
-    for field_name, value in fields.items():
-        field_pattern = re.compile(rf"^(\s*{re.escape(field_name)}:\s*).*$")
+    start, end = locate_item_block(lines, plan_identifier, item_identifier)
+    for field_line in lines_to_set:
+        rendered = field_line.render().rstrip("\n")
         existing = next(
-            (index for index in range(start, end) if field_pattern.match(lines[index])),
+            (
+                index
+                for index in range(start, end)
+                if field_line.pattern.match(lines[index])
+            ),
             None,
         )
         if existing is not None:
-            lines[existing] = f"{ITEM_FIELD_INDENT}{field_name}: {value}"
+            lines[existing] = rendered
             continue
         insertion = next(
             (
@@ -514,7 +834,7 @@ def apply_item_fields(
             ),
             last_populated_line(lines, start, end) + 1,
         )
-        lines.insert(insertion, f"{ITEM_FIELD_INDENT}{field_name}: {value}")
+        lines.insert(insertion, rendered)
         end += 1
     return "\n".join(lines)
 
@@ -542,18 +862,28 @@ def render_new_item(request: ItemRecordRequest) -> str:
     :raises IncompleteNewItemError: If a field a new entry cannot omit is missing.
     :return: The block's text, newline-terminated.
     """
-    if not request.title or not request.track:
-        raise IncompleteNewItemError(
-            f"item {request.item_identifier!r} is not in the plan yet, so recording it "
-            "needs --title and --track"
+    missing = tuple(
+        field
+        for field, value in (
+            (PlanField.TITLE, request.title),
+            (PlanField.TRACK, request.track),
         )
-    return (
-        f"  - id: {request.item_identifier}\n"
-        f'{ITEM_FIELD_INDENT}title: "{request.title}"\n'
-        f"{ITEM_FIELD_INDENT}branch: null\n"
-        f"{ITEM_FIELD_INDENT}track: {request.track}\n"
-        f"{ITEM_FIELD_INDENT}depends_on: []\n"
-        f"{ITEM_FIELD_INDENT}status: {request.status.value}\n"
+        if not value
+    )
+    if missing:
+        raise IncompleteNewItemError(
+            item_identifier=request.item_identifier, missing_fields=missing
+        )
+    opening = ItemFieldLine(PlanField.IDENTIFIER, request.item_identifier)
+    body = [
+        ItemFieldLine.quoting(PlanField.TITLE, request.title),
+        ItemFieldLine(PlanField.BRANCH, "null"),
+        ItemFieldLine(PlanField.TRACK, request.track),
+        ItemFieldLine(PlanField.DEPENDS_ON, "[]"),
+        ItemFieldLine(PlanField.STATUS, request.status.value),
+    ]
+    return opening.render(opening_the_item=True) + "".join(
+        line.render() for line in body
     )
 
 
@@ -675,9 +1005,9 @@ class BootstrapReport:
             "dashboard_command": self.dashboard_command,
         }
         if self.branch is not None:
-            document["branch"] = self.branch
+            document[PlanField.BRANCH.value] = self.branch
         if self.pull_request_number is not None:
-            document["pull_request_number"] = self.pull_request_number
+            document[PlanField.PULL_REQUEST_NUMBER.value] = self.pull_request_number
             document["pull_request_url"] = self.pull_request_url
         return document
 
@@ -700,8 +1030,9 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
     else:
         manifest_text = apply_item_fields(
             documents.manifest_text,
+            request.plan_identifier,
             request.item_identifier,
-            {"status": request.status.value},
+            [ItemFieldLine(PlanField.STATUS, request.status.value)],
         )
 
     roadmap_text = append_roadmap_section(
@@ -852,7 +1183,7 @@ class GitHubPullRequestOpener:
                 created = json.loads(response.read())
         except urllib.error.HTTPError as error:
             raise PullRequestRefusedError(
-                f"GitHub refused to create the pull request ({error.code}): "
+                detail=f"{error.code} "
                 f"{error.read().decode(errors='replace').strip()}"
             ) from error
         return CreatedPullRequest(
@@ -873,8 +1204,8 @@ class GitHubPullRequestOpener:
 @dataclass(frozen=True)
 class WorkOpenRequest:
     """
-    What opening an item's work needs: the branch to create and the pull request to
-    open on it.
+    What opening an item's work needs: the branch to create and the pull request to open
+    on it.
     """
 
     plan_identifier: str
@@ -920,9 +1251,9 @@ class WorkOpenRequest:
     A pull request the caller has already created, recorded instead of creating one.
 
     A pull request this module creates is attributed to the app the request is proxied
-    through rather than to the person running it, so a caller that can create one under
-    its own identity should, and hand the number here. Left unset, the module creates it
-    - which is what an unattended run with no session has to do.
+    through rather than to the person whose work it is, so a caller that can create one
+    under its own identity should, and hand the number here. Left unset, the module
+    creates it - which is what an unattended run with no session has to do.
     """
 
 
@@ -981,11 +1312,7 @@ class WorkOpener:
             project_root=self.project_root,
         )
         run_git(
-            "push",
-            "-u",
-            self.remote,
-            request.branch,
-            project_root=self.project_root,
+            "push", "-u", self.remote, request.branch, project_root=self.project_root
         )
 
 
@@ -1011,6 +1338,8 @@ def open_work(
     :param pull_request_opener: What creates the pull request, defaulting to GitHub.
     :param remote: The remote to publish the branch to.
     :raises UnknownItemError: If the plan does not track the item yet.
+    :raises PullRequestDetailsMissingError: If it must create a pull request but was
+        given nothing to create one from.
     :raises BranchAlreadyPublishedError: If the branch already exists on the remote.
     :raises PullRequestRefusedError: If the pull request could not be created.
     :return: What was opened.
@@ -1019,10 +1348,7 @@ def open_work(
     if request.pull_request_number is None and not (
         request.pull_request_title and request.pull_request_body
     ):
-        raise PullRequestDetailsMissingError(
-            "opening the work has to create the pull request, so it needs a title and "
-            "a body - or a --pull-request-number for one already created"
-        )
+        raise PullRequestDetailsMissingError(item_identifier=request.item_identifier)
     documents = PlanDocuments.load(request.plan_identifier, project_root)
     repository = documents.repository_for(request.item_identifier)
 
@@ -1030,10 +1356,7 @@ def open_work(
     if not work.branch_is_published(request.branch):
         work.publish(request)
     elif request.pull_request_number is None:
-        raise BranchAlreadyPublishedError(
-            f"branch {request.branch!r} already exists on {remote!r} - it is already "
-            "being worked, and republishing it would discard those commits"
-        )
+        raise BranchAlreadyPublishedError(branch=request.branch, remote=remote)
 
     created = (
         CreatedPullRequest(number=request.pull_request_number, html_url=None)
@@ -1051,13 +1374,14 @@ def open_work(
 
     manifest_text = apply_item_fields(
         documents.manifest_text,
+        request.plan_identifier,
         request.item_identifier,
-        {
-            "branch": request.branch,
-            "pull_request_number": str(created.number),
-            "session": request.session_url,
-            "status": ItemStatus.IN_PROGRESS.value,
-        },
+        [
+            ItemFieldLine(PlanField.BRANCH, request.branch),
+            ItemFieldLine(PlanField.PULL_REQUEST_NUMBER, str(created.number)),
+            ItemFieldLine(PlanField.SESSION, request.session_url),
+            ItemFieldLine(PlanField.STATUS, ItemStatus.IN_PROGRESS.value),
+        ],
     )
     documents.save(manifest_text, documents.roadmap_text, project_root)
     return BootstrapReport(
