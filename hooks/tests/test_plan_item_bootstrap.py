@@ -6,9 +6,9 @@ Run against the local scratch repository fixture rather than a real remote, and 
 a recording pull request opener rather than GitHub, so nothing here needs network access
 or credentials.
 
-Every manifest line asserted on is rendered by the :class:`PlanField` that owns it, and
-every path by the :class:`PlanDocument` that lives at it, so a test cannot pin a second,
-independently-drifting copy of the manifest's own vocabulary.
+Every manifest line asserted on is rendered by the :class:`ManifestKey` that owns it,
+and every path by the :class:`PlanDocument` that lives at it, so a test cannot pin a
+second, independently-drifting copy of the manifest's own vocabulary.
 """
 
 from __future__ import annotations
@@ -25,17 +25,20 @@ import yaml
 
 import plan_item_bootstrap
 from plan_item_bootstrap import (
+    BLOCK_STYLED_KEYS,
     PLANS_DIRECTORY,
     CreatedPullRequest,
     ExitCode,
     HookScript,
     ItemRecordRequest,
     ItemStatus,
+    KeySpecification,
+    ManifestKey,
     PlanDocument,
-    PlanField,
     PullRequestRequest,
     UnknownItemError,
     UnknownPlanError,
+    ValueStyle,
     WorkOpenRequest,
     open_work,
     record_item,
@@ -77,15 +80,15 @@ The session recorded on an item whose work was opened.
 """
 
 
-def manifest_line(field: PlanField, value: str) -> str:
+def manifest_line(manifest_key: ManifestKey, value: str) -> str:
     """
-    One manifest line as the field that owns it writes it.
+    One manifest line as the key that owns it writes it.
 
-    :param field: The key the line sets.
+    :param manifest_key: The key the line sets.
     :param value: The value it carries.
     :return: The rendered line.
     """
-    return field.render(value)
+    return manifest_key.render(value)
 
 
 # %% fixtures
@@ -259,7 +262,7 @@ def test_recording_an_existing_item_sets_its_status(
     assert result.exit_code is ExitCode.SUCCESS
     published = published_plan(bootstrap_repository)
     assert (
-        manifest_line(PlanField.STATUS, ItemStatus.IN_PROGRESS.value)
+        manifest_line(ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value)
         in published[PlanDocument.MANIFEST]
     )
 
@@ -273,8 +276,8 @@ def test_recording_leaves_every_other_manifest_line_byte_identical(
     )
 
     expected = PLAN_MANIFEST.replace(
-        manifest_line(PlanField.STATUS, ItemStatus.NOT_STARTED.value),
-        manifest_line(PlanField.STATUS, ItemStatus.IN_PROGRESS.value),
+        manifest_line(ManifestKey.STATUS, ItemStatus.NOT_STARTED.value),
+        manifest_line(ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value),
         1,
     )
     assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == expected
@@ -314,16 +317,16 @@ def test_recording_a_new_item_appends_it_to_the_manifest(
     manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
     assert manifest.startswith(PLAN_MANIFEST)
     assert manifest.endswith(
-        PlanField.IDENTIFIER.render(NEW_ITEM, opening_the_item=True)
-        + manifest_line(PlanField.TITLE, "A brand new item")
-        + manifest_line(PlanField.BRANCH, "null")
-        + manifest_line(PlanField.TRACK, "a-track")
-        + manifest_line(PlanField.DEPENDS_ON, "[]")
-        + manifest_line(PlanField.STATUS, ItemStatus.NOT_STARTED.value)
+        ManifestKey.IDENTIFIER.render(NEW_ITEM, opening_the_item=True)
+        + manifest_line(ManifestKey.TITLE, "A brand new item")
+        + manifest_line(ManifestKey.BRANCH, "null")
+        + manifest_line(ManifestKey.TRACK, "a-track")
+        + manifest_line(ManifestKey.DEPENDS_ON, "[]")
+        + manifest_line(ManifestKey.STATUS, ItemStatus.NOT_STARTED.value)
     )
 
 
-def test_recording_a_new_item_without_a_title_names_the_field_it_needs(
+def test_recording_a_new_item_without_a_title_names_the_key_it_needs(
     bootstrap_repository: ScratchRepository,
 ):
     with pytest.raises(plan_item_bootstrap.IncompleteNewItemError) as refusal:
@@ -337,7 +340,7 @@ def test_recording_a_new_item_without_a_title_names_the_field_it_needs(
             project_root=bootstrap_repository.project_root,
         )
 
-    assert refusal.value.missing_fields == (PlanField.TITLE,)
+    assert refusal.value.missing_keys == (ManifestKey.TITLE,)
 
 
 def test_recording_against_an_unknown_plan_is_refused(
@@ -369,13 +372,13 @@ def test_opening_writes_the_branch_pull_request_and_session_onto_the_item(
     assert result.exit_code is ExitCode.SUCCESS
     assert result.pull_request_number == 143
     manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
-    for field_written, value in (
-        (PlanField.BRANCH, NEW_BRANCH),
-        (PlanField.PULL_REQUEST_NUMBER, "143"),
-        (PlanField.SESSION, SESSION_URL),
-        (PlanField.STATUS, ItemStatus.IN_PROGRESS.value),
+    for written_key, value in (
+        (ManifestKey.BRANCH, NEW_BRANCH),
+        (ManifestKey.PULL_REQUEST_NUMBER, "143"),
+        (ManifestKey.SESSION, SESSION_URL),
+        (ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value),
     ):
-        assert manifest_line(field_written, value) in manifest
+        assert manifest_line(written_key, value) in manifest
 
 
 def test_opening_asks_for_a_draft_pull_request_against_the_plans_repository(
@@ -500,7 +503,7 @@ def test_a_supplied_pull_request_number_is_recorded_without_creating_one(
     assert opener.requests == []
     assert result.pull_request_number == 57
     assert (
-        manifest_line(PlanField.PULL_REQUEST_NUMBER, "57")
+        manifest_line(ManifestKey.PULL_REQUEST_NUMBER, "57")
         in published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
     )
 
@@ -548,30 +551,56 @@ def test_a_rendered_field_line_matches_how_a_real_manifest_writes_it():
     since every other test compares the two.
     """
     assert (
-        manifest_line(PlanField.STATUS, ItemStatus.NOT_STARTED.value) in PLAN_MANIFEST
+        manifest_line(ManifestKey.STATUS, ItemStatus.NOT_STARTED.value) in PLAN_MANIFEST
     )
-    assert manifest_line(PlanField.TRACK, "a-track") in PLAN_MANIFEST
+    assert manifest_line(ManifestKey.TRACK, "a-track") in PLAN_MANIFEST
 
 
-def test_a_field_quotes_its_own_value_when_its_specification_says_to():
+def test_a_key_quotes_its_own_value_when_its_style_says_to():
     """
-    Quoting is the field's to decide, so no caller has to know that a title is prose and
-    a track is a bare identifier.
+    Quoting is the key's to decide, so no caller has to know that a title is prose and a
+    track is a bare identifier.
     """
-    assert PlanField.TITLE.render("A brand new item").endswith(': "A brand new item"\n')
-    assert PlanField.TRACK.render("a-track").endswith(": a-track\n")
-    assert PlanField.TITLE.specification.quoted
-    assert not PlanField.TRACK.specification.quoted
+    assert ManifestKey.TITLE.render("A brand new item").endswith(
+        ': "A brand new item"\n'
+    )
+    assert ManifestKey.TRACK.render("a-track").endswith(": a-track\n")
+    assert ManifestKey.TITLE.style is ValueStyle.DOUBLE_QUOTED
+    assert ManifestKey.TRACK.style is ValueStyle.PLAIN
 
 
-def test_a_field_indexes_a_parsed_manifest_by_its_own_key():
+def test_every_key_is_a_specification_in_its_own_right():
     """
-    A member's string value stays its key, so carrying a specification never costs the
-    caller a ``.value`` when reading parsed YAML.
+    Mixing the specification into the enum is what lets a key carry its style without a
+    lookup beside it, so the relationship is asserted rather than assumed.
     """
-    item = yaml.safe_load(PLAN_MANIFEST)[PlanField.ITEMS][0]
-    assert item[PlanField.IDENTIFIER] == EXISTING_ITEM
-    assert item[PlanField.STATUS] == ItemStatus.NOT_STARTED
+    assert issubclass(ManifestKey, KeySpecification)
+    assert all(
+        isinstance(manifest_key, KeySpecification) for manifest_key in ManifestKey
+    )
+
+
+def test_every_key_was_declared_as_specification_arguments():
+    """
+    A member declared as a built ``KeySpecification`` rather than as its argument tuple
+    is accepted silently by the enum machinery and lands the whole instance in ``key``.
+
+    This is what catches that.
+    """
+    assert all(isinstance(manifest_key.key, str) for manifest_key in ManifestKey)
+    assert all(
+        isinstance(manifest_key.style, ValueStyle) for manifest_key in ManifestKey
+    )
+
+
+def test_a_key_indexes_a_parsed_manifest_by_the_string_it_names():
+    """
+    A key reads parsed YAML through its own ``key``, which is the manifest's own
+    spelling of it.
+    """
+    item = yaml.safe_load(PLAN_MANIFEST)[ManifestKey.ITEMS.key][0]
+    assert item[ManifestKey.IDENTIFIER.key] == EXISTING_ITEM
+    assert item[ManifestKey.STATUS.key] == ItemStatus.NOT_STARTED
 
 
 def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
@@ -602,9 +631,8 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
     )
 
 
-def test_only_the_fields_that_run_over_lines_are_treated_as_folded():
-    folded = {field for field in PlanField if field.spans_following_lines}
-    assert folded == {PlanField.NOTES, PlanField.BLOCKERS}
+def test_only_the_keys_whose_values_run_over_lines_are_block_styled():
+    assert BLOCK_STYLED_KEYS == {ManifestKey.NOTES, ManifestKey.BLOCKERS}
 
 
 # %% exit statuses
