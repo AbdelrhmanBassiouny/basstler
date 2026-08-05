@@ -781,6 +781,57 @@ def test_a_restack_keeps_what_the_branches_it_switches_to_do_not_have(
     assert tooling.read_text() == TOOLING_CONTENT
 
 
+def test_a_restack_publishes_a_branch_the_caller_is_sitting_on(
+    fork_checkout: ForkCheckout,
+):
+    """
+    git refuses to check one branch out in two worktrees at once, and the caller of a
+    pass is normally sitting on a branch of the stack - so the restack has to be lent it
+    rather than blocked by it.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    fork_checkout.run_git("checkout", "--quiet", "a-child")
+    before = fork_checkout.published_commit("origin", "a-child")
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+    )
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.published_commit("origin", "a-child") != before
+
+
+def test_the_caller_holds_no_branch_while_a_restack_runs(fork_checkout: ForkCheckout):
+    """
+    Lending the branch is what makes the restack possible at all, so the caller has to
+    be off it for as long as the restack has it - not merely put back afterwards.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-contested-file", "the parent's version\n")
+    fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
+    fork = PullRequestsWatchingTheCaller(caller=fork_checkout.git)
+
+    restack(a_stack(fork_checkout, the_board()), fork_checkout.git, fork)
+
+    assert fork.branch_held_while_restacking == ""
+
+
+def test_a_restack_gives_back_the_branch_the_caller_lent_it(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    fork_checkout.run_git("checkout", "--quiet", "a-child")
+
+    restack(
+        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+    )
+
+    assert fork_checkout.run_git("branch", "--show-current") == "a-child"
+
+
 def test_a_restack_leaves_no_worktree_of_its_own_behind(fork_checkout: ForkCheckout):
     a_stack_cut_before_the_tooling_landed(fork_checkout)
 
@@ -964,6 +1015,35 @@ class RecordingPullRequests:
         """
         self.description_writes.append(RecordedDescription(number, body))
         self.descriptions[number] = body
+
+
+@dataclass
+class PullRequestsWatchingTheCaller(RecordingPullRequests):
+    """
+    Reads the invoking checkout at the one moment a pass is provably mid-restack.
+
+    A write to the fork only happens from inside a branch's restack, so it is the hook
+    for asserting what the invoking checkout looks like while the restack has its
+    branch - which is otherwise over before a test can look.
+    """
+
+    caller: GitCommandRunner = dataclasses_field(kw_only=True)
+    """
+    The invoking checkout to read.
+    """
+
+    branch_held_while_restacking: str | None = None
+    """
+    What it had checked out when the write came, unset if no write ever came.
+    """
+
+    def replace_labels(self, number: int, labels: Sequence[str]) -> None:
+        """
+        :param number: The pull request to write.
+        :param labels: The complete label set to write.
+        """
+        self.branch_held_while_restacking = self.caller.checked_out_branch()
+        super().replace_labels(number, labels)
 
 
 @dataclass

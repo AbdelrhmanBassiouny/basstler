@@ -1157,6 +1157,51 @@ class RestackConcludedNothingError(RuntimeError):
 
 
 @dataclass(frozen=True)
+class DetachedCheckout:
+    """The invoking checkout, detached so its branch can be restacked elsewhere.
+
+    git refuses to check one branch out in two worktrees at once, and the caller of a
+    pass is usually sitting on a branch of the stack. Detaching releases the name while
+    changing nothing else - same commit, same files, same work in progress - and the
+    branch is checked out again afterwards, which is also how the caller picks up a
+    restack of their own branch.
+    """
+
+    git: GitCommandRunner
+    """The invoking checkout."""
+
+    branch: str
+    """The branch it was on, empty when it was already detached."""
+
+    @classmethod
+    def of(cls, git: GitCommandRunner) -> DetachedCheckout:
+        """:param git: The checkout to detach.
+        :return: The detachment, to be used as a context manager so it is undone."""
+        return cls(git, git.checked_out_branch())
+
+    def __enter__(self) -> DetachedCheckout:
+        """:return: This detachment, once the checkout is off its branch."""
+        if self.branch:
+            self.git.run("checkout", "--quiet", "--detach")
+        return self
+
+    def __exit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Put the checkout back on the branch it was on.
+
+        Attempted rather than depended on, so failing to restore never replaces the
+        exception on its way out; the checkout is then left detached at the commit it
+        started from, with everything it was carrying.
+        """
+        if self.branch:
+            self.git.attempt("checkout", "--quiet", self.branch)
+
+
+@dataclass(frozen=True)
 class RestackWorktree:
     """A checkout of its own for the branch switching a restack does.
 
@@ -1212,14 +1257,16 @@ def restack(
     """Put every branch whose parent moved through :data:`RESTACK_STEPS`, bottom up.
 
     The steps run in a :class:`RestackWorktree` rather than in the invoking checkout,
-    which is left on its own branch with its own files.
+    which lends its branch through a :class:`DetachedCheckout` and gets it back with its
+    own files still in place. The worktree goes first so it is gone before the branch is
+    wanted again.
 
     :param stack: The derived stack, whose plan this executes.
     :param git: The runner naming the checkout to add the worktree to.
     :param fork: The fork, read for conflict state and written to when reporting.
     :return: One outcome per branch in the plan, parent before child.
     """
-    with RestackWorktree.added_to(git) as switching:
+    with DetachedCheckout.of(git), RestackWorktree.added_to(git) as switching:
         checks = CommitMoveChecks(
             stack=stack,
             checked_out_branch="",
