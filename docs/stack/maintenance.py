@@ -1276,30 +1276,36 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
     rebuilding it. The ``in-review`` label stays the developer's to add, since the
     upstream pull request does not exist until they click Create.
 
+    Both the decision and the label write read the labels the branch carries *now*, not
+    the ones the board was exported with: the restack runs between those two moments and
+    withholds a branch by labelling it, so a snapshot is already out of date here.
+
     :param stack: The derived stack.
     :param fork: The fork to read descriptions from and write links back to.
     :return: One entry per branch promoted, in dependency order.
     """
     promoted: list[Promotion] = []
+    withheld = stack.configuration.needs_resolution_label
     for branch in promotion_order(stack):
-        if PROMOTION_LINK_LABEL in branch.labels:
-            continue
-        pull_request = fork.pull_request(branch.pull_request_number)
         number = branch.pull_request_number
+        pull_request = fork.pull_request(number)
+        labels = PullRequestField.LABELS.read(pull_request, number)
+        if PROMOTION_LINK_LABEL in labels or withheld in labels:
+            continue
         description = str(PullRequestField.BODY.read(pull_request, number) or "")
         link = PromotionLink.build(
             stack.configuration,
             branch.name,
             str(PullRequestField.TITLE.read(pull_request, number) or branch.name),
-            _prefilled_description(description, branch.pull_request_number, stack),
+            _prefilled_description(description, number, stack),
         )
         fork.set_description(
-            branch.pull_request_number,
+            number,
             description_with_promotion_link(description, link.url),
         )
         fork.replace_labels(
-            branch.pull_request_number,
-            LabelWrite.replacing(branch.labels, added=[PROMOTION_LINK_LABEL]).labels,
+            number,
+            LabelWrite.replacing(labels, added=[PROMOTION_LINK_LABEL]).labels,
         )
         promoted.append(
             Promotion(

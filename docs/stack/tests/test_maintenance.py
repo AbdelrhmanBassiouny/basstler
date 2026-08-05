@@ -753,6 +753,12 @@ class RecordingPullRequests:
     What title to report per pull request number.
     """
 
+    labels: dict[int, list[str]] = dataclasses_field(default_factory=dict)
+    """
+    What labels to report per pull request number, which is what the branch carries
+    *now* rather than what the board snapshot opened the pass with.
+    """
+
     label_writes: list[RecordedLabelWrite] = dataclasses_field(default_factory=list)
     """
     Every label set written, in order.
@@ -783,6 +789,7 @@ class RecordingPullRequests:
             PullRequestField.TITLE.key: self.titles.get(
                 number, f"Pull request {number}"
             ),
+            PullRequestField.LABELS.key: list(self.labels.get(number, [])),
         }
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
@@ -931,14 +938,47 @@ def test_a_branch_already_carrying_the_link_label_is_not_promoted_again(
     fork_checkout: ForkCheckout,
 ):
     a_parent_and_child(fork_checkout)
-    board = the_board()
-    board[0].labels = ["cram2-link-sent"]
-    fork = RecordingPullRequests()
+    fork = RecordingPullRequests(labels={40: ["cram2-link-sent"]})
 
-    promoted = promote(a_stack(fork_checkout, board), fork)
+    promoted = promote(a_stack(fork_checkout, the_board()), fork)
 
     assert promoted == []
     assert fork.description_writes == []
+
+
+def test_a_branch_labelled_needs_resolution_during_this_pass_is_not_promoted(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The board is a snapshot taken before the restack runs, so a branch the restack has
+    just withheld still looks promotable in it.
+
+    Promotion has to ask the branch, not the snapshot, or a pass promotes what the same
+    pass just conflicted on.
+    """
+    a_parent_and_child(fork_checkout)
+    fork = RecordingPullRequests(labels={40: ["needs-resolution"]})
+
+    promoted = promote(a_stack(fork_checkout, the_board()), fork)
+
+    assert promoted == []
+    assert fork.description_writes == []
+    assert fork.label_writes == []
+
+
+def test_the_promotion_label_write_keeps_a_label_added_since_the_board_was_taken(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A label write replaces the whole set, so computing it from the snapshot silently
+    strips anything applied since - including the label the restack applies mid-pass.
+    """
+    a_parent_and_child(fork_checkout)
+    fork = RecordingPullRequests(labels={40: ["bug"]})
+
+    promote(a_stack(fork_checkout, the_board()), fork)
+
+    assert fork.label_writes == [RecordedLabelWrite(40, ("bug", "cram2-link-sent"))]
 
 
 def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
