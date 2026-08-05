@@ -16,6 +16,7 @@ import pytest
 import check_scope_overlap
 from check_scope_overlap import (
     Candidate,
+    ReportKey,
     UnknownBranchError,
     build_scope_report,
 )
@@ -187,6 +188,25 @@ def test_unresolvable_candidate_branch_raises(
         )
 
 
+# %% the wire format itself
+
+
+def test_the_report_key_names_are_the_documented_wire_format() -> None:
+    """
+    Pin the key names as literals, since every other assertion now reads them from
+    :class:`ReportKey` and so would follow a rename rather than catch it. This is the one
+    place that owns what a reader of the JSON actually sees.
+    """
+    assert {key.name: str(key) for key in ReportKey} == {
+        "PATHS_ABSENT_FROM_BASE": "paths_absent_from_base",
+        "CANDIDATES": "candidates",
+        "LABEL": "label",
+        "BRANCH": "branch",
+        "SHARED_PATHS": "shared_paths",
+        "CHANGED_PATHS": "changed_paths",
+    }
+
+
 # %% command line
 
 
@@ -214,13 +234,13 @@ def test_command_line_prints_the_report_as_json(
     assert result.returncode == 0, result.stderr
 
     assert json.loads(result.stdout) == {
-        "paths_absent_from_base": [NEW_SKILL_PATH],
-        "candidates": [
+        ReportKey.PATHS_ABSENT_FROM_BASE: [NEW_SKILL_PATH],
+        ReportKey.CANDIDATES: [
             {
-                "label": "the parent",
-                "branch": "overlapping",
-                "shared_paths": [NEW_SKILL_PATH],
-                "changed_paths": [NEW_SKILL_PATH, "shared/helper.py"],
+                ReportKey.LABEL: "the parent",
+                ReportKey.BRANCH: "overlapping",
+                ReportKey.SHARED_PATHS: [NEW_SKILL_PATH],
+                ReportKey.CHANGED_PATHS: [NEW_SKILL_PATH, "shared/helper.py"],
             }
         ],
     }

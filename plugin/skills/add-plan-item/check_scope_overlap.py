@@ -38,6 +38,7 @@ import subprocess
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -45,6 +46,45 @@ CANDIDATE_SEPARATOR = "="
 """
 Separates a ``--candidate`` argument's label from its branch name.
 """
+
+
+class ReportKey(StrEnum):
+    """
+    The keys of the JSON document this script prints.
+
+    Named here so the reader that consumes the report and the code that builds it cannot
+    drift apart, and so a caller never spells one out as a bare string.
+    """
+
+    PATHS_ABSENT_FROM_BASE = "paths_absent_from_base"
+    """
+    The requested paths the base branch doesn't contain yet.
+    """
+
+    CANDIDATES = "candidates"
+    """
+    One overlap entry per requested candidate branch.
+    """
+
+    LABEL = "label"
+    """
+    How a candidate was named on the command line.
+    """
+
+    BRANCH = "branch"
+    """
+    The candidate's branch name.
+    """
+
+    SHARED_PATHS = "shared_paths"
+    """
+    The requested paths a candidate already changes.
+    """
+
+    CHANGED_PATHS = "changed_paths"
+    """
+    Every path a candidate changes, for comparing by purpose.
+    """
 
 
 class UnknownBranchError(ValueError):
@@ -123,10 +163,10 @@ class CandidateOverlap:
         Render the overlap in the output shape documented in the module docstring.
         """
         return {
-            "label": self.candidate.label,
-            "branch": self.candidate.branch,
-            "shared_paths": self.shared_paths,
-            "changed_paths": self.changed_paths,
+            ReportKey.LABEL: self.candidate.label,
+            ReportKey.BRANCH: self.candidate.branch,
+            ReportKey.SHARED_PATHS: self.shared_paths,
+            ReportKey.CHANGED_PATHS: self.changed_paths,
         }
 
 
@@ -151,8 +191,10 @@ class ScopeReport:
         Render the report in the output shape documented in the module docstring.
         """
         return {
-            "paths_absent_from_base": self.paths_absent_from_base,
-            "candidates": [overlap.as_dictionary() for overlap in self.candidates],
+            ReportKey.PATHS_ABSENT_FROM_BASE: self.paths_absent_from_base,
+            ReportKey.CANDIDATES: [
+                overlap.as_dictionary() for overlap in self.candidates
+            ],
         }
 
 
