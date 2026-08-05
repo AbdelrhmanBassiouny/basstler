@@ -45,8 +45,8 @@ the document never has to decode an integer back into a meaning.
    load-mutate-dump round trip is rejected for the reason ``sync_manifest_status.py``
    records: even a format-preserving library re-flows wrapped strings, turning a
    one-field edit into an unreadable diff across the whole file. Every key, filename and
-   status this module writes is named once in :class:`PlanField`, :class:`PlanDocument`
-   and :class:`ItemStatus`, and every line is rendered by the field that owns it, so no
+   status this module writes is named once in :class:`ManifestKey`, :class:`PlanDocument`
+   and :class:`ItemStatus`, and every line is rendered by the key that owns it, so no
    caller - tests included - writes a second copy of a manifest line by hand.
 """
 
@@ -63,7 +63,7 @@ import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import IntEnum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
 from typing import Any, ClassVar, Protocol
 
@@ -155,156 +155,168 @@ class PlanDocument(StrEnum):
         return f"{PLANS_DIRECTORY}/{plan_identifier}/{self.value}"
 
 
-@dataclass(frozen=True)
-class FieldSpecification:
+class ValueStyle(StrEnum):
     """
-    How one ``plan.yaml`` key is written, so no caller has to decide per field.
+    How a key's value is written, in YAML's own vocabulary.
+
+    Mutually exclusive by construction, which the two booleans this replaced could not
+    say: a value is written one of these ways, never two.
+    """
+
+    PLAIN = "plain"
+    """
+    A bare scalar on the key's own line.
+    """
+
+    DOUBLE_QUOTED = "double_quoted"
+    """
+    A quoted scalar, for prose that would otherwise need escaping.
+    """
+
+    BLOCK = "block"
+    """
+    A value written across the lines beneath the key - a folded scalar or a sequence.
+
+    Anything inserted after such a key would be swallowed by its value, so a new key
+    goes before the first block-styled one in an item rather than at the end.
+    """
+
+
+@dataclass(frozen=True)
+class KeySpecification:
+    """
+    How one ``plan.yaml`` key is written, so no caller has to decide per key.
     """
 
     key: str
     """
     The key as it appears in the manifest.
+
+    Named ``key`` rather than ``name`` for two reasons: it is YAML's own term for the
+    left-hand side of a mapping, and :class:`ManifestKey` mixes this class into an
+    ``Enum``, whose ``name`` is reserved for the member's own name.
     """
 
-    quoted: bool = False
+    style: ValueStyle = ValueStyle.PLAIN
     """
-    Whether the value is written as a double-quoted string.
-    """
-
-    spans_following_lines: bool = False
-    """
-    Whether the value may continue over the lines beneath it.
-
-    A folded or list value swallows anything inserted after it, so a new field is
-    inserted before the first such field in a block rather than at its end.
+    How this key's value is written.
     """
 
 
-class PlanField(StrEnum):
+class ManifestKey(KeySpecification, Enum):
     """
     The ``plan.yaml`` keys this module reads or writes, each carrying how it is written.
 
-    A member's value is its key, so it indexes a parsed manifest directly, while its
-    :class:`FieldSpecification` says whether that key's value is quoted or spans several
-    lines. That is what lets :meth:`render` produce a correct line from the field alone -
-    a caller never chooses quoting, and every assertion about a manifest line derives
-    from the same place the line is written. The full schema is documented in
-    ``plan-schema.md``; this enum carries the subset bootstrapping an item touches.
+    A member *is* a :class:`KeySpecification`, so ``isinstance`` and ``issubclass`` hold
+    and a key's own style is reached directly: ``ManifestKey.TITLE.style``. That is what
+    lets :meth:`render` produce a correct line from the key alone - a caller never
+    chooses quoting, and every assertion about a manifest line derives from the same
+    place the line is written. The full schema is documented in ``plan-schema.md``; this
+    enum carries the subset bootstrapping an item touches.
+
+    .. note::
+       A member's value is the argument tuple its specification is built from, not a
+       built :class:`KeySpecification`. Passing an instance is accepted silently by the
+       enum machinery and lands the whole instance in :attr:`KeySpecification.key`, so a
+       test asserts every key is a string.
     """
 
-    def __new__(cls, specification: FieldSpecification) -> PlanField:
-        """
-        Build a member whose string value is its key and which carries its specification.
-
-        :param specification: How this key is written.
-        :return: The member.
-        """
-        member = str.__new__(cls, specification.key)
-        member._value_ = specification.key
-        member.specification = specification
-        return member
-
-    IDENTIFIER = FieldSpecification(key="id")
+    IDENTIFIER = ("id",)
     """
     The item's own id, and the line that opens its block.
     """
 
-    TITLE = FieldSpecification(key="title", quoted=True)
+    TITLE = ("title", ValueStyle.DOUBLE_QUOTED)
     """
     What the item does, quoted because it is prose.
     """
 
-    BRANCH = FieldSpecification(key="branch")
+    BRANCH = ("branch",)
     """
     The git branch the work happens on, once one exists.
     """
 
-    REPOSITORY = FieldSpecification(key="repository")
+    REPOSITORY = ("repository",)
     """
     The item's own repository, overriding the plan's default.
     """
 
-    DEFAULT_REPOSITORY = FieldSpecification(key="default_repository")
+    DEFAULT_REPOSITORY = ("default_repository",)
     """
     The repository every item uses unless it sets its own.
     """
 
-    PULL_REQUEST_NUMBER = FieldSpecification(key="pull_request_number")
+    PULL_REQUEST_NUMBER = ("pull_request_number",)
     """
     The real pull request number, once one exists.
     """
 
-    TRACK = FieldSpecification(key="track")
+    TRACK = ("track",)
     """
     The parallel line of work the item belongs to.
     """
 
-    DEPENDS_ON = FieldSpecification(key="depends_on")
+    DEPENDS_ON = ("depends_on",)
     """
     The items this one stacks on, by id.
     """
 
-    STATUS = FieldSpecification(key="status")
+    STATUS = ("status",)
     """
     The session's own planning assessment - see :class:`ItemStatus`.
     """
 
-    SESSION = FieldSpecification(key="session")
+    SESSION = ("session",)
     """
     The session doing the work.
     """
 
-    NOTES = FieldSpecification(key="notes", spans_following_lines=True)
+    NOTES = ("notes", ValueStyle.BLOCK)
     """
     Freeform detail, routinely folded over many lines.
     """
 
-    BLOCKERS = FieldSpecification(key="blockers", spans_following_lines=True)
+    BLOCKERS = ("blockers", ValueStyle.BLOCK)
     """
-    Why the item is stuck, as a list.
+    Why the item is stuck, written as a sequence.
     """
 
-    ITEMS = FieldSpecification(key="items")
+    ITEMS = ("items",)
     """
     The manifest's top-level list of items.
     """
 
-    @property
-    def spans_following_lines(self) -> bool:
-        """
-        Whether this field's value may continue over the lines beneath it.
-        """
-        return self.specification.spans_following_lines
-
     def render(self, value: str, opening_the_item: bool = False) -> str:
         """
-        The manifest line setting this field to *value*, newline included.
+        The manifest line setting this key to *value*, newline included.
 
-        Quoting comes from the field's own specification rather than from the caller.
+        Quoting comes from the key's own style rather than from the caller.
 
         :param value: The value to write.
         :param opening_the_item: Whether this is the item block's first line, which
-            carries the list marker instead of the field indent.
+            carries the list marker instead of the key indent.
         :return: The rendered line.
         """
         prefix = ITEM_MARKER if opening_the_item else ITEM_FIELD_INDENT
-        written = f'"{value}"' if self.specification.quoted else value
-        return f"{prefix}{self.value}: {written}\n"
+        written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
+        return f"{prefix}{self.key}: {written}\n"
 
     @property
     def pattern(self) -> re.Pattern[str]:
         """
-        Matches this field wherever it already appears in an item block.
+        Matches this key wherever it already appears in an item block.
         """
-        return re.compile(rf"^\s*{re.escape(self.value)}:\s*.*$")
+        return re.compile(rf"^\s*{re.escape(self.key)}:\s*.*$")
 
 
-FOLDED_PLAN_FIELDS = frozenset(
-    field for field in PlanField if field.spans_following_lines
+BLOCK_STYLED_KEYS = frozenset(
+    manifest_key
+    for manifest_key in ManifestKey
+    if manifest_key.style is ValueStyle.BLOCK
 )
 """
-The item fields whose values routinely run over several lines, derived from the fields
-themselves rather than listed a second time.
+The keys whose values run over the lines beneath them, derived from the keys themselves
+rather than listed a second time.
 """
 
 
@@ -344,7 +356,7 @@ class ItemStatus(StrEnum):
     """
 
 
-ITEM_START_PATTERN = re.compile(rf"^\s*- {re.escape(PlanField.IDENTIFIER.value)}:")
+ITEM_START_PATTERN = re.compile(rf"^\s*- {re.escape(ManifestKey.IDENTIFIER.key)}:")
 """
 Matches the first line of an item block, which is always its ``id``.
 
@@ -356,12 +368,12 @@ TOP_LEVEL_KEY_PATTERN = re.compile(r"^\S")
 Matches a top-level ``plan.yaml`` key, which is where the last item block ends.
 """
 
-FOLDED_FIELD_PATTERN = re.compile(
-    rf"^\s*({'|'.join(sorted(field.value for field in FOLDED_PLAN_FIELDS))}):"
+BLOCK_VALUE_PATTERN = re.compile(
+    rf"^\s*({'|'.join(sorted(manifest_key.key for manifest_key in BLOCK_STYLED_KEYS))}):"
 )
 """
-Matches an item field whose value may run over the following lines, derived from
-:data:`FOLDED_PLAN_FIELDS` rather than listing those field names a second time.
+Matches a key whose value may run over the following lines, derived from
+:data:`BLOCK_STYLED_KEYS` rather than listing those keys a second time.
 """
 
 
@@ -509,13 +521,13 @@ class IncompleteNewItemError(BootstrapError):
     The item that would have been created.
     """
 
-    missing_fields: tuple[PlanField, ...]
+    missing_keys: tuple[ManifestKey, ...]
     """
-    The fields a new entry cannot omit that were not supplied.
+    The keys a new entry cannot omit that were not supplied.
     """
 
     def error_message(self) -> str:
-        missing = ", ".join(field.value for field in self.missing_fields)
+        missing = ", ".join(manifest_key.key for manifest_key in self.missing_keys)
         return (
             f"item {self.item_identifier!r} is not in the plan yet, so recording it "
             f"needs {missing}"
@@ -523,7 +535,8 @@ class IncompleteNewItemError(BootstrapError):
 
     def suggest_correction(self) -> str:
         return "Pass " + " and ".join(
-            f"--{field.value.replace('_', '-')}" for field in self.missing_fields
+            f"--{manifest_key.key.replace('_', '-')}"
+            for manifest_key in self.missing_keys
         )
 
 
@@ -750,8 +763,8 @@ class PlanDocuments:
         """
         item = self.item(item_identifier)
         return (
-            item.get(PlanField.REPOSITORY)
-            or self.manifest[PlanField.DEFAULT_REPOSITORY]
+            item.get(ManifestKey.REPOSITORY.key)
+            or self.manifest[ManifestKey.DEFAULT_REPOSITORY.key]
         )
 
     def item(self, item_identifier: str) -> dict[str, Any]:
@@ -762,9 +775,9 @@ class PlanDocuments:
         :raises UnknownItemError: If no item matches.
         :return: The item's mapping.
         """
-        for candidate in self.manifest.get(PlanField.ITEMS, []):
-            identifier = candidate.get(PlanField.IDENTIFIER) or candidate.get(
-                PlanField.BRANCH
+        for candidate in self.manifest.get(ManifestKey.ITEMS.key, []):
+            identifier = candidate.get(ManifestKey.IDENTIFIER.key) or candidate.get(
+                ManifestKey.BRANCH
             )
             if identifier == item_identifier:
                 return candidate
@@ -859,7 +872,7 @@ def locate_item_block(
     :raises UnknownItemError: If no block starts with that id.
     :return: The block's half-open line range.
     """
-    opener = f"- {PlanField.IDENTIFIER.value}:"
+    opener = f"- {ManifestKey.IDENTIFIER.key}:"
     for start, end in item_block_bounds(manifest_lines):
         if (
             manifest_lines[start].strip().removeprefix(opener).strip()
@@ -875,7 +888,7 @@ def apply_item_fields(
     manifest_text: str,
     plan_identifier: str,
     item_identifier: str,
-    fields_to_set: list[tuple[PlanField, str]],
+    fields_to_set: list[tuple[ManifestKey, str]],
 ) -> str:
     """
     Set each of *fields_to_set* on one item, patching an existing line or inserting a new
@@ -906,7 +919,7 @@ def apply_item_fields(
             (
                 index
                 for index in range(start, end)
-                if FOLDED_FIELD_PATTERN.match(lines[index])
+                if BLOCK_VALUE_PATTERN.match(lines[index])
             ),
             last_populated_line(lines, start, end) + 1,
         )
@@ -939,25 +952,25 @@ def render_new_item(request: ItemRecordRequest) -> str:
     :return: The block's text, newline-terminated.
     """
     missing = tuple(
-        field
-        for field, value in (
-            (PlanField.TITLE, request.title),
-            (PlanField.TRACK, request.track),
+        manifest_key
+        for manifest_key, value in (
+            (ManifestKey.TITLE, request.title),
+            (ManifestKey.TRACK, request.track),
         )
         if not value
     )
     if missing:
         raise IncompleteNewItemError(
-            item_identifier=request.item_identifier, missing_fields=missing
+            item_identifier=request.item_identifier, missing_keys=missing
         )
     body = [
-        (PlanField.TITLE, request.title),
-        (PlanField.BRANCH, "null"),
-        (PlanField.TRACK, request.track),
-        (PlanField.DEPENDS_ON, "[]"),
-        (PlanField.STATUS, request.status.value),
+        (ManifestKey.TITLE, request.title),
+        (ManifestKey.BRANCH, "null"),
+        (ManifestKey.TRACK, request.track),
+        (ManifestKey.DEPENDS_ON, "[]"),
+        (ManifestKey.STATUS, request.status.value),
     ]
-    return PlanField.IDENTIFIER.render(
+    return ManifestKey.IDENTIFIER.render(
         request.item_identifier, opening_the_item=True
     ) + "".join(field.render(value) for field, value in body)
 
@@ -1080,9 +1093,9 @@ class BootstrapReport:
             "dashboard_command": self.dashboard_command,
         }
         if self.branch is not None:
-            document[PlanField.BRANCH.value] = self.branch
+            document[ManifestKey.BRANCH.key] = self.branch
         if self.pull_request_number is not None:
-            document[PlanField.PULL_REQUEST_NUMBER.value] = self.pull_request_number
+            document[ManifestKey.PULL_REQUEST_NUMBER.key] = self.pull_request_number
             document["pull_request_url"] = self.pull_request_url
         return document
 
@@ -1107,7 +1120,7 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
             documents.manifest_text,
             request.plan_identifier,
             request.item_identifier,
-            [(PlanField.STATUS, request.status.value)],
+            [(ManifestKey.STATUS, request.status.value)],
         )
 
     roadmap_text = append_roadmap_section(
@@ -1452,10 +1465,10 @@ def open_work(
         request.plan_identifier,
         request.item_identifier,
         [
-            (PlanField.BRANCH, request.branch),
-            (PlanField.PULL_REQUEST_NUMBER, str(created.number)),
-            (PlanField.SESSION, request.session_url),
-            (PlanField.STATUS, ItemStatus.IN_PROGRESS.value),
+            (ManifestKey.BRANCH, request.branch),
+            (ManifestKey.PULL_REQUEST_NUMBER, str(created.number)),
+            (ManifestKey.SESSION, request.session_url),
+            (ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value),
         ],
     )
     documents.save(manifest_text, documents.roadmap_text, project_root)
