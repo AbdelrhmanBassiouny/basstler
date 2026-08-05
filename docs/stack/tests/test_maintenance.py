@@ -42,10 +42,11 @@ from stack import (
 import maintenance
 from maintenance import (
     CREDENTIAL_VARIABLES,
+    BoardCommand,
     BoardExport,
     BranchAncestry,
     BranchOutcome,
-    Command,
+    COMMANDS,
     FastForwardOutcome,
     FastForwardReport,
     GitCommandFailed,
@@ -63,6 +64,8 @@ from maintenance import (
     fast_forward,
     promote,
     ProposedPush,
+    RestackCommand,
+    MaintenanceCommand,
     RunReportCommand,
     restack,
     get_session_link_in,
@@ -645,7 +648,7 @@ def test_a_rebase_whose_lease_has_expired_is_rejected_rather_than_forced_through
     assert fork_checkout.commit_on_the_fork("a-child") == somebody_else_s
 
 
-def test_a_push_the_preflight_refuses_is_not_made(fork_checkout: ForkCheckout):
+def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
     """
     A parent that has swallowed its own child would, once pushed, make the child an
     ancestor of its own base - which GitHub reads as the child having merged and closes
@@ -971,6 +974,26 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
     assert fork.label_writes == [RecordedLabelWrite(40, ("in-review",))]
 
 
+def test_a_branch_no_step_concludes_is_an_error_rather_than_a_silent_pass(
+    fork_checkout: ForkCheckout, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    The last step always concludes a branch, so a branch reaching the end of the steps
+    means the procedure lost it - which must not read as a branch nothing happened to.
+    """
+    a_parent_and_child(fork_checkout)
+    monkeypatch.setattr(maintenance, "RESTACK_STEPS", ())
+
+    with pytest.raises(maintenance.RestackConcludedNothingError) as raised:
+        restack(
+            a_stack(fork_checkout, the_board()),
+            fork_checkout.git,
+            RecordingPullRequests(),
+        )
+
+    assert raised.value.branch in {"a-parent", "a-child"}
+
+
 # %% the report
 
 
@@ -1010,7 +1033,7 @@ def test_a_whole_pass_leaves_no_board_behind(
     monkeypatch.setattr(maintenance, "BOARD_PATH", board_path)
 
     RunReportCommand().run(
-        AlreadyResolvedPass(fork_checkout, the_board()),
+        AlreadyResolvedPass.over(fork_checkout, the_board()),
         argparse.Namespace(json=True),
     )
 
@@ -1112,7 +1135,7 @@ def test_a_non_zero_status_says_what_it_means_on_the_way_out(
     """
     fork_checkout.run_git("remote", "remove", "cram2")
 
-    result = run_maintenance(fork_checkout, Command.RESTACK)
+    result = run_maintenance(fork_checkout, RestackCommand())
 
     assert result.returncode == MaintenanceExitCode.BOARD_UNAVAILABLE
     assert "board-unavailable" in result.stderr
@@ -1122,19 +1145,19 @@ def test_a_clean_run_says_nothing_about_its_status(fork_checkout: ForkCheckout):
     """
     Success is the absence of news; announcing it would make every run noisy.
     """
-    result = run_maintenance(fork_checkout, Command.BOARD, "--help")
+    result = run_maintenance(fork_checkout, BoardCommand(), "--help")
 
     assert result.returncode == MaintenanceExitCode.SUCCESS
     assert "success" not in result.stderr
 
 
-def test_a_preflight_refusal_keeps_its_own_status():
+def test_a_refused_move_keeps_its_own_status():
     """
     Distinct from a branch needing attention: the branch is fine and the move was wrong.
     """
     assert (
         exit_code_for(a_report(restack_outcome=RestackOutcome.REFUSED))
-        == MaintenanceExitCode.PREFLIGHT_REFUSED
+        == MaintenanceExitCode.MOVE_REFUSED
     )
 
 
@@ -1144,34 +1167,52 @@ def test_a_preflight_refusal_keeps_its_own_status():
 @dataclass(frozen=True)
 class AlreadyResolvedPass(MaintenancePass):
     """
-    A pass whose stack and fork are the scratch checkout's, so a whole run can be
-    performed without a network or a board file to read.
+    A pass whose stack and fork are handed to it, so a whole run can be performed
+    without a network or a board file to read.
     """
 
-    def __init__(self, checkout: ForkCheckout, pull_requests: list[PullRequest]):
+    resolved_stack: Stack = None  # type: ignore[assignment]
+    """
+    The stack the commands run against.
+    """
+
+    recorded_fork: RecordingPullRequests = dataclasses_field(
+        default_factory=RecordingPullRequests
+    )
+    """
+    The stand-in that records writes instead of making them.
+    """
+
+    @classmethod
+    def over(
+        cls, checkout: ForkCheckout, pull_requests: list[PullRequest]
+    ) -> AlreadyResolvedPass:
         """
         :param checkout: The checkout to execute in.
         :param pull_requests: The board entries the stack is derived from.
+        :return: The pass, with its stack already derived.
         """
-        super().__init__(configuration=make_configuration(), git=checkout.git)
-        object.__setattr__(self, "_stack", a_stack(checkout, pull_requests))
-        object.__setattr__(self, "_fork", RecordingPullRequests())
+        return cls(
+            configuration=make_configuration(),
+            git=checkout.git,
+            resolved_stack=a_stack(checkout, pull_requests),
+        )
 
     def stack(self) -> Stack:
         """
         :return: The stack derived from the scratch checkout.
         """
-        return self._stack
+        return self.resolved_stack
 
     def fork(self) -> RecordingPullRequests:
         """
         :return: The stand-in that records writes instead of making them.
         """
-        return self._fork
+        return self.recorded_fork
 
 
 def run_maintenance(
-    checkout: ForkCheckout, command: Command, *flags: str
+    checkout: ForkCheckout, command: MaintenanceCommand, *flags: str
 ) -> subprocess.CompletedProcess[str]:
     """
     Invoke the executor as a caller does, so its exit status is exercised.
@@ -1210,12 +1251,23 @@ def test_an_unknown_command_is_a_usage_error(fork_checkout: ForkCheckout):
     assert result.returncode == MaintenanceExitCode.USAGE
 
 
+def test_every_command_class_is_one_reachable_command():
+    """
+    Commands are found from their own subclasses, so a class that exists is a command -
+    and two answering to the same name would make one of them unreachable.
+    """
+    assert {type(command) for command in COMMANDS} == set(
+        MaintenanceCommand.__subclasses__()
+    )
+    assert len({command.invoked_as for command in COMMANDS}) == len(COMMANDS)
+
+
 def test_every_command_is_reachable_from_the_command_line(fork_checkout: ForkCheckout):
     """
     A command in the enum that the parser never registers is unreachable, and nothing
     else would notice.
     """
-    for command in Command:
+    for command in COMMANDS:
         result = run_maintenance(fork_checkout, command, "--help")
         assert result.returncode == MaintenanceExitCode.SUCCESS, result.stderr
 
@@ -1229,7 +1281,7 @@ def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
     fork_checkout.run_git("remote", "remove", "cram2")
 
     assert (
-        run_maintenance(fork_checkout, Command.BOARD).returncode
+        run_maintenance(fork_checkout, BoardCommand()).returncode
         == MaintenanceExitCode.CREDENTIAL_UNAVAILABLE
     )
 
@@ -1248,6 +1300,6 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
     fork_checkout.run_git("remote", "remove", "cram2")
 
     assert (
-        run_maintenance(fork_checkout, Command.RESTACK).returncode
+        run_maintenance(fork_checkout, RestackCommand()).returncode
         == MaintenanceExitCode.BOARD_UNAVAILABLE
     )

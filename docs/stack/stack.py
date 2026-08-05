@@ -22,7 +22,7 @@ Commands (run from the repo root; ``--help`` on any of them for its flags)::
     python .claude/stack/stack.py restack-plan   # bottom-up restack plan as JSON
     python .claude/stack/stack.py configuration  # every resolved setting, including the remotes
     python .claude/stack/stack.py labels         # the complete label set a write must send
-    python .claude/stack/stack.py preflight      # may these commits move onto that branch?
+    python .claude/stack/stack.py check-move      # may these commits move onto that branch?
     python .claude/stack/stack.py promotion-link # the upstream compare-and-create URL for a branch
     python .claude/stack/stack.py reparents      # children whose base has landed, and the base they need
     python .claude/stack/stack.py landed         # open fork pull requests whose branch has landed
@@ -1004,7 +1004,7 @@ def landed_branches(stack: Stack) -> list[Branch]:
     return [branch for branch in order(stack) if branch.status == BranchStatus.MERGED]
 
 
-# %% pre-flight
+# %% move check
 
 
 class CommitMoveAction(StrEnum):
@@ -1053,7 +1053,7 @@ class RefusalReason(StrEnum):
 
 
 @dataclass(frozen=True)
-class PreFlightRefusal:
+class CommitMoveRefusal:
     """One reason a proposed move must not be made."""
 
     reason: RefusalReason
@@ -1064,7 +1064,7 @@ class PreFlightRefusal:
 
 
 @dataclass(frozen=True)
-class PreFlight:
+class CommitMoveChecks:
     """Checks a proposed move against the checkout it would run in.
 
     Every refusal describes a move that has gone wrong in practice - see
@@ -1081,7 +1081,7 @@ class PreFlight:
     """Maps a candidate ancestor branch and a descendant branch to whether the first is
     contained in the second; injected so the checks are testable without git."""
 
-    def refusals(self, move: ProposedCommitMove) -> list[PreFlightRefusal]:
+    def refusals(self, move: ProposedCommitMove) -> list[CommitMoveRefusal]:
         """Every reason the move must not be made.
 
         All of them are reported together: fixing one and re-running to discover the next
@@ -1093,7 +1093,7 @@ class PreFlight:
         found = []
         if move.source != self.checked_out_branch:
             found.append(
-                PreFlightRefusal(
+                CommitMoveRefusal(
                     RefusalReason.NOT_CHECKED_OUT,
                     f"'{move.source}' is not checked out; '{self.checked_out_branch}' is, "
                     f"and its content is what would move",
@@ -1101,7 +1101,7 @@ class PreFlight:
             )
         if move.source != move.destination:
             found.append(
-                PreFlightRefusal(
+                CommitMoveRefusal(
                     RefusalReason.MISMATCHED_BRANCH_NAMES,
                     f"this would move '{move.source}' onto '{move.destination}'; the "
                     f"source and the destination must be the same branch",
@@ -1109,7 +1109,7 @@ class PreFlight:
             )
         if move.destination_remote != self.stack.configuration.fork_remote:
             found.append(
-                PreFlightRefusal(
+                CommitMoveRefusal(
                     RefusalReason.NOT_THE_FORK,
                     f"'{move.destination_remote}' is not the fork remote "
                     f"'{self.stack.configuration.fork_remote}'",
@@ -1118,14 +1118,14 @@ class PreFlight:
         found.extend(self._false_merges(move))
         return found
 
-    def _false_merges(self, move: ProposedCommitMove) -> list[PreFlightRefusal]:
+    def _false_merges(self, move: ProposedCommitMove) -> list[CommitMoveRefusal]:
         """The children of the destination this move would make GitHub call merged.
 
         :param move: The proposed move.
         :return: One refusal per child already contained in the move's source.
         """
         return [
-            PreFlightRefusal(
+            CommitMoveRefusal(
                 RefusalReason.FALSE_MERGE,
                 f"'{child.name}' is already contained in '{move.source}', so this would "
                 f"make it an ancestor of its own parent '{move.destination}' and GitHub "
@@ -1305,14 +1305,16 @@ def print_landed(stack: Stack) -> None:
         print(f"{branch.name}\t{branch.pull_request_number}")
 
 
-def print_preflight(pre_flight: PreFlight, move: ProposedCommitMove) -> ExitCode:
+def print_move_checks(
+    move_checks: CommitMoveChecks, move: ProposedCommitMove
+) -> ExitCode:
     """Print whether a move may be made, and every reason it may not.
 
-    :param pre_flight: The checks to run.
+    :param move_checks: The checks to run.
     :param move: The proposed move.
     :return: Success when the move is clear, refusal otherwise.
     """
-    refusals = pre_flight.refusals(move)
+    refusals = move_checks.refusals(move)
     if not refusals:
         print(
             f"{move.action} {move.source} onto "
@@ -1321,7 +1323,7 @@ def print_preflight(pre_flight: PreFlight, move: ProposedCommitMove) -> ExitCode
         return ExitCode.SUCCESS
     for refusal in refusals:
         print(f"{refusal.reason}: {refusal.explanation}", file=sys.stderr)
-    return ExitCode.PREFLIGHT_REFUSED
+    return ExitCode.MOVE_REFUSED
 
 
 def print_configuration(configuration: Configuration) -> None:
@@ -1348,7 +1350,7 @@ class Command(StrEnum):
     RESTACK_PLAN = "restack-plan"
     REPARENTS = "reparents"
     LANDED = "landed"
-    PREFLIGHT = "preflight"
+    CHECK_MOVE = "check-move"
     CONFIGURATION = "configuration"
     LABELS = "labels"
     PROMOTION_LINK = "promotion-link"
@@ -1393,7 +1395,7 @@ class ExitCode(IntEnum):
     REMOTES_UNRESOLVED = 4
     """The fork could not be identified from this checkout's remotes."""
 
-    PREFLIGHT_REFUSED = 5
+    MOVE_REFUSED = 5
     """The proposed move must not be made; the reasons are on stderr."""
 
 
@@ -1472,23 +1474,23 @@ def _argument_parser() -> argparse.ArgumentParser:
     link.add_argument("--title", required=True, help="title to prefill")
     link.add_argument("--body", default="", help="description to prefill")
 
-    preflight = commands.add_parser(
-        Command.PREFLIGHT, help="may these commits move onto that branch?"
+    check_move = commands.add_parser(
+        Command.CHECK_MOVE, help="may these commits move onto that branch?"
     )
-    preflight.add_argument(
+    check_move.add_argument(
         "--action",
         required=True,
         type=CommitMoveAction,
         choices=list(CommitMoveAction),
         help="what the move would do",
     )
-    preflight.add_argument(
+    check_move.add_argument(
         "--source", required=True, help="the branch whose commits move"
     )
-    preflight.add_argument(
+    check_move.add_argument(
         "--destination", required=True, help="the branch they would land on"
     )
-    preflight.add_argument(
+    check_move.add_argument(
         "--destination-remote", required=True, help="the remote holding the destination"
     )
     return parser
@@ -1532,9 +1534,9 @@ def _run_against_the_board(
     :param stack: The derived stack.
     :return: The process exit code.
     """
-    if command is Command.PREFLIGHT:
-        return print_preflight(
-            PreFlight(
+    if command is Command.CHECK_MOVE:
+        return print_move_checks(
+            CommitMoveChecks(
                 stack=stack,
                 checked_out_branch=_git("branch", "--show-current"),
                 is_ancestor=_ancestry_predicate(stack.configuration),

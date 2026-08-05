@@ -40,7 +40,7 @@ from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
 from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, ClassVar, Protocol
 
 from stack import (
     BOARD_PATH,
@@ -54,7 +54,7 @@ from stack import (
     ForkRemoteNotFoundError,
     IntegrationStrategy,
     LabelWrite,
-    PreFlight,
+    CommitMoveChecks,
     PromotionLink,
     PromotionLinkTooLongError,
     ProposedCommitMove,
@@ -276,7 +276,7 @@ class GitCommandRunner:
 class BranchAncestry:
     """Answers containment questions about the fork's branches.
 
-    :class:`PreFlight` asks its false-merge question through this, so the question is
+    :class:`CommitMoveChecks` asks its false-merge question through this, so the question is
     asked of git rather than of anything this module remembers.
     """
 
@@ -296,7 +296,7 @@ class BranchAncestry:
 # %% the board export
 
 
-class FieldShape(StrEnum):
+class PullRequestFieldShape(StrEnum):
     """How one pull-request field's value has to be read.
 
     The API answers some fields with a nested object where a plain value would do, so
@@ -315,54 +315,80 @@ class FieldShape(StrEnum):
 
 
 @dataclass(frozen=True)
-class FieldSpecification:
+class PullRequestFieldSpecification:
     """What one pull-request field is called, how to read it, and whether it may be
     absent."""
 
     key: str
     """The key the API answers under."""
 
-    shape: FieldShape = FieldShape.VALUE
+    shape: PullRequestFieldShape = PullRequestFieldShape.VALUE
     """How its value has to be read."""
 
     required: bool = False
     """Whether a record omitting it is rejected rather than read."""
 
 
-class PullRequestField(FieldSpecification, Enum):
+def a_pull_request_field(
+    *,
+    key: str,
+    shape: PullRequestFieldShape = PullRequestFieldShape.VALUE,
+    required: bool = False,
+) -> tuple[str, PullRequestFieldShape, bool]:
+    """Name one field's specification for :class:`PullRequestField` to carry.
+
+    An enum member's value has to be the arguments its specification is built from, so
+    this names them rather than leaving a reader to count positions.
+
+    :param key: The key the API answers under.
+    :param shape: How its value has to be read.
+    :param required: Whether a record omitting it is rejected rather than read.
+    :return: The member's value.
+    """
+    return key, shape, required
+
+
+class PullRequestField(PullRequestFieldSpecification, Enum):
     """Every pull-request field this executor reads, and how to read it.
 
     Each member *is* a specification, so nothing outside this enum knows that ``head``
     arrives nested while ``draft`` does not, or which fields a board cannot be derived
     without.
 
-    ..note:: A member's value is the specification's argument tuple, never a built
-        ``FieldSpecification`` - passing one lands the whole instance in :attr:`key`
-        rather than raising.
+    ..note:: A member's value is the arguments its specification is built from, named
+        by :func:`a_pull_request_field`; passing a built
+        :class:`PullRequestFieldSpecification` instead lands the whole instance in
+        :attr:`key` rather than raising.
     """
 
-    NUMBER = ("number", FieldShape.VALUE, True)
+    NUMBER = a_pull_request_field(key="number", required=True)
     """The pull request's number."""
 
-    HEAD = ("head", FieldShape.BRANCH_REFERENCE, True)
+    HEAD = a_pull_request_field(
+        key="head", shape=PullRequestFieldShape.BRANCH_REFERENCE, required=True
+    )
     """The branch the pull request would merge - the stack node it names."""
 
-    BASE = ("base", FieldShape.BRANCH_REFERENCE, True)
+    BASE = a_pull_request_field(
+        key="base", shape=PullRequestFieldShape.BRANCH_REFERENCE, required=True
+    )
     """The branch it would merge into - its parent in the stack."""
 
-    DRAFT = ("draft", FieldShape.VALUE, True)
+    DRAFT = a_pull_request_field(key="draft", required=True)
     """Whether its author has yet reviewed it themselves."""
 
-    LABELS = ("labels", FieldShape.LABEL_NAMES, True)
+    LABELS = a_pull_request_field(
+        key="labels", shape=PullRequestFieldShape.LABEL_NAMES, required=True
+    )
     """The labels it carries, which the workflow reads as state."""
 
-    BODY = ("body",)
+    BODY = a_pull_request_field(key="body")
     """Its description, read for the session link and the promotion prefill."""
 
-    TITLE = ("title",)
+    TITLE = a_pull_request_field(key="title")
     """Its title, which prefills the upstream pull request."""
 
-    MERGEABLE_STATE = ("mergeable_state",)
+    MERGEABLE_STATE = a_pull_request_field(key="mergeable_state")
     """GitHub's own verdict on whether it currently conflicts with its base."""
 
     def read(self, record: PullRequestRecord, number: int | None = None) -> Any:
@@ -379,14 +405,16 @@ class PullRequestField(FieldSpecification, Enum):
             if self.required:
                 raise MissingPullRequestFieldError(self, number)
             return None
-        if self.shape is FieldShape.BRANCH_REFERENCE:
-            return self._branch_reference(value, number)
-        if self.shape is FieldShape.LABEL_NAMES:
-            return [
-                label if isinstance(label, str) else str(label["name"])
-                for label in value
-            ]
-        return value
+        match self.shape:
+            case PullRequestFieldShape.BRANCH_REFERENCE:
+                return self._branch_reference(value, number)
+            case PullRequestFieldShape.LABEL_NAMES:
+                return [
+                    label if isinstance(label, str) else str(label["name"])
+                    for label in value
+                ]
+            case _:
+                return value
 
     def _branch_reference(self, value: Any, number: int | None) -> str:
         """:param value: The field's value, plain or nested.
@@ -785,7 +813,7 @@ class RestackOutcome(StrEnum):
     """Its parent could not be integrated cleanly; nothing was published."""
 
     REFUSED = "refused"
-    """Pre-flight refused the push; nothing was published."""
+    """Move check refused the push; nothing was published."""
 
     PUSH_REJECTED = "push-rejected"
     """The fork rejected the push, so the branch moved under this pass; nothing was
@@ -866,202 +894,290 @@ def conflict_report(
     )
 
 
+@dataclass(frozen=True)
+class BranchUnderRestack:
+    """One branch's restack, and everything a step needs to carry it out."""
+
+    branch: Branch
+    """The branch being restacked."""
+
+    parent: str
+    """The branch whose tip is to be integrated into it."""
+
+    strategy: IntegrationStrategy
+    """How that parent is to be integrated, which is also what authorises a rewrite."""
+
+    stack: Stack
+    """The derived stack it belongs to."""
+
+    git: GitCommandRunner
+    """The runner to execute through."""
+
+    fork: ForkPullRequests
+    """The fork, read for conflict state and written to when reporting."""
+
+    checks: CommitMoveChecks
+    """The checks its push is put through."""
+
+    @property
+    def configuration(self) -> Configuration:
+        """:return: The resolved configuration."""
+        return self.stack.configuration
+
+    @property
+    def branch_reference(self) -> str:
+        """:return: The fork's copy of this branch, which every step starts from."""
+        return resolve_ref(self.configuration, self.branch.name)
+
+    @property
+    def parent_reference(self) -> str:
+        """:return: The fork's copy of the parent being integrated."""
+        return resolve_ref(self.configuration, self.parent)
+
+    def concluded(self, outcome: RestackOutcome, **detail: Any) -> BranchOutcome:
+        """Finish this branch with an outcome its owner can act on.
+
+        :param outcome: What became of it.
+        :param detail: Whatever that outcome carries.
+        :return: The outcome, naming this branch and its parent.
+        """
+        return BranchOutcome(
+            self.branch.name, self.parent, self.strategy, outcome, **detail
+        )
+
+
+class RestackStep:
+    """One step of a branch's restack.
+
+    A step either concludes the branch - returning the outcome its owner acts on - or
+    returns nothing and lets the next step run. Adding a step is writing a subclass and
+    placing it in :data:`RESTACK_STEPS`, whose order is the procedure.
+    """
+
+    def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
+        """Carry out this step.
+
+        :param restacking: The branch being restacked.
+        :return: The outcome concluding the branch, or ``None`` to continue.
+        """
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class WithholdBranchStillConflicting(RestackStep):
+    """Leaves a branch alone while it is still conflicted from an earlier pass.
+
+    Clears the label as a side effect when it is not, since that is what lets the branch
+    rejoin the pass without anybody remembering to remove it by hand.
+    """
+
+    def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
+        """:param restacking: The branch being restacked.
+        :return: A withheld outcome while it still conflicts, otherwise ``None``."""
+        branch = restacking.branch
+        label = restacking.configuration.needs_resolution_label
+        if label not in branch.labels:
+            return None
+        state = PullRequestField.MERGEABLE_STATE.read(
+            restacking.fork.pull_request(branch.pull_request_number),
+            branch.pull_request_number,
+        )
+        if state == MERGEABLE_STATE_WITH_CONFLICTS:
+            return restacking.concluded(
+                RestackOutcome.WITHHELD,
+                explanation="still conflicted against its base since a previous pass",
+            )
+        restacking.fork.replace_labels(
+            branch.pull_request_number,
+            LabelWrite.replacing(branch.labels, removed=[label]).labels,
+        )
+        return None
+
+
+@dataclass(frozen=True)
+class SkipBranchAlreadyCurrent(RestackStep):
+    """Leaves a branch alone when its parent's tip is already contained in it."""
+
+    def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
+        """:param restacking: The branch being restacked.
+        :return: An up-to-date outcome when nothing has to move, otherwise ``None``."""
+        if restacking.git.contains(
+            restacking.parent_reference, restacking.branch_reference
+        ):
+            return restacking.concluded(RestackOutcome.UP_TO_DATE)
+        return None
+
+
+@dataclass(frozen=True)
+class IntegrateParent(RestackStep):
+    """Integrates the parent's tip, reporting a conflict to the branch's owner.
+
+    A conflict is never resolved here - that is a change to somebody else's branch. It
+    is labelled and commented on, so the next pass withholds the branch rather than
+    re-reporting it.
+    """
+
+    def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
+        """:param restacking: The branch being restacked.
+        :return: A conflict outcome when the parent will not merge, otherwise
+            ``None``."""
+        git = restacking.git
+        git.checkout(restacking.branch.name, restacking.branch_reference)
+        integration = (
+            git.rebase(restacking.parent_reference)
+            if restacking.strategy is IntegrationStrategy.REBASE
+            else git.merge(restacking.parent_reference)
+        )
+        if integration.succeeded:
+            return None
+        conflicting = git.unmerged_paths()
+        git.abandon(restacking.strategy)
+        return restacking.concluded(
+            RestackOutcome.CONFLICT,
+            conflicting_paths=conflicting,
+            reported_at=self._report(restacking, conflicting),
+        )
+
+    @staticmethod
+    def _report(
+        restacking: BranchUnderRestack, conflicting_paths: Sequence[str]
+    ) -> str:
+        """Tell the branch's owner, and label it so the next pass withholds it.
+
+        :param restacking: The branch being restacked.
+        :param conflicting_paths: The paths that conflicted.
+        :return: The URL of the comment posted.
+        """
+        branch = restacking.branch
+        restacking.fork.replace_labels(
+            branch.pull_request_number,
+            LabelWrite.replacing(
+                branch.labels,
+                added=[restacking.configuration.needs_resolution_label],
+            ).labels,
+        )
+        return restacking.fork.add_comment(
+            branch.pull_request_number,
+            conflict_report(branch, conflicting_paths, restacking.parent),
+        )
+
+
+@dataclass(frozen=True)
+class RefuseAnUnsafeMove(RestackStep):
+    """Puts the push through the checks before it is made, without exception."""
+
+    def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
+        """:param restacking: The branch being restacked.
+        :return: A refused outcome carrying every reason, otherwise ``None``."""
+        checks = CommitMoveChecks(
+            stack=restacking.checks.stack,
+            checked_out_branch=restacking.git.checked_out_branch(),
+            is_ancestor=restacking.checks.is_ancestor,
+        )
+        refusals = tuple(
+            refusal.reason
+            for refusal in checks.refusals(
+                ProposedCommitMove(
+                    action=CommitMoveAction.RESTACK,
+                    source=restacking.branch.name,
+                    destination=restacking.branch.name,
+                    destination_remote=restacking.configuration.fork_remote,
+                )
+            )
+        )
+        if refusals:
+            return restacking.concluded(RestackOutcome.REFUSED, refusals=refusals)
+        return None
+
+
+@dataclass(frozen=True)
+class PublishBranch(RestackStep):
+    """Publishes the integrated branch, reporting rather than forcing a rejection."""
+
+    def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome:
+        """:param restacking: The branch being restacked.
+        :return: What became of the push - this step always concludes the branch."""
+        git = restacking.git
+        push = git.push(
+            ProposedPush.publishing(
+                restacking.configuration, restacking.branch.name, restacking.strategy
+            )
+        )
+        if not push.succeeded:
+            return restacking.concluded(
+                RestackOutcome.PUSH_REJECTED, explanation=push.error_output
+            )
+        git.fetch(restacking.configuration.fork_remote, restacking.branch.name)
+        return restacking.concluded(
+            RestackOutcome.PUSHED, pushed_commit=git.commit_at("HEAD")
+        )
+
+
+RESTACK_STEPS: tuple[RestackStep, ...] = (
+    WithholdBranchStillConflicting(),
+    SkipBranchAlreadyCurrent(),
+    IntegrateParent(),
+    RefuseAnUnsafeMove(),
+    PublishBranch(),
+)
+"""Every step a branch is put through, in the order that is the procedure - unlike the
+commands, these are listed rather than discovered, because their order is what they
+mean."""
+
+
+@dataclass
+class RestackConcludedNothingError(RuntimeError):
+    """Raised when no step concluded a branch, which the last step always must."""
+
+    branch: str
+    """The branch left without an outcome."""
+
+    def __str__(self) -> str:
+        """:return: Which branch was left unconcluded."""
+        return f"no restack step concluded '{self.branch}'"
+
+
 def restack(
     stack: Stack, git: GitCommandRunner, fork: ForkPullRequests
 ) -> list[BranchOutcome]:
-    """Integrate every moved parent, bottom up, and publish what integrated cleanly.
-
-    Pre-flight runs before every push without exception, and a branch is only ever
-    force-pushed when its own pull request carries the rebase label - which is what
-    makes the strategy, rather than this module's judgement, the thing that authorises
-    rewriting somebody's published history.
-
-    A conflict is never resolved here - it is a change to somebody else's branch. It is
-    reported to that branch's owner in a comment and labelled, so the next pass skips it
-    instead of re-reporting it, and the label is cleared again as soon as the branch
-    merges cleanly.
+    """Put every branch whose parent moved through :data:`RESTACK_STEPS`, bottom up.
 
     :param stack: The derived stack, whose plan this executes.
     :param git: The runner to execute through.
     :param fork: The fork, read for conflict state and written to when reporting.
     :return: One outcome per branch in the plan, parent before child.
     """
-    configuration = stack.configuration
-    pre_flight = PreFlight(
+    checks = CommitMoveChecks(
         stack=stack,
         checked_out_branch="",
-        is_ancestor=BranchAncestry(configuration, git).is_ancestor,
+        is_ancestor=BranchAncestry(stack.configuration, git).is_ancestor,
     )
     by_name = {branch.name: branch for branch in stack.branches}
-    outcomes: list[BranchOutcome] = []
-    for entry in restack_plan(stack):
-        outcomes.append(_restack_branch(entry, stack, by_name, pre_flight, git, fork))
-    return outcomes
-
-
-def _withhold(branch: Branch, stack: Stack, fork: ForkPullRequests) -> bool:
-    """Decide whether a branch delegated for conflict resolution is still conflicted.
-
-    Clears the label as a side effect when it is not, since that is what lets the branch
-    rejoin the pass without anybody remembering to remove it by hand.
-
-    :param branch: The branch to judge.
-    :param stack: The derived stack, for the label name.
-    :param fork: The fork, read for the conflict state and written to clear the label.
-    :return: Whether to leave the branch alone this pass.
-    """
-    label = stack.configuration.needs_resolution_label
-    if label not in branch.labels:
-        return False
-    state = PullRequestField.MERGEABLE_STATE.read(
-        fork.pull_request(branch.pull_request_number), branch.pull_request_number
-    )
-    if state == MERGEABLE_STATE_WITH_CONFLICTS:
-        return True
-    fork.replace_labels(
-        branch.pull_request_number,
-        LabelWrite.replacing(branch.labels, removed=[label]).labels,
-    )
-    return False
-
-
-def _report_conflict(
-    branch: Branch,
-    parent: str,
-    conflicting_paths: Sequence[str],
-    stack: Stack,
-    fork: ForkPullRequests,
-) -> str:
-    """Tell a branch's owner about a conflict, and label it so the next pass skips it.
-
-    :param branch: The branch that could not be integrated.
-    :param parent: The branch whose tip was being integrated.
-    :param conflicting_paths: The paths that conflicted.
-    :param stack: The derived stack, for the label name.
-    :param fork: The fork to write to.
-    :return: The URL of the comment posted.
-    """
-    fork.replace_labels(
-        branch.pull_request_number,
-        LabelWrite.replacing(
-            branch.labels, added=[stack.configuration.needs_resolution_label]
-        ).labels,
-    )
-    return fork.add_comment(
-        branch.pull_request_number, conflict_report(branch, conflicting_paths, parent)
-    )
-
-
-def _restack_branch(
-    entry: Mapping[str, str],
-    stack: Stack,
-    by_name: Mapping[str, Branch],
-    pre_flight: PreFlight,
-    git: GitCommandRunner,
-    fork: ForkPullRequests,
-) -> BranchOutcome:
-    """Integrate one branch's parent and publish the result.
-
-    :param entry: One ``restack_plan`` entry: branch, parent and strategy.
-    :param stack: The derived stack.
-    :param by_name: Every branch in the stack, keyed by name.
-    :param pre_flight: The checks every push is put through.
-    :param git: The runner to execute through.
-    :param fork: The fork, read for conflict state and written to when reporting.
-    :return: What became of the branch.
-    """
-    configuration = stack.configuration
-    branch, parent = entry["branch"], entry["parent"]
-    strategy = IntegrationStrategy(entry["strategy"])
-    node = by_name[branch]
-    branch_reference = resolve_ref(configuration, branch)
-    parent_reference = resolve_ref(configuration, parent)
-
-    if _withhold(node, stack, fork):
-        return BranchOutcome(
-            branch,
-            parent,
-            strategy,
-            RestackOutcome.WITHHELD,
-            explanation="still conflicted against its base since a previous pass",
-        )
-
-    if git.contains(parent_reference, branch_reference):
-        return BranchOutcome(branch, parent, strategy, RestackOutcome.UP_TO_DATE)
-
-    git.checkout(branch, branch_reference)
-    integration = (
-        git.rebase(parent_reference)
-        if strategy is IntegrationStrategy.REBASE
-        else git.merge(parent_reference)
-    )
-    if not integration.succeeded:
-        conflicting = git.unmerged_paths()
-        git.abandon(strategy)
-        return BranchOutcome(
-            branch,
-            parent,
-            strategy,
-            RestackOutcome.CONFLICT,
-            conflicting_paths=conflicting,
-            reported_at=_report_conflict(node, parent, conflicting, stack, fork),
-        )
-
-    refusals = pre_flight_refusals(pre_flight, configuration, branch, git)
-    if refusals:
-        return BranchOutcome(
-            branch, parent, strategy, RestackOutcome.REFUSED, refusals=refusals
-        )
-
-    push = git.push(ProposedPush.publishing(configuration, branch, strategy))
-    if not push.succeeded:
-        return BranchOutcome(
-            branch,
-            parent,
-            strategy,
-            RestackOutcome.PUSH_REJECTED,
-            explanation=push.error_output,
-        )
-    git.fetch(configuration.fork_remote, branch)
-    return BranchOutcome(
-        branch,
-        parent,
-        strategy,
-        RestackOutcome.PUSHED,
-        pushed_commit=git.commit_at("HEAD"),
-    )
-
-
-def pre_flight_refusals(
-    pre_flight: PreFlight,
-    configuration: Configuration,
-    branch: str,
-    git: GitCommandRunner,
-) -> tuple[RefusalReason, ...]:
-    """Ask pre-flight whether this branch's push may be made.
-
-    :param pre_flight: The checks, built once for the whole pass.
-    :param configuration: The resolved configuration.
-    :param branch: The branch about to be pushed.
-    :param git: The runner to read the checked-out branch through.
-    :return: Every reason to refuse, empty when the push is clear.
-    """
-    checked_out = PreFlight(
-        stack=pre_flight.stack,
-        checked_out_branch=git.run("branch", "--show-current"),
-        is_ancestor=pre_flight.is_ancestor,
-    )
-    return tuple(
-        refusal.reason
-        for refusal in checked_out.refusals(
-            ProposedCommitMove(
-                action=CommitMoveAction.RESTACK,
-                source=branch,
-                destination=branch,
-                destination_remote=configuration.fork_remote,
+    return [
+        _restack_branch(
+            BranchUnderRestack(
+                branch=by_name[entry["branch"]],
+                parent=entry["parent"],
+                strategy=IntegrationStrategy(entry["strategy"]),
+                stack=stack,
+                git=git,
+                fork=fork,
+                checks=checks,
             )
         )
-    )
+        for entry in restack_plan(stack)
+    ]
+
+
+def _restack_branch(restacking: BranchUnderRestack) -> BranchOutcome:
+    """:param restacking: The branch to restack.
+    :return: The outcome of the first step that concluded it.
+    :raises RestackConcludedNothingError: If no step did."""
+    for step in RESTACK_STEPS:
+        outcome = step.attempt(restacking)
+        if outcome is not None:
+            return outcome
+    raise RestackConcludedNothingError(restacking.branch.name)
 
 
 @dataclass(frozen=True)
@@ -1387,43 +1503,6 @@ def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> N
 # %% entry point
 
 
-@dataclass(frozen=True)
-class CommandSpecification:
-    """What one command is invoked by, and what ``--help`` says about it."""
-
-    invoked_as: str
-    """The name it is invoked by on the command line.
-
-    ..note:: Not ``name`` - :class:`Enum` reserves that for the member's own identifier.
-    """
-
-    description: str
-    """What it does, in one line."""
-
-
-class Command(CommandSpecification, Enum):
-    """Every command this executor answers, named and described in one place.
-
-    ..note:: A member's value is the specification's argument tuple, never a built
-        :class:`CommandSpecification`.
-    """
-
-    BOARD = ("board", "export the fork's open pull requests")
-    """Fetches the fork's open pull requests and writes the board."""
-
-    FAST_FORWARD = ("fast-forward", "move the fork's base branch onto the upstream")
-    """Moves the fork's base onto the upstream, refusing to force."""
-
-    RESTACK = ("restack", "integrate every moved parent and publish the result")
-    """Integrates every moved parent and publishes what merged cleanly."""
-
-    PROMOTE = ("promote", "record the upstream link on every promotable branch")
-    """Builds and records the upstream link on every branch ready for it."""
-
-    RUN_REPORT = ("run-report", "perform the whole pass and report it")
-    """Performs the whole pass and emits it as one document."""
-
-
 class MaintenanceExitCode(IntEnum):
     """What this executor's exit status tells a caller.
 
@@ -1443,7 +1522,7 @@ class MaintenanceExitCode(IntEnum):
     REMOTES_UNRESOLVED = 4
     """The fork could not be identified from this checkout's remotes."""
 
-    PREFLIGHT_REFUSED = 5
+    MOVE_REFUSED = 5
     """A push was refused; the reasons are in the report."""
 
     GIT_COMMAND_FAILED = 6
@@ -1462,7 +1541,7 @@ class MaintenanceExitCode(IntEnum):
     BRANCH_NEEDS_ATTENTION = 10
     """The pass itself ran, but left at least one branch unpublished for somebody to
     act on - a conflict, a withheld branch, or a push the fork rejected. Distinct from
-    a pre-flight refusal, which is a fault in the move rather than in the branch."""
+    a move check refusal, which is a fault in the move rather than in the branch."""
 
     @property
     def name_for_a_caller(self) -> str:
@@ -1491,7 +1570,7 @@ def exit_code_for(report: MaintenanceReport) -> MaintenanceExitCode:
         return MaintenanceExitCode.NOT_FAST_FORWARD
     unpublished = report.branches_left_unpublished
     if any(outcome.outcome is RestackOutcome.REFUSED for outcome in unpublished):
-        return MaintenanceExitCode.PREFLIGHT_REFUSED
+        return MaintenanceExitCode.MOVE_REFUSED
     if unpublished:
         return MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
     return MaintenanceExitCode.SUCCESS
@@ -1525,13 +1604,16 @@ class MaintenancePass:
 class MaintenanceCommand:
     """One command this executor answers.
 
-    A command owns its own name, its own flags and what it does, so adding one is adding
-    a subclass and listing it - never editing a dispatch that knows every command there
-    is.
+    A command owns its own name, its own flags and what it does, so adding one is
+    writing a subclass - :data:`COMMANDS` finds it, and nothing else has to be told it
+    exists.
     """
 
-    command: Command
-    """Which command this is, carrying its own name and help text."""
+    invoked_as: ClassVar[str]
+    """The name it is invoked by on the command line."""
+
+    description: ClassVar[str]
+    """What it does, as ``--help`` puts it."""
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """Declare this command's own flags.
@@ -1555,7 +1637,8 @@ class MaintenanceCommand:
 class BoardCommand(MaintenanceCommand):
     """Fetches the fork's open pull requests and exports them as the board."""
 
-    command: Command = Command.BOARD
+    invoked_as: ClassVar[str] = "board"
+    description: ClassVar[str] = "export the fork's open pull requests"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare ``--write`` on."""
@@ -1580,7 +1663,8 @@ class BoardCommand(MaintenanceCommand):
 class FastForwardCommand(MaintenanceCommand):
     """Moves the fork's base branch onto the upstream, refusing to force."""
 
-    command: Command = Command.FAST_FORWARD
+    invoked_as: ClassVar[str] = "fast-forward"
+    description: ClassVar[str] = "move the fork's base branch onto the upstream"
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
@@ -1597,7 +1681,8 @@ class FastForwardCommand(MaintenanceCommand):
 class RestackCommand(MaintenanceCommand):
     """Integrates every moved parent and publishes what merged cleanly."""
 
-    command: Command = Command.RESTACK
+    invoked_as: ClassVar[str] = "restack"
+    description: ClassVar[str] = "integrate every moved parent and publish the result"
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
@@ -1615,7 +1700,8 @@ class RestackCommand(MaintenanceCommand):
 class PromoteCommand(MaintenanceCommand):
     """Records the upstream link on every branch ready to be promoted."""
 
-    command: Command = Command.PROMOTE
+    invoked_as: ClassVar[str] = "promote"
+    description: ClassVar[str] = "record the upstream link on every promotable branch"
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
@@ -1635,7 +1721,8 @@ class PromoteCommand(MaintenanceCommand):
 class RunReportCommand(MaintenanceCommand):
     """Performs the whole pass and reports it as one document."""
 
-    command: Command = Command.RUN_REPORT
+    invoked_as: ClassVar[str] = "run-report"
+    description: ClassVar[str] = "perform the whole pass and report it"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare ``--json`` on."""
@@ -1678,14 +1765,11 @@ class RunReportCommand(MaintenanceCommand):
         return exit_code_for(report)
 
 
-COMMANDS: tuple[MaintenanceCommand, ...] = (
-    BoardCommand(),
-    FastForwardCommand(),
-    RestackCommand(),
-    PromoteCommand(),
-    RunReportCommand(),
+COMMANDS: tuple[MaintenanceCommand, ...] = tuple(
+    subclass() for subclass in MaintenanceCommand.__subclasses__()
 )
-"""Every command this executor answers, in the order ``--help`` lists them."""
+"""Every command this executor answers, found from the subclasses themselves so a
+command cannot exist without being reachable, in the order they are defined."""
 
 
 def _argument_parser() -> argparse.ArgumentParser:
@@ -1697,9 +1781,7 @@ def _argument_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
     for command in COMMANDS:
         command.declare_arguments(
-            subparsers.add_parser(
-                command.command.invoked_as, help=command.command.description
-            )
+            subparsers.add_parser(command.invoked_as, help=command.description)
         )
     return parser
 
@@ -1729,7 +1811,7 @@ def _dispatch() -> MaintenanceExitCode:
     """
     arguments = _argument_parser().parse_args()
     requested = next(
-        entry for entry in COMMANDS if entry.command.invoked_as == arguments.command
+        entry for entry in COMMANDS if entry.invoked_as == arguments.command
     )
     try:
         maintenance = MaintenancePass(
