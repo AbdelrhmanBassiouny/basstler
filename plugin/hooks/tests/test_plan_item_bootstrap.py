@@ -6,10 +6,9 @@ Run against the local scratch repository fixture rather than a real remote, and 
 a recording pull request opener rather than GitHub, so nothing here needs network access
 or credentials.
 
-Every manifest line asserted on is rendered by the production :class:`ItemFieldLine`
-rather than written out again here, and every path is resolved by the production
-:class:`PlanLocation`, so a test cannot pin a second, independently-drifting copy of the
-manifest's own vocabulary.
+Every manifest line asserted on is rendered by the :class:`PlanField` that owns it, and
+every path by the :class:`PlanDocument` that lives at it, so a test cannot pin a second,
+independently-drifting copy of the manifest's own vocabulary.
 """
 
 from __future__ import annotations
@@ -22,18 +21,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 import pytest
+import yaml
 
 import plan_item_bootstrap
 from plan_item_bootstrap import (
+    PLANS_DIRECTORY,
     CreatedPullRequest,
     ExitCode,
     HookScript,
-    ItemFieldLine,
     ItemRecordRequest,
     ItemStatus,
     PlanDocument,
     PlanField,
-    PlanLocation,
     PullRequestRequest,
     UnknownItemError,
     UnknownPlanError,
@@ -49,8 +48,7 @@ PLAN_IDENTIFIER = "test-plan"
 
 PLAN_MANIFEST = (FIXTURES_DIRECTORY / "bootstrap-plan.yaml").read_text()
 """
-The manifest every test starts from, kept as a real ``.yaml`` file rather than a string
-in this module so it is edited and validated as YAML.
+The manifest every test starts from.
 """
 
 PLAN_ROADMAP = (FIXTURES_DIRECTORY / "bootstrap-roadmap.md").read_text()
@@ -59,20 +57,35 @@ The roadmap every test starts from.
 """
 
 EXISTING_ITEM = "an-existing-item"
+"""
+The fixture item the plan already tracks, with no branch of its own yet.
+"""
+
 NEW_ITEM = "a-brand-new-item"
+"""
+An item the fixture plan does not track, for the entry-creating path.
+"""
+
 NEW_BRANCH = "claude/a-new-branch"
+"""
+The branch opening the work publishes.
+"""
+
 SESSION_URL = "https://example.invalid/session_first"
+"""
+The session recorded on an item whose work was opened.
+"""
 
 
 def manifest_line(field: PlanField, value: str) -> str:
     """
-    One manifest line as the production renderer writes it.
+    One manifest line as the field that owns it writes it.
 
     :param field: The key the line sets.
     :param value: The value it carries.
     :return: The rendered line.
     """
-    return ItemFieldLine(field, value).render()
+    return field.render(value)
 
 
 # %% fixtures
@@ -144,10 +157,10 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     scratch_repository.commit_everything("initial commit")
     scratch_repository.publish_notes_branch(
         {
-            f".claude/personal/plans/{PLAN_IDENTIFIER}/{PlanDocument.MANIFEST}": (
+            PlanDocument.MANIFEST.path_within_notes_branch(PLAN_IDENTIFIER): (
                 PLAN_MANIFEST
             ),
-            f".claude/personal/plans/{PLAN_IDENTIFIER}/{PlanDocument.ROADMAP}": (
+            PlanDocument.ROADMAP.path_within_notes_branch(PLAN_IDENTIFIER): (
                 PLAN_ROADMAP
             ),
         }
@@ -162,8 +175,8 @@ def published_plan(repository: ScratchRepository) -> dict[PlanDocument, str]:
     Read the plan's documents as they actually are on the notes branch, rather than what
     a run reported.
 
-    Resolves where they live through the production resolver, so this never states a
-    plan's layout independently of the configuration that owns it.
+    Asks each document where it lives, so this never states a plan's layout
+    independently of the code that owns it.
 
     :param repository: The scratch repository whose notes remote to read.
     :return: Each document's content.
@@ -171,9 +184,10 @@ def published_plan(repository: ScratchRepository) -> dict[PlanDocument, str]:
     checkout = repository.project_root.parent / "published-plan-checkout"
     shutil.rmtree(checkout, ignore_errors=True)
     repository.clone_notes_branch(checkout)
-    location = PlanLocation.resolve(PLAN_IDENTIFIER, repository.project_root)
     return {
-        document: (checkout / location.path_of(document)).read_text()
+        document: (
+            checkout / document.path_within_notes_branch(PLAN_IDENTIFIER)
+        ).read_text()
         for document in PlanDocument
     }
 
@@ -300,8 +314,8 @@ def test_recording_a_new_item_appends_it_to_the_manifest(
     manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
     assert manifest.startswith(PLAN_MANIFEST)
     assert manifest.endswith(
-        ItemFieldLine(PlanField.IDENTIFIER, NEW_ITEM).render(opening_the_item=True)
-        + ItemFieldLine.quoting(PlanField.TITLE, "A brand new item").render()
+        PlanField.IDENTIFIER.render(NEW_ITEM, opening_the_item=True)
+        + manifest_line(PlanField.TITLE, "A brand new item")
         + manifest_line(PlanField.BRANCH, "null")
         + manifest_line(PlanField.TRACK, "a-track")
         + manifest_line(PlanField.DEPENDS_ON, "[]")
@@ -537,6 +551,55 @@ def test_a_rendered_field_line_matches_how_a_real_manifest_writes_it():
         manifest_line(PlanField.STATUS, ItemStatus.NOT_STARTED.value) in PLAN_MANIFEST
     )
     assert manifest_line(PlanField.TRACK, "a-track") in PLAN_MANIFEST
+
+
+def test_a_field_quotes_its_own_value_when_its_specification_says_to():
+    """
+    Quoting is the field's to decide, so no caller has to know that a title is prose and
+    a track is a bare identifier.
+    """
+    assert PlanField.TITLE.render("A brand new item").endswith(': "A brand new item"\n')
+    assert PlanField.TRACK.render("a-track").endswith(": a-track\n")
+    assert PlanField.TITLE.specification.quoted
+    assert not PlanField.TRACK.specification.quoted
+
+
+def test_a_field_indexes_a_parsed_manifest_by_its_own_key():
+    """
+    A member's string value stays its key, so carrying a specification never costs the
+    caller a ``.value`` when reading parsed YAML.
+    """
+    item = yaml.safe_load(PLAN_MANIFEST)[PlanField.ITEMS][0]
+    assert item[PlanField.IDENTIFIER] == EXISTING_ITEM
+    assert item[PlanField.STATUS] == ItemStatus.NOT_STARTED
+
+
+def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    ``PLANS_DIRECTORY`` mirrors ``PLANS_DIR`` in the shell configuration; this is what
+    stops the mirror drifting, since the two are edited in different files.
+    """
+    resolved = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{HookScript.CONFIGURATION.path}" && '
+            'printf "%s\\n%s\\n" "${PLANS_DIR}" "$(plan_manifest_path "$1")"',
+            "test",
+            PLAN_IDENTIFIER,
+        ],
+        cwd=bootstrap_repository.project_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    plans_directory, manifest_path = resolved.stdout.strip().split("\n")
+    assert plans_directory == PLANS_DIRECTORY
+    assert manifest_path == PlanDocument.MANIFEST.path_within_notes_branch(
+        PLAN_IDENTIFIER
+    )
 
 
 def test_only_the_fields_that_run_over_lines_are_treated_as_folded():

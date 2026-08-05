@@ -46,8 +46,8 @@ the document never has to decode an integer back into a meaning.
    records: even a format-preserving library re-flows wrapped strings, turning a
    one-field edit into an unreadable diff across the whole file. Every key, filename and
    status this module writes is named once in :class:`PlanField`, :class:`PlanDocument`
-   and :class:`ItemStatus`, and rendered through :class:`ItemFieldLine`, so no caller -
-   tests included - writes a second copy of a manifest line by hand.
+   and :class:`ItemStatus`, and every line is rendered by the field that owns it, so no
+   caller - tests included - writes a second copy of a manifest line by hand.
 """
 
 from __future__ import annotations
@@ -79,95 +79,13 @@ HOOKS_DIRECTORY = ".claude/hooks"
 Where this repository keeps the scripts that read and write personal-notes data.
 """
 
-
-# %% the vocabulary a plan manifest is written in
-
-
-class HookScript(StrEnum):
-    """
-    The hook scripts this module drives, named once so a caller - a test installing them
-    into a scratch layout, or this module invoking one - never spells a filename itself.
-    """
-
-    CONFIGURATION = "resolve-personal-notes-config.sh"
-    SAVE_PLAN = "save-plan.sh"
-    PLAN_ITEM_BOOTSTRAP = "plan_item_bootstrap.py"
-
-    @property
-    def path(self) -> str:
-        """
-        The script's path from the project root.
-        """
-        return f"{HOOKS_DIRECTORY}/{self.value}"
-
-
-class PlanDocument(StrEnum):
-    """
-    The two files a plan is kept in, beside each other on the personal-notes branch.
-
-    ``roadmap.md`` is a fixed sibling filename rather than a configurable one, so both
-    names belong together here.
-    """
-
-    MANIFEST = "plan.yaml"
-    ROADMAP = "roadmap.md"
-
-
-class PlanField(StrEnum):
-    """
-    The ``plan.yaml`` keys this module reads or writes.
-
-    Naming them once is what lets a manifest line be rendered rather than typed: see
-    :class:`ItemFieldLine`. The full schema is documented in ``plan-schema.md``; this
-    enum carries the subset bootstrapping an item touches.
-    """
-
-    IDENTIFIER = "id"
-    TITLE = "title"
-    BRANCH = "branch"
-    REPOSITORY = "repository"
-    DEFAULT_REPOSITORY = "default_repository"
-    PULL_REQUEST_NUMBER = "pull_request_number"
-    TRACK = "track"
-    DEPENDS_ON = "depends_on"
-    STATUS = "status"
-    SESSION = "session"
-    NOTES = "notes"
-    BLOCKERS = "blockers"
-    ITEMS = "items"
-
-    @property
-    def spans_following_lines(self) -> bool:
-        """
-        Whether this field's value may continue over the lines beneath it.
-
-        A folded or list value swallows anything inserted after it, so a new field is
-        inserted before the first such field in the block rather than at its end.
-        """
-        return self in FOLDED_PLAN_FIELDS
-
-
-FOLDED_PLAN_FIELDS = frozenset({PlanField.NOTES, PlanField.BLOCKERS})
+PLANS_DIRECTORY = ".claude/personal/plans"
 """
-The item fields whose values routinely run over several lines.
+Where plans live on the personal-notes branch.
+
+Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shell half of
+the same tooling; a test holds the two equal so the mirror cannot drift.
 """
-
-
-class ItemStatus(StrEnum):
-    """
-    The statuses ``plan.yaml``'s ``status`` field accepts.
-
-    Mirrors ``build_dashboard.py``'s own enum, which lives in the plan-dashboard skill
-    directory and needs jinja2 and markdown to import, so a hook cannot reach it. The one
-    definition both share arrives with the package migration that gives them a home.
-    """
-
-    NOT_STARTED = "not_started"
-    IN_PROGRESS = "in_progress"
-    BLOCKED = "blocked"
-    DEFERRED = "deferred"
-    DONE = "done"
-
 
 ITEM_FIELD_INDENT = "    "
 """
@@ -180,53 +98,250 @@ What opens an item block, the list marker its first field sits behind.
 """
 
 
+# %% the vocabulary a plan manifest is written in
+
+
+class HookScript(StrEnum):
+    """
+    The hook scripts this module drives, named once so a caller - a test installing them
+    into a scratch layout, or this module invoking one - never spells a filename itself.
+    """
+
+    CONFIGURATION = "resolve-personal-notes-config.sh"
+    """
+    Resolves the personal-notes remote and branch, and fetches it.
+    """
+
+    SAVE_PLAN = "save-plan.sh"
+    """
+    Pushes an edited manifest and roadmap to the personal-notes branch.
+    """
+
+    PLAN_ITEM_BOOTSTRAP = "plan_item_bootstrap.py"
+    """
+    This module, which a caller invokes by path.
+    """
+
+    @property
+    def path(self) -> str:
+        """
+        The script's path from the project root.
+        """
+        return f"{HOOKS_DIRECTORY}/{self.value}"
+
+
+class PlanDocument(StrEnum):
+    """
+    The two files a plan is kept in, beside each other on the personal-notes branch.
+    """
+
+    MANIFEST = "plan.yaml"
+    """
+    The structured manifest, whose schema ``plan-schema.md`` documents.
+    """
+
+    ROADMAP = "roadmap.md"
+    """
+    The narrative companion, a fixed sibling filename rather than a configurable one.
+    """
+
+    def path_within_notes_branch(self, plan_identifier: str) -> str:
+        """
+        Where this document lives for one plan.
+
+        :param plan_identifier: The plan's id.
+        :return: The path, relative to the personal-notes branch's root.
+        """
+        return f"{PLANS_DIRECTORY}/{plan_identifier}/{self.value}"
+
+
 @dataclass(frozen=True)
-class ItemFieldLine:
+class FieldSpecification:
     """
-    One ``<field>: <value>`` line of an item block, as it is written in the manifest.
-
-    Rendering a line rather than writing one is what keeps this module's output and every
-    assertion about it derived from the same place.
+    How one ``plan.yaml`` key is written, so no caller has to decide per field.
     """
 
-    field: PlanField
+    key: str
     """
-    The key this line sets.
-    """
-
-    value: str
-    """
-    The value, already in the form YAML should carry it - see :meth:`quoting`.
+    The key as it appears in the manifest.
     """
 
-    @classmethod
-    def quoting(cls, field: PlanField, value: str) -> ItemFieldLine:
+    quoted: bool = False
+    """
+    Whether the value is written as a double-quoted string.
+    """
+
+    spans_following_lines: bool = False
+    """
+    Whether the value may continue over the lines beneath it.
+
+    A folded or list value swallows anything inserted after it, so a new field is
+    inserted before the first such field in a block rather than at its end.
+    """
+
+
+class PlanField(StrEnum):
+    """
+    The ``plan.yaml`` keys this module reads or writes, each carrying how it is written.
+
+    A member's value is its key, so it indexes a parsed manifest directly, while its
+    :class:`FieldSpecification` says whether that key's value is quoted or spans several
+    lines. That is what lets :meth:`render` produce a correct line from the field alone -
+    a caller never chooses quoting, and every assertion about a manifest line derives
+    from the same place the line is written. The full schema is documented in
+    ``plan-schema.md``; this enum carries the subset bootstrapping an item touches.
+    """
+
+    def __new__(cls, specification: FieldSpecification) -> PlanField:
         """
-        Build a line whose value is written as a double-quoted string.
+        Build a member whose string value is its key and which carries its specification.
 
-        :param field: The key to set.
-        :param value: The value to quote.
-        :return: The line.
+        :param specification: How this key is written.
+        :return: The member.
         """
-        return cls(field, f'"{value}"')
+        member = str.__new__(cls, specification.key)
+        member._value_ = specification.key
+        member.specification = specification
+        return member
 
-    def render(self, opening_the_item: bool = False) -> str:
+    IDENTIFIER = FieldSpecification(key="id")
+    """
+    The item's own id, and the line that opens its block.
+    """
+
+    TITLE = FieldSpecification(key="title", quoted=True)
+    """
+    What the item does, quoted because it is prose.
+    """
+
+    BRANCH = FieldSpecification(key="branch")
+    """
+    The git branch the work happens on, once one exists.
+    """
+
+    REPOSITORY = FieldSpecification(key="repository")
+    """
+    The item's own repository, overriding the plan's default.
+    """
+
+    DEFAULT_REPOSITORY = FieldSpecification(key="default_repository")
+    """
+    The repository every item uses unless it sets its own.
+    """
+
+    PULL_REQUEST_NUMBER = FieldSpecification(key="pull_request_number")
+    """
+    The real pull request number, once one exists.
+    """
+
+    TRACK = FieldSpecification(key="track")
+    """
+    The parallel line of work the item belongs to.
+    """
+
+    DEPENDS_ON = FieldSpecification(key="depends_on")
+    """
+    The items this one stacks on, by id.
+    """
+
+    STATUS = FieldSpecification(key="status")
+    """
+    The session's own planning assessment - see :class:`ItemStatus`.
+    """
+
+    SESSION = FieldSpecification(key="session")
+    """
+    The session doing the work.
+    """
+
+    NOTES = FieldSpecification(key="notes", spans_following_lines=True)
+    """
+    Freeform detail, routinely folded over many lines.
+    """
+
+    BLOCKERS = FieldSpecification(key="blockers", spans_following_lines=True)
+    """
+    Why the item is stuck, as a list.
+    """
+
+    ITEMS = FieldSpecification(key="items")
+    """
+    The manifest's top-level list of items.
+    """
+
+    @property
+    def spans_following_lines(self) -> bool:
         """
-        The line as it appears in the manifest, newline included.
+        Whether this field's value may continue over the lines beneath it.
+        """
+        return self.specification.spans_following_lines
 
+    def render(self, value: str, opening_the_item: bool = False) -> str:
+        """
+        The manifest line setting this field to *value*, newline included.
+
+        Quoting comes from the field's own specification rather than from the caller.
+
+        :param value: The value to write.
         :param opening_the_item: Whether this is the item block's first line, which
             carries the list marker instead of the field indent.
         :return: The rendered line.
         """
         prefix = ITEM_MARKER if opening_the_item else ITEM_FIELD_INDENT
-        return f"{prefix}{self.field.value}: {self.value}\n"
+        written = f'"{value}"' if self.specification.quoted else value
+        return f"{prefix}{self.value}: {written}\n"
 
     @property
     def pattern(self) -> re.Pattern[str]:
         """
-        Matches this line's field wherever it already appears in an item block.
+        Matches this field wherever it already appears in an item block.
         """
-        return re.compile(rf"^\s*{re.escape(self.field.value)}:\s*.*$")
+        return re.compile(rf"^\s*{re.escape(self.value)}:\s*.*$")
+
+
+FOLDED_PLAN_FIELDS = frozenset(
+    field for field in PlanField if field.spans_following_lines
+)
+"""
+The item fields whose values routinely run over several lines, derived from the fields
+themselves rather than listed a second time.
+"""
+
+
+class ItemStatus(StrEnum):
+    """
+    The statuses ``plan.yaml``'s ``status`` field accepts.
+
+    Mirrors ``build_dashboard.py``'s own enum, which lives in the plan-dashboard skill
+    directory and needs jinja2 and markdown to import, so a hook cannot reach it. A test
+    holds the two equal; the one definition both share arrives with the package
+    migration that gives them a home.
+    """
+
+    NOT_STARTED = "not_started"
+    """
+    Nothing has begun.
+    """
+
+    IN_PROGRESS = "in_progress"
+    """
+    The work is underway - what bootstrapping an item sets.
+    """
+
+    BLOCKED = "blocked"
+    """
+    Something outside the item has to move first.
+    """
+
+    DEFERRED = "deferred"
+    """
+    Deliberately parked rather than stuck.
+    """
+
+    DONE = "done"
+    """
+    Landed.
+    """
 
 
 ITEM_START_PATTERN = re.compile(rf"^\s*- {re.escape(PlanField.IDENTIFIER.value)}:")
@@ -537,67 +652,32 @@ def run_git(*arguments: str, project_root: Path) -> str:
     return result.stdout.rstrip("\n")
 
 
-@dataclass(frozen=True)
-class PlanLocation:
+def fetch_notes_branch(project_root: Path) -> None:
     """
-    Where one plan's documents live, as the shell configuration resolves it.
+    Fetch the personal-notes branch, leaving ``FETCH_HEAD`` pointing at it.
+
+    Sources the shell configuration and calls its own fetch function rather than
+    re-deriving the remote and branch precedence, so this and the hook scripts can never
+    disagree about which branch a plan is on. Where a plan sits *within* that branch is
+    :meth:`PlanDocument.path_within_notes_branch`'s to say.
+
+    :param project_root: The repository to fetch within.
+    :raises NotesBranchUnavailableError: If the notes branch cannot be fetched.
     """
-
-    paths: dict[PlanDocument, str]
-    """
-    Each document's path within the personal-notes branch.
-    """
-
-    @classmethod
-    def resolve(cls, plan_identifier: str, project_root: Path) -> PlanLocation:
-        """
-        Fetch the personal-notes branch and resolve *plan_identifier*'s paths within it.
-
-        Sources the shell configuration and calls its own resolution functions rather
-        than re-deriving where a plan lives, so this and the hook scripts can never
-        disagree - which is also why a test asserting on those paths asks this rather
-        than spelling them out.
-
-        :param plan_identifier: The plan's id.
-        :param project_root: The repository to resolve within.
-        :raises NotesBranchUnavailableError: If the notes branch cannot be fetched.
-        :return: The resolved location, with ``FETCH_HEAD`` left pointing at the branch.
-        """
-        probe = subprocess.run(
-            [
-                "bash",
-                "-c",
-                f'source "{HookScript.CONFIGURATION.path}" && '
-                "fetch_personal_notes_branch && "
-                'printf "%s\\n%s\\n" '
-                '"$(plan_manifest_path "$1")" "$(plan_roadmap_path "$1")"',
-                "plan_item_bootstrap",
-                plan_identifier,
-            ],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
+    probe = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{HookScript.CONFIGURATION.path}" && fetch_personal_notes_branch',
+        ],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+    )
+    if probe.returncode != 0:
+        raise NotesBranchUnavailableError(
+            detail=probe.stderr.strip() or "no personal-notes branch found"
         )
-        if probe.returncode != 0:
-            raise NotesBranchUnavailableError(
-                detail=probe.stderr.strip() or "no personal-notes branch found"
-            )
-        manifest_path, roadmap_path = probe.stdout.strip().split("\n")
-        return cls(
-            paths={
-                PlanDocument.MANIFEST: manifest_path,
-                PlanDocument.ROADMAP: roadmap_path,
-            }
-        )
-
-    def path_of(self, document: PlanDocument) -> str:
-        """
-        One document's path within the personal-notes branch.
-
-        :param document: The document wanted.
-        :return: Its path.
-        """
-        return self.paths[document]
 
 
 @dataclass(frozen=True)
@@ -634,10 +714,10 @@ class PlanDocuments:
         :raises UnknownPlanError: If the plan has no manifest on the branch.
         :return: The loaded documents.
         """
-        location = PlanLocation.resolve(plan_identifier, project_root)
+        fetch_notes_branch(project_root)
         contents = {}
         for document in PlanDocument:
-            path = location.path_of(document)
+            path = document.path_within_notes_branch(plan_identifier)
             try:
                 contents[document] = (
                     run_git("show", f"FETCH_HEAD:{path}", project_root=project_root)
@@ -795,10 +875,10 @@ def apply_item_fields(
     manifest_text: str,
     plan_identifier: str,
     item_identifier: str,
-    lines_to_set: list[ItemFieldLine],
+    fields_to_set: list[tuple[PlanField, str]],
 ) -> str:
     """
-    Set each of *lines_to_set* on one item, patching an existing line or inserting a new
+    Set each of *fields_to_set* on one item, patching an existing line or inserting a new
     one.
 
     Every other line is left byte-for-byte untouched, so comments, key order, string
@@ -807,20 +887,16 @@ def apply_item_fields(
     :param manifest_text: The manifest's raw text.
     :param plan_identifier: The plan being edited.
     :param item_identifier: The item to patch.
-    :param lines_to_set: The field lines to write.
+    :param fields_to_set: Each field to write, with the value to write to it.
     :raises UnknownItemError: If the item has no block in the text.
     :return: The patched manifest text.
     """
     lines = manifest_text.split("\n")
     start, end = locate_item_block(lines, plan_identifier, item_identifier)
-    for field_line in lines_to_set:
-        rendered = field_line.render().rstrip("\n")
+    for field, value in fields_to_set:
+        rendered = field.render(value).rstrip("\n")
         existing = next(
-            (
-                index
-                for index in range(start, end)
-                if field_line.pattern.match(lines[index])
-            ),
+            (index for index in range(start, end) if field.pattern.match(lines[index])),
             None,
         )
         if existing is not None:
@@ -874,17 +950,16 @@ def render_new_item(request: ItemRecordRequest) -> str:
         raise IncompleteNewItemError(
             item_identifier=request.item_identifier, missing_fields=missing
         )
-    opening = ItemFieldLine(PlanField.IDENTIFIER, request.item_identifier)
     body = [
-        ItemFieldLine.quoting(PlanField.TITLE, request.title),
-        ItemFieldLine(PlanField.BRANCH, "null"),
-        ItemFieldLine(PlanField.TRACK, request.track),
-        ItemFieldLine(PlanField.DEPENDS_ON, "[]"),
-        ItemFieldLine(PlanField.STATUS, request.status.value),
+        (PlanField.TITLE, request.title),
+        (PlanField.BRANCH, "null"),
+        (PlanField.TRACK, request.track),
+        (PlanField.DEPENDS_ON, "[]"),
+        (PlanField.STATUS, request.status.value),
     ]
-    return opening.render(opening_the_item=True) + "".join(
-        line.render() for line in body
-    )
+    return PlanField.IDENTIFIER.render(
+        request.item_identifier, opening_the_item=True
+    ) + "".join(field.render(value) for field, value in body)
 
 
 def append_item(manifest_text: str, block: str) -> str:
@@ -1032,7 +1107,7 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
             documents.manifest_text,
             request.plan_identifier,
             request.item_identifier,
-            [ItemFieldLine(PlanField.STATUS, request.status.value)],
+            [(PlanField.STATUS, request.status.value)],
         )
 
     roadmap_text = append_roadmap_section(
@@ -1377,10 +1452,10 @@ def open_work(
         request.plan_identifier,
         request.item_identifier,
         [
-            ItemFieldLine(PlanField.BRANCH, request.branch),
-            ItemFieldLine(PlanField.PULL_REQUEST_NUMBER, str(created.number)),
-            ItemFieldLine(PlanField.SESSION, request.session_url),
-            ItemFieldLine(PlanField.STATUS, ItemStatus.IN_PROGRESS.value),
+            (PlanField.BRANCH, request.branch),
+            (PlanField.PULL_REQUEST_NUMBER, str(created.number)),
+            (PlanField.SESSION, request.session_url),
+            (PlanField.STATUS, ItemStatus.IN_PROGRESS.value),
         ],
     )
     documents.save(manifest_text, documents.roadmap_text, project_root)
