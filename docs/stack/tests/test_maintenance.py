@@ -13,6 +13,7 @@ The board export and the report are pure, and are tested as such.
 
 from __future__ import annotations
 
+import argparse
 import json
 import os
 import subprocess
@@ -33,13 +34,16 @@ from stack import (
     PullRequest,
     RefusalReason,
     Repository,
+    Stack,
     build_stack,
     load_board,
 )
 
+import maintenance
 from maintenance import (
     CREDENTIAL_VARIABLES,
     BoardExport,
+    BranchAncestry,
     BranchOutcome,
     Command,
     FastForwardOutcome,
@@ -47,6 +51,7 @@ from maintenance import (
     GitCommandFailed,
     GitCommandRunner,
     MaintenanceExitCode,
+    MaintenancePass,
     MaintenanceReport,
     MissingPullRequestFieldError,
     PullRequestField,
@@ -57,9 +62,10 @@ from maintenance import (
     exit_code_for,
     fast_forward,
     promote,
-    push_arguments,
+    ProposedPush,
+    RunReportCommand,
     restack,
-    session_link_in,
+    get_session_link_in,
 )
 
 MAINTENANCE_SCRIPT = Path(__file__).parent.parent / "maintenance.py"
@@ -266,14 +272,10 @@ def a_stack(checkout: ForkCheckout, pull_requests: list[PullRequest]):
     """
     configuration = make_configuration()
     upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
+    ancestry = BranchAncestry(configuration, checkout.git)
 
     def is_merged(name: str) -> bool:
-        return checkout.git.succeeds(
-            "merge-base",
-            "--is-ancestor",
-            f"{configuration.fork_remote}/{name}",
-            upstream,
-        )
+        return ancestry.is_ancestor(name, upstream)
 
     return build_stack(configuration, pull_requests, is_merged)
 
@@ -292,7 +294,7 @@ def test_a_failing_git_command_raises_rather_than_returning_nothing(
         fork_checkout.git.run("rev-parse", "a-ref-that-does-not-exist")
 
     assert raised.value.arguments == ("rev-parse", "a-ref-that-does-not-exist")
-    assert raised.value.exit_status != 0
+    assert raised.value.status != 0
 
 
 # %% the board export
@@ -316,13 +318,50 @@ def an_api_record(
     :return: One pull request in the shape the REST API returns it.
     """
     return {
-        "number": number,
-        "head": {"ref": head},
-        "base": {"ref": base},
-        "draft": draft,
-        "labels": [{"name": name} for name in labels or []],
-        "body": body,
+        PullRequestField.NUMBER.key: number,
+        PullRequestField.HEAD.key: {"ref": head},
+        PullRequestField.BASE.key: {"ref": base},
+        PullRequestField.DRAFT.key: draft,
+        PullRequestField.LABELS.key: [{"name": name} for name in labels or []],
+        PullRequestField.BODY.key: body,
     }
+
+
+def test_every_field_is_named_by_the_key_the_api_answers_under():
+    """
+    A member's value is the specification's argument tuple; passing a built
+    specification instead lands the whole instance in the key, where every read then
+    silently finds nothing.
+    """
+    for field in PullRequestField:
+        assert isinstance(field.key, str), field
+
+
+def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
+    """
+    ``head`` and ``base`` arrive nested and ``labels`` as objects, so a field read the
+    wrong way produces a board that is wrong rather than empty.
+    """
+    export = BoardExport.from_api_records(
+        [
+            an_api_record(
+                number=41,
+                head="a-child",
+                base="a-parent",
+                draft=True,
+                labels=["rebase"],
+                body="see https://claude.ai/code/session_01ABCdef",
+            )
+        ]
+    )
+
+    exported = export.pull_requests[0]
+    assert exported.number == 41
+    assert exported.head == "a-child"
+    assert exported.base == "a-parent"
+    assert exported.draft is True
+    assert exported.labels == ["rebase"]
+    assert exported.session == "https://claude.ai/code/session_01ABCdef"
 
 
 def test_the_written_board_parses_back_into_the_records_it_was_built_from(
@@ -377,11 +416,11 @@ def test_the_board_snapshot_is_never_committable():
 def test_a_session_link_is_read_out_of_the_description():
     body = "Some prose.\n\nSession: https://claude.ai/code/session_01ABCdef\n"
 
-    assert session_link_in(body) == "https://claude.ai/code/session_01ABCdef"
+    assert get_session_link_in(body) == "https://claude.ai/code/session_01ABCdef"
 
 
 def test_a_description_naming_no_session_yields_none():
-    assert session_link_in("Some prose with no link.") is None
+    assert get_session_link_in("Some prose with no link.") is None
 
 
 # %% fast-forward
@@ -544,11 +583,15 @@ def test_only_the_rebase_strategy_authorises_rewriting_published_history():
     """
     configuration = make_configuration()
 
-    merging = push_arguments(configuration, "a-branch", IntegrationStrategy.MERGE)
-    rebasing = push_arguments(configuration, "a-branch", IntegrationStrategy.REBASE)
+    merging = ProposedPush.publishing(
+        configuration, "a-branch", IntegrationStrategy.MERGE
+    )
+    rebasing = ProposedPush.publishing(
+        configuration, "a-branch", IntegrationStrategy.REBASE
+    )
 
-    assert not [argument for argument in merging if argument.startswith("--force")]
-    assert "--force-with-lease" in rebasing
+    assert not merging.with_lease
+    assert rebasing.with_lease
 
 
 def test_a_branch_that_moved_under_the_pass_is_incorporated_rather_than_overwritten(
@@ -571,9 +614,7 @@ def test_a_branch_that_moved_under_the_pass_is_incorporated_rather_than_overwrit
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
     assert child.outcome == RestackOutcome.PUSHED
-    assert fork_checkout.git.succeeds(
-        "merge-base", "--is-ancestor", somebody_else_s, "origin/a-child"
-    )
+    assert fork_checkout.git.contains(somebody_else_s, "origin/a-child")
 
 
 def test_a_rebase_whose_lease_has_expired_is_rejected_rather_than_forced_through(
@@ -631,6 +672,57 @@ def test_a_push_the_preflight_refuses_is_not_made(fork_checkout: ForkCheckout):
 # %% reporting a branch back to its owner
 
 
+@dataclass(frozen=True)
+class RecordedLabelWrite:
+    """
+    One label set written to a pull request.
+    """
+
+    pull_request_number: int
+    """
+    The pull request written to.
+    """
+
+    labels: tuple[str, ...]
+    """
+    The complete set it was left carrying.
+    """
+
+
+@dataclass(frozen=True)
+class RecordedComment:
+    """
+    One comment posted on a pull request.
+    """
+
+    pull_request_number: int
+    """
+    The pull request commented on.
+    """
+
+    body: str
+    """
+    What the comment said.
+    """
+
+
+@dataclass(frozen=True)
+class RecordedDescription:
+    """
+    One description written to a pull request.
+    """
+
+    pull_request_number: int
+    """
+    The pull request written to.
+    """
+
+    body: str
+    """
+    The description it was left carrying.
+    """
+
+
 @dataclass
 class RecordingPullRequests:
     """
@@ -657,19 +749,19 @@ class RecordingPullRequests:
     What title to report per pull request number.
     """
 
-    label_writes: list[tuple[int, tuple[str, ...]]] = dataclasses_field(
-        default_factory=list
-    )
+    label_writes: list[RecordedLabelWrite] = dataclasses_field(default_factory=list)
     """
     Every label set written, in order.
     """
 
-    comments: list[tuple[int, str]] = dataclasses_field(default_factory=list)
+    comments: list[RecordedComment] = dataclasses_field(default_factory=list)
     """
     Every comment posted, in order.
     """
 
-    description_writes: list[tuple[int, str]] = dataclasses_field(default_factory=list)
+    description_writes: list[RecordedDescription] = dataclasses_field(
+        default_factory=list
+    )
     """
     Every description written, in order.
     """
@@ -677,13 +769,16 @@ class RecordingPullRequests:
     def pull_request(self, number: int) -> dict:
         """
         :param number: The pull request to read.
-        :return: The fields the executor reads off one pull request.
+        :return: The fields the executor reads off one pull request, keyed the way the
+            executor itself names them.
         """
         return {
-            "number": number,
-            "mergeable_state": self.states.get(number, "clean"),
-            "body": self.descriptions.get(number, ""),
-            "title": self.titles.get(number, f"Pull request {number}"),
+            PullRequestField.NUMBER.key: number,
+            PullRequestField.MERGEABLE_STATE.key: self.states.get(number, "clean"),
+            PullRequestField.BODY.key: self.descriptions.get(number, ""),
+            PullRequestField.TITLE.key: self.titles.get(
+                number, f"Pull request {number}"
+            ),
         }
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
@@ -691,7 +786,7 @@ class RecordingPullRequests:
         :param number: The pull request to write.
         :param labels: The complete label set to write.
         """
-        self.label_writes.append((number, tuple(labels)))
+        self.label_writes.append(RecordedLabelWrite(number, tuple(labels)))
 
     def add_comment(self, number: int, body: str) -> str:
         """
@@ -699,7 +794,7 @@ class RecordingPullRequests:
         :param body: The comment.
         :return: A stand-in for the comment's URL.
         """
-        self.comments.append((number, body))
+        self.comments.append(RecordedComment(number, body))
         return f"https://example.invalid/comment/{len(self.comments)}"
 
     def set_description(self, number: int, body: str) -> None:
@@ -707,7 +802,7 @@ class RecordingPullRequests:
         :param number: The pull request to write.
         :param body: The new description.
         """
-        self.description_writes.append((number, body))
+        self.description_writes.append(RecordedDescription(number, body))
         self.descriptions[number] = body
 
 
@@ -729,11 +824,11 @@ def test_a_conflict_labels_the_branch_and_tells_its_owner(
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
     assert child.outcome == RestackOutcome.CONFLICT
-    assert fork.label_writes == [(41, ("needs-resolution",))]
-    commented_on, comment = fork.comments[0]
-    assert commented_on == 41
-    assert "a-contested-file" in comment
-    assert "https://claude.ai/code/session_01ABCdef" in comment
+    assert fork.label_writes == [RecordedLabelWrite(41, ("needs-resolution",))]
+    comment = fork.comments[0]
+    assert comment.pull_request_number == 41
+    assert "a-contested-file" in comment.body
+    assert "https://claude.ai/code/session_01ABCdef" in comment.body
     assert child.reported_at == "https://example.invalid/comment/1"
 
 
@@ -756,7 +851,7 @@ def test_a_label_write_keeps_every_label_the_branch_already_carried(
     )
 
     assert fork.label_writes == [
-        (41, ("a-label-somebody-else-put-here", "needs-resolution"))
+        RecordedLabelWrite(41, ("a-label-somebody-else-put-here", "needs-resolution"))
     ]
 
 
@@ -802,7 +897,7 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
     assert child.outcome == RestackOutcome.PUSHED
-    assert fork.label_writes == [(41, ())]
+    assert fork.label_writes == [RecordedLabelWrite(41, ())]
 
 
 # %% promotion
@@ -820,12 +915,12 @@ def test_the_promotion_link_goes_into_the_description_and_the_branch_is_labelled
     promoted = promote(a_stack(fork_checkout, the_board()), fork)
 
     assert [entry.branch for entry in promoted] == ["a-parent"]
-    written_to, description = fork.description_writes[0]
-    assert written_to == 40
-    assert "## Promote" in description
-    assert promoted[0].url in description
-    assert "What this branch does." in description
-    assert fork.label_writes == [(40, ("cram2-link-sent",))]
+    written = fork.description_writes[0]
+    assert written.pull_request_number == 40
+    assert "## Promote" in written.body
+    assert promoted[0].url in written.body
+    assert "What this branch does." in written.body
+    assert fork.label_writes == [RecordedLabelWrite(40, ("cram2-link-sent",))]
 
 
 def test_a_branch_already_carrying_the_link_label_is_not_promoted_again(
@@ -873,7 +968,7 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
     cleared = clear_spent_promotion_labels(a_stack(fork_checkout, board), fork)
 
     assert cleared == ("a-parent",)
-    assert fork.label_writes == [(40, ("in-review",))]
+    assert fork.label_writes == [RecordedLabelWrite(40, ("in-review",))]
 
 
 # %% the report
@@ -899,6 +994,27 @@ def test_the_report_serialises_every_command_s_outcome(fork_checkout: ForkChecko
     assert document["promotable"] == ["a-parent"]
     assert document["landed"] == []
     assert document["reparents"] == []
+
+
+def test_a_whole_pass_leaves_no_board_behind(
+    fork_checkout: ForkCheckout, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    A board is a snapshot of one moment's open pull requests, and a later run reading a
+    stale one is worse than one finding none - so a pass that has finished with it
+    removes it, and the next pass starts by exporting a fresh one.
+    """
+    a_parent_and_child(fork_checkout)
+    board_path = tmp_path / "board.json"
+    board_path.write_text("{}")
+    monkeypatch.setattr(maintenance, "BOARD_PATH", board_path)
+
+    RunReportCommand().run(
+        AlreadyResolvedPass(fork_checkout, the_board()),
+        argparse.Namespace(json=True),
+    )
+
+    assert not board_path.exists()
 
 
 # %% the exit status every command derives from what it left behind
@@ -1025,8 +1141,37 @@ def test_a_preflight_refusal_keeps_its_own_status():
 # %% the command line a caller acts on the exit status of
 
 
+@dataclass(frozen=True)
+class AlreadyResolvedPass(MaintenancePass):
+    """
+    A pass whose stack and fork are the scratch checkout's, so a whole run can be
+    performed without a network or a board file to read.
+    """
+
+    def __init__(self, checkout: ForkCheckout, pull_requests: list[PullRequest]):
+        """
+        :param checkout: The checkout to execute in.
+        :param pull_requests: The board entries the stack is derived from.
+        """
+        super().__init__(configuration=make_configuration(), git=checkout.git)
+        object.__setattr__(self, "_stack", a_stack(checkout, pull_requests))
+        object.__setattr__(self, "_fork", RecordingPullRequests())
+
+    def stack(self) -> Stack:
+        """
+        :return: The stack derived from the scratch checkout.
+        """
+        return self._stack
+
+    def fork(self) -> RecordingPullRequests:
+        """
+        :return: The stand-in that records writes instead of making them.
+        """
+        return self._fork
+
+
 def run_maintenance(
-    checkout: ForkCheckout, *arguments: str
+    checkout: ForkCheckout, command: Command, *flags: str
 ) -> subprocess.CompletedProcess[str]:
     """
     Invoke the executor as a caller does, so its exit status is exercised.
@@ -1037,11 +1182,12 @@ def run_maintenance(
     about, and it cannot be asserted at all if the ambient environment answers it.
 
     :param checkout: The checkout to run in.
-    :param arguments: The command and its flags.
+    :param command: The command to invoke.
+    :param flags: That command's own flags.
     :return: The finished subprocess.
     """
     return subprocess.run(
-        [sys.executable, str(MAINTENANCE_SCRIPT), *arguments],
+        [sys.executable, str(MAINTENANCE_SCRIPT), command.invoked_as, *flags],
         capture_output=True,
         text=True,
         cwd=checkout.project_root,
@@ -1054,10 +1200,14 @@ def run_maintenance(
 
 
 def test_an_unknown_command_is_a_usage_error(fork_checkout: ForkCheckout):
-    assert (
-        run_maintenance(fork_checkout, "not-a-command").returncode
-        == MaintenanceExitCode.USAGE
+    result = subprocess.run(
+        [sys.executable, str(MAINTENANCE_SCRIPT), "not-a-command"],
+        capture_output=True,
+        text=True,
+        cwd=fork_checkout.project_root,
     )
+
+    assert result.returncode == MaintenanceExitCode.USAGE
 
 
 def test_every_command_is_reachable_from_the_command_line(fork_checkout: ForkCheckout):

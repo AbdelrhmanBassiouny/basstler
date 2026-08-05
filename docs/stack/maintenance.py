@@ -38,9 +38,9 @@ import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import asdict, dataclass
-from enum import IntEnum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
-from typing import Protocol
+from typing import Any, Protocol
 
 from stack import (
     BOARD_PATH,
@@ -82,34 +82,59 @@ SESSION_LINK_PATTERN = re.compile(r"https://claude\.ai/code/session_[A-Za-z0-9_-
 """Matches the session link a pull request description carries, which is the only
 channel for telling a branch's owner that their branch needs them."""
 
+PullRequestRecord = Mapping[str, Any]
+"""One pull request as the REST API answers it, before any field is read."""
 
-# %% running git
+
+# %% when something this pass depends on refuses
 
 
 @dataclass
-class GitCommandFailed(RuntimeError):
-    """Raised when a git command this module depends on the result of fails."""
+class ExternalCallFailed(RuntimeError):
+    """Base for a call to git or GitHub that this pass depended on and did not get.
 
-    arguments: tuple[str, ...]
-    """The git subcommand and its arguments, as invoked."""
+    Both carry the same three things under different names - what was called, the
+    status it came back with, and what it said - so they say so once here and differ
+    only in how they name the call. Mirrors ``krrood``'s dataclass-exception idiom
+    (typed context fields, an abstract message composed by the base) without importing
+    it, since this module is deliberately dependency-free.
+    """
 
-    exit_status: int
-    """The status git exited with."""
+    status: int
+    """The status the call came back with."""
 
-    error_output: str
-    """What git wrote to stderr."""
+    detail: str
+    """What the far side said about it."""
+
+    @property
+    def call(self) -> str:
+        """:return: The call that failed, named the way its own caller named it."""
+        raise NotImplementedError
 
     def __str__(self) -> str:
-        """:return: The command, its status, and what git said about it."""
-        return (
-            f"git {' '.join(self.arguments)} exited {self.exit_status}: "
-            f"{self.error_output}"
-        )
+        """:return: The call, its status, and the reason given."""
+        return f"{self.call} failed with {self.status}: {self.detail}"
+
+
+@dataclass
+class GitCommandFailed(ExternalCallFailed):
+    """Raised when a git command this module depends on the result of fails."""
+
+    arguments: tuple[str, ...] = ()
+    """The git subcommand and its arguments, as invoked."""
+
+    @property
+    def call(self) -> str:
+        """:return: The git command line, as invoked."""
+        return f"git {' '.join(self.arguments)}"
 
 
 @dataclass(frozen=True)
 class GitCommandResult:
     """One finished git command, whether or not it succeeded."""
+
+    arguments: tuple[str, ...]
+    """The git subcommand and its arguments, as invoked."""
 
     exit_status: int
     """The status git exited with."""
@@ -124,6 +149,17 @@ class GitCommandResult:
     def succeeded(self) -> bool:
         """:return: Whether git exited zero."""
         return self.exit_status == 0
+
+    def raise_if_failed(self) -> GitCommandResult:
+        """:return: This result, when the command succeeded.
+        :raises GitCommandFailed: When it did not."""
+        if not self.succeeded:
+            raise GitCommandFailed(
+                status=self.exit_status,
+                detail=self.error_output,
+                arguments=self.arguments,
+            )
+        return self
 
 
 @dataclass(frozen=True)
@@ -152,6 +188,7 @@ class GitCommandRunner:
             text=True,
         )
         return GitCommandResult(
+            arguments=arguments,
             exit_status=completed.returncode,
             output=completed.stdout.strip(),
             error_output=completed.stderr.strip(),
@@ -164,56 +201,203 @@ class GitCommandRunner:
         :return: Git's stripped stdout.
         :raises GitCommandFailed: If git exits non-zero.
         """
-        result = self.attempt(*arguments)
-        if not result.succeeded:
-            raise GitCommandFailed(arguments, result.exit_status, result.error_output)
-        return result.output
+        return self.attempt(*arguments).raise_if_failed().output
 
-    def succeeds(self, *arguments: str) -> bool:
-        """Run a command asked only as a question.
+    def fetch(self, remote: str, *references: str) -> None:
+        """Refresh what this checkout knows about a remote.
 
-        :param arguments: The git subcommand and its arguments.
-        :return: Whether git exited zero.
+        :param remote: The remote to fetch from.
+        :param references: The branches to fetch, all of them when none is named.
         """
-        return self.attempt(*arguments).succeeded
+        self.run("fetch", "--quiet", remote, *references)
 
+    def commit_at(self, reference: str) -> str:
+        """:param reference: Any reference git can resolve.
+        :return: The commit it names."""
+        return self.run("rev-parse", reference)
 
-def ancestry_predicate(
-    configuration: Configuration, git: GitCommandRunner
-) -> Callable[[str, str], bool]:
-    """Build the containment test :class:`PreFlight` asks its questions through.
+    def checkout(self, branch: str, start_point: str) -> None:
+        """Put a branch at a starting point and check it out.
 
-    :param configuration: The resolved configuration naming the fork remote.
-    :param git: The runner to ask git through.
-    :return: A predicate testing whether a fork branch is contained in a local branch.
-    """
+        :param branch: The branch to move and check out.
+        :param start_point: What to point it at.
+        """
+        self.run("checkout", "--quiet", "-B", branch, start_point)
 
-    def is_ancestor(candidate: str, descendant: str) -> bool:
-        return git.succeeds(
-            "merge-base",
-            "--is-ancestor",
-            resolve_ref(configuration, candidate),
-            descendant,
+    def checked_out_branch(self) -> str:
+        """:return: The branch whose content a push would move."""
+        return self.run("branch", "--show-current")
+
+    def merge(self, reference: str) -> GitCommandResult:
+        """:param reference: The reference to merge in.
+        :return: The finished merge, whose failure is a conflict."""
+        return self.attempt("merge", "--no-edit", reference)
+
+    def rebase(self, reference: str) -> GitCommandResult:
+        """:param reference: The reference to rebase onto.
+        :return: The finished rebase, whose failure is a conflict."""
+        return self.attempt("rebase", reference)
+
+    def abandon(self, strategy: IntegrationStrategy) -> None:
+        """Undo whichever integration just failed.
+
+        :param strategy: The integration that was attempted.
+        """
+        self.attempt(
+            "rebase" if strategy is IntegrationStrategy.REBASE else "merge", "--abort"
         )
 
-    return is_ancestor
+    def unmerged_paths(self) -> tuple[str, ...]:
+        """:return: The paths the integration that just failed left conflicted."""
+        unmerged = self.attempt("diff", "--name-only", "--diff-filter=U")
+        return tuple(path for path in unmerged.output.splitlines() if path)
+
+    def push(self, proposed: ProposedPush) -> GitCommandResult:
+        """Publish a refspec, forcing only where the push itself says it is authorised.
+
+        :param proposed: What to publish, and whether a rewrite is authorised.
+        :return: The finished push, whose failure the caller reports rather than forces.
+        """
+        lease = ["--force-with-lease"] if proposed.with_lease else []
+        return self.attempt(
+            "push", "--quiet", *lease, proposed.remote, proposed.refspec
+        )
+
+    def contains(self, candidate: str, descendant: str) -> bool:
+        """:param candidate: The reference that may be contained.
+        :param descendant: The reference that may contain it.
+        :return: Whether *candidate* is an ancestor of *descendant*."""
+        return self.attempt(
+            "merge-base", "--is-ancestor", candidate, descendant
+        ).succeeded
+
+
+@dataclass(frozen=True)
+class BranchAncestry:
+    """Answers containment questions about the fork's branches.
+
+    :class:`PreFlight` asks its false-merge question through this, so the question is
+    asked of git rather than of anything this module remembers.
+    """
+
+    configuration: Configuration
+    """The resolved configuration naming the fork remote."""
+
+    git: GitCommandRunner
+    """The runner to ask git through."""
+
+    def is_ancestor(self, candidate: str, descendant: str) -> bool:
+        """:param candidate: A fork branch that may be contained.
+        :param descendant: A local branch that may contain it.
+        :return: Whether the fork's copy of *candidate* is contained in *descendant*."""
+        return self.git.contains(resolve_ref(self.configuration, candidate), descendant)
 
 
 # %% the board export
 
 
-class PullRequestField(StrEnum):
-    """The fields a board entry cannot be derived without.
+class FieldShape(StrEnum):
+    """How one pull-request field's value has to be read.
 
-    Named rather than spelled out at each use so a rejection reports which field was
-    missing in the same terms the fetch doc requires it in.
+    The API answers some fields with a nested object where a plain value would do, so
+    reading is per-field rather than uniform.
     """
 
-    NUMBER = "number"
-    HEAD = "head"
-    BASE = "base"
-    DRAFT = "draft"
-    LABELS = "labels"
+    VALUE = "value"
+    """Taken as it comes."""
+
+    BRANCH_REFERENCE = "branch-reference"
+    """A branch, given either plainly or as an object carrying a ``ref``."""
+
+    LABEL_NAMES = "label-names"
+    """A list of labels, each given either plainly or as an object carrying a
+    ``name``."""
+
+
+@dataclass(frozen=True)
+class FieldSpecification:
+    """What one pull-request field is called, how to read it, and whether it may be
+    absent."""
+
+    key: str
+    """The key the API answers under."""
+
+    shape: FieldShape = FieldShape.VALUE
+    """How its value has to be read."""
+
+    required: bool = False
+    """Whether a record omitting it is rejected rather than read."""
+
+
+class PullRequestField(FieldSpecification, Enum):
+    """Every pull-request field this executor reads, and how to read it.
+
+    Each member *is* a specification, so nothing outside this enum knows that ``head``
+    arrives nested while ``draft`` does not, or which fields a board cannot be derived
+    without.
+
+    ..note:: A member's value is the specification's argument tuple, never a built
+        ``FieldSpecification`` - passing one lands the whole instance in :attr:`key`
+        rather than raising.
+    """
+
+    NUMBER = ("number", FieldShape.VALUE, True)
+    """The pull request's number."""
+
+    HEAD = ("head", FieldShape.BRANCH_REFERENCE, True)
+    """The branch the pull request would merge - the stack node it names."""
+
+    BASE = ("base", FieldShape.BRANCH_REFERENCE, True)
+    """The branch it would merge into - its parent in the stack."""
+
+    DRAFT = ("draft", FieldShape.VALUE, True)
+    """Whether its author has yet reviewed it themselves."""
+
+    LABELS = ("labels", FieldShape.LABEL_NAMES, True)
+    """The labels it carries, which the workflow reads as state."""
+
+    BODY = ("body",)
+    """Its description, read for the session link and the promotion prefill."""
+
+    TITLE = ("title",)
+    """Its title, which prefills the upstream pull request."""
+
+    MERGEABLE_STATE = ("mergeable_state",)
+    """GitHub's own verdict on whether it currently conflicts with its base."""
+
+    def read(self, record: PullRequestRecord, number: int | None = None) -> Any:
+        """Read this field out of a fetched pull request.
+
+        :param record: The fetched pull request.
+        :param number: The pull request being read, named in any rejection.
+        :return: The field's value, read according to its shape.
+        :raises MissingPullRequestFieldError: If a required field is absent, or its
+            value carries no name where its shape says one belongs.
+        """
+        value = record.get(self.key)
+        if value is None:
+            if self.required:
+                raise MissingPullRequestFieldError(self, number)
+            return None
+        if self.shape is FieldShape.BRANCH_REFERENCE:
+            return self._branch_reference(value, number)
+        if self.shape is FieldShape.LABEL_NAMES:
+            return [
+                label if isinstance(label, str) else str(label["name"])
+                for label in value
+            ]
+        return value
+
+    def _branch_reference(self, value: Any, number: int | None) -> str:
+        """:param value: The field's value, plain or nested.
+        :param number: The pull request being read, named in any rejection.
+        :return: The branch it names.
+        :raises MissingPullRequestFieldError: If it names none."""
+        if isinstance(value, str):
+            return value
+        if isinstance(value, Mapping) and value.get("ref"):
+            return str(value["ref"])
+        raise MissingPullRequestFieldError(self, number)
 
 
 @dataclass
@@ -244,7 +428,7 @@ class MissingPullRequestFieldError(ValueError):
         )
 
 
-def session_link_in(body: str | None) -> str | None:
+def get_session_link_in(body: str | None) -> str | None:
     """Read the session link out of a pull request description.
 
     :param body: The description to search, which may be absent.
@@ -256,55 +440,6 @@ def session_link_in(body: str | None) -> str | None:
     return found.group(0) if found else None
 
 
-def _required(
-    record: Mapping[str, object],
-    field_name: PullRequestField,
-    pull_request_number: int | None,
-) -> object:
-    """Read a field that must be present.
-
-    :param record: The fetched pull request.
-    :param field_name: The field to read.
-    :param pull_request_number: The pull request being read, for the error.
-    :return: The field's value.
-    :raises MissingPullRequestFieldError: If it is absent or null.
-    """
-    value = record.get(field_name)
-    if value is None:
-        raise MissingPullRequestFieldError(field_name, pull_request_number)
-    return value
-
-
-def _branch_reference(
-    value: object, field_name: PullRequestField, pull_request_number: int
-) -> str:
-    """Read a branch name from either the nested API shape or a plain string.
-
-    :param value: The field's value.
-    :param field_name: Which field it is, for the error.
-    :param pull_request_number: The pull request being read, for the error.
-    :return: The branch name.
-    :raises MissingPullRequestFieldError: If no branch name can be read from it.
-    """
-    if isinstance(value, str):
-        return value
-    if isinstance(value, Mapping) and value.get("ref"):
-        return str(value["ref"])
-    raise MissingPullRequestFieldError(field_name, pull_request_number)
-
-
-def _label_names(value: object) -> list[str]:
-    """Read label names from either the nested API shape or plain strings.
-
-    :param value: The ``labels`` field's value.
-    :return: The label names.
-    """
-    return [
-        label if isinstance(label, str) else str(label["name"])
-        for label in value  # type: ignore[union-attr]
-    ]
-
-
 @dataclass(frozen=True)
 class BoardExport:
     """The fork's open pull requests, in the shape the derived stack is read from."""
@@ -313,7 +448,7 @@ class BoardExport:
     """The exported pull requests."""
 
     @classmethod
-    def from_api_records(cls, records: Iterable[Mapping[str, object]]) -> BoardExport:
+    def from_api_records(cls, records: Iterable[PullRequestRecord]) -> BoardExport:
         """Build the export from what the REST API returned.
 
         :param records: The fetched pull requests.
@@ -323,30 +458,22 @@ class BoardExport:
         return cls(tuple(cls._pull_request(record) for record in records))
 
     @staticmethod
-    def _pull_request(record: Mapping[str, object]) -> PullRequest:
+    def _pull_request(record: PullRequestRecord) -> PullRequest:
         """Read one fetched pull request into a board entry.
 
         :param record: The fetched pull request.
         :return: The board entry.
         :raises MissingPullRequestFieldError: If a required field is absent.
         """
-        number = int(_required(record, PullRequestField.NUMBER, None))  # type: ignore[arg-type]
+        number = int(PullRequestField.NUMBER.read(record))
         return PullRequest(
             number=number,
-            head=_branch_reference(
-                _required(record, PullRequestField.HEAD, number),
-                PullRequestField.HEAD,
-                number,
-            ),
-            base=_branch_reference(
-                _required(record, PullRequestField.BASE, number),
-                PullRequestField.BASE,
-                number,
-            ),
-            draft=bool(_required(record, PullRequestField.DRAFT, number)),
-            labels=_label_names(record.get(PullRequestField.LABELS) or []),
-            ci=record.get("ci"),  # type: ignore[arg-type]
-            session=session_link_in(record.get("body")),  # type: ignore[arg-type]
+            head=PullRequestField.HEAD.read(record, number),
+            base=PullRequestField.BASE.read(record, number),
+            draft=bool(PullRequestField.DRAFT.read(record, number)),
+            labels=PullRequestField.LABELS.read(record, number),
+            ci=record.get("ci"),
+            session=get_session_link_in(PullRequestField.BODY.read(record, number)),
         )
 
     def as_json(self) -> str:
@@ -387,10 +514,10 @@ class GitHubCredentialUnavailableError(RuntimeError):
 class PullRequestReader(Protocol):
     """Reading the pull-request state a pass derives from."""
 
-    def open_pull_requests(self) -> list[Mapping[str, object]]:
+    def open_pull_requests(self) -> list[PullRequestRecord]:
         """:return: Every open pull request on the fork."""
 
-    def pull_request(self, number: int) -> Mapping[str, object]:
+    def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
         :return: That pull request."""
 
@@ -417,25 +544,29 @@ class PullRequestWriter(Protocol):
         :param body: The new description."""
 
 
+class ForkPullRequests(PullRequestReader, PullRequestWriter, Protocol):
+    """Everything a pass does to the fork's pull requests.
+
+    A pass reads state and writes back to the same fork, so the two halves are named
+    together wherever both are needed; the board export takes the reading half alone,
+    which is what keeps an export from being able to write.
+    """
+
+
 @dataclass
-class GitHubRequestFailed(RuntimeError):
+class GitHubRequestFailed(ExternalCallFailed):
     """Raised when the API refuses a call this module depends on."""
 
-    method: str
+    method: str = ""
     """The HTTP method used."""
 
-    path: str
+    path: str = ""
     """The API path called, without the host."""
 
-    status: int
-    """The status the API answered with."""
-
-    detail: str
-    """What the API said about it."""
-
-    def __str__(self) -> str:
-        """:return: The call, its status, and the reason given."""
-        return f"{self.method} {self.path} answered {self.status}: {self.detail}"
+    @property
+    def call(self) -> str:
+        """:return: The request line, as issued."""
+        return f"{self.method} {self.path}"
 
 
 @dataclass(frozen=True)
@@ -469,9 +600,9 @@ class GitHubRepository:
                 return cls(repository, token)
         raise GitHubCredentialUnavailableError(CREDENTIAL_VARIABLES)
 
-    def open_pull_requests(self) -> list[Mapping[str, object]]:
+    def open_pull_requests(self) -> list[PullRequestRecord]:
         """:return: Every open pull request on the repository, oldest page first."""
-        collected: list[Mapping[str, object]] = []
+        collected: list[PullRequestRecord] = []
         page = 1
         while True:
             query = urllib.parse.urlencode(
@@ -483,7 +614,7 @@ class GitHubRepository:
                 return collected
             page += 1
 
-    def pull_request(self, number: int) -> Mapping[str, object]:
+    def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
         :return: That pull request."""
         return self._call("GET", f"/pulls/{number}")
@@ -513,8 +644,8 @@ class GitHubRepository:
         self._call("PATCH", f"/pulls/{number}", {"body": body})
 
     def _call(
-        self, method: str, path: str, payload: Mapping[str, object] | None = None
-    ) -> object:
+        self, method: str, path: str, payload: Mapping[str, Any] | None = None
+    ) -> Any:
         """Make one authenticated API call.
 
         :param method: The HTTP method.
@@ -538,7 +669,10 @@ class GitHubRepository:
                 return json.loads(response.read())
         except urllib.error.HTTPError as refused:
             raise GitHubRequestFailed(
-                method, path, refused.code, refused.read().decode(errors="replace")
+                status=refused.code,
+                detail=refused.read().decode(errors="replace"),
+                method=method,
+                path=path,
             ) from refused
 
 
@@ -596,12 +730,10 @@ def fast_forward(
         f"{configuration.upstream_remote}/{configuration.upstream_base}"
     )
     fork_reference = resolve_ref(configuration, configuration.upstream_base)
-    git.run(
-        "fetch", "--quiet", configuration.upstream_remote, configuration.upstream_base
-    )
-    git.run("fetch", "--quiet", configuration.fork_remote, configuration.upstream_base)
-    upstream_commit = git.run("rev-parse", upstream_reference)
-    fork_commit = git.run("rev-parse", fork_reference)
+    git.fetch(configuration.upstream_remote, configuration.upstream_base)
+    git.fetch(configuration.fork_remote, configuration.upstream_base)
+    upstream_commit = git.commit_at(upstream_reference)
+    fork_commit = git.commit_at(fork_reference)
 
     if upstream_commit == fork_commit:
         return FastForwardReport(
@@ -610,7 +742,7 @@ def fast_forward(
             fork_reference,
             fork_commit,
         )
-    if not git.succeeds("merge-base", "--is-ancestor", fork_commit, upstream_commit):
+    if not git.contains(fork_commit, upstream_commit):
         return FastForwardReport(
             FastForwardOutcome.REFUSED_NOT_FAST_FORWARD,
             upstream_reference,
@@ -622,13 +754,13 @@ def fast_forward(
                 f"forcing"
             ),
         )
-    git.run(
-        "push",
-        "--quiet",
-        configuration.fork_remote,
-        f"{upstream_commit}:refs/heads/{configuration.upstream_base}",
-    )
-    git.run("fetch", "--quiet", configuration.fork_remote, configuration.upstream_base)
+    git.push(
+        ProposedPush(
+            remote=configuration.fork_remote,
+            refspec=f"{upstream_commit}:refs/heads/{configuration.upstream_base}",
+        )
+    ).raise_if_failed()
+    git.fetch(configuration.fork_remote, configuration.upstream_base)
     return FastForwardReport(
         FastForwardOutcome.PUSHED,
         upstream_reference,
@@ -697,24 +829,6 @@ class BranchOutcome:
     posted."""
 
 
-def _conflicting_paths(git: GitCommandRunner) -> tuple[str, ...]:
-    """:param git: The runner to ask git through.
-    :return: The paths left unmerged by the integration that just failed."""
-    unmerged = git.attempt("diff", "--name-only", "--diff-filter=U")
-    return tuple(path for path in unmerged.output.splitlines() if path)
-
-
-def _abandon_integration(git: GitCommandRunner, strategy: IntegrationStrategy) -> None:
-    """Return the checkout to the state the failed integration started from.
-
-    :param git: The runner to execute through.
-    :param strategy: Which integration was attempted.
-    """
-    git.attempt(
-        "rebase" if strategy is IntegrationStrategy.REBASE else "merge", "--abort"
-    )
-
-
 CONFLICT_COMMENT_PREFIX = "🔴 ROUTINE - NEEDS RESOLUTION:"
 """Opens the comment a conflict is reported in, so the branch's owner can find every one
 of them at a glance."""
@@ -753,7 +867,7 @@ def conflict_report(
 
 
 def restack(
-    stack: Stack, git: GitCommandRunner, fork: PullRequestReader | PullRequestWriter
+    stack: Stack, git: GitCommandRunner, fork: ForkPullRequests
 ) -> list[BranchOutcome]:
     """Integrate every moved parent, bottom up, and publish what integrated cleanly.
 
@@ -776,7 +890,7 @@ def restack(
     pre_flight = PreFlight(
         stack=stack,
         checked_out_branch="",
-        is_ancestor=ancestry_predicate(configuration, git),
+        is_ancestor=BranchAncestry(configuration, git).is_ancestor,
     )
     by_name = {branch.name: branch for branch in stack.branches}
     outcomes: list[BranchOutcome] = []
@@ -785,9 +899,7 @@ def restack(
     return outcomes
 
 
-def _withhold(
-    branch: Branch, stack: Stack, fork: PullRequestReader | PullRequestWriter
-) -> bool:
+def _withhold(branch: Branch, stack: Stack, fork: ForkPullRequests) -> bool:
     """Decide whether a branch delegated for conflict resolution is still conflicted.
 
     Clears the label as a side effect when it is not, since that is what lets the branch
@@ -801,7 +913,9 @@ def _withhold(
     label = stack.configuration.needs_resolution_label
     if label not in branch.labels:
         return False
-    state = fork.pull_request(branch.pull_request_number).get("mergeable_state")
+    state = PullRequestField.MERGEABLE_STATE.read(
+        fork.pull_request(branch.pull_request_number), branch.pull_request_number
+    )
     if state == MERGEABLE_STATE_WITH_CONFLICTS:
         return True
     fork.replace_labels(
@@ -816,7 +930,7 @@ def _report_conflict(
     parent: str,
     conflicting_paths: Sequence[str],
     stack: Stack,
-    fork: PullRequestReader | PullRequestWriter,
+    fork: ForkPullRequests,
 ) -> str:
     """Tell a branch's owner about a conflict, and label it so the next pass skips it.
 
@@ -844,7 +958,7 @@ def _restack_branch(
     by_name: Mapping[str, Branch],
     pre_flight: PreFlight,
     git: GitCommandRunner,
-    fork: PullRequestReader | PullRequestWriter,
+    fork: ForkPullRequests,
 ) -> BranchOutcome:
     """Integrate one branch's parent and publish the result.
 
@@ -872,18 +986,18 @@ def _restack_branch(
             explanation="still conflicted against its base since a previous pass",
         )
 
-    if git.succeeds("merge-base", "--is-ancestor", parent_reference, branch_reference):
+    if git.contains(parent_reference, branch_reference):
         return BranchOutcome(branch, parent, strategy, RestackOutcome.UP_TO_DATE)
 
-    git.run("checkout", "--quiet", "-B", branch, branch_reference)
+    git.checkout(branch, branch_reference)
     integration = (
-        git.attempt("rebase", parent_reference)
+        git.rebase(parent_reference)
         if strategy is IntegrationStrategy.REBASE
-        else git.attempt("merge", "--no-edit", parent_reference)
+        else git.merge(parent_reference)
     )
     if not integration.succeeded:
-        conflicting = _conflicting_paths(git)
-        _abandon_integration(git, strategy)
+        conflicting = git.unmerged_paths()
+        git.abandon(strategy)
         return BranchOutcome(
             branch,
             parent,
@@ -899,7 +1013,7 @@ def _restack_branch(
             branch, parent, strategy, RestackOutcome.REFUSED, refusals=refusals
         )
 
-    push = git.attempt(*push_arguments(configuration, branch, strategy))
+    push = git.push(ProposedPush.publishing(configuration, branch, strategy))
     if not push.succeeded:
         return BranchOutcome(
             branch,
@@ -908,13 +1022,13 @@ def _restack_branch(
             RestackOutcome.PUSH_REJECTED,
             explanation=push.error_output,
         )
-    git.run("fetch", "--quiet", configuration.fork_remote, branch)
+    git.fetch(configuration.fork_remote, branch)
     return BranchOutcome(
         branch,
         parent,
         strategy,
         RestackOutcome.PUSHED,
-        pushed_commit=git.run("rev-parse", "HEAD"),
+        pushed_commit=git.commit_at("HEAD"),
     )
 
 
@@ -950,24 +1064,41 @@ def pre_flight_refusals(
     )
 
 
-def push_arguments(
-    configuration: Configuration, branch: str, strategy: IntegrationStrategy
-) -> list[str]:
-    """Build the push, forcing only where the rebase label authorised it.
+@dataclass(frozen=True)
+class ProposedPush:
+    """One publication, and whether it is authorised to overwrite what is published.
 
-    :param configuration: The resolved configuration.
-    :param branch: The branch to publish.
-    :param strategy: How its parent was integrated.
-    :return: The git arguments.
+    Every push this module makes is built here, so whether history may be rewritten is
+    decided once rather than at each call.
     """
-    forcing = ["--force-with-lease"] if strategy is IntegrationStrategy.REBASE else []
-    return [
-        "push",
-        "--quiet",
-        *forcing,
-        configuration.fork_remote,
-        f"{branch}:{branch}",
-    ]
+
+    remote: str
+    """The remote to publish to."""
+
+    refspec: str
+    """What to publish, as ``<source>:<destination>``."""
+
+    with_lease: bool = False
+    """Whether published history may be overwritten, and then only if the remote is
+    where this checkout last saw it."""
+
+    @classmethod
+    def publishing(
+        cls, configuration: Configuration, branch: str, strategy: IntegrationStrategy
+    ) -> ProposedPush:
+        """Build the push that publishes a restacked branch.
+
+        :param configuration: The resolved configuration.
+        :param branch: The branch to publish.
+        :param strategy: How its parent was integrated, which is what authorises a
+            rewrite - and which ``build_stack`` sets to rebase only from the label.
+        :return: The push.
+        """
+        return cls(
+            remote=configuration.fork_remote,
+            refspec=f"{branch}:{branch}",
+            with_lease=strategy is IntegrationStrategy.REBASE,
+        )
 
 
 # %% promoting every approved unblocked branch
@@ -1023,9 +1154,7 @@ def promotion_summary(description: str) -> str:
     return paragraphs[0] if paragraphs else ""
 
 
-def promote(
-    stack: Stack, fork: PullRequestReader | PullRequestWriter
-) -> list[Promotion]:
+def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
     """Build and record the upstream link for every branch ready to be promoted.
 
     The upstream pull request is not opened here - the app has no write access there, so
@@ -1043,11 +1172,12 @@ def promote(
         if PROMOTION_LINK_LABEL in branch.labels:
             continue
         pull_request = fork.pull_request(branch.pull_request_number)
-        description = str(pull_request.get("body") or "")
+        number = branch.pull_request_number
+        description = str(PullRequestField.BODY.read(pull_request, number) or "")
         link = PromotionLink.build(
             stack.configuration,
             branch.name,
-            str(pull_request.get("title") or branch.name),
+            str(PullRequestField.TITLE.read(pull_request, number) or branch.name),
             _prefilled_description(description, branch.pull_request_number, stack),
         )
         fork.set_description(
@@ -1119,28 +1249,32 @@ class MaintenanceReport:
 
     ``reparents`` is that one thing: retargeting a base is the single write GitHub
     refuses to the credential this runs on, so it is reported rather than performed.
+
+    Every field defaults to nothing done, so a single command reports the part of the
+    pass it performed through the same object - and therefore through the same exit
+    status - as a whole pass does.
     """
 
-    fast_forward: FastForwardReport | None
+    fast_forward: FastForwardReport | None = None
     """What became of the fork's base branch, absent when it was not attempted."""
 
-    restacked: tuple[BranchOutcome, ...]
+    restacked: tuple[BranchOutcome, ...] = ()
     """What became of each branch in the restack plan."""
 
-    promoted: tuple[Promotion, ...]
+    promoted: tuple[Promotion, ...] = ()
     """The branches whose upstream link was built and recorded this pass."""
 
-    promotion_labels_cleared: tuple[str, ...]
+    promotion_labels_cleared: tuple[str, ...] = ()
     """The branches whose spent link label was removed this pass."""
 
-    reparents: tuple[Reparent, ...]
+    reparents: tuple[Reparent, ...] = ()
     """The children whose base has landed, for the caller to retarget - the one step
     this cannot perform itself."""
 
-    landed: tuple[str, ...]
+    landed: tuple[str, ...] = ()
     """The branches whose own commits are already in the upstream base."""
 
-    promotable: tuple[str, ...]
+    promotable: tuple[str, ...] = ()
     """The branches approved and unblocked, whether or not a link was built this pass."""
 
     def as_json(self) -> str:
@@ -1253,22 +1387,41 @@ def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> N
 # %% entry point
 
 
-class Command(StrEnum):
-    """Every command this executor answers, named once so no caller spells one out."""
+@dataclass(frozen=True)
+class CommandSpecification:
+    """What one command is invoked by, and what ``--help`` says about it."""
 
-    BOARD = "board"
-    FAST_FORWARD = "fast-forward"
-    RESTACK = "restack"
-    PROMOTE = "promote"
-    RUN_REPORT = "run-report"
+    invoked_as: str
+    """The name it is invoked by on the command line.
 
-    @property
-    def needs_a_board(self) -> bool:
-        """Whether answering this command means reading the derived stack.
+    ..note:: Not ``name`` - :class:`Enum` reserves that for the member's own identifier.
+    """
 
-        :return: Whether ``board.json`` must exist.
-        """
-        return self is not Command.BOARD
+    description: str
+    """What it does, in one line."""
+
+
+class Command(CommandSpecification, Enum):
+    """Every command this executor answers, named and described in one place.
+
+    ..note:: A member's value is the specification's argument tuple, never a built
+        :class:`CommandSpecification`.
+    """
+
+    BOARD = ("board", "export the fork's open pull requests")
+    """Fetches the fork's open pull requests and writes the board."""
+
+    FAST_FORWARD = ("fast-forward", "move the fork's base branch onto the upstream")
+    """Moves the fork's base onto the upstream, refusing to force."""
+
+    RESTACK = ("restack", "integrate every moved parent and publish the result")
+    """Integrates every moved parent and publishes what merged cleanly."""
+
+    PROMOTE = ("promote", "record the upstream link on every promotable branch")
+    """Builds and records the upstream link on every branch ready for it."""
+
+    RUN_REPORT = ("run-report", "perform the whole pass and report it")
+    """Performs the whole pass and emits it as one document."""
 
 
 class MaintenanceExitCode(IntEnum):
@@ -1344,113 +1497,211 @@ def exit_code_for(report: MaintenanceReport) -> MaintenanceExitCode:
     return MaintenanceExitCode.SUCCESS
 
 
+@dataclass(frozen=True)
+class MaintenancePass:
+    """What one run has resolved so far, built lazily as a command asks for it.
+
+    The board is derived before the credential is resolved, so a caller missing both is
+    sent after the board - the thing the previous command produces - rather than after a
+    token that would not help them yet.
+    """
+
+    configuration: Configuration
+    """The resolved configuration naming both repositories and every label."""
+
+    git: GitCommandRunner
+    """The runner every git command goes through."""
+
+    def fork(self) -> GitHubRepository:
+        """:return: The fork, as this run's credential can read and write it."""
+        return GitHubRepository.from_environment(self.configuration.fork_repository)
+
+    def stack(self) -> Stack:
+        """:return: The derived stack, read from the exported board."""
+        return load_stack()
+
+
+@dataclass(frozen=True)
+class MaintenanceCommand:
+    """One command this executor answers.
+
+    A command owns its own name, its own flags and what it does, so adding one is adding
+    a subclass and listing it - never editing a dispatch that knows every command there
+    is.
+    """
+
+    command: Command
+    """Which command this is, carrying its own name and help text."""
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """Declare this command's own flags.
+
+        :param parser: The subparser to declare them on.
+        """
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> MaintenanceExitCode:
+        """Perform the command.
+
+        :param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        raise NotImplementedError
+
+
+@dataclass(frozen=True)
+class BoardCommand(MaintenanceCommand):
+    """Fetches the fork's open pull requests and exports them as the board."""
+
+    command: Command = Command.BOARD
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--write`` on."""
+        parser.add_argument(
+            "--write",
+            action="store_true",
+            help="write board.json rather than printing the export",
+        )
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> MaintenanceExitCode:
+        """:param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        export = BoardExport.from_api_records(maintenance.fork().open_pull_requests())
+        print_board_export(export, export.write() if arguments.write else None)
+        return MaintenanceExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class FastForwardCommand(MaintenanceCommand):
+    """Moves the fork's base branch onto the upstream, refusing to force."""
+
+    command: Command = Command.FAST_FORWARD
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> MaintenanceExitCode:
+        """:param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        report = fast_forward(maintenance.configuration, maintenance.git)
+        print_fast_forward(report)
+        return exit_code_for(MaintenanceReport(fast_forward=report))
+
+
+@dataclass(frozen=True)
+class RestackCommand(MaintenanceCommand):
+    """Integrates every moved parent and publishes what merged cleanly."""
+
+    command: Command = Command.RESTACK
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> MaintenanceExitCode:
+        """:param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        stack = maintenance.stack()
+        outcomes = restack(stack, maintenance.git, maintenance.fork())
+        print_restack(outcomes)
+        return exit_code_for(MaintenanceReport(restacked=tuple(outcomes)))
+
+
+@dataclass(frozen=True)
+class PromoteCommand(MaintenanceCommand):
+    """Records the upstream link on every branch ready to be promoted."""
+
+    command: Command = Command.PROMOTE
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> MaintenanceExitCode:
+        """:param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        stack = maintenance.stack()
+        fork = maintenance.fork()
+        print_promotions(
+            promote(stack, fork), clear_spent_promotion_labels(stack, fork)
+        )
+        return MaintenanceExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class RunReportCommand(MaintenanceCommand):
+    """Performs the whole pass and reports it as one document."""
+
+    command: Command = Command.RUN_REPORT
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--json`` on."""
+        parser.add_argument(
+            "--json",
+            action="store_true",
+            help="emit the machine-readable document rather than a summary",
+        )
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> MaintenanceExitCode:
+        """Perform every step of the pass, then discard the board it derived from.
+
+        The board is a snapshot of one moment's open pull requests, and a stale one read
+        by a later run is worse than none at all - so a whole pass ends without one, and
+        the next begins by exporting a fresh one.
+
+        :param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        stack = maintenance.stack()
+        fork = maintenance.fork()
+        fast_forward_report = fast_forward(stack.configuration, maintenance.git)
+        report = build_report(
+            stack,
+            fast_forward_report,
+            restack(stack, maintenance.git, fork),
+            promote(stack, fork),
+            clear_spent_promotion_labels(stack, fork),
+        )
+        BOARD_PATH.unlink(missing_ok=True)
+        if arguments.json:
+            print(report.as_json())
+        else:
+            print_fast_forward(fast_forward_report)
+            print_restack(report.restacked)
+            print_promotions(report.promoted, report.promotion_labels_cleared)
+        return exit_code_for(report)
+
+
+COMMANDS: tuple[MaintenanceCommand, ...] = (
+    BoardCommand(),
+    FastForwardCommand(),
+    RestackCommand(),
+    PromoteCommand(),
+    RunReportCommand(),
+)
+"""Every command this executor answers, in the order ``--help`` lists them."""
+
+
 def _argument_parser() -> argparse.ArgumentParser:
-    """:return: The parser for every command and its own flags."""
+    """:return: The parser, built from the commands rather than from a list of them."""
     parser = argparse.ArgumentParser(
         prog="maintenance.py",
         description="Stacked-PR maintenance: perform the pass, report what happened.",
     )
-    commands = parser.add_subparsers(dest="command", required=True)
-
-    board = commands.add_parser(
-        Command.BOARD, help="export the fork's open pull requests"
-    )
-    board.add_argument(
-        "--write",
-        action="store_true",
-        help="write board.json rather than printing the export",
-    )
-    commands.add_parser(
-        Command.FAST_FORWARD, help="move the fork's base branch onto the upstream"
-    )
-    commands.add_parser(
-        Command.RESTACK, help="integrate every moved parent and publish the result"
-    )
-    commands.add_parser(
-        Command.PROMOTE, help="record the upstream link on every promotable branch"
-    )
-    report = commands.add_parser(
-        Command.RUN_REPORT, help="perform the whole pass and report it"
-    )
-    report.add_argument(
-        "--json",
-        action="store_true",
-        help="emit the machine-readable document rather than a summary",
-    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    for command in COMMANDS:
+        command.declare_arguments(
+            subparsers.add_parser(
+                command.command.invoked_as, help=command.command.description
+            )
+        )
     return parser
-
-
-def _run_board(fork: PullRequestReader, write: bool) -> MaintenanceExitCode:
-    """Fetch the fork's open pull requests and export them.
-
-    :param fork: The fork to read.
-    :param write: Whether to write ``board.json`` rather than print the export.
-    :return: The process exit code.
-    """
-    export = BoardExport.from_api_records(fork.open_pull_requests())
-    print_board_export(export, export.write() if write else None)
-    return MaintenanceExitCode.SUCCESS
-
-
-def _run_fast_forward(
-    configuration: Configuration, git: GitCommandRunner
-) -> MaintenanceExitCode:
-    """:param configuration: The resolved configuration.
-    :param git: The runner to execute through.
-    :return: The process exit code."""
-    report = fast_forward(configuration, git)
-    print_fast_forward(report)
-    if report.outcome is FastForwardOutcome.REFUSED_NOT_FAST_FORWARD:
-        return MaintenanceExitCode.NOT_FAST_FORWARD
-    return MaintenanceExitCode.SUCCESS
-
-
-def _run_restack(
-    stack: Stack, git: GitCommandRunner, fork: GitHubRepository
-) -> MaintenanceExitCode:
-    """:param stack: The derived stack.
-    :param git: The runner to execute through.
-    :param fork: The fork to read conflict state from and report back to.
-    :return: The process exit code."""
-    outcomes = restack(stack, git, fork)
-    print_restack(outcomes)
-    return exit_code_for(build_report(stack, None, outcomes))
-
-
-def _run_promote(stack: Stack, fork: GitHubRepository) -> MaintenanceExitCode:
-    """:param stack: The derived stack.
-    :param fork: The fork to write links and labels to.
-    :return: The process exit code."""
-    print_promotions(promote(stack, fork), clear_spent_promotion_labels(stack, fork))
-    return MaintenanceExitCode.SUCCESS
-
-
-def _run_report(
-    stack: Stack, git: GitCommandRunner, fork: GitHubRepository, as_json: bool
-) -> MaintenanceExitCode:
-    """Perform the whole pass and report it.
-
-    :param stack: The derived stack.
-    :param git: The runner to execute through.
-    :param fork: The fork to read from and write to.
-    :param as_json: Whether to emit the machine-readable document.
-    :return: The process exit code.
-    """
-    fast_forward_report = fast_forward(stack.configuration, git)
-    report = build_report(
-        stack,
-        fast_forward_report,
-        restack(stack, git, fork),
-        promote(stack, fork),
-        clear_spent_promotion_labels(stack, fork),
-    )
-    if as_json:
-        print(report.as_json())
-    else:
-        print_fast_forward(fast_forward_report)
-        print_restack(report.restacked)
-        print_promotions(report.promoted, report.promotion_labels_cleared)
-    return exit_code_for(report)
 
 
 def main() -> MaintenanceExitCode:
@@ -1477,27 +1728,15 @@ def _dispatch() -> MaintenanceExitCode:
     :return: The process exit code.
     """
     arguments = _argument_parser().parse_args()
-    command = Command(arguments.command)
-    git = GitCommandRunner(working_directory=Path.cwd())
+    requested = next(
+        entry for entry in COMMANDS if entry.command.invoked_as == arguments.command
+    )
     try:
-        configuration = load_configuration()
-        if command is Command.FAST_FORWARD:
-            return _run_fast_forward(configuration, git)
-        if command is Command.BOARD:
-            return _run_board(
-                GitHubRepository.from_environment(configuration.fork_repository),
-                arguments.write,
-            )
-        # The board is derived before the credential is resolved so a caller missing
-        # both is sent after the board - the thing the previous command produces -
-        # rather than after a token that would not help them yet.
-        stack = load_stack()
-        fork = GitHubRepository.from_environment(configuration.fork_repository)
-        if command is Command.RESTACK:
-            return _run_restack(stack, git, fork)
-        if command is Command.PROMOTE:
-            return _run_promote(stack, fork)
-        return _run_report(stack, git, fork, arguments.json)
+        maintenance = MaintenancePass(
+            configuration=load_configuration(),
+            git=GitCommandRunner(working_directory=Path.cwd()),
+        )
+        return requested.run(maintenance, arguments)
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
         print(f"{error}", file=sys.stderr)
         return MaintenanceExitCode.REMOTES_UNRESOLVED
