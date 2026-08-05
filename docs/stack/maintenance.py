@@ -943,8 +943,8 @@ class RestackStep:
     """One step of a branch's restack.
 
     A step either concludes the branch - returning the outcome its owner acts on - or
-    returns nothing and lets the next step run. Adding a step is writing a subclass;
-    :data:`RESTACK_STEPS` finds it, in the order the subclasses are defined.
+    returns nothing and lets the next step run. Adding a step is writing a subclass and
+    placing it in :data:`RESTACK_STEPS`, whose order is the procedure.
     """
 
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
@@ -1106,15 +1106,19 @@ class PublishBranch(RestackStep):
         )
 
 
-RESTACK_STEPS: tuple[RestackStep, ...] = tuple(
-    subclass() for subclass in RestackStep.__subclasses__()
+RESTACK_STEPS: tuple[RestackStep, ...] = (
+    WithholdBranchStillConflicting(),
+    SkipBranchAlreadyCurrent(),
+    IntegrateParent(),
+    RefuseAnUnsafeMove(),
+    PublishBranch(),
 )
-"""Every step a branch is put through, found from the subclasses themselves so a step
-cannot exist without running.
+"""Every step a branch is put through, in the order that is the procedure.
 
-..warning:: Definition order is the procedure - a branch is published only once its move
-    has been checked - so moving a class within this module changes what a pass does.
-    ``test_a_branch_is_published_only_after_every_earlier_step_passed`` pins it.
+Unlike :data:`COMMANDS`, these are listed rather than found from their own subclasses: a
+branch is published only once its move has been checked, so this order is a decision
+about what a pass does, not bookkeeping. Stating it here keeps it where it is read,
+rather than making it a consequence of where the classes happen to be defined.
 """
 
 
