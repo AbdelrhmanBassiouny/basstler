@@ -63,6 +63,7 @@ from maintenance import (
     exit_code_for,
     fast_forward,
     promote,
+    PROMOTION_LINK_LABEL,
     ProposedPush,
     RestackCommand,
     MaintenanceCommand,
@@ -80,6 +81,12 @@ assertion.
 UPSTREAM_BASE = "main"
 """
 The branch every stack in these tests ultimately targets.
+"""
+
+A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
+"""
+Stands for whatever else a pull request happens to carry - the labels a write must
+preserve precisely because this tool knows nothing about them.
 """
 
 
@@ -378,7 +385,9 @@ def test_the_written_board_parses_back_into_the_records_it_was_built_from(
     export = BoardExport.from_api_records(
         [
             an_api_record(number=41, head="a-child", base="a-parent", draft=True),
-            an_api_record(number=40, head="a-parent", labels=["in-review"]),
+            an_api_record(
+                number=40, head="a-parent", labels=[A_LABEL_THIS_TOOL_NEVER_WRITES]
+            ),
         ]
     )
     destination = tmp_path / "board.json"
@@ -1092,7 +1101,9 @@ def test_a_conflict_labels_the_branch_and_tells_its_owner(
 
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
     assert child.outcome == RestackOutcome.CONFLICT
-    assert fork.label_writes == [RecordedLabelWrite(41, ("needs-resolution",))]
+    assert fork.label_writes == [
+        RecordedLabelWrite(41, (make_configuration().needs_resolution_label,))
+    ]
     comment = fork.comments[0]
     assert comment.pull_request_number == 41
     assert "a-contested-file" in comment.body
@@ -1113,13 +1124,19 @@ def test_a_label_write_keeps_every_label_the_branch_already_carried(
     fork = RecordingPullRequests()
 
     restack(
-        a_stack(fork_checkout, the_board(labels=["a-label-somebody-else-put-here"])),
+        a_stack(fork_checkout, the_board(labels=[A_LABEL_THIS_TOOL_NEVER_WRITES])),
         fork_checkout.git,
         fork,
     )
 
     assert fork.label_writes == [
-        RecordedLabelWrite(41, ("a-label-somebody-else-put-here", "needs-resolution"))
+        RecordedLabelWrite(
+            41,
+            (
+                A_LABEL_THIS_TOOL_NEVER_WRITES,
+                make_configuration().needs_resolution_label,
+            ),
+        )
     ]
 
 
@@ -1135,7 +1152,10 @@ def test_a_branch_still_conflicting_is_withheld_without_being_relabelled(
     fork = RecordingPullRequests(states={41: "dirty"})
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board(labels=["needs-resolution"])),
+        a_stack(
+            fork_checkout,
+            the_board(labels=[make_configuration().needs_resolution_label]),
+        ),
         fork_checkout.git,
         fork,
     )
@@ -1158,7 +1178,10 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
     fork = RecordingPullRequests(states={41: "clean"})
 
     outcomes = restack(
-        a_stack(fork_checkout, the_board(labels=["needs-resolution"])),
+        a_stack(
+            fork_checkout,
+            the_board(labels=[make_configuration().needs_resolution_label]),
+        ),
         fork_checkout.git,
         fork,
     )
@@ -1188,14 +1211,14 @@ def test_the_promotion_link_goes_into_the_description_and_the_branch_is_labelled
     assert "## Promote" in written.body
     assert promoted[0].url in written.body
     assert "What this branch does." in written.body
-    assert fork.label_writes == [RecordedLabelWrite(40, ("cram2-link-sent",))]
+    assert fork.label_writes == [RecordedLabelWrite(40, (PROMOTION_LINK_LABEL,))]
 
 
 def test_a_branch_already_carrying_the_link_label_is_not_promoted_again(
     fork_checkout: ForkCheckout,
 ):
     a_parent_and_child(fork_checkout)
-    fork = RecordingPullRequests(labels={40: ["cram2-link-sent"]})
+    fork = RecordingPullRequests(labels={40: [PROMOTION_LINK_LABEL]})
 
     promoted = promote(a_stack(fork_checkout, the_board()), fork)
 
@@ -1214,7 +1237,9 @@ def test_a_branch_labelled_needs_resolution_during_this_pass_is_not_promoted(
     pass just conflicted on.
     """
     a_parent_and_child(fork_checkout)
-    fork = RecordingPullRequests(labels={40: ["needs-resolution"]})
+    fork = RecordingPullRequests(
+        labels={40: [make_configuration().needs_resolution_label]}
+    )
 
     promoted = promote(a_stack(fork_checkout, the_board()), fork)
 
@@ -1231,11 +1256,13 @@ def test_the_promotion_label_write_keeps_a_label_added_since_the_board_was_taken
     strips anything applied since - including the label the restack applies mid-pass.
     """
     a_parent_and_child(fork_checkout)
-    fork = RecordingPullRequests(labels={40: ["bug"]})
+    fork = RecordingPullRequests(labels={40: [A_LABEL_THIS_TOOL_NEVER_WRITES]})
 
     promote(a_stack(fork_checkout, the_board()), fork)
 
-    assert fork.label_writes == [RecordedLabelWrite(40, ("bug", "cram2-link-sent"))]
+    assert fork.label_writes == [
+        RecordedLabelWrite(40, (A_LABEL_THIS_TOOL_NEVER_WRITES, PROMOTION_LINK_LABEL))
+    ]
 
 
 def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
@@ -1263,13 +1290,15 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
     """
     a_parent_and_child(fork_checkout)
     board = the_board()
-    board[0].labels = ["cram2-link-sent", "in-review"]
+    board[0].labels = [PROMOTION_LINK_LABEL, make_configuration().in_review_label]
     fork = RecordingPullRequests()
 
     cleared = clear_spent_promotion_labels(a_stack(fork_checkout, board), fork)
 
     assert cleared == ("a-parent",)
-    assert fork.label_writes == [RecordedLabelWrite(40, ("in-review",))]
+    assert fork.label_writes == [
+        RecordedLabelWrite(40, (make_configuration().in_review_label,))
+    ]
 
 
 def test_a_branch_no_step_concludes_is_an_error_rather_than_a_silent_pass(
