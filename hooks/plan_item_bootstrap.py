@@ -888,10 +888,10 @@ def apply_item_fields(
     manifest_text: str,
     plan_identifier: str,
     item_identifier: str,
-    fields_to_set: list[tuple[ManifestKey, str]],
+    values_by_key: dict[ManifestKey, str],
 ) -> str:
     """
-    Set each of *fields_to_set* on one item, patching an existing line or inserting a new
+    Set each of *values_by_key* on one item, patching an existing line or inserting a new
     one.
 
     Every other line is left byte-for-byte untouched, so comments, key order, string
@@ -900,16 +900,21 @@ def apply_item_fields(
     :param manifest_text: The manifest's raw text.
     :param plan_identifier: The plan being edited.
     :param item_identifier: The item to patch.
-    :param fields_to_set: Each field to write, with the value to write to it.
+    :param values_by_key: The value to write to each key, applied in insertion order. A
+        mapping rather than pairs, since one key cannot be set twice.
     :raises UnknownItemError: If the item has no block in the text.
     :return: The patched manifest text.
     """
     lines = manifest_text.split("\n")
     start, end = locate_item_block(lines, plan_identifier, item_identifier)
-    for field, value in fields_to_set:
-        rendered = field.render(value).rstrip("\n")
+    for manifest_key, value in values_by_key.items():
+        rendered = manifest_key.render(value).rstrip("\n")
         existing = next(
-            (index for index in range(start, end) if field.pattern.match(lines[index])),
+            (
+                index
+                for index in range(start, end)
+                if manifest_key.pattern.match(lines[index])
+            ),
             None,
         )
         if existing is not None:
@@ -951,28 +956,24 @@ def render_new_item(request: ItemRecordRequest) -> str:
     :raises IncompleteNewItemError: If a field a new entry cannot omit is missing.
     :return: The block's text, newline-terminated.
     """
+    required = {ManifestKey.TITLE: request.title, ManifestKey.TRACK: request.track}
     missing = tuple(
-        manifest_key
-        for manifest_key, value in (
-            (ManifestKey.TITLE, request.title),
-            (ManifestKey.TRACK, request.track),
-        )
-        if not value
+        manifest_key for manifest_key, value in required.items() if not value
     )
     if missing:
         raise IncompleteNewItemError(
             item_identifier=request.item_identifier, missing_keys=missing
         )
-    body = [
-        (ManifestKey.TITLE, request.title),
-        (ManifestKey.BRANCH, "null"),
-        (ManifestKey.TRACK, request.track),
-        (ManifestKey.DEPENDS_ON, "[]"),
-        (ManifestKey.STATUS, request.status.value),
-    ]
+    body = {
+        ManifestKey.TITLE: request.title,
+        ManifestKey.BRANCH: "null",
+        ManifestKey.TRACK: request.track,
+        ManifestKey.DEPENDS_ON: "[]",
+        ManifestKey.STATUS: request.status.value,
+    }
     return ManifestKey.IDENTIFIER.render(
         request.item_identifier, opening_the_item=True
-    ) + "".join(field.render(value) for field, value in body)
+    ) + "".join(manifest_key.render(value) for manifest_key, value in body.items())
 
 
 def append_item(manifest_text: str, block: str) -> str:
@@ -1120,7 +1121,7 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
             documents.manifest_text,
             request.plan_identifier,
             request.item_identifier,
-            [(ManifestKey.STATUS, request.status.value)],
+            {ManifestKey.STATUS: request.status.value},
         )
 
     roadmap_text = append_roadmap_section(
@@ -1464,12 +1465,12 @@ def open_work(
         documents.manifest_text,
         request.plan_identifier,
         request.item_identifier,
-        [
-            (ManifestKey.BRANCH, request.branch),
-            (ManifestKey.PULL_REQUEST_NUMBER, str(created.number)),
-            (ManifestKey.SESSION, request.session_url),
-            (ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value),
-        ],
+        {
+            ManifestKey.BRANCH: request.branch,
+            ManifestKey.PULL_REQUEST_NUMBER: str(created.number),
+            ManifestKey.SESSION: request.session_url,
+            ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value,
+        },
     )
     documents.save(manifest_text, documents.roadmap_text, project_root)
     return BootstrapReport(
