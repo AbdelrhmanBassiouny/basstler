@@ -52,10 +52,23 @@ whole run. Do not inspect, guess at, or rename remotes yourself - a remote's nam
 and a wrong guess points every push at the wrong repository.
 
 **a. Make the tooling present rather than assuming it.** Every step shells out to
-`.claude/stack/stack.py`, and a failure in a later step lands after an earlier one has already
-changed pull requests. If `ls .claude/stack/stack.py` fails, `git fetch` the ref you were told to
-resolve this document from and `git checkout <ref> -- .claude/stack/`. Once `.claude/stack/` is on
-the default branch this is a no-op on a fresh clone.
+`.claude/stack/`, and a failure in a later step lands after an earlier one has already changed pull
+requests. If `ls .claude/stack/maintenance.py` fails, `git fetch` the ref you were told to resolve
+this document from and restore it **into the working tree only**:
+
+```bash
+git restore --source=<ref> --worktree -- .claude/stack/
+```
+
+Never reach for `git checkout` with a ref and a path here. That form writes the index as well, so on
+a branch that does not carry the tooling the files end up staged - and the next commit made on that
+branch during a pass is a restack merge, which would commit the tooling into somebody's feature
+branch and from there into the upstream. `git restore --worktree` leaves them untracked, where
+nothing can pick them up.
+
+Once `.claude/stack/` is on the default branch this is a no-op on a fresh clone. The pass itself no
+longer takes the tooling away: `restack` switches branches in a worktree of its own, so the checkout
+you invoked it from keeps its branch and its files.
 
 **b. Take the fork and the upstream in this order, stopping at the first that answers:**
 
