@@ -231,12 +231,14 @@ class GitCommandRunner:
 
     def merge(self, reference: str) -> GitCommandResult:
         """:param reference: The reference to merge in.
-        :return: The finished merge, whose failure is a conflict."""
+        :return: The finished merge, whose failure is a conflict only when it left
+            unmerged paths behind."""
         return self.attempt("merge", "--no-edit", reference)
 
     def rebase(self, reference: str) -> GitCommandResult:
         """:param reference: The reference to rebase onto.
-        :return: The finished rebase, whose failure is a conflict."""
+        :return: The finished rebase, whose failure is a conflict only when it left
+            unmerged paths behind."""
         return self.attempt("rebase", reference)
 
     def abandon(self, strategy: IntegrationStrategy) -> None:
@@ -805,6 +807,10 @@ class RestackOutcome(StrEnum):
     CONFLICT = "conflict"
     """Its parent could not be integrated cleanly; nothing was published."""
 
+    INTEGRATION_FAILED = "integration-failed"
+    """Integrating its parent failed without conflicting on anything, so the branch is
+    not the thing to fix and its owner was not told; nothing was published."""
+
     REFUSED = "refused"
     """Move check refused the push; nothing was published."""
 
@@ -843,7 +849,8 @@ class BranchOutcome:
     """The commit published, absent unless the outcome is a push."""
 
     explanation: str | None = None
-    """What the fork said when it rejected the push, absent unless it did."""
+    """Why this outcome happened in words its owner can act on, absent unless the
+    outcome carries one."""
 
     reported_at: str | None = None
     """URL of the comment telling this branch's owner about it, absent unless one was
@@ -1008,12 +1015,18 @@ class IntegrateParent(RestackStep):
     A conflict is never resolved here - that is a change to somebody else's branch. It
     is labelled and commented on, so the next pass withholds the branch rather than
     re-reporting it.
+
+    Unmerged paths are what make a failed integration a conflict, not its exit status:
+    a merge also refuses when an untracked file is in the way, when the histories are
+    unrelated, or when a reference does not resolve. Labelling those would name a
+    branch that merges perfectly well, and the branch's owner would have nothing to
+    fix - so they are reported as a plain failure of the pass instead.
     """
 
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
         """:param restacking: The branch being restacked.
-        :return: A conflict outcome when the parent will not merge, otherwise
-            ``None``."""
+        :return: A conflict outcome when the parent left unmerged paths, a failure
+            outcome when the integration failed without any, otherwise ``None``."""
         git = restacking.git
         git.checkout(restacking.branch.name, restacking.branch_reference)
         integration = (
@@ -1025,6 +1038,11 @@ class IntegrateParent(RestackStep):
             return None
         conflicting = git.unmerged_paths()
         git.abandon(restacking.strategy)
+        if not conflicting:
+            return restacking.concluded(
+                RestackOutcome.INTEGRATION_FAILED,
+                explanation=integration.error_output,
+            )
         return restacking.concluded(
             RestackOutcome.CONFLICT,
             conflicting_paths=conflicting,

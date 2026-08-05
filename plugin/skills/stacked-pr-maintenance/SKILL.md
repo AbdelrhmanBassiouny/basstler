@@ -179,8 +179,14 @@ A non-zero run also prints its status in words, so you never have to look a numb
 change is the one write this credential is refused, so step 1 of the next pass is where it gets
 made. Everything else - `fast_forward`, `landed`, `restacked`, `promoted`,
 `promotion_labels_cleared` - is what happened, for the summary. A `restacked` entry other than
-`pushed` or `up-to-date` is a branch left for its owner; the executor has already labelled and
-commented on it, so name it in the summary and move on.
+`pushed` or `up-to-date` is a branch the pass could not publish; the executor has already labelled
+and commented on it, so name it in the summary and move on.
+
+The one exception is `integration-failed`: integrating the parent failed without conflicting on
+anything, so the branch is not what needs fixing and its owner was deliberately not told. Its
+`explanation` carries what git said - an untracked file in the way, unrelated histories, a
+reference that does not resolve. That is the pass's own environment to fix, so report it in the
+summary as yours rather than the branch owner's, and never label the branch for it.
 
 If a landed pull request is somehow still open after the pass, report it rather than closing it
 yourself.

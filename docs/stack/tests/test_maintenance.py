@@ -555,6 +555,33 @@ def test_a_conflicting_integration_pushes_nothing_and_names_the_files(
     assert fork_checkout.published_commit("origin", "a-child") == before
 
 
+def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A merge exits non-zero for reasons that leave nothing conflicted at all - here an
+    untracked file it refuses to overwrite. Reading any failure as a conflict labels a
+    branch that merges perfectly well and sends its owner a report naming no files.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "an-obstructing-file", "the parent's version\n")
+    fork_checkout.run_git("checkout", "--quiet", "a-child")
+    (fork_checkout.project_root / "an-obstructing-file").write_text("in the way\n")
+    before = fork_checkout.published_commit("origin", "a-child")
+    fork = RecordingPullRequests()
+
+    outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git, fork)
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.INTEGRATION_FAILED
+    assert child.conflicting_paths == ()
+    assert "an-obstructing-file" in child.explanation
+    assert fork.label_writes == []
+    assert fork.comments == []
+    assert child.reported_at is None
+    assert fork_checkout.published_commit("origin", "a-child") == before
+
+
 def test_a_rebase_labelled_branch_is_rebased_rather_than_merged(
     fork_checkout: ForkCheckout,
 ):
@@ -1130,7 +1157,12 @@ def test_a_refused_fast_forward_is_never_reported_as_a_clean_pass():
 
 @pytest.mark.parametrize(
     "left_behind",
-    [RestackOutcome.CONFLICT, RestackOutcome.WITHHELD, RestackOutcome.PUSH_REJECTED],
+    [
+        RestackOutcome.CONFLICT,
+        RestackOutcome.WITHHELD,
+        RestackOutcome.PUSH_REJECTED,
+        RestackOutcome.INTEGRATION_FAILED,
+    ],
 )
 def test_a_branch_left_unpublished_is_never_reported_as_a_clean_pass(
     left_behind: RestackOutcome,
