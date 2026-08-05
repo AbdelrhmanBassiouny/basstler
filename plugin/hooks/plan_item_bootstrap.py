@@ -381,18 +381,44 @@ class ExitCode(IntEnum):
     """
     The process statuses this tool exits with.
 
-    Values are distinct rather than aligned with ``stack.py``'s own ``ExitCode``, which
-    is not reachable from ``main``; aligning the two belongs with whichever item brings
-    them into one package.
+    A distinct status per refusal lets a caller act on *which* failure happened without
+    parsing stderr. ``argparse`` supplies 2 for a usage error.
     """
 
     SUCCESS = 0
+    """
+    The operation ran and printed its report.
+    """
+
     UNKNOWN_PLAN = 3
+    """
+    No plan of that id is on the personal-notes branch.
+    """
+
     UNKNOWN_ITEM = 4
+    """
+    The plan exists but tracks no item of that id, and too little was given to add one.
+    """
+
     INCOMPLETE_NEW_ITEM = 5
+    """
+    Adding the item was asked for without every key a new entry must carry.
+    """
+
     BRANCH_ALREADY_PUBLISHED = 6
+    """
+    The branch is already on the remote, so opening the work would adopt someone's.
+    """
+
     PULL_REQUEST_DETAILS_MISSING = 7
+    """
+    Neither an existing pull request number nor the title and body to create one.
+    """
+
     PULL_REQUEST_REFUSED = 8
+    """
+    GitHub rejected the creation; its own message says why.
+    """
 
     @property
     def name_for_a_caller(self) -> str:
