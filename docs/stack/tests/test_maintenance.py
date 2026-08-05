@@ -338,6 +338,7 @@ def test_every_field_is_named_by_the_key_the_api_answers_under():
     """
     for field in PullRequestField:
         assert isinstance(field.key, str), field
+    assert len({field.key for field in PullRequestField}) == len(list(PullRequestField))
 
 
 def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
@@ -972,6 +973,24 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
 
     assert cleared == ("a-parent",)
     assert fork.label_writes == [RecordedLabelWrite(40, ("in-review",))]
+
+
+def test_a_branch_is_published_only_after_every_earlier_step_passed():
+    """
+    The steps are found from their own subclasses, so their definition order is the
+    procedure - publishing a branch before its move has been checked is a bug no type
+    catches, and reordering the classes is all it would take.
+    """
+    assert [type(step).__name__ for step in maintenance.RESTACK_STEPS] == [
+        "WithholdBranchStillConflicting",
+        "SkipBranchAlreadyCurrent",
+        "IntegrateParent",
+        "RefuseAnUnsafeMove",
+        "PublishBranch",
+    ]
+    assert {type(step) for step in maintenance.RESTACK_STEPS} == set(
+        maintenance.RestackStep.__subclasses__()
+    )
 
 
 def test_a_branch_no_step_concludes_is_an_error_rather_than_a_silent_pass(

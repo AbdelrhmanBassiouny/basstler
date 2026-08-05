@@ -37,6 +37,7 @@ import urllib.error
 import urllib.parse
 import urllib.request
 from collections.abc import Callable, Iterable, Mapping, Sequence
+import dataclasses
 from dataclasses import asdict, dataclass
 from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
@@ -329,25 +330,6 @@ class PullRequestFieldSpecification:
     """Whether a record omitting it is rejected rather than read."""
 
 
-def a_pull_request_field(
-    *,
-    key: str,
-    shape: PullRequestFieldShape = PullRequestFieldShape.VALUE,
-    required: bool = False,
-) -> tuple[str, PullRequestFieldShape, bool]:
-    """Name one field's specification for :class:`PullRequestField` to carry.
-
-    An enum member's value has to be the arguments its specification is built from, so
-    this names them rather than leaving a reader to count positions.
-
-    :param key: The key the API answers under.
-    :param shape: How its value has to be read.
-    :param required: Whether a record omitting it is rejected rather than read.
-    :return: The member's value.
-    """
-    return key, shape, required
-
-
 class PullRequestField(PullRequestFieldSpecification, Enum):
     """Every pull-request field this executor reads, and how to read it.
 
@@ -355,40 +337,51 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
     arrives nested while ``draft`` does not, or which fields a board cannot be derived
     without.
 
-    ..note:: A member's value is the arguments its specification is built from, named
-        by :func:`a_pull_request_field`; passing a built
-        :class:`PullRequestFieldSpecification` instead lands the whole instance in
-        :attr:`key` rather than raising.
+    A member is written as the specification it carries, and :meth:`__init__` unpacks it
+    onto the member itself - so ``PullRequestField.HEAD.key`` reads directly and the
+    member is a :class:`PullRequestFieldSpecification` in its own right.
     """
 
-    NUMBER = a_pull_request_field(key="number", required=True)
+    def __init__(self, specification: PullRequestFieldSpecification) -> None:
+        """Carry the specification's values on the member itself.
+
+        Without this the mixin would receive the whole specification as its first
+        argument - silently, landing the instance in :attr:`key` - since an enum passes
+        a member's value straight to the type it mixes in.
+
+        :param specification: What this field is called and how to read it.
+        """
+        for field in dataclasses.fields(PullRequestFieldSpecification):
+            object.__setattr__(self, field.name, getattr(specification, field.name))
+
+    NUMBER = PullRequestFieldSpecification(key="number", required=True)
     """The pull request's number."""
 
-    HEAD = a_pull_request_field(
+    HEAD = PullRequestFieldSpecification(
         key="head", shape=PullRequestFieldShape.BRANCH_REFERENCE, required=True
     )
     """The branch the pull request would merge - the stack node it names."""
 
-    BASE = a_pull_request_field(
+    BASE = PullRequestFieldSpecification(
         key="base", shape=PullRequestFieldShape.BRANCH_REFERENCE, required=True
     )
     """The branch it would merge into - its parent in the stack."""
 
-    DRAFT = a_pull_request_field(key="draft", required=True)
+    DRAFT = PullRequestFieldSpecification(key="draft", required=True)
     """Whether its author has yet reviewed it themselves."""
 
-    LABELS = a_pull_request_field(
+    LABELS = PullRequestFieldSpecification(
         key="labels", shape=PullRequestFieldShape.LABEL_NAMES, required=True
     )
     """The labels it carries, which the workflow reads as state."""
 
-    BODY = a_pull_request_field(key="body")
+    BODY = PullRequestFieldSpecification(key="body")
     """Its description, read for the session link and the promotion prefill."""
 
-    TITLE = a_pull_request_field(key="title")
+    TITLE = PullRequestFieldSpecification(key="title")
     """Its title, which prefills the upstream pull request."""
 
-    MERGEABLE_STATE = a_pull_request_field(key="mergeable_state")
+    MERGEABLE_STATE = PullRequestFieldSpecification(key="mergeable_state")
     """GitHub's own verdict on whether it currently conflicts with its base."""
 
     def read(self, record: PullRequestRecord, number: int | None = None) -> Any:
@@ -950,8 +943,8 @@ class RestackStep:
     """One step of a branch's restack.
 
     A step either concludes the branch - returning the outcome its owner acts on - or
-    returns nothing and lets the next step run. Adding a step is writing a subclass and
-    placing it in :data:`RESTACK_STEPS`, whose order is the procedure.
+    returns nothing and lets the next step run. Adding a step is writing a subclass;
+    :data:`RESTACK_STEPS` finds it, in the order the subclasses are defined.
     """
 
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
@@ -1113,16 +1106,16 @@ class PublishBranch(RestackStep):
         )
 
 
-RESTACK_STEPS: tuple[RestackStep, ...] = (
-    WithholdBranchStillConflicting(),
-    SkipBranchAlreadyCurrent(),
-    IntegrateParent(),
-    RefuseAnUnsafeMove(),
-    PublishBranch(),
+RESTACK_STEPS: tuple[RestackStep, ...] = tuple(
+    subclass() for subclass in RestackStep.__subclasses__()
 )
-"""Every step a branch is put through, in the order that is the procedure - unlike the
-commands, these are listed rather than discovered, because their order is what they
-mean."""
+"""Every step a branch is put through, found from the subclasses themselves so a step
+cannot exist without running.
+
+..warning:: Definition order is the procedure - a branch is published only once its move
+    has been checked - so moving a class within this module changes what a pass does.
+    ``test_a_branch_is_published_only_after_every_earlier_step_passed`` pins it.
+"""
 
 
 @dataclass

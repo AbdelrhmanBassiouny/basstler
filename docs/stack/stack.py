@@ -52,7 +52,11 @@ from urllib.parse import quote
 # %% configuration
 
 CONFIGURATION_PATH = Path(__file__).with_name("stack.toml")
+"""The checked-in configuration every run starts from, before any per-user override."""
+
 BOARD_PATH = Path(__file__).with_name("board.json")
+"""Where the exported snapshot of the fork's open pull requests is read from and written
+to - scratch state, never committed."""
 
 PERSONAL_STACK_CONFIGURATION_PATH = ".claude/personal/stack.toml"
 """Path, relative to the project root, of the per-user configuration override file on the personal-notes
@@ -441,16 +445,27 @@ class BranchStatus(StrEnum):
     """A stack node's lifecycle position."""
 
     DRAFT = "draft"
+    """Its author has not yet reviewed it themselves, so it may not be promoted."""
+
     READY = "ready"
+    """Out of draft - reviewed by its author, and promotable once its parent is."""
+
     IN_REVIEW = "in-review"
+    """Promoted to the upstream, where it waits on that queue rather than on us."""
+
     MERGED = "merged"
+    """Its own commits are already contained in the upstream base."""
 
 
 class IntegrationStrategy(StrEnum):
     """How a branch integrates its parent's moved tip during a restack."""
 
     MERGE = "merge"
+    """Merge the parent's tip in, which adds a commit and needs no force-push."""
+
     REBASE = "rebase"
+    """Replay the branch onto the parent's tip, which rewrites published history and is
+    authorised only by the branch's own rebase label."""
 
 
 @dataclass
@@ -1011,8 +1026,13 @@ class CommitMoveAction(StrEnum):
     """What a proposed move would do to the destination branch."""
 
     PUSH = "push"
+    """Publish one branch's commits to a remote branch."""
+
     MERGE = "merge"
+    """Bring one branch's commits into another locally."""
+
     RESTACK = "restack"
+    """Integrate a moved parent and publish the result - a merge and a push together."""
 
 
 @dataclass(frozen=True)
@@ -1345,15 +1365,34 @@ class Command(StrEnum):
     """Every command this tool answers, named once so no caller spells one out."""
 
     STATUS = "status"
+    """Render the derived stack, one line per branch."""
+
     CHECK = "check"
+    """Report every structural problem the derived stack has."""
+
     NEXT = "next"
+    """Name the branches ready to be promoted upstream."""
+
     RESTACK_PLAN = "restack-plan"
+    """Emit the bottom-up plan of which branch integrates which parent, and how."""
+
     REPARENTS = "reparents"
+    """Name the children whose base has landed and must be retargeted."""
+
     LANDED = "landed"
+    """Name the branches whose own commits are already in the upstream base."""
+
     CHECK_MOVE = "check-move"
+    """Answer whether a proposed commit move may be made, and refuse it if not."""
+
     CONFIGURATION = "configuration"
+    """Print the resolved configuration, one ``field<TAB>value`` line per setting."""
+
     LABELS = "labels"
+    """Compute the complete label set a write must send, from the labels carried now."""
+
     PROMOTION_LINK = "promotion-link"
+    """Build the upstream compare-and-create link for one branch."""
 
     @property
     def needs_a_board(self) -> bool:
