@@ -33,6 +33,7 @@ import os
 import re
 import subprocess
 import sys
+import tempfile
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -41,7 +42,10 @@ import dataclasses
 from dataclasses import asdict, dataclass
 from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
-from typing import Any, ClassVar, Protocol
+from typing import TYPE_CHECKING, Any, ClassVar, Protocol
+
+if TYPE_CHECKING:
+    from types import TracebackType
 
 from stack import (
     BOARD_PATH,
@@ -1152,36 +1156,90 @@ class RestackConcludedNothingError(RuntimeError):
         return f"no restack step concluded '{self.branch}'"
 
 
+@dataclass(frozen=True)
+class RestackWorktree:
+    """A checkout of its own for the branch switching a restack does.
+
+    Every step of the pass shells out to this file, which is tracked content in the
+    checkout the pass is invoked from. Most branches in a stack were cut before that
+    tooling landed, so checking one out there deletes the tooling the rest of the pass
+    needs and leaves the caller on a branch that is not theirs. This worktree is added
+    outside the project instead, out of reach of the branches a restack switches to.
+
+    Its refs are the same refs, so a branch it moves is moved for the whole repository.
+    """
+
+    git: GitCommandRunner
+    """The runner every branch switch of a restack goes through."""
+
+    origin: GitCommandRunner
+    """The invoking checkout, which the worktree is added to and removed from."""
+
+    @classmethod
+    def added_to(cls, origin: GitCommandRunner) -> RestackWorktree:
+        """Add a worktree, detached at whatever the invoking checkout has.
+
+        :param origin: The checkout to add it to.
+        :return: The worktree, to be used as a context manager so it is removed again.
+        """
+        path = Path(tempfile.mkdtemp(prefix="stack-restack-"))
+        origin.run("worktree", "add", "--quiet", "--detach", str(path), "HEAD")
+        return cls(GitCommandRunner(working_directory=path), origin)
+
+    def __enter__(self) -> GitCommandRunner:
+        """:return: The runner to restack through."""
+        return self.git
+
+    def __exit__(
+        self,
+        exception_type: type[BaseException] | None,
+        exception: BaseException | None,
+        traceback: TracebackType | None,
+    ) -> None:
+        """Remove the worktree, whether the restack finished or was abandoned.
+
+        Removal is attempted rather than depended on, so a failure to tidy up never
+        replaces the exception that is on its way out.
+        """
+        self.origin.attempt(
+            "worktree", "remove", "--force", str(self.git.working_directory)
+        )
+
+
 def restack(
     stack: Stack, git: GitCommandRunner, fork: ForkPullRequests
 ) -> list[BranchOutcome]:
     """Put every branch whose parent moved through :data:`RESTACK_STEPS`, bottom up.
 
+    The steps run in a :class:`RestackWorktree` rather than in the invoking checkout,
+    which is left on its own branch with its own files.
+
     :param stack: The derived stack, whose plan this executes.
-    :param git: The runner to execute through.
+    :param git: The runner naming the checkout to add the worktree to.
     :param fork: The fork, read for conflict state and written to when reporting.
     :return: One outcome per branch in the plan, parent before child.
     """
-    checks = CommitMoveChecks(
-        stack=stack,
-        checked_out_branch="",
-        is_ancestor=BranchAncestry(stack.configuration, git).is_ancestor,
-    )
-    by_name = {branch.name: branch for branch in stack.branches}
-    return [
-        _restack_branch(
-            BranchUnderRestack(
-                branch=by_name[entry["branch"]],
-                parent=entry["parent"],
-                strategy=IntegrationStrategy(entry["strategy"]),
-                stack=stack,
-                git=git,
-                fork=fork,
-                checks=checks,
-            )
+    with RestackWorktree.added_to(git) as switching:
+        checks = CommitMoveChecks(
+            stack=stack,
+            checked_out_branch="",
+            is_ancestor=BranchAncestry(stack.configuration, switching).is_ancestor,
         )
-        for entry in restack_plan(stack)
-    ]
+        by_name = {branch.name: branch for branch in stack.branches}
+        return [
+            _restack_branch(
+                BranchUnderRestack(
+                    branch=by_name[entry["branch"]],
+                    parent=entry["parent"],
+                    strategy=IntegrationStrategy(entry["strategy"]),
+                    stack=stack,
+                    git=switching,
+                    fork=fork,
+                    checks=checks,
+                )
+            )
+            for entry in restack_plan(stack)
+        ]
 
 
 def _restack_branch(restacking: BranchUnderRestack) -> BranchOutcome:

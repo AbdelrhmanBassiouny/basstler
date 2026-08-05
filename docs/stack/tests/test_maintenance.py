@@ -491,6 +491,24 @@ def a_parent_and_child(fork_checkout: ForkCheckout) -> None:
     fork_checkout.branch_from("a-child", "a-parent")
 
 
+def an_unrelated_history_on(fork_checkout: ForkCheckout, branch: str) -> None:
+    """
+    Republish a branch on a root commit of its own, sharing no history with the stack.
+
+    A merge refuses this outright, so it is a way to stop an integration before it
+    begins that depends on nothing but what the fork carries.
+
+    :param fork_checkout: The checkout to republish the branch from.
+    :param branch: The branch to republish.
+    """
+    fork_checkout.run_git("checkout", "--quiet", "--orphan", "an-unrelated-root")
+    fork_checkout.run_git("rm", "--quiet", "-rf", ".")
+    fork_checkout.commit("an-unrelated-file", "a history of its own\n")
+    fork_checkout.run_git("branch", "--force", branch, "HEAD")
+    fork_checkout.run_git("push", "--quiet", "--force", "origin", f"{branch}:{branch}")
+    fork_checkout.run_git("fetch", "--quiet", "origin")
+
+
 def the_board(labels: list[str] | None = None) -> list[PullRequest]:
     """
     :param labels: The labels the child's pull request carries.
@@ -559,14 +577,13 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     fork_checkout: ForkCheckout,
 ):
     """
-    A merge exits non-zero for reasons that leave nothing conflicted at all - here an
-    untracked file it refuses to overwrite. Reading any failure as a conflict labels a
-    branch that merges perfectly well and sends its owner a report naming no files.
+    A merge exits non-zero for reasons that leave nothing conflicted at all - here a
+    parent whose history shares no root with the branch. Reading any failure as a
+    conflict labels a branch that merges perfectly well and sends its owner a report
+    naming no files.
     """
     a_parent_and_child(fork_checkout)
-    fork_checkout.commit_on("a-parent", "an-obstructing-file", "the parent's version\n")
-    fork_checkout.run_git("checkout", "--quiet", "a-child")
-    (fork_checkout.project_root / "an-obstructing-file").write_text("in the way\n")
+    an_unrelated_history_on(fork_checkout, "a-parent")
     before = fork_checkout.published_commit("origin", "a-child")
     fork = RecordingPullRequests()
 
@@ -575,7 +592,7 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
     assert child.outcome == RestackOutcome.INTEGRATION_FAILED
     assert child.conflicting_paths == ()
-    assert "an-obstructing-file" in child.explanation
+    assert "refusing to merge unrelated histories" in child.explanation
     assert fork.label_writes == []
     assert fork.comments == []
     assert child.reported_at is None
@@ -698,6 +715,111 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
     assert parent.outcome == RestackOutcome.REFUSED
     assert RefusalReason.FALSE_MERGE in parent.refusals
     assert fork_checkout.published_commit("origin", "a-parent") == before
+
+
+# %% the checkout the pass was invoked in
+
+TOOLING_PATH = ".claude/stack/maintenance.py"
+"""
+Where the pass's own tooling sits: tracked content, so a branch cut before it landed
+does not carry it, and checking that branch out deletes it from the working tree.
+"""
+
+TOOLING_CONTENT = "the pass's own tooling\n"
+"""
+What the stand-in tooling file holds, so its survival can be asserted by value.
+"""
+
+
+def a_stack_cut_before_the_tooling_landed(fork_checkout: ForkCheckout) -> Path:
+    """
+    Publish the two-branch stack, add the tooling to the base alone, and move the parent
+    so the child has something to restack.
+
+    Branching first is what most of a real stack looks like - the branches were cut
+    before the tooling landed, so their trees do not carry it - and it leaves the
+    checkout on the base, holding a file neither branch has.
+
+    :param fork_checkout: The checkout to build the stack in.
+    :return: The tooling file in the working tree.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    tooling = fork_checkout.project_root / TOOLING_PATH
+    tooling.parent.mkdir(parents=True)
+    fork_checkout.commit(TOOLING_PATH, TOOLING_CONTENT)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    return tooling
+
+
+def test_a_restack_leaves_the_invoking_checkout_on_its_own_branch(
+    fork_checkout: ForkCheckout,
+):
+    a_stack_cut_before_the_tooling_landed(fork_checkout)
+
+    restack(
+        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+    )
+
+    assert fork_checkout.run_git("branch", "--show-current") == UPSTREAM_BASE
+
+
+def test_a_restack_keeps_what_the_branches_it_switches_to_do_not_have(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The tooling every step of the pass shells out to is tracked content in the checkout
+    the pass runs in, so a restack that switched branches there would delete it.
+    """
+    tooling = a_stack_cut_before_the_tooling_landed(fork_checkout)
+
+    restack(
+        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+    )
+
+    assert tooling.read_text() == TOOLING_CONTENT
+
+
+def test_a_restack_leaves_no_worktree_of_its_own_behind(fork_checkout: ForkCheckout):
+    a_stack_cut_before_the_tooling_landed(fork_checkout)
+
+    restack(
+        a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
+    )
+
+    listed = fork_checkout.run_git("worktree", "list", "--porcelain")
+    assert [
+        line.removeprefix("worktree ")
+        for line in listed.splitlines()
+        if line.startswith("worktree ")
+    ] == [str(fork_checkout.project_root.resolve())]
+
+
+def test_a_restack_that_raises_still_takes_its_worktree_with_it(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A pass abandoned part-way must not leave a worktree behind holding a checked-out
+    branch, so the cleanup cannot sit on the success path.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-contested-file", "the parent's version\n")
+    fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
+
+    with pytest.raises(ReportingRefused):
+        restack(
+            a_stack(fork_checkout, the_board()),
+            fork_checkout.git,
+            PullRequestsRefusingToReport(),
+        )
+
+    listed = fork_checkout.run_git("worktree", "list", "--porcelain")
+    assert [
+        line.removeprefix("worktree ")
+        for line in listed.splitlines()
+        if line.startswith("worktree ")
+    ] == [str(fork_checkout.project_root.resolve())]
 
 
 # %% reporting a branch back to its owner
@@ -842,6 +964,34 @@ class RecordingPullRequests:
         """
         self.description_writes.append(RecordedDescription(number, body))
         self.descriptions[number] = body
+
+
+@dataclass
+class ReportingRefused(RuntimeError):
+    """
+    Raised instead of writing to the fork, to abandon a pass where it stands.
+    """
+
+    def __str__(self) -> str:
+        """
+        :return: Why the write did not happen.
+        """
+        return "the fork refused the write"
+
+
+@dataclass
+class PullRequestsRefusingToReport(RecordingPullRequests):
+    """
+    A fork whose label writes raise, so a pass dies part-way through a branch.
+    """
+
+    def replace_labels(self, number: int, labels: Sequence[str]) -> None:
+        """
+        :param number: The pull request that would have been written.
+        :param labels: The label set that would have been written.
+        :raises ReportingRefused: Always.
+        """
+        raise ReportingRefused
 
 
 def test_a_conflict_labels_the_branch_and_tells_its_owner(
