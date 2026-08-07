@@ -147,6 +147,7 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
+source "${SCRIPT_DIR}/session-start-messages.sh"
 
 fetch_personal_notes_branch || exit 0
 
@@ -250,11 +251,11 @@ PLAN_ID="$(plan_id_for_branch "${CURRENT_BRANCH}" || true)"
 # plan item could ever track, there is nothing to prompt about at all.
 if [ -z "${PLAN_ID}" ]; then
   if ! branch_can_hold_plan_item "${CURRENT_BRANCH}"; then
-    SUMMARY_PLAN="not applicable (this branch never holds a plan item)"
+    SUMMARY_PLAN="$(plan_line_not_applicable)"
   elif plan_branch_index_exists; then
-    SUMMARY_PLAN="no item tracks branch '${CURRENT_BRANCH}' ($(tracked_plan_count) plan(s) tracked) - if this session's work belongs to one of them, add its item before starting; if it belongs to none, there is nothing to do"
+    SUMMARY_PLAN="$(plan_line_no_item_tracks_branch "${CURRENT_BRANCH}" "$(tracked_plan_count)")"
   else
-    SUMMARY_PLAN="no plans tracked on '${NOTES_BRANCH}' yet"
+    SUMMARY_PLAN="$(plan_line_no_plans_tracked "${NOTES_BRANCH}")"
   fi
 else
   PLAN_MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
@@ -262,7 +263,7 @@ else
   # An index entry pointing at a manifest that isn't there means the index and
   # the plan data have drifted apart - previously indistinguishable from having
   # no plan at all, so it went unnoticed.
-  SUMMARY_PLAN="'${PLAN_ID}' tracks this branch, but ${PLAN_MANIFEST_PATH} is missing on '${NOTES_BRANCH}'"
+  SUMMARY_PLAN="$(plan_line_manifest_missing "${PLAN_ID}" "${PLAN_MANIFEST_PATH}" "${NOTES_BRANCH}")"
   if git cat-file -e "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
     [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
     # TRACKING_ISSUE: a plain top-level scalar, so grep/sed suffices here too -
@@ -331,7 +332,7 @@ ROADMAP_HEADER
     fi
     echo "<!-- END-PLAN-ROADMAP -->" >> "${OUTPUT_FILE}"
     WROTE_ANYTHING=1
-    SUMMARY_PLAN="'${PLAN_ID}' (tracking issue: ${TRACKING_ISSUE:-none})"
+    SUMMARY_PLAN="$(plan_line_tracked "${PLAN_ID}" "${TRACKING_ISSUE:-none}")"
   fi
 fi
 
@@ -377,17 +378,18 @@ fi
 # resolve-personal-notes-config.sh, which cd's and reassigns every variable
 # already in use here - and captured with `|| true`, so a setup gap can never
 # turn into a session that starts with a broken hook.
-SUMMARY_SETUP="not checked - ${CHECK_SETUP_SCRIPT} is not in this checkout"
+SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
 if [ -f "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" ]; then
   # Only the needs-setup rows: the info rows are context for someone reading
   # the full report, not a verdict, and this summary is not that report.
   NEEDS_SETUP_ROWS="$(bash "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" 2>/dev/null \
     | awk -F'\t' '$2 == "needs-setup" { printf "    %s: %s\n", $1, $3 }' || true)"
   if [ -z "${NEEDS_SETUP_ROWS}" ]; then
-    SUMMARY_SETUP="ok"
+    SUMMARY_SETUP="$(setup_line_ok)"
   else
-    SUMMARY_SETUP="$(printf '%s check(s) need setup - run /setup-personal-notes:\n%s' \
-      "$(printf '%s\n' "${NEEDS_SETUP_ROWS}" | wc -l | tr -d ' ')" "${NEEDS_SETUP_ROWS}")"
+    SUMMARY_SETUP="$(printf '%s\n%s' \
+      "$(setup_line_needs_setup "$(printf '%s\n' "${NEEDS_SETUP_ROWS}" | wc -l | tr -d ' ')")" \
+      "${NEEDS_SETUP_ROWS}")"
   fi
 fi
 

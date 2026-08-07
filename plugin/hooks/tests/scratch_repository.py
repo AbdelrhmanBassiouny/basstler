@@ -13,6 +13,7 @@ import shutil
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import plan_manifest_tools
@@ -32,39 +33,42 @@ WORK_BRANCH = "some-work-branch"
 The throwaway branch a scratch repository is left checked out on.
 """
 
-REQUIREMENTS_FILE = ".claude/skills/plan-dashboard/requirements.txt"
+SET_UP_CLONE_FIXTURE = Path(__file__).parent / "fixtures" / "set-up-clone"
 """
-The requirements file check-setup.sh derives the dependency check from.
-"""
-
-TOOLING_FILES = (
-    ".claude/skills/plan-dashboard/build_dashboard.py",
-    ".claude/skills/plan-dashboard/refresh_dashboard.sh",
-    REQUIREMENTS_FILE,
-    ".claude/skills/plan-dashboard/plan-schema.md",
-)
-"""
-The files check-setup.sh's ``tooling_files`` check requires, relative to the project
-root.
-
-Kept as literals rather than sourced from resolve-personal-notes-config.sh so a rename
-that breaks the check has to be made deliberately in both places, instead of the tests
-silently following along and asserting nothing.
+A checked-in clone layout satisfying every check-setup.sh check that reads a file, laid
+out under the same relative paths it will occupy in a scratch project root.
 """
 
-SESSION_START_SETTINGS = (
-    '{"hooks": {"SessionStart": [{"hooks": [{"type": "command",'
-    ' "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh"}]}]}}\n'
-)
-"""
-A settings file registering the SessionStart hook, as check-setup.sh expects to find it.
-"""
 
-INSTALLED_REQUIREMENT = "pytest>=1\n"
-"""
-The requirements file's content: one requirement that is certainly installed wherever
-these tests run, so the dependency check has a green baseline it cannot flake on.
-"""
+class SetupPrerequisiteFile(StrEnum):
+    """
+    The files check-setup.sh's ``tooling_files`` check requires, relative to the project
+    root.
+
+    Stated here as well as in the fixture tree deliberately. A rename that breaks the
+    check then has to be made in both places, rather than the fixture and the tests
+    following each other silently and asserting nothing.
+    """
+
+    BUILD_DASHBOARD = ".claude/skills/plan-dashboard/build_dashboard.py"
+    """
+    The dashboard builder the plan-dashboard skill runs.
+    """
+
+    REFRESH_DASHBOARD = ".claude/skills/plan-dashboard/refresh_dashboard.sh"
+    """
+    The refresh entry point the same skill runs.
+    """
+
+    DASHBOARD_REQUIREMENTS = ".claude/skills/plan-dashboard/requirements.txt"
+    """
+    The requirements file check-setup.sh also derives the dependency check from.
+    """
+
+    PLAN_SCHEMA = ".claude/skills/plan-dashboard/plan-schema.md"
+    """
+    The manifest field reference.
+    """
 
 
 def initialize_bare_repository(path: Path) -> Path:
@@ -159,13 +163,10 @@ class ScratchRepository:
         personal-notes branch and CLAUDE.local.md.
 
         Leaves CLAUDE.local.md out deliberately: session-start.sh writes it, so a test
-        of that script must not find it already there.
+        of that script must not find it already there - which is why this is a named
+        step rather than part of building the repository.
         """
-        for tooling_file in TOOLING_FILES:
-            self.write(tooling_file, "placeholder\n")
-        self.write(REQUIREMENTS_FILE, INSTALLED_REQUIREMENT)
-        self.write(".claude/settings.json", SESSION_START_SETTINGS)
-        self.write(".gitignore", "CLAUDE.local.md\n")
+        shutil.copytree(SET_UP_CLONE_FIXTURE, self.project_root, dirs_exist_ok=True)
 
     def run_hook_script(
         self, script_name: str, *arguments: str

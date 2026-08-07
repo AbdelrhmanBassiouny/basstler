@@ -18,7 +18,14 @@ from pathlib import Path
 
 import pytest
 
-from scratch_repository import NOTES_BRANCH, WORK_BRANCH, ScratchRepository
+from scratch_repository import (
+    HOOKS_SOURCE_DIRECTORY,
+    NOTES_BRANCH,
+    WORK_BRANCH,
+    ScratchRepository,
+)
+
+MESSAGES_SCRIPT = HOOKS_SOURCE_DIRECTORY / "session-start-messages.sh"
 
 FIXTURES_DIRECTORY = Path(__file__).parent / "fixtures"
 
@@ -40,7 +47,31 @@ MANIFEST_PATH = f".claude/personal/plans/{PLAN_IDENTIFIER}/plan.yaml"
 
 CLAUDE_LOCAL_MD = "CLAUDE.local.md"
 
-NOT_APPLICABLE_PLAN = "not applicable (this branch never holds a plan item)"
+
+def summary_message(message_name: str, *arguments: str) -> str:
+    """
+    Render one summary line from the same definitions session-start.sh prints it from,
+    so an assertion is never a second copy of the wording.
+
+    :param message_name: A function defined in session-start-messages.sh.
+    :param arguments: That function's arguments, in order.
+    :return: The rendered line.
+    """
+    result = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$1"; shift; "$@"',
+            "_",
+            str(MESSAGES_SCRIPT),
+            message_name,
+            *arguments,
+        ],
+        capture_output=True,
+        text=True,
+    )
+    assert result.returncode == 0, result.stderr
+    return result.stdout
 
 
 def branch_index(plan_identifier_by_branch: Mapping[str, str]) -> str:
@@ -88,6 +119,7 @@ def session_start_repository(
     """
     scratch_repository.install_hook_scripts(
         "resolve-personal-notes-config.sh",
+        "session-start-messages.sh",
         "session-start.sh",
         "check-setup.sh",
     )
@@ -169,9 +201,8 @@ def test_reports_no_plans_when_none_are_tracked(
     result = publish_and_run(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert (
-        summary_value(result.stdout, "plan")
-        == f"no plans tracked on '{NOTES_BRANCH}' yet"
+    assert summary_value(result.stdout, "plan") == summary_message(
+        "plan_line_no_plans_tracked", NOTES_BRANCH
     )
 
 
@@ -192,10 +223,8 @@ def test_names_the_missing_item_when_other_plans_are_tracked(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == (
-        f"no item tracks branch '{WORK_BRANCH}' (2 plan(s) tracked) - if this "
-        "session's work belongs to one of them, add its item before starting; "
-        "if it belongs to none, there is nothing to do"
+    assert summary_value(result.stdout, "plan") == summary_message(
+        "plan_line_no_item_tracks_branch", WORK_BRANCH, "2"
     )
 
 
@@ -211,8 +240,8 @@ def test_reports_the_plan_that_tracks_this_branch(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == (
-        f"'{PLAN_IDENTIFIER}' (tracking issue: {TRACKING_ISSUE})"
+    assert summary_value(result.stdout, "plan") == summary_message(
+        "plan_line_tracked", PLAN_IDENTIFIER, TRACKING_ISSUE
     )
 
 
@@ -228,8 +257,8 @@ def test_reports_a_tracked_plan_that_has_no_tracking_issue(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == (
-        f"'{PLAN_IDENTIFIER}' (tracking issue: none)"
+    assert summary_value(result.stdout, "plan") == summary_message(
+        "plan_line_tracked", PLAN_IDENTIFIER, "none"
     )
 
 
@@ -242,9 +271,8 @@ def test_reports_a_tracked_branch_whose_manifest_is_missing(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == (
-        f"'{PLAN_IDENTIFIER}' tracks this branch, but {MANIFEST_PATH} is missing "
-        f"on '{NOTES_BRANCH}'"
+    assert summary_value(result.stdout, "plan") == summary_message(
+        "plan_line_manifest_missing", PLAN_IDENTIFIER, MANIFEST_PATH, NOTES_BRANCH
     )
 
 
@@ -266,7 +294,9 @@ def test_reports_plan_as_not_applicable_on_the_default_branch(
     result = run_session_start(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == NOT_APPLICABLE_PLAN
+    assert summary_value(result.stdout, "plan") == summary_message(
+        "plan_line_not_applicable"
+    )
 
 
 def test_reports_plan_as_not_applicable_on_the_notes_branch(
@@ -284,7 +314,9 @@ def test_reports_plan_as_not_applicable_on_the_notes_branch(
     result = run_session_start(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == NOT_APPLICABLE_PLAN
+    assert summary_value(result.stdout, "plan") == summary_message(
+        "plan_line_not_applicable"
+    )
 
 
 # %% the setup line
@@ -296,7 +328,7 @@ def test_reports_setup_as_ok_when_every_check_passes(
     result = publish_and_run(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "setup") == "ok"
+    assert summary_value(result.stdout, "setup") == summary_message("setup_line_ok")
 
 
 def test_names_every_check_that_needs_setup(
@@ -315,8 +347,8 @@ def test_names_every_check_that_needs_setup(
         ).stdout.splitlines()
         if row.split("\t")[0] == failing_check
     )
-    assert summary_value(result.stdout, "setup") == (
-        "1 check(s) need setup - run /setup-personal-notes:"
+    assert summary_value(result.stdout, "setup") == summary_message(
+        "setup_line_needs_setup", "1"
     )
     assert f"    {failing_check}: {detail}" in result.stdout
 
@@ -331,3 +363,45 @@ def test_a_failing_setup_check_does_not_fail_the_hook(
 
     assert result.returncode == 0, result.stderr
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+
+
+# %% the wording itself
+
+
+def test_every_summary_message_reads_as_written():
+    """
+    Pin what each summary line actually says, in the one place that says it.
+
+    Every other assertion in this module renders its expectation from
+    session-start-messages.sh, which is what keeps them from drifting - and also what
+    stops any of them failing when a message is reworded, since both sides move
+    together. This test is the counterweight: a reword is a deliberate change to what a
+    session reads, so it fails exactly here and nowhere else.
+    """
+    assert summary_message("plan_line_not_applicable") == (
+        "not applicable (this branch never holds a plan item)"
+    )
+    assert summary_message("plan_line_no_plans_tracked", "some-notes-branch") == (
+        "no plans tracked on 'some-notes-branch' yet"
+    )
+    assert summary_message("plan_line_no_item_tracks_branch", "some-branch", "3") == (
+        "no item tracks branch 'some-branch' (3 plan(s) tracked) - if this session's "
+        "work belongs to one of them, add its item before starting; if it belongs to "
+        "none, there is nothing to do"
+    )
+    assert summary_message(
+        "plan_line_manifest_missing", "some-plan", "some/plan.yaml", "some-notes-branch"
+    ) == (
+        "'some-plan' tracks this branch, but some/plan.yaml is missing on "
+        "'some-notes-branch'"
+    )
+    assert summary_message("plan_line_tracked", "some-plan", "77") == (
+        "'some-plan' (tracking issue: 77)"
+    )
+    assert summary_message("setup_line_not_checked", "some/check-setup.sh") == (
+        "not checked - some/check-setup.sh is not in this checkout"
+    )
+    assert summary_message("setup_line_ok") == "ok"
+    assert summary_message("setup_line_needs_setup", "4") == (
+        "4 check(s) need setup - run /setup-personal-notes:"
+    )
