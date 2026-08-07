@@ -554,17 +554,27 @@ class UnresolvedThreadReport:
             if self.include_resolved
             else self.snapshot.unresolved_threads
         )
-        unresolved_count = len(self.snapshot.unresolved_threads)
-        heading = f"## {unresolved_count} unresolved review threads"
-        if not self.snapshot.unresolved_threads:
-            heading = "## No unresolved review threads"
-        lines = [heading, ""]
+        lines = [self._heading(len(shown)), ""]
         if not shown:
             lines.extend(["Nothing to act on.", ""])
             return lines
         for thread in shown:
             lines.extend(self._render_thread(thread))
         return lines
+
+    def _heading(self, shown_count: int) -> str:
+        """
+        Describe the set actually being listed, not just the unresolved one.
+
+        :param shown_count: How many threads the section goes on to list.
+        :return: The section heading.
+        """
+        unresolved_count = len(self.snapshot.unresolved_threads)
+        if not unresolved_count:
+            return "## No unresolved review threads"
+        if self.include_resolved:
+            return f"## {shown_count} review threads, {unresolved_count} unresolved"
+        return f"## {unresolved_count} unresolved review threads"
 
     def _render_thread(self, thread: ReviewThread) -> list[str]:
         """
@@ -625,10 +635,33 @@ def main(argv: list[str] | None = None) -> int:
     """
     Read one upstream pull request and print its report.
 
+    A branch that was never promoted upstream is an ordinary answer rather than a crash,
+    so this boundary turns the script's own errors into a stated reason. Anything else
+    still propagates with its traceback intact.
+
     :param argv: The arguments to parse, defaulting to the process's own.
     :return: The process exit status.
     """
     arguments = _parse_arguments(argv)
+    try:
+        report = _build_report(arguments)
+    except UpstreamReviewError as failure:
+        print(failure, file=sys.stderr)
+        return 1
+    print(report)
+    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
+    if summary_path:
+        Path(summary_path).write_text(report)
+    return 0
+
+
+def _build_report(arguments: argparse.Namespace) -> str:
+    """
+    Read the requested pull request and render its report.
+
+    :param arguments: The parsed command line.
+    :return: The rendered markdown.
+    """
     reader = UpstreamReviewReader(
         GitHubCommandTransport(),
         resolve_upstream_repository(override=arguments.upstream),
@@ -637,14 +670,9 @@ def main(argv: list[str] | None = None) -> int:
     number = arguments.pull_request or reader.resolve_pull_request_number(
         arguments.branch
     )
-    report = UnresolvedThreadReport(
+    return UnresolvedThreadReport(
         reader.snapshot(number), include_resolved=arguments.include_resolved
     ).render()
-    print(report)
-    summary_path = os.environ.get("GITHUB_STEP_SUMMARY")
-    if summary_path:
-        Path(summary_path).write_text(report)
-    return 0
 
 
 if __name__ == "__main__":

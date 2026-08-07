@@ -21,6 +21,7 @@ from upstream_reviews import (
     UnresolvedThreadReport,
     UpstreamPullRequestNotFound,
     UpstreamReviewReader,
+    main,
     resolve_upstream_repository,
 )
 
@@ -134,6 +135,14 @@ def test_including_resolved_threads_restores_it(paginated_transport):
     rendered = UnresolvedThreadReport(snapshot, include_resolved=True).render()
 
     assert "doc formatting" in rendered
+
+
+def test_including_resolved_threads_counts_what_is_shown(paginated_transport):
+    snapshot = make_reader(paginated_transport).snapshot(513)
+
+    rendered = UnresolvedThreadReport(snapshot, include_resolved=True).render()
+
+    assert "## 3 review threads, 2 unresolved" in rendered
 
 
 # %% pull request resolution
@@ -313,6 +322,30 @@ def test_a_failing_gh_invocation_is_raised(stubbed_gh, monkeypatch):
 
     with pytest.raises(GitHubCommandFailed):
         GitHubCommandTransport().execute("query {}", {})
+
+
+def test_a_branch_without_an_upstream_pull_request_exits_without_a_traceback(
+    stubbed_gh, monkeypatch, capsys
+):
+    monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
+    monkeypatch.setenv(
+        "STUB_GH_GRAPHQL_JSON",
+        json.dumps({"data": {"repository": {"pullRequests": {"nodes": []}}}}),
+    )
+
+    status = main(
+        [
+            "--branch",
+            "never-promoted",
+            "--fork-owner",
+            "someone",
+            "--upstream",
+            "some-org/some-repo",
+        ]
+    )
+
+    assert status == 1
+    assert "not been promoted upstream" in capsys.readouterr().err
 
 
 def test_graphql_errors_are_raised_rather_than_returned(stubbed_gh, monkeypatch):
