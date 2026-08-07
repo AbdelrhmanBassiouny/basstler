@@ -51,8 +51,12 @@ CLAUDE_LOCAL_MD = "CLAUDE.local.md"
 
 class SummaryMessage(StrEnum):
     """
-    The summary lines session-start-messages.sh defines, named by the shell function
-    that renders each one.
+    The situations session-start.sh reports, each carrying the session-start-messages.sh
+    function that renders its line.
+
+    Named for the situation rather than for that function: a test reads as the case it
+    exercises, while the shell file keeps grouping its own definitions by which summary
+    line they belong to.
     """
 
     PLAN_NOT_APPLICABLE = "plan_line_not_applicable"
@@ -60,12 +64,12 @@ class SummaryMessage(StrEnum):
     The branch is one no plan item could ever track.
     """
 
-    PLAN_NO_PLANS_TRACKED = "plan_line_no_plans_tracked"
+    NO_PLANS_TRACKED = "plan_line_no_plans_tracked"
     """
     The notes branch tracks no plans at all.
     """
 
-    PLAN_NO_ITEM_TRACKS_BRANCH = "plan_line_no_item_tracks_branch"
+    NO_PLAN_ITEM_TRACKS_BRANCH = "plan_line_no_item_tracks_branch"
     """
     Plans are tracked, and none holds an item for this branch.
     """
@@ -75,14 +79,14 @@ class SummaryMessage(StrEnum):
     The index names a plan whose manifest is not on the notes branch.
     """
 
-    PLAN_TRACKED = "plan_line_tracked"
+    BRANCH_TRACKED_IN_PLAN = "plan_line_tracked"
     """
     The branch is a tracked item of a plan that resolved.
     """
 
-    SETUP_NOT_CHECKED = "setup_line_not_checked"
+    SETUP_SCRIPT_MISSING = "setup_line_not_checked"
     """
-    check-setup.sh is absent from this checkout, so there is no verdict to report.
+    The check-setup.sh script is not in this checkout, so there is no verdict.
     """
 
     SETUP_OK = "setup_line_ok"
@@ -90,7 +94,7 @@ class SummaryMessage(StrEnum):
     Every setup check passed.
     """
 
-    SETUP_NEEDS_SETUP = "setup_line_needs_setup"
+    CHECKS_NEED_SETUP = "setup_line_needs_setup"
     """
     The heading above the indented rows naming each check that needs setup.
     """
@@ -250,7 +254,7 @@ def test_reports_no_plans_when_none_are_tracked(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        SummaryMessage.PLAN_NO_PLANS_TRACKED, NOTES_BRANCH
+        SummaryMessage.NO_PLANS_TRACKED, NOTES_BRANCH
     )
 
 
@@ -272,7 +276,7 @@ def test_names_the_missing_item_when_other_plans_are_tracked(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        SummaryMessage.PLAN_NO_ITEM_TRACKS_BRANCH, WORK_BRANCH, "2"
+        SummaryMessage.NO_PLAN_ITEM_TRACKS_BRANCH, WORK_BRANCH, "2"
     )
 
 
@@ -289,7 +293,7 @@ def test_reports_the_plan_that_tracks_this_branch(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        SummaryMessage.PLAN_TRACKED, PLAN_IDENTIFIER, TRACKING_ISSUE
+        SummaryMessage.BRANCH_TRACKED_IN_PLAN, PLAN_IDENTIFIER, TRACKING_ISSUE
     )
 
 
@@ -306,7 +310,7 @@ def test_reports_a_tracked_plan_that_has_no_tracking_issue(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        SummaryMessage.PLAN_TRACKED, PLAN_IDENTIFIER, "none"
+        SummaryMessage.BRANCH_TRACKED_IN_PLAN, PLAN_IDENTIFIER, "none"
     )
 
 
@@ -401,7 +405,7 @@ def test_names_every_check_that_needs_setup(
         if row.split("\t")[0] == failing_check
     )
     assert summary_value(result.stdout, "setup") == summary_message(
-        SummaryMessage.SETUP_NEEDS_SETUP, "1"
+        SummaryMessage.CHECKS_NEED_SETUP, "1"
     )
     assert f"    {failing_check}: {detail}" in result.stdout
 
