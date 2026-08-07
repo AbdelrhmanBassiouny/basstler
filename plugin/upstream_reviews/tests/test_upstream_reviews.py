@@ -1,6 +1,6 @@
 """
 Tests for upstream_reviews.py's payload parsing, thread pagination, pull request
-resolution, report rendering, and the gh-backed transport.
+resolution, report rendering, and the gh-backed client.
 """
 
 import json
@@ -9,20 +9,21 @@ import shutil
 import stat
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 import pytest
-from conftest import FixtureName, RecordedCall, ReplayingTransport
+from conftest import FixtureName, RecordedCall, ReplayingClient
 
 from upstream_reviews import (
     GitHubCommandFailed,
-    GitHubCommandTransport,
+    GitHubCommandLineClient,
     GraphQLErrorsReturned,
-    PayloadKey,
+    PullRequestJSONKey,
     PullRequestReviewSnapshot,
     QueryVariable,
+    ReportText,
     Repository,
     ReviewState,
+    ReviewThread,
     ThreadMarker,
     UnresolvedThreadReport,
     UpstreamPullRequestNotFound,
@@ -79,87 +80,82 @@ GRAPHQL_ERROR_MESSAGE = "Could not resolve to a Repository"
 UPSTREAM_SETTING_TEMPLATE = 'upstream_repository = "{repository}"\n'
 
 
-def make_reader(transport: ReplayingTransport) -> UpstreamReviewReader:
+def make_reader(client: ReplayingClient) -> UpstreamReviewReader:
     """
-    Build a reader wired to *transport* and the recorded upstream.
+    Build a reader wired to *client* and the recorded upstream.
 
-    :param transport: The transport to replay payloads from.
+    :param client: The client to replay payloads from.
     :return: The reader under test.
     """
-    return UpstreamReviewReader(transport, UPSTREAM, Example.FORK_OWNER)
+    return UpstreamReviewReader(client, UPSTREAM, Example.FORK_OWNER)
 
 
-def recorded_pull_request(fixture: FixtureName) -> dict[str, Any]:
+def recorded_thread(fixture: FixtureName, identifier: ThreadIdentifier) -> ReviewThread:
     """
-    Read the ``pullRequest`` node straight out of a recorded payload.
+    Read one recorded review thread by its identifier.
 
-    Lets a test compare parsed values against their recorded source rather than
-    restating them as literals.
-
-    :param fixture: The fixture to read.
-    :return: The recorded node.
-    """
-    return fixture.load()[PayloadKey.REPOSITORY][PayloadKey.PULL_REQUEST]
-
-
-def recorded_thread(
-    fixture: FixtureName, identifier: ThreadIdentifier
-) -> dict[str, Any]:
-    """
-    Read one recorded review-thread node by its identifier.
+    Reaches it through the same mirror the production code parses into, so a test names
+    attributes rather than indexing the raw payload.
 
     :param fixture: The fixture to read.
     :param identifier: The thread to find.
-    :return: The recorded node.
+    :return: The recorded thread.
     :raises KeyError: If the fixture carries no such thread.
     """
-    nodes = recorded_pull_request(fixture)[PayloadKey.REVIEW_THREADS][PayloadKey.NODES]
-    for node in nodes:
-        if node[PayloadKey.IDENTIFIER] == identifier:
-            return node
+    for thread in fixture.recorded().review_thread_page.threads:
+        if thread.identifier == identifier:
+            return thread
     raise KeyError(identifier)
 
 
 # %% payload parsing
 
+EXPECTED_RESOLVED_THREAD_LINE = 1031
+EXPECTED_RESOLVED_COMMENT_IDENTIFIER = 3728009027
 
-def test_thread_fields_are_read_from_the_payload(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+
+def test_a_thread_maps_each_field_to_its_own_attribute(paginated_client):
+    """Pins the mapping itself, with values stated here rather than read back
+    through the parser under test - the one assertion that has to restate them."""
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    recorded = recorded_thread(
+    parsed = snapshot.thread(ThreadIdentifier.RESOLVED)
+    assert parsed.is_resolved is True
+    assert parsed.is_outdated is False
+    assert parsed.line == EXPECTED_RESOLVED_THREAD_LINE
+    assert parsed.comments[0].database_identifier == (
+        EXPECTED_RESOLVED_COMMENT_IDENTIFIER
+    )
+
+
+def test_every_recorded_thread_survives_the_read_unchanged(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
+        RECORDED_PULL_REQUEST_NUMBER
+    )
+
+    assert snapshot.thread(ThreadIdentifier.RESOLVED) == recorded_thread(
         FixtureName.PULL_REQUEST_PAGE_ONE, ThreadIdentifier.RESOLVED
     )
-    parsed = snapshot.thread(ThreadIdentifier.RESOLVED)
-    assert parsed.is_resolved is recorded[PayloadKey.IS_RESOLVED]
-    assert parsed.path == recorded[PayloadKey.PATH]
-    assert parsed.line == recorded[PayloadKey.LINE]
-    recorded_comment = recorded[PayloadKey.COMMENTS][PayloadKey.NODES][0]
-    assert parsed.comments[0].body == recorded_comment[PayloadKey.BODY]
-    assert (
-        parsed.comments[0].database_identifier
-        == recorded_comment[PayloadKey.DATABASE_IDENTIFIER]
-    )
-    assert (
-        parsed.comments[0].author.login
-        == recorded_comment[PayloadKey.AUTHOR][PayloadKey.LOGIN]
+    assert snapshot.thread(ThreadIdentifier.UNRESOLVED_OUTDATED) == recorded_thread(
+        FixtureName.PULL_REQUEST_PAGE_TWO, ThreadIdentifier.UNRESOLVED_OUTDATED
     )
 
 
-def test_the_snapshot_identifies_the_pull_request_it_read(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+def test_the_snapshot_identifies_the_pull_request_it_read(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    recorded = recorded_pull_request(FixtureName.PULL_REQUEST_PAGE_ONE)
-    assert snapshot.number == recorded[PayloadKey.NUMBER]
-    assert snapshot.title == recorded[PayloadKey.TITLE]
-    assert snapshot.url == recorded[PayloadKey.URL]
+    recorded = FixtureName.PULL_REQUEST_PAGE_ONE.recorded().pull_request_reviews
+    assert snapshot.number == recorded.number
+    assert snapshot.title == recorded.title
+    assert snapshot.url == recorded.url
 
 
-def test_a_thread_keeps_every_comment_in_order(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+def test_a_thread_keeps_every_comment_in_order(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
@@ -167,14 +163,13 @@ def test_a_thread_keeps_every_comment_in_order(paginated_transport):
         FixtureName.PULL_REQUEST_PAGE_ONE, ThreadIdentifier.UNRESOLVED_MIDDLE
     )
     parsed = snapshot.thread(ThreadIdentifier.UNRESOLVED_MIDDLE)
-    assert [comment.author.login for comment in parsed.comments] == [
-        comment[PayloadKey.AUTHOR][PayloadKey.LOGIN]
-        for comment in recorded[PayloadKey.COMMENTS][PayloadKey.NODES]
+    assert [comment.author for comment in parsed.comments] == [
+        comment.author for comment in recorded.comments
     ]
 
 
-def test_reviews_are_parsed_with_their_state(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+def test_reviews_are_parsed_with_their_state(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
@@ -184,8 +179,8 @@ def test_reviews_are_parsed_with_their_state(paginated_transport):
     ]
 
 
-def test_a_thread_on_an_outdated_hunk_has_no_line(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+def test_a_thread_on_an_outdated_hunk_has_no_line(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
@@ -195,8 +190,8 @@ def test_a_thread_on_an_outdated_hunk_has_no_line(paginated_transport):
     assert outdated.location == outdated.path
 
 
-def test_a_thread_anchored_to_a_line_is_located_by_it(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+def test_a_thread_anchored_to_a_line_is_located_by_it(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
@@ -207,8 +202,8 @@ def test_a_thread_anchored_to_a_line_is_located_by_it(paginated_transport):
 # %% thread pagination
 
 
-def test_both_pages_are_merged_into_one_snapshot(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+def test_both_pages_are_merged_into_one_snapshot(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
@@ -219,28 +214,28 @@ def test_both_pages_are_merged_into_one_snapshot(paginated_transport):
     ]
 
 
-def test_the_second_request_carries_the_first_pages_cursor(paginated_transport):
-    make_reader(paginated_transport).read_current_state(RECORDED_PULL_REQUEST_NUMBER)
+def test_the_second_request_carries_the_first_pages_cursor(paginated_client):
+    make_reader(paginated_client).read_current_state(RECORDED_PULL_REQUEST_NUMBER)
 
-    assert len(paginated_transport.calls) == 2
-    assert paginated_transport.calls[0].variables[QueryVariable.THREAD_CURSOR] is None
+    assert len(paginated_client.calls) == 2
+    assert paginated_client.calls[0].variables[QueryVariable.THREAD_CURSOR] is None
     assert (
-        paginated_transport.calls[1].variables[QueryVariable.THREAD_CURSOR]
+        paginated_client.calls[1].variables[QueryVariable.THREAD_CURSOR]
         == ThreadCursor.PAGE_ONE
     )
 
 
-def test_paging_stops_once_a_page_reports_no_successor(paginated_transport):
-    make_reader(paginated_transport).read_current_state(RECORDED_PULL_REQUEST_NUMBER)
+def test_paging_stops_once_a_page_reports_no_successor(paginated_client):
+    make_reader(paginated_client).read_current_state(RECORDED_PULL_REQUEST_NUMBER)
 
-    assert paginated_transport.payloads == []
+    assert paginated_client.payloads == []
 
 
 # %% resolved filtering
 
 
-def test_resolved_threads_are_excluded_by_default(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+def test_resolved_threads_are_excluded_by_default(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
@@ -250,8 +245,8 @@ def test_resolved_threads_are_excluded_by_default(paginated_transport):
     ]
 
 
-def test_the_report_omits_a_resolved_thread(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+def test_the_report_omits_a_resolved_thread(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
@@ -265,8 +260,8 @@ def test_the_report_omits_a_resolved_thread(paginated_transport):
     )
 
 
-def test_including_resolved_threads_restores_it(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+def test_including_resolved_threads_restores_it(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
@@ -275,8 +270,8 @@ def test_including_resolved_threads_restores_it(paginated_transport):
     assert snapshot.thread(ThreadIdentifier.RESOLVED).comments[0].body in rendered
 
 
-def test_including_resolved_threads_counts_what_is_shown(paginated_transport):
-    snapshot = make_reader(paginated_transport).read_current_state(
+def test_including_resolved_threads_counts_what_is_shown(paginated_client):
+    snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
@@ -290,19 +285,19 @@ def test_including_resolved_threads_counts_what_is_shown(paginated_transport):
 
 
 def test_a_branch_resolves_to_the_forks_own_pull_request():
-    transport = ReplayingTransport([FixtureName.BRANCH_PULL_REQUESTS.load()])
+    client = ReplayingClient([FixtureName.BRANCH_PULL_REQUESTS.load()])
 
-    number = make_reader(transport).resolve_pull_request_number(Example.BRANCH)
+    number = make_reader(client).resolve_pull_request_number(Example.BRANCH)
 
     assert number == RECORDED_PULL_REQUEST_NUMBER
 
 
 def test_the_branch_name_and_upstream_are_sent_as_variables():
-    transport = ReplayingTransport([FixtureName.BRANCH_PULL_REQUESTS.load()])
+    client = ReplayingClient([FixtureName.BRANCH_PULL_REQUESTS.load()])
 
-    make_reader(transport).resolve_pull_request_number(Example.BRANCH)
+    make_reader(client).resolve_pull_request_number(Example.BRANCH)
 
-    assert transport.calls[0].variables == {
+    assert client.calls[0].variables == {
         QueryVariable.OWNER: Example.UPSTREAM_OWNER,
         QueryVariable.NAME: Example.UPSTREAM_NAME,
         QueryVariable.HEAD_REF_NAME: Example.BRANCH,
@@ -310,24 +305,28 @@ def test_the_branch_name_and_upstream_are_sent_as_variables():
 
 
 def test_a_branch_of_another_contributor_is_not_claimed():
-    transport = ReplayingTransport(
-        [FixtureName.BRANCH_PULL_REQUESTS_FOREIGN_OWNER.load()]
-    )
+    client = ReplayingClient([FixtureName.BRANCH_PULL_REQUESTS_FOREIGN_OWNER.load()])
 
     with pytest.raises(UpstreamPullRequestNotFound) as raised:
-        make_reader(transport).resolve_pull_request_number(Example.BRANCH)
+        make_reader(client).resolve_pull_request_number(Example.BRANCH)
 
     assert raised.value.branch == Example.BRANCH
     assert raised.value.fork_owner == Example.FORK_OWNER
 
 
 def test_a_branch_never_promoted_upstream_is_reported_clearly():
-    transport = ReplayingTransport(
-        [{PayloadKey.REPOSITORY: {PayloadKey.PULL_REQUESTS: {PayloadKey.NODES: []}}}]
+    client = ReplayingClient(
+        [
+            {
+                PullRequestJSONKey.REPOSITORY: {
+                    PullRequestJSONKey.PULL_REQUESTS: {PullRequestJSONKey.NODES: []}
+                }
+            }
+        ]
     )
 
     with pytest.raises(UpstreamPullRequestNotFound) as raised:
-        make_reader(transport).resolve_pull_request_number(Example.UNPROMOTED_BRANCH)
+        make_reader(client).resolve_pull_request_number(Example.UNPROMOTED_BRANCH)
 
     assert raised.value.upstream == UPSTREAM
 
@@ -336,14 +335,14 @@ def test_a_branch_never_promoted_upstream_is_reported_clearly():
 
 
 def test_the_configured_upstream_reaches_the_query():
-    transport = ReplayingTransport([FixtureName.BRANCH_PULL_REQUESTS.load()])
+    client = ReplayingClient([FixtureName.BRANCH_PULL_REQUESTS.load()])
     elsewhere = Repository("another-organization", "another-repository")
-    reader = UpstreamReviewReader(transport, elsewhere, Example.FOREIGN_OWNER)
+    reader = UpstreamReviewReader(client, elsewhere, Example.FOREIGN_OWNER)
 
     reader.resolve_pull_request_number(Example.BRANCH)
 
-    assert transport.calls[0].variables[QueryVariable.OWNER] == elsewhere.owner
-    assert transport.calls[0].variables[QueryVariable.NAME] == elsewhere.name
+    assert client.calls[0].variables[QueryVariable.OWNER] == elsewhere.owner
+    assert client.calls[0].variables[QueryVariable.NAME] == elsewhere.name
 
 
 def test_the_upstream_is_read_from_the_configuration_file(tmp_path):
@@ -367,9 +366,9 @@ def test_an_explicit_override_outranks_the_configuration_file(tmp_path):
 
 
 @pytest.fixture
-def current_state(paginated_transport) -> PullRequestReviewSnapshot:
+def current_state(paginated_client) -> PullRequestReviewSnapshot:
     """:return: The snapshot parsed from both recorded pages."""
-    return make_reader(paginated_transport).read_current_state(
+    return make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
 
@@ -427,11 +426,11 @@ def test_a_pull_request_with_nothing_outstanding_says_so(current_state):
 
     rendered = UnresolvedThreadReport(settled).render()
 
-    assert UnresolvedThreadReport.NO_UNRESOLVED_HEADING in rendered
-    assert UnresolvedThreadReport.NOTHING_TO_ACT_ON in rendered
+    assert ReportText.NO_UNRESOLVED_HEADING in rendered
+    assert ReportText.NOTHING_TO_ACT_ON in rendered
 
 
-# %% gh transport
+# %% gh client
 
 
 @pytest.fixture
@@ -453,12 +452,13 @@ def stubbed_gh(tmp_path, monkeypatch) -> Path:
 
 
 def test_the_data_payload_is_unwrapped(stubbed_gh, monkeypatch):
-    payload = {PayloadKey.REPOSITORY: None}
+    payload = {PullRequestJSONKey.REPOSITORY: None}
     monkeypatch.setenv(
-        StubEnvironmentVariable.GRAPHQL_JSON, json.dumps({PayloadKey.DATA: payload})
+        StubEnvironmentVariable.GRAPHQL_JSON,
+        json.dumps({PullRequestJSONKey.DATA: payload}),
     )
 
-    assert GitHubCommandTransport().execute("query {}", {}) == payload
+    assert GitHubCommandLineClient().execute("query {}", {}) == payload
 
 
 def test_the_query_and_variables_are_sent_as_the_request_body(
@@ -467,15 +467,15 @@ def test_the_query_and_variables_are_sent_as_the_request_body(
     call_log = tmp_path / "calls.txt"
     monkeypatch.setenv(StubEnvironmentVariable.CALL_LOG, str(call_log))
     monkeypatch.setenv(
-        StubEnvironmentVariable.GRAPHQL_JSON, json.dumps({PayloadKey.DATA: {}})
+        StubEnvironmentVariable.GRAPHQL_JSON, json.dumps({PullRequestJSONKey.DATA: {}})
     )
     sent = RecordedCall("query Example {}", {QueryVariable.NUMBER: 513})
 
-    GitHubCommandTransport().execute(sent.query, sent.variables)
+    GitHubCommandLineClient().execute(sent.query, sent.variables)
 
     assert json.loads(call_log.read_text()) == {
-        PayloadKey.QUERY: sent.query,
-        PayloadKey.VARIABLES: sent.variables,
+        PullRequestJSONKey.QUERY: sent.query,
+        PullRequestJSONKey.VARIABLES: sent.variables,
     }
 
 
@@ -483,7 +483,7 @@ def test_a_failing_gh_invocation_is_raised(stubbed_gh, monkeypatch):
     monkeypatch.setenv(StubEnvironmentVariable.EXIT_CODE, "1")
 
     with pytest.raises(GitHubCommandFailed) as raised:
-        GitHubCommandTransport().execute("query {}", {})
+        GitHubCommandLineClient().execute("query {}", {})
 
     assert raised.value.exit_code == 1
 
@@ -491,11 +491,17 @@ def test_a_failing_gh_invocation_is_raised(stubbed_gh, monkeypatch):
 def test_graphql_errors_are_raised_rather_than_returned(stubbed_gh, monkeypatch):
     monkeypatch.setenv(
         StubEnvironmentVariable.GRAPHQL_JSON,
-        json.dumps({PayloadKey.ERRORS: [{PayloadKey.MESSAGE: GRAPHQL_ERROR_MESSAGE}]}),
+        json.dumps(
+            {
+                PullRequestJSONKey.ERRORS: [
+                    {PullRequestJSONKey.MESSAGE: GRAPHQL_ERROR_MESSAGE}
+                ]
+            }
+        ),
     )
 
     with pytest.raises(GraphQLErrorsReturned) as raised:
-        GitHubCommandTransport().execute("query {}", {})
+        GitHubCommandLineClient().execute("query {}", {})
 
     assert raised.value.messages == [GRAPHQL_ERROR_MESSAGE]
 
@@ -508,9 +514,9 @@ def test_a_branch_without_an_upstream_pull_request_exits_without_a_traceback(
         StubEnvironmentVariable.GRAPHQL_JSON,
         json.dumps(
             {
-                PayloadKey.DATA: {
-                    PayloadKey.REPOSITORY: {
-                        PayloadKey.PULL_REQUESTS: {PayloadKey.NODES: []}
+                PullRequestJSONKey.DATA: {
+                    PullRequestJSONKey.REPOSITORY: {
+                        PullRequestJSONKey.PULL_REQUESTS: {PullRequestJSONKey.NODES: []}
                     }
                 }
             }

@@ -4,9 +4,9 @@ Report the review threads a fork's pull request has collected upstream.
 
 Thread resolved-state is only exposed by GitHub's GraphQL API, which is unreachable from
 a Claude session, so this runs in the fork's own GitHub Actions runner and the session
-reads its job log. ``gh`` is the transport rather than a hand-rolled client: runners
-ship it and ``GITHUB_TOKEN`` authenticates it, so no access rule is implemented here a
-fourth time.
+reads its job log. ``gh`` is what talks to GitHub, rather than a hand-rolled client:
+runners ship it and ``GITHUB_TOKEN`` authenticates it, so no access rule is implemented
+here a fourth time.
 
 Every repository name comes from configuration or the runner's own environment, so the
 script works unchanged in any contributor's fork.
@@ -36,7 +36,7 @@ from stack import CONFIGURATION_PATH, Repository  # noqa: E402
 # %% wire vocabulary
 
 
-class PayloadKey(StrEnum):
+class PullRequestJSONKey(StrEnum):
     """
     Every field name this script reads out of a GraphQL response.
 
@@ -262,7 +262,7 @@ class Author:
     """
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any] | None) -> Author:
+    def from_json(cls, payload: dict[str, Any] | None) -> Author:
         """
         Read an author, tolerating the null GitHub returns for deleted users.
 
@@ -271,7 +271,7 @@ class Author:
         """
         if payload is None:
             return cls(UNKNOWN_LOGIN)
-        return cls(payload[PayloadKey.LOGIN])
+        return cls(payload[PullRequestJSONKey.LOGIN])
 
 
 @dataclass(frozen=True)
@@ -306,7 +306,7 @@ class ThreadComment:
     """
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> ThreadComment:
+    def from_json(cls, payload: dict[str, Any]) -> ThreadComment:
         """
         Build a comment from one ``comments`` node.
 
@@ -314,11 +314,11 @@ class ThreadComment:
         :return: The parsed comment.
         """
         return cls(
-            database_identifier=payload[PayloadKey.DATABASE_IDENTIFIER],
-            author=Author.from_payload(payload[PayloadKey.AUTHOR]),
-            body=payload[PayloadKey.BODY],
-            created_at=payload[PayloadKey.CREATED_AT],
-            url=payload[PayloadKey.URL],
+            database_identifier=payload[PullRequestJSONKey.DATABASE_IDENTIFIER],
+            author=Author.from_json(payload[PullRequestJSONKey.AUTHOR]),
+            body=payload[PullRequestJSONKey.BODY],
+            created_at=payload[PullRequestJSONKey.CREATED_AT],
+            url=payload[PullRequestJSONKey.URL],
         )
 
 
@@ -359,7 +359,7 @@ class ReviewThread:
     """
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> ReviewThread:
+    def from_json(cls, payload: dict[str, Any]) -> ReviewThread:
         """
         Build a thread from one ``reviewThreads`` node.
 
@@ -367,14 +367,16 @@ class ReviewThread:
         :return: The parsed thread.
         """
         return cls(
-            identifier=payload[PayloadKey.IDENTIFIER],
-            is_resolved=payload[PayloadKey.IS_RESOLVED],
-            is_outdated=payload[PayloadKey.IS_OUTDATED],
-            path=payload[PayloadKey.PATH],
-            line=payload[PayloadKey.LINE],
+            identifier=payload[PullRequestJSONKey.IDENTIFIER],
+            is_resolved=payload[PullRequestJSONKey.IS_RESOLVED],
+            is_outdated=payload[PullRequestJSONKey.IS_OUTDATED],
+            path=payload[PullRequestJSONKey.PATH],
+            line=payload[PullRequestJSONKey.LINE],
             comments=[
-                ThreadComment.from_payload(comment)
-                for comment in payload[PayloadKey.COMMENTS][PayloadKey.NODES]
+                ThreadComment.from_json(comment)
+                for comment in payload[PullRequestJSONKey.COMMENTS][
+                    PullRequestJSONKey.NODES
+                ]
             ],
         )
 
@@ -423,7 +425,7 @@ class Review:
     """
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> Review:
+    def from_json(cls, payload: dict[str, Any]) -> Review:
         """
         Build a review from one ``reviews`` node.
 
@@ -431,10 +433,10 @@ class Review:
         :return: The parsed review.
         """
         return cls(
-            author=Author.from_payload(payload[PayloadKey.AUTHOR]),
-            state=ReviewState(payload[PayloadKey.STATE]),
-            body=payload[PayloadKey.BODY],
-            submitted_at=payload[PayloadKey.SUBMITTED_AT],
+            author=Author.from_json(payload[PullRequestJSONKey.AUTHOR]),
+            state=ReviewState(payload[PullRequestJSONKey.STATE]),
+            body=payload[PullRequestJSONKey.BODY],
+            submitted_at=payload[PullRequestJSONKey.SUBMITTED_AT],
         )
 
 
@@ -460,7 +462,7 @@ class BranchPullRequest:
     """
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> BranchPullRequest:
+    def from_json(cls, payload: dict[str, Any]) -> BranchPullRequest:
         """
         Build a summary from one ``pullRequests`` node.
 
@@ -468,9 +470,11 @@ class BranchPullRequest:
         :return: The parsed summary.
         """
         return cls(
-            number=payload[PayloadKey.NUMBER],
-            state=PullRequestState(payload[PayloadKey.STATE]),
-            head_owner=Author.from_payload(payload[PayloadKey.HEAD_REPOSITORY_OWNER]),
+            number=payload[PullRequestJSONKey.NUMBER],
+            state=PullRequestState(payload[PullRequestJSONKey.STATE]),
+            head_owner=Author.from_json(
+                payload[PullRequestJSONKey.HEAD_REPOSITORY_OWNER]
+            ),
         )
 
 
@@ -496,20 +500,21 @@ class ReviewThreadPage:
     """
 
     @classmethod
-    def from_payload(cls, payload: dict[str, Any]) -> ReviewThreadPage:
+    def from_json(cls, payload: dict[str, Any]) -> ReviewThreadPage:
         """
         Build a page from a ``reviewThreads`` connection.
 
         :param payload: The connection to read.
         :return: The parsed page.
         """
-        page_info = payload[PayloadKey.PAGE_INFO]
+        page_info = payload[PullRequestJSONKey.PAGE_INFO]
         return cls(
             threads=[
-                ReviewThread.from_payload(node) for node in payload[PayloadKey.NODES]
+                ReviewThread.from_json(node)
+                for node in payload[PullRequestJSONKey.NODES]
             ],
-            has_next_page=page_info[PayloadKey.HAS_NEXT_PAGE],
-            end_cursor=page_info[PayloadKey.END_CURSOR],
+            has_next_page=page_info[PullRequestJSONKey.HAS_NEXT_PAGE],
+            end_cursor=page_info[PullRequestJSONKey.END_CURSOR],
         )
 
 
@@ -545,7 +550,7 @@ class PullRequestReviewSnapshot:
     """
 
     @classmethod
-    def from_payload(
+    def from_json(
         cls, payload: dict[str, Any], threads: list[ReviewThread]
     ) -> PullRequestReviewSnapshot:
         """
@@ -556,12 +561,14 @@ class PullRequestReviewSnapshot:
         :return: The parsed snapshot.
         """
         return cls(
-            number=payload[PayloadKey.NUMBER],
-            title=payload[PayloadKey.TITLE],
-            url=payload[PayloadKey.URL],
+            number=payload[PullRequestJSONKey.NUMBER],
+            title=payload[PullRequestJSONKey.TITLE],
+            url=payload[PullRequestJSONKey.URL],
             reviews=[
-                Review.from_payload(node)
-                for node in payload[PayloadKey.REVIEWS][PayloadKey.NODES]
+                Review.from_json(node)
+                for node in payload[PullRequestJSONKey.REVIEWS][
+                    PullRequestJSONKey.NODES
+                ]
             ],
             threads=threads,
         )
@@ -600,33 +607,46 @@ class RepositoryPayload:
     """
 
     @classmethod
-    def from_data(cls, data: dict[str, Any]) -> RepositoryPayload:
+    def from_json(cls, data: dict[str, Any]) -> RepositoryPayload:
         """
         Read the repository out of a response's ``data``.
 
         :param data: The response payload.
         :return: The wrapped repository.
         """
-        return cls(data[PayloadKey.REPOSITORY])
+        return cls(data[PullRequestJSONKey.REPOSITORY])
 
     @property
     def pull_request(self) -> dict[str, Any]:
         """:return: The single ``pullRequest`` this response selected."""
-        return self.node[PayloadKey.PULL_REQUEST]
+        return self.node[PullRequestJSONKey.PULL_REQUEST]
 
     @property
     def review_thread_page(self) -> ReviewThreadPage:
         """:return: The pull request's page of review threads."""
-        return ReviewThreadPage.from_payload(
-            self.pull_request[PayloadKey.REVIEW_THREADS]
+        return ReviewThreadPage.from_json(
+            self.pull_request[PullRequestJSONKey.REVIEW_THREADS]
+        )
+
+    @property
+    def pull_request_reviews(self) -> PullRequestReviewSnapshot:
+        """:return: The pull request's review state, from this response alone.
+
+        Only complete when the response carried every page of threads; a paged
+        read assembles the snapshot itself from the threads it accumulated.
+        """
+        return PullRequestReviewSnapshot.from_json(
+            self.pull_request, self.review_thread_page.threads
         )
 
     @property
     def branch_pull_requests(self) -> list[BranchPullRequest]:
         """:return: Every pull request the head-branch search matched."""
         return [
-            BranchPullRequest.from_payload(node)
-            for node in self.node[PayloadKey.PULL_REQUESTS][PayloadKey.NODES]
+            BranchPullRequest.from_json(node)
+            for node in self.node[PullRequestJSONKey.PULL_REQUESTS][
+                PullRequestJSONKey.NODES
+            ]
         ]
 
 
@@ -656,9 +676,10 @@ class GraphQLResponse:
         """
         body = json.loads(text)
         return cls(
-            data=body.get(PayloadKey.DATA),
+            data=body.get(PullRequestJSONKey.DATA),
             errors=[
-                error[PayloadKey.MESSAGE] for error in body.get(PayloadKey.ERRORS, [])
+                error[PullRequestJSONKey.MESSAGE]
+                for error in body.get(PullRequestJSONKey.ERRORS, [])
             ],
         )
 
@@ -672,10 +693,10 @@ class GraphQLResponse:
         return self.data or {}
 
 
-# %% transport
+# %% client
 
 
-class GraphQLTransport(ABC):
+class GraphQLClient(ABC):
     """
     Sends a GraphQL document to GitHub and returns its ``data`` payload.
     """
@@ -692,9 +713,9 @@ class GraphQLTransport(ABC):
 
 
 @dataclass
-class GitHubCommandTransport(GraphQLTransport):
+class GitHubCommandLineClient(GraphQLClient):
     """
-    A transport that shells out to ``gh api graphql``.
+    A client that shells out to ``gh api graphql``.
 
     The runner already ships ``gh`` and authenticates it from ``GITHUB_TOKEN``, so this
     holds no credential handling of its own.
@@ -715,7 +736,9 @@ class GitHubCommandTransport(GraphQLTransport):
         :raises GitHubCommandFailed: If ``gh`` exits non-zero.
         :raises GraphQLErrorsReturned: If GitHub answers with errors.
         """
-        request = json.dumps({PayloadKey.QUERY: query, PayloadKey.VARIABLES: variables})
+        request = json.dumps(
+            {PullRequestJSONKey.QUERY: query, PullRequestJSONKey.VARIABLES: variables}
+        )
         completed = subprocess.run(
             [self.executable, "api", "graphql", "--input", "-"],
             input=request,
@@ -735,10 +758,10 @@ class GitHubCommandTransport(GraphQLTransport):
 @dataclass
 class UpstreamReviewReader:
     """
-    Reads one upstream pull request's review state through a transport.
+    Reads one upstream pull request's review state through a client.
     """
 
-    transport: GraphQLTransport
+    client: GraphQLClient
     """
     How GraphQL queries reach GitHub.
     """
@@ -772,13 +795,13 @@ class UpstreamReviewReader:
         :return: The upstream pull request number.
         :raises UpstreamPullRequestNotFound: If the fork has no such pull request.
         """
-        payload = self.transport.execute(
+        payload = self.client.execute(
             GraphQLDocument.PULL_REQUEST_FOR_BRANCH.read(),
             {**self._repository_variables, QueryVariable.HEAD_REF_NAME: branch},
         )
         candidates = [
             pull_request
-            for pull_request in RepositoryPayload.from_data(
+            for pull_request in RepositoryPayload.from_json(
                 payload
             ).branch_pull_requests
             if pull_request.head_owner.login == self.fork_owner
@@ -805,7 +828,7 @@ class UpstreamReviewReader:
         cursor: str | None = None
         repository = None
         while True:
-            payload = self.transport.execute(
+            payload = self.client.execute(
                 GraphQLDocument.REVIEW_THREADS_PAGE.read(),
                 {
                     **self._repository_variables,
@@ -813,13 +836,13 @@ class UpstreamReviewReader:
                     QueryVariable.THREAD_CURSOR: cursor,
                 },
             )
-            repository = RepositoryPayload.from_data(payload)
+            repository = RepositoryPayload.from_json(payload)
             page = repository.review_thread_page
             threads.extend(page.threads)
             if not page.has_next_page:
                 break
             cursor = page.end_cursor
-        return PullRequestReviewSnapshot.from_payload(repository.pull_request, threads)
+        return PullRequestReviewSnapshot.from_json(repository.pull_request, threads)
 
 
 # %% configuration
@@ -854,28 +877,25 @@ The ``stack.toml`` key naming the repository reviews happen on.
 # %% report
 
 
+class ReportText(StrEnum):
+    """
+    The fixed lines the report states rather than computes.
+    """
+
+    REVIEWS_HEADING = "## Reviews"
+    NO_REVIEWS = "No reviews submitted."
+    NO_UNRESOLVED_HEADING = "## No unresolved review threads"
+    NOTHING_TO_ACT_ON = "Nothing to act on."
+
+
 @dataclass
 class UnresolvedThreadReport:
     """
-    Renders a snapshot as the markdown a session or a phone reads.
+    Renders a pull request's current review state as the markdown a session or a phone
+    reads.
     """
 
-    NO_UNRESOLVED_HEADING = "## No unresolved review threads"
-    """
-    Stated when every thread has been resolved.
-    """
-
-    NOTHING_TO_ACT_ON = "Nothing to act on."
-    """
-    Stated when the section would otherwise be empty.
-    """
-
-    NO_REVIEWS = "No reviews submitted."
-    """
-    Stated when nobody has submitted a review yet.
-    """
-
-    snapshot: PullRequestReviewSnapshot
+    current_pull_request_reviews: PullRequestReviewSnapshot
     """
     The review state to describe.
     """
@@ -888,9 +908,9 @@ class UnresolvedThreadReport:
     def render(self) -> str:
         """:return: The report as markdown."""
         lines = [
-            f"# Upstream review: #{self.snapshot.number} {self.snapshot.title}",
+            f"# Upstream review: #{self.current_pull_request_reviews.number} {self.current_pull_request_reviews.title}",
             "",
-            self.snapshot.url,
+            self.current_pull_request_reviews.url,
             "",
         ]
         lines.extend(self._render_reviews())
@@ -904,9 +924,9 @@ class UnresolvedThreadReport:
         :param shown_count: How many threads the section goes on to list.
         :return: The section heading.
         """
-        unresolved_count = len(self.snapshot.unresolved_threads)
+        unresolved_count = len(self.current_pull_request_reviews.unresolved_threads)
         if not unresolved_count:
-            return self.NO_UNRESOLVED_HEADING
+            return ReportText.NO_UNRESOLVED_HEADING
         if self.include_resolved:
             return f"## {shown_count} review threads, {unresolved_count} unresolved"
         return f"## {unresolved_count} unresolved review threads"
@@ -915,15 +935,15 @@ class UnresolvedThreadReport:
     def shown_threads(self) -> list[ReviewThread]:
         """:return: The threads this report lists."""
         if self.include_resolved:
-            return self.snapshot.threads
-        return self.snapshot.unresolved_threads
+            return self.current_pull_request_reviews.threads
+        return self.current_pull_request_reviews.unresolved_threads
 
     def _render_reviews(self) -> list[str]:
         """:return: The submitted-reviews section."""
-        if not self.snapshot.reviews:
-            return ["## Reviews", "", self.NO_REVIEWS, ""]
-        lines = ["## Reviews", ""]
-        for review in self.snapshot.reviews:
+        if not self.current_pull_request_reviews.reviews:
+            return [ReportText.REVIEWS_HEADING, "", ReportText.NO_REVIEWS, ""]
+        lines = [ReportText.REVIEWS_HEADING, ""]
+        for review in self.current_pull_request_reviews.reviews:
             lines.append(
                 f"- **{review.author.login}** — {review.state.spoken} "
                 f"({review.submitted_at})"
@@ -938,7 +958,7 @@ class UnresolvedThreadReport:
         shown = self.shown_threads
         lines = [self.heading(len(shown)), ""]
         if not shown:
-            lines.extend([self.NOTHING_TO_ACT_ON, ""])
+            lines.extend([ReportText.NOTHING_TO_ACT_ON, ""])
             return lines
         for thread in shown:
             lines.extend(self._render_thread(thread))
@@ -1027,7 +1047,7 @@ def _build_report(arguments: argparse.Namespace) -> str:
     :return: The rendered markdown.
     """
     reader = UpstreamReviewReader(
-        GitHubCommandTransport(),
+        GitHubCommandLineClient(),
         resolve_upstream_repository(override=arguments.upstream),
         arguments.fork_owner,
     )
