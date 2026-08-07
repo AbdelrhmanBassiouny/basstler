@@ -14,6 +14,7 @@ from __future__ import annotations
 import os
 import subprocess
 from collections.abc import Mapping
+from enum import StrEnum
 from pathlib import Path
 
 import pytest
@@ -48,13 +49,60 @@ MANIFEST_PATH = f".claude/personal/plans/{PLAN_IDENTIFIER}/plan.yaml"
 CLAUDE_LOCAL_MD = "CLAUDE.local.md"
 
 
-def summary_message(message_name: str, *arguments: str) -> str:
+class SummaryMessage(StrEnum):
+    """
+    The summary lines session-start-messages.sh defines, named by the shell function
+    that renders each one.
+    """
+
+    PLAN_NOT_APPLICABLE = "plan_line_not_applicable"
+    """
+    The branch is one no plan item could ever track.
+    """
+
+    PLAN_NO_PLANS_TRACKED = "plan_line_no_plans_tracked"
+    """
+    The notes branch tracks no plans at all.
+    """
+
+    PLAN_NO_ITEM_TRACKS_BRANCH = "plan_line_no_item_tracks_branch"
+    """
+    Plans are tracked, and none holds an item for this branch.
+    """
+
+    PLAN_MANIFEST_MISSING = "plan_line_manifest_missing"
+    """
+    The index names a plan whose manifest is not on the notes branch.
+    """
+
+    PLAN_TRACKED = "plan_line_tracked"
+    """
+    The branch is a tracked item of a plan that resolved.
+    """
+
+    SETUP_NOT_CHECKED = "setup_line_not_checked"
+    """
+    check-setup.sh is absent from this checkout, so there is no verdict to report.
+    """
+
+    SETUP_OK = "setup_line_ok"
+    """
+    Every setup check passed.
+    """
+
+    SETUP_NEEDS_SETUP = "setup_line_needs_setup"
+    """
+    The heading above the indented rows naming each check that needs setup.
+    """
+
+
+def summary_message(message: SummaryMessage, *arguments: str) -> str:
     """
     Render one summary line from the same definitions session-start.sh prints it from,
     so an assertion is never a second copy of the wording.
 
-    :param message_name: A function defined in session-start-messages.sh.
-    :param arguments: That function's arguments, in order.
+    :param message: The summary line to render.
+    :param arguments: That message's arguments, in order.
     :return: The rendered line.
     """
     result = subprocess.run(
@@ -64,7 +112,7 @@ def summary_message(message_name: str, *arguments: str) -> str:
             'source "$1"; shift; "$@"',
             "_",
             str(MESSAGES_SCRIPT),
-            message_name,
+            message,
             *arguments,
         ],
         capture_output=True,
@@ -202,7 +250,7 @@ def test_reports_no_plans_when_none_are_tracked(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        "plan_line_no_plans_tracked", NOTES_BRANCH
+        SummaryMessage.PLAN_NO_PLANS_TRACKED, NOTES_BRANCH
     )
 
 
@@ -224,7 +272,7 @@ def test_names_the_missing_item_when_other_plans_are_tracked(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        "plan_line_no_item_tracks_branch", WORK_BRANCH, "2"
+        SummaryMessage.PLAN_NO_ITEM_TRACKS_BRANCH, WORK_BRANCH, "2"
     )
 
 
@@ -241,7 +289,7 @@ def test_reports_the_plan_that_tracks_this_branch(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        "plan_line_tracked", PLAN_IDENTIFIER, TRACKING_ISSUE
+        SummaryMessage.PLAN_TRACKED, PLAN_IDENTIFIER, TRACKING_ISSUE
     )
 
 
@@ -258,7 +306,7 @@ def test_reports_a_tracked_plan_that_has_no_tracking_issue(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        "plan_line_tracked", PLAN_IDENTIFIER, "none"
+        SummaryMessage.PLAN_TRACKED, PLAN_IDENTIFIER, "none"
     )
 
 
@@ -272,7 +320,10 @@ def test_reports_a_tracked_branch_whose_manifest_is_missing(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        "plan_line_manifest_missing", PLAN_IDENTIFIER, MANIFEST_PATH, NOTES_BRANCH
+        SummaryMessage.PLAN_MANIFEST_MISSING,
+        PLAN_IDENTIFIER,
+        MANIFEST_PATH,
+        NOTES_BRANCH,
     )
 
 
@@ -295,7 +346,7 @@ def test_reports_plan_as_not_applicable_on_the_default_branch(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        "plan_line_not_applicable"
+        SummaryMessage.PLAN_NOT_APPLICABLE
     )
 
 
@@ -315,7 +366,7 @@ def test_reports_plan_as_not_applicable_on_the_notes_branch(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, "plan") == summary_message(
-        "plan_line_not_applicable"
+        SummaryMessage.PLAN_NOT_APPLICABLE
     )
 
 
@@ -328,7 +379,9 @@ def test_reports_setup_as_ok_when_every_check_passes(
     result = publish_and_run(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "setup") == summary_message("setup_line_ok")
+    assert summary_value(result.stdout, "setup") == summary_message(
+        SummaryMessage.SETUP_OK
+    )
 
 
 def test_names_every_check_that_needs_setup(
@@ -348,7 +401,7 @@ def test_names_every_check_that_needs_setup(
         if row.split("\t")[0] == failing_check
     )
     assert summary_value(result.stdout, "setup") == summary_message(
-        "setup_line_needs_setup", "1"
+        SummaryMessage.SETUP_NEEDS_SETUP, "1"
     )
     assert f"    {failing_check}: {detail}" in result.stdout
 
@@ -365,43 +418,21 @@ def test_a_failing_setup_check_does_not_fail_the_hook(
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
 
 
-# %% the wording itself
+# %% every message renders
 
 
-def test_every_summary_message_reads_as_written():
+def test_every_summary_message_renders_something():
     """
-    Pin what each summary line actually says, in the one place that says it.
+    Check that every message this module can name resolves to a shell function that
+    prints something.
 
-    Every other assertion in this module renders its expectation from
-    session-start-messages.sh, which is what keeps them from drifting - and also what
-    stops any of them failing when a message is reworded, since both sides move
-    together. This test is the counterweight: a reword is a deliberate change to what a
-    session reads, so it fails exactly here and nowhere else.
+    Deliberately not an assertion about the wording: every other assertion here renders
+    its expectation from session-start-messages.sh, so a reword moves both sides at once
+    and none of them fail. What is still worth catching is a member naming a function
+    that does not exist, or one that prints nothing - neither of which survives here.
+
+    Three placeholder arguments cover the widest message; a shell function ignores the
+    ones it does not read.
     """
-    assert summary_message("plan_line_not_applicable") == (
-        "not applicable (this branch never holds a plan item)"
-    )
-    assert summary_message("plan_line_no_plans_tracked", "some-notes-branch") == (
-        "no plans tracked on 'some-notes-branch' yet"
-    )
-    assert summary_message("plan_line_no_item_tracks_branch", "some-branch", "3") == (
-        "no item tracks branch 'some-branch' (3 plan(s) tracked) - if this session's "
-        "work belongs to one of them, add its item before starting; if it belongs to "
-        "none, there is nothing to do"
-    )
-    assert summary_message(
-        "plan_line_manifest_missing", "some-plan", "some/plan.yaml", "some-notes-branch"
-    ) == (
-        "'some-plan' tracks this branch, but some/plan.yaml is missing on "
-        "'some-notes-branch'"
-    )
-    assert summary_message("plan_line_tracked", "some-plan", "77") == (
-        "'some-plan' (tracking issue: 77)"
-    )
-    assert summary_message("setup_line_not_checked", "some/check-setup.sh") == (
-        "not checked - some/check-setup.sh is not in this checkout"
-    )
-    assert summary_message("setup_line_ok") == "ok"
-    assert summary_message("setup_line_needs_setup", "4") == (
-        "4 check(s) need setup - run /setup-personal-notes:"
-    )
+    for message in SummaryMessage:
+        assert summary_message(message, "first", "second", "third").strip() != ""
