@@ -11,6 +11,8 @@ requiring an ``__init__.py``/packaging setup just for tests. Mirrors
 
 import json
 import sys
+from dataclasses import dataclass, field
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -18,36 +20,64 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest  # noqa: E402
 
+from upstream_reviews import GraphQLTransport  # noqa: E402
+
 FIXTURE_DIRECTORY = Path(__file__).parent / "fixtures"
+"""
+Where the recorded GraphQL payloads live.
+"""
 
 
-def load_fixture(name: str) -> dict[str, Any]:
+class FixtureName(StrEnum):
     """
-    Read one recorded GraphQL ``data`` payload.
-
-    :param name: The fixture's filename stem.
-    :return: The parsed payload.
+    The recorded payloads the tests replay, named by their filename stem.
     """
-    return json.loads((FIXTURE_DIRECTORY / f"{name}.json").read_text())
+
+    PULL_REQUEST_PAGE_ONE = "pull_request_page_one"
+    PULL_REQUEST_PAGE_TWO = "pull_request_page_two"
+    BRANCH_PULL_REQUESTS = "branch_pull_requests"
+    BRANCH_PULL_REQUESTS_FOREIGN_OWNER = "branch_pull_requests_foreign_owner"
+
+    def load(self) -> dict[str, Any]:
+        """:return: The recorded ``data`` payload this fixture holds."""
+        return json.loads((FIXTURE_DIRECTORY / f"{self}.json").read_text())
 
 
-class ReplayingTransport:
+@dataclass(frozen=True)
+class RecordedCall:
+    """
+    One query the reader executed, kept so a test can assert on it.
+    """
+
+    query: str
+    """
+    The GraphQL document that was sent.
+    """
+
+    variables: dict[str, Any]
+    """
+    The variables it was sent with.
+    """
+
+
+@dataclass
+class ReplayingTransport(GraphQLTransport):
     """
     A transport that returns queued payloads instead of calling GitHub.
 
-    Records every query and variable set it was given, so a test can assert the exact
-    request the reader made.
+    Records every call it was given, so a test can assert the exact request the reader
+    made.
     """
 
-    def __init__(self, payloads: list[dict[str, Any]]) -> None:
-        self.payloads = list(payloads)
-        """
-        The payloads still to be returned, in order.
-        """
-        self.calls: list[tuple[str, dict[str, Any]]] = []
-        """
-        Every ``(query, variables)`` pair the reader executed.
-        """
+    payloads: list[dict[str, Any]]
+    """
+    The payloads still to be returned, in order.
+    """
+
+    calls: list[RecordedCall] = field(default_factory=list)
+    """
+    Every call the reader executed, oldest first.
+    """
 
     def execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         """
@@ -57,7 +87,7 @@ class ReplayingTransport:
         :param variables: The GraphQL variables, recorded for assertions.
         :return: The next queued payload.
         """
-        self.calls.append((query, variables))
+        self.calls.append(RecordedCall(query, variables))
         return self.payloads.pop(0)
 
 
@@ -65,5 +95,8 @@ class ReplayingTransport:
 def paginated_transport() -> ReplayingTransport:
     """:return: A transport replaying both pages of the recorded review threads."""
     return ReplayingTransport(
-        [load_fixture("pull_request_page_one"), load_fixture("pull_request_page_two")]
+        [
+            FixtureName.PULL_REQUEST_PAGE_ONE.load(),
+            FixtureName.PULL_REQUEST_PAGE_TWO.load(),
+        ]
     )
