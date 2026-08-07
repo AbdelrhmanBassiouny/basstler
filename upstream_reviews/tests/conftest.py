@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 import pytest  # noqa: E402
 
-from upstream_reviews import GraphQLTransport  # noqa: E402
+from upstream_reviews import GraphQLClient, RepositoryPayload  # noqa: E402
 
 FIXTURE_DIRECTORY = Path(__file__).parent / "fixtures"
 """
@@ -42,6 +42,17 @@ class FixtureName(StrEnum):
         """:return: The recorded ``data`` payload this fixture holds."""
         return json.loads((FIXTURE_DIRECTORY / f"{self}.json").read_text())
 
+    def recorded(self) -> RepositoryPayload:
+        """
+        Read this fixture through the same mirror the production code uses.
+
+        Lets a test reach recorded values as typed attributes rather than indexing the
+        raw payload at the call site.
+
+        :return: The recorded repository.
+        """
+        return RepositoryPayload.from_json(self.load())
+
 
 @dataclass(frozen=True)
 class RecordedCall:
@@ -61,9 +72,9 @@ class RecordedCall:
 
 
 @dataclass
-class ReplayingTransport(GraphQLTransport):
+class ReplayingClient(GraphQLClient):
     """
-    A transport that returns queued payloads instead of calling GitHub.
+    A client that returns queued payloads instead of calling GitHub.
 
     Records every call it was given, so a test can assert the exact request the reader
     made.
@@ -92,9 +103,9 @@ class ReplayingTransport(GraphQLTransport):
 
 
 @pytest.fixture
-def paginated_transport() -> ReplayingTransport:
-    """:return: A transport replaying both pages of the recorded review threads."""
-    return ReplayingTransport(
+def paginated_client() -> ReplayingClient:
+    """:return: A client replaying both pages of the recorded review threads."""
+    return ReplayingClient(
         [
             FixtureName.PULL_REQUEST_PAGE_ONE.load(),
             FixtureName.PULL_REQUEST_PAGE_TWO.load(),
