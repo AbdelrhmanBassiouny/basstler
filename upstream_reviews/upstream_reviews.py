@@ -249,52 +249,59 @@ class UpstreamPullRequestNotFound(UpstreamReviewError):
 
 # %% models mirroring the data
 
-ParsedNode = TypeVar("ParsedNode")
+ParsedItem = TypeVar("ParsedItem")
+"""
+Whatever mirror dataclass a list of JSON items is being parsed into.
+"""
 
 
 @dataclass(frozen=True)
-class Connection:
+class JSONItemList:
     """
-    The ``{nodes: [...]}`` wrapper GitHub returns wherever a field is a list.
+    The items of a list-valued field, unwrapped.
 
-    Mirrors the one shape every list in the response shares, so the step from a field
-    down to its nodes is written here instead of at each use.
+    GitHub never returns a list-valued field as a bare array. It returns an object
+    holding one, under the key ``nodes`` - so ``reviews`` arrives as
+    ``{"nodes": [ ... ]}`` rather than ``[ ... ]``, and the same is true of
+    ``comments``, ``pullRequests`` and ``reviewThreads``. Unwrapping that is the
+    one step every list in the response needs, so it happens here rather than at
+    each of the four call sites.
     """
 
-    nodes: list[dict[str, Any]]
+    items: list[dict[str, Any]]
     """
-    The raw nodes, in the order GitHub returned them.
+    The objects the field holds, in the order GitHub returned them.
     """
 
     @classmethod
-    def at(cls, data: dict[str, Any], field_name: PullRequestJSONKey) -> Connection:
+    def at(cls, data: dict[str, Any], field_name: PullRequestJSONKey) -> JSONItemList:
         """
-        Read the connection stored under *field_name*.
+        Read the list-valued field named *field_name*.
 
-        :param data: The object holding the connection.
-        :param field_name: The field the connection is stored under.
-        :return: The wrapped connection.
+        :param data: The object the field belongs to.
+        :param field_name: The list-valued field to read.
+        :return: Its items.
         """
         return cls.from_json(data[field_name])
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> Connection:
+    def from_json(cls, data: dict[str, Any]) -> JSONItemList:
         """
-        Read a connection object directly.
+        Read an already-selected list-valued field.
 
-        :param data: The connection to read.
-        :return: The wrapped connection.
+        :param data: The object holding the ``nodes`` array.
+        :return: Its items.
         """
         return cls(data[PullRequestJSONKey.NODES])
 
-    def parsed_into(self, model: type[ParsedNode]) -> list[ParsedNode]:
+    def parsed_into(self, model: type[ParsedItem]) -> list[ParsedItem]:
         """
-        Parse every node with *model*'s own reader.
+        Parse every item with *model*'s own reader.
 
-        :param model: The mirror dataclass to parse each node into.
-        :return: The parsed nodes.
+        :param model: The mirror dataclass to parse each item into.
+        :return: The parsed items.
         """
-        return [model.from_json(node) for node in self.nodes]
+        return [model.from_json(item) for item in self.items]
 
 
 @dataclass(frozen=True)
@@ -419,7 +426,7 @@ class ReviewThread:
             is_outdated=data[PullRequestJSONKey.IS_OUTDATED],
             path=data[PullRequestJSONKey.PATH],
             line=data[PullRequestJSONKey.LINE],
-            comments=Connection.at(data, PullRequestJSONKey.COMMENTS).parsed_into(
+            comments=JSONItemList.at(data, PullRequestJSONKey.COMMENTS).parsed_into(
                 ThreadComment
             ),
         )
@@ -551,7 +558,7 @@ class ReviewThreadPage:
         """
         page_info = data[PullRequestJSONKey.PAGE_INFO]
         return cls(
-            threads=Connection.from_json(data).parsed_into(ReviewThread),
+            threads=JSONItemList.from_json(data).parsed_into(ReviewThread),
             has_next_page=page_info[PullRequestJSONKey.HAS_NEXT_PAGE],
             end_cursor=page_info[PullRequestJSONKey.END_CURSOR],
         )
@@ -603,7 +610,9 @@ class PullRequestReviewSnapshot:
             number=data[PullRequestJSONKey.NUMBER],
             title=data[PullRequestJSONKey.TITLE],
             url=data[PullRequestJSONKey.URL],
-            reviews=Connection.at(data, PullRequestJSONKey.REVIEWS).parsed_into(Review),
+            reviews=JSONItemList.at(data, PullRequestJSONKey.REVIEWS).parsed_into(
+                Review
+            ),
             threads=threads,
         )
 
@@ -676,7 +685,7 @@ class RepositoryJSON:
     @property
     def branch_pull_requests(self) -> list[BranchPullRequest]:
         """:return: Every pull request the head-branch search matched."""
-        return Connection.at(self.data, PullRequestJSONKey.PULL_REQUESTS).parsed_into(
+        return JSONItemList.at(self.data, PullRequestJSONKey.PULL_REQUESTS).parsed_into(
             BranchPullRequest
         )
 
