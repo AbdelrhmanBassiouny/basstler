@@ -1,5 +1,5 @@
 """
-Tests for upstream_reviews.py's payload parsing, thread pagination, pull request
+Tests for upstream_reviews.py's data parsing, thread pagination, pull request
 resolution, report rendering, and the gh-backed client.
 """
 
@@ -35,7 +35,7 @@ from upstream_reviews import (
 
 class Example(StrEnum):
     """
-    The identities the recorded payloads were built around.
+    The identities the recorded responses were built around.
     """
 
     UPSTREAM_OWNER = "example-upstream"
@@ -48,7 +48,7 @@ class Example(StrEnum):
 
 class ThreadIdentifier(StrEnum):
     """
-    The review threads the recorded payloads carry.
+    The review threads the recorded responses carry.
     """
 
     RESOLVED = "THREAD_RESOLVED"
@@ -84,7 +84,7 @@ def make_reader(client: ReplayingClient) -> UpstreamReviewReader:
     """
     Build a reader wired to *client* and the recorded upstream.
 
-    :param client: The client to replay payloads from.
+    :param client: The client to replay responses from.
     :return: The reader under test.
     """
     return UpstreamReviewReader(client, UPSTREAM, Example.FORK_OWNER)
@@ -95,7 +95,7 @@ def recorded_thread(fixture: FixtureName, identifier: ThreadIdentifier) -> Revie
     Read one recorded review thread by its identifier.
 
     Reaches it through the same mirror the production code parses into, so a test names
-    attributes rather than indexing the raw payload.
+    attributes rather than indexing the raw data.
 
     :param fixture: The fixture to read.
     :param identifier: The thread to find.
@@ -108,10 +108,7 @@ def recorded_thread(fixture: FixtureName, identifier: ThreadIdentifier) -> Revie
     raise KeyError(identifier)
 
 
-# %% payload parsing
-
-EXPECTED_RESOLVED_THREAD_LINE = 1031
-EXPECTED_RESOLVED_COMMENT_IDENTIFIER = 3728009027
+# %% data parsing
 
 
 def test_a_thread_maps_each_field_to_its_own_attribute(paginated_client):
@@ -124,10 +121,8 @@ def test_a_thread_maps_each_field_to_its_own_attribute(paginated_client):
     parsed = snapshot.thread(ThreadIdentifier.RESOLVED)
     assert parsed.is_resolved is True
     assert parsed.is_outdated is False
-    assert parsed.line == EXPECTED_RESOLVED_THREAD_LINE
-    assert parsed.comments[0].database_identifier == (
-        EXPECTED_RESOLVED_COMMENT_IDENTIFIER
-    )
+    assert parsed.line == 1031
+    assert parsed.comments[0].database_identifier == 3728009027
 
 
 def test_every_recorded_thread_survives_the_read_unchanged(paginated_client):
@@ -228,7 +223,7 @@ def test_the_second_request_carries_the_first_pages_cursor(paginated_client):
 def test_paging_stops_once_a_page_reports_no_successor(paginated_client):
     make_reader(paginated_client).read_current_state(RECORDED_PULL_REQUEST_NUMBER)
 
-    assert paginated_client.payloads == []
+    assert paginated_client.responses == []
 
 
 # %% resolved filtering
@@ -451,14 +446,14 @@ def stubbed_gh(tmp_path, monkeypatch) -> Path:
     return stub_directory
 
 
-def test_the_data_payload_is_unwrapped(stubbed_gh, monkeypatch):
-    payload = {PullRequestJSONKey.REPOSITORY: None}
+def test_the_data_is_unwrapped(stubbed_gh, monkeypatch):
+    data = {PullRequestJSONKey.REPOSITORY: None}
     monkeypatch.setenv(
         StubEnvironmentVariable.GRAPHQL_JSON,
-        json.dumps({PullRequestJSONKey.DATA: payload}),
+        json.dumps({PullRequestJSONKey.DATA: data}),
     )
 
-    assert GitHubCommandLineClient().execute("query {}", {}) == payload
+    assert GitHubCommandLineClient().execute("query {}", {}) == data
 
 
 def test_the_query_and_variables_are_sent_as_the_request_body(
