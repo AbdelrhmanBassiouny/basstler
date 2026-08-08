@@ -35,6 +35,11 @@ from stack import CONFIGURATION_PATH, Repository  # noqa: E402
 
 # %% wire vocabulary
 
+ParsedItem = TypeVar("ParsedItem")
+"""
+Whatever mirror dataclass a list-valued field is being parsed into.
+"""
+
 
 class PullRequestJSONKey(StrEnum):
     """
@@ -75,6 +80,23 @@ class PullRequestJSONKey(StrEnum):
     HEAD_REPOSITORY_OWNER = "headRepositoryOwner"
     QUERY = "query"
     VARIABLES = "variables"
+
+    def read_list(
+        self, data: dict[str, Any], model: type[ParsedItem]
+    ) -> list[ParsedItem]:
+        """
+        Parse every entry of the list-valued field this key names.
+
+        GitHub returns a list-valued field as an object holding the array under
+        ``nodes`` rather than as the array itself, so that step happens here rather
+        than at each call site.
+
+        :param data: The object the field belongs to.
+        :param model: The mirror dataclass to parse each entry into.
+        :return: The parsed entries, in the order GitHub returned them.
+        """
+        entries = data[self][PullRequestJSONKey.NODES]
+        return [model.from_json(entry) for entry in entries]
 
 
 class QueryVariable(StrEnum):
@@ -249,60 +271,6 @@ class UpstreamPullRequestNotFound(UpstreamReviewError):
 
 # %% models mirroring the data
 
-ParsedItem = TypeVar("ParsedItem")
-"""
-Whatever mirror dataclass a list of JSON items is being parsed into.
-"""
-
-
-@dataclass(frozen=True)
-class JSONItemList:
-    """
-    The items of a list-valued field, unwrapped.
-
-    GitHub never returns a list-valued field as a bare array. It returns an object
-    holding one, under the key ``nodes`` - so ``reviews`` arrives as
-    ``{"nodes": [ ... ]}`` rather than ``[ ... ]``, and the same is true of
-    ``comments``, ``pullRequests`` and ``reviewThreads``. Unwrapping that is the
-    one step every list in the response needs, so it happens here rather than at
-    each of the four call sites.
-    """
-
-    items: list[dict[str, Any]]
-    """
-    The objects the field holds, in the order GitHub returned them.
-    """
-
-    @classmethod
-    def at(cls, data: dict[str, Any], field_name: PullRequestJSONKey) -> JSONItemList:
-        """
-        Read the list-valued field named *field_name*.
-
-        :param data: The object the field belongs to.
-        :param field_name: The list-valued field to read.
-        :return: Its items.
-        """
-        return cls.from_json(data[field_name])
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> JSONItemList:
-        """
-        Read an already-selected list-valued field.
-
-        :param data: The object holding the ``nodes`` array.
-        :return: Its items.
-        """
-        return cls(data[PullRequestJSONKey.NODES])
-
-    def parsed_into(self, model: type[ParsedItem]) -> list[ParsedItem]:
-        """
-        Parse every item with *model*'s own reader.
-
-        :param model: The mirror dataclass to parse each item into.
-        :return: The parsed items.
-        """
-        return [model.from_json(item) for item in self.items]
-
 
 @dataclass(frozen=True)
 class Author:
@@ -426,9 +394,7 @@ class ReviewThread:
             is_outdated=data[PullRequestJSONKey.IS_OUTDATED],
             path=data[PullRequestJSONKey.PATH],
             line=data[PullRequestJSONKey.LINE],
-            comments=JSONItemList.at(data, PullRequestJSONKey.COMMENTS).parsed_into(
-                ThreadComment
-            ),
+            comments=PullRequestJSONKey.COMMENTS.read_list(data, ThreadComment),
         )
 
     @property
@@ -551,14 +517,15 @@ class ReviewThreadPage:
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> ReviewThreadPage:
         """
-        Build a page from a ``reviewThreads`` connection.
+        Build a page from a ``pullRequest`` node.
 
-        :param data: The connection to read.
+        :param data: The node to read.
         :return: The parsed page.
         """
-        page_info = data[PullRequestJSONKey.PAGE_INFO]
+        threads_field = data[PullRequestJSONKey.REVIEW_THREADS]
+        page_info = threads_field[PullRequestJSONKey.PAGE_INFO]
         return cls(
-            threads=JSONItemList.from_json(data).parsed_into(ReviewThread),
+            threads=PullRequestJSONKey.REVIEW_THREADS.read_list(data, ReviewThread),
             has_next_page=page_info[PullRequestJSONKey.HAS_NEXT_PAGE],
             end_cursor=page_info[PullRequestJSONKey.END_CURSOR],
         )
@@ -610,9 +577,7 @@ class PullRequestReviewSnapshot:
             number=data[PullRequestJSONKey.NUMBER],
             title=data[PullRequestJSONKey.TITLE],
             url=data[PullRequestJSONKey.URL],
-            reviews=JSONItemList.at(data, PullRequestJSONKey.REVIEWS).parsed_into(
-                Review
-            ),
+            reviews=PullRequestJSONKey.REVIEWS.read_list(data, Review),
             threads=threads,
         )
 
@@ -667,9 +632,7 @@ class RepositoryJSON:
     @property
     def review_thread_page(self) -> ReviewThreadPage:
         """:return: The pull request's page of review threads."""
-        return ReviewThreadPage.from_json(
-            self.pull_request[PullRequestJSONKey.REVIEW_THREADS]
-        )
+        return ReviewThreadPage.from_json(self.pull_request)
 
     @property
     def pull_request_reviews(self) -> PullRequestReviewSnapshot:
@@ -685,9 +648,7 @@ class RepositoryJSON:
     @property
     def branch_pull_requests(self) -> list[BranchPullRequest]:
         """:return: Every pull request the head-branch search matched."""
-        return JSONItemList.at(self.data, PullRequestJSONKey.PULL_REQUESTS).parsed_into(
-            BranchPullRequest
-        )
+        return PullRequestJSONKey.PULL_REQUESTS.read_list(self.data, BranchPullRequest)
 
 
 @dataclass(frozen=True)
