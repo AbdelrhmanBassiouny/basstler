@@ -36,12 +36,12 @@ from stack import CONFIGURATION_PATH, Repository  # noqa: E402
 # %% the reading contract
 
 
-class JSONMirror(ABC):
+class JSONModel(ABC):
     """
     A dataclass mirroring one object GitHub returns, able to read itself from it.
 
     Declaring the reader here is what lets :meth:`PullRequestJSONKey.read_list` call
-    it on any mirror. Without it the shared name would be a convention every model
+    it on any model. Without it the shared name would be a convention every model
     is trusted to have followed, and a model that spelled it differently would fail
     only when something happened to parse that field.
 
@@ -52,18 +52,18 @@ class JSONMirror(ABC):
 
     @classmethod
     @abstractmethod
-    def from_json(cls, data: dict[str, Any]) -> JSONMirror:
+    def from_json(cls, data: dict[str, Any]) -> JSONModel:
         """
         Read one of these out of the object GitHub returned.
 
         :param data: The object to read.
-        :return: The parsed mirror.
+        :return: The parsed model.
         """
 
 
-ParsedItem = TypeVar("ParsedItem", bound=JSONMirror)
+ParsedItem = TypeVar("ParsedItem", bound=JSONModel)
 """
-Whatever mirror a list-valued field is being parsed into.
+Whatever model a list-valued field is being parsed into.
 """
 
 
@@ -121,7 +121,7 @@ class PullRequestJSONKey(StrEnum):
         than at each call site.
 
         :param data: The object the field belongs to.
-        :param model: The mirror dataclass to parse each entry into.
+        :param model: The model to parse each entry into.
         :return: The parsed entries, in the order GitHub returned them.
         """
         entries = data[self][PullRequestJSONKey.NODES]
@@ -302,7 +302,7 @@ class UpstreamPullRequestNotFound(UpstreamReviewError):
 
 
 @dataclass(frozen=True)
-class Author(JSONMirror):
+class Author(JSONModel):
     """
     Whoever wrote a comment or submitted a review.
     """
@@ -326,7 +326,7 @@ class Author(JSONMirror):
 
 
 @dataclass(frozen=True)
-class ThreadComment(JSONMirror):
+class ThreadComment(JSONModel):
     """
     One comment inside a review thread.
     """
@@ -374,7 +374,7 @@ class ThreadComment(JSONMirror):
 
 
 @dataclass(frozen=True)
-class ReviewThread(JSONMirror):
+class ReviewThread(JSONModel):
     """
     A conversation anchored to one location in the pull request's diff.
     """
@@ -445,7 +445,7 @@ class ReviewThread(JSONMirror):
 
 
 @dataclass(frozen=True)
-class Review(JSONMirror):
+class Review(JSONModel):
     """
     A submitted review, separate from the threads it may have opened.
     """
@@ -487,7 +487,7 @@ class Review(JSONMirror):
 
 
 @dataclass(frozen=True)
-class BranchPullRequest(JSONMirror):
+class BranchPullRequest(JSONModel):
     """
     One pull request found by searching the upstream for a head branch.
     """
@@ -523,7 +523,7 @@ class BranchPullRequest(JSONMirror):
 
 
 @dataclass(frozen=True)
-class ReviewThreadPage(JSONMirror):
+class ReviewThreadPage(JSONModel):
     """
     One page of review threads, with the cursor that follows it.
     """
@@ -630,7 +630,7 @@ class PullRequestReviewSnapshot:
 
 
 @dataclass(frozen=True)
-class RepositoryJSON(JSONMirror):
+class RepositoryJSON(JSONModel):
     """
     The ``repository`` object every query in this script selects.
 

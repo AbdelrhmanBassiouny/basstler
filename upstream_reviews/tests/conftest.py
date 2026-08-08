@@ -45,7 +45,7 @@ class FixtureName(StrEnum):
 
     def recorded(self) -> RepositoryJSON:
         """
-        Read this fixture through the same mirror the production code uses.
+        Read this fixture through the same model the production code uses.
 
         Lets a test reach recorded values as typed attributes rather than indexing the
         raw data at the call site.
