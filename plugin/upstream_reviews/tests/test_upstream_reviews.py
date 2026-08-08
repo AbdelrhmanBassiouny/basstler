@@ -16,14 +16,18 @@ from conftest import FixtureName, RecordedCall, ReplayingClient
 from upstream_reviews import (
     GitHubCommandFailed,
     GitHubCommandLineClient,
+    BranchPullRequest,
     GraphQLErrorsReturned,
+    JSONMirror,
     PullRequestJSONKey,
     PullRequestReviewSnapshot,
     QueryVariable,
     ReportText,
     Repository,
+    Review,
     ReviewState,
     ReviewThread,
+    ThreadComment,
     ThreadMarker,
     UnresolvedThreadReport,
     UpstreamPullRequestNotFound,
@@ -106,6 +110,23 @@ def recorded_thread(fixture: FixtureName, identifier: ThreadIdentifier) -> Revie
         if thread.identifier == identifier:
             return thread
     raise KeyError(identifier)
+
+
+# %% the reading contract
+
+
+def test_a_mirror_that_declares_no_reader_cannot_be_built():
+    class MirrorMissingItsReader(JSONMirror):
+        """Stands in for a model that forgot the reader every mirror owes."""
+
+    with pytest.raises(TypeError):
+        MirrorMissingItsReader()
+
+
+def test_every_model_a_list_is_parsed_into_declares_the_reader():
+    parsed_models = [ThreadComment, Review, ReviewThread, BranchPullRequest]
+
+    assert [issubclass(model, JSONMirror) for model in parsed_models] == [True] * 4
 
 
 # %% data parsing

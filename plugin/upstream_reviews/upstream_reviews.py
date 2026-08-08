@@ -33,12 +33,41 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "stack"))
 import tomllib  # noqa: E402
 from stack import CONFIGURATION_PATH, Repository  # noqa: E402
 
-# %% wire vocabulary
+# %% the reading contract
 
-ParsedItem = TypeVar("ParsedItem")
+
+class JSONMirror(ABC):
+    """
+    A dataclass mirroring one object GitHub returns, able to read itself from it.
+
+    Declaring the reader here is what lets :meth:`PullRequestJSONKey.read_list` call
+    it on any mirror. Without it the shared name would be a convention every model
+    is trusted to have followed, and a model that spelled it differently would fail
+    only when something happened to parse that field.
+
+    ..note:: A reader needing more than the object itself cannot state this
+        contract, so :class:`PullRequestReviewSnapshot`, which is assembled from
+        threads gathered across several responses, does not implement it.
+    """
+
+    @classmethod
+    @abstractmethod
+    def from_json(cls, data: dict[str, Any]) -> JSONMirror:
+        """
+        Read one of these out of the object GitHub returned.
+
+        :param data: The object to read.
+        :return: The parsed mirror.
+        """
+
+
+ParsedItem = TypeVar("ParsedItem", bound=JSONMirror)
 """
-Whatever mirror dataclass a list-valued field is being parsed into.
+Whatever mirror a list-valued field is being parsed into.
 """
+
+
+# %% wire vocabulary
 
 
 class PullRequestJSONKey(StrEnum):
@@ -273,7 +302,7 @@ class UpstreamPullRequestNotFound(UpstreamReviewError):
 
 
 @dataclass(frozen=True)
-class Author:
+class Author(JSONMirror):
     """
     Whoever wrote a comment or submitted a review.
     """
@@ -297,7 +326,7 @@ class Author:
 
 
 @dataclass(frozen=True)
-class ThreadComment:
+class ThreadComment(JSONMirror):
     """
     One comment inside a review thread.
     """
@@ -345,7 +374,7 @@ class ThreadComment:
 
 
 @dataclass(frozen=True)
-class ReviewThread:
+class ReviewThread(JSONMirror):
     """
     A conversation anchored to one location in the pull request's diff.
     """
@@ -416,7 +445,7 @@ class ReviewThread:
 
 
 @dataclass(frozen=True)
-class Review:
+class Review(JSONMirror):
     """
     A submitted review, separate from the threads it may have opened.
     """
@@ -458,7 +487,7 @@ class Review:
 
 
 @dataclass(frozen=True)
-class BranchPullRequest:
+class BranchPullRequest(JSONMirror):
     """
     One pull request found by searching the upstream for a head branch.
     """
@@ -494,7 +523,7 @@ class BranchPullRequest:
 
 
 @dataclass(frozen=True)
-class ReviewThreadPage:
+class ReviewThreadPage(JSONMirror):
     """
     One page of review threads, with the cursor that follows it.
     """
@@ -601,7 +630,7 @@ class PullRequestReviewSnapshot:
 
 
 @dataclass(frozen=True)
-class RepositoryJSON:
+class RepositoryJSON(JSONMirror):
     """
     The ``repository`` object every query in this script selects.
 
