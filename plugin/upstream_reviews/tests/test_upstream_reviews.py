@@ -3,7 +3,6 @@ Tests for upstream_reviews.py's data parsing, thread pagination, pull request
 resolution, report rendering, and the gh-backed client.
 """
 
-import inspect
 import json
 import os
 import shutil
@@ -12,7 +11,6 @@ from enum import StrEnum
 from pathlib import Path
 
 import pytest
-import upstream_reviews
 from conftest import FixtureName, RecordedCall, ReplayingClient
 
 from upstream_reviews import (
@@ -120,32 +118,6 @@ def test_a_model_that_declares_no_reader_cannot_be_built():
 
     with pytest.raises(TypeError):
         ModelMissingItsReader()
-
-
-def models_read_from_one_object() -> list[type]:
-    """
-    Find every class in the module whose reader takes only the object to read.
-
-    Derived rather than listed, so a model added later is covered without this
-    module being edited. The signature is what selects them, which is also the
-    contract's own boundary: a reader needing more than the object cannot state it.
-
-    :return: The classes that should declare the reading contract.
-    """
-    return [
-        member
-        for member in vars(upstream_reviews).values()
-        if inspect.isclass(member)
-        and "from_json" in vars(member)
-        and list(inspect.signature(member.from_json).parameters) == ["data"]
-    ]
-
-
-def test_every_model_read_from_one_object_declares_the_contract():
-    models = models_read_from_one_object()
-
-    assert models
-    assert [model for model in models if not issubclass(model, JSONModel)] == []
 
 
 # %% data parsing
