@@ -23,7 +23,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeVar
 
 # ``stack.py`` is a single-file script rather than an installed package, so its
 # directory joins the path the same way the test suites do it. Reusing its
@@ -249,6 +249,53 @@ class UpstreamPullRequestNotFound(UpstreamReviewError):
 
 # %% models mirroring the data
 
+ParsedNode = TypeVar("ParsedNode")
+
+
+@dataclass(frozen=True)
+class Connection:
+    """
+    The ``{nodes: [...]}`` wrapper GitHub returns wherever a field is a list.
+
+    Mirrors the one shape every list in the response shares, so the step from a field
+    down to its nodes is written here instead of at each use.
+    """
+
+    nodes: list[dict[str, Any]]
+    """
+    The raw nodes, in the order GitHub returned them.
+    """
+
+    @classmethod
+    def at(cls, data: dict[str, Any], field_name: PullRequestJSONKey) -> Connection:
+        """
+        Read the connection stored under *field_name*.
+
+        :param data: The object holding the connection.
+        :param field_name: The field the connection is stored under.
+        :return: The wrapped connection.
+        """
+        return cls.from_json(data[field_name])
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> Connection:
+        """
+        Read a connection object directly.
+
+        :param data: The connection to read.
+        :return: The wrapped connection.
+        """
+        return cls(data[PullRequestJSONKey.NODES])
+
+    def parsed_into(self, model: type[ParsedNode]) -> list[ParsedNode]:
+        """
+        Parse every node with *model*'s own reader.
+
+        :param model: The mirror dataclass to parse each node into.
+        :return: The parsed nodes.
+        """
+        return [model.from_json(node) for node in self.nodes]
+
 
 @dataclass(frozen=True)
 class Author:
@@ -372,12 +419,9 @@ class ReviewThread:
             is_outdated=data[PullRequestJSONKey.IS_OUTDATED],
             path=data[PullRequestJSONKey.PATH],
             line=data[PullRequestJSONKey.LINE],
-            comments=[
-                ThreadComment.from_json(comment)
-                for comment in data[PullRequestJSONKey.COMMENTS][
-                    PullRequestJSONKey.NODES
-                ]
-            ],
+            comments=Connection.at(data, PullRequestJSONKey.COMMENTS).parsed_into(
+                ThreadComment
+            ),
         )
 
     @property
@@ -507,9 +551,7 @@ class ReviewThreadPage:
         """
         page_info = data[PullRequestJSONKey.PAGE_INFO]
         return cls(
-            threads=[
-                ReviewThread.from_json(node) for node in data[PullRequestJSONKey.NODES]
-            ],
+            threads=Connection.from_json(data).parsed_into(ReviewThread),
             has_next_page=page_info[PullRequestJSONKey.HAS_NEXT_PAGE],
             end_cursor=page_info[PullRequestJSONKey.END_CURSOR],
         )
@@ -561,10 +603,7 @@ class PullRequestReviewSnapshot:
             number=data[PullRequestJSONKey.NUMBER],
             title=data[PullRequestJSONKey.TITLE],
             url=data[PullRequestJSONKey.URL],
-            reviews=[
-                Review.from_json(node)
-                for node in data[PullRequestJSONKey.REVIEWS][PullRequestJSONKey.NODES]
-            ],
+            reviews=Connection.at(data, PullRequestJSONKey.REVIEWS).parsed_into(Review),
             threads=threads,
         )
 
@@ -637,12 +676,9 @@ class RepositoryJSON:
     @property
     def branch_pull_requests(self) -> list[BranchPullRequest]:
         """:return: Every pull request the head-branch search matched."""
-        return [
-            BranchPullRequest.from_json(node)
-            for node in self.data[PullRequestJSONKey.PULL_REQUESTS][
-                PullRequestJSONKey.NODES
-            ]
-        ]
+        return Connection.at(self.data, PullRequestJSONKey.PULL_REQUESTS).parsed_into(
+            BranchPullRequest
+        )
 
 
 @dataclass(frozen=True)

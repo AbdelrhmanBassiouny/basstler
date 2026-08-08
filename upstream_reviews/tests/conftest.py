@@ -37,6 +37,7 @@ class FixtureName(StrEnum):
     PULL_REQUEST_PAGE_TWO = "pull_request_page_two"
     BRANCH_PULL_REQUESTS = "branch_pull_requests"
     BRANCH_PULL_REQUESTS_FOREIGN_OWNER = "branch_pull_requests_foreign_owner"
+    BRANCH_PULL_REQUESTS_NONE = "branch_pull_requests_none"
 
     def load(self) -> dict[str, Any]:
         """:return: The recorded ``data`` object this fixture holds."""

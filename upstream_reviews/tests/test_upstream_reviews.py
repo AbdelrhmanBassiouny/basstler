@@ -310,15 +310,7 @@ def test_a_branch_of_another_contributor_is_not_claimed():
 
 
 def test_a_branch_never_promoted_upstream_is_reported_clearly():
-    client = ReplayingClient(
-        [
-            {
-                PullRequestJSONKey.REPOSITORY: {
-                    PullRequestJSONKey.PULL_REQUESTS: {PullRequestJSONKey.NODES: []}
-                }
-            }
-        ]
-    )
+    client = ReplayingClient([FixtureName.BRANCH_PULL_REQUESTS_NONE.load()])
 
     with pytest.raises(UpstreamPullRequestNotFound) as raised:
         make_reader(client).resolve_pull_request_number(Example.UNPROMOTED_BRANCH)
@@ -508,13 +500,7 @@ def test_a_branch_without_an_upstream_pull_request_exits_without_a_traceback(
     monkeypatch.setenv(
         StubEnvironmentVariable.GRAPHQL_JSON,
         json.dumps(
-            {
-                PullRequestJSONKey.DATA: {
-                    PullRequestJSONKey.REPOSITORY: {
-                        PullRequestJSONKey.PULL_REQUESTS: {PullRequestJSONKey.NODES: []}
-                    }
-                }
-            }
+            {PullRequestJSONKey.DATA: FixtureName.BRANCH_PULL_REQUESTS_NONE.load()}
         ),
     )
 
