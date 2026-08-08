@@ -247,7 +247,7 @@ class UpstreamPullRequestNotFound(UpstreamReviewError):
         )
 
 
-# %% models mirroring the payload
+# %% models mirroring the data
 
 
 @dataclass(frozen=True)
@@ -262,16 +262,16 @@ class Author:
     """
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any] | None) -> Author:
+    def from_json(cls, data: dict[str, Any] | None) -> Author:
         """
         Read an author, tolerating the null GitHub returns for deleted users.
 
-        :param payload: The ``author`` object, which GitHub may report as null.
+        :param data: The ``author`` object, which GitHub may report as null.
         :return: The parsed author.
         """
-        if payload is None:
+        if data is None:
             return cls(UNKNOWN_LOGIN)
-        return cls(payload[PullRequestJSONKey.LOGIN])
+        return cls(data[PullRequestJSONKey.LOGIN])
 
 
 @dataclass(frozen=True)
@@ -306,19 +306,19 @@ class ThreadComment:
     """
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> ThreadComment:
+    def from_json(cls, data: dict[str, Any]) -> ThreadComment:
         """
         Build a comment from one ``comments`` node.
 
-        :param payload: The node to read.
+        :param data: The node to read.
         :return: The parsed comment.
         """
         return cls(
-            database_identifier=payload[PullRequestJSONKey.DATABASE_IDENTIFIER],
-            author=Author.from_json(payload[PullRequestJSONKey.AUTHOR]),
-            body=payload[PullRequestJSONKey.BODY],
-            created_at=payload[PullRequestJSONKey.CREATED_AT],
-            url=payload[PullRequestJSONKey.URL],
+            database_identifier=data[PullRequestJSONKey.DATABASE_IDENTIFIER],
+            author=Author.from_json(data[PullRequestJSONKey.AUTHOR]),
+            body=data[PullRequestJSONKey.BODY],
+            created_at=data[PullRequestJSONKey.CREATED_AT],
+            url=data[PullRequestJSONKey.URL],
         )
 
 
@@ -359,22 +359,22 @@ class ReviewThread:
     """
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> ReviewThread:
+    def from_json(cls, data: dict[str, Any]) -> ReviewThread:
         """
         Build a thread from one ``reviewThreads`` node.
 
-        :param payload: The node to read.
+        :param data: The node to read.
         :return: The parsed thread.
         """
         return cls(
-            identifier=payload[PullRequestJSONKey.IDENTIFIER],
-            is_resolved=payload[PullRequestJSONKey.IS_RESOLVED],
-            is_outdated=payload[PullRequestJSONKey.IS_OUTDATED],
-            path=payload[PullRequestJSONKey.PATH],
-            line=payload[PullRequestJSONKey.LINE],
+            identifier=data[PullRequestJSONKey.IDENTIFIER],
+            is_resolved=data[PullRequestJSONKey.IS_RESOLVED],
+            is_outdated=data[PullRequestJSONKey.IS_OUTDATED],
+            path=data[PullRequestJSONKey.PATH],
+            line=data[PullRequestJSONKey.LINE],
             comments=[
                 ThreadComment.from_json(comment)
-                for comment in payload[PullRequestJSONKey.COMMENTS][
+                for comment in data[PullRequestJSONKey.COMMENTS][
                     PullRequestJSONKey.NODES
                 ]
             ],
@@ -425,18 +425,18 @@ class Review:
     """
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> Review:
+    def from_json(cls, data: dict[str, Any]) -> Review:
         """
         Build a review from one ``reviews`` node.
 
-        :param payload: The node to read.
+        :param data: The node to read.
         :return: The parsed review.
         """
         return cls(
-            author=Author.from_json(payload[PullRequestJSONKey.AUTHOR]),
-            state=ReviewState(payload[PullRequestJSONKey.STATE]),
-            body=payload[PullRequestJSONKey.BODY],
-            submitted_at=payload[PullRequestJSONKey.SUBMITTED_AT],
+            author=Author.from_json(data[PullRequestJSONKey.AUTHOR]),
+            state=ReviewState(data[PullRequestJSONKey.STATE]),
+            body=data[PullRequestJSONKey.BODY],
+            submitted_at=data[PullRequestJSONKey.SUBMITTED_AT],
         )
 
 
@@ -462,19 +462,17 @@ class BranchPullRequest:
     """
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> BranchPullRequest:
+    def from_json(cls, data: dict[str, Any]) -> BranchPullRequest:
         """
         Build a summary from one ``pullRequests`` node.
 
-        :param payload: The node to read.
+        :param data: The node to read.
         :return: The parsed summary.
         """
         return cls(
-            number=payload[PullRequestJSONKey.NUMBER],
-            state=PullRequestState(payload[PullRequestJSONKey.STATE]),
-            head_owner=Author.from_json(
-                payload[PullRequestJSONKey.HEAD_REPOSITORY_OWNER]
-            ),
+            number=data[PullRequestJSONKey.NUMBER],
+            state=PullRequestState(data[PullRequestJSONKey.STATE]),
+            head_owner=Author.from_json(data[PullRequestJSONKey.HEAD_REPOSITORY_OWNER]),
         )
 
 
@@ -500,18 +498,17 @@ class ReviewThreadPage:
     """
 
     @classmethod
-    def from_json(cls, payload: dict[str, Any]) -> ReviewThreadPage:
+    def from_json(cls, data: dict[str, Any]) -> ReviewThreadPage:
         """
         Build a page from a ``reviewThreads`` connection.
 
-        :param payload: The connection to read.
+        :param data: The connection to read.
         :return: The parsed page.
         """
-        page_info = payload[PullRequestJSONKey.PAGE_INFO]
+        page_info = data[PullRequestJSONKey.PAGE_INFO]
         return cls(
             threads=[
-                ReviewThread.from_json(node)
-                for node in payload[PullRequestJSONKey.NODES]
+                ReviewThread.from_json(node) for node in data[PullRequestJSONKey.NODES]
             ],
             has_next_page=page_info[PullRequestJSONKey.HAS_NEXT_PAGE],
             end_cursor=page_info[PullRequestJSONKey.END_CURSOR],
@@ -551,24 +548,22 @@ class PullRequestReviewSnapshot:
 
     @classmethod
     def from_json(
-        cls, payload: dict[str, Any], threads: list[ReviewThread]
+        cls, data: dict[str, Any], threads: list[ReviewThread]
     ) -> PullRequestReviewSnapshot:
         """
         Build a snapshot from a ``pullRequest`` node and its collected threads.
 
-        :param payload: The node to read.
+        :param data: The node to read.
         :param threads: Every thread gathered across the paged reads.
         :return: The parsed snapshot.
         """
         return cls(
-            number=payload[PullRequestJSONKey.NUMBER],
-            title=payload[PullRequestJSONKey.TITLE],
-            url=payload[PullRequestJSONKey.URL],
+            number=data[PullRequestJSONKey.NUMBER],
+            title=data[PullRequestJSONKey.TITLE],
+            url=data[PullRequestJSONKey.URL],
             reviews=[
                 Review.from_json(node)
-                for node in payload[PullRequestJSONKey.REVIEWS][
-                    PullRequestJSONKey.NODES
-                ]
+                for node in data[PullRequestJSONKey.REVIEWS][PullRequestJSONKey.NODES]
             ],
             threads=threads,
         )
@@ -593,7 +588,7 @@ class PullRequestReviewSnapshot:
 
 
 @dataclass(frozen=True)
-class RepositoryPayload:
+class RepositoryJSON:
     """
     The ``repository`` object every query in this script selects.
 
@@ -601,17 +596,17 @@ class RepositoryPayload:
     so no caller spells that path out again.
     """
 
-    node: dict[str, Any]
+    data: dict[str, Any]
     """
     The repository object as returned.
     """
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RepositoryPayload:
+    def from_json(cls, data: dict[str, Any]) -> RepositoryJSON:
         """
         Read the repository out of a response's ``data``.
 
-        :param data: The response payload.
+        :param data: The response's ``data`` object.
         :return: The wrapped repository.
         """
         return cls(data[PullRequestJSONKey.REPOSITORY])
@@ -619,7 +614,7 @@ class RepositoryPayload:
     @property
     def pull_request(self) -> dict[str, Any]:
         """:return: The single ``pullRequest`` this response selected."""
-        return self.node[PullRequestJSONKey.PULL_REQUEST]
+        return self.data[PullRequestJSONKey.PULL_REQUEST]
 
     @property
     def review_thread_page(self) -> ReviewThreadPage:
@@ -644,7 +639,7 @@ class RepositoryPayload:
         """:return: Every pull request the head-branch search matched."""
         return [
             BranchPullRequest.from_json(node)
-            for node in self.node[PullRequestJSONKey.PULL_REQUESTS][
+            for node in self.data[PullRequestJSONKey.PULL_REQUESTS][
                 PullRequestJSONKey.NODES
             ]
         ]
@@ -658,7 +653,7 @@ class GraphQLResponse:
 
     data: dict[str, Any] | None
     """
-    The ``data`` payload, absent when the query failed outright.
+    The ``data`` data, absent when the query failed outright.
     """
 
     errors: list[str] = field(default_factory=list)
@@ -683,8 +678,8 @@ class GraphQLResponse:
             ],
         )
 
-    def payload(self) -> dict[str, Any]:
-        """:return: The ``data`` payload.
+    def result(self) -> dict[str, Any]:
+        """:return: The query's result.
 
         :raises GraphQLErrorsReturned: If GitHub reported errors instead.
         """
@@ -698,7 +693,7 @@ class GraphQLResponse:
 
 class GraphQLClient(ABC):
     """
-    Sends a GraphQL document to GitHub and returns its ``data`` payload.
+    Sends a GraphQL document to GitHub and returns its ``data`` data.
     """
 
     @abstractmethod
@@ -708,7 +703,7 @@ class GraphQLClient(ABC):
 
         :param query: The GraphQL document.
         :param variables: The document's variables.
-        :return: The response's ``data`` payload.
+        :return: The response's ``data`` data.
         """
 
 
@@ -732,7 +727,7 @@ class GitHubCommandLineClient(GraphQLClient):
 
         :param query: The GraphQL document.
         :param variables: The document's variables.
-        :return: The response's ``data`` payload.
+        :return: The response's ``data`` data.
         :raises GitHubCommandFailed: If ``gh`` exits non-zero.
         :raises GraphQLErrorsReturned: If GitHub answers with errors.
         """
@@ -749,7 +744,7 @@ class GitHubCommandLineClient(GraphQLClient):
             raise GitHubCommandFailed(
                 self.executable, completed.returncode, completed.stderr.strip()
             )
-        return GraphQLResponse.from_json(completed.stdout).payload()
+        return GraphQLResponse.from_json(completed.stdout).result()
 
 
 # %% reading
@@ -795,15 +790,13 @@ class UpstreamReviewReader:
         :return: The upstream pull request number.
         :raises UpstreamPullRequestNotFound: If the fork has no such pull request.
         """
-        payload = self.client.execute(
+        data = self.client.execute(
             GraphQLDocument.PULL_REQUEST_FOR_BRANCH.read(),
             {**self._repository_variables, QueryVariable.HEAD_REF_NAME: branch},
         )
         candidates = [
             pull_request
-            for pull_request in RepositoryPayload.from_json(
-                payload
-            ).branch_pull_requests
+            for pull_request in RepositoryJSON.from_json(data).branch_pull_requests
             if pull_request.head_owner.login == self.fork_owner
         ]
         if not candidates:
@@ -828,7 +821,7 @@ class UpstreamReviewReader:
         cursor: str | None = None
         repository = None
         while True:
-            payload = self.client.execute(
+            data = self.client.execute(
                 GraphQLDocument.REVIEW_THREADS_PAGE.read(),
                 {
                     **self._repository_variables,
@@ -836,7 +829,7 @@ class UpstreamReviewReader:
                     QueryVariable.THREAD_CURSOR: cursor,
                 },
             )
-            repository = RepositoryPayload.from_json(payload)
+            repository = RepositoryJSON.from_json(data)
             page = repository.review_thread_page
             threads.extend(page.threads)
             if not page.has_next_page:
