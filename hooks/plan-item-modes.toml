@@ -1,0 +1,16 @@
+# How the plan-item skills start an item, when nothing else says otherwise.
+#
+# A .claude/personal/plan-item-modes.toml on the personal-notes branch, if
+# present, layers per-user overrides on top of these values, and a --requested
+# mode on one invocation beats both (see plan_item_mode.py's resolve).
+#
+# ask   put the choice to the user, with the skill's own recommendation
+# auto  plan implicitly and implement without waiting for approval
+# plan  present the plan and stop until the user approves it
+#
+# Both default to "ask" rather than "auto" so a clone nobody has configured
+# never implements unasked. Pinning "auto" is one command:
+#   python3 .claude/hooks/plan_item_mode.py set --skill kickoff --mode auto
+
+kickoff_mode = "ask"
+resolve_mode = "ask"
