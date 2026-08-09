@@ -139,6 +139,12 @@ the narrative that doesn't belong in structured data.
   marks it `in_progress` as soon as its plan is approved — via
   [`plan_item_bootstrap.py`](./plan_item_bootstrap.py), which you can also run by hand — so the
   manifest never says `not_started` while the work is underway.
+- Choose whether either skill asks first, plans first, or implements on its own →
+  [`plan_item_mode.py`](./plan_item_mode.py) `resolve|set --skill <kickoff|resolve>`. Defaults in
+  [`plan-item-modes.toml`](./plan-item-modes.toml) are `ask` for both; `set` pins a per-user
+  override at `.claude/personal/plan-item-modes.toml` on the notes branch. What each mode obliges
+  the skill to do →
+  [`execution-modes.md`](../skills/plan-dashboard/execution-modes.md).
 - Recheck one for updates, without rereading it →
   [`plan-updates-since.sh`](./plan-updates-since.sh) `<plan-id> [--since <sha>]`. Every
   `session-start.sh` run stamps the notes-branch commit it just fetched (gitignored, at

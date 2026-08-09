@@ -1,7 +1,7 @@
 ---
 name: plan-item-resolve
-description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, roadmap.md history, the real state of its branch/PR - conflicts, CI, review comments - and any relevant discussion on its plan's tracking issue) and propose a concrete plan to resolve whatever is stalling it, via plan mode, without writing any code. Invoke as "/plan-item-resolve <plan-id> <item-id>". Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
-allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__Claude_Code_Remote__subscribe_pr_activity
+description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, roadmap.md history, the real state of its branch/PR - conflicts, CI, review comments - and any relevant discussion on its plan's tracking issue), then resolve whatever is stalling it in whichever execution mode is in force - presenting a plan for approval, carrying it out directly on the item's existing branch, or asking which. Invoke as "/plan-item-resolve <plan-id> <item-id>". Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
+allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__update_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
 # Plan Item Resolve
@@ -10,10 +10,19 @@ Generic, plan-agnostic — nothing here may hardcode a specific plan id,
 item, or branch. Unlike `plan-item-kickoff` (for an item that hasn't
 started), this skill is for an item that already has real state - a
 branch, a PR, prior review, a recorded blocker - and needs that state
-understood before proposing what to do next. **This skill never writes
-code, creates a branch, or pushes anything** — it is a research-and-planning
-skill, not an implementation one. Every invocation starts fresh in the
-current session; it does not try to detect or resume any other session.
+understood before deciding what to do next.
+
+**Steps 1-4 are research only — they create nothing and write no code.**
+Step 5 resolves the item's execution mode, and that mode decides what
+happens next: `plan` presents the plan and stops until the user approves it,
+`auto` carries it out on the item's existing branch without asking, and
+`ask` puts the choice to the user. `${EXECUTION_MODES_DOCUMENT}` states what
+each mode means and what it still obliges.
+
+This skill never creates a branch or a pull request — the item already has
+both, and an item that has neither belongs to `plan-item-kickoff`. Every
+invocation starts fresh in the current session; it does not try to detect or
+resume any other session.
 
 ## 0. Check the setup is in place, and offer it if not
 
@@ -118,7 +127,21 @@ Read `roadmap.md`'s standing-conventions section (however it's titled in
 this plan) and this repository's own `AGENTS.md`. Whatever the resolution
 turns out to be, it must honor both.
 
-## 5. Propose the plan — plan mode, no code
+## 5. Resolve how this item gets resolved
+
+Follow `${EXECUTION_MODES_DOCUMENT}`: run its `resolve --skill resolve`
+call, and if the answer is `ask`, put its question — with a recommendation
+drawn from what steps 1-4 just turned up, and the reasons behind it.
+
+Do this only once steps 1-4 are done. What decides the recommendation here
+is whether the cause of the stall is actually identified: a named failing
+check or review comment with an obvious fix argues for going ahead, and a
+blocker whose real cause is still a guess argues for planning first.
+
+Pass `--requested <mode>` when the user named a mode in the invocation
+itself.
+
+## 6. Draft the plan
 
 Before drafting the plan or raising any open question with the user, check
 whether the question is already answered: re-read the relevant part of
@@ -131,14 +154,13 @@ already answered means the read wasn't thorough enough. If you do ask, say
 what you checked and why it still looks open, so the user can correct you
 quickly with a pointer if you missed it.
 
-Enter plan mode and present, via `ExitPlanMode`, a concrete plan to
-resolve the item: what's actually wrong (cite the specific failing check,
-review comment, blocker text, or regressed dependency that's the real
-cause — never a vague "something's blocking this"), what changes it
-requires, in which files, in what order, and how each part will be
-verified. Cite where each part of the plan came from so the user can
-sanity-check it against the source. Flag explicitly, never silently paper
-over:
+Draft a concrete plan to resolve the item: what's actually wrong (cite the
+specific failing check, review comment, blocker text, or regressed
+dependency that's the real cause — never a vague "something's blocking
+this"), what changes it requires, in which files, in what order, and how
+each part will be verified. Cite where each part of the plan came from so it
+can be sanity-checked against the source. Flag explicitly, never silently
+paper over:
 
 - Any dependency that regressed or still isn't safe to build on.
 - Any conflict between what `blockers`/`notes` says and what the PR's own
@@ -146,5 +168,33 @@ over:
 - Anything genuinely unresolved after the check above — say so rather
   than filling the gap with an assumption.
 
-Do not touch git, create a branch, or write any code in this skill — its
-only output is the plan itself.
+In `plan` mode, present it via `ExitPlanMode` and stop there — nothing below
+happens until the user approves it, and whether to carry the approved plan
+out in this session or a fresh one is their call. In `auto` mode, don't ask:
+the plan is settled the moment it is drafted, and the flags above go into
+the record described below instead of into a question.
+
+Either way, write no code in this step — its only output is the plan itself.
+
+## 7. Carry it out — `auto` mode only
+
+Work the plan on the item's existing branch, honoring the standing
+conventions step 4 cross-checked: tests first per TDD, commits in the user's
+own git identity, no assistant author or co-author trailer.
+
+`${EXECUTION_MODES_DOCUMENT}` states what stays owed while doing it, and the
+bar for stopping to ask anyway. Two things are this skill's own, because the
+item is already underway rather than being started:
+
+- **The record is an update, not a first draft.** Append what the resolution
+  turned out to be to `roadmap.md` — especially a blocker whose recorded
+  cause turned out to be wrong — and refresh the PR-progress note and the
+  pull request description rather than writing them from scratch. Update the
+  item's `blockers`, `notes` and `status` where the resolution changed what
+  the item means, then republish the dashboard with `/plan-dashboard`.
+- **The pull request goes back to draft after the push**, per the user's own
+  convention, unless they marked it ready themselves — in which case the
+  item was finished and this skill should not have been resolving it.
+
+Finish by reporting what was wrong, what was changed, and what was decided —
+in `auto` mode this report is the user's first look at the resolution.

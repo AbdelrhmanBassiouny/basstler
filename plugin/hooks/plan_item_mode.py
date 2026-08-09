@@ -1,0 +1,683 @@
+#!/usr/bin/env python3
+"""
+Resolve how a plan-item skill starts an item: by asking, by planning, or on its own.
+
+``plan-item-kickoff`` and ``plan-item-resolve`` both gather their context and then hand
+the user a plan to approve. That gate is worth keeping where a plan genuinely needs a
+decision; what is wrong is that it is unconditional, so it costs the same round trip on
+an item whose notes and roadmap section already settle every design call.
+
+Three modes, one of which only decides who picks:
+
+``plan``
+    Present the plan and stop until it is approved.
+
+``auto``
+    Draft the plan, record it, and implement it without asking. The planning phase still
+    happens and is still written down; it stops blocking.
+
+``ask``
+    Put the choice to the user, with the skill's own recommendation. The default.
+
+Precedence is invocation argument > personal setting > committed default, so one run can
+depart from the setting without changing it. What each mode obliges a skill to do is
+``plan-dashboard/execution-modes.md``'s to say; this module only answers which one is in
+force.
+
+Usage:
+    python3 plan_item_mode.py resolve --skill <kickoff|resolve> [--requested <mode>]
+    python3 plan_item_mode.py set --skill <kickoff|resolve> --mode <mode>
+
+Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller acting on
+the document never has to decode an integer back into a meaning.
+
+.. note::
+   An absent personal settings file, or an unreachable notes branch, resolves to the
+   committed default rather than failing: someone who has never set personal notes up
+   still gets a working skill. A setting that is *present but unreadable* - a value
+   outside the enum, or TOML that will not parse - is refused instead. A silent fall back
+   there would be indistinguishable from the setting having worked, and the point of the
+   setting is that the user does not have to watch a run to know what it will do.
+
+.. note::
+   ``resolve-personal-notes-config.sh`` is the one path spelled literally here. It is the
+   bootstrap seam every script and skill in this system sources to find every other path,
+   for the reason ``refresh_dashboard.sh``'s own header records: something has to name it
+   before anything can ask it where things are.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import tomllib
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from enum import IntEnum, StrEnum
+from pathlib import Path
+from typing import ClassVar
+
+# %% locations
+
+HOOKS_DIRECTORY = ".claude/hooks"
+"""
+Where this script and the shell configuration it sources live, from the project root.
+"""
+
+CONFIGURATION_SCRIPT_PATH = f"{HOOKS_DIRECTORY}/resolve-personal-notes-config.sh"
+"""
+The shell configuration that resolves the personal-notes remote and branch.
+"""
+
+NOTES_WRITER_SCRIPT_PATH = f"{HOOKS_DIRECTORY}/write-personal-notes-file.sh"
+"""
+The generic commit-and-push-one-file helper ``set`` writes through.
+"""
+
+COMMITTED_DEFAULTS_PATH = f"{HOOKS_DIRECTORY}/plan-item-modes.toml"
+"""
+The shipped defaults, in the repository rather than on the personal-notes branch.
+"""
+
+PERSONAL_SETTINGS_PATH = ".claude/personal/plan-item-modes.toml"
+"""
+The per-user override, on the personal-notes branch.
+"""
+
+
+# %% vocabulary
+
+
+class ExecutionMode(StrEnum):
+    """
+    How a plan-item skill proceeds once it has gathered the item's context.
+    """
+
+    ASK = "ask"
+    """
+    Put the choice between the other two to the user.
+    """
+
+    AUTO = "auto"
+    """
+    Plan implicitly and implement without waiting for approval.
+    """
+
+    PLAN = "plan"
+    """
+    Present the plan and stop until the user approves it.
+    """
+
+
+class ModeSource(StrEnum):
+    """
+    Where a resolved mode came from, in precedence order.
+    """
+
+    INVOCATION_ARGUMENT = "invocation_argument"
+    """
+    Asked for on the command line, for this run only.
+    """
+
+    PERSONAL_SETTING = "personal_setting"
+    """
+    Pinned in the personal settings file on the notes branch.
+    """
+
+    COMMITTED_DEFAULT = "committed_default"
+    """
+    Nothing was configured, so the shipped default applies.
+    """
+
+
+class PlanItemSkill(StrEnum):
+    """
+    The skills that resolve a mode, each owning the key its setting is stored under.
+    """
+
+    KICKOFF = "kickoff"
+    """
+    ``plan-item-kickoff``, which starts an item that has not been started.
+    """
+
+    RESOLVE = "resolve"
+    """
+    ``plan-item-resolve``, which unblocks or resumes one already underway.
+    """
+
+    @property
+    def setting_key(self) -> str:
+        """
+        The key this skill's mode is stored under, in both settings files.
+        """
+        return f"{self.value}_mode"
+
+
+class ExitCode(IntEnum):
+    """
+    The process statuses this tool exits with.
+
+    A distinct status per refusal lets a caller act on *which* failure happened without
+    parsing stderr. ``argparse`` supplies 2 for a usage error.
+    """
+
+    SUCCESS = 0
+    """
+    The operation ran and printed its report.
+    """
+
+    UNKNOWN_MODE = 3
+    """
+    A mode was named that :class:`ExecutionMode` does not define.
+    """
+
+    MALFORMED_MODE_SETTINGS = 4
+    """
+    A settings file exists but cannot be read as the modes it is supposed to hold.
+    """
+
+    SETTINGS_WRITE_REFUSED = 5
+    """
+    The personal settings file could not be pushed to the notes branch.
+    """
+
+    @property
+    def name_for_a_caller(self) -> str:
+        """
+        The status as the lowercase name a report and a message both use.
+        """
+        return self.name.lower()
+
+
+# %% failures
+
+
+@dataclass
+class ModeError(Exception, ABC):
+    """
+    Base for every refusal this tool reports, each carrying its own exit status.
+
+    Subclasses hold the context that explains the refusal as typed fields and compose it
+    into the message at construction, so no call site formats one. Mirrors the
+    ``plan_item_bootstrap.py`` idiom beside it.
+    """
+
+    exit_code: ClassVar[ExitCode] = ExitCode.SUCCESS
+    """
+    The process status this refusal exits with.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        Compose the message from the subclass's own description and advice.
+        """
+        correction = self.suggest_correction()
+        message = self.error_message()
+        super().__init__(f"{message}\n{correction}" if correction else message)
+
+    def __str__(self) -> str:
+        """
+        The composed message, rather than a repr of the dataclass fields.
+        """
+        return Exception.__str__(self)
+
+    @abstractmethod
+    def error_message(self) -> str:
+        """
+        :return: What went wrong.
+        """
+
+    @abstractmethod
+    def suggest_correction(self) -> str:
+        """
+        :return: What to do about it, or an empty string when there is nothing to add.
+        """
+
+
+@dataclass
+class UnknownModeError(ModeError):
+    """
+    Raised when a mode is named that :class:`ExecutionMode` does not define.
+    """
+
+    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_MODE
+
+    setting_key: str
+    """
+    The key the value was given under, or the command line option that carried it.
+    """
+
+    value: str
+    """
+    The value that names no mode.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.setting_key}: {self.value!r} is not an execution mode."
+
+    def suggest_correction(self) -> str:
+        return f"Use one of: {', '.join(ExecutionMode)}."
+
+
+@dataclass
+class MalformedModeSettingsError(ModeError):
+    """
+    Raised when a settings file exists but cannot be read as the modes it should hold.
+    """
+
+    exit_code: ClassVar[ExitCode] = ExitCode.MALFORMED_MODE_SETTINGS
+
+    path: str
+    """
+    The settings file that could not be read.
+    """
+
+    detail: str
+    """
+    What was wrong with it.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.path} could not be read: {self.detail}"
+
+    def suggest_correction(self) -> str:
+        return (
+            "Fix the file, or delete it to fall back to "
+            f"{COMMITTED_DEFAULTS_PATH}'s defaults."
+        )
+
+
+@dataclass
+class SettingsWriteRefusedError(ModeError):
+    """
+    Raised when the personal settings file could not be pushed to the notes branch.
+    """
+
+    exit_code: ClassVar[ExitCode] = ExitCode.SETTINGS_WRITE_REFUSED
+
+    detail: str
+    """
+    What the notes writer reported.
+    """
+
+    def error_message(self) -> str:
+        return f"{PERSONAL_SETTINGS_PATH} was not written: {self.detail}"
+
+    def suggest_correction(self) -> str:
+        return "Check the personal-notes branch is set up: run /setup-personal-notes."
+
+
+# %% reading the settings
+
+
+def parse_mode(value: object, setting_key: str) -> ExecutionMode:
+    """
+    Read one mode, refusing anything :class:`ExecutionMode` does not define.
+
+    Applied to the command line as well as the file, so both refusals read alike - a
+    caller should not have to know which of the two a bad mode came from.
+
+    :param value: The value to read.
+    :param setting_key: What to name in the refusal.
+    :raises UnknownModeError: If the value names no mode.
+    :return: The mode.
+    """
+    try:
+        return ExecutionMode(value)
+    except ValueError:
+        raise UnknownModeError(setting_key=setting_key, value=str(value)) from None
+
+
+def read_settings_file(path: Path, reported_path: str) -> dict[str, object]:
+    """
+    Parse one settings file.
+
+    :param path: The file to read.
+    :param reported_path: The path to name in a refusal, which for the personal file is
+        its location on the notes branch rather than the scratch path it was read from.
+    :raises MalformedModeSettingsError: If it will not parse as TOML.
+    :return: The parsed settings.
+    """
+    try:
+        return tomllib.loads(path.read_text())
+    except tomllib.TOMLDecodeError as error:
+        raise MalformedModeSettingsError(
+            path=reported_path, detail=str(error)
+        ) from None
+
+
+def committed_defaults(project_root: Path) -> dict[str, ExecutionMode]:
+    """
+    The shipped mode for every skill.
+
+    :param project_root: The repository to read within.
+    :raises MalformedModeSettingsError: If the file will not parse, or names no mode for
+        some skill.
+    :raises UnknownModeError: If a default names no mode.
+    :return: Every skill's default, keyed by its setting key.
+    """
+    raw = read_settings_file(
+        project_root / COMMITTED_DEFAULTS_PATH, COMMITTED_DEFAULTS_PATH
+    )
+    missing = [
+        skill.setting_key for skill in PlanItemSkill if skill.setting_key not in raw
+    ]
+    if missing:
+        raise MalformedModeSettingsError(
+            path=COMMITTED_DEFAULTS_PATH, detail=f"no default for {', '.join(missing)}"
+        )
+    return {
+        skill.setting_key: parse_mode(raw[skill.setting_key], skill.setting_key)
+        for skill in PlanItemSkill
+    }
+
+
+def personal_settings(project_root: Path) -> dict[str, object]:
+    """
+    The per-user overrides as they stand on the notes branch.
+
+    :param project_root: The repository to read within.
+    :raises MalformedModeSettingsError: If the file exists but will not parse.
+    :return: The parsed overrides, empty when there is no file or no notes branch.
+    """
+    if not fetch_notes_branch(project_root):
+        return {}
+    shown = subprocess.run(
+        ["git", "show", f"FETCH_HEAD:{PERSONAL_SETTINGS_PATH}"],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+    )
+    if shown.returncode != 0:
+        return {}
+    with tempfile.TemporaryDirectory() as scratch_directory:
+        scratch_file = Path(scratch_directory) / "personal-plan-item-modes.toml"
+        scratch_file.write_text(shown.stdout)
+        return read_settings_file(scratch_file, PERSONAL_SETTINGS_PATH)
+
+
+def fetch_notes_branch(project_root: Path) -> bool:
+    """
+    Fetch the personal-notes branch, leaving ``FETCH_HEAD`` pointing at it.
+
+    Sources the shell configuration and calls its own fetch function rather than
+    re-deriving the remote and branch precedence, so this and the hook scripts can never
+    disagree about which branch a setting is on.
+
+    :param project_root: The repository to fetch within.
+    :return: Whether the branch was reachable.
+    """
+    probe = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{CONFIGURATION_SCRIPT_PATH}" && fetch_personal_notes_branch',
+        ],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+    )
+    return probe.returncode == 0
+
+
+# %% resolving
+
+
+@dataclass(frozen=True)
+class ModeResolution:
+    """
+    Which mode a skill runs in, and what decided it.
+    """
+
+    skill: PlanItemSkill
+    """
+    The skill the mode was resolved for.
+    """
+
+    mode: ExecutionMode
+    """
+    The mode in force.
+    """
+
+    source: ModeSource
+    """
+    What decided it.
+    """
+
+    exit_code: ExitCode = ExitCode.SUCCESS
+    """
+    The process status this resolution exits with.
+    """
+
+    def as_document(self) -> dict[str, object]:
+        """
+        :return: The report a caller reads, led by the status it can act on.
+        """
+        return {
+            "status": "resolved",
+            "exit_code": int(self.exit_code),
+            "skill": str(self.skill),
+            "mode": str(self.mode),
+            "source": str(self.source),
+            "setting_key": self.skill.setting_key,
+            "personal_setting_path": PERSONAL_SETTINGS_PATH,
+        }
+
+
+def resolve_mode(
+    skill: PlanItemSkill, requested: str | None, project_root: Path
+) -> ModeResolution:
+    """
+    Work out which mode *skill* runs in, in precedence order.
+
+    :param skill: The skill to resolve for.
+    :param requested: A mode asked for on the command line, if any.
+    :param project_root: The repository to read within.
+    :raises UnknownModeError: If a named mode is not one this tool defines.
+    :raises MalformedModeSettingsError: If a settings file cannot be read.
+    :return: The mode and what decided it.
+    """
+    if requested is not None:
+        return ModeResolution(
+            skill=skill,
+            mode=parse_mode(requested, "--requested"),
+            source=ModeSource.INVOCATION_ARGUMENT,
+        )
+
+    overrides = personal_settings(project_root)
+    if skill.setting_key in overrides:
+        return ModeResolution(
+            skill=skill,
+            mode=parse_mode(overrides[skill.setting_key], skill.setting_key),
+            source=ModeSource.PERSONAL_SETTING,
+        )
+
+    return ModeResolution(
+        skill=skill,
+        mode=committed_defaults(project_root)[skill.setting_key],
+        source=ModeSource.COMMITTED_DEFAULT,
+    )
+
+
+# %% writing
+
+
+@dataclass(frozen=True)
+class SettingsWriteReport:
+    """
+    What ``set`` pinned, and where.
+    """
+
+    skill: PlanItemSkill
+    """
+    The skill whose mode was pinned.
+    """
+
+    mode: ExecutionMode
+    """
+    The mode it was pinned to.
+    """
+
+    exit_code: ExitCode = ExitCode.SUCCESS
+    """
+    The process status this write exits with.
+    """
+
+    def as_document(self) -> dict[str, object]:
+        """
+        :return: The report a caller reads, led by the status it can act on.
+        """
+        return {
+            "status": "set",
+            "exit_code": int(self.exit_code),
+            "skill": str(self.skill),
+            "mode": str(self.mode),
+            "setting_key": self.skill.setting_key,
+            "personal_setting_path": PERSONAL_SETTINGS_PATH,
+        }
+
+
+def render_settings(modes: dict[str, ExecutionMode]) -> str:
+    """
+    Render the personal settings file.
+
+    :param modes: Every skill's mode, keyed by its setting key.
+    :return: The file's text.
+    """
+    header = (
+        "# Personal plan-item execution modes, layered over the committed defaults\n"
+        f"# at {COMMITTED_DEFAULTS_PATH}. Rewritten in full by plan_item_mode.py's\n"
+        "# set command, so anything other than the keys below is not preserved.\n"
+    )
+    body = "".join(
+        f'{skill.setting_key} = "{modes[skill.setting_key]}"\n'
+        for skill in PlanItemSkill
+    )
+    return header + body
+
+
+def write_mode(
+    skill: PlanItemSkill, mode: ExecutionMode, project_root: Path
+) -> SettingsWriteReport:
+    """
+    Pin one skill's mode in the personal settings file on the notes branch.
+
+    Every other skill keeps whatever it already had, falling back to the committed
+    default where the file said nothing - so pinning one mode can never clobber another.
+
+    :param skill: The skill to pin.
+    :param mode: The mode to pin it to.
+    :param project_root: The repository to write from.
+    :raises UnknownModeError: If the file already holds a value naming no mode.
+    :raises MalformedModeSettingsError: If a settings file cannot be read.
+    :raises SettingsWriteRefusedError: If the notes writer refused the push.
+    :return: What was pinned.
+    """
+    overrides = personal_settings(project_root)
+    modes = {
+        other.setting_key: (
+            parse_mode(overrides[other.setting_key], other.setting_key)
+            if other.setting_key in overrides
+            else committed_defaults(project_root)[other.setting_key]
+        )
+        for other in PlanItemSkill
+    }
+    modes[skill.setting_key] = mode
+
+    with tempfile.TemporaryDirectory() as scratch_directory:
+        scratch_file = Path(scratch_directory) / "plan-item-modes.toml"
+        scratch_file.write_text(render_settings(modes))
+        written = subprocess.run(
+            [
+                "bash",
+                NOTES_WRITER_SCRIPT_PATH,
+                "--source",
+                str(scratch_file),
+                "--destination",
+                PERSONAL_SETTINGS_PATH,
+                "--message",
+                f"Set {skill.setting_key} to {mode}",
+            ],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+        )
+    if written.returncode != 0:
+        raise SettingsWriteRefusedError(
+            detail=written.stderr.strip() or "the notes writer reported no detail"
+        )
+    return SettingsWriteReport(skill=skill, mode=mode)
+
+
+# %% command line
+
+
+class Subcommand(StrEnum):
+    """
+    The operations this tool offers.
+    """
+
+    RESOLVE = "resolve"
+    """
+    Report which mode a skill runs in.
+    """
+
+    SET = "set"
+    """
+    Pin a skill's mode in the personal settings file.
+    """
+
+
+def build_parser() -> argparse.ArgumentParser:
+    """
+    :return: The command line this tool accepts, per the module docstring.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    subcommands = parser.add_subparsers(dest="subcommand", required=True)
+
+    for name in Subcommand:
+        subcommand = subcommands.add_parser(name)
+        subcommand.add_argument(
+            "--skill", type=PlanItemSkill, choices=list(PlanItemSkill), required=True
+        )
+
+    # Both mode options are plain strings, validated by parse_mode rather than by
+    # argparse's own choices, so a mode the enum does not name refuses identically
+    # whether it came from the command line or from the settings file.
+    subcommands.choices[Subcommand.RESOLVE].add_argument("--requested", default=None)
+    subcommands.choices[Subcommand.SET].add_argument("--mode", required=True)
+    return parser
+
+
+def main() -> int:
+    """
+    Parse arguments, run the requested operation, and print its report.
+
+    See the module docstring for the command line contract.
+    """
+    arguments = build_parser().parse_args()
+    project_root = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd()))
+
+    try:
+        if arguments.subcommand == Subcommand.RESOLVE:
+            report = resolve_mode(arguments.skill, arguments.requested, project_root)
+        else:
+            report = write_mode(
+                arguments.skill,
+                parse_mode(arguments.mode, "--mode"),
+                project_root,
+            )
+    except ModeError as error:
+        print(f"{error.exit_code.name_for_a_caller}: {error}", file=sys.stderr)
+        return int(error.exit_code)
+
+    print(json.dumps(report.as_document()))
+    return int(report.exit_code)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
