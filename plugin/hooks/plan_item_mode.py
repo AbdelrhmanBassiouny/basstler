@@ -26,7 +26,7 @@ force.
 
 Usage:
     python3 plan_item_mode.py resolve --skill <kickoff|resolve> [--requested <mode>]
-    python3 plan_item_mode.py set --skill <kickoff|resolve> --mode <mode>
+    python3 plan_item_mode.py set --skill <kickoff|resolve> [--skill ...] --mode <mode>
 
 Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller acting on
 the document never has to decode an integer back into a meaning.
@@ -56,6 +56,7 @@ import sys
 import tempfile
 import tomllib
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from pathlib import Path
@@ -512,14 +513,14 @@ class SettingsWriteReport:
     What ``set`` pinned, and where.
     """
 
-    skill: PlanItemSkill
+    skills: tuple[PlanItemSkill, ...]
     """
-    The skill whose mode was pinned.
+    The skills whose mode was pinned, in the order they were named.
     """
 
     mode: ExecutionMode
     """
-    The mode it was pinned to.
+    The mode they were pinned to.
     """
 
     exit_code: ExitCode = ExitCode.SUCCESS
@@ -534,9 +535,9 @@ class SettingsWriteReport:
         return {
             "status": "set",
             "exit_code": int(self.exit_code),
-            "skill": str(self.skill),
+            "skills": [str(skill) for skill in self.skills],
             "mode": str(self.mode),
-            "setting_key": self.skill.setting_key,
+            "setting_keys": [skill.setting_key for skill in self.skills],
             "personal_setting_path": PERSONAL_SETTINGS_PATH,
         }
 
@@ -561,16 +562,17 @@ def render_settings(modes: dict[str, ExecutionMode]) -> str:
 
 
 def write_mode(
-    skill: PlanItemSkill, mode: ExecutionMode, project_root: Path
+    skills: Sequence[PlanItemSkill], mode: ExecutionMode, project_root: Path
 ) -> SettingsWriteReport:
     """
-    Pin one skill's mode in the personal settings file on the notes branch.
+    Pin one or more skills' mode in the personal settings file on the notes branch.
 
-    Every other skill keeps whatever it already had, falling back to the committed
+    Every skill not named keeps whatever it already had, falling back to the committed
     default where the file said nothing - so pinning one mode can never clobber another.
+    Naming several writes the file once, which matters because each write is a push.
 
-    :param skill: The skill to pin.
-    :param mode: The mode to pin it to.
+    :param skills: The skills to pin.
+    :param mode: The mode to pin them to.
     :param project_root: The repository to write from.
     :raises UnknownModeError: If the file already holds a value naming no mode.
     :raises MalformedModeSettingsError: If a settings file cannot be read.
@@ -586,8 +588,12 @@ def write_mode(
         )
         for other in PlanItemSkill
     }
-    modes[skill.setting_key] = mode
+    # Naming a skill twice pins it once, so the report never claims more than happened.
+    requested = tuple(dict.fromkeys(skills))
+    for skill in requested:
+        modes[skill.setting_key] = mode
 
+    pinned = ", ".join(skill.setting_key for skill in requested)
     with tempfile.TemporaryDirectory() as scratch_directory:
         scratch_file = Path(scratch_directory) / "plan-item-modes.toml"
         scratch_file.write_text(render_settings(modes))
@@ -600,7 +606,7 @@ def write_mode(
                 "--destination",
                 PERSONAL_SETTINGS_PATH,
                 "--message",
-                f"Set {skill.setting_key} to {mode}",
+                f"Set {pinned} to {mode}",
             ],
             cwd=project_root,
             capture_output=True,
@@ -610,7 +616,7 @@ def write_mode(
         raise SettingsWriteRefusedError(
             detail=written.stderr.strip() or "the notes writer reported no detail"
         )
-    return SettingsWriteReport(skill=skill, mode=mode)
+    return SettingsWriteReport(skills=requested, mode=mode)
 
 
 # %% command line
@@ -640,10 +646,22 @@ def build_parser() -> argparse.ArgumentParser:
     subcommands = parser.add_subparsers(dest="subcommand", required=True)
 
     for name in Subcommand:
-        subcommand = subcommands.add_parser(name)
-        subcommand.add_argument(
-            "--skill", type=PlanItemSkill, choices=list(PlanItemSkill), required=True
-        )
+        subcommands.add_parser(name)
+
+    # `resolve` answers for one skill; `set` takes --skill as often as there are skills
+    # to pin, because the settings file is rewritten whole and one push should not
+    # become several.
+    subcommands.choices[Subcommand.RESOLVE].add_argument(
+        "--skill", type=PlanItemSkill, choices=list(PlanItemSkill), required=True
+    )
+    subcommands.choices[Subcommand.SET].add_argument(
+        "--skill",
+        dest="skills",
+        action="append",
+        type=PlanItemSkill,
+        choices=list(PlanItemSkill),
+        required=True,
+    )
 
     # Both mode options are plain strings, validated by parse_mode rather than by
     # argparse's own choices, so a mode the enum does not name refuses identically
@@ -667,7 +685,7 @@ def main() -> int:
             report = resolve_mode(arguments.skill, arguments.requested, project_root)
         else:
             report = write_mode(
-                arguments.skill,
+                arguments.skills,
                 parse_mode(arguments.mode, "--mode"),
                 project_root,
             )
