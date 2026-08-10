@@ -146,6 +146,7 @@ class PullRequestLabel(StrEnum):
     BUG = "bug"
 
 
+@dataclass
 class ValidationProblem(ABC):
     """A single problem found while validating a plan.yaml - see plan-schema.md.
 
@@ -160,8 +161,14 @@ class ValidationProblem(ABC):
     """
 
     @abstractmethod
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """The human-readable description of this problem, shown to the user."""
+
+    def suggest_correction(self) -> str:
+        """
+        Default implementation for suggesting a correction for manifest validation problems.
+        """
+        return ""
 
 
 @dataclass
@@ -172,7 +179,7 @@ class InvalidManifestRoot(ValidationProblem):
     actual_value: Any
     """Whatever the manifest actually parsed to."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"plan.yaml must parse to a mapping, got {type(self.actual_value).__name__}: {self.actual_value!r}"
 
@@ -184,7 +191,7 @@ class InvalidSchemaVersion(ValidationProblem):
     actual_value: Any
     """Whatever ``schema_version`` actually held."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"schema_version must be 1, got {self.actual_value!r}"
 
@@ -196,7 +203,7 @@ class DuplicateItemId(ValidationProblem):
     duplicate_identifiers: list[str]
     """Every identifier that occurred more than once."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"duplicate item id(s): {sorted(self.duplicate_identifiers)}"
 
@@ -211,7 +218,7 @@ class UnknownTrack(ValidationProblem):
     track: Any
     """Whatever ``track`` actually held."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} has unknown track {self.track!r}"
 
@@ -226,7 +233,7 @@ class UnknownStatus(ValidationProblem):
     status: Any
     """Whatever ``status`` actually held."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} has unknown status {self.status!r}"
 
@@ -246,7 +253,7 @@ class InvalidDependsOn(ValidationProblem):
     actual_type: type
     """The type ``depends_on`` actually held, instead of ``list``."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} depends_on must be a list, got {self.actual_type.__name__}"
 
@@ -266,7 +273,7 @@ class InvalidBlockers(ValidationProblem):
     actual_type: type
     """The type ``blockers`` actually held, instead of ``list``."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} blockers must be a list, got {self.actual_type.__name__}"
 
@@ -281,7 +288,7 @@ class UnknownDependency(ValidationProblem):
     dependency_identifier: str
     """The unresolvable id named in ``depends_on``."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} depends_on unknown id {self.dependency_identifier!r}"
 
@@ -296,7 +303,7 @@ class UnknownWave(ValidationProblem):
     wave: Any
     """Whatever ``wave`` actually held."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"track {self.track_identifier!r} has unknown wave {self.wave!r}"
 
@@ -312,7 +319,7 @@ class DependencyCycle(ValidationProblem):
     """The item ids forming the cycle, in order, with the first id repeated
     at the end to show where it closes."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"depends_on cycle: {' -> '.join(self.cycle_identifiers)}"
 
@@ -327,7 +334,7 @@ class PlanValidationError(Exception):
         instead of one-error-at-a-time: a broken manifest is itself
         something the user needs the full picture of, not a single
         symptom they have to rediscover the rest of by trial and error."""
-        super().__init__("; ".join(problem.describe() for problem in problems))
+        super().__init__("; ".join(problem.error_message() for problem in problems))
 
 
 def _find_dependency_cycle(
