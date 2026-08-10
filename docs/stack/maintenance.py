@@ -31,6 +31,7 @@ import argparse
 import json
 import os
 import re
+from abc import ABC, abstractmethod
 import subprocess
 import sys
 import tempfile
@@ -950,7 +951,8 @@ class BranchUnderRestack:
         )
 
 
-class RestackStep:
+@dataclass(frozen=True)
+class RestackStep(ABC):
     """One step of a branch's restack.
 
     A step either concludes the branch - returning the outcome its owner acts on - or
@@ -958,13 +960,13 @@ class RestackStep:
     placing it in :data:`RESTACK_STEPS`, whose order is the procedure.
     """
 
+    @abstractmethod
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome | None:
         """Carry out this step.
 
         :param restacking: The branch being restacked.
         :return: The outcome concluding the branch, or ``None`` to continue.
         """
-        raise NotImplementedError
 
 
 @dataclass(frozen=True)
@@ -1727,26 +1729,40 @@ class MaintenancePass:
 
 
 @dataclass(frozen=True)
-class MaintenanceCommand:
+class MaintenanceCommand(ABC):
     """One command this executor answers.
 
     A command owns its own name, its own flags and what it does, so adding one is
     writing a subclass - :data:`COMMANDS` finds it, and nothing else has to be told it
     exists.
+
+    The name and the description are abstract rather than merely declared, so a subclass
+    that omits either cannot be instantiated - and since :data:`COMMANDS` instantiates
+    every subclass, that refusal happens at import rather than when ``--help`` first
+    reads a name that was never set. A subclass satisfies them with a plain
+    ``ClassVar``; they are per-class facts, not per-instance ones.
     """
 
-    invoked_as: ClassVar[str]
-    """The name it is invoked by on the command line."""
+    @property
+    @abstractmethod
+    def invoked_as(self) -> str:
+        """:return: The name it is invoked by on the command line."""
 
-    description: ClassVar[str]
-    """What it does, as ``--help`` puts it."""
+    @property
+    @abstractmethod
+    def description(self) -> str:
+        """:return: What it does, as ``--help`` puts it."""
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """Declare this command's own flags.
 
+        Concrete rather than abstract: most commands take none, and requiring an empty
+        override of every one of them would say nothing.
+
         :param parser: The subparser to declare them on.
         """
 
+    @abstractmethod
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
     ) -> MaintenanceExitCode:
@@ -1756,7 +1772,6 @@ class MaintenanceCommand:
         :param arguments: The parsed command line.
         :return: The process exit code.
         """
-        raise NotImplementedError
 
 
 @dataclass(frozen=True)

@@ -22,6 +22,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
 from pathlib import Path
+from typing import ClassVar
 
 import pytest
 
@@ -1592,6 +1593,36 @@ def test_every_command_class_is_one_reachable_command():
         MaintenanceCommand.__subclasses__()
     )
     assert len({command.invoked_as for command in COMMANDS}) == len(COMMANDS)
+
+
+def test_a_command_that_omits_its_name_or_description_cannot_be_built():
+    """
+    COMMANDS instantiates every subclass, so refusing here is refusing at import - which
+    is where a command missing the name --help reads should be caught, rather than when
+    something first goes looking for it.
+    """
+
+    class CommandWithoutAName(MaintenanceCommand):
+        description: ClassVar[str] = "a command that forgot what it is called"
+
+        def run(self, maintenance, arguments):
+            return MaintenanceExitCode.SUCCESS
+
+    with pytest.raises(TypeError, match="invoked_as"):
+        CommandWithoutAName()
+
+
+def test_a_restack_step_that_does_nothing_cannot_be_built():
+    """
+    A step is only ever reached through RESTACK_STEPS, where one that concludes nothing
+    would silently pass every branch along to the next step.
+    """
+
+    class StepWithoutAnAttempt(maintenance.RestackStep):
+        pass
+
+    with pytest.raises(TypeError, match="attempt"):
+        StepWithoutAnAttempt()
 
 
 def test_every_command_is_reachable_from_the_command_line(fork_checkout: ForkCheckout):
