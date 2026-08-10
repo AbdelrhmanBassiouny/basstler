@@ -219,7 +219,9 @@ deterministic, so it belongs in the script, not in your recollection of what
 `Artifact` just returned.
 
 Call `Artifact` with `action: "list"` and write its rows to a scratch JSON
-file as `[{"title": ..., "url": ...}, ...]`, then:
+file as `[{"title": ..., "url": ..., "updated": ...}, ...]` — `updated` is the
+date each row already carries, and is what separates two artifacts sharing a
+title. Then:
 
 ```bash
 git show "FETCH_HEAD:${DASHBOARD_URL_CACHE_PATH}" > /tmp/dashboard-urls.yaml
@@ -232,11 +234,11 @@ python3 "${RECORD_DASHBOARD_URL_SCRIPT}" \
 ```
 
 It finds the artifact by title and records *that* URL, so no UUID ever passes
-through you. It exits non-zero rather than guessing when the title matches no
-artifact (nothing was published), or matches several (a duplicate already
-exists — which of the pair survives is the user's call, so put it to them with
-`AskUserQuestion` and pass the answer as `--url`). Report a non-zero exit
-instead of working around it.
+through you. When several artifacts share the title — a duplicate already
+exists — it takes the most recently updated one, which is the page that was
+just published; `--url` overrides that and must name one of them. It exits
+non-zero only when the title matches no artifact at all, meaning nothing was
+published under it. Report a non-zero exit instead of working around it.
 
 Push the result back only when it says `"changed": true`, with the same helper
 `refresh_dashboard.sh` uses internally for the manifest correction:
