@@ -130,14 +130,14 @@ def published_settings(repository: ScratchRepository, tmp_path: Path) -> dict[st
 
 
 @pytest.mark.parametrize("skill", list(PlanItemSkill))
-def test_a_clone_with_no_personal_settings_asks(
+def test_a_clone_with_no_personal_settings_runs_on_its_own(
     mode_repository: ScratchRepository, skill: PlanItemSkill
 ):
     """
-    The zero-configuration default is to put the choice to the user, for every skill.
+    The zero-configuration default is to implement without asking, for every skill.
     """
     report = resolve(mode_repository, skill)
-    assert report["mode"] == ExecutionMode.ASK
+    assert report["mode"] == ExecutionMode.AUTO
     assert report["source"] == ModeSource.COMMITTED_DEFAULT
     assert report["skill"] == skill
     assert report["setting_key"] == skill.setting_key
@@ -171,11 +171,14 @@ def test_an_unreachable_notes_branch_still_resolves_to_the_default(
     scratch_repository.commit_everything("initial commit")
 
     report = resolve(scratch_repository, PlanItemSkill.KICKOFF)
-    assert report["mode"] == ExecutionMode.ASK
+    assert report["mode"] == ExecutionMode.AUTO
     assert report["source"] == ModeSource.COMMITTED_DEFAULT
 
 
 # %% resolving with a personal setting
+
+# Every setting below pins a mode the committed default is not, so a resolution that
+# silently fell through to the default would fail rather than coincide with the answer.
 
 
 def test_a_personal_setting_overrides_the_committed_default(
@@ -186,15 +189,15 @@ def test_a_personal_setting_overrides_the_committed_default(
     """
     mode_repository.update_notes_branch_file(
         PERSONAL_SETTINGS_PATH,
-        f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.AUTO}"\n',
+        f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
     kickoff = resolve(mode_repository, PlanItemSkill.KICKOFF)
-    assert kickoff["mode"] == ExecutionMode.AUTO
+    assert kickoff["mode"] == ExecutionMode.PLAN
     assert kickoff["source"] == ModeSource.PERSONAL_SETTING
 
     resolve_skill = resolve(mode_repository, PlanItemSkill.RESOLVE)
-    assert resolve_skill["mode"] == ExecutionMode.ASK
+    assert resolve_skill["mode"] == ExecutionMode.AUTO
     assert resolve_skill["source"] == ModeSource.COMMITTED_DEFAULT
 
 
@@ -206,13 +209,13 @@ def test_the_invocation_argument_beats_the_personal_setting(
     """
     mode_repository.update_notes_branch_file(
         PERSONAL_SETTINGS_PATH,
-        f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.AUTO}"\n',
+        f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
     report = resolve(
-        mode_repository, PlanItemSkill.KICKOFF, "--requested", ExecutionMode.PLAN
+        mode_repository, PlanItemSkill.KICKOFF, "--requested", ExecutionMode.ASK
     )
-    assert report["mode"] == ExecutionMode.PLAN
+    assert report["mode"] == ExecutionMode.ASK
     assert report["source"] == ModeSource.INVOCATION_ARGUMENT
 
 
@@ -297,7 +300,7 @@ def test_setting_one_mode_preserves_the_other(
     """
     mode_repository.update_notes_branch_file(
         PERSONAL_SETTINGS_PATH,
-        f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.AUTO}"\n',
+        f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
     finished = run_mode(
@@ -306,13 +309,13 @@ def test_setting_one_mode_preserves_the_other(
         "--skill",
         PlanItemSkill.RESOLVE,
         "--mode",
-        ExecutionMode.PLAN,
+        ExecutionMode.ASK,
     )
     assert finished.returncode == ExitCode.SUCCESS, finished.stderr
 
     assert published_settings(mode_repository, tmp_path) == {
-        PlanItemSkill.KICKOFF.setting_key: ExecutionMode.AUTO,
-        PlanItemSkill.RESOLVE.setting_key: ExecutionMode.PLAN,
+        PlanItemSkill.KICKOFF.setting_key: ExecutionMode.PLAN,
+        PlanItemSkill.RESOLVE.setting_key: ExecutionMode.ASK,
     }
 
 
@@ -329,14 +332,61 @@ def test_setting_a_mode_with_no_personal_file_yet_seeds_it_from_the_defaults(
         "--skill",
         PlanItemSkill.KICKOFF,
         "--mode",
-        ExecutionMode.AUTO,
+        ExecutionMode.ASK,
     )
     assert finished.returncode == ExitCode.SUCCESS, finished.stderr
 
     assert published_settings(mode_repository, tmp_path) == {
-        PlanItemSkill.KICKOFF.setting_key: ExecutionMode.AUTO,
-        PlanItemSkill.RESOLVE.setting_key: ExecutionMode.ASK,
+        PlanItemSkill.KICKOFF.setting_key: ExecutionMode.ASK,
+        PlanItemSkill.RESOLVE.setting_key: ExecutionMode.AUTO,
     }
+
+
+def notes_branch_commit_count(
+    repository: ScratchRepository, tmp_path: Path, checkout_name: str
+) -> int:
+    """
+    Count the commits on the published notes branch.
+
+    :param repository: A fixture-built scratch repository.
+    :param tmp_path: Somewhere to check the notes branch out into.
+    :param checkout_name: A directory name not yet used in this test.
+    :return: How many commits the branch carries.
+    """
+    checkout = repository.clone_notes_branch(tmp_path / checkout_name)
+    counted = repository.run_git("rev-list", "--count", "HEAD", cwd=checkout)
+    return int(counted.stdout.strip())
+
+
+def test_one_run_can_set_every_skill_at_once(
+    mode_repository: ScratchRepository, tmp_path: Path
+):
+    """
+    Naming both skills writes once, so changing the whole configuration costs one push
+    to the notes branch rather than one per skill.
+    """
+    before = notes_branch_commit_count(mode_repository, tmp_path, "before")
+
+    finished = run_mode(
+        mode_repository,
+        "set",
+        "--skill",
+        PlanItemSkill.KICKOFF,
+        "--skill",
+        PlanItemSkill.RESOLVE,
+        "--mode",
+        ExecutionMode.PLAN,
+    )
+    assert finished.returncode == ExitCode.SUCCESS, finished.stderr
+
+    assert published_settings(mode_repository, tmp_path) == {
+        skill.setting_key: ExecutionMode.PLAN for skill in PlanItemSkill
+    }
+    assert json.loads(finished.stdout)["skills"] == [
+        PlanItemSkill.KICKOFF,
+        PlanItemSkill.RESOLVE,
+    ]
+    assert notes_branch_commit_count(mode_repository, tmp_path, "after") == before + 1
 
 
 def test_a_written_setting_is_what_the_next_resolve_reads(
@@ -351,11 +401,11 @@ def test_a_written_setting_is_what_the_next_resolve_reads(
         "--skill",
         PlanItemSkill.KICKOFF,
         "--mode",
-        ExecutionMode.AUTO,
+        ExecutionMode.PLAN,
     )
 
     report = resolve(mode_repository, PlanItemSkill.KICKOFF)
-    assert report["mode"] == ExecutionMode.AUTO
+    assert report["mode"] == ExecutionMode.PLAN
     assert report["source"] == ModeSource.PERSONAL_SETTING
 
 

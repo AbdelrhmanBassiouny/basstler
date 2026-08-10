@@ -12,8 +12,12 @@ of being restated in each skill.
 - **`auto`** — draft the same plan, record it, and implement it without
   asking. The planning phase still happens and is still written down; what it
   stops doing is blocking. The user reviews the finished draft pull request.
-- **`ask`** — put the choice between the two to the user. The default, so a
-  clone nobody has configured never implements unasked.
+  **The default**, because by the time the mode applies the skill has already
+  read the item's recorded state and the progress on its plan and pull
+  request, and the escalation rule below sends anything that genuinely
+  changes the settled plan back as a question anyway.
+- **`ask`** — put the choice between the other two to the user. Pin this to
+  be asked every time.
 
 ## Resolving which one is in force
 
@@ -36,12 +40,17 @@ Do not infer the mode from anything else — not from how well-specified the
 item looks, not from how the user phrased the request. The whole point of the
 setting is that its answer does not depend on the run's own judgement.
 
-To pin a mode (offer this if the user says they don't want to be asked again;
-it writes the personal-notes branch, so don't run it unprompted):
+To pin a mode, `/plan-item-mode <mode> [kickoff|resolve|both]` — or the script
+it calls, which takes `--skill` once per skill so pinning both is one push:
 
 ```bash
-python3 "${PLAN_ITEM_MODE_SCRIPT}" set --skill <kickoff|resolve> --mode <mode>
+python3 "${PLAN_ITEM_MODE_SCRIPT}" set --skill kickoff --skill resolve --mode <mode>
 ```
+
+This writes the personal-notes branch, so don't run it unprompted. Do run it
+when the user's answer carries a standing preference rather than a one-off
+choice — "always", "from now on", "stop asking me" — since asking them again
+next time is exactly what they just said not to do.
 
 ## When the mode is `ask`
 
