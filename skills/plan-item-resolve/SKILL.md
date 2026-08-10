@@ -12,8 +12,8 @@ started), this skill is for an item that already has real state - a
 branch, a PR, prior review, a recorded blocker - and needs that state
 understood before deciding what to do next.
 
-**Steps 1-4 are research only — they create nothing and write no code.**
-Step 5 resolves the item's execution mode, and that mode decides what
+**Step 1 is research only — it creates nothing and writes no code.**
+Step 2 resolves the item's execution mode, and that mode decides what
 happens next: `plan` presents the plan and stops until the user approves it,
 `auto` carries it out on the item's existing branch without asking, and
 `ask` puts the choice to the user. `${EXECUTION_MODES_DOCUMENT}` states what
@@ -24,55 +24,17 @@ both, and an item that has neither belongs to `plan-item-kickoff`. Every
 invocation starts fresh in the current session; it does not try to detect or
 resume any other session.
 
-## 0. Check the setup is in place, and offer it if not
+## 1. Gather the item's context
 
-The item's manifest entry and roadmap live on the personal-notes branch, which
-the user may not have set up yet. Follow
-`.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1: run
-the check, and if it reports anything missing, offer `/setup-personal-notes`
-rather than failing on a branch that isn't there.
+Follow `${PLAN_ITEM_GATHERING_DOCUMENT}` end to end — the setup check, the
+item's resolution off the personal-notes branch, the tracking-issue
+subscription, its recorded state, the full roadmap read, the dependency
+chain, and the standing conventions. `plan-item-kickoff` runs the same
+procedure, which is why it lives there rather than in either skill.
 
-## 1. Resolve the item
+Then add the part only a resolve needs — **the live state of work that
+already exists**, which is where the cause of a stall almost always is:
 
-Source the shared config script — it resolves the personal-notes
-remote/branch precedence and defines `DEPENDENCY_READINESS_DOCUMENT` (used in
-step 2):
-
-```bash
-source .claude/hooks/resolve-personal-notes-config.sh
-git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
-```
-
-Load `<plan-id>/plan.yaml` + `roadmap.md` off `FETCH_HEAD` (same resolution
-`plan-dashboard`'s own step 1 uses — read `resolve-personal-notes-config.sh`
-if the precedence is unclear rather than re-deriving it). Find the item by
-`id` (or `branch` if `id` is unset) among `items[]`.
-
-If the plan id or item id doesn't resolve, stop and list what's actually
-available (every plan id under `plans/*/plan.yaml`, or every item id in the
-named plan) rather than guessing which one was meant.
-
-If the plan has a `tracking_issue`, subscribe to it now via
-`mcp__Claude_Code_Remote__subscribe_pr_activity` (it takes a plain issue
-number the same way it takes a PR number). A resolve session may go on to
-push a fix directly, without a fresh session ever starting - the
-subscription `session-start.sh` sets up for an already-checked-out item
-branch never fires in that case - so subscribing here, before gathering any
-state, is what actually covers a resolve that turns into an uninterrupted
-fix. Skip this step entirely if the plan has no `tracking_issue`. The call
-is idempotent, so it's safe to run even if something already subscribed
-this session. If it errors, don't let that fail the skill: mention it in
-passing when presenting the plan (step 5) and continue - subscribing is a
-convenience for staying aware of concurrent structural changes, not a
-precondition for resolving this item.
-
-## 2. Gather the item's own state
-
-- `title`, `status`, `notes`, `blockers` (free text — this is often the
-  most direct statement of what's actually wrong), `track`, `wave`,
-  `session` (a link to whatever session previously worked this, if
-  recorded — read it as context, not as something to redirect to or wait
-  on).
 - If `pull_request_number` is set: fetch the PR (`mcp__github__pull_request_read`,
   `method: "get"`) for its mergeable state and CI status
   (`method: "get_check_runs"`), then its review threads
@@ -90,50 +52,23 @@ precondition for resolving this item.
   that mentions this item by id, branch, or title — a structural change
   proposed there (a dependency change, a scope split) can be exactly why
   an item stalled.
-- `depends_on`: follow `${DEPENDENCY_READINESS_DOCUMENT}`'s bulk-fetch-and-check
-  procedure, for `--item <item-id>`. A dependency the script reports not
-  ready for (was ready, is now blocked or closed unmerged) is a real,
-  common cause of a stall — check this even if `blockers` doesn't mention
-  it.
-- Read `roadmap.md` **in full** — do not stop at grepping for this item's
-  id/branch/title. A roadmap routinely records decisions, conventions, and
-  design rationale in sections that don't name every item individually
-  (e.g. "Finalized design decisions", "Decisions locked in", a track's own
-  design notes, a prior review round's resolution) — those decisions bind
-  this item just as much as a direct mention would, and missing one means
-  proposing a resolution that contradicts an already-settled call, or
-  asking the user something they've already answered. After the full read,
-  also grep for the item's id/branch/title specifically, to catch any
-  focused mention a full read might skim past. If `roadmap.md` is large
-  enough that a full read is genuinely impractical, say so explicitly and
-  name which sections you read in full versus grepped — don't silently
-  read only part of it and present the plan as if it were comprehensive.
+- If a branch or PR exists, read what's actually in it
+  (`mcp__github__pull_request_read` for the diff/description,
+  `mcp__github__get_file_contents` or a local `git fetch` + `git show` for
+  the real file contents) before proposing anything — the plan must resolve
+  the real, current state, not a guessed one. For sibling items in the same
+  track that already landed, read their merged diffs the same way
+  `plan-item-kickoff` does, when the resolution involves matching an
+  established pattern (e.g. a review comment asking this item to follow what
+  a later sibling already settled on).
 
-## 3. Read the item's actual existing work
-
-If a branch or PR exists, read what's actually there
-(`mcp__github__pull_request_read` for the diff/description,
-`mcp__github__get_file_contents` or a local `git fetch` + `git show` for
-the real file contents) before proposing anything — the plan must resolve
-the real, current state, not a guessed one. For sibling items in the same
-track that already landed, read their merged diffs the same way
-`plan-item-kickoff` does, when the resolution involves matching an
-established pattern (e.g. a review comment asking this item to follow what
-a later sibling already settled on).
-
-## 4. Cross-check the standing conventions
-
-Read `roadmap.md`'s standing-conventions section (however it's titled in
-this plan) and this repository's own `AGENTS.md`. Whatever the resolution
-turns out to be, it must honor both.
-
-## 5. Resolve how this item gets resolved
+## 2. Resolve how this item gets resolved
 
 Follow `${EXECUTION_MODES_DOCUMENT}`: run its `resolve --skill resolve`
 call, and if the answer is `ask`, put its question — with a recommendation
-drawn from what steps 1-4 just turned up, and the reasons behind it.
+drawn from what step 1 just turned up, and the reasons behind it.
 
-Do this only once steps 1-4 are done. What decides the recommendation here
+Do this only once step 1 is done. What decides the recommendation here
 is whether the cause of the stall is actually identified: a named failing
 check or review comment with an obvious fix argues for going ahead, and a
 blocker whose real cause is still a guess argues for planning first.
@@ -141,18 +76,12 @@ blocker whose real cause is still a guess argues for planning first.
 Pass `--requested <mode>` when the user named a mode in the invocation
 itself.
 
-## 6. Draft the plan
+## 3. Draft the plan
 
-Before drafting the plan or raising any open question with the user, check
-whether the question is already answered: re-read the relevant part of
-`roadmap.md`, the item's own `notes`/`blockers`, and the PR's/tracking
-issue's comment history — a design call, a naming convention, or a scope
-boundary is very often already decided somewhere in that material. Only
-surface something as an open question if, after that check, it's genuinely
-still unresolved; asking the user something the roadmap or the discussion
-already answered means the read wasn't thorough enough. If you do ask, say
-what you checked and why it still looks open, so the user can correct you
-quickly with a pointer if you missed it.
+Apply `${PLAN_ITEM_GATHERING_DOCUMENT}`'s last section first: anything you
+are about to raise as an open question is very often already answered by the
+material step 1 gathered — here including the pull request's own review
+threads and the tracking issue's discussion.
 
 Draft a concrete plan to resolve the item: what's actually wrong (cite the
 specific failing check, review comment, blocker text, or regressed
@@ -176,10 +105,10 @@ the record described below instead of into a question.
 
 Either way, write no code in this step — its only output is the plan itself.
 
-## 7. Carry it out — `auto` mode only
+## 4. Carry it out — `auto` mode only
 
 Work the plan on the item's existing branch, honoring the standing
-conventions step 4 cross-checked: tests first per TDD, commits in the user's
+conventions step 1 cross-checked: tests first per TDD, commits in the user's
 own git identity, no assistant author or co-author trailer.
 
 `${EXECUTION_MODES_DOCUMENT}` states what stays owed while doing it, and the

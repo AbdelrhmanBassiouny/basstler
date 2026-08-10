@@ -334,6 +334,14 @@ PERSONAL_PLAN_ITEM_MODES_PATH=".claude/personal/plan-item-modes.toml"
 # reasoning as DEPENDENCY_READINESS_DOCUMENT above.
 EXECUTION_MODES_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/execution-modes.md"
 
+# PLAN_ITEM_GATHERING_DOCUMENT: the shared "what is already known and already
+# decided about this item?" procedure - the setup check, resolving the item off
+# the notes branch, the tracking-issue subscription, the full roadmap read, the
+# dependency chain and the standing conventions. plan-item-kickoff and
+# plan-item-resolve both run it in full and then add only what their own
+# situation needs, instead of each carrying its own copy.
+PLAN_ITEM_GATHERING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/plan-item-gathering.md"
+
 # GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
 # MCP tools every pr_data.json-gathering procedure in this system calls
 # (see pr-data-fetching.md), named once here so every doc references the
