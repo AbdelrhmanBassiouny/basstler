@@ -1736,22 +1736,36 @@ class MaintenanceCommand(ABC):
     writing a subclass - :data:`COMMANDS` finds it, and nothing else has to be told it
     exists.
 
-    The name and the description are abstract rather than merely declared, so a subclass
-    that omits either cannot be instantiated - and since :data:`COMMANDS` instantiates
-    every subclass, that refusal happens at import rather than when ``--help`` first
-    reads a name that was never set. A subclass satisfies them with a plain
-    ``ClassVar``; they are per-class facts, not per-instance ones.
+    The name and the description belong to the class rather than to an instance - the
+    parser reads them to build the command line before anything is constructed - so they
+    are class variables, and :meth:`__init_subclass__` is what requires them. A subclass
+    omitting either is refused when it is *defined*, which is earlier than any instance
+    of it could exist.
     """
 
-    @property
-    @abstractmethod
-    def invoked_as(self) -> str:
-        """:return: The name it is invoked by on the command line."""
+    invoked_as: ClassVar[str]
+    """The name it is invoked by on the command line."""
 
-    @property
-    @abstractmethod
-    def description(self) -> str:
-        """:return: What it does, as ``--help`` puts it."""
+    description: ClassVar[str]
+    """What it does, as ``--help`` puts it."""
+
+    REQUIRED_OF_EVERY_COMMAND: ClassVar[tuple[str, ...]] = ("invoked_as", "description")
+    """The class variables a subclass has to supply for the parser to describe it."""
+
+    def __init_subclass__(cls, **keyword_arguments: Any) -> None:
+        """Refuse a command that does not say what it is called or what it does.
+
+        :param keyword_arguments: Passed to the base implementation untouched.
+        :raises TypeError: If the subclass leaves either class variable unset.
+        """
+        super().__init_subclass__(**keyword_arguments)
+        missing = [
+            name
+            for name in cls.REQUIRED_OF_EVERY_COMMAND
+            if not isinstance(getattr(cls, name, None), str)
+        ]
+        if missing:
+            raise TypeError(f"{cls.__name__} must define {' and '.join(missing)}")
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """Declare this command's own flags.

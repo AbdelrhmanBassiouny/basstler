@@ -1595,21 +1595,27 @@ def test_every_command_class_is_one_reachable_command():
     assert len({command.invoked_as for command in COMMANDS}) == len(COMMANDS)
 
 
-def test_a_command_that_omits_its_name_or_description_cannot_be_built():
+def test_a_command_names_itself_without_being_instantiated():
     """
-    COMMANDS instantiates every subclass, so refusing here is refusing at import - which
-    is where a command missing the name --help reads should be caught, rather than when
-    something first goes looking for it.
+    The parser reads both to build the command line before any command is constructed,
+    so they have to answer on the class.
     """
+    assert BoardCommand.invoked_as == "board"
+    assert isinstance(BoardCommand.description, str)
 
-    class CommandWithoutAName(MaintenanceCommand):
-        description: ClassVar[str] = "a command that forgot what it is called"
 
-        def run(self, maintenance, arguments):
-            return MaintenanceExitCode.SUCCESS
-
+def test_a_command_that_omits_its_name_or_description_is_refused_when_defined():
+    """
+    Refusing at class definition is earlier than any instance could exist, so a command
+    missing the name --help reads cannot reach the parser at all.
+    """
     with pytest.raises(TypeError, match="invoked_as"):
-        CommandWithoutAName()
+
+        class CommandWithoutAName(MaintenanceCommand):
+            description: ClassVar[str] = "a command that forgot what it is called"
+
+            def run(self, maintenance, arguments):
+                return MaintenanceExitCode.SUCCESS
 
 
 def test_a_restack_step_that_does_nothing_cannot_be_built():
