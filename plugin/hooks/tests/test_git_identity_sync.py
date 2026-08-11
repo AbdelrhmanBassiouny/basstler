@@ -23,7 +23,7 @@ from scratch_repository import (
     GitIdentity,
     ScratchRepository,
 )
-from session_start_summary import summary_value
+from session_start_summary import SummaryMessage, summary_message, summary_value
 
 NOTES_PATH = ".claude/personal/cram-notes.md"
 
@@ -56,6 +56,7 @@ def git_identity_repository(scratch_repository: ScratchRepository) -> ScratchRep
     """
     scratch_repository.install_hook_scripts(
         "resolve-personal-notes-config.sh",
+        "session-start-messages.sh",
         "session-start.sh",
         "save-git-identity.sh",
         "write-personal-notes-file.sh",
@@ -119,9 +120,11 @@ def test_reports_the_identity_it_set(git_identity_repository: ScratchRepository)
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == (
-        f"set from '{NOTES_BRANCH}' ({PERSONAL_GIT_IDENTITY_PATH}): "
-        f"{RECORDED_IDENTITY.name} <{RECORDED_IDENTITY.email}>"
+    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+        SummaryMessage.GIT_IDENTITY_WRITTEN,
+        NOTES_BRANCH,
+        PERSONAL_GIT_IDENTITY_PATH,
+        f"{RECORDED_IDENTITY.name} <{RECORDED_IDENTITY.email}>",
     )
 
 
@@ -150,9 +153,9 @@ def test_reports_the_identity_it_left_alone(
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == (
-        f"already set in this clone: {SCRATCH_IDENTITY.name} "
-        f"<{SCRATCH_IDENTITY.email}> - left unchanged"
+    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+        SummaryMessage.CLONE_HAS_ITS_OWN_GIT_IDENTITY,
+        f"{SCRATCH_IDENTITY.name} <{SCRATCH_IDENTITY.email}>",
     )
 
 
@@ -178,9 +181,10 @@ def test_reports_that_no_identity_is_recorded(
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == (
-        f"not recorded on '{NOTES_BRANCH}' ({PERSONAL_GIT_IDENTITY_PATH}) - run "
-        "./save-git-identity.sh to record one"
+    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+        SummaryMessage.NO_GIT_IDENTITY_RECORDED,
+        NOTES_BRANCH,
+        PERSONAL_GIT_IDENTITY_PATH,
     )
 
 
@@ -206,9 +210,10 @@ def test_names_what_an_incomplete_recording_is_missing(
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == (
-        f"{PERSONAL_GIT_IDENTITY_PATH} on '{NOTES_BRANCH}' needs both user.name and "
-        "user.email - nothing written"
+    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+        SummaryMessage.GIT_IDENTITY_INCOMPLETE,
+        PERSONAL_GIT_IDENTITY_PATH,
+        NOTES_BRANCH,
     )
 
 

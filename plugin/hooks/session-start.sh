@@ -66,6 +66,14 @@ set -euo pipefail
 # the BEGIN-PERSONAL-NOTES/END-PERSONAL-NOTES markers, then runs the save
 # script to push the change back.
 #
+# Personal settings: the same branch may also carry a
+# `.claude/personal/settings.local.json`, which is copied verbatim into this
+# clone's `.claude/settings.local.json` - the file Claude Code reads as local
+# settings, so personal permission rules, env vars and the like follow you into
+# every clone the same way your notes do. It is never merged (gitignored, exactly
+# like CLAUDE.local.md), and local edits to it are never overwritten - see the
+# settings block near the bottom of this script and ./save-personal-settings.sh.
+#
 # PR progress: on any branch with a sensible "current PR" (i.e. not the
 # default branch, a detached HEAD, or the personal-notes branch itself - see
 # pr_progress_path in ./resolve-personal-notes-config.sh), CLAUDE.local.md
@@ -126,6 +134,13 @@ set -euo pipefail
 # it in real time - see plan-schema.md's "Proposing structural changes"
 # section for the full convention.
 #
+# Recheck stamp: every run also records the personal-notes commit this
+# clone just fetched (gitignored, see PLAN_STATE_SYNC_STAMP in
+# ./resolve-personal-notes-config.sh), regardless of whether this branch
+# tracks a plan. ./plan-updates-since.sh diffs from that stamp instead of a
+# session rereading whole plan files to answer "what changed since I last
+# looked" - see that script and cram-notes.md's recheck-deltas convention.
+#
 # How this script gets invoked (see ../settings.json): Claude Code registers it
 # as a SessionStart hook via `$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh`.
 # CLAUDE_PROJECT_DIR is an env var Claude Code itself injects into every hook
@@ -142,12 +157,22 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
+source "${SCRIPT_DIR}/session-start-messages.sh"
 
 fetch_personal_notes_branch || exit 0
 
 # FETCH_HEAD, not "${ACTIVE_NOTES_REMOTE}/${NOTES_BRANCH}": a URL-form remote
 # creates no remote-tracking ref, but FETCH_HEAD always points at what was
 # just fetched, whether the serving remote was a name or a raw URL.
+
+# Stamp this run's baseline unconditionally - not only when the current
+# branch turns out to track a plan below. This is the whole branch's tip,
+# fetched regardless, so it's just as valid a "last time I looked" baseline
+# for a session working on a plan more broadly (e.g. a plan-item-kickoff
+# session on a branch that isn't itself a tracked item) as for one on a
+# tracked item's own branch. See ./plan-updates-since.sh, the recheck tool
+# this stamp exists for.
+record_plan_state_sync_stamp
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
 # Sanitized copy for embedding into this script's <!-- ... --> HTML comment
@@ -237,11 +262,11 @@ PLAN_ID="$(plan_id_for_branch "${CURRENT_BRANCH}" || true)"
 # plan item could ever track, there is nothing to prompt about at all.
 if [ -z "${PLAN_ID}" ]; then
   if ! branch_can_hold_plan_item "${CURRENT_BRANCH}"; then
-    SUMMARY_PLAN="not applicable (this branch never holds a plan item)"
+    SUMMARY_PLAN="$(plan_line_not_applicable)"
   elif plan_branch_index_exists; then
-    SUMMARY_PLAN="no item tracks branch '${CURRENT_BRANCH}' ($(tracked_plan_count) plan(s) tracked) - if this session's work belongs to one of them, add its item before starting; if it belongs to none, there is nothing to do"
+    SUMMARY_PLAN="$(plan_line_no_item_tracks_branch "${CURRENT_BRANCH}" "$(tracked_plan_count)")"
   else
-    SUMMARY_PLAN="no plans tracked on '${NOTES_BRANCH}' yet"
+    SUMMARY_PLAN="$(plan_line_no_plans_tracked "${NOTES_BRANCH}")"
   fi
 else
   PLAN_MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
@@ -249,7 +274,7 @@ else
   # An index entry pointing at a manifest that isn't there means the index and
   # the plan data have drifted apart - previously indistinguishable from having
   # no plan at all, so it went unnoticed.
-  SUMMARY_PLAN="'${PLAN_ID}' tracks this branch, but ${PLAN_MANIFEST_PATH} is missing on '${NOTES_BRANCH}'"
+  SUMMARY_PLAN="$(plan_line_manifest_missing "${PLAN_ID}" "${PLAN_MANIFEST_PATH}" "${NOTES_BRANCH}")"
   if git cat-file -e "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
     [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
     # TRACKING_ISSUE: a plain top-level scalar, so grep/sed suffices here too -
@@ -318,7 +343,7 @@ ROADMAP_HEADER
     fi
     echo "<!-- END-PLAN-ROADMAP -->" >> "${OUTPUT_FILE}"
     WROTE_ANYTHING=1
-    SUMMARY_PLAN="'${PLAN_ID}' (tracking issue: ${TRACKING_ISSUE:-none})"
+    SUMMARY_PLAN="$(plan_line_tracked "${PLAN_ID}" "${TRACKING_ISSUE:-none}")"
   fi
 fi
 
@@ -337,17 +362,45 @@ fi
 # reports on the identity this run has just set rather than the absence it was
 # about to fix - the same ordering, for the same reason, as CLAUDE.local.md.
 if ! recorded_git_identity_exists; then
-  SUMMARY_GIT_IDENTITY="not recorded on '${NOTES_BRANCH}' (${PERSONAL_GIT_IDENTITY_PATH}) - run ./save-git-identity.sh to record one"
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_not_recorded \
+    "${NOTES_BRANCH}" "${PERSONAL_GIT_IDENTITY_PATH}")"
 elif ! RECORDED_GIT_IDENTITY="$(recorded_git_identity)"; then
-  SUMMARY_GIT_IDENTITY="${PERSONAL_GIT_IDENTITY_PATH} on '${NOTES_BRANCH}' needs both user.name and user.email - nothing written"
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_incomplete \
+    "${PERSONAL_GIT_IDENTITY_PATH}" "${NOTES_BRANCH}")"
 elif LOCAL_GIT_IDENTITY="$(repository_local_git_identity)"; then
   IFS=$'\t' read -r LOCAL_NAME LOCAL_EMAIL <<< "${LOCAL_GIT_IDENTITY}"
-  SUMMARY_GIT_IDENTITY="already set in this clone: $(format_git_identity "${LOCAL_NAME}" "${LOCAL_EMAIL}") - left unchanged"
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_already_set \
+    "$(format_git_identity "${LOCAL_NAME}" "${LOCAL_EMAIL}")")"
 else
   IFS=$'\t' read -r RECORDED_NAME RECORDED_EMAIL <<< "${RECORDED_GIT_IDENTITY}"
   git config --local user.name "${RECORDED_NAME}"
   git config --local user.email "${RECORDED_EMAIL}"
-  SUMMARY_GIT_IDENTITY="set from '${NOTES_BRANCH}' (${PERSONAL_GIT_IDENTITY_PATH}): $(format_git_identity "${RECORDED_NAME}" "${RECORDED_EMAIL}")"
+  SUMMARY_GIT_IDENTITY="$(git_identity_line_written "${NOTES_BRANCH}" \
+    "${PERSONAL_GIT_IDENTITY_PATH}" \
+    "$(format_git_identity "${RECORDED_NAME}" "${RECORDED_EMAIL}")")"
+fi
+
+# Personal settings: unlike everything above, these don't go into CLAUDE.local.md -
+# they are copied verbatim to .claude/settings.local.json, the file Claude Code
+# itself reads as this project's local settings (see PERSONAL_SETTINGS_PATH in
+# ./resolve-personal-notes-config.sh). No header or markers: it is strict JSON,
+# which has no comment syntax to carry them.
+#
+# Locally modified settings are never overwritten. Claude Code writes to this same
+# file whenever a permission is granted with "don't ask again", so a blind copy
+# every session start would silently drop those grants - see
+# personal_settings_are_locally_modified. Run ./save-personal-settings.sh to push
+# such edits up, which makes them the new baseline and lets syncing resume.
+SUMMARY_SETTINGS="none on '${NOTES_BRANCH}' (${PERSONAL_SETTINGS_PATH})"
+if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
+  if personal_settings_are_locally_modified; then
+    SUMMARY_SETTINGS="kept local edits to ${LOCAL_SETTINGS_RELATIVE_PATH} - run save-personal-settings.sh to push them"
+  else
+    mkdir -p "$(dirname "${LOCAL_SETTINGS_JSON}")"
+    git show "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" > "${LOCAL_SETTINGS_JSON}"
+    record_personal_settings_sync
+    SUMMARY_SETTINGS="synced to ${LOCAL_SETTINGS_RELATIVE_PATH}"
+  fi
 fi
 
 # Setup verdict, from ./check-setup.sh - the single read-only source of truth
@@ -355,25 +408,26 @@ fi
 # is exactly what does not happen: a session that skips it discovers the same
 # gaps later, one failure at a time, in the middle of unrelated work.
 #
-# Run after CLAUDE.local.md is written, never before: check-setup.sh's
-# claude_local_md check reports on the file this run has just created, so the
-# other order would report needs-setup on a correctly set up clone's first run.
+# Run last, after everything this run writes: check-setup.sh's claude_local_md
+# check reports on the file this run has just created, so any other order would
+# report needs-setup on a correctly set up clone's first run.
 #
 # Run as a subprocess rather than sourced - it sources
 # resolve-personal-notes-config.sh, which cd's and reassigns every variable
 # already in use here - and captured with `|| true`, so a setup gap can never
 # turn into a session that starts with a broken hook.
-SUMMARY_SETUP="not checked - ${CHECK_SETUP_SCRIPT} is not in this checkout"
+SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
 if [ -f "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" ]; then
   # Only the needs-setup rows: the info rows are context for someone reading
   # the full report, not a verdict, and this summary is not that report.
   NEEDS_SETUP_ROWS="$(bash "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" 2>/dev/null \
     | awk -F'\t' '$2 == "needs-setup" { printf "    %s: %s\n", $1, $3 }' || true)"
   if [ -z "${NEEDS_SETUP_ROWS}" ]; then
-    SUMMARY_SETUP="ok"
+    SUMMARY_SETUP="$(setup_line_ok)"
   else
-    SUMMARY_SETUP="$(printf '%s check(s) need setup - run /setup-personal-notes:\n%s' \
-      "$(printf '%s\n' "${NEEDS_SETUP_ROWS}" | wc -l | tr -d ' ')" "${NEEDS_SETUP_ROWS}")"
+    SUMMARY_SETUP="$(printf '%s\n%s' \
+      "$(setup_line_needs_setup "$(printf '%s\n' "${NEEDS_SETUP_ROWS}" | wc -l | tr -d ' ')")" \
+      "${NEEDS_SETUP_ROWS}")"
   fi
 fi
 
@@ -386,8 +440,10 @@ fi
 cat <<SUMMARY
 session-start.sh summary:
   personal notes:  ${SUMMARY_NOTES}
+  local settings:  ${SUMMARY_SETTINGS}
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   setup:           ${SUMMARY_SETUP}
+  plan state SHA:  $(git rev-parse FETCH_HEAD) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY

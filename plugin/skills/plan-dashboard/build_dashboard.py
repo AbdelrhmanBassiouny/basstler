@@ -18,9 +18,10 @@ Usage:
 
 pr_data.json shape: {"<owner>/<repo>": {"<pr_number>": {"state": "open"|
 "closed", "draft": bool, "merged_at": str|null, "labels": [str, ...]}}} -
-one entry per pull request number referenced by any item. See
-pr-data-fetching.md (next to this script) for how a session should gather
-it.
+one entry per pull request number referenced by any item. A closed entry
+must carry merged_at explicitly, null included; omitting it is rejected
+rather than read as unmerged. See pr-data-fetching.md (next to this script)
+for how a session should gather it.
 
 Prints a one-line JSON summary to stdout (status counts, drift count,
 ready-to-start/blocker-maybe-cleared item titles) so the calling skill can
@@ -145,6 +146,7 @@ class PullRequestLabel(StrEnum):
     BUG = "bug"
 
 
+@dataclass
 class ValidationProblem(ABC):
     """A single problem found while validating a plan.yaml - see plan-schema.md.
 
@@ -159,8 +161,14 @@ class ValidationProblem(ABC):
     """
 
     @abstractmethod
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """The human-readable description of this problem, shown to the user."""
+
+    def suggest_correction(self) -> str:
+        """
+        Default implementation for suggesting a correction for manifest validation problems.
+        """
+        return ""
 
 
 @dataclass
@@ -171,7 +179,7 @@ class InvalidManifestRoot(ValidationProblem):
     actual_value: Any
     """Whatever the manifest actually parsed to."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"plan.yaml must parse to a mapping, got {type(self.actual_value).__name__}: {self.actual_value!r}"
 
@@ -183,7 +191,7 @@ class InvalidSchemaVersion(ValidationProblem):
     actual_value: Any
     """Whatever ``schema_version`` actually held."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"schema_version must be 1, got {self.actual_value!r}"
 
@@ -195,7 +203,7 @@ class DuplicateItemId(ValidationProblem):
     duplicate_identifiers: list[str]
     """Every identifier that occurred more than once."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"duplicate item id(s): {sorted(self.duplicate_identifiers)}"
 
@@ -210,7 +218,7 @@ class UnknownTrack(ValidationProblem):
     track: Any
     """Whatever ``track`` actually held."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} has unknown track {self.track!r}"
 
@@ -225,7 +233,7 @@ class UnknownStatus(ValidationProblem):
     status: Any
     """Whatever ``status`` actually held."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} has unknown status {self.status!r}"
 
@@ -245,9 +253,29 @@ class InvalidDependsOn(ValidationProblem):
     actual_type: type
     """The type ``depends_on`` actually held, instead of ``list``."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} depends_on must be a list, got {self.actual_type.__name__}"
+
+
+@dataclass
+class InvalidBlockers(ValidationProblem):
+    """An item's ``blockers`` isn't a list.
+
+    A plain string is iterable character-by-character in Python, so without
+    this check a string ``blockers`` would silently be misread as one
+    blocker per character instead of failing loudly.
+    """
+
+    item_identifier: str
+    """The offending item's effective id."""
+
+    actual_type: type
+    """The type ``blockers`` actually held, instead of ``list``."""
+
+    def error_message(self) -> str:
+        """See :meth:`ValidationProblem.describe`."""
+        return f"item {self.item_identifier!r} blockers must be a list, got {self.actual_type.__name__}"
 
 
 @dataclass
@@ -260,7 +288,7 @@ class UnknownDependency(ValidationProblem):
     dependency_identifier: str
     """The unresolvable id named in ``depends_on``."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} depends_on unknown id {self.dependency_identifier!r}"
 
@@ -275,7 +303,7 @@ class UnknownWave(ValidationProblem):
     wave: Any
     """Whatever ``wave`` actually held."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"track {self.track_identifier!r} has unknown wave {self.wave!r}"
 
@@ -291,7 +319,7 @@ class DependencyCycle(ValidationProblem):
     """The item ids forming the cycle, in order, with the first id repeated
     at the end to show where it closes."""
 
-    def describe(self) -> str:
+    def error_message(self) -> str:
         """See :meth:`ValidationProblem.describe`."""
         return f"depends_on cycle: {' -> '.join(self.cycle_identifiers)}"
 
@@ -306,7 +334,7 @@ class PlanValidationError(Exception):
         instead of one-error-at-a-time: a broken manifest is itself
         something the user needs the full picture of, not a single
         symptom they have to rediscover the rest of by trial and error."""
-        super().__init__("; ".join(problem.describe() for problem in problems))
+        super().__init__("; ".join(problem.error_message() for problem in problems))
 
 
 def _find_dependency_cycle(
@@ -406,6 +434,10 @@ def validate_plan(plan: dict[str, Any]) -> None:
                         UnknownDependency(item_identifier, dependency_identifier)
                     )
 
+        blockers = item.get("blockers")
+        if blockers is not None and not isinstance(blockers, list):
+            problems.append(InvalidBlockers(item_identifier, type(blockers)))
+
     cycle = _find_dependency_cycle(item_identifiers, depends_on_by_identifier)
     if cycle is not None:
         problems.append(DependencyCycle(cycle))
@@ -416,6 +448,12 @@ def validate_plan(plan: dict[str, Any]) -> None:
 
     if problems:
         raise PlanValidationError(problems)
+
+
+class MissingMergeTimestampError(ValueError):
+    """Raised when a closed pull request's ``pr_data.json`` entry omits the
+    ``merged_at`` key altogether, which leaves no way to tell a merged pull
+    request from one closed unmerged."""
 
 
 @dataclass
@@ -459,10 +497,23 @@ class PullRequestRecord:
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> PullRequestRecord:
-        """Build a record from one entry of ``pr_data.json``."""
+        """Build a record from one entry of ``pr_data.json``.
+
+        A closed entry must carry ``merged_at`` explicitly, ``null`` included:
+        a gatherer that never requested the field would otherwise be
+        indistinguishable from GitHub reporting no merge, silently turning
+        every merged pull request into a closed-unmerged one.
+
+        :raises MissingMergeTimestampError: If a closed entry omits ``merged_at``.
+        """
+        state = PullRequestState(data["state"])
+        if state is PullRequestState.CLOSED and "merged_at" not in data:
+            raise MissingMergeTimestampError(
+                "a closed pull request entry must carry merged_at (null included)"
+            )
         merged_at = data.get("merged_at")
         return cls(
-            state=PullRequestState(data["state"]),
+            state=state,
             draft=data.get("draft", False),
             merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
             labels=list(data.get("labels") or []),

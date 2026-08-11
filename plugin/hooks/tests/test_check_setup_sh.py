@@ -17,10 +17,9 @@ import pytest
 from scratch_repository import (
     NOTES_BRANCH,
     PERSONAL_GIT_IDENTITY_PATH,
-    REQUIREMENTS_FILE,
     SCRATCH_IDENTITY,
-    TOOLING_FILES,
     ScratchRepository,
+    SetupPrerequisiteFile,
     initialize_bare_repository,
 )
 
@@ -340,20 +339,17 @@ def test_reports_a_setting_resolved_from_the_environment(
 def test_reports_which_tooling_files_this_checkout_is_missing(
     check_setup_repository: ScratchRepository,
 ):
-    (
-        check_setup_repository.project_root
-        / ".claude/skills/plan-dashboard/plan-schema.md"
-    ).unlink()
+    (check_setup_repository.project_root / SetupPrerequisiteFile.PLAN_SCHEMA).unlink()
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
     assert report.results[SetupCheck.TOOLING_FILES].status == CheckStatus.NEEDS_SETUP
     assert (
-        ".claude/skills/plan-dashboard/plan-schema.md"
+        SetupPrerequisiteFile.PLAN_SCHEMA
         in report.results[SetupCheck.TOOLING_FILES].detail
     )
     assert (
-        ".claude/skills/plan-dashboard/build_dashboard.py"
+        SetupPrerequisiteFile.BUILD_DASHBOARD
         not in report.results[SetupCheck.TOOLING_FILES].detail
     )
 
@@ -390,7 +386,8 @@ def test_reports_dashboard_requirements_that_are_not_installed(
     check_setup_repository: ScratchRepository,
 ):
     check_setup_repository.write(
-        REQUIREMENTS_FILE, "pytest>=1\nno-such-distribution-exists>=2  # a comment\n"
+        SetupPrerequisiteFile.DASHBOARD_REQUIREMENTS,
+        "pytest>=1\nno-such-distribution-exists>=2  # a comment\n",
     )
 
     report = run_check_setup(check_setup_repository)
