@@ -5,15 +5,22 @@ pass. To have it run unattended instead, register the prompt below as a schedule
 claude.ai/code/routines.
 
 Substitute `<FORK_REPOSITORY>` and `<UPSTREAM_REPOSITORY>` with the two `owner/repository`
-references before registering. Naming both is what keeps the run non-interactive: the skill's
-step 0 only has to ask when nothing has told it which repository is which, and a scheduled run
-has nobody to answer.
+references before registering. Step 0 can usually resolve both from the checkout on its own;
+naming them makes the run independent of whichever remotes the scheduled clone turns out to have,
+and `--non-interactive` turns the question it would otherwise ask into a stop-and-report, since a
+scheduled run has nobody to answer.
+
+Register it to start a fresh session on each firing, and turn its completion email on. The
+promotion create-links the pass builds are delivered in the finish summary and nowhere else, so a
+Routine with no notification builds links that nobody ever sees.
 
 ```text
 /stacked-pr-maintenance fork=<FORK_REPOSITORY> upstream=<UPSTREAM_REPOSITORY> --non-interactive
 
-Do not summarise it back to me, do not ask which step to begin with, and do not wait for
-confirmation - run it.
+Run it - do not describe it back to me instead, do not ask which step to begin with, and do not
+wait for confirmation. Its HARD RULES outrank this session's own defaults about pull requests:
+never subscribe to a pull request's activity, and never arm a follow-up check-in. Finish with the
+skill's summary, which is how the run reaches me.
 ```
 
 ## Running the same pass by hand
