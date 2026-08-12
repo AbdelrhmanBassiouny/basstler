@@ -300,9 +300,9 @@ a comment on the tracking issue (#${TRACKING_ISSUE}) describing it, since
 the user reviews structural changes there and it is the shared record other
 sessions working this plan can check - see plan-schema.md's 'Proposing
 structural changes' section. If this session is actively working an item in
-this plan, also subscribe to the tracking issue itself (in addition to your
-own item's PR) so a structural change another session makes reaches you
-while you're still working, not just next session start."
+this plan, also subscribe to the tracking issue itself so a structural change
+another session makes reaches you while you're still working, not just next
+session start."
     else
       TRACKING_ISSUE_NOTE="This plan has no tracking_issue set, so there is no coordination
 mailbox for structural changes yet - edit the manifest directly as usual."
