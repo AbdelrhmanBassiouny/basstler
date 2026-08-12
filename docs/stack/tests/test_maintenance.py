@@ -1636,6 +1636,7 @@ def test_a_command_that_omits_its_name_cannot_be_built():
     subclass - so one that never says cannot reach the parser at all.
     """
 
+    @dataclass(frozen=True)
     class CommandWithoutAName(MaintenanceCommand):
         @classproperty
         def description(cls) -> str:
@@ -1648,7 +1649,7 @@ def test_a_command_that_omits_its_name_cannot_be_built():
         CommandWithoutAName()
 
 
-def test_a_command_answers_with_its_own_name_rather_than_its_base_s():
+def test_a_command_answers_with_its_own_name_rather_than_the_one_on_its_base():
     """
     An abstract class property answers with itself rather than calling its accessor,
     which is what leaves a subclass supplying nothing abstract instead of silently
@@ -1675,10 +1676,14 @@ def test_a_fork_client_that_cannot_make_one_of_the_writes_cannot_be_built():
             return {}
 
         def replace_labels(self, number: int, labels: Sequence[str]) -> None:
-            """Recorded nowhere, since this fork is never expected to be built."""
+            """
+            Recorded nowhere, since this fork is never expected to be built.
+            """
 
         def set_description(self, number: int, body: str) -> None:
-            """Recorded nowhere, since this fork is never expected to be built."""
+            """
+            Recorded nowhere, since this fork is never expected to be built.
+            """
 
     with pytest.raises(TypeError, match="add_comment"):
         ForkThatCannotComment()
@@ -1707,6 +1712,7 @@ def test_a_restack_step_that_does_nothing_cannot_be_built():
     would silently pass every branch along to the next step.
     """
 
+    @dataclass(frozen=True)
     class StepWithoutAnAttempt(RestackStep):
         pass
 
