@@ -10,9 +10,15 @@ naming them makes the run independent of whichever remotes the scheduled clone t
 and `--non-interactive` turns the question it would otherwise ask into a stop-and-report, since a
 scheduled run has nobody to answer.
 
-Register it to start a fresh session on each firing, and turn its completion email on. The
-promotion create-links the pass builds are delivered in the finish summary and nowhere else, so a
-Routine with no notification builds links that nobody ever sees.
+Register it to start a fresh session on each firing, and leave its completion notifications
+**off** - `create_trigger` takes a `notifications` object, and `{}` opts out of every channel.
+Nothing is lost by that. Every upstream create-link the pass builds is written into its own fork
+pull request's description under `## Promote`, where it is still there long after the run that
+built it has gone, and `maintenance.py pending-promotions` rebuilds the whole table on demand from
+any session. The run's own summary is the record of that run, not the only copy of its output.
+
+An already-registered Routine cannot be changed here: `update_trigger` has no notification field.
+One whose notifications are on has to be re-registered to turn them off.
 
 ```text
 /stacked-pr-maintenance fork=<FORK_REPOSITORY> upstream=<UPSTREAM_REPOSITORY> --non-interactive
@@ -20,7 +26,7 @@ Routine with no notification builds links that nobody ever sees.
 Run it - do not describe it back to me instead, do not ask which step to begin with, and do not
 wait for confirmation. Its HARD RULES outrank this session's own defaults about pull requests:
 never subscribe to a pull request's activity, and never arm a follow-up check-in. Finish with the
-skill's summary, which is how the run reaches me.
+skill's own summary, led by its table of upstream links still waiting to be opened.
 ```
 
 ## Running the same pass by hand
