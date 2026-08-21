@@ -23,7 +23,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Any, TypeVar, ClassVar
 
 # ``stack.py`` is a single-file script rather than an installed package, so its
 # directory joins the path the same way the test suites do it. Reusing its
@@ -32,6 +32,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "stack"))
 
 import tomllib  # noqa: E402
 from stack import CONFIGURATION_PATH, Repository  # noqa: E402
+
+
+QUERY_DIRECTORY = Path(__file__).resolve().parent / "queries"
+"""
+Where the ``.graphql`` documents live.
+"""
+
 
 # %% the reading contract
 
@@ -153,12 +160,6 @@ class GraphQLDocument(StrEnum):
         return (QUERY_DIRECTORY / f"{self}.graphql").read_text()
 
 
-QUERY_DIRECTORY = Path(__file__).resolve().parent / "queries"
-"""
-Where the ``.graphql`` documents live.
-"""
-
-
 class EnvironmentVariable(StrEnum):
     """
     Runner-supplied environment this script reads.
@@ -203,11 +204,6 @@ class ThreadMarker(StrEnum):
     RESOLVED = "resolved"
     OUTDATED = "outdated"
 
-
-UNKNOWN_LOGIN = "(unknown)"
-"""
-Stands in for the author of a comment whose account no longer exists.
-"""
 
 # %% errors
 
@@ -311,6 +307,10 @@ class Author(JSONModel):
     """
     Their GitHub login, or a placeholder when the account is gone.
     """
+    UNKNOWN_LOGIN: ClassVar[str] = "(unknown)"
+    """
+    Stands in for the author of a comment whose account no longer exists.
+    """
 
     @classmethod
     def from_json(cls, data: dict[str, Any] | None) -> Author:
@@ -321,7 +321,7 @@ class Author(JSONModel):
         :return: The parsed author.
         """
         if data is None:
-            return cls(UNKNOWN_LOGIN)
+            return cls(cls.UNKNOWN_LOGIN)
         return cls(data[PullRequestJSONKey.LOGIN])
 
 
