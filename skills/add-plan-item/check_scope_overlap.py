@@ -87,16 +87,41 @@ class ReportKey(StrEnum):
     """
 
 
+@dataclass
 class UnknownBranchError(ValueError):
     """
     Raised when a requested base or candidate branch doesn't resolve in the repository.
     """
 
+    git_command: str
+    """
+    The git command that failed.
+    """
+    result_stderr: str
+    """
+    The git error message.
+    """
 
+    def __str__(self) -> str:
+        return f"git {self.git_command} failed: {self.result_stderr}"
+
+
+@dataclass
 class MalformedCandidateError(ValueError):
     """
     Raised when a ``--candidate`` argument isn't in ``<label>=<branch>`` form.
     """
+    expected_candidate: str
+    """
+    The expected format.
+    """
+    wrong_candidate: str
+    """
+    The argument that failed to parse.
+    """
+
+    def __str__(self) -> str:
+        return f"expected {self.expected_candidate!r}, got {self.wrong_candidate!r}"
 
 
 # %% inputs and results
@@ -132,7 +157,7 @@ class Candidate:
         label, separator, branch = argument.partition(CANDIDATE_SEPARATOR)
         if not separator or not label.strip() or not branch.strip():
             raise MalformedCandidateError(
-                f"expected '<label>{CANDIDATE_SEPARATOR}<branch>', got {argument!r}"
+                f"'<label>{CANDIDATE_SEPARATOR}<branch>'", argument
             )
         return cls(label.strip(), branch.strip())
 
@@ -158,7 +183,7 @@ class CandidateOverlap:
     Every path this candidate changes, relative to its merge base with the base branch.
     """
 
-    def as_dictionary(self) -> dict[str, Any]:
+    def as_json(self) -> dict[str, Any]:
         """
         Render the overlap in the output shape documented in the module docstring.
         """
@@ -186,14 +211,14 @@ class ScopeReport:
     One entry per requested candidate, in the order they were given.
     """
 
-    def as_dictionary(self) -> dict[str, Any]:
+    def as_json(self) -> dict[str, Any]:
         """
         Render the report in the output shape documented in the module docstring.
         """
         return {
             ReportKey.PATHS_ABSENT_FROM_BASE: self.paths_absent_from_base,
             ReportKey.CANDIDATES: [
-                overlap.as_dictionary() for overlap in self.candidates
+                overlap.as_json() for overlap in self.candidates
             ],
         }
 
@@ -218,13 +243,13 @@ def run_git(repository_path: Path, *arguments: str) -> str:
     )
     if result.returncode != 0:
         raise UnknownBranchError(
-            f"git {' '.join(arguments)} failed: {result.stderr.strip()}"
+            f"git {' '.join(arguments)}", result.stderr.strip()
         )
     return result.stdout.rstrip("\n")
 
 
 def paths_present_on(
-    repository_path: Path, branch: str, paths: Sequence[str]
+        repository_path: Path, branch: str, paths: Sequence[str]
 ) -> set[str]:
     """
     Report which of *paths* the given branch's tree already contains.
@@ -243,7 +268,7 @@ def paths_present_on(
 
 
 def changed_paths_since_base(
-    repository_path: Path, base_branch: str, branch: str
+        repository_path: Path, base_branch: str, branch: str
 ) -> list[str]:
     """
     List everything *branch* changes relative to its merge base with *base_branch*.
@@ -266,10 +291,10 @@ def changed_paths_since_base(
 
 
 def build_scope_report(
-    repository_path: Path,
-    base_branch: str,
-    paths: Sequence[str],
-    candidates: Sequence[Candidate],
+        repository_path: Path,
+        base_branch: str,
+        paths: Sequence[str],
+        candidates: Sequence[Candidate],
 ) -> ScopeReport:
     """
     Gather the evidence for one scope decision.
@@ -340,7 +365,7 @@ def main() -> int:
         print(str(error), file=sys.stderr)
         return 1
 
-    print(json.dumps(report.as_dictionary()))
+    print(json.dumps(report.as_json()))
     return 0
 
 
