@@ -279,6 +279,13 @@ plan_roadmap_path() {
 # full plan-dashboard schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
+# DASHBOARD_URL_CACHE_PATH: the generated cache mapping each plan id (plus
+# "_index" for the master index) to the Artifact URL its dashboard is
+# published at, so /plan-dashboard updates that page instead of minting a
+# second one. Named here rather than typed into plan-dashboard/SKILL.md,
+# same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
+DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
+
 # PLAN_DASHBOARD_DIRECTORY / *_SCRIPT / *_FILE / *_DOC: the canonical
 # location of every script, hook, requirements file, and reference doc the
 # plan-dashboard/plan-item-*/CI tooling invokes or reads - defined once,
@@ -308,6 +315,10 @@ REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
 # refresh_dashboard_support.py: the JSON-plumbing helpers
 # refresh_dashboard.sh calls between its two script calls.
 REFRESH_DASHBOARD_SUPPORT_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard_support.py"
+# record_dashboard_url.py: writes one key's published Artifact URL into
+# DASHBOARD_URL_CACHE_PATH, resolving that URL from the account's live
+# Artifact listing so a URL nobody published cannot be recorded.
+RECORD_DASHBOARD_URL_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/record_dashboard_url.py"
 # requirements.txt: the PyYAML/Jinja2/markdown dependencies every script
 # above needs - installed by both CI and a session running them directly.
 PLAN_DASHBOARD_REQUIREMENTS_FILE="${PLAN_DASHBOARD_DIRECTORY}/requirements.txt"
