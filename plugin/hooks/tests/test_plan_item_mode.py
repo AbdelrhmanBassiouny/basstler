@@ -19,11 +19,10 @@ import pytest
 
 import plan_item_mode
 from plan_item_mode import (
-    COMMITTED_DEFAULTS_PATH,
-    PERSONAL_SETTINGS_PATH,
     CommandLineOption,
     ExecutionMode,
     ExitCode,
+    Location,
     MalformedModeSettingsError,
     ModeSetting,
     ModeSource,
@@ -69,7 +68,7 @@ def mode_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
         CONFIGURATION_SCRIPT_FILENAME,
         NOTES_WRITER_SCRIPT_FILENAME,
         MODE_SCRIPT_FILENAME,
-        COMMITTED_DEFAULTS_PATH.name,
+        Location.COMMITTED_DEFAULTS.path.name,
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
@@ -128,7 +127,7 @@ def published_settings(repository: ScratchRepository, tmp_path: Path) -> dict[st
     :return: The parsed settings.
     """
     checkout = repository.clone_notes_branch(tmp_path / "published")
-    return tomllib.loads((checkout / PERSONAL_SETTINGS_PATH).read_text())
+    return tomllib.loads((checkout / Location.PERSONAL_SETTINGS).read_text())
 
 
 # %% resolving with nothing configured
@@ -156,7 +155,7 @@ def test_the_report_names_where_a_personal_setting_would_go(
     where to put one without deriving the path itself.
     """
     report = resolve(mode_repository, PlanItemSkill.KICKOFF)
-    assert report["personal_setting_path"] == str(PERSONAL_SETTINGS_PATH)
+    assert report["personal_setting_path"] == Location.PERSONAL_SETTINGS
 
 
 def test_an_unreachable_notes_branch_still_resolves_to_the_default(
@@ -170,7 +169,7 @@ def test_an_unreachable_notes_branch_still_resolves_to_the_default(
         CONFIGURATION_SCRIPT_FILENAME,
         NOTES_WRITER_SCRIPT_FILENAME,
         MODE_SCRIPT_FILENAME,
-        COMMITTED_DEFAULTS_PATH.name,
+        Location.COMMITTED_DEFAULTS.path.name,
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
@@ -193,7 +192,7 @@ def test_a_personal_setting_overrides_the_committed_default(
     Pinning one skill's mode changes that skill and leaves the other on the default.
     """
     mode_repository.update_notes_branch_file(
-        str(PERSONAL_SETTINGS_PATH),
+        Location.PERSONAL_SETTINGS,
         f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
@@ -213,7 +212,7 @@ def test_the_invocation_argument_beats_the_personal_setting(
     A mode asked for on the command line wins, so one run can depart from the setting.
     """
     mode_repository.update_notes_branch_file(
-        str(PERSONAL_SETTINGS_PATH),
+        Location.PERSONAL_SETTINGS,
         f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
@@ -238,7 +237,7 @@ def test_a_mode_the_enum_does_not_name_is_refused_in_the_personal_file(
     setting having worked.
     """
     mode_repository.update_notes_branch_file(
-        str(PERSONAL_SETTINGS_PATH), f'{PlanItemSkill.KICKOFF.setting_key} = "atuo"\n'
+        Location.PERSONAL_SETTINGS, f'{PlanItemSkill.KICKOFF.setting_key} = "atuo"\n'
     )
 
     finished = run_mode(
@@ -277,7 +276,7 @@ def test_a_personal_settings_file_that_will_not_parse_is_refused(
     Broken syntax is reported rather than read as an absent setting.
     """
     mode_repository.update_notes_branch_file(
-        str(PERSONAL_SETTINGS_PATH), "kickoff_mode = \n"
+        Location.PERSONAL_SETTINGS, "kickoff_mode = \n"
     )
 
     finished = run_mode(
@@ -343,7 +342,7 @@ def test_setting_one_mode_preserves_the_other(
     Writing one key must not clobber the key the user was not changing.
     """
     mode_repository.update_notes_branch_file(
-        str(PERSONAL_SETTINGS_PATH),
+        Location.PERSONAL_SETTINGS,
         f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
@@ -463,7 +462,8 @@ def test_every_skill_names_a_key_the_committed_defaults_define():
     """
     defaults = tomllib.loads(
         (
-            Path(plan_item_mode.__file__).parent.parent.parent / COMMITTED_DEFAULTS_PATH
+            Path(plan_item_mode.__file__).parent.parent.parent
+            / Location.COMMITTED_DEFAULTS
         ).read_text()
     )
     assert set(defaults) == {skill.setting_key for skill in PlanItemSkill}
