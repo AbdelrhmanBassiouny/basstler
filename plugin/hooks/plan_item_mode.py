@@ -14,10 +14,10 @@ Three modes, one of which only decides who picks:
 
 ``auto``
     Draft the plan, record it, and implement it without asking. The planning phase still
-    happens and is still written down; it stops blocking.
+    happens and is still written down; it stops blocking. The default.
 
 ``ask``
-    Put the choice to the user, with the skill's own recommendation. The default.
+    Put the choice to the user, with the skill's own recommendation.
 
 Precedence is invocation argument > personal setting > committed default, so one run can
 depart from the setting without changing it. What each mode obliges a skill to do is
@@ -158,17 +158,42 @@ class PlanItemSkill(StrEnum):
         return f"{self.value}_mode"
 
 
+class ModeOption(StrEnum):
+    """
+    The command line options that carry a mode, named where a refusal reports one.
+    """
+
+    REQUESTED = "--requested"
+    """
+    ``resolve``'s override for one run.
+    """
+
+    MODE = "--mode"
+    """
+    The mode ``set`` pins.
+    """
+
+
 class ExitCode(IntEnum):
     """
     The process statuses this tool exits with.
 
     A distinct status per refusal lets a caller act on *which* failure happened without
-    parsing stderr. ``argparse`` supplies 2 for a usage error.
+    parsing stderr. The named refusals start at 3 because the two below them are already
+    spoken for: 2 is the usage error ``argparse`` exits with, and 1 is what Python exits
+    with on an uncaught exception, so leaving it free keeps a crash from reading as a
+    refusal this tool chose to make.
     """
 
     SUCCESS = 0
     """
     The operation ran and printed its report.
+    """
+
+    USAGE = 2
+    """
+    No such subcommand, or the wrong arguments. Exited with by ``argparse`` itself, and
+    named here so the value is reserved rather than merely unused.
     """
 
     UNKNOWN_MODE = 3
@@ -192,6 +217,72 @@ class ExitCode(IntEnum):
         The status as the lowercase name a report and a message both use.
         """
         return self.name.lower()
+
+
+# %% settings
+
+
+@dataclass(frozen=True)
+class ModeSetting:
+    """
+    One mode as it was given, together with what gave it.
+
+    Pairing them is what lets a refusal name the setting or the option a bad value came
+    from, without every reader of a value having to carry that name beside it.
+    """
+
+    key: str
+    """
+    The settings key the value was stored under, or the option that carried it.
+    """
+
+    value: object
+    """
+    The value as it was read, which TOML and ``argparse`` are both free to make any type.
+    """
+
+    def parse(self) -> ExecutionMode:
+        """
+        Read this setting as a mode, refusing anything :class:`ExecutionMode` does not
+        define.
+
+        :raises UnknownModeError: If the value names no mode.
+        :return: The mode.
+        """
+        try:
+            return ExecutionMode(self.value)
+        except ValueError:
+            raise UnknownModeError(setting=self) from None
+
+
+@dataclass(frozen=True)
+class SettingsFile:
+    """
+    A modes file, together with the path a refusal about it should name.
+    """
+
+    path: Path
+    """
+    The file on disk to read.
+    """
+
+    origin: str
+    """
+    Where the settings came from as the user knows it, which for the personal file is its
+    location on the notes branch rather than the scratch copy it is read from.
+    """
+
+    def read(self) -> dict[str, object]:
+        """
+        Parse the file.
+
+        :raises MalformedModeSettingsError: If it will not parse as TOML.
+        :return: The parsed settings.
+        """
+        try:
+            return tomllib.loads(self.path.read_text())
+        except tomllib.TOMLDecodeError as error:
+            raise MalformedModeSettingsError(file=self, detail=str(error)) from None
 
 
 # %% failures
@@ -247,18 +338,13 @@ class UnknownModeError(ModeError):
 
     exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_MODE
 
-    setting_key: str
+    setting: ModeSetting
     """
-    The key the value was given under, or the command line option that carried it.
-    """
-
-    value: str
-    """
-    The value that names no mode.
+    The setting whose value names no mode.
     """
 
     def error_message(self) -> str:
-        return f"{self.setting_key}: {self.value!r} is not an execution mode."
+        return f"{self.setting.key}: {self.setting.value!r} is not an execution mode."
 
     def suggest_correction(self) -> str:
         return f"Use one of: {', '.join(ExecutionMode)}."
@@ -272,7 +358,7 @@ class MalformedModeSettingsError(ModeError):
 
     exit_code: ClassVar[ExitCode] = ExitCode.MALFORMED_MODE_SETTINGS
 
-    path: str
+    file: SettingsFile
     """
     The settings file that could not be read.
     """
@@ -283,7 +369,7 @@ class MalformedModeSettingsError(ModeError):
     """
 
     def error_message(self) -> str:
-        return f"{self.path} could not be read: {self.detail}"
+        return f"{self.file.origin} could not be read: {self.detail}"
 
     def suggest_correction(self) -> str:
         return (
@@ -315,42 +401,6 @@ class SettingsWriteRefusedError(ModeError):
 # %% reading the settings
 
 
-def parse_mode(value: object, setting_key: str) -> ExecutionMode:
-    """
-    Read one mode, refusing anything :class:`ExecutionMode` does not define.
-
-    Applied to the command line as well as the file, so both refusals read alike - a
-    caller should not have to know which of the two a bad mode came from.
-
-    :param value: The value to read.
-    :param setting_key: What to name in the refusal.
-    :raises UnknownModeError: If the value names no mode.
-    :return: The mode.
-    """
-    try:
-        return ExecutionMode(value)
-    except ValueError:
-        raise UnknownModeError(setting_key=setting_key, value=str(value)) from None
-
-
-def read_settings_file(path: Path, reported_path: str) -> dict[str, object]:
-    """
-    Parse one settings file.
-
-    :param path: The file to read.
-    :param reported_path: The path to name in a refusal, which for the personal file is
-        its location on the notes branch rather than the scratch path it was read from.
-    :raises MalformedModeSettingsError: If it will not parse as TOML.
-    :return: The parsed settings.
-    """
-    try:
-        return tomllib.loads(path.read_text())
-    except tomllib.TOMLDecodeError as error:
-        raise MalformedModeSettingsError(
-            path=reported_path, detail=str(error)
-        ) from None
-
-
 def committed_defaults(project_root: Path) -> dict[str, ExecutionMode]:
     """
     The shipped mode for every skill.
@@ -361,18 +411,21 @@ def committed_defaults(project_root: Path) -> dict[str, ExecutionMode]:
     :raises UnknownModeError: If a default names no mode.
     :return: Every skill's default, keyed by its setting key.
     """
-    raw = read_settings_file(
-        project_root / COMMITTED_DEFAULTS_PATH, COMMITTED_DEFAULTS_PATH
+    shipped = SettingsFile(
+        path=project_root / COMMITTED_DEFAULTS_PATH, origin=COMMITTED_DEFAULTS_PATH
     )
+    raw = shipped.read()
     missing = [
         skill.setting_key for skill in PlanItemSkill if skill.setting_key not in raw
     ]
     if missing:
         raise MalformedModeSettingsError(
-            path=COMMITTED_DEFAULTS_PATH, detail=f"no default for {', '.join(missing)}"
+            file=shipped, detail=f"no default for {', '.join(missing)}"
         )
     return {
-        skill.setting_key: parse_mode(raw[skill.setting_key], skill.setting_key)
+        skill.setting_key: ModeSetting(
+            key=skill.setting_key, value=raw[skill.setting_key]
+        ).parse()
         for skill in PlanItemSkill
     }
 
@@ -398,7 +451,7 @@ def personal_settings(project_root: Path) -> dict[str, object]:
     with tempfile.TemporaryDirectory() as scratch_directory:
         scratch_file = Path(scratch_directory) / "personal-plan-item-modes.toml"
         scratch_file.write_text(shown.stdout)
-        return read_settings_file(scratch_file, PERSONAL_SETTINGS_PATH)
+        return SettingsFile(path=scratch_file, origin=PERSONAL_SETTINGS_PATH).read()
 
 
 def fetch_notes_branch(project_root: Path) -> bool:
@@ -425,11 +478,108 @@ def fetch_notes_branch(project_root: Path) -> bool:
     return probe.returncode == 0
 
 
+# %% reports
+
+
+class ReportStatus(StrEnum):
+    """
+    What a printed report says happened, as the first thing a caller reads.
+    """
+
+    RESOLVED = "resolved"
+    """
+    A mode was worked out and is being reported.
+    """
+
+    SET = "set"
+    """
+    A mode was pinned in the personal settings file.
+    """
+
+
+class ReportKey(StrEnum):
+    """
+    The keys a printed report is read by.
+
+    The document is parsed by callers outside this module, so its spelling is a contract
+    rather than a diagnostic; naming the keys here is what gives a rename one place to
+    happen.
+    """
+
+    STATUS = "status"
+    """
+    What happened, as a :class:`ReportStatus`.
+    """
+
+    EXIT_CODE = "exit_code"
+    """
+    The process status the run exits with, so acting on the document needs no decoding.
+    """
+
+    SKILL = "skill"
+    """
+    The skill a mode was resolved for.
+    """
+
+    SKILLS = "skills"
+    """
+    The skills a mode was pinned for.
+    """
+
+    MODE = "mode"
+    """
+    The mode in force, or the one pinned.
+    """
+
+    SOURCE = "source"
+    """
+    What decided the mode, as a :class:`ModeSource`.
+    """
+
+    SETTING_KEY = "setting_key"
+    """
+    The key the resolved skill's mode is stored under.
+    """
+
+    SETTING_KEYS = "setting_keys"
+    """
+    The keys the pinned skills' modes are stored under.
+    """
+
+    PERSONAL_SETTING_PATH = "personal_setting_path"
+    """
+    Where a per-user override goes, so a caller can say where to change the answer.
+    """
+
+
+class Report(ABC):
+    """
+    What an operation prints, and the status it exits with.
+
+    Declared rather than left to a convention each report is trusted to have followed,
+    since ``main`` prints and exits through this pair without knowing which operation
+    produced it.
+    """
+
+    @property
+    @abstractmethod
+    def exit_code(self) -> ExitCode:
+        """
+        :return: The process status this report exits with.
+        """
+
+    @abstractmethod
+    def as_document(self) -> dict[str, object]:
+        """
+        :return: The report a caller reads, led by the status it can act on.
+        """
+
+
 # %% resolving
 
 
 @dataclass(frozen=True)
-class ModeResolution:
+class ModeResolution(Report):
     """
     Which mode a skill runs in, and what decided it.
     """
@@ -456,16 +606,16 @@ class ModeResolution:
 
     def as_document(self) -> dict[str, object]:
         """
-        :return: The report a caller reads, led by the status it can act on.
+        :return: The mode in force, what decided it, and where to change it.
         """
         return {
-            "status": "resolved",
-            "exit_code": int(self.exit_code),
-            "skill": str(self.skill),
-            "mode": str(self.mode),
-            "source": str(self.source),
-            "setting_key": self.skill.setting_key,
-            "personal_setting_path": PERSONAL_SETTINGS_PATH,
+            ReportKey.STATUS: ReportStatus.RESOLVED,
+            ReportKey.EXIT_CODE: int(self.exit_code),
+            ReportKey.SKILL: str(self.skill),
+            ReportKey.MODE: str(self.mode),
+            ReportKey.SOURCE: str(self.source),
+            ReportKey.SETTING_KEY: self.skill.setting_key,
+            ReportKey.PERSONAL_SETTING_PATH: PERSONAL_SETTINGS_PATH,
         }
 
 
@@ -485,7 +635,7 @@ def resolve_mode(
     if requested is not None:
         return ModeResolution(
             skill=skill,
-            mode=parse_mode(requested, "--requested"),
+            mode=ModeSetting(key=ModeOption.REQUESTED, value=requested).parse(),
             source=ModeSource.INVOCATION_ARGUMENT,
         )
 
@@ -493,7 +643,9 @@ def resolve_mode(
     if skill.setting_key in overrides:
         return ModeResolution(
             skill=skill,
-            mode=parse_mode(overrides[skill.setting_key], skill.setting_key),
+            mode=ModeSetting(
+                key=skill.setting_key, value=overrides[skill.setting_key]
+            ).parse(),
             source=ModeSource.PERSONAL_SETTING,
         )
 
@@ -508,7 +660,7 @@ def resolve_mode(
 
 
 @dataclass(frozen=True)
-class SettingsWriteReport:
+class SettingsWriteReport(Report):
     """
     What ``set`` pinned, and where.
     """
@@ -530,15 +682,15 @@ class SettingsWriteReport:
 
     def as_document(self) -> dict[str, object]:
         """
-        :return: The report a caller reads, led by the status it can act on.
+        :return: What was pinned, to what, and in which file.
         """
         return {
-            "status": "set",
-            "exit_code": int(self.exit_code),
-            "skills": [str(skill) for skill in self.skills],
-            "mode": str(self.mode),
-            "setting_keys": [skill.setting_key for skill in self.skills],
-            "personal_setting_path": PERSONAL_SETTINGS_PATH,
+            ReportKey.STATUS: ReportStatus.SET,
+            ReportKey.EXIT_CODE: int(self.exit_code),
+            ReportKey.SKILLS: [str(skill) for skill in self.skills],
+            ReportKey.MODE: str(self.mode),
+            ReportKey.SETTING_KEYS: [skill.setting_key for skill in self.skills],
+            ReportKey.PERSONAL_SETTING_PATH: PERSONAL_SETTINGS_PATH,
         }
 
 
@@ -582,7 +734,9 @@ def write_mode(
     overrides = personal_settings(project_root)
     modes = {
         other.setting_key: (
-            parse_mode(overrides[other.setting_key], other.setting_key)
+            ModeSetting(
+                key=other.setting_key, value=overrides[other.setting_key]
+            ).parse()
             if other.setting_key in overrides
             else committed_defaults(project_root)[other.setting_key]
         )
@@ -663,11 +817,15 @@ def build_parser() -> argparse.ArgumentParser:
         required=True,
     )
 
-    # Both mode options are plain strings, validated by parse_mode rather than by
+    # Both mode options are plain strings, validated by ModeSetting rather than by
     # argparse's own choices, so a mode the enum does not name refuses identically
     # whether it came from the command line or from the settings file.
-    subcommands.choices[Subcommand.RESOLVE].add_argument("--requested", default=None)
-    subcommands.choices[Subcommand.SET].add_argument("--mode", required=True)
+    subcommands.choices[Subcommand.RESOLVE].add_argument(
+        ModeOption.REQUESTED, dest="requested", default=None
+    )
+    subcommands.choices[Subcommand.SET].add_argument(
+        ModeOption.MODE, dest="mode", required=True
+    )
     return parser
 
 
@@ -680,13 +838,14 @@ def main() -> int:
     arguments = build_parser().parse_args()
     project_root = Path(os.environ.get("CLAUDE_PROJECT_DIR", Path.cwd()))
 
+    report: Report
     try:
         if arguments.subcommand == Subcommand.RESOLVE:
             report = resolve_mode(arguments.skill, arguments.requested, project_root)
         else:
             report = write_mode(
                 arguments.skills,
-                parse_mode(arguments.mode, "--mode"),
+                ModeSetting(key=ModeOption.MODE, value=arguments.mode).parse(),
                 project_root,
             )
     except ModeError as error:

@@ -24,8 +24,11 @@ from plan_item_mode import (
     ExecutionMode,
     ExitCode,
     MalformedModeSettingsError,
+    ModeSetting,
     ModeSource,
     PlanItemSkill,
+    ReportKey,
+    ReportStatus,
     UnknownModeError,
 )
 from scratch_repository import ScratchRepository
@@ -283,10 +286,22 @@ def test_each_refusal_carries_its_own_exit_code():
 
 def test_a_refusal_composes_its_message_from_its_own_fields():
     refusal = UnknownModeError(
-        setting_key=PlanItemSkill.KICKOFF.setting_key, value="go"
+        setting=ModeSetting(key=PlanItemSkill.KICKOFF.setting_key, value="go")
     )
     assert refusal.error_message() in str(refusal)
     assert refusal.suggest_correction() in str(refusal)
+
+
+def test_a_refusal_names_the_setting_the_bad_value_came_from():
+    """
+    The key is a field of the setting rather than an argument passed alongside its
+    value, so a refusal can always say which setting or option it is about.
+    """
+    setting = ModeSetting(key=PlanItemSkill.RESOLVE.setting_key, value="atuo")
+
+    assert setting.key in UnknownModeError(setting=setting).error_message()
+    with pytest.raises(UnknownModeError):
+        setting.parse()
 
 
 # %% writing the setting
@@ -407,6 +422,73 @@ def test_a_written_setting_is_what_the_next_resolve_reads(
     report = resolve(mode_repository, PlanItemSkill.KICKOFF)
     assert report["mode"] == ExecutionMode.PLAN
     assert report["source"] == ModeSource.PERSONAL_SETTING
+
+
+# %% the wire format
+
+
+def test_the_enum_values_are_the_words_the_settings_file_and_the_report_use():
+    """
+    The deliberate exception to this module's read-it-from-the-enum rule.
+
+    Every other assertion here reads its expected value from the enum, so renaming a
+    member's value changes the test and the code together and nothing fails - which is
+    exactly the guard that single-sourcing deletes. These values are a contract: they are
+    written into the settings file a user edits by hand and into a document other programs
+    parse, so a rename has to break something.
+    """
+    assert {member.name: str(member) for member in ExecutionMode} == {
+        "ASK": "ask",
+        "AUTO": "auto",
+        "PLAN": "plan",
+    }
+    assert {member.name: str(member) for member in ModeSource} == {
+        "INVOCATION_ARGUMENT": "invocation_argument",
+        "PERSONAL_SETTING": "personal_setting",
+        "COMMITTED_DEFAULT": "committed_default",
+    }
+    assert {member.name: str(member) for member in PlanItemSkill} == {
+        "KICKOFF": "kickoff",
+        "RESOLVE": "resolve",
+    }
+    assert {member.name: member.setting_key for member in PlanItemSkill} == {
+        "KICKOFF": "kickoff_mode",
+        "RESOLVE": "resolve_mode",
+    }
+    assert {member.name: str(member) for member in ReportStatus} == {
+        "RESOLVED": "resolved",
+        "SET": "set",
+    }
+    assert {member.name: str(member) for member in ReportKey} == {
+        "STATUS": "status",
+        "EXIT_CODE": "exit_code",
+        "SKILL": "skill",
+        "SKILLS": "skills",
+        "MODE": "mode",
+        "SOURCE": "source",
+        "SETTING_KEY": "setting_key",
+        "SETTING_KEYS": "setting_keys",
+        "PERSONAL_SETTING_PATH": "personal_setting_path",
+    }
+    assert {member.name: int(member) for member in ExitCode} == {
+        "SUCCESS": 0,
+        "USAGE": 2,
+        "UNKNOWN_MODE": 3,
+        "MALFORMED_MODE_SETTINGS": 4,
+        "SETTINGS_WRITE_REFUSED": 5,
+    }
+
+
+def test_a_usage_error_exits_with_the_status_the_enum_reserves_for_it(
+    mode_repository: ScratchRepository,
+):
+    """
+    2 is left out of the refusals this tool raises because ``argparse`` already owns it.
+    """
+    finished = run_mode(mode_repository, "resolve", "--skill", "bogus")
+
+    assert finished.returncode == ExitCode.USAGE
+    assert finished.stdout == ""
 
 
 # %% the committed defaults
