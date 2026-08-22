@@ -60,31 +60,31 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from pathlib import Path
-from typing import ClassVar
+from typing import Any, ClassVar
 
 # %% locations
 
-HOOKS_DIRECTORY = ".claude/hooks"
+HOOKS_DIRECTORY = Path(".claude/hooks")
 """
 Where this script and the shell configuration it sources live, from the project root.
 """
 
-CONFIGURATION_SCRIPT_PATH = f"{HOOKS_DIRECTORY}/resolve-personal-notes-config.sh"
+CONFIGURATION_SCRIPT_PATH = HOOKS_DIRECTORY / "resolve-personal-notes-config.sh"
 """
 The shell configuration that resolves the personal-notes remote and branch.
 """
 
-NOTES_WRITER_SCRIPT_PATH = f"{HOOKS_DIRECTORY}/write-personal-notes-file.sh"
+NOTES_WRITER_SCRIPT_PATH = HOOKS_DIRECTORY / "write-personal-notes-file.sh"
 """
 The generic commit-and-push-one-file helper ``set`` writes through.
 """
 
-COMMITTED_DEFAULTS_PATH = f"{HOOKS_DIRECTORY}/plan-item-modes.toml"
+COMMITTED_DEFAULTS_PATH = HOOKS_DIRECTORY / "plan-item-modes.toml"
 """
 The shipped defaults, in the repository rather than on the personal-notes branch.
 """
 
-PERSONAL_SETTINGS_PATH = ".claude/personal/plan-item-modes.toml"
+PERSONAL_SETTINGS_PATH = Path(".claude/personal/plan-item-modes.toml")
 """
 The per-user override, on the personal-notes branch.
 """
@@ -158,14 +158,19 @@ class PlanItemSkill(StrEnum):
         return f"{self.value}_mode"
 
 
-class ModeOption(StrEnum):
+class CommandLineOption(StrEnum):
     """
-    The command line options that carry a mode, named where a refusal reports one.
+    The options this tool accepts, named once so a parser and a refusal cannot disagree.
+    """
+
+    SKILL = "--skill"
+    """
+    Which skill to act on; ``set`` accepts it once per skill it pins.
     """
 
     REQUESTED = "--requested"
     """
-    ``resolve``'s override for one run.
+    ``resolve``'s mode override for one run.
     """
 
     MODE = "--mode"
@@ -236,7 +241,7 @@ class ModeSetting:
     The settings key the value was stored under, or the option that carried it.
     """
 
-    value: object
+    value: Any
     """
     The value as it was read, which TOML and ``argparse`` are both free to make any type.
     """
@@ -266,13 +271,13 @@ class SettingsFile:
     The file on disk to read.
     """
 
-    origin: str
+    origin: Path
     """
     Where the settings came from as the user knows it, which for the personal file is its
     location on the notes branch rather than the scratch copy it is read from.
     """
 
-    def read(self) -> dict[str, object]:
+    def read(self) -> dict[str, Any]:
         """
         Parse the file.
 
@@ -296,6 +301,11 @@ class ModeError(Exception, ABC):
     Subclasses hold the context that explains the refusal as typed fields and compose it
     into the message at construction, so no call site formats one. Mirrors the
     ``plan_item_bootstrap.py`` idiom beside it.
+
+    Where one of these translates a library exception - ``ValueError`` from an enum,
+    ``TOMLDecodeError`` from a parse - the refusal is raised ``from None``: everything the
+    original said is already folded into these fields, so chaining it would print a second
+    traceback saying the same thing in the library's words instead of ours.
     """
 
     exit_code: ClassVar[ExitCode] = ExitCode.SUCCESS
@@ -430,7 +440,7 @@ def committed_defaults(project_root: Path) -> dict[str, ExecutionMode]:
     }
 
 
-def personal_settings(project_root: Path) -> dict[str, object]:
+def personal_settings(project_root: Path) -> dict[str, Any]:
     """
     The per-user overrides as they stand on the notes branch.
 
@@ -541,11 +551,6 @@ class ReportKey(StrEnum):
     The key the resolved skill's mode is stored under.
     """
 
-    SETTING_KEYS = "setting_keys"
-    """
-    The keys the pinned skills' modes are stored under.
-    """
-
     PERSONAL_SETTING_PATH = "personal_setting_path"
     """
     Where a per-user override goes, so a caller can say where to change the answer.
@@ -569,7 +574,7 @@ class Report(ABC):
         """
 
     @abstractmethod
-    def as_document(self) -> dict[str, object]:
+    def as_json(self) -> dict[str, Any]:
         """
         :return: The report a caller reads, led by the status it can act on.
         """
@@ -604,7 +609,7 @@ class ModeResolution(Report):
     The process status this resolution exits with.
     """
 
-    def as_document(self) -> dict[str, object]:
+    def as_json(self) -> dict[str, Any]:
         """
         :return: The mode in force, what decided it, and where to change it.
         """
@@ -615,7 +620,7 @@ class ModeResolution(Report):
             ReportKey.MODE: str(self.mode),
             ReportKey.SOURCE: str(self.source),
             ReportKey.SETTING_KEY: self.skill.setting_key,
-            ReportKey.PERSONAL_SETTING_PATH: PERSONAL_SETTINGS_PATH,
+            ReportKey.PERSONAL_SETTING_PATH: str(PERSONAL_SETTINGS_PATH),
         }
 
 
@@ -635,7 +640,7 @@ def resolve_mode(
     if requested is not None:
         return ModeResolution(
             skill=skill,
-            mode=ModeSetting(key=ModeOption.REQUESTED, value=requested).parse(),
+            mode=ModeSetting(key=CommandLineOption.REQUESTED, value=requested).parse(),
             source=ModeSource.INVOCATION_ARGUMENT,
         )
 
@@ -680,7 +685,7 @@ class SettingsWriteReport(Report):
     The process status this write exits with.
     """
 
-    def as_document(self) -> dict[str, object]:
+    def as_json(self) -> dict[str, Any]:
         """
         :return: What was pinned, to what, and in which file.
         """
@@ -689,8 +694,7 @@ class SettingsWriteReport(Report):
             ReportKey.EXIT_CODE: int(self.exit_code),
             ReportKey.SKILLS: [str(skill) for skill in self.skills],
             ReportKey.MODE: str(self.mode),
-            ReportKey.SETTING_KEYS: [skill.setting_key for skill in self.skills],
-            ReportKey.PERSONAL_SETTING_PATH: PERSONAL_SETTINGS_PATH,
+            ReportKey.PERSONAL_SETTING_PATH: str(PERSONAL_SETTINGS_PATH),
         }
 
 
@@ -754,11 +758,11 @@ def write_mode(
         written = subprocess.run(
             [
                 "bash",
-                NOTES_WRITER_SCRIPT_PATH,
+                str(NOTES_WRITER_SCRIPT_PATH),
                 "--source",
                 str(scratch_file),
                 "--destination",
-                PERSONAL_SETTINGS_PATH,
+                str(PERSONAL_SETTINGS_PATH),
                 "--message",
                 f"Set {pinned} to {mode}",
             ],
@@ -806,10 +810,14 @@ def build_parser() -> argparse.ArgumentParser:
     # to pin, because the settings file is rewritten whole and one push should not
     # become several.
     subcommands.choices[Subcommand.RESOLVE].add_argument(
-        "--skill", type=PlanItemSkill, choices=list(PlanItemSkill), required=True
+        CommandLineOption.SKILL,
+        dest="skill",
+        type=PlanItemSkill,
+        choices=list(PlanItemSkill),
+        required=True,
     )
     subcommands.choices[Subcommand.SET].add_argument(
-        "--skill",
+        CommandLineOption.SKILL,
         dest="skills",
         action="append",
         type=PlanItemSkill,
@@ -821,10 +829,10 @@ def build_parser() -> argparse.ArgumentParser:
     # argparse's own choices, so a mode the enum does not name refuses identically
     # whether it came from the command line or from the settings file.
     subcommands.choices[Subcommand.RESOLVE].add_argument(
-        ModeOption.REQUESTED, dest="requested", default=None
+        CommandLineOption.REQUESTED, dest="requested", default=None
     )
     subcommands.choices[Subcommand.SET].add_argument(
-        ModeOption.MODE, dest="mode", required=True
+        CommandLineOption.MODE, dest="mode", required=True
     )
     return parser
 
@@ -845,14 +853,14 @@ def main() -> int:
         else:
             report = write_mode(
                 arguments.skills,
-                ModeSetting(key=ModeOption.MODE, value=arguments.mode).parse(),
+                ModeSetting(key=CommandLineOption.MODE, value=arguments.mode).parse(),
                 project_root,
             )
     except ModeError as error:
         print(f"{error.exit_code.name_for_a_caller}: {error}", file=sys.stderr)
         return int(error.exit_code)
 
-    print(json.dumps(report.as_document()))
+    print(json.dumps(report.as_json()))
     return int(report.exit_code)
 
 
