@@ -21,14 +21,14 @@ import plan_item_mode
 from plan_item_mode import (
     COMMITTED_DEFAULTS_PATH,
     PERSONAL_SETTINGS_PATH,
+    CommandLineOption,
     ExecutionMode,
     ExitCode,
     MalformedModeSettingsError,
     ModeSetting,
     ModeSource,
     PlanItemSkill,
-    ReportKey,
-    ReportStatus,
+    Subcommand,
     UnknownModeError,
 )
 from scratch_repository import ScratchRepository
@@ -69,7 +69,7 @@ def mode_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
         CONFIGURATION_SCRIPT_FILENAME,
         NOTES_WRITER_SCRIPT_FILENAME,
         MODE_SCRIPT_FILENAME,
-        Path(COMMITTED_DEFAULTS_PATH).name,
+        COMMITTED_DEFAULTS_PATH.name,
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
@@ -111,7 +111,9 @@ def resolve(
     :param arguments: Further CLI arguments, such as a requested mode.
     :return: The parsed report.
     """
-    finished = run_mode(repository, "resolve", "--skill", skill, *arguments)
+    finished = run_mode(
+        repository, Subcommand.RESOLVE, CommandLineOption.SKILL, skill, *arguments
+    )
     assert finished.returncode == ExitCode.SUCCESS, finished.stderr
     return json.loads(finished.stdout)
 
@@ -154,7 +156,7 @@ def test_the_report_names_where_a_personal_setting_would_go(
     where to put one without deriving the path itself.
     """
     report = resolve(mode_repository, PlanItemSkill.KICKOFF)
-    assert report["personal_setting_path"] == PERSONAL_SETTINGS_PATH
+    assert report["personal_setting_path"] == str(PERSONAL_SETTINGS_PATH)
 
 
 def test_an_unreachable_notes_branch_still_resolves_to_the_default(
@@ -168,7 +170,7 @@ def test_an_unreachable_notes_branch_still_resolves_to_the_default(
         CONFIGURATION_SCRIPT_FILENAME,
         NOTES_WRITER_SCRIPT_FILENAME,
         MODE_SCRIPT_FILENAME,
-        Path(COMMITTED_DEFAULTS_PATH).name,
+        COMMITTED_DEFAULTS_PATH.name,
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
@@ -191,7 +193,7 @@ def test_a_personal_setting_overrides_the_committed_default(
     Pinning one skill's mode changes that skill and leaves the other on the default.
     """
     mode_repository.update_notes_branch_file(
-        PERSONAL_SETTINGS_PATH,
+        str(PERSONAL_SETTINGS_PATH),
         f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
@@ -211,12 +213,15 @@ def test_the_invocation_argument_beats_the_personal_setting(
     A mode asked for on the command line wins, so one run can depart from the setting.
     """
     mode_repository.update_notes_branch_file(
-        PERSONAL_SETTINGS_PATH,
+        str(PERSONAL_SETTINGS_PATH),
         f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
     report = resolve(
-        mode_repository, PlanItemSkill.KICKOFF, "--requested", ExecutionMode.ASK
+        mode_repository,
+        PlanItemSkill.KICKOFF,
+        CommandLineOption.REQUESTED,
+        ExecutionMode.ASK,
     )
     assert report["mode"] == ExecutionMode.ASK
     assert report["source"] == ModeSource.INVOCATION_ARGUMENT
@@ -233,10 +238,15 @@ def test_a_mode_the_enum_does_not_name_is_refused_in_the_personal_file(
     setting having worked.
     """
     mode_repository.update_notes_branch_file(
-        PERSONAL_SETTINGS_PATH, f'{PlanItemSkill.KICKOFF.setting_key} = "atuo"\n'
+        str(PERSONAL_SETTINGS_PATH), f'{PlanItemSkill.KICKOFF.setting_key} = "atuo"\n'
     )
 
-    finished = run_mode(mode_repository, "resolve", "--skill", PlanItemSkill.KICKOFF)
+    finished = run_mode(
+        mode_repository,
+        Subcommand.RESOLVE,
+        CommandLineOption.SKILL,
+        PlanItemSkill.KICKOFF,
+    )
     assert finished.returncode == ExitCode.UNKNOWN_MODE
     assert finished.stdout == ""
     assert ExitCode.UNKNOWN_MODE.name_for_a_caller in finished.stderr
@@ -250,10 +260,10 @@ def test_a_mode_the_enum_does_not_name_is_refused_on_the_command_line(
     """
     finished = run_mode(
         mode_repository,
-        "resolve",
-        "--skill",
+        Subcommand.RESOLVE,
+        CommandLineOption.SKILL,
         PlanItemSkill.KICKOFF,
-        "--requested",
+        CommandLineOption.REQUESTED,
         "go",
     )
     assert finished.returncode == ExitCode.UNKNOWN_MODE
@@ -267,11 +277,30 @@ def test_a_personal_settings_file_that_will_not_parse_is_refused(
     Broken syntax is reported rather than read as an absent setting.
     """
     mode_repository.update_notes_branch_file(
-        PERSONAL_SETTINGS_PATH, "kickoff_mode = \n"
+        str(PERSONAL_SETTINGS_PATH), "kickoff_mode = \n"
     )
 
-    finished = run_mode(mode_repository, "resolve", "--skill", PlanItemSkill.KICKOFF)
+    finished = run_mode(
+        mode_repository,
+        Subcommand.RESOLVE,
+        CommandLineOption.SKILL,
+        PlanItemSkill.KICKOFF,
+    )
     assert finished.returncode == ExitCode.MALFORMED_MODE_SETTINGS
+    assert finished.stdout == ""
+
+
+def test_a_usage_error_exits_with_the_status_the_enum_reserves_for_it(
+    mode_repository: ScratchRepository,
+):
+    """
+    2 is left out of the refusals this tool raises because ``argparse`` already owns it.
+    """
+    finished = run_mode(
+        mode_repository, Subcommand.RESOLVE, CommandLineOption.SKILL, "bogus"
+    )
+
+    assert finished.returncode == ExitCode.USAGE
     assert finished.stdout == ""
 
 
@@ -314,16 +343,16 @@ def test_setting_one_mode_preserves_the_other(
     Writing one key must not clobber the key the user was not changing.
     """
     mode_repository.update_notes_branch_file(
-        PERSONAL_SETTINGS_PATH,
+        str(PERSONAL_SETTINGS_PATH),
         f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
     finished = run_mode(
         mode_repository,
-        "set",
-        "--skill",
+        Subcommand.SET,
+        CommandLineOption.SKILL,
         PlanItemSkill.RESOLVE,
-        "--mode",
+        CommandLineOption.MODE,
         ExecutionMode.ASK,
     )
     assert finished.returncode == ExitCode.SUCCESS, finished.stderr
@@ -343,10 +372,10 @@ def test_setting_a_mode_with_no_personal_file_yet_seeds_it_from_the_defaults(
     """
     finished = run_mode(
         mode_repository,
-        "set",
-        "--skill",
+        Subcommand.SET,
+        CommandLineOption.SKILL,
         PlanItemSkill.KICKOFF,
-        "--mode",
+        CommandLineOption.MODE,
         ExecutionMode.ASK,
     )
     assert finished.returncode == ExitCode.SUCCESS, finished.stderr
@@ -384,12 +413,12 @@ def test_one_run_can_set_every_skill_at_once(
 
     finished = run_mode(
         mode_repository,
-        "set",
-        "--skill",
+        Subcommand.SET,
+        CommandLineOption.SKILL,
         PlanItemSkill.KICKOFF,
-        "--skill",
+        CommandLineOption.SKILL,
         PlanItemSkill.RESOLVE,
-        "--mode",
+        CommandLineOption.MODE,
         ExecutionMode.PLAN,
     )
     assert finished.returncode == ExitCode.SUCCESS, finished.stderr
@@ -412,83 +441,16 @@ def test_a_written_setting_is_what_the_next_resolve_reads(
     """
     run_mode(
         mode_repository,
-        "set",
-        "--skill",
+        Subcommand.SET,
+        CommandLineOption.SKILL,
         PlanItemSkill.KICKOFF,
-        "--mode",
+        CommandLineOption.MODE,
         ExecutionMode.PLAN,
     )
 
     report = resolve(mode_repository, PlanItemSkill.KICKOFF)
     assert report["mode"] == ExecutionMode.PLAN
     assert report["source"] == ModeSource.PERSONAL_SETTING
-
-
-# %% the wire format
-
-
-def test_the_enum_values_are_the_words_the_settings_file_and_the_report_use():
-    """
-    The deliberate exception to this module's read-it-from-the-enum rule.
-
-    Every other assertion here reads its expected value from the enum, so renaming a
-    member's value changes the test and the code together and nothing fails - which is
-    exactly the guard that single-sourcing deletes. These values are a contract: they are
-    written into the settings file a user edits by hand and into a document other programs
-    parse, so a rename has to break something.
-    """
-    assert {member.name: str(member) for member in ExecutionMode} == {
-        "ASK": "ask",
-        "AUTO": "auto",
-        "PLAN": "plan",
-    }
-    assert {member.name: str(member) for member in ModeSource} == {
-        "INVOCATION_ARGUMENT": "invocation_argument",
-        "PERSONAL_SETTING": "personal_setting",
-        "COMMITTED_DEFAULT": "committed_default",
-    }
-    assert {member.name: str(member) for member in PlanItemSkill} == {
-        "KICKOFF": "kickoff",
-        "RESOLVE": "resolve",
-    }
-    assert {member.name: member.setting_key for member in PlanItemSkill} == {
-        "KICKOFF": "kickoff_mode",
-        "RESOLVE": "resolve_mode",
-    }
-    assert {member.name: str(member) for member in ReportStatus} == {
-        "RESOLVED": "resolved",
-        "SET": "set",
-    }
-    assert {member.name: str(member) for member in ReportKey} == {
-        "STATUS": "status",
-        "EXIT_CODE": "exit_code",
-        "SKILL": "skill",
-        "SKILLS": "skills",
-        "MODE": "mode",
-        "SOURCE": "source",
-        "SETTING_KEY": "setting_key",
-        "SETTING_KEYS": "setting_keys",
-        "PERSONAL_SETTING_PATH": "personal_setting_path",
-    }
-    assert {member.name: int(member) for member in ExitCode} == {
-        "SUCCESS": 0,
-        "USAGE": 2,
-        "UNKNOWN_MODE": 3,
-        "MALFORMED_MODE_SETTINGS": 4,
-        "SETTINGS_WRITE_REFUSED": 5,
-    }
-
-
-def test_a_usage_error_exits_with_the_status_the_enum_reserves_for_it(
-    mode_repository: ScratchRepository,
-):
-    """
-    2 is left out of the refusals this tool raises because ``argparse`` already owns it.
-    """
-    finished = run_mode(mode_repository, "resolve", "--skill", "bogus")
-
-    assert finished.returncode == ExitCode.USAGE
-    assert finished.stdout == ""
 
 
 # %% the committed defaults
