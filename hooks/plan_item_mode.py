@@ -69,25 +69,44 @@ HOOKS_DIRECTORY = Path(".claude/hooks")
 Where this script and the shell configuration it sources live, from the project root.
 """
 
-CONFIGURATION_SCRIPT_PATH = HOOKS_DIRECTORY / "resolve-personal-notes-config.sh"
-"""
-The shell configuration that resolves the personal-notes remote and branch.
-"""
 
-NOTES_WRITER_SCRIPT_PATH = HOOKS_DIRECTORY / "write-personal-notes-file.sh"
-"""
-The generic commit-and-push-one-file helper ``set`` writes through.
-"""
+class Location(StrEnum):
+    """
+    Every file this module reads, runs or writes, from the project root.
 
-COMMITTED_DEFAULTS_PATH = HOOKS_DIRECTORY / "plan-item-modes.toml"
-"""
-The shipped defaults, in the repository rather than on the personal-notes branch.
-"""
+    A member is the path as text, since that is what most of them are handed to - a
+    ``git`` reference, a ``bash -c`` line, a subprocess argument, the report a caller
+    parses. :attr:`path` is the same location where a real :class:`~pathlib.Path` is
+    wanted. ``HOOKS_DIRECTORY`` stays a constant above rather than a member, so the
+    directory the first three share is still named once.
+    """
 
-PERSONAL_SETTINGS_PATH = Path(".claude/personal/plan-item-modes.toml")
-"""
-The per-user override, on the personal-notes branch.
-"""
+    CONFIGURATION_SCRIPT = f"{HOOKS_DIRECTORY}/resolve-personal-notes-config.sh"
+    """
+    The shell configuration that resolves the personal-notes remote and branch.
+    """
+
+    NOTES_WRITER_SCRIPT = f"{HOOKS_DIRECTORY}/write-personal-notes-file.sh"
+    """
+    The generic commit-and-push-one-file helper ``set`` writes through.
+    """
+
+    COMMITTED_DEFAULTS = f"{HOOKS_DIRECTORY}/plan-item-modes.toml"
+    """
+    The shipped defaults, in the repository rather than on the personal-notes branch.
+    """
+
+    PERSONAL_SETTINGS = ".claude/personal/plan-item-modes.toml"
+    """
+    The per-user override, on the personal-notes branch.
+    """
+
+    @property
+    def path(self) -> Path:
+        """
+        :return: This location as a path, for the callers that do path arithmetic on it.
+        """
+        return Path(self.value)
 
 
 # %% vocabulary
@@ -271,7 +290,7 @@ class SettingsFile:
     The file on disk to read.
     """
 
-    origin: Path
+    origin: Location
     """
     Where the settings came from as the user knows it, which for the personal file is its
     location on the notes branch rather than the scratch copy it is read from.
@@ -384,7 +403,7 @@ class MalformedModeSettingsError(ModeError):
     def suggest_correction(self) -> str:
         return (
             "Fix the file, or delete it to fall back to "
-            f"{COMMITTED_DEFAULTS_PATH}'s defaults."
+            f"{Location.COMMITTED_DEFAULTS}'s defaults."
         )
 
 
@@ -402,7 +421,7 @@ class SettingsWriteRefusedError(ModeError):
     """
 
     def error_message(self) -> str:
-        return f"{PERSONAL_SETTINGS_PATH} was not written: {self.detail}"
+        return f"{Location.PERSONAL_SETTINGS} was not written: {self.detail}"
 
     def suggest_correction(self) -> str:
         return "Check the personal-notes branch is set up: run /setup-personal-notes."
@@ -422,7 +441,8 @@ def committed_defaults(project_root: Path) -> dict[str, ExecutionMode]:
     :return: Every skill's default, keyed by its setting key.
     """
     shipped = SettingsFile(
-        path=project_root / COMMITTED_DEFAULTS_PATH, origin=COMMITTED_DEFAULTS_PATH
+        path=project_root / Location.COMMITTED_DEFAULTS,
+        origin=Location.COMMITTED_DEFAULTS,
     )
     raw = shipped.read()
     missing = [
@@ -451,7 +471,7 @@ def personal_settings(project_root: Path) -> dict[str, Any]:
     if not fetch_notes_branch(project_root):
         return {}
     shown = subprocess.run(
-        ["git", "show", f"FETCH_HEAD:{PERSONAL_SETTINGS_PATH}"],
+        ["git", "show", f"FETCH_HEAD:{Location.PERSONAL_SETTINGS}"],
         cwd=project_root,
         capture_output=True,
         text=True,
@@ -461,7 +481,7 @@ def personal_settings(project_root: Path) -> dict[str, Any]:
     with tempfile.TemporaryDirectory() as scratch_directory:
         scratch_file = Path(scratch_directory) / "personal-plan-item-modes.toml"
         scratch_file.write_text(shown.stdout)
-        return SettingsFile(path=scratch_file, origin=PERSONAL_SETTINGS_PATH).read()
+        return SettingsFile(path=scratch_file, origin=Location.PERSONAL_SETTINGS).read()
 
 
 def fetch_notes_branch(project_root: Path) -> bool:
@@ -479,7 +499,7 @@ def fetch_notes_branch(project_root: Path) -> bool:
         [
             "bash",
             "-c",
-            f'source "{CONFIGURATION_SCRIPT_PATH}" && fetch_personal_notes_branch',
+            f'source "{Location.CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
         ],
         cwd=project_root,
         capture_output=True,
@@ -620,7 +640,7 @@ class ModeResolution(Report):
             ReportKey.MODE: str(self.mode),
             ReportKey.SOURCE: str(self.source),
             ReportKey.SETTING_KEY: self.skill.setting_key,
-            ReportKey.PERSONAL_SETTING_PATH: str(PERSONAL_SETTINGS_PATH),
+            ReportKey.PERSONAL_SETTING_PATH: Location.PERSONAL_SETTINGS,
         }
 
 
@@ -694,7 +714,7 @@ class SettingsWriteReport(Report):
             ReportKey.EXIT_CODE: int(self.exit_code),
             ReportKey.SKILLS: [str(skill) for skill in self.skills],
             ReportKey.MODE: str(self.mode),
-            ReportKey.PERSONAL_SETTING_PATH: str(PERSONAL_SETTINGS_PATH),
+            ReportKey.PERSONAL_SETTING_PATH: Location.PERSONAL_SETTINGS,
         }
 
 
@@ -707,7 +727,7 @@ def render_settings(modes: dict[str, ExecutionMode]) -> str:
     """
     header = (
         "# Personal plan-item execution modes, layered over the committed defaults\n"
-        f"# at {COMMITTED_DEFAULTS_PATH}. Rewritten in full by plan_item_mode.py's\n"
+        f"# at {Location.COMMITTED_DEFAULTS}. Rewritten in full by plan_item_mode.py's\n"
         "# set command, so anything other than the keys below is not preserved.\n"
     )
     body = "".join(
@@ -758,11 +778,11 @@ def write_mode(
         written = subprocess.run(
             [
                 "bash",
-                str(NOTES_WRITER_SCRIPT_PATH),
+                Location.NOTES_WRITER_SCRIPT,
                 "--source",
                 str(scratch_file),
                 "--destination",
-                str(PERSONAL_SETTINGS_PATH),
+                Location.PERSONAL_SETTINGS,
                 "--message",
                 f"Set {pinned} to {mode}",
             ],
