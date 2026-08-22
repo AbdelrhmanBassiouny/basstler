@@ -68,6 +68,13 @@ Apply `${PLAN_ITEM_GATHERING_DOCUMENT}`'s last section first: anything you
 are about to raise as an open question is very often already answered by the
 material step 1 gathered.
 
+Then check the item is still the right unit of work, now that you know which
+files it will touch: follow `${SCOPE_DECISION_DOCUMENT}`. If nothing
+substantial would remain once the overlapping edits are removed, propose
+folding rather than opening a branch that will have to be folded later.
+Otherwise carry on, but say which files overlap so the two branches do not
+build the same thing twice.
+
 Draft a concrete implementation plan: what changes, in which files, in what
 order, and how each part will be verified (tests first, per TDD). Cite where
 each part of the plan came from (the item's own notes, a specific sibling
