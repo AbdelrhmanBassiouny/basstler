@@ -584,6 +584,10 @@ class Report(ABC):
     Declared rather than left to a convention each report is trusted to have followed,
     since ``main`` prints and exits through this pair without knowing which operation
     produced it.
+
+    ``to_json`` is the name and signature
+    :class:`krrood.adapters.json_serializer.SubclassJSONSerializer` gives the same
+    operation, so a report can inherit it wherever that dependency becomes available.
     """
 
     @property
@@ -594,7 +598,7 @@ class Report(ABC):
         """
 
     @abstractmethod
-    def as_json(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         :return: The report a caller reads, led by the status it can act on.
         """
@@ -629,7 +633,7 @@ class ModeResolution(Report):
     The process status this resolution exits with.
     """
 
-    def as_json(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         :return: The mode in force, what decided it, and where to change it.
         """
@@ -705,7 +709,7 @@ class SettingsWriteReport(Report):
     The process status this write exits with.
     """
 
-    def as_json(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
         :return: What was pinned, to what, and in which file.
         """
@@ -880,7 +884,7 @@ def main() -> int:
         print(f"{error.exit_code.name_for_a_caller}: {error}", file=sys.stderr)
         return int(error.exit_code)
 
-    print(json.dumps(report.as_json()))
+    print(json.dumps(report.to_json()))
     return int(report.exit_code)
 
 
