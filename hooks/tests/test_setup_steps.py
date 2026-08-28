@@ -18,6 +18,7 @@ import pytest
 
 import setup_steps
 from setup_steps import (
+    COMMENT_MARKER,
     ForkLabels,
     git_value,
     PersistentVariables,
@@ -222,6 +223,40 @@ def test_a_setting_already_in_the_environment_is_listed_too(
     """
     A value coming from the environment is still worth pasting into a *persistent*
     variable list, which is a different place from the current session's environment.
+    """
+    branch = "claude/my-own-notes"
+    step = PersistentVariables.resolve(
+        scratch_repository.project_root,
+        {PersonalNotesSetting.BRANCH.environment_variable: branch},
+    )
+    assert step.variable_lines == (
+        f"{PersonalNotesSetting.BRANCH.environment_variable}={branch}",
+    )
+
+
+def test_a_value_carrying_a_comment_marker_is_quoted(
+    scratch_repository: ScratchRepository,
+) -> None:
+    """
+    An environment's variable list reads an unquoted value only as far as its comment
+    marker, so a branch or path carrying one has to be quoted or it is silently set to a
+    prefix of itself.
+    """
+    branch = f"claude/notes{COMMENT_MARKER}2"
+    step = PersistentVariables.resolve(
+        scratch_repository.project_root,
+        {PersonalNotesSetting.BRANCH.environment_variable: branch},
+    )
+    assert step.variable_lines == (
+        f'{PersonalNotesSetting.BRANCH.environment_variable}="{branch}"',
+    )
+
+
+def test_a_value_with_nothing_to_escape_is_left_bare(
+    scratch_repository: ScratchRepository,
+) -> None:
+    """
+    Quoting is for the value that needs it, so an ordinary one is pasted as written.
     """
     branch = "claude/my-own-notes"
     step = PersistentVariables.resolve(
