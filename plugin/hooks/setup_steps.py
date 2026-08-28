@@ -32,9 +32,13 @@ The repository this script describes, resolved from the script's own location so
 answer does not depend on the caller's working directory.
 """
 
-CONNECTOR_SETTINGS_URL = "https://claude.ai/customize/connectors"
+CONNECTOR_SETTINGS_URL = (
+    "https://claude.ai/customize/connectors?auth_start=github&auth_start_force=1"
+)
 """
 Where a user grants Claude access to their own GitHub repositories.
+
+The query opens the GitHub authorization directly rather than the connector list.
 """
 
 ORGANIZATION_SETTINGS_URL = "https://claude.ai/admin-settings/claude-tag"
@@ -43,10 +47,18 @@ Where an organization owner grants Claude access to the organization's repositor
 """
 
 WEB_ENVIRONMENT_DOCUMENTATION_URL = (
-    "https://code.claude.com/docs/en/claude-code-on-the-web"
+    "https://code.claude.com/docs/en/cloud-environments#set-environment-variables"
 )
 """
 Where the environment-level variable list for cloud sessions is documented.
+
+The section rather than the page: the overview only mentions that an environment
+carries variables, and points here for the list itself.
+"""
+
+ENVIRONMENT_SELECTOR_URL = "https://claude.ai/code"
+"""
+Where an environment is edited, which is the selector rather than a settings page.
 """
 
 
@@ -423,6 +435,27 @@ class RepositoryAccess(SetupStep):
         ]
 
 
+COMMENT_MARKER = "#"
+"""
+What starts a comment in the ``.env`` format an environment's variable list uses.
+"""
+
+
+def quoted_if_needed(value: str) -> str:
+    """
+    Quote a variable's value when leaving it bare would truncate it.
+
+    An unquoted value is read to the first comment marker and the rest of the line is
+    dropped, which is silent - the variable is set, to a prefix of what was pasted.
+
+    :param value: The value to write after the ``=``.
+    :return: The value, quoted only when it carries a comment marker.
+    """
+    if COMMENT_MARKER not in value:
+        return value
+    return f'"{value}"'
+
+
 @dataclass(frozen=True)
 class PersistentVariables(SetupStep):
     """
@@ -450,7 +483,9 @@ class PersistentVariables(SetupStep):
         for setting in PersonalNotesSetting:
             value = setting.resolve(project_root, environment)
             if value != setting.default:
-                lines.append(f"{setting.environment_variable}={value}")
+                lines.append(
+                    f"{setting.environment_variable}={quoted_if_needed(value)}"
+                )
         return cls(variable_lines=tuple(lines))
 
     @property
@@ -471,8 +506,8 @@ class PersistentVariables(SetupStep):
         if not self.variable_lines:
             return ["Nothing to paste: every setting is still its default."]
         return [
-            "Paste these into your environment's variable list "
-            f"({WEB_ENVIRONMENT_DOCUMENTATION_URL}):",
+            f"Open your environment at {ENVIRONMENT_SELECTOR_URL} and paste these into "
+            f"its variable list ({WEB_ENVIRONMENT_DOCUMENTATION_URL}):",
             *self.variable_lines,
         ]
 
