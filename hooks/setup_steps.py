@@ -17,12 +17,13 @@ Usage:
 
 from __future__ import annotations
 
+import dataclasses
 import os
 import subprocess
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum, StrEnum
 from pathlib import Path
 
 PROJECT_ROOT = Path(__file__).parent.parent.parent
@@ -49,13 +50,39 @@ Where the environment-level variable list for cloud sessions is documented.
 """
 
 
+# %% reading a value out of the clone
+
+
+def git_value(project_root: Path, *arguments: str) -> str | None:
+    """
+    Read a value git can answer for a clone, or nothing when it has no answer.
+
+    An absent answer is an ordinary outcome here - an unset configuration key, a remote
+    the clone never added - so it is reported rather than raised, and every caller in
+    this module falls through to the next thing it knows.
+
+    :param project_root: The clone to run in.
+    :param arguments: The git subcommand and its arguments.
+    :return: The trimmed output, or ``None`` when the command failed or said nothing.
+    """
+    completed = subprocess.run(
+        ["git", *arguments],
+        cwd=project_root,
+        capture_output=True,
+        text=True,
+    )
+    if completed.returncode != 0:
+        return None
+    return completed.stdout.strip() or None
+
+
 # %% the settings whose values the printed steps depend on
 
 
 @dataclass(frozen=True)
-class PersonalNotesSetting:
+class PersonalNotesSettingSpecification:
     """
-    One of the three settings that decide where personal notes live.
+    Where one personal-notes setting is read from, and what it falls back to.
 
     resolve-personal-notes-config.sh is the definition of both the precedence and the
     defaults; this mirrors them because the shell file exports nothing a child process
@@ -85,52 +112,74 @@ class PersonalNotesSetting:
         :param environment: The environment to read the variable from.
         :return: The value in force.
         """
-        configured = subprocess.run(
-            ["git", "config", "--get", self.git_config_key],
-            cwd=project_root,
-            capture_output=True,
-            text=True,
-        )
-        if configured.returncode == 0 and configured.stdout.strip():
-            return configured.stdout.strip()
+        configured = git_value(project_root, "config", "--get", self.git_config_key)
+        if configured is not None:
+            return configured
         return environment.get(self.environment_variable) or self.default
 
 
-NOTES_REMOTE_SETTING = PersonalNotesSetting(
-    git_config_key="claude.personalNotesRemote",
-    environment_variable="CLAUDE_PERSONAL_NOTES_REMOTE",
-    default="origin",
-)
-"""
-The remote, or raw URL, the notes branch lives on.
-"""
+class PersonalNotesSetting(PersonalNotesSettingSpecification, Enum):
+    """
+    The three settings that decide where personal notes live, in the order the printed
+    variable list uses them.
 
-NOTES_BRANCH_SETTING = PersonalNotesSetting(
-    git_config_key="claude.personalNotesBranch",
-    environment_variable="CLAUDE_PERSONAL_NOTES_BRANCH",
-    default="claude/personal-notes",
-)
-"""
-The branch the notes are stored on.
-"""
+    Each member *is* a specification, so a setting's own key, variable and default are
+    reached directly and no caller holds a parallel list of them.
 
-NOTES_PATH_SETTING = PersonalNotesSetting(
-    git_config_key="claude.personalNotesPath",
-    environment_variable="CLAUDE_PERSONAL_NOTES_PATH",
-    default=".claude/personal/cram-notes.md",
-)
-"""
-Where on that branch the notes file sits.
-"""
+    .. note::
+       Both :meth:`__new__` and :meth:`__init__` are needed: the enum machinery builds a
+       member's value by calling the mixed-in type with the member's value as arguments,
+       which a specification with no defaulted field cannot survive.
+    """
 
-PERSONAL_NOTES_SETTINGS = (
-    NOTES_REMOTE_SETTING,
-    NOTES_BRANCH_SETTING,
-    NOTES_PATH_SETTING,
-)
-"""
-Every personal-notes setting, in the order the printed variable list uses.
-"""
+    def __new__(
+        cls, specification: PersonalNotesSettingSpecification
+    ) -> PersonalNotesSetting:
+        """
+        Make the member without letting the enum rebuild the specification from it.
+
+        :param specification: Where this setting is read from.
+        :return: The member, carrying that specification as its value.
+        """
+        member = object.__new__(cls)
+        member._value_ = specification
+        return member
+
+    def __init__(self, specification: PersonalNotesSettingSpecification) -> None:
+        """
+        Carry the specification's values on the member itself.
+
+        :param specification: Where this setting is read from.
+        """
+        for field in dataclasses.fields(PersonalNotesSettingSpecification):
+            object.__setattr__(self, field.name, getattr(specification, field.name))
+
+    REMOTE = PersonalNotesSettingSpecification(
+        git_config_key="claude.personalNotesRemote",
+        environment_variable="CLAUDE_PERSONAL_NOTES_REMOTE",
+        default="origin",
+    )
+    """
+    The remote, or raw URL, the notes branch lives on.
+    """
+
+    BRANCH = PersonalNotesSettingSpecification(
+        git_config_key="claude.personalNotesBranch",
+        environment_variable="CLAUDE_PERSONAL_NOTES_BRANCH",
+        default="claude/personal-notes",
+    )
+    """
+    The branch the notes are stored on.
+    """
+
+    PATH = PersonalNotesSettingSpecification(
+        git_config_key="claude.personalNotesPath",
+        environment_variable="CLAUDE_PERSONAL_NOTES_PATH",
+        default=".claude/personal/cram-notes.md",
+    )
+    """
+    Where on that branch the notes file sits.
+    """
 
 
 # %% the repository the steps are about
@@ -191,16 +240,10 @@ def resolve_repository(project_root: Path, notes_remote: str) -> Repository | No
     :param notes_remote: The resolved notes remote, either a remote name or a URL.
     :return: The repository, or ``None`` when no remote resolves to a GitHub URL.
     """
-    candidates = [notes_remote]
-    remote_url = subprocess.run(
-        ["git", "remote", "get-url", notes_remote],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
-    )
-    if remote_url.returncode == 0:
-        candidates.insert(0, remote_url.stdout.strip())
-    for candidate in candidates:
+    remote_url = git_value(project_root, "remote", "get-url", notes_remote)
+    for candidate in (remote_url, notes_remote):
+        if candidate is None:
+            continue
         repository = Repository.from_remote_url(candidate)
         if repository is not None:
             return repository
@@ -210,41 +253,48 @@ def resolve_repository(project_root: Path, notes_remote: str) -> Repository | No
 # %% the labels a fork has to carry
 
 
-class LabelPurpose(StrEnum):
+class RepositoryLabel(StrEnum):
     """
-    What each label this tooling relies on is for, as its ``gh`` description.
+    Every label this tooling reads or applies, and therefore every one a fork must
+    carry, each with the description it is created with.
+
+    A member is its own label name, so the set mirrors build_dashboard.py's
+    ``PullRequestLabel`` member for member and value for value - held equal by a test
+    rather than by an import, because that module needs the dashboard's dependencies
+    installed, which is one of the things this script exists to run before.
     """
 
-    MERGED = "The changes landed even though GitHub never recorded a merge"
+    purpose: str
+    """
+    What the label means, used as its description when it is created.
+    """
+
+    def __new__(cls, label: str, purpose: str) -> RepositoryLabel:
+        """
+        Make a member that is its own label name and carries what the label means.
+
+        :param label: The label's name, as GitHub stores it.
+        :param purpose: What it means, used as the description when it is created.
+        :return: The member.
+        """
+        member = str.__new__(cls, label)
+        member._value_ = label
+        member.purpose = purpose
+        return member
+
+    MERGED = ("merged", "The changes landed even though GitHub never recorded a merge")
     """
     Read by the dashboard, which treats the label exactly like a real merge.
     """
 
-    BUG = "A bug fix"
-    """
-    Applied by a session opening a bug-fix pull request, and shown as a dashboard chip.
-    """
-
-    IN_REVIEW = "Under review"
+    IN_REVIEW = ("in-review", "Under review")
     """
     Recognized so it does not read as an unknown label; no script acts on it yet.
     """
 
-
-@dataclass(frozen=True)
-class RepositoryLabel:
+    BUG = ("bug", "A bug fix")
     """
-    One label this tooling reads or applies, and therefore one a fork must carry.
-    """
-
-    name: str
-    """
-    The label's name, as GitHub stores it.
-    """
-
-    purpose: LabelPurpose
-    """
-    What it means, used as the description when the label is created.
+    Applied by a session opening a bug-fix pull request, and shown as a dashboard chip.
     """
 
     def creation_command(self, repository: Repository) -> str:
@@ -255,23 +305,9 @@ class RepositoryLabel:
         :return: The command, ready to paste.
         """
         return (
-            f"gh label create {self.name} --repo {repository.full_name} "
-            f'--description "{self.purpose.value}"'
+            f"gh label create {self.value} --repo {repository.full_name} "
+            f'--description "{self.purpose}"'
         )
-
-
-REQUIRED_LABELS = (
-    RepositoryLabel(name="merged", purpose=LabelPurpose.MERGED),
-    RepositoryLabel(name="bug", purpose=LabelPurpose.BUG),
-    RepositoryLabel(name="in-review", purpose=LabelPurpose.IN_REVIEW),
-)
-"""
-Every label the tooling reads or applies.
-
-The same set build_dashboard.py's ``PullRequestLabel`` enumerates - kept as its own
-tuple because that module needs the dashboard's dependencies installed, which is one
-of the things this script exists to run before.
-"""
 
 
 # %% the steps themselves
@@ -345,9 +381,13 @@ class ForkLabels(SetupStep):
     def instructions(self) -> list[str]:
         """See :meth:`SetupStep.instructions`."""
         commands = [
-            label.creation_command(self.repository) for label in REQUIRED_LABELS
+            label.creation_command(self.repository) for label in RepositoryLabel
         ]
-        return [*commands, f"Or create them by hand: {self.repository.labels_url}"]
+        return [
+            f"By hand: {self.repository.labels_url}",
+            "Or, if you have the gh CLI:",
+            *commands,
+        ]
 
 
 @dataclass(frozen=True)
@@ -407,7 +447,7 @@ class PersistentVariables(SetupStep):
         :return: The step, carrying only the lines that differ from the defaults.
         """
         lines = []
-        for setting in PERSONAL_NOTES_SETTINGS:
+        for setting in PersonalNotesSetting:
             value = setting.resolve(project_root, environment)
             if value != setting.default:
                 lines.append(f"{setting.environment_variable}={value}")
@@ -471,7 +511,7 @@ class SetupChecklist:
         :param environment: The environment its settings resolve from.
         :return: The checklist.
         """
-        notes_remote = NOTES_REMOTE_SETTING.resolve(project_root, environment)
+        notes_remote = PersonalNotesSetting.REMOTE.resolve(project_root, environment)
         repository = resolve_repository(project_root, notes_remote)
         steps: list[SetupStep] = []
         if repository is not None:
