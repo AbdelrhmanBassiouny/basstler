@@ -18,15 +18,13 @@ import pytest
 
 import setup_steps
 from setup_steps import (
-    NOTES_BRANCH_SETTING,
-    NOTES_PATH_SETTING,
-    NOTES_REMOTE_SETTING,
-    PERSONAL_NOTES_SETTINGS,
-    REQUIRED_LABELS,
     ForkLabels,
+    git_value,
     PersistentVariables,
+    PersonalNotesSetting,
     Repository,
     RepositoryAccess,
+    RepositoryLabel,
     SetupChecklist,
     resolve_repository,
 )
@@ -123,37 +121,69 @@ def test_a_clone_with_no_github_remote_resolves_no_repository(
     assert resolve_repository(scratch_repository.project_root, "origin") is None
 
 
+# %% reading a value out of the clone
+
+
+def test_a_value_git_cannot_answer_is_reported_rather_than_raised(
+    scratch_repository: ScratchRepository,
+) -> None:
+    """
+    Both callers fall through to something else when git has no answer, so an unset key
+    and an unknown remote have to come back as nothing at all.
+    """
+    root = scratch_repository.project_root
+    assert git_value(root, "config", "--get", "claude.notSet") is None
+    assert git_value(root, "remote", "get-url", "no-such-remote") is None
+
+
+def test_a_value_git_does_answer_comes_back_trimmed(
+    clone_with_fork_remote: ScratchRepository,
+) -> None:
+    """
+    The answer is the value itself, without the newline git writes after it.
+    """
+    root = clone_with_fork_remote.project_root
+    assert git_value(root, "remote", "get-url", "origin") == FORK_REMOTE_URL
+
+
 # %% the labels step
 
 
 def test_every_label_the_tooling_relies_on_is_offered() -> None:
     """
-    The labels this step creates are exactly the ones the dashboard recognizes.
+    This enum and the dashboard's own name the same labels, member for member.
 
-    Asserted against ``build_dashboard.PullRequestLabel`` itself: a label added there
-    and not here would leave a fork missing one, with nothing else to catch it.
+    Asserted against ``build_dashboard.PullRequestLabel`` itself, by member name as well
+    as by value: a label added there and not here would leave a fork missing one, with
+    nothing else to catch it.
     """
-    assert {label.name for label in REQUIRED_LABELS} == {
-        member.value for member in PullRequestLabel
+    assert {label.name: label.value for label in RepositoryLabel} == {
+        member.name: member.value for member in PullRequestLabel
     }
 
 
-def test_each_label_is_created_with_its_own_description() -> None:
+def test_each_label_carries_the_description_it_is_created_with() -> None:
     """
-    The creation commands name the fork and describe what each label means.
+    Every label says what it means, and the creation command names the fork.
     """
-    assert [label.creation_command(FORK) for label in REQUIRED_LABELS] == [
-        f"gh label create {label.name} --repo {FORK.full_name} "
-        f'--description "{label.purpose.value}"'
-        for label in REQUIRED_LABELS
+    for label in RepositoryLabel:
+        assert label.purpose
+        assert label.creation_command(FORK) == (
+            f"gh label create {label.value} --repo {FORK.full_name} "
+            f'--description "{label.purpose}"'
+        )
+
+
+def test_the_labels_step_leads_with_the_page_that_creates_them_by_hand() -> None:
+    """
+    The ``gh`` CLI is not present everywhere, so the step offers the fork's own labels
+    page before the commands that need it.
+    """
+    instructions = ForkLabels(FORK).instructions()
+    assert FORK.labels_url in instructions[0]
+    assert [line for line in instructions if line.startswith("gh label create")] == [
+        label.creation_command(FORK) for label in RepositoryLabel
     ]
-
-
-def test_the_labels_step_also_points_at_the_page_that_creates_them_by_hand() -> None:
-    """
-    A user without the ``gh`` CLI is given the fork's own labels page.
-    """
-    assert FORK.labels_url in ForkLabels(FORK).instructions()[-1]
 
 
 # %% the variables step
@@ -178,11 +208,11 @@ def test_only_the_settings_moved_off_their_defaults_are_listed(
     alone are not.
     """
     scratch_repository.run_git(
-        "config", NOTES_REMOTE_SETTING.git_config_key, FORK_REMOTE_URL
+        "config", PersonalNotesSetting.REMOTE.git_config_key, FORK_REMOTE_URL
     )
     step = PersistentVariables.resolve(scratch_repository.project_root, {})
     assert step.variable_lines == (
-        f"{NOTES_REMOTE_SETTING.environment_variable}={FORK_REMOTE_URL}",
+        f"{PersonalNotesSetting.REMOTE.environment_variable}={FORK_REMOTE_URL}",
     )
 
 
@@ -196,10 +226,10 @@ def test_a_setting_already_in_the_environment_is_listed_too(
     branch = "claude/my-own-notes"
     step = PersistentVariables.resolve(
         scratch_repository.project_root,
-        {NOTES_BRANCH_SETTING.environment_variable: branch},
+        {PersonalNotesSetting.BRANCH.environment_variable: branch},
     )
     assert step.variable_lines == (
-        f"{NOTES_BRANCH_SETTING.environment_variable}={branch}",
+        f"{PersonalNotesSetting.BRANCH.environment_variable}={branch}",
     )
 
 
@@ -210,11 +240,11 @@ def test_git_config_outranks_the_environment(
     The precedence the hooks apply - git config, then environment, then default.
     """
     scratch_repository.run_git(
-        "config", NOTES_PATH_SETTING.git_config_key, "configured/notes.md"
+        "config", PersonalNotesSetting.PATH.git_config_key, "configured/notes.md"
     )
-    resolved = NOTES_PATH_SETTING.resolve(
+    resolved = PersonalNotesSetting.PATH.resolve(
         scratch_repository.project_root,
-        {NOTES_PATH_SETTING.environment_variable: "environment/notes.md"},
+        {PersonalNotesSetting.PATH.environment_variable: "environment/notes.md"},
     )
     assert resolved == "configured/notes.md"
 
@@ -227,7 +257,7 @@ def test_the_settings_are_the_ones_the_hooks_resolve() -> None:
     configuration = RESOLVE_CONFIG_SCRIPT.read_text(encoding="utf-8")
     missing = [
         value
-        for setting in PERSONAL_NOTES_SETTINGS
+        for setting in PersonalNotesSetting
         for value in (
             setting.git_config_key,
             setting.environment_variable,
