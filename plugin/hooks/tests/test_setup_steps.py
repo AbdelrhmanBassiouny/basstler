@@ -19,16 +19,16 @@ import pytest
 import setup_steps
 from setup_steps import (
     COMMENT_MARKER,
-    CONNECTOR_SETTINGS_URL,
-    ORGANIZATION_CONNECTOR_SETTINGS_URL,
     ForkLabels,
     git_value,
     PersistentVariables,
     PersonalNotesSetting,
+    Host,
     Repository,
     RepositoryAccess,
     RepositoryLabel,
     SetupChecklist,
+    SetupLink,
     resolve_repository,
 )
 
@@ -63,6 +63,35 @@ def clone_with_fork_remote(scratch_repository: ScratchRepository) -> ScratchRepo
     """
     scratch_repository.run_git("remote", "add", "origin", FORK_REMOTE_URL)
     return scratch_repository
+
+
+# %% the pages the steps link to
+
+
+def test_every_link_is_served_by_a_host_this_module_names() -> None:
+    """
+    A page is composed from the host serving it rather than spelling that host again, so
+    the three services are named once between them.
+    """
+    for link in SetupLink:
+        assert any(link.startswith(host.url) for host in Host), link
+
+
+def test_the_repository_links_use_the_same_host_as_everything_else() -> None:
+    """
+    A link that varies with the repository is built rather than listed, and builds from
+    the same place the fixed ones do.
+    """
+    assert FORK.labels_url.startswith(Host.GITHUB.url)
+
+
+def test_the_module_writes_the_scheme_once() -> None:
+    """
+    Every link resolves through :attr:`Host.url`, so a second ``https://`` in the source
+    is a page spelling out a host that is already named.
+    """
+    source = Path(setup_steps.__file__).read_text(encoding="utf-8")
+    assert source.count('"https://') == 1
 
 
 # %% reading the repository out of a remote
@@ -209,8 +238,8 @@ def test_the_access_step_leads_with_the_authorization_a_user_performs() -> None:
     authorization, not alternatives to it, so it comes first.
     """
     instructions = RepositoryAccess(FORK).instructions()
-    assert CONNECTOR_SETTINGS_URL in instructions[0]
-    assert any(ORGANIZATION_CONNECTOR_SETTINGS_URL in line for line in instructions[1:])
+    assert SetupLink.GITHUB_AUTHORIZATION in instructions[0]
+    assert any(SetupLink.ORGANIZATION_CONNECTORS in line for line in instructions[1:])
 
 
 def test_the_access_step_says_the_github_app_is_not_the_grant() -> None:
