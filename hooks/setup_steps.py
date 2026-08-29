@@ -41,9 +41,11 @@ Where a user grants Claude access to their own GitHub repositories.
 The query opens the GitHub authorization directly rather than the connector list.
 """
 
-ORGANIZATION_SETTINGS_URL = "https://claude.ai/admin-settings/claude-tag"
+ORGANIZATION_CONNECTOR_SETTINGS_URL = "https://claude.ai/admin-settings/connectors"
 """
-Where an organization owner grants Claude access to the organization's repositories.
+Where an owner turns the GitHub connector on for a Team or Enterprise organization.
+
+Until they do, the authorization above offers no sign-in button at all.
 """
 
 WEB_ENVIRONMENT_DOCUMENTATION_URL = (
@@ -417,21 +419,25 @@ class RepositoryAccess(SetupStep):
     @property
     def title(self) -> str:
         """See :attr:`SetupStep.title`."""
-        return f"Give Claude access to {self.repository.full_name}"
+        return f"Connect GitHub, so Claude can work in {self.repository.full_name}"
 
     @property
     def reason(self) -> str:
         """See :attr:`SetupStep.reason`."""
         return (
-            "A session that cannot reach the repository cannot read pull requests, "
-            "open them, or build a dashboard from their state."
+            "This is what lets a session clone the fork, push a branch, open a pull "
+            "request and comment on one - and read the state a dashboard is built from."
         )
 
     def instructions(self) -> list[str]:
         """See :meth:`SetupStep.instructions`."""
         return [
-            f"Your own fork: {CONNECTOR_SETTINGS_URL}",
-            f"An organization's fork, granted by an owner: {ORGANIZATION_SETTINGS_URL}",
+            f"Authorize GitHub: {CONNECTOR_SETTINGS_URL}",
+            "One authorization covers every repository your GitHub account can see.",
+            "On a Team or Enterprise plan an owner turns the connector on first, or "
+            f"there is no sign-in to accept: {ORGANIZATION_CONNECTOR_SETTINGS_URL}",
+            "The Claude GitHub App is separate and optional: it adds auto-fix on pull "
+            "requests, and is not what grants access.",
         ]
 
 

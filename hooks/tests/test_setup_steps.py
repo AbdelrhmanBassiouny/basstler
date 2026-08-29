@@ -19,6 +19,8 @@ import pytest
 import setup_steps
 from setup_steps import (
     COMMENT_MARKER,
+    CONNECTOR_SETTINGS_URL,
+    ORGANIZATION_CONNECTOR_SETTINGS_URL,
     ForkLabels,
     git_value,
     PersistentVariables,
@@ -185,6 +187,43 @@ def test_the_labels_step_leads_with_the_page_that_creates_them_by_hand() -> None
     assert [line for line in instructions if line.startswith("gh label create")] == [
         label.creation_command(FORK) for label in RepositoryLabel
     ]
+
+
+# %% the access step
+
+
+def test_the_access_step_names_what_the_authorization_covers() -> None:
+    """
+    Pushing and opening pull requests come from this one authorization, so the step has
+    to say so - a reader who reads it as read-only access has no other step to look for.
+    """
+    step = RepositoryAccess(FORK)
+    covered = f"{step.reason} {' '.join(step.instructions())}"
+    assert "push" in covered
+    assert "pull request" in covered
+
+
+def test_the_access_step_leads_with_the_authorization_a_user_performs() -> None:
+    """
+    The owner's connector toggle and the GitHub App are conditions around the
+    authorization, not alternatives to it, so it comes first.
+    """
+    instructions = RepositoryAccess(FORK).instructions()
+    assert CONNECTOR_SETTINGS_URL in instructions[0]
+    assert any(ORGANIZATION_CONNECTOR_SETTINGS_URL in line for line in instructions[1:])
+
+
+def test_the_access_step_says_the_github_app_is_not_the_grant() -> None:
+    """
+    Installing the app is skippable and grants nothing, so a reader must not take it for
+    the access step and must not skip it expecting auto-fix anyway.
+    """
+    application = [
+        line for line in RepositoryAccess(FORK).instructions() if "App" in line
+    ]
+    assert len(application) == 1
+    assert "auto-fix" in application[0]
+    assert "not what grants access" in application[0]
 
 
 # %% the variables step
