@@ -32,36 +32,78 @@ The repository this script describes, resolved from the script's own location so
 answer does not depend on the caller's working directory.
 """
 
-CONNECTOR_SETTINGS_URL = (
-    "https://claude.ai/customize/connectors?auth_start=github&auth_start_force=1"
-)
-"""
-Where a user grants Claude access to their own GitHub repositories.
 
-The query opens the GitHub authorization directly rather than the connector list.
-"""
+class Host(StrEnum):
+    """
+    The services the printed steps send a reader to, each named once.
 
-ORGANIZATION_CONNECTOR_SETTINGS_URL = "https://claude.ai/admin-settings/connectors"
-"""
-Where an owner turns the GitHub connector on for a Team or Enterprise organization.
+    A member is the bare host, which is how a remote URL carries it; :attr:`url` is
+    the same host addressed over HTTPS, which is how a link carries it.
+    """
 
-Until they do, the authorization above offers no sign-in button at all.
-"""
+    CLAUDE = "claude.ai"
+    """
+    Where Claude's own settings and cloud sessions live.
+    """
 
-WEB_ENVIRONMENT_DOCUMENTATION_URL = (
-    "https://code.claude.com/docs/en/cloud-environments#set-environment-variables"
-)
-"""
-Where the environment-level variable list for cloud sessions is documented.
+    CLAUDE_DOCUMENTATION = "code.claude.com"
+    """
+    Where Claude Code's documentation lives.
+    """
 
-The section rather than the page: the overview only mentions that an environment
-carries variables, and points here for the list itself.
-"""
+    GITHUB = "github.com"
+    """
+    Where the fork, its labels and its pull requests live.
+    """
 
-ENVIRONMENT_SELECTOR_URL = "https://claude.ai/code"
-"""
-Where an environment is edited, which is the selector rather than a settings page.
-"""
+    @property
+    def url(self) -> str:
+        """
+        This host addressed the way every link in this module addresses it.
+        """
+        return f"https://{self}"
+
+
+class SetupLink(StrEnum):
+    """
+    Every fixed page the printed steps link to, composed from the host serving it.
+
+    A link that varies with the repository is built by that repository instead - see
+    :attr:`Repository.labels_url`.
+    """
+
+    GITHUB_AUTHORIZATION = (
+        f"{Host.CLAUDE.url}/customize/connectors"
+        "?auth_start=github&auth_start_force=1"
+    )
+    """
+    Where a user grants Claude access to their own GitHub repositories.
+
+    The query opens the GitHub authorization directly rather than the connector list.
+    """
+
+    ORGANIZATION_CONNECTORS = f"{Host.CLAUDE.url}/admin-settings/connectors"
+    """
+    Where an owner enables the GitHub connector for a Team or Enterprise Claude plan.
+
+    Until they do, the authorization above offers no sign-in button at all.
+    """
+
+    ENVIRONMENT_SELECTOR = f"{Host.CLAUDE.url}/code"
+    """
+    Where an environment is edited, which is the selector rather than a settings page.
+    """
+
+    ENVIRONMENT_VARIABLES = (
+        f"{Host.CLAUDE_DOCUMENTATION.url}/docs/en/cloud-environments"
+        "#set-environment-variables"
+    )
+    """
+    Where the environment-level variable list for cloud sessions is documented.
+
+    The section rather than the page: the overview only mentions that an environment
+    carries variables, and points here for the list itself.
+    """
 
 
 # %% reading a value out of the clone
@@ -223,9 +265,9 @@ class Repository:
         :param url: The remote URL.
         :return: The repository, or ``None`` if the URL names no GitHub repository.
         """
-        if "github.com" not in url:
+        if Host.GITHUB not in url:
             return None
-        path = url.split("github.com", 1)[1].lstrip(":/").removesuffix(".git")
+        path = url.split(Host.GITHUB, 1)[1].lstrip(":/").removesuffix(".git")
         segments = [segment for segment in path.split("/") if segment]
         if len(segments) != 2:
             return None
@@ -243,7 +285,7 @@ class Repository:
         """
         The page where labels are created by hand.
         """
-        return f"https://github.com/{self.full_name}/labels"
+        return f"{Host.GITHUB.url}/{self.full_name}/labels"
 
 
 def resolve_repository(project_root: Path, notes_remote: str) -> Repository | None:
@@ -432,10 +474,11 @@ class RepositoryAccess(SetupStep):
     def instructions(self) -> list[str]:
         """See :meth:`SetupStep.instructions`."""
         return [
-            f"Authorize GitHub: {CONNECTOR_SETTINGS_URL}",
+            f"Authorize GitHub: {SetupLink.GITHUB_AUTHORIZATION}",
             "One authorization covers every repository your GitHub account can see.",
-            "On a Team or Enterprise plan an owner turns the connector on first, or "
-            f"there is no sign-in to accept: {ORGANIZATION_CONNECTOR_SETTINGS_URL}",
+            "If your Claude plan is Team or Enterprise, an owner enables the GitHub "
+            f"connector first or no sign-in appears: "
+            f"{SetupLink.ORGANIZATION_CONNECTORS}",
             "The Claude GitHub App is separate and optional: it adds auto-fix on pull "
             "requests, and is not what grants access.",
         ]
@@ -512,8 +555,8 @@ class PersistentVariables(SetupStep):
         if not self.variable_lines:
             return ["Nothing to paste: every setting is still its default."]
         return [
-            f"Open your environment at {ENVIRONMENT_SELECTOR_URL} and paste these into "
-            f"its variable list ({WEB_ENVIRONMENT_DOCUMENTATION_URL}):",
+            f"Open your environment at {SetupLink.ENVIRONMENT_SELECTOR} and paste these into "
+            f"its variable list ({SetupLink.ENVIRONMENT_VARIABLES}):",
             *self.variable_lines,
         ]
 
