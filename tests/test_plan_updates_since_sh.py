@@ -21,7 +21,7 @@ import pytest
 
 from basstler.locations import ProjectLocation
 
-from .constants import DatasetLocation
+from .constants import DatasetLocation, ScratchBranch
 from .script_runner import BashScriptRunner
 
 from .executable_stubs import (
@@ -116,7 +116,7 @@ def scratch_repo(scratch_repository: ScratchRepository) -> ScratchRepository:
     """
     install_plan_updates_since(scratch_repository)
     scratch_repository.publish_notes_branch(
-        {".claude/personal/placeholder.md": "notes\n"}
+        {ProjectLocation.PERSONAL_NOTES / "placeholder.md": "notes\n"}
     )
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
@@ -150,20 +150,20 @@ def write_plan_commit(
         "clone",
         "--quiet",
         "--branch",
-        "claude/personal-notes",
+        ScratchBranch.PERSONAL_NOTES,
         str(repository.notes_remote_path),
         str(checkout),
         cwd=repository.project_root.parent,
     )
     _run_git("config", "user.name", "Scratch Repo", cwd=checkout)
     _run_git("config", "user.email", "scratch-repo@example.com", cwd=checkout)
-    plan_directory = checkout / ".claude" / "personal" / "plans" / plan_id
+    plan_directory = checkout / ProjectLocation.PLANS / plan_id
     plan_directory.mkdir(parents=True, exist_ok=True)
     (plan_directory / "plan.yaml").write_text(manifest)
     (plan_directory / "roadmap.md").write_text(roadmap)
-    _run_git("add", f".claude/personal/plans/{plan_id}", cwd=checkout)
+    _run_git("add", str(plan_directory), cwd=checkout)
     _run_git("commit", "--quiet", "-m", message, cwd=checkout)
-    _run_git("push", "--quiet", "origin", "claude/personal-notes", cwd=checkout)
+    _run_git("push", "--quiet", "origin", ScratchBranch.PERSONAL_NOTES, cwd=checkout)
     sha = _run_git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
     shutil.rmtree(checkout)
     return sha

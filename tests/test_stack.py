@@ -50,6 +50,8 @@ from basstler.stack import (
     restack_plan,
 )
 
+from basstler.locations import ProjectLocation
+
 from .constants import StackLabel
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
@@ -345,7 +347,9 @@ def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
 ):
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.publish_notes_branch(
-        {".claude/personal/stack.toml": 'upstream_remote = "my-fork-cram2"\n'}
+        {
+            ProjectLocation.PERSONAL_STACK_CONFIGURATION: 'upstream_remote = "my-fork-cram2"\n'
+        }
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -397,7 +401,9 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
         "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
     )
     scratch_repository.publish_notes_branch(
-        {".claude/personal/stack.toml": 'fork_repository = "someone-else/their-fork"\n'}
+        {
+            ProjectLocation.PERSONAL_STACK_CONFIGURATION: 'fork_repository = "someone-else/their-fork"\n'
+        }
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)

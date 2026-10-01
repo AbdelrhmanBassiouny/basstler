@@ -38,7 +38,7 @@ TRACKING_ISSUE = "55"
 PLAN_IDENTIFIER = "test-plan"
 
 
-MANIFEST_PATH = f".claude/personal/plans/{PLAN_IDENTIFIER}/plan.yaml"
+MANIFEST_PATH = ProjectLocation.PLANS / PLAN_IDENTIFIER / "plan.yaml"
 
 CLAUDE_LOCAL_MD = "CLAUDE.local.md"
 
@@ -231,7 +231,7 @@ def test_reports_a_tracked_branch_whose_manifest_is_missing(
     assert summary_value(result.stdout, "plan") == summary_message(
         SummaryMessage.PLAN_MANIFEST_MISSING,
         PLAN_IDENTIFIER,
-        MANIFEST_PATH,
+        str(MANIFEST_PATH),
         ScratchBranch.PERSONAL_NOTES,
     )
 
@@ -302,7 +302,11 @@ def test_reports_setup_as_ok_when_every_check_passes(
 def test_names_every_check_that_needs_setup(
     session_start_repository: ScratchRepository,
 ):
-    (session_start_repository.project_root / ".claude" / "settings.json").unlink()
+    (
+        session_start_repository.project_root
+        / ProjectLocation.CLAUDE_CODE_DIRECTORY
+        / "settings.json"
+    ).unlink()
     session_start_repository.commit_everything("unregister the SessionStart hook")
 
     result = publish_and_run(session_start_repository)
@@ -324,7 +328,11 @@ def test_names_every_check_that_needs_setup(
 def test_a_failing_setup_check_does_not_fail_the_hook(
     session_start_repository: ScratchRepository,
 ):
-    (session_start_repository.project_root / ".claude" / "settings.json").unlink()
+    (
+        session_start_repository.project_root
+        / ProjectLocation.CLAUDE_CODE_DIRECTORY
+        / "settings.json"
+    ).unlink()
     session_start_repository.commit_everything("unregister the SessionStart hook")
 
     result = publish_and_run(session_start_repository)

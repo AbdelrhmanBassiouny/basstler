@@ -83,13 +83,7 @@ def _refresh_dashboard_script_path(scratch_project_root: Path) -> Path:
 
     :param scratch_project_root: A fixture-built scratch project root.
     """
-    return (
-        scratch_project_root
-        / ".claude"
-        / "skills"
-        / "plan-dashboard"
-        / "refresh_dashboard.sh"
-    )
+    return scratch_project_root / SkillDirectory.PLAN_DASHBOARD / "refresh_dashboard.sh"
 
 
 def run_refresh_dashboard(
@@ -188,7 +182,8 @@ def test_a_correction_pushes_to_personal_notes(scratch_project_root: Path):
     ).read_text()
     plan_path = scratch_project_root / "plan.yaml"
     assert f"--source\n{plan_path}\n" in invocation
-    assert "--destination\n.claude/personal/plans/test-plan/plan.yaml\n" in invocation
+    manifest_destination = ProjectLocation.PLANS / "test-plan" / "plan.yaml"
+    assert f"--destination\n{manifest_destination}\n" in invocation
     assert "1 item(s) to done" in invocation
 
 

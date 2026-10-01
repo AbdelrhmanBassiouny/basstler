@@ -425,7 +425,9 @@ class ScratchRepository:
         )
         return destination
 
-    def update_notes_branch_file(self, relative_path: str, content: str) -> None:
+    def update_notes_branch_file(
+        self, relative_path: str | os.PathLike[str], content: str
+    ) -> None:
         """
         Change one file on the already-published notes branch, the way an edit made from
         another clone would reach it.
