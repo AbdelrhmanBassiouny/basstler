@@ -15,7 +15,7 @@ from __future__ import annotations
 from enum import StrEnum
 from pathlib import Path
 
-from basstler.package_layout import PACKAGE_DIRECTORY, REPOSITORY_ROOT
+from basstler.locations import PackageLocation
 
 __all__ = [
     "DATASET_DIRECTORY",
@@ -23,6 +23,8 @@ __all__ = [
     "PACKAGE_DIRECTORY",
     "REPOSITORY_ROOT",
     "SCRUBBED_ENVIRONMENT_PREFIXES",
+    "INSTALLED_DISTRIBUTION_NAME",
+    "INSTALLED_DISTRIBUTIONS_DATASET",
     "SET_UP_CLONE_DATASET",
     "STUBS_DIRECTORY",
     "UPSTREAM_REVIEW_RESPONSE_DIRECTORY",
@@ -32,6 +34,16 @@ __all__ = [
     "StackLabel",
     "ToolingDirectory",
 ]
+
+PACKAGE_DIRECTORY = PackageLocation.DIRECTORY.value
+"""
+The package under test's own directory.
+"""
+
+REPOSITORY_ROOT = PackageLocation.REPOSITORY_ROOT.value
+"""
+The repository the package under test is imported from.
+"""
 
 DATASET_DIRECTORY = Path(__file__).parent / "dataset"
 """
@@ -47,6 +59,17 @@ hook script.
 UPSTREAM_REVIEW_RESPONSE_DIRECTORY = DATASET_DIRECTORY / "upstream-review-responses"
 """
 The recorded GraphQL responses the upstream review reader is replayed against.
+"""
+
+INSTALLED_DISTRIBUTIONS_DATASET = DATASET_DIRECTORY / "installed-distributions"
+"""
+A directory that reads as installed distributions once it is on ``sys.path``, holding one
+whose name is spelled with every separator a distribution name may use.
+"""
+
+INSTALLED_DISTRIBUTION_NAME = "Spelled_Apart.Name"
+"""
+The name the distribution in :data:`INSTALLED_DISTRIBUTIONS_DATASET` declares itself as.
 """
 
 SET_UP_CLONE_DATASET = DATASET_DIRECTORY / "set-up-clone"

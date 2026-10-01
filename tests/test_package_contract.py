@@ -19,12 +19,10 @@ from pathlib import Path
 
 import pytest
 
-from .constants import ToolingDirectory
+from .constants import PACKAGE_DIRECTORY, REPOSITORY_ROOT, ToolingDirectory
 from .script_runner import ScriptRunner
 from basstler import _version
 from basstler.package_layout import (
-    PACKAGE_DIRECTORY,
-    REPOSITORY_ROOT,
     PackageModule,
     command_line_entry_points,
     package_modules,

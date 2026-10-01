@@ -25,7 +25,6 @@ from pathlib import Path
 import pytest
 
 from basstler.stack import (
-    BOARD_PATH,
     Configuration,
     IntegrationStrategy,
     PullRequest,
@@ -37,9 +36,9 @@ from basstler.stack import (
 )
 
 import basstler.maintenance
-import basstler.maintenance_commands
 import basstler.maintenance_restack_procedure
 from basstler.class_property import classproperty
+from basstler.locations import PackageLocation
 from basstler.maintenance_board import (
     BoardExport,
     MissingPullRequestFieldError,
@@ -492,8 +491,8 @@ def test_the_board_snapshot_is_never_committable():
     between a pass and a committed snapshot of a stack that has since moved.
     """
     ignored = subprocess.run(
-        ["git", "check-ignore", "--quiet", str(BOARD_PATH)],
-        cwd=BOARD_PATH.parent,
+        ["git", "check-ignore", "--quiet", str(PackageLocation.BOARD)],
+        cwd=PackageLocation.DIRECTORY.value,
         capture_output=True,
     )
 
@@ -1511,18 +1510,18 @@ def test_the_report_serialises_every_command_s_outcome(fork_checkout: ForkChecko
     assert document["reparents"] == []
 
 
-def test_a_whole_pass_leaves_no_board_behind(
-    fork_checkout: ForkCheckout, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-):
+def test_a_whole_pass_leaves_no_board_behind(fork_checkout: ForkCheckout):
     """
     A board is a snapshot of one moment's open pull requests, and a later run reading a
     stale one is worse than one finding none - so a pass that has finished with it
     removes it, and the next pass starts by exporting a fresh one.
+
+    The board written here is the real one, which ``board_snapshot_set_aside`` has moved
+    out of the way and puts back afterwards.
     """
     a_parent_and_child(fork_checkout)
-    board_path = tmp_path / "board.json"
+    board_path = PackageLocation.BOARD.value
     board_path.write_text("{}")
-    monkeypatch.setattr(basstler.maintenance_commands, "BOARD_PATH", board_path)
 
     RunReportCommand().run(
         AlreadyResolvedPass.over(fork_checkout, the_board()),

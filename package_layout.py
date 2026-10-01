@@ -17,15 +17,7 @@ from dataclasses import dataclass
 from functools import cache
 from pathlib import Path
 
-PACKAGE_DIRECTORY = Path(__file__).parent
-"""
-This package's own directory, which is also the directory it *is* rather than lives under.
-"""
-
-REPOSITORY_ROOT = PACKAGE_DIRECTORY.parent
-"""
-The repository root, which is the directory ``basstler`` imports from with no install.
-"""
+from basstler.locations import PackageLocation
 
 
 @dataclass(frozen=True)
@@ -69,7 +61,7 @@ def package_modules() -> tuple[PackageModule, ...]:
     """
     return tuple(
         PackageModule(path.stem, _has_a_main_block(path))
-        for path in sorted(PACKAGE_DIRECTORY.glob("*.py"))
+        for path in sorted(PackageLocation.DIRECTORY.value.glob("*.py"))
         if path.stem != "__init__"
     )
 

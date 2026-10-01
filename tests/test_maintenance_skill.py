@@ -14,7 +14,8 @@ import subprocess
 from pathlib import Path
 
 import basstler.stack
-from basstler.stack import CONFIGURATION_PATH, Repository, _configuration_values
+from basstler.locations import PackageLocation
+from basstler.stack import Repository, _configuration_values
 
 from .constants import ToolingDirectory
 
@@ -38,7 +39,9 @@ def candidate_forks() -> set[Repository]:
     :return: The candidate forks, empty if the checkout has no repository remote at all.
     """
     upstream = Repository.parse(
-        _configuration_values(CONFIGURATION_PATH)["upstream_repository"]
+        _configuration_values(PackageLocation.STACK_CONFIGURATION.value)[
+            "upstream_repository"
+        ]
     )
     listed = subprocess.run(
         ["git", "remote"], capture_output=True, text=True, check=True

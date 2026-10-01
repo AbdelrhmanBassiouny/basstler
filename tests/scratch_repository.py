@@ -17,7 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from .script_runner import BashScriptRunner
-import basstler.stack
+from basstler.locations import PackageLocation, ProjectLocation
 
 from .constants import (
     NOTES_BRANCH,
@@ -294,10 +294,11 @@ class ScratchRepository:
         :return: The path :func:`basstler.stack.load_configuration` should be pointed at.
         """
         self.install_hook_scripts(
-            Path(basstler.stack.PERSONAL_NOTES_CONFIGURATION_SCRIPT).name
+            ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name
         )
         written = self.write(
-            f"{PACKAGE_DIRECTORY.name}/{basstler.stack.CONFIGURATION_PATH.name}", content
+            f"{ProjectLocation.PACKAGE}/{PackageLocation.STACK_CONFIGURATION.value.name}",
+            content,
         )
         self.commit_everything("add stack.toml")
         return written

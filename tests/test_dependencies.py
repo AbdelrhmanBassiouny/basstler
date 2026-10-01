@@ -11,6 +11,7 @@ import tomllib
 
 import pytest
 
+from .constants import INSTALLED_DISTRIBUTION_NAME, INSTALLED_DISTRIBUTIONS_DATASET
 from .script_runner import PythonModuleRunner
 from basstler import dependencies
 from basstler.dependencies import (
@@ -19,7 +20,7 @@ from basstler.dependencies import (
     PyprojectKey,
     UnreadableDependencyDeclarationError,
 )
-from basstler.package_layout import REPOSITORY_ROOT
+from basstler.locations import PackageLocation
 
 # %% the declaration
 
@@ -95,6 +96,21 @@ def test_a_distribution_nothing_has_installed_is_reported_missing():
     assert absent.is_missing
 
 
+def test_a_dependency_spelled_differently_from_its_installed_distribution_is_present(
+    monkeypatch,
+):
+    """
+    Case and the separators ``-``, ``_`` and ``.`` do not tell distribution names apart,
+    so a declaration need not spell a name the way the distribution itself does.
+    """
+    monkeypatch.syspath_prepend(INSTALLED_DISTRIBUTIONS_DATASET)
+    respelled = Dependency(
+        f"{INSTALLED_DISTRIBUTION_NAME.upper().replace('_', '-')}>=1"
+    )
+
+    assert not respelled.is_missing
+
+
 def test_missing_dependencies_are_a_subset_of_what_is_declared():
     """
     What the caller installs is drawn from the declaration and nothing else.
@@ -111,7 +127,9 @@ def test_an_absent_declaration_raises_rather_than_declaring_nothing(tmp_path):
     An absent file is not an empty declaration: reading nothing from it would tell a
     caller that nothing is missing.
     """
-    absent = DependencyDeclaration(tmp_path / DependencyDeclaration.FILE_NAME)
+    absent = DependencyDeclaration(
+        tmp_path / PackageLocation.DEPENDENCY_DECLARATION.value.name
+    )
 
     with pytest.raises(UnreadableDependencyDeclarationError):
         absent.missing()
@@ -128,7 +146,8 @@ def run_module(*arguments: str):
     :return: The completed process, with output captured as text.
     """
     return PythonModuleRunner(
-        project_root=REPOSITORY_ROOT, module_name=dependencies.__name__
+        project_root=PackageLocation.REPOSITORY_ROOT.value,
+        module_name=dependencies.__name__,
     ).run(*arguments)
 
 
@@ -163,7 +182,8 @@ def test_an_unreadable_declaration_fails_rather_than_reporting_nothing_missing()
     nothing.
     """
     result = PythonModuleRunner(
-        project_root=REPOSITORY_ROOT, module_name=dependencies.__name__
+        project_root=PackageLocation.REPOSITORY_ROOT.value,
+        module_name=dependencies.__name__,
     ).run("--declaration", "/nonexistent/pyproject.toml")
 
     assert result.returncode != 0

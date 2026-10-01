@@ -1,6 +1,6 @@
 """
-Tests for basstler.plan_item_bootstrap.py's two operations, recording an item and opening
-its work.
+Tests for basstler.plan_item_bootstrap.py's two operations, recording an item and
+opening its work.
 
 Run against the local scratch repository fixture rather than a real remote, and against
 a recording pull request opener rather than GitHub, so nothing here needs network access
@@ -24,9 +24,9 @@ import pytest
 import yaml
 
 import basstler.plan_item_bootstrap
+from basstler.locations import ProjectLocation
 from basstler.plan_item_bootstrap import (
     BLOCK_STYLED_KEYS,
-    PLANS_DIRECTORY,
     CreatedPullRequest,
     ExitCode,
     HookScript,
@@ -650,8 +650,8 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
     bootstrap_repository: ScratchRepository,
 ):
     """
-    ``PLANS_DIRECTORY`` mirrors ``PLANS_DIR`` in the shell configuration; this is what
-    stops the mirror drifting, since the two are edited in different files.
+    ``ProjectLocation.PLANS`` mirrors ``PLANS_DIR`` in the shell configuration; this is
+    what stops the mirror drifting, since the two are edited in different files.
     """
     resolved = subprocess.run(
         [
@@ -668,7 +668,7 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
         check=True,
     )
     plans_directory, manifest_path = resolved.stdout.strip().split("\n")
-    assert plans_directory == PLANS_DIRECTORY
+    assert plans_directory == str(ProjectLocation.PLANS)
     assert manifest_path == PlanDocument.MANIFEST.path_within_notes_branch(
         PLAN_IDENTIFIER
     )

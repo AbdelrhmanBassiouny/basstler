@@ -28,10 +28,11 @@ import sys
 import tomllib
 from dataclasses import dataclass
 from enum import StrEnum
-from functools import cache
 from importlib.metadata import distributions
 from pathlib import Path
 from typing import ClassVar
+
+from basstler.locations import PackageLocation
 
 
 class PyprojectKey(StrEnum):
@@ -82,40 +83,13 @@ class Dependency:
     CONSTRAINT_START: ClassVar[re.Pattern[str]] = re.compile(r"[<>=!~;\[ ]")
     """
     The first character that ends a distribution's name and begins a version bound, an extra
-    or an environment marker.
-    """
-
-    NAME_SEPARATORS: ClassVar[re.Pattern[str]] = re.compile(r"[-_.]+")
-    """
-    The characters a distribution name may be spelled with interchangeably, per PEP 503.
+    or an environment marker, in a PEP 508 specifier.
     """
 
     specifier: str
     """
     The requirement as ``pyproject.toml`` writes it, version bounds and all.
     """
-
-    @classmethod
-    def canonical_name(cls, distribution_name: str) -> str:
-        """
-        :param distribution_name: A distribution's name as anyone spells it.
-        :return: The one spelling ``PyYAML``, ``pyyaml`` and ``py-yaml`` share.
-        """
-        return cls.NAME_SEPARATORS.sub("-", distribution_name).lower()
-
-    @classmethod
-    @cache
-    def installed_distribution_names(cls) -> frozenset[str]:
-        """
-        Read once per process: nothing installs into the environment while it runs.
-
-        :return: The canonical name of every distribution installed in this environment.
-        """
-        return frozenset(
-            cls.canonical_name(installed.metadata["Name"])
-            for installed in distributions()
-            if installed.metadata["Name"]
-        )
 
     @property
     def distribution_name(self) -> str:
@@ -126,25 +100,19 @@ class Dependency:
     def is_missing(self) -> bool:
         """
         Presence rather than version: an installed distribution is left alone, which is
-        what lets a session start run this on every start and install nothing.
+        what lets a session start run this on every start and install nothing. Names are
+        compared as PEP 503 does, so a declaration need not match a distribution's own
+        spelling.
 
         :return: Whether this environment has no distribution of that name.
         """
-        return (
-            self.canonical_name(self.distribution_name)
-            not in self.installed_distribution_names()
-        )
+        return next(iter(distributions(name=self.distribution_name)), None) is None
 
 
 @dataclass(frozen=True)
 class DependencyDeclaration:
     """
     A ``pyproject.toml`` and the dependencies it declares.
-    """
-
-    FILE_NAME: ClassVar[str] = "pyproject.toml"
-    """
-    The file a package's own metadata is declared in.
     """
 
     path: Path
@@ -158,7 +126,7 @@ class DependencyDeclaration:
         :return: This package's own metadata, found beside the modules it declares the
             dependencies of.
         """
-        return cls(Path(__file__).with_name(cls.FILE_NAME))
+        return cls(PackageLocation.DEPENDENCY_DECLARATION.value)
 
     def dependencies(self) -> tuple[Dependency, ...]:
         """

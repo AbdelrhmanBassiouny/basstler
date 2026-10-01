@@ -69,25 +69,9 @@ from typing import Any, ClassVar, Protocol
 
 import yaml
 
+from basstler.locations import ProjectLocation
+from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
-
-GITHUB_API_ROOT = "https://api.github.com"
-"""
-Where pull requests are created, overridable for a GitHub Enterprise host.
-"""
-
-HOOKS_DIRECTORY = ".claude/hooks"
-"""
-Where this repository keeps the scripts that read and write personal-notes data.
-"""
-
-PLANS_DIRECTORY = ".claude/personal/plans"
-"""
-Where plans live on the personal-notes branch.
-
-Mirrors ``PLANS_DIR`` in ``resolve-personal-notes-config.sh``, which is the shell half of
-the same tooling; a test holds the two equal so the mirror cannot drift.
-"""
 
 ITEM_FIELD_INDENT = "    "
 """
@@ -119,17 +103,12 @@ class HookScript(StrEnum):
     Pushes an edited manifest and roadmap to the personal-notes branch.
     """
 
-    PLAN_ITEM_BOOTSTRAP = "plan_item_bootstrap.py"
-    """
-    This module, which a caller invokes by path.
-    """
-
     @property
-    def path(self) -> str:
+    def path(self) -> Path:
         """
         The script's path from the project root.
         """
-        return f"{HOOKS_DIRECTORY}/{self.value}"
+        return ProjectLocation.HOOKS / self.value
 
 
 class PlanDocument(StrEnum):
@@ -154,7 +133,7 @@ class PlanDocument(StrEnum):
         :param plan_identifier: The plan's id.
         :return: The path, relative to the personal-notes branch's root.
         """
-        return f"{PLANS_DIRECTORY}/{plan_identifier}/{self.value}"
+        return str(ProjectLocation.PLANS / plan_identifier / self.value)
 
 
 class ValueStyle(StrEnum):
@@ -641,7 +620,7 @@ class NotesBranchUnavailableError(BootstrapError):
         return f"could not fetch the personal-notes branch: {self.detail}"
 
     def suggest_correction(self) -> str:
-        return f"Run {HOOKS_DIRECTORY}/create-personal-notes-branch.sh first."
+        return f"Run {ProjectLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first."
 
 
 # %% the plan on the personal-notes branch
