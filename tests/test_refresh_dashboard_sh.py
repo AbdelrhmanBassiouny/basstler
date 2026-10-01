@@ -17,10 +17,14 @@ from pathlib import Path
 
 import pytest
 
-from .constants import PACKAGE_DIRECTORY, STUBS_DIRECTORY, ToolingDirectory
+from basstler.locations import PackageLocation, ProjectLocation
+
+from .constants import DatasetLocation, SkillDirectory
 from .scratch_repository import install_hook_scripts_into
 
-PLAN_DASHBOARD_DIRECTORY = ToolingDirectory.PLAN_DASHBOARD_SKILL.path
+PLAN_DASHBOARD_DIRECTORY = (
+    PackageLocation.REPOSITORY_ROOT / SkillDirectory.PLAN_DASHBOARD
+)
 """
 Where refresh_dashboard.sh itself lives - the skill directory, not the package. Claude
 Code discovers a skill by path, so its shell entry point stays with it.
@@ -37,9 +41,9 @@ def scratch_project_root(tmp_path: Path) -> Path:
     :param tmp_path: pytest's per-test temporary directory.
     :return: The scratch project root.
     """
-    plan_dashboard_directory = tmp_path / ToolingDirectory.PLAN_DASHBOARD_SKILL
-    hooks_directory = tmp_path / ToolingDirectory.HOOKS
-    package_directory = tmp_path / PACKAGE_DIRECTORY.name
+    plan_dashboard_directory = tmp_path / SkillDirectory.PLAN_DASHBOARD
+    hooks_directory = tmp_path / ProjectLocation.HOOKS
+    package_directory = tmp_path / ProjectLocation.PACKAGE
     plan_dashboard_directory.mkdir(parents=True)
     package_directory.mkdir()
 
@@ -53,19 +57,19 @@ def scratch_project_root(tmp_path: Path) -> Path:
     # scratch package the script's `python3 -m basstler.<module>` calls resolve against.
     (package_directory / "__init__.py").touch()
     shutil.copy(
-        PACKAGE_DIRECTORY / "refresh_dashboard_support.py",
+        PackageLocation.DIRECTORY / "refresh_dashboard_support.py",
         package_directory / "refresh_dashboard_support.py",
     )
     shutil.copy(
-        STUBS_DIRECTORY / "sync_manifest_status_stub.py",
+        DatasetLocation.STUBS / "sync_manifest_status_stub.py",
         package_directory / "sync_manifest_status.py",
     )
     shutil.copy(
-        STUBS_DIRECTORY / "build_dashboard_stub.py",
+        DatasetLocation.STUBS / "build_dashboard_stub.py",
         package_directory / "build_dashboard.py",
     )
     shutil.copy(
-        STUBS_DIRECTORY / "write_personal_notes_file_stub.sh",
+        DatasetLocation.STUBS / "write_personal_notes_file_stub.sh",
         hooks_directory / "write-personal-notes-file.sh",
     )
     (hooks_directory / "write-personal-notes-file.sh").chmod(0o755)

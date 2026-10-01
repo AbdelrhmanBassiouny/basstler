@@ -17,10 +17,12 @@ import basstler.stack
 from basstler.locations import PackageLocation
 from basstler.stack import Repository, _configuration_values
 
-from .constants import ToolingDirectory
+from .constants import SkillDirectory
 
 MAINTENANCE_SKILL_DOCUMENT = (
-    ToolingDirectory.STACKED_PULL_REQUEST_MAINTENANCE_SKILL.path / "SKILL.md"
+    PackageLocation.REPOSITORY_ROOT
+    / SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE
+    / "SKILL.md"
 )
 """
 The instructions a maintenance pass follows.

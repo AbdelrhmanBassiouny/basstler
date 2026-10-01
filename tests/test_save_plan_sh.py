@@ -10,10 +10,10 @@ import subprocess
 import pytest
 
 from .scratch_repository import ScratchRepository
-from .constants import DATASET_DIRECTORY
+from .constants import DatasetLocation
 
-PLAN_MANIFEST = (DATASET_DIRECTORY / "plan.yaml").read_text()
-PLAN_ROADMAP = (DATASET_DIRECTORY / "roadmap.md").read_text()
+PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
+PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "roadmap.md").read_text()
 
 
 @pytest.fixture

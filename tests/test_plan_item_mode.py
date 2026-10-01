@@ -29,9 +29,8 @@ from basstler.plan_item_mode import (
     UnknownModeError,
 )
 
-from basstler.locations import ProjectLocation
+from basstler.locations import PackageLocation, ProjectLocation
 
-from .constants import REPOSITORY_ROOT, PersonalNotesPath
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
@@ -66,7 +65,9 @@ def mode_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
     scratch_repository.install_package()
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
-    scratch_repository.publish_notes_branch({PersonalNotesPath.NOTES_FILE: "notes\n"})
+    scratch_repository.publish_notes_branch(
+        {ProjectLocation.PERSONAL_NOTES_DOCUMENT: "notes\n"}
+    )
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
 
@@ -449,6 +450,8 @@ def test_every_skill_names_a_key_the_committed_defaults_define():
     gaining a skill the other has never heard of.
     """
     defaults = tomllib.loads(
-        (REPOSITORY_ROOT / ProjectLocation.PLAN_ITEM_MODE_DEFAULTS).read_text()
+        (
+            PackageLocation.REPOSITORY_ROOT / ProjectLocation.PLAN_ITEM_MODE_DEFAULTS
+        ).read_text()
     )
     assert set(defaults) == {skill.setting_key for skill in PlanItemSkill}

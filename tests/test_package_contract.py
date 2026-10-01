@@ -19,7 +19,8 @@ from pathlib import Path
 
 import pytest
 
-from .constants import PACKAGE_DIRECTORY, REPOSITORY_ROOT, ToolingDirectory
+from basstler.locations import PackageLocation, ProjectLocation
+
 from .script_runner import ScriptRunner
 from basstler import _version
 from basstler.package_layout import (
@@ -28,14 +29,16 @@ from basstler.package_layout import (
     package_modules,
 )
 
-CLAUDE_DIRECTORY = REPOSITORY_ROOT / ".claude"
+CLAUDE_DIRECTORY = (
+    PackageLocation.REPOSITORY_ROOT / ProjectLocation.CLAUDE_CODE_DIRECTORY
+)
 """
 The directory the migration emptied of Python.
 
 Its SKILL.md files, settings.json and bash entry points stay; not one ``.py`` file does.
 """
 
-WORKFLOWS_DIRECTORY = REPOSITORY_ROOT / ".github" / "workflows"
+WORKFLOWS_DIRECTORY = PackageLocation.REPOSITORY_ROOT / ".github" / "workflows"
 """
 Where this repository's Actions workflows live.
 
@@ -70,12 +73,16 @@ def run_from_repository_root(*arguments: str) -> subprocess.CompletedProcess[str
     :return: The completed process, with output captured as text.
     """
     return InterpreterRunner(
-        project_root=REPOSITORY_ROOT,
+        project_root=PackageLocation.REPOSITORY_ROOT.value,
         removed_variable_prefixes=("PYTHONPATH",),
     ).run(*arguments)
 
 
-SHELL_CONFIGURATION = ToolingDirectory.HOOKS.path / "resolve-personal-notes-config.sh"
+SHELL_CONFIGURATION = (
+    PackageLocation.REPOSITORY_ROOT
+    / ProjectLocation.HOOKS
+    / "resolve-personal-notes-config.sh"
+)
 """
 The file the bash callers source, which is where a module gets a shell name.
 """
@@ -129,7 +136,7 @@ def test_the_package_imports_from_the_repository_root_with_no_install():
     result = run_from_repository_root("-c", "import basstler; print(basstler.__file__)")
 
     assert result.returncode == 0, result.stderr
-    assert Path(result.stdout.strip()) == PACKAGE_DIRECTORY / "__init__.py"
+    assert Path(result.stdout.strip()) == PackageLocation.DIRECTORY / "__init__.py"
 
 
 def test_the_package_version_is_the_repository_version():
@@ -137,7 +144,10 @@ def test_the_package_version_is_the_repository_version():
     ``_version.py`` is written by ``scripts/sync_version.py`` from the root ``VERSION``
     file, the same as every other package here, so one bump moves them all together.
     """
-    assert _version.__version__ == (REPOSITORY_ROOT / "VERSION").read_text().strip()
+    assert (
+        _version.__version__
+        == (PackageLocation.REPOSITORY_ROOT / "VERSION").read_text().strip()
+    )
 
 
 # %% each module stands on its own
@@ -225,7 +235,7 @@ def test_no_python_module_remains_under_the_claude_directory():
     Code discovers those by path - and not one Python file.
     """
     remaining_module_paths = sorted(
-        str(path.relative_to(REPOSITORY_ROOT))
+        str(path.relative_to(PackageLocation.REPOSITORY_ROOT.value))
         for path in CLAUDE_DIRECTORY.rglob("*.py")
     )
 

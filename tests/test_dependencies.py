@@ -8,10 +8,11 @@ than restating the four distributions - what they hold is the reading, not the l
 from __future__ import annotations
 
 import tomllib
+from importlib.metadata import distributions
 
 import pytest
 
-from .constants import INSTALLED_DISTRIBUTION_NAME, INSTALLED_DISTRIBUTIONS_DATASET
+from .constants import DatasetLocation
 from .script_runner import PythonModuleRunner
 from basstler import dependencies
 from basstler.dependencies import (
@@ -103,10 +104,9 @@ def test_a_dependency_spelled_differently_from_its_installed_distribution_is_pre
     Case and the separators ``-``, ``_`` and ``.`` do not tell distribution names apart,
     so a declaration need not spell a name the way the distribution itself does.
     """
-    monkeypatch.syspath_prepend(INSTALLED_DISTRIBUTIONS_DATASET)
-    respelled = Dependency(
-        f"{INSTALLED_DISTRIBUTION_NAME.upper().replace('_', '-')}>=1"
-    )
+    monkeypatch.syspath_prepend(DatasetLocation.INSTALLED_DISTRIBUTIONS)
+    (installed,) = distributions(path=[str(DatasetLocation.INSTALLED_DISTRIBUTIONS)])
+    respelled = Dependency(f"{installed.name.upper().replace('_', '-')}>=1")
 
     assert not respelled.is_missing
 

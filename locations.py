@@ -92,12 +92,17 @@ class ProjectLocation(PathEnumeration):
     same tree.
     """
 
-    HOOKS = Path(".claude/hooks")
+    CLAUDE_CODE_DIRECTORY = Path(".claude")
+    """
+    The directory Claude Code reads a project's settings, hooks and skills from.
+    """
+
+    HOOKS = CLAUDE_CODE_DIRECTORY / "hooks"
     """
     The shell entry points that read and write personal-notes data.
     """
 
-    PERSONAL_NOTES = Path(".claude/personal")
+    PERSONAL_NOTES = CLAUDE_CODE_DIRECTORY / "personal"
     """
     Where the personal-notes branch keeps everything it holds.
     """

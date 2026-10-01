@@ -85,7 +85,7 @@ from basstler.maintenance_restack_steps import (
 )
 
 from .scratch_repository import initialize_bare_repository, install_package_into
-from .constants import REPOSITORY_ROOT, StackBranch, StackLabel
+from .constants import StackBranch, StackLabel
 from .script_runner import PythonModuleRunner
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
@@ -842,7 +842,11 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
 
 # %% the checkout the pass was invoked in
 
-TOOLING_PATH = str(Path(basstler.maintenance.__file__).relative_to(REPOSITORY_ROOT))
+TOOLING_PATH = str(
+    Path(basstler.maintenance.__file__).relative_to(
+        PackageLocation.REPOSITORY_ROOT.value
+    )
+)
 """
 Where the pass's own tooling sits: tracked content, so a branch cut before it landed
 does not carry it, and checking that branch out deletes it from the working tree.
