@@ -52,6 +52,12 @@ from basstler.render_common import (
     render_markdown_to_html,
     sanitize_http_url,
 )
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 MAXIMUM_DEPENDENCY_STACK_LEVEL = 4
 """Same-track dependency chains deeper than this wrap back to indent level 0."""
@@ -1451,7 +1457,7 @@ def main() -> int:
     try:
         validate_plan(raw_plan)
     except PlanValidationError as error:
-        print(f"plan.yaml failed validation: {error}", file=sys.stderr)
+        logger.error(f"plan.yaml failed validation: {error}")
         return 1
 
     plan = Plan.from_mapping(raw_plan)
@@ -1467,7 +1473,7 @@ def main() -> int:
     output, summary = renderer.render()
 
     Path(arguments.output).write_text(output)
-    print(json.dumps(summary.to_json_dict()))
+    logger.info(json.dumps(summary.to_json_dict()))
     return 0
 
 

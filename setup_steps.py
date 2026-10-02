@@ -28,6 +28,12 @@ from pathlib import Path
 
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 
 class Host(StrEnum):
@@ -576,7 +582,7 @@ def main() -> None:
     """
     Print the checklist for this clone.
     """
-    print(
+    logger.info(
         SetupChecklist.for_clone(
             PackageLocation.REPOSITORY_ROOT.value, os.environ
         ).render()

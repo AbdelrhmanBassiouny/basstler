@@ -72,6 +72,12 @@ import yaml
 from basstler.locations import ProjectLocation
 from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 ITEM_FIELD_INDENT = "    "
 """
@@ -1578,10 +1584,10 @@ def main() -> int:
                 remote=arguments.remote,
             )
     except BootstrapError as error:
-        print(f"{error.exit_code.name_for_a_caller}: {error}", file=sys.stderr)
+        logger.error(f"{error.exit_code.name_for_a_caller}: {error}")
         return int(error.exit_code)
 
-    print(json.dumps(report.as_document()))
+    logger.info(json.dumps(report.as_document()))
     return int(report.exit_code)
 
 
