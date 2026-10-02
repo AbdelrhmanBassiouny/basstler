@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 import sys
+from dataclasses import dataclass
 from typing import TextIO
 
 MAIN_MODULE_NAME = "__main__"
@@ -22,7 +23,13 @@ PACKAGE_NAME = __name__.partition(".")[0]
 The package whose loggers this module configures.
 """
 
+BARE_MESSAGE_FORMAT = "%(message)s"
+"""
+A record written as its message alone, with no level or logger name.
+"""
 
+
+@dataclass(eq=False)
 class StandardStreamHandler(logging.Handler):
     """
     Writes each record's bare message to standard output, or to standard error from a
@@ -31,11 +38,14 @@ class StandardStreamHandler(logging.Handler):
     The stream is looked up when a record is written rather than when the handler is
     made, so a record goes wherever ``sys.stdout`` or ``sys.stderr`` points at that
     moment.
+
+    .. note:: Compared by identity, as every handler is, so that the logging module can
+        tell two of them apart.
     """
 
-    def __init__(self) -> None:
+    def __post_init__(self) -> None:
         super().__init__()
-        self.setFormatter(logging.Formatter("%(message)s"))
+        self.setFormatter(logging.Formatter(BARE_MESSAGE_FORMAT))
 
     @staticmethod
     def stream_for(record: logging.LogRecord) -> TextIO:
