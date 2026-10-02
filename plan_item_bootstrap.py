@@ -5,7 +5,7 @@ Bootstrap a plan item before its implementation, rather than after it.
 Everything a session knows the moment an implementation plan is approved - the branch,
 the draft pull request, the item's manifest fields, its roadmap section - is derivable
 without a line of the implementation, yet all of it conventionally happens at the end.
-For that whole window ``plan.yaml`` says the item is ``not_started`` with no branch while
+For that whole window ``plan.yaml`` says the item is ``not started`` with no branch while
 a branch exists and is being worked, which every dashboard, kickoff and resolve run
 downstream reads as truth.
 
@@ -18,7 +18,7 @@ Two operations, so each caller depends only on the surface it uses:
 ``open``
     Create the branch, publish it, open the draft pull request, then write ``branch``,
     ``session`` and ``pull_request_number`` back onto the item and flip it to
-    ``in_progress``. A caller that has already created the pull request passes
+    ``in progress``. A caller that has already created the pull request passes
     ``--pull-request-number`` and only the recording happens.
 
 ``open`` runs before ``record`` when both are wanted: the pull request number does not

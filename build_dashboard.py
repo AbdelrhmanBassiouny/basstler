@@ -392,7 +392,7 @@ def validate_plan(plan: dict[str, Any]) -> None:
         item_identifier = item.get("id") or item.get("branch")
         if item.get("track") not in track_identifiers:
             problems.append(UnknownTrack(item_identifier, item.get("track")))
-        if item.get("status") not in {status.value for status in ItemStatus}:
+        if item.get("status") not in ItemStatus.accepted_spellings():
             problems.append(UnknownStatus(item_identifier, item.get("status")))
         depends_on = item.get("depends_on")
         if depends_on is not None and not isinstance(depends_on, list):
@@ -791,10 +791,10 @@ class Item:
 
     @property
     def status_and_drift_css_class(self) -> str:
-        """The item card's dynamic CSS class suffix: ``status-<value>``,
+        """The item card's dynamic CSS class suffix: ``status-<member name>``,
         plus ``has-drift`` once :attr:`drift_description` is set."""
         drift_suffix = " has-drift" if self.drift_description else ""
-        return f"status-{self.status.value}{drift_suffix}"
+        return f"status-{self.status.name.lower()}{drift_suffix}"
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Item:

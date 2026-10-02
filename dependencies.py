@@ -26,11 +26,10 @@ import argparse
 import re
 import sys
 import tomllib
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from importlib.metadata import distributions
 from pathlib import Path
-from typing import ClassVar
 
 from basstler.locations import PackageLocation
 
@@ -80,21 +79,23 @@ class Dependency:
     One requirement this package declares.
     """
 
-    CONSTRAINT_START: ClassVar[re.Pattern[str]] = re.compile(r"[<>=!~;\[ ]")
-    """
-    The first character that ends a distribution's name and begins a version bound, an extra
-    or an environment marker, in a PEP 508 specifier.
-    """
-
     specifier: str
     """
     The requirement as ``pyproject.toml`` writes it, version bounds and all.
     """
 
+    constraint_start: re.Pattern[str] = field(
+        default=re.compile(r"[<>=!~;\[ ]"), repr=False, compare=False
+    )
+    """
+    The first character that ends a distribution's name and begins a version bound, an extra
+    or an environment marker, in a PEP 508 specifier.
+    """
+
     @property
     def distribution_name(self) -> str:
         """:return: The distribution this requirement names, without its constraints."""
-        return self.CONSTRAINT_START.split(self.specifier, maxsplit=1)[0].strip()
+        return self.constraint_start.split(self.specifier, maxsplit=1)[0].strip()
 
     @property
     def is_missing(self) -> bool:

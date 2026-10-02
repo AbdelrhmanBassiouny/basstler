@@ -60,7 +60,7 @@ from basstler.build_dashboard import (
 )
 
 _ITEM_START_PATTERN = re.compile(r"^\s*- id:")
-_STATUS_LINE_PATTERN = re.compile(r"^(\s*status:\s*)(\S+)\s*$")
+_STATUS_LINE_PATTERN = re.compile(r"^(\s*status:\s*)(\S.*?)\s*$")
 
 
 class MissingStatusLineError(ValueError):
