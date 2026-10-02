@@ -28,7 +28,7 @@ from typing import Any, TypeVar, ClassVar
 import tomllib
 
 from basstler.locations import PackageLocation
-from basstler.stack import Repository
+from basstler.repository import Repository
 
 # %% the reading contract
 
