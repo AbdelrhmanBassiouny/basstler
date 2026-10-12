@@ -11,6 +11,7 @@ directory holding them rather than named.
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 import sys
@@ -30,7 +31,7 @@ from basstler.package_layout import (
     package_modules,
 )
 
-from .constants import InterpreterRequirementKey
+from .constants import ClaudeCodeVariable, InterpreterRequirementKey
 from .script_runner import InterpreterVariable, ScriptRunner
 
 CLAUDE_DIRECTORY = (
@@ -313,3 +314,54 @@ def test_the_shell_asks_for_the_interpreters_the_package_supports():
         shell_value("BASSTLER_PYTHON_REQUIREMENT")
         == project[PyprojectKey.PROJECT][InterpreterRequirementKey.REQUIRES_PYTHON]
     )
+
+
+# %% what the skill documents name
+
+
+SHELL_VARIABLE_REFERENCE = re.compile(r"\$\{([A-Z][A-Z0-9_]*)\}")
+"""
+A ``${NAME}`` reference to an upper-case shell variable, as a skill document writes one.
+"""
+
+
+def variables_the_configuration_defines() -> frozenset[str]:
+    """
+    :return: Every variable set once the shell configuration is sourced, in an environment
+        carrying nothing but a search path, so an inherited variable cannot pass for one
+        the configuration defines.
+    """
+    return frozenset(
+        subprocess.run(
+            ["bash", "-c", 'source "$0" && compgen -v', SHELL_CONFIGURATION],
+            cwd=PackageLocation.REPOSITORY_ROOT.value,
+            capture_output=True,
+            text=True,
+            check=True,
+            env={"PATH": os.environ["PATH"]},
+        ).stdout.split()
+    )
+
+
+def test_every_variable_a_skill_document_names_is_defined():
+    """
+    A document naming a variable nothing defines hands its reader an empty string, and a
+    command built from it fails far from the cause - a rename or a move leaves exactly
+    this behind.
+    """
+    claude_code_directory = (
+        PackageLocation.REPOSITORY_ROOT / ProjectLocation.CLAUDE_CODE_DIRECTORY
+    )
+    personal_notes = PackageLocation.REPOSITORY_ROOT / ProjectLocation.PERSONAL_NOTES
+    named = {
+        variable_name
+        for document in claude_code_directory.rglob("*.md")
+        if not document.is_relative_to(personal_notes)
+        for variable_name in SHELL_VARIABLE_REFERENCE.findall(document.read_text())
+    }
+
+    assert named != set()
+    assert sorted(
+        named - variables_the_configuration_defines() - set(ClaudeCodeVariable)
+    ) == []
+

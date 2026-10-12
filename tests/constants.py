@@ -209,3 +209,16 @@ class InterpreterRequirementKey(StrEnum):
     """
     The version specifier an interpreter has to satisfy.
     """
+
+
+class ClaudeCodeVariable(StrEnum):
+    """
+    The environment variables Claude Code sets for the commands it runs, which a skill
+    document may name without the shell configuration defining them.
+    """
+
+    PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR"
+    """
+    The root of the project the session runs in.
+    """
+
