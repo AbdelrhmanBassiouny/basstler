@@ -728,10 +728,11 @@ def _merged_predicate(configuration: Configuration):
     return is_merged
 
 
-def load_stack() -> Stack:
-    """:return: the full live stack: configuration + board export + git merged-detection."""
+def load_stack(board: Path = PackageLocation.BOARD.value) -> Stack:
+    """:param board: The exported board to derive the stack from.
+    :return: the full live stack: configuration + board export + git merged-detection."""
     configuration = load_configuration()
-    prs = load_board()
+    prs = load_board(board)
     fetch(configuration, [pr.head for pr in prs])
     return build_stack(configuration, prs, _merged_predicate(configuration))
 
