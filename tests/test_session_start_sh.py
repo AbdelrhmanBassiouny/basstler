@@ -13,30 +13,36 @@ personal-notes remote - no network access or real personal-notes branch involved
 
 from __future__ import annotations
 
-import os
 import shutil
 import subprocess
 import sys
-import tomllib
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 
-from basstler.dependencies import DependencyDeclaration, PyprojectKey
 from basstler.locations import ProjectLocation
 
 from .constants import (
     ConfigurationVariable,
     DatasetLocation,
-    InterpreterRequirementKey,
+    EnvironmentVariable,
+    FileMode,
+    PackageManager,
     PersonalNotesPath,
     ScratchBranch,
+    StubVariable,
 )
 from .executable_stubs import ExecutableStubDirectory, path_hiding_executables
+from .project_declaration import ProjectDeclaration
 from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
 from .script_runner import configuration_value
-from .session_start_summary import SummaryMessage, summary_message, summary_value
+from .session_start_summary import (
+    SummaryLine,
+    SummaryMessage,
+    summary_message,
+    summary_value,
+)
 
 PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
 
@@ -96,22 +102,22 @@ def session_start_repository(
 
 
 def run_session_start(
-    repository: ScratchRepository, **environment_overrides: str
+    repository: ScratchRepository, environment: Mapping[str, str] | None = None
 ) -> subprocess.CompletedProcess[str]:
     """
     Run the scratch layout's session-start.sh.
 
     :param repository: A fixture-built scratch repository.
-    :param environment_overrides: Variables to set for this run.
+    :param environment: Variables to set for this run.
     :return: The finished subprocess.
     """
-    return repository.run_hook_script("session-start.sh", **environment_overrides)
+    return repository.run_hook_script("session-start.sh", **(environment or {}))
 
 
 def publish_and_run(
     repository: ScratchRepository,
     notes_branch_files: Mapping[str, str] | None = None,
-    **environment_overrides: str,
+    environment: Mapping[str, str] | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """
     Publish everything a set up notes branch carries, plus *notes_branch_files*, then
@@ -125,7 +131,7 @@ def publish_and_run(
     :param repository: The fixture-built scratch repository.
     :param notes_branch_files: Extra file contents, keyed by path relative to the
         project root.
-    :param environment_overrides: Variables to set for the hook's run.
+    :param environment: Variables to set for the hook's run.
     :return: The finished session-start.sh process.
     """
     repository.publish_notes_branch(
@@ -135,7 +141,7 @@ def publish_and_run(
             **(notes_branch_files or {}),
         }
     )
-    return run_session_start(repository, **environment_overrides)
+    return run_session_start(repository, environment)
 
 
 # %% someone who uses neither plans nor personal notes
@@ -162,7 +168,7 @@ def test_reports_no_plans_when_none_are_tracked(
     result = publish_and_run(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.PLAN) == summary_message(
         SummaryMessage.NO_PLANS_TRACKED, ScratchBranch.PERSONAL_NOTES
     )
 
@@ -184,7 +190,7 @@ def test_names_the_missing_item_when_other_plans_are_tracked(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.PLAN) == summary_message(
         SummaryMessage.NO_PLAN_ITEM_TRACKS_BRANCH, ScratchBranch.WORK, "2"
     )
 
@@ -203,7 +209,7 @@ def test_reports_the_plan_that_tracks_this_branch(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.PLAN) == summary_message(
         SummaryMessage.BRANCH_TRACKED_IN_PLAN, PLAN_IDENTIFIER, TRACKING_ISSUE
     )
 
@@ -222,7 +228,7 @@ def test_reports_a_tracked_plan_that_has_no_tracking_issue(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.PLAN) == summary_message(
         SummaryMessage.BRANCH_TRACKED_IN_PLAN, PLAN_IDENTIFIER, "none"
     )
 
@@ -240,7 +246,7 @@ def test_reports_a_tracked_branch_whose_manifest_is_missing(
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.PLAN) == summary_message(
         SummaryMessage.PLAN_MANIFEST_MISSING,
         PLAN_IDENTIFIER,
         str(MANIFEST_PATH),
@@ -268,7 +274,7 @@ def test_reports_plan_as_not_applicable_on_the_default_branch(
     result = run_session_start(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.PLAN) == summary_message(
         SummaryMessage.PLAN_NOT_APPLICABLE
     )
 
@@ -292,7 +298,7 @@ def test_reports_plan_as_not_applicable_on_the_notes_branch(
     result = run_session_start(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "plan") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.PLAN) == summary_message(
         SummaryMessage.PLAN_NOT_APPLICABLE
     )
 
@@ -306,7 +312,7 @@ def test_reports_setup_as_ok_when_every_check_passes(
     result = publish_and_run(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "setup") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.SETUP) == summary_message(
         SummaryMessage.SETUP_OK
     )
 
@@ -331,7 +337,7 @@ def test_names_every_check_that_needs_setup(
         ).stdout.splitlines()
         if row.split("\t")[0] == failing_check
     )
-    assert summary_value(result.stdout, "setup") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.SETUP) == summary_message(
         SummaryMessage.CHECKS_NEED_SETUP, "1"
     )
     assert f"    {failing_check}: {detail}" in result.stdout
@@ -371,9 +377,7 @@ SOURCE_TREE_ARGUMENT = f"./{ProjectLocation.PACKAGE_SOURCE_TREE}"
 What the installer is handed: the source tree, installed editable.
 """
 
-SUPPORTED_PYTHON = tomllib.loads(
-    DependencyDeclaration.of_this_package().path.read_text()
-)[PyprojectKey.PROJECT][InterpreterRequirementKey.REQUIRES_PYTHON]
+SUPPORTED_PYTHON = ProjectDeclaration.of_this_package().requires_python
 """
 The interpreters the package supports, as its metadata states them and so as the
 environment has to be asked for.
@@ -399,9 +403,10 @@ def require_the_uninstallable(repository: ScratchRepository) -> None:
     """
     repository.write(
         DECLARATION_FILE,
-        "[project]\n"
-        f'name = "{DependencyDeclaration.of_this_package().project().specifier}"\n'
-        f'dependencies = ["{UNINSTALLABLE_REQUIREMENT}"]\n',
+        ProjectDeclaration(
+            name=ProjectDeclaration.of_this_package().name,
+            dependencies=(UNINSTALLABLE_REQUIREMENT,),
+        ).as_toml(),
     )
     repository.commit_everything("declare something that is not installed")
 
@@ -431,7 +436,8 @@ def uv_installer_call(repository: ScratchRepository) -> str:
     :return: The install invocation ``uv`` is expected to receive, where there is one.
     """
     return (
-        f"pip install --python {environment_interpreter(repository)} --editable "
+        f"{PackageManager.PIP} install --python {environment_interpreter(repository)} "
+        f"--editable "
         f"{SOURCE_TREE_ARGUMENT}"
     )
 
@@ -456,17 +462,21 @@ def test_installs_nothing_when_every_requirement_is_already_installed(
     The common case, and the one that decides whether installing on every start is
     affordable: nothing is missing, so no installer runs at all.
     """
-    stub_bin.install("pip")
+    stub_bin.install(PackageManager.PIP)
     call_log = tmp_path / "pip-calls"
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(path_hiding_executables(tmp_path, "uv")),
-        STUB_PIP_CALL_LOG=str(call_log),
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+            StubVariable.PIP_CALL_LOG: str(call_log),
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ALREADY_INSTALLED, ENVIRONMENT_DIRECTORY
     )
     assert not call_log.exists()
@@ -483,17 +493,21 @@ def test_installs_the_package_with_pip_when_a_requirement_is_missing(
     and the run says so.
     """
     require_the_uninstallable(session_start_repository)
-    stub_bin.install("pip")
+    stub_bin.install(PackageManager.PIP)
     call_log = tmp_path / "pip-calls"
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(path_hiding_executables(tmp_path, "uv")),
-        STUB_PIP_CALL_LOG=str(call_log),
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+            StubVariable.PIP_CALL_LOG: str(call_log),
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_INSTALLED,
         UNINSTALLABLE_REQUIREMENT,
         ENVIRONMENT_DIRECTORY,
@@ -513,20 +527,22 @@ def test_installs_the_package_with_uv_where_there_is_one(
     environment's interpreter, however new that interpreter is.
     """
     require_the_uninstallable(session_start_repository)
-    stub_bin.install("uv")
-    stub_bin.install("pip")
+    stub_bin.install(PackageManager.UV)
+    stub_bin.install(PackageManager.PIP)
     install_log = tmp_path / "uv-calls"
     pip_log = tmp_path / "pip-calls"
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
-        STUB_UV_CALL_LOG=str(install_log),
-        STUB_PIP_CALL_LOG=str(pip_log),
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            StubVariable.UV_CALL_LOG: str(install_log),
+            StubVariable.PIP_CALL_LOG: str(pip_log),
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_INSTALLED,
         UNINSTALLABLE_REQUIREMENT,
         ENVIRONMENT_DIRECTORY,
@@ -550,16 +566,20 @@ def test_reports_a_failed_install_and_finishes_the_run(
     and no explanation.
     """
     require_the_uninstallable(session_start_repository)
-    stub_bin.install("pip")
+    stub_bin.install(PackageManager.PIP)
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(path_hiding_executables(tmp_path, "uv")),
-        STUB_PIP_STATUS="1",
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+            StubVariable.PIP_STATUS: "1",
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies").startswith(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES).startswith(
         summary_message(
             SummaryMessage.DEPENDENCIES_INSTALL_FAILED,
             UNINSTALLABLE_REQUIREMENT,
@@ -569,7 +589,7 @@ def test_reports_a_failed_install_and_finishes_the_run(
         ).split(" - ")[0]
     )
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
-    assert summary_value(result.stdout, "personal notes") != ""
+    assert summary_value(result.stdout, SummaryLine.PERSONAL_NOTES) != ""
 
 
 def test_reports_that_it_could_not_check_when_the_declaration_will_not_parse(
@@ -586,7 +606,7 @@ def test_reports_that_it_could_not_check_when_the_declaration_will_not_parse(
     result = publish_and_run(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_NOT_CHECKED
     )
 
@@ -602,11 +622,18 @@ def test_reports_a_missing_installer_without_failing(
     require_the_uninstallable(session_start_repository)
 
     result = publish_and_run(
-        session_start_repository, PATH=path_hiding_executables(tmp_path, "pip", "uv")
+        session_start_repository,
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: path_hiding_executables(
+                tmp_path, PackageManager.PIP, PackageManager.UV
+            )
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert UNINSTALLABLE_REQUIREMENT in summary_value(result.stdout, "dependencies")
+    assert UNINSTALLABLE_REQUIREMENT in summary_value(
+        result.stdout, SummaryLine.DEPENDENCIES
+    )
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
 
 
@@ -634,21 +661,23 @@ def test_creates_the_environment_with_uv_and_installs_the_package_into_it(
     package supports, with the package installed into it by ``uv`` too.
     """
     without_an_environment(session_start_repository)
-    stub_bin.install("uv")
-    stub_bin.install("pip")
+    stub_bin.install(PackageManager.UV)
+    stub_bin.install(PackageManager.PIP)
     environment_log = tmp_path / "uv-calls"
     install_log = tmp_path / "pip-calls"
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
-        STUB_UV_CALL_LOG=str(environment_log),
-        STUB_UV_PYTHON=sys.executable,
-        STUB_PIP_CALL_LOG=str(install_log),
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            StubVariable.UV_CALL_LOG: str(environment_log),
+            StubVariable.UV_PYTHON: sys.executable,
+            StubVariable.PIP_CALL_LOG: str(install_log),
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
         ENVIRONMENT_DIRECTORY,
         SOURCE_TREE_ARGUMENT,
@@ -670,15 +699,19 @@ def test_creates_the_environment_from_an_interpreter_found_by_name_without_uv(
     package supports - a real one, so the environment is a real one too.
     """
     without_an_environment(session_start_repository)
-    stub_bin.install("pip")
+    stub_bin.install(PackageManager.PIP)
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(path_hiding_executables(tmp_path, "uv")),
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
         ENVIRONMENT_DIRECTORY,
         SOURCE_TREE_ARGUMENT,
@@ -704,7 +737,7 @@ def path_without_a_supported_interpreter(mirror_parent: Path) -> str:
     """
     return path_hiding_executables(
         mirror_parent,
-        "uv",
+        PackageManager.UV,
         *configuration_value(ConfigurationVariable.INTERPRETER_CANDIDATES).split(),
     )
 
@@ -729,27 +762,34 @@ def test_installs_uv_when_no_supported_interpreter_is_on_the_path(
     an environment: ``uv`` is installed with the ``pip`` there is, and fetches one.
     """
     without_an_environment(session_start_repository)
-    stub_bin.install("pip")
+    stub_bin.install(PackageManager.PIP)
     install_log = tmp_path / "pip-calls"
     environment_log = tmp_path / "uv-calls"
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(path_without_a_supported_interpreter(tmp_path)),
-        STUB_PIP_CALL_LOG=str(install_log),
-        STUB_PIP_INSTALLED_UV=str(DatasetLocation.STUBS / "uv.sh"),
-        STUB_UV_CALL_LOG=str(environment_log),
-        STUB_UV_PYTHON=sys.executable,
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_without_a_supported_interpreter(tmp_path)
+            ),
+            StubVariable.PIP_CALL_LOG: str(install_log),
+            StubVariable.PIP_INSTALLED_UV: str(
+                ExecutableStubDirectory.stub_for(PackageManager.UV)
+            ),
+            StubVariable.UV_CALL_LOG: str(environment_log),
+            StubVariable.UV_PYTHON: sys.executable,
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
         ENVIRONMENT_DIRECTORY,
         SOURCE_TREE_ARGUMENT,
     )
     assert install_log.read_text().splitlines() == [
-        f"install --target {installed_uv_directory(session_start_repository)} uv"
+        f"install --target {installed_uv_directory(session_start_repository)} "
+        f"{PackageManager.UV}"
     ]
     assert environment_log.read_text().splitlines() == [
         environment_call(session_start_repository),
@@ -766,24 +806,30 @@ def test_reuses_the_uv_it_installed_before(
     The ``uv`` a session start installed is used again rather than installed again.
     """
     without_an_environment(session_start_repository)
-    stub_bin.install("pip")
-    installed_uv = installed_uv_directory(session_start_repository) / "bin" / "uv"
+    stub_bin.install(PackageManager.PIP)
+    installed_uv = (
+        installed_uv_directory(session_start_repository) / "bin" / PackageManager.UV
+    )
     installed_uv.parent.mkdir(parents=True)
-    shutil.copy(DatasetLocation.STUBS / "uv.sh", installed_uv)
-    installed_uv.chmod(0o755)
+    shutil.copy(ExecutableStubDirectory.stub_for(PackageManager.UV), installed_uv)
+    installed_uv.chmod(FileMode.EXECUTABLE)
     pip_log = tmp_path / "pip-calls"
     uv_log = tmp_path / "uv-calls"
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(path_without_a_supported_interpreter(tmp_path)),
-        STUB_PIP_CALL_LOG=str(pip_log),
-        STUB_UV_CALL_LOG=str(uv_log),
-        STUB_UV_PYTHON=sys.executable,
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_without_a_supported_interpreter(tmp_path)
+            ),
+            StubVariable.PIP_CALL_LOG: str(pip_log),
+            StubVariable.UV_CALL_LOG: str(uv_log),
+            StubVariable.UV_PYTHON: sys.executable,
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies") == summary_message(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
         ENVIRONMENT_DIRECTORY,
         SOURCE_TREE_ARGUMENT,
@@ -805,16 +851,20 @@ def test_reports_uv_it_could_not_install_and_finishes_the_run(
     - the environment is reported as not created, and the run carries on.
     """
     without_an_environment(session_start_repository)
-    stub_bin.install("pip")
+    stub_bin.install(PackageManager.PIP)
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(path_without_a_supported_interpreter(tmp_path)),
-        STUB_PIP_STATUS="1",
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_without_a_supported_interpreter(tmp_path)
+            ),
+            StubVariable.PIP_STATUS: "1",
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies").startswith(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES).startswith(
         summary_message(
             SummaryMessage.DEPENDENCIES_ENVIRONMENT_NOT_CREATED,
             ENVIRONMENT_DIRECTORY,
@@ -834,16 +884,18 @@ def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
     ``uv`` to fetch one - is reported, nothing is installed, and the run carries on.
     """
     without_an_environment(session_start_repository)
-    stub_bin.install("uv")
+    stub_bin.install(PackageManager.UV)
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
-        STUB_UV_STATUS="1",
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            StubVariable.UV_STATUS: "1",
+        },
     )
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, "dependencies").startswith(
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES).startswith(
         summary_message(
             SummaryMessage.DEPENDENCIES_ENVIRONMENT_NOT_CREATED,
             ENVIRONMENT_DIRECTORY,

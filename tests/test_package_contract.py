@@ -15,13 +15,11 @@ import os
 import re
 import subprocess
 import sys
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
-from basstler.dependencies import PyprojectKey
 from basstler.locations import PackageLocation, ProjectLocation
 
 from basstler import _version
@@ -34,9 +32,10 @@ from basstler.package_layout import (
 from .constants import (
     ClaudeCodeVariable,
     ConfigurationVariable,
-    InterpreterRequirementKey,
+    EnvironmentVariable,
 )
-from .script_runner import InterpreterVariable, ScriptRunner, configuration_value
+from .project_declaration import ProjectDeclaration
+from .script_runner import ScriptRunner, configuration_value
 
 CLAUDE_DIRECTORY = (
     PackageLocation.REPOSITORY_ROOT / ProjectLocation.CLAUDE_CODE_DIRECTORY
@@ -99,7 +98,7 @@ def run_as_a_caller(*arguments: str) -> subprocess.CompletedProcess[str]:
     """
     return ConfiguredInterpreterRunner(
         project_root=PackageLocation.REPOSITORY_ROOT.value,
-        removed_variable_prefixes=(InterpreterVariable.IMPORT_PATH,),
+        removed_variable_prefixes=(EnvironmentVariable.IMPORT_PATH,),
     ).run(*arguments)
 
 
@@ -292,11 +291,9 @@ def test_the_shell_asks_for_the_interpreters_the_package_supports():
     The interpreter an environment is created from satisfies the package's own
     ``requires-python``, so the two cannot disagree about which versions run it.
     """
-    project = tomllib.loads(PackageLocation.DEPENDENCY_DECLARATION.value.read_text())
-
     assert (
         configuration_value(ConfigurationVariable.PYTHON_REQUIREMENT)
-        == project[PyprojectKey.PROJECT][InterpreterRequirementKey.REQUIRES_PYTHON]
+        == ProjectDeclaration.of_this_package().requires_python
     )
 
 
@@ -322,7 +319,11 @@ def variables_the_configuration_defines() -> frozenset[str]:
             capture_output=True,
             text=True,
             check=True,
-            env={"PATH": os.environ["PATH"]},
+            env={
+                EnvironmentVariable.EXECUTABLE_SEARCH_PATH: os.environ[
+                    EnvironmentVariable.EXECUTABLE_SEARCH_PATH
+                ]
+            },
         ).stdout.split()
     )
 

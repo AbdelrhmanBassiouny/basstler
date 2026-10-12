@@ -9,10 +9,10 @@ import subprocess
 
 import pytest
 
-from basstler.dependencies import DependencyDeclaration
 from basstler.locations import ProjectLocation
 
 from .constants import DatasetLocation, PersonalNotesPath
+from .project_declaration import ProjectDeclaration
 from .scratch_repository import ScratchRepository
 
 PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
@@ -89,9 +89,10 @@ def test_refuses_when_a_declared_dependency_is_not_installed(
     """
     save_plan_repository.write(
         DECLARATION_FILE,
-        "[project]\n"
-        f'name = "{DependencyDeclaration.of_this_package().project().specifier}"\n'
-        f'dependencies = ["{UNINSTALLABLE_REQUIREMENT}"]\n',
+        ProjectDeclaration(
+            name=ProjectDeclaration.of_this_package().name,
+            dependencies=(UNINSTALLABLE_REQUIREMENT,),
+        ).as_toml(),
     )
 
     result = run_save_plan(save_plan_repository, "test-plan")

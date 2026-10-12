@@ -23,6 +23,7 @@ from basstler.locations import PackageLocation, ProjectLocation
 
 from .constants import (
     DatasetLocation,
+    FileMode,
     ScratchBranch,
     ScrubbedEnvironmentPrefix,
     SkillDirectory,
@@ -84,7 +85,7 @@ def write_interpreter_wrapper(destination: Path) -> Path:
     """
     destination.parent.mkdir(parents=True, exist_ok=True)
     destination.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
-    destination.chmod(0o755)
+    destination.chmod(FileMode.EXECUTABLE)
     return destination
 
 

@@ -10,7 +10,7 @@ paths only the shell hooks name, and the names a scratch repository is built wit
 
 from __future__ import annotations
 
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 from basstler.locations import PathEnumeration, ProjectLocation
@@ -46,6 +46,11 @@ class DatasetLocation(PathEnumeration):
     UNINSTALLED_PROJECT = DIRECTORY / "uninstalled-project" / "pyproject.toml"
     """
     The metadata of a project no environment has installed, declaring no dependencies.
+    """
+
+    PARTLY_INSTALLED_PROJECT = DIRECTORY / "partly-installed-project" / "pyproject.toml"
+    """
+    A project declaring one dependency that is installed, then one that cannot be.
     """
 
     SET_UP_CLONE = DIRECTORY / "set-up-clone"
@@ -200,14 +205,20 @@ class ScrubbedEnvironmentPrefix(StrEnum):
     """
 
 
-class InterpreterRequirementKey(StrEnum):
+class ProjectTableKey(StrEnum):
     """
-    The ``[project]`` key stating which interpreters the package supports.
+    The ``[project]`` keys the suites read that :class:`basstler.dependencies.PyprojectKey`
+    does not name, since the package itself never reads them.
     """
 
     REQUIRES_PYTHON = "requires-python"
     """
     The version specifier an interpreter has to satisfy.
+    """
+
+    DYNAMIC = "dynamic"
+    """
+    The keys the build backend resolves rather than the table stating them.
     """
 
 
@@ -247,4 +258,101 @@ class ConfigurationVariable(StrEnum):
     """
     Where a session start installs ``uv`` when it finds neither ``uv`` nor a supported
     interpreter.
+    """
+
+
+class EnvironmentVariable(StrEnum):
+    """
+    The standard environment variables a test sets or reads for a subprocess.
+    """
+
+    EXECUTABLE_SEARCH_PATH = "PATH"
+    """
+    The directories a shell searches for a command.
+    """
+
+    IMPORT_PATH = "PYTHONPATH"
+    """
+    The directories an interpreter searches for imports ahead of its installed packages.
+    """
+
+
+class StubVariable(StrEnum):
+    """
+    The environment variables the stubs under ``dataset/stubs`` read.
+    """
+
+    PIP_CALL_LOG = "STUB_PIP_CALL_LOG"
+    """
+    The file the ``pip`` stub appends each invocation to.
+    """
+
+    PIP_STATUS = "STUB_PIP_STATUS"
+    """
+    The exit status the ``pip`` stub reports.
+    """
+
+    PIP_INSTALLED_UV = "STUB_PIP_INSTALLED_UV"
+    """
+    The script a ``uv`` installed by the ``pip`` stub runs.
+    """
+
+    UV_CALL_LOG = "STUB_UV_CALL_LOG"
+    """
+    The file the ``uv`` stub appends each invocation to.
+    """
+
+    UV_STATUS = "STUB_UV_STATUS"
+    """
+    The exit status the ``uv`` stub reports.
+    """
+
+    UV_PYTHON = "STUB_UV_PYTHON"
+    """
+    The interpreter an environment the ``uv`` stub creates runs.
+    """
+
+
+class PackageManager(StrEnum):
+    """
+    The executables the session start installs packages with, each named as it is on
+    ``PATH`` and as its stub is under ``dataset/stubs``.
+    """
+
+    PIP = "pip"
+    """
+    The package installer every interpreter ships, used where there is no ``uv``.
+    """
+
+    UV = "uv"
+    """
+    The package manager that also creates environments and fetches interpreters.
+    """
+
+
+class GitHubClient(StrEnum):
+    """
+    The executables a hook reaches the GitHub API through, each named as it is on
+    ``PATH`` and as its stub is under ``dataset/stubs``.
+    """
+
+    COMMAND_LINE = "gh"
+    """
+    GitHub's own command-line client, preferred where it is installed.
+    """
+
+    CURL = "curl"
+    """
+    The plain HTTP client used with a token where there is no ``gh``.
+    """
+
+
+class FileMode(IntEnum):
+    """
+    The permission bits a test gives a file it writes.
+    """
+
+    EXECUTABLE = 0o755
+    """
+    Readable and runnable by everyone, writable by its owner.
     """

@@ -28,6 +28,37 @@ The shell file defining the wording of every summary line.
 """
 
 
+class SummaryLine(StrEnum):
+    """
+    The labels of the summary report's lines, as session-start.sh prints them.
+    """
+
+    PERSONAL_NOTES = "personal notes"
+    """
+    Whether the personal notes were loaded, and from where.
+    """
+
+    PLAN = "plan"
+    """
+    Which plan, if any, tracks the current branch.
+    """
+
+    GIT_IDENTITY = "git identity"
+    """
+    Which git identity the clone commits with.
+    """
+
+    DEPENDENCIES = "dependencies"
+    """
+    Whether the package's environment exists and holds everything the package requires.
+    """
+
+    SETUP = "setup"
+    """
+    check-setup.sh's verdict.
+    """
+
+
 class SummaryMessage(StrEnum):
     """
     The situations session-start.sh reports, each carrying the session-start-messages.sh
@@ -132,12 +163,12 @@ class SummaryMessage(StrEnum):
     """
 
 
-def summary_value(output: str, label: str) -> str:
+def summary_value(output: str, label: SummaryLine) -> str:
     """
     Extract one line's value from the summary report.
 
     :param output: session-start.sh's standard output.
-    :param label: The summary line's label, such as ``plan``.
+    :param label: The summary line to read.
     :return: Everything after the label, stripped.
     :raises AssertionError: If the report has no such line.
     """
