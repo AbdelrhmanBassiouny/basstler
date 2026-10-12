@@ -14,6 +14,7 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 
 from basstler.locations import PathEnumeration, ProjectLocation
+from basstler.setup_steps import PersonalNotesSetting
 
 
 class DatasetLocation(PathEnumeration):
@@ -141,7 +142,7 @@ class ScratchBranch(StrEnum):
     The branches a scratch repository is given besides a stack's own.
     """
 
-    PERSONAL_NOTES = "claude/personal-notes"
+    PERSONAL_NOTES = PersonalNotesSetting.BRANCH.default
     """
     The personal-notes branch name the hooks resolve to by default.
     """
@@ -219,18 +220,6 @@ class ProjectTableKey(StrEnum):
     DYNAMIC = "dynamic"
     """
     The keys the build backend resolves rather than the table stating them.
-    """
-
-
-class ClaudeCodeVariable(StrEnum):
-    """
-    The environment variables Claude Code sets for the commands it runs, which a skill
-    document may name without the shell configuration defining them.
-    """
-
-    PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR"
-    """
-    The root of the project the session runs in.
     """
 
 
@@ -327,23 +316,6 @@ class PackageManager(StrEnum):
     UV = "uv"
     """
     The package manager that also creates environments and fetches interpreters.
-    """
-
-
-class GitHubClient(StrEnum):
-    """
-    The executables a hook reaches the GitHub API through, each named as it is on
-    ``PATH`` and as its stub is under ``dataset/stubs``.
-    """
-
-    COMMAND_LINE = "gh"
-    """
-    GitHub's own command-line client, preferred where it is installed.
-    """
-
-    CURL = "curl"
-    """
-    The plain HTTP client used with a token where there is no ``gh``.
     """
 
 

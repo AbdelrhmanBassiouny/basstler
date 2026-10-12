@@ -8,7 +8,7 @@ Every file and directory this package names, each written once.
 from __future__ import annotations
 
 import os
-from enum import ReprEnum
+from enum import ReprEnum, StrEnum
 from pathlib import Path
 
 
@@ -185,4 +185,15 @@ class ProjectLocation(PathEnumeration):
     PERSONAL_PLAN_ITEM_MODES = PERSONAL_NOTES / "plan-item-modes.toml"
     """
     The per-user override of :attr:`PLAN_ITEM_MODE_DEFAULTS`.
+    """
+
+
+class ClaudeCodeVariable(StrEnum):
+    """
+    The environment variables Claude Code sets for the commands it runs.
+    """
+
+    PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR"
+    """
+    The root of the project the session runs in.
     """

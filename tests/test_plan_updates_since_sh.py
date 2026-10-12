@@ -19,11 +19,11 @@ from pathlib import Path
 import pytest
 
 from basstler.locations import ProjectLocation
+from basstler.maintenance_constants import GitHubClient
 
 from .constants import (
     DatasetLocation,
     EnvironmentVariable,
-    GitHubClient,
     ScratchBranch,
 )
 from .script_runner import BashScriptRunner

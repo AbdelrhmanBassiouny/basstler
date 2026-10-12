@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import ClaudeCodeVariable, PackageLocation, ProjectLocation
 
 from basstler import _version
 from basstler.package_layout import (
@@ -30,7 +30,6 @@ from basstler.package_layout import (
 )
 
 from .constants import (
-    ClaudeCodeVariable,
     ConfigurationVariable,
     EnvironmentVariable,
 )
