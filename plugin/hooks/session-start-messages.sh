@@ -143,10 +143,9 @@ dependencies_line_install_failed() {
   local missing="$1"
   local environment_directory="$2"
   local reason="$3"
-  local source_tree="$4"
-  printf 'could not install %s into %s - %s - run: pip --python %s/bin/python install --editable %s' \
-    "${missing}" "${environment_directory}" "${reason}" "${environment_directory}" \
-    "${source_tree}"
+  local install_command="$4"
+  printf 'could not install %s into %s - %s - run: %s' \
+    "${missing}" "${environment_directory}" "${reason}" "${install_command}"
 }
 
 # dependencies_line_environment_created: the package's environment did not
@@ -164,7 +163,7 @@ dependencies_line_environment_not_created() {
   local environment_directory="$1"
   local reason="$2"
   local python_requirement="$3"
-  printf 'could not create %s - %s - run: uv venv --python "%s" %s' \
+  printf 'could not create %s - %s - run: uv venv --no-project --python "%s" %s' \
     "${environment_directory}" "${reason}" "${python_requirement}" \
     "${environment_directory}"
 }

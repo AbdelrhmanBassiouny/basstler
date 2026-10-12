@@ -26,7 +26,7 @@ from .script_runner import BashScriptRunner
 
 from .executable_stubs import (
     ExecutableStubDirectory,
-    path_hiding_executable,
+    path_hiding_executables,
 )
 
 from basstler.plan_updates_since_support import (
@@ -384,7 +384,7 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
         author_login="hubot", created_at="2026-08-01T01:00:00Z", body="Ship it"
     )
     comments_json = json.dumps([comment.to_api_response()])
-    hidden_gh_path = path_hiding_executable("gh", tmp_path)
+    hidden_gh_path = path_hiding_executables(tmp_path, "gh")
 
     result = run_plan_updates_since(
         scratch_repo,
@@ -414,7 +414,7 @@ def test_fails_when_neither_gh_nor_a_token_is_available(
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
-    hidden_gh_path = path_hiding_executable("gh", tmp_path)
+    hidden_gh_path = path_hiding_executables(tmp_path, "gh")
 
     result = run_plan_updates_since(
         scratch_repo,

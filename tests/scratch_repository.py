@@ -55,8 +55,9 @@ def install_package_into(project_root: Path) -> None:
 
     The whole source tree rather than the modules one script happens to call: a scratch
     clone *is* a clone, so it carries what a clone carries, and a test then never has to
-    track which sibling a module imports. Build output, the package's own environment and
-    the board snapshot are left behind, as a fresh clone has none of them.
+    track which sibling a module imports. Build output, the package's own environment, the
+    ``uv`` installed for it and the board snapshot are left behind, as a fresh clone has
+    none of them.
 
     :param project_root: The checkout to copy it into.
     """
@@ -67,6 +68,7 @@ def install_package_into(project_root: Path) -> None:
             "__pycache__",
             "*.egg-info",
             ".venv",
+            ".uv",
             f"{PackageLocation.BOARD.value.name}*",
         ),
         dirs_exist_ok=True,

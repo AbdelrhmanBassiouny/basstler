@@ -31,8 +31,12 @@ from basstler.package_layout import (
     package_modules,
 )
 
-from .constants import ClaudeCodeVariable, InterpreterRequirementKey
-from .script_runner import InterpreterVariable, ScriptRunner
+from .constants import (
+    ClaudeCodeVariable,
+    ConfigurationVariable,
+    InterpreterRequirementKey,
+)
+from .script_runner import InterpreterVariable, ScriptRunner, configuration_value
 
 CLAUDE_DIRECTORY = (
     PackageLocation.REPOSITORY_ROOT / ProjectLocation.CLAUDE_CODE_DIRECTORY
@@ -274,31 +278,11 @@ def test_no_module_sits_directly_in_the_source_tree():
 # %% the shell's copies of what the package states
 
 
-def shell_value(variable_name: str) -> str:
-    """
-    :param variable_name: A variable the shell configuration assigns.
-    :return: Its value once the configuration is sourced.
-    """
-    return subprocess.run(
-        [
-            "bash",
-            "-c",
-            'source "$0" && printf "%s" "${!1}"',
-            SHELL_CONFIGURATION,
-            variable_name,
-        ],
-        cwd=PackageLocation.REPOSITORY_ROOT.value,
-        capture_output=True,
-        text=True,
-        check=True,
-    ).stdout
-
-
 def test_the_shell_creates_the_environment_the_package_names():
     """
     The shell creates the environment; the package names it for every Python reader.
     """
-    assert shell_value("BASSTLER_ENVIRONMENT_DIRECTORY") == str(
+    assert configuration_value(ConfigurationVariable.ENVIRONMENT_DIRECTORY) == str(
         ProjectLocation.PACKAGE_ENVIRONMENT
     )
 
@@ -311,7 +295,7 @@ def test_the_shell_asks_for_the_interpreters_the_package_supports():
     project = tomllib.loads(PackageLocation.DEPENDENCY_DECLARATION.value.read_text())
 
     assert (
-        shell_value("BASSTLER_PYTHON_REQUIREMENT")
+        configuration_value(ConfigurationVariable.PYTHON_REQUIREMENT)
         == project[PyprojectKey.PROJECT][InterpreterRequirementKey.REQUIRES_PYTHON]
     )
 
@@ -361,7 +345,7 @@ def test_every_variable_a_skill_document_names_is_defined():
     }
 
     assert named != set()
-    assert sorted(
-        named - variables_the_configuration_defines() - set(ClaudeCodeVariable)
-    ) == []
-
+    assert (
+        sorted(named - variables_the_configuration_defines() - set(ClaudeCodeVariable))
+        == []
+    )

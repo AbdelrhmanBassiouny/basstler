@@ -23,8 +23,12 @@ declares them, and installing the package brings them with it.
 
 The environment comes from `uv` where it is on the path, since `uv` can fetch a supported
 interpreter where none is installed, and otherwise from the newest supported `python3.1x`
-on the path. `.claude/hooks/session-start.sh` does the work, so no module has to work around
-a dependency that is not there, and nobody has to run `pip` by hand.
+on the path. A machine with neither - one whose only interpreter is too old - gets `uv`
+installed into `basstler/.uv` with the `pip` it has, and `uv` fetches the interpreter.
+`uv` also does the installing wherever there is one, since `pip` runs inside the
+environment's own interpreter and an older `pip` breaks on a newer one.
+`.claude/hooks/session-start.sh` does the work, so no module has to work around a
+dependency that is not there, and nobody has to run `pip` by hand.
 
 Three things bound it, and they are worth knowing because it creates an environment and
 installs into it:
@@ -35,7 +39,7 @@ installs into it:
 - **Only what is missing.** The usual start finds the environment, looks the declaration
   up and runs no installer, which is what makes doing it every time affordable. The
   package itself counts: an environment without it is reinstalled into.
-- **Never fatal.** No supported interpreter, no `pip`, or no network: the summary's
+- **Never fatal.** No `pip` to install `uv` with, or no network: the summary's
   `dependencies:` line says so, naming the command to run, and the rest of the run carries
   on. Callers then fall back to `python3`.
 

@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from basstler.locations import ProjectLocation
+from basstler.locations import PackageLocation, ProjectLocation
 
 
 class InterpreterVariable(StrEnum):
@@ -152,3 +152,24 @@ class BashScriptRunner(ScriptRunner):
     def command(self) -> tuple[str, ...]:
         """:return: bash, running that script."""
         return ("bash", str(self.script_path))
+
+
+def configuration_value(variable_name: str) -> str:
+    """
+    :param variable_name: A variable the shell configuration assigns.
+    :return: Its value once this repository's shell configuration is sourced.
+    """
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$0" && printf "%s" "${!1}"',
+            PackageLocation.REPOSITORY_ROOT
+            / ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT,
+            variable_name,
+        ],
+        cwd=PackageLocation.REPOSITORY_ROOT.value,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout

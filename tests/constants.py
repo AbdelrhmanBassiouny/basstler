@@ -222,3 +222,29 @@ class ClaudeCodeVariable(StrEnum):
     The root of the project the session runs in.
     """
 
+
+class ConfigurationVariable(StrEnum):
+    """
+    The variables of the shell configuration the tests read back, named once.
+    """
+
+    ENVIRONMENT_DIRECTORY = "BASSTLER_ENVIRONMENT_DIRECTORY"
+    """
+    The package's own environment.
+    """
+
+    PYTHON_REQUIREMENT = "BASSTLER_PYTHON_REQUIREMENT"
+    """
+    The interpreters the package supports.
+    """
+
+    INTERPRETER_CANDIDATES = "BASSTLER_INTERPRETER_CANDIDATES"
+    """
+    The supported interpreters looked for by name, separated by spaces.
+    """
+
+    UV_DIRECTORY = "BASSTLER_UV_DIRECTORY"
+    """
+    Where a session start installs ``uv`` when it finds neither ``uv`` nor a supported
+    interpreter.
+    """

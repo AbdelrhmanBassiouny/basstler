@@ -27,13 +27,15 @@ from basstler.dependencies import DependencyDeclaration, PyprojectKey
 from basstler.locations import ProjectLocation
 
 from .constants import (
+    ConfigurationVariable,
     DatasetLocation,
     InterpreterRequirementKey,
     PersonalNotesPath,
     ScratchBranch,
 )
-from .executable_stubs import ExecutableStubDirectory, path_hiding_executable
+from .executable_stubs import ExecutableStubDirectory, path_hiding_executables
 from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
+from .script_runner import configuration_value
 from .session_start_summary import SummaryMessage, summary_message, summary_value
 
 PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
@@ -412,14 +414,36 @@ def environment_interpreter(repository: ScratchRepository) -> Path:
     return repository.project_root / ProjectLocation.PACKAGE_ENVIRONMENT_INTERPRETER
 
 
-def installer_call(repository: ScratchRepository) -> str:
+def pip_installer_call(repository: ScratchRepository) -> str:
     """
     :param repository: The fixture-built scratch repository.
-    :return: The one invocation the installer is expected to receive.
+    :return: The one invocation ``pip`` is expected to receive, where there is no ``uv``.
     """
     return (
         f"--python {environment_interpreter(repository)} install --editable "
         f"{SOURCE_TREE_ARGUMENT}"
+    )
+
+
+def uv_installer_call(repository: ScratchRepository) -> str:
+    """
+    :param repository: The fixture-built scratch repository.
+    :return: The install invocation ``uv`` is expected to receive, where there is one.
+    """
+    return (
+        f"pip install --python {environment_interpreter(repository)} --editable "
+        f"{SOURCE_TREE_ARGUMENT}"
+    )
+
+
+def environment_call(repository: ScratchRepository) -> str:
+    """
+    :param repository: The fixture-built scratch repository.
+    :return: The invocation ``uv`` is expected to create the environment with.
+    """
+    return (
+        f"venv --no-project --python {SUPPORTED_PYTHON} "
+        f"{repository.project_root / ProjectLocation.PACKAGE_ENVIRONMENT}"
     )
 
 
@@ -437,7 +461,7 @@ def test_installs_nothing_when_every_requirement_is_already_installed(
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
+        PATH=stub_bin.ahead_of(path_hiding_executables(tmp_path, "uv")),
         STUB_PIP_CALL_LOG=str(call_log),
     )
 
@@ -448,14 +472,15 @@ def test_installs_nothing_when_every_requirement_is_already_installed(
     assert not call_log.exists()
 
 
-def test_installs_the_package_into_its_environment_when_a_requirement_is_missing(
+def test_installs_the_package_with_pip_when_a_requirement_is_missing(
     session_start_repository: ScratchRepository,
     stub_bin: ExecutableStubDirectory,
     tmp_path: Path,
 ):
     """
     A missing requirement is installed without anyone being asked, by installing the
-    package editable into its own environment, and the run says so.
+    package editable into its own environment - with ``pip`` where there is no ``uv`` -
+    and the run says so.
     """
     require_the_uninstallable(session_start_repository)
     stub_bin.install("pip")
@@ -463,7 +488,7 @@ def test_installs_the_package_into_its_environment_when_a_requirement_is_missing
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
+        PATH=stub_bin.ahead_of(path_hiding_executables(tmp_path, "uv")),
         STUB_PIP_CALL_LOG=str(call_log),
     )
 
@@ -474,8 +499,42 @@ def test_installs_the_package_into_its_environment_when_a_requirement_is_missing
         ENVIRONMENT_DIRECTORY,
     )
     assert call_log.read_text().splitlines() == [
-        installer_call(session_start_repository)
+        pip_installer_call(session_start_repository)
     ]
+
+
+def test_installs_the_package_with_uv_where_there_is_one(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    ``uv`` installs where there is one, since it runs no code of its own inside the
+    environment's interpreter, however new that interpreter is.
+    """
+    require_the_uninstallable(session_start_repository)
+    stub_bin.install("uv")
+    stub_bin.install("pip")
+    install_log = tmp_path / "uv-calls"
+    pip_log = tmp_path / "pip-calls"
+
+    result = publish_and_run(
+        session_start_repository,
+        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
+        STUB_UV_CALL_LOG=str(install_log),
+        STUB_PIP_CALL_LOG=str(pip_log),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "dependencies") == summary_message(
+        SummaryMessage.DEPENDENCIES_INSTALLED,
+        UNINSTALLABLE_REQUIREMENT,
+        ENVIRONMENT_DIRECTORY,
+    )
+    assert install_log.read_text().splitlines() == [
+        uv_installer_call(session_start_repository)
+    ]
+    assert not pip_log.exists()
 
 
 def test_reports_a_failed_install_and_finishes_the_run(
@@ -495,7 +554,7 @@ def test_reports_a_failed_install_and_finishes_the_run(
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(os.environ.get("PATH", "")),
+        PATH=stub_bin.ahead_of(path_hiding_executables(tmp_path, "uv")),
         STUB_PIP_STATUS="1",
     )
 
@@ -505,6 +564,7 @@ def test_reports_a_failed_install_and_finishes_the_run(
             SummaryMessage.DEPENDENCIES_INSTALL_FAILED,
             UNINSTALLABLE_REQUIREMENT,
             ENVIRONMENT_DIRECTORY,
+            "",
             "",
         ).split(" - ")[0]
     )
@@ -542,7 +602,7 @@ def test_reports_a_missing_installer_without_failing(
     require_the_uninstallable(session_start_repository)
 
     result = publish_and_run(
-        session_start_repository, PATH=path_hiding_executable("pip", tmp_path)
+        session_start_repository, PATH=path_hiding_executables(tmp_path, "pip", "uv")
     )
 
     assert result.returncode == 0, result.stderr
@@ -571,7 +631,7 @@ def test_creates_the_environment_with_uv_and_installs_the_package_into_it(
 ):
     """
     A clone with no environment gets one from ``uv``, asked for an interpreter the
-    package supports, with the package installed into it.
+    package supports, with the package installed into it by ``uv`` too.
     """
     without_an_environment(session_start_repository)
     stub_bin.install("uv")
@@ -594,12 +654,10 @@ def test_creates_the_environment_with_uv_and_installs_the_package_into_it(
         SOURCE_TREE_ARGUMENT,
     )
     assert environment_log.read_text().splitlines() == [
-        f"venv --python {SUPPORTED_PYTHON} "
-        f"{session_start_repository.project_root / ProjectLocation.PACKAGE_ENVIRONMENT}"
+        environment_call(session_start_repository),
+        uv_installer_call(session_start_repository),
     ]
-    assert install_log.read_text().splitlines() == [
-        installer_call(session_start_repository)
-    ]
+    assert not install_log.exists()
 
 
 def test_creates_the_environment_from_an_interpreter_found_by_name_without_uv(
@@ -616,7 +674,7 @@ def test_creates_the_environment_from_an_interpreter_found_by_name_without_uv(
 
     result = publish_and_run(
         session_start_repository,
-        PATH=stub_bin.ahead_of(path_hiding_executable("uv", tmp_path)),
+        PATH=stub_bin.ahead_of(path_hiding_executables(tmp_path, "uv")),
     )
 
     assert result.returncode == 0, result.stderr
@@ -636,6 +694,135 @@ def test_creates_the_environment_from_an_interpreter_found_by_name_without_uv(
         check=True,
     )
     assert version.stdout.strip() == str(True)
+
+
+def path_without_a_supported_interpreter(mirror_parent: Path) -> str:
+    """
+    :param mirror_parent: Where to build the mirror directories.
+    :return: A ``PATH`` offering neither ``uv`` nor any interpreter the environment could
+        be created from, as on a machine whose only interpreter is too old.
+    """
+    return path_hiding_executables(
+        mirror_parent,
+        "uv",
+        *configuration_value(ConfigurationVariable.INTERPRETER_CANDIDATES).split(),
+    )
+
+
+def installed_uv_directory(repository: ScratchRepository) -> Path:
+    """
+    :param repository: The fixture-built scratch repository.
+    :return: Where the session start installs ``uv`` for itself.
+    """
+    return repository.project_root / configuration_value(
+        ConfigurationVariable.UV_DIRECTORY
+    )
+
+
+def test_installs_uv_when_no_supported_interpreter_is_on_the_path(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    A machine with no ``uv`` and only an interpreter too old for the package still gets
+    an environment: ``uv`` is installed with the ``pip`` there is, and fetches one.
+    """
+    without_an_environment(session_start_repository)
+    stub_bin.install("pip")
+    install_log = tmp_path / "pip-calls"
+    environment_log = tmp_path / "uv-calls"
+
+    result = publish_and_run(
+        session_start_repository,
+        PATH=stub_bin.ahead_of(path_without_a_supported_interpreter(tmp_path)),
+        STUB_PIP_CALL_LOG=str(install_log),
+        STUB_PIP_INSTALLED_UV=str(DatasetLocation.STUBS / "uv.sh"),
+        STUB_UV_CALL_LOG=str(environment_log),
+        STUB_UV_PYTHON=sys.executable,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "dependencies") == summary_message(
+        SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
+        ENVIRONMENT_DIRECTORY,
+        SOURCE_TREE_ARGUMENT,
+    )
+    assert install_log.read_text().splitlines() == [
+        f"install --target {installed_uv_directory(session_start_repository)} uv"
+    ]
+    assert environment_log.read_text().splitlines() == [
+        environment_call(session_start_repository),
+        uv_installer_call(session_start_repository),
+    ]
+
+
+def test_reuses_the_uv_it_installed_before(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    The ``uv`` a session start installed is used again rather than installed again.
+    """
+    without_an_environment(session_start_repository)
+    stub_bin.install("pip")
+    installed_uv = installed_uv_directory(session_start_repository) / "bin" / "uv"
+    installed_uv.parent.mkdir(parents=True)
+    shutil.copy(DatasetLocation.STUBS / "uv.sh", installed_uv)
+    installed_uv.chmod(0o755)
+    pip_log = tmp_path / "pip-calls"
+    uv_log = tmp_path / "uv-calls"
+
+    result = publish_and_run(
+        session_start_repository,
+        PATH=stub_bin.ahead_of(path_without_a_supported_interpreter(tmp_path)),
+        STUB_PIP_CALL_LOG=str(pip_log),
+        STUB_UV_CALL_LOG=str(uv_log),
+        STUB_UV_PYTHON=sys.executable,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "dependencies") == summary_message(
+        SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
+        ENVIRONMENT_DIRECTORY,
+        SOURCE_TREE_ARGUMENT,
+    )
+    assert uv_log.read_text().splitlines() == [
+        environment_call(session_start_repository),
+        uv_installer_call(session_start_repository),
+    ]
+    assert not pip_log.exists()
+
+
+def test_reports_uv_it_could_not_install_and_finishes_the_run(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    With no supported interpreter and no way to install ``uv`` - no network, no ``pip``
+    - the environment is reported as not created, and the run carries on.
+    """
+    without_an_environment(session_start_repository)
+    stub_bin.install("pip")
+
+    result = publish_and_run(
+        session_start_repository,
+        PATH=stub_bin.ahead_of(path_without_a_supported_interpreter(tmp_path)),
+        STUB_PIP_STATUS="1",
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, "dependencies").startswith(
+        summary_message(
+            SummaryMessage.DEPENDENCIES_ENVIRONMENT_NOT_CREATED,
+            ENVIRONMENT_DIRECTORY,
+            "",
+        ).split(" - ")[0]
+    )
+    assert not environment_interpreter(session_start_repository).exists()
+    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
 
 
 def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
