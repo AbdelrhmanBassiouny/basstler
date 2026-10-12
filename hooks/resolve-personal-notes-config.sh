@@ -554,6 +554,11 @@ BASSTLER_PYTHON_REQUIREMENT=">=3.12"
 # BASSTLER_INTERPRETER_CANDIDATES: interpreters satisfying that requirement,
 # newest first, tried by name when uv is not there to find or fetch one.
 BASSTLER_INTERPRETER_CANDIDATES="python3.14 python3.13 python3.12"
+# BASSTLER_UV_DIRECTORY: where uv is installed, gitignored, on a machine with
+# neither uv nor any of the candidates - so one whose only interpreter is too
+# old for the package still gets an environment, from an interpreter uv fetches.
+BASSTLER_UV_DIRECTORY="${BASSTLER_SOURCE_TREE}/.uv"
+BASSTLER_INSTALLED_UV="${PROJECT_ROOT}/${BASSTLER_UV_DIRECTORY}/bin/uv"
 
 # resolve_basstler_python: sets BASSTLER_PYTHON, the interpreter every caller
 # runs a module of the package with - the package's environment once it
@@ -595,37 +600,78 @@ missing_dependencies() {
 # tool said in BASSTLER_ENVIRONMENT_OUTPUT and returning its exit status.
 #
 # uv first, since it can fetch a supported interpreter where none is
-# installed; otherwise the first of BASSTLER_INTERPRETER_CANDIDATES on PATH.
-# Neither installs pip into the environment: install_basstler_into_environment
-# runs the pip on PATH against it instead.
+# installed; then the first of BASSTLER_INTERPRETER_CANDIDATES on PATH; and
+# with neither, uv installed into BASSTLER_UV_DIRECTORY for the purpose.
+# None of them installs pip into the environment:
+# install_basstler_into_environment runs the pip on PATH against it instead.
 create_basstler_environment() {
-  local environment_directory="${PROJECT_ROOT}/${BASSTLER_ENVIRONMENT_DIRECTORY}"
-  if command -v uv > /dev/null 2>&1; then
-    BASSTLER_ENVIRONMENT_OUTPUT="$(uv venv --python "${BASSTLER_PYTHON_REQUIREMENT}" \
-      "${environment_directory}" 2>&1)"
+  local uv
+  if uv="$(available_uv)"; then
+    create_basstler_environment_with "${uv}"
     return
   fi
   local candidate
   for candidate in ${BASSTLER_INTERPRETER_CANDIDATES}; do
     command -v "${candidate}" > /dev/null 2>&1 || continue
     BASSTLER_ENVIRONMENT_OUTPUT="$("${candidate}" -m venv --without-pip \
-      "${environment_directory}" 2>&1)"
+      "${PROJECT_ROOT}/${BASSTLER_ENVIRONMENT_DIRECTORY}" 2>&1)"
     return
   done
-  BASSTLER_ENVIRONMENT_OUTPUT="neither uv nor any of ${BASSTLER_INTERPRETER_CANDIDATES} is on PATH"
-  return 1
+  if ! install_uv; then
+    BASSTLER_ENVIRONMENT_OUTPUT="no uv and none of ${BASSTLER_INTERPRETER_CANDIDATES} on PATH, and uv could not be installed: $(printf '%s' "${BASSTLER_ENVIRONMENT_OUTPUT}" | tail -1)"
+    return 1
+  fi
+  create_basstler_environment_with "${BASSTLER_INSTALLED_UV}"
+}
+
+# available_uv: prints the uv to create the environment with - the one on PATH,
+# else the one install_uv installed earlier - and returns 1 when there is none.
+available_uv() {
+  command -v uv && return
+  [ -x "${BASSTLER_INSTALLED_UV}" ] || return 1
+  printf '%s\n' "${BASSTLER_INSTALLED_UV}"
+}
+
+# create_basstler_environment_with: creates the environment with the uv at $1,
+# which fetches a supported interpreter if none is installed. --no-project,
+# because the repository root is a uv workspace the package is not a member
+# of, and its Python requirement is not the package's.
+create_basstler_environment_with() {
+  local uv="$1"
+  BASSTLER_ENVIRONMENT_OUTPUT="$("${uv}" venv --no-project \
+    --python "${BASSTLER_PYTHON_REQUIREMENT}" \
+    "${PROJECT_ROOT}/${BASSTLER_ENVIRONMENT_DIRECTORY}" 2>&1)"
+}
+
+# install_uv: installs uv into BASSTLER_UV_DIRECTORY with the pip on PATH,
+# leaving pip's output in BASSTLER_ENVIRONMENT_OUTPUT. A target directory
+# rather than the interpreter's own packages, so an externally managed
+# interpreter does not refuse it and nothing outside the clone changes.
+install_uv() {
+  BASSTLER_ENVIRONMENT_OUTPUT="$(pip install --target \
+    "${PROJECT_ROOT}/${BASSTLER_UV_DIRECTORY}" uv 2>&1)"
 }
 
 # install_basstler_into_environment: installs the package editable into its
-# environment, which brings every declared dependency with it, leaving pip's own
-# output (both streams) in BASSTLER_INSTALL_OUTPUT for a caller to report, and
-# returning pip's exit status.
+# environment, which brings every declared dependency with it, leaving the
+# installer's own output (both streams) in BASSTLER_INSTALL_OUTPUT and the
+# command it ran in the array BASSTLER_INSTALL_COMMAND, for a caller to report, and
+# returning the installer's exit status.
 #
 # Editable, so `import basstler` in the environment is this clone's own source
-# rather than a second copy of it in site-packages.
+# rather than a second copy of it in site-packages. With uv where there is one,
+# since pip runs its own code inside the environment's interpreter and an older
+# pip breaks on a newer interpreter; otherwise with the pip on PATH.
 install_basstler_into_environment() {
-  BASSTLER_INSTALL_OUTPUT="$(pip --python "${BASSTLER_ENVIRONMENT_INTERPRETER}" install \
-    --editable "./${BASSTLER_SOURCE_TREE}" 2>&1)"
+  local uv
+  if uv="$(available_uv)"; then
+    BASSTLER_INSTALL_COMMAND=("${uv}" pip install --python
+      "${BASSTLER_ENVIRONMENT_INTERPRETER}" --editable "./${BASSTLER_SOURCE_TREE}")
+  else
+    BASSTLER_INSTALL_COMMAND=(pip --python "${BASSTLER_ENVIRONMENT_INTERPRETER}"
+      install --editable "./${BASSTLER_SOURCE_TREE}")
+  fi
+  BASSTLER_INSTALL_OUTPUT="$("${BASSTLER_INSTALL_COMMAND[@]}" 2>&1)"
 }
 
 # PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit

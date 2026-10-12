@@ -450,7 +450,7 @@ ensure_basstler_environment() {
     SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed "${missing}" \
       "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
       "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
-      "./${BASSTLER_SOURCE_TREE}")"
+      "${BASSTLER_INSTALL_COMMAND[*]}")"
     return
   fi
   SUMMARY_DEPENDENCIES="$(dependencies_line_installed "${missing}" \
@@ -473,7 +473,7 @@ create_and_install_basstler_environment() {
     SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
       "./${BASSTLER_SOURCE_TREE}" "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
       "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
-      "./${BASSTLER_SOURCE_TREE}")"
+      "${BASSTLER_INSTALL_COMMAND[*]}")"
     return
   fi
   SUMMARY_DEPENDENCIES="$(dependencies_line_environment_created \
