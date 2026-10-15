@@ -24,11 +24,22 @@ class PathEnumeration(Path, ReprEnum):
         the path's last component, and the member's name is ``member._name_``.
     """
 
-    __hash__ = Path.__hash__
-    """
-    Hash as the path does, so a member and its path are one key; the enumeration's own
-    hash would tell them apart.
-    """
+    def __hash__(self) -> int:
+        """
+        Hash as the path does, so a member and its path are one key; the enumeration's own
+        hash would tell them apart.
+        """
+        return hash(self.value)
+
+    def __eq__(self, value: object, /) -> bool:
+        """
+        The value of the Enum should be equal to an equivalent Path instance.
+
+        :param value: A Path instance to compare.
+        :return: True if the value is equal to an equivalent Path instance, False otherwise.
+        """
+        return self.value == value
+
 
     def with_segments(self, *path_segments: str | os.PathLike[str]) -> Path:
         """
