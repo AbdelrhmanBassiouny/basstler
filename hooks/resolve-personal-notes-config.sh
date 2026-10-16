@@ -77,6 +77,7 @@ personal_settings_are_locally_modified() {
 # record_personal_settings_sync: stamps the local settings' current content as the
 # synced baseline, so the next session start may update them in place.
 record_personal_settings_sync() {
+  mkdir -p "$(dirname "${PERSONAL_SETTINGS_SYNC_STAMP}")"
   git hash-object "${LOCAL_SETTINGS_JSON}" > "${PERSONAL_SETTINGS_SYNC_STAMP}"
 }
 
@@ -720,6 +721,7 @@ PLAN_STATE_SYNC_STAMP="${PROJECT_ROOT}/.claude/.plan-state-sync-sha"
 # FETCH_HEAD directly rather than fetching again itself, same reasoning as
 # plan_id_for_branch above.
 record_plan_state_sync_stamp() {
+  mkdir -p "$(dirname "${PLAN_STATE_SYNC_STAMP}")"
   git rev-parse FETCH_HEAD > "${PLAN_STATE_SYNC_STAMP}"
 }
 
