@@ -1,6 +1,6 @@
 # First-time setup
 
-Four steps, once per person and project. They give you personal notes that follow you
+Five steps, once per person and project. They give you personal notes that follow you
 across sessions, per-pull-request progress tracking, and multi-PR plan dashboards.
 
 Details of everything below: [`hooks/README.md`](../plugin/hooks/README.md).
@@ -47,7 +47,21 @@ It prints these three, already filled in for your fork:
 | Your Claude settings | Give Claude access to the fork on GitHub. |
 | Your Claude environment | Paste the `CLAUDE_PERSONAL_NOTES_*` variables — only if you moved a setting off its default, and only for environments that clone fresh each session. |
 
-## 3. Check it worked
+## 3. For the stacked-PR workflow: name the project's upstream
+
+Only if the project uses `/stacked-pr-maintenance` or `/upstream-reviews`. Commit
+`.claude/basstler/stack.toml` naming the repository the project's pull requests are
+reviewed on:
+
+```toml
+upstream_repository = "<owner>/<name>"
+```
+
+and, for `/upstream-reviews`, copy [`examples/upstream-reviews.yml`](examples/upstream-reviews.yml)
+to the project's `.github/workflows/upstream-reviews.yml` on its default branch. It calls this
+repository's reusable workflow at the plugin's release.
+
+## 4. Check it worked
 
 ```bash
 "${BASSTLER_PLUGIN_ROOT}/hooks/check-setup.sh"

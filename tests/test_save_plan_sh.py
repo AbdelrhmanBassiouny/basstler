@@ -66,7 +66,6 @@ A distribution nothing can have installed, so the refusal cannot pass by acciden
 """
 
 
-
 def declaration_file(repository: ScratchRepository) -> Path:
     """
     :param repository: A fixture-built scratch repository.

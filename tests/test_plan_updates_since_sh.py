@@ -190,7 +190,9 @@ def run_plan_updates_since(
         project_root=repository.project_root,
         removed_variable_prefixes=REMOVED_VARIABLE_PREFIXES,
         script_path=(
-            repository.plugin_root / PluginLocation.HOOKS.value.name / "plan-updates-since.sh"
+            repository.plugin_root
+            / PluginLocation.HOOKS.value.name
+            / "plan-updates-since.sh"
         ),
     ).run(*arguments, **(env or {}))
 

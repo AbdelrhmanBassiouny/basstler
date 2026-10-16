@@ -450,7 +450,5 @@ def test_every_skill_names_a_key_the_committed_defaults_define():
     The enum and the shipped TOML are edited in different files; this is what stops one
     gaining a skill the other has never heard of.
     """
-    defaults = tomllib.loads(
-        PackageLocation.PLAN_ITEM_MODE_DEFAULTS.value.read_text()
-    )
+    defaults = tomllib.loads(PackageLocation.PLAN_ITEM_MODE_DEFAULTS.value.read_text())
     assert set(defaults) == {skill.setting_key for skill in PlanItemSkill}

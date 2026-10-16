@@ -40,7 +40,6 @@ class PathEnumeration(Path, ReprEnum):
         """
         return self.value == value
 
-
     def with_segments(self, *path_segments: str | os.PathLike[str]) -> Path:
         """
         :param path_segments: The segments of a path derived from this one.

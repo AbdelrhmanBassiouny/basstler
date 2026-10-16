@@ -62,7 +62,12 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
 
-from basstler.locations import ClaudeCodeVariable, PackageLocation, PluginLocation, ProjectLocation
+from basstler.locations import (
+    ClaudeCodeVariable,
+    PackageLocation,
+    PluginLocation,
+    ProjectLocation,
+)
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

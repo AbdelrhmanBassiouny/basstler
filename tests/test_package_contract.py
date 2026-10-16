@@ -48,10 +48,7 @@ without anyone recording that it exists.
 """
 
 
-SHELL_CONFIGURATION = (
-    RepositoryLocation.HOOKS
-    / "resolve-personal-notes-config.sh"
-)
+SHELL_CONFIGURATION = RepositoryLocation.HOOKS / "resolve-personal-notes-config.sh"
 """
 The file the bash callers source, which is where a module gets a shell name and the
 interpreter its import path.
@@ -99,9 +96,7 @@ MODULE_VARIABLE = re.compile(r'^([A-Z_]+)="(basstler\.[a-z_]+)"', re.MULTILINE)
 One ``NAME="basstler.module"`` assignment in the shell configuration.
 """
 
-DEPENDENCY_INSTALL = re.compile(
-    r"(pip install|uv pip install|uv sync)[^\n]*" r"(BASSTLER_SOURCE_TREE|basstler)"
-)
+DEPENDENCY_INSTALL = re.compile(r"(pip install|uv pip install|uv sync)[^\n]*basstler")
 """
 A step that installs this package, and with it the dependencies its metadata declares,
 however the caller spells the directory.
@@ -231,6 +226,28 @@ def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():
         for workflow_path, _ in running
         if not installs_the_dependencies(workflow_path.read_text())
     ] == []
+
+
+RELEASE_REFERENCE = re.compile(r"(?:@|basstler_ref: )(v[0-9][^\s]*)")
+"""
+A ``@<ref>`` or ``basstler_ref: <ref>`` naming a basstler release.
+"""
+
+
+def test_the_example_caller_calls_the_plugins_own_release():
+    """
+    A project copies the example caller as it stands, so it has to call the release its
+    plugin installs - both the workflow it uses and the package that workflow installs.
+    """
+    manifest = json.loads(
+        (RepositoryLocation.PLUGIN / ".claude-plugin" / "plugin.json").read_text()
+    )
+    caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
+
+    references = RELEASE_REFERENCE.findall(caller.read_text())
+
+    assert len(references) == 2
+    assert set(references) == {f"v{manifest[PluginManifestKey.VERSION]}"}
 
 
 # %% nothing is left behind

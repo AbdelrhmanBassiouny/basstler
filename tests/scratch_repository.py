@@ -65,7 +65,9 @@ def install_hook_scripts_into(plugin_root: Path, *script_names: str) -> None:
     hooks_directory = plugin_root / PluginLocation.HOOKS.value.name
     hooks_directory.mkdir(parents=True, exist_ok=True)
     for script_name in script_names:
-        shutil.copy(RepositoryLocation.HOOKS / script_name, hooks_directory / script_name)
+        shutil.copy(
+            RepositoryLocation.HOOKS / script_name, hooks_directory / script_name
+        )
 
 
 def install_package_into(checkout_root: Path) -> None:
@@ -408,9 +410,7 @@ class ScratchRepository:
         """
         interpreter = write_interpreter_wrapper(
             Path(
-                self.configuration_value(
-                    ConfigurationVariable.ENVIRONMENT_INTERPRETER
-                )
+                self.configuration_value(ConfigurationVariable.ENVIRONMENT_INTERPRETER)
             )
         )
         Path(

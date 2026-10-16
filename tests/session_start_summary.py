@@ -18,10 +18,7 @@ from enum import StrEnum
 
 from .constants import RepositoryLocation
 
-MESSAGES_SCRIPT = (
-    RepositoryLocation.HOOKS
-    / "session-start-messages.sh"
-)
+MESSAGES_SCRIPT = RepositoryLocation.HOOKS / "session-start-messages.sh"
 """
 The shell file defining the wording of every summary line.
 """

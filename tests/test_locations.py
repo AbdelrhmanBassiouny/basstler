@@ -40,9 +40,17 @@ def test_a_member_is_accepted_where_a_path_is(tmp_path: Path):
     Joining onto a root, joining beneath a member and handing one to ``os`` all see the
     path.
     """
-    assert tmp_path / ProjectLocation.PERSONAL_NOTES == tmp_path / ProjectLocation.PERSONAL_NOTES.value
-    assert ProjectLocation.PERSONAL_NOTES / "a.md" == ProjectLocation.PERSONAL_NOTES.value / "a.md"
-    assert os.fspath(ProjectLocation.PERSONAL_NOTES) == str(ProjectLocation.PERSONAL_NOTES.value)
+    assert (
+        tmp_path / ProjectLocation.PERSONAL_NOTES
+        == tmp_path / ProjectLocation.PERSONAL_NOTES.value
+    )
+    assert (
+        ProjectLocation.PERSONAL_NOTES / "a.md"
+        == ProjectLocation.PERSONAL_NOTES.value / "a.md"
+    )
+    assert os.fspath(ProjectLocation.PERSONAL_NOTES) == str(
+        ProjectLocation.PERSONAL_NOTES.value
+    )
 
 
 @pytest.mark.parametrize(

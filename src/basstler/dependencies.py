@@ -167,7 +167,9 @@ class RequirementSource(ABC):
         :return: The source checkout's ``pyproject.toml`` where the package runs from
             one, else the package's installed metadata.
         """
-        declaration = DependencyDeclaration(PackageLocation.DEPENDENCY_DECLARATION.value)
+        declaration = DependencyDeclaration(
+            PackageLocation.DEPENDENCY_DECLARATION.value
+        )
         if declaration.path.is_file():
             return declaration
         return InstalledDistribution(PackageLocation.DIRECTORY.value.name)
@@ -195,7 +197,11 @@ class InstalledDistribution(RequirementSource):
             return (Dependency(self.name),)
         return (
             Dependency(self.name),
-            *(Dependency(specifier) for specifier in stated if "extra ==" not in specifier),
+            *(
+                Dependency(specifier)
+                for specifier in stated
+                if "extra ==" not in specifier
+            ),
         )
 
 

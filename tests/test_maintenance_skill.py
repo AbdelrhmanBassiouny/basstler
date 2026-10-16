@@ -38,7 +38,9 @@ def candidate_forks() -> set[Repository]:
 
     :return: The candidate forks, empty if the checkout has no repository remote at all.
     """
-    configuration = CommittedStackConfiguration(project_root=RepositoryLocation.ROOT.value)
+    configuration = CommittedStackConfiguration(
+        project_root=RepositoryLocation.ROOT.value
+    )
     upstreams = (
         {configuration.upstream_repository()}
         if configuration.project_file.is_file()

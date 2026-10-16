@@ -493,7 +493,8 @@ def test_installs_nothing_when_every_requirement_is_already_installed(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
-        SummaryMessage.DEPENDENCIES_ALREADY_INSTALLED, environment_directory(session_start_repository)
+        SummaryMessage.DEPENDENCIES_ALREADY_INSTALLED,
+        environment_directory(session_start_repository),
     )
     assert not call_log.exists()
 
@@ -700,8 +701,7 @@ def test_a_plugin_outside_a_checkout_installs_its_own_release_of_the_package(
     declaration_file(session_start_repository).unlink()
     manifest = json.loads(
         (
-            session_start_repository.plugin_root
-            / SetupPrerequisiteFile.PLUGIN_MANIFEST
+            session_start_repository.plugin_root / SetupPrerequisiteFile.PLUGIN_MANIFEST
         ).read_text()
     )
 

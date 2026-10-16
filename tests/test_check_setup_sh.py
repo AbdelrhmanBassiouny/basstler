@@ -354,7 +354,9 @@ def test_reports_a_session_start_hook_that_is_not_registered(
     check_setup_repository: ScratchRepository,
 ):
     (
-        check_setup_repository.plugin_root / PluginLocation.HOOKS.value.name / "hooks.json"
+        check_setup_repository.plugin_root
+        / PluginLocation.HOOKS.value.name
+        / "hooks.json"
     ).write_text("{}\n")
 
     report = run_check_setup(check_setup_repository)

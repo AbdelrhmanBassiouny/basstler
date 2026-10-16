@@ -846,9 +846,7 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
 # %% the checkout the pass was invoked in
 
 TOOLING_PATH = str(
-    Path(basstler.maintenance.__file__).relative_to(
-        RepositoryLocation.ROOT.value
-    )
+    Path(basstler.maintenance.__file__).relative_to(RepositoryLocation.ROOT.value)
 )
 """
 Where the pass's own tooling sits: tracked content, so a branch cut before it landed

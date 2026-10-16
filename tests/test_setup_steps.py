@@ -41,10 +41,7 @@ FORK = Repository(owner="some-user", name="some-repository")
 
 FORK_REMOTE_URL = f"https://github.com/{FORK.full_name}.git"
 
-RESOLVE_CONFIG_SCRIPT = (
-    RepositoryLocation.HOOKS
-    / "resolve-personal-notes-config.sh"
-)
+RESOLVE_CONFIG_SCRIPT = RepositoryLocation.HOOKS / "resolve-personal-notes-config.sh"
 
 
 @pytest.fixture

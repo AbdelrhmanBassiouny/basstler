@@ -1151,7 +1151,9 @@ def test_a_project_naming_no_upstream_says_so_by_status(
     The upstream is the one setting only the project knows, and its absence is a
     setup step a caller can name, not a failure to read the checkout.
     """
-    (offline_checkout.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION).unlink()
+    (
+        offline_checkout.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION
+    ).unlink()
     offline_checkout.run_git(
         "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
     )

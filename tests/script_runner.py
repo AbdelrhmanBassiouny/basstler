@@ -134,7 +134,8 @@ def configuration_value(variable_name: str) -> str:
             "bash",
             "-c",
             'source "$0" && printf "%s" "${!1}"',
-            RepositoryLocation.HOOKS / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name,
+            RepositoryLocation.HOOKS
+            / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name,
             variable_name,
         ],
         cwd=RepositoryLocation.ROOT.value,

@@ -307,7 +307,9 @@ def resolved_remotes(
     return resolve_remotes(
         _remote_urls(),
         upstream_repository
-        or upstream_repository_in(values, CommittedStackConfiguration(path).project_file),
+        or upstream_repository_in(
+            values, CommittedStackConfiguration(path).project_file
+        ),
         values[StackSetting.UPSTREAM_REMOTE],
         fork_repository
         or (Repository.parse(configured_fork) if configured_fork else None),

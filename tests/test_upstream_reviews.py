@@ -361,7 +361,9 @@ def test_the_upstream_is_read_from_the_configuration_file(tmp_path):
     configuration.write_text(UPSTREAM_SETTING_TEMPLATE.format(repository=configured))
 
     assert (
-        resolve_upstream_repository(CommittedStackConfiguration(configuration, tmp_path))
+        resolve_upstream_repository(
+            CommittedStackConfiguration(configuration, tmp_path)
+        )
         == configured
     )
 

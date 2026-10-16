@@ -31,9 +31,7 @@ from .constants import (
 from .scratch_repository import PackageSourceFile, install_hook_scripts_into
 from .script_runner import BashScriptRunner
 
-PLAN_DASHBOARD_DIRECTORY = (
-    RepositoryLocation.PLUGIN / SkillDirectory.PLAN_DASHBOARD
-)
+PLAN_DASHBOARD_DIRECTORY = RepositoryLocation.PLUGIN / SkillDirectory.PLAN_DASHBOARD
 """
 Where refresh_dashboard.sh itself lives - the skill directory, not the package. Claude
 Code discovers a skill by path, so its shell entry point stays with it.
