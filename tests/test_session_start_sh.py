@@ -152,6 +152,29 @@ def publish_and_run(
     return run_session_start(repository, environment)
 
 
+# %% a project that has never held anything of Claude Code's
+
+
+def test_runs_in_a_project_with_no_claude_code_directory(
+    session_start_repository: ScratchRepository,
+):
+    """
+    The plugin lives outside the project, so nothing guarantees the project has a
+    ``.claude`` directory for the hook's own records - it makes one.
+    """
+    session_start_repository.publish_notes_branch(
+        {ProjectLocation.PERSONAL_NOTES_DOCUMENT: "personal notes\n"}
+    )
+    shutil.rmtree(
+        session_start_repository.project_root / ProjectLocation.CLAUDE_CODE_DIRECTORY
+    )
+
+    result = run_session_start(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+
+
 # %% someone who uses neither plans nor personal notes
 
 
