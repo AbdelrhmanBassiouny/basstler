@@ -103,10 +103,9 @@ it were ready.
 ## Cross-check the standing conventions
 
 Read `roadmap.md`'s standing-conventions section (however it is titled in
-this plan) and this repository's own `AGENTS.md`. Whatever is proposed must
-honor both — SOLID, TDD, no abbreviations, dataclasses, docstring
-conventions, whatever the repo's own rules are — not just what the item's
-own `notes` happen to mention.
+this plan) and the project's own instructions (`AGENTS.md`, else `CLAUDE.md`). Whatever is proposed must
+honor both — whatever the project's own rules are — not just what the
+item's own `notes` happen to mention.
 
 ## Before raising an open question, check whether it is already answered
 

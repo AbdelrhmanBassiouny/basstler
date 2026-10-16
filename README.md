@@ -83,6 +83,8 @@ uv venv --python ">=3.12" .venv && uv pip install --python .venv/bin/python --ed
 PATH="$PWD/.venv/bin:$PATH" pytest tests -n auto
 ```
 
-The hook tests run `python3`, so the environment has to be first on the path. To try a
+The hook tests run `python3`, so the environment has to be first on the path. Python is formatted
+by `python scripts/format_docstrings.py <files>` (black, then docformatter where black keeps
+its result), also run as a pre-commit hook. To try a
 change in a real session, start Claude Code with `--plugin-dir plugin`: the plugin then
 sits in this clone, and installs the clone editable.

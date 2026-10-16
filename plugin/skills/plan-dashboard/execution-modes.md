@@ -83,8 +83,8 @@ Autonomy is about not waiting for approval, not about skipping the record.
   work actually does as it changes.
 - **Record decisions as you make them**, in the PR-progress note and the
   description, so the review reads the reasoning rather than reconstructing it.
-- **Run the multi-PR-scope judgement anyway.** `cram-notes.md`'s "Plan-mode
-  approval → persistent plans" rule fires on plan-mode approval, which `auto`
+- **Run the multi-PR-scope judgement anyway.** A personal-notes rule that turns an
+  approved plan-mode plan into persistent plan items fires on plan-mode approval, which `auto`
   never reaches — so make the same call at the moment the plan is settled:
   does this span more than one pull request or session, and does it therefore
   need plan items of its own?

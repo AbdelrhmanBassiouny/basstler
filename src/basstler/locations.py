@@ -172,7 +172,7 @@ class ProjectLocation(PathEnumeration):
     :attr:`PackageLocation.STACK_CONFIGURATION`.
     """
 
-    PERSONAL_NOTES_DOCUMENT = PERSONAL_NOTES / "cram-notes.md"
+    PERSONAL_NOTES_DOCUMENT = PERSONAL_NOTES / "notes.md"
     """
     The notes file itself, unless a clone's settings put it elsewhere.
     """

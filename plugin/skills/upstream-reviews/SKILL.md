@@ -11,8 +11,8 @@ repository and reports it. Generic and fork-agnostic — nothing here may
 hardcode a repository, owner, or branch name.
 
 **This skill only reads.** It never comments on, reviews, resolves, or
-otherwise modifies anything on the upstream. `AGENTS.md` forbids it outright,
-and the report is the entire deliverable.
+otherwise modifies anything on the upstream: the upstream belongs to its
+reviewers, and the report is the entire deliverable.
 
 ## Why an Action rather than a direct read
 

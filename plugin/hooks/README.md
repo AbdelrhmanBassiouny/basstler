@@ -17,7 +17,7 @@ Three kinds of content, stored the same way and never merged anywhere:
 
 | Section in `CLAUDE.local.md` | Holds | Stored on the notes branch at | Saved by |
 | --- | --- | --- | --- |
-| Personal notes | Your standing preferences | `.claude/personal/cram-notes.md` | [`save-personal-notes.sh`](./save-personal-notes.sh) |
+| Personal notes | Your standing preferences | `.claude/personal/notes.md` | [`save-personal-notes.sh`](./save-personal-notes.sh) |
 | PR progress | Plan, progress and next steps for the current branch's PR | `.claude/personal/pr-progress/<branch>.md` | [`save-pr-progress.sh`](./save-pr-progress.sh) |
 | Plan | A multi-PR initiative's manifest and roadmap | `.claude/personal/plans/<plan-id>/` | [`save-plan.sh`](./save-plan.sh) |
 
@@ -136,7 +136,7 @@ Three independent settings, each resolved as **git config**, then **environment 
 | --- | --- | --- | --- |
 | Remote | `claude.personalNotesRemote` | `CLAUDE_PERSONAL_NOTES_REMOTE` | `origin` |
 | Branch | `claude.personalNotesBranch` | `CLAUDE_PERSONAL_NOTES_BRANCH` | `claude/personal-notes` |
-| Path | `claude.personalNotesPath` | `CLAUDE_PERSONAL_NOTES_PATH` | `.claude/personal/cram-notes.md` |
+| Path | `claude.personalNotesPath` | `CLAUDE_PERSONAL_NOTES_PATH` | `.claude/personal/notes.md` |
 
 Override only what you need:
 

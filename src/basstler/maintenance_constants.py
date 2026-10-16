@@ -68,7 +68,7 @@ PROMOTION_HEADING = "## Promote"
 description - the summary that carried it is delivered once and then gone, and the
 description is still there a week later."""
 
-PROMOTION_LINK_LABEL = "cram2-link-sent"
+PROMOTION_LINK_LABEL = "promotion-link-sent"
 """
 Marks a branch whose link has been built, so a later pass does not rebuild it.
 """

@@ -46,6 +46,7 @@ from basstler.build_dashboard import (
     validate_plan,
 )
 from basstler.locations import PackageLocation
+from basstler.maintenance_constants import PROMOTION_LINK_LABEL
 
 from .constants import RepositoryLocation, SkillDirectory
 
@@ -377,9 +378,11 @@ def test_identified_labels_recognizes_known_labels():
 
 
 def test_identified_labels_silently_excludes_an_unrecognized_label():
-    # cram2-link-sent is real label traffic on this repo's own PRs (added by
-    # other automation) that this codebase has no reason to recognize.
-    record = PullRequestRecord(state=PullRequestState.OPEN, labels=["cram2-link-sent"])
+    # The promotion-link marker is real label traffic on a fork's PRs (added by the
+    # maintenance pass) that the dashboard has no reason to recognize.
+    record = PullRequestRecord(
+        state=PullRequestState.OPEN, labels=[PROMOTION_LINK_LABEL]
+    )
     assert record.identified_labels == frozenset()
 
 

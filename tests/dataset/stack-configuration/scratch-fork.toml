@@ -1,4 +1,4 @@
 # The stack settings a scratch fork checkout commits: the upstream its bare stand-in is
 # addressed as, and the remote name the checkout gives it.
 upstream_repository = "an-upstream-owner/a-project"
-upstream_remote = "cram2"
+upstream_remote = "upstream"

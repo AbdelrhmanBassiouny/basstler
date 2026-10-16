@@ -79,7 +79,7 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
-        upstream_remote="cram2",
+        upstream_remote="upstream",
         upstream_base="main",
         upstream_setup_command=upstream_setup_command,
     )
@@ -166,7 +166,7 @@ def test_nothing_promotes_when_all_draft():
 
 def test_ready_child_blocked_until_parent_lands():
     prs = [
-        PullRequest(1, "parent", "main", draft=True),  # still draft, not on cram2
+        PullRequest(1, "parent", "main", draft=True),  # still draft, not upstream
         PullRequest(
             2, "child", "parent", draft=False
         ),  # approved but parent hasn't landed
@@ -306,7 +306,7 @@ rebase_label = "rebase"
 needs_resolution_label = "needs-resolution"
 fork_remote = "origin"
 upstream_repository = "an-upstream-owner/a-project"
-upstream_remote = "cram2"
+upstream_remote = "upstream"
 upstream_base = "main"
 """
 
@@ -338,7 +338,7 @@ def test_load_configuration_uses_committed_defaults_when_no_personal_notes_branc
 
     configuration = load_configuration(configuration_path)
 
-    assert configuration.upstream_remote == "cram2"
+    assert configuration.upstream_remote == "upstream"
 
 
 def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
@@ -347,7 +347,7 @@ def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.publish_notes_branch(
         {
-            ProjectLocation.PERSONAL_STACK_CONFIGURATION: 'upstream_remote = "my-fork-cram2"\n'
+            ProjectLocation.PERSONAL_STACK_CONFIGURATION: 'upstream_remote = "my-own-upstream-name"\n'
         }
     )
     scratch_repository.resolve_notes_remote_to()
@@ -355,7 +355,7 @@ def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
 
     configuration = load_configuration(configuration_path)
 
-    assert configuration.upstream_remote == "my-fork-cram2"
+    assert configuration.upstream_remote == "my-own-upstream-name"
     assert configuration.upstream_base == "main"  # untouched default
 
 
@@ -369,7 +369,7 @@ def test_load_configuration_ignores_personal_notes_branch_without_a_stack_file(
 
     configuration = load_configuration(configuration_path)
 
-    assert configuration.upstream_remote == "cram2"
+    assert configuration.upstream_remote == "upstream"
 
 
 def test_load_configuration_resolves_the_fork_whatever_the_remote_is_called(
@@ -442,7 +442,7 @@ def test_the_fork_resolves_the_same_when_origin_happens_to_be_the_fork():
     resolution = resolve(
         {
             "origin": "https://github.com/a-fork-owner/a-project.git",
-            "cram2": "https://github.com/an-upstream-owner/a-project.git",
+            "upstream": "https://github.com/an-upstream-owner/a-project.git",
         }
     )
 
@@ -473,12 +473,12 @@ def test_nothing_to_add_when_the_upstream_remote_is_already_there():
     resolution = resolve(
         {
             "origin": "https://github.com/a-fork-owner/a-project.git",
-            "cram2": "https://github.com/an-upstream-owner/a-project.git",
+            "upstream": "https://github.com/an-upstream-owner/a-project.git",
         }
     )
 
     assert resolution.upstream_setup_command is None
-    assert resolution.upstream_name == "cram2"
+    assert resolution.upstream_name == "upstream"
 
 
 def test_a_checkout_with_only_the_upstream_is_rejected_rather_than_guessed():
@@ -544,7 +544,7 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
         "fork_repository": "a-fork-owner/a-fork",
         "fork_remote": "origin",
         "upstream_repository": "an-upstream-owner/a-project",
-        "upstream_remote": "cram2",
+        "upstream_remote": "upstream",
         "upstream_base": "main",
     }
 
@@ -553,12 +553,12 @@ def test_a_checkout_missing_its_upstream_remote_is_printed_the_command_that_adds
     capsys,
 ):
     print_configuration(
-        make_configuration(upstream_setup_command="git remote add cram2 a-url")
+        make_configuration(upstream_setup_command="git remote add upstream a-url")
     )
 
     printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
 
-    assert printed["upstream_setup_command"] == "git remote add cram2 a-url"
+    assert printed["upstream_setup_command"] == "git remote add upstream a-url"
 
 
 def test_nothing_is_printed_for_a_setup_command_that_is_not_needed(capsys):
@@ -851,11 +851,11 @@ def test_a_destination_on_the_upstream_remote_is_refused():
     opening a pull request against it.
     """
     refusals = checks_over_that_stack().refusals(
-        a_proposed_push(destination_remote="cram2")
+        a_proposed_push(destination_remote="upstream")
     )
 
     assert [refusal.reason for refusal in refusals] == [RefusalReason.NOT_THE_FORK]
-    assert "cram2" in refusals[0].explanation
+    assert "upstream" in refusals[0].explanation
 
 
 def test_a_push_that_would_make_a_child_an_ancestor_of_its_parent_is_refused():
@@ -886,7 +886,7 @@ def test_every_reason_to_refuse_is_reported_rather_than_only_the_first():
     gets made.
     """
     refusals = checks_over_that_stack(checked_out_branch="parser").refusals(
-        a_proposed_push(destination="engine-ui", destination_remote="cram2")
+        a_proposed_push(destination="engine-ui", destination_remote="upstream")
     )
 
     assert [refusal.reason for refusal in refusals] == [
@@ -1043,7 +1043,7 @@ def test_a_named_upstream_replaces_the_committed_default(
         "a-different-upstream", "a-project"
     )
     assert configuration.upstream_setup_command == (
-        "git remote add cram2 https://github.com/a-different-upstream/a-project.git"
+        "git remote add upstream https://github.com/a-different-upstream/a-project.git"
     )
 
 
@@ -1148,8 +1148,8 @@ def test_a_project_naming_no_upstream_says_so_by_status(
     offline_checkout: ScratchRepository,
 ):
     """
-    The upstream is the one setting only the project knows, and its absence is a
-    setup step a caller can name, not a failure to read the checkout.
+    The upstream is the one setting only the project knows, and its absence is a setup
+    step a caller can name, not a failure to read the checkout.
     """
     (
         offline_checkout.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION

@@ -152,7 +152,7 @@ def make_configuration() -> Configuration:
         fork_repository=Repository("a-fork-owner", "a-fork"),
         fork_remote="origin",
         upstream_repository=Repository("an-upstream-owner", "a-project"),
-        upstream_remote="cram2",
+        upstream_remote="upstream",
         upstream_base=UPSTREAM_BASE,
         upstream_setup_command=None,
     )
@@ -208,12 +208,12 @@ class ForkCheckout:
         checkout.run_git("config", "user.name", "Scratch Fork")
         checkout.run_git("config", "user.email", "scratch-fork@example.com")
         checkout.run_git("remote", "add", "origin", checkout.fork_path.as_uri())
-        checkout.run_git("remote", "add", "cram2", checkout.upstream_path.as_uri())
+        checkout.run_git("remote", "add", "upstream", checkout.upstream_path.as_uri())
         checkout.commit("a-file", "the first line\n")
         checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
-        checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
+        checkout.run_git("push", "--quiet", "upstream", UPSTREAM_BASE)
         checkout.run_git("fetch", "--quiet", "origin")
-        checkout.run_git("fetch", "--quiet", "cram2")
+        checkout.run_git("fetch", "--quiet", "upstream")
         return checkout
 
     def name_the_upstream(self) -> None:
@@ -518,7 +518,7 @@ def test_a_description_naming_no_session_yields_none():
 def test_the_fork_base_is_fast_forwarded_to_the_upstream(fork_checkout: ForkCheckout):
     fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
     advanced = fork_checkout.commit("another-file", "upstream moved\n")
-    fork_checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
+    fork_checkout.run_git("push", "--quiet", "upstream", UPSTREAM_BASE)
     fork_checkout.run_git(
         "push", "--quiet", "--force", "origin", f"HEAD~1:{UPSTREAM_BASE}"
     )
@@ -551,10 +551,10 @@ def test_a_non_fast_forward_is_refused_and_the_fork_base_is_untouched(
     fork_checkout.run_git("checkout", "--quiet", "-B", "a-divergent-line", "HEAD~1")
     fork_checkout.commit("an-upstream-only-file", "only upstream\n")
     fork_checkout.run_git(
-        "push", "--quiet", "--force", "cram2", f"HEAD:{UPSTREAM_BASE}"
+        "push", "--quiet", "--force", "upstream", f"HEAD:{UPSTREAM_BASE}"
     )
     fork_checkout.run_git("fetch", "--quiet", "origin")
-    fork_checkout.run_git("fetch", "--quiet", "cram2")
+    fork_checkout.run_git("fetch", "--quiet", "upstream")
     before = fork_checkout.published_commit("origin", UPSTREAM_BASE)
 
     report = fast_forward(make_configuration(), fork_checkout.git)
@@ -1547,7 +1547,7 @@ def a_report(
     """
     return MaintenanceReport(
         fast_forward=FastForwardReport(
-            fast_forward_outcome, "cram2/main", "origin/main", "a-commit"
+            fast_forward_outcome, "upstream/main", "origin/main", "a-commit"
         ),
         restacked=(
             BranchOutcome(
@@ -1631,7 +1631,7 @@ def test_a_non_zero_status_says_what_it_means_on_the_way_out(
     """
     A caller reading a bare number has to look it up; the executor already knows.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", "upstream")
 
     result = run_maintenance(fork_checkout, RestackCommand())
 
@@ -1859,7 +1859,7 @@ def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
     """
     Distinguishable from a missing board, since the fix is a token rather than a fetch.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", "upstream")
 
     assert (
         run_maintenance(fork_checkout, BoardCommand()).returncode
@@ -1878,7 +1878,7 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
     ``stack.toml``, whose upstream is this repository's own - against which both of the
     fixture's remotes look like candidate forks, and inference rightly refuses to guess.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", "upstream")
 
     assert (
         run_maintenance(fork_checkout, RestackCommand()).returncode

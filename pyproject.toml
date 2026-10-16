@@ -63,3 +63,11 @@ basstler = [
     "stack.toml",
     "plan-item-modes.toml",
 ]
+
+# Docstrings are formatted by docformatter on top of black - scripts/format_docstrings.py
+# runs both, keeping docformatter's change only where black leaves it alone.
+[tool.docformatter]
+make-summary-multi-line = true
+pre-summary-newline = true
+close-quotes-on-newline = true
+black = true

@@ -223,7 +223,7 @@ Record every branch reported on this run - the summary must list it, since a com
 guaranteed to be seen.
 
 The **top** of the finish summary must list all pending upstream create-links: any built this run,
-and any fork pull request still carrying `cram2-link-sent` but not yet `in-review` (re-listed from
+and any fork pull request still carrying `promotion-link-sent` but not yet `in-review` (re-listed from
 prior runs, its link rebuilt with `promotion-link`). This section appears at the top even when
 nothing new was built, as long as any are pending - a scheduled run is configured to email its
 summary, so the summary *is* the delivery. List each pull request's number, title, branch and

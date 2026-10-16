@@ -17,7 +17,7 @@ set -euo pipefail
 #
 # Works out of the box, zero config: it looks for a branch named
 # `claude/personal-notes` on `origin` and, if found, reads
-# `.claude/personal/cram-notes.md` off it into CLAUDE.local.md.
+# `.claude/personal/notes.md` off it into CLAUDE.local.md.
 # ./create-personal-notes-branch.sh creates that branch (with an empty notes
 # file) for anyone who doesn't have it yet.
 #
@@ -147,7 +147,7 @@ set -euo pipefail
 # ./resolve-personal-notes-config.sh), regardless of whether this branch
 # tracks a plan. ./plan-updates-since.sh diffs from that stamp instead of a
 # session rereading whole plan files to answer "what changed since I last
-# looked" - see that script and cram-notes.md's recheck-deltas convention.
+# looked" - see that script and the personal notes' recheck-deltas convention.
 #
 # How this script gets invoked (see ./hooks.json): the plugin registers it as a
 # SessionStart hook via `${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh`.

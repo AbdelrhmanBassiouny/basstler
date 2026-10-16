@@ -90,7 +90,7 @@ the exact lines to paste, and only the ones that differ from the defaults:
 ```
 CLAUDE_PERSONAL_NOTES_REMOTE=<chosen-remote-or-url>
 CLAUDE_PERSONAL_NOTES_BRANCH=<branch, only if not claude/personal-notes>
-CLAUDE_PERSONAL_NOTES_PATH=<path, only if not .claude/personal/cram-notes.md>
+CLAUDE_PERSONAL_NOTES_PATH=<path, only if not .claude/personal/notes.md>
 ```
 
 Point them at their environment's own docs for where that list lives (for

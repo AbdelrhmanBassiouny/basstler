@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Stacked-PR helper for the fork-staging / cram2-review workflow.
+"""Stacked-PR helper for the fork-staging / upstream-review workflow.
 
 GitHub is the single source of truth. The stack is **not** declared in a ledger: it is read from a
 ``board.json`` export of the fork's pull requests, combined with plain ``git``:
 
   * dependency tree = each fork PR's **base branch** (base = parent);
   * ``draft`` <-> ``ready`` = the fork PR's draft flag;
-  * ``in-review`` = the ``in_review_label`` on the fork PR (cram2 is not readable from the cloud);
+  * ``in-review`` = the ``in_review_label`` on the fork PR (the upstream is not readable from the cloud);
   * ``merged`` = the branch is an ancestor of ``<upstream_remote>/<upstream_base>``.
 
-``stack.toml`` carries the committed defaults (label names, the upstream repository); a
-``.claude/personal/stack.toml`` on the personal-notes branch, if present, layers per-user overrides on
-top of them (see :func:`load_configuration`).
+``stack.toml`` carries the shipped defaults (label names, the base branch); the project's committed
+``.claude/basstler/stack.toml`` names its upstream, and a ``.claude/personal/stack.toml`` on the
+personal-notes branch, if present, layers per-user overrides on top of both (see
+:func:`load_configuration`).
 
 Commands (run from the repo root; ``--help`` on any of them for its flags)::
 

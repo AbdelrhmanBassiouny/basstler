@@ -1,8 +1,8 @@
-# Stacked-PR workflow (fork staging → cram2 review)
+# Stacked-PR workflow (fork staging → upstream review)
 
 High-velocity, review-constrained workflow. This fork (`origin`) holds the **full stack** of
-in-flight branches; **cram2** is the slow review queue. You promote approved branches to
-cram2 as their parents land. Claude does the mechanical restacking so the stack never rots
+in-flight branches; **the upstream** is the slow review queue. You promote approved branches
+to the upstream as their parents land. Claude does the mechanical restacking so the stack never rots
 and you keep coding.
 
 ## The rationale (why)
@@ -20,10 +20,10 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 |---|---|---|
 | dependency **tree** (parent) | each fork PR's **base branch** (`base = parent`) | retargeting the PR base on GitHub - from a session, only via the GitHub MCP `update_pull_request` tool (see the maintenance skill) |
 | `draft` ↔ `ready` | the fork PR's **draft toggle** | un-drafting when you approve it |
-| `in-review` | the **`in-review` label** on the fork PR | labelling at promote time (cram2 isn't readable from the cloud) |
-| `merged` | branch is an ancestor of `cram2/main` | nothing - GitHub marks the PR merged itself once its head is contained in its base |
+| `in-review` | the **`in-review` label** on the fork PR | labelling at promote time (the upstream isn't readable from the cloud) |
+| `merged` | branch is an ancestor of `<upstream_remote>/<upstream_base>` | nothing - GitHub marks the PR merged itself once its head is contained in its base |
 | `merge` vs `rebase` | the **`rebase`** label; default `merge` | labelling on GitHub |
-| cram2 create-link built | the **`cram2-link-sent`** marker | nothing - a maintenance pass sets it when it puts a create-link in the PR description, and clears it once you promote (add `in-review`) |
+| upstream create-link built | the **`promotion-link-sent`** marker | nothing - a maintenance pass sets it when it puts a create-link in the PR description, and clears it once you promote (add `in-review`) |
 | conflict/CI-red reported | the **`needs-resolution`** label | nothing - a maintenance pass sets it when it reports a restack conflict to the branch's owning session, and clears it once the branch stops conflicting |
 
 ## Files
@@ -48,8 +48,8 @@ next to the workflow it describes, because it is read rather than run.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack status` - the whole stack, with ahead/behind drift per parent.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack check` - would each branch integrate cleanly onto its parent
     *now* (fast, non-mutating `git merge-tree` probe)?
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack next` - every branch ready to submit to cram2 next: approved,
-    parent landed, not withheld. **This is your "what goes to cram2 next" answer.**
+  - `~/.local/share/basstler/venv/bin/python -m basstler.stack next` - every branch ready to submit upstream next: approved,
+    parent landed, not withheld. **This is your "what goes upstream next" answer.**
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack next --porcelain` - machine-readable `next`: one
     `name<TAB>pr` line per branch to promote (or nothing).
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack restack-plan` - the bottom-up restack plan as JSON (one
@@ -101,17 +101,17 @@ next to the workflow it describes, because it is read rather than run.
 
 - `draft → ready` is **your gate**: self-review the fork PR and **un-draft it** on GitHub to
   approve. `stack.py next` only ever promotes a `ready` (un-drafted) branch - nothing reaches
-  cram2 without your sign-off.
+  the upstream without your sign-off.
 - `ready → in-review`: when you promote it, add the **`in-review`** label to the fork PR.
-- `in-review → merged`: automatic once the branch lands in `cram2/main` (git ancestry).
+- `in-review → merged`: automatic once the branch lands in `<upstream_remote>/<upstream_base>` (git ancestry).
 
 ## The loop you run
 
 1. Code at full speed on top of your stack tip; open each PR with **`base` = its parent branch**.
 2. **Self-review the bottom fork PR.** If good, **un-draft it** on GitHub. ← the gate.
 3. `~/.local/share/basstler/venv/bin/python -m basstler.stack next` → it names every approved, unblocked branch. Open its
-   cram2 PR and add the **`in-review`** label to the fork PR.
-4. When cram2 merges it: nothing to edit - it becomes `merged` automatically. Run a maintenance
+   upstream PR and add the **`in-review`** label to the fork PR.
+4. When the upstream merges it: nothing to edit - it becomes `merged` automatically. Run a maintenance
    pass to cascade the new base up the stack; `status`/`check` confirm it's clean again.
 
 ## Running a maintenance pass
@@ -144,8 +144,8 @@ To run it unattended, register it as a scheduled Routine; the prompt to paste is
   unmerged parent is premature - land the parent first.
 - **Refresh `board.json` before acting.** It's a snapshot; the routine brings it current with
   GitHub.
-- **CI is the validator; validate ROS-free first.** Cloud containers have no ROS, so never try
-  to run the coraplex/SDT suites locally - poll a PR's CI with the GitHub MCP and treat its
+- **CI is the validator.** A suite the cloud container cannot run (missing system
+  dependencies, hardware, services) is never run locally - poll a PR's CI with the GitHub MCP and treat its
   red/green as the oracle (no session subscribes to a PR's activity - scheduled or interactive,
   CI is learned by polling; see the maintenance skill's HARD RULES). A
   maintenance pass never fixes a failing check: it reports the branch to its owner and moves on.
