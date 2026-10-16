@@ -14,7 +14,7 @@ issue's discussion. Neither should re-derive anything on this page.
 
 The item's manifest entry and roadmap live on the personal-notes branch,
 which the user may not have set up yet. Follow
-`.claude/skills/setup-personal-notes/prerequisite-check.md` first: run the
+`skills/setup-personal-notes/prerequisite-check.md` first: run the
 check, and if it reports anything missing, run `/setup-personal-notes`
 without asking first, rather than failing later on a branch that isn't there.
 
@@ -26,7 +26,7 @@ remote/branch precedence and defines every other constant referenced below
 others, so nothing "more shared" exists yet for it to point at):
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 ```
 

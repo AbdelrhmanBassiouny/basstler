@@ -24,7 +24,7 @@ and what goes in them are personal; ask, with a default. Everything else
 ## 1. Find out what is actually missing
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 bash "${CHECK_SETUP_SCRIPT}" || true
 ```
 
@@ -42,19 +42,18 @@ anything else. Do not re-verify by hand what the script just verified.
 they're ordered so an earlier fix can be a prerequisite of a later one — using
 the steps below. Skip the step for any check already `ok`.
 
-## 2. `tooling_files` — the fork is missing the tooling itself
+## 2. `tooling_files` / `session_start_hook` — the plugin is incomplete
 
-Not fixable from here: their default branch predates the `.claude/` tooling.
-Tell them to merge the current default branch into their fork and re-run. Stop;
-every later step depends on files this clone doesn't have.
+Not fixable from here: the basstler plugin's own files are missing. Tell them to
+reinstall the plugin (claude.ai Customize > Plugins, or `/plugin` in a local
+session) and re-run. Stop; every later step depends on those files.
 
-## 3. `session_start_hook` / `claude_local_md_ignored` — a broken checkout
+## 3. `claude_local_md_ignored` — CLAUDE.local.md could be committed
 
-Both come from committed files (`.claude/settings.json`, `.gitignore`), so a
-failure means this checkout diverges from the default branch rather than
-anything personal being unconfigured. Say which one is off and what restores it
-(`git checkout <default-branch> -- .claude/settings.json` / `.gitignore`); ask
-before changing a tracked file, since the divergence may be deliberate.
+The project's `.gitignore` does not ignore `CLAUDE.local.md`, so the notes
+could end up in a commit. Offer to add `CLAUDE.local.md`,
+`.claude/settings.local.json`, `.claude/.personal-settings-sync-hash` and
+`.claude/.plan-state-sync-sha` to it; ask before changing the tracked file.
 
 ## 4. `notes_branch` — where the notes should live
 
@@ -111,7 +110,7 @@ people sharing one remote don't collide.
 Then create it:
 
 ```bash
-"${PROJECT_ROOT}/.claude/hooks/create-personal-notes-branch.sh"
+"${HOOKS_DIR}/create-personal-notes-branch.sh"
 ```
 
 It creates the branch with an empty notes file, on the resolved remote, in a
@@ -131,7 +130,7 @@ already made one.
 To seed it:
 
 ```bash
-"${PROJECT_ROOT}/.claude/hooks/write-personal-notes-file.sh" \
+"${HOOKS_DIR}/write-personal-notes-file.sh" \
   --source "${STARTER_NOTES_FILE}" \
   --destination "${NOTES_PATH}" \
   --message "Initialize personal notes from the starter template"
@@ -145,7 +144,7 @@ Mechanical, not a preference. Say what's missing and install it, into the
 package's own environment where it exists:
 
 ```bash
-pip --python "${BASSTLER_PYTHON}" install --editable "./${BASSTLER_SOURCE_TREE}"
+install_basstler_into_environment && echo "installed from $(basstler_package_source)"
 ```
 
 Where the environment does not exist yet, step 7's session start creates it
@@ -163,7 +162,7 @@ this session, before any of the above existed. Run it now so the notes are
 live immediately instead of next session:
 
 ```bash
-"${PROJECT_ROOT}/.claude/hooks/session-start.sh"
+"${HOOKS_DIR}/session-start.sh"
 ```
 
 Its output is the same summary a real session start prints. Note for the user

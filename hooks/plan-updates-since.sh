@@ -9,7 +9,7 @@ set -euo pipefail
 # never touched the manifest.
 #
 # Usage:
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/plan-updates-since.sh" <plan-id> [--since <sha>]
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/plan-updates-since.sh" <plan-id> [--since <sha>]
 #
 # <plan-id> is required - unlike save-plan.sh, there is no current-branch
 # auto-discovery here, since this script is meant to be run from anywhere,

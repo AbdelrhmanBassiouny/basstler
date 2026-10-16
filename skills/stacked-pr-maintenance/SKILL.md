@@ -51,27 +51,13 @@ Nothing below names a repository or a remote. Resolve both here, once, and use w
 whole run. Do not inspect, guess at, or rename remotes yourself - a remote's name carries no meaning,
 and a wrong guess points every push at the wrong repository.
 
-**a. Make the tooling present rather than assuming it.** Every step shells out to
-`basstler/`, and a failure in a later step lands after an earlier one has already changed pull
-requests. If `ls basstler/src/basstler/maintenance.py` fails, `git fetch` the ref you were told to resolve
-this document from and restore it **into the working tree only**:
+**a. Source the configuration once.** The tooling is the plugin's and the package's, never the
+checkout's, so nothing has to be restored into the working tree whichever branch it has checked
+out; every command below runs the package through the interpreter the configuration names:
 
 ```bash
-git restore --source=<ref> --worktree -- basstler/ .claude/hooks/
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 ```
-
-Then source the configuration once; every command below runs the package through the
-interpreter it names, with this checkout's own `basstler/src` on the import path:
-
-```bash
-source .claude/hooks/resolve-personal-notes-config.sh
-```
-
-Never reach for `git checkout` with a ref and a path here. That form writes the index as well, so on
-a branch that does not carry the tooling the files end up staged - and the next commit made on that
-branch during a pass is a restack merge, which would commit the tooling into somebody's feature
-branch and from there into the upstream. `git restore --worktree` leaves them untracked, where
-nothing can pick them up.
 
 Once `basstler/` is on the default branch this is a no-op on a fresh clone. The pass itself no
 longer takes the tooling away: `restack` switches branches in a worktree of its own, so the checkout
@@ -99,7 +85,7 @@ you invoked it from keeps its branch and its files.
      branch:
 
      ```bash
-     "${CLAUDE_PROJECT_DIR}/.claude/hooks/write-personal-notes-file.sh" \
+     "${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" \
        --source <the file you prepared> \
        --destination .claude/personal/stack.toml \
        --message "record which repository is my fork"

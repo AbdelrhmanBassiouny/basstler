@@ -141,7 +141,7 @@ Edit `plans/<plan-id>/plan.yaml` and `roadmap.md` directly (in
 personal-notes branch otherwise), then run
 
 ```bash
-"$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id>
+"${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id>
 ```
 
 to push both files and regenerate the reverse index in one commit. This

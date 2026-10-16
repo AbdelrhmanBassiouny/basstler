@@ -11,7 +11,7 @@ Source the shared config script first if you haven't already this session -
 it defines the tool-name constants referenced below:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 ```
 
 For each distinct repository referenced (`items[].repository` if set, else

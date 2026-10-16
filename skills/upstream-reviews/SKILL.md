@@ -39,7 +39,7 @@ landed on the fork's default branch yet.
 The fork is this checkout's own repository — resolve it rather than assuming:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 "${BASSTLER_PYTHON}" -m "${STACK_MODULE}" configuration
 ```
 

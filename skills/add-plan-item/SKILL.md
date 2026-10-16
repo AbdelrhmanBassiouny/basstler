@@ -23,7 +23,7 @@ There are exactly four outcomes, and step 5 picks one:
 
 Every plan's manifest lives on the personal-notes branch, which the user may not
 have set up yet. Follow
-`.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1: run
+`skills/setup-personal-notes/prerequisite-check.md` before step 1: run
 the check, and if it reports anything missing, run `/setup-personal-notes`
 without asking first, rather than failing on a branch that isn't there.
 
@@ -44,7 +44,7 @@ branch by default.
 ## 2. Find the candidate homes
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 ```
 
