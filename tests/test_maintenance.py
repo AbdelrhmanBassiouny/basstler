@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -38,7 +39,7 @@ from basstler.stack import (
 import basstler.maintenance
 import basstler.maintenance_restack_procedure
 from basstler.class_property import classproperty
-from basstler.locations import PackageLocation
+from basstler.locations import PackageLocation, ProjectLocation
 from basstler.maintenance_board import (
     BoardExport,
     MissingPullRequestFieldError,
@@ -84,8 +85,8 @@ from basstler.maintenance_restack_steps import (
     RestackStep,
 )
 
-from .scratch_repository import initialize_bare_repository, install_package_into
-from .constants import RepositoryLocation, StackBranch, StackLabel
+from .scratch_repository import initialize_bare_repository
+from .constants import DatasetLocation, RepositoryLocation, StackBranch, StackLabel
 from .script_runner import PythonModuleRunner
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
@@ -215,15 +216,17 @@ class ForkCheckout:
         checkout.run_git("fetch", "--quiet", "cram2")
         return checkout
 
-    def install_package(self) -> None:
+    def name_the_upstream(self) -> None:
         """
-        Put the package in the checkout, untracked, so a command line run here resolves
-        ``python3 -m basstler.<module>`` the way it does in a real fork.
+        Write the project's stack settings naming its upstream, untracked, as a real fork
+        commits them.
 
         Untracked rather than committed because the branches these tests build stand for
-        branches cut before the tooling landed - see :data:`TOOLING_PATH`.
+        branches cut before the settings landed, and checking one out must not delete them.
         """
-        install_package_into(self.project_root)
+        destination = self.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(DatasetLocation.SCRATCH_FORK_STACK_CONFIGURATION, destination)
 
     @staticmethod
     def _bare_repository(path: Path) -> Path:
@@ -1737,12 +1740,12 @@ def run_maintenance(
     :param flags: That command's own flags.
     :return: The finished subprocess.
     """
-    checkout.install_package()
+    checkout.name_the_upstream()
     return maintenance_runner(checkout).run(command.invoked_as, *flags)
 
 
 def test_an_unknown_command_is_a_usage_error(fork_checkout: ForkCheckout):
-    fork_checkout.install_package()
+    fork_checkout.name_the_upstream()
 
     result = maintenance_runner(fork_checkout).run("not-a-command")
 

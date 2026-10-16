@@ -51,7 +51,7 @@ from basstler.stack import (
 
 from basstler.locations import ProjectLocation
 
-from .constants import StackLabel
+from .constants import DatasetLocation, StackLabel
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
@@ -1053,18 +1053,20 @@ def test_a_named_upstream_replaces_the_committed_default(
 @pytest.fixture
 def offline_checkout(scratch_repository: ScratchRepository) -> ScratchRepository:
     """
-    A checkout carrying the package, whose personal-notes remote is a local bare
+    A checkout naming its upstream, whose personal-notes remote is a local bare
     repository.
 
     Resolving configuration fetches that branch, so pointing it at a local path is what
-    keeps these tests off the network. The package is installed because the tool runs
-    from the project root of the checkout it inspects, exactly as it does in a clone.
+    keeps these tests off the network.
 
     :param scratch_repository: The scratch repository to point.
     :return: The same repository, now resolving its notes remote locally.
     """
     scratch_repository.resolve_notes_remote_to()
-    scratch_repository.install_package()
+    scratch_repository.write(
+        ProjectLocation.PROJECT_STACK_CONFIGURATION,
+        DatasetLocation.SCRATCH_FORK_STACK_CONFIGURATION.read_text(),
+    )
     return scratch_repository
 
 
@@ -1140,6 +1142,24 @@ def test_a_checkout_whose_fork_cannot_be_identified_says_so_by_status(
     result = run_stack(offline_checkout, "configuration")
 
     assert result.returncode == ExitCode.REMOTES_UNRESOLVED
+
+
+def test_a_project_naming_no_upstream_says_so_by_status(
+    offline_checkout: ScratchRepository,
+):
+    """
+    The upstream is the one setting only the project knows, and its absence is a
+    setup step a caller can name, not a failure to read the checkout.
+    """
+    (offline_checkout.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION).unlink()
+    offline_checkout.run_git(
+        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
+    )
+
+    result = run_stack(offline_checkout, "configuration")
+
+    assert result.returncode == ExitCode.UPSTREAM_UNCONFIGURED
+    assert str(ProjectLocation.PROJECT_STACK_CONFIGURATION) in result.stderr
 
 
 def test_a_readable_checkout_with_no_board_reports_the_missing_board_instead(

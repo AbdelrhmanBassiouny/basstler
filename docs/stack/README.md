@@ -32,13 +32,15 @@ Every module named below lives in the `basstler` package, `src/basstler/`, and r
 from the package's own environment; `stack.toml` and `board.json` sit beside them. This document stays here,
 next to the workflow it describes, because it is read rather than run.
 
-- **`stack.toml`** - the committed defaults: label names, and `upstream_repository`, the one
-  repository that is the same for every contributor. It names nobody's fork: the fork is
+- **`stack.toml`** - the shipped defaults: label names and the upstream base branch. It names
+  nobody's repository. The project names its own upstream in its committed
+  `.claude/basstler/stack.toml` - `upstream_repository = "<owner>/<name>"`, the one repository
+  that is the same for every contributor - which outranks the shipped values. The fork is
   *whichever remote is not the upstream*, matched by the repository each URL points at rather
   than by what the remote is called, so `origin` may be either one. A
-  `.claude/personal/stack.toml` on the personal-notes branch layers your own overrides on top
-  (see `stack.py`'s `load_configuration`), including a `fork_repository` to pick between remotes
-  when more than one could be the fork.
+  `.claude/personal/stack.toml` on the personal-notes branch layers your own overrides on top of
+  both (see `stack.py`'s `load_configuration`), including a `fork_repository` to pick between
+  remotes when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
   `session`) that `stack.py` reads. Written from GitHub as scratch by whatever refreshes it -
   never committed.

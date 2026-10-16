@@ -48,6 +48,7 @@ from basstler.stack import (
     PromotionLinkTooLongError,
     load_configuration,
 )
+from basstler.stack_configuration import MissingUpstreamRepositoryError
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -105,6 +106,9 @@ def _dispatch() -> MaintenanceExitCode:
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
         logger.error(f"{error}")
         return MaintenanceExitCode.REMOTES_UNRESOLVED
+    except MissingUpstreamRepositoryError as error:
+        logger.error(f"{error}")
+        return MaintenanceExitCode.UPSTREAM_UNCONFIGURED
     except BoardUnavailable as error:
         logger.error(f"{error}")
         return MaintenanceExitCode.BOARD_UNAVAILABLE

@@ -12,9 +12,8 @@ from __future__ import annotations
 
 import subprocess
 
-from basstler.locations import PackageLocation
 from basstler.repository import Repository
-from basstler.stack import _configuration_values
+from basstler.stack_configuration import CommittedStackConfiguration
 
 from .constants import RepositoryLocation, SkillDirectory
 
@@ -39,10 +38,11 @@ def candidate_forks() -> set[Repository]:
 
     :return: The candidate forks, empty if the checkout has no repository remote at all.
     """
-    upstream = Repository.parse(
-        _configuration_values(PackageLocation.STACK_CONFIGURATION.value)[
-            "upstream_repository"
-        ]
+    configuration = CommittedStackConfiguration(project_root=RepositoryLocation.ROOT.value)
+    upstreams = (
+        {configuration.upstream_repository()}
+        if configuration.project_file.is_file()
+        else set()
     )
     listed = subprocess.run(
         ["git", "remote"], capture_output=True, text=True, check=True
@@ -61,7 +61,7 @@ def candidate_forks() -> set[Repository]:
         for url in urls
         if Repository.names_a_repository(url)
     }
-    return named - {upstream}
+    return named - upstreams
 
 
 def test_the_skill_names_no_fork_of_its_own():

@@ -25,11 +25,14 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any, TypeVar, ClassVar
 
-import tomllib
 
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import GitHubClient
 from basstler.repository import Repository
+from basstler.stack_configuration import (
+    CommittedStackConfiguration,
+    MissingUpstreamRepositoryError,
+)
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -874,29 +877,23 @@ class UpstreamReviewReader:
 
 
 def resolve_upstream_repository(
-    path: Path = PackageLocation.STACK_CONFIGURATION.value, override: str | None = None
+    configuration: CommittedStackConfiguration, override: str | None = None
 ) -> Repository:
     """
     Decide which repository the fork's pull requests are reviewed on.
 
-    Reads the committed defaults only. The per-user layer lives on the personal-notes
+    Reads the committed settings only. The per-user layer lives on the personal-notes
     branch, which a runner does not check out, so *override* is the escape hatch for a
     checkout whose upstream differs.
 
-    :param path: The committed stack configuration file.
-    :param override: An ``owner/name`` reference outranking the file.
+    :param configuration: The shipped defaults and the project's committed settings.
+    :param override: An ``owner/name`` reference outranking the files.
     :return: The upstream repository.
+    :raises MissingUpstreamRepositoryError: If neither names one and no override is given.
     """
     if override:
         return Repository.parse(override)
-    values = tomllib.loads(path.read_text())
-    return Repository.parse(values[UPSTREAM_REPOSITORY_SETTING])
-
-
-UPSTREAM_REPOSITORY_SETTING = "upstream_repository"
-"""
-The ``stack.toml`` key naming the repository reviews happen on.
-"""
+    return configuration.upstream_repository()
 
 
 # %% report
@@ -1054,7 +1051,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _parse_arguments(argv)
     try:
         report = _build_report(arguments)
-    except UpstreamReviewError as failure:
+    except (UpstreamReviewError, MissingUpstreamRepositoryError) as failure:
         logger.error(failure)
         return 1
     logger.info(report)
@@ -1073,7 +1070,9 @@ def _build_report(arguments: argparse.Namespace) -> str:
     """
     reader = UpstreamReviewReader(
         GitHubCommandLineClient(),
-        resolve_upstream_repository(override=arguments.upstream),
+        resolve_upstream_repository(
+            CommittedStackConfiguration(), override=arguments.upstream
+        ),
         arguments.fork_owner,
     )
     number = arguments.pull_request or reader.resolve_pull_request_number(

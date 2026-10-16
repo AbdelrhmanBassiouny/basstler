@@ -247,6 +247,11 @@ class MaintenanceExitCode(IntEnum):
     act on - a conflict, a withheld branch, or a push the fork rejected. Distinct from
     a move check refusal, which is a fault in the move rather than in the branch."""
 
+    UPSTREAM_UNCONFIGURED = 11
+    """
+    The project names no upstream repository; stderr says where to name it.
+    """
+
     @property
     def name_for_a_caller(self) -> str:
         """

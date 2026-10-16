@@ -85,6 +85,17 @@ class DatasetLocation(PathEnumeration):
     A project declaring one dependency that is installed, then one that cannot be.
     """
 
+    STACK_CONFIGURATION = DIRECTORY / "stack-configuration"
+    """
+    Shipped defaults and a project's own stack settings, for layering one over the other.
+    """
+
+    SCRATCH_FORK_STACK_CONFIGURATION = STACK_CONFIGURATION / "scratch-fork.toml"
+    """
+    The stack settings a scratch fork checkout commits, naming the upstream its tests
+    stand up.
+    """
+
     SET_UP_CHECKOUT = DIRECTORY / "set-up-checkout"
     """
     A committed tree of everything ``check-setup.sh`` requires of the basstler checkout a

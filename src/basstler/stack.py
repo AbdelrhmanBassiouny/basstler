@@ -49,6 +49,12 @@ from urllib.parse import quote
 
 from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 from basstler.repository import Repository
+from basstler.stack_configuration import (
+    CommittedStackConfiguration,
+    MissingUpstreamRepositoryError,
+    StackSetting,
+    upstream_repository_in,
+)
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -240,20 +246,21 @@ def load_configuration(
 ) -> Configuration:
     """Parse the layered configuration into a :class:`Configuration`.
 
-    Values from the committed *path* are the defaults; any key present in
-    ``.claude/personal/stack.toml`` on the personal-notes branch overrides them, so a user's own
-    remotes/labels never have to be hand-edited into the checked-in file. A repository passed
-    here outranks both, so a caller that has been told which repository is which never has one
-    inferred for it.
+    Values from the shipped *path* are the defaults; the project's committed
+    ``.claude/basstler/stack.toml`` overrides them, and any key present in
+    ``.claude/personal/stack.toml`` on the personal-notes branch overrides both, so a user's own
+    remotes/labels never have to be hand-edited into a checked-in file. A repository passed
+    here outranks all three, so a caller that has been told which repository is which never has
+    one inferred for it.
 
-    :param path: The committed defaults file.
+    :param path: The shipped defaults file.
     :param fork_repository: The fork, when the caller already knows it.
     :param upstream_repository: The upstream, when the caller already knows it.
     :return: The layered configuration.
     """
     values = _configuration_values(path)
-    upstream_repository = upstream_repository or Repository.parse(
-        values["upstream_repository"]
+    upstream_repository = upstream_repository or upstream_repository_in(
+        values, CommittedStackConfiguration(path).project_file
     )
     resolution = resolved_remotes(path, fork_repository, upstream_repository)
     return Configuration(
@@ -270,12 +277,13 @@ def load_configuration(
 
 
 def _configuration_values(path: Path) -> dict[str, str]:
-    """Read the committed defaults with any personal-notes overrides layered on top.
+    """Read the shipped defaults and the project's settings, with any personal-notes overrides
+    layered on top.
 
-    :param path: The committed defaults file.
+    :param path: The shipped defaults file.
     :return: The layered values.
     """
-    values = tomllib.loads(path.read_text())
+    values = CommittedStackConfiguration(path).values()
     values.update(_personal_configuration_overrides())
     return values
 
@@ -298,8 +306,9 @@ def resolved_remotes(
     configured_fork = values.get("fork_repository")
     return resolve_remotes(
         _remote_urls(),
-        upstream_repository or Repository.parse(values["upstream_repository"]),
-        values.get("upstream_remote", "cram2"),
+        upstream_repository
+        or upstream_repository_in(values, CommittedStackConfiguration(path).project_file),
+        values[StackSetting.UPSTREAM_REMOTE],
         fork_repository
         or (Repository.parse(configured_fork) if configured_fork else None),
     )
@@ -1356,6 +1365,9 @@ class ExitCode(IntEnum):
     MOVE_REFUSED = 5
     """The proposed move must not be made; the reasons are on stderr."""
 
+    UPSTREAM_UNCONFIGURED = 6
+    """The project names no upstream repository; stderr says where to name it."""
+
 
 def _argument_parser() -> argparse.ArgumentParser:
     """:return: The parser for every command and its own flags."""
@@ -1548,6 +1560,9 @@ def main() -> ExitCode:
     except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
         logger.error(f"{error}")
         return ExitCode.REMOTES_UNRESOLVED
+    except MissingUpstreamRepositoryError as error:
+        logger.error(f"{error}")
+        return ExitCode.UPSTREAM_UNCONFIGURED
     except BoardUnavailable as error:
         logger.error(f"{error}")
         return ExitCode.BOARD_UNAVAILABLE

@@ -167,6 +167,12 @@ class ProjectLocation(PathEnumeration):
     Where the personal-notes branch keeps everything it holds.
     """
 
+    PROJECT_STACK_CONFIGURATION = CLAUDE_CODE_DIRECTORY / "basstler" / "stack.toml"
+    """
+    The stack settings a project commits, naming its own upstream - layered over
+    :attr:`PackageLocation.STACK_CONFIGURATION`.
+    """
+
     PERSONAL_NOTES_DOCUMENT = PERSONAL_NOTES / "cram-notes.md"
     """
     The notes file itself, unless a clone's settings put it elsewhere.
@@ -182,7 +188,7 @@ class ProjectLocation(PathEnumeration):
 
     PERSONAL_STACK_CONFIGURATION = PERSONAL_NOTES / "stack.toml"
     """
-    The per-user override of :attr:`PackageLocation.STACK_CONFIGURATION`.
+    The per-user override of :attr:`PROJECT_STACK_CONFIGURATION`.
     """
 
     PERSONAL_PLAN_ITEM_MODES = PERSONAL_NOTES / "plan-item-modes.toml"

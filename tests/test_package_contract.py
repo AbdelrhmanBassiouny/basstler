@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ClaudeCodeVariable, PackageLocation, ProjectLocation
+from basstler.locations import ClaudeCodeVariable, PackageLocation
 
 from basstler import _version
 from basstler.package_layout import (
