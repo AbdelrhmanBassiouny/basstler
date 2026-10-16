@@ -1,0 +1,13 @@
+{
+  "name": "basstler",
+  "owner": {
+    "name": "Abdelrhman Bassiouny"
+  },
+  "plugins": [
+    {
+      "name": "basstler",
+      "source": "./plugin",
+      "description": "Personal notes, PR progress, multi-PR plans with live dashboards, and stacked-PR maintenance for Claude Code sessions."
+    }
+  ]
+}

@@ -85,7 +85,7 @@ from basstler.maintenance_restack_steps import (
 )
 
 from .scratch_repository import initialize_bare_repository, install_package_into
-from .constants import StackBranch, StackLabel
+from .constants import RepositoryLocation, StackBranch, StackLabel
 from .script_runner import PythonModuleRunner
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
@@ -844,7 +844,7 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
 
 TOOLING_PATH = str(
     Path(basstler.maintenance.__file__).relative_to(
-        PackageLocation.REPOSITORY_ROOT.value
+        RepositoryLocation.ROOT.value
     )
 )
 """

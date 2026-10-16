@@ -3,8 +3,9 @@
 What this package needs installed, and which of it this environment is missing.
 
 The declaration is ``pyproject.toml``'s ``[project]`` table: the package's own name and its
-``dependencies``, which is where every package in this repository states them, so there is
-one list rather than a metadata table and a requirements file that can disagree. An
+``dependencies``, so there is one list rather than a metadata table and a requirements file
+that can disagree. A package installed as a copy, from its repository, carries no
+``pyproject.toml``; its installed metadata states the same list. An
 environment runs the package only with the package itself installed in it, so the package
 counts as a requirement of its own.
 
@@ -28,9 +29,10 @@ import argparse
 import re
 import sys
 import tomllib
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
-from importlib.metadata import distributions
+from importlib.metadata import PackageNotFoundError, distribution, distributions
 from pathlib import Path
 from typing import Any
 
@@ -87,6 +89,20 @@ class UnreadableDependencyDeclarationError(Exception):
         )
 
 
+@dataclass
+class MalformedDependencyDeclarationError(UnreadableDependencyDeclarationError):
+    """
+    Raised when the declaration exists but is not valid TOML.
+    """
+
+    def __str__(self) -> str:
+        """:return: What to tell a reader who asked what is missing and cannot be told."""
+        return (
+            f"{self.declaration} is not valid TOML, so this package's dependencies "
+            f"cannot be read"
+        )
+
+
 @dataclass(frozen=True)
 class Dependency:
     """
@@ -124,8 +140,67 @@ class Dependency:
         return next(iter(distributions(name=self.distribution_name)), None) is None
 
 
+class RequirementSource(ABC):
+    """
+    Somewhere a package's requirements are stated: the package itself, then its
+    dependencies.
+    """
+
+    @abstractmethod
+    def requirements(self) -> tuple[Dependency, ...]:
+        """
+        :return: Everything an environment needs to run the package: the package itself,
+            then its dependencies.
+        """
+
+    def missing(self) -> tuple[Dependency, ...]:
+        """
+        :return: The requirements this environment does not have.
+        """
+        return tuple(
+            requirement for requirement in self.requirements() if requirement.is_missing
+        )
+
+    @staticmethod
+    def for_this_package() -> RequirementSource:
+        """
+        :return: The source checkout's ``pyproject.toml`` where the package runs from
+            one, else the package's installed metadata.
+        """
+        declaration = DependencyDeclaration(PackageLocation.DEPENDENCY_DECLARATION.value)
+        if declaration.path.is_file():
+            return declaration
+        return InstalledDistribution(PackageLocation.DIRECTORY.value.name)
+
+
 @dataclass(frozen=True)
-class DependencyDeclaration:
+class InstalledDistribution(RequirementSource):
+    """
+    An installed distribution, and the dependencies its metadata states.
+    """
+
+    name: str
+    """
+    The distribution's name.
+    """
+
+    def requirements(self) -> tuple[Dependency, ...]:
+        """
+        :return: The distribution itself, then every requirement its metadata states
+            without an extra, in the order stated; only itself when it is not installed.
+        """
+        try:
+            stated = distribution(self.name).requires or []
+        except PackageNotFoundError:
+            return (Dependency(self.name),)
+        return (
+            Dependency(self.name),
+            *(Dependency(specifier) for specifier in stated if "extra ==" not in specifier),
+        )
+
+
+@dataclass(frozen=True)
+class DependencyDeclaration(RequirementSource):
     """
     A ``pyproject.toml`` and the dependencies it declares.
     """
@@ -169,25 +244,19 @@ class DependencyDeclaration:
         """
         return (self.project(), *self.dependencies())
 
-    def missing(self) -> tuple[Dependency, ...]:
-        """
-        :return: The requirements this environment does not have.
-        :raises UnreadableDependencyDeclarationError: If the file is absent.
-        """
-        return tuple(
-            requirement for requirement in self.requirements() if requirement.is_missing
-        )
-
     def _project_table(self) -> dict[str, Any]:
         """
         :return: The ``[project]`` table, the package's own metadata.
         :raises UnreadableDependencyDeclarationError: If the file is absent.
+        :raises MalformedDependencyDeclarationError: If the file is not valid TOML.
         """
         if not self.path.is_file():
             raise UnreadableDependencyDeclarationError(self.path)
-        return tomllib.loads(self.path.read_text(encoding="utf-8"))[
-            PyprojectKey.PROJECT
-        ]
+        try:
+            declaration = tomllib.loads(self.path.read_text(encoding="utf-8"))
+        except tomllib.TOMLDecodeError as error:
+            raise MalformedDependencyDeclarationError(self.path) from error
+        return declaration[PyprojectKey.PROJECT]
 
 
 class ExitCode(IntEnum):
@@ -216,14 +285,23 @@ def main() -> ExitCode:
     parser.add_argument(
         "--declaration",
         type=Path,
-        default=DependencyDeclaration.of_this_package().path,
-        help="The pyproject.toml to read the dependencies from",
+        help="A pyproject.toml to read the dependencies from, instead of this package's "
+        "own requirements",
     )
-    declaration = DependencyDeclaration(parser.parse_args().declaration)
-    if not declaration.path.is_file():
-        logger.error(str(UnreadableDependencyDeclarationError(declaration.path)))
+    declaration_path = parser.parse_args().declaration
+    if declaration_path is None:
+        source = RequirementSource.for_this_package()
+    elif declaration_path.is_file():
+        source = DependencyDeclaration(declaration_path)
+    else:
+        logger.error(str(UnreadableDependencyDeclarationError(declaration_path)))
         return ExitCode.UNREADABLE_DECLARATION
-    for requirement in declaration.missing():
+    try:
+        missing = source.missing()
+    except UnreadableDependencyDeclarationError as error:
+        logger.error(str(error))
+        return ExitCode.UNREADABLE_DECLARATION
+    for requirement in missing:
         logger.info(requirement.specifier)
     return ExitCode.SUCCESS
 

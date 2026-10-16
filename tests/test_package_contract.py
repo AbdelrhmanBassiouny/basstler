@@ -1,8 +1,8 @@
 """
-The contract :mod:`basstler` has to keep: every caller importing the clone's own source,
+The contract :mod:`basstler` has to keep: every caller importing the checkout's own source,
 every module importable on its own, every entry point reachable through
-``python3 -m``, every workflow that runs a module installing its dependencies first, and
-nothing left behind under ``.claude/``.
+``python3 -m``, every workflow that runs a module installing its dependencies first, one
+version for the package and the plugin, and no Python in the plugin.
 
 :mod:`basstler.package_layout` discovers the modules and the entry points from the package
 itself, so nothing here is a second list of them, and the workflows are read from the
@@ -11,6 +11,7 @@ directory holding them rather than named.
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import subprocess
@@ -32,20 +33,13 @@ from basstler.package_layout import (
 from .constants import (
     ConfigurationVariable,
     EnvironmentVariable,
+    PluginManifestKey,
+    RepositoryLocation,
 )
 from .project_declaration import ProjectDeclaration
 from .script_runner import ScriptRunner, configuration_value
 
-CLAUDE_DIRECTORY = (
-    PackageLocation.REPOSITORY_ROOT / ProjectLocation.CLAUDE_CODE_DIRECTORY
-)
-"""
-The directory the migration emptied of Python.
-
-Its SKILL.md files, settings.json and bash entry points stay; not one ``.py`` file does.
-"""
-
-WORKFLOWS_DIRECTORY = PackageLocation.REPOSITORY_ROOT / ".github" / "workflows"
+WORKFLOWS_DIRECTORY = RepositoryLocation.WORKFLOWS
 """
 Where this repository's Actions workflows live.
 
@@ -55,8 +49,7 @@ without anyone recording that it exists.
 
 
 SHELL_CONFIGURATION = (
-    PackageLocation.REPOSITORY_ROOT
-    / ProjectLocation.HOOKS
+    RepositoryLocation.HOOKS
     / "resolve-personal-notes-config.sh"
 )
 """
@@ -96,7 +89,7 @@ def run_as_a_caller(*arguments: str) -> subprocess.CompletedProcess[str]:
     :return: The completed process, with output captured as text.
     """
     return ConfiguredInterpreterRunner(
-        project_root=PackageLocation.REPOSITORY_ROOT.value,
+        project_root=RepositoryLocation.ROOT.value,
         removed_variable_prefixes=(EnvironmentVariable.IMPORT_PATH,),
     ).run(*arguments)
 
@@ -139,13 +132,13 @@ def installs_the_dependencies(caller_source: str) -> bool:
     return DEPENDENCY_INSTALL.search(caller_source) is not None
 
 
-# %% a caller imports the clone's own source
+# %% a caller imports the checkout's own source
 
 
-def test_a_caller_imports_the_clones_own_source_with_no_install():
+def test_a_caller_imports_the_checkouts_own_source_with_no_install():
     """
-    What a bash caller imports is this clone's source tree, even where nothing is
-    installed: ``-S`` leaves site-packages, and with it any install, out of the search.
+    What a bash caller of a plugin sitting in a checkout imports is that checkout's
+    source tree, even where nothing is installed: ``-S`` leaves site-packages, and with it any install, out of the search.
     """
     result = run_as_a_caller("-S", "-c", "import basstler; print(basstler.__file__)")
 
@@ -153,15 +146,17 @@ def test_a_caller_imports_the_clones_own_source_with_no_install():
     assert Path(result.stdout.strip()) == PackageLocation.DIRECTORY / "__init__.py"
 
 
-def test_the_package_version_is_the_repository_version():
+def test_the_package_version_is_the_plugin_version():
     """
-    ``_version.py`` is written by ``scripts/sync_version.py`` from the root ``VERSION``
-    file, the same as every other package here, so one bump moves them all together.
+    An installed plugin installs the package at its own version, so the two are one
+    release: a bump that moved only one of them would install a package the hooks were
+    not written against.
     """
-    assert (
-        _version.__version__
-        == (PackageLocation.REPOSITORY_ROOT / "VERSION").read_text().strip()
+    manifest = json.loads(
+        (RepositoryLocation.PLUGIN / ".claude-plugin" / "plugin.json").read_text()
     )
+
+    assert _version.__version__ == manifest[PluginManifestKey.VERSION]
 
 
 # %% each module stands on its own
@@ -241,16 +236,15 @@ def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():
 # %% nothing is left behind
 
 
-def test_no_python_module_remains_under_the_claude_directory():
+def test_the_plugin_carries_no_python_module():
     """
-    The migration's own completeness assertion from the other side.
-
-    ``.claude/`` keeps its SKILL.md files, settings.json and bash entry points - Claude
-    Code discovers those by path - and not one Python file.
+    The plugin keeps its SKILL.md files, manifest and bash entry points - Claude Code
+    discovers those by path - and not one Python file: every module is the package's,
+    installed at the plugin's own version.
     """
     remaining_module_paths = sorted(
-        str(path.relative_to(PackageLocation.REPOSITORY_ROOT.value))
-        for path in CLAUDE_DIRECTORY.rglob("*.py")
+        str(path.relative_to(RepositoryLocation.ROOT.value))
+        for path in RepositoryLocation.PLUGIN.value.rglob("*.py")
     )
 
     assert remaining_module_paths == []
@@ -266,7 +260,7 @@ def test_no_module_sits_directly_in_the_source_tree():
     trusted to the merge.
     """
     stray_module_paths = sorted(
-        str(path.relative_to(PackageLocation.REPOSITORY_ROOT.value))
+        str(path.relative_to(RepositoryLocation.ROOT.value))
         for path in PackageLocation.SOURCE_TREE.value.glob("*.py")
     )
 
@@ -274,15 +268,6 @@ def test_no_module_sits_directly_in_the_source_tree():
 
 
 # %% the shell's copies of what the package states
-
-
-def test_the_shell_creates_the_environment_the_package_names():
-    """
-    The shell creates the environment; the package names it for every Python reader.
-    """
-    assert configuration_value(ConfigurationVariable.ENVIRONMENT_DIRECTORY) == str(
-        ProjectLocation.PACKAGE_ENVIRONMENT
-    )
 
 
 def test_the_shell_asks_for_the_interpreters_the_package_supports():
@@ -314,7 +299,7 @@ def variables_the_configuration_defines() -> frozenset[str]:
     return frozenset(
         subprocess.run(
             ["bash", "-c", 'source "$0" && compgen -v', SHELL_CONFIGURATION],
-            cwd=PackageLocation.REPOSITORY_ROOT.value,
+            cwd=RepositoryLocation.ROOT.value,
             capture_output=True,
             text=True,
             check=True,
@@ -333,14 +318,9 @@ def test_every_variable_a_skill_document_names_is_defined():
     command built from it fails far from the cause - a rename or a move leaves exactly
     this behind.
     """
-    claude_code_directory = (
-        PackageLocation.REPOSITORY_ROOT / ProjectLocation.CLAUDE_CODE_DIRECTORY
-    )
-    personal_notes = PackageLocation.REPOSITORY_ROOT / ProjectLocation.PERSONAL_NOTES
     named = {
         variable_name
-        for document in claude_code_directory.rglob("*.md")
-        if not document.is_relative_to(personal_notes)
+        for document in RepositoryLocation.PLUGIN.value.rglob("*.md")
         for variable_name in SHELL_VARIABLE_REFERENCE.findall(document.read_text())
     }
 

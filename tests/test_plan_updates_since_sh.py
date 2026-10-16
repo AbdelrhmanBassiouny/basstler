@@ -18,13 +18,14 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ProjectLocation
+from basstler.locations import PluginLocation, ProjectLocation
 from basstler.maintenance_constants import GitHubClient
 
 from .constants import (
     DatasetLocation,
     EnvironmentVariable,
     ScratchBranch,
+    ScrubbedEnvironmentPrefix,
 )
 from .script_runner import BashScriptRunner
 
@@ -71,7 +72,7 @@ REMOVED_VARIABLE_PREFIXES = (
     "GH_TOKEN",
     "GITHUB_TOKEN",
     "GH_HOST",
-    "CLAUDE_PERSONAL_NOTES_",
+    *ScrubbedEnvironmentPrefix,
 )
 """
 What every subprocess these tests run must not inherit.
@@ -189,7 +190,7 @@ def run_plan_updates_since(
         project_root=repository.project_root,
         removed_variable_prefixes=REMOVED_VARIABLE_PREFIXES,
         script_path=(
-            repository.project_root / ProjectLocation.HOOKS / "plan-updates-since.sh"
+            repository.plugin_root / PluginLocation.HOOKS.value.name / "plan-updates-since.sh"
         ),
     ).run(*arguments, **(env or {}))
 

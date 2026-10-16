@@ -1,5 +1,6 @@
-# Installed editable into basstler's own environment by every session start that finds it
-# missing, so `import basstler` resolves to this clone's own source under src/.
+# Installed into basstler's own environment by every session start that finds it missing or
+# out of date: from the plugin's own release of this repository, or editable from a clone the
+# plugin runs from.
 
 [build-system]
 requires = ["setuptools>=68"]
@@ -27,9 +28,8 @@ classifiers = [
     "Topic :: Utilities",
 ]
 
-# Stated here and nowhere else, as every package in this repository states them: a
-# session start, an Actions workflow and `pip install ./basstler` all install from this
-# one list. `basstler.dependencies` is what reads it.
+# Stated here and nowhere else: a session start, an Actions workflow and `pip install .` all
+# install from this one list. `basstler.dependencies` is what reads it.
 dependencies = [
     "pyyaml>=6",
     "jinja2>=3",
@@ -39,13 +39,13 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-"Source" = "https://github.com/cram2/cognitive_robot_abstract_machine"
-"Bug Tracker" = "https://github.com/cram2/cognitive_robot_abstract_machine/issues"
+"Source" = "https://github.com/AbdelrhmanBassiouny/basstler"
+"Bug Tracker" = "https://github.com/AbdelrhmanBassiouny/basstler/issues"
 
 [tool.setuptools.dynamic]
-# The version comes from the repository's own root VERSION file, written into
-# _version.py by scripts/sync_version.py - the same mechanism every other package here
-# uses, so one bump moves all of them together.
+# One release for the package and the plugin: a test holds _version.py equal to
+# plugin/.claude-plugin/plugin.json's version, which is the tag an installed plugin installs
+# the package at.
 version = {attr = "basstler._version.__version__"}
 
 [tool.setuptools.packages.find]

@@ -29,10 +29,9 @@ from basstler.setup_steps import (
     resolve_repository,
 )
 
-from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
 
-from .constants import ScrubbedEnvironmentPrefix
+from .constants import RepositoryLocation, ScrubbedEnvironmentPrefix
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
@@ -43,8 +42,7 @@ FORK = Repository(owner="some-user", name="some-repository")
 FORK_REMOTE_URL = f"https://github.com/{FORK.full_name}.git"
 
 RESOLVE_CONFIG_SCRIPT = (
-    PackageLocation.REPOSITORY_ROOT
-    / ProjectLocation.HOOKS
+    RepositoryLocation.HOOKS
     / "resolve-personal-notes-config.sh"
 )
 

@@ -62,7 +62,7 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import Any, ClassVar
 
-from basstler.locations import ClaudeCodeVariable, ProjectLocation
+from basstler.locations import ClaudeCodeVariable, PackageLocation, PluginLocation, ProjectLocation
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -364,7 +364,7 @@ class MalformedModeSettingsError(ModeError):
     def suggest_correction(self) -> str:
         return (
             "Fix the file, or delete it to fall back to "
-            f"{ProjectLocation.PLAN_ITEM_MODE_DEFAULTS}'s defaults."
+            f"{PackageLocation.PLAN_ITEM_MODE_DEFAULTS}'s defaults."
         )
 
 
@@ -393,19 +393,18 @@ class SettingsWriteRefusedError(ModeError):
 # %% reading the settings
 
 
-def committed_defaults(project_root: Path) -> dict[str, ExecutionMode]:
+def committed_defaults() -> dict[str, ExecutionMode]:
     """
     The shipped mode for every skill.
 
-    :param project_root: The repository to read within.
     :raises MalformedModeSettingsError: If the file will not parse, or names no mode for
         some skill.
     :raises UnknownModeError: If a default names no mode.
     :return: Every skill's default, keyed by its setting key.
     """
     shipped = SettingsFile(
-        path=project_root / ProjectLocation.PLAN_ITEM_MODE_DEFAULTS,
-        origin=ProjectLocation.PLAN_ITEM_MODE_DEFAULTS,
+        path=PackageLocation.PLAN_ITEM_MODE_DEFAULTS.value,
+        origin=PackageLocation.PLAN_ITEM_MODE_DEFAULTS,
     )
     raw = shipped.read()
     missing = [
@@ -464,7 +463,7 @@ def fetch_notes_branch(project_root: Path) -> bool:
         [
             "bash",
             "-c",
-            f'source "{ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
+            f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
         ],
         cwd=project_root,
         capture_output=True,
@@ -647,7 +646,7 @@ def resolve_mode(
 
     return ModeResolution(
         skill=skill,
-        mode=committed_defaults(project_root)[skill.setting_key],
+        mode=committed_defaults()[skill.setting_key],
         source=ModeSource.COMMITTED_DEFAULT,
     )
 
@@ -700,7 +699,7 @@ def render_settings(modes: dict[str, ExecutionMode]) -> str:
     """
     header = (
         "# Personal plan-item execution modes, layered over the committed defaults\n"
-        f"# at {ProjectLocation.PLAN_ITEM_MODE_DEFAULTS}. Rewritten in full by plan_item_mode.py's\n"
+        f"# at {PackageLocation.PLAN_ITEM_MODE_DEFAULTS}. Rewritten in full by plan_item_mode.py's\n"
         "# set command, so anything other than the keys below is not preserved.\n"
     )
     body = "".join(
@@ -735,7 +734,7 @@ def write_mode(
                 key=other.setting_key, value=overrides[other.setting_key]
             ).parse()
             if other.setting_key in overrides
-            else committed_defaults(project_root)[other.setting_key]
+            else committed_defaults()[other.setting_key]
         )
         for other in PlanItemSkill
     }
@@ -751,7 +750,7 @@ def write_mode(
         written = subprocess.run(
             [
                 "bash",
-                ProjectLocation.PERSONAL_NOTES_WRITER_SCRIPT,
+                PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT,
                 "--source",
                 str(scratch_file),
                 "--destination",

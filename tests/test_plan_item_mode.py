@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -29,7 +30,7 @@ from basstler.plan_item_mode import (
     UnknownModeError,
 )
 
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
@@ -41,8 +42,8 @@ the module rather than spelled out.
 """
 
 BASH_ENTRY_POINTS = (
-    ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name,
-    ProjectLocation.PERSONAL_NOTES_WRITER_SCRIPT.value.name,
+    PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name,
+    PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT.value.name,
 )
 """
 The two shell scripts the module sources and runs, named by the locations it reads them
@@ -450,8 +451,6 @@ def test_every_skill_names_a_key_the_committed_defaults_define():
     gaining a skill the other has never heard of.
     """
     defaults = tomllib.loads(
-        (
-            PackageLocation.REPOSITORY_ROOT / ProjectLocation.PLAN_ITEM_MODE_DEFAULTS
-        ).read_text()
+        PackageLocation.PLAN_ITEM_MODE_DEFAULTS.value.read_text()
     )
     assert set(defaults) == {skill.setting_key for skill in PlanItemSkill}

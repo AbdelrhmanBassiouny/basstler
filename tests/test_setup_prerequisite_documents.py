@@ -18,9 +18,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from basstler.locations import PackageLocation
 
-from .constants import SkillDirectory
+from .constants import RepositoryLocation, SkillDirectory
 
 
 class SkillCommand(StrEnum):
@@ -90,7 +89,7 @@ class SkillDocument:
         """
         The path as a reader of this repository would name it.
         """
-        return str(self.path.relative_to(PackageLocation.REPOSITORY_ROOT.value))
+        return str(self.path.relative_to(RepositoryLocation.ROOT.value))
 
     @property
     def offer_instructions(self) -> list[str]:
@@ -129,7 +128,7 @@ def skill_documents() -> list[SkillDocument]:
     return [
         SkillDocument.read_from(path)
         for path in sorted(
-            (PackageLocation.REPOSITORY_ROOT / SkillDirectory.DIRECTORY).rglob("*.md")
+            (RepositoryLocation.PLUGIN / SkillDirectory.DIRECTORY).rglob("*.md")
         )
     ]
 

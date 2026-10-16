@@ -47,7 +47,7 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
 
@@ -326,7 +326,7 @@ def _fetch_personal_notes_branch() -> bool:
             [
                 "bash",
                 "-c",
-                f'source "{ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
+                f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
             ],
             capture_output=True,
             text=True,

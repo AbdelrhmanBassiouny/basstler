@@ -13,6 +13,7 @@ personal-notes remote - no network access or real personal-notes branch involved
 
 from __future__ import annotations
 
+import json
 import shutil
 import subprocess
 import sys
@@ -21,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ProjectLocation
+from basstler.locations import BasstlerVariable, PluginLocation, ProjectLocation
 
 from .constants import (
     ConfigurationVariable,
@@ -30,12 +31,19 @@ from .constants import (
     FileMode,
     PackageManager,
     PersonalNotesPath,
+    PluginManifestKey,
     ScratchBranch,
+    ScrubbedEnvironmentPrefix,
     StubVariable,
 )
 from .executable_stubs import ExecutableStubDirectory, path_hiding_executables
 from .project_declaration import ProjectDeclaration
-from .scratch_repository import SCRATCH_IDENTITY, ScratchRepository
+from .scratch_repository import (
+    SCRATCH_IDENTITY,
+    PackageSourceFile,
+    ScratchRepository,
+    SetupPrerequisiteFile,
+)
 from .script_runner import configuration_value
 from .session_start_summary import (
     SummaryLine,
@@ -317,15 +325,19 @@ def test_reports_setup_as_ok_when_every_check_passes(
     )
 
 
+def unregister_the_session_start_hook(repository: ScratchRepository) -> None:
+    """
+    Take the plugin's hook registration away, so exactly one setup check fails.
+
+    :param repository: The fixture-built scratch repository.
+    """
+    (repository.plugin_root / PluginLocation.HOOKS.value.name / "hooks.json").unlink()
+
+
 def test_names_every_check_that_needs_setup(
     session_start_repository: ScratchRepository,
 ):
-    (
-        session_start_repository.project_root
-        / ProjectLocation.CLAUDE_CODE_DIRECTORY
-        / "settings.json"
-    ).unlink()
-    session_start_repository.commit_everything("unregister the SessionStart hook")
+    unregister_the_session_start_hook(session_start_repository)
 
     result = publish_and_run(session_start_repository)
 
@@ -346,12 +358,7 @@ def test_names_every_check_that_needs_setup(
 def test_a_failing_setup_check_does_not_fail_the_hook(
     session_start_repository: ScratchRepository,
 ):
-    (
-        session_start_repository.project_root
-        / ProjectLocation.CLAUDE_CODE_DIRECTORY
-        / "settings.json"
-    ).unlink()
-    session_start_repository.commit_everything("unregister the SessionStart hook")
+    unregister_the_session_start_hook(session_start_repository)
 
     result = publish_and_run(session_start_repository)
 
@@ -362,20 +369,29 @@ def test_a_failing_setup_check_does_not_fail_the_hook(
 # %% the dependencies line
 
 
-DECLARATION_FILE = str(ProjectLocation.PACKAGE_SOURCE_TREE / "pyproject.toml")
-"""
-Where the scratch clone declares its requirements.
-"""
+def declaration_file(repository: ScratchRepository) -> Path:
+    """
+    :param repository: The fixture-built scratch repository.
+    :return: Where its scratch checkout declares the package's requirements.
+    """
+    return repository.checkout_root / PackageSourceFile.METADATA
 
-ENVIRONMENT_DIRECTORY = str(ProjectLocation.PACKAGE_ENVIRONMENT)
-"""
-The package's own environment, as the summary line names it.
-"""
 
-SOURCE_TREE_ARGUMENT = f"./{ProjectLocation.PACKAGE_SOURCE_TREE}"
-"""
-What the installer is handed: the source tree, installed editable.
-"""
+def environment_directory(repository: ScratchRepository) -> str:
+    """
+    :param repository: The fixture-built scratch repository.
+    :return: The package's own environment, as the summary line names it.
+    """
+    return repository.configuration_value(ConfigurationVariable.ENVIRONMENT_DIRECTORY)
+
+
+def package_source(repository: ScratchRepository) -> str:
+    """
+    :param repository: The fixture-built scratch repository.
+    :return: What the installer is handed: the scratch checkout the plugin sits in.
+    """
+    return repository.configuration_output("basstler_package_source").strip()
+
 
 SUPPORTED_PYTHON = ProjectDeclaration.of_this_package().requires_python
 """
@@ -401,22 +417,22 @@ def require_the_uninstallable(repository: ScratchRepository) -> None:
 
     :param repository: The fixture-built scratch repository.
     """
-    repository.write(
-        DECLARATION_FILE,
+    declaration_file(repository).write_text(
         ProjectDeclaration(
             name=ProjectDeclaration.of_this_package().name,
             dependencies=(UNINSTALLABLE_REQUIREMENT,),
         ).as_toml(),
     )
-    repository.commit_everything("declare something that is not installed")
 
 
 def environment_interpreter(repository: ScratchRepository) -> Path:
     """
     :param repository: The fixture-built scratch repository.
-    :return: Where the scratch clone's package environment keeps its interpreter.
+    :return: Where the package environment keeps its interpreter.
     """
-    return repository.project_root / ProjectLocation.PACKAGE_ENVIRONMENT_INTERPRETER
+    return Path(
+        repository.configuration_value(ConfigurationVariable.ENVIRONMENT_INTERPRETER)
+    )
 
 
 def pip_installer_call(repository: ScratchRepository) -> str:
@@ -426,7 +442,7 @@ def pip_installer_call(repository: ScratchRepository) -> str:
     """
     return (
         f"--python {environment_interpreter(repository)} install --editable "
-        f"{SOURCE_TREE_ARGUMENT}"
+        f"{package_source(repository)}"
     )
 
 
@@ -438,7 +454,7 @@ def uv_installer_call(repository: ScratchRepository) -> str:
     return (
         f"{PackageManager.PIP} install --python {environment_interpreter(repository)} "
         f"--editable "
-        f"{SOURCE_TREE_ARGUMENT}"
+        f"{package_source(repository)}"
     )
 
 
@@ -449,7 +465,7 @@ def environment_call(repository: ScratchRepository) -> str:
     """
     return (
         f"venv --no-project --python {SUPPORTED_PYTHON} "
-        f"{repository.project_root / ProjectLocation.PACKAGE_ENVIRONMENT}"
+        f"{environment_directory(repository)}"
     )
 
 
@@ -477,7 +493,7 @@ def test_installs_nothing_when_every_requirement_is_already_installed(
 
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
-        SummaryMessage.DEPENDENCIES_ALREADY_INSTALLED, ENVIRONMENT_DIRECTORY
+        SummaryMessage.DEPENDENCIES_ALREADY_INSTALLED, environment_directory(session_start_repository)
     )
     assert not call_log.exists()
 
@@ -510,7 +526,7 @@ def test_installs_the_package_with_pip_when_a_requirement_is_missing(
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_INSTALLED,
         UNINSTALLABLE_REQUIREMENT,
-        ENVIRONMENT_DIRECTORY,
+        environment_directory(session_start_repository),
     )
     assert call_log.read_text().splitlines() == [
         pip_installer_call(session_start_repository)
@@ -545,7 +561,7 @@ def test_installs_the_package_with_uv_where_there_is_one(
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_INSTALLED,
         UNINSTALLABLE_REQUIREMENT,
-        ENVIRONMENT_DIRECTORY,
+        environment_directory(session_start_repository),
     )
     assert install_log.read_text().splitlines() == [
         uv_installer_call(session_start_repository)
@@ -583,7 +599,7 @@ def test_reports_a_failed_install_and_finishes_the_run(
         summary_message(
             SummaryMessage.DEPENDENCIES_INSTALL_FAILED,
             UNINSTALLABLE_REQUIREMENT,
-            ENVIRONMENT_DIRECTORY,
+            environment_directory(session_start_repository),
             "",
             "",
         ).split(" - ")[0]
@@ -600,8 +616,7 @@ def test_reports_that_it_could_not_check_when_the_declaration_will_not_parse(
     with nothing missing - which is what an empty answer means, and would install
     nothing while saying everything was already there.
     """
-    session_start_repository.write(DECLARATION_FILE, "this is not toml\n")
-    session_start_repository.commit_everything("break the declaration")
+    declaration_file(session_start_repository).write_text("this is not toml\n")
 
     result = publish_and_run(session_start_repository)
 
@@ -637,6 +652,94 @@ def test_reports_a_missing_installer_without_failing(
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
 
 
+def test_reinstalls_the_package_when_the_plugin_names_another_source(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    A plugin update names a new source for the package; the environment, installed from
+    the old one, is installed into again so the hooks and the package stay one release.
+    """
+    Path(
+        session_start_repository.configuration_value(
+            ConfigurationVariable.INSTALLED_SOURCE_FILE
+        )
+    ).write_text("an earlier release\n")
+    stub_bin.install(PackageManager.PIP)
+    call_log = tmp_path / "pip-calls"
+
+    result = publish_and_run(
+        session_start_repository,
+        environment={
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+            StubVariable.PIP_CALL_LOG: str(call_log),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
+        SummaryMessage.DEPENDENCIES_INSTALLED,
+        package_source(session_start_repository),
+        environment_directory(session_start_repository),
+    )
+    assert call_log.read_text().splitlines() == [
+        pip_installer_call(session_start_repository)
+    ]
+
+
+def test_a_plugin_outside_a_checkout_installs_its_own_release_of_the_package(
+    session_start_repository: ScratchRepository,
+):
+    """
+    An installed plugin carries no package source, so the package comes from the
+    plugin's repository at the plugin's own version.
+    """
+    declaration_file(session_start_repository).unlink()
+    manifest = json.loads(
+        (
+            session_start_repository.plugin_root
+            / SetupPrerequisiteFile.PLUGIN_MANIFEST
+        ).read_text()
+    )
+
+    assert package_source(session_start_repository) == (
+        f"{manifest[PluginManifestKey.NAME]} @ git+"
+        f"{session_start_repository.configuration_value(ConfigurationVariable.REPOSITORY_URL)}"
+        f"@v{manifest[PluginManifestKey.VERSION]}"
+    )
+
+
+def test_tells_the_session_where_the_plugin_is(
+    session_start_repository: ScratchRepository, tmp_path: Path
+):
+    """
+    Only a hook is told where the plugin is; the commands a session runs afterwards
+    learn it from the file Claude Code reads exported variables from.
+    """
+    environment_file = tmp_path / "session-environment"
+
+    publish_and_run(
+        session_start_repository,
+        environment={ScrubbedEnvironmentPrefix.ENVIRONMENT_FILE: str(environment_file)},
+    )
+
+    exported = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "$0" && printf "%s" "${{{BasstlerVariable.PLUGIN_ROOT}}}"',
+            environment_file,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert Path(exported) == session_start_repository.plugin_root
+
+
 # %% creating the package's environment
 
 
@@ -647,7 +750,7 @@ def without_an_environment(repository: ScratchRepository) -> ScratchRepository:
     :param repository: The fixture-built scratch repository.
     :return: The same repository.
     """
-    shutil.rmtree(repository.project_root / ProjectLocation.PACKAGE_ENVIRONMENT)
+    shutil.rmtree(environment_directory(repository))
     return repository
 
 
@@ -679,8 +782,8 @@ def test_creates_the_environment_with_uv_and_installs_the_package_into_it(
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
-        ENVIRONMENT_DIRECTORY,
-        SOURCE_TREE_ARGUMENT,
+        environment_directory(session_start_repository),
+        package_source(session_start_repository),
     )
     assert environment_log.read_text().splitlines() == [
         environment_call(session_start_repository),
@@ -713,8 +816,8 @@ def test_creates_the_environment_from_an_interpreter_found_by_name_without_uv(
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
-        ENVIRONMENT_DIRECTORY,
-        SOURCE_TREE_ARGUMENT,
+        environment_directory(session_start_repository),
+        package_source(session_start_repository),
     )
     version = subprocess.run(
         [
@@ -747,9 +850,7 @@ def installed_uv_directory(repository: ScratchRepository) -> Path:
     :param repository: The fixture-built scratch repository.
     :return: Where the session start installs ``uv`` for itself.
     """
-    return repository.project_root / configuration_value(
-        ConfigurationVariable.UV_DIRECTORY
-    )
+    return Path(repository.configuration_value(ConfigurationVariable.UV_DIRECTORY))
 
 
 def test_installs_uv_when_no_supported_interpreter_is_on_the_path(
@@ -784,8 +885,8 @@ def test_installs_uv_when_no_supported_interpreter_is_on_the_path(
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
-        ENVIRONMENT_DIRECTORY,
-        SOURCE_TREE_ARGUMENT,
+        environment_directory(session_start_repository),
+        package_source(session_start_repository),
     )
     assert install_log.read_text().splitlines() == [
         f"install --target {installed_uv_directory(session_start_repository)} "
@@ -831,8 +932,8 @@ def test_reuses_the_uv_it_installed_before(
     assert result.returncode == 0, result.stderr
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
         SummaryMessage.DEPENDENCIES_ENVIRONMENT_CREATED,
-        ENVIRONMENT_DIRECTORY,
-        SOURCE_TREE_ARGUMENT,
+        environment_directory(session_start_repository),
+        package_source(session_start_repository),
     )
     assert uv_log.read_text().splitlines() == [
         environment_call(session_start_repository),
@@ -867,7 +968,7 @@ def test_reports_uv_it_could_not_install_and_finishes_the_run(
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES).startswith(
         summary_message(
             SummaryMessage.DEPENDENCIES_ENVIRONMENT_NOT_CREATED,
-            ENVIRONMENT_DIRECTORY,
+            environment_directory(session_start_repository),
             "",
         ).split(" - ")[0]
     )
@@ -898,7 +999,7 @@ def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
     assert summary_value(result.stdout, SummaryLine.DEPENDENCIES).startswith(
         summary_message(
             SummaryMessage.DEPENDENCIES_ENVIRONMENT_NOT_CREATED,
-            ENVIRONMENT_DIRECTORY,
+            environment_directory(session_start_repository),
             "",
         ).split(" - ")[0]
     )

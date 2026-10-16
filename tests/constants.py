@@ -13,8 +13,39 @@ from __future__ import annotations
 from enum import IntEnum, StrEnum
 from pathlib import Path
 
-from basstler.locations import PathEnumeration, ProjectLocation
+from basstler.locations import PackageLocation, PathEnumeration, ProjectLocation
 from basstler.setup_steps import PersonalNotesSetting
+
+
+class RepositoryLocation(PathEnumeration):
+    """
+    This repository's own parts the suites read: the plugin the hooks and skills ship
+    in, and the workflows.
+
+    Found from the package's source tree rather than through
+    :class:`basstler.locations.PluginLocation`, so a plugin root set in the environment
+    running the suite cannot point the tests at another copy.
+    """
+
+    ROOT = PackageLocation.SOURCE_TREE.value
+    """
+    The repository root.
+    """
+
+    PLUGIN = ROOT / "plugin"
+    """
+    The Claude Code plugin: its manifest, hooks and skills.
+    """
+
+    HOOKS = PLUGIN / "hooks"
+    """
+    The shell entry points under test.
+    """
+
+    WORKFLOWS = ROOT / ".github" / "workflows"
+    """
+    The repository's Actions workflows.
+    """
 
 
 class DatasetLocation(PathEnumeration):
@@ -54,13 +85,19 @@ class DatasetLocation(PathEnumeration):
     A project declaring one dependency that is installed, then one that cannot be.
     """
 
-    SET_UP_CLONE = DIRECTORY / "set-up-clone"
+    SET_UP_CHECKOUT = DIRECTORY / "set-up-checkout"
     """
-    A committed tree of everything ``check-setup.sh`` requires of a set-up clone, copied over
-    a scratch project root rather than written out file by file.
+    A committed tree of everything ``check-setup.sh`` requires of the basstler checkout a
+    plugin runs from, copied over a scratch checkout rather than written out file by file.
 
-    Its ``basstler/`` stands in for the real package: the ``tooling_files`` check tests only
-    that each path exists, so nothing there is ever imported or run.
+    Its plugin files stand in for the real ones: the ``tooling_files`` check tests only that
+    each path exists, so nothing there is ever run.
+    """
+
+    SET_UP_PROJECT = DIRECTORY / "set-up-project"
+    """
+    A committed tree of everything ``check-setup.sh`` requires of a set-up project, copied
+    over a scratch project root.
     """
 
 
@@ -118,13 +155,13 @@ class StackLabel(StrEnum):
 
 class SkillDirectory(PathEnumeration):
     """
-    The skills the suites read, relative to the project root.
+    The skills the suites read, relative to the plugin root.
 
     Claude Code finds a skill by its path, so the path *is* the interface, and the package
     does not name it.
     """
 
-    DIRECTORY = ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills"
+    DIRECTORY = Path("skills")
     """
     The directory holding every skill.
     """
@@ -198,6 +235,21 @@ class ScrubbedEnvironmentPrefix(StrEnum):
     The personal-notes remote, branch and path overrides.
     """
 
+    PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR"
+    """
+    The project Claude Code names, which the hooks resolve their project from first.
+    """
+
+    ENVIRONMENT_FILE = "CLAUDE_ENV_FILE"
+    """
+    The file a SessionStart hook exports variables to the session through.
+    """
+
+    BASSTLER = "BASSTLER_"
+    """
+    The plugin root, the package's home and anything else the configuration exports.
+    """
+
     GIT_AUTHOR = "GIT_AUTHOR_"
     """
     The commit author git would otherwise take from the configuration.
@@ -236,6 +288,16 @@ class ConfigurationVariable(StrEnum):
     The package's own environment.
     """
 
+    ENVIRONMENT_INTERPRETER = "BASSTLER_ENVIRONMENT_INTERPRETER"
+    """
+    The interpreter of the package's own environment.
+    """
+
+    INSTALLED_SOURCE_FILE = "BASSTLER_INSTALLED_SOURCE_FILE"
+    """
+    The file recording what the environment's package was installed from.
+    """
+
     PYTHON_REQUIREMENT = "BASSTLER_PYTHON_REQUIREMENT"
     """
     The interpreters the package supports.
@@ -246,10 +308,36 @@ class ConfigurationVariable(StrEnum):
     The supported interpreters looked for by name, separated by spaces.
     """
 
+    HOME = "BASSTLER_HOME"
+    """
+    Where the package's environment and its installed ``uv`` live.
+    """
+
+    REPOSITORY_URL = "BASSTLER_REPOSITORY_URL"
+    """
+    The repository an installed plugin's package is installed from.
+    """
+
     UV_DIRECTORY = "BASSTLER_UV_DIRECTORY"
     """
     Where a session start installs ``uv`` when it finds neither ``uv`` nor a supported
     interpreter.
+    """
+
+
+class PluginManifestKey(StrEnum):
+    """
+    The keys of a Claude Code plugin's ``plugin.json`` the suites read.
+    """
+
+    NAME = "name"
+    """
+    The plugin's name, which is also its package's distribution name.
+    """
+
+    VERSION = "version"
+    """
+    The plugin's release, which its package is installed at.
     """
 
 

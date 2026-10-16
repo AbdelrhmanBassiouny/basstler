@@ -7,7 +7,6 @@ Runs the real scripts against a local `git init --bare` fixture instead of a rea
 remote - no network access or real personal-notes branch involved.
 """
 
-import os
 import subprocess
 
 import pytest
@@ -18,7 +17,6 @@ from .constants import (
     DatasetLocation,
     PersonalNotesPath,
     ScratchBranch,
-    ScrubbedEnvironmentPrefix,
 )
 from .scratch_repository import ScratchRepository
 
@@ -68,21 +66,10 @@ def run_hook(
     the tests can never change what they assert.
 
     :param repository: A fixture-built scratch repository.
-    :param script_name: File name of the script under ``.claude/hooks``.
+    :param script_name: File name of the script within the plugin's hooks.
     :return: The finished subprocess, whether it succeeded or not.
     """
-    environment = {
-        name: value
-        for name, value in os.environ.items()
-        if not name.startswith(ScrubbedEnvironmentPrefix.PERSONAL_NOTES)
-    }
-    return subprocess.run(
-        ["bash", str(repository.project_root / ProjectLocation.HOOKS / script_name)],
-        cwd=repository.project_root,
-        capture_output=True,
-        text=True,
-        env=environment,
-    )
+    return repository.run_hook_script(script_name)
 
 
 def local_settings_of(repository: ScratchRepository) -> str:

@@ -26,7 +26,7 @@ question is only worth putting once you can say something useful about the
 item:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 "${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill <kickoff|resolve>
 ```
 

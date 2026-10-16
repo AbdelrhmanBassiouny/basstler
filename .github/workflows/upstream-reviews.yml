@@ -47,7 +47,7 @@ jobs:
       - name: Install the basstler dependencies
         run: |
           set -euo pipefail
-          source .claude/hooks/resolve-personal-notes-config.sh
+          source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
           pip install --editable "./${BASSTLER_SOURCE_TREE}"
 
       - name: Read upstream review threads
@@ -70,5 +70,5 @@ jobs:
           if [ "${{ inputs.include_resolved }}" = "true" ]; then
             ARGUMENTS+=(--include-resolved)
           fi
-          source .claude/hooks/resolve-personal-notes-config.sh
+          source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
           "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_MODULE}" "${ARGUMENTS[@]}"

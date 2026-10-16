@@ -26,7 +26,7 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
 
@@ -584,7 +584,8 @@ def main() -> None:
     """
     logger.info(
         SetupChecklist.for_clone(
-            PackageLocation.REPOSITORY_ROOT.value, os.environ
+            Path(os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())),
+            os.environ,
         ).render()
     )
 

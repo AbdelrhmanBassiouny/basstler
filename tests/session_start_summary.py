@@ -16,11 +16,10 @@ from __future__ import annotations
 import subprocess
 from enum import StrEnum
 
-from basstler.locations import PackageLocation, ProjectLocation
+from .constants import RepositoryLocation
 
 MESSAGES_SCRIPT = (
-    PackageLocation.REPOSITORY_ROOT
-    / ProjectLocation.HOOKS
+    RepositoryLocation.HOOKS
     / "session-start-messages.sh"
 )
 """

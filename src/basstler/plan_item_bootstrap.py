@@ -69,7 +69,7 @@ from typing import Any, ClassVar, Protocol
 
 import yaml
 
-from basstler.locations import ClaudeCodeVariable, ProjectLocation
+from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
 from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
 from basstler.standard_streams import StandardStreamHandler
@@ -112,9 +112,9 @@ class HookScript(StrEnum):
     @property
     def path(self) -> Path:
         """
-        The script's path from the project root.
+        The script's path within the plugin.
         """
-        return ProjectLocation.HOOKS / self.value
+        return PluginLocation.HOOKS / self.value
 
 
 class PlanDocument(StrEnum):
@@ -626,7 +626,7 @@ class NotesBranchUnavailableError(BootstrapError):
         return f"could not fetch the personal-notes branch: {self.detail}"
 
     def suggest_correction(self) -> str:
-        return f"Run {ProjectLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first."
+        return f"Run {PluginLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first."
 
 
 # %% the plan on the personal-notes branch

@@ -56,26 +56,20 @@ class PackageLocation(PathEnumeration):
 
     DIRECTORY = Path(__file__).parent
     """
-    This package's own directory, under its source tree's ``src`` directory.
+    This package's own directory.
     """
 
     SOURCE_TREE = DIRECTORY.parent.parent
     """
-    The directory holding the package's ``pyproject.toml``, ``README.md`` and ``src``.
-
-    Found from the modules, so it is the clone's own source tree wherever the package is
-    imported from that source - through an editable install or ``PYTHONPATH``.
-    """
-
-    REPOSITORY_ROOT = SOURCE_TREE.parent
-    """
-    The repository root, which holds the source tree.
+    The directory holding the package's ``pyproject.toml``, ``README.md`` and ``src`` when
+    the package is imported from a source checkout - through an editable install or
+    ``PYTHONPATH``. Meaningless for a package installed as a copy.
     """
 
     STACK_CONFIGURATION = DIRECTORY / "stack.toml"
     """
-    The checked-in stack configuration every run starts from, before any per-user
-    override.
+    The shipped stack configuration every run starts from, before a project's and a
+    user's overrides.
     """
 
     BOARD = DIRECTORY / "board.json"
@@ -85,7 +79,8 @@ class PackageLocation(PathEnumeration):
 
     DEPENDENCY_DECLARATION = SOURCE_TREE / "pyproject.toml"
     """
-    The package metadata, whose ``[project] dependencies`` this package installs.
+    The package metadata of a source checkout, whose ``[project] dependencies`` this
+    package installs.
     """
 
     TEMPLATES = DIRECTORY / "templates"
@@ -98,60 +93,43 @@ class PackageLocation(PathEnumeration):
     The GraphQL documents the upstream review reader sends.
     """
 
-
-class ProjectLocation(PathEnumeration):
+    PLAN_ITEM_MODE_DEFAULTS = DIRECTORY / "plan-item-modes.toml"
     """
-    The files this package reads, runs or writes in a project, relative to its root.
-
-    Those on the personal-notes branch are relative to that branch's root, which is the
-    same tree.
+    The shipped plan-item execution modes.
     """
 
-    CLAUDE_CODE_DIRECTORY = Path(".claude")
+
+class BasstlerVariable(StrEnum):
     """
-    The directory Claude Code reads a project's settings, hooks and skills from.
+    The environment variables this package's own shell configuration sets.
     """
 
-    HOOKS = CLAUDE_CODE_DIRECTORY / "hooks"
+    PLUGIN_ROOT = "BASSTLER_PLUGIN_ROOT"
     """
-    The shell entry points that read and write personal-notes data.
-    """
-
-    PERSONAL_NOTES = CLAUDE_CODE_DIRECTORY / "personal"
-    """
-    Where the personal-notes branch keeps everything it holds.
+    The root of the Claude Code plugin whose hooks and skills run this package.
     """
 
-    PACKAGE_SOURCE_TREE = PackageLocation.SOURCE_TREE.value.relative_to(
-        PackageLocation.REPOSITORY_ROOT.value
+
+class PluginLocation(PathEnumeration):
+    """
+    The plugin's files this package runs, as absolute paths.
+
+    The plugin is found through :attr:`BasstlerVariable.PLUGIN_ROOT`, which sourcing the
+    plugin's shell configuration exports, else as the ``plugin`` directory of the source
+    checkout the package is imported from.
+    """
+
+    ROOT = Path(
+        os.environ.get(BasstlerVariable.PLUGIN_ROOT)
+        or PackageLocation.SOURCE_TREE.value / "plugin"
     )
     """
-    The directory holding the package's ``pyproject.toml``, ``README.md`` and ``src``.
+    The plugin's root directory, holding its manifest, hooks and skills.
     """
 
-    PACKAGE_IMPORT_DIRECTORY = PACKAGE_SOURCE_TREE / "src"
+    HOOKS = ROOT / "hooks"
     """
-    The directory a caller puts on the import path to import this clone's own package.
-    """
-
-    PACKAGE = PACKAGE_IMPORT_DIRECTORY / PackageLocation.DIRECTORY.value.name
-    """
-    This package's own directory.
-    """
-
-    PACKAGE_ENVIRONMENT = PACKAGE_SOURCE_TREE / ".venv"
-    """
-    The package's own virtual environment, which a session start creates and installs
-    the package into.
-
-    Mirrors ``BASSTLER_ENVIRONMENT_DIRECTORY`` in ``resolve-personal-notes-config.sh``;
-    a test holds the two equal.
-    """
-
-    PACKAGE_ENVIRONMENT_INTERPRETER = PACKAGE_ENVIRONMENT / "bin" / "python"
-    """
-    The interpreter of :attr:`PACKAGE_ENVIRONMENT`, which every caller runs the package
-    with once it exists.
+    The shell entry points that read and write personal-notes data.
     """
 
     PERSONAL_NOTES_CONFIGURATION_SCRIPT = HOOKS / "resolve-personal-notes-config.sh"
@@ -168,6 +146,25 @@ class ProjectLocation(PathEnumeration):
     PERSONAL_NOTES_BRANCH_CREATION_SCRIPT = HOOKS / "create-personal-notes-branch.sh"
     """
     The helper that creates the personal-notes branch where it does not exist yet.
+    """
+
+
+class ProjectLocation(PathEnumeration):
+    """
+    The files this package reads, runs or writes in a project, relative to its root.
+
+    Those on the personal-notes branch are relative to that branch's root, which is the
+    same tree.
+    """
+
+    CLAUDE_CODE_DIRECTORY = Path(".claude")
+    """
+    The directory Claude Code reads a project's settings from.
+    """
+
+    PERSONAL_NOTES = CLAUDE_CODE_DIRECTORY / "personal"
+    """
+    Where the personal-notes branch keeps everything it holds.
     """
 
     PERSONAL_NOTES_DOCUMENT = PERSONAL_NOTES / "cram-notes.md"
@@ -188,14 +185,9 @@ class ProjectLocation(PathEnumeration):
     The per-user override of :attr:`PackageLocation.STACK_CONFIGURATION`.
     """
 
-    PLAN_ITEM_MODE_DEFAULTS = PACKAGE / "plan-item-modes.toml"
-    """
-    The shipped plan-item execution modes.
-    """
-
     PERSONAL_PLAN_ITEM_MODES = PERSONAL_NOTES / "plan-item-modes.toml"
     """
-    The per-user override of :attr:`PLAN_ITEM_MODE_DEFAULTS`.
+    The per-user override of :attr:`PackageLocation.PLAN_ITEM_MODE_DEFAULTS`.
     """
 
 
