@@ -8,6 +8,7 @@ non-trivial branches later) tested like any other code.
 
 Usage:
     python3 plan_manifest_tools.py read-id <manifest-file>
+    python3 plan_manifest_tools.py validate <manifest-file>
     python3 plan_manifest_tools.py regenerate-branch-index \\
         --scratch-dir <dir> --plans-dir <relative-dir> \\
         --manifest-filename <name> --output <relative-path>
@@ -19,15 +20,55 @@ import argparse
 import glob
 import os
 import sys
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 import yaml
+
+from basstler.build_dashboard import PlanValidationError, validate_plan
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
+
+
+class ManifestToolsCommand(StrEnum):
+    """
+    The subcommands this tool answers.
+    """
+
+    READ_ID = "read-id"
+    """
+    Print a manifest's ``id`` field.
+    """
+
+    VALIDATE = "validate"
+    """
+    Check a manifest against the rules a dashboard is built under.
+    """
+
+    REGENERATE_BRANCH_INDEX = "regenerate-branch-index"
+    """
+    Rebuild the branch to plan-id index.
+    """
+
+
+class ManifestToolsExitCode(IntEnum):
+    """
+    How the command ended, as its caller reads it.
+    """
+
+    SUCCESS = 0
+    """
+    The subcommand did what it was asked.
+    """
+
+    INVALID_MANIFEST = 1
+    """
+    The manifest breaks a rule the dashboard validates; the problems are on stderr.
+    """
 
 
 class YamlBooleanCoercionError(ValueError):
@@ -73,6 +114,18 @@ def read_manifest_id(manifest_path: Path) -> str:
     with manifest_path.open() as manifest_file:
         manifest = yaml.safe_load(manifest_file)
     return _require_string_field(manifest.get("id", ""), "id", manifest_path)
+
+
+def validate_manifest(manifest_path: Path) -> None:
+    """
+    Check a manifest against the same rules a dashboard is built under, so nothing is
+    saved that no dashboard could then be built from.
+
+    :param manifest_path: Path to the manifest file.
+    :raises PlanValidationError: If it breaks any rule, carrying every problem found.
+    """
+    with manifest_path.open() as manifest_file:
+        validate_plan(yaml.safe_load(manifest_file))
 
 
 def regenerate_branch_index(
@@ -123,7 +176,7 @@ def regenerate_branch_index(
     return "\n".join(lines) + ("\n" if lines else "")
 
 
-def main() -> int:
+def main() -> ManifestToolsExitCode:
     """
     Parse arguments and dispatch to the requested subcommand.
     """
@@ -133,12 +186,19 @@ def main() -> int:
     subcommands = parser.add_subparsers(dest="subcommand", required=True)
 
     read_id_parser = subcommands.add_parser(
-        "read-id", help="Print a manifest's id field"
+        ManifestToolsCommand.READ_ID, help="Print a manifest's id field"
     )
     read_id_parser.add_argument("manifest_path", type=Path)
 
+    validate_parser = subcommands.add_parser(
+        ManifestToolsCommand.VALIDATE,
+        help="Check a manifest against the rules a dashboard is built under",
+    )
+    validate_parser.add_argument("manifest_path", type=Path)
+
     regenerate_parser = subcommands.add_parser(
-        "regenerate-branch-index", help="Rebuild the branch->plan-id index"
+        ManifestToolsCommand.REGENERATE_BRANCH_INDEX,
+        help="Rebuild the branch->plan-id index",
     )
     regenerate_parser.add_argument("--scratch-dir", required=True, type=Path)
     regenerate_parser.add_argument("--plans-dir", required=True)
@@ -149,15 +209,21 @@ def main() -> int:
 
     arguments = parser.parse_args()
 
-    if arguments.subcommand == "read-id":
+    if arguments.subcommand == ManifestToolsCommand.READ_ID:
         logger.info(read_manifest_id(arguments.manifest_path))
-    elif arguments.subcommand == "regenerate-branch-index":
+    elif arguments.subcommand == ManifestToolsCommand.VALIDATE:
+        try:
+            validate_manifest(arguments.manifest_path)
+        except PlanValidationError as error:
+            logger.error(f"{arguments.manifest_path} failed validation: {error}")
+            return ManifestToolsExitCode.INVALID_MANIFEST
+    elif arguments.subcommand == ManifestToolsCommand.REGENERATE_BRANCH_INDEX:
         index_content = regenerate_branch_index(
             arguments.scratch_dir, arguments.plans_dir, arguments.manifest_filename
         )
         arguments.output.write_text(index_content)
 
-    return 0
+    return ManifestToolsExitCode.SUCCESS
 
 
 if __name__ == "__main__":

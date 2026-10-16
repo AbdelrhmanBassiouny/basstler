@@ -8,12 +8,19 @@ from pathlib import Path
 
 import pytest
 
+import yaml
+
+from basstler.build_dashboard import PlanValidationError, validate_plan
 from basstler.plan_manifest_tools import (
+    ManifestToolsCommand,
+    ManifestToolsExitCode,
     YamlBooleanCoercionError,
     main,
     read_manifest_id,
     regenerate_branch_index,
 )
+
+from .constants import DatasetLocation
 
 
 def write_manifest(directory: Path, plan_id: str, name: str = "plan.yaml") -> Path:
@@ -154,3 +161,44 @@ def test_main_dispatches_regenerate_branch_index(tmp_path, monkeypatch):
     exit_code = main()
     assert exit_code == 0
     assert output_path.read_text() == "branch-1\tplan-a\n"
+
+
+# %% main - validating a manifest before it is saved
+
+
+def run_validate(monkeypatch, manifest_path: Path) -> int:
+    """
+    :param monkeypatch: pytest's monkeypatch fixture.
+    :param manifest_path: The manifest to validate.
+    :return: The exit status the command line returns.
+    """
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["plan_manifest_tools.py", ManifestToolsCommand.VALIDATE, str(manifest_path)],
+    )
+    return main()
+
+
+def test_validate_accepts_a_manifest_the_dashboard_builds(monkeypatch):
+    assert run_validate(monkeypatch, DatasetLocation.PLAN.value) == (
+        ManifestToolsExitCode.SUCCESS
+    )
+
+
+def test_validate_refuses_a_manifest_the_dashboard_rejects_and_says_why(
+    monkeypatch, capsys
+):
+    """
+    A manifest saved past the dashboard's own validation is one no dashboard can be
+    built from, so the save refuses it with the same problems the build would report.
+    """
+    with pytest.raises(PlanValidationError) as expected:
+        validate_plan(
+            yaml.safe_load(DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.read_text())
+        )
+
+    status = run_validate(monkeypatch, DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.value)
+
+    assert status == ManifestToolsExitCode.INVALID_MANIFEST
+    assert str(expected.value) in capsys.readouterr().err

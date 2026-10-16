@@ -85,6 +85,16 @@ class DatasetLocation(PathEnumeration):
     A project declaring one dependency that is installed, then one that cannot be.
     """
 
+    PLAN = DIRECTORY / "plan.yaml"
+    """
+    A minimal plan the dashboard builds.
+    """
+
+    PLAN_WITH_UNKNOWN_STATUS = DIRECTORY / "plan-with-unknown-status.yaml"
+    """
+    The same plan, its item's status one the schema does not define.
+    """
+
     STACK_CONFIGURATION = DIRECTORY / "stack-configuration"
     """
     Shipped defaults and a project's own stack settings, for layering one over the other.

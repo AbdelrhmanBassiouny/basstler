@@ -114,6 +114,36 @@ def test_refuses_when_the_declaration_cannot_be_read(
     assert str(declaration_file(save_plan_repository)) in result.stderr
 
 
+# %% the manifest it saves
+
+
+def test_refuses_a_manifest_the_dashboard_would_reject(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    Nothing reaches the notes branch that the dashboard could not then be built from.
+    """
+    manifest_path = save_plan_repository.write(
+        "plan.yaml", DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.read_text()
+    )
+    roadmap_path = save_plan_repository.write("roadmap.md", PLAN_ROADMAP)
+
+    result = run_save_plan(
+        save_plan_repository,
+        "test-plan",
+        "--manifest",
+        str(manifest_path),
+        "--roadmap",
+        str(roadmap_path),
+    )
+
+    assert result.returncode == 1
+    verify_checkout = save_plan_repository.clone_notes_branch(
+        save_plan_repository.project_root.parent / "verify-checkout"
+    )
+    assert not (verify_checkout / ProjectLocation.PLANS / "test-plan").exists()
+
+
 # %% --manifest/--roadmap pairing
 
 

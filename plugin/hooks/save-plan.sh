@@ -201,6 +201,13 @@ if [ ! -s "${MANIFEST_FILE}" ]; then
   exit 1
 fi
 
+# The dashboard's own validation, so nothing reaches the notes branch that no
+# dashboard could then be built from. It prints every problem it finds.
+if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate "${MANIFEST_FILE}"; then
+  echo "Nothing was saved - fix the manifest and save again." >&2
+  exit 1
+fi
+
 MANIFEST_PLAN_ID="$("${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" read-id "${MANIFEST_FILE}")"
 if [ "${MANIFEST_PLAN_ID}" != "${PLAN_ID}" ]; then
   echo "The plan manifest's 'id: ${MANIFEST_PLAN_ID}' does not match the plan" >&2
