@@ -35,7 +35,7 @@ NOTES_BRANCH="$(git config --get claude.personalNotesBranch || true)"
 NOTES_BRANCH="${NOTES_BRANCH:-${CLAUDE_PERSONAL_NOTES_BRANCH:-claude/personal-notes}}"
 
 NOTES_PATH="$(git config --get claude.personalNotesPath || true)"
-NOTES_PATH="${NOTES_PATH:-${CLAUDE_PERSONAL_NOTES_PATH:-.claude/personal/cram-notes.md}}"
+NOTES_PATH="${NOTES_PATH:-${CLAUDE_PERSONAL_NOTES_PATH:-.claude/personal/notes.md}}"
 
 # NOTES_REMOTE may be either a configured remote's name (e.g. "origin") or a
 # raw git URL (e.g. "https://github.com/<you>/<repo>") - `git fetch`/`git
@@ -709,7 +709,7 @@ install_basstler_into_environment() {
 # PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
 # SHA that was FETCH_HEAD the last time this clone read plan state (either
 # session-start.sh's own auto-discovery, or ./plan-updates-since.sh). This is
-# the "last-seen SHA" the recheck-deltas convention in cram-notes.md is built
+# the "last-seen SHA" the recheck-deltas convention in the personal notes is built
 # around: a session that wants to know what changed since it last looked
 # diffs from this stamp instead of rereading whole files - see
 # ./plan-updates-since.sh, which is also what advances it.

@@ -3,7 +3,7 @@ set -euo pipefail
 
 # One-time helper: creates the personal-notes branch (default:
 # `claude/personal-notes`) on a remote (default: `origin`) with a single
-# empty notes file at the default path (`.claude/personal/cram-notes.md`),
+# empty notes file at the default path (`.claude/personal/notes.md`),
 # and pushes it - so session-start.sh has something to read out of the box,
 # with no config needed on your end.
 #

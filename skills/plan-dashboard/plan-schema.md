@@ -11,7 +11,7 @@ generic, plan-agnostic reference material, so every clone has it with no
 setup. The **plan data it describes** is the opposite: it is never merged
 into `main`, living only on the personal-notes branch (`claude/personal-notes`
 by default — see [`resolve-personal-notes-config.sh`](../../hooks/resolve-personal-notes-config.sh)
-for how that's resolved), exactly like `cram-notes.md` and `pr-progress/*.md`.
+for how that's resolved), exactly like the personal notes and `pr-progress/*.md`.
 
 New to the system and want to see it end to end before reading the schema?
 Start with [`example-walkthrough.md`](./example-walkthrough.md), a short

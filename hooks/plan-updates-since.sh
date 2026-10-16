@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Implements the recheck-deltas convention (cram-notes.md, personal-notes
+# Implements the recheck-deltas convention (personal notes, personal-notes
 # branch): rather than rereading a whole plan.yaml/roadmap.md to answer "what
 # changed since I last looked", diff only from the last commit this clone
 # saw. Also prints the plan's tracking-issue comments newer than that

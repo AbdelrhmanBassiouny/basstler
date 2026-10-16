@@ -135,8 +135,8 @@ the item and flips it to `in progress`; `record` appends the settled plan to
 can create one — with `--pull-request-title`/`--pull-request-body` instead of
 `--pull-request-number`, verified live — but a pull request it creates is
 attributed to the app its requests are proxied through rather than to the
-person whose work it is, the same authorship problem `AGENTS.md` rules out for
-commits. Creating it yourself keeps your identity on it. The creating path is
+person whose work it is, the same authorship problem that rules out an assistant
+authoring commits. Creating it yourself keeps your identity on it. The creating path is
 there for an unattended run whose credential is a real one; if you use it,
 `open` publishes the branch too, so the three git commands above are yours to
 skip.
