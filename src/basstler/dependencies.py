@@ -66,6 +66,19 @@ class PyprojectKey(StrEnum):
     """
 
 
+class RequirementMarker(StrEnum):
+    """
+    The environment-marker fragments of an installed distribution's requirements this
+    module reads.
+    """
+
+    EXTRA = "extra =="
+    """
+    Marks a requirement that applies only when one of the distribution's extras is
+    requested, which a plain install does not.
+    """
+
+
 @dataclass
 class UnreadableDependencyDeclarationError(Exception):
     """
@@ -200,7 +213,7 @@ class InstalledDistribution(RequirementSource):
             *(
                 Dependency(specifier)
                 for specifier in stated
-                if "extra ==" not in specifier
+                if RequirementMarker.EXTRA not in specifier
             ),
         )
 
