@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
+from typing import ClassVar
 from pathlib import Path
 
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_errors import ExternalCallFailed
 from basstler.stack import Configuration, IntegrationStrategy, resolve_ref
 
@@ -19,10 +21,12 @@ from basstler.stack import Configuration, IntegrationStrategy, resolve_ref
 
 
 @dataclass
-class GitCommandFailed(ExternalCallFailed):
+class GitCommandFailed(CommandFailure, ExternalCallFailed):
     """
     Raised when a git command this module depends on the result of fails.
     """
+
+    exit_code: ClassVar[int] = StackExitCode.GIT_COMMAND_FAILED
 
     arguments: tuple[str, ...] = ()
     """

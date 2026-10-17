@@ -15,8 +15,9 @@ import tomllib
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
 
@@ -68,10 +69,12 @@ class StackSetting(StrEnum):
 
 
 @dataclass
-class MissingUpstreamRepositoryError(LookupError):
+class MissingUpstreamRepositoryError(CommandFailure, LookupError):
     """
     Raised when neither the project nor anything above it names the upstream repository.
     """
+
+    exit_code: ClassVar[int] = StackExitCode.UPSTREAM_UNCONFIGURED
 
     project_file: Path
     """

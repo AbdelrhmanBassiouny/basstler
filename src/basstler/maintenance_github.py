@@ -17,8 +17,9 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, ClassVar
 
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_board import PullRequestRecord
 from basstler.environment import GitHubCredentialVariable
 from basstler.maintenance_constants import GITHUB_API_ROOT
@@ -27,13 +28,17 @@ from basstler.repository import Repository
 
 
 @dataclass
-class GitHubCredentialUnavailableError(RuntimeError):
+class GitHubCredentialUnavailableError(CommandFailure, RuntimeError):
     """
     Raised when no token is available to authenticate the API calls with.
     """
 
+    exit_code: ClassVar[int] = StackExitCode.CREDENTIAL_UNAVAILABLE
+
     variables: tuple[str, ...]
-    """The environment variables that were consulted."""
+    """
+    The environment variables that were consulted.
+    """
 
     def __str__(self) -> str:
         """:return: What was looked for, so the caller can supply it."""
@@ -104,10 +109,12 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
 
 
 @dataclass
-class GitHubRequestFailed(ExternalCallFailed):
+class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
     """
     Raised when the API refuses a call this module depends on.
     """
+
+    exit_code: ClassVar[int] = StackExitCode.GITHUB_REQUEST_FAILED
 
     method: str = ""
     """

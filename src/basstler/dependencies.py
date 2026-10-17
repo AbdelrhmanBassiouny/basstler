@@ -34,8 +34,9 @@ from dataclasses import dataclass, field
 from enum import IntEnum, StrEnum
 from importlib.metadata import PackageNotFoundError, distribution, distributions
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
+from basstler.exit_codes import CommandFailure
 from basstler.locations import PackageLocation
 from basstler.standard_streams import StandardStreamHandler
 
@@ -79,8 +80,24 @@ class RequirementMarker(StrEnum):
     """
 
 
+class ExitCode(IntEnum):
+    """
+    How the command ended, as its caller reads it.
+    """
+
+    SUCCESS = 0
+    """
+    The missing requirements, if any, were printed.
+    """
+
+    UNREADABLE_DECLARATION = 1
+    """
+    The declaration could not be read, so nothing was printed.
+    """
+
+
 @dataclass
-class UnreadableDependencyDeclarationError(Exception):
+class UnreadableDependencyDeclarationError(CommandFailure):
     """
     Raised when the declaration cannot be read, so nothing can be said about what is
     missing.
@@ -88,6 +105,8 @@ class UnreadableDependencyDeclarationError(Exception):
     Distinct from *nothing is missing*, which is what a caller would otherwise conclude
     from an empty answer and act on by installing nothing.
     """
+
+    exit_code: ClassVar[int] = ExitCode.UNREADABLE_DECLARATION
 
     declaration: Path
     """
@@ -278,22 +297,6 @@ class DependencyDeclaration(RequirementSource):
         return declaration[PyprojectKey.PROJECT]
 
 
-class ExitCode(IntEnum):
-    """
-    How the command ended, as its caller reads it.
-    """
-
-    SUCCESS = 0
-    """
-    The missing requirements, if any, were printed.
-    """
-
-    UNREADABLE_DECLARATION = 1
-    """
-    The declaration could not be read, so nothing was printed.
-    """
-
-
 def main() -> ExitCode:
     """
     Print one specifier per missing requirement, for a caller to report.
@@ -308,18 +311,17 @@ def main() -> ExitCode:
         "own requirements",
     )
     declaration_path = parser.parse_args().declaration
-    if declaration_path is None:
-        source = RequirementSource.for_this_package()
-    elif declaration_path.is_file():
-        source = DependencyDeclaration(declaration_path)
-    else:
-        logger.error(str(UnreadableDependencyDeclarationError(declaration_path)))
-        return ExitCode.UNREADABLE_DECLARATION
     try:
+        if declaration_path is None:
+            source = RequirementSource.for_this_package()
+        elif declaration_path.is_file():
+            source = DependencyDeclaration(declaration_path)
+        else:
+            raise UnreadableDependencyDeclarationError(declaration_path)
         missing = source.missing()
-    except UnreadableDependencyDeclarationError as error:
+    except CommandFailure as error:
         logger.error(str(error))
-        return ExitCode.UNREADABLE_DECLARATION
+        return error.exit_code
     for requirement in missing:
         logger.info(requirement.specifier)
     return ExitCode.SUCCESS

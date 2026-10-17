@@ -32,23 +32,10 @@ import argparse
 import sys
 from pathlib import Path
 
-from basstler.maintenance_board import MissingPullRequestFieldError
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_commands import COMMANDS, MaintenancePass
-from basstler.maintenance_git_commands import GitCommandFailed, GitCommandRunner
-from basstler.maintenance_github import (
-    GitHubCredentialUnavailableError,
-    GitHubRequestFailed,
-)
-from basstler.maintenance_report import MaintenanceExitCode
-from basstler.stack import (
-    AmbiguousForkRemoteError,
-    BoardUnavailable,
-    ContradictoryLabelWriteError,
-    ForkRemoteNotFoundError,
-    PromotionLinkTooLongError,
-    load_configuration,
-)
-from basstler.stack_configuration import MissingUpstreamRepositoryError
+from basstler.maintenance_git_commands import GitCommandRunner
+from basstler.stack import load_configuration
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -71,7 +58,7 @@ def _argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> MaintenanceExitCode:
+def main() -> StackExitCode:
     """
     Run the command line and say, in words, what its status means.
 
@@ -82,12 +69,12 @@ def main() -> MaintenanceExitCode:
     :return: The process exit code.
     """
     status = _dispatch()
-    if status is not MaintenanceExitCode.SUCCESS:
+    if status is not StackExitCode.SUCCESS:
         logger.error(f"maintenance.py: {status.name_for_a_caller} ({int(status)})")
     return status
 
 
-def _dispatch() -> MaintenanceExitCode:
+def _dispatch() -> StackExitCode:
     """
     Run the requested command, mapping every refusal to its own status.
 
@@ -103,31 +90,9 @@ def _dispatch() -> MaintenanceExitCode:
             git=GitCommandRunner(working_directory=Path.cwd()),
         )
         return requested.run(maintenance, arguments)
-    except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
+    except CommandFailure as error:
         logger.error(f"{error}")
-        return MaintenanceExitCode.REMOTES_UNRESOLVED
-    except MissingUpstreamRepositoryError as error:
-        logger.error(f"{error}")
-        return MaintenanceExitCode.UPSTREAM_UNCONFIGURED
-    except BoardUnavailable as error:
-        logger.error(f"{error}")
-        return MaintenanceExitCode.BOARD_UNAVAILABLE
-    except GitHubCredentialUnavailableError as error:
-        logger.error(f"{error}")
-        return MaintenanceExitCode.CREDENTIAL_UNAVAILABLE
-    except (
-        MissingPullRequestFieldError,
-        ContradictoryLabelWriteError,
-        PromotionLinkTooLongError,
-    ) as error:
-        logger.error(f"{error}")
-        return MaintenanceExitCode.USAGE
-    except GitCommandFailed as error:
-        logger.error(f"{error}")
-        return MaintenanceExitCode.GIT_COMMAND_FAILED
-    except GitHubRequestFailed as error:
-        logger.error(f"{error}")
-        return MaintenanceExitCode.GITHUB_REQUEST_FAILED
+        return error.exit_code
 
 
 if __name__ == "__main__":

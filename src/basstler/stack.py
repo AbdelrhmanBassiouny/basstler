@@ -43,17 +43,17 @@ import subprocess
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.stack_configuration import (
     CommittedStackConfiguration,
-    MissingUpstreamRepositoryError,
     StackSetting,
     upstream_repository_in,
 )
@@ -79,8 +79,10 @@ class Remote:
 
 
 @dataclass
-class ForkRemoteNotFoundError(LookupError):
+class ForkRemoteNotFoundError(CommandFailure, LookupError):
     """Raised when no remote points at a repository other than the upstream."""
+
+    exit_code: ClassVar[int] = StackExitCode.REMOTES_UNRESOLVED
 
     upstream_repository: Repository
     """The upstream every candidate turned out to be."""
@@ -94,8 +96,10 @@ class ForkRemoteNotFoundError(LookupError):
 
 
 @dataclass
-class AmbiguousForkRemoteError(LookupError):
+class AmbiguousForkRemoteError(CommandFailure, LookupError):
     """Raised when several remotes could each be the fork."""
+
+    exit_code: ClassVar[int] = StackExitCode.REMOTES_UNRESOLVED
 
     candidates: tuple[Remote, ...]
     """The remotes that are not the upstream, in the order git reported them."""
@@ -475,8 +479,10 @@ class Stack:
         )
 
 
-class BoardUnavailable(RuntimeError):
+class BoardUnavailable(CommandFailure, RuntimeError):
     """Raised when ``board.json`` is missing."""
+
+    exit_code: ClassVar[int] = StackExitCode.BOARD_UNAVAILABLE
 
 
 def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
@@ -562,8 +568,10 @@ def build_stack(
 
 
 @dataclass
-class ContradictoryLabelWriteError(ValueError):
+class ContradictoryLabelWriteError(CommandFailure, ValueError):
     """Raised when one write is asked both to carry a label and to drop it."""
+
+    exit_code: ClassVar[int] = StackExitCode.USAGE
 
     labels: tuple[str, ...]
     """The labels asked for in both directions."""
@@ -615,8 +623,10 @@ class LabelWrite:
 
 
 @dataclass
-class PromotionLinkTooLongError(ValueError):
+class PromotionLinkTooLongError(CommandFailure, ValueError):
     """Raised when a link cannot fit even with its whole description dropped."""
+
+    exit_code: ClassVar[int] = StackExitCode.USAGE
 
     branch: str
     """The branch whose link was being built."""
@@ -1248,7 +1258,7 @@ def print_landed(stack: Stack) -> None:
 
 def print_move_checks(
     move_checks: CommitMoveChecks, move: ProposedCommitMove
-) -> ExitCode:
+) -> StackExitCode:
     """Print whether a move may be made, and every reason it may not.
 
     :param move_checks: The checks to run.
@@ -1261,10 +1271,10 @@ def print_move_checks(
             f"{move.action} {move.source} onto "
             f"{move.destination_remote}/{move.destination}: clear"
         )
-        return ExitCode.SUCCESS
+        return StackExitCode.SUCCESS
     for refusal in refusals:
         logger.error(f"{refusal.reason}: {refusal.explanation}")
-    return ExitCode.MOVE_REFUSED
+    return StackExitCode.MOVE_REFUSED
 
 
 def print_configuration(configuration: Configuration) -> None:
@@ -1332,34 +1342,6 @@ class Command(StrEnum):
 
 
 # %% entry point
-
-
-class ExitCode(IntEnum):
-    """What this tool's exit status tells a caller.
-
-    A distinct status per failure lets a caller - a shell script, or a session acting on
-    what it gets back - tell "you asked for something that does not exist" from "the
-    checkout is not in a state I can read", without parsing stderr.
-    """
-
-    SUCCESS = 0
-    """The command ran and printed its result."""
-
-    USAGE = 2
-    """No such command, or the wrong arguments; the conventional status for a usage
-    error, as `argparse` also uses."""
-
-    BOARD_UNAVAILABLE = 3
-    """`board.json` is missing or unreadable, so the stack cannot be derived."""
-
-    REMOTES_UNRESOLVED = 4
-    """The fork could not be identified from this checkout's remotes."""
-
-    MOVE_REFUSED = 5
-    """The proposed move must not be made; the reasons are on stderr."""
-
-    UPSTREAM_UNCONFIGURED = 6
-    """The project names no upstream repository; stderr says where to name it."""
 
 
 def _argument_parser() -> argparse.ArgumentParser:
@@ -1459,7 +1441,9 @@ def _argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> ExitCode:
+def _run_without_a_board(
+    command: Command, arguments: argparse.Namespace
+) -> StackExitCode:
     """Run a command that needs no ``board.json``.
 
     :param command: The command to run.
@@ -1470,7 +1454,7 @@ def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> Exi
         print_label_write(
             LabelWrite.replacing(arguments.current, arguments.add, arguments.remove)
         )
-        return ExitCode.SUCCESS
+        return StackExitCode.SUCCESS
     if command is Command.CONFIGURATION:
         print_configuration(
             load_configuration(
@@ -1478,18 +1462,18 @@ def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> Exi
                 upstream_repository=arguments.upstream,
             )
         )
-        return ExitCode.SUCCESS
+        return StackExitCode.SUCCESS
     print_promotion_link(
         PromotionLink.build(
             load_configuration(), arguments.branch, arguments.title, arguments.body
         )
     )
-    return ExitCode.SUCCESS
+    return StackExitCode.SUCCESS
 
 
 def _run_against_the_board(
     command: Command, arguments: argparse.Namespace, stack: Stack
-) -> ExitCode:
+) -> StackExitCode:
     """Run a command that reads the derived stack.
 
     :param command: The command to run.
@@ -1520,7 +1504,7 @@ def _run_against_the_board(
         Command.LANDED: print_landed,
     }
     reporters[command](stack)
-    return ExitCode.SUCCESS
+    return StackExitCode.SUCCESS
 
 
 def _ancestry_predicate(configuration: Configuration) -> Callable[[str, str], bool]:
@@ -1539,8 +1523,8 @@ def _ancestry_predicate(configuration: Configuration) -> Callable[[str, str], bo
     return is_ancestor
 
 
-def main() -> ExitCode:
-    """Dispatch the command-line invocation, mapping every refusal to its own status.
+def main() -> StackExitCode:
+    """Dispatch the command-line invocation, ending with the status the refusal carries.
 
     :return: The process exit code.
     """
@@ -1550,18 +1534,9 @@ def main() -> ExitCode:
         if not command.needs_a_board:
             return _run_without_a_board(command, arguments)
         return _run_against_the_board(command, arguments, load_stack())
-    except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
+    except CommandFailure as error:
         logger.error(f"{error}")
-        return ExitCode.REMOTES_UNRESOLVED
-    except MissingUpstreamRepositoryError as error:
-        logger.error(f"{error}")
-        return ExitCode.UPSTREAM_UNCONFIGURED
-    except BoardUnavailable as error:
-        logger.error(f"{error}")
-        return ExitCode.BOARD_UNAVAILABLE
-    except (ContradictoryLabelWriteError, PromotionLinkTooLongError) as error:
-        logger.error(f"{error}")
-        return ExitCode.USAGE
+        return error.exit_code
 
 
 if __name__ == "__main__":

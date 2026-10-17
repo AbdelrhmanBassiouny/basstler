@@ -14,8 +14,9 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import SESSION_LINK_PATTERN
 from basstler.stack import PullRequest
@@ -174,7 +175,7 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
 
 
 @dataclass
-class MissingPullRequestFieldError(ValueError):
+class MissingPullRequestFieldError(CommandFailure, ValueError):
     """
     Raised when a fetched pull request omits a field the board is derived from.
 
@@ -182,6 +183,8 @@ class MissingPullRequestFieldError(ValueError):
     are different facts, and defaulting one to the other is what makes bad board data
     indistinguishable from good.
     """
+
+    exit_code: ClassVar[int] = StackExitCode.USAGE
 
     field_name: PullRequestField
     """

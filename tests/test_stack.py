@@ -17,6 +17,7 @@ from pathlib import Path
 import pytest
 
 import basstler.stack
+from basstler.exit_codes import StackExitCode
 from basstler.repository import Repository
 from basstler.stack import (
     AmbiguousForkRemoteError,
@@ -24,7 +25,6 @@ from basstler.stack import (
     BranchStatus,
     Configuration,
     ContradictoryLabelWriteError,
-    ExitCode,
     ForkRemoteNotFoundError,
     LabelWrite,
     IntegrationStrategy,
@@ -1103,7 +1103,9 @@ def run_stack(
 
 
 def test_an_unknown_command_is_a_usage_error(offline_checkout: ScratchRepository):
-    assert run_stack(offline_checkout, "not-a-command").returncode == ExitCode.USAGE
+    assert (
+        run_stack(offline_checkout, "not-a-command").returncode == StackExitCode.USAGE
+    )
 
 
 def test_a_label_write_prints_the_complete_set_one_label_per_line(
@@ -1124,7 +1126,7 @@ def test_a_label_write_prints_the_complete_set_one_label_per_line(
         StackLabel.REBASE,
     )
 
-    assert result.returncode == ExitCode.SUCCESS
+    assert result.returncode == StackExitCode.SUCCESS
     assert result.stdout.splitlines() == [
         StackLabel.IN_REVIEW,
         StackLabel.BUG,
@@ -1144,7 +1146,7 @@ def test_a_contradictory_label_write_is_refused_rather_than_guessed_at(
         StackLabel.REBASE,
     )
 
-    assert result.returncode == ExitCode.USAGE
+    assert result.returncode == StackExitCode.USAGE
     assert StackLabel.REBASE in result.stderr
 
 
@@ -1157,7 +1159,7 @@ def test_a_checkout_whose_fork_cannot_be_identified_says_so_by_status(
     """
     result = run_stack(offline_checkout, Command.CONFIGURATION)
 
-    assert result.returncode == ExitCode.REMOTES_UNRESOLVED
+    assert result.returncode == StackExitCode.REMOTES_UNRESOLVED
 
 
 def test_a_project_naming_no_upstream_says_so_by_status(
@@ -1174,7 +1176,7 @@ def test_a_project_naming_no_upstream_says_so_by_status(
 
     result = run_stack(offline_checkout, Command.CONFIGURATION)
 
-    assert result.returncode == ExitCode.UPSTREAM_UNCONFIGURED
+    assert result.returncode == StackExitCode.UPSTREAM_UNCONFIGURED
     assert str(ProjectLocation.PROJECT_STACK_CONFIGURATION) in result.stderr
 
 
@@ -1185,7 +1187,7 @@ def test_a_readable_checkout_with_no_board_reports_the_missing_board_instead(
 
     result = run_stack(offline_checkout, Command.STATUS)
 
-    assert result.returncode == ExitCode.BOARD_UNAVAILABLE
+    assert result.returncode == StackExitCode.BOARD_UNAVAILABLE
 
 
 def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
@@ -1200,7 +1202,7 @@ def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
 
     assert (
         run_stack(offline_checkout, Command.CONFIGURATION).returncode
-        == ExitCode.REMOTES_UNRESOLVED
+        == StackExitCode.REMOTES_UNRESOLVED
     )
 
     result = run_stack(
@@ -1212,7 +1214,7 @@ def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
         "an-upstream-owner/a-project",
     )
 
-    assert result.returncode == ExitCode.SUCCESS
+    assert result.returncode == StackExitCode.SUCCESS
     printed = dict(line.split("\t") for line in result.stdout.splitlines())
     assert printed["fork_repository"] == "a-fork-owner/a-fork"
     assert printed["fork_remote"] == "whatever"
@@ -1226,7 +1228,7 @@ def test_a_fork_that_is_not_owner_and_name_is_a_usage_error(
         offline_checkout, Command.CONFIGURATION, "--fork", "not-a-repository"
     )
 
-    assert result.returncode == ExitCode.USAGE
+    assert result.returncode == StackExitCode.USAGE
 
 
 def test_a_promotion_link_is_built_from_the_resolved_repositories(
@@ -1243,7 +1245,7 @@ def test_a_promotion_link_is_built_from_the_resolved_repositories(
         "A title",
     )
 
-    assert result.returncode == ExitCode.SUCCESS
+    assert result.returncode == StackExitCode.SUCCESS
     assert result.stdout.strip().endswith(
         "...a-fork-owner:engine?expand=1&title=A%20title&body="
     )

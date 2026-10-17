@@ -12,6 +12,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 
+from basstler.exit_codes import StackExitCode
 from basstler.class_property import classproperty
 from basstler.locations import PackageLocation
 from basstler.maintenance_board import BoardExport
@@ -20,7 +21,6 @@ from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.maintenance_github import GitHubRepository
 from basstler.maintenance_promotion import clear_spent_promotion_labels, promote
 from basstler.maintenance_report import (
-    MaintenanceExitCode,
     MaintenanceReport,
     build_report,
     exit_code_for,
@@ -112,7 +112,7 @@ class MaintenanceCommand(ABC):
     @abstractmethod
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
-    ) -> MaintenanceExitCode:
+    ) -> StackExitCode:
         """
         Perform the command.
 
@@ -152,7 +152,7 @@ class BoardCommand(MaintenanceCommand):
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
-    ) -> MaintenanceExitCode:
+    ) -> StackExitCode:
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
@@ -160,7 +160,7 @@ class BoardCommand(MaintenanceCommand):
         print_board_export(
             export, export.write(maintenance.board) if arguments.write else None
         )
-        return MaintenanceExitCode.SUCCESS
+        return StackExitCode.SUCCESS
 
 
 @dataclass(frozen=True)
@@ -185,7 +185,7 @@ class FastForwardCommand(MaintenanceCommand):
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
-    ) -> MaintenanceExitCode:
+    ) -> StackExitCode:
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
@@ -216,7 +216,7 @@ class RestackCommand(MaintenanceCommand):
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
-    ) -> MaintenanceExitCode:
+    ) -> StackExitCode:
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
@@ -248,7 +248,7 @@ class PromoteCommand(MaintenanceCommand):
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
-    ) -> MaintenanceExitCode:
+    ) -> StackExitCode:
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
@@ -257,7 +257,7 @@ class PromoteCommand(MaintenanceCommand):
         print_promotions(
             promote(stack, fork), clear_spent_promotion_labels(stack, fork)
         )
-        return MaintenanceExitCode.SUCCESS
+        return StackExitCode.SUCCESS
 
 
 @dataclass(frozen=True)
@@ -290,7 +290,7 @@ class RunReportCommand(MaintenanceCommand):
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
-    ) -> MaintenanceExitCode:
+    ) -> StackExitCode:
         """
         Perform every step of the pass, then discard the board it derived from.
 

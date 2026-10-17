@@ -25,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.exit_codes import StackExitCode
 from basstler.repository import Repository
 from basstler.stack import (
     Configuration,
@@ -74,7 +75,6 @@ from basstler.maintenance_promotion import (
     promote,
 )
 from basstler.maintenance_report import (
-    MaintenanceExitCode,
     MaintenanceReport,
     build_report,
     exit_code_for,
@@ -1589,10 +1589,10 @@ def a_report(
 
 
 def test_a_pass_that_published_everything_is_a_success():
-    assert exit_code_for(a_report()) == MaintenanceExitCode.SUCCESS
+    assert exit_code_for(a_report()) == StackExitCode.SUCCESS
     assert (
         exit_code_for(a_report(restack_outcome=RestackOutcome.UP_TO_DATE))
-        == MaintenanceExitCode.SUCCESS
+        == StackExitCode.SUCCESS
     )
 
 
@@ -1603,7 +1603,7 @@ def test_a_refused_fast_forward_is_never_reported_as_a_clean_pass():
     """
     refused = a_report(fast_forward_outcome=FastForwardOutcome.REFUSED_NOT_FAST_FORWARD)
 
-    assert exit_code_for(refused) == MaintenanceExitCode.NOT_FAST_FORWARD
+    assert exit_code_for(refused) == StackExitCode.NOT_FAST_FORWARD
 
 
 @pytest.mark.parametrize(
@@ -1624,7 +1624,7 @@ def test_a_branch_left_unpublished_is_never_reported_as_a_clean_pass(
     """
     assert (
         exit_code_for(a_report(restack_outcome=left_behind))
-        == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+        == StackExitCode.BRANCH_NEEDS_ATTENTION
     )
 
 
@@ -1633,11 +1633,11 @@ def test_every_status_names_itself_distinctly():
     The name is derived from the member rather than written beside it, so a status
     cannot end up with a name that belongs to a different one.
     """
-    named = {code: code.name_for_a_caller for code in MaintenanceExitCode}
+    named = {code: code.name_for_a_caller for code in StackExitCode}
 
-    assert named[MaintenanceExitCode.BRANCH_NEEDS_ATTENTION] == "branch-needs-attention"
-    assert named[MaintenanceExitCode.SUCCESS] == "success"
-    assert len(set(named.values())) == len(MaintenanceExitCode)
+    assert named[StackExitCode.BRANCH_NEEDS_ATTENTION] == "branch-needs-attention"
+    assert named[StackExitCode.SUCCESS] == "success"
+    assert len(set(named.values())) == len(StackExitCode)
 
 
 def test_the_report_carries_what_its_status_means(fork_checkout: ForkCheckout):
@@ -1648,7 +1648,7 @@ def test_the_report_carries_what_its_status_means(fork_checkout: ForkCheckout):
     document = json.loads(a_report(restack_outcome=RestackOutcome.CONFLICT).as_json())
 
     assert document["status"] == "branch-needs-attention"
-    assert document["exit_code"] == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+    assert document["exit_code"] == StackExitCode.BRANCH_NEEDS_ATTENTION
 
 
 def test_a_non_zero_status_says_what_it_means_on_the_way_out(
@@ -1661,7 +1661,7 @@ def test_a_non_zero_status_says_what_it_means_on_the_way_out(
 
     result = run_maintenance(fork_checkout, RestackCommand())
 
-    assert result.returncode == MaintenanceExitCode.BOARD_UNAVAILABLE
+    assert result.returncode == StackExitCode.BOARD_UNAVAILABLE
     assert "board-unavailable" in result.stderr
 
 
@@ -1671,7 +1671,7 @@ def test_a_clean_run_says_nothing_about_its_status(fork_checkout: ForkCheckout):
     """
     result = run_maintenance(fork_checkout, BoardCommand(), "--help")
 
-    assert result.returncode == MaintenanceExitCode.SUCCESS
+    assert result.returncode == StackExitCode.SUCCESS
     assert "success" not in result.stderr
 
 
@@ -1681,7 +1681,7 @@ def test_a_refused_move_keeps_its_own_status():
     """
     assert (
         exit_code_for(a_report(restack_outcome=RestackOutcome.REFUSED))
-        == MaintenanceExitCode.MOVE_REFUSED
+        == StackExitCode.MOVE_REFUSED
     )
 
 
@@ -1773,7 +1773,7 @@ def test_an_unknown_command_is_a_usage_error(fork_checkout: ForkCheckout):
 
     result = maintenance_runner(fork_checkout).run("not-a-command")
 
-    assert result.returncode == MaintenanceExitCode.USAGE
+    assert result.returncode == StackExitCode.USAGE
 
 
 def test_every_command_class_is_one_reachable_command():
@@ -1809,7 +1809,7 @@ def test_a_command_that_omits_its_name_cannot_be_built():
             return "a command that forgot what it is called"
 
         def run(self, maintenance, arguments):
-            return MaintenanceExitCode.SUCCESS
+            return StackExitCode.SUCCESS
 
     with pytest.raises(TypeError, match="invoked_as"):
         CommandWithoutAName()
@@ -1876,7 +1876,7 @@ def test_every_command_is_reachable_from_the_command_line(fork_checkout: ForkChe
     """
     for command in COMMANDS:
         result = run_maintenance(fork_checkout, command, "--help")
-        assert result.returncode == MaintenanceExitCode.SUCCESS, result.stderr
+        assert result.returncode == StackExitCode.SUCCESS, result.stderr
 
 
 def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
@@ -1889,7 +1889,7 @@ def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
 
     assert (
         run_maintenance(fork_checkout, BoardCommand()).returncode
-        == MaintenanceExitCode.CREDENTIAL_UNAVAILABLE
+        == StackExitCode.CREDENTIAL_UNAVAILABLE
     )
 
 
@@ -1908,5 +1908,5 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
 
     assert (
         run_maintenance(fork_checkout, RestackCommand()).returncode
-        == MaintenanceExitCode.BOARD_UNAVAILABLE
+        == StackExitCode.BOARD_UNAVAILABLE
     )
