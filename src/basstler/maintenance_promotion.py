@@ -141,8 +141,8 @@ def _prefilled_description(
     """
     summary = promotion_summary(description)
     detail = (
-        f"Full detail: https://github.com/{stack.configuration.fork_repository}"
-        f"/pull/{pull_request_number}"
+        "Full detail: "
+        f"{stack.configuration.fork_repository.pull_request_url(pull_request_number)}"
     )
     return f"{summary}\n\n{detail}" if summary else detail
 

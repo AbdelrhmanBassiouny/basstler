@@ -11,7 +11,6 @@ caller to perform rather than performed.
 from __future__ import annotations
 
 import json
-import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -21,7 +20,8 @@ from dataclasses import dataclass
 from typing import Any
 
 from basstler.maintenance_board import PullRequestRecord
-from basstler.maintenance_constants import CREDENTIAL_VARIABLES, GITHUB_API_ROOT
+from basstler.environment import GitHubCredentialVariable
+from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.maintenance_errors import ExternalCallFailed
 from basstler.repository import Repository
 
@@ -161,11 +161,10 @@ class GitHubRepository(ForkPullRequests):
         :return: The client.
         :raises GitHubCredentialUnavailableError: If no token is set.
         """
-        for variable in CREDENTIAL_VARIABLES:
-            token = os.environ.get(variable)
-            if token:
-                return cls(repository, token)
-        raise GitHubCredentialUnavailableError(CREDENTIAL_VARIABLES)
+        token = GitHubCredentialVariable.first_token()
+        if token:
+            return cls(repository, token)
+        raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
 
     def open_pull_requests(self) -> list[PullRequestRecord]:
         """:return: Every open pull request on the repository, oldest page first."""

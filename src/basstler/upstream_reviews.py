@@ -16,7 +16,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from abc import ABC, abstractmethod
@@ -26,6 +25,7 @@ from pathlib import Path
 from typing import Any, TypeVar, ClassVar
 
 
+from basstler.environment import GitHubActionsVariable
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import GitHubClient
 from basstler.repository import Repository
@@ -158,15 +158,6 @@ class GraphQLDocument(StrEnum):
     def read(self) -> str:
         """:return: The document's text."""
         return (PackageLocation.QUERIES / f"{self}.graphql").read_text()
-
-
-class EnvironmentVariable(StrEnum):
-    """
-    Runner-supplied environment this script reads.
-    """
-
-    STEP_SUMMARY = "GITHUB_STEP_SUMMARY"
-    REPOSITORY_OWNER = "GITHUB_REPOSITORY_OWNER"
 
 
 class ReviewState(StrEnum):
@@ -1023,7 +1014,7 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--fork-owner",
-        default=os.environ.get(EnvironmentVariable.REPOSITORY_OWNER, ""),
+        default=GitHubActionsVariable.REPOSITORY_OWNER.read() or "",
         help="the owner whose branches to claim, defaulting to the runner's own",
     )
     parser.add_argument(
@@ -1055,7 +1046,7 @@ def main(argv: list[str] | None = None) -> int:
         logger.error(failure)
         return 1
     logger.info(report)
-    summary_path = os.environ.get(EnvironmentVariable.STEP_SUMMARY)
+    summary_path = GitHubActionsVariable.STEP_SUMMARY.read()
     if summary_path:
         Path(summary_path).write_text(report)
     return 0

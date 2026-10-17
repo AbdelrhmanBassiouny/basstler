@@ -8,8 +8,10 @@ Every file and directory this package names, each written once.
 from __future__ import annotations
 
 import os
-from enum import ReprEnum, StrEnum
+from enum import ReprEnum
 from pathlib import Path
+
+from basstler.environment import EnvironmentVariable
 
 
 class PathEnumeration(Path, ReprEnum):
@@ -98,7 +100,7 @@ class PackageLocation(PathEnumeration):
     """
 
 
-class BasstlerVariable(StrEnum):
+class BasstlerVariable(EnvironmentVariable):
     """
     The environment variables this package's own shell configuration sets.
     """
@@ -119,7 +121,7 @@ class PluginLocation(PathEnumeration):
     """
 
     ROOT = Path(
-        os.environ.get(BasstlerVariable.PLUGIN_ROOT)
+        BasstlerVariable.PLUGIN_ROOT.read()
         or PackageLocation.SOURCE_TREE.value / "plugin"
     )
     """
@@ -145,6 +147,42 @@ class PluginLocation(PathEnumeration):
     PERSONAL_NOTES_BRANCH_CREATION_SCRIPT = HOOKS / "create-personal-notes-branch.sh"
     """
     The helper that creates the personal-notes branch where it does not exist yet.
+    """
+
+    SESSION_START_SCRIPT = HOOKS / "session-start.sh"
+    """
+    The session-start hook: sets up the package's environment and loads the personal
+    notes.
+    """
+
+    SESSION_START_MESSAGES_SCRIPT = HOOKS / "session-start-messages.sh"
+    """
+    The messages the session-start hook prints, sourced by it.
+    """
+
+    SETUP_CHECK_SCRIPT = HOOKS / "check-setup.sh"
+    """
+    Reports, one row per prerequisite, what the personal-notes setup still lacks.
+    """
+
+    PLAN_SAVING_SCRIPT = HOOKS / "save-plan.sh"
+    """
+    Pushes an edited plan manifest and roadmap to the personal-notes branch.
+    """
+
+    PLAN_UPDATES_SINCE_SCRIPT = HOOKS / "plan-updates-since.sh"
+    """
+    Reports what changed in the plans since this clone last read them.
+    """
+
+    GIT_IDENTITY_SAVING_SCRIPT = HOOKS / "save-git-identity.sh"
+    """
+    Saves the user's git identity to the personal-notes branch.
+    """
+
+    PERSONAL_SETTINGS_SAVING_SCRIPT = HOOKS / "save-personal-settings.sh"
+    """
+    Saves the user's personal settings to the personal-notes branch.
     """
 
 
@@ -196,7 +234,7 @@ class ProjectLocation(PathEnumeration):
     """
 
 
-class ClaudeCodeVariable(StrEnum):
+class ClaudeCodeVariable(EnvironmentVariable):
     """
     The environment variables Claude Code sets for the commands it runs.
     """

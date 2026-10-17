@@ -29,6 +29,7 @@ from basstler.stack import (
     LabelWrite,
     IntegrationStrategy,
     CommitMoveChecks,
+    Command,
     ProposedCommitMove,
     RefusalReason,
     PromotionLink,
@@ -51,9 +52,24 @@ from basstler.stack import (
 
 from basstler.locations import ProjectLocation
 
-from .constants import DatasetLocation, StackLabel
+from .constants import DatasetLocation, RemoteName, StackLabel
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
+
+A_FORK = Repository("a-fork-owner", "a-fork")
+"""
+The fork a scratch checkout's remote points at.
+"""
+
+SOMEBODY_ELSES_FORK = Repository("someone-else", "their-fork")
+"""
+A fork other than the one the configuration names.
+"""
+
+ANOTHER_OWNERS_FORK = Repository("another-owner", "a-project")
+"""
+A second fork of the upstream, beside :data:`FORK`.
+"""
 
 A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
 """
@@ -76,10 +92,10 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
         in_review_label=StackLabel.IN_REVIEW,
         rebase_label=StackLabel.REBASE,
         needs_resolution_label=StackLabel.NEEDS_RESOLUTION,
-        fork_repository=Repository("a-fork-owner", "a-fork"),
-        fork_remote="origin",
+        fork_repository=A_FORK,
+        fork_remote=RemoteName.ORIGIN,
         upstream_repository=Repository("an-upstream-owner", "a-project"),
-        upstream_remote="upstream",
+        upstream_remote=RemoteName.UPSTREAM,
         upstream_base="main",
         upstream_setup_command=upstream_setup_command,
     )
@@ -324,7 +340,7 @@ def _committed_configuration_path(scratch_repository: ScratchRepository) -> Path
         "remote",
         "add",
         "a-name-nobody-expects",
-        "https://github.com/a-fork-owner/a-fork.git",
+        A_FORK.clone_url,
     )
     return path
 
@@ -338,7 +354,7 @@ def test_load_configuration_uses_committed_defaults_when_no_personal_notes_branc
 
     configuration = load_configuration(configuration_path)
 
-    assert configuration.upstream_remote == "upstream"
+    assert configuration.upstream_remote == RemoteName.UPSTREAM
 
 
 def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
@@ -369,7 +385,7 @@ def test_load_configuration_ignores_personal_notes_branch_without_a_stack_file(
 
     configuration = load_configuration(configuration_path)
 
-    assert configuration.upstream_remote == "upstream"
+    assert configuration.upstream_remote == RemoteName.UPSTREAM
 
 
 def test_load_configuration_resolves_the_fork_whatever_the_remote_is_called(
@@ -384,7 +400,7 @@ def test_load_configuration_resolves_the_fork_whatever_the_remote_is_called(
 
     configuration = load_configuration(configuration_path)
 
-    assert configuration.fork_repository == Repository("a-fork-owner", "a-fork")
+    assert configuration.fork_repository == A_FORK
     assert configuration.fork_remote == "a-name-nobody-expects"
 
 
@@ -397,7 +413,7 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
     """
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.run_git(
-        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
+        "remote", "add", "another", SOMEBODY_ELSES_FORK.clone_url
     )
     scratch_repository.publish_notes_branch(
         {
@@ -409,7 +425,7 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
 
     configuration = load_configuration(configuration_path)
 
-    assert configuration.fork_repository == Repository("someone-else", "their-fork")
+    assert configuration.fork_repository == SOMEBODY_ELSES_FORK
     assert configuration.fork_remote == "another"
 
 
@@ -429,38 +445,38 @@ def test_the_fork_is_the_remote_that_is_not_the_upstream():
     """
     resolution = resolve(
         {
-            "origin": "https://github.com/an-upstream-owner/a-project.git",
-            "whatever-i-called-it": "https://github.com/a-fork-owner/a-project.git",
+            RemoteName.ORIGIN: UPSTREAM.clone_url,
+            "whatever-i-called-it": FORK.clone_url,
         }
     )
 
     assert resolution.fork == Remote("whatever-i-called-it", FORK)
-    assert resolution.upstream == Remote("origin", UPSTREAM)
+    assert resolution.upstream == Remote(RemoteName.ORIGIN, UPSTREAM)
 
 
 def test_the_fork_resolves_the_same_when_origin_happens_to_be_the_fork():
     resolution = resolve(
         {
-            "origin": "https://github.com/a-fork-owner/a-project.git",
-            "upstream": "https://github.com/an-upstream-owner/a-project.git",
+            RemoteName.ORIGIN: FORK.clone_url,
+            RemoteName.UPSTREAM: UPSTREAM.clone_url,
         }
     )
 
-    assert resolution.fork == Remote("origin", FORK)
+    assert resolution.fork == Remote(RemoteName.ORIGIN, FORK)
 
 
 def test_the_fork_resolves_from_a_checkout_that_has_only_the_fork():
     """
     A fresh cloud clone has one remote and no upstream at all.
     """
-    resolution = resolve({"origin": "https://github.com/a-fork-owner/a-project.git"})
+    resolution = resolve({RemoteName.ORIGIN: FORK.clone_url})
 
-    assert resolution.fork == Remote("origin", FORK)
+    assert resolution.fork == Remote(RemoteName.ORIGIN, FORK)
     assert resolution.upstream is None
 
 
 def test_a_checkout_without_an_upstream_remote_is_told_how_to_add_one():
-    resolution = resolve({"origin": "https://github.com/a-fork-owner/a-project.git"})
+    resolution = resolve({RemoteName.ORIGIN: FORK.clone_url})
 
     assert resolution.upstream_setup_command == (
         "git remote add an-upstream-remote "
@@ -472,13 +488,13 @@ def test_a_checkout_without_an_upstream_remote_is_told_how_to_add_one():
 def test_nothing_to_add_when_the_upstream_remote_is_already_there():
     resolution = resolve(
         {
-            "origin": "https://github.com/a-fork-owner/a-project.git",
-            "upstream": "https://github.com/an-upstream-owner/a-project.git",
+            RemoteName.ORIGIN: FORK.clone_url,
+            RemoteName.UPSTREAM: UPSTREAM.clone_url,
         }
     )
 
     assert resolution.upstream_setup_command is None
-    assert resolution.upstream_name == "upstream"
+    assert resolution.upstream_name == RemoteName.UPSTREAM
 
 
 def test_a_checkout_with_only_the_upstream_is_rejected_rather_than_guessed():
@@ -486,15 +502,15 @@ def test_a_checkout_with_only_the_upstream_is_rejected_rather_than_guessed():
     Treating the upstream as the fork would target every push at the review repository.
     """
     with pytest.raises(ForkRemoteNotFoundError):
-        resolve({"origin": "https://github.com/an-upstream-owner/a-project.git"})
+        resolve({RemoteName.ORIGIN: UPSTREAM.clone_url})
 
 
 def test_two_possible_forks_are_rejected_rather_than_guessed():
     with pytest.raises(AmbiguousForkRemoteError):
         resolve(
             {
-                "mine": "https://github.com/a-fork-owner/a-project.git",
-                "theirs": "https://github.com/another-owner/a-project.git",
+                "mine": FORK.clone_url,
+                "theirs": ANOTHER_OWNERS_FORK.clone_url,
             }
         )
 
@@ -502,8 +518,8 @@ def test_two_possible_forks_are_rejected_rather_than_guessed():
 def test_configuration_disambiguates_two_possible_forks():
     resolution = resolve(
         {
-            "mine": "https://github.com/a-fork-owner/a-project.git",
-            "theirs": "https://github.com/another-owner/a-project.git",
+            "mine": FORK.clone_url,
+            "theirs": ANOTHER_OWNERS_FORK.clone_url,
         },
         fork_repository=FORK,
     )
@@ -517,12 +533,12 @@ def test_a_remote_that_names_no_repository_is_ignored():
     """
     resolution = resolve(
         {
-            "origin": "https://github.com/a-fork-owner/a-project.git",
+            RemoteName.ORIGIN: FORK.clone_url,
             "backup": "/srv/git/mirror",
         }
     )
 
-    assert resolution.fork == Remote("origin", FORK)
+    assert resolution.fork == Remote(RemoteName.ORIGIN, FORK)
 
 
 # %% the configuration the shell tooling reads
@@ -542,9 +558,9 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
         "rebase_label": StackLabel.REBASE,
         "needs_resolution_label": StackLabel.NEEDS_RESOLUTION,
         "fork_repository": "a-fork-owner/a-fork",
-        "fork_remote": "origin",
+        "fork_remote": RemoteName.ORIGIN,
         "upstream_repository": "an-upstream-owner/a-project",
-        "upstream_remote": "upstream",
+        "upstream_remote": RemoteName.UPSTREAM,
         "upstream_base": "main",
     }
 
@@ -783,7 +799,7 @@ def test_asking_to_add_and_remove_one_label_at_once_is_refused():
 def a_proposed_push(
     source: str = "engine",
     destination: str = "engine",
-    destination_remote: str = "origin",
+    destination_remote: str = RemoteName.ORIGIN,
 ) -> ProposedCommitMove:
     """
     A proposed push, defaulting to the one shape that is always allowed.
@@ -851,11 +867,11 @@ def test_a_destination_on_the_upstream_remote_is_refused():
     opening a pull request against it.
     """
     refusals = checks_over_that_stack().refusals(
-        a_proposed_push(destination_remote="upstream")
+        a_proposed_push(destination_remote=RemoteName.UPSTREAM)
     )
 
     assert [refusal.reason for refusal in refusals] == [RefusalReason.NOT_THE_FORK]
-    assert "upstream" in refusals[0].explanation
+    assert RemoteName.UPSTREAM in refusals[0].explanation
 
 
 def test_a_push_that_would_make_a_child_an_ancestor_of_its_parent_is_refused():
@@ -886,7 +902,7 @@ def test_every_reason_to_refuse_is_reported_rather_than_only_the_first():
     gets made.
     """
     refusals = checks_over_that_stack(checked_out_branch="parser").refusals(
-        a_proposed_push(destination="engine-ui", destination_remote="upstream")
+        a_proposed_push(destination="engine-ui", destination_remote=RemoteName.UPSTREAM)
     )
 
     assert [refusal.reason for refusal in refusals] == [
@@ -1011,7 +1027,7 @@ def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
     """
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.run_git(
-        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
+        "remote", "add", "another", SOMEBODY_ELSES_FORK.clone_url
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -1020,10 +1036,10 @@ def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
         load_configuration(configuration_path)
 
     configuration = load_configuration(
-        configuration_path, fork_repository=Repository("someone-else", "their-fork")
+        configuration_path, fork_repository=SOMEBODY_ELSES_FORK
     )
 
-    assert configuration.fork_repository == Repository("someone-else", "their-fork")
+    assert configuration.fork_repository == SOMEBODY_ELSES_FORK
     assert configuration.fork_remote == "another"
 
 
@@ -1099,7 +1115,7 @@ def test_a_label_write_prints_the_complete_set_one_label_per_line(
     """
     result = run_stack(
         offline_checkout,
-        "labels",
+        Command.LABELS,
         "--current",
         StackLabel.IN_REVIEW,
         "--current",
@@ -1121,7 +1137,7 @@ def test_a_contradictory_label_write_is_refused_rather_than_guessed_at(
 ):
     result = run_stack(
         offline_checkout,
-        "labels",
+        Command.LABELS,
         "--add",
         StackLabel.REBASE,
         "--remove",
@@ -1139,7 +1155,7 @@ def test_a_checkout_whose_fork_cannot_be_identified_says_so_by_status(
     A caller has to tell "I cannot know which remote is yours" from every other failure
     without reading stderr, because that one is the question it can put to the user.
     """
-    result = run_stack(offline_checkout, "configuration")
+    result = run_stack(offline_checkout, Command.CONFIGURATION)
 
     assert result.returncode == ExitCode.REMOTES_UNRESOLVED
 
@@ -1154,11 +1170,9 @@ def test_a_project_naming_no_upstream_says_so_by_status(
     (
         offline_checkout.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION
     ).unlink()
-    offline_checkout.run_git(
-        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
-    )
+    offline_checkout.run_git("remote", "add", "whatever", A_FORK.clone_url)
 
-    result = run_stack(offline_checkout, "configuration")
+    result = run_stack(offline_checkout, Command.CONFIGURATION)
 
     assert result.returncode == ExitCode.UPSTREAM_UNCONFIGURED
     assert str(ProjectLocation.PROJECT_STACK_CONFIGURATION) in result.stderr
@@ -1167,11 +1181,9 @@ def test_a_project_naming_no_upstream_says_so_by_status(
 def test_a_readable_checkout_with_no_board_reports_the_missing_board_instead(
     offline_checkout: ScratchRepository,
 ):
-    offline_checkout.run_git(
-        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
-    )
+    offline_checkout.run_git("remote", "add", "whatever", A_FORK.clone_url)
 
-    result = run_stack(offline_checkout, "status")
+    result = run_stack(offline_checkout, Command.STATUS)
 
     assert result.returncode == ExitCode.BOARD_UNAVAILABLE
 
@@ -1183,21 +1195,17 @@ def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
     Two candidate remotes are ambiguous, so a caller that already knows the answer must
     be able to say so rather than be blocked by the guess it does not need.
     """
-    offline_checkout.run_git(
-        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
-    )
-    offline_checkout.run_git(
-        "remote", "add", "another", "https://github.com/someone-else/their-fork.git"
-    )
+    offline_checkout.run_git("remote", "add", "whatever", A_FORK.clone_url)
+    offline_checkout.run_git("remote", "add", "another", SOMEBODY_ELSES_FORK.clone_url)
 
     assert (
-        run_stack(offline_checkout, "configuration").returncode
+        run_stack(offline_checkout, Command.CONFIGURATION).returncode
         == ExitCode.REMOTES_UNRESOLVED
     )
 
     result = run_stack(
         offline_checkout,
-        "configuration",
+        Command.CONFIGURATION,
         "--fork",
         "a-fork-owner/a-fork",
         "--upstream",
@@ -1214,7 +1222,9 @@ def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
 def test_a_fork_that_is_not_owner_and_name_is_a_usage_error(
     offline_checkout: ScratchRepository,
 ):
-    result = run_stack(offline_checkout, "configuration", "--fork", "not-a-repository")
+    result = run_stack(
+        offline_checkout, Command.CONFIGURATION, "--fork", "not-a-repository"
+    )
 
     assert result.returncode == ExitCode.USAGE
 
@@ -1222,12 +1232,15 @@ def test_a_fork_that_is_not_owner_and_name_is_a_usage_error(
 def test_a_promotion_link_is_built_from_the_resolved_repositories(
     offline_checkout: ScratchRepository,
 ):
-    offline_checkout.run_git(
-        "remote", "add", "whatever", "https://github.com/a-fork-owner/a-fork.git"
-    )
+    offline_checkout.run_git("remote", "add", "whatever", A_FORK.clone_url)
 
     result = run_stack(
-        offline_checkout, "promotion-link", "--branch", "engine", "--title", "A title"
+        offline_checkout,
+        Command.PROMOTION_LINK,
+        "--branch",
+        "engine",
+        "--title",
+        "A title",
     )
 
     assert result.returncode == ExitCode.SUCCESS

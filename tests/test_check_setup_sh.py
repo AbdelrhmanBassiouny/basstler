@@ -130,7 +130,8 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     :return: The same repository, fully set up.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh", "check-setup.sh"
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.SETUP_CHECK_SCRIPT.name,
     )
     scratch_repository.install_package()
 
@@ -160,7 +161,9 @@ def run_check_setup(
     :return: The parsed report.
     """
     return SetupReport.from_completed_process(
-        repository.run_hook_script("check-setup.sh", **environment_overrides)
+        repository.run_hook_script(
+            PluginLocation.SETUP_CHECK_SCRIPT.name, **environment_overrides
+        )
     )
 
 

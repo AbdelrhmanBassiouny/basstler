@@ -68,6 +68,7 @@ from basstler.locations import (
     PluginLocation,
     ProjectLocation,
 )
+from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -464,17 +465,12 @@ def fetch_notes_branch(project_root: Path) -> bool:
     :param project_root: The repository to fetch within.
     :return: Whether the branch was reachable.
     """
-    probe = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
-        ],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
+    return (
+        ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run(
+            project_root
+        ).returncode
+        == 0
     )
-    return probe.returncode == 0
 
 
 # %% reports

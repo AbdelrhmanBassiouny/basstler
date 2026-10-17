@@ -187,6 +187,11 @@ class SkillDirectory(PathEnumeration):
     The maintenance pass's own instructions.
     """
 
+    DASHBOARD_REFRESH_SCRIPT = PLAN_DASHBOARD / "refresh_dashboard.sh"
+    """
+    The dashboard skill's shell entry point.
+    """
+
 
 class ScratchBranch(StrEnum):
     """
@@ -333,6 +338,23 @@ class ConfigurationVariable(StrEnum):
     """
     Where a session start installs ``uv`` when it finds neither ``uv`` nor a supported
     interpreter.
+    """
+
+
+class RemoteName(StrEnum):
+    """
+    The git remote names the scratch checkouts are built with: the fork and upstream
+    names the shipped ``stack.toml`` defaults to.
+    """
+
+    ORIGIN = "origin"
+    """
+    The name git gives the remote a checkout was cloned from.
+    """
+
+    UPSTREAM = "upstream"
+    """
+    The conventional name of the remote a fork was forked from.
     """
 
 

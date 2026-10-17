@@ -48,8 +48,9 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
-from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
+from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
+from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.stack_configuration import (
     CommittedStackConfiguration,
     MissingUpstreamRepositoryError,
@@ -138,7 +139,7 @@ class RemoteResolution:
             return None
         return (
             f"git remote add {self.preferred_upstream_name} "
-            f"https://github.com/{self.upstream_repository}.git"
+            f"{self.upstream_repository.clone_url}"
         )
 
 
@@ -333,18 +334,7 @@ def _fetch_personal_notes_branch() -> bool:
 
     :return: Whether the branch was fetched.
     """
-    return (
-        subprocess.run(
-            [
-                "bash",
-                "-c",
-                f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
-            ],
-            capture_output=True,
-            text=True,
-        ).returncode
-        == 0
-    )
+    return ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run().returncode == 0
 
 
 def _personal_configuration_overrides() -> dict[str, object]:
@@ -678,7 +668,7 @@ class PromotionLink:
 
         def url_for(text: str) -> str:
             return (
-                f"https://github.com/{configuration.upstream_repository}/compare/"
+                f"{configuration.upstream_repository.url}/compare/"
                 f"{configuration.upstream_base}..."
                 f"{configuration.fork_repository.owner}:{branch}"
                 f"?expand=1&title={quote(title)}&body={quote(text)}"

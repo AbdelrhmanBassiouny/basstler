@@ -29,6 +29,7 @@ from basstler.setup_steps import (
     resolve_repository,
 )
 
+from basstler.locations import PluginLocation
 from basstler.repository import Repository
 
 from .constants import RepositoryLocation, ScrubbedEnvironmentPrefix
@@ -41,7 +42,9 @@ FORK = Repository(owner="some-user", name="some-repository")
 
 FORK_REMOTE_URL = f"https://github.com/{FORK.full_name}.git"
 
-RESOLVE_CONFIG_SCRIPT = RepositoryLocation.HOOKS / "resolve-personal-notes-config.sh"
+RESOLVE_CONFIG_SCRIPT = (
+    RepositoryLocation.HOOKS / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
+)
 
 
 @pytest.fixture

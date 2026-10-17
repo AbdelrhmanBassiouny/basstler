@@ -23,6 +23,8 @@ from pathlib import Path
 import pytest
 
 from basstler.locations import BasstlerVariable, PluginLocation, ProjectLocation
+from basstler.repository import Repository
+from basstler.shell_configuration import ShellConfigurationFunction
 
 from .constants import (
     ConfigurationVariable,
@@ -96,10 +98,10 @@ def session_start_repository(
     :return: The same repository, ready to publish a notes branch and run the hook.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "session-start-messages.sh",
-        "session-start.sh",
-        "check-setup.sh",
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.SESSION_START_MESSAGES_SCRIPT.name,
+        PluginLocation.SESSION_START_SCRIPT.name,
+        PluginLocation.SETUP_CHECK_SCRIPT.name,
     )
     scratch_repository.install_package()
     scratch_repository.install_package_environment()
@@ -119,7 +121,9 @@ def run_session_start(
     :param environment: Variables to set for this run.
     :return: The finished subprocess.
     """
-    return repository.run_hook_script("session-start.sh", **(environment or {}))
+    return repository.run_hook_script(
+        PluginLocation.SESSION_START_SCRIPT.name, **(environment or {})
+    )
 
 
 def publish_and_run(
@@ -368,7 +372,7 @@ def test_names_every_check_that_needs_setup(
     detail = next(
         row.split("\t")[2]
         for row in session_start_repository.run_hook_script(
-            "check-setup.sh"
+            PluginLocation.SETUP_CHECK_SCRIPT.name
         ).stdout.splitlines()
         if row.split("\t")[0] == failing_check
     )
@@ -413,7 +417,9 @@ def package_source(repository: ScratchRepository) -> str:
     :param repository: The fixture-built scratch repository.
     :return: What the installer is handed: the scratch checkout the plugin sits in.
     """
-    return repository.configuration_output("basstler_package_source").strip()
+    return repository.configuration_output(
+        ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE
+    ).strip()
 
 
 SUPPORTED_PYTHON = ProjectDeclaration.of_this_package().requires_python
@@ -728,10 +734,14 @@ def test_a_plugin_outside_a_checkout_installs_its_own_release_of_the_package(
         ).read_text()
     )
 
-    assert package_source(session_start_repository) == (
-        f"{manifest[PluginManifestKey.NAME]} @ git+"
-        f"{session_start_repository.configuration_value(ConfigurationVariable.REPOSITORY_URL)}"
-        f"@v{manifest[PluginManifestKey.VERSION]}"
+    repository = Repository.from_remote_url(
+        session_start_repository.configuration_value(
+            ConfigurationVariable.REPOSITORY_URL
+        )
+    )
+
+    assert package_source(session_start_repository) == repository.git_requirement(
+        manifest[PluginManifestKey.NAME], f"v{manifest[PluginManifestKey.VERSION]}"
     )
 
 

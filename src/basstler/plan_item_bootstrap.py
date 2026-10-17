@@ -69,9 +69,11 @@ from typing import Any, ClassVar, Protocol
 
 import yaml
 
+from basstler.environment import GitHubCredentialVariable
 from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
 from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
+from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -91,30 +93,6 @@ What opens an item block, the list marker its first field sits behind.
 
 
 # %% the vocabulary a plan manifest is written in
-
-
-class HookScript(StrEnum):
-    """
-    The hook scripts this module drives, named once so a caller - a test installing them
-    into a scratch layout, or this module invoking one - never spells a filename itself.
-    """
-
-    CONFIGURATION = "resolve-personal-notes-config.sh"
-    """
-    Resolves the personal-notes remote and branch, and fetches it.
-    """
-
-    SAVE_PLAN = "save-plan.sh"
-    """
-    Pushes an edited manifest and roadmap to the personal-notes branch.
-    """
-
-    @property
-    def path(self) -> Path:
-        """
-        The script's path within the plugin.
-        """
-        return PluginLocation.HOOKS / self.value
 
 
 class PlanDocument(StrEnum):
@@ -663,16 +641,7 @@ def fetch_notes_branch(project_root: Path) -> None:
     :param project_root: The repository to fetch within.
     :raises NotesBranchUnavailableError: If the notes branch cannot be fetched.
     """
-    probe = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'source "{HookScript.CONFIGURATION.path}" && fetch_personal_notes_branch',
-        ],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
-    )
+    probe = ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run(project_root)
     if probe.returncode != 0:
         raise NotesBranchUnavailableError(
             detail=probe.stderr.strip() or "no personal-notes branch found"
@@ -804,7 +773,7 @@ class PlanDocuments:
             subprocess.run(
                 [
                     "bash",
-                    HookScript.SAVE_PLAN.path,
+                    PluginLocation.PLAN_SAVING_SCRIPT,
                     self.plan_identifier,
                     "--manifest",
                     str(scratch / PlanDocument.MANIFEST.value),
@@ -1295,7 +1264,7 @@ class GitHubPullRequestOpener:
 
         :return: The header, or an empty mapping when there is no token.
         """
-        token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        token = GitHubCredentialVariable.first_token()
         return {"Authorization": f"Bearer {token}"} if token else {}
 
 

@@ -1,9 +1,8 @@
 """
 The maintenance executor's hand-maintained values.
 
-Everything here is a decision somebody made and may change again - where the API lives,
-which environment variables carry a credential, the heading a promotion link is written
-under. They are gathered in one module so changing one is an edit rather than a search
+Everything here is a decision somebody made and may change again - where the API lives, the
+heading a promotion link is written under. They are gathered in one module so changing one is an edit rather than a search
 through whichever module happens to read it.
 
 Values a program derives for itself belong beside the code that derives them, not here.
@@ -37,11 +36,6 @@ class GitHubClient(StrEnum):
     ``gh``.
     """
 
-
-CREDENTIAL_VARIABLES = ("GH_TOKEN", "GITHUB_TOKEN")
-"""
-Environment variables read, in order, for the token the API calls authenticate with.
-"""
 
 SESSION_LINK_PATTERN = re.compile(r"https://claude\.ai/code/session_[A-Za-z0-9_-]+")
 """

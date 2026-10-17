@@ -24,12 +24,11 @@ import pytest
 import yaml
 
 import basstler.plan_item_bootstrap
-from basstler.locations import ProjectLocation
+from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan_item_bootstrap import (
     BLOCK_STYLED_KEYS,
     CreatedPullRequest,
     ExitCode,
-    HookScript,
     ItemRecordRequest,
     ItemStatus,
     KeySpecification,
@@ -162,8 +161,8 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     :return: The same repository, ready to bootstrap an item in.
     """
     scratch_repository.install_hook_scripts(
-        HookScript.CONFIGURATION.value,
-        HookScript.SAVE_PLAN.value,
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
     )
     scratch_repository.install_package()
     scratch_repository.write("README.md", "scratch repo\n")
@@ -657,7 +656,7 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
         [
             "bash",
             "-c",
-            f'source "{HookScript.CONFIGURATION.path}" && '
+            f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && '
             'printf "%s\\n%s\\n" "${PLANS_DIR}" "$(plan_manifest_path "$1")"',
             "test",
             PLAN_IDENTIFIER,

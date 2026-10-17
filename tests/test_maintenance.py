@@ -54,7 +54,8 @@ from basstler.maintenance_commands import (
     RestackCommand,
     RunReportCommand,
 )
-from basstler.maintenance_constants import CREDENTIAL_VARIABLES, PROMOTION_LINK_LABEL
+from basstler.environment import GitHubCredentialVariable
+from basstler.maintenance_constants import PROMOTION_LINK_LABEL
 from basstler.maintenance_fast_forward import (
     FastForwardOutcome,
     FastForwardReport,
@@ -86,7 +87,13 @@ from basstler.maintenance_restack_steps import (
 )
 
 from .scratch_repository import initialize_bare_repository
-from .constants import DatasetLocation, RepositoryLocation, StackBranch, StackLabel
+from .constants import (
+    DatasetLocation,
+    RemoteName,
+    RepositoryLocation,
+    StackBranch,
+    StackLabel,
+)
 from .script_runner import PythonModuleRunner
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
@@ -150,9 +157,9 @@ def make_configuration() -> Configuration:
         rebase_label=StackLabel.REBASE,
         needs_resolution_label=StackLabel.NEEDS_RESOLUTION,
         fork_repository=Repository("a-fork-owner", "a-fork"),
-        fork_remote="origin",
+        fork_remote=RemoteName.ORIGIN,
         upstream_repository=Repository("an-upstream-owner", "a-project"),
-        upstream_remote="upstream",
+        upstream_remote=RemoteName.UPSTREAM,
         upstream_base=UPSTREAM_BASE,
         upstream_setup_command=None,
     )
@@ -207,13 +214,17 @@ class ForkCheckout:
         checkout.run_git("symbolic-ref", "HEAD", f"refs/heads/{UPSTREAM_BASE}")
         checkout.run_git("config", "user.name", "Scratch Fork")
         checkout.run_git("config", "user.email", "scratch-fork@example.com")
-        checkout.run_git("remote", "add", "origin", checkout.fork_path.as_uri())
-        checkout.run_git("remote", "add", "upstream", checkout.upstream_path.as_uri())
+        checkout.run_git(
+            "remote", "add", RemoteName.ORIGIN, checkout.fork_path.as_uri()
+        )
+        checkout.run_git(
+            "remote", "add", RemoteName.UPSTREAM, checkout.upstream_path.as_uri()
+        )
         checkout.commit("a-file", "the first line\n")
-        checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
-        checkout.run_git("push", "--quiet", "upstream", UPSTREAM_BASE)
-        checkout.run_git("fetch", "--quiet", "origin")
-        checkout.run_git("fetch", "--quiet", "upstream")
+        checkout.run_git("push", "--quiet", RemoteName.ORIGIN, UPSTREAM_BASE)
+        checkout.run_git("push", "--quiet", RemoteName.UPSTREAM, UPSTREAM_BASE)
+        checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
+        checkout.run_git("fetch", "--quiet", RemoteName.UPSTREAM)
         return checkout
 
     def name_the_upstream(self) -> None:
@@ -280,8 +291,8 @@ class ForkCheckout:
         """
         self.run_git("checkout", "--quiet", "-B", name, start_point)
         commit = self.commit(self.own_file(name), f"the work on {name}\n")
-        self.run_git("push", "--quiet", "origin", f"{name}:{name}")
-        self.run_git("fetch", "--quiet", "origin")
+        self.run_git("push", "--quiet", RemoteName.ORIGIN, f"{name}:{name}")
+        self.run_git("fetch", "--quiet", RemoteName.ORIGIN)
         return commit
 
     @staticmethod
@@ -304,8 +315,8 @@ class ForkCheckout:
         """
         self.run_git("checkout", "--quiet", branch)
         commit = self.commit(name, content)
-        self.run_git("push", "--quiet", "origin", f"{branch}:{branch}")
-        self.run_git("fetch", "--quiet", "origin")
+        self.run_git("push", "--quiet", RemoteName.ORIGIN, f"{branch}:{branch}")
+        self.run_git("fetch", "--quiet", RemoteName.ORIGIN)
         return commit
 
     def published_commit(self, remote: str, branch: str) -> str:
@@ -323,7 +334,9 @@ class ForkCheckout:
         :param branch: The branch to read.
         :return: The commit the fork has that branch pointing at.
         """
-        return self.run_git("ls-remote", "origin", f"refs/heads/{branch}").split()[0]
+        return self.run_git(
+            "ls-remote", RemoteName.ORIGIN, f"refs/heads/{branch}"
+        ).split()[0]
 
     @property
     def git(self) -> GitCommandRunner:
@@ -518,16 +531,16 @@ def test_a_description_naming_no_session_yields_none():
 def test_the_fork_base_is_fast_forwarded_to_the_upstream(fork_checkout: ForkCheckout):
     fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
     advanced = fork_checkout.commit("another-file", "upstream moved\n")
-    fork_checkout.run_git("push", "--quiet", "upstream", UPSTREAM_BASE)
+    fork_checkout.run_git("push", "--quiet", RemoteName.UPSTREAM, UPSTREAM_BASE)
     fork_checkout.run_git(
-        "push", "--quiet", "--force", "origin", f"HEAD~1:{UPSTREAM_BASE}"
+        "push", "--quiet", "--force", RemoteName.ORIGIN, f"HEAD~1:{UPSTREAM_BASE}"
     )
-    fork_checkout.run_git("fetch", "--quiet", "origin")
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
 
     report = fast_forward(make_configuration(), fork_checkout.git)
 
     assert report.outcome == FastForwardOutcome.PUSHED
-    assert fork_checkout.published_commit("origin", UPSTREAM_BASE) == advanced
+    assert fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE) == advanced
 
 
 def test_a_fork_base_already_level_with_the_upstream_is_left_alone(
@@ -547,20 +560,20 @@ def test_a_non_fast_forward_is_refused_and_the_fork_base_is_untouched(
     """
     fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
     fork_checkout.commit("a-fork-only-file", "only on the fork\n")
-    fork_checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
+    fork_checkout.run_git("push", "--quiet", RemoteName.ORIGIN, UPSTREAM_BASE)
     fork_checkout.run_git("checkout", "--quiet", "-B", "a-divergent-line", "HEAD~1")
     fork_checkout.commit("an-upstream-only-file", "only upstream\n")
     fork_checkout.run_git(
-        "push", "--quiet", "--force", "upstream", f"HEAD:{UPSTREAM_BASE}"
+        "push", "--quiet", "--force", RemoteName.UPSTREAM, f"HEAD:{UPSTREAM_BASE}"
     )
-    fork_checkout.run_git("fetch", "--quiet", "origin")
-    fork_checkout.run_git("fetch", "--quiet", "upstream")
-    before = fork_checkout.published_commit("origin", UPSTREAM_BASE)
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.UPSTREAM)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE)
 
     report = fast_forward(make_configuration(), fork_checkout.git)
 
     assert report.outcome == FastForwardOutcome.REFUSED_NOT_FAST_FORWARD
-    assert fork_checkout.published_commit("origin", UPSTREAM_BASE) == before
+    assert fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE) == before
 
 
 # %% restack
@@ -590,8 +603,10 @@ def an_unrelated_history_on(fork_checkout: ForkCheckout, branch: str) -> None:
     fork_checkout.run_git("rm", "--quiet", "-rf", ".")
     fork_checkout.commit("an-unrelated-file", "a history of its own\n")
     fork_checkout.run_git("branch", "--force", branch, "HEAD")
-    fork_checkout.run_git("push", "--quiet", "--force", "origin", f"{branch}:{branch}")
-    fork_checkout.run_git("fetch", "--quiet", "origin")
+    fork_checkout.run_git(
+        "push", "--quiet", "--force", RemoteName.ORIGIN, f"{branch}:{branch}"
+    )
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
 
 
 def the_board(labels: list[str] | None = None) -> list[PullRequest]:
@@ -637,7 +652,7 @@ def test_a_branch_whose_parent_moved_is_integrated_and_pushed(
         fork_checkout.own_file(StackBranch.PARENT),
         "the parent moved\n",
     )
-    before = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
 
     outcomes = restack(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
@@ -645,7 +660,7 @@ def test_a_branch_whose_parent_moved_is_integrated_and_pushed(
 
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.PUSHED
-    after = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    after = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
     assert after != before
     assert child.pushed_commit == after
 
@@ -660,7 +675,7 @@ def test_a_conflicting_integration_pushes_nothing_and_names_the_files(
     fork_checkout.commit_on(
         StackBranch.CHILD, FixtureFile.CONTESTED, "the child's version\n"
     )
-    before = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
 
     outcomes = restack(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
@@ -669,7 +684,9 @@ def test_a_conflicting_integration_pushes_nothing_and_names_the_files(
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.CONFLICT
     assert child.conflicting_paths == (FixtureFile.CONTESTED,)
-    assert fork_checkout.published_commit("origin", StackBranch.CHILD) == before
+    assert (
+        fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD) == before
+    )
 
 
 def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
@@ -683,7 +700,7 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     """
     a_parent_and_child(fork_checkout)
     an_unrelated_history_on(fork_checkout, StackBranch.PARENT)
-    before = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
     fork = RecordingPullRequests()
 
     outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git, fork)
@@ -695,7 +712,9 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     assert fork.label_writes == []
     assert fork.comments == []
     assert child.reported_at is None
-    assert fork_checkout.published_commit("origin", StackBranch.CHILD) == before
+    assert (
+        fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD) == before
+    )
 
 
 def test_a_rebase_labelled_branch_is_rebased_rather_than_merged(
@@ -768,9 +787,9 @@ def test_a_branch_that_moved_under_the_pass_is_incorporated_rather_than_overwrit
         FixtureFile.PUSHED_BY_SOMEBODY_ELSE, "not ours\n"
     )
     fork_checkout.run_git(
-        "push", "--quiet", "origin", f"a-side-line:{StackBranch.CHILD}"
+        "push", "--quiet", RemoteName.ORIGIN, f"a-side-line:{StackBranch.CHILD}"
     )
-    fork_checkout.run_git("fetch", "--quiet", "origin")
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
 
     outcomes = restack(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
@@ -796,7 +815,7 @@ def test_a_rebase_whose_lease_has_expired_is_rejected_rather_than_forced_through
         fork_checkout.own_file(StackBranch.PARENT),
         "the parent moved\n",
     )
-    stale = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    stale = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
     somebody_else_s = fork_checkout.commit_on(
         StackBranch.CHILD, FixtureFile.PUSHED_BY_SOMEBODY_ELSE, "not ours\n"
     )
@@ -826,10 +845,13 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
     fork_checkout.run_git("checkout", "--quiet", StackBranch.PARENT)
     fork_checkout.run_git("merge", "--quiet", "--no-edit", StackBranch.CHILD)
     fork_checkout.run_git(
-        "push", "--quiet", "origin", f"{StackBranch.PARENT}:{StackBranch.PARENT}"
+        "push",
+        "--quiet",
+        RemoteName.ORIGIN,
+        f"{StackBranch.PARENT}:{StackBranch.PARENT}",
     )
     fork_checkout.commit_on(UPSTREAM_BASE, FixtureFile.ON_THE_BASE, "the base moved\n")
-    before = fork_checkout.published_commit("origin", StackBranch.PARENT)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.PARENT)
 
     outcomes = restack(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
@@ -840,7 +862,9 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
     )
     assert parent.outcome == RestackOutcome.REFUSED
     assert RefusalReason.FALSE_MERGE in parent.refusals
-    assert fork_checkout.published_commit("origin", StackBranch.PARENT) == before
+    assert (
+        fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.PARENT) == before
+    )
 
 
 # %% the checkout the pass was invoked in
@@ -928,7 +952,7 @@ def test_a_restack_publishes_a_branch_the_caller_is_sitting_on(
         "the parent moved\n",
     )
     fork_checkout.run_git("checkout", "--quiet", StackBranch.CHILD)
-    before = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
 
     outcomes = restack(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
@@ -936,7 +960,9 @@ def test_a_restack_publishes_a_branch_the_caller_is_sitting_on(
 
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.PUSHED
-    assert fork_checkout.published_commit("origin", StackBranch.CHILD) != before
+    assert (
+        fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD) != before
+    )
 
 
 def test_the_caller_holds_no_branch_while_a_restack_runs(fork_checkout: ForkCheckout):
@@ -1631,7 +1657,7 @@ def test_a_non_zero_status_says_what_it_means_on_the_way_out(
     """
     A caller reading a bare number has to look it up; the executor already knows.
     """
-    fork_checkout.run_git("remote", "remove", "upstream")
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
 
     result = run_maintenance(fork_checkout, RestackCommand())
 
@@ -1717,7 +1743,7 @@ def maintenance_runner(checkout: ForkCheckout) -> PythonModuleRunner:
     """
     return PythonModuleRunner(
         project_root=checkout.project_root,
-        removed_variable_prefixes=CREDENTIAL_VARIABLES,
+        removed_variable_prefixes=tuple(GitHubCredentialVariable),
         module_name=MAINTENANCE_MODULE,
     )
 
@@ -1859,7 +1885,7 @@ def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
     """
     Distinguishable from a missing board, since the fix is a token rather than a fetch.
     """
-    fork_checkout.run_git("remote", "remove", "upstream")
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
 
     assert (
         run_maintenance(fork_checkout, BoardCommand()).returncode
@@ -1878,7 +1904,7 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
     ``stack.toml``, whose upstream is this repository's own - against which both of the
     fixture's remotes look like candidate forks, and inference rightly refuses to guess.
     """
-    fork_checkout.run_git("remote", "remove", "upstream")
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
 
     assert (
         run_maintenance(fork_checkout, RestackCommand()).returncode

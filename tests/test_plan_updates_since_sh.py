@@ -102,8 +102,8 @@ def install_plan_updates_since(repository: ScratchRepository) -> None:
     :param repository: A fixture-built scratch repository.
     """
     repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "plan-updates-since.sh",
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.PLAN_UPDATES_SINCE_SCRIPT.name,
     )
     repository.install_package()
     repository.write("README.md", "scratch repo\n")
@@ -192,7 +192,7 @@ def run_plan_updates_since(
         script_path=(
             repository.plugin_root
             / PluginLocation.HOOKS.value.name
-            / "plan-updates-since.sh"
+            / PluginLocation.PLAN_UPDATES_SINCE_SCRIPT.name
         ),
     ).run(*arguments, **(env or {}))
 

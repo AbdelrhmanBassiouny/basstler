@@ -21,7 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ClaudeCodeVariable, PackageLocation
+from basstler.locations import ClaudeCodeVariable, PackageLocation, PluginLocation
 
 from basstler import _version
 from basstler.package_layout import (
@@ -48,7 +48,9 @@ without anyone recording that it exists.
 """
 
 
-SHELL_CONFIGURATION = RepositoryLocation.HOOKS / "resolve-personal-notes-config.sh"
+SHELL_CONFIGURATION = (
+    RepositoryLocation.HOOKS / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
+)
 """
 The file the bash callers source, which is where a module gets a shell name and the
 interpreter its import path.
