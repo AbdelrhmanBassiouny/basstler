@@ -13,6 +13,7 @@ from __future__ import annotations
 import os
 import subprocess
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
@@ -293,11 +294,42 @@ def run_release_step(checkout: Path, summary: Path) -> subprocess.CompletedProce
     )
 
 
-@pytest.fixture
-def published_checkout(released_checkout, tmp_path) -> tuple[ScratchRepository, Path]:
+@dataclass(frozen=True)
+class PublishedCheckout:
     """
-    :return: The released checkout pushed to a scratch remote with its tag, and a clone
-        of that remote standing in for the runner's checkout.
+    A released checkout pushed to a scratch remote, and a clone of that remote standing in
+    for the runner's checkout.
+    """
+
+    repository: ScratchRepository
+    """
+    The released checkout, with the scratch remote as its ``origin``.
+    """
+    runner: Path
+    """
+    The runner's clone of the scratch remote.
+    """
+
+    def remote_commit(self, reference: str) -> str:
+        """
+        :param reference: A reference on the scratch remote, as the runner's clone names it.
+        :return: The commit it names, after fetching the remote's branches and tags.
+        """
+        subprocess.run(
+            ["git", "fetch", "--quiet", "--tags", "origin"], cwd=self.runner, check=True
+        )
+        return subprocess.run(
+            ["git", "rev-parse", f"{reference}^{{commit}}"],
+            cwd=self.runner,
+            capture_output=True,
+            text=True,
+        ).stdout.strip()
+
+
+@pytest.fixture
+def published_checkout(released_checkout, tmp_path) -> PublishedCheckout:
+    """
+    :return: The released checkout, published to a scratch remote with its tag.
     """
     remote = initialize_bare_repository(tmp_path / "origin.git")
     released_checkout.run_git("push", "--quiet", "--tags", str(remote), "HEAD:main")
@@ -307,26 +339,7 @@ def published_checkout(released_checkout, tmp_path) -> tuple[ScratchRepository, 
         check=True,
     )
     released_checkout.add_remote("origin", str(remote))
-    return released_checkout, runner
-
-
-def remote_state(runner: Path) -> tuple[str, str]:
-    """
-    :param runner: The runner's clone.
-    :return: The remote's ``main`` commit and the commit its newest patch tag names.
-    """
-    subprocess.run(
-        ["git", "fetch", "--quiet", "--tags", "origin"], cwd=runner, check=True
-    )
-
-    def resolve(reference: str) -> str:
-        return subprocess.run(
-            ["git", "rev-parse", reference], cwd=runner, capture_output=True, text=True
-        ).stdout.strip()
-
-    return resolve("origin/main"), resolve(
-        f"{version(ReleaseSampleVersion.NEXT_PATCH).tag}^{{commit}}"
-    )
+    return PublishedCheckout(released_checkout, runner)
 
 
 def test_the_release_step_pushes_the_bump_and_its_tag_together(
@@ -336,18 +349,18 @@ def test_the_release_step_pushes_the_bump_and_its_tag_together(
     ``main`` and the new tag land on the same commit, so no plugin can sync a version
     whose tag does not exist yet.
     """
-    repository, runner = published_checkout
-    change_and_commit(repository)
-    repository.run_git("push", "--quiet", "origin", "HEAD:main")
+    change_and_commit(published_checkout.repository)
+    published_checkout.repository.run_git("push", "--quiet", "origin", "HEAD:main")
 
-    result = run_release_step(runner, tmp_path / "summary.md")
+    result = run_release_step(published_checkout.runner, tmp_path / "summary.md")
 
     assert result.returncode == 0, result.stderr
-    main_commit, tag_commit = remote_state(runner)
-    assert main_commit == tag_commit
+    main_commit = published_checkout.remote_commit("origin/main")
+    tag = version(ReleaseSampleVersion.NEXT_PATCH).tag
+    assert main_commit == published_checkout.remote_commit(tag)
     released = subprocess.run(
         ["git", "show", f"{main_commit}:{CheckoutLocation.PLUGIN_MANIFEST}"],
-        cwd=runner,
+        cwd=published_checkout.runner,
         capture_output=True,
         text=True,
     ).stdout
@@ -359,10 +372,9 @@ def test_the_release_step_pushes_the_bump_and_its_tag_together(
 def test_the_release_step_does_nothing_when_nothing_changed(
     published_checkout, tmp_path
 ):
-    _, runner = published_checkout
     summary = tmp_path / "summary.md"
 
-    result = run_release_step(runner, summary)
+    result = run_release_step(published_checkout.runner, summary)
 
     assert result.returncode == 0, result.stderr
     assert "Nothing changed" in summary.read_text()

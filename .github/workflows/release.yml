@@ -1,15 +1,8 @@
 name: Release
 
-# Every push to main that changes anything is a release, so the version an installed plugin
-# installs the package at (`basstler @ git+<repository>@v<version>`) always names the code
-# its hooks and skills came from.
-#
-# `python -m basstler.release_version release` decides it: the manifest's version when a
-# pull request raised it to a minor or major release, else the next patch version, which it
-# writes everywhere a version is written. The bump is committed and tagged here, and pushed
-# with the tag in one atomic push, so main never carries a version without its tag. Patch
-# releases need nothing from a pull request, so no two pull requests conflict over the
-# version line.
+# Every change merged to main is released: a patch bump, or the minor or major version a
+# pull request set. The bump and its tag are pushed atomically, so main never carries an
+# untagged version.
 
 on:
   push:
@@ -28,7 +21,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      # Every tag, since the release is decided against the latest one.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -42,8 +34,7 @@ jobs:
       - name: Install basstler
         run: pip install --editable basstler
 
-      # Another merge can land while this runs; its push then fails as non-fast-forward,
-      # and the release is decided again on top of it, a few times before giving up.
+      # Retried on top of any merge that lands meanwhile.
       - name: Commit, tag and push the release
         working-directory: basstler
         run: |

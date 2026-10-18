@@ -1,32 +1,5 @@
 """
-Releases: every change to ``main`` is one, and a pull request names only minor or major
-ones.
-
-An installed plugin runs the hooks and skills of the revision it synced, but installs the
-package at ``v<version>``, the tag on the release of that version, and a project calls the
-reusable workflow at a tag too. So a version has to name one state of the repository: a
-change that reaches ``main`` without a new tag reaches some installs and not others - a
-plugin's hooks call a subcommand the package installed at the old tag does not have yet.
-
-Every change counts, not only those to a list of shipped paths: such a list goes stale the
-day something new ships from outside it, which is how that bug would come back.
-
-The release workflow makes the release on every push to ``main``, by ``release``: when
-anything changed since the latest release, it releases the manifest's version if a pull
-request raised it, else the next patch version, written everywhere a version is written.
-Patch releases therefore need nothing from a pull request, and two pull requests never
-conflict over the version line.
-
-A pull request may still name a minor or major release, with ``bump --part minor`` or
-``bump --part major``. ``check``, which CI runs on every pull request, holds it to that:
-the manifest's version is either the latest release's, or exactly its next minor or major
-version.
-
-Usage:
-    python3 -m basstler.release_version check [--checkout <directory>]
-    python3 -m basstler.release_version bump [--part minor|major]
-        [--version <version>] [--checkout <directory>]
-    python3 -m basstler.release_version release [--checkout <directory>]
+Releases: every change to ``main`` is one; a pull request names only minor or major ones.
 """
 
 from __future__ import annotations
