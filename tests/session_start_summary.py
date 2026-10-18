@@ -16,12 +16,12 @@ from __future__ import annotations
 import subprocess
 from enum import StrEnum
 
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import PluginLocation
+
+from .constants import RepositoryLocation
 
 MESSAGES_SCRIPT = (
-    PackageLocation.REPOSITORY_ROOT
-    / ProjectLocation.HOOKS
-    / "session-start-messages.sh"
+    RepositoryLocation.HOOKS / PluginLocation.SESSION_START_MESSAGES_SCRIPT.name
 )
 """
 The shell file defining the wording of every summary line.

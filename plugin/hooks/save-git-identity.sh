@@ -6,7 +6,7 @@ set -euo pipefail
 # section of ./session-start.sh's header for what reads it back.
 #
 # Usage:
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-git-identity.sh" \
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/save-git-identity.sh" \
 #     --name "Your Name" \
 #     --email "you@example.com"
 #
@@ -59,7 +59,7 @@ trap 'rm -f "${IDENTITY_FILE}"' EXIT
 git config --file "${IDENTITY_FILE}" user.name "${IDENTITY_NAME}"
 git config --file "${IDENTITY_FILE}" user.email "${IDENTITY_EMAIL}"
 
-bash "${PROJECT_ROOT}/${WRITE_PERSONAL_NOTES_FILE_SCRIPT}" \
+bash "${WRITE_PERSONAL_NOTES_FILE_SCRIPT}" \
   --source "${IDENTITY_FILE}" \
   --destination "${PERSONAL_GIT_IDENTITY_PATH}" \
   --message "Record git identity for $(format_git_identity "${IDENTITY_NAME}" "${IDENTITY_EMAIL}")"
