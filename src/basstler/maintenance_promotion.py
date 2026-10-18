@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from basstler.maintenance_constants import PROMOTION_HEADING, PROMOTION_LINK_LABEL
+from basstler.github_labels import GitHubLabel
+from basstler.maintenance_constants import RoutineText
 from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_github import ForkPullRequests, PullRequestWriter
 from basstler.stack import (
@@ -57,8 +58,8 @@ def description_with_promotion_link(description: str, url: str) -> str:
     :param url: The link to record.
     :return: The description to write back.
     """
-    before, _, _ = description.partition(PROMOTION_HEADING)
-    return f"{before.rstrip()}\n\n{PROMOTION_HEADING}\n\n{url}\n"
+    before, _, _ = description.partition(RoutineText.PROMOTION_HEADING)
+    return f"{before.rstrip()}\n\n{RoutineText.PROMOTION_HEADING}\n\n{url}\n"
 
 
 def promotion_summary(description: str) -> str:
@@ -71,7 +72,7 @@ def promotion_summary(description: str) -> str:
     :param description: The fork pull request's description.
     :return: Its first paragraph, empty if it has none.
     """
-    before, _, _ = description.partition(PROMOTION_HEADING)
+    before, _, _ = description.partition(RoutineText.PROMOTION_HEADING)
     paragraphs = [block.strip() for block in before.split("\n\n") if block.strip()]
     return paragraphs[0] if paragraphs else ""
 
@@ -100,7 +101,7 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
         number = branch.pull_request_number
         pull_request = fork.pull_request(number)
         labels = PullRequestField.LABELS.read(pull_request, number)
-        if PROMOTION_LINK_LABEL in labels or withheld in labels:
+        if GitHubLabel.PROMOTION_LINK_SENT in labels or withheld in labels:
             continue
         description = str(PullRequestField.BODY.read(pull_request, number) or "")
         link = PromotionLink.build(
@@ -115,7 +116,9 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
         )
         fork.replace_labels(
             number,
-            LabelWrite.replacing(labels, added=[PROMOTION_LINK_LABEL]).labels,
+            LabelWrite.replacing(
+                labels, added=[GitHubLabel.PROMOTION_LINK_SENT]
+            ).labels,
         )
         promoted.append(
             Promotion(
@@ -141,8 +144,8 @@ def _prefilled_description(
     """
     summary = promotion_summary(description)
     detail = (
-        f"Full detail: https://github.com/{stack.configuration.fork_repository}"
-        f"/pull/{pull_request_number}"
+        "Full detail: "
+        f"{stack.configuration.fork_repository.pull_request_url(pull_request_number)}"
     )
     return f"{summary}\n\n{detail}" if summary else detail
 
@@ -160,12 +163,14 @@ def clear_spent_promotion_labels(
     spent = [
         branch
         for branch in stack.branches
-        if PROMOTION_LINK_LABEL in branch.labels
+        if GitHubLabel.PROMOTION_LINK_SENT in branch.labels
         and branch.status in {BranchStatus.IN_REVIEW, BranchStatus.MERGED}
     ]
     for branch in spent:
         fork.replace_labels(
             branch.pull_request_number,
-            LabelWrite.replacing(branch.labels, removed=[PROMOTION_LINK_LABEL]).labels,
+            LabelWrite.replacing(
+                branch.labels, removed=[GitHubLabel.PROMOTION_LINK_SENT]
+            ).labels,
         )
     return tuple(branch.name for branch in spent)

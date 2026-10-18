@@ -41,16 +41,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+from basstler.class_property import classproperty
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
-"""
-
-CANDIDATE_SEPARATOR = "="
-"""
-Separates a ``--candidate`` argument's label from its branch name.
 """
 
 
@@ -151,6 +147,13 @@ class Candidate:
     The branch to compare against.
     """
 
+    @classproperty
+    def separator(cls) -> str:
+        """
+        Separates a ``--candidate`` argument's label from its branch name.
+        """
+        return "="
+
     @classmethod
     def parse(cls, argument: str) -> Candidate:
         """
@@ -161,11 +164,9 @@ class Candidate:
             empty.
         :return: The parsed candidate.
         """
-        label, separator, branch = argument.partition(CANDIDATE_SEPARATOR)
+        label, separator, branch = argument.partition(cls.separator)
         if not separator or not label.strip() or not branch.strip():
-            raise MalformedCandidateError(
-                f"'<label>{CANDIDATE_SEPARATOR}<branch>'", argument
-            )
+            raise MalformedCandidateError(f"'<label>{cls.separator}<branch>'", argument)
         return cls(label.strip(), branch.strip())
 
 

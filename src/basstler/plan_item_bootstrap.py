@@ -63,15 +63,19 @@ import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum, IntEnum, StrEnum
+from enum import Enum, StrEnum
 from pathlib import Path
-from typing import Any, ClassVar, Protocol
+from typing import Any, Protocol
 
 import yaml
 
-from basstler.locations import ClaudeCodeVariable, ProjectLocation
-from basstler.maintenance_constants import GITHUB_API_ROOT
+from basstler.environment import GitHubCredentialVariable
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, ExitCode
+from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
 from basstler.plan_model import ItemStatus
+from basstler.repository import GitHubAddress
+from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -79,42 +83,23 @@ logger = StandardStreamHandler.logger_for(__name__)
 This module's logger, which is also what its command prints through.
 """
 
-ITEM_FIELD_INDENT = "    "
-"""
-The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
-"""
-
-ITEM_MARKER = "  - "
-"""
-What opens an item block, the list marker its first field sits behind.
-"""
-
-
 # %% the vocabulary a plan manifest is written in
 
 
-class HookScript(StrEnum):
+class ItemLayout(StrEnum):
     """
-    The hook scripts this module drives, named once so a caller - a test installing them
-    into a scratch layout, or this module invoking one - never spells a filename itself.
-    """
-
-    CONFIGURATION = "resolve-personal-notes-config.sh"
-    """
-    Resolves the personal-notes remote and branch, and fetches it.
+    The whitespace and markers an item block in ``plan.yaml`` is laid out with.
     """
 
-    SAVE_PLAN = "save-plan.sh"
+    FIELD_INDENT = " " * 4
     """
-    Pushes an edited manifest and roadmap to the personal-notes branch.
+    The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
     """
 
-    @property
-    def path(self) -> Path:
-        """
-        The script's path from the project root.
-        """
-        return ProjectLocation.HOOKS / self.value
+    MARKER = " " * 2 + "- "
+    """
+    What opens an item block, the list marker its first field sits behind.
+    """
 
 
 class PlanDocument(StrEnum):
@@ -277,7 +262,7 @@ class ManifestKey(KeySpecification, Enum):
         self,
         value: str,
         opening_the_item: bool = False,
-        field_indent: str = ITEM_FIELD_INDENT,
+        field_indent: str = ItemLayout.FIELD_INDENT.value,
     ) -> str:
         """
         The manifest line setting this key to *value*, newline included.
@@ -293,7 +278,7 @@ class ManifestKey(KeySpecification, Enum):
             it already has.
         :return: The rendered line.
         """
-        prefix = ITEM_MARKER if opening_the_item else field_indent
+        prefix = ItemLayout.MARKER.value if opening_the_item else field_indent
         written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
         return f"{prefix}{self.key}: {written}\n"
 
@@ -304,40 +289,64 @@ class ManifestKey(KeySpecification, Enum):
         """
         return re.compile(rf"^\s*{re.escape(self.key)}:\s*.*$")
 
+    @property
+    def is_block_styled(self) -> bool:
+        """
+        Whether this key's value runs over the lines beneath it.
+        """
+        return self.style is ValueStyle.BLOCK
 
-BLOCK_STYLED_KEYS = frozenset(
-    manifest_key
-    for manifest_key in ManifestKey
-    if manifest_key.style is ValueStyle.BLOCK
-)
-"""
-The keys whose values run over the lines beneath them, derived from the keys themselves
-rather than listed a second time.
-"""
+    @classmethod
+    def block_styled(cls) -> frozenset[ManifestKey]:
+        """
+        The keys whose values run over the lines beneath them, derived from the keys
+        themselves rather than listed a second time.
 
-
-ITEM_START_PATTERN = re.compile(rf"^\s*- {re.escape(ManifestKey.IDENTIFIER.key)}:")
-"""
-Matches the first line of an item block, which is always its ``id``.
-
-Same anchor ``sync_manifest_status.py`` uses to find item boundaries in raw text.
-"""
-
-TOP_LEVEL_KEY_PATTERN = re.compile(r"^\S")
-"""
-Matches a top-level ``plan.yaml`` key, which is where the last item block ends.
-"""
-
-BLOCK_VALUE_PATTERN = re.compile(
-    rf"^\s*({'|'.join(sorted(manifest_key.key for manifest_key in BLOCK_STYLED_KEYS))}):"
-)
-"""
-Matches a key whose value may run over the following lines, derived from
-:data:`BLOCK_STYLED_KEYS` rather than listing those keys a second time.
-"""
+        :return: Every block-styled key.
+        """
+        return frozenset(
+            manifest_key for manifest_key in cls if manifest_key.is_block_styled
+        )
 
 
-class ExitCode(IntEnum):
+class ManifestLinePattern(Enum):
+    """
+    What the item-block patching looks for in a raw ``plan.yaml`` line.
+    """
+
+    ITEM_START = re.compile(rf"^\s*- {re.escape(ManifestKey.IDENTIFIER.key)}:")
+    """
+    Matches the first line of an item block, which is always its ``id``.
+
+    Same anchor ``sync_manifest_status.py`` uses to find item boundaries in raw text.
+    """
+
+    TOP_LEVEL_KEY = re.compile(r"^\S")
+    """
+    Matches a top-level ``plan.yaml`` key, which is where the last item block ends.
+    """
+
+    BLOCK_VALUE = re.compile(
+        r"^\s*("
+        + "|".join(
+            sorted(manifest_key.key for manifest_key in ManifestKey.block_styled())
+        )
+        + "):"
+    )
+    """
+    Matches a key whose value may run over the following lines, derived from
+    :meth:`ManifestKey.block_styled` rather than listing those keys a second time.
+    """
+
+    def matches(self, line: str) -> bool:
+        """
+        :param line: One manifest line.
+        :return: Whether this pattern matches at the line's start.
+        """
+        return self.value.match(line) is not None
+
+
+class PlanItemBootstrapExitCode(ExitCode):
     """
     The process statuses this tool exits with.
 
@@ -380,22 +389,12 @@ class ExitCode(IntEnum):
     GitHub rejected the creation; its own message says why.
     """
 
-    @property
-    def name_for_a_caller(self) -> str:
-        """
-        The status's own name, for a report a person or a script has to act on.
-
-        Derived from the member rather than a table beside it, so a status can never
-        carry a name belonging to a different one.
-        """
-        return self.name.lower()
-
 
 # %% failures
 
 
 @dataclass
-class BootstrapError(Exception, ABC):
+class BootstrapError(CommandFailure, ABC):
     """
     Base for every refusal this tool reports, each carrying its own exit status.
 
@@ -405,18 +404,13 @@ class BootstrapError(Exception, ABC):
     12 records for this tooling.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.SUCCESS
-    """
-    The process status this refusal exits with.
-    """
-
     def __post_init__(self) -> None:
         """
         Compose the message from the subclass's own description and advice.
         """
         correction = self.suggest_correction()
         message = self.error_message()
-        super().__init__(f"{message}\n{correction}" if correction else message)
+        Exception.__init__(self, f"{message}\n{correction}" if correction else message)
 
     def __str__(self) -> str:
         """
@@ -443,7 +437,10 @@ class UnknownPlanError(BootstrapError):
     Raised when the named plan has no manifest on the personal-notes branch.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_PLAN
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.UNKNOWN_PLAN
 
     plan_identifier: str
     """
@@ -471,7 +468,10 @@ class UnknownItemError(BootstrapError):
     Raised when the named item is absent from an otherwise resolvable plan.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_ITEM
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.UNKNOWN_ITEM
 
     plan_identifier: str
     """
@@ -500,7 +500,10 @@ class IncompleteNewItemError(BootstrapError):
     write its entry.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.INCOMPLETE_NEW_ITEM
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.INCOMPLETE_NEW_ITEM
 
     item_identifier: str
     """
@@ -533,7 +536,10 @@ class BranchAlreadyPublishedError(BootstrapError):
     underway and overwriting it would discard someone's commits.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.BRANCH_ALREADY_PUBLISHED
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.BRANCH_ALREADY_PUBLISHED
 
     branch: str
     """
@@ -565,7 +571,10 @@ class PullRequestDetailsMissingError(BootstrapError):
     create it from.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.PULL_REQUEST_DETAILS_MISSING
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.PULL_REQUEST_DETAILS_MISSING
 
     item_identifier: str
     """
@@ -591,7 +600,10 @@ class PullRequestRefusedError(BootstrapError):
     Raised when the remote declines to create the pull request.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.PULL_REQUEST_REFUSED
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.PULL_REQUEST_REFUSED
 
     detail: str
     """
@@ -615,7 +627,10 @@ class NotesBranchUnavailableError(BootstrapError):
     read or write.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_PLAN
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.UNKNOWN_PLAN
 
     detail: str
     """
@@ -626,7 +641,7 @@ class NotesBranchUnavailableError(BootstrapError):
         return f"could not fetch the personal-notes branch: {self.detail}"
 
     def suggest_correction(self) -> str:
-        return f"Run {ProjectLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first."
+        return f"Run {PluginLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first."
 
 
 # %% the plan on the personal-notes branch
@@ -663,16 +678,7 @@ def fetch_notes_branch(project_root: Path) -> None:
     :param project_root: The repository to fetch within.
     :raises NotesBranchUnavailableError: If the notes branch cannot be fetched.
     """
-    probe = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'source "{HookScript.CONFIGURATION.path}" && fetch_personal_notes_branch',
-        ],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
-    )
+    probe = ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run(project_root)
     if probe.returncode != 0:
         raise NotesBranchUnavailableError(
             detail=probe.stderr.strip() or "no personal-notes branch found"
@@ -804,7 +810,7 @@ class PlanDocuments:
             subprocess.run(
                 [
                     "bash",
-                    HookScript.SAVE_PLAN.path,
+                    PluginLocation.PLAN_SAVING_SCRIPT,
                     self.plan_identifier,
                     "--manifest",
                     str(scratch / PlanDocument.MANIFEST.value),
@@ -831,7 +837,7 @@ def item_block_bounds(manifest_lines: list[str]) -> list[tuple[int, int]]:
     starts = [
         index
         for index, line in enumerate(manifest_lines)
-        if ITEM_START_PATTERN.match(line)
+        if ManifestLinePattern.ITEM_START.matches(line)
     ]
     if not starts:
         return []
@@ -839,7 +845,7 @@ def item_block_bounds(manifest_lines: list[str]) -> list[tuple[int, int]]:
         (
             index
             for index in range(starts[-1] + 1, len(manifest_lines))
-            if TOP_LEVEL_KEY_PATTERN.match(manifest_lines[index])
+            if ManifestLinePattern.TOP_LEVEL_KEY.matches(manifest_lines[index])
         ),
         len(manifest_lines),
     )
@@ -889,7 +895,7 @@ def existing_field_indent(manifest_lines: list[str], start: int, end: int) -> st
         if manifest_lines[index].strip():
             stripped = manifest_lines[index].lstrip(" ")
             return manifest_lines[index][: len(manifest_lines[index]) - len(stripped)]
-    return ITEM_FIELD_INDENT
+    return ItemLayout.FIELD_INDENT.value
 
 
 def apply_item_fields(
@@ -933,7 +939,7 @@ def apply_item_fields(
             (
                 index
                 for index in range(start, end)
-                if BLOCK_VALUE_PATTERN.match(lines[index])
+                if ManifestLinePattern.BLOCK_VALUE.matches(lines[index])
             ),
             last_populated_line(lines, start, end) + 1,
         )
@@ -1047,7 +1053,7 @@ class BootstrapReport:
     What an operation did, in the shape a caller acts on.
     """
 
-    exit_code: ExitCode
+    exit_code: PlanItemBootstrapExitCode
     """
     The status the process exits with.
     """
@@ -1138,7 +1144,7 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
     )
     documents.save(manifest_text, roadmap_text, project_root)
     return BootstrapReport(
-        exit_code=ExitCode.SUCCESS,
+        exit_code=PlanItemBootstrapExitCode.SUCCESS,
         plan_identifier=request.plan_identifier,
         item_identifier=request.item_identifier,
         created_item=created_item,
@@ -1244,7 +1250,7 @@ class GitHubPullRequestOpener:
     absorb.
     """
 
-    api_root: str = GITHUB_API_ROOT
+    api_root: str = GitHubAddress.API
     """
     The API host, overridable for a GitHub Enterprise deployment.
     """
@@ -1295,7 +1301,7 @@ class GitHubPullRequestOpener:
 
         :return: The header, or an empty mapping when there is no token.
         """
-        token = os.environ.get("GH_TOKEN") or os.environ.get("GITHUB_TOKEN")
+        token = GitHubCredentialVariable.first_token()
         return {"Authorization": f"Bearer {token}"} if token else {}
 
 
@@ -1483,7 +1489,7 @@ def open_work(
     )
     documents.save(manifest_text, documents.roadmap_text, project_root)
     return BootstrapReport(
-        exit_code=ExitCode.SUCCESS,
+        exit_code=PlanItemBootstrapExitCode.SUCCESS,
         plan_identifier=request.plan_identifier,
         item_identifier=request.item_identifier,
         branch=request.branch,

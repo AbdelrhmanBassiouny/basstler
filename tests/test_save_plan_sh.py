@@ -6,14 +6,16 @@ real remote - no network access or real personal-notes branch involved.
 """
 
 import subprocess
+from pathlib import Path
 
 import pytest
 
-from basstler.locations import ProjectLocation
+from basstler.locations import PluginLocation, ProjectLocation
+from basstler.shell_configuration import ShellConfigurationFunction
 
 from .constants import DatasetLocation, PersonalNotesPath
 from .project_declaration import ProjectDeclaration
-from .scratch_repository import ScratchRepository
+from .scratch_repository import PackageSourceFile, ScratchRepository
 
 PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
 PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "roadmap.md").read_text()
@@ -30,8 +32,8 @@ def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     :return: The same repository, ready to run save-plan.sh against.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "save-plan.sh",
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
     )
     scratch_repository.install_package()
     scratch_repository.write("README.md", "scratch repo\n")
@@ -53,15 +55,8 @@ def run_save_plan(
     :param arguments: CLI arguments to pass to save-plan.sh.
     :return: The finished subprocess.
     """
-    return subprocess.run(
-        [
-            "bash",
-            str(repository.project_root / ProjectLocation.HOOKS / "save-plan.sh"),
-            *arguments,
-        ],
-        cwd=repository.project_root,
-        capture_output=True,
-        text=True,
+    return repository.run_hook_script(
+        PluginLocation.PLAN_SAVING_SCRIPT.name, *arguments
     )
 
 
@@ -73,10 +68,13 @@ UNINSTALLABLE_REQUIREMENT = "basstler-no-such-distribution>=1"
 A distribution nothing can have installed, so the refusal cannot pass by accident.
 """
 
-DECLARATION_FILE = str(ProjectLocation.PACKAGE_SOURCE_TREE / "pyproject.toml")
-"""
-Where the scratch clone declares the package's requirements.
-"""
+
+def declaration_file(repository: ScratchRepository) -> Path:
+    """
+    :param repository: A fixture-built scratch repository.
+    :return: Where its scratch checkout declares the package's requirements.
+    """
+    return repository.checkout_root / PackageSourceFile.METADATA
 
 
 def test_refuses_when_a_declared_dependency_is_not_installed(
@@ -87,8 +85,7 @@ def test_refuses_when_a_declared_dependency_is_not_installed(
     everything the tooling is short of and what to run - not a traceback from whichever
     module happens to be imported first.
     """
-    save_plan_repository.write(
-        DECLARATION_FILE,
+    declaration_file(save_plan_repository).write_text(
         ProjectDeclaration(
             name=ProjectDeclaration.of_this_package().name,
             dependencies=(UNINSTALLABLE_REQUIREMENT,),
@@ -100,7 +97,8 @@ def test_refuses_when_a_declared_dependency_is_not_installed(
     assert result.returncode == 1
     assert UNINSTALLABLE_REQUIREMENT in result.stderr
     assert (
-        f"install --editable ./{ProjectLocation.PACKAGE_SOURCE_TREE}" in result.stderr
+        f"install '{save_plan_repository.configuration_output(ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE).strip()}'"
+        in result.stderr
     )
 
 
@@ -111,12 +109,12 @@ def test_refuses_when_the_declaration_cannot_be_read(
     A declaration the lookup cannot parse says nothing about what is installed, so it
     stops the save rather than reading as nothing missing.
     """
-    save_plan_repository.write(DECLARATION_FILE, "this is not toml\n")
+    declaration_file(save_plan_repository).write_text("this is not toml\n")
 
     result = run_save_plan(save_plan_repository, "test-plan")
 
     assert result.returncode == 1
-    assert DECLARATION_FILE in result.stderr
+    assert str(declaration_file(save_plan_repository)) in result.stderr
 
 
 # %% --manifest/--roadmap pairing

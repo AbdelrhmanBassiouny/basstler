@@ -34,7 +34,7 @@ One call, however many skills — the settings file is rewritten whole, so
 naming both in one run is one commit on the notes branch instead of two:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 "${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" set \
     --skill kickoff --skill resolve --mode <mode>
 ```

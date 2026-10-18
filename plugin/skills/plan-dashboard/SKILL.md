@@ -17,7 +17,7 @@ anything below is unclear about a field's meaning, rather than guessing.
 
 **Everything deterministic — schema validation, live-state classification,
 drift detection, HTML rendering — lives in the committed `basstler` package
-(`basstler/src/basstler/build_dashboard.py`, `build_index.py`,
+(`src/basstler/build_dashboard.py`, `build_index.py`,
 `render_common.py`), not in this document.** This file's job is only
 the parts a module can't do: resolving what to fetch, calling the GitHub API,
 and calling the `Artifact` tool. If you find yourself re-deriving rendering or
@@ -37,9 +37,9 @@ alone can't tell you *why* an item is blocked, deferred, or still open.
 ## 0. Check the setup is in place, and run it if not
 
 Every step below reads the personal-notes branch and runs scripts that need
-the dependencies `${BASSTLER_PYPROJECT_FILE}` declares — neither of which a user who
+the `basstler` package and its dependencies — neither of which a user who
 hasn't done the one-time setup has. Follow
-`.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1: run
+`skills/setup-personal-notes/prerequisite-check.md` before step 1: run
 the check, and if it reports anything missing, run `/setup-personal-notes`
 without asking first, rather than failing later on a missing branch or an
 `ImportError`.
@@ -55,12 +55,12 @@ remote/branch precedence (`git config claude.personalNotesRemote` → env var
 into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines every other script/hook path
 this document references below (`BUILD_INDEX_MODULE`,
 `REFRESH_DASHBOARD_SCRIPT`, `WRITE_PERSONAL_NOTES_FILE_SCRIPT`,
-`BASSTLER_PYPROJECT_FILE`, ...) — read that file if you need the
+`BASSTLER_PYTHON`, ...) — read that file if you need the
 precise logic or the full list of what it defines. Every bash block in this
 document assumes it's already been sourced once per session:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 ```
 
@@ -129,7 +129,7 @@ other kind of drift (a bad PR number, "done" while still open, closed
 unmerged against an active status), there's no ambiguity to leave for a
 human. If that finds anything to correct, it pushes the patched
 `plan.yaml` back to the personal-notes branch resolved in step 1 (via
-`.claude/hooks/write-personal-notes-file.sh`) *before* rendering, so the
+`hooks/write-personal-notes-file.sh`) *before* rendering, so the
 dashboard reflects corrected data instead of reporting the same "merged but
 not marked done" drift forever; if nothing needed correcting, nothing is
 pushed. It then runs `build_dashboard.py`, which validates the manifest
@@ -176,7 +176,7 @@ its stderr says exactly what's wrong (which field, which value). Report
 that to the user instead of trying to patch around it yourself; a broken
 manifest is something they need to know about, not paper over. Requires
 the package's environment, which every session start creates and installs
-the package's dependencies into — `.claude/hooks/session-start.sh` again if
+the package's dependencies into — `hooks/session-start.sh` again if
 its `dependencies:` line reported a failure.
 
 On success it prints one merged JSON summary on stdout: `sync_manifest_status.py`'s
@@ -278,7 +278,7 @@ it unprompted, since that republishes a second, separate page.
 ## Refreshing after a manifest edit
 
 This skill is the second half of the refresh loop
-`.claude/hooks/save-plan.sh` starts: that script pushes an edited
+`hooks/save-plan.sh` starts: that script pushes an edited
 `plan.yaml`/`roadmap.md` and regenerates the branch reverse index, but it
 cannot call the `Artifact` tool itself (only a live Claude session can) — it
 prints a reminder to run `/plan-dashboard <plan-id>` afterward, which is

@@ -10,11 +10,49 @@ paths only the shell hooks name, and the names a scratch repository is built wit
 
 from __future__ import annotations
 
-from enum import IntEnum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
+from typing import Any
 
-from basstler.locations import PathEnumeration, ProjectLocation
+from basstler.locations import PackageLocation, PathEnumeration, ProjectLocation
+from basstler.repository import Repository
 from basstler.setup_steps import PersonalNotesSetting
+
+
+class RepositoryLocation(PathEnumeration):
+    """
+    This repository's own parts the suites read: the plugin the hooks and skills ship
+    in, and the workflows.
+
+    Found from the package's source tree rather than through
+    :class:`basstler.locations.PluginLocation`, so a plugin root set in the environment
+    running the suite cannot point the tests at another copy.
+    """
+
+    ROOT = PackageLocation.SOURCE_TREE.value
+    """
+    The repository root.
+    """
+
+    PLUGIN = ROOT / "plugin"
+    """
+    The Claude Code plugin: its manifest, hooks and skills.
+    """
+
+    PLUGIN_MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
+    """
+    The plugin's manifest, the one place the release's version is written.
+    """
+
+    HOOKS = PLUGIN / "hooks"
+    """
+    The shell entry points under test.
+    """
+
+    WORKFLOWS = ROOT / ".github" / "workflows"
+    """
+    The repository's Actions workflows.
+    """
 
 
 class DatasetLocation(PathEnumeration):
@@ -54,13 +92,38 @@ class DatasetLocation(PathEnumeration):
     A project declaring one dependency that is installed, then one that cannot be.
     """
 
-    SET_UP_CLONE = DIRECTORY / "set-up-clone"
+    STACK_CONFIGURATION = DIRECTORY / "stack-configuration"
     """
-    A committed tree of everything ``check-setup.sh`` requires of a set-up clone, copied over
-    a scratch project root rather than written out file by file.
+    Shipped defaults and a project's own stack settings, for layering one over the other.
+    """
 
-    Its ``basstler/`` stands in for the real package: the ``tooling_files`` check tests only
-    that each path exists, so nothing there is ever imported or run.
+    SCRATCH_FORK_STACK_CONFIGURATION = STACK_CONFIGURATION / "scratch-fork.toml"
+    """
+    The stack settings a scratch fork checkout commits, naming the upstream its tests
+    stand up.
+    """
+
+    COMMITTED_DEFAULT_STACK_CONFIGURATION = (
+        STACK_CONFIGURATION / "committed-default.toml"
+    )
+    """
+    A project's committed settings naming every default, beneath a personal-notes
+    override.
+    """
+
+    SET_UP_CHECKOUT = DIRECTORY / "set-up-checkout"
+    """
+    A committed tree of everything ``check-setup.sh`` requires of the basstler checkout a
+    plugin runs from, copied over a scratch checkout rather than written out file by file.
+
+    Its plugin files stand in for the real ones: the ``tooling_files`` check tests only that
+    each path exists, so nothing there is ever run.
+    """
+
+    SET_UP_PROJECT = DIRECTORY / "set-up-project"
+    """
+    A committed tree of everything ``check-setup.sh`` requires of a set-up project, copied
+    over a scratch project root.
     """
 
 
@@ -82,6 +145,91 @@ class StackBranch(StrEnum):
     CHILD = "a-child"
     """
     Stacked directly on the parent.
+    """
+
+    BASE = "main"
+    """
+    The upstream base every stack in the suites ultimately targets.
+    """
+
+    ENGINE = "engine"
+    """
+    The bottom of a three-deep stack, cut from the base.
+    """
+
+    ENGINE_UI = "engine-ui"
+    """
+    Stacked on :attr:`ENGINE`.
+    """
+
+    ENGINE_DOCS = "engine-docs"
+    """
+    Stacked on :attr:`ENGINE_UI`, the top of the three-deep stack.
+    """
+
+    PARSER = "parser"
+    """
+    A single branch cut from the base, beside the three-deep stack.
+    """
+
+    FEATURE = "feature"
+    """
+    The one branch of a stack that needs no other.
+    """
+
+    FIRST_ROOT = "first-root"
+    """
+    One of two branches cut from the base.
+    """
+
+    SECOND_ROOT = "second-root"
+    """
+    The other of two branches cut from the base.
+    """
+
+    CHILD_OF_FIRST_ROOT = "child-of-first-root"
+    """
+    Stacked on :attr:`FIRST_ROOT`.
+    """
+
+    LANDED = "landed"
+    """
+    A branch already in the upstream base.
+    """
+
+    LANDED_ELSEWHERE = "landed-elsewhere"
+    """
+    A parent in the upstream base that no open pull request describes.
+    """
+
+    UNLANDED_ELSEWHERE = "unlanded-elsewhere"
+    """
+    A parent no open pull request describes and that is not in the upstream base.
+    """
+
+    OFF_BOARD_PARENT = "off-board-parent"
+    """
+    A parent other than the base that the board carries no pull request for.
+    """
+
+    UNDER_REVIEW = "under-review"
+    """
+    A branch in the upstream review queue.
+    """
+
+    WORK_IN_PROGRESS = "work-in-progress"
+    """
+    A drafted branch, still being worked on.
+    """
+
+    STUCK = "stuck"
+    """
+    A branch withheld for conflict resolution.
+    """
+
+    FINE = "fine"
+    """
+    A branch beside :attr:`STUCK` that nothing holds back.
     """
 
 
@@ -115,16 +263,83 @@ class StackLabel(StrEnum):
     Carried by a fix, and never acted on by this tooling - a label it reads past.
     """
 
+    SOMEBODY_ELSES = "a-label-somebody-else-put-here"
+    """
+    Stands for whatever else a pull request happens to carry - the labels a write must
+    preserve precisely because this tool knows nothing about them.
+    """
+
+
+class StackPullRequestNumber(IntEnum):
+    """
+    The numbers of the fork pull requests the two-branch stack under test is made of.
+
+    A number is written into a board entry, keyed into a recorded write and read back in
+    an assertion, so it is named once rather than spelled at each of those places.
+    """
+
+    PARENT = 40
+    """
+    The pull request of :attr:`StackBranch.PARENT`.
+    """
+
+    CHILD = 41
+    """
+    The pull request of :attr:`StackBranch.CHILD`, based on the parent's.
+    """
+
+
+class PromotionSampleText(StrEnum):
+    """
+    The text a promotion test puts into a fork pull request and finds again in what the
+    routine writes back.
+    """
+
+    TITLE = "A parent branch"
+    """
+    The parent pull request's title.
+    """
+
+    SUMMARY = "What this branch does."
+    """
+    The first paragraph of the parent pull request's description.
+    """
+
+    DETAIL = "More detail."
+    """
+    The paragraph after it.
+    """
+
+    PROSE = "Prose."
+    """
+    A description's text before its Promote section.
+    """
+
+    FIRST_LINK = "https://example.invalid/first"
+    """
+    The create-link a first promotion writes.
+    """
+
+    SECOND_LINK = "https://example.invalid/second"
+    """
+    The create-link a second promotion writes in its place.
+    """
+
+    COMMENT_LINK_PREFIX = "https://example.invalid/comment/"
+    """
+    What a recorded comment's stand-in URL starts with, before the comment's position.
+    """
+
 
 class SkillDirectory(PathEnumeration):
     """
-    The skills the suites read, relative to the project root.
+    The skills the suites read, relative to the plugin root.
 
     Claude Code finds a skill by its path, so the path *is* the interface, and the package
     does not name it.
     """
 
-    DIRECTORY = ProjectLocation.CLAUDE_CODE_DIRECTORY / "skills"
+    DIRECTORY = Path("skills")
     """
     The directory holding every skill.
     """
@@ -137,6 +352,11 @@ class SkillDirectory(PathEnumeration):
     STACKED_PULL_REQUEST_MAINTENANCE = DIRECTORY / "stacked-pr-maintenance"
     """
     The maintenance pass's own instructions.
+    """
+
+    DASHBOARD_REFRESH_SCRIPT = PLAN_DASHBOARD / "refresh_dashboard.sh"
+    """
+    The dashboard skill's shell entry point.
     """
 
 
@@ -198,6 +418,21 @@ class ScrubbedEnvironmentPrefix(StrEnum):
     The personal-notes remote, branch and path overrides.
     """
 
+    PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR"
+    """
+    The project Claude Code names, which the hooks resolve their project from first.
+    """
+
+    ENVIRONMENT_FILE = "CLAUDE_ENV_FILE"
+    """
+    The file a SessionStart hook exports variables to the session through.
+    """
+
+    BASSTLER = "BASSTLER_"
+    """
+    The plugin root, the package's home and anything else the configuration exports.
+    """
+
     GIT_AUTHOR = "GIT_AUTHOR_"
     """
     The commit author git would otherwise take from the configuration.
@@ -236,6 +471,16 @@ class ConfigurationVariable(StrEnum):
     The package's own environment.
     """
 
+    ENVIRONMENT_INTERPRETER = "BASSTLER_ENVIRONMENT_INTERPRETER"
+    """
+    The interpreter of the package's own environment.
+    """
+
+    INSTALLED_SOURCE_FILE = "BASSTLER_INSTALLED_SOURCE_FILE"
+    """
+    The file recording what the environment's package was installed from.
+    """
+
     PYTHON_REQUIREMENT = "BASSTLER_PYTHON_REQUIREMENT"
     """
     The interpreters the package supports.
@@ -246,10 +491,231 @@ class ConfigurationVariable(StrEnum):
     The supported interpreters looked for by name, separated by spaces.
     """
 
+    HOME = "BASSTLER_HOME"
+    """
+    Where the package's environment and its installed ``uv`` live.
+    """
+
+    REPOSITORY_URL = "BASSTLER_REPOSITORY_URL"
+    """
+    The repository an installed plugin's package is installed from.
+    """
+
     UV_DIRECTORY = "BASSTLER_UV_DIRECTORY"
     """
     Where a session start installs ``uv`` when it finds neither ``uv`` nor a supported
     interpreter.
+    """
+
+
+class RemoteName(StrEnum):
+    """
+    The git remote names the scratch checkouts are built with: the fork and upstream
+    names the shipped ``stack.toml`` defaults to.
+    """
+
+    ORIGIN = "origin"
+    """
+    The name git gives the remote a checkout was cloned from.
+    """
+
+    UPSTREAM = "upstream"
+    """
+    The conventional name of the remote a fork was forked from.
+    """
+
+    MINE = "mine"
+    """
+    A remote pointing at the user's own fork, under a name no default matches.
+    """
+
+    THEIRS = "theirs"
+    """
+    A remote pointing at somebody else's fork, beside :attr:`MINE`.
+    """
+
+    BACKUP = "backup"
+    """
+    A remote at a local path, which names no repository.
+    """
+
+    UNEXPECTED = "a-name-nobody-expects"
+    """
+    A fork remote under a name no default or setting mentions.
+    """
+
+    PERSONAL_UPSTREAM = "my-own-upstream-name"
+    """
+    The upstream remote name a personal-notes override picks.
+    """
+
+    PREFERRED_UPSTREAM = "an-upstream-remote"
+    """
+    The name a missing upstream remote is to be added under.
+    """
+
+
+class StackRepository(Enum):
+    """
+    The repositories the stack suites' checkouts and configurations name.
+    """
+
+    FORK = Repository("a-fork-owner", "a-fork")
+    """
+    The fork a scratch checkout's remote points at.
+    """
+
+    SOMEBODY_ELSES_FORK = Repository("someone-else", "their-fork")
+    """
+    A fork other than the one the configuration names.
+    """
+
+    SAME_NAMED_FORK = Repository("a-fork-owner", "a-project")
+    """
+    A fork named like the upstream it was forked from.
+    """
+
+    ANOTHER_OWNERS_FORK = Repository("another-owner", "a-project")
+    """
+    A second fork of the upstream, beside :attr:`SAME_NAMED_FORK`.
+    """
+
+    UPSTREAM = Repository("an-upstream-owner", "a-project")
+    """
+    The upstream every fork here is forked from.
+    """
+
+    DIFFERENT_UPSTREAM = Repository("a-different-upstream", "a-project")
+    """
+    An upstream named on the command line in place of the committed one.
+    """
+
+
+class StackSampleText(StrEnum):
+    """
+    The text the stack suites feed in where only its shape matters.
+    """
+
+    CHECK_CONCLUSION = "failure"
+    """
+    A pull request's CI conclusion, carried through untouched.
+    """
+
+    SESSION_LINK = "https://claude.ai/code/session_x"
+    """
+    The session a pull request was opened from.
+    """
+
+    TITLE = "A title"
+    """
+    A promotion link's title.
+    """
+
+    BODY = "A body"
+    """
+    A promotion link's description.
+    """
+
+    SHORT_BODY = "short"
+    """
+    A description well within the link's length limit.
+    """
+
+    TITLE_WITH_SEPARATORS = "Fix A & B"
+    """
+    A title holding a character that would end a query parameter unencoded.
+    """
+
+    BODY_WITH_FRAGMENT = "see #106"
+    """
+    A description holding a character that would start a URL fragment unencoded.
+    """
+
+    FILLER = "x"
+    """
+    One character, repeated to make a text too long for a link.
+    """
+
+    LOCAL_PATH_REMOTE = "/srv/git/mirror"
+    """
+    A remote URL that is a local path rather than a repository.
+    """
+
+    UNRELATED_FILE = "README.md"
+    """
+    A notes-branch file that is not the stack configuration.
+    """
+
+    UNRELATED_CONTENT = "unrelated\n"
+    """
+    Its content.
+    """
+
+    UNKNOWN_COMMAND = "not-a-command"
+    """
+    A command the tool does not answer.
+    """
+
+    NOT_A_REPOSITORY = "not-a-repository"
+    """
+    A repository reference missing its ``owner/`` part.
+    """
+
+
+class HatchVersionKey(StrEnum):
+    """
+    The path through ``pyproject.toml`` to the build's version source, and that source's
+    keys.
+    """
+
+    TOOL = "tool"
+    """
+    The table every tool's settings sit under.
+    """
+
+    HATCH = "hatch"
+    """
+    The build backend's own table.
+    """
+
+    VERSION = "version"
+    """
+    Where the backend is told to read the version from, and the name it requires of the
+    pattern's group that captures the version.
+    """
+
+    PATH = "path"
+    """
+    The file the version is read out of, relative to the repository root.
+    """
+
+    PATTERN = "pattern"
+    """
+    The regular expression whose ``version`` group is the version.
+    """
+
+    @classmethod
+    def version_table(cls, pyproject: dict[str, Any]) -> dict[str, str]:
+        """
+        :param pyproject: A parsed ``pyproject.toml``.
+        :return: Its ``[tool.hatch.version]`` table.
+        """
+        return pyproject[cls.TOOL][cls.HATCH][cls.VERSION]
+
+
+class PluginManifestKey(StrEnum):
+    """
+    The keys of a Claude Code plugin's ``plugin.json`` the suites read.
+    """
+
+    NAME = "name"
+    """
+    The plugin's name, which is also its package's distribution name.
+    """
+
+    VERSION = "version"
+    """
+    The plugin's release, which its package is installed at.
     """
 
 

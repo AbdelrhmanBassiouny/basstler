@@ -8,8 +8,8 @@ allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__githu
 
 Generic, plan-agnostic tooling — nothing in this file may hardcode a
 specific plan's id, branches, or PRs. This is the authoring half of the
-plan-dashboard system; `.claude/skills/plan-dashboard/SKILL.md` is the
-reading/publishing half. Read `.claude/skills/plan-dashboard/plan-schema.md`
+plan-dashboard system; `skills/plan-dashboard/SKILL.md` is the
+reading/publishing half. Read `skills/plan-dashboard/plan-schema.md`
 for the full `plan.yaml` schema before drafting
 anything — this skill must produce manifests that pass the exact same
 validation `plan-dashboard` step 2 runs, not a close approximation.
@@ -25,7 +25,7 @@ takes a shortcut a hand-written manifest wouldn't also have to clear.
 
 Everything below writes to the personal-notes branch, which the user may not
 have set up yet. Follow
-`.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1:
+`skills/setup-personal-notes/prerequisite-check.md` before step 1:
 run the check, and if it reports anything missing, run `/setup-personal-notes`
 without asking first, rather than failing partway through drafting a plan.
 
@@ -36,7 +36,7 @@ remote/branch precedence into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines
 `SAVE_PLAN_SCRIPT` (used in step 7):
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 ```
 

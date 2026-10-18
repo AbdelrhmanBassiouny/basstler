@@ -8,8 +8,8 @@ set -euo pipefail
 # (.claude/personal/plans/_generated/branch-index.tsv) in the same commit,
 # scanning every plan's plan.yaml so it can never drift out of sync with
 # the manifests it's derived from. See
-# .claude/skills/plan-dashboard/plan-schema.md for the
-# full plan.yaml schema, and .claude/skills/plan-dashboard/SKILL.md for how
+# skills/plan-dashboard/plan-schema.md for the
+# full plan.yaml schema, and skills/plan-dashboard/SKILL.md for how
 # the manifest is consumed.
 #
 # This is the write half of the loop session-start.sh's own plan section
@@ -18,7 +18,7 @@ set -euo pipefail
 # BEGIN-PLAN-ROADMAP/END-PLAN-ROADMAP markers, then run this script.
 #
 # Usage (from anywhere, after editing CLAUDE.local.md):
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" [<plan-id>]
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" [<plan-id>]
 #
 # <plan-id> is optional if the current branch already appears in some
 # plan's items[] (session-start.sh's plan_id_for_branch lookup resolves it,
@@ -29,12 +29,12 @@ set -euo pipefail
 # coordinating the whole plan rather than working one item).
 #
 # Bootstrapping a brand-new plan - two equivalent ways:
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id> \
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id> \
 #     --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
 # reads the manifest/roadmap directly from the given files instead of
 # extracting them from CLAUDE.local.md's markers - the plan id must still be
 # explicit, since a brand-new plan has no entry in the reverse index yet to
-# auto-derive it from. This is what .claude/skills/plan-create/SKILL.md
+# auto-derive it from. This is what skills/plan-create/SKILL.md
 # uses, since it already has the drafted content in hand and gains nothing
 # from round-tripping it through CLAUDE.local.md first. Doing it by hand is
 # still just as valid: add the BEGIN-PLAN-MANIFEST/END-PLAN-MANIFEST and
@@ -79,12 +79,12 @@ fi
 # about what the tooling needs. A session start installs these; a checkout
 # where that never ran reaches this message instead of a traceback.
 if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
-  echo "Could not read what the basstler package requires from ${BASSTLER_PYPROJECT_FILE}." >&2
+  echo "Could not read what the basstler package requires." >&2
   exit 1
 fi
 if [ -n "${MISSING_DEPENDENCIES}" ]; then
   echo "The basstler package's requirements are not installed for ${BASSTLER_PYTHON}: ${MISSING_DEPENDENCIES}" >&2
-  echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install --editable ./${BASSTLER_SOURCE_TREE}" >&2
+  echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install '$(basstler_package_source)'" >&2
   exit 1
 fi
 

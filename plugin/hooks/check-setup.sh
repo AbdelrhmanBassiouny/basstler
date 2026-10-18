@@ -7,7 +7,7 @@ set -euo pipefail
 #
 # Usage (from anywhere - always inspects this repo specifically, see
 # resolve-personal-notes-config.sh):
-#   ./.claude/hooks/check-setup.sh
+#   "${BASSTLER_PLUGIN_ROOT}"/hooks/check-setup.sh
 #
 # Read-only: it fetches (into FETCH_HEAD) and reads git config, but never
 # writes config, branches, files, or remotes. Running it can't change the
@@ -32,7 +32,7 @@ set -euo pipefail
 # The one thing it deliberately does not check is GitHub API access, which
 # /plan-dashboard needs for live pull request state: that is reachable only
 # through a session's MCP tools, not from a shell. The same goes for the pull
-# request labels the dashboard reads. .claude/skills/setup-personal-notes
+# request labels the dashboard reads. skills/setup-personal-notes
 # covers both as their own steps.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -79,31 +79,30 @@ git_identity_precedence_note() {
 
 # %% the tooling itself
 
-# Everything below assumes this checkout actually carries the agent tooling.
-# A fork that predates it would otherwise fail later, one confusing missing
-# file at a time, instead of here with a single clear answer.
+# Everything below assumes the plugin is whole. One that is not would otherwise
+# fail later, one confusing missing file at a time, instead of here with a
+# single clear answer.
 MISSING_TOOLING=""
 for tooling_path in \
-    "${BASSTLER_PACKAGE_DIRECTORY}/__init__.py" \
+    "${PLUGIN_MANIFEST}" \
     "${REFRESH_DASHBOARD_SCRIPT}" \
-    "${BASSTLER_PYPROJECT_FILE}" \
     "${PLAN_SCHEMA_DOCUMENT}"; do
   [ -f "${tooling_path}" ] || MISSING_TOOLING="${MISSING_TOOLING} ${tooling_path}"
 done
 if [ -n "${MISSING_TOOLING}" ]; then
   report tooling_files needs-setup \
-    "this checkout is missing:${MISSING_TOOLING} - merge the plan-dashboard tooling into your fork's default branch first"
+    "the basstler plugin at ${PLUGIN_ROOT} is missing:${MISSING_TOOLING} - reinstall the plugin"
 else
-  report tooling_files ok "the basstler package, its metadata, the refresh entry point and the schema reference are all present"
+  report tooling_files ok "the plugin's manifest, the refresh entry point and the schema reference are all present"
 fi
 
 # %% session-start wiring
 
-if grep -q 'session-start.sh' "${PROJECT_ROOT}/.claude/settings.json" 2>/dev/null; then
-  report session_start_hook ok "registered in .claude/settings.json"
+if grep -q 'session-start.sh' "${HOOKS_DIR}/hooks.json" 2>/dev/null; then
+  report session_start_hook ok "registered in the plugin's hooks/hooks.json"
 else
   report session_start_hook needs-setup \
-    ".claude/settings.json does not register .claude/hooks/session-start.sh - CLAUDE.local.md will never be populated"
+    "${HOOKS_DIR}/hooks.json does not register session-start.sh - CLAUDE.local.md will never be populated"
 fi
 
 if git check-ignore --quiet CLAUDE.local.md 2>/dev/null; then
@@ -183,15 +182,13 @@ fi
 # rows to word.
 if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
   report dashboard_dependencies needs-setup "${BASSTLER_PYTHON} is not on PATH, so the plan-dashboard modules cannot run at all"
-elif [ ! -f "${BASSTLER_PYPROJECT_FILE}" ]; then
-  report dashboard_dependencies needs-setup "cannot check: ${BASSTLER_PYPROJECT_FILE} is missing"
 elif ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
-  report dashboard_dependencies needs-setup "cannot check: ${BASSTLER_PYPROJECT_FILE} could not be read"
+  report dashboard_dependencies needs-setup "cannot check: the basstler package's declared dependencies could not be read"
 elif [ -z "${MISSING_DEPENDENCIES}" ]; then
-  report dashboard_dependencies ok "every requirement ${BASSTLER_PYPROJECT_FILE} declares is installed for ${BASSTLER_PYTHON}"
+  report dashboard_dependencies ok "the basstler package and every requirement it declares are installed for ${BASSTLER_PYTHON}"
 else
   report dashboard_dependencies needs-setup \
-    "not installed for ${BASSTLER_PYTHON}:${MISSING_DEPENDENCIES// / } - a session start installs them, or run: pip --python ${BASSTLER_PYTHON} install --editable ./${BASSTLER_SOURCE_TREE}"
+    "not installed for ${BASSTLER_PYTHON}:${MISSING_DEPENDENCIES// / } - a session start installs them, or run: pip --python ${BASSTLER_PYTHON} install '$(basstler_package_source)'"
 fi
 
 # %% the result of it all working

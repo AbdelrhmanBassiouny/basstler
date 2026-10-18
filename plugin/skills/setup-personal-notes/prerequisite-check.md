@@ -16,7 +16,7 @@ references it in a line rather than restating it.
 Run this **before** the skill's own first step:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 bash "${CHECK_SETUP_SCRIPT}" || true
 ```
 
