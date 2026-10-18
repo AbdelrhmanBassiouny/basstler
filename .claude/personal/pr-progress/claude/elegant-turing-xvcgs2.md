@@ -1,10 +1,10 @@
-Branch restarted from main after PR 5 merged (v0.1.1 released). Now: workflow-cutover's plan-site-builder (a599549 holds the hub part, no PR yet).
+PR https://github.com/AbdelrhmanBassiouny/basstler/pull/6 (draft): workflow-cutover's plan-site-builder. basstler.build_site renders hub / <owner>/<repo>/ / <owner>/<repo>/<plan>/ from the registry's hub file; session start prints the plan site line.
 
 Plan:
-- Hub file in each repo's notes (plans/_hub.yaml), basstler is the registry. plan_hub/build_hub in Python; indexes and dashboards link up; session start prints the hub line.
+- Site served by stack-board's Pages (plan-site-action, next item). Hub file plans/_hub.yaml on both notes branches names https://abdelrhmanbassiouny.github.io/stack-board/.
 
 Done:
-- Moved 9 tooling plans from CRAM notes to basstler (CRAM 8c6c016), carried their dashboard URLs. Published basstler index (GanshUqLJm7MS5z8oChaQ2) and hub (Bn8wrrpCVeL5qdpnVK9SeK); _hub.yaml on both notes branches. 860 tests pass. Recorded plan-site-builder/-action/-setup in workflow-cutover (stack-board-single-site deferred), dashboard republished.
+- 2b0c639 on a599549; 878 tests pass; live build rendered 36 plans from 2 repos. Moved 9 tooling plans from CRAM; CRAM-retirement track added to basstler-package; #160 item deferred (folded into #151); dashboards republished (plan-size-limits' artifact is another account's).
 
 Next:
-- plan-site-builder: port build_site from cc27198 (basstler branch claude/plan-dashboard-multi-account-y2vexc) into src/, hub page as site root, drop set-url/Artifact hub bits; draft PR. Then plan-site-action reworks stack-board's plan-dashboards.yml (no cron).
+- Wait for review. Then plan-site-action and plan-site-setup via their Start now buttons.
