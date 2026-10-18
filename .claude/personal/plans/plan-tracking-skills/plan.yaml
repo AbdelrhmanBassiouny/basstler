@@ -59,8 +59,7 @@ items:
 - id: resolve-propagates-downstream
   title: Merge a resolved item's fix down into the pull requests stacked on it
   branch: claude/plan-item-kickoff-resolve-ic3qnu
-  pull_request_number: 430
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  pull_request_number: 15
   session: https://claude.ai/code/session_01Mkoj43S6gvqMaFzRpiGwHX
   track: skills
   notes: 'Placed by `/add-plan-item` rather than by default, against nineteen unlanded tooling
