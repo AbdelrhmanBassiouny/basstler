@@ -1,8 +1,8 @@
 """
-The contract :mod:`basstler` has to keep: everything importable from the repository root
-with no install, every module importable on its own, every entry point reachable through
-``python3 -m``, every workflow that runs a module installing its dependencies first, and
-nothing left behind under ``.claude/``.
+The contract :mod:`basstler` has to keep: every caller importing the checkout's own source,
+every module importable on its own, every entry point reachable through
+``python3 -m``, every workflow that runs a module installing its dependencies first, one
+version for the package and the plugin, and no Python in the plugin.
 
 :mod:`basstler.package_layout` discovers the modules and the entry points from the package
 itself, so nothing here is a second list of them, and the workflows are read from the
@@ -11,6 +11,8 @@ directory holding them rather than named.
 
 from __future__ import annotations
 
+import importlib.metadata
+import os
 import re
 import subprocess
 import sys
@@ -19,25 +21,24 @@ from pathlib import Path
 
 import pytest
 
-from .constants import ToolingDirectory
-from .script_runner import ScriptRunner
-from basstler import _version
+from basstler.locations import ClaudeCodeVariable, PackageLocation, PluginLocation
+
 from basstler.package_layout import (
-    PACKAGE_DIRECTORY,
-    REPOSITORY_ROOT,
     PackageModule,
     command_line_entry_points,
     package_modules,
 )
 
-CLAUDE_DIRECTORY = REPOSITORY_ROOT / ".claude"
-"""
-The directory the migration emptied of Python.
+from .constants import (
+    ConfigurationVariable,
+    EnvironmentVariable,
+    RepositoryLocation,
+)
+from .plugin_manifest import PluginManifest
+from .project_declaration import HatchVersionSource, ProjectDeclaration
+from .script_runner import ScriptRunner, configuration_value
 
-Its SKILL.md files, settings.json and bash entry points stay; not one ``.py`` file does.
-"""
-
-WORKFLOWS_DIRECTORY = REPOSITORY_ROOT / ".github" / "workflows"
+WORKFLOWS_DIRECTORY = RepositoryLocation.WORKFLOWS
 """
 Where this repository's Actions workflows live.
 
@@ -46,50 +47,57 @@ without anyone recording that it exists.
 """
 
 
+SHELL_CONFIGURATION = (
+    RepositoryLocation.HOOKS / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
+)
+"""
+The file the bash callers source, which is where a module gets a shell name and the
+interpreter its import path.
+"""
+
+
 @dataclass(frozen=True, kw_only=True)
-class InterpreterRunner(ScriptRunner):
+class ConfiguredInterpreterRunner(ScriptRunner):
     """
-    Runs this interpreter itself, for the checks that are about the import rather than
-    about any one entry point.
+    Runs this interpreter the way a bash caller does: after sourcing the shell
+    configuration, and so with whatever import path it sets up.
     """
 
     @property
     def command(self) -> tuple[str, ...]:
-        """:return: This interpreter, with no module named yet."""
-        return (sys.executable,)
+        """:return: bash sourcing the configuration, then handing over to this interpreter."""
+        return (
+            "bash",
+            "-c",
+            'source "$0" && exec "$@"',
+            str(SHELL_CONFIGURATION),
+            sys.executable,
+        )
 
 
-def run_from_repository_root(*arguments: str) -> subprocess.CompletedProcess[str]:
+def run_as_a_caller(*arguments: str) -> subprocess.CompletedProcess[str]:
     """
-    Run this interpreter from the repository root with an environment that cannot help
-    it find the package.
+    Run this interpreter as a bash caller does, with an environment that cannot help it
+    find the package.
 
-    ``PYTHONPATH`` is removed so a pass proves the zero-install import really comes from
-    the repository root being the working directory, rather than from whatever the
-    caller's shell happened to export.
+    ``PYTHONPATH`` is removed so a pass proves the import path comes from the shell
+    configuration, rather than from whatever the caller's shell happened to export.
 
     :param arguments: Arguments to the interpreter, e.g. ``("-c", "import basstler")``.
     :return: The completed process, with output captured as text.
     """
-    return InterpreterRunner(
-        project_root=REPOSITORY_ROOT,
-        removed_variable_prefixes=("PYTHONPATH",),
+    return ConfiguredInterpreterRunner(
+        project_root=RepositoryLocation.ROOT.value,
+        removed_variable_prefixes=(EnvironmentVariable.IMPORT_PATH,),
     ).run(*arguments)
 
-
-SHELL_CONFIGURATION = ToolingDirectory.HOOKS.path / "resolve-personal-notes-config.sh"
-"""
-The file the bash callers source, which is where a module gets a shell name.
-"""
 
 MODULE_VARIABLE = re.compile(r'^([A-Z_]+)="(basstler\.[a-z_]+)"', re.MULTILINE)
 """
 One ``NAME="basstler.module"`` assignment in the shell configuration.
 """
 
-DEPENDENCY_INSTALL = re.compile(
-    r"(pip install|uv pip install|uv sync)[^\n]*" r"(BASSTLER_PACKAGE_DIRECTORY|basstler)"
-)
+DEPENDENCY_INSTALL = re.compile(r"(pip install|uv pip install|uv sync)[^\n]*basstler")
 """
 A step that installs this package, and with it the dependencies its metadata declares,
 however the caller spells the directory.
@@ -120,26 +128,40 @@ def installs_the_dependencies(caller_source: str) -> bool:
     return DEPENDENCY_INSTALL.search(caller_source) is not None
 
 
-# %% the package exists and is reachable with no install
+# %% a caller imports the checkout's own source
 
 
-def test_the_package_imports_from_the_repository_root_with_no_install():
+def test_a_caller_imports_the_checkouts_own_source_with_no_install():
     """
-    The zero-install contract: a fresh clone with no pip step can import the package,
-    and what it imports is this repository's copy rather than an installed one.
+    What a bash caller of a plugin sitting in a checkout imports is that checkout's
+    source tree, even where nothing is installed: ``-S`` leaves site-packages, and with it any install, out of the search.
     """
-    result = run_from_repository_root("-c", "import basstler; print(basstler.__file__)")
+    result = run_as_a_caller("-S", "-c", "import basstler; print(basstler.__file__)")
 
     assert result.returncode == 0, result.stderr
-    assert Path(result.stdout.strip()) == PACKAGE_DIRECTORY / "__init__.py"
+    assert Path(result.stdout.strip()) == PackageLocation.DIRECTORY / "__init__.py"
 
 
-def test_the_package_version_is_the_repository_version():
+def test_the_build_reads_its_version_from_the_plugin_manifest():
     """
-    ``_version.py`` is written by ``scripts/sync_version.py`` from the root ``VERSION``
-    file, the same as every other package here, so one bump moves them all together.
+    An installed plugin installs the package at its own version, so the two are one
+    release. The manifest has to hold the version as a literal, since Claude Code runs
+    nothing before reading it, so the build reads it from there rather than from a second
+    copy a bump could leave behind.
     """
-    assert _version.__version__ == (REPOSITORY_ROOT / "VERSION").read_text().strip()
+    version_source = HatchVersionSource.of_this_package()
+
+    assert version_source.path == RepositoryLocation.PLUGIN_MANIFEST
+    assert version_source.version() == PluginManifest.of_this_plugin().version
+
+
+def test_the_installed_package_is_the_plugin_version():
+    """
+    The version the build read is the one the installed package reports.
+    """
+    manifest = PluginManifest.of_this_plugin()
+
+    assert importlib.metadata.version(manifest.name) == manifest.version
 
 
 # %% each module stands on its own
@@ -154,7 +176,7 @@ def test_every_module_imports_on_its_own(module: PackageModule):
     whichever module a caller reaches first, so a suite that imports them together can
     stay green while a single-module entry point is broken.
     """
-    result = run_from_repository_root("-c", f"import {module.import_path}")
+    result = run_as_a_caller("-c", f"import {module.import_path}")
 
     assert result.returncode == 0, result.stderr
 
@@ -172,7 +194,7 @@ def test_every_entry_point_answers_help_through_the_module_runner(
     on ``sys.path`` instead of the repository root, so its absolute imports of its
     siblings would not resolve. Every bash caller invokes them this way.
     """
-    result = run_from_repository_root("-m", module.import_path, "--help")
+    result = run_as_a_caller("-m", module.import_path, "--help")
 
     assert result.returncode == 0, result.stderr
 
@@ -216,19 +238,119 @@ def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():
     ] == []
 
 
+RELEASE_REFERENCE = re.compile(r"(?:@|basstler_ref: )(v[0-9][^\s]*)")
+"""
+A ``@<ref>`` or ``basstler_ref: <ref>`` naming a basstler release.
+"""
+
+
+def test_the_example_caller_calls_the_plugins_own_release():
+    """
+    A project copies the example caller as it stands, so it has to call the release its
+    plugin installs - both the workflow it uses and the package that workflow installs.
+    """
+    manifest = PluginManifest.of_this_plugin()
+    caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
+
+    references = RELEASE_REFERENCE.findall(caller.read_text())
+
+    assert len(references) == 2
+    assert set(references) == {manifest.release_tag}
+
+
 # %% nothing is left behind
 
 
-def test_no_python_module_remains_under_the_claude_directory():
+def test_the_plugin_carries_no_python_module():
     """
-    The migration's own completeness assertion from the other side.
-
-    ``.claude/`` keeps its SKILL.md files, settings.json and bash entry points - Claude
-    Code discovers those by path - and not one Python file.
+    The plugin keeps its SKILL.md files, manifest and bash entry points - Claude Code
+    discovers those by path - and not one Python file: every module is the package's,
+    installed at the plugin's own version.
     """
     remaining_module_paths = sorted(
-        str(path.relative_to(REPOSITORY_ROOT))
-        for path in CLAUDE_DIRECTORY.rglob("*.py")
+        str(path.relative_to(RepositoryLocation.ROOT.value))
+        for path in RepositoryLocation.PLUGIN.value.rglob("*.py")
     )
 
     assert remaining_module_paths == []
+
+
+def test_no_module_sits_directly_in_the_source_tree():
+    """
+    The package's modules live under ``src/``, and nothing beside ``pyproject.toml`` is
+    one.
+
+    A module a branch adds where the package used to be merges with no conflict and is
+    then never imported, so the move's own completeness has to be asserted rather than
+    trusted to the merge.
+    """
+    stray_module_paths = sorted(
+        str(path.relative_to(RepositoryLocation.ROOT.value))
+        for path in PackageLocation.SOURCE_TREE.value.glob("*.py")
+    )
+
+    assert stray_module_paths == []
+
+
+# %% the shell's copies of what the package states
+
+
+def test_the_shell_asks_for_the_interpreters_the_package_supports():
+    """
+    The interpreter an environment is created from satisfies the package's own
+    ``requires-python``, so the two cannot disagree about which versions run it.
+    """
+    assert (
+        configuration_value(ConfigurationVariable.PYTHON_REQUIREMENT)
+        == ProjectDeclaration.of_this_package().requires_python
+    )
+
+
+# %% what the skill documents name
+
+
+SHELL_VARIABLE_REFERENCE = re.compile(r"\$\{([A-Z][A-Z0-9_]*)\}")
+"""
+A ``${NAME}`` reference to an upper-case shell variable, as a skill document writes one.
+"""
+
+
+def variables_the_configuration_defines() -> frozenset[str]:
+    """
+    :return: Every variable set once the shell configuration is sourced, in an environment
+        carrying nothing but a search path, so an inherited variable cannot pass for one
+        the configuration defines.
+    """
+    return frozenset(
+        subprocess.run(
+            ["bash", "-c", 'source "$0" && compgen -v', SHELL_CONFIGURATION],
+            cwd=RepositoryLocation.ROOT.value,
+            capture_output=True,
+            text=True,
+            check=True,
+            env={
+                EnvironmentVariable.EXECUTABLE_SEARCH_PATH: os.environ[
+                    EnvironmentVariable.EXECUTABLE_SEARCH_PATH
+                ]
+            },
+        ).stdout.split()
+    )
+
+
+def test_every_variable_a_skill_document_names_is_defined():
+    """
+    A document naming a variable nothing defines hands its reader an empty string, and a
+    command built from it fails far from the cause - a rename or a move leaves exactly
+    this behind.
+    """
+    named = {
+        variable_name
+        for document in RepositoryLocation.PLUGIN.value.rglob("*.md")
+        for variable_name in SHELL_VARIABLE_REFERENCE.findall(document.read_text())
+    }
+
+    assert named != set()
+    assert (
+        sorted(named - variables_the_configuration_defines() - set(ClaudeCodeVariable))
+        == []
+    )

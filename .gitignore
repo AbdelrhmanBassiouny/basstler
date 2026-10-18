@@ -1,0 +1,17 @@
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# The stacked-PR board snapshot, re-exported from GitHub by
+# `python3 -m basstler.maintenance board --write` at the start of every maintenance pass.
+# Scratch state, never committed: a stale copy read as current is a pass acting on a
+# stack that has since moved.
+src/basstler/board.json
+
+# What the plugin's own session start writes into the project it serves - this
+# repository, when developing it with its own plugin enabled. Personal, never committed.
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/.personal-settings-sync-hash
+.claude/.plan-state-sync-sha

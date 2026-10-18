@@ -44,18 +44,7 @@ already exists**, which is where the cause of a stall almost always is:
   exists to surface. A failing check or a requested-changes review is
   usually the actual blocker; state exactly which one and why, don't just
   say "CI is failing."
-- If the fork PR carries the `in_review_label` from `basstler/stack.toml`
-  (`in-review` by default, the recorded signal for "promoted upstream, under
-  review"), the branch also has a pull request on the upstream, whose review
-  threads none of the calls above can see — a fork PR can look entirely clean
-  while the item is in fact stalled on an upstream request for changes. Invoke
-  `/upstream-reviews` for the item's `branch` and read every unresolved thread
-  it reports. Invoke it even without the label when `notes`/`status` say the
-  item is under upstream review; skip it otherwise, since a branch never
-  promoted has no upstream PR to read. If the dispatch or the run fails, don't
-  let that fail the skill: mention it when presenting the plan (step 5) and
-  continue — upstream state is valuable context, not a precondition.
-- If the fork PR carries the `in_review_label` from `.claude/stack/stack.toml`
+- If the fork PR carries the `in_review_label` from the stack configuration
   (`in-review` by default, the recorded signal for "promoted upstream, under
   review"), the branch also has a pull request on the upstream, whose review
   threads none of the calls above can see — a fork PR can look entirely clean

@@ -14,24 +14,24 @@ from pathlib import Path
 import pytest
 
 import basstler.setup_steps
-from basstler.build_dashboard import PullRequestLabel
+from basstler.github_labels import GitHubLabel
 from basstler.setup_steps import (
-    COMMENT_MARKER,
     ForkLabels,
     git_value,
     PersistentVariables,
     PersonalNotesSetting,
     Host,
-    Repository,
     RepositoryAccess,
-    RepositoryLabel,
     SetupChecklist,
     SetupLink,
     resolve_repository,
 )
 
-from .constants import REPOSITORY_ROOT, ToolingDirectory
-from .scratch_repository import SCRUBBED_ENVIRONMENT_PREFIXES, ScratchRepository
+from basstler.locations import PluginLocation
+from basstler.repository import Repository
+
+from .constants import RepositoryLocation, ScrubbedEnvironmentPrefix
+from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
 SETUP_STEPS_MODULE = basstler.setup_steps.__name__
@@ -41,7 +41,7 @@ FORK = Repository(owner="some-user", name="some-repository")
 FORK_REMOTE_URL = f"https://github.com/{FORK.full_name}.git"
 
 RESOLVE_CONFIG_SCRIPT = (
-    REPOSITORY_ROOT / ToolingDirectory.HOOKS / "resolve-personal-notes-config.sh"
+    RepositoryLocation.HOOKS / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
 )
 
 
@@ -74,7 +74,7 @@ def test_the_repository_links_use_the_same_host_as_everything_else() -> None:
     A link that varies with the repository is built rather than listed, and builds from
     the same place the fixed ones do.
     """
-    assert FORK.labels_url.startswith(Host.GITHUB.url)
+    assert ForkLabels(FORK).labels_url.startswith(Host.GITHUB.url)
 
 
 def test_the_module_writes_the_scheme_once() -> None:
@@ -109,12 +109,14 @@ def test_a_github_remote_url_names_its_repository(url: str) -> None:
     "url",
     ["https://gitlab.com/some-user/some-repository.git", "/srv/mirrors/bare.git"],
 )
-def test_a_remote_that_is_not_a_github_repository_names_none(url: str) -> None:
+def test_a_remote_that_is_not_a_github_repository_names_none(
+    url: str, scratch_repository: ScratchRepository
+) -> None:
     """
     A remote pointing anywhere but a GitHub repository yields no repository at all,
     rather than a guess assembled from its path.
     """
-    assert Repository.from_remote_url(url) is None
+    assert resolve_repository(scratch_repository.project_root, url) is None
 
 
 def test_the_repository_comes_from_the_notes_remotes_url(
@@ -173,24 +175,11 @@ def test_a_value_git_does_answer_comes_back_trimmed(
 # %% the labels step
 
 
-def test_every_label_the_tooling_relies_on_is_offered() -> None:
-    """
-    This enum and the dashboard's own name the same labels, member for member.
-
-    Asserted against ``build_dashboard.PullRequestLabel`` itself, by member name as well
-    as by value: a label added there and not here would leave a fork missing one, with
-    nothing else to catch it.
-    """
-    assert {label.name: label.value for label in RepositoryLabel} == {
-        member.name: member.value for member in PullRequestLabel
-    }
-
-
 def test_each_label_carries_the_description_it_is_created_with() -> None:
     """
     Every label says what it means, and the creation command names the fork.
     """
-    for label in RepositoryLabel:
+    for label in GitHubLabel:
         assert label.purpose
         assert label.creation_command(FORK) == (
             f"gh label create {label.value} --repo {FORK.full_name} "
@@ -203,10 +192,11 @@ def test_the_labels_step_leads_with_the_page_that_creates_them_by_hand() -> None
     The ``gh`` CLI is not present everywhere, so the step offers the fork's own labels
     page before the commands that need it.
     """
-    instructions = ForkLabels(FORK).instructions()
-    assert FORK.labels_url in instructions[0]
+    step = ForkLabels(FORK)
+    instructions = step.instructions()
+    assert step.labels_url in instructions[0]
     assert [line for line in instructions if line.startswith("gh label create")] == [
-        label.creation_command(FORK) for label in RepositoryLabel
+        label.creation_command(FORK) for label in GitHubLabel
     ]
 
 
@@ -302,7 +292,7 @@ def test_a_value_carrying_a_comment_marker_is_quoted(
     marker, so a branch or path carrying one has to be quoted or it is silently set to a
     prefix of itself.
     """
-    branch = f"claude/notes{COMMENT_MARKER}2"
+    branch = f"claude/notes{PersistentVariables.comment_marker}2"
     step = PersistentVariables.resolve(
         scratch_repository.project_root,
         {PersonalNotesSetting.BRANCH.environment_variable: branch},
@@ -403,7 +393,7 @@ def test_running_the_module_prints_the_steps_for_its_own_clone(
     clone_with_fork_remote.install_package()
     result = PythonModuleRunner(
         project_root=clone_with_fork_remote.project_root,
-        removed_variable_prefixes=SCRUBBED_ENVIRONMENT_PREFIXES,
+        removed_variable_prefixes=tuple(ScrubbedEnvironmentPrefix),
         module_name=SETUP_STEPS_MODULE,
     ).run()
     assert result.returncode == 0, result.stderr

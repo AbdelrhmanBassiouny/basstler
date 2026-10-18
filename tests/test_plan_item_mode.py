@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import subprocess
 import tomllib
+from pathlib import Path
 
 import pytest
 
@@ -20,8 +21,7 @@ import basstler.plan_item_mode
 from basstler.plan_item_mode import (
     CommandLineOption,
     ExecutionMode,
-    ExitCode,
-    Location,
+    PlanItemModeExitCode,
     MalformedModeSettingsError,
     ModeSetting,
     ModeSource,
@@ -30,7 +30,8 @@ from basstler.plan_item_mode import (
     UnknownModeError,
 )
 
-from .constants import REPOSITORY_ROOT, PersonalNotesPath
+from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
+
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
@@ -41,8 +42,8 @@ the module rather than spelled out.
 """
 
 BASH_ENTRY_POINTS = (
-    Location.CONFIGURATION_SCRIPT.path.name,
-    Location.NOTES_WRITER_SCRIPT.path.name,
+    PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name,
+    PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT.value.name,
 )
 """
 The two shell scripts the module sources and runs, named by the locations it reads them
@@ -65,7 +66,9 @@ def mode_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
     scratch_repository.install_package()
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
-    scratch_repository.publish_notes_branch({PersonalNotesPath.NOTES_FILE: "notes\n"})
+    scratch_repository.publish_notes_branch(
+        {ProjectLocation.PERSONAL_NOTES_DOCUMENT: "notes\n"}
+    )
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
 
@@ -99,7 +102,7 @@ def resolve(
     finished = run_mode(
         repository, Subcommand.RESOLVE, CommandLineOption.SKILL, skill, *arguments
     )
-    assert finished.returncode == ExitCode.SUCCESS, finished.stderr
+    assert finished.returncode == PlanItemModeExitCode.SUCCESS, finished.stderr
     return json.loads(finished.stdout)
 
 
@@ -113,7 +116,9 @@ def published_settings(repository: ScratchRepository, tmp_path: Path) -> dict[st
     :return: The parsed settings.
     """
     checkout = repository.clone_notes_branch(tmp_path / "published")
-    return tomllib.loads((checkout / Location.PERSONAL_SETTINGS).read_text())
+    return tomllib.loads(
+        (checkout / ProjectLocation.PERSONAL_PLAN_ITEM_MODES).read_text()
+    )
 
 
 # %% resolving with nothing configured
@@ -141,7 +146,9 @@ def test_the_report_names_where_a_personal_setting_would_go(
     where to put one without deriving the path itself.
     """
     report = resolve(mode_repository, PlanItemSkill.KICKOFF)
-    assert report["personal_setting_path"] == Location.PERSONAL_SETTINGS
+    assert report["personal_setting_path"] == str(
+        ProjectLocation.PERSONAL_PLAN_ITEM_MODES
+    )
 
 
 def test_an_unreachable_notes_branch_still_resolves_to_the_default(
@@ -174,7 +181,7 @@ def test_a_personal_setting_overrides_the_committed_default(
     Pinning one skill's mode changes that skill and leaves the other on the default.
     """
     mode_repository.update_notes_branch_file(
-        Location.PERSONAL_SETTINGS,
+        ProjectLocation.PERSONAL_PLAN_ITEM_MODES,
         f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
@@ -194,7 +201,7 @@ def test_the_invocation_argument_beats_the_personal_setting(
     A mode asked for on the command line wins, so one run can depart from the setting.
     """
     mode_repository.update_notes_branch_file(
-        Location.PERSONAL_SETTINGS,
+        ProjectLocation.PERSONAL_PLAN_ITEM_MODES,
         f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
@@ -219,7 +226,8 @@ def test_a_mode_the_enum_does_not_name_is_refused_in_the_personal_file(
     setting having worked.
     """
     mode_repository.update_notes_branch_file(
-        Location.PERSONAL_SETTINGS, f'{PlanItemSkill.KICKOFF.setting_key} = "atuo"\n'
+        ProjectLocation.PERSONAL_PLAN_ITEM_MODES,
+        f'{PlanItemSkill.KICKOFF.setting_key} = "atuo"\n',
     )
 
     finished = run_mode(
@@ -228,9 +236,9 @@ def test_a_mode_the_enum_does_not_name_is_refused_in_the_personal_file(
         CommandLineOption.SKILL,
         PlanItemSkill.KICKOFF,
     )
-    assert finished.returncode == ExitCode.UNKNOWN_MODE
+    assert finished.returncode == PlanItemModeExitCode.UNKNOWN_MODE
     assert finished.stdout == ""
-    assert ExitCode.UNKNOWN_MODE.name_for_a_caller in finished.stderr
+    assert PlanItemModeExitCode.UNKNOWN_MODE.name_for_a_caller in finished.stderr
 
 
 def test_a_mode_the_enum_does_not_name_is_refused_on_the_command_line(
@@ -247,7 +255,7 @@ def test_a_mode_the_enum_does_not_name_is_refused_on_the_command_line(
         CommandLineOption.REQUESTED,
         "go",
     )
-    assert finished.returncode == ExitCode.UNKNOWN_MODE
+    assert finished.returncode == PlanItemModeExitCode.UNKNOWN_MODE
     assert finished.stdout == ""
 
 
@@ -258,7 +266,7 @@ def test_a_personal_settings_file_that_will_not_parse_is_refused(
     Broken syntax is reported rather than read as an absent setting.
     """
     mode_repository.update_notes_branch_file(
-        Location.PERSONAL_SETTINGS, "kickoff_mode = \n"
+        ProjectLocation.PERSONAL_PLAN_ITEM_MODES, "kickoff_mode = \n"
     )
 
     finished = run_mode(
@@ -267,7 +275,7 @@ def test_a_personal_settings_file_that_will_not_parse_is_refused(
         CommandLineOption.SKILL,
         PlanItemSkill.KICKOFF,
     )
-    assert finished.returncode == ExitCode.MALFORMED_MODE_SETTINGS
+    assert finished.returncode == PlanItemModeExitCode.MALFORMED_MODE_SETTINGS
     assert finished.stdout == ""
 
 
@@ -281,15 +289,15 @@ def test_a_usage_error_exits_with_the_status_the_enum_reserves_for_it(
         mode_repository, Subcommand.RESOLVE, CommandLineOption.SKILL, "bogus"
     )
 
-    assert finished.returncode == ExitCode.USAGE
+    assert finished.returncode == PlanItemModeExitCode.USAGE
     assert finished.stdout == ""
 
 
 def test_each_refusal_carries_its_own_exit_code():
     codes = {
-        UnknownModeError: ExitCode.UNKNOWN_MODE,
-        MalformedModeSettingsError: ExitCode.MALFORMED_MODE_SETTINGS,
-        basstler.plan_item_mode.SettingsWriteRefusedError: ExitCode.SETTINGS_WRITE_REFUSED,
+        UnknownModeError: PlanItemModeExitCode.UNKNOWN_MODE,
+        MalformedModeSettingsError: PlanItemModeExitCode.MALFORMED_MODE_SETTINGS,
+        basstler.plan_item_mode.SettingsWriteRefusedError: PlanItemModeExitCode.SETTINGS_WRITE_REFUSED,
     }
     assert {error: error.exit_code for error in codes} == codes
 
@@ -324,7 +332,7 @@ def test_setting_one_mode_preserves_the_other(
     Writing one key must not clobber the key the user was not changing.
     """
     mode_repository.update_notes_branch_file(
-        Location.PERSONAL_SETTINGS,
+        ProjectLocation.PERSONAL_PLAN_ITEM_MODES,
         f'{PlanItemSkill.KICKOFF.setting_key} = "{ExecutionMode.PLAN}"\n',
     )
 
@@ -336,7 +344,7 @@ def test_setting_one_mode_preserves_the_other(
         CommandLineOption.MODE,
         ExecutionMode.ASK,
     )
-    assert finished.returncode == ExitCode.SUCCESS, finished.stderr
+    assert finished.returncode == PlanItemModeExitCode.SUCCESS, finished.stderr
 
     assert published_settings(mode_repository, tmp_path) == {
         PlanItemSkill.KICKOFF.setting_key: ExecutionMode.PLAN,
@@ -359,7 +367,7 @@ def test_setting_a_mode_with_no_personal_file_yet_seeds_it_from_the_defaults(
         CommandLineOption.MODE,
         ExecutionMode.ASK,
     )
-    assert finished.returncode == ExitCode.SUCCESS, finished.stderr
+    assert finished.returncode == PlanItemModeExitCode.SUCCESS, finished.stderr
 
     assert published_settings(mode_repository, tmp_path) == {
         PlanItemSkill.KICKOFF.setting_key: ExecutionMode.ASK,
@@ -402,7 +410,7 @@ def test_one_run_can_set_every_skill_at_once(
         CommandLineOption.MODE,
         ExecutionMode.PLAN,
     )
-    assert finished.returncode == ExitCode.SUCCESS, finished.stderr
+    assert finished.returncode == PlanItemModeExitCode.SUCCESS, finished.stderr
 
     assert published_settings(mode_repository, tmp_path) == {
         skill.setting_key: ExecutionMode.PLAN for skill in PlanItemSkill
@@ -442,7 +450,5 @@ def test_every_skill_names_a_key_the_committed_defaults_define():
     The enum and the shipped TOML are edited in different files; this is what stops one
     gaining a skill the other has never heard of.
     """
-    defaults = tomllib.loads(
-        (REPOSITORY_ROOT / Location.COMMITTED_DEFAULTS).read_text()
-    )
+    defaults = tomllib.loads(PackageLocation.PLAN_ITEM_MODE_DEFAULTS.value.read_text())
     assert set(defaults) == {skill.setting_key for skill in PlanItemSkill}

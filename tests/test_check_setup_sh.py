@@ -14,10 +14,14 @@ from pathlib import Path
 
 import pytest
 
-from .constants import NOTES_BRANCH, PersonalNotesPath
+from basstler.locations import PluginLocation, ProjectLocation
+
+from .constants import DatasetLocation, PersonalNotesPath, ScratchBranch
+from .project_declaration import ProjectDeclaration
 from .scratch_repository import (
     SCRATCH_IDENTITY,
     ScratchRepository,
+    PackageSourceFile,
     SetupPrerequisiteFile,
     initialize_bare_repository,
 )
@@ -126,7 +130,8 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     :return: The same repository, fully set up.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh", "check-setup.sh"
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.SETUP_CHECK_SCRIPT.name,
     )
     scratch_repository.install_package()
 
@@ -136,7 +141,7 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     scratch_repository.commit_everything("initial commit")
     scratch_repository.publish_notes_branch(
         {
-            PersonalNotesPath.NOTES_FILE: "my notes\n",
+            ProjectLocation.PERSONAL_NOTES_DOCUMENT: "my notes\n",
             PersonalNotesPath.GIT_IDENTITY: SCRATCH_IDENTITY.as_git_config_file(),
         }
     )
@@ -156,7 +161,9 @@ def run_check_setup(
     :return: The parsed report.
     """
     return SetupReport.from_completed_process(
-        repository.run_hook_script("check-setup.sh", **environment_overrides)
+        repository.run_hook_script(
+            PluginLocation.SETUP_CHECK_SCRIPT.name, **environment_overrides
+        )
     )
 
 
@@ -213,18 +220,14 @@ def test_does_not_check_for_the_notes_file_when_its_branch_is_missing(
 def test_reports_a_notes_branch_that_exists_but_holds_no_notes_file(
     check_setup_repository: ScratchRepository,
 ):
-    check_setup_repository.run_git(
-        "config", "claude.personalNotesPath", ".claude/personal/some-other-notes.md"
-    )
+    other_notes = str(ProjectLocation.PERSONAL_NOTES / "some-other-notes.md")
+    check_setup_repository.run_git("config", "claude.personalNotesPath", other_notes)
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
     assert report.results[SetupCheck.NOTES_BRANCH].status == CheckStatus.OK
     assert report.results[SetupCheck.NOTES_FILE].status == CheckStatus.NEEDS_SETUP
-    assert (
-        ".claude/personal/some-other-notes.md"
-        in report.results[SetupCheck.NOTES_FILE].detail
-    )
+    assert other_notes in report.results[SetupCheck.NOTES_FILE].detail
 
 
 # %% who commits here would be authored as
@@ -310,33 +313,32 @@ def test_reports_which_source_each_resolved_setting_came_from(
         in report.results[SetupCheck.NOTES_REMOTE].detail
     )
     assert report.results[SetupCheck.NOTES_BRANCH_NAME].detail == (
-        f"{NOTES_BRANCH} (from built-in default)"
+        f"{ScratchBranch.PERSONAL_NOTES} (from built-in default)"
     )
     assert report.results[SetupCheck.NOTES_PATH].detail == (
-        f"{PersonalNotesPath.NOTES_FILE} (from built-in default)"
+        f"{ProjectLocation.PERSONAL_NOTES_DOCUMENT} (from built-in default)"
     )
 
 
 def test_reports_a_setting_resolved_from_the_environment(
     check_setup_repository: ScratchRepository,
 ):
+    notes_path = str(ProjectLocation.PERSONAL_NOTES / "from-the-environment.md")
     report = run_check_setup(
-        check_setup_repository,
-        CLAUDE_PERSONAL_NOTES_PATH=".claude/personal/from-the-environment.md",
+        check_setup_repository, CLAUDE_PERSONAL_NOTES_PATH=notes_path
     )
     assert report.results[SetupCheck.NOTES_PATH].detail == (
-        ".claude/personal/from-the-environment.md"
-        " (from environment variable CLAUDE_PERSONAL_NOTES_PATH)"
+        f"{notes_path} (from environment variable CLAUDE_PERSONAL_NOTES_PATH)"
     )
 
 
-# %% the tooling this checkout is expected to carry
+# %% the plugin's own files
 
 
-def test_reports_which_tooling_files_this_checkout_is_missing(
+def test_reports_which_tooling_files_the_plugin_is_missing(
     check_setup_repository: ScratchRepository,
 ):
-    (check_setup_repository.project_root / SetupPrerequisiteFile.PLAN_SCHEMA).unlink()
+    (check_setup_repository.plugin_root / SetupPrerequisiteFile.PLAN_SCHEMA).unlink()
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
@@ -346,7 +348,7 @@ def test_reports_which_tooling_files_this_checkout_is_missing(
         in report.results[SetupCheck.TOOLING_FILES].detail
     )
     assert (
-        SetupPrerequisiteFile.PACKAGE
+        SetupPrerequisiteFile.PLUGIN_MANIFEST
         not in report.results[SetupCheck.TOOLING_FILES].detail
     )
 
@@ -354,7 +356,11 @@ def test_reports_which_tooling_files_this_checkout_is_missing(
 def test_reports_a_session_start_hook_that_is_not_registered(
     check_setup_repository: ScratchRepository,
 ):
-    check_setup_repository.write(".claude/settings.json", "{}\n")
+    (
+        check_setup_repository.plugin_root
+        / PluginLocation.HOOKS.value.name
+        / "hooks.json"
+    ).write_text("{}\n")
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
@@ -382,22 +388,42 @@ def test_reports_a_claude_local_md_that_is_not_gitignored(
 def test_reports_declared_dependencies_that_are_not_installed(
     check_setup_repository: ScratchRepository,
 ):
-    check_setup_repository.write(
-        SetupPrerequisiteFile.PACKAGE_METADATA,
-        '[project]\ndependencies = ["pytest>=1", "no-such-distribution-exists>=2"]\n',
+    (check_setup_repository.checkout_root / PackageSourceFile.METADATA).write_text(
+        DatasetLocation.PARTLY_INSTALLED_PROJECT.read_text(),
     )
+    installed, uninstalled = ProjectDeclaration.read(
+        DatasetLocation.PARTLY_INSTALLED_PROJECT
+    ).dependencies
 
     report = run_check_setup(check_setup_repository)
+    detail = report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
     assert report.exit_code == 1
     assert (
         report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
         == CheckStatus.NEEDS_SETUP
     )
-    assert (
-        "no-such-distribution-exists"
-        in report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
+    assert uninstalled in detail
+    assert installed not in detail
+
+
+def test_reports_a_declaration_it_cannot_read_rather_than_nothing_missing(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    A declaration the lookup cannot parse says nothing about what is installed, so it is
+    not reported as an environment with nothing missing.
+    """
+    (check_setup_repository.checkout_root / PackageSourceFile.METADATA).write_text(
+        "this is not toml\n"
     )
-    assert "pytest" not in report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.exit_code == 1
+    assert (
+        report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
+        == CheckStatus.NEEDS_SETUP
+    )
 
 
 # %% the outcome of it all working

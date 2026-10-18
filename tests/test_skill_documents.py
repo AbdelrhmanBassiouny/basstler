@@ -13,7 +13,7 @@ import re
 
 import pytest
 
-from .constants import ToolingDirectory
+from .constants import RepositoryLocation, SkillDirectory
 
 LINK_TARGET = re.compile(r"\]\(([^)]+)\)")
 """
@@ -34,15 +34,14 @@ def linked_files(instructions: str) -> set[str]:
     }
 
 
-@pytest.mark.parametrize("skill_directory", ToolingDirectory.skills())
-def test_every_file_a_skill_links_to_is_there(skill_directory: ToolingDirectory):
-    instructions = skill_directory.path / "SKILL.md"
+@pytest.mark.parametrize("skill_directory", SkillDirectory.skills())
+def test_every_file_a_skill_links_to_is_there(skill_directory: SkillDirectory):
+    directory = RepositoryLocation.PLUGIN / skill_directory
+    instructions = directory / "SKILL.md"
 
     linked = linked_files(instructions.read_text())
 
     missing = {
-        target
-        for target in linked
-        if not (skill_directory.path / target).resolve().exists()
+        target for target in linked if not (directory / target).resolve().exists()
     }
     assert missing == set()

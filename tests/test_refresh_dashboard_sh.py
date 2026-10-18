@@ -7,7 +7,7 @@ the personal-notes push (write-personal-notes-file.sh) are replaced with stubs i
 scratch project-root layout, so these tests exercise only refresh_dashboard.sh's own
 shell logic - no real git remote, network access, or GitHub data is involved.
 basstler.refresh_dashboard_support has no such dependencies, so the real module is reused
-unchanged.
+unchanged, with the logging module it prints through.
 """
 
 import json
@@ -17,58 +17,74 @@ from pathlib import Path
 
 import pytest
 
-from .constants import PACKAGE_DIRECTORY, STUBS_DIRECTORY, ToolingDirectory
-from .scratch_repository import install_hook_scripts_into
+import basstler.refresh_dashboard_support
+import basstler.standard_streams
+from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 
-PLAN_DASHBOARD_DIRECTORY = ToolingDirectory.PLAN_DASHBOARD_SKILL.path
-"""
-Where refresh_dashboard.sh itself lives - the skill directory, not the package. Claude
-Code discovers a skill by path, so its shell entry point stays with it.
-"""
+from .constants import (
+    DatasetLocation,
+    FileMode,
+    RepositoryLocation,
+    ScrubbedEnvironmentPrefix,
+    SkillDirectory,
+)
+from .scratch_repository import PackageSourceFile, install_hook_scripts_into
+from .script_runner import BashScriptRunner
 
 
 @pytest.fixture
 def scratch_project_root(tmp_path: Path) -> Path:
     """
-    Build a scratch project-root layout refresh_dashboard.sh can run
-    against unmodified: the real script plus resolve-personal-notes-config.sh,
-    and stand-ins for every script/hook it calls out to.
+    Build a scratch layout refresh_dashboard.sh can run against unmodified: a scratch
+    basstler checkout holding the real script plus resolve-personal-notes-config.sh, and
+    stand-ins for every script/hook it calls out to, beside the directory it runs in.
 
     :param tmp_path: pytest's per-test temporary directory.
-    :return: The scratch project root.
+    :return: The directory the script runs in.
     """
-    plan_dashboard_directory = tmp_path / ToolingDirectory.PLAN_DASHBOARD_SKILL
-    hooks_directory = tmp_path / ToolingDirectory.HOOKS
-    package_directory = tmp_path / PACKAGE_DIRECTORY.name
+    checkout_root = scratch_checkout_root(tmp_path)
+    plugin_root = checkout_root / RepositoryLocation.PLUGIN.value.name
+    plan_dashboard_directory = plugin_root / SkillDirectory.PLAN_DASHBOARD
+    hooks_directory = plugin_root / PluginLocation.HOOKS.value.name
+    package_directory = (
+        checkout_root / PackageSourceFile.SOURCE / PackageLocation.DIRECTORY.value.name
+    )
     plan_dashboard_directory.mkdir(parents=True)
-    package_directory.mkdir()
+    package_directory.mkdir(parents=True)
+    shutil.copy(
+        DatasetLocation.SET_UP_CHECKOUT / PackageSourceFile.METADATA,
+        checkout_root / PackageSourceFile.METADATA,
+    )
 
     shutil.copy(
-        PLAN_DASHBOARD_DIRECTORY / "refresh_dashboard.sh",
-        plan_dashboard_directory / "refresh_dashboard.sh",
+        RepositoryLocation.PLUGIN / SkillDirectory.DASHBOARD_REFRESH_SCRIPT,
+        plan_dashboard_directory / SkillDirectory.DASHBOARD_REFRESH_SCRIPT.name,
     )
-    install_hook_scripts_into(tmp_path, "resolve-personal-notes-config.sh")
+    install_hook_scripts_into(
+        plugin_root, PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
+    )
 
-    # The real support module, whose own dependencies are the standard library only, in a
-    # scratch package the script's `python3 -m basstler.<module>` calls resolve against.
+    # The real support module and the logging it prints through, whose own dependencies
+    # are the standard library only, in a scratch package the script's
+    # `python3 -m basstler.<module>` calls resolve against.
     (package_directory / "__init__.py").touch()
+    for module in (basstler.refresh_dashboard_support, basstler.standard_streams):
+        shutil.copy(module.__file__, package_directory / Path(module.__file__).name)
     shutil.copy(
-        PACKAGE_DIRECTORY / "refresh_dashboard_support.py",
-        package_directory / "refresh_dashboard_support.py",
-    )
-    shutil.copy(
-        STUBS_DIRECTORY / "sync_manifest_status_stub.py",
+        DatasetLocation.STUBS / "sync_manifest_status_stub.py",
         package_directory / "sync_manifest_status.py",
     )
     shutil.copy(
-        STUBS_DIRECTORY / "build_dashboard_stub.py",
+        DatasetLocation.STUBS / "build_dashboard_stub.py",
         package_directory / "build_dashboard.py",
     )
     shutil.copy(
-        STUBS_DIRECTORY / "write_personal_notes_file_stub.sh",
-        hooks_directory / "write-personal-notes-file.sh",
+        DatasetLocation.STUBS / "write_personal_notes_file_stub.sh",
+        hooks_directory / PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT.name,
     )
-    (hooks_directory / "write-personal-notes-file.sh").chmod(0o755)
+    (hooks_directory / PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT.name).chmod(
+        FileMode.EXECUTABLE
+    )
 
     return tmp_path
 
@@ -80,12 +96,30 @@ def _refresh_dashboard_script_path(scratch_project_root: Path) -> Path:
     :param scratch_project_root: A fixture-built scratch project root.
     """
     return (
-        scratch_project_root
-        / ".claude"
-        / "skills"
-        / "plan-dashboard"
-        / "refresh_dashboard.sh"
+        scratch_checkout_root(scratch_project_root)
+        / RepositoryLocation.PLUGIN.value.name
+        / SkillDirectory.DASHBOARD_REFRESH_SCRIPT
     )
+
+
+def scratch_checkout_root(scratch_project_root: Path) -> Path:
+    """
+    :param scratch_project_root: The directory the script runs in.
+    :return: The scratch basstler checkout the script sits in, inside it.
+    """
+    return scratch_project_root / "basstler-checkout"
+
+
+def scrubbed_environment() -> dict[str, str]:
+    """
+    :return: This process's environment without anything that would point the script
+        at another project, plugin or personal-notes setting.
+    """
+    return BashScriptRunner(
+        project_root=Path(),
+        removed_variable_prefixes=tuple(ScrubbedEnvironmentPrefix),
+        script_path=Path(),
+    ).environment({})
 
 
 def run_refresh_dashboard(
@@ -128,6 +162,7 @@ def run_refresh_dashboard(
         cwd=scratch_project_root,
         capture_output=True,
         text=True,
+        env=scrubbed_environment(),
     )
 
 
@@ -142,6 +177,7 @@ def test_missing_required_argument_fails_with_usage(scratch_project_root: Path):
         cwd=scratch_project_root,
         capture_output=True,
         text=True,
+        env=scrubbed_environment(),
     )
     assert result.returncode == 1
     assert result.stderr.startswith(f"Usage: {script_path} ")
@@ -154,6 +190,7 @@ def test_unrecognized_argument_fails(scratch_project_root: Path):
         cwd=scratch_project_root,
         capture_output=True,
         text=True,
+        env=scrubbed_environment(),
     )
     assert result.returncode == 1
     assert result.stderr == "Unrecognized argument: --not-a-real-flag\n"
@@ -184,7 +221,8 @@ def test_a_correction_pushes_to_personal_notes(scratch_project_root: Path):
     ).read_text()
     plan_path = scratch_project_root / "plan.yaml"
     assert f"--source\n{plan_path}\n" in invocation
-    assert "--destination\n.claude/personal/plans/test-plan/plan.yaml\n" in invocation
+    manifest_destination = ProjectLocation.PLANS / "test-plan" / "plan.yaml"
+    assert f"--destination\n{manifest_destination}\n" in invocation
     assert "1 item(s) to done" in invocation
 
 
