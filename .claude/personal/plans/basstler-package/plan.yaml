@@ -64,13 +64,17 @@ items:
   depends_on: [basstler-repository-extraction]
   pull_request_number: 7
   session: https://claude.ai/code/session_01XHyFmqJdtdZbCm6Ss8teWA
-  notes: >
-    The branches arrived rewritten with the extraction. For each claude/* branch on origin that still
-    holds commits not on main and is not stale, merge main into it and open a draft pull request,
-    quoting the unresolved review threads from its original pull request. Branches written before
-    the package existed (the misspelled bastler/ era) are stale: open a one-paragraph issue for
-    each unless the user marks it to carry, then delete the branch. Set each carried item's
-    branch and pull_request_number here. The old link-sent label becomes promotion-link-sent.
+  notes: >-
+    Carried, each with main merged in and a draft pull request here: #8 notes-core, #9
+    restack merges, #10 Actions budget, #11 size limits, #13 upstream CI, #14 failure logs,
+    #15 fix propagation, #16 stack-maintenance workflow, #17 cross-plan depends_on (with
+    CRAM #206), #18 new-plan routing (with CRAM #207). #12 (krrood) opened without the
+    merge, since its rework replaces it. Retired with an issue each (#19-#31): the bastler/
+    and .claude/stack/ era branches, the superseded #514 and #207, and, by the user's
+    choice, the whole integration-branch stack (#154, #211, #281, #437). Left: the user
+    deletes the 13 retired branches (a session's git proxy refuses deletes); the actions-
+    budget item in the CRAM notes still names CRAM #503 (now #10). #7 tracks it and closes
+    once the branches are gone.
 - id: cram-uses-basstler-plugin
   title: The CRAM fork installs basstler as a plugin instead of carrying its code
   branch: null
@@ -137,7 +141,7 @@ items:
   status: blocked
   track: carried-across
   depends_on: [basstler-open-pull-request-carryover]
-  pull_request_number: null
+  pull_request_number: 12
   notes: Depend on plain krrood (its light core, with a krrood[all] extra for the rest) instead of
     a separate krrood_core package. Exceptions in exceptions.py as DataclassExceptions, board.json
     through krrood's serializer. The branch predates that choice and needs reworking.
@@ -146,22 +150,25 @@ items:
 - id: upstream-pull-request-checks
   title: Report a promoted branch's upstream CI alongside its review threads
   branch: claude/review-pr-ci-status-20k6g4
-  status: not started
+  status: in progress
   track: carried-across
   depends_on: [basstler-open-pull-request-carryover]
-  pull_request_number: null
-  notes: Reads the upstream pull request's statusCheckRollup in the same GraphQL query as its review
-    threads, on the fork's runner, and names every check that did not pass. The branch is not on
-    main yet; it needs main merged in and a fresh draft pull request.
+  pull_request_number: 13
+  notes: >-
+    Reads the upstream pull request's statusCheckRollup in the same GraphQL query as its
+    review threads, on the fork's runner, and names every check that did not pass. Carried
+    as draft #13 with main merged in.
 - id: upstream-check-failure-logs
   title: Say why an upstream check failed, not only that it did
   branch: claude/upstream-check-failure-logs
-  status: not started
+  status: in progress
   track: carried-across
   depends_on: [upstream-pull-request-checks]
-  pull_request_number: null
-  notes: Stacked on upstream-pull-request-checks. Quotes the failing step's log for each failed upstream
-    check, stopping where the step failed. Lands after its parent.
+  pull_request_number: 14
+  notes: >-
+    Stacked on upstream-pull-request-checks (#13). Quotes the failing step's log for each
+    failed upstream check, stopping where the step failed. Carried as draft #14; the
+    reusable workflow and its example caller take failure_logs. Lands after its parent.
 - id: setup-stacked-prs-skill
   title: '/setup-stacked-prs: one guided command that sets up the stacked-pull-request workflow'
   branch: null
@@ -222,7 +229,7 @@ items:
   status: not started
   track: conversion
   depends_on: [basstler-typed-invocations]
-  pull_request_number: null
+  pull_request_number: 8
   notes: 'Pure addition, no bash changes: PersonalNotesLocation, PersonalNotesBranch.fetch (upstream
     fallback), NotesBranchWriter (detached scratch worktree, PUSHED/UNCHANGED, None removes),
     NotesMarker.section_in, in src/basstler/. The branch exists but predates typed invocations;
