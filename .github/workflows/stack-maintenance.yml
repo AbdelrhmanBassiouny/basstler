@@ -20,6 +20,17 @@ name: Stack maintenance
 #
 # A runner starts with nothing installed and no session hook runs on it, so this job
 # installs the package itself before invoking a module.
+#
+# Interaction with the regenerated integration branch (`integration-branch`/
+# `integration-branch-ci-verdict`, not yet on `main`): that pipeline opens its own,
+# non-draft pull requests to judge a build - candidates this pass must never restack or
+# promote as though they were ordinary stack members. The exclusion
+# (`BoardExport.is_a_candidate`) lives in the board export both a build and this pass
+# derive their work from, in the same pull request that starts opening candidates, so
+# this workflow inherits it with no change. The two can still fire on the same pull
+# request event, but they write to disjoint refs - a feature branch or the fork's own
+# base here, a separate build branch there - and a rebuild is regenerated from scratch,
+# so a race is benign rather than an interruption.
 
 on:
   workflow_call:
