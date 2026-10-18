@@ -139,6 +139,17 @@ items:
     ScriptRunner, PythonModuleRunner, BashScriptRunner and GitCommandRunner; GitHubClient.send(request)
     mirrors it. Scope: every subprocess call in src/ and tests/, and the GitHub API calls in src/.
     It goes ahead of the conversion items, which rewrite the same calls.
+- id: basstler-test-constants
+  title: Move the test modules' module-level constants into tests/constants.py
+  branch: null
+  status: not started
+  track: conversion
+  depends_on: []
+  pull_request_number: null
+  notes: test_stack.py already takes every value from tests/constants.py and the dataset; the other
+    test modules still define module-level constants. Move them into named enums or dataclasses in
+    tests/constants.py, as test_stack.py does, so no test spells a value of its own. Recorded from
+    PR 1's follow-up list.
 - id: basstler-notes-core-python
   title: 'Bash to Python 1: notes-core modules (config, git seam, writer, markers)'
   branch: claude/basstler-notes-core-python
