@@ -79,26 +79,26 @@ def test_indexes_every_item_branch(tmp_path):
         "plan-a",
         "  - branch: branch-1\n  - branch: branch-2\n",
     )
-    content = BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render()
+    content = BranchIndex(tmp_path, Path("plans"), PlanDocument.MANIFEST).render()
     assert content == "branch-1\tplan-a\nbranch-2\tplan-a\n"
 
 
 def test_skips_items_with_no_branch(tmp_path):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "plan-a", "  - title: no branch here\n")
-    assert BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render() == ""
+    assert BranchIndex(tmp_path, Path("plans"), PlanDocument.MANIFEST).render() == ""
 
 
 def test_empty_when_no_plans_exist(tmp_path):
     (tmp_path / "plans").mkdir()
-    assert BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render() == ""
+    assert BranchIndex(tmp_path, Path("plans"), PlanDocument.MANIFEST).render() == ""
 
 
 def test_first_plan_wins_on_a_duplicate_branch(tmp_path):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "plan-a", "  - branch: shared\n")
     _write_plan(plans_directory, "plan-b", "  - branch: shared\n")
-    content = BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render()
+    content = BranchIndex(tmp_path, Path("plans"), PlanDocument.MANIFEST).render()
     # plans are scanned in sorted glob order, so plan-a wins over plan-b.
     assert content == "shared\tplan-a\n"
 
@@ -107,7 +107,7 @@ def test_warns_on_stderr_when_a_duplicate_branch_is_dropped(tmp_path, capsys):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "plan-a", "  - branch: shared\n")
     _write_plan(plans_directory, "plan-b", "  - branch: shared\n")
-    BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render()
+    BranchIndex(tmp_path, Path("plans"), PlanDocument.MANIFEST).render()
     duplicate_manifest_path = plans_directory / "plan-b" / PlanDocument.MANIFEST
     assert capsys.readouterr().err == (
         f"plan_manifest_tools.py: duplicate branch 'shared' in "
@@ -120,14 +120,14 @@ def test_raises_when_plan_id_is_coerced_to_a_boolean(tmp_path):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "no", "  - branch: branch-1\n")
     with pytest.raises(YamlBooleanCoercionError, match="'id'"):
-        BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render()
+        BranchIndex(tmp_path, Path("plans"), PlanDocument.MANIFEST).render()
 
 
 def test_raises_when_a_branch_is_coerced_to_a_boolean(tmp_path):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "plan-a", "  - branch: no\n")
     with pytest.raises(YamlBooleanCoercionError, match="'branch'"):
-        BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render()
+        BranchIndex(tmp_path, Path("plans"), PlanDocument.MANIFEST).render()
 
 
 # %% main - subcommand dispatch

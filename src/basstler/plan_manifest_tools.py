@@ -17,8 +17,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import glob
-import os
 import sys
 from dataclasses import dataclass
 from enum import StrEnum
@@ -177,7 +175,7 @@ class BranchIndex:
     The scratch worktree root to scan within.
     """
 
-    plans_directory: str
+    plans_directory: Path
     """
     The plans directory, relative to :attr:`scratch_directory` (e.g.
     ``.claude/personal/plans``).
@@ -193,11 +191,10 @@ class BranchIndex:
         """
         :return: Every ``<plans_directory>/*/<manifest_filename>``, in sorted order.
         """
-        manifest_pattern = os.path.join(
-            self.scratch_directory, self.plans_directory, "*", self.manifest_filename
-        )
+        plans_root = self.scratch_directory / self.plans_directory
         return [
-            PlanManifest(Path(path)) for path in sorted(glob.glob(manifest_pattern))
+            PlanManifest(path)
+            for path in sorted(plans_root.glob(f"*/{self.manifest_filename}"))
         ]
 
     def render(self) -> str:
@@ -257,7 +254,7 @@ class ManifestToolsCommandLine:
             help="Rebuild the branch->plan-id index",
         )
         regenerate_parser.add_argument("--scratch-dir", required=True, type=Path)
-        regenerate_parser.add_argument("--plans-dir", required=True)
+        regenerate_parser.add_argument("--plans-dir", required=True, type=Path)
         regenerate_parser.add_argument("--manifest-filename", required=True)
         regenerate_parser.add_argument(
             "--output", required=True, type=Path, help="Path to write the index to"
