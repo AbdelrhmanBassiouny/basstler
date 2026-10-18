@@ -11,8 +11,8 @@ upstream repository and reports it. Generic and fork-agnostic — nothing here
 may hardcode a repository, owner, or branch name.
 
 **This skill only reads.** It never comments on, reviews, resolves, or
-otherwise modifies anything on the upstream. `AGENTS.md` forbids it outright,
-and the report is the entire deliverable.
+otherwise modifies anything on the upstream: the upstream belongs to its
+reviewers, and the report is the entire deliverable.
 
 ## Why an Action rather than a direct read
 
@@ -42,8 +42,8 @@ landed on the fork's default branch yet.
 The fork is this checkout's own repository — resolve it rather than assuming:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
-python3 -m "${STACK_MODULE}" configuration
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+"${BASSTLER_PYTHON}" -m "${STACK_MODULE}" configuration
 ```
 
 Take the target from the skill's argument: a bare number is an upstream pull
