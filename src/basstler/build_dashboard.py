@@ -61,9 +61,6 @@ logger = StandardStreamHandler.logger_for(__name__)
 This module's logger, which is also what its command prints through.
 """
 
-MAXIMUM_DEPENDENCY_STACK_LEVEL = 4
-"""Same-track dependency chains deeper than this wrap back to indent level 0."""
-
 
 class LiveState(StrEnum):
     """An item's live GitHub pull request state, classified fresh on every run.
@@ -663,29 +660,46 @@ class ResolveAction(ItemAction):
     skill_command_name: ClassVar[str] = "/plan-item-resolve"
 
 
-@dataclass(frozen=True)
-class ModelOption:
-    """One choice in a dashboard action button's model dropdown."""
+class ModelOption(StrEnum):
+    """One choice in a dashboard action button's model dropdown, in the order the
+    dropdown lists them.
 
-    value: str
-    """The model id to prepend as ``/model <value>`` before the copied
-    command, or ``""`` to copy the command alone and inherit whatever
-    model the pasted-into session is already running."""
+    Every model is offered dashboard-wide - not plan-specific, so declared once
+    here rather than threaded through :class:`Plan`. A member is its own model
+    id, the one to prepend as ``/model <value>`` before the copied command, or
+    ``""`` to copy the command alone and inherit whatever model the
+    pasted-into session is already running.
+    """
 
     label: str
     """The human-readable label shown in the dropdown."""
 
+    def __new__(cls, model_identifier: str, label: str) -> ModelOption:
+        """Make a member that is its own model id and carries its dropdown label.
 
-AVAILABLE_MODELS: list[ModelOption] = [
-    ModelOption(value="", label="Session default"),
-    ModelOption(value="claude-opus-5", label="Opus 5"),
-    ModelOption(value="claude-sonnet-5", label="Sonnet 5"),
-    ModelOption(value="claude-haiku-4-5-20251001", label="Haiku 4.5"),
-    ModelOption(value="claude-fable-5", label="Fable 5"),
-]
-"""Every model offered in an action button's dropdown, dashboard-wide - not
-plan-specific, so declared once at module level rather than threaded through
-:class:`Plan`."""
+        :param model_identifier: The model id, or ``""`` for the session default.
+        :param label: The human-readable label shown in the dropdown.
+        :return: The member.
+        """
+        member = str.__new__(cls, model_identifier)
+        member._value_ = model_identifier
+        member.label = label
+        return member
+
+    SESSION_DEFAULT = ("", "Session default")
+    """Inherit whatever model the pasted-into session is already running."""
+
+    OPUS_5 = ("claude-opus-5", "Opus 5")
+    """Claude Opus 5."""
+
+    SONNET_5 = ("claude-sonnet-5", "Sonnet 5")
+    """Claude Sonnet 5."""
+
+    HAIKU_4_5 = ("claude-haiku-4-5-20251001", "Haiku 4.5")
+    """Claude Haiku 4.5."""
+
+    FABLE_5 = ("claude-fable-5", "Fable 5")
+    """Claude Fable 5."""
 
 
 @dataclass
@@ -931,7 +945,7 @@ class StackedItem:
 
     indent_level: int
     """How deeply nested this item is under its same-track dependency chain,
-    capped at :data:`MAXIMUM_DEPENDENCY_STACK_LEVEL`."""
+    capped at :attr:`DashboardRenderer.maximum_dependency_stack_level`."""
 
     wrap_parent: Item | None
     """The item this one visually continues from, if the chain wrapped back
@@ -1013,6 +1027,9 @@ class DashboardRenderer:
     items_by_identifier: dict[str, Item] = field(init=False)
     """Every item, keyed by :attr:`Item.identifier`."""
 
+    maximum_dependency_stack_level: ClassVar[int] = 4
+    """Same-track dependency chains deeper than this wrap back to indent level 0."""
+
     def __post_init__(self) -> None:
         self.items_by_identifier = {item.identifier: item for item in self.plan.items}
 
@@ -1046,7 +1063,7 @@ class DashboardRenderer:
             has_bug_fix_next_steps=any(item.is_bug_fix for item in next_step_items),
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             waves=self._build_wave_sections(),
-            available_models=AVAILABLE_MODELS,
+            available_models=list(ModelOption),
         )
 
         summary = DashboardSummary(
@@ -1302,11 +1319,11 @@ class DashboardRenderer:
             for wave in self.plan.waves
         ]
 
-    @staticmethod
-    def _build_track_stack(track_items: list[Item]) -> list[StackedItem]:
+    @classmethod
+    def _build_track_stack(cls, track_items: list[Item]) -> list[StackedItem]:
         """Order a track's items into a dependency stack (same-track
         depends_on only), assign an indent level per item capped at
-        :data:`MAXIMUM_DEPENDENCY_STACK_LEVEL`, wrapping back to level 0
+        :attr:`maximum_dependency_stack_level`, wrapping back to level 0
         (with a reference back to the real parent) past the cap. Also
         computes each item's indent as it would be with done items hidden -
         see :class:`StackedItem`."""
@@ -1345,7 +1362,7 @@ class DashboardRenderer:
             else:
                 parent_level, parent_wrap_parent = visible_stack_position(parent)
                 next_level = parent_level + 1
-                if next_level > MAXIMUM_DEPENDENCY_STACK_LEVEL:
+                if next_level > cls.maximum_dependency_stack_level:
                     result = (0, parent)
                 else:
                     result = (next_level, parent_wrap_parent)
@@ -1359,7 +1376,7 @@ class DashboardRenderer:
             appending a :class:`StackedItem` per visit."""
             next_level = level + 1
             wrap_for_children = None
-            if next_level > MAXIMUM_DEPENDENCY_STACK_LEVEL:
+            if next_level > cls.maximum_dependency_stack_level:
                 next_level = 0
                 wrap_for_children = item
             visible_level, visible_wrap_parent = visible_stack_position(item)

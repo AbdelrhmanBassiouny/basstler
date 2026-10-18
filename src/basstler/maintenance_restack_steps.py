@@ -242,7 +242,8 @@ class RestackStep(ABC):
 
     A step either concludes the branch - returning the outcome its owner acts on - or
     returns nothing and lets the next step run. Adding a step is writing a subclass and
-    placing it in :data:`maintenance_restack_procedure.RESTACK_STEPS`, whose order is the procedure.
+    placing it in :func:`maintenance_restack_procedure.restack_steps`, whose order is
+    the procedure.
     """
 
     @abstractmethod

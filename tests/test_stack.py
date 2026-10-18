@@ -13,6 +13,7 @@ from __future__ import annotations
 import subprocess
 from collections.abc import Container
 from pathlib import Path
+from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -31,10 +32,13 @@ from basstler.stack import (
     IntegrationStrategy,
     CommitMoveChecks,
     Command,
+    CommandOption,
     ProposedCommitMove,
     RefusalReason,
     PromotionLink,
+    PromotionLinkParameter,
     PromotionLinkTooLongError,
+    PrintedConfiguration,
     PullRequest,
     Remote,
     Reparent,
@@ -54,33 +58,16 @@ from basstler.stack import (
 
 from basstler.locations import ProjectLocation
 
-from .constants import DatasetLocation, RemoteName, StackBranch, StackLabel
+from .constants import (
+    DatasetLocation,
+    RemoteName,
+    StackBranch,
+    StackLabel,
+    StackRepository,
+    StackSampleText,
+)
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
-
-A_FORK = Repository("a-fork-owner", "a-fork")
-"""
-The fork a scratch checkout's remote points at.
-"""
-
-SOMEBODY_ELSES_FORK = Repository("someone-else", "their-fork")
-"""
-A fork other than the one the configuration names.
-"""
-
-ANOTHER_OWNERS_FORK = Repository("another-owner", "a-project")
-"""
-A second fork of the upstream, beside :data:`FORK`.
-"""
-
-STACK_MODULE = basstler.stack.__name__
-"""
-The tool under test, invoked as a subprocess wherever an exit status is the assertion.
-
-Named off the module rather than spelled out, and run with ``-m`` rather than by path: a
-module run by path puts its own directory on ``sys.path`` in place of the project root,
-so its absolute imports of its siblings would not resolve.
-"""
 
 
 def make_configuration(upstream_setup_command: str | None = None) -> Configuration:
@@ -88,9 +75,9 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
         in_review_label=StackLabel.IN_REVIEW,
         rebase_label=StackLabel.REBASE,
         needs_resolution_label=StackLabel.NEEDS_RESOLUTION,
-        fork_repository=A_FORK,
+        fork_repository=StackRepository.FORK.value,
         fork_remote=RemoteName.ORIGIN,
-        upstream_repository=Repository("an-upstream-owner", "a-project"),
+        upstream_repository=StackRepository.UPSTREAM.value,
         upstream_remote=RemoteName.UPSTREAM,
         upstream_base=StackBranch.BASE,
         upstream_setup_command=upstream_setup_command,
@@ -277,13 +264,13 @@ def test_ci_and_session_carried_onto_branch():
                 StackBranch.FEATURE,
                 StackBranch.BASE,
                 draft=False,
-                ci="failure",
-                session="https://claude.ai/code/session_x",
+                ci=StackSampleText.CHECK_CONCLUSION,
+                session=StackSampleText.SESSION_LINK,
             )
         ]
     )
-    assert stack.branches[0].ci == "failure"
-    assert stack.branches[0].session == "https://claude.ai/code/session_x"
+    assert stack.branches[0].ci == StackSampleText.CHECK_CONCLUSION
+    assert stack.branches[0].session == StackSampleText.SESSION_LINK
 
 
 # %% restack plan
@@ -386,15 +373,23 @@ def test_ready_child_promotable_when_its_off_board_parent_has_landed():
 
 # %% configuration layering (personal-notes overrides)
 
-DEFAULT_STACK_TOML = """\
-in_review_label = "in-review"
-rebase_label = "rebase"
-needs_resolution_label = "needs-resolution"
-fork_remote = "origin"
-upstream_repository = "an-upstream-owner/a-project"
-upstream_remote = "upstream"
-upstream_base = "main"
-"""
+
+def a_setting_line(setting: StackSetting, value: object) -> str:
+    """
+    :param setting: The setting to write.
+    :param value: Its value.
+    :return: The ``stack.toml`` line giving *setting* that value.
+    """
+    return f'{setting} = "{value}"\n'
+
+
+def a_remote_addition_command(name: str, repository: Repository) -> str:
+    """
+    :param name: What the remote is to be called.
+    :param repository: The repository it is to point at.
+    :return: The command adding that remote.
+    """
+    return f"git remote add {name} {repository.clone_url}"
 
 
 def _committed_configuration_path(scratch_repository: ScratchRepository) -> Path:
@@ -405,12 +400,11 @@ def _committed_configuration_path(scratch_repository: ScratchRepository) -> Path
     :param scratch_repository: The scratch repository to write into.
     :return: The path :func:`load_configuration` should be pointed at.
     """
-    path = scratch_repository.install_stack_configuration(DEFAULT_STACK_TOML)
-    scratch_repository.run_git(
-        "remote",
-        "add",
-        "a-name-nobody-expects",
-        A_FORK.clone_url,
+    path = scratch_repository.install_stack_configuration(
+        DatasetLocation.COMMITTED_DEFAULT_STACK_CONFIGURATION.read_text()
+    )
+    scratch_repository.add_remote(
+        RemoteName.UNEXPECTED, StackRepository.FORK.value.clone_url
     )
     return path
 
@@ -433,7 +427,9 @@ def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.publish_notes_branch(
         {
-            ProjectLocation.PERSONAL_STACK_CONFIGURATION: 'upstream_remote = "my-own-upstream-name"\n'
+            ProjectLocation.PERSONAL_STACK_CONFIGURATION: a_setting_line(
+                StackSetting.UPSTREAM_REMOTE, RemoteName.PERSONAL_UPSTREAM
+            )
         }
     )
     scratch_repository.resolve_notes_remote_to()
@@ -441,7 +437,7 @@ def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
 
     configuration = load_configuration(configuration_path)
 
-    assert configuration.upstream_remote == "my-own-upstream-name"
+    assert configuration.upstream_remote == RemoteName.PERSONAL_UPSTREAM
     assert configuration.upstream_base == StackBranch.BASE  # untouched default
 
 
@@ -449,7 +445,9 @@ def test_load_configuration_ignores_personal_notes_branch_without_a_stack_file(
     scratch_repository: ScratchRepository, monkeypatch
 ):
     configuration_path = _committed_configuration_path(scratch_repository)
-    scratch_repository.publish_notes_branch({"README.md": "unrelated\n"})
+    scratch_repository.publish_notes_branch(
+        {StackSampleText.UNRELATED_FILE: StackSampleText.UNRELATED_CONTENT}
+    )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
@@ -470,8 +468,8 @@ def test_load_configuration_resolves_the_fork_whatever_the_remote_is_called(
 
     configuration = load_configuration(configuration_path)
 
-    assert configuration.fork_repository == A_FORK
-    assert configuration.fork_remote == "a-name-nobody-expects"
+    assert configuration.fork_repository == StackRepository.FORK.value
+    assert configuration.fork_remote == RemoteName.UNEXPECTED
 
 
 def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
@@ -482,12 +480,15 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
     push to.
     """
     configuration_path = _committed_configuration_path(scratch_repository)
-    scratch_repository.run_git(
-        "remote", "add", RemoteName.THEIRS, SOMEBODY_ELSES_FORK.clone_url
+    scratch_repository.add_remote(
+        RemoteName.THEIRS, StackRepository.SOMEBODY_ELSES_FORK.value.clone_url
     )
     scratch_repository.publish_notes_branch(
         {
-            ProjectLocation.PERSONAL_STACK_CONFIGURATION: 'fork_repository = "someone-else/their-fork"\n'
+            ProjectLocation.PERSONAL_STACK_CONFIGURATION: a_setting_line(
+                StackSetting.FORK_REPOSITORY,
+                StackRepository.SOMEBODY_ELSES_FORK.value,
+            )
         }
     )
     scratch_repository.resolve_notes_remote_to()
@@ -495,18 +496,20 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
 
     configuration = load_configuration(configuration_path)
 
-    assert configuration.fork_repository == SOMEBODY_ELSES_FORK
+    assert configuration.fork_repository == StackRepository.SOMEBODY_ELSES_FORK.value
     assert configuration.fork_remote == RemoteName.THEIRS
 
 
 # %% resolving which remote is the fork
 
-UPSTREAM = Repository("an-upstream-owner", "a-project")
-FORK = Repository("a-fork-owner", "a-project")
-
 
 def resolve(remote_urls: dict[str, str], fork_repository: Repository | None = None):
-    return resolve_remotes(remote_urls, UPSTREAM, "an-upstream-remote", fork_repository)
+    return resolve_remotes(
+        remote_urls,
+        StackRepository.UPSTREAM.value,
+        RemoteName.PREFERRED_UPSTREAM,
+        fork_repository,
+    )
 
 
 def test_the_fork_is_the_remote_that_is_not_the_upstream():
@@ -515,51 +518,62 @@ def test_the_fork_is_the_remote_that_is_not_the_upstream():
     """
     resolution = resolve(
         {
-            RemoteName.ORIGIN: UPSTREAM.clone_url,
-            RemoteName.MINE: FORK.clone_url,
+            RemoteName.ORIGIN: StackRepository.UPSTREAM.value.clone_url,
+            RemoteName.MINE: StackRepository.SAME_NAMED_FORK.value.clone_url,
         }
     )
 
-    assert resolution.fork == Remote(RemoteName.MINE, FORK)
-    assert resolution.upstream == Remote(RemoteName.ORIGIN, UPSTREAM)
+    assert resolution.fork == Remote(
+        RemoteName.MINE, StackRepository.SAME_NAMED_FORK.value
+    )
+    assert resolution.upstream == Remote(
+        RemoteName.ORIGIN, StackRepository.UPSTREAM.value
+    )
 
 
 def test_the_fork_resolves_the_same_when_origin_happens_to_be_the_fork():
     resolution = resolve(
         {
-            RemoteName.ORIGIN: FORK.clone_url,
-            RemoteName.UPSTREAM: UPSTREAM.clone_url,
+            RemoteName.ORIGIN: StackRepository.SAME_NAMED_FORK.value.clone_url,
+            RemoteName.UPSTREAM: StackRepository.UPSTREAM.value.clone_url,
         }
     )
 
-    assert resolution.fork == Remote(RemoteName.ORIGIN, FORK)
+    assert resolution.fork == Remote(
+        RemoteName.ORIGIN, StackRepository.SAME_NAMED_FORK.value
+    )
 
 
 def test_the_fork_resolves_from_a_checkout_that_has_only_the_fork():
     """
     A fresh cloud clone has one remote and no upstream at all.
     """
-    resolution = resolve({RemoteName.ORIGIN: FORK.clone_url})
+    resolution = resolve(
+        {RemoteName.ORIGIN: StackRepository.SAME_NAMED_FORK.value.clone_url}
+    )
 
-    assert resolution.fork == Remote(RemoteName.ORIGIN, FORK)
+    assert resolution.fork == Remote(
+        RemoteName.ORIGIN, StackRepository.SAME_NAMED_FORK.value
+    )
     assert resolution.upstream is None
 
 
 def test_a_checkout_without_an_upstream_remote_is_told_how_to_add_one():
-    resolution = resolve({RemoteName.ORIGIN: FORK.clone_url})
-
-    assert resolution.upstream_setup_command == (
-        "git remote add an-upstream-remote "
-        "https://github.com/an-upstream-owner/a-project.git"
+    resolution = resolve(
+        {RemoteName.ORIGIN: StackRepository.SAME_NAMED_FORK.value.clone_url}
     )
-    assert resolution.upstream_name == "an-upstream-remote"
+
+    assert resolution.upstream_setup_command == a_remote_addition_command(
+        RemoteName.PREFERRED_UPSTREAM, StackRepository.UPSTREAM.value
+    )
+    assert resolution.upstream_name == RemoteName.PREFERRED_UPSTREAM
 
 
 def test_nothing_to_add_when_the_upstream_remote_is_already_there():
     resolution = resolve(
         {
-            RemoteName.ORIGIN: FORK.clone_url,
-            RemoteName.UPSTREAM: UPSTREAM.clone_url,
+            RemoteName.ORIGIN: StackRepository.SAME_NAMED_FORK.value.clone_url,
+            RemoteName.UPSTREAM: StackRepository.UPSTREAM.value.clone_url,
         }
     )
 
@@ -572,15 +586,15 @@ def test_a_checkout_with_only_the_upstream_is_rejected_rather_than_guessed():
     Treating the upstream as the fork would target every push at the review repository.
     """
     with pytest.raises(ForkRemoteNotFoundError):
-        resolve({RemoteName.ORIGIN: UPSTREAM.clone_url})
+        resolve({RemoteName.ORIGIN: StackRepository.UPSTREAM.value.clone_url})
 
 
 def test_two_possible_forks_are_rejected_rather_than_guessed():
     with pytest.raises(AmbiguousForkRemoteError):
         resolve(
             {
-                RemoteName.MINE: FORK.clone_url,
-                RemoteName.THEIRS: ANOTHER_OWNERS_FORK.clone_url,
+                RemoteName.MINE: StackRepository.SAME_NAMED_FORK.value.clone_url,
+                RemoteName.THEIRS: StackRepository.ANOTHER_OWNERS_FORK.value.clone_url,
             }
         )
 
@@ -588,13 +602,15 @@ def test_two_possible_forks_are_rejected_rather_than_guessed():
 def test_configuration_disambiguates_two_possible_forks():
     resolution = resolve(
         {
-            RemoteName.MINE: FORK.clone_url,
-            RemoteName.THEIRS: ANOTHER_OWNERS_FORK.clone_url,
+            RemoteName.MINE: StackRepository.SAME_NAMED_FORK.value.clone_url,
+            RemoteName.THEIRS: StackRepository.ANOTHER_OWNERS_FORK.value.clone_url,
         },
-        fork_repository=FORK,
+        fork_repository=StackRepository.SAME_NAMED_FORK.value,
     )
 
-    assert resolution.fork == Remote(RemoteName.MINE, FORK)
+    assert resolution.fork == Remote(
+        RemoteName.MINE, StackRepository.SAME_NAMED_FORK.value
+    )
 
 
 def test_a_remote_that_names_no_repository_is_ignored():
@@ -603,12 +619,14 @@ def test_a_remote_that_names_no_repository_is_ignored():
     """
     resolution = resolve(
         {
-            RemoteName.ORIGIN: FORK.clone_url,
-            RemoteName.BACKUP: "/srv/git/mirror",
+            RemoteName.ORIGIN: StackRepository.SAME_NAMED_FORK.value.clone_url,
+            RemoteName.BACKUP: StackSampleText.LOCAL_PATH_REMOTE,
         }
     )
 
-    assert resolution.fork == Remote(RemoteName.ORIGIN, FORK)
+    assert resolution.fork == Remote(
+        RemoteName.ORIGIN, StackRepository.SAME_NAMED_FORK.value
+    )
 
 
 # %% the configuration the shell tooling reads
@@ -621,15 +639,15 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
     """
     print_configuration(make_configuration())
 
-    printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
+    printed = PrintedConfiguration.read(capsys.readouterr().out)
 
     assert printed == {
         StackSetting.IN_REVIEW_LABEL: StackLabel.IN_REVIEW,
         StackSetting.REBASE_LABEL: StackLabel.REBASE,
         StackSetting.NEEDS_RESOLUTION_LABEL: StackLabel.NEEDS_RESOLUTION,
-        StackSetting.FORK_REPOSITORY: "a-fork-owner/a-fork",
+        StackSetting.FORK_REPOSITORY: StackRepository.FORK.value.full_name,
         StackSetting.FORK_REMOTE: RemoteName.ORIGIN,
-        StackSetting.UPSTREAM_REPOSITORY: "an-upstream-owner/a-project",
+        StackSetting.UPSTREAM_REPOSITORY: StackRepository.UPSTREAM.value.full_name,
         StackSetting.UPSTREAM_REMOTE: RemoteName.UPSTREAM,
         StackSetting.UPSTREAM_BASE: StackBranch.BASE,
     }
@@ -638,13 +656,14 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
 def test_a_checkout_missing_its_upstream_remote_is_printed_the_command_that_adds_it(
     capsys,
 ):
-    print_configuration(
-        make_configuration(upstream_setup_command="git remote add upstream a-url")
+    setup_command = a_remote_addition_command(
+        RemoteName.UPSTREAM, StackRepository.UPSTREAM.value
     )
+    print_configuration(make_configuration(upstream_setup_command=setup_command))
 
-    printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
+    printed = PrintedConfiguration.read(capsys.readouterr().out)
 
-    assert printed["upstream_setup_command"] == "git remote add upstream a-url"
+    assert printed[StackSetting.UPSTREAM_SETUP_COMMAND] == setup_command
 
 
 def test_nothing_is_printed_for_a_setup_command_that_is_not_needed(capsys):
@@ -654,7 +673,7 @@ def test_nothing_is_printed_for_a_setup_command_that_is_not_needed(capsys):
     """
     print_configuration(make_configuration())
 
-    assert "upstream_setup_command" not in capsys.readouterr().out
+    assert StackSetting.UPSTREAM_SETUP_COMMAND not in capsys.readouterr().out
 
 
 # %% a whole stack through its lifecycle
@@ -1020,7 +1039,9 @@ def test_every_reason_to_refuse_is_reported_rather_than_only_the_first():
 # %% promotion links
 
 
-def a_promotion_link(title: str = "A title", body: str = "A body") -> PromotionLink:
+def a_promotion_link(
+    title: str = StackSampleText.TITLE, body: str = StackSampleText.BODY
+) -> PromotionLink:
     """
     The compare-and-create link for that stack's root branch.
 
@@ -1031,10 +1052,20 @@ def a_promotion_link(title: str = "A title", body: str = "A body") -> PromotionL
     return PromotionLink.build(make_configuration(), StackBranch.ENGINE, title, body)
 
 
+def prefilled(link: PromotionLink, parameter: PromotionLinkParameter) -> str:
+    """
+    :param link: The link to read.
+    :param parameter: The prefill to read out of it.
+    :return: That prefill, decoded.
+    """
+    return parse_qs(urlsplit(link.url).query)[parameter][0]
+
+
 def test_the_link_compares_the_upstream_base_against_the_fork_branch():
     assert a_promotion_link().url.startswith(
-        "https://github.com/an-upstream-owner/a-project/compare/"
-        "main...a-fork-owner:engine?expand=1"
+        f"{StackRepository.UPSTREAM.value.url}/compare/{StackBranch.BASE}..."
+        f"{StackRepository.FORK.value.owner}:{StackBranch.ENGINE}"
+        f"?{PromotionLinkParameter.EXPAND}=1"
     )
 
 
@@ -1043,17 +1074,24 @@ def test_the_title_and_body_are_encoded_rather_than_pasted_in_raw():
     An unencoded ``&`` or ``#`` truncates the query string at that character, so the
     prefill silently loses everything after it.
     """
-    url = a_promotion_link(title="Fix A & B", body="see #106").url
+    link = a_promotion_link(
+        title=StackSampleText.TITLE_WITH_SEPARATORS,
+        body=StackSampleText.BODY_WITH_FRAGMENT,
+    )
 
-    assert "title=Fix%20A%20%26%20B" in url
-    assert "body=see%20%23106" in url
+    assert prefilled(link, PromotionLinkParameter.TITLE) == (
+        StackSampleText.TITLE_WITH_SEPARATORS
+    )
+    assert prefilled(link, PromotionLinkParameter.BODY) == (
+        StackSampleText.BODY_WITH_FRAGMENT
+    )
 
 
 def test_a_body_within_the_limit_is_left_whole():
-    link = a_promotion_link(body="short")
+    link = a_promotion_link(body=StackSampleText.SHORT_BODY)
 
     assert not link.body_was_truncated
-    assert "body=short" in link.url
+    assert prefilled(link, PromotionLinkParameter.BODY) == StackSampleText.SHORT_BODY
 
 
 def test_an_oversized_body_is_truncated_rather_than_silently_dropped():
@@ -1061,7 +1099,9 @@ def test_an_oversized_body_is_truncated_rather_than_silently_dropped():
     Over the limit the whole prefill is discarded by the server, so the link arrives
     with an empty description and nobody is told.
     """
-    link = a_promotion_link(body="x" * 20000)
+    link = a_promotion_link(
+        body=StackSampleText.FILLER * (PromotionLink.URL_CHARACTER_LIMIT + 1)
+    )
 
     assert link.body_was_truncated
     assert link.url.endswith(PromotionLink.TRUNCATION_MARKER)
@@ -1075,7 +1115,10 @@ def test_a_link_that_cannot_fit_even_without_a_description_is_refused():
     so.
     """
     with pytest.raises(PromotionLinkTooLongError):
-        a_promotion_link(title="t" * 20000, body="")
+        a_promotion_link(
+            title=StackSampleText.FILLER * (PromotionLink.URL_CHARACTER_LIMIT + 1),
+            body="",
+        )
 
 
 # %% landed parents
@@ -1134,8 +1177,8 @@ def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
     anything being written to the checkout.
     """
     configuration_path = _committed_configuration_path(scratch_repository)
-    scratch_repository.run_git(
-        "remote", "add", RemoteName.THEIRS, SOMEBODY_ELSES_FORK.clone_url
+    scratch_repository.add_remote(
+        RemoteName.THEIRS, StackRepository.SOMEBODY_ELSES_FORK.value.clone_url
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -1144,10 +1187,10 @@ def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
         load_configuration(configuration_path)
 
     configuration = load_configuration(
-        configuration_path, fork_repository=SOMEBODY_ELSES_FORK
+        configuration_path, fork_repository=StackRepository.SOMEBODY_ELSES_FORK.value
     )
 
-    assert configuration.fork_repository == SOMEBODY_ELSES_FORK
+    assert configuration.fork_repository == StackRepository.SOMEBODY_ELSES_FORK.value
     assert configuration.fork_remote == RemoteName.THEIRS
 
 
@@ -1160,14 +1203,12 @@ def test_a_named_upstream_replaces_the_committed_default(
 
     configuration = load_configuration(
         configuration_path,
-        upstream_repository=Repository("a-different-upstream", "a-project"),
+        upstream_repository=StackRepository.DIFFERENT_UPSTREAM.value,
     )
 
-    assert configuration.upstream_repository == Repository(
-        "a-different-upstream", "a-project"
-    )
-    assert configuration.upstream_setup_command == (
-        "git remote add upstream https://github.com/a-different-upstream/a-project.git"
+    assert configuration.upstream_repository == StackRepository.DIFFERENT_UPSTREAM.value
+    assert configuration.upstream_setup_command == a_remote_addition_command(
+        RemoteName.UPSTREAM, StackRepository.DIFFERENT_UPSTREAM.value
     )
 
 
@@ -1206,13 +1247,14 @@ def run_stack(
     :return: The finished subprocess.
     """
     return PythonModuleRunner(
-        project_root=checkout.project_root, module_name=STACK_MODULE
+        project_root=checkout.project_root, module_name=basstler.stack.__name__
     ).run(*arguments)
 
 
 def test_an_unknown_command_is_a_usage_error(offline_checkout: ScratchRepository):
     assert (
-        run_stack(offline_checkout, "not-a-command").returncode == StackExitCode.USAGE
+        run_stack(offline_checkout, StackSampleText.UNKNOWN_COMMAND).returncode
+        == StackExitCode.USAGE
     )
 
 
@@ -1226,11 +1268,11 @@ def test_a_label_write_prints_the_complete_set_one_label_per_line(
     result = run_stack(
         offline_checkout,
         Command.LABELS,
-        "--current",
+        CommandOption.CURRENT,
         StackLabel.IN_REVIEW,
-        "--current",
+        CommandOption.CURRENT,
         StackLabel.BUG,
-        "--add",
+        CommandOption.ADD,
         StackLabel.REBASE,
     )
 
@@ -1248,9 +1290,9 @@ def test_a_contradictory_label_write_is_refused_rather_than_guessed_at(
     result = run_stack(
         offline_checkout,
         Command.LABELS,
-        "--add",
+        CommandOption.ADD,
         StackLabel.REBASE,
-        "--remove",
+        CommandOption.REMOVE,
         StackLabel.REBASE,
     )
 
@@ -1280,7 +1322,7 @@ def test_a_project_naming_no_upstream_says_so_by_status(
     (
         offline_checkout.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION
     ).unlink()
-    offline_checkout.run_git("remote", "add", RemoteName.MINE, A_FORK.clone_url)
+    offline_checkout.add_remote(RemoteName.MINE, StackRepository.FORK.value.clone_url)
 
     result = run_stack(offline_checkout, Command.CONFIGURATION)
 
@@ -1291,7 +1333,7 @@ def test_a_project_naming_no_upstream_says_so_by_status(
 def test_a_readable_checkout_with_no_board_reports_the_missing_board_instead(
     offline_checkout: ScratchRepository,
 ):
-    offline_checkout.run_git("remote", "add", RemoteName.MINE, A_FORK.clone_url)
+    offline_checkout.add_remote(RemoteName.MINE, StackRepository.FORK.value.clone_url)
 
     result = run_stack(offline_checkout, Command.STATUS)
 
@@ -1305,9 +1347,9 @@ def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
     Two candidate remotes are ambiguous, so a caller that already knows the answer must
     be able to say so rather than be blocked by the guess it does not need.
     """
-    offline_checkout.run_git("remote", "add", RemoteName.MINE, A_FORK.clone_url)
-    offline_checkout.run_git(
-        "remote", "add", RemoteName.THEIRS, SOMEBODY_ELSES_FORK.clone_url
+    offline_checkout.add_remote(RemoteName.MINE, StackRepository.FORK.value.clone_url)
+    offline_checkout.add_remote(
+        RemoteName.THEIRS, StackRepository.SOMEBODY_ELSES_FORK.value.clone_url
     )
 
     assert (
@@ -1318,24 +1360,30 @@ def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
     result = run_stack(
         offline_checkout,
         Command.CONFIGURATION,
-        "--fork",
-        "a-fork-owner/a-fork",
-        "--upstream",
-        "an-upstream-owner/a-project",
+        CommandOption.FORK,
+        StackRepository.FORK.value.full_name,
+        CommandOption.UPSTREAM,
+        StackRepository.UPSTREAM.value.full_name,
     )
 
     assert result.returncode == StackExitCode.SUCCESS
-    printed = dict(line.split("\t") for line in result.stdout.splitlines())
-    assert printed["fork_repository"] == "a-fork-owner/a-fork"
-    assert printed["fork_remote"] == RemoteName.MINE
-    assert printed["upstream_repository"] == "an-upstream-owner/a-project"
+    printed = PrintedConfiguration.read(result.stdout)
+    assert printed[StackSetting.FORK_REPOSITORY] == StackRepository.FORK.value.full_name
+    assert printed[StackSetting.FORK_REMOTE] == RemoteName.MINE
+    assert (
+        printed[StackSetting.UPSTREAM_REPOSITORY]
+        == StackRepository.UPSTREAM.value.full_name
+    )
 
 
 def test_a_fork_that_is_not_owner_and_name_is_a_usage_error(
     offline_checkout: ScratchRepository,
 ):
     result = run_stack(
-        offline_checkout, Command.CONFIGURATION, "--fork", "not-a-repository"
+        offline_checkout,
+        Command.CONFIGURATION,
+        CommandOption.FORK,
+        StackSampleText.NOT_A_REPOSITORY,
     )
 
     assert result.returncode == StackExitCode.USAGE
@@ -1344,18 +1392,23 @@ def test_a_fork_that_is_not_owner_and_name_is_a_usage_error(
 def test_a_promotion_link_is_built_from_the_resolved_repositories(
     offline_checkout: ScratchRepository,
 ):
-    offline_checkout.run_git("remote", "add", RemoteName.MINE, A_FORK.clone_url)
+    offline_checkout.add_remote(RemoteName.MINE, StackRepository.FORK.value.clone_url)
 
     result = run_stack(
         offline_checkout,
         Command.PROMOTION_LINK,
-        "--branch",
+        CommandOption.BRANCH,
         StackBranch.ENGINE,
-        "--title",
-        "A title",
+        CommandOption.TITLE,
+        StackSampleText.TITLE,
     )
 
     assert result.returncode == StackExitCode.SUCCESS
-    assert result.stdout.strip().endswith(
-        "...a-fork-owner:engine?expand=1&title=A%20title&body="
+    assert result.stdout.strip() == (
+        PromotionLink.build(
+            make_configuration(),
+            StackBranch.ENGINE,
+            StackSampleText.TITLE,
+            "",
+        ).url
     )

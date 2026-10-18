@@ -2,12 +2,14 @@
 The commands the executor answers, and what one run has resolved for them.
 
 A command owns its own name, its own flags and its own work, so adding one is writing a
-subclass: :data:`COMMANDS` finds it, and nothing else has to be told it exists.
+subclass: :meth:`MaintenanceCommand.every_command` finds it, and nothing else has to be
+told it exists.
 """
 
 from __future__ import annotations
 
 import argparse
+import functools
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
@@ -81,9 +83,23 @@ class MaintenanceCommand(ABC):
     The name and the description belong to the class rather than to an instance - the
     parser reads them to build the command line before anything is constructed - so they
     are abstract :class:`class_property.classproperty` members. A subclass supplying
-    neither stays abstract, and :data:`COMMANDS` builds every subclass, so a command
-    that cannot say what it is called is refused as this module is imported.
+    neither stays abstract, and :meth:`every_command` builds every subclass, so a
+    command that cannot say what it is called is refused as this module is imported.
     """
+
+    @classmethod
+    @functools.cache
+    def every_command(cls) -> tuple[MaintenanceCommand, ...]:
+        """
+        Every command this executor answers, found from the subclasses themselves so a
+        command cannot exist without being reachable, in the order they are defined.
+
+        Built once, when this module is imported, and the same commands answered every
+        time after.
+
+        :return: One instance of every direct subclass of :class:`MaintenanceCommand`.
+        """
+        return tuple(subclass() for subclass in MaintenanceCommand.__subclasses__())
 
     @classproperty
     @abstractmethod
@@ -322,10 +338,6 @@ class RunReportCommand(MaintenanceCommand):
         return exit_code_for(report)
 
 
-COMMANDS: tuple[MaintenanceCommand, ...] = tuple(
-    subclass() for subclass in MaintenanceCommand.__subclasses__()
-)
-"""
-Every command this executor answers, found from the subclasses themselves so a command
-cannot exist without being reachable, in the order they are defined.
-"""
+# Built now rather than on first use, so a command that cannot say what it is called is
+# refused as this module is imported.
+MaintenanceCommand.every_command()

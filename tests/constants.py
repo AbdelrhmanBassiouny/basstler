@@ -10,11 +10,12 @@ paths only the shell hooks name, and the names a scratch repository is built wit
 
 from __future__ import annotations
 
-from enum import IntEnum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
 from typing import Any
 
 from basstler.locations import PackageLocation, PathEnumeration, ProjectLocation
+from basstler.repository import Repository
 from basstler.setup_steps import PersonalNotesSetting
 
 
@@ -100,6 +101,14 @@ class DatasetLocation(PathEnumeration):
     """
     The stack settings a scratch fork checkout commits, naming the upstream its tests
     stand up.
+    """
+
+    COMMITTED_DEFAULT_STACK_CONFIGURATION = (
+        STACK_CONFIGURATION / "committed-default.toml"
+    )
+    """
+    A project's committed settings naming every default, beneath a personal-notes
+    override.
     """
 
     SET_UP_CHECKOUT = DIRECTORY / "set-up-checkout"
@@ -530,6 +539,128 @@ class RemoteName(StrEnum):
     A remote at a local path, which names no repository.
     """
 
+    UNEXPECTED = "a-name-nobody-expects"
+    """
+    A fork remote under a name no default or setting mentions.
+    """
+
+    PERSONAL_UPSTREAM = "my-own-upstream-name"
+    """
+    The upstream remote name a personal-notes override picks.
+    """
+
+    PREFERRED_UPSTREAM = "an-upstream-remote"
+    """
+    The name a missing upstream remote is to be added under.
+    """
+
+
+class StackRepository(Enum):
+    """
+    The repositories the stack suites' checkouts and configurations name.
+    """
+
+    FORK = Repository("a-fork-owner", "a-fork")
+    """
+    The fork a scratch checkout's remote points at.
+    """
+
+    SOMEBODY_ELSES_FORK = Repository("someone-else", "their-fork")
+    """
+    A fork other than the one the configuration names.
+    """
+
+    SAME_NAMED_FORK = Repository("a-fork-owner", "a-project")
+    """
+    A fork named like the upstream it was forked from.
+    """
+
+    ANOTHER_OWNERS_FORK = Repository("another-owner", "a-project")
+    """
+    A second fork of the upstream, beside :attr:`SAME_NAMED_FORK`.
+    """
+
+    UPSTREAM = Repository("an-upstream-owner", "a-project")
+    """
+    The upstream every fork here is forked from.
+    """
+
+    DIFFERENT_UPSTREAM = Repository("a-different-upstream", "a-project")
+    """
+    An upstream named on the command line in place of the committed one.
+    """
+
+
+class StackSampleText(StrEnum):
+    """
+    The text the stack suites feed in where only its shape matters.
+    """
+
+    CHECK_CONCLUSION = "failure"
+    """
+    A pull request's CI conclusion, carried through untouched.
+    """
+
+    SESSION_LINK = "https://claude.ai/code/session_x"
+    """
+    The session a pull request was opened from.
+    """
+
+    TITLE = "A title"
+    """
+    A promotion link's title.
+    """
+
+    BODY = "A body"
+    """
+    A promotion link's description.
+    """
+
+    SHORT_BODY = "short"
+    """
+    A description well within the link's length limit.
+    """
+
+    TITLE_WITH_SEPARATORS = "Fix A & B"
+    """
+    A title holding a character that would end a query parameter unencoded.
+    """
+
+    BODY_WITH_FRAGMENT = "see #106"
+    """
+    A description holding a character that would start a URL fragment unencoded.
+    """
+
+    FILLER = "x"
+    """
+    One character, repeated to make a text too long for a link.
+    """
+
+    LOCAL_PATH_REMOTE = "/srv/git/mirror"
+    """
+    A remote URL that is a local path rather than a repository.
+    """
+
+    UNRELATED_FILE = "README.md"
+    """
+    A notes-branch file that is not the stack configuration.
+    """
+
+    UNRELATED_CONTENT = "unrelated\n"
+    """
+    Its content.
+    """
+
+    UNKNOWN_COMMAND = "not-a-command"
+    """
+    A command the tool does not answer.
+    """
+
+    NOT_A_REPOSITORY = "not-a-repository"
+    """
+    A repository reference missing its ``owner/`` part.
+    """
+
 
 class HatchVersionKey(StrEnum):
     """
@@ -569,10 +700,7 @@ class HatchVersionKey(StrEnum):
         :param pyproject: A parsed ``pyproject.toml``.
         :return: Its ``[tool.hatch.version]`` table.
         """
-        table = pyproject
-        for key in (cls.TOOL, cls.HATCH, cls.VERSION):
-            table = table[key]
-        return table
+        return pyproject[cls.TOOL][cls.HATCH][cls.VERSION]
 
 
 class PluginManifestKey(StrEnum):

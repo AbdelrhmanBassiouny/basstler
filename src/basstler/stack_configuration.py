@@ -68,6 +68,12 @@ class StackSetting(StrEnum):
     The upstream branch every stack ultimately targets.
     """
 
+    UPSTREAM_SETUP_COMMAND = "upstream_setup_command"
+    """
+    The command adding a missing upstream remote. Resolved from the checkout rather than
+    read from a ``stack.toml``, and printed only when the remote is missing.
+    """
+
 
 @dataclass
 class MissingUpstreamRepositoryError(CommandFailure, LookupError):

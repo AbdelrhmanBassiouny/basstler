@@ -667,6 +667,19 @@ class PromotionLinkTooLongError(CommandFailure, ValueError):
         )
 
 
+class PromotionLinkParameter(StrEnum):
+    """The query parameters of a compare-and-create link."""
+
+    EXPAND = "expand"
+    """Opens the pull request form rather than only the comparison."""
+
+    TITLE = "title"
+    """The title to prefill."""
+
+    BODY = "body"
+    """The description to prefill."""
+
+
 @dataclass(frozen=True)
 class PromotionLink:
     """A one-click compare-and-create link opening a fork branch's pull request upstream.
@@ -705,7 +718,9 @@ class PromotionLink:
                 f"{configuration.upstream_repository.url}/compare/"
                 f"{configuration.upstream_base}..."
                 f"{configuration.fork_repository.owner}:{branch}"
-                f"?expand=1&title={quote(title)}&body={quote(text)}"
+                f"?{PromotionLinkParameter.EXPAND}=1"
+                f"&{PromotionLinkParameter.TITLE}={quote(title)}"
+                f"&{PromotionLinkParameter.BODY}={quote(text)}"
             )
 
         if len(url_for(body)) <= cls.URL_CHARACTER_LIMIT:
@@ -1325,7 +1340,28 @@ def print_configuration(configuration: Configuration) -> None:
     for name, value in vars(configuration).items():
         if value is None:
             continue
-        logger.info(f"{name}\t{value}")
+        logger.info(f"{name}{PrintedConfiguration.FIELD_SEPARATOR}{value}")
+
+
+class PrintedConfiguration(StrEnum):
+    """
+    How :func:`print_configuration` lays a setting out on its line.
+    """
+
+    FIELD_SEPARATOR = "\t"
+    """
+    What separates a setting's name from its value.
+    """
+
+    @classmethod
+    def read(cls, output: str) -> dict[str, str]:
+        """
+        Read printed configuration back into its settings.
+
+        :param output: What :func:`print_configuration` printed.
+        :return: Each printed setting's value, by name.
+        """
+        return dict(line.split(cls.FIELD_SEPARATOR) for line in output.splitlines())
 
 
 class Command(StrEnum):
@@ -1377,6 +1413,49 @@ class Command(StrEnum):
         }
 
 
+class CommandOption(StrEnum):
+    """Every option a command takes, named once so no caller spells one out."""
+
+    PORCELAIN = "--porcelain"
+    """Print only what a script reads, for :attr:`Command.NEXT`."""
+
+    FORK = "--fork"
+    """The fork, as ``owner/name``, when the caller already knows it."""
+
+    UPSTREAM = "--upstream"
+    """The upstream, as ``owner/name``, when the caller already knows it."""
+
+    CURRENT = "--current"
+    """A label the pull request carries now, repeated per label."""
+
+    ADD = "--add"
+    """A label to end up with."""
+
+    REMOVE = "--remove"
+    """A label to end up without."""
+
+    BRANCH = "--branch"
+    """The fork branch to build a promotion link for."""
+
+    TITLE = "--title"
+    """The title to prefill."""
+
+    BODY = "--body"
+    """The description to prefill."""
+
+    ACTION = "--action"
+    """What a commit move would do."""
+
+    SOURCE = "--source"
+    """The branch whose commits move."""
+
+    DESTINATION = "--destination"
+    """The branch they would land on."""
+
+    DESTINATION_REMOTE = "--destination-remote"
+    """The remote holding the destination."""
+
+
 # %% entry point
 
 
@@ -1397,7 +1476,7 @@ def _argument_parser() -> argparse.ArgumentParser:
         Command.NEXT, help="which branches to submit upstream next"
     )
     promote.add_argument(
-        "--porcelain",
+        CommandOption.PORCELAIN,
         action="store_true",
         help="print only 'name<TAB>pr' per branch to promote",
     )
@@ -1413,12 +1492,12 @@ def _argument_parser() -> argparse.ArgumentParser:
         Command.CONFIGURATION, help="every resolved setting, including the remotes"
     )
     configuration.add_argument(
-        "--fork",
+        CommandOption.FORK,
         type=Repository.parse,
         help="the fork as 'owner/name', when you already know it",
     )
     configuration.add_argument(
-        "--upstream",
+        CommandOption.UPSTREAM,
         type=Repository.parse,
         help="the upstream as 'owner/name', when you already know it",
     )
@@ -1427,21 +1506,21 @@ def _argument_parser() -> argparse.ArgumentParser:
         Command.LABELS, help="the complete label set a label write must send"
     )
     labels.add_argument(
-        "--current",
+        CommandOption.CURRENT,
         action="append",
         default=[],
         metavar="LABEL",
         help="a label the pull request carries now; repeat per label",
     )
     labels.add_argument(
-        "--add",
+        CommandOption.ADD,
         action="append",
         default=[],
         metavar="LABEL",
         help="a label to end up with",
     )
     labels.add_argument(
-        "--remove",
+        CommandOption.REMOVE,
         action="append",
         default=[],
         metavar="LABEL",
@@ -1451,28 +1530,32 @@ def _argument_parser() -> argparse.ArgumentParser:
     link = commands.add_parser(
         Command.PROMOTION_LINK, help="the upstream compare-and-create URL for a branch"
     )
-    link.add_argument("--branch", required=True, help="the fork branch to promote")
-    link.add_argument("--title", required=True, help="title to prefill")
-    link.add_argument("--body", default="", help="description to prefill")
+    link.add_argument(
+        CommandOption.BRANCH, required=True, help="the fork branch to promote"
+    )
+    link.add_argument(CommandOption.TITLE, required=True, help="title to prefill")
+    link.add_argument(CommandOption.BODY, default="", help="description to prefill")
 
     check_move = commands.add_parser(
         Command.CHECK_MOVE, help="may these commits move onto that branch?"
     )
     check_move.add_argument(
-        "--action",
+        CommandOption.ACTION,
         required=True,
         type=CommitMoveAction,
         choices=list(CommitMoveAction),
         help="what the move would do",
     )
     check_move.add_argument(
-        "--source", required=True, help="the branch whose commits move"
+        CommandOption.SOURCE, required=True, help="the branch whose commits move"
     )
     check_move.add_argument(
-        "--destination", required=True, help="the branch they would land on"
+        CommandOption.DESTINATION, required=True, help="the branch they would land on"
     )
     check_move.add_argument(
-        "--destination-remote", required=True, help="the remote holding the destination"
+        CommandOption.DESTINATION_REMOTE,
+        required=True,
+        help="the remote holding the destination",
     )
     return parser
 

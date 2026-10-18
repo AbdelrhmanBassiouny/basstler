@@ -13,7 +13,6 @@ import pytest
 import yaml
 
 from basstler.build_dashboard import (
-    AVAILABLE_MODELS,
     DashboardRenderer,
     DependencyCycle,
     DuplicateItemId,
@@ -25,8 +24,8 @@ from basstler.build_dashboard import (
     ItemStatus,
     LiveState,
     MalformedPullRequestDataError,
-    MAXIMUM_DEPENDENCY_STACK_LEVEL,
     MissingMergeTimestampError,
+    ModelOption,
     Plan,
     PlanValidationError,
     PullRequestRecord,
@@ -1376,7 +1375,7 @@ def test_action_is_reconsider_for_a_deferred_item():
 
 def test_track_stack_wraps_past_the_maximum_level():
     # A chain one longer than the cap: item N depends on item N-1.
-    chain_length = MAXIMUM_DEPENDENCY_STACK_LEVEL + 2
+    chain_length = DashboardRenderer.maximum_dependency_stack_level + 2
     items = [item("item-0", ItemStatus.NOT_STARTED)]
     for index in range(1, chain_length):
         items.append(
@@ -1394,7 +1393,7 @@ def test_track_stack_wraps_past_the_maximum_level():
 
 def test_track_stack_does_not_wrap_within_the_maximum_level():
     items = [item("item-0", ItemStatus.NOT_STARTED)]
-    for index in range(1, MAXIMUM_DEPENDENCY_STACK_LEVEL):
+    for index in range(1, DashboardRenderer.maximum_dependency_stack_level):
         items.append(
             item(
                 f"item-{index}",
@@ -1775,7 +1774,7 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    for model in AVAILABLE_MODELS:
+    for model in ModelOption:
         assert f'data-value="{model.value}"' in output
         assert f">{model.label}</li>" in output
     assert 'class="model-picker-toggle"' in output

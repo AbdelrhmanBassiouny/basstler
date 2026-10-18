@@ -33,7 +33,7 @@ import sys
 from pathlib import Path
 
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
-from basstler.maintenance_commands import COMMANDS, MaintenancePass
+from basstler.maintenance_commands import MaintenanceCommand, MaintenancePass
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.stack import load_configuration
 from basstler.standard_streams import StandardStreamHandler
@@ -51,7 +51,7 @@ def _argument_parser() -> argparse.ArgumentParser:
         description="Stacked-PR maintenance: perform the pass, report what happened.",
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
-    for command in COMMANDS:
+    for command in MaintenanceCommand.every_command():
         command.declare_arguments(
             subparsers.add_parser(command.invoked_as, help=command.description)
         )
@@ -82,7 +82,9 @@ def _dispatch() -> ExitCode:
     """
     arguments = _argument_parser().parse_args()
     requested = next(
-        entry for entry in COMMANDS if entry.invoked_as == arguments.command
+        entry
+        for entry in MaintenanceCommand.every_command()
+        if entry.invoked_as == arguments.command
     )
     try:
         maintenance = MaintenancePass(

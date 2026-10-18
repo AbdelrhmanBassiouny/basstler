@@ -25,6 +25,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
+from typing import ClassVar
 
 from basstler.github_labels import GitHubLabel
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
@@ -386,27 +387,6 @@ class RepositoryAccess(SetupStep):
         ]
 
 
-COMMENT_MARKER = "#"
-"""
-What starts a comment in the ``.env`` format an environment's variable list uses.
-"""
-
-
-def quoted_if_needed(value: str) -> str:
-    """
-    Quote a variable's value when leaving it bare would truncate it.
-
-    An unquoted value is read to the first comment marker and the rest of the line is
-    dropped, which is silent - the variable is set, to a prefix of what was pasted.
-
-    :param value: The value to write after the ``=``.
-    :return: The value, quoted only when it carries a comment marker.
-    """
-    if COMMENT_MARKER not in value:
-        return value
-    return f'"{value}"'
-
-
 @dataclass(frozen=True)
 class PersistentVariables(SetupStep):
     """
@@ -418,6 +398,27 @@ class PersistentVariables(SetupStep):
     """
     The ``NAME=value`` lines to paste, empty when every setting is still its default.
     """
+
+    comment_marker: ClassVar[str] = "#"
+    """
+    What starts a comment in the ``.env`` format an environment's variable list uses.
+    """
+
+    @classmethod
+    def quoted_if_needed(cls, value: str) -> str:
+        """
+        Quote a variable's value when leaving it bare would truncate it.
+
+        An unquoted value is read to the first comment marker and the rest of the line
+        is dropped, which is silent - the variable is set, to a prefix of what was
+        pasted.
+
+        :param value: The value to write after the ``=``.
+        :return: The value, quoted only when it carries a comment marker.
+        """
+        if cls.comment_marker not in value:
+            return value
+        return f'"{value}"'
 
     @classmethod
     def resolve(
@@ -435,7 +436,7 @@ class PersistentVariables(SetupStep):
             value = setting.resolve(project_root, environment)
             if value != setting.default:
                 lines.append(
-                    f"{setting.environment_variable}={quoted_if_needed(value)}"
+                    f"{setting.environment_variable}={cls.quoted_if_needed(value)}"
                 )
         return cls(variable_lines=tuple(lines))
 
@@ -466,12 +467,6 @@ class PersistentVariables(SetupStep):
 # %% the checklist they add up to
 
 
-HEADING = "These steps are yours - no script can do them:"
-"""
-The line introducing the printed list.
-"""
-
-
 @dataclass(frozen=True)
 class SetupChecklist:
     """
@@ -481,6 +476,11 @@ class SetupChecklist:
     steps: tuple[SetupStep, ...]
     """
     The steps that apply to this clone.
+    """
+
+    heading: ClassVar[str] = "These steps are yours - no script can do them:"
+    """
+    The line introducing the printed list.
     """
 
     @classmethod
@@ -514,7 +514,7 @@ class SetupChecklist:
         blocks = [
             step.render(number) for number, step in enumerate(self.steps, start=1)
         ]
-        return "\n\n".join([HEADING, *blocks])
+        return "\n\n".join([self.heading, *blocks])
 
 
 def main() -> None:

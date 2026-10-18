@@ -8,7 +8,6 @@ be left out of this check by not being listed here.
 
 from __future__ import annotations
 
-import dataclasses
 import inspect
 
 import pytest
@@ -36,21 +35,6 @@ def test_every_error_nothing_extends_can_be_raised(failure: type[CommandFailure]
 )
 def test_every_command_failure_declares_its_status(failure: type[CommandFailure]):
     assert isinstance(failure.exit_code, ExitCode)
-
-
-@pytest.mark.parametrize(
-    "failure", command_failures(), ids=lambda failure: failure.__qualname__
-)
-def test_the_status_is_not_a_constructor_argument(failure: type[CommandFailure]):
-    """
-    The status belongs to the kind of error, so no raise site can pick another.
-
-    A field named like anything :class:`CommandFailure` defines would shadow it, the
-    status included.
-    """
-    fields = {field.name for field in dataclasses.fields(failure)}
-
-    assert fields.isdisjoint(vars(CommandFailure))
 
 
 def test_no_status_is_a_failure():

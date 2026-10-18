@@ -83,18 +83,23 @@ logger = StandardStreamHandler.logger_for(__name__)
 This module's logger, which is also what its command prints through.
 """
 
-ITEM_FIELD_INDENT = "    "
-"""
-The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
-"""
-
-ITEM_MARKER = "  - "
-"""
-What opens an item block, the list marker its first field sits behind.
-"""
-
-
 # %% the vocabulary a plan manifest is written in
+
+
+class ItemLayout(StrEnum):
+    """
+    The whitespace and markers an item block in ``plan.yaml`` is laid out with.
+    """
+
+    FIELD_INDENT = "    "
+    """
+    The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
+    """
+
+    MARKER = "  - "
+    """
+    What opens an item block, the list marker its first field sits behind.
+    """
 
 
 class PlanDocument(StrEnum):
@@ -257,7 +262,7 @@ class ManifestKey(KeySpecification, Enum):
         self,
         value: str,
         opening_the_item: bool = False,
-        field_indent: str = ITEM_FIELD_INDENT,
+        field_indent: str = ItemLayout.FIELD_INDENT.value,
     ) -> str:
         """
         The manifest line setting this key to *value*, newline included.
@@ -273,7 +278,7 @@ class ManifestKey(KeySpecification, Enum):
             it already has.
         :return: The rendered line.
         """
-        prefix = ITEM_MARKER if opening_the_item else field_indent
+        prefix = ItemLayout.MARKER.value if opening_the_item else field_indent
         written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
         return f"{prefix}{self.key}: {written}\n"
 
@@ -284,37 +289,61 @@ class ManifestKey(KeySpecification, Enum):
         """
         return re.compile(rf"^\s*{re.escape(self.key)}:\s*.*$")
 
+    @property
+    def is_block_styled(self) -> bool:
+        """
+        Whether this key's value runs over the lines beneath it.
+        """
+        return self.style is ValueStyle.BLOCK
 
-BLOCK_STYLED_KEYS = frozenset(
-    manifest_key
-    for manifest_key in ManifestKey
-    if manifest_key.style is ValueStyle.BLOCK
-)
-"""
-The keys whose values run over the lines beneath them, derived from the keys themselves
-rather than listed a second time.
-"""
+    @classmethod
+    def block_styled(cls) -> frozenset[ManifestKey]:
+        """
+        The keys whose values run over the lines beneath them, derived from the keys
+        themselves rather than listed a second time.
+
+        :return: Every block-styled key.
+        """
+        return frozenset(
+            manifest_key for manifest_key in cls if manifest_key.is_block_styled
+        )
 
 
-ITEM_START_PATTERN = re.compile(rf"^\s*- {re.escape(ManifestKey.IDENTIFIER.key)}:")
-"""
-Matches the first line of an item block, which is always its ``id``.
+class ManifestLinePattern(Enum):
+    """
+    What the item-block patching looks for in a raw ``plan.yaml`` line.
+    """
 
-Same anchor ``sync_manifest_status.py`` uses to find item boundaries in raw text.
-"""
+    ITEM_START = re.compile(rf"^\s*- {re.escape(ManifestKey.IDENTIFIER.key)}:")
+    """
+    Matches the first line of an item block, which is always its ``id``.
 
-TOP_LEVEL_KEY_PATTERN = re.compile(r"^\S")
-"""
-Matches a top-level ``plan.yaml`` key, which is where the last item block ends.
-"""
+    Same anchor ``sync_manifest_status.py`` uses to find item boundaries in raw text.
+    """
 
-BLOCK_VALUE_PATTERN = re.compile(
-    rf"^\s*({'|'.join(sorted(manifest_key.key for manifest_key in BLOCK_STYLED_KEYS))}):"
-)
-"""
-Matches a key whose value may run over the following lines, derived from
-:data:`BLOCK_STYLED_KEYS` rather than listing those keys a second time.
-"""
+    TOP_LEVEL_KEY = re.compile(r"^\S")
+    """
+    Matches a top-level ``plan.yaml`` key, which is where the last item block ends.
+    """
+
+    BLOCK_VALUE = re.compile(
+        r"^\s*("
+        + "|".join(
+            sorted(manifest_key.key for manifest_key in ManifestKey.block_styled())
+        )
+        + "):"
+    )
+    """
+    Matches a key whose value may run over the following lines, derived from
+    :meth:`ManifestKey.block_styled` rather than listing those keys a second time.
+    """
+
+    def matches(self, line: str) -> bool:
+        """
+        :param line: One manifest line.
+        :return: Whether this pattern matches at the line's start.
+        """
+        return self.value.match(line) is not None
 
 
 class PlanItemBootstrapExitCode(ExitCode):
@@ -808,7 +837,7 @@ def item_block_bounds(manifest_lines: list[str]) -> list[tuple[int, int]]:
     starts = [
         index
         for index, line in enumerate(manifest_lines)
-        if ITEM_START_PATTERN.match(line)
+        if ManifestLinePattern.ITEM_START.matches(line)
     ]
     if not starts:
         return []
@@ -816,7 +845,7 @@ def item_block_bounds(manifest_lines: list[str]) -> list[tuple[int, int]]:
         (
             index
             for index in range(starts[-1] + 1, len(manifest_lines))
-            if TOP_LEVEL_KEY_PATTERN.match(manifest_lines[index])
+            if ManifestLinePattern.TOP_LEVEL_KEY.matches(manifest_lines[index])
         ),
         len(manifest_lines),
     )
@@ -866,7 +895,7 @@ def existing_field_indent(manifest_lines: list[str], start: int, end: int) -> st
         if manifest_lines[index].strip():
             stripped = manifest_lines[index].lstrip(" ")
             return manifest_lines[index][: len(manifest_lines[index]) - len(stripped)]
-    return ITEM_FIELD_INDENT
+    return ItemLayout.FIELD_INDENT.value
 
 
 def apply_item_fields(
@@ -910,7 +939,7 @@ def apply_item_fields(
             (
                 index
                 for index in range(start, end)
-                if BLOCK_VALUE_PATTERN.match(lines[index])
+                if ManifestLinePattern.BLOCK_VALUE.matches(lines[index])
             ),
             last_populated_line(lines, start, end) + 1,
         )

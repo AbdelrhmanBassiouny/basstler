@@ -16,7 +16,6 @@ import pytest
 import basstler.setup_steps
 from basstler.github_labels import GitHubLabel
 from basstler.setup_steps import (
-    COMMENT_MARKER,
     ForkLabels,
     git_value,
     PersistentVariables,
@@ -293,7 +292,7 @@ def test_a_value_carrying_a_comment_marker_is_quoted(
     marker, so a branch or path carrying one has to be quoted or it is silently set to a
     prefix of itself.
     """
-    branch = f"claude/notes{COMMENT_MARKER}2"
+    branch = f"claude/notes{PersistentVariables.comment_marker}2"
     step = PersistentVariables.resolve(
         scratch_repository.project_root,
         {PersonalNotesSetting.BRANCH.environment_variable: branch},

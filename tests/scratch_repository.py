@@ -315,6 +315,15 @@ class ScratchRepository:
         assert result.returncode == 0, result.stderr
         return result
 
+    def add_remote(self, name: str, url: str) -> None:
+        """
+        Add a git remote to the project.
+
+        :param name: What to call the remote.
+        :param url: Where it points.
+        """
+        self.run_git("remote", "add", name, url)
+
     def run_git_allowing_failure(
         self, *arguments: str, cwd: Path | None = None
     ) -> subprocess.CompletedProcess[str]:

@@ -26,7 +26,6 @@ import yaml
 import basstler.plan_item_bootstrap
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan_item_bootstrap import (
-    BLOCK_STYLED_KEYS,
     CreatedPullRequest,
     PlanItemBootstrapExitCode,
     ItemRecordRequest,
@@ -573,7 +572,7 @@ NARROWLY_INDENTED_MANIFEST = (
 """
 A manifest predating this module's own formatting convention: its items list has no
 indent before the ``-`` and its fields sit two spaces in, not the four
-``ITEM_FIELD_INDENT`` assumes.
+``ItemLayout.FIELD_INDENT`` assumes.
 
 ``icra-mechanism/plan.yaml`` on the personal-notes branch is written exactly this way.
 """
@@ -674,7 +673,7 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
 
 
 def test_only_the_keys_whose_values_run_over_lines_are_block_styled():
-    assert BLOCK_STYLED_KEYS == {ManifestKey.NOTES, ManifestKey.BLOCKERS}
+    assert ManifestKey.block_styled() == {ManifestKey.NOTES, ManifestKey.BLOCKERS}
 
 
 # %% exit statuses

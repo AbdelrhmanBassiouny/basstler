@@ -48,7 +48,6 @@ from basstler.maintenance_board import (
     get_session_link_in,
 )
 from basstler.maintenance_commands import (
-    COMMANDS,
     BoardCommand,
     MaintenanceCommand,
     MaintenancePass,
@@ -1531,7 +1530,9 @@ def test_a_branch_no_step_concludes_is_an_error_rather_than_a_silent_pass(
     means the procedure lost it - which must not read as a branch nothing happened to.
     """
     a_parent_and_child(fork_checkout)
-    monkeypatch.setattr(basstler.maintenance_restack_procedure, "RESTACK_STEPS", ())
+    monkeypatch.setattr(
+        basstler.maintenance_restack_procedure, "restack_steps", lambda: ()
+    )
 
     with pytest.raises(
         basstler.maintenance_restack_procedure.RestackConcludedNothingError
@@ -1814,10 +1815,11 @@ def test_every_command_class_is_one_reachable_command():
     Commands are found from their own subclasses, so a class that exists is a command -
     and two answering to the same name would make one of them unreachable.
     """
-    assert {type(command) for command in COMMANDS} == set(
+    commands = MaintenanceCommand.every_command()
+    assert {type(command) for command in commands} == set(
         MaintenanceCommand.__subclasses__()
     )
-    assert len({command.invoked_as for command in COMMANDS}) == len(COMMANDS)
+    assert len({command.invoked_as for command in commands}) == len(commands)
 
 
 def test_a_command_names_itself_without_being_instantiated():
@@ -1831,8 +1833,8 @@ def test_a_command_names_itself_without_being_instantiated():
 
 def test_a_command_that_omits_its_name_cannot_be_built():
     """
-    A command stays abstract until it says what it is called, and COMMANDS builds every
-    subclass - so one that never says cannot reach the parser at all.
+    A command stays abstract until it says what it is called, and every_command builds
+    every subclass - so one that never says cannot reach the parser at all.
     """
 
     @dataclass(frozen=True)
@@ -1890,7 +1892,7 @@ def test_a_fork_client_that_cannot_make_one_of_the_writes_cannot_be_built():
 
 def test_a_restack_step_that_does_nothing_cannot_be_built():
     """
-    A step is only ever reached through RESTACK_STEPS, where one that concludes nothing
+    A step is only ever reached through restack_steps, where one that concludes nothing
     would silently pass every branch along to the next step.
     """
 
@@ -1907,7 +1909,7 @@ def test_every_command_is_reachable_from_the_command_line(fork_checkout: ForkChe
     A command in the enum that the parser never registers is unreachable, and nothing
     else would notice.
     """
-    for command in COMMANDS:
+    for command in MaintenanceCommand.every_command():
         result = run_maintenance(fork_checkout, command, "--help")
         assert result.returncode == StackExitCode.SUCCESS, result.stderr
 
