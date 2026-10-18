@@ -1,17 +1,18 @@
 #!/usr/bin/env python3
-"""Stacked-PR helper for the fork-staging / cram2-review workflow.
+"""Stacked-PR helper for the fork-staging / upstream-review workflow.
 
 GitHub is the single source of truth. The stack is **not** declared in a ledger: it is read from a
 ``board.json`` export of the fork's pull requests, combined with plain ``git``:
 
   * dependency tree = each fork PR's **base branch** (base = parent);
   * ``draft`` <-> ``ready`` = the fork PR's draft flag;
-  * ``in-review`` = the ``in_review_label`` on the fork PR (cram2 is not readable from the cloud);
+  * ``in-review`` = the ``in_review_label`` on the fork PR (the upstream is not readable from the cloud);
   * ``merged`` = the branch is an ancestor of ``<upstream_remote>/<upstream_base>``.
 
-``stack.toml`` carries the committed defaults (label names, the upstream repository); a
-``.claude/personal/stack.toml`` on the personal-notes branch, if present, layers per-user overrides on
-top of them (see :func:`load_configuration`).
+``stack.toml`` carries the shipped defaults (label names, the base branch); the project's committed
+``.claude/basstler/stack.toml`` names its upstream, and a ``.claude/personal/stack.toml`` on the
+personal-notes branch, if present, layers per-user overrides on top of both (see
+:func:`load_configuration`).
 
 Commands (run from the repo root; ``--help`` on any of them for its flags)::
 
@@ -41,14 +42,21 @@ import json
 import subprocess
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
-from enum import IntEnum, StrEnum
+from dataclasses import asdict, dataclass, field
+from enum import StrEnum
 from pathlib import Path
-from typing import ClassVar
 from urllib.parse import quote
 
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
+from basstler.shell_configuration import ShellConfigurationFunction
+from basstler.stack_configuration import (
+    CommittedStackConfiguration,
+    StackSetting,
+    upstream_repository_in,
+)
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -71,8 +79,13 @@ class Remote:
 
 
 @dataclass
-class ForkRemoteNotFoundError(LookupError):
+class ForkRemoteNotFoundError(CommandFailure, LookupError):
     """Raised when no remote points at a repository other than the upstream."""
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.REMOTES_UNRESOLVED
 
     upstream_repository: Repository
     """The upstream every candidate turned out to be."""
@@ -86,8 +99,13 @@ class ForkRemoteNotFoundError(LookupError):
 
 
 @dataclass
-class AmbiguousForkRemoteError(LookupError):
+class AmbiguousForkRemoteError(CommandFailure, LookupError):
     """Raised when several remotes could each be the fork."""
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.REMOTES_UNRESOLVED
 
     candidates: tuple[Remote, ...]
     """The remotes that are not the upstream, in the order git reported them."""
@@ -131,7 +149,7 @@ class RemoteResolution:
             return None
         return (
             f"git remote add {self.preferred_upstream_name} "
-            f"https://github.com/{self.upstream_repository}.git"
+            f"{self.upstream_repository.clone_url}"
         )
 
 
@@ -240,20 +258,21 @@ def load_configuration(
 ) -> Configuration:
     """Parse the layered configuration into a :class:`Configuration`.
 
-    Values from the committed *path* are the defaults; any key present in
-    ``.claude/personal/stack.toml`` on the personal-notes branch overrides them, so a user's own
-    remotes/labels never have to be hand-edited into the checked-in file. A repository passed
-    here outranks both, so a caller that has been told which repository is which never has one
-    inferred for it.
+    Values from the shipped *path* are the defaults; the project's committed
+    ``.claude/basstler/stack.toml`` overrides them, and any key present in
+    ``.claude/personal/stack.toml`` on the personal-notes branch overrides both, so a user's own
+    remotes/labels never have to be hand-edited into a checked-in file. A repository passed
+    here outranks all three, so a caller that has been told which repository is which never has
+    one inferred for it.
 
-    :param path: The committed defaults file.
+    :param path: The shipped defaults file.
     :param fork_repository: The fork, when the caller already knows it.
     :param upstream_repository: The upstream, when the caller already knows it.
     :return: The layered configuration.
     """
     values = _configuration_values(path)
-    upstream_repository = upstream_repository or Repository.parse(
-        values["upstream_repository"]
+    upstream_repository = upstream_repository or upstream_repository_in(
+        values, CommittedStackConfiguration(path).project_file
     )
     resolution = resolved_remotes(path, fork_repository, upstream_repository)
     return Configuration(
@@ -270,12 +289,13 @@ def load_configuration(
 
 
 def _configuration_values(path: Path) -> dict[str, str]:
-    """Read the committed defaults with any personal-notes overrides layered on top.
+    """Read the shipped defaults and the project's settings, with any personal-notes overrides
+    layered on top.
 
-    :param path: The committed defaults file.
+    :param path: The shipped defaults file.
     :return: The layered values.
     """
-    values = tomllib.loads(path.read_text())
+    values = CommittedStackConfiguration(path).values()
     values.update(_personal_configuration_overrides())
     return values
 
@@ -298,8 +318,11 @@ def resolved_remotes(
     configured_fork = values.get("fork_repository")
     return resolve_remotes(
         _remote_urls(),
-        upstream_repository or Repository.parse(values["upstream_repository"]),
-        values.get("upstream_remote", "cram2"),
+        upstream_repository
+        or upstream_repository_in(
+            values, CommittedStackConfiguration(path).project_file
+        ),
+        values[StackSetting.UPSTREAM_REMOTE],
         fork_repository
         or (Repository.parse(configured_fork) if configured_fork else None),
     )
@@ -321,18 +344,7 @@ def _fetch_personal_notes_branch() -> bool:
 
     :return: Whether the branch was fetched.
     """
-    return (
-        subprocess.run(
-            [
-                "bash",
-                "-c",
-                f'source "{ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
-            ],
-            capture_output=True,
-            text=True,
-        ).returncode
-        == 0
-    )
+    return ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run().returncode == 0
 
 
 def _personal_configuration_overrides() -> dict[str, object]:
@@ -474,8 +486,21 @@ class Stack:
         )
 
 
-class BoardUnavailable(RuntimeError):
+@dataclass
+class BoardUnavailable(CommandFailure, RuntimeError):
     """Raised when ``board.json`` is missing."""
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.BOARD_UNAVAILABLE
+
+    board: Path
+    """Where the board export was looked for."""
+
+    def __str__(self) -> str:
+        """:return: Which file is missing."""
+        return f"{self.board.name} not found"
 
 
 def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
@@ -486,7 +511,7 @@ def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
     :raises BoardUnavailable: If *path* does not exist.
     """
     if not path.exists():
-        raise BoardUnavailable(f"{path.name} not found")
+        raise BoardUnavailable(path)
     data = json.loads(path.read_text())
     return [
         PullRequest(
@@ -561,8 +586,13 @@ def build_stack(
 
 
 @dataclass
-class ContradictoryLabelWriteError(ValueError):
+class ContradictoryLabelWriteError(CommandFailure, ValueError):
     """Raised when one write is asked both to carry a label and to drop it."""
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.USAGE
 
     labels: tuple[str, ...]
     """The labels asked for in both directions."""
@@ -614,8 +644,13 @@ class LabelWrite:
 
 
 @dataclass
-class PromotionLinkTooLongError(ValueError):
+class PromotionLinkTooLongError(CommandFailure, ValueError):
     """Raised when a link cannot fit even with its whole description dropped."""
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.USAGE
 
     branch: str
     """The branch whose link was being built."""
@@ -628,8 +663,21 @@ class PromotionLinkTooLongError(ValueError):
         return (
             f"the compare link for {self.branch} is {self.length_without_a_description} "
             f"characters before its description, over the "
-            f"{PromotionLink.URL_CHARACTER_LIMIT}-character limit: shorten the title"
+            f"{PromotionLink.url_character_limit}-character limit: shorten the title"
         )
+
+
+class PromotionLinkParameter(StrEnum):
+    """The query parameters of a compare-and-create link."""
+
+    EXPAND = "expand"
+    """Opens the pull request form rather than only the comparison."""
+
+    TITLE = "title"
+    """The title to prefill."""
+
+    BODY = "body"
+    """The description to prefill."""
 
 
 @dataclass(frozen=True)
@@ -640,17 +688,21 @@ class PromotionLink:
     oversized one is discarded whole by the server - both silently.
     """
 
-    URL_CHARACTER_LIMIT: ClassVar[int] = 8192
-    """Longest URL to build, the conventional 8 KiB request-line limit servers accept."""
+    @classproperty
+    def url_character_limit(cls) -> int:
+        """Longest URL to build, the conventional 8 KiB request-line limit servers accept."""
+        return 8192
 
-    TRUNCATION_MARKER: ClassVar[str] = "..."
-    """Appended to a body that had to be shortened, so the cut is visible in the prefill."""
+    @classproperty
+    def truncation_marker(cls) -> str:
+        """Appended to a body that had to be shortened, so the cut is visible in the prefill."""
+        return "..."
 
     url: str
     """The compare-and-create URL, ready to open."""
 
     body_was_truncated: bool
-    """Whether the body had to be shortened to fit :attr:`URL_CHARACTER_LIMIT`."""
+    """Whether the body had to be shortened to fit :attr:`url_character_limit`."""
 
     @classmethod
     def build(
@@ -667,27 +719,29 @@ class PromotionLink:
 
         def url_for(text: str) -> str:
             return (
-                f"https://github.com/{configuration.upstream_repository}/compare/"
+                f"{configuration.upstream_repository.url}/compare/"
                 f"{configuration.upstream_base}..."
                 f"{configuration.fork_repository.owner}:{branch}"
-                f"?expand=1&title={quote(title)}&body={quote(text)}"
+                f"?{PromotionLinkParameter.EXPAND}=1"
+                f"&{PromotionLinkParameter.TITLE}={quote(title)}"
+                f"&{PromotionLinkParameter.BODY}={quote(text)}"
             )
 
-        if len(url_for(body)) <= cls.URL_CHARACTER_LIMIT:
+        if len(url_for(body)) <= cls.url_character_limit:
             return cls(url_for(body), body_was_truncated=False)
-        if len(url_for(cls.TRUNCATION_MARKER)) > cls.URL_CHARACTER_LIMIT:
+        if len(url_for(cls.truncation_marker)) > cls.url_character_limit:
             raise PromotionLinkTooLongError(branch, len(url_for("")))
         shortest, longest = 0, len(body)
         while shortest < longest:
             midpoint = (shortest + longest + 1) // 2
-            candidate = url_for(body[:midpoint] + cls.TRUNCATION_MARKER)
+            candidate = url_for(body[:midpoint] + cls.truncation_marker)
             shortest, longest = (
                 (midpoint, longest)
-                if len(candidate) <= cls.URL_CHARACTER_LIMIT
+                if len(candidate) <= cls.url_character_limit
                 else (shortest, midpoint - 1)
             )
         return cls(
-            url_for(body[:shortest] + cls.TRUNCATION_MARKER), body_was_truncated=True
+            url_for(body[:shortest] + cls.truncation_marker), body_was_truncated=True
         )
 
 
@@ -843,7 +897,21 @@ def next_to_promote(stack: Stack) -> Branch | None:
     return ordered[0] if ordered else None
 
 
-def restack_plan(stack: Stack) -> list[dict[str, str]]:
+@dataclass(frozen=True)
+class RestackPlanEntry:
+    """One entry of :func:`restack_plan`: a branch, and what and how it is brought up to date with."""
+
+    branch: str
+    """The branch to bring up to date."""
+
+    parent: str
+    """The branch it is brought up to date with."""
+
+    strategy: IntegrationStrategy
+    """How it is brought up to date."""
+
+
+def restack_plan(stack: Stack) -> list[RestackPlanEntry]:
     """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
 
     One entry per branch not yet ``merged``, in parent-before-child order. In-review branches are
@@ -860,7 +928,7 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
     :param stack: The stack to plan.
     :return: The restack plan, one entry per not-yet-merged branch.
     """
-    plan: list[dict[str, str]] = []
+    plan: list[RestackPlanEntry] = []
     for branch in order(stack):
         if branch.status == BranchStatus.MERGED:
             continue
@@ -870,11 +938,9 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
             else branch.parent
         )
         plan.append(
-            {
-                "branch": branch.name,
-                "parent": effective_parent,
-                "strategy": branch.strategy,
-            }
+            RestackPlanEntry(
+                branch=branch.name, parent=effective_parent, strategy=branch.strategy
+            )
         )
     return plan
 
@@ -1199,7 +1265,7 @@ def print_restack_plan(stack: Stack) -> None:
 
     :param stack: The stack to plan.
     """
-    logger.info(json.dumps(restack_plan(stack), indent=2))
+    logger.info(json.dumps([asdict(entry) for entry in restack_plan(stack)], indent=2))
 
 
 def print_label_write(write: LabelWrite) -> None:
@@ -1247,7 +1313,7 @@ def print_landed(stack: Stack) -> None:
 
 def print_move_checks(
     move_checks: CommitMoveChecks, move: ProposedCommitMove
-) -> ExitCode:
+) -> StackExitCode:
     """Print whether a move may be made, and every reason it may not.
 
     :param move_checks: The checks to run.
@@ -1260,10 +1326,10 @@ def print_move_checks(
             f"{move.action} {move.source} onto "
             f"{move.destination_remote}/{move.destination}: clear"
         )
-        return ExitCode.SUCCESS
+        return StackExitCode.SUCCESS
     for refusal in refusals:
         logger.error(f"{refusal.reason}: {refusal.explanation}")
-    return ExitCode.MOVE_REFUSED
+    return StackExitCode.MOVE_REFUSED
 
 
 def print_configuration(configuration: Configuration) -> None:
@@ -1278,7 +1344,28 @@ def print_configuration(configuration: Configuration) -> None:
     for name, value in vars(configuration).items():
         if value is None:
             continue
-        logger.info(f"{name}\t{value}")
+        logger.info(f"{name}{PrintedConfiguration.FIELD_SEPARATOR}{value}")
+
+
+class PrintedConfiguration(StrEnum):
+    """
+    How :func:`print_configuration` lays a setting out on its line.
+    """
+
+    FIELD_SEPARATOR = "\t"
+    """
+    What separates a setting's name from its value.
+    """
+
+    @classmethod
+    def read(cls, output: str) -> dict[str, str]:
+        """
+        Read printed configuration back into its settings.
+
+        :param output: What :func:`print_configuration` printed.
+        :return: Each printed setting's value, by name.
+        """
+        return dict(line.split(cls.FIELD_SEPARATOR) for line in output.splitlines())
 
 
 class Command(StrEnum):
@@ -1330,32 +1417,50 @@ class Command(StrEnum):
         }
 
 
+class CommandOption(StrEnum):
+    """Every option a command takes, named once so no caller spells one out."""
+
+    PORCELAIN = "--porcelain"
+    """Print only what a script reads, for :attr:`Command.NEXT`."""
+
+    FORK = "--fork"
+    """The fork, as ``owner/name``, when the caller already knows it."""
+
+    UPSTREAM = "--upstream"
+    """The upstream, as ``owner/name``, when the caller already knows it."""
+
+    CURRENT = "--current"
+    """A label the pull request carries now, repeated per label."""
+
+    ADD = "--add"
+    """A label to end up with."""
+
+    REMOVE = "--remove"
+    """A label to end up without."""
+
+    BRANCH = "--branch"
+    """The fork branch to build a promotion link for."""
+
+    TITLE = "--title"
+    """The title to prefill."""
+
+    BODY = "--body"
+    """The description to prefill."""
+
+    ACTION = "--action"
+    """What a commit move would do."""
+
+    SOURCE = "--source"
+    """The branch whose commits move."""
+
+    DESTINATION = "--destination"
+    """The branch they would land on."""
+
+    DESTINATION_REMOTE = "--destination-remote"
+    """The remote holding the destination."""
+
+
 # %% entry point
-
-
-class ExitCode(IntEnum):
-    """What this tool's exit status tells a caller.
-
-    A distinct status per failure lets a caller - a shell script, or a session acting on
-    what it gets back - tell "you asked for something that does not exist" from "the
-    checkout is not in a state I can read", without parsing stderr.
-    """
-
-    SUCCESS = 0
-    """The command ran and printed its result."""
-
-    USAGE = 2
-    """No such command, or the wrong arguments; the conventional status for a usage
-    error, as `argparse` also uses."""
-
-    BOARD_UNAVAILABLE = 3
-    """`board.json` is missing or unreadable, so the stack cannot be derived."""
-
-    REMOTES_UNRESOLVED = 4
-    """The fork could not be identified from this checkout's remotes."""
-
-    MOVE_REFUSED = 5
-    """The proposed move must not be made; the reasons are on stderr."""
 
 
 def _argument_parser() -> argparse.ArgumentParser:
@@ -1375,7 +1480,7 @@ def _argument_parser() -> argparse.ArgumentParser:
         Command.NEXT, help="which branches to submit upstream next"
     )
     promote.add_argument(
-        "--porcelain",
+        CommandOption.PORCELAIN,
         action="store_true",
         help="print only 'name<TAB>pr' per branch to promote",
     )
@@ -1391,12 +1496,12 @@ def _argument_parser() -> argparse.ArgumentParser:
         Command.CONFIGURATION, help="every resolved setting, including the remotes"
     )
     configuration.add_argument(
-        "--fork",
+        CommandOption.FORK,
         type=Repository.parse,
         help="the fork as 'owner/name', when you already know it",
     )
     configuration.add_argument(
-        "--upstream",
+        CommandOption.UPSTREAM,
         type=Repository.parse,
         help="the upstream as 'owner/name', when you already know it",
     )
@@ -1405,21 +1510,21 @@ def _argument_parser() -> argparse.ArgumentParser:
         Command.LABELS, help="the complete label set a label write must send"
     )
     labels.add_argument(
-        "--current",
+        CommandOption.CURRENT,
         action="append",
         default=[],
         metavar="LABEL",
         help="a label the pull request carries now; repeat per label",
     )
     labels.add_argument(
-        "--add",
+        CommandOption.ADD,
         action="append",
         default=[],
         metavar="LABEL",
         help="a label to end up with",
     )
     labels.add_argument(
-        "--remove",
+        CommandOption.REMOVE,
         action="append",
         default=[],
         metavar="LABEL",
@@ -1429,33 +1534,39 @@ def _argument_parser() -> argparse.ArgumentParser:
     link = commands.add_parser(
         Command.PROMOTION_LINK, help="the upstream compare-and-create URL for a branch"
     )
-    link.add_argument("--branch", required=True, help="the fork branch to promote")
-    link.add_argument("--title", required=True, help="title to prefill")
-    link.add_argument("--body", default="", help="description to prefill")
+    link.add_argument(
+        CommandOption.BRANCH, required=True, help="the fork branch to promote"
+    )
+    link.add_argument(CommandOption.TITLE, required=True, help="title to prefill")
+    link.add_argument(CommandOption.BODY, default="", help="description to prefill")
 
     check_move = commands.add_parser(
         Command.CHECK_MOVE, help="may these commits move onto that branch?"
     )
     check_move.add_argument(
-        "--action",
+        CommandOption.ACTION,
         required=True,
         type=CommitMoveAction,
         choices=list(CommitMoveAction),
         help="what the move would do",
     )
     check_move.add_argument(
-        "--source", required=True, help="the branch whose commits move"
+        CommandOption.SOURCE, required=True, help="the branch whose commits move"
     )
     check_move.add_argument(
-        "--destination", required=True, help="the branch they would land on"
+        CommandOption.DESTINATION, required=True, help="the branch they would land on"
     )
     check_move.add_argument(
-        "--destination-remote", required=True, help="the remote holding the destination"
+        CommandOption.DESTINATION_REMOTE,
+        required=True,
+        help="the remote holding the destination",
     )
     return parser
 
 
-def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> ExitCode:
+def _run_without_a_board(
+    command: Command, arguments: argparse.Namespace
+) -> StackExitCode:
     """Run a command that needs no ``board.json``.
 
     :param command: The command to run.
@@ -1466,7 +1577,7 @@ def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> Exi
         print_label_write(
             LabelWrite.replacing(arguments.current, arguments.add, arguments.remove)
         )
-        return ExitCode.SUCCESS
+        return StackExitCode.SUCCESS
     if command is Command.CONFIGURATION:
         print_configuration(
             load_configuration(
@@ -1474,18 +1585,18 @@ def _run_without_a_board(command: Command, arguments: argparse.Namespace) -> Exi
                 upstream_repository=arguments.upstream,
             )
         )
-        return ExitCode.SUCCESS
+        return StackExitCode.SUCCESS
     print_promotion_link(
         PromotionLink.build(
             load_configuration(), arguments.branch, arguments.title, arguments.body
         )
     )
-    return ExitCode.SUCCESS
+    return StackExitCode.SUCCESS
 
 
 def _run_against_the_board(
     command: Command, arguments: argparse.Namespace, stack: Stack
-) -> ExitCode:
+) -> StackExitCode:
     """Run a command that reads the derived stack.
 
     :param command: The command to run.
@@ -1516,7 +1627,7 @@ def _run_against_the_board(
         Command.LANDED: print_landed,
     }
     reporters[command](stack)
-    return ExitCode.SUCCESS
+    return StackExitCode.SUCCESS
 
 
 def _ancestry_predicate(configuration: Configuration) -> Callable[[str, str], bool]:
@@ -1536,7 +1647,7 @@ def _ancestry_predicate(configuration: Configuration) -> Callable[[str, str], bo
 
 
 def main() -> ExitCode:
-    """Dispatch the command-line invocation, mapping every refusal to its own status.
+    """Dispatch the command-line invocation, ending with the status the refusal carries.
 
     :return: The process exit code.
     """
@@ -1546,15 +1657,9 @@ def main() -> ExitCode:
         if not command.needs_a_board:
             return _run_without_a_board(command, arguments)
         return _run_against_the_board(command, arguments, load_stack())
-    except (ForkRemoteNotFoundError, AmbiguousForkRemoteError) as error:
+    except CommandFailure as error:
         logger.error(f"{error}")
-        return ExitCode.REMOTES_UNRESOLVED
-    except BoardUnavailable as error:
-        logger.error(f"{error}")
-        return ExitCode.BOARD_UNAVAILABLE
-    except (ContradictoryLabelWriteError, PromotionLinkTooLongError) as error:
-        logger.error(f"{error}")
-        return ExitCode.USAGE
+        return error.exit_code
 
 
 if __name__ == "__main__":

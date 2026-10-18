@@ -16,8 +16,10 @@ from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation
-from basstler.maintenance_constants import SESSION_LINK_PATTERN
+from basstler.maintenance_constants import DescriptionPattern
 from basstler.stack import PullRequest
 
 PullRequestRecord = Mapping[str, Any]
@@ -174,7 +176,7 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
 
 
 @dataclass
-class MissingPullRequestFieldError(ValueError):
+class MissingPullRequestFieldError(CommandFailure, ValueError):
     """
     Raised when a fetched pull request omits a field the board is derived from.
 
@@ -182,6 +184,11 @@ class MissingPullRequestFieldError(ValueError):
     are different facts, and defaulting one to the other is what makes bad board data
     indistinguishable from good.
     """
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.USAGE
 
     field_name: PullRequestField
     """
@@ -213,10 +220,7 @@ def get_session_link_in(body: str | None) -> str | None:
     :param body: The description to search, which may be absent.
     :return: The first session link, or ``None`` if the description names none.
     """
-    if not body:
-        return None
-    found = SESSION_LINK_PATTERN.search(body)
-    return found.group(0) if found else None
+    return DescriptionPattern.SESSION_LINK.first_in(body)
 
 
 # %% the export itself

@@ -15,8 +15,8 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.maintenance_constants import (
-    CONFLICT_COMMENT_PREFIX,
-    MERGEABLE_STATE_WITH_CONFLICTS,
+    MergeableState,
+    RoutineText,
 )
 from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_git_commands import (
@@ -157,7 +157,7 @@ def conflict_report(
         else "\n\nThis pull request's description names no session to address."
     )
     return (
-        f"{CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
+        f"{RoutineText.CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
         f"conflicts, so this branch was left untouched and skipped.\n\n"
         f"Conflicting files:\n{files}\n\n"
         f"Please resolve and push. This branch is labelled "
@@ -297,7 +297,8 @@ class RestackStep(ABC):
 
     A step either concludes the branch - returning the outcome its owner acts on - or
     returns nothing and lets the next step run. Adding a step is writing a subclass and
-    placing it in :data:`maintenance_restack_procedure.RESTACK_STEPS`, whose order is the procedure.
+    placing it in :func:`maintenance_restack_procedure.restack_steps`, whose order is
+    the procedure.
     """
 
     @abstractmethod
@@ -330,7 +331,7 @@ class WithholdBranchStillConflicting(RestackStep):
             restacking.fork.pull_request(branch.pull_request_number),
             branch.pull_request_number,
         )
-        if state == MERGEABLE_STATE_WITH_CONFLICTS:
+        if state == MergeableState.DIRTY:
             return restacking.concluded(
                 RestackOutcome.WITHHELD,
                 explanation="still conflicted against its base since a previous pass",

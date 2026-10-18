@@ -16,20 +16,24 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import subprocess
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, TypeVar, ClassVar
+from typing import Any, TypeVar
 
-import tomllib
 
+from basstler.class_property import classproperty
+from basstler.environment import GitHubActionsVariable
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import GitHubClient
 from basstler.repository import Repository
+from basstler.stack_configuration import (
+    CommittedStackConfiguration,
+    MissingUpstreamRepositoryError,
+)
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -155,15 +159,6 @@ class GraphQLDocument(StrEnum):
     def read(self) -> str:
         """:return: The document's text."""
         return (PackageLocation.QUERIES / f"{self}.graphql").read_text()
-
-
-class EnvironmentVariable(StrEnum):
-    """
-    Runner-supplied environment this script reads.
-    """
-
-    STEP_SUMMARY = "GITHUB_STEP_SUMMARY"
-    REPOSITORY_OWNER = "GITHUB_REPOSITORY_OWNER"
 
 
 class ReviewState(StrEnum):
@@ -304,10 +299,13 @@ class Author(JSONModel):
     """
     Their GitHub login, or a placeholder when the account is gone.
     """
-    UNKNOWN_LOGIN: ClassVar[str] = "(unknown)"
-    """
-    Stands in for the author of a comment whose account no longer exists.
-    """
+
+    @classproperty
+    def unknown_login(cls) -> str:
+        """
+        Stands in for the author of a comment whose account no longer exists.
+        """
+        return "(unknown)"
 
     @classmethod
     def from_json(cls, data: dict[str, Any] | None) -> Author:
@@ -318,7 +316,7 @@ class Author(JSONModel):
         :return: The parsed author.
         """
         if data is None:
-            return cls(cls.UNKNOWN_LOGIN)
+            return cls(cls.unknown_login)
         return cls(data[PullRequestJSONKey.LOGIN])
 
 
@@ -874,29 +872,23 @@ class UpstreamReviewReader:
 
 
 def resolve_upstream_repository(
-    path: Path = PackageLocation.STACK_CONFIGURATION.value, override: str | None = None
+    configuration: CommittedStackConfiguration, override: str | None = None
 ) -> Repository:
     """
     Decide which repository the fork's pull requests are reviewed on.
 
-    Reads the committed defaults only. The per-user layer lives on the personal-notes
+    Reads the committed settings only. The per-user layer lives on the personal-notes
     branch, which a runner does not check out, so *override* is the escape hatch for a
     checkout whose upstream differs.
 
-    :param path: The committed stack configuration file.
-    :param override: An ``owner/name`` reference outranking the file.
+    :param configuration: The shipped defaults and the project's committed settings.
+    :param override: An ``owner/name`` reference outranking the files.
     :return: The upstream repository.
+    :raises MissingUpstreamRepositoryError: If neither names one and no override is given.
     """
     if override:
         return Repository.parse(override)
-    values = tomllib.loads(path.read_text())
-    return Repository.parse(values[UPSTREAM_REPOSITORY_SETTING])
-
-
-UPSTREAM_REPOSITORY_SETTING = "upstream_repository"
-"""
-The ``stack.toml`` key naming the repository reviews happen on.
-"""
+    return configuration.upstream_repository()
 
 
 # %% report
@@ -1026,7 +1018,7 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     )
     parser.add_argument(
         "--fork-owner",
-        default=os.environ.get(EnvironmentVariable.REPOSITORY_OWNER, ""),
+        default=GitHubActionsVariable.REPOSITORY_OWNER.read() or "",
         help="the owner whose branches to claim, defaulting to the runner's own",
     )
     parser.add_argument(
@@ -1054,11 +1046,11 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _parse_arguments(argv)
     try:
         report = _build_report(arguments)
-    except UpstreamReviewError as failure:
+    except (UpstreamReviewError, MissingUpstreamRepositoryError) as failure:
         logger.error(failure)
         return 1
     logger.info(report)
-    summary_path = os.environ.get(EnvironmentVariable.STEP_SUMMARY)
+    summary_path = GitHubActionsVariable.STEP_SUMMARY.read()
     if summary_path:
         Path(summary_path).write_text(report)
     return 0
@@ -1073,7 +1065,9 @@ def _build_report(arguments: argparse.Namespace) -> str:
     """
     reader = UpstreamReviewReader(
         GitHubCommandLineClient(),
-        resolve_upstream_repository(override=arguments.upstream),
+        resolve_upstream_repository(
+            CommittedStackConfiguration(), override=arguments.upstream
+        ),
         arguments.fork_owner,
     )
     number = arguments.pull_request or reader.resolve_pull_request_number(

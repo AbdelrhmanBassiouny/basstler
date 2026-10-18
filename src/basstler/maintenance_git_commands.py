@@ -12,6 +12,8 @@ import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_errors import ExternalCallFailed
 from basstler.stack import Configuration, IntegrationStrategy, resolve_ref
 
@@ -19,10 +21,15 @@ from basstler.stack import Configuration, IntegrationStrategy, resolve_ref
 
 
 @dataclass
-class GitCommandFailed(ExternalCallFailed):
+class GitCommandFailed(CommandFailure, ExternalCallFailed):
     """
     Raised when a git command this module depends on the result of fails.
     """
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.GIT_COMMAND_FAILED
 
     arguments: tuple[str, ...] = ()
     """

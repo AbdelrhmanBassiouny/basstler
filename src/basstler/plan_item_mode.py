@@ -58,11 +58,19 @@ import tomllib
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
-from basstler.locations import ClaudeCodeVariable, ProjectLocation
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, ExitCode
+from basstler.locations import (
+    ClaudeCodeVariable,
+    PackageLocation,
+    PluginLocation,
+    ProjectLocation,
+)
+from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -159,7 +167,7 @@ class CommandLineOption(StrEnum):
     """
 
 
-class ExitCode(IntEnum):
+class PlanItemModeExitCode(ExitCode):
     """
     The process statuses this tool exits with.
 
@@ -195,13 +203,6 @@ class ExitCode(IntEnum):
     """
     The personal settings file could not be pushed to the notes branch.
     """
-
-    @property
-    def name_for_a_caller(self) -> str:
-        """
-        The status as the lowercase name a report and a message both use.
-        """
-        return self.name.lower()
 
 
 # %% settings
@@ -274,7 +275,7 @@ class SettingsFile:
 
 
 @dataclass
-class ModeError(Exception, ABC):
+class ModeError(CommandFailure, ABC):
     """
     Base for every refusal this tool reports, each carrying its own exit status.
 
@@ -288,18 +289,13 @@ class ModeError(Exception, ABC):
     traceback saying the same thing in the library's words instead of ours.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.SUCCESS
-    """
-    The process status this refusal exits with.
-    """
-
     def __post_init__(self) -> None:
         """
         Compose the message from the subclass's own description and advice.
         """
         correction = self.suggest_correction()
         message = self.error_message()
-        super().__init__(f"{message}\n{correction}" if correction else message)
+        Exception.__init__(self, f"{message}\n{correction}" if correction else message)
 
     def __str__(self) -> str:
         """
@@ -326,7 +322,10 @@ class UnknownModeError(ModeError):
     Raised when a mode is named that :class:`ExecutionMode` does not define.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_MODE
+    @classproperty
+    def exit_code(cls) -> PlanItemModeExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemModeExitCode.UNKNOWN_MODE
 
     setting: ModeSetting
     """
@@ -346,7 +345,10 @@ class MalformedModeSettingsError(ModeError):
     Raised when a settings file exists but cannot be read as the modes it should hold.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.MALFORMED_MODE_SETTINGS
+    @classproperty
+    def exit_code(cls) -> PlanItemModeExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemModeExitCode.MALFORMED_MODE_SETTINGS
 
     file: SettingsFile
     """
@@ -364,7 +366,7 @@ class MalformedModeSettingsError(ModeError):
     def suggest_correction(self) -> str:
         return (
             "Fix the file, or delete it to fall back to "
-            f"{ProjectLocation.PLAN_ITEM_MODE_DEFAULTS}'s defaults."
+            f"{PackageLocation.PLAN_ITEM_MODE_DEFAULTS}'s defaults."
         )
 
 
@@ -374,7 +376,10 @@ class SettingsWriteRefusedError(ModeError):
     Raised when the personal settings file could not be pushed to the notes branch.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.SETTINGS_WRITE_REFUSED
+    @classproperty
+    def exit_code(cls) -> PlanItemModeExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemModeExitCode.SETTINGS_WRITE_REFUSED
 
     detail: str
     """
@@ -393,19 +398,18 @@ class SettingsWriteRefusedError(ModeError):
 # %% reading the settings
 
 
-def committed_defaults(project_root: Path) -> dict[str, ExecutionMode]:
+def committed_defaults() -> dict[str, ExecutionMode]:
     """
     The shipped mode for every skill.
 
-    :param project_root: The repository to read within.
     :raises MalformedModeSettingsError: If the file will not parse, or names no mode for
         some skill.
     :raises UnknownModeError: If a default names no mode.
     :return: Every skill's default, keyed by its setting key.
     """
     shipped = SettingsFile(
-        path=project_root / ProjectLocation.PLAN_ITEM_MODE_DEFAULTS,
-        origin=ProjectLocation.PLAN_ITEM_MODE_DEFAULTS,
+        path=PackageLocation.PLAN_ITEM_MODE_DEFAULTS.value,
+        origin=PackageLocation.PLAN_ITEM_MODE_DEFAULTS,
     )
     raw = shipped.read()
     missing = [
@@ -460,17 +464,12 @@ def fetch_notes_branch(project_root: Path) -> bool:
     :param project_root: The repository to fetch within.
     :return: Whether the branch was reachable.
     """
-    probe = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'source "{ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
-        ],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
+    return (
+        ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run(
+            project_root
+        ).returncode
+        == 0
     )
-    return probe.returncode == 0
 
 
 # %% reports
@@ -557,7 +556,7 @@ class Report(ABC):
 
     @property
     @abstractmethod
-    def exit_code(self) -> ExitCode:
+    def exit_code(self) -> PlanItemModeExitCode:
         """
         :return: The process status this report exits with.
         """
@@ -593,7 +592,7 @@ class ModeResolution(Report):
     What decided it.
     """
 
-    exit_code: ExitCode = ExitCode.SUCCESS
+    exit_code: PlanItemModeExitCode = PlanItemModeExitCode.SUCCESS
     """
     The process status this resolution exits with.
     """
@@ -647,7 +646,7 @@ def resolve_mode(
 
     return ModeResolution(
         skill=skill,
-        mode=committed_defaults(project_root)[skill.setting_key],
+        mode=committed_defaults()[skill.setting_key],
         source=ModeSource.COMMITTED_DEFAULT,
     )
 
@@ -671,7 +670,7 @@ class SettingsWriteReport(Report):
     The mode they were pinned to.
     """
 
-    exit_code: ExitCode = ExitCode.SUCCESS
+    exit_code: PlanItemModeExitCode = PlanItemModeExitCode.SUCCESS
     """
     The process status this write exits with.
     """
@@ -700,7 +699,7 @@ def render_settings(modes: dict[str, ExecutionMode]) -> str:
     """
     header = (
         "# Personal plan-item execution modes, layered over the committed defaults\n"
-        f"# at {ProjectLocation.PLAN_ITEM_MODE_DEFAULTS}. Rewritten in full by plan_item_mode.py's\n"
+        f"# at {PackageLocation.PLAN_ITEM_MODE_DEFAULTS}. Rewritten in full by plan_item_mode.py's\n"
         "# set command, so anything other than the keys below is not preserved.\n"
     )
     body = "".join(
@@ -735,7 +734,7 @@ def write_mode(
                 key=other.setting_key, value=overrides[other.setting_key]
             ).parse()
             if other.setting_key in overrides
-            else committed_defaults(project_root)[other.setting_key]
+            else committed_defaults()[other.setting_key]
         )
         for other in PlanItemSkill
     }
@@ -751,7 +750,7 @@ def write_mode(
         written = subprocess.run(
             [
                 "bash",
-                ProjectLocation.PERSONAL_NOTES_WRITER_SCRIPT,
+                PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT,
                 "--source",
                 str(scratch_file),
                 "--destination",

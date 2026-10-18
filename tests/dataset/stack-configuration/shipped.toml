@@ -1,0 +1,4 @@
+# Stands in for the package's shipped stack.toml: defaults only, naming no repository.
+in_review_label = "in-review"
+upstream_remote = "upstream"
+upstream_base = "main"

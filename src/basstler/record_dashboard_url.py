@@ -39,6 +39,7 @@ import re
 import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import Enum
 from pathlib import Path
 from typing import Any
 from basstler.standard_streams import StandardStreamHandler
@@ -48,13 +49,27 @@ logger = StandardStreamHandler.logger_for(__name__)
 This module's logger, which is also what its command prints through.
 """
 
-ARTIFACT_URL_PATTERN = re.compile(
-    r"^https://claude\.ai/code/artifact/"
-    r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
-)
-"""
-The shape of a published Artifact URL, used to reject anything else on sight.
-"""
+
+class ArtifactUrlPattern(Enum):
+    """
+    The URL shapes a dashboard cache entry is checked against.
+    """
+
+    PUBLISHED = re.compile(
+        r"^https://claude\.ai/code/artifact/"
+        r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    )
+    """
+    The shape of a published Artifact URL, used to reject anything else on sight.
+    """
+
+    def matches(self, url: str) -> bool:
+        """
+        :param url: The URL to check.
+        :return: Whether the whole URL has this shape.
+        """
+        return self.value.match(url) is not None
+
 
 # %% refusals
 
@@ -241,7 +256,7 @@ def resolve_artifact_url(
     :raises UnlistedArtifactUrlError: If ``chosen_url`` carries a different title.
     :return: The URL to record.
     """
-    if chosen_url is not None and not ARTIFACT_URL_PATTERN.match(chosen_url):
+    if chosen_url is not None and not ArtifactUrlPattern.PUBLISHED.matches(chosen_url):
         raise MalformedArtifactUrlError(supplied_url=chosen_url)
 
     candidates = [entry for entry in listing if entry.title == expected_title]

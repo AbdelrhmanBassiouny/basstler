@@ -10,6 +10,8 @@ import it rather than duplicating the logic.
 from __future__ import annotations
 
 import re
+from enum import IntEnum, StrEnum
+from functools import cache
 from urllib.parse import urlsplit
 
 import jinja2
@@ -18,26 +20,69 @@ import nh3
 
 from basstler.locations import PackageLocation
 
-_ALLOWED_URL_SCHEMES = frozenset({"http", "https"})
+
+class AllowedUrlScheme(StrEnum):
+    """
+    The URL schemes a manifest- or index-authored link may use.
+    """
+
+    HTTP = "http"
+    """
+    Plain web links.
+    """
+
+    HTTPS = "https"
+    """
+    Secure web links.
+    """
 
 
-# Matches one opening or closing HTML heading tag, e.g. "<h1>"/"</h1>" through
-# "<h6>"/"</h6>". _shift_heading_level() shifts each match down by
-# _HEADING_LEVEL_SHIFT and caps it at _MAXIMUM_HEADING_LEVEL, so a roadmap's
-# own "<h1>Title</h1>" becomes "<h4>Title</h4>" once embedded in a dashboard
-# page, and a roadmap's "<h5>Deep</h5>" becomes "<h6>Deep</h6>" - shifted but
-# capped, rather than overflowing to a nonexistent "<h8>".
-_HEADING_TAG_PATTERN = re.compile(r"<(/?)h([1-6])>")
+class HeadingShift(IntEnum):
+    """
+    How a roadmap's own headings are pushed down to nest inside a dashboard page.
 
-_HEADING_LEVEL_SHIFT = 3
-"""
-How many levels to push a roadmap's own headings down by, so they nest below the
-embedding dashboard page's own h1-h3.
-"""
+    A roadmap's ``<h1>Title</h1>`` becomes ``<h4>Title</h4>`` once embedded, and its
+    ``<h5>Deep</h5>`` becomes ``<h6>Deep</h6>`` - shifted but capped, rather than
+    overflowing to a nonexistent ``<h8>``.
+    """
 
-_MAXIMUM_HEADING_LEVEL = 6
-"""The deepest valid HTML heading level - shifting never produces anything
-past this, even for an already-deep roadmap heading."""
+    LEVELS = 3
+    """
+    How many levels to push a roadmap's own headings down by, so they nest below the
+    embedding dashboard page's own h1-h3.
+    """
+
+    DEEPEST_LEVEL = 6
+    """
+    The deepest valid HTML heading level - shifting never produces anything past this,
+    even for an already-deep roadmap heading.
+    """
+
+    @staticmethod
+    @cache
+    def tag_pattern() -> re.Pattern[str]:
+        """
+        :return: The pattern matching one opening or closing HTML heading tag, ``<h1>``
+            through ``</h6>``; group 1 is the closing slash, group 2 the level.
+        """
+        return re.compile(r"<(/?)h([1-6])>")
+
+    @classmethod
+    def shifted(cls, heading_tag_match: re.Match[str]) -> str:
+        """
+        Shift one heading tag match down by :attr:`LEVELS`, capped at
+        :attr:`DEEPEST_LEVEL`.
+
+        Used as the substitution callback for :meth:`tag_pattern`.
+
+        :param heading_tag_match: A match of :meth:`tag_pattern`.
+        :return: The tag with its level shifted.
+        """
+        closing_slash, original_level = heading_tag_match.group(1), int(
+            heading_tag_match.group(2)
+        )
+        shifted_level = min(original_level + cls.LEVELS, cls.DEEPEST_LEVEL)
+        return f"<{closing_slash}h{shifted_level}>"
 
 
 def create_template_environment() -> jinja2.Environment:
@@ -84,7 +129,7 @@ def render_markdown_to_html(markdown_text: str) -> str:
         markdown_text, extensions=["tables", "fenced_code"]
     )
     sanitized_html_text = nh3.clean(html_text, link_rel=None)
-    return _HEADING_TAG_PATTERN.sub(_shift_heading_level, sanitized_html_text)
+    return HeadingShift.tag_pattern().sub(HeadingShift.shifted, sanitized_html_text)
 
 
 def sanitize_http_url(url: str | None) -> str | None:
@@ -98,27 +143,6 @@ def sanitize_http_url(url: str | None) -> str | None:
     :return: *url* unchanged if its scheme is ``http`` or ``https``;
         ``None`` otherwise.
     """
-    if url is None or urlsplit(url).scheme.lower() not in _ALLOWED_URL_SCHEMES:
+    if url is None or urlsplit(url).scheme.lower() not in set(AllowedUrlScheme):
         return None
     return url
-
-
-def _shift_heading_level(heading_tag_match: re.Match[str]) -> str:
-    """
-    Shift one ``<h1>``-``<h6>`` tag match down by :data:`_HEADING_LEVEL_SHIFT`.
-
-    Used as the substitution callback for :data:`_HEADING_TAG_PATTERN`, so a
-    roadmap's own ``<h1>`` renders as the embedding dashboard page's
-    ``<h4>``, staying below the dashboard's own h1-h3 - capped at h6 so a
-    deeply-nested roadmap heading never overflows past the last valid level.
-
-    :param heading_tag_match: A match of :data:`_HEADING_TAG_PATTERN` -
-        group 1 is ``"/"`` for a closing tag or ``""`` for an opening one,
-        group 2 is the original heading level.
-    :return: The tag with its level shifted.
-    """
-    closing_slash, original_level = heading_tag_match.group(1), int(
-        heading_tag_match.group(2)
-    )
-    shifted_level = min(original_level + _HEADING_LEVEL_SHIFT, _MAXIMUM_HEADING_LEVEL)
-    return f"<{closing_slash}h{shifted_level}>"
