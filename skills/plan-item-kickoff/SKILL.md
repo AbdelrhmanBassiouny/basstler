@@ -114,13 +114,13 @@ git checkout -b <branch> <base-branch>
 git commit --allow-empty -m "Bootstrap <item-id>"
 git push -u origin <branch>
 # then create the draft pull request with your GitHub tool, and:
-source .claude/hooks/resolve-personal-notes-config.sh
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" open \
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" open \
     --plan <plan-id> --item <item-id> \
     --branch <branch> --base <base-branch> \
     --session <this session's url> \
     --pull-request-number <number>
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" record \
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" record \
     --plan <plan-id> --item <item-id> \
     --status "in progress" --roadmap-section <file>
 ```
@@ -135,8 +135,8 @@ the item and flips it to `in progress`; `record` appends the settled plan to
 can create one — with `--pull-request-title`/`--pull-request-body` instead of
 `--pull-request-number`, verified live — but a pull request it creates is
 attributed to the app its requests are proxied through rather than to the
-person whose work it is, the same authorship problem `AGENTS.md` rules out for
-commits. Creating it yourself keeps your identity on it. The creating path is
+person whose work it is, the same authorship problem that rules out an assistant
+authoring commits. Creating it yourself keeps your identity on it. The creating path is
 there for an unattended run whose credential is a real one; if you use it,
 `open` publishes the branch too, so the three git commands above are yours to
 skip.
@@ -155,7 +155,7 @@ the only record it will ever have:
 - **The PR-progress note** — the plan, what is done, and what is next, kept
   current as the work goes. Write it between `CLAUDE.local.md`'s
   `BEGIN-PR-PROGRESS`/`END-PR-PROGRESS` markers and run
-  `.claude/hooks/save-pr-progress.sh` to push it. Do this as soon as the
+  `hooks/save-pr-progress.sh` to push it. Do this as soon as the
   branch exists, not at the end: a note written afterwards is a summary, and
   the point of it is that another session can pick the work up mid-flight.
 
