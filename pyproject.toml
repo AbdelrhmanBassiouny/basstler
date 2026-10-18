@@ -3,8 +3,8 @@
 # plugin runs from.
 
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
 
 [project]
 name = "basstler"
@@ -42,27 +42,21 @@ dynamic = ["version"]
 "Source" = "https://github.com/AbdelrhmanBassiouny/basstler"
 "Bug Tracker" = "https://github.com/AbdelrhmanBassiouny/basstler/issues"
 
-[tool.setuptools.dynamic]
-# One release for the package and the plugin: a test holds _version.py equal to
-# plugin/.claude-plugin/plugin.json's version, which is the tag an installed plugin installs
-# the package at.
-version = {attr = "basstler._version.__version__"}
+# One release for the package and the plugin, written in one place: the plugin's manifest.
+# Claude Code reads the version there and runs nothing first, so it has to be a literal in
+# plugin.json; the build reads it from there rather than keeping a second copy. It is also
+# the tag an installed plugin installs the package at, which the release workflow pushes.
+[tool.hatch.version]
+path = "plugin/.claude-plugin/plugin.json"
+pattern = '"version"\s*:\s*"(?P<version>[^"]+)"'
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["basstler"]
-
-# The files the modules resolve beside themselves rather than by an argument, all named
-# in locations.py: the page templates, the GraphQL documents and the committed defaults.
-# An install that left them out would import and then fail at the first render, the first
-# configuration read, or the first query.
-[tool.setuptools.package-data]
-basstler = [
-    "templates/*.html",
-    "queries/*.graphql",
-    "stack.toml",
-    "plan-item-modes.toml",
-]
+# The whole package directory, so the files the modules resolve beside themselves rather
+# than by an argument - all named in locations.py: the page templates, the GraphQL
+# documents and the committed defaults - ship with it. An install that left them out would
+# import and then fail at the first render, the first configuration read, or the first
+# query.
+[tool.hatch.build.targets.wheel]
+packages = ["src/basstler"]
 
 # Docstrings are formatted by docformatter on top of black - scripts/format_docstrings.py
 # runs both, keeping docformatter's change only where black leaves it alone.

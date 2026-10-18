@@ -11,11 +11,13 @@ directory holding them rather than named.
 
 from __future__ import annotations
 
+import importlib.metadata
 import json
 import os
 import re
 import subprocess
 import sys
+import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -23,7 +25,6 @@ import pytest
 
 from basstler.locations import ClaudeCodeVariable, PackageLocation, PluginLocation
 
-from basstler import _version
 from basstler.package_layout import (
     PackageModule,
     command_line_entry_points,
@@ -33,6 +34,7 @@ from basstler.package_layout import (
 from .constants import (
     ConfigurationVariable,
     EnvironmentVariable,
+    HatchVersionKey,
     PluginManifestKey,
     RepositoryLocation,
 )
@@ -143,17 +145,39 @@ def test_a_caller_imports_the_checkouts_own_source_with_no_install():
     assert Path(result.stdout.strip()) == PackageLocation.DIRECTORY / "__init__.py"
 
 
-def test_the_package_version_is_the_plugin_version():
+def test_the_build_reads_its_version_from_the_plugin_manifest():
     """
     An installed plugin installs the package at its own version, so the two are one
-    release: a bump that moved only one of them would install a package the hooks were
-    not written against.
+    release. The manifest has to hold the version as a literal, since Claude Code runs
+    nothing before reading it, so the build reads it from there rather than from a second
+    copy a bump could leave behind.
     """
-    manifest = json.loads(
-        (RepositoryLocation.PLUGIN / ".claude-plugin" / "plugin.json").read_text()
+    version_source = tomllib.loads(
+        PackageLocation.DEPENDENCY_DECLARATION.value.read_text()
+    )[HatchVersionKey.TOOL][HatchVersionKey.HATCH][HatchVersionKey.VERSION]
+    manifest_text = RepositoryLocation.PLUGIN_MANIFEST.read_text()
+
+    assert (
+        RepositoryLocation.ROOT / version_source[HatchVersionKey.PATH]
+        == RepositoryLocation.PLUGIN_MANIFEST
+    )
+    read_by_the_build = re.search(
+        version_source[HatchVersionKey.PATTERN], manifest_text
+    )
+    assert read_by_the_build is not None
+    assert (
+        read_by_the_build["version"]
+        == json.loads(manifest_text)[PluginManifestKey.VERSION]
     )
 
-    assert _version.__version__ == manifest[PluginManifestKey.VERSION]
+
+def test_the_installed_package_is_the_plugin_version():
+    """
+    The version the build read is the one the installed package reports.
+    """
+    manifest = json.loads(RepositoryLocation.PLUGIN_MANIFEST.read_text())
+
+    assert importlib.metadata.version("basstler") == manifest[PluginManifestKey.VERSION]
 
 
 # %% each module stands on its own
@@ -241,9 +265,7 @@ def test_the_example_caller_calls_the_plugins_own_release():
     A project copies the example caller as it stands, so it has to call the release its
     plugin installs - both the workflow it uses and the package that workflow installs.
     """
-    manifest = json.loads(
-        (RepositoryLocation.PLUGIN / ".claude-plugin" / "plugin.json").read_text()
-    )
+    manifest = json.loads(RepositoryLocation.PLUGIN_MANIFEST.read_text())
     caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
 
     references = RELEASE_REFERENCE.findall(caller.read_text())

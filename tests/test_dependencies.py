@@ -171,13 +171,16 @@ def test_an_installed_distribution_requires_what_pyproject_declares():
     """
     A package installed from its repository rather than run from a checkout has no
     ``pyproject.toml`` beside it; its installed metadata states the same dependencies.
+
+    Compared without their order, which the build backend is free to change: hatchling
+    writes them sorted.
     """
     declared = ProjectDeclaration.of_this_package()
 
-    assert [
+    assert sorted(
         requirement.specifier
         for requirement in InstalledDistribution(declared.name).requirements()
-    ] == [declared.name, *declared.dependencies]
+    ) == sorted([declared.name, *declared.dependencies])
 
 
 def test_an_installed_distribution_this_environment_has_misses_nothing():

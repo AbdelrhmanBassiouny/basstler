@@ -20,8 +20,13 @@ Setting it up: [`docs/SETUP.md`](docs/SETUP.md).
 | `docs/` | The setup guide and the stacked-PR workflow. |
 
 The plugin carries no Python, and the package carries no hooks: a session start installs the
-package at the plugin's own version, so the two are always one release. A test holds the
-package's `_version.py` equal to the plugin's version.
+package at the plugin's own version, so the two are always one release.
+
+## Releasing
+
+The version is written in one place, `plugin/.claude-plugin/plugin.json`; the package's build
+reads it from there. Bump it in a pull request, and merging that to `main` tags `v<version>`,
+the tag an installed plugin installs the package at.
 
 ## The package's own environment
 

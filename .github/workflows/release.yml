@@ -1,0 +1,45 @@
+name: Release
+
+# A release is one line in plugin/.claude-plugin/plugin.json: merging a version bump to main
+# tags that version, and the tag is what an installed plugin installs the package at
+# (`basstler @ git+<repository>@v<version>`). A push that leaves the version alone finds
+# its tag already there and does nothing.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - plugin/.claude-plugin/plugin.json
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    name: Tag the plugin's version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Read the version
+        id: version
+        run: |
+          version="$(python3 -c 'import json; print(json.load(open("plugin/.claude-plugin/plugin.json"))["version"])')"
+          echo "tag=v${version}" >> "${GITHUB_OUTPUT}"
+
+      - name: Tag it, unless it is already tagged
+        env:
+          TAG: ${{ steps.version.outputs.tag }}
+        run: |
+          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" > /dev/null; then
+            echo "${TAG} is already tagged; nothing to release."
+            exit 0
+          fi
+          git tag "${TAG}" "${GITHUB_SHA}"
+          git push origin "refs/tags/${TAG}"
+          echo "Tagged ${TAG} at ${GITHUB_SHA}." >> "${GITHUB_STEP_SUMMARY}"

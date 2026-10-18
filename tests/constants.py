@@ -37,6 +37,11 @@ class RepositoryLocation(PathEnumeration):
     The Claude Code plugin: its manifest, hooks and skills.
     """
 
+    PLUGIN_MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
+    """
+    The plugin's manifest, the one place the release's version is written.
+    """
+
     HOOKS = PLUGIN / "hooks"
     """
     The shell entry points under test.
@@ -370,6 +375,38 @@ class RemoteName(StrEnum):
     BACKUP = "backup"
     """
     A remote at a local path, which names no repository.
+    """
+
+
+class HatchVersionKey(StrEnum):
+    """
+    The path through ``pyproject.toml`` to the build's version source, and that source's
+    keys.
+    """
+
+    TOOL = "tool"
+    """
+    The table every tool's settings sit under.
+    """
+
+    HATCH = "hatch"
+    """
+    The build backend's own table.
+    """
+
+    VERSION = "version"
+    """
+    Where the backend is told to read the version from.
+    """
+
+    PATH = "path"
+    """
+    The file the version is read out of, relative to the repository root.
+    """
+
+    PATTERN = "pattern"
+    """
+    The regular expression whose ``version`` group is the version.
     """
 
 
