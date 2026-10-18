@@ -846,3 +846,107 @@ class FileMode(IntEnum):
     """
     Readable and runnable by everyone, writable by its owner.
     """
+
+
+class ReleaseSampleVersion(StrEnum):
+    """
+    The versions a scratch checkout's plugin manifest names in the release-version tests.
+    """
+
+    RELEASED = "1.0.0"
+    """
+    The version the scratch checkout is tagged at.
+    """
+
+    NEXT_PATCH = "1.0.1"
+    """
+    :attr:`RELEASED` with its patch part bumped: what a release on merge makes.
+    """
+
+    NEXT_MINOR = "1.1.0"
+    """
+    :attr:`RELEASED` with its minor part bumped, which a pull request may name.
+    """
+
+    NEXT_MAJOR = "2.0.0"
+    """
+    :attr:`RELEASED` with its major part bumped, which a pull request may name.
+    """
+
+    SKIPPING = "1.2.0"
+    """
+    A minor release past the next one, which a pull request may not name.
+    """
+
+    OLDER = "0.9.0"
+    """
+    A version behind :attr:`RELEASED`.
+    """
+
+    UNMERGED = "3.0.0"
+    """
+    A version tagged on a branch the checked-out commit does not contain.
+    """
+
+
+class ReleaseSampleTag(StrEnum):
+    """
+    Tags the release-version tests put on a scratch checkout that release nothing.
+    """
+
+    NOT_A_RELEASE = "nightly"
+    """
+    A tag that names no version.
+    """
+
+    MALFORMED = "v1.x"
+    """
+    A tag shaped like a release whose version is not one.
+    """
+
+
+class ReleaseSampleFile(PathEnumeration):
+    """
+    The files of a scratch checkout the release-version tests change, relative to its
+    root.
+    """
+
+    PACKAGE_MODULE = Path("src") / "sample" / "__init__.py"
+    """
+    A module of the scratch checkout's package.
+    """
+
+    SKILL = Path("plugin") / "skills" / "sample" / "SKILL.md"
+    """
+    A skill of the scratch checkout's plugin.
+    """
+
+    DOCUMENTATION = Path("docs") / "guide.md"
+    """
+    Documentation, which no install runs but which still makes a new release.
+    """
+
+
+class ReleaseSampleText(StrEnum):
+    """
+    File contents the release-version tests write.
+    """
+
+    MANIFEST = '{{\n  "name": "basstler",\n  "version": "{version}"\n}}\n'
+    """
+    A plugin manifest, formatted with its ``version``.
+    """
+
+    EXAMPLE_CALLER = (
+        "    uses: owner/basstler/.github/workflows/upstream-reviews.yml@v{version}\n"
+        "    with:\n"
+        "      basstler_ref: v{version}\n"
+    )
+    """
+    The example caller's two references to the release, formatted with its ``version``.
+    """
+
+    CHANGE = "changed = True\n"
+    """
+    What a test writes to change a file.
+    """

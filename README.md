@@ -24,9 +24,23 @@ package at the plugin's own version, so the two are always one release.
 
 ## Releasing
 
-The version is written in one place, `plugin/.claude-plugin/plugin.json`; the package's build
-reads it from there. Bump it in a pull request, and merging that to `main` tags `v<version>`,
-the tag an installed plugin installs the package at.
+Every push to `main` that changes anything is a release, made by `release.yml`. An install
+takes the package and the reusable workflow from the tag `v<version>`, so a change merged
+without one would reach some installs and not others: a plugin's hooks would call a package
+that predates them. Every change counts, not only those to the package, since a list of
+shipped paths would go stale.
+
+- **Patch releases need nothing from a pull request.** On merge, the workflow writes the next
+  patch version everywhere a version is written (`plugin/.claude-plugin/plugin.json`, which
+  the build reads it from, and the example caller's references to the release tag), commits
+  it, and pushes the commit and its tag together.
+- **A pull request names a minor or major release** with
+  `python -m basstler.release_version bump --part minor` (or `--part major`, or
+  `--version <x.y.z>`). The workflow then tags that version as it stands.
+
+CI's `release-version` job (`python -m basstler.release_version check`) fails a pull request
+whose manifest names anything else: it may only name the latest release's version, or that
+release's next minor or major one.
 
 ## The package's own environment
 
