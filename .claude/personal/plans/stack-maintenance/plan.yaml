@@ -76,53 +76,43 @@ items:
     and every promoted branch must be reported as a table in the session the pass ran in.'
 - id: integration-branch
   title: 'Regenerated personal integration branch: build, check, resolve, report'
-  branch: claude/plan-item-kickoff-workflow-ixbvxl
-  pull_request_number: 154
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  status: in_progress
+  branch: null
+  pull_request_number: null
+  status: deferred
   session: https://claude.ai/code/session_01Ra51SAHQKy7TVYRG2HRERW
   track: integration
   depends_on:
   - manifest-currency-first
-  notes: 'The constraint is upstream review throughput: pull requests are produced faster
-    than the upstream merges them, so shipped-but-unreviewed features are unusable in daily
-    work, and two in-flight features that conflict only discover it at the far end of the
-    review queue. The answer is a regenerated integration branch - the upstream base with
-    every in-flight reviewed tip merged on top, rebuilt from scratch on demand, existing to
-    be built *from* rather than to be history. Nothing merges out of it.'
+  notes: >-
+    Retired with the whole integration-branch stack by the user's choice in the carryover:
+    porting it onto main's layers was a rewrite. basstler#27 records the branch's last
+    commit.
 - id: integration-branch-ci-verdict
   title: Move the integration branch's verdict to CI, with a stable branch and a targeted
     job
-  branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
-  pull_request_number: 211
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  status: in_progress
+  branch: null
+  pull_request_number: null
+  status: deferred
   session: https://claude.ai/code/session_01KgTu7rha5xxBYAVm41e3uV
   track: integration
   depends_on:
   - integration-branch
   blockers: []
-  notes: 'Part D of `integration-branch`''s review round: the verdict moves from a local test
-    run to real CI. Folded back onto that item''s branch after being split out, so it has
-    no pull request of its own - the scope test inverted at the fold, because it had first
-    been run against *planned* content none of which had been written, the same expiry a basing
-    decision has. **One measured fact shapes the whole design**: `ci.yml` triggers on push
-    to `main` and on `pull_request` and nothing else, so a pushed build collects no checks
-    at all.'
+  notes: >-
+    Retired with the integration-branch stack in the carryover; basstler#28 records the
+    branch's last commit.
 - id: red-candidate-localisation
   title: Localise a red candidate to the branches that caused it
-  branch: claude/plan-item-kickoff-workflow-unification-wg4w4x
-  pull_request_number: 211
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  status: in_progress
+  branch: null
+  pull_request_number: null
+  status: deferred
   session: https://claude.ai/code/session_0138w5mqzbkyMPtotF7PD59Z
   track: integration
   depends_on:
   - integration-branch-ci-verdict
-  notes: What happens when the candidate's verdict comes back red for a reason the local suite
-    cannot see. The local localisation re-assembles the tips and re-runs the configured tooling
-    suite, so it reaches a break between two branches whose tooling code disagrees and reaches
-    nothing in the docker matrix.
+  notes: >-
+    Retired with the integration-branch stack in the carryover; basstler#28 records the
+    branch's last commit.
 - id: per-plan-integration-branches
   title: One integration branch per plan, and a complete branch built from their last green
     builds
@@ -141,12 +131,14 @@ items:
 - id: integrated-label
   title: Label every pull request the integration branch carries, and unlabel the ones it
     drops
-  branch: claude/stack-maintenance-kickoff-9kal0j
-  pull_request_number: 260
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  status: in_progress
+  branch: null
+  pull_request_number: null
+  status: deferred
   session: https://claude.ai/code/session_016Fms9hs3XuS3a5wgc5ts3x
   track: integration
   depends_on:
   - integration-branch-ci-verdict
   - red-candidate-localisation
+  notes: >-
+    Retired in the carryover (bastler/ era, stacked on the retired integration branch);
+    basstler#19 records the branch's last commit.
