@@ -21,11 +21,13 @@ items:
   branch: claude/plan-item-bootstrap-yaml-indent-y8qs0m
   pull_request_number: 160
   repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  status: in_progress
+  status: deferred
   session: https://claude.ai/code/session_0157EHWeTzFSYf1nqHX5J7NC
   track: skills
   depends_on: []
-  notes: 'Bug fix off `main`, found by using the bootstrap script on `rdr-refactor`. `open`
+  notes: '#160 was closed unmerged; the roadmap records it folded into #151
+    (manifest-currency-first, still open), so the fix lands with that. Recheck at #151''s
+    landing whether plan_item_bootstrap still hardcodes the indent. Before: Bug fix off `main`, found by using the bootstrap script on `rdr-refactor`. `open`
     patched the item''s fields at a hardcoded four-space indent, which does not parse in a
     manifest whose items are written flush with `items:` - `rdr-refactor`''s style - so `save-plan.sh`
     failed in `yaml.safe_load`. The depth is now read off the manifest being edited. Two defects
