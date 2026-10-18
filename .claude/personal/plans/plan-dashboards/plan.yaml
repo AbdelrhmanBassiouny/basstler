@@ -82,11 +82,11 @@ items:
   session: https://claude.ai/code/session_0112C4kGpRE6uLmi5Lwkghx2
   track: legibility
   depends_on: []
-  notes: 'Raised while refreshing a dashboard: a published page is a snapshot of the moment
-    it was rendered and nothing on it can republish it, so getting a current one meant recalling
-    both the skill name and the plan''s id from outside the page that needs them. The masthead
-    now carries a Refresh button copying `/plan-dashboard <plan-id>`, with a hint beside it
-    so it is not read as an in-page reload.'
+  notes: >-
+    The masthead carries a Refresh button copying /plan-dashboard <plan-id>, so a published
+    page offers the command that republishes it. Its branch was not carried to basstler; the
+    work rides draft basstler#17 (cross-plan-dependencies), which merged it in on the CRAM
+    side. CRAM #206 closes once #17 lands.
 - id: shared-pr-state-chips
   title: 'PR 3: shared pull_request_state module + LOC/CI/conflict chips in plan dashboards'
   branch: claude/shared-pr-state-chips
@@ -115,8 +115,7 @@ items:
 - id: cross-plan-dependencies
   title: Let depends_on name an item in another plan, resolved live at dashboard time
   branch: claude/plan-dashboards-cross-dependencies-h3icfd
-  pull_request_number: 253
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  pull_request_number: 17
   track: corrections
   session: https://claude.ai/code/session_01U2r4CGpBKiD551i2FE5NXW
   depends_on: []
