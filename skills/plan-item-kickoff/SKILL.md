@@ -20,7 +20,7 @@ each one applies.
 
 Step 4 opens the item's branch and draft pull request and records its
 manifest state, before any implementation begins. It runs in both modes, so
-the item stops reading as `not_started` the moment it isn't.
+the item stops reading as `not started` the moment it isn't.
 
 ## 1. Gather the item's context
 
@@ -101,7 +101,7 @@ The moment the plan is settled, the branch, the draft pull request, the
 item's `branch`/`session`/`pull_request_number` fields and its roadmap
 section are all derivable, and none of them depends on a line of the
 implementation. Doing them at the end instead means the manifest says
-`not_started` with no branch for the entire length of the work, which every
+`not started` with no branch for the entire length of the work, which every
 dashboard, kickoff and resolve run downstream reads as truth.
 
 So run this first, before the first edit:
@@ -114,20 +114,20 @@ git checkout -b <branch> <base-branch>
 git commit --allow-empty -m "Bootstrap <item-id>"
 git push -u origin <branch>
 # then create the draft pull request with your GitHub tool, and:
-source .claude/hooks/resolve-personal-notes-config.sh
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" open \
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" open \
     --plan <plan-id> --item <item-id> \
     --branch <branch> --base <base-branch> \
     --session <this session's url> \
     --pull-request-number <number>
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" record \
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" record \
     --plan <plan-id> --item <item-id> \
-    --status in_progress --roadmap-section <file>
+    --status "in progress" --roadmap-section <file>
 ```
 
 `open` before `record`: the pull request number does not exist until the pull
 request does. `open` writes the branch, session and pull request number onto
-the item and flips it to `in_progress`; `record` appends the settled plan to
+the item and flips it to `in progress`; `record` appends the settled plan to
 `roadmap.md`. Both print a one-line JSON report led by `status` and
 `exit_code`.
 
@@ -135,8 +135,8 @@ the item and flips it to `in_progress`; `record` appends the settled plan to
 can create one — with `--pull-request-title`/`--pull-request-body` instead of
 `--pull-request-number`, verified live — but a pull request it creates is
 attributed to the app its requests are proxied through rather than to the
-person whose work it is, the same authorship problem `AGENTS.md` rules out for
-commits. Creating it yourself keeps your identity on it. The creating path is
+person whose work it is, the same authorship problem that rules out an assistant
+authoring commits. Creating it yourself keeps your identity on it. The creating path is
 there for an unattended run whose credential is a real one; if you use it,
 `open` publishes the branch too, so the three git commands above are yours to
 skip.
@@ -155,7 +155,7 @@ the only record it will ever have:
 - **The PR-progress note** — the plan, what is done, and what is next, kept
   current as the work goes. Write it between `CLAUDE.local.md`'s
   `BEGIN-PR-PROGRESS`/`END-PR-PROGRESS` markers and run
-  `.claude/hooks/save-pr-progress.sh` to push it. Do this as soon as the
+  `hooks/save-pr-progress.sh` to push it. Do this as soon as the
   branch exists, not at the end: a note written afterwards is a summary, and
   the point of it is that another session can pick the work up mid-flight.
 

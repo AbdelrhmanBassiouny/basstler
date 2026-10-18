@@ -19,13 +19,13 @@ There are exactly four outcomes, and step 6 picks one:
 4. **No item at all** — work small enough that tracking it costs more than it
    returns.
 
-## 0. Check the setup is in place, and offer it if not
+## 0. Check the setup is in place, and run it if not
 
 Every plan's manifest lives on the personal-notes branch, which the user may not
 have set up yet. Follow
-`.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1: run
-the check, and if it reports anything missing, offer `/setup-personal-notes`
-rather than failing on a branch that isn't there.
+`skills/setup-personal-notes/prerequisite-check.md` before step 1: run
+the check, and if it reports anything missing, run `/setup-personal-notes`
+without asking first, rather than failing on a branch that isn't there.
 
 ## 1. Pin down what the work actually touches
 
@@ -44,7 +44,7 @@ branch by default.
 ## 2. Find the candidate homes
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 ```
 
@@ -64,7 +64,7 @@ The rule is in `${SCOPE_DECISION_DOCUMENT}` — read it rather than re-deriving
 it here. Gather its evidence in one call:
 
 ```bash
-python3 -m "${CHECK_SCOPE_OVERLAP_MODULE}" \
+"${BASSTLER_PYTHON}" -m "${CHECK_SCOPE_OVERLAP_MODULE}" \
     --base <base-branch> \
     --path <path> [--path <path> ...] \
     --candidate '<item-id-or-title>=<branch>' [--candidate ... ]
@@ -93,7 +93,7 @@ the work, measure its *current* manifest and roadmap (already fetched off
 ```bash
 git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/plan.yaml" > /tmp/plan.yaml
 git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/roadmap.md" > /tmp/roadmap.md 2>/dev/null || : > /tmp/roadmap.md
-python3 -m "${PLAN_SIZE_CHECK_MODULE}" --manifest /tmp/plan.yaml --roadmap /tmp/roadmap.md
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest /tmp/plan.yaml --roadmap /tmp/roadmap.md
 ```
 
 `is_full: true` disqualifies that plan for growth, whatever its `description`
@@ -152,8 +152,8 @@ changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}
 and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn,
 so no published dashboard is older than the manifest behind it.
 
-**If the outcome is a new item**, `${PLAN_ITEM_BOOTSTRAP_SCRIPT}`'s `record`
-operation writes its `plan.yaml` entry and `roadmap.md` section and runs the save
+**If the outcome is a new item**, the `record` operation of
+`"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}"` writes its `plan.yaml` entry and `roadmap.md` section and runs the save
 for you — `record` only, never `open`, which creates the branch and pull request
 this skill does not.
 

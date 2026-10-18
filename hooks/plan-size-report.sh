@@ -6,7 +6,7 @@ set -euo pipefail
 # roadmap.md hold together, and which half of the budget it is over.
 #
 # Usage (from anywhere):
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/plan-size-report.sh"
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/plan-size-report.sh"
 #
 # Takes no arguments: the budget is fixed (see plan_size_budget.py's
 # SizeBudget) and every plan is measured, since the question the report
@@ -23,7 +23,8 @@ set -euo pipefail
 # scratch directory for the report to measure. Never checks anything out and
 # never touches your current branch or working tree.
 #
-# Requires python3 and everything the package declares, like save-plan.sh -
+# Requires the package's interpreter and everything the package declares, like
+# save-plan.sh -
 # the item count is parsed out of each manifest rather than matched line by
 # line.
 
@@ -36,28 +37,27 @@ if [ $# -gt 0 ]; then
   exit 1
 fi
 
-if ! command -v python3 > /dev/null 2>&1; then
-  echo "python3 is required to parse plan manifests and render the report." >&2
+if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
+  echo "${BASSTLER_PYTHON} is required to parse plan manifests and render the report." >&2
   exit 1
 fi
-# Every dependency is reported, and none is named here: the package declares
-# them, so adding one there is enough for this check to start covering it. The
-# lookup is missing_dependencies, which check-setup.sh and session-start.sh
-# also read, so all three judge the one declaration the same way.
-if [ ! -f "${BASSTLER_PYPROJECT_FILE}" ]; then
-  echo "${BASSTLER_PYPROJECT_FILE} is missing, so its dependencies cannot be read." >&2
+# Asked through the package's own declaration rather than by importing one
+# name here, so this script carries no Python of its own and no second opinion
+# about what the tooling needs. A session start installs these; a checkout
+# where that never ran reaches this message instead of a traceback.
+if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
+  echo "Could not read what the basstler package requires." >&2
   exit 1
 fi
-MISSING_DEPENDENCIES="$(missing_dependencies)"
 if [ -n "${MISSING_DEPENDENCIES}" ]; then
-  echo "Not installed: ${MISSING_DEPENDENCIES}" >&2
-  echo "Run: pip install ${MISSING_DEPENDENCIES}" >&2
+  echo "The basstler package's requirements are not installed for ${BASSTLER_PYTHON}: ${MISSING_DEPENDENCIES}" >&2
+  echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install '$(basstler_package_source)'" >&2
   exit 1
 fi
 
 if ! fetch_personal_notes_branch; then
   echo "Branch '${NOTES_BRANCH}' doesn't exist yet (tried: ${ATTEMPTED_NOTES_REMOTES})." >&2
-  echo "Run ${CREATE_PERSONAL_NOTES_BRANCH_SCRIPT} first, then re-run this script." >&2
+  echo "Run ./create-personal-notes-branch.sh first, then re-run this script." >&2
   exit 1
 fi
 
@@ -81,7 +81,7 @@ while IFS= read -r file_path; do
 done < <(git ls-tree -r --name-only FETCH_HEAD -- "${PLANS_DIR}")
 
 echo "=== Plan sizes on '${NOTES_BRANCH}' (remote '${ACTIVE_NOTES_REMOTE}') ==="
-python3 -m "${PLAN_SIZE_BUDGET_MODULE}" \
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_BUDGET_MODULE}" \
   --plans-dir "${SCRATCH_DIR}" \
   --manifest-filename "${PLAN_MANIFEST_FILENAME}" \
   --roadmap-filename "${PLAN_ROADMAP_FILENAME}"

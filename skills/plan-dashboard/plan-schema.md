@@ -11,7 +11,7 @@ generic, plan-agnostic reference material, so every clone has it with no
 setup. The **plan data it describes** is the opposite: it is never merged
 into `main`, living only on the personal-notes branch (`claude/personal-notes`
 by default — see [`resolve-personal-notes-config.sh`](../../hooks/resolve-personal-notes-config.sh)
-for how that's resolved), exactly like `cram-notes.md` and `pr-progress/*.md`.
+for how that's resolved), exactly like the personal notes and `pr-progress/*.md`.
 
 New to the system and want to see it end to end before reading the schema?
 Start with [`example-walkthrough.md`](./example-walkthrough.md), a short
@@ -71,7 +71,7 @@ items:                         # the actual trackable units of work - flat,
     pull_request_number: <int or null>  # the real GitHub PR number, once one exists
     track: <track-id>
     depends_on: [<item-id>, ...]  # structural/stacking dependency, by item id
-    status: not_started | in_progress | blocked | deferred | done
+    status: not started | in progress | blocked | deferred | done  # underscores (not_started) still read
     session: <url or omitted>
     notes: "short, freeform"
     blockers: ["freeform reasons", ...]   # optional, defaults to []
@@ -88,7 +88,7 @@ the authority.
 never encodes draft/ready-for-review/merged/closed/CI-green/mergeable —
 those are fetched live from GitHub every time `/plan-dashboard` runs, so
 they can never go stale in the manifest. The dashboard shows both side by
-side and flags any item where the two disagree (e.g. `status: in_progress`
+side and flags any item where the two disagree (e.g. `status: in progress`
 on a PR that's already merged) — this is the actual mechanism that replaces
 "a session has to notice a note is stale by accident."
 
@@ -141,7 +141,7 @@ Edit `plans/<plan-id>/plan.yaml` and `roadmap.md` directly (in
 personal-notes branch otherwise), then run
 
 ```bash
-"$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id>
+"${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id>
 ```
 
 to push both files and regenerate the reverse index in one commit. This
