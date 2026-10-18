@@ -83,7 +83,10 @@ items:
     skills in .claude/skills/, .claude/hooks/, .claude/SETUP.md and upstream-reviews.yml. Enable
     the basstler plugin in .claude/settings.json, move the stack configuration to
     .claude/basstler/stack.toml, and make upstream-reviews.yml call basstler's reusable workflow.
-    Additive: nothing is deleted yet, so both paths work while sessions switch over.
+    Commit .claude/basstler/stack.toml naming cram2/cognitive_robot_abstract_machine and the
+    remote cram2, and relabel fork pull requests from cram2-link-sent to promotion-link-sent
+    (both flagged on basstler#1). Additive: nothing is deleted yet, so both paths work while
+    sessions switch over.
 - id: cram-basstler-removal
   title: Delete the carried tooling from CRAM, and from cram2 through the promotion flow
   branch: null
