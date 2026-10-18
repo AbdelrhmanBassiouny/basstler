@@ -21,21 +21,61 @@ items:
   branch: claude/dashboard-publish-automation-hnfi5a
   pull_request_number: 218
   repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  status: in_progress
+  status: deferred
   session: https://claude.ai/code/session_01CfwosnvBeiWvRLXxcnfHPk
   track: cutover
   depends_on: []
-  blockers:
-  - Two review rounds are answered and pushed - the 26-thread round of 2026-09-04 as `d61619ac`,
-    and the single dataclass ask of 2026-09-05 as `8afbbe30`; what is left is the user's own
-    re-review.
-  notes: 'Re-scoped 2026-07-31 to the user''s one-dashboard decision: no board index is built
+  notes: 'Superseded 2026-10-18 by plan-site-builder and plan-site-action: one site over every
+    repository''s plans, hosted on AbdelrhmanBassiouny/stack-board''s Pages. Close #218 once
+    plan-site-action has deployed, naming them. Before: Re-scoped 2026-07-31 to the user''s one-dashboard decision: no board index is built
     at all. GitHub''s native stack map covers derived stack mechanics, so the plan dashboards
     are the single surface, published as `_site/plans/<id>/` with no live session. Shipped
     2026-08-30 as draft #218 off `main` rather than stacked on #111, at the user''s instruction
     not to wait - the workflow does nothing until it is on a base branch, and #111 has been
     conflict-blocked since the 2026-08-29 maintenance pass. Both recorded dependencies were
     dropped for the same reason; neither is needed by what shipped.'
+- id: plan-site-builder
+  title: One static site over every repository's plans, starting at the hub
+  branch: claude/elegant-turing-xvcgs2
+  status: in_progress
+  session: https://claude.ai/code/session_01XhxoBFCwQFEPXespxzFnc1
+  track: cutover
+  depends_on: []
+  notes: >
+    Artifacts belong to the account that publishes them, and sessions run under two accounts,
+    so plan pages are built as a static site instead: the hub at the root, one card per
+    repository; <owner>/<repo>/ that repository's plans; <owner>/<repo>/<plan>/ a dashboard
+    with live pull request state. Folds in basstler.build_site from cc27198 (branch
+    claude/plan-dashboard-multi-account-y2vexc, never opened as a pull request) and the hub
+    from a599549: the hub file .claude/personal/plans/_hub.yaml on every registered
+    repository's notes (registry AbdelrhmanBassiouny/basstler), plan_hub gather and build_hub.
+    The Artifact-only parts of a599549 (the hub URL, set-url) go.
+- id: plan-site-action
+  title: Deploy the plan site to stack-board's Pages, on demand rather than on a timer
+  branch: null
+  status: not_started
+  track: cutover
+  depends_on:
+  - plan-site-builder
+  notes: >
+    A reusable workflow in basstler builds the site from every repository the registry's hub
+    file lists; AbdelrhmanBassiouny/stack-board calls it, reworking the draft
+    plan-dashboards.yml on its claude/plan-dashboards-site-y2vexc branch (a duplicate sits on
+    claude/plan-dashboard-multi-account-y2vexc): render with basstler, read the hub file, and
+    drop the 10-minute cron for workflow_dispatch, which save-plan.sh and the plan skills
+    trigger after a save. No schedule, per actions-budget. Retires stack-board's board.yml.
+- id: plan-site-setup
+  title: Setup registers the repository in the hub, and sessions are told the site links
+  branch: null
+  status: not_started
+  track: cutover
+  depends_on:
+  - plan-site-builder
+  notes: >
+    /setup-personal-notes adds the repository to the registry's hub file and copies the file
+    onto this repository's notes, with no question asked; a repository with no registry
+    configured becomes its own. The session-start summary prints the site links worked out
+    from the hub file - the hub, this repository, and this branch's plan and item.
 - id: routine-cutover
   title: 'Retire the scheduled LLM Routine: deterministic Action + on-demand sessions'
   branch: claude/stack-maintenance-action
@@ -65,7 +105,7 @@ items:
   status: not_started
   track: cutover
   depends_on:
-  - stack-board-single-site
+  - plan-site-action
   notes: 'Raised by the user on #218''s review of `SKILL.md` (2026-09-04): now the dashboards
     publish to Pages, is the Artifact path still needed? Kept out of #218 as a plan-level
     scope change rather than a review fix, and tracked here because it is what finishes this
