@@ -11,14 +11,12 @@ from pathlib import Path
 import pytest
 
 from basstler.locations import PluginLocation, ProjectLocation
+from basstler.plan_item_bootstrap import PlanDocument
 from basstler.shell_configuration import ShellConfigurationFunction
 
-from .constants import DatasetLocation, PersonalNotesPath
+from .constants import DatasetLocation, DatasetPlan, PersonalNotesPath, SavePlanOption
 from .project_declaration import ProjectDeclaration
 from .scratch_repository import PackageSourceFile, ScratchRepository
-
-PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
-PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "roadmap.md").read_text()
 
 
 @pytest.fixture
@@ -92,7 +90,7 @@ def test_refuses_when_a_declared_dependency_is_not_installed(
         ).as_toml(),
     )
 
-    result = run_save_plan(save_plan_repository, "test-plan")
+    result = run_save_plan(save_plan_repository, DatasetPlan.IDENTIFIER)
 
     assert result.returncode == 1
     assert UNINSTALLABLE_REQUIREMENT in result.stderr
@@ -111,19 +109,58 @@ def test_refuses_when_the_declaration_cannot_be_read(
     """
     declaration_file(save_plan_repository).write_text("this is not toml\n")
 
-    result = run_save_plan(save_plan_repository, "test-plan")
+    result = run_save_plan(save_plan_repository, DatasetPlan.IDENTIFIER)
 
     assert result.returncode == 1
     assert str(declaration_file(save_plan_repository)) in result.stderr
+
+
+# %% the manifest it saves
+
+
+def test_refuses_a_manifest_the_dashboard_would_reject(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    Nothing reaches the notes branch that the dashboard could not then be built from.
+    """
+    manifest_path = save_plan_repository.write(
+        PlanDocument.MANIFEST, DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.read_text()
+    )
+    roadmap_path = save_plan_repository.write(
+        PlanDocument.ROADMAP, DatasetLocation.ROADMAP.read_text()
+    )
+
+    result = run_save_plan(
+        save_plan_repository,
+        DatasetPlan.IDENTIFIER,
+        SavePlanOption.MANIFEST,
+        str(manifest_path),
+        SavePlanOption.ROADMAP,
+        str(roadmap_path),
+    )
+
+    assert result.returncode == 1
+    verify_checkout = save_plan_repository.clone_notes_branch(
+        save_plan_repository.project_root.parent / "verify-checkout"
+    )
+    assert not (
+        verify_checkout / ProjectLocation.PLANS / DatasetPlan.IDENTIFIER
+    ).exists()
 
 
 # %% --manifest/--roadmap pairing
 
 
 def test_manifest_without_roadmap_fails(save_plan_repository: ScratchRepository):
-    manifest_path = save_plan_repository.write("plan.yaml", PLAN_MANIFEST)
+    manifest_path = save_plan_repository.write(
+        PlanDocument.MANIFEST, DatasetLocation.PLAN.read_text()
+    )
     result = run_save_plan(
-        save_plan_repository, "test-plan", "--manifest", str(manifest_path)
+        save_plan_repository,
+        DatasetPlan.IDENTIFIER,
+        SavePlanOption.MANIFEST,
+        str(manifest_path),
     )
     assert result.returncode == 1
     assert result.stderr == (
@@ -132,9 +169,14 @@ def test_manifest_without_roadmap_fails(save_plan_repository: ScratchRepository)
 
 
 def test_roadmap_without_manifest_fails(save_plan_repository: ScratchRepository):
-    roadmap_path = save_plan_repository.write("roadmap.md", PLAN_ROADMAP)
+    roadmap_path = save_plan_repository.write(
+        PlanDocument.ROADMAP, DatasetLocation.ROADMAP.read_text()
+    )
     result = run_save_plan(
-        save_plan_repository, "test-plan", "--roadmap", str(roadmap_path)
+        save_plan_repository,
+        DatasetPlan.IDENTIFIER,
+        SavePlanOption.ROADMAP,
+        str(roadmap_path),
     )
     assert result.returncode == 1
     assert result.stderr == (
@@ -149,38 +191,40 @@ def test_saves_the_manifest_and_roadmap_extracted_from_claude_local_md_markers(
     save_plan_repository: ScratchRepository,
 ):
     save_plan_repository.write(
-        "CLAUDE.local.md",
-        "<!-- BEGIN-PLAN-MANIFEST: test-plan -->\n"
-        f"{PLAN_MANIFEST}"
+        PersonalNotesPath.LOCAL_INSTRUCTIONS.value,
+        f"<!-- BEGIN-PLAN-MANIFEST: {DatasetPlan.IDENTIFIER} -->\n"
+        f"{DatasetLocation.PLAN.read_text()}"
         "<!-- END-PLAN-MANIFEST -->\n"
-        "<!-- BEGIN-PLAN-ROADMAP: test-plan -->\n"
-        f"{PLAN_ROADMAP}"
+        f"<!-- BEGIN-PLAN-ROADMAP: {DatasetPlan.IDENTIFIER} -->\n"
+        f"{DatasetLocation.ROADMAP.read_text()}"
         "<!-- END-PLAN-ROADMAP -->\n",
     )
 
-    result = run_save_plan(save_plan_repository, "test-plan")
+    result = run_save_plan(save_plan_repository, DatasetPlan.IDENTIFIER)
     assert result.returncode == 0, result.stderr
-    assert "Saved plan 'test-plan'" in result.stdout
+    assert f"Saved plan '{DatasetPlan.IDENTIFIER}'" in result.stdout
     assert str(save_plan_repository.notes_remote_path) in result.stdout
 
     verify_checkout = save_plan_repository.clone_notes_branch(
         save_plan_repository.project_root.parent / "verify-checkout"
     )
-    plan_directory = verify_checkout / ProjectLocation.PLANS / "test-plan"
-    saved_manifest = (plan_directory / "plan.yaml").read_text()
-    saved_roadmap = (plan_directory / "roadmap.md").read_text()
-    assert saved_manifest == PLAN_MANIFEST
-    assert saved_roadmap == PLAN_ROADMAP
+    plan_directory = verify_checkout / ProjectLocation.PLANS / DatasetPlan.IDENTIFIER
+    saved_manifest = (plan_directory / PlanDocument.MANIFEST).read_text()
+    saved_roadmap = (plan_directory / PlanDocument.ROADMAP).read_text()
+    assert saved_manifest == DatasetLocation.PLAN.read_text()
+    assert saved_roadmap == DatasetLocation.ROADMAP.read_text()
 
     branch_index = (verify_checkout / PersonalNotesPath.BRANCH_INDEX).read_text()
-    assert branch_index == "item-a-branch\ttest-plan\n"
+    assert branch_index == f"item-a-branch\t{DatasetPlan.IDENTIFIER}\n"
 
 
 def test_missing_marker_pair_fails_with_a_clear_message(
     save_plan_repository: ScratchRepository,
 ):
-    save_plan_repository.write("CLAUDE.local.md", "no markers here\n")
-    result = run_save_plan(save_plan_repository, "test-plan")
+    save_plan_repository.write(
+        PersonalNotesPath.LOCAL_INSTRUCTIONS.value, "no markers here\n"
+    )
+    result = run_save_plan(save_plan_repository, DatasetPlan.IDENTIFIER)
     assert result.returncode == 1
     assert result.stderr.startswith(
         "CLAUDE.local.md has no plan-manifest/plan-roadmap section to extract.\n"
