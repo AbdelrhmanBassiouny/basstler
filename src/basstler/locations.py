@@ -245,6 +245,16 @@ class ProjectLocation(PathEnumeration):
     The per-user override of :attr:`PROJECT_STACK_CONFIGURATION`.
     """
 
+    WORKFLOWS = Path(".github") / "workflows"
+    """
+    Where GitHub reads a repository's workflows from - the top level only.
+    """
+
+    ACTIONS_BUDGET = Path(".github") / "actions_budget.py"
+    """
+    The repository's Actions budget: the limits basstler holds every workflow to.
+    """
+
     PERSONAL_PLAN_ITEM_MODES = PERSONAL_NOTES / "plan-item-modes.toml"
     """
     The per-user override of :attr:`PackageLocation.PLAN_ITEM_MODE_DEFAULTS`.

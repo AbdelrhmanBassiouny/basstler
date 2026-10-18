@@ -15,6 +15,7 @@ permissions:
 jobs:
   test:
     name: pytest on Python ${{ matrix.python-version }}
+    if: github.event_name != 'push' || !github.event.repository.fork
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
@@ -39,6 +40,7 @@ jobs:
 
   release-version:
     name: The package is the release its version names
+    if: github.event_name != 'push' || !github.event.repository.fork
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
