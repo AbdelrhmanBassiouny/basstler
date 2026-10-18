@@ -56,7 +56,7 @@ from basstler.maintenance_commands import (
     RunReportCommand,
 )
 from basstler.environment import GitHubCredentialVariable
-from basstler.maintenance_constants import PROMOTION_LINK_LABEL
+from basstler.maintenance_constants import MergeableState, RoutineLabel, RoutineText
 from basstler.maintenance_fast_forward import (
     FastForwardOutcome,
     FastForwardReport,
@@ -1334,7 +1334,7 @@ def test_a_branch_still_conflicting_is_withheld_without_being_relabelled(
         fork_checkout.own_file(StackBranch.PARENT),
         "the parent moved\n",
     )
-    fork = RecordingPullRequests(states={41: "dirty"})
+    fork = RecordingPullRequests(states={41: MergeableState.DIRTY})
 
     outcomes = restack(
         a_stack(
@@ -1397,17 +1397,19 @@ def test_the_promotion_link_goes_into_the_description_and_the_branch_is_labelled
     assert [entry.branch for entry in promoted] == [StackBranch.PARENT]
     written = fork.description_writes[0]
     assert written.pull_request_number == 40
-    assert "## Promote" in written.body
+    assert RoutineText.PROMOTION_HEADING in written.body
     assert promoted[0].url in written.body
     assert "What this branch does." in written.body
-    assert fork.label_writes == [RecordedLabelWrite(40, (PROMOTION_LINK_LABEL,))]
+    assert fork.label_writes == [
+        RecordedLabelWrite(40, (RoutineLabel.PROMOTION_LINK_SENT,))
+    ]
 
 
 def test_a_branch_already_carrying_the_link_label_is_not_promoted_again(
     fork_checkout: ForkCheckout,
 ):
     a_parent_and_child(fork_checkout)
-    fork = RecordingPullRequests(labels={40: [PROMOTION_LINK_LABEL]})
+    fork = RecordingPullRequests(labels={40: [RoutineLabel.PROMOTION_LINK_SENT]})
 
     promoted = promote(a_stack(fork_checkout, the_board()), fork)
 
@@ -1450,7 +1452,9 @@ def test_the_promotion_label_write_keeps_a_label_added_since_the_board_was_taken
     promote(a_stack(fork_checkout, the_board()), fork)
 
     assert fork.label_writes == [
-        RecordedLabelWrite(40, (A_LABEL_THIS_TOOL_NEVER_WRITES, PROMOTION_LINK_LABEL))
+        RecordedLabelWrite(
+            40, (A_LABEL_THIS_TOOL_NEVER_WRITES, RoutineLabel.PROMOTION_LINK_SENT)
+        )
     ]
 
 
@@ -1464,7 +1468,7 @@ def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
 
     second = description_with_promotion_link(first, "https://example.invalid/second")
 
-    assert second.count("## Promote") == 1
+    assert second.count(RoutineText.PROMOTION_HEADING) == 1
     assert "https://example.invalid/second" in second
     assert "https://example.invalid/first" not in second
     assert second.startswith("Prose.")
@@ -1479,7 +1483,10 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
     """
     a_parent_and_child(fork_checkout)
     board = the_board()
-    board[0].labels = [PROMOTION_LINK_LABEL, make_configuration().in_review_label]
+    board[0].labels = [
+        RoutineLabel.PROMOTION_LINK_SENT,
+        make_configuration().in_review_label,
+    ]
     fork = RecordingPullRequests()
 
     cleared = clear_spent_promotion_labels(a_stack(fork_checkout, board), fork)

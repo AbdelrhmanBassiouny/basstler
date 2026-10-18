@@ -18,7 +18,7 @@ from typing import Any
 
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.locations import PackageLocation
-from basstler.maintenance_constants import SESSION_LINK_PATTERN
+from basstler.maintenance_constants import DescriptionPattern
 from basstler.stack import PullRequest
 
 PullRequestRecord = Mapping[str, Any]
@@ -184,7 +184,10 @@ class MissingPullRequestFieldError(CommandFailure, ValueError):
     indistinguishable from good.
     """
 
-    exit_code: ExitCode = dataclasses.field(default=StackExitCode.USAGE, init=False)
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.USAGE
 
     field_name: PullRequestField
     """
@@ -216,10 +219,7 @@ def get_session_link_in(body: str | None) -> str | None:
     :param body: The description to search, which may be absent.
     :return: The first session link, or ``None`` if the description names none.
     """
-    if not body:
-        return None
-    found = SESSION_LINK_PATTERN.search(body)
-    return found.group(0) if found else None
+    return DescriptionPattern.SESSION_LINK.first_in(body)
 
 
 # %% the export itself

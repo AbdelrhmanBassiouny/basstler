@@ -62,7 +62,7 @@ import tempfile
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any, Protocol
@@ -407,9 +407,10 @@ class UnknownPlanError(BootstrapError):
     Raised when the named plan has no manifest on the personal-notes branch.
     """
 
-    exit_code: ExitCode = field(
-        default=PlanItemBootstrapExitCode.UNKNOWN_PLAN, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.UNKNOWN_PLAN
 
     plan_identifier: str
     """
@@ -437,9 +438,10 @@ class UnknownItemError(BootstrapError):
     Raised when the named item is absent from an otherwise resolvable plan.
     """
 
-    exit_code: ExitCode = field(
-        default=PlanItemBootstrapExitCode.UNKNOWN_ITEM, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.UNKNOWN_ITEM
 
     plan_identifier: str
     """
@@ -468,9 +470,10 @@ class IncompleteNewItemError(BootstrapError):
     write its entry.
     """
 
-    exit_code: ExitCode = field(
-        default=PlanItemBootstrapExitCode.INCOMPLETE_NEW_ITEM, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.INCOMPLETE_NEW_ITEM
 
     item_identifier: str
     """
@@ -503,9 +506,10 @@ class BranchAlreadyPublishedError(BootstrapError):
     underway and overwriting it would discard someone's commits.
     """
 
-    exit_code: ExitCode = field(
-        default=PlanItemBootstrapExitCode.BRANCH_ALREADY_PUBLISHED, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.BRANCH_ALREADY_PUBLISHED
 
     branch: str
     """
@@ -537,9 +541,10 @@ class PullRequestDetailsMissingError(BootstrapError):
     create it from.
     """
 
-    exit_code: ExitCode = field(
-        default=PlanItemBootstrapExitCode.PULL_REQUEST_DETAILS_MISSING, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.PULL_REQUEST_DETAILS_MISSING
 
     item_identifier: str
     """
@@ -565,9 +570,10 @@ class PullRequestRefusedError(BootstrapError):
     Raised when the remote declines to create the pull request.
     """
 
-    exit_code: ExitCode = field(
-        default=PlanItemBootstrapExitCode.PULL_REQUEST_REFUSED, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.PULL_REQUEST_REFUSED
 
     detail: str
     """
@@ -591,9 +597,10 @@ class NotesBranchUnavailableError(BootstrapError):
     read or write.
     """
 
-    exit_code: ExitCode = field(
-        default=PlanItemBootstrapExitCode.UNKNOWN_PLAN, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.UNKNOWN_PLAN
 
     detail: str
     """

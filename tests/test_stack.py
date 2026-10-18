@@ -48,13 +48,13 @@ from basstler.stack import (
     resolve_remotes,
     order,
     promotion_order,
-    RestackPlanKey,
+    RestackPlanEntry,
     restack_plan,
 )
 
 from basstler.locations import ProjectLocation
 
-from .constants import DatasetLocation, RemoteName, StackLabel
+from .constants import DatasetLocation, RemoteName, StackBranch, StackLabel
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
@@ -98,7 +98,7 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
         fork_remote=RemoteName.ORIGIN,
         upstream_repository=Repository("an-upstream-owner", "a-project"),
         upstream_remote=RemoteName.UPSTREAM,
-        upstream_base="main",
+        upstream_base=StackBranch.BASE,
         upstream_setup_command=upstream_setup_command,
     )
 
@@ -138,22 +138,43 @@ def test_drafted_is_draft():
 
 def test_in_review_derived_from_label():
     stack = build(
-        [PullRequest(3, "feature", "main", draft=False, labels=[StackLabel.IN_REVIEW])]
+        [
+            PullRequest(
+                3,
+                StackBranch.FEATURE,
+                StackBranch.BASE,
+                draft=False,
+                labels=[StackLabel.IN_REVIEW],
+            )
+        ]
     )
     assert stack.branches[0].status == BranchStatus.IN_REVIEW
 
 
 def test_merged_derived_from_predicate_not_labels():
     stack = build(
-        [PullRequest(9, "landed", "main", draft=False, labels=[])], merged={"landed"}
+        [PullRequest(9, StackBranch.LANDED, StackBranch.BASE, draft=False, labels=[])],
+        merged={StackBranch.LANDED},
     )
     assert stack.branches[0].status == BranchStatus.MERGED
 
 
 def test_rebase_label_sets_strategy():
-    stack = build([PullRequest(1, "f", "main", draft=True, labels=[StackLabel.REBASE])])
+    stack = build(
+        [
+            PullRequest(
+                1,
+                StackBranch.FEATURE,
+                StackBranch.BASE,
+                draft=True,
+                labels=[StackLabel.REBASE],
+            )
+        ]
+    )
     assert stack.branches[0].strategy == IntegrationStrategy.REBASE
-    stack = build([PullRequest(1, "f", "main", draft=True, labels=[])])
+    stack = build(
+        [PullRequest(1, StackBranch.FEATURE, StackBranch.BASE, draft=True, labels=[])]
+    )
     assert stack.branches[0].strategy == IntegrationStrategy.MERGE
 
 
@@ -162,31 +183,33 @@ def test_rebase_label_sets_strategy():
 
 def test_order_places_parent_before_child():
     prs = [
-        PullRequest(3, "child", "parent", draft=True),
-        PullRequest(2, "parent", "main", draft=True),
+        PullRequest(3, StackBranch.CHILD, StackBranch.PARENT, draft=True),
+        PullRequest(2, StackBranch.PARENT, StackBranch.BASE, draft=True),
     ]
     names = [b.name for b in order(build(prs))]
-    assert names.index("parent") < names.index("child")
+    assert names.index(StackBranch.PARENT) < names.index(StackBranch.CHILD)
 
 
 # %% promotion policy - simplified: every ready, unblocked branch, no cap or turn order
 
 
 def test_promotes_ready_root():
-    prs = [PullRequest(11, "arith", "main", draft=False)]
-    assert next_to_promote(build(prs)).name == "arith"
+    prs = [PullRequest(11, StackBranch.FEATURE, StackBranch.BASE, draft=False)]
+    assert next_to_promote(build(prs)).name == StackBranch.FEATURE
 
 
 def test_nothing_promotes_when_all_draft():
-    prs = [PullRequest(5, "wip", "main", draft=True)]
+    prs = [PullRequest(5, StackBranch.WORK_IN_PROGRESS, StackBranch.BASE, draft=True)]
     assert next_to_promote(build(prs)) is None
 
 
 def test_ready_child_blocked_until_parent_lands():
     prs = [
-        PullRequest(1, "parent", "main", draft=True),  # still draft, not upstream
         PullRequest(
-            2, "child", "parent", draft=False
+            1, StackBranch.PARENT, StackBranch.BASE, draft=True
+        ),  # still draft, not upstream
+        PullRequest(
+            2, StackBranch.CHILD, StackBranch.PARENT, draft=False
         ),  # approved but parent hasn't landed
     ]
     assert next_to_promote(build(prs)) is None
@@ -197,18 +220,27 @@ def test_child_promotable_once_parent_reaches_review():
     # its own parent the moment the parent has reached in-review - it does not have to
     # wait for the parent to fully merge.
     prs = [
-        PullRequest(1, "parent", "main", draft=False, labels=[StackLabel.IN_REVIEW]),
-        PullRequest(2, "child", "parent", draft=False),
+        PullRequest(
+            1,
+            StackBranch.PARENT,
+            StackBranch.BASE,
+            draft=False,
+            labels=[StackLabel.IN_REVIEW],
+        ),
+        PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
     ]
-    assert next_to_promote(build(prs)).name == "child"
+    assert next_to_promote(build(prs)).name == StackBranch.CHILD
 
 
 def test_child_promotable_once_parent_merged():
     prs = [
-        PullRequest(1, "parent", "main", draft=False),
-        PullRequest(2, "child", "parent", draft=False),
+        PullRequest(1, StackBranch.PARENT, StackBranch.BASE, draft=False),
+        PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
     ]
-    assert next_to_promote(build(prs, merged={"parent"})).name == "child"
+    assert (
+        next_to_promote(build(prs, merged={StackBranch.PARENT})).name
+        == StackBranch.CHILD
+    )
 
 
 def test_promotion_order_includes_every_ready_unblocked_branch_in_dependency_order():
@@ -216,12 +248,14 @@ def test_promotion_order_includes_every_ready_unblocked_branch_in_dependency_ord
     # reached review - all ready roots promote together (no cap), the blocked child does
     # not.
     prs = [
-        PullRequest(1, "a", "main", draft=False),
-        PullRequest(2, "c", "a", draft=False),  # child of "a", but "a" is only ready
-        PullRequest(3, "b", "main", draft=False),
+        PullRequest(1, StackBranch.FIRST_ROOT, StackBranch.BASE, draft=False),
+        PullRequest(
+            2, StackBranch.CHILD_OF_FIRST_ROOT, StackBranch.FIRST_ROOT, draft=False
+        ),  # its parent is only ready
+        PullRequest(3, StackBranch.SECOND_ROOT, StackBranch.BASE, draft=False),
     ]
     names = [b.name for b in promotion_order(build(prs))]
-    assert names == ["a", "b"]
+    assert names == [StackBranch.FIRST_ROOT, StackBranch.SECOND_ROOT]
 
 
 def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
@@ -229,12 +263,16 @@ def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
     # not be promoted even though it is otherwise ready and unblocked.
     prs = [
         PullRequest(
-            1, "stuck", "main", draft=False, labels=[StackLabel.NEEDS_RESOLUTION]
+            1,
+            StackBranch.STUCK,
+            StackBranch.BASE,
+            draft=False,
+            labels=[StackLabel.NEEDS_RESOLUTION],
         ),
-        PullRequest(2, "fine", "main", draft=False),
+        PullRequest(2, StackBranch.FINE, StackBranch.BASE, draft=False),
     ]
     names = [b.name for b in promotion_order(build(prs))]
-    assert names == ["fine"]
+    assert names == [StackBranch.FINE]
 
 
 def test_ci_and_session_carried_onto_branch():
@@ -242,8 +280,8 @@ def test_ci_and_session_carried_onto_branch():
         [
             PullRequest(
                 11,
-                "f",
-                "main",
+                StackBranch.FEATURE,
+                StackBranch.BASE,
                 draft=False,
                 ci="failure",
                 session="https://claude.ai/code/session_x",
@@ -259,25 +297,44 @@ def test_ci_and_session_carried_onto_branch():
 
 def test_restack_plan_excludes_merged_only():
     prs = [
-        PullRequest(1, "landed", "main", draft=False),
-        PullRequest(2, "review", "main", draft=False, labels=[StackLabel.IN_REVIEW]),
-        PullRequest(3, "wip", "review", draft=True),
+        PullRequest(1, StackBranch.LANDED, StackBranch.BASE, draft=False),
+        PullRequest(
+            2,
+            StackBranch.UNDER_REVIEW,
+            StackBranch.BASE,
+            draft=False,
+            labels=[StackLabel.IN_REVIEW],
+        ),
+        PullRequest(
+            3, StackBranch.WORK_IN_PROGRESS, StackBranch.UNDER_REVIEW, draft=True
+        ),
     ]
-    plan = restack_plan(build(prs, merged={"landed"}))
-    names = [entry[RestackPlanKey.BRANCH] for entry in plan]
-    assert "landed" not in names
-    assert names == ["review", "wip"]  # in-review included, parent before child
+    plan = restack_plan(build(prs, merged={StackBranch.LANDED}))
+    names = [entry.branch for entry in plan]
+    assert StackBranch.LANDED not in names
+    assert names == [
+        StackBranch.UNDER_REVIEW,
+        StackBranch.WORK_IN_PROGRESS,
+    ]  # in-review included, parent before child
 
 
 def test_restack_plan_carries_parent_and_strategy():
-    prs = [PullRequest(2, "wip", "base-branch", draft=True, labels=[StackLabel.REBASE])]
+    prs = [
+        PullRequest(
+            2,
+            StackBranch.WORK_IN_PROGRESS,
+            StackBranch.OFF_BOARD_PARENT,
+            draft=True,
+            labels=[StackLabel.REBASE],
+        )
+    ]
     plan = restack_plan(build(prs))
     assert plan == [
-        {
-            RestackPlanKey.BRANCH: "wip",
-            RestackPlanKey.PARENT: "base-branch",
-            RestackPlanKey.STRATEGY: IntegrationStrategy.REBASE,
-        }
+        RestackPlanEntry(
+            branch=StackBranch.WORK_IN_PROGRESS,
+            parent=StackBranch.OFF_BOARD_PARENT,
+            strategy=IntegrationStrategy.REBASE,
+        )
     ]
 
 
@@ -285,16 +342,16 @@ def test_restack_plan_reparents_child_of_merged_parent_onto_base():
     # parent merged into main -> its commits are in the base, so the child is reparented
     # onto main (the routine mirrors this by retargeting the child PR's base on GitHub).
     prs = [
-        PullRequest(1, "parent", "main", draft=False),
-        PullRequest(2, "child", "parent", draft=False),
+        PullRequest(1, StackBranch.PARENT, StackBranch.BASE, draft=False),
+        PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
     ]
-    plan = restack_plan(build(prs, merged={"parent"}))
+    plan = restack_plan(build(prs, merged={StackBranch.PARENT}))
     assert plan == [
-        {
-            RestackPlanKey.BRANCH: "child",
-            RestackPlanKey.PARENT: "main",
-            RestackPlanKey.STRATEGY: "merge",
-        }
+        RestackPlanEntry(
+            branch=StackBranch.CHILD,
+            parent=StackBranch.BASE,
+            strategy=IntegrationStrategy.MERGE,
+        )
     ]
 
 
@@ -305,27 +362,32 @@ def test_restack_plan_reparents_child_of_a_landed_parent_with_no_open_pull_reque
     # the board only carries OPEN pull requests, so a parent whose own PR was closed is
     # absent from it entirely - yet its commits are in the upstream base, so its child
     # must still be reparented onto that base rather than left on the landed branch.
-    prs = [PullRequest(2, "child", "landed-elsewhere", draft=False)]
-    plan = restack_plan(build(prs, merged={"landed-elsewhere"}))
+    prs = [PullRequest(2, StackBranch.CHILD, StackBranch.LANDED_ELSEWHERE, draft=False)]
+    plan = restack_plan(build(prs, merged={StackBranch.LANDED_ELSEWHERE}))
     assert plan == [
-        {
-            RestackPlanKey.BRANCH: "child",
-            RestackPlanKey.PARENT: "main",
-            RestackPlanKey.STRATEGY: "merge",
-        }
+        RestackPlanEntry(
+            branch=StackBranch.CHILD,
+            parent=StackBranch.BASE,
+            strategy=IntegrationStrategy.MERGE,
+        )
     ]
 
 
 def test_ready_child_blocked_when_its_only_parent_is_an_unlanded_off_board_branch():
     # an off-board parent is not evidence of a root branch: this one has not landed, so
     # the child is not promotable even though no PR describes the parent.
-    prs = [PullRequest(2, "child", "unlanded-elsewhere", draft=False)]
+    prs = [
+        PullRequest(2, StackBranch.CHILD, StackBranch.UNLANDED_ELSEWHERE, draft=False)
+    ]
     assert next_to_promote(build(prs)) is None
 
 
 def test_ready_child_promotable_when_its_off_board_parent_has_landed():
-    prs = [PullRequest(2, "child", "landed-elsewhere", draft=False)]
-    assert next_to_promote(build(prs, merged={"landed-elsewhere"})).name == "child"
+    prs = [PullRequest(2, StackBranch.CHILD, StackBranch.LANDED_ELSEWHERE, draft=False)]
+    assert (
+        next_to_promote(build(prs, merged={StackBranch.LANDED_ELSEWHERE})).name
+        == StackBranch.CHILD
+    )
 
 
 # %% configuration layering (personal-notes overrides)
@@ -386,7 +448,7 @@ def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
     configuration = load_configuration(configuration_path)
 
     assert configuration.upstream_remote == "my-own-upstream-name"
-    assert configuration.upstream_base == "main"  # untouched default
+    assert configuration.upstream_base == StackBranch.BASE  # untouched default
 
 
 def test_load_configuration_ignores_personal_notes_branch_without_a_stack_file(
@@ -427,7 +489,7 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
     """
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.run_git(
-        "remote", "add", "another", SOMEBODY_ELSES_FORK.clone_url
+        "remote", "add", RemoteName.THEIRS, SOMEBODY_ELSES_FORK.clone_url
     )
     scratch_repository.publish_notes_branch(
         {
@@ -440,7 +502,7 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
     configuration = load_configuration(configuration_path)
 
     assert configuration.fork_repository == SOMEBODY_ELSES_FORK
-    assert configuration.fork_remote == "another"
+    assert configuration.fork_remote == RemoteName.THEIRS
 
 
 # %% resolving which remote is the fork
@@ -460,11 +522,11 @@ def test_the_fork_is_the_remote_that_is_not_the_upstream():
     resolution = resolve(
         {
             RemoteName.ORIGIN: UPSTREAM.clone_url,
-            "whatever-i-called-it": FORK.clone_url,
+            RemoteName.MINE: FORK.clone_url,
         }
     )
 
-    assert resolution.fork == Remote("whatever-i-called-it", FORK)
+    assert resolution.fork == Remote(RemoteName.MINE, FORK)
     assert resolution.upstream == Remote(RemoteName.ORIGIN, UPSTREAM)
 
 
@@ -575,7 +637,7 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
         StackSetting.FORK_REMOTE: RemoteName.ORIGIN,
         StackSetting.UPSTREAM_REPOSITORY: "an-upstream-owner/a-project",
         StackSetting.UPSTREAM_REMOTE: RemoteName.UPSTREAM,
-        StackSetting.UPSTREAM_BASE: "main",
+        StackSetting.UPSTREAM_BASE: StackBranch.BASE,
     }
 
 
@@ -625,8 +687,12 @@ def a_deep_stack_beside_an_independent_branch(
     :param landed: Branches that are ancestors of the upstream base.
     :return: The stack as the tooling derives it.
     """
-    deep = [("engine", "main"), ("engine-ui", "engine"), ("engine-docs", "engine-ui")]
-    aside = [("parser", "main")]
+    deep = [
+        (StackBranch.ENGINE, StackBranch.BASE),
+        (StackBranch.ENGINE_UI, StackBranch.ENGINE),
+        (StackBranch.ENGINE_DOCS, StackBranch.ENGINE_UI),
+    ]
+    aside = [(StackBranch.PARSER, StackBranch.BASE)]
     pull_requests = [
         PullRequest(
             number,
@@ -650,9 +716,11 @@ def test_approving_a_root_promotes_it_and_nothing_above_it():
     Un-drafting is the approval gate, and it approves one branch rather than a whole
     stack.
     """
-    stack = a_deep_stack_beside_an_independent_branch(approved={"engine", "engine-ui"})
+    stack = a_deep_stack_beside_an_independent_branch(
+        approved={StackBranch.ENGINE, StackBranch.ENGINE_UI}
+    )
 
-    assert [branch.name for branch in promotion_order(stack)] == ["engine"]
+    assert [branch.name for branch in promotion_order(stack)] == [StackBranch.ENGINE]
 
 
 def test_promoting_a_parent_unblocks_the_child_behind_it():
@@ -661,16 +729,22 @@ def test_promoting_a_parent_unblocks_the_child_behind_it():
     wait for the parent to merge.
     """
     stack = a_deep_stack_beside_an_independent_branch(
-        approved={"engine", "engine-ui"}, promoted={"engine"}
+        approved={StackBranch.ENGINE, StackBranch.ENGINE_UI},
+        promoted={StackBranch.ENGINE},
     )
 
-    assert [branch.name for branch in promotion_order(stack)] == ["engine-ui"]
+    assert [branch.name for branch in promotion_order(stack)] == [StackBranch.ENGINE_UI]
 
 
 def test_both_stacks_promote_together_since_they_do_not_depend_on_each_other():
-    stack = a_deep_stack_beside_an_independent_branch(approved={"engine", "parser"})
+    stack = a_deep_stack_beside_an_independent_branch(
+        approved={StackBranch.ENGINE, StackBranch.PARSER}
+    )
 
-    assert [branch.name for branch in promotion_order(stack)] == ["engine", "parser"]
+    assert [branch.name for branch in promotion_order(stack)] == [
+        StackBranch.ENGINE,
+        StackBranch.PARSER,
+    ]
 
 
 def test_a_branch_delegated_for_conflict_resolution_is_held_back_alone():
@@ -678,10 +752,10 @@ def test_a_branch_delegated_for_conflict_resolution_is_held_back_alone():
     Withholding one branch must not withhold an unrelated stack.
     """
     stack = a_deep_stack_beside_an_independent_branch(
-        approved={"engine", "parser"}, withheld={"engine"}
+        approved={StackBranch.ENGINE, StackBranch.PARSER}, withheld={StackBranch.ENGINE}
     )
 
-    assert [branch.name for branch in promotion_order(stack)] == ["parser"]
+    assert [branch.name for branch in promotion_order(stack)] == [StackBranch.PARSER]
 
 
 def test_landing_a_root_reparents_only_its_own_child():
@@ -689,24 +763,24 @@ def test_landing_a_root_reparents_only_its_own_child():
     The landed branch drops out of the plan and its child moves onto the base, while the
     branch above keeps the parent it still has and the untouched stack keeps its own.
     """
-    stack = a_deep_stack_beside_an_independent_branch(landed={"engine"})
+    stack = a_deep_stack_beside_an_independent_branch(landed={StackBranch.ENGINE})
 
     assert restack_plan(stack) == [
-        {
-            RestackPlanKey.BRANCH: "engine-ui",
-            RestackPlanKey.PARENT: "main",
-            RestackPlanKey.STRATEGY: "merge",
-        },
-        {
-            RestackPlanKey.BRANCH: "engine-docs",
-            RestackPlanKey.PARENT: "engine-ui",
-            RestackPlanKey.STRATEGY: "merge",
-        },
-        {
-            RestackPlanKey.BRANCH: "parser",
-            RestackPlanKey.PARENT: "main",
-            RestackPlanKey.STRATEGY: "merge",
-        },
+        RestackPlanEntry(
+            branch=StackBranch.ENGINE_UI,
+            parent=StackBranch.BASE,
+            strategy=IntegrationStrategy.MERGE,
+        ),
+        RestackPlanEntry(
+            branch=StackBranch.ENGINE_DOCS,
+            parent=StackBranch.ENGINE_UI,
+            strategy=IntegrationStrategy.MERGE,
+        ),
+        RestackPlanEntry(
+            branch=StackBranch.PARSER,
+            parent=StackBranch.BASE,
+            strategy=IntegrationStrategy.MERGE,
+        ),
     ]
 
 
@@ -717,17 +791,18 @@ def test_landing_a_root_that_no_open_pull_request_describes_still_reparents():
     child must still be moved off it.
     """
     orphaned = build(
-        [PullRequest(2, "engine-ui", "engine", draft=True)], merged={"engine"}
+        [PullRequest(2, StackBranch.ENGINE_UI, StackBranch.ENGINE, draft=True)],
+        merged={StackBranch.ENGINE},
     )
 
     assert restack_plan(orphaned) == [
-        {
-            RestackPlanKey.BRANCH: "engine-ui",
-            RestackPlanKey.PARENT: "main",
-            RestackPlanKey.STRATEGY: "merge",
-        }
+        RestackPlanEntry(
+            branch=StackBranch.ENGINE_UI,
+            parent=StackBranch.BASE,
+            strategy=IntegrationStrategy.MERGE,
+        )
     ]
-    assert orphaned.has_landed_upstream("engine")
+    assert orphaned.has_landed_upstream(StackBranch.ENGINE)
 
 
 def test_a_stack_lands_bottom_up_over_successive_runs():
@@ -735,25 +810,25 @@ def test_a_stack_lands_bottom_up_over_successive_runs():
     Each branch reaches the base only after the one below it has, so the plan shortens
     from the bottom as the stack drains.
     """
-    after_first = a_deep_stack_beside_an_independent_branch(landed={"engine"})
+    after_first = a_deep_stack_beside_an_independent_branch(landed={StackBranch.ENGINE})
     after_second = a_deep_stack_beside_an_independent_branch(
-        landed={"engine", "engine-ui"}
+        landed={StackBranch.ENGINE, StackBranch.ENGINE_UI}
     )
 
-    assert [entry[RestackPlanKey.BRANCH] for entry in restack_plan(after_first)] == [
-        "engine-ui",
-        "engine-docs",
-        "parser",
+    assert [entry.branch for entry in restack_plan(after_first)] == [
+        StackBranch.ENGINE_UI,
+        StackBranch.ENGINE_DOCS,
+        StackBranch.PARSER,
     ]
-    assert [entry[RestackPlanKey.BRANCH] for entry in restack_plan(after_second)] == [
-        "engine-docs",
-        "parser",
+    assert [entry.branch for entry in restack_plan(after_second)] == [
+        StackBranch.ENGINE_DOCS,
+        StackBranch.PARSER,
     ]
-    assert restack_plan(after_second)[0] == {
-        RestackPlanKey.BRANCH: "engine-docs",
-        RestackPlanKey.PARENT: "main",
-        RestackPlanKey.STRATEGY: "merge",
-    }
+    assert restack_plan(after_second)[0] == RestackPlanEntry(
+        branch=StackBranch.ENGINE_DOCS,
+        parent=StackBranch.BASE,
+        strategy=IntegrationStrategy.MERGE,
+    )
 
 
 # %% label writes
@@ -827,8 +902,8 @@ def test_asking_to_add_and_remove_one_label_at_once_is_refused():
 
 
 def a_proposed_push(
-    source: str = "engine",
-    destination: str = "engine",
+    source: str = StackBranch.ENGINE,
+    destination: str = StackBranch.ENGINE,
     destination_remote: str = RemoteName.ORIGIN,
 ) -> ProposedCommitMove:
     """
@@ -848,7 +923,8 @@ def a_proposed_push(
 
 
 def checks_over_that_stack(
-    checked_out_branch: str = "engine", ancestors: Container[str] = frozenset()
+    checked_out_branch: str = StackBranch.ENGINE,
+    ancestors: Container[str] = frozenset(),
 ) -> CommitMoveChecks:
     """
     A move check over the stack above.
@@ -873,17 +949,17 @@ def test_pushing_while_another_branch_is_checked_out_is_refused():
     The checked-out branch is the one whose content actually moves, so a mismatch moves
     something other than what was intended.
     """
-    refusals = checks_over_that_stack(checked_out_branch="parser").refusals(
+    refusals = checks_over_that_stack(checked_out_branch=StackBranch.PARSER).refusals(
         a_proposed_push()
     )
 
     assert [refusal.reason for refusal in refusals] == [RefusalReason.NOT_CHECKED_OUT]
-    assert "parser" in refusals[0].explanation
+    assert StackBranch.PARSER in refusals[0].explanation
 
 
 def test_a_push_naming_a_different_branch_on_each_side_is_refused():
     refusals = checks_over_that_stack().refusals(
-        a_proposed_push(destination="engine-ui")
+        a_proposed_push(destination=StackBranch.ENGINE_UI)
     )
 
     assert [refusal.reason for refusal in refusals] == [
@@ -909,12 +985,12 @@ def test_a_push_that_would_make_a_child_an_ancestor_of_its_parent_is_refused():
     GitHub reads a pull request whose head is contained in its base as merged, so this
     push would falsely close the child.
     """
-    refusals = checks_over_that_stack(ancestors={"engine-ui"}).refusals(
+    refusals = checks_over_that_stack(ancestors={StackBranch.ENGINE_UI}).refusals(
         a_proposed_push()
     )
 
     assert [refusal.reason for refusal in refusals] == [RefusalReason.FALSE_MERGE]
-    assert "engine-ui" in refusals[0].explanation
+    assert StackBranch.ENGINE_UI in refusals[0].explanation
 
 
 def test_an_unrelated_branch_contained_in_the_source_is_not_a_false_merge():
@@ -922,7 +998,10 @@ def test_an_unrelated_branch_contained_in_the_source_is_not_a_false_merge():
     Only a child of the destination can be falsely merged by pushing to it.
     """
     assert (
-        checks_over_that_stack(ancestors={"parser"}).refusals(a_proposed_push()) == []
+        checks_over_that_stack(ancestors={StackBranch.PARSER}).refusals(
+            a_proposed_push()
+        )
+        == []
     )
 
 
@@ -931,8 +1010,10 @@ def test_every_reason_to_refuse_is_reported_rather_than_only_the_first():
     Fixing one problem and re-running to discover the next is how a half-applied move
     gets made.
     """
-    refusals = checks_over_that_stack(checked_out_branch="parser").refusals(
-        a_proposed_push(destination="engine-ui", destination_remote=RemoteName.UPSTREAM)
+    refusals = checks_over_that_stack(checked_out_branch=StackBranch.PARSER).refusals(
+        a_proposed_push(
+            destination=StackBranch.ENGINE_UI, destination_remote=RemoteName.UPSTREAM
+        )
     )
 
     assert [refusal.reason for refusal in refusals] == [
@@ -953,7 +1034,7 @@ def a_promotion_link(title: str = "A title", body: str = "A body") -> PromotionL
     :param body: The body to prefill.
     :return: The built link.
     """
-    return PromotionLink.build(make_configuration(), "engine", title, body)
+    return PromotionLink.build(make_configuration(), StackBranch.ENGINE, title, body)
 
 
 def test_the_link_compares_the_upstream_base_against_the_fork_branch():
@@ -1007,14 +1088,14 @@ def test_a_link_that_cannot_fit_even_without_a_description_is_refused():
 
 
 def test_a_child_of_a_landed_parent_is_named_with_the_base_it_should_get():
-    stack = a_deep_stack_beside_an_independent_branch(landed={"engine"})
+    stack = a_deep_stack_beside_an_independent_branch(landed={StackBranch.ENGINE})
 
     assert reparents(stack) == [
         Reparent(
-            branch="engine-ui",
+            branch=StackBranch.ENGINE_UI,
             pull_request_number=2,
-            current_base="engine",
-            target_base="main",
+            current_base=StackBranch.ENGINE,
+            target_base=StackBranch.BASE,
         )
     ]
 
@@ -1029,16 +1110,19 @@ def test_a_child_of_a_landed_parent_with_no_open_pull_request_is_still_named():
     from it entirely - the case that orphaned a real pull request for six days.
     """
     orphaned = build(
-        [PullRequest(2, "engine-ui", "engine", draft=True)], merged={"engine"}
+        [PullRequest(2, StackBranch.ENGINE_UI, StackBranch.ENGINE, draft=True)],
+        merged={StackBranch.ENGINE},
     )
 
-    assert [reparent.branch for reparent in reparents(orphaned)] == ["engine-ui"]
+    assert [reparent.branch for reparent in reparents(orphaned)] == [
+        StackBranch.ENGINE_UI
+    ]
 
 
 def test_a_branch_that_has_landed_is_named_for_labelling_and_closing():
-    stack = a_deep_stack_beside_an_independent_branch(landed={"engine"})
+    stack = a_deep_stack_beside_an_independent_branch(landed={StackBranch.ENGINE})
 
-    assert [branch.name for branch in landed_branches(stack)] == ["engine"]
+    assert [branch.name for branch in landed_branches(stack)] == [StackBranch.ENGINE]
 
 
 def test_nothing_has_landed_while_the_whole_stack_is_still_open():
@@ -1057,7 +1141,7 @@ def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
     """
     configuration_path = _committed_configuration_path(scratch_repository)
     scratch_repository.run_git(
-        "remote", "add", "another", SOMEBODY_ELSES_FORK.clone_url
+        "remote", "add", RemoteName.THEIRS, SOMEBODY_ELSES_FORK.clone_url
     )
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
@@ -1070,7 +1154,7 @@ def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
     )
 
     assert configuration.fork_repository == SOMEBODY_ELSES_FORK
-    assert configuration.fork_remote == "another"
+    assert configuration.fork_remote == RemoteName.THEIRS
 
 
 def test_a_named_upstream_replaces_the_committed_default(
@@ -1202,7 +1286,7 @@ def test_a_project_naming_no_upstream_says_so_by_status(
     (
         offline_checkout.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION
     ).unlink()
-    offline_checkout.run_git("remote", "add", "whatever", A_FORK.clone_url)
+    offline_checkout.run_git("remote", "add", RemoteName.MINE, A_FORK.clone_url)
 
     result = run_stack(offline_checkout, Command.CONFIGURATION)
 
@@ -1213,7 +1297,7 @@ def test_a_project_naming_no_upstream_says_so_by_status(
 def test_a_readable_checkout_with_no_board_reports_the_missing_board_instead(
     offline_checkout: ScratchRepository,
 ):
-    offline_checkout.run_git("remote", "add", "whatever", A_FORK.clone_url)
+    offline_checkout.run_git("remote", "add", RemoteName.MINE, A_FORK.clone_url)
 
     result = run_stack(offline_checkout, Command.STATUS)
 
@@ -1227,8 +1311,10 @@ def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
     Two candidate remotes are ambiguous, so a caller that already knows the answer must
     be able to say so rather than be blocked by the guess it does not need.
     """
-    offline_checkout.run_git("remote", "add", "whatever", A_FORK.clone_url)
-    offline_checkout.run_git("remote", "add", "another", SOMEBODY_ELSES_FORK.clone_url)
+    offline_checkout.run_git("remote", "add", RemoteName.MINE, A_FORK.clone_url)
+    offline_checkout.run_git(
+        "remote", "add", RemoteName.THEIRS, SOMEBODY_ELSES_FORK.clone_url
+    )
 
     assert (
         run_stack(offline_checkout, Command.CONFIGURATION).returncode
@@ -1247,7 +1333,7 @@ def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
     assert result.returncode == StackExitCode.SUCCESS
     printed = dict(line.split("\t") for line in result.stdout.splitlines())
     assert printed["fork_repository"] == "a-fork-owner/a-fork"
-    assert printed["fork_remote"] == "whatever"
+    assert printed["fork_remote"] == RemoteName.MINE
     assert printed["upstream_repository"] == "an-upstream-owner/a-project"
 
 
@@ -1264,13 +1350,13 @@ def test_a_fork_that_is_not_owner_and_name_is_a_usage_error(
 def test_a_promotion_link_is_built_from_the_resolved_repositories(
     offline_checkout: ScratchRepository,
 ):
-    offline_checkout.run_git("remote", "add", "whatever", A_FORK.clone_url)
+    offline_checkout.run_git("remote", "add", RemoteName.MINE, A_FORK.clone_url)
 
     result = run_stack(
         offline_checkout,
         Command.PROMOTION_LINK,
         "--branch",
-        "engine",
+        StackBranch.ENGINE,
         "--title",
         "A title",
     )

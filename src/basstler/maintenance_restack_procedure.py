@@ -27,8 +27,6 @@ from basstler.maintenance_restack_steps import (
 )
 from basstler.stack import (
     CommitMoveChecks,
-    IntegrationStrategy,
-    RestackPlanKey,
     Stack,
     restack_plan,
 )
@@ -213,9 +211,9 @@ def restack(
         return [
             _restack_branch(
                 BranchUnderRestack(
-                    branch=by_name[entry[RestackPlanKey.BRANCH]],
-                    parent=entry[RestackPlanKey.PARENT],
-                    strategy=IntegrationStrategy(entry[RestackPlanKey.STRATEGY]),
+                    branch=by_name[entry.branch],
+                    parent=entry.parent,
+                    strategy=entry.strategy,
                     stack=stack,
                     git=switching,
                     fork=fork,

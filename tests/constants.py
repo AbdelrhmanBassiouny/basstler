@@ -12,6 +12,7 @@ from __future__ import annotations
 
 from enum import IntEnum, StrEnum
 from pathlib import Path
+from typing import Any
 
 from basstler.locations import PackageLocation, PathEnumeration, ProjectLocation
 from basstler.setup_steps import PersonalNotesSetting
@@ -135,6 +136,91 @@ class StackBranch(StrEnum):
     CHILD = "a-child"
     """
     Stacked directly on the parent.
+    """
+
+    BASE = "main"
+    """
+    The upstream base every stack in the suites ultimately targets.
+    """
+
+    ENGINE = "engine"
+    """
+    The bottom of a three-deep stack, cut from the base.
+    """
+
+    ENGINE_UI = "engine-ui"
+    """
+    Stacked on :attr:`ENGINE`.
+    """
+
+    ENGINE_DOCS = "engine-docs"
+    """
+    Stacked on :attr:`ENGINE_UI`, the top of the three-deep stack.
+    """
+
+    PARSER = "parser"
+    """
+    A single branch cut from the base, beside the three-deep stack.
+    """
+
+    FEATURE = "feature"
+    """
+    The one branch of a stack that needs no other.
+    """
+
+    FIRST_ROOT = "first-root"
+    """
+    One of two branches cut from the base.
+    """
+
+    SECOND_ROOT = "second-root"
+    """
+    The other of two branches cut from the base.
+    """
+
+    CHILD_OF_FIRST_ROOT = "child-of-first-root"
+    """
+    Stacked on :attr:`FIRST_ROOT`.
+    """
+
+    LANDED = "landed"
+    """
+    A branch already in the upstream base.
+    """
+
+    LANDED_ELSEWHERE = "landed-elsewhere"
+    """
+    A parent in the upstream base that no open pull request describes.
+    """
+
+    UNLANDED_ELSEWHERE = "unlanded-elsewhere"
+    """
+    A parent no open pull request describes and that is not in the upstream base.
+    """
+
+    OFF_BOARD_PARENT = "off-board-parent"
+    """
+    A parent other than the base that the board carries no pull request for.
+    """
+
+    UNDER_REVIEW = "under-review"
+    """
+    A branch in the upstream review queue.
+    """
+
+    WORK_IN_PROGRESS = "work-in-progress"
+    """
+    A drafted branch, still being worked on.
+    """
+
+    STUCK = "stuck"
+    """
+    A branch withheld for conflict resolution.
+    """
+
+    FINE = "fine"
+    """
+    A branch beside :attr:`STUCK` that nothing holds back.
     """
 
 
@@ -396,7 +482,8 @@ class HatchVersionKey(StrEnum):
 
     VERSION = "version"
     """
-    Where the backend is told to read the version from.
+    Where the backend is told to read the version from, and the name it requires of the
+    pattern's group that captures the version.
     """
 
     PATH = "path"
@@ -408,6 +495,17 @@ class HatchVersionKey(StrEnum):
     """
     The regular expression whose ``version`` group is the version.
     """
+
+    @classmethod
+    def version_table(cls, pyproject: dict[str, Any]) -> dict[str, str]:
+        """
+        :param pyproject: A parsed ``pyproject.toml``.
+        :return: Its ``[tool.hatch.version]`` table.
+        """
+        table = pyproject
+        for key in (cls.TOOL, cls.HATCH, cls.VERSION):
+            table = table[key]
+        return table
 
 
 class PluginManifestKey(StrEnum):

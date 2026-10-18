@@ -106,9 +106,10 @@ class UnreadableDependencyDeclarationError(CommandFailure):
     from an empty answer and act on by installing nothing.
     """
 
-    exit_code: ExitCode = field(
-        default=DependencyExitCode.UNREADABLE_DECLARATION, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return DependencyExitCode.UNREADABLE_DECLARATION
 
     declaration: Path
     """

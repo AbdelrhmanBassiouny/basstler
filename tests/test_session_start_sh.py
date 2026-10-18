@@ -13,7 +13,6 @@ personal-notes remote - no network access or real personal-notes branch involved
 
 from __future__ import annotations
 
-import json
 import shutil
 import subprocess
 import sys
@@ -33,12 +32,12 @@ from .constants import (
     FileMode,
     PackageManager,
     PersonalNotesPath,
-    PluginManifestKey,
     ScratchBranch,
     ScrubbedEnvironmentPrefix,
     StubVariable,
 )
 from .executable_stubs import ExecutableStubDirectory, path_hiding_executables
+from .plugin_manifest import PluginManifest
 from .project_declaration import ProjectDeclaration
 from .scratch_repository import (
     SCRATCH_IDENTITY,
@@ -728,10 +727,8 @@ def test_a_plugin_outside_a_checkout_installs_its_own_release_of_the_package(
     plugin's repository at the plugin's own version.
     """
     declaration_file(session_start_repository).unlink()
-    manifest = json.loads(
-        (
-            session_start_repository.plugin_root / SetupPrerequisiteFile.PLUGIN_MANIFEST
-        ).read_text()
+    manifest = PluginManifest.read(
+        session_start_repository.plugin_root / SetupPrerequisiteFile.PLUGIN_MANIFEST
     )
 
     repository = Repository.from_remote_url(
@@ -741,7 +738,7 @@ def test_a_plugin_outside_a_checkout_installs_its_own_release_of_the_package(
     )
 
     assert package_source(session_start_repository) == repository.git_requirement(
-        manifest[PluginManifestKey.NAME], f"v{manifest[PluginManifestKey.VERSION]}"
+        manifest.name, manifest.release_tag
     )
 
 

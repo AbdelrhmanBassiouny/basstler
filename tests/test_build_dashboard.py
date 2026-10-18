@@ -46,7 +46,7 @@ from basstler.build_dashboard import (
     validate_plan,
 )
 from basstler.locations import PackageLocation
-from basstler.maintenance_constants import PROMOTION_LINK_LABEL
+from basstler.maintenance_constants import RoutineLabel
 
 from .constants import RepositoryLocation, SkillDirectory
 
@@ -381,7 +381,7 @@ def test_identified_labels_silently_excludes_an_unrecognized_label():
     # The promotion-link marker is real label traffic on a fork's PRs (added by the
     # maintenance pass) that the dashboard has no reason to recognize.
     record = PullRequestRecord(
-        state=PullRequestState.OPEN, labels=[PROMOTION_LINK_LABEL]
+        state=PullRequestState.OPEN, labels=[RoutineLabel.PROMOTION_LINK_SENT]
     )
     assert record.identified_labels == frozenset()
 

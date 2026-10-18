@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any
 
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
@@ -32,9 +32,10 @@ class GitHubCredentialUnavailableError(CommandFailure, RuntimeError):
     Raised when no token is available to authenticate the API calls with.
     """
 
-    exit_code: ExitCode = field(
-        default=StackExitCode.CREDENTIAL_UNAVAILABLE, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.CREDENTIAL_UNAVAILABLE
 
     variables: tuple[str, ...]
     """
@@ -115,13 +116,15 @@ class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
     Raised when the API refuses a call this module depends on.
     """
 
-    exit_code: ExitCode = field(default=StackExitCode.GITHUB_REQUEST_FAILED, init=False)
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.GITHUB_REQUEST_FAILED
 
     method: str = ""
     """
     The HTTP method used.
     """
-
     path: str = ""
     """
     The API path called, without the host.

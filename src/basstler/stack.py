@@ -42,7 +42,7 @@ import json
 import subprocess
 import tomllib
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import ClassVar
@@ -82,7 +82,10 @@ class Remote:
 class ForkRemoteNotFoundError(CommandFailure, LookupError):
     """Raised when no remote points at a repository other than the upstream."""
 
-    exit_code: ExitCode = field(default=StackExitCode.REMOTES_UNRESOLVED, init=False)
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.REMOTES_UNRESOLVED
 
     upstream_repository: Repository
     """The upstream every candidate turned out to be."""
@@ -99,7 +102,10 @@ class ForkRemoteNotFoundError(CommandFailure, LookupError):
 class AmbiguousForkRemoteError(CommandFailure, LookupError):
     """Raised when several remotes could each be the fork."""
 
-    exit_code: ExitCode = field(default=StackExitCode.REMOTES_UNRESOLVED, init=False)
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.REMOTES_UNRESOLVED
 
     candidates: tuple[Remote, ...]
     """The remotes that are not the upstream, in the order git reported them."""
@@ -483,7 +489,10 @@ class Stack:
 class BoardUnavailable(CommandFailure, RuntimeError):
     """Raised when ``board.json`` is missing."""
 
-    exit_code: ExitCode = field(default=StackExitCode.BOARD_UNAVAILABLE, init=False)
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.BOARD_UNAVAILABLE
 
     board: Path
     """Where the board export was looked for."""
@@ -579,7 +588,10 @@ def build_stack(
 class ContradictoryLabelWriteError(CommandFailure, ValueError):
     """Raised when one write is asked both to carry a label and to drop it."""
 
-    exit_code: ExitCode = field(default=StackExitCode.USAGE, init=False)
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.USAGE
 
     labels: tuple[str, ...]
     """The labels asked for in both directions."""
@@ -634,7 +646,10 @@ class LabelWrite:
 class PromotionLinkTooLongError(CommandFailure, ValueError):
     """Raised when a link cannot fit even with its whole description dropped."""
 
-    exit_code: ExitCode = field(default=StackExitCode.USAGE, init=False)
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.USAGE
 
     branch: str
     """The branch whose link was being built."""
@@ -862,20 +877,21 @@ def next_to_promote(stack: Stack) -> Branch | None:
     return ordered[0] if ordered else None
 
 
-class RestackPlanKey(StrEnum):
-    """The keys of one entry of :func:`restack_plan`."""
+@dataclass(frozen=True)
+class RestackPlanEntry:
+    """One entry of :func:`restack_plan`: a branch, and what and how it is brought up to date with."""
 
-    BRANCH = "branch"
+    branch: str
     """The branch to bring up to date."""
 
-    PARENT = "parent"
+    parent: str
     """The branch it is brought up to date with."""
 
-    STRATEGY = "strategy"
-    """How it is brought up to date - an :class:`IntegrationStrategy`."""
+    strategy: IntegrationStrategy
+    """How it is brought up to date."""
 
 
-def restack_plan(stack: Stack) -> list[dict[RestackPlanKey, str]]:
+def restack_plan(stack: Stack) -> list[RestackPlanEntry]:
     """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
 
     One entry per branch not yet ``merged``, in parent-before-child order. In-review branches are
@@ -892,7 +908,7 @@ def restack_plan(stack: Stack) -> list[dict[RestackPlanKey, str]]:
     :param stack: The stack to plan.
     :return: The restack plan, one entry per not-yet-merged branch.
     """
-    plan: list[dict[RestackPlanKey, str]] = []
+    plan: list[RestackPlanEntry] = []
     for branch in order(stack):
         if branch.status == BranchStatus.MERGED:
             continue
@@ -902,11 +918,9 @@ def restack_plan(stack: Stack) -> list[dict[RestackPlanKey, str]]:
             else branch.parent
         )
         plan.append(
-            {
-                RestackPlanKey.BRANCH: branch.name,
-                RestackPlanKey.PARENT: effective_parent,
-                RestackPlanKey.STRATEGY: branch.strategy,
-            }
+            RestackPlanEntry(
+                branch=branch.name, parent=effective_parent, strategy=branch.strategy
+            )
         )
     return plan
 
@@ -1231,7 +1245,7 @@ def print_restack_plan(stack: Stack) -> None:
 
     :param stack: The stack to plan.
     """
-    logger.info(json.dumps(restack_plan(stack), indent=2))
+    logger.info(json.dumps([asdict(entry) for entry in restack_plan(stack)], indent=2))
 
 
 def print_label_write(write: LabelWrite) -> None:

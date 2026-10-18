@@ -74,7 +74,10 @@ class MissingUpstreamRepositoryError(CommandFailure, LookupError):
     Raised when neither the project nor anything above it names the upstream repository.
     """
 
-    exit_code: ExitCode = field(default=StackExitCode.UPSTREAM_UNCONFIGURED, init=False)
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.UPSTREAM_UNCONFIGURED
 
     project_file: Path
     """

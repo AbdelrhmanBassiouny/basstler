@@ -15,8 +15,8 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.maintenance_constants import (
-    CONFLICT_COMMENT_PREFIX,
-    MERGEABLE_STATE_WITH_CONFLICTS,
+    MergeableState,
+    RoutineText,
 )
 from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_git_commands import GitCommandRunner, ProposedPush
@@ -153,7 +153,7 @@ def conflict_report(
         else "\n\nThis pull request's description names no session to address."
     )
     return (
-        f"{CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
+        f"{RoutineText.CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
         f"conflicts, so this branch was left untouched and skipped.\n\n"
         f"Conflicting files:\n{files}\n\n"
         f"Please resolve and push. This branch is labelled "
@@ -275,7 +275,7 @@ class WithholdBranchStillConflicting(RestackStep):
             restacking.fork.pull_request(branch.pull_request_number),
             branch.pull_request_number,
         )
-        if state == MERGEABLE_STATE_WITH_CONFLICTS:
+        if state == MergeableState.DIRTY:
             return restacking.concluded(
                 RestackOutcome.WITHHELD,
                 explanation="still conflicted against its base since a previous pass",

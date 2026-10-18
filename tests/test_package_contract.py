@@ -12,12 +12,10 @@ directory holding them rather than named.
 from __future__ import annotations
 
 import importlib.metadata
-import json
 import os
 import re
 import subprocess
 import sys
-import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -34,11 +32,10 @@ from basstler.package_layout import (
 from .constants import (
     ConfigurationVariable,
     EnvironmentVariable,
-    HatchVersionKey,
-    PluginManifestKey,
     RepositoryLocation,
 )
-from .project_declaration import ProjectDeclaration
+from .plugin_manifest import PluginManifest
+from .project_declaration import HatchVersionSource, ProjectDeclaration
 from .script_runner import ScriptRunner, configuration_value
 
 WORKFLOWS_DIRECTORY = RepositoryLocation.WORKFLOWS
@@ -152,32 +149,19 @@ def test_the_build_reads_its_version_from_the_plugin_manifest():
     nothing before reading it, so the build reads it from there rather than from a second
     copy a bump could leave behind.
     """
-    version_source = tomllib.loads(
-        PackageLocation.DEPENDENCY_DECLARATION.value.read_text()
-    )[HatchVersionKey.TOOL][HatchVersionKey.HATCH][HatchVersionKey.VERSION]
-    manifest_text = RepositoryLocation.PLUGIN_MANIFEST.read_text()
+    version_source = HatchVersionSource.of_this_package()
 
-    assert (
-        RepositoryLocation.ROOT / version_source[HatchVersionKey.PATH]
-        == RepositoryLocation.PLUGIN_MANIFEST
-    )
-    read_by_the_build = re.search(
-        version_source[HatchVersionKey.PATTERN], manifest_text
-    )
-    assert read_by_the_build is not None
-    assert (
-        read_by_the_build["version"]
-        == json.loads(manifest_text)[PluginManifestKey.VERSION]
-    )
+    assert version_source.path == RepositoryLocation.PLUGIN_MANIFEST
+    assert version_source.version() == PluginManifest.of_this_plugin().version
 
 
 def test_the_installed_package_is_the_plugin_version():
     """
     The version the build read is the one the installed package reports.
     """
-    manifest = json.loads(RepositoryLocation.PLUGIN_MANIFEST.read_text())
+    manifest = PluginManifest.of_this_plugin()
 
-    assert importlib.metadata.version("basstler") == manifest[PluginManifestKey.VERSION]
+    assert importlib.metadata.version(manifest.name) == manifest.version
 
 
 # %% each module stands on its own
@@ -265,13 +249,13 @@ def test_the_example_caller_calls_the_plugins_own_release():
     A project copies the example caller as it stands, so it has to call the release its
     plugin installs - both the workflow it uses and the package that workflow installs.
     """
-    manifest = json.loads(RepositoryLocation.PLUGIN_MANIFEST.read_text())
+    manifest = PluginManifest.of_this_plugin()
     caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
 
     references = RELEASE_REFERENCE.findall(caller.read_text())
 
     assert len(references) == 2
-    assert set(references) == {f"v{manifest[PluginManifestKey.VERSION]}"}
+    assert set(references) == {manifest.release_tag}
 
 
 # %% nothing is left behind

@@ -18,7 +18,8 @@ which produced it.
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from enum import IntEnum
 
 
@@ -124,20 +125,23 @@ class StackExitCode(ExitCode):
 
 
 @dataclass
-class CommandFailure(Exception):
+class CommandFailure(Exception, ABC):
     """
     An error a command reports to its caller by an exit status of its own.
 
     Extended alongside the built-in exception that says what kind of error it is, e.g.
     ``class SomeError(CommandFailure, LookupError)``, so ``except LookupError`` still
-    catches it. Each concrete error redeclares :attr:`exit_code` with its own status as
-    the default.
+    catches it. Each concrete error implements :attr:`exit_code` with its own status.
     """
 
-    exit_code: ExitCode = field(init=False)
-    """
-    The status a command ends with when this error stops it.
+    @property
+    @abstractmethod
+    def exit_code(self) -> ExitCode:
+        """
+        The status a command ends with when this error stops it.
 
-    Not a constructor argument: the status belongs to the kind of error, so a subclass
-    fixes it as this field's default rather than a caller choosing it per raise.
-    """
+        A property of the kind of error rather than a field, so no raise site can choose
+        another, and abstract, so an error that names no status cannot be raised at all.
+
+        :return: The status.
+        """

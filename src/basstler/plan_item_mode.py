@@ -57,7 +57,7 @@ import tempfile
 import tomllib
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -321,7 +321,10 @@ class UnknownModeError(ModeError):
     Raised when a mode is named that :class:`ExecutionMode` does not define.
     """
 
-    exit_code: ExitCode = field(default=PlanItemModeExitCode.UNKNOWN_MODE, init=False)
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemModeExitCode.UNKNOWN_MODE
 
     setting: ModeSetting
     """
@@ -341,9 +344,10 @@ class MalformedModeSettingsError(ModeError):
     Raised when a settings file exists but cannot be read as the modes it should hold.
     """
 
-    exit_code: ExitCode = field(
-        default=PlanItemModeExitCode.MALFORMED_MODE_SETTINGS, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemModeExitCode.MALFORMED_MODE_SETTINGS
 
     file: SettingsFile
     """
@@ -371,9 +375,10 @@ class SettingsWriteRefusedError(ModeError):
     Raised when the personal settings file could not be pushed to the notes branch.
     """
 
-    exit_code: ExitCode = field(
-        default=PlanItemModeExitCode.SETTINGS_WRITE_REFUSED, init=False
-    )
+    @property
+    def exit_code(self) -> ExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemModeExitCode.SETTINGS_WRITE_REFUSED
 
     detail: str
     """
