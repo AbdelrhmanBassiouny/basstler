@@ -4,10 +4,6 @@ claude/magical-albattani-9fbkd5	basstler-package
 claude/review-pr-ci-status-20k6g4	basstler-package
 claude/upstream-check-failure-logs	basstler-package
 claude/basstler-notes-core-python	basstler-package
-claude/integration-priority-labels	integration-tip-selection
-claude/ready-tooling-integration-fkd5b5	integration-tip-selection
-claude/pipeline-relocation-collision-6gehio	integration-tip-selection
-claude/fork-pr-integration-conflicts-7oeulp	integration-tip-selection
 claude/deferred-dependency-drift-pr-qxpfsm	plan-dashboards
 claude/hidden-deferred-plan-items-6weef1	plan-dashboards
 claude/rdr-dashboard-refresh-button-tpuvo9	plan-dashboards
