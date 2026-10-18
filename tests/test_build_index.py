@@ -171,3 +171,11 @@ def test_main_renders_every_plan_from_the_plans_json_file(tmp_path, monkeypatch)
     exit_code = main()
     assert exit_code == 0
     assert "Plan A" in output_path.read_text()
+
+
+def test_index_page_links_back_to_the_plan_hub():
+    page = render_index_page(
+        [summary()], "owner/repo", "https://claude.ai/artifact/hub"
+    )
+    assert "https://claude.ai/artifact/hub" in page
+    assert "owner/repo" in page

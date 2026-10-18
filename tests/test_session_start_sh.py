@@ -1037,6 +1037,46 @@ def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
 
 
+# %% the plan hub line
+
+HUB_URL = "https://claude.ai/artifact/hub"
+
+HUB_FILE = (
+    f"url: {HUB_URL}\nregistry: owner/registry\nrepositories:\n- owner/registry\n"
+)
+
+
+def test_reports_no_hub_when_the_notes_branch_has_no_hub_file(
+    session_start_repository: ScratchRepository,
+):
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.PLAN_HUB) == summary_message(
+        SummaryMessage.HUB_NOT_REGISTERED, ScratchBranch.PERSONAL_NOTES
+    )
+
+
+def test_places_a_tracked_branch_under_its_plan_in_the_hub(
+    session_start_repository: ScratchRepository,
+):
+    result = publish_and_run(
+        session_start_repository,
+        {
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
+                {ScratchBranch.WORK: PLAN_IDENTIFIER}
+            ),
+            MANIFEST_PATH: PLAN_MANIFEST,
+            PersonalNotesPath.PLAN_HUB: HUB_FILE,
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    hub_line = summary_value(result.stdout, SummaryLine.PLAN_HUB)
+    assert hub_line.startswith(HUB_URL)
+    assert hub_line.endswith(f" › {PLAN_IDENTIFIER}")
+
+
 # %% every message renders
 
 

@@ -452,6 +452,11 @@ class PersonalNotesPath(PathEnumeration):
     The generated reverse index mapping an item's branch to the plan tracking it.
     """
 
+    PLAN_HUB = ProjectLocation.PLANS / "_hub.yaml"
+    """
+    The plan hub file: the hub page's URL and every repository it lists.
+    """
+
 
 class ScrubbedEnvironmentPrefix(StrEnum):
     """

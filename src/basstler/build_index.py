@@ -8,7 +8,8 @@ beyond that. Pair with build_dashboard.py, whose --output JSON summary
 gives you the done/total counts to build one of these entries from.
 
 Usage:
-    python3 build_index.py --plans /tmp/plans.json --output /tmp/index.html
+    python3 build_index.py --plans /tmp/plans.json --output /tmp/index.html \
+        [--repository <owner/repo> --hub-url <the plan hub's url>]
 
 plans.json shape: a JSON list of objects, each:
     {
@@ -121,15 +122,23 @@ class PlanSummary:
         return "plan-card complete" if self.is_complete else "plan-card"
 
 
-def render_index_page(plans: list[PlanSummary]) -> str:
+def render_index_page(
+    plans: list[PlanSummary],
+    repository: str | None = None,
+    hub_url: str | None = None,
+) -> str:
     """
     Render the full master-index page for every known plan.
 
     :param plans: Every plan to list, in the order they should appear.
+    :param repository: The repository whose plans these are, shown in the header.
+    :param hub_url: The plan hub's URL, linked back to from the header.
     :return: The rendered HTML page.
     """
     template = create_template_environment().get_template("index.html")
-    return template.render(plans=plans)
+    return template.render(
+        plans=plans, repository=repository, hub_url=sanitize_http_url(hub_url)
+    )
 
 
 def main() -> int:
@@ -147,13 +156,17 @@ def main() -> int:
     parser.add_argument(
         "--output", required=True, help="Path to write the index HTML to"
     )
+    parser.add_argument(
+        "--repository", default=None, help="The repository whose plans these are"
+    )
+    parser.add_argument("--hub-url", default=None, help="The plan hub's URL")
     arguments = parser.parse_args()
 
     plans = [
         PlanSummary.from_mapping(entry)
         for entry in json.loads(Path(arguments.plans).read_text())
     ]
-    output = render_index_page(plans)
+    output = render_index_page(plans, arguments.repository, arguments.hub_url)
     Path(arguments.output).write_text(output)
     return 0
 

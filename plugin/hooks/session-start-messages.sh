@@ -54,6 +54,23 @@ plan_line_tracked() {
   printf "'%s' (tracking issue: %s)" "${plan_id}" "${tracking_issue}"
 }
 
+# %% the hub line
+
+# hub_line_not_registered: the notes branch has no hub file.
+hub_line_not_registered() {
+  local notes_branch="$1"
+  printf "none on '%s' - /setup-personal-notes registers this repository in your plan hub" \
+    "${notes_branch}"
+}
+
+# hub_line_registered: the hub page, and where this session's work sits in it.
+hub_line_registered() {
+  local hub_url="$1"
+  local position="$2"
+  printf '%s - this session: %s' "${hub_url:-not published yet (/plan-dashboard --hub)}" \
+    "${position}"
+}
+
 # %% the git identity line
 
 # git_identity_line_not_recorded: the notes branch carries no identity at all,

@@ -1033,6 +1033,12 @@ class DashboardRenderer:
     tracking_url: str | None
     """The tracking issue's or pull request's ``html_url``, if the plan has one."""
 
+    hub_url: str | None = None
+    """The plan hub's URL, the first link of the page's breadcrumb."""
+
+    index_url: str | None = None
+    """The repository's own index page, the breadcrumb's second link."""
+
     items_by_identifier: dict[str, Item] = field(init=False)
     """Every item, keyed by :attr:`Item.identifier`."""
 
@@ -1065,6 +1071,8 @@ class DashboardRenderer:
             repository_url=self.plan.repository_url,
             total_items=len(self.plan.items),
             tracking_url=self.tracking_url,
+            hub_url=sanitize_http_url(self.hub_url),
+            index_url=sanitize_http_url(self.index_url),
             item_statuses=list(ItemStatus),
             status_counts=self._status_counts(),
             drift_items=drift_items,
@@ -1458,6 +1466,10 @@ def main() -> int:
         default=None,
         help="The plan's tracking_issue html_url, if it has one",
     )
+    parser.add_argument("--hub-url", default=None, help="The plan hub's URL")
+    parser.add_argument(
+        "--index-url", default=None, help="The repository's own index page URL"
+    )
     arguments = parser.parse_args()
 
     raw_plan = yaml.safe_load(Path(arguments.plan).read_text())
@@ -1479,6 +1491,8 @@ def main() -> int:
         roadmap_text=roadmap_text,
         pull_requests_by_repository=pull_requests_by_repository,
         tracking_url=arguments.tracking_url,
+        hub_url=arguments.hub_url,
+        index_url=arguments.index_url,
     )
     output, summary = renderer.render()
 
