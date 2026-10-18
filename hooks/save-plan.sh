@@ -8,13 +8,13 @@ set -euo pipefail
 # (.claude/personal/plans/_generated/branch-index.tsv) in the same commit,
 # scanning every plan's plan.yaml so it can never drift out of sync with
 # the manifests it's derived from. See
-# .claude/skills/plan-dashboard/plan-schema.md for the
-# full plan.yaml schema, and .claude/skills/plan-dashboard/SKILL.md for how
+# skills/plan-dashboard/plan-schema.md for the
+# full plan.yaml schema, and skills/plan-dashboard/SKILL.md for how
 # the manifest is consumed.
 #
 # Usage, after copying the plan's files off the personal-notes branch and
 # editing them:
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id> \
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id> \
 #     --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
 # The plan id is always explicit with these flags, since a brand-new plan has
 # no entry in the reverse index yet to derive it from.
@@ -28,8 +28,8 @@ set -euo pipefail
 #
 # Before anything is pushed, landed items are dropped (with every depends_on
 # edge to them), a plan left with no items is removed, and a plan over the
-# limits in basstler/src/basstler/plan_size_limits.py is refused, naming
-# each violation.
+# limits in src/basstler/plan_size_limits.py is refused, naming each
+# violation.
 #
 # This script pushes data only. It never calls the Artifact tool (only a
 # live Claude session can), so it does not regenerate the dashboard itself -
@@ -167,6 +167,13 @@ fi
 
 if [ ! -s "${MANIFEST_FILE}" ]; then
   echo "The plan manifest is empty - nothing to save." >&2
+  exit 1
+fi
+
+# The dashboard's own validation, so nothing reaches the notes branch that no
+# dashboard could then be built from. It prints every problem it finds.
+if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate "${MANIFEST_FILE}"; then
+  echo "Nothing was saved - fix the manifest and save again." >&2
   exit 1
 fi
 

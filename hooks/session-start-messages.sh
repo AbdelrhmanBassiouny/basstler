@@ -92,11 +92,11 @@ git_identity_line_written() {
 
 # %% the setup line
 
-# setup_line_not_checked: check-setup.sh is not in this checkout, so there is
+# setup_line_not_checked: check-setup.sh is not in this plugin, so there is
 # no verdict to report rather than a passing one.
 setup_line_not_checked() {
   local check_setup_script="$1"
-  printf 'not checked - %s is not in this checkout' "${check_setup_script}"
+  printf 'not checked - %s is missing' "${check_setup_script}"
 }
 
 # setup_line_ok: every check passed.
@@ -127,8 +127,8 @@ dependencies_line_already_installed() {
   printf 'already installed in %s' "${environment_directory}"
 }
 
-# dependencies_line_installed: what was missing, now installed by installing
-# the package editable into its environment.
+# dependencies_line_installed: what was missing or out of date, now installed
+# by installing the package into its environment.
 dependencies_line_installed() {
   local installed="$1"
   local environment_directory="$2"
