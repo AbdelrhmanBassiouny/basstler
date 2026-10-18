@@ -4,7 +4,7 @@ set -euo pipefail
 # Orchestrates one plan's refresh: sync_manifest_status's auto-correction,
 # pushing that correction back to the personal-notes branch if it changed
 # anything, then build_dashboard's render - the exact sequence
-# .claude/skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
+# skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
 # embedded bash snippet for a session to improvise from. Extracted so that
 # sequence is real, tested-by-construction code (it just calls the two
 # modules test/basstler_test/ already covers) rather than

@@ -11,7 +11,7 @@ set -euo pipefail
 # END-PR-PROGRESS markers, then run this script.
 #
 # Usage (from anywhere, after editing CLAUDE.local.md):
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-pr-progress.sh"
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/save-pr-progress.sh"
 #
 # Always reads the project root's CLAUDE.local.md specifically (see
 # CLAUDE_LOCAL_MD in ./resolve-personal-notes-config.sh), regardless of the
