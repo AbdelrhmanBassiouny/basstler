@@ -1,15 +1,19 @@
 name: Release
 
-# A release is one line in plugin/.claude-plugin/plugin.json: merging a version bump to main
-# tags that version, and the tag is what an installed plugin installs the package at
-# (`basstler @ git+<repository>@v<version>`). A push that leaves the version alone finds
-# its tag already there and does nothing.
+# Every push to main that changes anything is a release, so the version an installed plugin
+# installs the package at (`basstler @ git+<repository>@v<version>`) always names the code
+# its hooks and skills came from.
+#
+# `python -m basstler.release_version release` decides it: the manifest's version when a
+# pull request raised it to a minor or major release, else the next patch version, which it
+# writes everywhere a version is written. The bump is committed and tagged here, and pushed
+# with the tag in one atomic push, so main never carries a version without its tag. Patch
+# releases need nothing from a pull request, so no two pull requests conflict over the
+# version line.
 
 on:
   push:
     branches: [main]
-    paths:
-      - plugin/.claude-plugin/plugin.json
 
 concurrency:
   group: release
@@ -19,27 +23,50 @@ permissions:
   contents: write
 
 jobs:
-  tag:
-    name: Tag the plugin's version
+  release:
+    name: Release what changed since the latest release
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
     steps:
+      # Every tag, since the release is decided against the latest one.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: basstler
 
-      - name: Read the version
-        id: version
-        run: |
-          version="$(python3 -c 'import json; print(json.load(open("plugin/.claude-plugin/plugin.json"))["version"])')"
-          echo "tag=v${version}" >> "${GITHUB_OUTPUT}"
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
 
-      - name: Tag it, unless it is already tagged
-        env:
-          TAG: ${{ steps.version.outputs.tag }}
+      - name: Install basstler
+        run: pip install --editable basstler
+
+      # Another merge can land while this runs; its push then fails as non-fast-forward,
+      # and the release is decided again on top of it, a few times before giving up.
+      - name: Commit, tag and push the release
+        working-directory: basstler
         run: |
-          if git ls-remote --exit-code --tags origin "refs/tags/${TAG}" > /dev/null; then
-            echo "${TAG} is already tagged; nothing to release."
-            exit 0
-          fi
-          git tag "${TAG}" "${GITHUB_SHA}"
-          git push origin "refs/tags/${TAG}"
-          echo "Tagged ${TAG} at ${GITHUB_SHA}." >> "${GITHUB_STEP_SUMMARY}"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch --quiet --tags origin main
+            git checkout --quiet --force --detach origin/main
+            release="$(python -m basstler.release_version release --checkout .)"
+            tag="$(printf '%s\n' "${release}" | sed -n 's/^tag=//p')"
+            if [ -z "${tag}" ]; then
+              echo "Nothing changed since the latest release." >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+            if printf '%s\n' "${release}" | grep -qx 'bumped=true'; then
+              git commit --quiet --all --message "Release ${tag}"
+            fi
+            git tag "${tag}"
+            if git push --atomic origin HEAD:refs/heads/main "refs/tags/${tag}"; then
+              echo "Released ${tag} at $(git rev-parse HEAD)." >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+            git tag --delete "${tag}"
+          done
+          echo "Could not push the release after 3 attempts." >&2
+          exit 1

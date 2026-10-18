@@ -860,22 +860,48 @@ class ReleaseSampleVersion(StrEnum):
 
     NEXT_PATCH = "1.0.1"
     """
-    :attr:`RELEASED` with its patch part bumped, not tagged yet.
+    :attr:`RELEASED` with its patch part bumped: what a release on merge makes.
     """
 
     NEXT_MINOR = "1.1.0"
     """
-    :attr:`RELEASED` with its minor part bumped.
+    :attr:`RELEASED` with its minor part bumped, which a pull request may name.
     """
 
     NEXT_MAJOR = "2.0.0"
     """
-    :attr:`RELEASED` with its major part bumped.
+    :attr:`RELEASED` with its major part bumped, which a pull request may name.
     """
 
-    CHOSEN = "3.4.5"
+    SKIPPING = "1.2.0"
     """
-    A version given explicitly rather than incremented.
+    A minor release past the next one, which a pull request may not name.
+    """
+
+    OLDER = "0.9.0"
+    """
+    A version behind :attr:`RELEASED`.
+    """
+
+    UNMERGED = "3.0.0"
+    """
+    A version tagged on a branch the checked-out commit does not contain.
+    """
+
+
+class ReleaseSampleTag(StrEnum):
+    """
+    Tags the release-version tests put on a scratch checkout that release nothing.
+    """
+
+    NOT_A_RELEASE = "nightly"
+    """
+    A tag that names no version.
+    """
+
+    MALFORMED = "v1.x"
+    """
+    A tag shaped like a release whose version is not one.
     """
 
 

@@ -42,7 +42,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
-      # Every tag, since the check compares the package with the tag the version names.
+      # Every tag, since the check compares the version with the latest release.
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
@@ -56,7 +56,7 @@ jobs:
       - name: Install basstler
         run: pip install --editable basstler
 
-      # An install takes the package and the reusable workflow from v<version>, so a
-      # change that leaves the version alone reaches some installs and not others.
-      - name: Check the version was bumped since its release
+      # Patch releases are made on merge; a pull request may only name the latest
+      # release's version, or its next minor or major one.
+      - name: Check the version is one a pull request may name
         run: python -m basstler.release_version check --checkout basstler
