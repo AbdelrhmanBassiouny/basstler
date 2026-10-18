@@ -11,17 +11,14 @@ here, which is what makes it worth a test where a prose assertion would not be.
 from __future__ import annotations
 
 import subprocess
-from pathlib import Path
 
-import basstler.stack
-from basstler.locations import PackageLocation
 from basstler.repository import Repository
-from basstler.stack import _configuration_values
+from basstler.stack_configuration import CommittedStackConfiguration
 
-from .constants import SkillDirectory
+from .constants import RepositoryLocation, SkillDirectory
 
 MAINTENANCE_SKILL_DOCUMENT = (
-    PackageLocation.REPOSITORY_ROOT
+    RepositoryLocation.PLUGIN
     / SkillDirectory.STACKED_PULL_REQUEST_MAINTENANCE
     / "SKILL.md"
 )
@@ -41,10 +38,13 @@ def candidate_forks() -> set[Repository]:
 
     :return: The candidate forks, empty if the checkout has no repository remote at all.
     """
-    upstream = Repository.parse(
-        _configuration_values(PackageLocation.STACK_CONFIGURATION.value)[
-            "upstream_repository"
-        ]
+    configuration = CommittedStackConfiguration(
+        project_root=RepositoryLocation.ROOT.value
+    )
+    upstreams = (
+        {configuration.upstream_repository()}
+        if configuration.project_file.is_file()
+        else set()
     )
     listed = subprocess.run(
         ["git", "remote"], capture_output=True, text=True, check=True
@@ -63,7 +63,7 @@ def candidate_forks() -> set[Repository]:
         for url in urls
         if Repository.names_a_repository(url)
     }
-    return named - {upstream}
+    return named - upstreams
 
 
 def test_the_skill_names_no_fork_of_its_own():
@@ -77,16 +77,13 @@ def test_the_skill_names_no_fork_of_its_own():
         assert str(fork) not in skill
 
 
-def test_the_skill_restores_the_tooling_without_writing_the_index():
+def test_the_skill_writes_no_tooling_into_the_checkout():
     """
-    ``git checkout <ref> -- <path>`` writes the index as well as the working tree, so on
-    a branch that does not carry the tooling the files end up staged - and the next
-    commit the pass makes on that branch is a restack merge, which would carry them into
-    somebody's feature branch. Only the working-tree restore may be handed to a pass.
+    The tooling is the plugin's and the package's, so a pass never has to bring it into
+    the working tree - and anything it did bring there, on a branch whose next commit is a
+    restack merge, would be carried into somebody's feature branch.
     """
     skill = MAINTENANCE_SKILL_DOCUMENT.read_text()
 
-    package = Path(basstler.stack.__file__).parent.name
-
-    assert f"git restore --source=<ref> --worktree -- {package}/" in skill
-    assert f"git checkout <ref> -- {package}/" not in skill
+    assert "git restore --source=" not in skill
+    assert "git checkout <ref> --" not in skill

@@ -16,11 +16,16 @@ import subprocess
 
 import pytest
 
-from basstler.locations import ProjectLocation
+from basstler.locations import PluginLocation, ProjectLocation
 
 from .constants import PersonalNotesPath, ScratchBranch
 from .scratch_repository import SCRATCH_IDENTITY, GitIdentity, ScratchRepository
-from .session_start_summary import SummaryMessage, summary_message, summary_value
+from .session_start_summary import (
+    SummaryLine,
+    SummaryMessage,
+    summary_message,
+    summary_value,
+)
 
 RECORDED_IDENTITY = GitIdentity("Ada Lovelace", "ada@example.com")
 """
@@ -33,9 +38,6 @@ IDENTITY_FILE_WITHOUT_EMAIL = f"[user]\n\tname = {RECORDED_IDENTITY.name}\n"
 A recording that names the author but cannot authorize a commit - the half-written state
 a hand-edited file can land in.
 """
-
-SUMMARY_LABEL = "git identity"
-
 
 # %% the scratch layout
 
@@ -50,11 +52,11 @@ def git_identity_repository(scratch_repository: ScratchRepository) -> ScratchRep
     :return: The same repository, ready to publish a notes branch and run the hooks.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "session-start-messages.sh",
-        "session-start.sh",
-        "save-git-identity.sh",
-        "write-personal-notes-file.sh",
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.SESSION_START_MESSAGES_SCRIPT.name,
+        PluginLocation.SESSION_START_SCRIPT.name,
+        PluginLocation.GIT_IDENTITY_SAVING_SCRIPT.name,
+        PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT.name,
     )
     scratch_repository.write_setup_prerequisites()
     scratch_repository.commit_everything("initial commit")
@@ -87,7 +89,7 @@ def run_session_start(
     :param repository: A fixture-built scratch repository.
     :return: The finished subprocess.
     """
-    return repository.run_hook_script("session-start.sh")
+    return repository.run_hook_script(PluginLocation.SESSION_START_SCRIPT.name)
 
 
 # %% filling a gap in a clone that has no identity of its own
@@ -115,7 +117,7 @@ def test_reports_the_identity_it_set(git_identity_repository: ScratchRepository)
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+    assert summary_value(result.stdout, SummaryLine.GIT_IDENTITY) == summary_message(
         SummaryMessage.GIT_IDENTITY_WRITTEN,
         ScratchBranch.PERSONAL_NOTES,
         PersonalNotesPath.GIT_IDENTITY,
@@ -148,7 +150,7 @@ def test_reports_the_identity_it_left_alone(
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+    assert summary_value(result.stdout, SummaryLine.GIT_IDENTITY) == summary_message(
         SummaryMessage.CLONE_HAS_ITS_OWN_GIT_IDENTITY,
         f"{SCRATCH_IDENTITY.name} <{SCRATCH_IDENTITY.email}>",
     )
@@ -176,7 +178,7 @@ def test_reports_that_no_identity_is_recorded(
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+    assert summary_value(result.stdout, SummaryLine.GIT_IDENTITY) == summary_message(
         SummaryMessage.NO_GIT_IDENTITY_RECORDED,
         ScratchBranch.PERSONAL_NOTES,
         PersonalNotesPath.GIT_IDENTITY,
@@ -205,7 +207,7 @@ def test_names_what_an_incomplete_recording_is_missing(
 
     result = run_session_start(git_identity_repository)
 
-    assert summary_value(result.stdout, SUMMARY_LABEL) == summary_message(
+    assert summary_value(result.stdout, SummaryLine.GIT_IDENTITY) == summary_message(
         SummaryMessage.GIT_IDENTITY_INCOMPLETE,
         PersonalNotesPath.GIT_IDENTITY,
         ScratchBranch.PERSONAL_NOTES,
@@ -221,7 +223,7 @@ def test_records_the_given_identity_on_the_notes_branch(
     publish_notes_branch(git_identity_repository)
 
     result = git_identity_repository.run_hook_script(
-        "save-git-identity.sh",
+        PluginLocation.GIT_IDENTITY_SAVING_SCRIPT.name,
         "--name",
         RECORDED_IDENTITY.name,
         "--email",
@@ -246,9 +248,13 @@ def test_recording_the_same_identity_again_pushes_nothing(
         "--email",
         RECORDED_IDENTITY.email,
     )
-    git_identity_repository.run_hook_script("save-git-identity.sh", *arguments)
+    git_identity_repository.run_hook_script(
+        PluginLocation.GIT_IDENTITY_SAVING_SCRIPT.name, *arguments
+    )
 
-    result = git_identity_repository.run_hook_script("save-git-identity.sh", *arguments)
+    result = git_identity_repository.run_hook_script(
+        PluginLocation.GIT_IDENTITY_SAVING_SCRIPT.name, *arguments
+    )
 
     assert result.returncode == 0, result.stderr
     assert "already up to date" in result.stdout
@@ -260,7 +266,9 @@ def test_refuses_to_record_an_identity_with_no_name(
     publish_notes_branch(git_identity_repository)
 
     result = git_identity_repository.run_hook_script(
-        "save-git-identity.sh", "--email", RECORDED_IDENTITY.email
+        PluginLocation.GIT_IDENTITY_SAVING_SCRIPT.name,
+        "--email",
+        RECORDED_IDENTITY.email,
     )
 
     assert result.returncode == 1
@@ -273,7 +281,7 @@ def test_refuses_to_record_an_identity_with_no_email(
     publish_notes_branch(git_identity_repository)
 
     result = git_identity_repository.run_hook_script(
-        "save-git-identity.sh", "--name", RECORDED_IDENTITY.name
+        PluginLocation.GIT_IDENTITY_SAVING_SCRIPT.name, "--name", RECORDED_IDENTITY.name
     )
 
     assert result.returncode == 1

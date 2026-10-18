@@ -14,12 +14,14 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ProjectLocation
+from basstler.locations import PluginLocation, ProjectLocation
 
-from .constants import PersonalNotesPath, ScratchBranch
+from .constants import DatasetLocation, PersonalNotesPath, ScratchBranch
+from .project_declaration import ProjectDeclaration
 from .scratch_repository import (
     SCRATCH_IDENTITY,
     ScratchRepository,
+    PackageSourceFile,
     SetupPrerequisiteFile,
     initialize_bare_repository,
 )
@@ -128,7 +130,8 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
     :return: The same repository, fully set up.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh", "check-setup.sh"
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.SETUP_CHECK_SCRIPT.name,
     )
     scratch_repository.install_package()
 
@@ -158,7 +161,9 @@ def run_check_setup(
     :return: The parsed report.
     """
     return SetupReport.from_completed_process(
-        repository.run_hook_script("check-setup.sh", **environment_overrides)
+        repository.run_hook_script(
+            PluginLocation.SETUP_CHECK_SCRIPT.name, **environment_overrides
+        )
     )
 
 
@@ -327,13 +332,13 @@ def test_reports_a_setting_resolved_from_the_environment(
     )
 
 
-# %% the tooling this checkout is expected to carry
+# %% the plugin's own files
 
 
-def test_reports_which_tooling_files_this_checkout_is_missing(
+def test_reports_which_tooling_files_the_plugin_is_missing(
     check_setup_repository: ScratchRepository,
 ):
-    (check_setup_repository.project_root / SetupPrerequisiteFile.PLAN_SCHEMA).unlink()
+    (check_setup_repository.plugin_root / SetupPrerequisiteFile.PLAN_SCHEMA).unlink()
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
@@ -343,7 +348,7 @@ def test_reports_which_tooling_files_this_checkout_is_missing(
         in report.results[SetupCheck.TOOLING_FILES].detail
     )
     assert (
-        SetupPrerequisiteFile.PACKAGE
+        SetupPrerequisiteFile.PLUGIN_MANIFEST
         not in report.results[SetupCheck.TOOLING_FILES].detail
     )
 
@@ -351,9 +356,11 @@ def test_reports_which_tooling_files_this_checkout_is_missing(
 def test_reports_a_session_start_hook_that_is_not_registered(
     check_setup_repository: ScratchRepository,
 ):
-    check_setup_repository.write(
-        ProjectLocation.CLAUDE_CODE_DIRECTORY / "settings.json", "{}\n"
-    )
+    (
+        check_setup_repository.plugin_root
+        / PluginLocation.HOOKS.value.name
+        / "hooks.json"
+    ).write_text("{}\n")
 
     report = run_check_setup(check_setup_repository)
     assert report.exit_code == 1
@@ -381,22 +388,42 @@ def test_reports_a_claude_local_md_that_is_not_gitignored(
 def test_reports_declared_dependencies_that_are_not_installed(
     check_setup_repository: ScratchRepository,
 ):
-    check_setup_repository.write(
-        SetupPrerequisiteFile.PACKAGE_METADATA,
-        '[project]\ndependencies = ["pytest>=1", "no-such-distribution-exists>=2"]\n',
+    (check_setup_repository.checkout_root / PackageSourceFile.METADATA).write_text(
+        DatasetLocation.PARTLY_INSTALLED_PROJECT.read_text(),
     )
+    installed, uninstalled = ProjectDeclaration.read(
+        DatasetLocation.PARTLY_INSTALLED_PROJECT
+    ).dependencies
 
     report = run_check_setup(check_setup_repository)
+    detail = report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
     assert report.exit_code == 1
     assert (
         report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
         == CheckStatus.NEEDS_SETUP
     )
-    assert (
-        "no-such-distribution-exists"
-        in report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
+    assert uninstalled in detail
+    assert installed not in detail
+
+
+def test_reports_a_declaration_it_cannot_read_rather_than_nothing_missing(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    A declaration the lookup cannot parse says nothing about what is installed, so it is
+    not reported as an environment with nothing missing.
+    """
+    (check_setup_repository.checkout_root / PackageSourceFile.METADATA).write_text(
+        "this is not toml\n"
     )
-    assert "pytest" not in report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.exit_code == 1
+    assert (
+        report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
+        == CheckStatus.NEEDS_SETUP
+    )
 
 
 # %% the outcome of it all working

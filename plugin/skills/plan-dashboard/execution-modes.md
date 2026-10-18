@@ -26,8 +26,8 @@ question is only worth putting once you can say something useful about the
 item:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
-python3 -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill <kickoff|resolve>
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill <kickoff|resolve>
 ```
 
 It prints one JSON object: `mode` (`ask` | `auto` | `plan`), `source`
@@ -44,7 +44,7 @@ To pin a mode, `/plan-item-mode <mode> [kickoff|resolve|both]` — or the script
 it calls, which takes `--skill` once per skill so pinning both is one push:
 
 ```bash
-python3 -m "${PLAN_ITEM_MODE_MODULE}" set --skill kickoff --skill resolve --mode <mode>
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" set --skill kickoff --skill resolve --mode <mode>
 ```
 
 This writes the personal-notes branch, so don't run it unprompted. Do run it
@@ -83,8 +83,8 @@ Autonomy is about not waiting for approval, not about skipping the record.
   work actually does as it changes.
 - **Record decisions as you make them**, in the PR-progress note and the
   description, so the review reads the reasoning rather than reconstructing it.
-- **Run the multi-PR-scope judgement anyway.** `cram-notes.md`'s "Plan-mode
-  approval → persistent plans" rule fires on plan-mode approval, which `auto`
+- **Run the multi-PR-scope judgement anyway.** A personal-notes rule that turns an
+  approved plan-mode plan into persistent plan items fires on plan-mode approval, which `auto`
   never reaches — so make the same call at the moment the plan is settled:
   does this span more than one pull request or session, and does it therefore
   need plan items of its own?

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import shutil
 import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -24,6 +25,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.exit_codes import StackExitCode
 from basstler.repository import Repository
 from basstler.stack import (
     Configuration,
@@ -39,7 +41,7 @@ from basstler.stack import (
 import basstler.maintenance
 import basstler.maintenance_restack_procedure
 from basstler.class_property import classproperty
-from basstler.locations import PackageLocation
+from basstler.locations import PackageLocation, ProjectLocation
 from basstler.maintenance_board import (
     BoardExport,
     MissingPullRequestFieldError,
@@ -47,7 +49,6 @@ from basstler.maintenance_board import (
     get_session_link_in,
 )
 from basstler.maintenance_commands import (
-    COMMANDS,
     BoardCommand,
     MaintenanceCommand,
     MaintenancePass,
@@ -55,7 +56,9 @@ from basstler.maintenance_commands import (
     RunReportCommand,
     UnattendedRunCommand,
 )
-from basstler.maintenance_constants import CREDENTIAL_VARIABLES, PROMOTION_LINK_LABEL
+from basstler.environment import GitHubCredentialVariable
+from basstler.github_labels import GitHubLabel
+from basstler.maintenance_constants import MergeableState, RoutineText
 from basstler.maintenance_fast_forward import (
     FastForwardOutcome,
     FastForwardReport,
@@ -79,7 +82,6 @@ from basstler.maintenance_reparent_notice import (
     resolve_reparents,
 )
 from basstler.maintenance_report import (
-    MaintenanceExitCode,
     MaintenanceReport,
     build_report,
     exit_code_for,
@@ -92,8 +94,16 @@ from basstler.maintenance_restack_steps import (
     RestackStep,
 )
 
-from .scratch_repository import initialize_bare_repository, install_package_into
-from .constants import StackBranch, StackLabel
+from .scratch_repository import initialize_bare_repository
+from .constants import (
+    DatasetLocation,
+    PromotionSampleText,
+    RemoteName,
+    RepositoryLocation,
+    StackBranch,
+    StackLabel,
+    StackPullRequestNumber,
+)
 from .script_runner import PythonModuleRunner
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
@@ -141,12 +151,6 @@ The session a pull request's description names, written into one and read back o
 another wherever a test follows that link through the pass.
 """
 
-A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
-"""
-Stands for whatever else a pull request happens to carry - the labels a write must
-preserve precisely because this tool knows nothing about them.
-"""
-
 
 def make_configuration() -> Configuration:
     """
@@ -157,9 +161,9 @@ def make_configuration() -> Configuration:
         rebase_label=StackLabel.REBASE,
         needs_resolution_label=StackLabel.NEEDS_RESOLUTION,
         fork_repository=Repository("a-fork-owner", "a-fork"),
-        fork_remote="origin",
+        fork_remote=RemoteName.ORIGIN,
         upstream_repository=Repository("an-upstream-owner", "a-project"),
-        upstream_remote="cram2",
+        upstream_remote=RemoteName.UPSTREAM,
         upstream_base=UPSTREAM_BASE,
         upstream_setup_command=None,
     )
@@ -214,24 +218,30 @@ class ForkCheckout:
         checkout.run_git("symbolic-ref", "HEAD", f"refs/heads/{UPSTREAM_BASE}")
         checkout.run_git("config", "user.name", "Scratch Fork")
         checkout.run_git("config", "user.email", "scratch-fork@example.com")
-        checkout.run_git("remote", "add", "origin", checkout.fork_path.as_uri())
-        checkout.run_git("remote", "add", "cram2", checkout.upstream_path.as_uri())
+        checkout.run_git(
+            "remote", "add", RemoteName.ORIGIN, checkout.fork_path.as_uri()
+        )
+        checkout.run_git(
+            "remote", "add", RemoteName.UPSTREAM, checkout.upstream_path.as_uri()
+        )
         checkout.commit("a-file", "the first line\n")
-        checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
-        checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
-        checkout.run_git("fetch", "--quiet", "origin")
-        checkout.run_git("fetch", "--quiet", "cram2")
+        checkout.run_git("push", "--quiet", RemoteName.ORIGIN, UPSTREAM_BASE)
+        checkout.run_git("push", "--quiet", RemoteName.UPSTREAM, UPSTREAM_BASE)
+        checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
+        checkout.run_git("fetch", "--quiet", RemoteName.UPSTREAM)
         return checkout
 
-    def install_package(self) -> None:
+    def name_the_upstream(self) -> None:
         """
-        Put the package in the checkout, untracked, so a command line run here resolves
-        ``python3 -m basstler.<module>`` the way it does in a real fork.
+        Write the project's stack settings naming its upstream, untracked, as a real fork
+        commits them.
 
         Untracked rather than committed because the branches these tests build stand for
-        branches cut before the tooling landed - see :data:`TOOLING_PATH`.
+        branches cut before the settings landed, and checking one out must not delete them.
         """
-        install_package_into(self.project_root)
+        destination = self.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(DatasetLocation.SCRATCH_FORK_STACK_CONFIGURATION, destination)
 
     @staticmethod
     def _bare_repository(path: Path) -> Path:
@@ -285,8 +295,8 @@ class ForkCheckout:
         """
         self.run_git("checkout", "--quiet", "-B", name, start_point)
         commit = self.commit(self.own_file(name), f"the work on {name}\n")
-        self.run_git("push", "--quiet", "origin", f"{name}:{name}")
-        self.run_git("fetch", "--quiet", "origin")
+        self.run_git("push", "--quiet", RemoteName.ORIGIN, f"{name}:{name}")
+        self.run_git("fetch", "--quiet", RemoteName.ORIGIN)
         return commit
 
     @staticmethod
@@ -309,8 +319,8 @@ class ForkCheckout:
         """
         self.run_git("checkout", "--quiet", branch)
         commit = self.commit(name, content)
-        self.run_git("push", "--quiet", "origin", f"{branch}:{branch}")
-        self.run_git("fetch", "--quiet", "origin")
+        self.run_git("push", "--quiet", RemoteName.ORIGIN, f"{branch}:{branch}")
+        self.run_git("fetch", "--quiet", RemoteName.ORIGIN)
         return commit
 
     def published_commit(self, remote: str, branch: str) -> str:
@@ -328,7 +338,9 @@ class ForkCheckout:
         :param branch: The branch to read.
         :return: The commit the fork has that branch pointing at.
         """
-        return self.run_git("ls-remote", "origin", f"refs/heads/{branch}").split()[0]
+        return self.run_git(
+            "ls-remote", RemoteName.ORIGIN, f"refs/heads/{branch}"
+        ).split()[0]
 
     @property
     def git(self) -> GitCommandRunner:
@@ -433,7 +445,7 @@ def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
     export = BoardExport.from_api_records(
         [
             an_api_record(
-                number=41,
+                number=StackPullRequestNumber.CHILD,
                 head=StackBranch.CHILD,
                 base=StackBranch.PARENT,
                 draft=True,
@@ -444,7 +456,7 @@ def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
     )
 
     exported = export.pull_requests[0]
-    assert exported.number == 41
+    assert exported.number == StackPullRequestNumber.CHILD
     assert exported.head == StackBranch.CHILD
     assert exported.base == StackBranch.PARENT
     assert exported.draft is True
@@ -462,12 +474,15 @@ def test_the_written_board_parses_back_into_the_records_it_was_built_from(
     export = BoardExport.from_api_records(
         [
             an_api_record(
-                number=41, head=StackBranch.CHILD, base=StackBranch.PARENT, draft=True
+                number=StackPullRequestNumber.CHILD,
+                head=StackBranch.CHILD,
+                base=StackBranch.PARENT,
+                draft=True,
             ),
             an_api_record(
-                number=40,
+                number=StackPullRequestNumber.PARENT,
                 head=StackBranch.PARENT,
-                labels=[A_LABEL_THIS_TOOL_NEVER_WRITES],
+                labels=[StackLabel.SOMEBODY_ELSES],
             ),
         ]
     )
@@ -483,14 +498,14 @@ def test_a_pull_request_missing_a_required_field_is_rejected_rather_than_default
     A dropped field is what made #119's bad data indistinguishable from good data, so
     the parser refuses it at the point it enters rather than substituting a default.
     """
-    record = an_api_record(number=41)
+    record = an_api_record(number=StackPullRequestNumber.CHILD)
     del record["draft"]
 
     with pytest.raises(MissingPullRequestFieldError) as raised:
         BoardExport.from_api_records([record])
 
     assert raised.value.field_name == PullRequestField.DRAFT
-    assert raised.value.pull_request_number == 41
+    assert raised.value.pull_request_number == StackPullRequestNumber.CHILD
 
 
 def test_the_board_snapshot_is_never_committable():
@@ -523,16 +538,16 @@ def test_a_description_naming_no_session_yields_none():
 def test_the_fork_base_is_fast_forwarded_to_the_upstream(fork_checkout: ForkCheckout):
     fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
     advanced = fork_checkout.commit("another-file", "upstream moved\n")
-    fork_checkout.run_git("push", "--quiet", "cram2", UPSTREAM_BASE)
+    fork_checkout.run_git("push", "--quiet", RemoteName.UPSTREAM, UPSTREAM_BASE)
     fork_checkout.run_git(
-        "push", "--quiet", "--force", "origin", f"HEAD~1:{UPSTREAM_BASE}"
+        "push", "--quiet", "--force", RemoteName.ORIGIN, f"HEAD~1:{UPSTREAM_BASE}"
     )
-    fork_checkout.run_git("fetch", "--quiet", "origin")
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
 
     report = fast_forward(make_configuration(), fork_checkout.git)
 
     assert report.outcome == FastForwardOutcome.PUSHED
-    assert fork_checkout.published_commit("origin", UPSTREAM_BASE) == advanced
+    assert fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE) == advanced
 
 
 def test_a_fork_base_already_level_with_the_upstream_is_left_alone(
@@ -552,20 +567,20 @@ def test_a_non_fast_forward_is_refused_and_the_fork_base_is_untouched(
     """
     fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
     fork_checkout.commit("a-fork-only-file", "only on the fork\n")
-    fork_checkout.run_git("push", "--quiet", "origin", UPSTREAM_BASE)
+    fork_checkout.run_git("push", "--quiet", RemoteName.ORIGIN, UPSTREAM_BASE)
     fork_checkout.run_git("checkout", "--quiet", "-B", "a-divergent-line", "HEAD~1")
     fork_checkout.commit("an-upstream-only-file", "only upstream\n")
     fork_checkout.run_git(
-        "push", "--quiet", "--force", "cram2", f"HEAD:{UPSTREAM_BASE}"
+        "push", "--quiet", "--force", RemoteName.UPSTREAM, f"HEAD:{UPSTREAM_BASE}"
     )
-    fork_checkout.run_git("fetch", "--quiet", "origin")
-    fork_checkout.run_git("fetch", "--quiet", "cram2")
-    before = fork_checkout.published_commit("origin", UPSTREAM_BASE)
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.UPSTREAM)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE)
 
     report = fast_forward(make_configuration(), fork_checkout.git)
 
     assert report.outcome == FastForwardOutcome.REFUSED_NOT_FAST_FORWARD
-    assert fork_checkout.published_commit("origin", UPSTREAM_BASE) == before
+    assert fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE) == before
 
 
 # %% restack
@@ -595,8 +610,10 @@ def an_unrelated_history_on(fork_checkout: ForkCheckout, branch: str) -> None:
     fork_checkout.run_git("rm", "--quiet", "-rf", ".")
     fork_checkout.commit("an-unrelated-file", "a history of its own\n")
     fork_checkout.run_git("branch", "--force", branch, "HEAD")
-    fork_checkout.run_git("push", "--quiet", "--force", "origin", f"{branch}:{branch}")
-    fork_checkout.run_git("fetch", "--quiet", "origin")
+    fork_checkout.run_git(
+        "push", "--quiet", "--force", RemoteName.ORIGIN, f"{branch}:{branch}"
+    )
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
 
 
 def the_board(labels: list[str] | None = None) -> list[PullRequest]:
@@ -606,10 +623,13 @@ def the_board(labels: list[str] | None = None) -> list[PullRequest]:
     """
     return [
         PullRequest(
-            number=40, head=StackBranch.PARENT, base=UPSTREAM_BASE, draft=False
+            number=StackPullRequestNumber.PARENT,
+            head=StackBranch.PARENT,
+            base=UPSTREAM_BASE,
+            draft=False,
         ),
         PullRequest(
-            number=41,
+            number=StackPullRequestNumber.CHILD,
             head=StackBranch.CHILD,
             base=StackBranch.PARENT,
             draft=False,
@@ -642,7 +662,7 @@ def test_a_branch_whose_parent_moved_is_integrated_and_pushed(
         fork_checkout.own_file(StackBranch.PARENT),
         "the parent moved\n",
     )
-    before = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
 
     outcomes = restack(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
@@ -650,7 +670,7 @@ def test_a_branch_whose_parent_moved_is_integrated_and_pushed(
 
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.PUSHED
-    after = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    after = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
     assert after != before
     assert child.pushed_commit == after
 
@@ -665,7 +685,7 @@ def test_a_conflicting_integration_pushes_nothing_and_names_the_files(
     fork_checkout.commit_on(
         StackBranch.CHILD, FixtureFile.CONTESTED, "the child's version\n"
     )
-    before = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
 
     outcomes = restack(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
@@ -674,7 +694,9 @@ def test_a_conflicting_integration_pushes_nothing_and_names_the_files(
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.CONFLICT
     assert child.conflicting_paths == (FixtureFile.CONTESTED,)
-    assert fork_checkout.published_commit("origin", StackBranch.CHILD) == before
+    assert (
+        fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD) == before
+    )
 
 
 def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
@@ -688,7 +710,7 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     """
     a_parent_and_child(fork_checkout)
     an_unrelated_history_on(fork_checkout, StackBranch.PARENT)
-    before = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
     fork = RecordingPullRequests()
 
     outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git, fork)
@@ -700,7 +722,9 @@ def test_an_integration_stopped_before_it_began_is_not_reported_as_a_conflict(
     assert fork.label_writes == []
     assert fork.comments == []
     assert child.reported_at is None
-    assert fork_checkout.published_commit("origin", StackBranch.CHILD) == before
+    assert (
+        fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD) == before
+    )
 
 
 def test_a_rebase_labelled_branch_is_rebased_rather_than_merged(
@@ -773,9 +797,9 @@ def test_a_branch_that_moved_under_the_pass_is_incorporated_rather_than_overwrit
         FixtureFile.PUSHED_BY_SOMEBODY_ELSE, "not ours\n"
     )
     fork_checkout.run_git(
-        "push", "--quiet", "origin", f"a-side-line:{StackBranch.CHILD}"
+        "push", "--quiet", RemoteName.ORIGIN, f"a-side-line:{StackBranch.CHILD}"
     )
-    fork_checkout.run_git("fetch", "--quiet", "origin")
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
 
     outcomes = restack(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
@@ -801,7 +825,7 @@ def test_a_rebase_whose_lease_has_expired_is_rejected_rather_than_forced_through
         fork_checkout.own_file(StackBranch.PARENT),
         "the parent moved\n",
     )
-    stale = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    stale = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
     somebody_else_s = fork_checkout.commit_on(
         StackBranch.CHILD, FixtureFile.PUSHED_BY_SOMEBODY_ELSE, "not ours\n"
     )
@@ -831,10 +855,13 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
     fork_checkout.run_git("checkout", "--quiet", StackBranch.PARENT)
     fork_checkout.run_git("merge", "--quiet", "--no-edit", StackBranch.CHILD)
     fork_checkout.run_git(
-        "push", "--quiet", "origin", f"{StackBranch.PARENT}:{StackBranch.PARENT}"
+        "push",
+        "--quiet",
+        RemoteName.ORIGIN,
+        f"{StackBranch.PARENT}:{StackBranch.PARENT}",
     )
     fork_checkout.commit_on(UPSTREAM_BASE, FixtureFile.ON_THE_BASE, "the base moved\n")
-    before = fork_checkout.published_commit("origin", StackBranch.PARENT)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.PARENT)
 
     outcomes = restack(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
@@ -845,15 +872,15 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
     )
     assert parent.outcome == RestackOutcome.REFUSED
     assert RefusalReason.FALSE_MERGE in parent.refusals
-    assert fork_checkout.published_commit("origin", StackBranch.PARENT) == before
+    assert (
+        fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.PARENT) == before
+    )
 
 
 # %% the checkout the pass was invoked in
 
 TOOLING_PATH = str(
-    Path(basstler.maintenance.__file__).relative_to(
-        PackageLocation.REPOSITORY_ROOT.value
-    )
+    Path(basstler.maintenance.__file__).relative_to(RepositoryLocation.ROOT.value)
 )
 """
 Where the pass's own tooling sits: tracked content, so a branch cut before it landed
@@ -935,7 +962,7 @@ def test_a_restack_publishes_a_branch_the_caller_is_sitting_on(
         "the parent moved\n",
     )
     fork_checkout.run_git("checkout", "--quiet", StackBranch.CHILD)
-    before = fork_checkout.published_commit("origin", StackBranch.CHILD)
+    before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
 
     outcomes = restack(
         a_stack(fork_checkout, the_board()), fork_checkout.git, RecordingPullRequests()
@@ -943,7 +970,9 @@ def test_a_restack_publishes_a_branch_the_caller_is_sitting_on(
 
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.PUSHED
-    assert fork_checkout.published_commit("origin", StackBranch.CHILD) != before
+    assert (
+        fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD) != before
+    )
 
 
 def test_the_caller_holds_no_branch_while_a_restack_runs(fork_checkout: ForkCheckout):
@@ -1198,7 +1227,7 @@ class RecordingPullRequests(ForkPullRequests):
         :return: A stand-in for the comment's URL.
         """
         self.comments.append(RecordedComment(number, body))
-        return f"https://example.invalid/comment/{len(self.comments)}"
+        return f"{PromotionSampleText.COMMENT_LINK_PREFIX}{len(self.comments)}"
 
     def set_description(self, number: int, body: str) -> None:
         """
@@ -1298,13 +1327,15 @@ def test_a_conflict_labels_the_branch_and_tells_its_owner(
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.CONFLICT
     assert fork.label_writes == [
-        RecordedLabelWrite(41, (make_configuration().needs_resolution_label,))
+        RecordedLabelWrite(
+            StackPullRequestNumber.CHILD, (make_configuration().needs_resolution_label,)
+        )
     ]
     comment = fork.comments[0]
-    assert comment.pull_request_number == 41
+    assert comment.pull_request_number == StackPullRequestNumber.CHILD
     assert FixtureFile.CONTESTED in comment.body
     assert A_SESSION_LINK in comment.body
-    assert child.reported_at == "https://example.invalid/comment/1"
+    assert child.reported_at == f"{PromotionSampleText.COMMENT_LINK_PREFIX}1"
 
 
 def test_a_label_write_keeps_every_label_the_branch_already_carried(
@@ -1324,16 +1355,16 @@ def test_a_label_write_keeps_every_label_the_branch_already_carried(
     fork = RecordingPullRequests()
 
     restack(
-        a_stack(fork_checkout, the_board(labels=[A_LABEL_THIS_TOOL_NEVER_WRITES])),
+        a_stack(fork_checkout, the_board(labels=[StackLabel.SOMEBODY_ELSES])),
         fork_checkout.git,
         fork,
     )
 
     assert fork.label_writes == [
         RecordedLabelWrite(
-            41,
+            StackPullRequestNumber.CHILD,
             (
-                A_LABEL_THIS_TOOL_NEVER_WRITES,
+                StackLabel.SOMEBODY_ELSES,
                 make_configuration().needs_resolution_label,
             ),
         )
@@ -1353,7 +1384,9 @@ def test_a_branch_still_conflicting_is_withheld_without_being_relabelled(
         fork_checkout.own_file(StackBranch.PARENT),
         "the parent moved\n",
     )
-    fork = RecordingPullRequests(states={41: "dirty"})
+    fork = RecordingPullRequests(
+        states={StackPullRequestNumber.CHILD: MergeableState.DIRTY}
+    )
 
     outcomes = restack(
         a_stack(
@@ -1383,7 +1416,9 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
         fork_checkout.own_file(StackBranch.PARENT),
         "the parent moved\n",
     )
-    fork = RecordingPullRequests(states={41: "clean"})
+    fork = RecordingPullRequests(
+        states={StackPullRequestNumber.CHILD: MergeableState.CLEAN}
+    )
 
     outcomes = restack(
         a_stack(
@@ -1396,7 +1431,7 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
 
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.PUSHED
-    assert fork.label_writes == [RecordedLabelWrite(41, ())]
+    assert fork.label_writes == [RecordedLabelWrite(StackPullRequestNumber.CHILD, ())]
 
 
 # %% reparent notification
@@ -1411,8 +1446,10 @@ def a_landed_parent_and_unreparented_child(fork_checkout: ForkCheckout) -> None:
     :param fork_checkout: The checkout to build the branches in and land the parent on.
     """
     a_parent_and_child(fork_checkout)
-    fork_checkout.run_git("push", "--quiet", "cram2", f"a-parent:{UPSTREAM_BASE}")
-    fork_checkout.run_git("fetch", "--quiet", "cram2")
+    fork_checkout.run_git(
+        "push", "--quiet", RemoteName.UPSTREAM, f"{StackBranch.PARENT}:{UPSTREAM_BASE}"
+    )
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.UPSTREAM)
 
 
 def the_board_with_only_the_child(
@@ -1490,7 +1527,7 @@ def test_a_refused_reparent_notice_keeps_every_label_the_branch_already_carried(
     a_landed_parent_and_unreparented_child(fork_checkout)
     stack = a_stack(fork_checkout, the_board_with_only_the_child())
     fork = RecordingPullRequests(
-        labels={41: [A_LABEL_THIS_TOOL_NEVER_WRITES]},
+        labels={41: [StackLabel.SOMEBODY_ELSES]},
         retarget_refusals=frozenset({41}),
     )
 
@@ -1500,7 +1537,7 @@ def test_a_refused_reparent_notice_keeps_every_label_the_branch_already_carried(
         RecordedLabelWrite(
             41,
             (
-                A_LABEL_THIS_TOOL_NEVER_WRITES,
+                StackLabel.SOMEBODY_ELSES,
                 make_configuration().needs_resolution_label,
             ),
         )
@@ -1538,26 +1575,36 @@ def test_the_promotion_link_goes_into_the_description_and_the_branch_is_labelled
 ):
     a_parent_and_child(fork_checkout)
     fork = RecordingPullRequests(
-        descriptions={40: "What this branch does.\n\nMore detail.\n"},
-        titles={40: "A parent branch"},
+        descriptions={
+            StackPullRequestNumber.PARENT: (
+                f"{PromotionSampleText.SUMMARY}\n\n{PromotionSampleText.DETAIL}\n"
+            )
+        },
+        titles={StackPullRequestNumber.PARENT: PromotionSampleText.TITLE},
     )
 
     promoted = promote(a_stack(fork_checkout, the_board()), fork)
 
     assert [entry.branch for entry in promoted] == [StackBranch.PARENT]
     written = fork.description_writes[0]
-    assert written.pull_request_number == 40
-    assert "## Promote" in written.body
+    assert written.pull_request_number == StackPullRequestNumber.PARENT
+    assert RoutineText.PROMOTION_HEADING in written.body
     assert promoted[0].url in written.body
-    assert "What this branch does." in written.body
-    assert fork.label_writes == [RecordedLabelWrite(40, (PROMOTION_LINK_LABEL,))]
+    assert PromotionSampleText.SUMMARY in written.body
+    assert fork.label_writes == [
+        RecordedLabelWrite(
+            StackPullRequestNumber.PARENT, (GitHubLabel.PROMOTION_LINK_SENT,)
+        )
+    ]
 
 
 def test_a_branch_already_carrying_the_link_label_is_not_promoted_again(
     fork_checkout: ForkCheckout,
 ):
     a_parent_and_child(fork_checkout)
-    fork = RecordingPullRequests(labels={40: [PROMOTION_LINK_LABEL]})
+    fork = RecordingPullRequests(
+        labels={StackPullRequestNumber.PARENT: [GitHubLabel.PROMOTION_LINK_SENT]}
+    )
 
     promoted = promote(a_stack(fork_checkout, the_board()), fork)
 
@@ -1577,7 +1624,9 @@ def test_a_branch_labelled_needs_resolution_during_this_pass_is_not_promoted(
     """
     a_parent_and_child(fork_checkout)
     fork = RecordingPullRequests(
-        labels={40: [make_configuration().needs_resolution_label]}
+        labels={
+            StackPullRequestNumber.PARENT: [make_configuration().needs_resolution_label]
+        }
     )
 
     promoted = promote(a_stack(fork_checkout, the_board()), fork)
@@ -1595,12 +1644,17 @@ def test_the_promotion_label_write_keeps_a_label_added_since_the_board_was_taken
     strips anything applied since - including the label the restack applies mid-pass.
     """
     a_parent_and_child(fork_checkout)
-    fork = RecordingPullRequests(labels={40: [A_LABEL_THIS_TOOL_NEVER_WRITES]})
+    fork = RecordingPullRequests(
+        labels={StackPullRequestNumber.PARENT: [StackLabel.SOMEBODY_ELSES]}
+    )
 
     promote(a_stack(fork_checkout, the_board()), fork)
 
     assert fork.label_writes == [
-        RecordedLabelWrite(40, (A_LABEL_THIS_TOOL_NEVER_WRITES, PROMOTION_LINK_LABEL))
+        RecordedLabelWrite(
+            StackPullRequestNumber.PARENT,
+            (StackLabel.SOMEBODY_ELSES, GitHubLabel.PROMOTION_LINK_SENT),
+        )
     ]
 
 
@@ -1610,14 +1664,16 @@ def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
     be replaced in place - two Promote headings would leave a reader guessing which link
     is current.
     """
-    first = description_with_promotion_link("Prose.\n", "https://example.invalid/first")
+    first = description_with_promotion_link(
+        f"{PromotionSampleText.PROSE}\n", PromotionSampleText.FIRST_LINK
+    )
 
-    second = description_with_promotion_link(first, "https://example.invalid/second")
+    second = description_with_promotion_link(first, PromotionSampleText.SECOND_LINK)
 
-    assert second.count("## Promote") == 1
-    assert "https://example.invalid/second" in second
-    assert "https://example.invalid/first" not in second
-    assert second.startswith("Prose.")
+    assert second.count(RoutineText.PROMOTION_HEADING) == 1
+    assert PromotionSampleText.SECOND_LINK in second
+    assert PromotionSampleText.FIRST_LINK not in second
+    assert second.startswith(PromotionSampleText.PROSE)
 
 
 def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
@@ -1629,14 +1685,19 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
     """
     a_parent_and_child(fork_checkout)
     board = the_board()
-    board[0].labels = [PROMOTION_LINK_LABEL, make_configuration().in_review_label]
+    board[0].labels = [
+        GitHubLabel.PROMOTION_LINK_SENT,
+        make_configuration().in_review_label,
+    ]
     fork = RecordingPullRequests()
 
     cleared = clear_spent_promotion_labels(a_stack(fork_checkout, board), fork)
 
     assert cleared == (StackBranch.PARENT,)
     assert fork.label_writes == [
-        RecordedLabelWrite(40, (make_configuration().in_review_label,))
+        RecordedLabelWrite(
+            StackPullRequestNumber.PARENT, (make_configuration().in_review_label,)
+        )
     ]
 
 
@@ -1648,7 +1709,9 @@ def test_a_branch_no_step_concludes_is_an_error_rather_than_a_silent_pass(
     means the procedure lost it - which must not read as a branch nothing happened to.
     """
     a_parent_and_child(fork_checkout)
-    monkeypatch.setattr(basstler.maintenance_restack_procedure, "RESTACK_STEPS", ())
+    monkeypatch.setattr(
+        basstler.maintenance_restack_procedure, "restack_steps", lambda: ()
+    )
 
     with pytest.raises(
         basstler.maintenance_restack_procedure.RestackConcludedNothingError
@@ -1697,19 +1760,16 @@ def test_a_whole_pass_leaves_no_board_behind(fork_checkout: ForkCheckout):
     stale one is worse than one finding none - so a pass that has finished with it
     removes it, and the next pass starts by exporting a fresh one.
 
-    The board written here is the real one, which ``board_snapshot_set_aside`` has moved
-    out of the way and puts back afterwards.
+    The board is the one the pass was given, in the scratch checkout, so the run touches
+    no board outside it.
     """
     a_parent_and_child(fork_checkout)
-    board_path = PackageLocation.BOARD.value
-    board_path.write_text("{}")
+    maintenance = AlreadyResolvedPass.over(fork_checkout, the_board())
+    maintenance.board.write_text("{}")
 
-    RunReportCommand().run(
-        AlreadyResolvedPass.over(fork_checkout, the_board()),
-        argparse.Namespace(json=True),
-    )
+    RunReportCommand().run(maintenance, argparse.Namespace(json=True))
 
-    assert not board_path.exists()
+    assert not maintenance.board.exists()
 
 
 def test_a_whole_pass_retargets_a_pending_reparent(fork_checkout: ForkCheckout):
@@ -1774,7 +1834,7 @@ def a_report(
     """
     return MaintenanceReport(
         fast_forward=FastForwardReport(
-            fast_forward_outcome, "cram2/main", "origin/main", "a-commit"
+            fast_forward_outcome, "upstream/main", "origin/main", "a-commit"
         ),
         restacked=(
             BranchOutcome(
@@ -1790,10 +1850,10 @@ def a_report(
 
 
 def test_a_pass_that_published_everything_is_a_success():
-    assert exit_code_for(a_report()) == MaintenanceExitCode.SUCCESS
+    assert exit_code_for(a_report()) == StackExitCode.SUCCESS
     assert (
         exit_code_for(a_report(restack_outcome=RestackOutcome.UP_TO_DATE))
-        == MaintenanceExitCode.SUCCESS
+        == StackExitCode.SUCCESS
     )
 
 
@@ -1804,7 +1864,7 @@ def test_a_refused_fast_forward_is_never_reported_as_a_clean_pass():
     """
     refused = a_report(fast_forward_outcome=FastForwardOutcome.REFUSED_NOT_FAST_FORWARD)
 
-    assert exit_code_for(refused) == MaintenanceExitCode.NOT_FAST_FORWARD
+    assert exit_code_for(refused) == StackExitCode.NOT_FAST_FORWARD
 
 
 @pytest.mark.parametrize(
@@ -1825,7 +1885,7 @@ def test_a_branch_left_unpublished_is_never_reported_as_a_clean_pass(
     """
     assert (
         exit_code_for(a_report(restack_outcome=left_behind))
-        == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+        == StackExitCode.BRANCH_NEEDS_ATTENTION
     )
 
 
@@ -1840,7 +1900,7 @@ def test_an_unattended_pass_succeeds_when_every_branch_left_behind_was_reported(
     """
     assert (
         unattended_exit_code_for(a_report(restack_outcome=reported))
-        == MaintenanceExitCode.SUCCESS
+        == StackExitCode.SUCCESS
     )
 
 
@@ -1863,7 +1923,7 @@ def test_an_unattended_pass_fails_on_a_branch_nobody_was_told_about(
 def test_an_unattended_pass_still_fails_on_a_refused_fast_forward():
     refused = a_report(fast_forward_outcome=FastForwardOutcome.REFUSED_NOT_FAST_FORWARD)
 
-    assert unattended_exit_code_for(refused) == MaintenanceExitCode.NOT_FAST_FORWARD
+    assert unattended_exit_code_for(refused) == StackExitCode.NOT_FAST_FORWARD
 
 
 def test_an_unattended_run_reports_a_conflict_on_its_pull_request_and_succeeds(
@@ -1880,13 +1940,10 @@ def test_an_unattended_run_reports_a_conflict_on_its_pull_request_and_succeeds(
 
     status = UnattendedRunCommand().run(maintenance_pass, argparse.Namespace())
 
-    assert status == MaintenanceExitCode.SUCCESS
+    assert status == StackExitCode.SUCCESS
     assert maintenance_pass.recorded_fork.comments[0].pull_request_number == 41
     document = json.loads(capsys.readouterr().out)
-    assert (
-        document["status"]
-        == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION.name_for_a_caller
-    )
+    assert document["status"] == StackExitCode.BRANCH_NEEDS_ATTENTION.name_for_a_caller
 
 
 def test_every_status_names_itself_distinctly():
@@ -1894,11 +1951,11 @@ def test_every_status_names_itself_distinctly():
     The name is derived from the member rather than written beside it, so a status
     cannot end up with a name that belongs to a different one.
     """
-    named = {code: code.name_for_a_caller for code in MaintenanceExitCode}
+    named = {code: code.name_for_a_caller for code in StackExitCode}
 
-    assert named[MaintenanceExitCode.BRANCH_NEEDS_ATTENTION] == "branch-needs-attention"
-    assert named[MaintenanceExitCode.SUCCESS] == "success"
-    assert len(set(named.values())) == len(MaintenanceExitCode)
+    assert named[StackExitCode.BRANCH_NEEDS_ATTENTION] == "branch-needs-attention"
+    assert named[StackExitCode.SUCCESS] == "success"
+    assert len(set(named.values())) == len(StackExitCode)
 
 
 def test_the_report_carries_what_its_status_means(fork_checkout: ForkCheckout):
@@ -1909,7 +1966,7 @@ def test_the_report_carries_what_its_status_means(fork_checkout: ForkCheckout):
     document = json.loads(a_report(restack_outcome=RestackOutcome.CONFLICT).as_json())
 
     assert document["status"] == "branch-needs-attention"
-    assert document["exit_code"] == MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
+    assert document["exit_code"] == StackExitCode.BRANCH_NEEDS_ATTENTION
 
 
 def test_a_non_zero_status_says_what_it_means_on_the_way_out(
@@ -1918,11 +1975,11 @@ def test_a_non_zero_status_says_what_it_means_on_the_way_out(
     """
     A caller reading a bare number has to look it up; the executor already knows.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
 
     result = run_maintenance(fork_checkout, RestackCommand())
 
-    assert result.returncode == MaintenanceExitCode.BOARD_UNAVAILABLE
+    assert result.returncode == StackExitCode.BOARD_UNAVAILABLE
     assert "board-unavailable" in result.stderr
 
 
@@ -1932,7 +1989,7 @@ def test_a_clean_run_says_nothing_about_its_status(fork_checkout: ForkCheckout):
     """
     result = run_maintenance(fork_checkout, BoardCommand(), "--help")
 
-    assert result.returncode == MaintenanceExitCode.SUCCESS
+    assert result.returncode == StackExitCode.SUCCESS
     assert "success" not in result.stderr
 
 
@@ -1942,7 +1999,7 @@ def test_a_refused_move_keeps_its_own_status():
     """
     assert (
         exit_code_for(a_report(restack_outcome=RestackOutcome.REFUSED))
-        == MaintenanceExitCode.MOVE_REFUSED
+        == StackExitCode.MOVE_REFUSED
     )
 
 
@@ -1980,6 +2037,7 @@ class AlreadyResolvedPass(MaintenancePass):
         return cls(
             configuration=make_configuration(),
             git=checkout.git,
+            board=checkout.project_root / PackageLocation.BOARD.value.name,
             resolved_stack=a_stack(checkout, pull_requests),
         )
 
@@ -2003,7 +2061,7 @@ def maintenance_runner(checkout: ForkCheckout) -> PythonModuleRunner:
     """
     return PythonModuleRunner(
         project_root=checkout.project_root,
-        removed_variable_prefixes=CREDENTIAL_VARIABLES,
+        removed_variable_prefixes=tuple(GitHubCredentialVariable),
         module_name=MAINTENANCE_MODULE,
     )
 
@@ -2024,16 +2082,16 @@ def run_maintenance(
     :param flags: That command's own flags.
     :return: The finished subprocess.
     """
-    checkout.install_package()
+    checkout.name_the_upstream()
     return maintenance_runner(checkout).run(command.invoked_as, *flags)
 
 
 def test_an_unknown_command_is_a_usage_error(fork_checkout: ForkCheckout):
-    fork_checkout.install_package()
+    fork_checkout.name_the_upstream()
 
     result = maintenance_runner(fork_checkout).run("not-a-command")
 
-    assert result.returncode == MaintenanceExitCode.USAGE
+    assert result.returncode == StackExitCode.USAGE
 
 
 def test_every_command_class_is_one_reachable_command():
@@ -2041,10 +2099,11 @@ def test_every_command_class_is_one_reachable_command():
     Commands are found from their own subclasses, so a class that exists is a command -
     and two answering to the same name would make one of them unreachable.
     """
-    assert {type(command) for command in COMMANDS} == set(
+    commands = MaintenanceCommand.every_command()
+    assert {type(command) for command in commands} == set(
         MaintenanceCommand.__subclasses__()
     )
-    assert len({command.invoked_as for command in COMMANDS}) == len(COMMANDS)
+    assert len({command.invoked_as for command in commands}) == len(commands)
 
 
 def test_a_command_names_itself_without_being_instantiated():
@@ -2058,8 +2117,8 @@ def test_a_command_names_itself_without_being_instantiated():
 
 def test_a_command_that_omits_its_name_cannot_be_built():
     """
-    A command stays abstract until it says what it is called, and COMMANDS builds every
-    subclass - so one that never says cannot reach the parser at all.
+    A command stays abstract until it says what it is called, and every_command builds
+    every subclass - so one that never says cannot reach the parser at all.
     """
 
     @dataclass(frozen=True)
@@ -2069,7 +2128,7 @@ def test_a_command_that_omits_its_name_cannot_be_built():
             return "a command that forgot what it is called"
 
         def run(self, maintenance, arguments):
-            return MaintenanceExitCode.SUCCESS
+            return StackExitCode.SUCCESS
 
     with pytest.raises(TypeError, match="invoked_as"):
         CommandWithoutAName()
@@ -2117,7 +2176,7 @@ def test_a_fork_client_that_cannot_make_one_of_the_writes_cannot_be_built():
 
 def test_a_restack_step_that_does_nothing_cannot_be_built():
     """
-    A step is only ever reached through RESTACK_STEPS, where one that concludes nothing
+    A step is only ever reached through restack_steps, where one that concludes nothing
     would silently pass every branch along to the next step.
     """
 
@@ -2134,9 +2193,9 @@ def test_every_command_is_reachable_from_the_command_line(fork_checkout: ForkChe
     A command in the enum that the parser never registers is unreachable, and nothing
     else would notice.
     """
-    for command in COMMANDS:
+    for command in MaintenanceCommand.every_command():
         result = run_maintenance(fork_checkout, command, "--help")
-        assert result.returncode == MaintenanceExitCode.SUCCESS, result.stderr
+        assert result.returncode == StackExitCode.SUCCESS, result.stderr
 
 
 def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
@@ -2145,11 +2204,11 @@ def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
     """
     Distinguishable from a missing board, since the fix is a token rather than a fetch.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
 
     assert (
         run_maintenance(fork_checkout, BoardCommand()).returncode
-        == MaintenanceExitCode.CREDENTIAL_UNAVAILABLE
+        == StackExitCode.CREDENTIAL_UNAVAILABLE
     )
 
 
@@ -2164,9 +2223,9 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
     ``stack.toml``, whose upstream is this repository's own - against which both of the
     fixture's remotes look like candidate forks, and inference rightly refuses to guess.
     """
-    fork_checkout.run_git("remote", "remove", "cram2")
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
 
     assert (
         run_maintenance(fork_checkout, RestackCommand()).returncode
-        == MaintenanceExitCode.BOARD_UNAVAILABLE
+        == StackExitCode.BOARD_UNAVAILABLE
     )

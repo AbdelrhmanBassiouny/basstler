@@ -13,12 +13,12 @@ from __future__ import annotations
 
 import yaml
 
-from basstler.locations import PackageLocation
+import basstler.maintenance
 from basstler.maintenance_commands import BoardCommand, UnattendedRunCommand
 
-STACK_MAINTENANCE_WORKFLOW = (
-    PackageLocation.REPOSITORY_ROOT / ".github" / "workflows" / "stack-maintenance.yml"
-)
+from .constants import RepositoryLocation
+
+STACK_MAINTENANCE_WORKFLOW = RepositoryLocation.WORKFLOWS / "stack-maintenance.yml"
 """
 The workflow document that runs the maintenance pass unattended.
 """
@@ -41,11 +41,8 @@ def test_the_board_is_exported_before_the_report_is_run():
     """
     script = _maintenance_pass_run_script()
 
-    board_export = script.index(
-        f'"${{MAINTENANCE_MODULE}}" {BoardCommand.invoked_as} --write'
-    )
-    unattended_run = script.index(
-        f'"${{MAINTENANCE_MODULE}}" {UnattendedRunCommand.invoked_as}'
-    )
+    module = basstler.maintenance.__name__
+    board_export = script.index(f"{module} {BoardCommand.invoked_as} --write")
+    unattended_run = script.index(f"{module} {UnattendedRunCommand.invoked_as}")
 
     assert board_export < unattended_run
