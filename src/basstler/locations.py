@@ -102,16 +102,21 @@ class PackageLocation(PathEnumeration):
 
 class CheckoutLocation(PathEnumeration):
     """
-    The files of a checkout of this repository that make up a release, relative to the
-    checkout's root.
+    The files of a checkout of this repository that make up or name a release, relative
+    to the checkout's root.
 
     Relative rather than absolute, since they are read at a git revision as well as on
     disk: the release tag a version names, as much as the working tree.
     """
 
-    PLUGIN_MANIFEST = Path("plugin") / ".claude-plugin" / "plugin.json"
+    PLUGIN = Path("plugin")
     """
-    The plugin's manifest, the one place a release's version is written.
+    The plugin: its manifest, hooks and skills.
+    """
+
+    PLUGIN_MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
+    """
+    The plugin's manifest, where a release's version is declared.
     """
 
     PACKAGE_SOURCE = Path("src")
@@ -122,6 +127,16 @@ class CheckoutLocation(PathEnumeration):
     PACKAGE_METADATA = Path("pyproject.toml")
     """
     The package's metadata, installed along with its source.
+    """
+
+    REUSABLE_WORKFLOW = Path(".github") / "workflows" / "upstream-reviews.yml"
+    """
+    The workflow a project calls at a release tag, from a caller of its own.
+    """
+
+    EXAMPLE_CALLER = Path("docs") / "examples" / "upstream-reviews.yml"
+    """
+    The caller a project copies, naming the release it calls.
     """
 
 

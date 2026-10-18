@@ -858,9 +858,24 @@ class ReleaseSampleVersion(StrEnum):
     The version the scratch checkout is tagged at.
     """
 
-    NEXT = "1.0.1"
+    NEXT_PATCH = "1.0.1"
     """
-    A bump of :attr:`RELEASED` that is not tagged yet.
+    :attr:`RELEASED` with its patch part bumped, not tagged yet.
+    """
+
+    NEXT_MINOR = "1.1.0"
+    """
+    :attr:`RELEASED` with its minor part bumped.
+    """
+
+    NEXT_MAJOR = "2.0.0"
+    """
+    :attr:`RELEASED` with its major part bumped.
+    """
+
+    CHOSEN = "3.4.5"
+    """
+    A version given explicitly rather than incremented.
     """
 
 
@@ -877,5 +892,35 @@ class ReleaseSampleFile(PathEnumeration):
 
     SKILL = Path("plugin") / "skills" / "sample" / "SKILL.md"
     """
-    A file of the scratch checkout's plugin, outside the package.
+    A skill of the scratch checkout's plugin.
+    """
+
+    DOCUMENTATION = Path("docs") / "guide.md"
+    """
+    Documentation, which no install takes.
+    """
+
+
+class ReleaseSampleText(StrEnum):
+    """
+    File contents the release-version tests write.
+    """
+
+    MANIFEST = '{{\n  "name": "basstler",\n  "version": "{version}"\n}}\n'
+    """
+    A plugin manifest, formatted with its ``version``.
+    """
+
+    EXAMPLE_CALLER = (
+        "    uses: owner/basstler/.github/workflows/upstream-reviews.yml@v{version}\n"
+        "    with:\n"
+        "      basstler_ref: v{version}\n"
+    )
+    """
+    The example caller's two references to the release, formatted with its ``version``.
+    """
+
+    CHANGE = "changed = True\n"
+    """
+    What a test writes to change a file.
     """

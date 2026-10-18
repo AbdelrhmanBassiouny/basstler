@@ -24,14 +24,20 @@ package at the plugin's own version, so the two are always one release.
 
 ## Releasing
 
-The version is written in one place, `plugin/.claude-plugin/plugin.json`; the package's build
-reads it from there. Bump it in a pull request, and merging that to `main` tags `v<version>`,
+The version is declared in `plugin/.claude-plugin/plugin.json`; the package's build reads it
+from there. Bump it in a pull request, and merging that to `main` tags `v<version>`,
 the tag an installed plugin installs the package at.
 
-A pull request that changes the package (`src/` or `pyproject.toml`) has to bump it: an
-installed plugin's hooks come from `main`, but its package comes from the tag, so an unbumped
-change reaches the hooks without the package they call. CI's `release-version` job, which
-runs `python -m basstler.release_version`, fails until the version is bumped.
+Any pull request that changes what basstler ships - `src/`, `pyproject.toml`, `plugin/`, or
+the reusable `upstream-reviews.yml` workflow - has to bump it, so each version names one
+behaviour. An install takes the package and the workflow from the tag, so an unbumped change
+reaches some installs and not others: a plugin's hooks call a package that predates them.
+CI's `release-version` job (`python -m basstler.release_version check`) fails until the
+version is bumped.
+
+Bump with `python -m basstler.release_version bump` (the patch part by default; `--part
+minor` or `--part major`, or `--version <x.y.z>`). It writes the version everywhere one is
+written: `plugin.json` and the example caller's references to the release tag.
 
 ## The package's own environment
 

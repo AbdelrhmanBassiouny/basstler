@@ -1,125 +1,214 @@
 """
-A pull request that changes the package has to bump the version, since an installed
-plugin installs the package at the tag its version names.
+Every change to what basstler ships needs a version bump, since an install takes the
+package and the reusable workflow from the tag its version names; and a bump writes the
+version everywhere one is written.
 
 Each test builds a scratch checkout tagged at a release, changes it, and checks what
-:class:`~basstler.release_version.ReleaseCheck` makes of it.
+:class:`~basstler.release_version.Release` makes of it.
 """
 
 from __future__ import annotations
-
-import json
 
 import pytest
 
 from basstler.locations import CheckoutLocation
 from basstler.release_version import (
-    PluginManifestKey,
-    ReleaseCheck,
+    MalformedVersion,
+    Release,
+    ReleaseVersion,
     ReleaseVersionExitCode,
-    UnreleasedPackageChange,
+    UnreleasedChange,
+    VersionPart,
+    VersionReference,
+    VersionReferenceMissing,
 )
 
-from .constants import ReleaseSampleFile, ReleaseSampleVersion, RepositoryLocation
+from .constants import (
+    ReleaseSampleFile,
+    ReleaseSampleText,
+    ReleaseSampleVersion,
+    RepositoryLocation,
+)
+from .plugin_manifest import PluginManifest
 from .scratch_repository import ScratchRepository
 
 
 def write_version(repository: ScratchRepository, version: ReleaseSampleVersion) -> None:
     """
     :param repository: The scratch checkout.
-    :param version: The version its plugin manifest is to declare.
+    :param version: The version its manifest and example caller are to name.
     """
     repository.write(
         CheckoutLocation.PLUGIN_MANIFEST,
-        json.dumps({PluginManifestKey.VERSION: version}),
+        ReleaseSampleText.MANIFEST.format(version=version),
+    )
+    repository.write(
+        CheckoutLocation.EXAMPLE_CALLER,
+        ReleaseSampleText.EXAMPLE_CALLER.format(version=version),
     )
 
 
 @pytest.fixture
 def released_checkout(tmp_path) -> ScratchRepository:
     """
-    :return: A scratch checkout with a package, its metadata and a plugin, tagged at
-        :attr:`ReleaseSampleVersion.RELEASED`.
+    :return: A scratch checkout with every shipped part and some documentation, tagged
+        at :attr:`ReleaseSampleVersion.RELEASED`.
     """
     repository = ScratchRepository.create(tmp_path)
     write_version(repository, ReleaseSampleVersion.RELEASED)
-    repository.write(ReleaseSampleFile.PACKAGE_MODULE, "")
-    repository.write(CheckoutLocation.PACKAGE_METADATA, "")
-    repository.write(ReleaseSampleFile.SKILL, "")
+    for path in (
+        ReleaseSampleFile.PACKAGE_MODULE,
+        ReleaseSampleFile.SKILL,
+        ReleaseSampleFile.DOCUMENTATION,
+        CheckoutLocation.PACKAGE_METADATA,
+        CheckoutLocation.REUSABLE_WORKFLOW,
+    ):
+        repository.write(path, "")
     repository.commit_everything("Release")
     repository.run_git("tag", f"v{ReleaseSampleVersion.RELEASED}")
     return repository
 
 
-def check(repository: ScratchRepository) -> ReleaseCheck:
+def release_of(repository: ScratchRepository) -> Release:
     """
     :param repository: The scratch checkout.
-    :return: The check of its committed state.
+    :return: Its release.
     """
-    return ReleaseCheck(repository.project_root)
+    return Release(repository.project_root)
 
 
-def test_an_unchanged_package_passes(released_checkout):
-    check(released_checkout).verify()
+# %% check
+
+
+def test_an_unchanged_checkout_passes(released_checkout):
+    release_of(released_checkout).verify()
 
 
 @pytest.mark.parametrize(
     "changed_file",
-    [ReleaseSampleFile.PACKAGE_MODULE, CheckoutLocation.PACKAGE_METADATA],
+    [
+        ReleaseSampleFile.PACKAGE_MODULE,
+        ReleaseSampleFile.SKILL,
+        CheckoutLocation.PACKAGE_METADATA,
+        CheckoutLocation.REUSABLE_WORKFLOW,
+    ],
     ids=lambda path: path._name_,
 )
-def test_a_package_change_without_a_bump_fails_naming_the_change(
+def test_a_shipped_change_without_a_bump_fails_naming_the_change(
     released_checkout, changed_file
 ):
     """
-    The reported case: the hooks gained a call into the package, and the plugin kept
-    installing the release from before it.
+    The reported case was a hook gaining a call into the package while the plugin kept
+    installing the release from before it; a skill or workflow change splits installs
+    the same way.
     """
-    released_checkout.write(changed_file, "changed = True\n")
-    released_checkout.commit_everything("Change the package")
+    released_checkout.write(changed_file, ReleaseSampleText.CHANGE)
+    released_checkout.commit_everything("Change what basstler ships")
 
-    with pytest.raises(UnreleasedPackageChange) as raised:
-        check(released_checkout).verify()
+    with pytest.raises(UnreleasedChange) as raised:
+        release_of(released_checkout).verify()
 
     assert raised.value.changed_paths == (str(changed_file),)
     assert raised.value.release_tag == f"v{ReleaseSampleVersion.RELEASED}"
-    assert raised.value.exit_code is ReleaseVersionExitCode.UNRELEASED_PACKAGE_CHANGE
+    assert raised.value.exit_code is ReleaseVersionExitCode.UNRELEASED_CHANGE
 
 
-def test_a_package_change_with_a_bump_passes(released_checkout):
-    released_checkout.write(ReleaseSampleFile.PACKAGE_MODULE, "changed = True\n")
-    write_version(released_checkout, ReleaseSampleVersion.NEXT)
+def test_a_shipped_change_with_a_bump_passes(released_checkout):
+    released_checkout.write(ReleaseSampleFile.PACKAGE_MODULE, ReleaseSampleText.CHANGE)
+    release_of(released_checkout).bump(
+        ReleaseVersion.parse(ReleaseSampleVersion.NEXT_PATCH)
+    )
     released_checkout.commit_everything("Change the package and bump the version")
 
-    check(released_checkout).verify()
+    release_of(released_checkout).verify()
 
 
-def test_a_plugin_only_change_needs_no_bump(released_checkout):
+def test_a_documentation_change_needs_no_bump(released_checkout):
     """
-    The installed package is unchanged, so the plugin's hooks still find what they call.
+    No install takes documentation from the tag.
     """
-    released_checkout.write(ReleaseSampleFile.SKILL, "changed\n")
-    released_checkout.commit_everything("Change a skill")
+    released_checkout.write(ReleaseSampleFile.DOCUMENTATION, ReleaseSampleText.CHANGE)
+    released_checkout.commit_everything("Change the documentation")
 
-    check(released_checkout).verify()
+    release_of(released_checkout).verify()
 
 
-def test_an_uncommitted_package_change_is_not_judged(released_checkout):
+def test_an_uncommitted_change_is_not_judged(released_checkout):
     """
     The check reads the commit under review, not whatever the working tree holds.
     """
-    released_checkout.write(ReleaseSampleFile.PACKAGE_MODULE, "changed = True\n")
+    released_checkout.write(ReleaseSampleFile.PACKAGE_MODULE, ReleaseSampleText.CHANGE)
 
-    check(released_checkout).verify()
+    release_of(released_checkout).verify()
 
 
-def test_the_checkout_locations_are_this_repositorys_own():
-    """
-    The release workflow and the build read the manifest at the path the check reads.
-    """
-    assert (
-        RepositoryLocation.ROOT / CheckoutLocation.PLUGIN_MANIFEST
-        == RepositoryLocation.PLUGIN_MANIFEST
+# %% bump
+
+
+@pytest.mark.parametrize(
+    "part, expected",
+    [
+        (VersionPart.PATCH, ReleaseSampleVersion.NEXT_PATCH),
+        (VersionPart.MINOR, ReleaseSampleVersion.NEXT_MINOR),
+        (VersionPart.MAJOR, ReleaseSampleVersion.NEXT_MAJOR),
+    ],
+)
+def test_a_version_bumps_by_the_part_named(part, expected):
+    released = ReleaseVersion.parse(ReleaseSampleVersion.RELEASED)
+
+    assert str(released.bumped(part)) == expected
+
+
+def test_a_bump_writes_the_version_everywhere_one_is_written(released_checkout):
+    release_of(released_checkout).bump(
+        ReleaseVersion.parse(ReleaseSampleVersion.CHOSEN)
     )
-    assert (RepositoryLocation.ROOT / CheckoutLocation.PACKAGE_SOURCE).is_dir()
-    assert (RepositoryLocation.ROOT / CheckoutLocation.PACKAGE_METADATA).is_file()
+
+    for reference in VersionReference.every():
+        versions = reference.versions_in(released_checkout.project_root)
+        assert set(versions) == {ReleaseSampleVersion.CHOSEN}, reference.path
+    assert (
+        released_checkout.project_root / CheckoutLocation.PLUGIN_MANIFEST
+    ).read_text() == (
+        ReleaseSampleText.MANIFEST.format(version=ReleaseSampleVersion.CHOSEN)
+    )
+
+
+def test_a_bump_with_a_reference_missing_writes_nothing(released_checkout):
+    released_checkout.write(CheckoutLocation.EXAMPLE_CALLER, "")
+
+    with pytest.raises(VersionReferenceMissing) as raised:
+        release_of(released_checkout).bump(
+            ReleaseVersion.parse(ReleaseSampleVersion.NEXT_PATCH)
+        )
+
+    assert raised.value.path == CheckoutLocation.EXAMPLE_CALLER
+    assert release_of(released_checkout).version == ReleaseVersion.parse(
+        ReleaseSampleVersion.RELEASED
+    )
+
+
+def test_a_version_that_is_not_three_numbers_is_refused():
+    with pytest.raises(MalformedVersion):
+        ReleaseVersion.parse(f"v{ReleaseSampleVersion.RELEASED}")
+
+
+# %% this repository
+
+
+def test_every_reference_in_this_repository_names_the_plugins_version():
+    """
+    A reference the bump does not know of would be left behind at the old release.
+    """
+    version = PluginManifest.of_this_plugin().version
+
+    for reference in VersionReference.every():
+        versions = reference.versions_in(RepositoryLocation.ROOT)
+        assert versions and set(versions) == {version}, reference.path
+
+
+@pytest.mark.parametrize(
+    "location", list(CheckoutLocation), ids=lambda path: path._name_
+)
+def test_every_checkout_location_exists_in_this_repository(location):
+    assert (RepositoryLocation.ROOT / location).exists()
