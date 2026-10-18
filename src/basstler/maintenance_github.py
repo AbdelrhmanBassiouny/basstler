@@ -17,6 +17,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
 from basstler.class_property import classproperty
@@ -111,6 +112,22 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
     """
 
 
+class PullRequestListState(StrEnum):
+    """
+    The pull request states the list API filters on.
+    """
+
+    OPEN = "open"
+    """
+    Only open pull requests, drafts included.
+    """
+
+    ALL = "all"
+    """
+    Every pull request, whether open, closed or merged.
+    """
+
+
 @dataclass
 class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
     """
@@ -180,11 +197,31 @@ class GitHubRepository(ForkPullRequests):
 
     def open_pull_requests(self) -> list[PullRequestRecord]:
         """:return: Every open pull request on the repository, oldest page first."""
+        return self._pull_requests_in_state(PullRequestListState.OPEN)
+
+    def all_pull_requests(self) -> list[PullRequestRecord]:
+        """:return: Every pull request on the repository, open or closed."""
+        return self._pull_requests_in_state(PullRequestListState.ALL)
+
+    def issue(self, number: int) -> Mapping[str, Any]:
+        """:param number: The issue or pull request to read.
+        :return: It, as the issues API describes it."""
+        return self._call("GET", f"/issues/{number}")
+
+    def _pull_requests_in_state(
+        self, state: PullRequestListState
+    ) -> list[PullRequestRecord]:
+        """
+        Read every page of pull requests in one state.
+
+        :param state: Which pull requests to list.
+        :return: Them, oldest page first.
+        """
         collected: list[PullRequestRecord] = []
         page = 1
         while True:
             query = urllib.parse.urlencode(
-                {"state": "open", "per_page": self.page_size, "page": page}
+                {"state": state, "per_page": self.page_size, "page": page}
             )
             fetched = self._call("GET", f"/pulls?{query}")
             collected.extend(fetched)

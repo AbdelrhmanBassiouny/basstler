@@ -43,9 +43,9 @@ class SummaryLine(StrEnum):
     Which plan, if any, tracks the current branch.
     """
 
-    PLAN_HUB = "plan hub"
+    PLAN_SITE = "plan site"
     """
-    The plan hub page, and where this session's work sits in it.
+    The plan site, and where this session's work sits on it.
     """
 
     GIT_IDENTITY = "git identity"
@@ -101,12 +101,12 @@ class SummaryMessage(StrEnum):
 
     HUB_NOT_REGISTERED = "hub_line_not_registered"
     """
-    The notes branch has no plan hub file.
+    The notes branch has no hub file.
     """
 
     HUB_REGISTERED = "hub_line_registered"
     """
-    The notes branch names the plan hub, and this session's place in it.
+    The hub file names the plan site, and this session's place on it.
     """
 
     NO_GIT_IDENTITY_RECORDED = "git_identity_line_not_recorded"

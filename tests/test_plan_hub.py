@@ -1,5 +1,5 @@
 """
-Tests for plan_hub.py: the hub file, and gathering every registered repository's plans.
+Tests for plan_hub.py: the hub file, and reading a listed repository's notes branch.
 """
 
 from __future__ import annotations
@@ -7,37 +7,13 @@ from __future__ import annotations
 import subprocess
 from pathlib import Path
 
-import pytest
-
-from basstler.build_hub import RepositorySummary, render_hub_page
-from basstler.plan_hub import (
-    HubDefault,
-    HubUrlConflictError,
-    PlanHub,
-    gather,
-    set_hub_url,
-)
+from basstler.plan_hub import HubDefault, NotesBranch, PlanHub
 
 REGISTRY = "owner/registry"
 
-OTHER_REPOSITORY = "owner/other"
+SITE_URL = "https://owner.github.io/site/"
 
-HUB_URL = "https://claude.ai/artifact/hub"
-
-PLAN_MANIFEST = """\
-title: First plan
-description: What the first plan is for.
-items:
-- id: a
-  status: done
-- id: b
-  status: in_progress
-"""
-
-DASHBOARD_URLS = """\
-_index: https://claude.ai/artifact/index
-first-plan: https://claude.ai/artifact/first
-"""
+PLAN_MANIFEST = "title: First plan\nitems: []\n"
 
 
 def publish_notes(remote: Path, files: dict[str, str]) -> None:
@@ -49,6 +25,7 @@ def publish_notes(remote: Path, files: dict[str, str]) -> None:
     """
     work = remote.with_suffix(".work")
     subprocess.run(["git", "init", "--quiet", str(work)], check=True)
+    subprocess.run(["git", "init", "--quiet", "--bare", str(remote)], check=True)
     for relative_path, content in files.items():
         path = work / HubDefault.PLANS_DIRECTORY.value / relative_path
         path.parent.mkdir(parents=True, exist_ok=True)
@@ -59,26 +36,6 @@ def publish_notes(remote: Path, files: dict[str, str]) -> None:
         ["push", "--quiet", str(remote), f"HEAD:{HubDefault.NOTES_BRANCH.value}"],
     ):
         subprocess.run(["git", "-C", str(work), *command], check=True)
-
-
-@pytest.fixture
-def remotes(tmp_path: Path) -> Path:
-    """
-    A directory standing in for GitHub, holding the registry's notes.
-    """
-    registry = tmp_path / f"{REGISTRY}.git"
-    registry.parent.mkdir(parents=True)
-    subprocess.run(["git", "init", "--quiet", "--bare", str(registry)], check=True)
-    publish_notes(
-        registry,
-        {
-            "first-plan/plan.yaml": PLAN_MANIFEST,
-            "first-plan/roadmap.md": "# first\n",
-            "_hub.yaml": "url: null\n",
-            HubDefault.DASHBOARD_URL_CACHE.value: DASHBOARD_URLS,
-        },
-    )
-    return tmp_path
 
 
 # %% the hub file
@@ -93,7 +50,7 @@ def test_register_lists_a_repository_once():
 
 
 def test_the_hub_file_round_trips(tmp_path: Path):
-    hub = PlanHub(registry=REGISTRY, repositories=[REGISTRY], url=HUB_URL)
+    hub = PlanHub(registry=REGISTRY, repositories=[REGISTRY], site_url=SITE_URL)
     path = tmp_path / "hub.yaml"
     path.write_text(hub.to_text())
 
@@ -104,64 +61,30 @@ def test_a_missing_hub_file_loads_as_none(tmp_path: Path):
     assert PlanHub.load(tmp_path / "hub.yaml") is None
 
 
-def test_set_hub_url_records_the_first_url():
-    hub = PlanHub(registry=REGISTRY)
-
-    assert set_hub_url(hub, HUB_URL)
-    assert not set_hub_url(hub, HUB_URL)
-    assert hub.url == HUB_URL
+# %% a listed repository's notes
 
 
-def test_set_hub_url_never_replaces_a_recorded_url():
-    hub = PlanHub(registry=REGISTRY, url=HUB_URL)
+def test_a_fetched_notes_branch_reads_and_exports_its_plans(tmp_path: Path):
+    publish_notes(tmp_path / f"{REGISTRY}.git", {"first-plan/plan.yaml": PLAN_MANIFEST})
 
-    with pytest.raises(HubUrlConflictError):
-        set_hub_url(hub, "https://claude.ai/artifact/second")
+    notes = NotesBranch.fetch(
+        REGISTRY,
+        HubDefault.NOTES_BRANCH.value,
+        f"{tmp_path}/{{repository}}.git",
+        tmp_path / "scratch",
+    )
+    plans_directory = notes.export_plans(tmp_path / "checkout")
 
-
-# %% gathering
-
-
-def test_gather_reads_each_repository_plans_and_index(remotes: Path):
-    hub = PlanHub(registry=REGISTRY, repositories=[REGISTRY])
-
-    (entry,) = gather(hub, f"{remotes}/{{repository}}.git")
-
-    assert entry["repository"] == REGISTRY
-    assert entry["index_url"] == "https://claude.ai/artifact/index"
-    assert entry["plans"] == [
-        {
-            "id": "first-plan",
-            "title": "First plan",
-            "description": "What the first plan is for.",
-            "done": 1,
-            "total": 2,
-            "dashboard_url": "https://claude.ai/artifact/first",
-        }
-    ]
+    assert notes.read("first-plan/plan.yaml") == PLAN_MANIFEST
+    assert (plans_directory / "first-plan" / "plan.yaml").read_text() == PLAN_MANIFEST
 
 
-def test_gather_reports_a_repository_it_cannot_fetch(remotes: Path):
-    hub = PlanHub(registry=REGISTRY, repositories=[REGISTRY, OTHER_REPOSITORY])
+def test_a_repository_that_cannot_be_fetched_reads_as_none(tmp_path: Path):
+    notes = NotesBranch.fetch(
+        "owner/missing",
+        HubDefault.NOTES_BRANCH.value,
+        f"{tmp_path}/{{repository}}.git",
+        tmp_path / "scratch",
+    )
 
-    entries = gather(hub, f"{remotes}/{{repository}}.git")
-
-    assert entries[1]["repository"] == OTHER_REPOSITORY
-    assert entries[1]["plans"] == []
-    assert entries[1]["error"]
-
-
-# %% rendering
-
-
-def test_the_hub_page_opens_each_repository_index_not_its_plans(remotes: Path):
-    hub = PlanHub(registry=REGISTRY, repositories=[REGISTRY])
-    repositories = [
-        RepositorySummary.from_mapping(entry)
-        for entry in gather(hub, f"{remotes}/{{repository}}.git")
-    ]
-
-    page = render_hub_page(repositories)
-
-    assert "https://claude.ai/artifact/index" in page
-    assert "https://claude.ai/artifact/first" not in page
+    assert notes is None

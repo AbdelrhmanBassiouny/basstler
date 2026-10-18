@@ -1,32 +1,19 @@
-#!/usr/bin/env python3
 """
 Render the plan hub: one card per registered repository, opening its own index.
-
-Usage:
-    python3 build_hub.py --repositories /tmp/repositories.json --output /tmp/hub.html
-
-repositories.json is what ``python -m basstler.plan_hub gather`` writes: a JSON list of
-``{"repository": ..., "index_url": ..., "plans": [<build_index.py plan summary>, ...]}``,
-with an ``error`` on a repository whose notes could not be read.
 """
 
 from __future__ import annotations
 
-import argparse
-import json
-import sys
 from dataclasses import dataclass, field
-from pathlib import Path
-from typing import Any
 
 from basstler.build_index import PlanSummary
-from basstler.render_common import create_template_environment, sanitize_http_url
+from basstler.render_common import create_template_environment
 
 
 @dataclass
 class RepositorySummary:
     """
-    One repository's section of the hub.
+    One repository's card on the hub.
     """
 
     name: str
@@ -36,7 +23,7 @@ class RepositorySummary:
 
     index_url: str | None
     """
-    The repository's own index page, or ``None`` if it was never published.
+    The repository's own index page, or ``None`` when its notes could not be read.
     """
 
     plans: list[PlanSummary] = field(default_factory=list)
@@ -48,18 +35,6 @@ class RepositorySummary:
     """
     Why the repository's notes could not be read, if they could not.
     """
-
-    @classmethod
-    def from_mapping(cls, data: dict[str, Any]) -> RepositorySummary:
-        """
-        Build a summary from one entry of ``repositories.json``.
-        """
-        return cls(
-            name=data["repository"],
-            index_url=sanitize_http_url(data.get("index_url")),
-            plans=[PlanSummary.from_mapping(plan) for plan in data.get("plans", [])],
-            error=data.get("error"),
-        )
 
     @property
     def done(self) -> int:
@@ -105,26 +80,3 @@ def render_hub_page(repositories: list[RepositorySummary]) -> str:
     """
     template = create_template_environment().get_template("hub.html")
     return template.render(repositories=repositories)
-
-
-def main() -> int:
-    """
-    Parse arguments, render the hub page, and write it out.
-    """
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument("--repositories", required=True, type=Path)
-    parser.add_argument("--output", required=True, type=Path)
-    arguments = parser.parse_args()
-
-    repositories = [
-        RepositorySummary.from_mapping(entry)
-        for entry in json.loads(arguments.repositories.read_text())
-    ]
-    arguments.output.write_text(render_hub_page(repositories))
-    return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())

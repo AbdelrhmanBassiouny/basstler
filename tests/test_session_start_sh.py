@@ -1037,12 +1037,12 @@ def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
     assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
 
 
-# %% the plan hub line
+# %% the plan site line
 
-HUB_URL = "https://claude.ai/artifact/hub"
+SITE_URL = "https://owner.github.io/site/"
 
 HUB_FILE = (
-    f"url: {HUB_URL}\nregistry: owner/registry\nrepositories:\n- owner/registry\n"
+    f"site_url: {SITE_URL}\nregistry: owner/registry\nrepositories:\n- owner/registry\n"
 )
 
 
@@ -1052,12 +1052,12 @@ def test_reports_no_hub_when_the_notes_branch_has_no_hub_file(
     result = publish_and_run(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert summary_value(result.stdout, SummaryLine.PLAN_HUB) == summary_message(
+    assert summary_value(result.stdout, SummaryLine.PLAN_SITE) == summary_message(
         SummaryMessage.HUB_NOT_REGISTERED, ScratchBranch.PERSONAL_NOTES
     )
 
 
-def test_places_a_tracked_branch_under_its_plan_in_the_hub(
+def test_links_a_tracked_branch_to_its_plan_on_the_site(
     session_start_repository: ScratchRepository,
 ):
     result = publish_and_run(
@@ -1072,9 +1072,9 @@ def test_places_a_tracked_branch_under_its_plan_in_the_hub(
     )
 
     assert result.returncode == 0, result.stderr
-    hub_line = summary_value(result.stdout, SummaryLine.PLAN_HUB)
-    assert hub_line.startswith(HUB_URL)
-    assert hub_line.endswith(f" › {PLAN_IDENTIFIER}")
+    site_line = summary_value(result.stdout, SummaryLine.PLAN_SITE)
+    assert site_line.startswith(SITE_URL)
+    assert site_line.endswith(f"/{PLAN_IDENTIFIER}/")
 
 
 # %% every message renders
