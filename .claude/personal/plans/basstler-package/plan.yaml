@@ -58,11 +58,12 @@ items:
     workflow. Tagged v0.1.0.
 - id: basstler-open-pull-request-carryover
   title: Open draft pull requests here for the carried tooling branches, retire the stale ones
-  branch: null
-  status: not started
+  branch: claude/affectionate-curie-6k7tgt
+  status: in progress
   track: carried-across
   depends_on: [basstler-repository-extraction]
-  pull_request_number: null
+  pull_request_number: 7
+  session: https://claude.ai/code/session_01XHyFmqJdtdZbCm6Ss8teWA
   notes: >
     The branches arrived rewritten with the extraction. For each claude/* branch on origin that still
     holds commits not on main and is not stale, merge main into it and open a draft pull request,
