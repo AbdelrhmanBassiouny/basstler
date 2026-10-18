@@ -22,9 +22,10 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, TypeVar, ClassVar
+from typing import Any, TypeVar
 
 
+from basstler.class_property import classproperty
 from basstler.environment import GitHubActionsVariable
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import GitHubClient
@@ -298,10 +299,13 @@ class Author(JSONModel):
     """
     Their GitHub login, or a placeholder when the account is gone.
     """
-    UNKNOWN_LOGIN: ClassVar[str] = "(unknown)"
-    """
-    Stands in for the author of a comment whose account no longer exists.
-    """
+
+    @classproperty
+    def unknown_login(cls) -> str:
+        """
+        Stands in for the author of a comment whose account no longer exists.
+        """
+        return "(unknown)"
 
     @classmethod
     def from_json(cls, data: dict[str, Any] | None) -> Author:
@@ -312,7 +316,7 @@ class Author(JSONModel):
         :return: The parsed author.
         """
         if data is None:
-            return cls(cls.UNKNOWN_LOGIN)
+            return cls(cls.unknown_login)
         return cls(data[PullRequestJSONKey.LOGIN])
 
 

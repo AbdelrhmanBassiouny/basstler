@@ -45,7 +45,6 @@ from collections.abc import Callable, Iterable, Mapping
 from dataclasses import asdict, dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import ClassVar
 from urllib.parse import quote
 
 from basstler.class_property import classproperty
@@ -663,7 +662,7 @@ class PromotionLinkTooLongError(CommandFailure, ValueError):
         return (
             f"the compare link for {self.branch} is {self.length_without_a_description} "
             f"characters before its description, over the "
-            f"{PromotionLink.URL_CHARACTER_LIMIT}-character limit: shorten the title"
+            f"{PromotionLink.url_character_limit}-character limit: shorten the title"
         )
 
 
@@ -688,17 +687,21 @@ class PromotionLink:
     oversized one is discarded whole by the server - both silently.
     """
 
-    URL_CHARACTER_LIMIT: ClassVar[int] = 8192
-    """Longest URL to build, the conventional 8 KiB request-line limit servers accept."""
+    @classproperty
+    def url_character_limit(cls) -> int:
+        """Longest URL to build, the conventional 8 KiB request-line limit servers accept."""
+        return 8192
 
-    TRUNCATION_MARKER: ClassVar[str] = "..."
-    """Appended to a body that had to be shortened, so the cut is visible in the prefill."""
+    @classproperty
+    def truncation_marker(cls) -> str:
+        """Appended to a body that had to be shortened, so the cut is visible in the prefill."""
+        return "..."
 
     url: str
     """The compare-and-create URL, ready to open."""
 
     body_was_truncated: bool
-    """Whether the body had to be shortened to fit :attr:`URL_CHARACTER_LIMIT`."""
+    """Whether the body had to be shortened to fit :attr:`url_character_limit`."""
 
     @classmethod
     def build(
@@ -723,21 +726,21 @@ class PromotionLink:
                 f"&{PromotionLinkParameter.BODY}={quote(text)}"
             )
 
-        if len(url_for(body)) <= cls.URL_CHARACTER_LIMIT:
+        if len(url_for(body)) <= cls.url_character_limit:
             return cls(url_for(body), body_was_truncated=False)
-        if len(url_for(cls.TRUNCATION_MARKER)) > cls.URL_CHARACTER_LIMIT:
+        if len(url_for(cls.truncation_marker)) > cls.url_character_limit:
             raise PromotionLinkTooLongError(branch, len(url_for("")))
         shortest, longest = 0, len(body)
         while shortest < longest:
             midpoint = (shortest + longest + 1) // 2
-            candidate = url_for(body[:midpoint] + cls.TRUNCATION_MARKER)
+            candidate = url_for(body[:midpoint] + cls.truncation_marker)
             shortest, longest = (
                 (midpoint, longest)
-                if len(candidate) <= cls.URL_CHARACTER_LIMIT
+                if len(candidate) <= cls.url_character_limit
                 else (shortest, midpoint - 1)
             )
         return cls(
-            url_for(body[:shortest] + cls.TRUNCATION_MARKER), body_was_truncated=True
+            url_for(body[:shortest] + cls.truncation_marker), body_was_truncated=True
         )
 
 

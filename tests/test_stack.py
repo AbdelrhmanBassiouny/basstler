@@ -1100,12 +1100,12 @@ def test_an_oversized_body_is_truncated_rather_than_silently_dropped():
     with an empty description and nobody is told.
     """
     link = a_promotion_link(
-        body=StackSampleText.FILLER * (PromotionLink.URL_CHARACTER_LIMIT + 1)
+        body=StackSampleText.FILLER * (PromotionLink.url_character_limit + 1)
     )
 
     assert link.body_was_truncated
-    assert link.url.endswith(PromotionLink.TRUNCATION_MARKER)
-    assert len(link.url) <= PromotionLink.URL_CHARACTER_LIMIT
+    assert link.url.endswith(PromotionLink.truncation_marker)
+    assert len(link.url) <= PromotionLink.url_character_limit
 
 
 def test_a_link_that_cannot_fit_even_without_a_description_is_refused():
@@ -1116,7 +1116,7 @@ def test_a_link_that_cannot_fit_even_without_a_description_is_refused():
     """
     with pytest.raises(PromotionLinkTooLongError):
         a_promotion_link(
-            title=StackSampleText.FILLER * (PromotionLink.URL_CHARACTER_LIMIT + 1),
+            title=StackSampleText.FILLER * (PromotionLink.url_character_limit + 1),
             body="",
         )
 

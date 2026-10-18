@@ -40,7 +40,8 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
+from basstler.class_property import classproperty
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -146,10 +147,12 @@ class Candidate:
     The branch to compare against.
     """
 
-    separator: ClassVar[str] = "="
-    """
-    Separates a ``--candidate`` argument's label from its branch name.
-    """
+    @classproperty
+    def separator(cls) -> str:
+        """
+        Separates a ``--candidate`` argument's label from its branch name.
+        """
+        return "="
 
     @classmethod
     def parse(cls, argument: str) -> Candidate:

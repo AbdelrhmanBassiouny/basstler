@@ -42,10 +42,11 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import yaml
 
+from basstler.class_property import classproperty
 from basstler.github_labels import GitHubLabel
 from basstler.plan_model import ItemStatus
 from basstler.render_common import (
@@ -630,11 +631,13 @@ class ItemAction(ABC):
     item_identifier: str
     """The item this action's command targets."""
 
-    skill_command_name: ClassVar[str]
-    """The ``/plan-item-...`` skill this action invokes - fixed per
-    subclass, since which skill an action routes to never varies per
-    instance (only :attr:`label` does, e.g. ``"Resolve"`` vs. ``"Resume"``
-    for the same :class:`ResolveAction`)."""
+    @classproperty
+    @abstractmethod
+    def skill_command_name(cls) -> str:
+        """The ``/plan-item-...`` skill this action invokes - fixed per
+        subclass, since which skill an action routes to never varies per
+        instance (only :attr:`label` does, e.g. ``"Resolve"`` vs. ``"Resume"``
+        for the same :class:`ResolveAction`)."""
 
     @property
     def command(self) -> str:
@@ -648,7 +651,10 @@ class StartNowAction(ItemAction):
     """Routes a not-started item, once every dependency is ready, to
     ``plan-item-kickoff``."""
 
-    skill_command_name: ClassVar[str] = "/plan-item-kickoff"
+    @classproperty
+    def skill_command_name(cls) -> str:
+        """:return: The ``plan-item-kickoff`` skill."""
+        return "/plan-item-kickoff"
 
 
 @dataclass(frozen=True)
@@ -657,7 +663,10 @@ class ResolveAction(ItemAction):
     ``plan-item-resolve`` - :attr:`ItemAction.label` is worded to match
     which of those three it actually is."""
 
-    skill_command_name: ClassVar[str] = "/plan-item-resolve"
+    @classproperty
+    def skill_command_name(cls) -> str:
+        """:return: The ``plan-item-resolve`` skill."""
+        return "/plan-item-resolve"
 
 
 class ModelOption(StrEnum):
@@ -1027,8 +1036,10 @@ class DashboardRenderer:
     items_by_identifier: dict[str, Item] = field(init=False)
     """Every item, keyed by :attr:`Item.identifier`."""
 
-    maximum_dependency_stack_level: ClassVar[int] = 4
-    """Same-track dependency chains deeper than this wrap back to indent level 0."""
+    @classproperty
+    def maximum_dependency_stack_level(cls) -> int:
+        """Same-track dependency chains deeper than this wrap back to indent level 0."""
+        return 4
 
     def __post_init__(self) -> None:
         self.items_by_identifier = {item.identifier: item for item in self.plan.items}

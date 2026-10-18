@@ -91,12 +91,12 @@ class ItemLayout(StrEnum):
     The whitespace and markers an item block in ``plan.yaml`` is laid out with.
     """
 
-    FIELD_INDENT = "    "
+    FIELD_INDENT = " " * 4
     """
     The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
     """
 
-    MARKER = "  - "
+    MARKER = " " * 2 + "- "
     """
     What opens an item block, the list marker its first field sits behind.
     """

@@ -25,8 +25,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import ClassVar
 
+from basstler.class_property import classproperty
 from basstler.github_labels import GitHubLabel
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.repository import Repository
@@ -399,10 +399,12 @@ class PersistentVariables(SetupStep):
     The ``NAME=value`` lines to paste, empty when every setting is still its default.
     """
 
-    comment_marker: ClassVar[str] = "#"
-    """
-    What starts a comment in the ``.env`` format an environment's variable list uses.
-    """
+    @classproperty
+    def comment_marker(cls) -> str:
+        """
+        What starts a comment in the ``.env`` format an environment's variable list uses.
+        """
+        return "#"
 
     @classmethod
     def quoted_if_needed(cls, value: str) -> str:
@@ -478,10 +480,12 @@ class SetupChecklist:
     The steps that apply to this clone.
     """
 
-    heading: ClassVar[str] = "These steps are yours - no script can do them:"
-    """
-    The line introducing the printed list.
-    """
+    @classproperty
+    def heading(cls) -> str:
+        """
+        The line introducing the printed list.
+        """
+        return "These steps are yours - no script can do them:"
 
     @classmethod
     def for_clone(
