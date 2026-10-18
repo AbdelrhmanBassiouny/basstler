@@ -1,0 +1,63 @@
+name: Release
+
+# Every change merged to main is released: a patch bump, or the minor or major version a
+# pull request set. The bump and its tag are pushed atomically, so main never carries an
+# untagged version.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Release what changed since the latest release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: basstler
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install basstler
+        run: pip install --editable basstler
+
+      # Retried on top of any merge that lands meanwhile.
+      - name: Commit, tag and push the release
+        working-directory: basstler
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          for attempt in 1 2 3; do
+            git fetch --quiet --tags origin main
+            git checkout --quiet --force --detach origin/main
+            release="$(python -m basstler.release_version release --checkout .)"
+            tag="$(printf '%s\n' "${release}" | sed -n 's/^tag=//p')"
+            if [ -z "${tag}" ]; then
+              echo "Nothing changed since the latest release." >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+            if printf '%s\n' "${release}" | grep -qx 'bumped=true'; then
+              git commit --quiet --all --message "Release ${tag}"
+            fi
+            git tag "${tag}"
+            if git push --atomic origin HEAD:refs/heads/main "refs/tags/${tag}"; then
+              echo "Released ${tag} at $(git rev-parse HEAD)." >> "${GITHUB_STEP_SUMMARY}"
+              exit 0
+            fi
+            git tag --delete "${tag}"
+          done
+          echo "Could not push the release after 3 attempts." >&2
+          exit 1

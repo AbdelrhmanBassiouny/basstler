@@ -35,6 +35,8 @@ from basstler.upstream_reviews import (
     main,
     resolve_upstream_repository,
 )
+from basstler.locations import ProjectLocation
+from basstler.stack_configuration import CommittedStackConfiguration
 
 from .upstream_reviews_replay import (
     RecordedCall,
@@ -474,7 +476,12 @@ def test_the_upstream_is_read_from_the_configuration_file(tmp_path):
     configuration = tmp_path / "stack.toml"
     configuration.write_text(UPSTREAM_SETTING_TEMPLATE.format(repository=configured))
 
-    assert resolve_upstream_repository(configuration) == configured
+    assert (
+        resolve_upstream_repository(
+            CommittedStackConfiguration(configuration, tmp_path)
+        )
+        == configured
+    )
 
 
 def test_an_explicit_override_outranks_the_configuration_file(tmp_path):
@@ -483,7 +490,26 @@ def test_an_explicit_override_outranks_the_configuration_file(tmp_path):
     configuration = tmp_path / "stack.toml"
     configuration.write_text(UPSTREAM_SETTING_TEMPLATE.format(repository=configured))
 
-    assert resolve_upstream_repository(configuration, str(overriding)) == overriding
+    assert (
+        resolve_upstream_repository(
+            CommittedStackConfiguration(configuration, tmp_path), str(overriding)
+        )
+        == overriding
+    )
+
+
+def test_a_project_naming_no_upstream_is_a_stated_reason_not_a_crash(
+    tmp_path, monkeypatch, caplog
+):
+    """
+    A runner on a project that never named its upstream gets told where to name it.
+    """
+    monkeypatch.chdir(tmp_path)
+
+    status = main(["--pull-request", "1"])
+
+    assert status == 1
+    assert str(ProjectLocation.PROJECT_STACK_CONFIGURATION) in caplog.text
 
 
 # %% report rendering

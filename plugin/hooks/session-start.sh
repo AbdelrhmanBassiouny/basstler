@@ -17,7 +17,7 @@ set -euo pipefail
 #
 # Works out of the box, zero config: it looks for a branch named
 # `claude/personal-notes` on `origin` and, if found, reads
-# `.claude/personal/cram-notes.md` off it into CLAUDE.local.md.
+# `.claude/personal/notes.md` off it into CLAUDE.local.md.
 # ./create-personal-notes-branch.sh creates that branch (with an empty notes
 # file) for anyone who doesn't have it yet.
 #
@@ -85,8 +85,8 @@ set -euo pipefail
 # initialize and maintain it from the start. See ./save-pr-progress.sh.
 #
 # Plan auto-discovery: if the current branch appears as an item in some
-# multi-PR/multi-session plan (see .claude/skills/plan-dashboard/plan-schema.md
-# and .claude/skills/plan-dashboard/SKILL.md), CLAUDE.local.md also gets
+# multi-PR/multi-session plan (see skills/plan-dashboard/plan-schema.md
+# and skills/plan-dashboard/SKILL.md), CLAUDE.local.md also gets
 # that plan's manifest
 # (plan.yaml) and narrative (roadmap.md) pulled in - so a session picks up
 # the wider initiative its branch belongs to without anyone having to ask it
@@ -119,11 +119,12 @@ set -euo pipefail
 # keeps it, and global config is never touched. See ./save-git-identity.sh to
 # record one, and ./README.md for the two cases a hook cannot reach.
 #
-# Dependencies: the package's own are installed on every start, for anyone
-# whose notes branch resolved - the same audience everything else here serves.
-# Only what is missing gets installed, so the usual run costs an import check
-# and nothing more, and a failure is reported rather than allowed to end the
-# run. See install_dependencies in ./resolve-personal-notes-config.sh, and
+# Dependencies: the package gets its own environment, with itself and its
+# dependencies installed in it, on every start that finds any of that missing,
+# for anyone whose notes branch resolved - the same audience everything else
+# here serves. The usual run costs an import check and nothing more, and a
+# failure is reported rather than allowed to end the run. See
+# create_basstler_environment in ./resolve-personal-notes-config.sh, and
 # basstler/README.md, which tells a reader this happens.
 #
 # Setup: the summary also carries ./check-setup.sh's verdict, naming any
@@ -146,25 +147,29 @@ set -euo pipefail
 # ./resolve-personal-notes-config.sh), regardless of whether this branch
 # tracks a plan. ./plan-updates-since.sh diffs from that stamp instead of a
 # session rereading whole plan files to answer "what changed since I last
-# looked" - see that script and cram-notes.md's recheck-deltas convention.
+# looked" - see that script and the personal notes' recheck-deltas convention.
 #
-# How this script gets invoked (see ../settings.json): Claude Code registers it
-# as a SessionStart hook via `$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh`.
-# CLAUDE_PROJECT_DIR is an env var Claude Code itself injects into every hook
-# command's environment, resolving to this project's root - so that path is
-# correct regardless of Claude Code's own cwd when it runs the hook.
+# How this script gets invoked (see ./hooks.json): the plugin registers it as a
+# SessionStart hook via `${CLAUDE_PLUGIN_ROOT}/hooks/session-start.sh`.
+# CLAUDE_PROJECT_DIR, which Claude Code injects into every hook command's
+# environment, names the project it works on - so the hook serves whichever
+# project the plugin is enabled in, regardless of Claude Code's own cwd.
 #
-# Coexistence with your own settings: Claude Code merges the `hooks` arrays
-# across all settings layers (managed > CLI args > .claude/settings.local.json
-# > .claude/settings.json (this repo's, committed) > ~/.claude/settings.json)
-# by concatenation, not override. So this SessionStart hook runs alongside -
-# never instead of - any SessionStart hook you already have configured for
-# yourself. settings.json is strict JSON with no comment support, which is why
-# this explanation lives here instead of there.
+# Coexistence with your own settings: Claude Code runs a plugin's hooks
+# alongside - never instead of - any SessionStart hook you already have
+# configured for yourself.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 source "${SCRIPT_DIR}/session-start-messages.sh"
+
+# The plugin's location, for every command the session runs after this: a
+# skill sources "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh",
+# and only a hook is told where the plugin is. CLAUDE_ENV_FILE is the file
+# Claude Code reads such variables from, set for SessionStart hooks only.
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  printf 'export BASSTLER_PLUGIN_ROOT=%q\n' "${PLUGIN_ROOT}" >> "${CLAUDE_ENV_FILE}"
+fi
 
 fetch_personal_notes_branch || exit 0
 
@@ -208,7 +213,7 @@ if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
 Personal notes, synced from '${NOTES_BRANCH}' (${NOTES_PATH}) on remote
 '${ACTIVE_NOTES_REMOTE}' by session-start.sh.
 To edit: change the notes between the markers below, then run
-  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-personal-notes.sh"
+  "\${BASSTLER_PLUGIN_ROOT}/hooks/save-personal-notes.sh"
 to push the change back. This header and the markers are regenerated every
 session from git config/environment/default (plus a same-branch-upstream
 fallback) - editing them has no effect; only content between the markers is
@@ -235,7 +240,7 @@ here throughout work on this PR. It is never merged: it lives only on
 PR merges is harmless (just unread from then on) - delete it directly on
 '${NOTES_BRANCH}' if you want to tidy it up.
 To edit: change the notes between the markers below, then run
-  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-pr-progress.sh"
+  "\${BASSTLER_PLUGIN_ROOT}/hooks/save-pr-progress.sh"
 to push the change back. This header and the markers are regenerated every
 session - editing them has no effect; only content between the markers is
 ever saved.
@@ -319,10 +324,10 @@ mailbox for structural changes yet - edit the manifest directly as usual."
 Plan manifest for '${PLAN_ID}', synced from '${NOTES_BRANCH}'
 (${PLAN_MANIFEST_PATH}) on remote '${ACTIVE_NOTES_REMOTE}' by
 session-start.sh. This branch is tracked as an item in this plan - see
-.claude/skills/plan-dashboard/plan-schema.md for the schema and
-.claude/skills/plan-dashboard/SKILL.md for how it's used and refreshed.
+skills/plan-dashboard/plan-schema.md for the schema and
+skills/plan-dashboard/SKILL.md for how it's used and refreshed.
 To edit: change the manifest between the markers below, then run
-  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh"
+  "\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh"
 to push the change back (this also regenerates the branch index), then run
 /plan-dashboard ${PLAN_ID} to refresh its dashboard - save-plan.sh can't call
 the Artifact tool itself. This header and the markers are regenerated every
@@ -410,10 +415,11 @@ if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
   fi
 fi
 
-# Dependencies: install whatever of the package's own this clone is missing,
-# so nothing downstream has to run without them. Reached only after the notes
-# branch resolved above, which is the signal that this is somebody who has run
-# the setup - a clone that never did installs nothing.
+# Dependencies: give the package its own environment, with the package and its
+# dependencies installed in it, wherever any of that is missing - so nothing
+# downstream has to run without them. Reached only after the notes branch
+# resolved above, which is the signal that this is somebody who has run the
+# setup - a clone that never did installs nothing.
 #
 # Run before the setup check below, so check-setup.sh's dashboard_dependencies
 # row reports on what this run has just installed rather than on the absence it
@@ -424,22 +430,73 @@ fi
 # import check and no installer at all, which is what makes doing this on
 # every session start affordable.
 #
-# Never fatal. An installer that is absent, offline or refused by an
-# externally managed environment reports here and the run carries on: a hook
-# that dies at this point takes the notes, the plan and the setup verdict with
-# it, and says nothing about why.
-if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
-  SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)"
-elif [ -z "${MISSING_DEPENDENCIES}" ]; then
-  SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed "${BASSTLER_PYPROJECT_FILE}")"
-elif install_dependencies "${MISSING_DEPENDENCIES}"; then
-  SUMMARY_DEPENDENCIES="$(dependencies_line_installed \
-    "${MISSING_DEPENDENCIES}" "${BASSTLER_PYPROJECT_FILE}")"
-else
-  SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
-    "${MISSING_DEPENDENCIES}" \
-    "$(printf '%s' "${DEPENDENCY_INSTALL_OUTPUT}" | tail -1)")"
-fi
+# Never fatal. An installer that is absent, offline or refused reports here and
+# the run carries on: a hook that dies at this point takes the notes, the plan
+# and the setup verdict with it, and says nothing about why.
+#
+# ensure_basstler_environment: sets SUMMARY_DEPENDENCIES to what it did.
+ensure_basstler_environment() {
+  if [ ! -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
+    create_and_install_basstler_environment
+    return
+  fi
+  if ! installed_package_is_current; then
+    install_basstler_and_report "$(basstler_package_source)"
+    return
+  fi
+  local missing
+  if ! missing="$(missing_dependencies)"; then
+    SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)"
+    return
+  fi
+  if [ -z "${missing}" ]; then
+    SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed \
+      "${BASSTLER_ENVIRONMENT_DIRECTORY}")"
+    return
+  fi
+  install_basstler_and_report "${missing}"
+}
+
+# install_basstler_and_report: installs the package into its existing
+# environment, setting SUMMARY_DEPENDENCIES to what became of the requirements
+# named in $1.
+install_basstler_and_report() {
+  local requirements="$1"
+  if ! install_basstler_into_environment; then
+    SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed "${requirements}" \
+      "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+      "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
+      "${BASSTLER_INSTALL_COMMAND[*]}")"
+    return
+  fi
+  SUMMARY_DEPENDENCIES="$(dependencies_line_installed "${requirements}" \
+    "${BASSTLER_ENVIRONMENT_DIRECTORY}")"
+}
+
+# create_and_install_basstler_environment: the first start on a clone, or one
+# whose environment was deleted - create it, install the package into it, and
+# point BASSTLER_PYTHON at it for everything after this in the run.
+create_and_install_basstler_environment() {
+  if ! create_basstler_environment; then
+    SUMMARY_DEPENDENCIES="$(dependencies_line_environment_not_created \
+      "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+      "$(printf '%s' "${BASSTLER_ENVIRONMENT_OUTPUT}" | tail -1)" \
+      "${BASSTLER_PYTHON_REQUIREMENT}")"
+    return
+  fi
+  resolve_basstler_python
+  if ! install_basstler_into_environment; then
+    SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
+      "$(basstler_package_source)" "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+      "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
+      "${BASSTLER_INSTALL_COMMAND[*]}")"
+    return
+  fi
+  SUMMARY_DEPENDENCIES="$(dependencies_line_environment_created \
+    "${BASSTLER_ENVIRONMENT_DIRECTORY}" "$(basstler_package_source)")"
+}
+
+ensure_basstler_environment
 
 # Setup verdict, from ./check-setup.sh - the single read-only source of truth
 # for whether this clone is set up. Reported here because remembering to run it
@@ -455,10 +512,10 @@ fi
 # already in use here - and captured with `|| true`, so a setup gap can never
 # turn into a session that starts with a broken hook.
 SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
-if [ -f "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" ]; then
+if [ -f "${CHECK_SETUP_SCRIPT}" ]; then
   # Only the needs-setup rows: the info rows are context for someone reading
   # the full report, not a verdict, and this summary is not that report.
-  NEEDS_SETUP_ROWS="$(bash "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" 2>/dev/null \
+  NEEDS_SETUP_ROWS="$(bash "${CHECK_SETUP_SCRIPT}" 2>/dev/null \
     | awk -F'\t' '$2 == "needs-setup" { printf "    %s: %s\n", $1, $3 }' || true)"
   if [ -z "${NEEDS_SETUP_ROWS}" ]; then
     SUMMARY_SETUP="$(setup_line_ok)"

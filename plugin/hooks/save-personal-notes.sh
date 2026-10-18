@@ -9,7 +9,7 @@ set -euo pipefail
 # this script.
 #
 # Usage (from anywhere, after editing CLAUDE.local.md):
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-personal-notes.sh"
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/save-personal-notes.sh"
 #
 # Always reads/writes the project root's CLAUDE.local.md specifically (see
 # CLAUDE_LOCAL_MD in ./resolve-personal-notes-config.sh), regardless of the
