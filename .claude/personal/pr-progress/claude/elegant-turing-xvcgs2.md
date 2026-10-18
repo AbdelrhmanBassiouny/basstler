@@ -1,10 +1,10 @@
-PR https://github.com/AbdelrhmanBassiouny/basstler/pull/5 (draft, bug): fail a PR that changes the package without bumping plugin.json's version.
+PR https://github.com/AbdelrhmanBassiouny/basstler/pull/5 (draft, bug): fail a PR that changes what basstler ships (src, pyproject, plugin/, reusable workflow) without bumping plugin.json's version; `release_version bump` writes it everywhere.
 
 Plan:
-- basstler.release_version check + CI release-version job; bump to 0.1.1.
+- `release_version check` in CI; `release_version bump`; version 0.1.1.
 
 Done:
-- Module, 7 tests, CI job, README, bump to 0.1.1; 820 tests pass; pushed and PR opened.
+- Review round 1 (a8d4a4a): plugin/skills count, bump command, fields before exit_code. Threads replied and resolved. 838 tests pass.
 
 Next:
-- Wait for the user's review; on merge, release.yml tags v0.1.1.
+- Wait for the user's review. On merge, release.yml tags v0.1.1.
