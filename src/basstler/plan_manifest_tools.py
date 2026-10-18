@@ -8,6 +8,7 @@ non-trivial branches later) tested like any other code.
 
 Usage:
     python3 plan_manifest_tools.py read-id <manifest-file>
+    python3 plan_manifest_tools.py validate <manifest-file>
     python3 plan_manifest_tools.py regenerate-branch-index \\
         --scratch-dir <dir> --plans-dir <relative-dir> \\
         --manifest-filename <name> --output <relative-path>
@@ -17,15 +18,18 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import glob
-import os
 import sys
+from dataclasses import dataclass
 from enum import StrEnum
+from functools import cached_property
 from pathlib import Path
+from typing import Any
 
 import yaml
 
-from basstler.plan_model import ManifestField, PlanItem, PlanManifest
+from basstler.build_dashboard import PlanValidationError, validate_plan
+from basstler import plan_model
+from basstler.exit_codes import ExitCode
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -34,142 +38,19 @@ This module's logger, which is also what its command prints through.
 """
 
 
-class YamlBooleanCoercionError(ValueError):
+class ManifestToolsCommand(StrEnum):
     """
-    Raised when a plan.yaml field that must be a string was parsed as a ``bool``
-    instead. PyYAML's YAML 1.1 resolver treats bare tokens like.
-
-    ``no``/``yes``/``on``/``off`` as booleans, silently discarding the
-    original text - quoting the value in plan.yaml (e.g. ``id: "no"``)
-    avoids this.
-    """
-
-
-def _require_string_field(value: object, field_name: str, manifest_path: object) -> str:
-    """
-    Guard against PyYAML's YAML 1.1 boolean coercion silently corrupting a plan/branch
-    identifier that happens to read as a bare ``no``/``yes``/ ``on``/``off`` token.
-
-    :param value: The field's already-parsed value.
-    :param field_name: The field's name, for the error message.
-    :param manifest_path: The manifest this field was read from, for the error message.
-    :raises YamlBooleanCoercionError: If *value* was coerced to ``bool``.
-    :return: *value* as a ``str``.
-    """
-    if isinstance(value, bool):
-        raise YamlBooleanCoercionError(
-            f"{manifest_path}: field {field_name!r} was parsed as the boolean "
-            f"{value!r} instead of a string - quote its value in plan.yaml "
-            f'(e.g. {field_name}: "no") to avoid PyYAML\'s YAML 1.1 bare-token '
-            "coercion."
-        )
-    return str(value)
-
-
-def read_manifest_id(manifest_path: Path) -> str:
-    """
-    Read the ``id`` field out of a plan.yaml manifest.
-
-    :param manifest_path: Path to the manifest file.
-    :raises YamlBooleanCoercionError: If ``id`` was parsed as a boolean.
-    :return: The manifest's ``id`` field, or an empty string if it has none.
-    """
-    with manifest_path.open() as manifest_file:
-        manifest = yaml.safe_load(manifest_file)
-    return _require_string_field(manifest.get("id", ""), "id", manifest_path)
-
-
-def regenerate_branch_index(
-    scratch_directory: Path, plans_directory: str, manifest_filename: str
-) -> str:
-    """
-    Rebuild the branch -> plan-id reverse index from every plan.yaml found.
-
-    Scans every ``<plans_directory>/*/<manifest_filename>`` under ``scratch_directory``
-    (a fresh checkout of the personal-notes branch) and emits one ``"<branch>\\t<plan-
-    id>"`` line per item branch, first plan wins on a duplicate branch. See ``resolve-
-    personal-notes-config.sh``'s ``plan_id_for_branch`` for why the format is TSV, not
-    YAML.
-
-    :param scratch_directory: The scratch worktree root to scan within.
-    :param plans_directory: The plans directory, relative to ``scratch_directory`` (e.g.
-        ``.claude/personal/plans``).
-    :param manifest_filename: The manifest's fixed filename (e.g. ``plan.yaml``).
-    :raises YamlBooleanCoercionError: If a plan's ``id`` or an item's ``branch`` was
-        parsed as a boolean.
-    :return: The regenerated index content, ready to write to disk.
-    """
-    lines = []
-    seen_branches = set()
-    manifest_pattern = os.path.join(
-        scratch_directory, plans_directory, "*", manifest_filename
-    )
-    for manifest_path in sorted(glob.glob(manifest_pattern)):
-        with open(manifest_path) as manifest_file:
-            plan = yaml.safe_load(manifest_file)
-        plan_id = _require_string_field(plan["id"], "id", manifest_path)
-        for item in plan.get("items", []):
-            raw_branch = item.get("branch")
-            if raw_branch is None:
-                continue
-            branch = _require_string_field(raw_branch, "branch", manifest_path)
-            if not branch:
-                continue
-            if branch in seen_branches:
-                logger.error(
-                    f"plan_manifest_tools.py: duplicate branch {branch!r} in "
-                    f"{manifest_path} - keeping the first plan it was seen "
-                    "under, dropping this one."
-                )
-                continue
-            seen_branches.add(branch)
-            lines.append(f"{branch}\t{plan_id}")
-    return "\n".join(lines) + ("\n" if lines else "")
-
-
-class ItemSummaryKey(StrEnum):
-    """
-    The keys an item summary adds to the plan fields it copies.
-    """
-
-    ITEM = "item"
-    """
-    The item's own entry.
-    """
-
-
-def item_summary(manifest: PlanManifest, item: PlanItem) -> str:
-    """
-    The part of a plan one item's session needs: the plan's id, title and tracking
-    issue, and that item's own entry.
-
-    :param manifest: The plan.
-    :param item: The item to summarize.
-    :return: The summary as YAML.
-    """
-    summary = {
-        field_name.value: manifest.content.get(field_name)
-        for field_name in (
-            ManifestField.IDENTIFIER,
-            ManifestField.TITLE,
-            ManifestField.TRACKING_ISSUE,
-        )
-    }
-    summary[ItemSummaryKey.ITEM.value] = item.content
-    return yaml.safe_dump(summary, sort_keys=False, allow_unicode=True, width=88)
-
-
-# %% command line
-
-
-class ManifestToolCommand(StrEnum):
-    """
-    The subcommands this module's command line runs.
+    The subcommands this tool answers.
     """
 
     READ_ID = "read-id"
     """
-    Print a manifest's id field.
+    Print a manifest's ``id`` field.
+    """
+
+    VALIDATE = "validate"
+    """
+    Check a manifest against the rules a dashboard is built under.
     """
 
     REGENERATE_BRANCH_INDEX = "regenerate-branch-index"
@@ -183,168 +64,256 @@ class ManifestToolCommand(StrEnum):
     """
 
 
-class ManifestToolOption(StrEnum):
+class ManifestToolsExitCode(ExitCode):
     """
-    The options this module's command line takes.
-    """
-
-    SCRATCH_DIRECTORY = "--scratch-dir"
-    """
-    The checkout of the personal-notes branch the index is built from.
+    How the command ended, as its caller reads it.
     """
 
-    PLANS_DIRECTORY = "--plans-dir"
+    SUCCESS = 0
     """
-    The plans directory, relative to the scratch directory.
-    """
-
-    MANIFEST_FILENAME = "--manifest-filename"
-    """
-    The filename every plan's manifest has.
+    The subcommand did what it was asked.
     """
 
-    OUTPUT = "--output"
+    INVALID_MANIFEST = 1
     """
-    Where the regenerated index is written.
-    """
-
-    ITEM_IDENTIFIER = "--id"
-    """
-    The id of the item to print.
-    """
-
-    BRANCH = "--branch"
-    """
-    The branch whose item to print.
+    The manifest breaks a rule the dashboard validates; the problems are on stderr.
     """
 
 
-class ManifestToolArgument(StrEnum):
+class YamlBooleanCoercionError(ValueError):
     """
-    The names this module's command line parses its subcommand and arguments under.
-    """
+    Raised when a plan.yaml field that must be a string was parsed as a ``bool``
+    instead. PyYAML's YAML 1.1 resolver treats bare tokens like.
 
-    SUBCOMMAND = "subcommand"
-    """
-    The subcommand to run, a :class:`ManifestToolCommand`.
-    """
-
-    MANIFEST_PATH = "manifest_path"
-    """
-    The manifest :attr:`ManifestToolCommand.READ_ID` and :attr:`ManifestToolCommand.ITEM`
-    read.
-    """
-
-    SCRATCH_DIRECTORY = "scratch_directory"
-    """
-    The value of :attr:`ManifestToolOption.SCRATCH_DIRECTORY`.
-    """
-
-    PLANS_DIRECTORY = "plans_directory"
-    """
-    The value of :attr:`ManifestToolOption.PLANS_DIRECTORY`.
-    """
-
-    MANIFEST_FILENAME = "manifest_filename"
-    """
-    The value of :attr:`ManifestToolOption.MANIFEST_FILENAME`.
-    """
-
-    OUTPUT = "output"
-    """
-    The value of :attr:`ManifestToolOption.OUTPUT`.
-    """
-
-    ITEM_IDENTIFIER = "item_identifier"
-    """
-    The value of :attr:`ManifestToolOption.ITEM_IDENTIFIER`.
-    """
-
-    BRANCH = "branch"
-    """
-    The value of :attr:`ManifestToolOption.BRANCH`.
+    ``no``/``yes``/``on``/``off`` as booleans, silently discarding the
+    original text - quoting the value in plan.yaml (e.g. ``id: "no"``)
+    avoids this.
     """
 
 
-def main() -> int:
+@dataclass
+class PlanManifest:
+    """
+    One plan.yaml manifest on disk, read once.
+    """
+
+    path: Path
+    """
+    Where the manifest is.
+    """
+
+    @cached_property
+    def content(self) -> dict[str, Any]:
+        """
+        :return: The manifest, parsed.
+        """
+        with self.path.open() as manifest_file:
+            return yaml.safe_load(manifest_file)
+
+    @property
+    def identifier(self) -> str:
+        """
+        :raises YamlBooleanCoercionError: If ``id`` was parsed as a boolean.
+        :return: The manifest's ``id`` field, or an empty string if it has none.
+        """
+        return self.string_field(self.content.get("id", ""), "id")
+
+    @property
+    def item_branches(self) -> list[str]:
+        """
+        :raises YamlBooleanCoercionError: If an item's ``branch`` was parsed as a
+            boolean.
+        :return: Every item's branch, in the manifest's order, leaving out the items that
+            name none.
+        """
+        branches = []
+        for item in self.content.get("items", []):
+            raw_branch = item.get("branch")
+            if raw_branch is None:
+                continue
+            branch = self.string_field(raw_branch, "branch")
+            if branch:
+                branches.append(branch)
+        return branches
+
+    def validate(self) -> None:
+        """
+        Check the manifest against the same rules a dashboard is built under, so nothing
+        is saved that no dashboard could then be built from.
+
+        :raises PlanValidationError: If it breaks any rule, carrying every problem
+            found.
+        """
+        validate_plan(self.content)
+
+    def string_field(self, value: object, field_name: str) -> str:
+        """
+        Guard against PyYAML's YAML 1.1 boolean coercion silently corrupting a
+        plan/branch identifier that happens to read as a bare ``no``/``yes``/
+        ``on``/``off`` token.
+
+        :param value: The field's already-parsed value.
+        :param field_name: The field's name, for the error message.
+        :raises YamlBooleanCoercionError: If *value* was coerced to ``bool``.
+        :return: *value* as a ``str``.
+        """
+        if isinstance(value, bool):
+            raise YamlBooleanCoercionError(
+                f"{self.path}: field {field_name!r} was parsed as the boolean "
+                f"{value!r} instead of a string - quote its value in plan.yaml "
+                f'(e.g. {field_name}: "no") to avoid PyYAML\'s YAML 1.1 bare-token '
+                "coercion."
+            )
+        return str(value)
+
+
+@dataclass
+class BranchIndex:
+    """
+    The branch -> plan-id reverse index, rebuilt from every plan.yaml in a checkout of
+    the personal-notes branch.
+
+    See ``resolve-personal-notes-config.sh``'s ``plan_id_for_branch`` for why the format
+    is TSV, not YAML.
+    """
+
+    scratch_directory: Path
+    """
+    The scratch worktree root to scan within.
+    """
+
+    plans_directory: Path
+    """
+    The plans directory, relative to :attr:`scratch_directory` (e.g.
+    ``.claude/personal/plans``).
+    """
+
+    manifest_filename: str
+    """
+    The manifest's fixed filename (e.g. ``plan.yaml``).
+    """
+
+    @property
+    def manifests(self) -> list[PlanManifest]:
+        """
+        :return: Every ``<plans_directory>/*/<manifest_filename>``, in sorted order.
+        """
+        plans_root = self.scratch_directory / self.plans_directory
+        return [
+            PlanManifest(path)
+            for path in sorted(plans_root.glob(f"*/{self.manifest_filename}"))
+        ]
+
+    def render(self) -> str:
+        """
+        One ``"<branch>\\t<plan-id>"`` line per item branch; the first plan wins on a
+        duplicate branch.
+
+        :raises YamlBooleanCoercionError: If a plan's ``id`` or an item's ``branch`` was
+            parsed as a boolean.
+        :return: The regenerated index content, ready to write to disk.
+        """
+        lines = []
+        seen_branches = set()
+        for manifest in self.manifests:
+            plan_id = manifest.string_field(manifest.content["id"], "id")
+            for branch in manifest.item_branches:
+                if branch in seen_branches:
+                    logger.error(
+                        f"plan_manifest_tools.py: duplicate branch {branch!r} in "
+                        f"{manifest.path} - keeping the first plan it was seen "
+                        "under, dropping this one."
+                    )
+                    continue
+                seen_branches.add(branch)
+                lines.append(f"{branch}\t{plan_id}")
+        return "\n".join(lines) + ("\n" if lines else "")
+
+
+class ManifestToolsCommandLine:
+    """
+    The command line save-plan.sh calls: its arguments, and the subcommand they name.
+    """
+
+    @classmethod
+    def parser(cls) -> argparse.ArgumentParser:
+        """
+        :return: The parser for every subcommand and its arguments.
+        """
+        parser = argparse.ArgumentParser(
+            description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+        subcommands = parser.add_subparsers(dest="subcommand", required=True)
+
+        read_id_parser = subcommands.add_parser(
+            ManifestToolsCommand.READ_ID, help="Print a manifest's id field"
+        )
+        read_id_parser.add_argument("manifest_path", type=Path)
+
+        validate_parser = subcommands.add_parser(
+            ManifestToolsCommand.VALIDATE,
+            help="Check a manifest against the rules a dashboard is built under",
+        )
+        validate_parser.add_argument("manifest_path", type=Path)
+
+        regenerate_parser = subcommands.add_parser(
+            ManifestToolsCommand.REGENERATE_BRANCH_INDEX,
+            help="Rebuild the branch->plan-id index",
+        )
+        regenerate_parser.add_argument("--scratch-dir", required=True, type=Path)
+        regenerate_parser.add_argument("--plans-dir", required=True, type=Path)
+        regenerate_parser.add_argument("--manifest-filename", required=True)
+        regenerate_parser.add_argument(
+            "--output", required=True, type=Path, help="Path to write the index to"
+        )
+
+        item_parser = subcommands.add_parser(
+            ManifestToolsCommand.ITEM,
+            help="Print the plan's header and one item's entry",
+        )
+        item_parser.add_argument("manifest_path", type=Path)
+        item_selector = item_parser.add_mutually_exclusive_group(required=True)
+        item_selector.add_argument("--id", dest="item_identifier")
+        item_selector.add_argument("--branch")
+        return parser
+
+    @classmethod
+    def run(cls, arguments: argparse.Namespace) -> ManifestToolsExitCode:
+        """
+        Carry out the subcommand *arguments* name.
+
+        :param arguments: The parsed command line.
+        :return: How the subcommand ended.
+        """
+        if arguments.subcommand == ManifestToolsCommand.READ_ID:
+            logger.info(PlanManifest(arguments.manifest_path).identifier)
+        elif arguments.subcommand == ManifestToolsCommand.VALIDATE:
+            try:
+                PlanManifest(arguments.manifest_path).validate()
+            except PlanValidationError as error:
+                logger.error(f"{arguments.manifest_path} failed validation: {error}")
+                return ManifestToolsExitCode.INVALID_MANIFEST
+        elif arguments.subcommand == ManifestToolsCommand.REGENERATE_BRANCH_INDEX:
+            index = BranchIndex(
+                arguments.scratch_dir, arguments.plans_dir, arguments.manifest_filename
+            )
+            arguments.output.write_text(index.render())
+        elif arguments.subcommand == ManifestToolsCommand.ITEM:
+            manifest = plan_model.PlanManifest.from_file(arguments.manifest_path)
+            item = (
+                manifest.item_on_branch(arguments.branch)
+                if arguments.branch is not None
+                else manifest.item_named(arguments.item_identifier)
+            )
+            logger.info(manifest.item_summary(item).rstrip("\n"))
+        return ManifestToolsExitCode.SUCCESS
+
+
+def main() -> ManifestToolsExitCode:
     """
     Parse arguments and dispatch to the requested subcommand.
     """
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    subcommands = parser.add_subparsers(
-        dest=ManifestToolArgument.SUBCOMMAND, required=True
-    )
-
-    read_id_parser = subcommands.add_parser(
-        ManifestToolCommand.READ_ID, help="Print a manifest's id field"
-    )
-    read_id_parser.add_argument(ManifestToolArgument.MANIFEST_PATH, type=Path)
-
-    regenerate_parser = subcommands.add_parser(
-        ManifestToolCommand.REGENERATE_BRANCH_INDEX,
-        help="Rebuild the branch->plan-id index",
-    )
-    regenerate_parser.add_argument(
-        ManifestToolOption.SCRATCH_DIRECTORY,
-        dest=ManifestToolArgument.SCRATCH_DIRECTORY,
-        required=True,
-        type=Path,
-    )
-    regenerate_parser.add_argument(
-        ManifestToolOption.PLANS_DIRECTORY,
-        dest=ManifestToolArgument.PLANS_DIRECTORY,
-        required=True,
-    )
-    regenerate_parser.add_argument(
-        ManifestToolOption.MANIFEST_FILENAME,
-        dest=ManifestToolArgument.MANIFEST_FILENAME,
-        required=True,
-    )
-    regenerate_parser.add_argument(
-        ManifestToolOption.OUTPUT,
-        dest=ManifestToolArgument.OUTPUT,
-        required=True,
-        type=Path,
-        help="Path to write the index to",
-    )
-
-    item_parser = subcommands.add_parser(
-        ManifestToolCommand.ITEM, help="Print the plan's header and one item's entry"
-    )
-    item_parser.add_argument(ManifestToolArgument.MANIFEST_PATH, type=Path)
-    item_selector = item_parser.add_mutually_exclusive_group(required=True)
-    item_selector.add_argument(
-        ManifestToolOption.ITEM_IDENTIFIER, dest=ManifestToolArgument.ITEM_IDENTIFIER
-    )
-    item_selector.add_argument(
-        ManifestToolOption.BRANCH, dest=ManifestToolArgument.BRANCH
-    )
-
-    arguments = vars(parser.parse_args())
-    subcommand = arguments[ManifestToolArgument.SUBCOMMAND]
-
-    if subcommand == ManifestToolCommand.READ_ID:
-        logger.info(read_manifest_id(arguments[ManifestToolArgument.MANIFEST_PATH]))
-    elif subcommand == ManifestToolCommand.REGENERATE_BRANCH_INDEX:
-        index_content = regenerate_branch_index(
-            arguments[ManifestToolArgument.SCRATCH_DIRECTORY],
-            arguments[ManifestToolArgument.PLANS_DIRECTORY],
-            arguments[ManifestToolArgument.MANIFEST_FILENAME],
-        )
-        arguments[ManifestToolArgument.OUTPUT].write_text(index_content)
-    elif subcommand == ManifestToolCommand.ITEM:
-        manifest = PlanManifest.from_file(arguments[ManifestToolArgument.MANIFEST_PATH])
-        branch = arguments[ManifestToolArgument.BRANCH]
-        item = (
-            manifest.item_on_branch(branch)
-            if branch is not None
-            else manifest.item_named(arguments[ManifestToolArgument.ITEM_IDENTIFIER])
-        )
-        logger.info(item_summary(manifest, item).rstrip("\n"))
-
-    return 0
+    return ManifestToolsCommandLine.run(ManifestToolsCommandLine.parser().parse_args())
 
 
 if __name__ == "__main__":

@@ -9,7 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.maintenance_constants import CREDENTIAL_VARIABLES
+from basstler.environment import GitHubCredentialVariable
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.maintenance_github import GitHubRepository
 from basstler.progress_notes import (
@@ -159,7 +159,7 @@ def without_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
     """
     Remove every GitHub credential from the environment.
     """
-    for variable in CREDENTIAL_VARIABLES:
+    for variable in GitHubCredentialVariable:
         monkeypatch.delenv(variable, raising=False)
 
 
@@ -176,7 +176,7 @@ def test_pruning_without_a_credential_removes_nothing(
 def test_pruning_against_an_unreadable_remote_removes_nothing(
     checkout_with_remote, tmp_path, monkeypatch
 ):
-    monkeypatch.setenv(CREDENTIAL_VARIABLES[0], "token")
+    monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, "token")
     checkout_with_remote.run_git("remote", "set-url", "origin", str(tmp_path / "gone"))
     directory = progress_directory(tmp_path / "notes", ProgressBranch.MERGED)
     outcome = pruning(checkout_with_remote, directory).run()
@@ -188,7 +188,7 @@ def test_pruning_removes_the_finished_and_deleted_branches_notes(
     checkout_with_remote, tmp_path, monkeypatch
 ):
     without_credentials(monkeypatch)
-    monkeypatch.setenv(CREDENTIAL_VARIABLES[0], "token")
+    monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, "token")
     monkeypatch.setattr(
         GitHubRepository, "pull_requests", lambda self, state: PULL_REQUESTS
     )

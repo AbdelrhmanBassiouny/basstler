@@ -12,7 +12,7 @@ every other constant referenced by name in this system, so nothing "more
 shared" exists yet for it to point at):
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 ```
 
 For the item's `depends_on` list, follow `pr-data-fetching.md`'s procedure

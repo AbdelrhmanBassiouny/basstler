@@ -207,6 +207,17 @@ class PlanItem:
         return PlanItem({**self.content, ManifestField.DEPENDS_ON.value: remaining})
 
 
+class ItemSummaryKey(StrEnum):
+    """
+    The keys an item summary adds to the plan fields it copies.
+    """
+
+    ITEM = "item"
+    """
+    The item's own entry.
+    """
+
+
 @dataclass(frozen=True)
 class PlanManifest:
     """
@@ -291,6 +302,25 @@ class PlanManifest:
         raise ItemNotTrackedError(
             plan_identifier=self.identifier, item_identifier=branch
         )
+
+    def item_summary(self, item: PlanItem) -> str:
+        """
+        The part of the plan one item's session needs: the plan's id, title and
+        tracking issue, and that item's own entry.
+
+        :param item: The item to summarize.
+        :return: The summary as YAML.
+        """
+        summary = {
+            field_name.value: self.content.get(field_name)
+            for field_name in (
+                ManifestField.IDENTIFIER,
+                ManifestField.TITLE,
+                ManifestField.TRACKING_ISSUE,
+            )
+        }
+        summary[ItemSummaryKey.ITEM.value] = item.content
+        return yaml.safe_dump(summary, sort_keys=False, allow_unicode=True, width=88)
 
     def without_landed_items(self) -> PlanManifest:
         """

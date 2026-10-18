@@ -1,0 +1,3 @@
+# Stands in for a project's committed .claude/basstler/stack.toml.
+upstream_repository = "a-project-owner/a-project"
+upstream_remote = "a-project-upstream"

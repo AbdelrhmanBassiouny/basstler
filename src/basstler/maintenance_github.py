@@ -11,7 +11,6 @@ caller to perform rather than performed.
 from __future__ import annotations
 
 import json
-import os
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -21,20 +20,29 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_board import PullRequestRecord
-from basstler.maintenance_constants import CREDENTIAL_VARIABLES, GITHUB_API_ROOT
+from basstler.environment import GitHubCredentialVariable
 from basstler.maintenance_errors import ExternalCallFailed
-from basstler.repository import Repository
+from basstler.repository import GitHubAddress, Repository
 
 
 @dataclass
-class GitHubCredentialUnavailableError(RuntimeError):
+class GitHubCredentialUnavailableError(CommandFailure, RuntimeError):
     """
     Raised when no token is available to authenticate the API calls with.
     """
 
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.CREDENTIAL_UNAVAILABLE
+
     variables: tuple[str, ...]
-    """The environment variables that were consulted."""
+    """
+    The environment variables that were consulted.
+    """
 
     def __str__(self) -> str:
         """:return: What was looked for, so the caller can supply it."""
@@ -105,16 +113,20 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
 
 
 @dataclass
-class GitHubRequestFailed(ExternalCallFailed):
+class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
     """
     Raised when the API refuses a call this module depends on.
     """
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.GITHUB_REQUEST_FAILED
 
     method: str = ""
     """
     The HTTP method used.
     """
-
     path: str = ""
     """
     The API path called, without the host.
@@ -178,24 +190,10 @@ class GitHubRepository(ForkPullRequests):
         :return: The client.
         :raises GitHubCredentialUnavailableError: If no token is set.
         """
-        token = cls.environment_token()
-        if token is None:
-            raise GitHubCredentialUnavailableError(CREDENTIAL_VARIABLES)
-        return cls(repository, token)
-
-    @staticmethod
-    def environment_token() -> str | None:
-        """
-        :return: The first non-empty credential the environment carries, if any.
-        """
-        return next(
-            (
-                os.environ[variable]
-                for variable in CREDENTIAL_VARIABLES
-                if os.environ.get(variable)
-            ),
-            None,
-        )
+        token = GitHubCredentialVariable.first_token()
+        if token:
+            return cls(repository, token)
+        raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
 
     def open_pull_requests(self) -> list[PullRequestRecord]:
         return self.pull_requests(ListedPullRequestState.OPEN)
@@ -261,7 +259,7 @@ class GitHubRepository(ForkPullRequests):
         :raises GitHubRequestFailed: If the API answers with an error status.
         """
         request = urllib.request.Request(
-            f"{GITHUB_API_ROOT}/repos/{self.repository}{path}",
+            f"{GitHubAddress.API}/repos/{self.repository}{path}",
             method=method,
             data=None if payload is None else json.dumps(payload).encode(),
             headers={

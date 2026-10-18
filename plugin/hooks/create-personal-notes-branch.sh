@@ -3,13 +3,13 @@ set -euo pipefail
 
 # One-time helper: creates the personal-notes branch (default:
 # `claude/personal-notes`) on a remote (default: `origin`) with a single
-# empty notes file at the default path (`.claude/personal/cram-notes.md`),
+# empty notes file at the default path (`.claude/personal/notes.md`),
 # and pushes it - so session-start.sh has something to read out of the box,
 # with no config needed on your end.
 #
 # Usage (from anywhere - always operates on this repo specifically, see
 # resolve-personal-notes-config.sh):
-#   ./.claude/hooks/create-personal-notes-branch.sh
+#   "${BASSTLER_PLUGIN_ROOT}"/hooks/create-personal-notes-branch.sh
 #
 # Resolves the remote/branch/path the same way session-start.sh does (git
 # config > environment variable > default), so it always targets whatever a
@@ -17,7 +17,7 @@ set -euo pipefail
 # names it and configure-personal-notes.sh read:
 #   CLAUDE_PERSONAL_NOTES_REMOTE=<remote-name-or-url> \
 #     CLAUDE_PERSONAL_NOTES_BRANCH=<branch> CLAUDE_PERSONAL_NOTES_PATH=<path> \
-#     ./.claude/hooks/create-personal-notes-branch.sh
+#     "${BASSTLER_PLUGIN_ROOT}"/hooks/create-personal-notes-branch.sh
 # See ./README.md for when a remote name vs. a raw URL is the right choice.
 #
 # Safe to re-run: refuses to touch a branch that already exists locally, on

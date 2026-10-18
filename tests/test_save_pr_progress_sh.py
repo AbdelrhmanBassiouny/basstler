@@ -9,9 +9,8 @@ import subprocess
 
 import pytest
 
-from basstler.locations import ProjectLocation
-from basstler.maintenance_constants import CREDENTIAL_VARIABLES
-from basstler.plan_item_bootstrap import HookScript
+from basstler.environment import GitHubCredentialVariable
+from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan_size_limits import Measure
 from basstler.progress_notes import ProgressNotesFile
 
@@ -35,7 +34,8 @@ def progress_repository(scratch_repository: ScratchRepository) -> ScratchReposit
     :return: The same repository, ready to run save-pr-progress.sh against.
     """
     scratch_repository.install_hook_scripts(
-        HookScript.CONFIGURATION, HookFile.SAVE_PULL_REQUEST_PROGRESS
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        HookFile.SAVE_PULL_REQUEST_PROGRESS,
     )
     scratch_repository.install_package()
     scratch_repository.write("README.md", "scratch repo\n")
@@ -59,7 +59,7 @@ def save_progress(
     :return: The finished hook.
     """
     repository.write(
-        PersonalNotesPath.CLAUDE_LOCAL,
+        PersonalNotesPath.LOCAL_INSTRUCTIONS,
         ClaudeLocalSection.PULL_REQUEST_PROGRESS.around(progress),
     )
     return repository.run_hook_script(
@@ -115,7 +115,7 @@ def test_without_a_credential_the_save_goes_ahead_unpruned(
     result = save_progress(
         progress_repository,
         "- Next: a step.\n",
-        **{variable: "" for variable in CREDENTIAL_VARIABLES},
+        **{variable: "" for variable in GitHubCredentialVariable},
     )
 
     assert result.returncode == 0, result.stderr

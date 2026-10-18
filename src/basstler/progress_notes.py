@@ -22,6 +22,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from basstler.environment import GitHubCredentialVariable
 from basstler.maintenance_board import PullRequestRecord
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.maintenance_github import GitHubRepository, ListedPullRequestState
@@ -247,7 +248,7 @@ class ProgressNotesPruning:
         """
         :return: The branches whose notes were deleted, or why nothing was judged.
         """
-        token = GitHubRepository.environment_token()
+        token = GitHubCredentialVariable.first_token()
         if token is None:
             return PruningSkipped.NO_CREDENTIAL
         url = self.git.attempt("remote", "get-url", self.remote)

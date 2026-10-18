@@ -1,5 +1,6 @@
 """
-A ``pyproject.toml``'s ``[project]`` table, read or written by a test.
+A ``pyproject.toml``'s ``[project]`` table, read or written by a test, and the build
+backend's version source, read by one.
 
 The suites both read the package's own declaration back and write declarations of their
 own into a scratch clone, so the table's keys and its access path live here once rather
@@ -9,6 +10,7 @@ than at every use site.
 from __future__ import annotations
 
 import json
+import re
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
@@ -16,7 +18,7 @@ from pathlib import Path
 from basstler.dependencies import PyprojectKey
 from basstler.locations import PackageLocation
 
-from .constants import ProjectTableKey
+from .constants import HatchVersionKey, ProjectTableKey, RepositoryLocation
 
 
 @dataclass(frozen=True)
@@ -83,3 +85,49 @@ class ProjectDeclaration:
                 f"{json.dumps(self.requires_python)}"
             )
         return "\n".join(lines) + "\n"
+
+
+@dataclass(frozen=True)
+class HatchVersionSource:
+    """
+    Where a ``pyproject.toml`` tells hatchling to read the version from.
+    """
+
+    path: Path
+    """
+    The file the version is read out of.
+    """
+
+    pattern: str
+    """
+    The regular expression whose ``version`` group is the version.
+    """
+
+    @classmethod
+    def read(cls, path: Path, root: Path) -> HatchVersionSource:
+        """
+        :param path: A ``pyproject.toml``.
+        :param root: The directory the source's path is relative to.
+        :return: Its ``[tool.hatch.version]`` table.
+        """
+        table = HatchVersionKey.version_table(tomllib.loads(path.read_text()))
+        return cls(
+            path=root / table[HatchVersionKey.PATH],
+            pattern=table[HatchVersionKey.PATTERN],
+        )
+
+    @classmethod
+    def of_this_package(cls) -> HatchVersionSource:
+        """
+        :return: The package's own version source, read straight from its source.
+        """
+        return cls.read(
+            PackageLocation.DEPENDENCY_DECLARATION.value, RepositoryLocation.ROOT
+        )
+
+    def version(self) -> str | None:
+        """
+        :return: The version the build reads, or ``None`` if the pattern matches nothing.
+        """
+        found = re.search(self.pattern, self.path.read_text())
+        return found.group(HatchVersionKey.VERSION) if found else None

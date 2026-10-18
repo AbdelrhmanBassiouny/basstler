@@ -9,7 +9,7 @@ set -euo pipefail
 # your notes.
 #
 # Usage (from anywhere, after editing .claude/settings.local.json):
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-personal-settings.sh"
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/save-personal-settings.sh"
 #
 # Run this whenever settings changed locally - including when Claude Code itself
 # appended a permission rule after an "always allow". Until it is run, those edits

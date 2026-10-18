@@ -11,7 +11,7 @@ generic, plan-agnostic reference material, so every clone has it with no
 setup. The **plan data it describes** is the opposite: it is never merged
 into `main`, living only on the personal-notes branch (`claude/personal-notes`
 by default — see [`resolve-personal-notes-config.sh`](../../hooks/resolve-personal-notes-config.sh)
-for how that's resolved), exactly like `cram-notes.md` and `pr-progress/*.md`.
+for how that's resolved), exactly like the personal notes and `pr-progress/*.md`.
 
 New to the system and want to see it end to end before reading the schema?
 Start with [`example-walkthrough.md`](./example-walkthrough.md), a short
@@ -138,7 +138,7 @@ itself.
 
 Every session that loads a plan pays for every line of it, so the plan holds
 only what a future session needs to act. `save-plan.sh` enforces this with
-the limits `basstler/src/basstler/plan_size_limits.py` names (`Measure`):
+the limits `src/basstler/plan_size_limits.py` names (`Measure`):
 
 - **Landed items are dropped on save**, along with every `depends_on` edge to
   them: the work is in the code and its history in git. A plan left with no
@@ -156,7 +156,7 @@ the limits `basstler/src/basstler/plan_size_limits.py` names (`Measure`):
 
 A save over a limit is refused with every violation named. Read one item
 rather than the manifest with
-`basstler/.venv/bin/python -m basstler.plan_manifest_tools item <file> --id <item-id>`.
+`"${BASSTLER_PYTHON}" -m basstler.plan_manifest_tools item <file> --id <item-id>`.
 
 ## Editing an existing plan
 
@@ -164,7 +164,7 @@ Fetch the personal-notes branch, copy `plans/<plan-id>/plan.yaml` and
 `roadmap.md` to scratch files, edit them, then run
 
 ```bash
-"$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id> --manifest <file> --roadmap <file>
+"${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id> --manifest <file> --roadmap <file>
 ```
 
 to push both files and regenerate the reverse index in one commit. This

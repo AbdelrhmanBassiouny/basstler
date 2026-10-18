@@ -6,6 +6,23 @@ references and git remote URLs the tooling is handed.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
+
+
+class GitHubAddress(StrEnum):
+    """
+    The base URLs every GitHub address this package builds is built on.
+    """
+
+    WEB = "https://github.com"
+    """
+    The root of every web and clone URL.
+    """
+
+    API = "https://api.github.com"
+    """
+    The root of every REST call.
+    """
 
 
 @dataclass
@@ -105,6 +122,37 @@ class Repository:
         The ``owner/name`` form GitHub's own interface and the ``gh`` CLI use.
         """
         return f"{self.owner}/{self.name}"
+
+    @property
+    def url(self) -> str:
+        """
+        The repository's page on GitHub, which is also the base of every page within it.
+        """
+        return f"{GitHubAddress.WEB}/{self.full_name}"
+
+    @property
+    def clone_url(self) -> str:
+        """
+        The HTTPS URL git clones and fetches the repository from.
+        """
+        return f"{self.url}.git"
+
+    def pull_request_url(self, number: int) -> str:
+        """
+        :param number: The pull request's number.
+        :return: The pull request's page on GitHub.
+        """
+        return f"{self.url}/pull/{number}"
+
+    def git_requirement(self, distribution: str, reference: str) -> str:
+        """
+        A pip requirement installing a distribution straight from this repository.
+
+        :param distribution: The distribution the repository builds.
+        :param reference: The tag, branch or commit to install it at.
+        :return: The requirement, as ``pip install`` takes it.
+        """
+        return f"{distribution} @ git+{self.url}@{reference}"
 
     def __str__(self) -> str:
         """:return: :attr:`full_name`."""
