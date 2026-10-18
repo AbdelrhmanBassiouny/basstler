@@ -1,6 +1,6 @@
 """
-Tests for basstler.plan_item_bootstrap.py's two operations, recording an item and opening
-its work.
+Tests for basstler.plan_item_bootstrap.py's two operations, recording an item and
+opening its work.
 
 Run against the local scratch repository fixture rather than a real remote, and against
 a recording pull request opener rather than GitHub, so nothing here needs network access
@@ -24,12 +24,10 @@ import pytest
 import yaml
 
 import basstler.plan_item_bootstrap
+from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan_item_bootstrap import (
-    BLOCK_STYLED_KEYS,
-    PLANS_DIRECTORY,
     CreatedPullRequest,
-    ExitCode,
-    HookScript,
+    PlanItemBootstrapExitCode,
     ItemRecordRequest,
     ItemStatus,
     KeySpecification,
@@ -45,7 +43,7 @@ from basstler.plan_item_bootstrap import (
     record_item,
 )
 from .scratch_repository import ScratchRepository
-from .constants import DATASET_DIRECTORY, WORK_BRANCH
+from .constants import DatasetLocation, ScratchBranch
 
 from .script_runner import PythonModuleRunner
 
@@ -60,12 +58,12 @@ the package's own directory on ``sys.path`` in place of the project root.
 
 PLAN_IDENTIFIER = "test-plan"
 
-PLAN_MANIFEST = (DATASET_DIRECTORY / "bootstrap-plan.yaml").read_text()
+PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "bootstrap-plan.yaml").read_text()
 """
 The manifest every test starts from.
 """
 
-PLAN_ROADMAP = (DATASET_DIRECTORY / "bootstrap-roadmap.md").read_text()
+PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "bootstrap-roadmap.md").read_text()
 """
 The roadmap every test starts from.
 """
@@ -162,8 +160,8 @@ def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     :return: The same repository, ready to bootstrap an item in.
     """
     scratch_repository.install_hook_scripts(
-        HookScript.CONFIGURATION.value,
-        HookScript.SAVE_PLAN.value,
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
     )
     scratch_repository.install_package()
     scratch_repository.write("README.md", "scratch repo\n")
@@ -249,7 +247,7 @@ def open_request(**overrides: object) -> WorkOpenRequest:
         plan_identifier=PLAN_IDENTIFIER,
         item_identifier=EXISTING_ITEM,
         branch=NEW_BRANCH,
-        base_branch=WORK_BRANCH,
+        base_branch=ScratchBranch.WORK,
         session_url=SESSION_URL,
         pull_request_title="An item that has not been started",
         pull_request_body="What it does.",
@@ -269,7 +267,7 @@ def test_recording_an_existing_item_sets_its_status(
         project_root=bootstrap_repository.project_root,
     )
 
-    assert result.exit_code is ExitCode.SUCCESS
+    assert result.exit_code is PlanItemBootstrapExitCode.SUCCESS
     published = published_plan(bootstrap_repository)
     assert (
         manifest_line(ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value)
@@ -379,7 +377,7 @@ def test_opening_writes_the_branch_pull_request_and_session_onto_the_item(
         pull_request_opener=opener,
     )
 
-    assert result.exit_code is ExitCode.SUCCESS
+    assert result.exit_code is PlanItemBootstrapExitCode.SUCCESS
     assert result.pull_request_number == 143
     manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
     for written_key, value in (
@@ -407,7 +405,7 @@ def test_opening_asks_for_a_draft_pull_request_against_the_plans_repository(
     assert request.draft is True
     assert request.repository == "an-owner/a-repository"
     assert request.head == NEW_BRANCH
-    assert request.base == WORK_BRANCH
+    assert request.base == ScratchBranch.WORK
 
 
 def test_opening_publishes_the_branch_to_the_repositorys_own_remote(
@@ -569,12 +567,12 @@ def test_a_rendered_field_line_matches_how_a_real_manifest_writes_it():
 
 
 NARROWLY_INDENTED_MANIFEST = (
-    DATASET_DIRECTORY / "narrowly-indented-plan.yaml"
+    DatasetLocation.DIRECTORY / "narrowly-indented-plan.yaml"
 ).read_text()
 """
 A manifest predating this module's own formatting convention: its items list has no
 indent before the ``-`` and its fields sit two spaces in, not the four
-``ITEM_FIELD_INDENT`` assumes.
+``ItemLayout.FIELD_INDENT`` assumes.
 
 ``icra-mechanism/plan.yaml`` on the personal-notes branch is written exactly this way.
 """
@@ -650,14 +648,14 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
     bootstrap_repository: ScratchRepository,
 ):
     """
-    ``PLANS_DIRECTORY`` mirrors ``PLANS_DIR`` in the shell configuration; this is what
-    stops the mirror drifting, since the two are edited in different files.
+    ``ProjectLocation.PLANS`` mirrors ``PLANS_DIR`` in the shell configuration; this is
+    what stops the mirror drifting, since the two are edited in different files.
     """
     resolved = subprocess.run(
         [
             "bash",
             "-c",
-            f'source "{HookScript.CONFIGURATION.path}" && '
+            f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && '
             'printf "%s\\n%s\\n" "${PLANS_DIR}" "$(plan_manifest_path "$1")"',
             "test",
             PLAN_IDENTIFIER,
@@ -668,36 +666,36 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
         check=True,
     )
     plans_directory, manifest_path = resolved.stdout.strip().split("\n")
-    assert plans_directory == PLANS_DIRECTORY
+    assert plans_directory == str(ProjectLocation.PLANS)
     assert manifest_path == PlanDocument.MANIFEST.path_within_notes_branch(
         PLAN_IDENTIFIER
     )
 
 
 def test_only_the_keys_whose_values_run_over_lines_are_block_styled():
-    assert BLOCK_STYLED_KEYS == {ManifestKey.NOTES, ManifestKey.BLOCKERS}
+    assert ManifestKey.block_styled() == {ManifestKey.NOTES, ManifestKey.BLOCKERS}
 
 
 # %% exit statuses
 
 
 def test_every_exit_code_names_itself_from_its_own_member():
-    for exit_code in ExitCode:
+    for exit_code in PlanItemBootstrapExitCode:
         assert exit_code.name_for_a_caller == exit_code.name.lower()
 
 
 def test_each_refusal_carries_its_own_exit_code():
     codes = {
-        UnknownPlanError: ExitCode.UNKNOWN_PLAN,
-        UnknownItemError: ExitCode.UNKNOWN_ITEM,
-        basstler.plan_item_bootstrap.IncompleteNewItemError: ExitCode.INCOMPLETE_NEW_ITEM,
+        UnknownPlanError: PlanItemBootstrapExitCode.UNKNOWN_PLAN,
+        UnknownItemError: PlanItemBootstrapExitCode.UNKNOWN_ITEM,
+        basstler.plan_item_bootstrap.IncompleteNewItemError: PlanItemBootstrapExitCode.INCOMPLETE_NEW_ITEM,
         basstler.plan_item_bootstrap.BranchAlreadyPublishedError: (
-            ExitCode.BRANCH_ALREADY_PUBLISHED
+            PlanItemBootstrapExitCode.BRANCH_ALREADY_PUBLISHED
         ),
         basstler.plan_item_bootstrap.PullRequestDetailsMissingError: (
-            ExitCode.PULL_REQUEST_DETAILS_MISSING
+            PlanItemBootstrapExitCode.PULL_REQUEST_DETAILS_MISSING
         ),
-        basstler.plan_item_bootstrap.PullRequestRefusedError: ExitCode.PULL_REQUEST_REFUSED,
+        basstler.plan_item_bootstrap.PullRequestRefusedError: PlanItemBootstrapExitCode.PULL_REQUEST_REFUSED,
     }
     assert {error: error.exit_code for error in codes} == codes
 
@@ -759,7 +757,7 @@ def test_the_record_subcommand_reports_status_and_exit_code_first(
     assert result.returncode == 0, result.stderr
     report = json.loads(result.stdout)
     assert list(report)[:2] == ["status", "exit_code"]
-    assert report["status"] == ExitCode.SUCCESS.name_for_a_caller
+    assert report["status"] == PlanItemBootstrapExitCode.SUCCESS.name_for_a_caller
     assert report["exit_code"] == 0
 
 
@@ -772,8 +770,8 @@ def test_the_command_line_names_the_status_it_failed_with(
         bootstrap_repository, *record_arguments(section, plan="no-such-plan")
     )
 
-    assert result.returncode == ExitCode.UNKNOWN_PLAN
-    assert ExitCode.UNKNOWN_PLAN.name_for_a_caller in result.stderr
+    assert result.returncode == PlanItemBootstrapExitCode.UNKNOWN_PLAN
+    assert PlanItemBootstrapExitCode.UNKNOWN_PLAN.name_for_a_caller in result.stderr
 
 
 def test_the_dashboard_republish_is_handed_back_rather_than_attempted(

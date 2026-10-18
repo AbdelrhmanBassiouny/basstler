@@ -1,24 +1,28 @@
-# Sourced (not executed) by session-start.sh, create-personal-notes-branch.sh,
-# save-personal-notes.sh and save-pr-progress.sh, so all four resolve the
-# personal-notes remote, branch and path with the exact same precedence: git
-# config > environment variable > the zero-config default. See ./README.md.
+# Sourced (not executed) by every hook and skill entry point, so all of them
+# resolve the plugin, the project and the personal-notes remote, branch and
+# path with the exact same precedence: git config > environment variable > the
+# zero-config default. See ./README.md.
 
-# CLAUDE_LOCAL_MD: the one, deterministic path to CLAUDE.local.md, always the
-# project root regardless of the caller's current working directory. Derived
-# from this file's own location on disk (${BASH_SOURCE[0]}, which - inside a
-# sourced file - is that file's own path, not the sourcing script's) rather
-# than $CLAUDE_PROJECT_DIR or the caller's cwd: a SessionStart hook's cwd
-# isn't guaranteed to be the project root (see session-start.sh), and these
-# scripts are also run directly, outside any hook, where nothing guarantees
-# $CLAUDE_PROJECT_DIR is set at all. This file always lives at
-# <project-root>/.claude/hooks/resolve-personal-notes-config.sh, so two
-# levels up from its own directory is always the project root, unconditionally.
+# HOOKS_DIR / PLUGIN_ROOT: where this plugin's own files are - derived from this
+# file's own location on disk (${BASH_SOURCE[0]}, which - inside a sourced file -
+# is that file's own path, not the sourcing script's), so every script and
+# document path below is absolute, whichever project the plugin serves.
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PROJECT_ROOT="$(cd "${HOOKS_DIR}/../.." && pwd)"
+PLUGIN_ROOT="$(cd "${HOOKS_DIR}/.." && pwd)"
+# Exported so a module of the package run from here finds the plugin's scripts
+# too (see basstler.locations.PluginLocation).
+export BASSTLER_PLUGIN_ROOT="${PLUGIN_ROOT}"
+
+# PROJECT_ROOT: the project the session works in - CLAUDE_PROJECT_DIR, which
+# Claude Code sets for every hook, else the top of the git repository the caller
+# runs in, for a script run by hand. Never derived from this file's location: the
+# plugin lives outside the project it serves.
+PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
+PROJECT_ROOT="$(cd "${PROJECT_ROOT}" && pwd)"
 CLAUDE_LOCAL_MD="${PROJECT_ROOT}/CLAUDE.local.md"
 
 # Every caller also does `git` operations (config, fetch, worktree, branch)
-# that assume they're running inside this repo. Move there explicitly instead
+# that assume they're running inside the project. Move there explicitly instead
 # of trusting the invoking cwd to already be inside it (or inside it at all) -
 # git itself would otherwise auto-discover a *different* repo if run from
 # inside some other one, or fail outright if run from outside any repo.
@@ -31,7 +35,7 @@ NOTES_BRANCH="$(git config --get claude.personalNotesBranch || true)"
 NOTES_BRANCH="${NOTES_BRANCH:-${CLAUDE_PERSONAL_NOTES_BRANCH:-claude/personal-notes}}"
 
 NOTES_PATH="$(git config --get claude.personalNotesPath || true)"
-NOTES_PATH="${NOTES_PATH:-${CLAUDE_PERSONAL_NOTES_PATH:-.claude/personal/cram-notes.md}}"
+NOTES_PATH="${NOTES_PATH:-${CLAUDE_PERSONAL_NOTES_PATH:-.claude/personal/notes.md}}"
 
 # NOTES_REMOTE may be either a configured remote's name (e.g. "origin") or a
 # raw git URL (e.g. "https://github.com/<you>/<repo>") - `git fetch`/`git
@@ -73,6 +77,7 @@ personal_settings_are_locally_modified() {
 # record_personal_settings_sync: stamps the local settings' current content as the
 # synced baseline, so the next session start may update them in place.
 record_personal_settings_sync() {
+  mkdir -p "$(dirname "${PERSONAL_SETTINGS_SYNC_STAMP}")"
   git hash-object "${LOCAL_SETTINGS_JSON}" > "${PERSONAL_SETTINGS_SYNC_STAMP}"
 }
 
@@ -81,9 +86,14 @@ record_personal_settings_sync() {
 # "abdel-direct/some-branch"), or nothing if it has no upstream (detached
 # HEAD, or a branch that was never pushed with -u/--set-upstream). Shared by
 # fetch_personal_notes_branch below and by create-personal-notes-branch.sh's
-# existence check, so both apply the exact same fallback remote.
+# existence check, so both apply the exact same fallback remote. Having no
+# upstream is an answer, not an error, so this always returns 0 - otherwise a
+# caller under `set -e -o pipefail` (create-personal-notes-branch.sh) exits
+# silently with git's 128 instead of going on to create the branch.
 current_branch_upstream_remote() {
-  git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null | cut -d/ -f1
+  local upstream
+  upstream="$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null)" || return 0
+  printf '%s\n' "${upstream%%/*}"
 }
 
 # fetch_personal_notes_branch: fetches NOTES_BRANCH from NOTES_REMOTE. If that
@@ -275,7 +285,7 @@ plan_roadmap_path() {
 
 # PLAN_BRANCH_INDEX_PATH: the generated reverse index mapping every plan
 # item's branch to the plan id that tracks it (see
-# .claude/skills/plan-dashboard/plan-schema.md for the
+# skills/plan-dashboard/plan-schema.md for the
 # full plan-dashboard schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
@@ -286,21 +296,27 @@ PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 # same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
 DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 
-# BASSTLER_PACKAGE_DIRECTORY / *_MODULE / *_FILE: every Python entry point in
-# this system, and the package holding them - defined once, here, so
-# refresh_dashboard.sh, every plan-*/SKILL.md, and .github/workflows/ci.yml
-# source this file and use these variables instead of each carrying its own
-# separately-typed literal (exactly the drift risk a reviewer flagged after
-# those paths had already been duplicated across all of them). Relative to
-# the project root, which sourcing this file already `cd`s into (see
-# PROJECT_ROOT above) - so every caller can use these directly, with no
-# further path arithmetic of its own.
+# *_MODULE: every Python entry point in this system - defined once, here, so
+# refresh_dashboard.sh, every SKILL.md and every workflow source this file and
+# use these variables instead of each carrying its own separately-typed literal.
 #
 # A *_MODULE is an import path rather than a file path, and is run as
-# `python3 -m "${SOME_MODULE}"`. Running one by its file path instead would
-# put the package's own directory on sys.path in place of the project root,
-# so its absolute imports of its siblings would not resolve.
-BASSTLER_PACKAGE_DIRECTORY="basstler"
+# `"${BASSTLER_PYTHON}" -m "${SOME_MODULE}"`, BASSTLER_PYTHON being the
+# package's own interpreter (see resolve_basstler_python below).
+#
+# BASSTLER_CHECKOUT: the basstler source checkout this plugin sits in, when it
+# sits in one - a development clone, or a plugin run straight from a clone of
+# its repository. Empty for a plugin installed on its own, whose package comes
+# from its repository at the plugin's own version instead (see
+# basstler_package_source below).
+BASSTLER_CHECKOUT=""
+if [ -f "${PLUGIN_ROOT}/../pyproject.toml" ] && [ -d "${PLUGIN_ROOT}/../src/basstler" ]; then
+  BASSTLER_CHECKOUT="$(cd "${PLUGIN_ROOT}/.." && pwd)"
+  # Exported so every module a caller runs is that checkout's own source,
+  # whichever interpreter runs it, and whatever an install elsewhere would
+  # resolve to.
+  export PYTHONPATH="${BASSTLER_CHECKOUT}/src${PYTHONPATH:+:${PYTHONPATH}}"
+fi
 # build_dashboard: renders one plan's dashboard HTML from its manifest
 # and live GitHub data - see the module's own docstring.
 BUILD_DASHBOARD_MODULE="basstler.build_dashboard"
@@ -345,42 +361,23 @@ CHECK_SCOPE_OVERLAP_MODULE="basstler.check_scope_overlap"
 # upstream_reviews: reports the review threads a fork branch's upstream
 # pull request has collected, run by the upstream-reviews Action.
 UPSTREAM_REVIEWS_MODULE="basstler.upstream_reviews"
-# dependencies: prints the package's declared dependencies this environment
-# does not have - what missing_dependencies below calls.
+# dependencies: prints the package's requirements an environment does not
+# have - what missing_dependencies below calls.
 BASSTLER_DEPENDENCIES_MODULE="basstler.dependencies"
-# pyproject.toml: the package's own metadata, and the one place its
-# PyYAML/Jinja2/markdown/nh3 dependencies are declared - installed by CI, by an
-# Actions workflow running a module, and by ./session-start.sh on every session
-# start (see install_dependencies below).
-BASSTLER_PYPROJECT_FILE="${BASSTLER_PACKAGE_DIRECTORY}/pyproject.toml"
-# stack.toml: the committed defaults stack.py's load_configuration layers a
-# personal-notes .claude/personal/stack.toml override on top of.
-STACK_CONFIG_FILE="${BASSTLER_PACKAGE_DIRECTORY}/stack.toml"
-# plan-item-modes.toml: the committed execution-mode defaults plan_item_mode
-# layers a personal-notes .claude/personal/plan-item-modes.toml override on
-# top of - the same committed-defaults/personal-override split as stack.toml.
-PLAN_ITEM_MODES_CONFIG_FILE="${BASSTLER_PACKAGE_DIRECTORY}/plan-item-modes.toml"
+# plan-item-modes.toml on the personal-notes branch: the per-user override
+# plan_item_mode layers on top of the package's shipped defaults.
 PERSONAL_PLAN_ITEM_MODES_PATH=".claude/personal/plan-item-modes.toml"
-# test/basstler_test/: the one pytest suite covering every module above -
-# the exact directory CI and a session both run against. One directory
-# rather than the three this suite was merged from, since one package has
-# one test tree.
-BASSTLER_TESTS_DIRECTORY="test/basstler_test"
 
 # PLAN_DASHBOARD_DIRECTORY / REFRESH_DASHBOARD_SCRIPT: what the
-# plan-dashboard skill still keeps outside the package - Claude Code
-# discovers a skill and its reference documents by path, and the shell
-# entry point sits with the skill it belongs to.
-PLAN_DASHBOARD_DIRECTORY=".claude/skills/plan-dashboard"
+# plan-dashboard skill keeps outside the package - Claude Code discovers a
+# skill and its reference documents by path, and the shell entry point sits
+# with the skill it belongs to. Every path from here on is absolute, under
+# PLUGIN_ROOT.
+PLAN_DASHBOARD_DIRECTORY="${PLUGIN_ROOT}/skills/plan-dashboard"
 # refresh_dashboard.sh: orchestrates sync_manifest_status, the
 # conditional push of its correction, then build_dashboard - the whole
 # refresh sequence /plan-dashboard runs for one plan.
 REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
-
-# STACK_DIRECTORY: where the stacked-PR workflow's own README lives. Its
-# Python moved into the package above; the document stays, because it is
-# read rather than run.
-STACK_DIRECTORY=".claude/stack"
 
 # plan-schema.md: the full plan.yaml field reference every plan-* skill
 # reads before drafting or interpreting a manifest. On main, next to the
@@ -400,7 +397,7 @@ PULL_REQUEST_DATA_FETCHING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetchin
 # personal-notes-branch helper, used by refresh_dashboard.sh (the manifest
 # auto-sync correction) and plan-dashboard/SKILL.md (the dashboard-URL
 # cache) alike.
-WRITE_PERSONAL_NOTES_FILE_SCRIPT=".claude/hooks/write-personal-notes-file.sh"
+WRITE_PERSONAL_NOTES_FILE_SCRIPT="${HOOKS_DIR}/write-personal-notes-file.sh"
 
 # SETUP_PERSONAL_NOTES_DIRECTORY / *_DOCUMENT / STARTER_NOTES_FILE /
 # CHECK_SETUP_SCRIPT: the one-time-setup half of this system - the skill a
@@ -408,28 +405,23 @@ WRITE_PERSONAL_NOTES_FILE_SCRIPT=".claude/hooks/write-personal-notes-file.sh"
 # shared "is this clone set up yet?" procedure every other skill defers to
 # instead of restating it, and the read-only inspection script all of them
 # call. Same defined-once reasoning as every path above.
-SETUP_PERSONAL_NOTES_DIRECTORY=".claude/skills/setup-personal-notes"
+SETUP_PERSONAL_NOTES_DIRECTORY="${PLUGIN_ROOT}/skills/setup-personal-notes"
 # check-setup.sh: reports, as TSV, which parts of the setup are already done -
 # the single source of truth for that question, so no caller re-implements
 # "is the notes branch there?" with its own git plumbing.
-CHECK_SETUP_SCRIPT=".claude/hooks/check-setup.sh"
-# CREATE_PERSONAL_NOTES_BRANCH_SCRIPT: the script that creates the notes
-# branch, named once here because nine scripts tell the user to run it when the
-# branch is missing. Defined-once for the same reason as every path above: a
-# rename otherwise has to find every message that spells it.
-CREATE_PERSONAL_NOTES_BRANCH_SCRIPT=".claude/hooks/create-personal-notes-branch.sh"
+CHECK_SETUP_SCRIPT="${HOOKS_DIR}/check-setup.sh"
 # PLAN_SIZE_BUDGET_MODULE / PLAN_SIZE_REPORT_SCRIPT: the budget every plan is
 # measured against and the command that reports it, same defined-once reasoning
 # as every path above.
 PLAN_SIZE_BUDGET_MODULE="basstler.plan_size_budget"
-PLAN_SIZE_REPORT_SCRIPT=".claude/hooks/plan-size-report.sh"
+PLAN_SIZE_REPORT_SCRIPT="${HOOKS_DIR}/plan-size-report.sh"
 # PLAN_SIZE_CHECK_MODULE: whether a plan is already full, for `/add-plan-item`
 # and `/plan-create` to check before writing into or as it - never refuses,
 # unlike a future save-time gate, since the routing decision has to happen
 # before a save is even attempted. Same defined-once reasoning as every path
 # above.
 PLAN_SIZE_CHECK_MODULE="basstler.plan_size_check"
-# prerequisite-check.md: the shared "run check-setup.sh, offer
+# prerequisite-check.md: the shared "run check-setup.sh, run
 # /setup-personal-notes if it fails" procedure that plan-create,
 # plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in
 # one line rather than each spelling it out.
@@ -444,7 +436,7 @@ STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 # work (/add-plan-item) and the shared scope rule all four plan skills defer to
 # instead of each restating it. Its Python moved into the package above, as
 # CHECK_SCOPE_OVERLAP_MODULE.
-ADD_PLAN_ITEM_DIRECTORY=".claude/skills/add-plan-item"
+ADD_PLAN_ITEM_DIRECTORY="${PLUGIN_ROOT}/skills/add-plan-item"
 # scope-decision.md: the shared "is this new work, or a change to work already
 # in flight?" rule that plan-create, plan-item-kickoff, plan-item-resolve and
 # add-plan-item each reference in a line rather than each spelling it out.
@@ -456,7 +448,7 @@ SCOPE_DECISION_DOCUMENT="${ADD_PLAN_ITEM_DIRECTORY}/scope-decision.md"
 # instructions), save-plan.sh is invoked from plan-create/SKILL.md's own
 # bootstrap step, i.e. a real caller this codebase controls - the same
 # duplication risk, just for a hook script instead of a plan-dashboard one.
-SAVE_PLAN_SCRIPT=".claude/hooks/save-plan.sh"
+SAVE_PLAN_SCRIPT="${HOOKS_DIR}/save-plan.sh"
 
 # EXECUTION_MODES_DOCUMENT: the shared "which mode is in force, what it
 # obliges, and when auto mode still asks" procedure that plan-item-kickoff and
@@ -549,47 +541,191 @@ tracked_plan_count() {
     | awk -F'\t' 'NF >= 2 { seen[$2] = 1 } END { print length(seen) }'
 }
 
-# %% the package's own dependencies
+# %% the package's own environment
 
-# missing_dependencies: prints the requirement specifiers
-# BASSTLER_PYPROJECT_FILE declares that are not installed, space separated, and
-# nothing at all when every one of them is. Returns 1 without printing when the
-# file or python3 is missing, which is a caller's problem to word rather than
-# this function's.
+# BASSTLER_HOME: where the package's environment and anything installed for it
+# live - one per user rather than one per clone, so every project the plugin
+# serves shares one environment, and a fresh clone of any of them needs no
+# install of its own.
+BASSTLER_HOME="${BASSTLER_HOME:-${XDG_DATA_HOME:-${HOME}/.local/share}/basstler}"
+# BASSTLER_ENVIRONMENT_DIRECTORY: the package's own virtual environment, which
+# session-start.sh creates where it is missing and installs the package into.
+BASSTLER_ENVIRONMENT_DIRECTORY="${BASSTLER_HOME}/venv"
+BASSTLER_ENVIRONMENT_INTERPRETER="${BASSTLER_ENVIRONMENT_DIRECTORY}/bin/python"
+# BASSTLER_INSTALLED_SOURCE_FILE: what the environment's package was last
+# installed from, so a plugin update - which names a new source - reinstalls it.
+BASSTLER_INSTALLED_SOURCE_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-source"
+# BASSTLER_PYTHON_REQUIREMENT: the interpreters the package supports - the
+# requires-python of the package's pyproject.toml, which a test holds this
+# equal to.
+BASSTLER_PYTHON_REQUIREMENT=">=3.12"
+# BASSTLER_INTERPRETER_CANDIDATES: interpreters satisfying that requirement,
+# newest first, tried by name when uv is not there to find or fetch one.
+BASSTLER_INTERPRETER_CANDIDATES="python3.14 python3.13 python3.12"
+# BASSTLER_UV_DIRECTORY: where uv is installed on a machine with neither uv nor
+# any of the candidates - so one whose only interpreter is too old for the
+# package still gets an environment, from an interpreter uv fetches.
+BASSTLER_UV_DIRECTORY="${BASSTLER_HOME}/uv"
+BASSTLER_INSTALLED_UV="${BASSTLER_UV_DIRECTORY}/bin/uv"
+# BASSTLER_REPOSITORY_URL / PLUGIN_MANIFEST: where an installed plugin's package
+# comes from, and the manifest naming the version it comes at.
+BASSTLER_REPOSITORY_URL="https://github.com/AbdelrhmanBassiouny/basstler"
+PLUGIN_MANIFEST="${PLUGIN_ROOT}/.claude-plugin/plugin.json"
+
+# plugin_version: prints the version PLUGIN_MANIFEST declares.
+plugin_version() {
+  sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
+    "${PLUGIN_MANIFEST}" | head -1
+}
+
+# basstler_package_source: prints what to install the package from - the
+# checkout this plugin sits in, else the plugin's own version of its
+# repository, so the package and the hooks calling it are always one release.
+basstler_package_source() {
+  if [ -n "${BASSTLER_CHECKOUT}" ]; then
+    printf '%s\n' "${BASSTLER_CHECKOUT}"
+    return
+  fi
+  printf 'basstler @ git+%s@v%s\n' "${BASSTLER_REPOSITORY_URL}" "$(plugin_version)"
+}
+
+# resolve_basstler_python: sets BASSTLER_PYTHON, the interpreter every caller
+# runs a module of the package with - the package's environment once it
+# exists, python3 until then. Run on sourcing, and again by session-start.sh
+# once it has created the environment.
+resolve_basstler_python() {
+  if [ -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
+    BASSTLER_PYTHON="${BASSTLER_ENVIRONMENT_INTERPRETER}"
+  else
+    BASSTLER_PYTHON="python3"
+  fi
+}
+resolve_basstler_python
+
+# installed_package_is_current: whether BASSTLER_PYTHON imports the package and
+# it was installed from what basstler_package_source names now.
+installed_package_is_current() {
+  [ -f "${BASSTLER_INSTALLED_SOURCE_FILE}" ] || return 1
+  [ "$(cat "${BASSTLER_INSTALLED_SOURCE_FILE}")" = "$(basstler_package_source)" ] \
+    || return 1
+  "${BASSTLER_PYTHON}" -c "import basstler" > /dev/null 2>&1
+}
+
+# missing_dependencies: prints the requirement specifiers - the package itself,
+# then the dependencies it declares - that BASSTLER_PYTHON does not have, space
+# separated, and nothing at all when it has every one of them. Returns 1
+# without printing when the interpreter is missing or the declaration cannot be
+# read, which is a caller's problem to word rather than this function's.
 #
 # The reading is BASSTLER_DEPENDENCIES_MODULE's rather than a snippet written
 # out here: it parses a declaration, and parsing embedded in a shell string is
 # code nothing can run on its own or test.
 missing_dependencies() {
-  command -v python3 > /dev/null 2>&1 || return 1
-  [ -f "${BASSTLER_PYPROJECT_FILE}" ] || return 1
+  command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1 || return 1
+  if ! "${BASSTLER_PYTHON}" -c "import basstler" > /dev/null 2>&1; then
+    printf 'basstler\n'
+    return 0
+  fi
   local missing
   # Its failure is reported rather than echoed, since an empty answer is what
   # a caller reads as "nothing to install".
-  missing="$(python3 -m "${BASSTLER_DEPENDENCIES_MODULE}")" || return 1
+  missing="$("${BASSTLER_PYTHON}" -m "${BASSTLER_DEPENDENCIES_MODULE}")" || return 1
   # Unquoted so the module's one-specifier-per-line output is word split and
   # printed back as one space separated line.
   # shellcheck disable=SC2086
   echo ${missing}
 }
 
-# install_dependencies: installs the specifiers named in $1, leaving pip's own
-# output (both streams) in DEPENDENCY_INSTALL_OUTPUT for a caller to report,
-# and returning pip's exit status.
+# create_basstler_environment: creates BASSTLER_ENVIRONMENT_DIRECTORY from an
+# interpreter satisfying BASSTLER_PYTHON_REQUIREMENT, leaving what the creating
+# tool said in BASSTLER_ENVIRONMENT_OUTPUT and returning its exit status.
 #
-# The specifiers rather than the package itself: installing ./basstler would put
-# a second copy of these modules in site-packages beside the clone's own, and
-# the clone's copy is what the zero-install contract says a caller imports.
-install_dependencies() {
-  local specifiers="$1"
-  # shellcheck disable=SC2086 # each specifier is its own argument to pip.
-  DEPENDENCY_INSTALL_OUTPUT="$(pip install ${specifiers} 2>&1)"
+# uv first, since it can fetch a supported interpreter where none is
+# installed; then the first of BASSTLER_INTERPRETER_CANDIDATES on PATH; and
+# with neither, uv installed into BASSTLER_UV_DIRECTORY for the purpose.
+# None of them installs pip into the environment:
+# install_basstler_into_environment runs the pip on PATH against it instead.
+create_basstler_environment() {
+  mkdir -p "${BASSTLER_HOME}"
+  local uv
+  if uv="$(available_uv)"; then
+    create_basstler_environment_with "${uv}"
+    return
+  fi
+  local candidate
+  for candidate in ${BASSTLER_INTERPRETER_CANDIDATES}; do
+    command -v "${candidate}" > /dev/null 2>&1 || continue
+    BASSTLER_ENVIRONMENT_OUTPUT="$("${candidate}" -m venv --without-pip \
+      "${BASSTLER_ENVIRONMENT_DIRECTORY}" 2>&1)"
+    return
+  done
+  if ! install_uv; then
+    BASSTLER_ENVIRONMENT_OUTPUT="no uv and none of ${BASSTLER_INTERPRETER_CANDIDATES} on PATH, and uv could not be installed: $(printf '%s' "${BASSTLER_ENVIRONMENT_OUTPUT}" | tail -1)"
+    return 1
+  fi
+  create_basstler_environment_with "${BASSTLER_INSTALLED_UV}"
+}
+
+# available_uv: prints the uv to create the environment with - the one on PATH,
+# else the one install_uv installed earlier - and returns 1 when there is none.
+available_uv() {
+  command -v uv && return
+  [ -x "${BASSTLER_INSTALLED_UV}" ] || return 1
+  printf '%s\n' "${BASSTLER_INSTALLED_UV}"
+}
+
+# create_basstler_environment_with: creates the environment with the uv at $1,
+# which fetches a supported interpreter if none is installed. --no-project, so
+# a uv project the caller happens to stand in does not impose its own Python
+# requirement, which is not the package's.
+create_basstler_environment_with() {
+  local uv="$1"
+  BASSTLER_ENVIRONMENT_OUTPUT="$("${uv}" venv --no-project \
+    --python "${BASSTLER_PYTHON_REQUIREMENT}" \
+    "${BASSTLER_ENVIRONMENT_DIRECTORY}" 2>&1)"
+}
+
+# install_uv: installs uv into BASSTLER_UV_DIRECTORY with the pip on PATH,
+# leaving pip's output in BASSTLER_ENVIRONMENT_OUTPUT. A target directory
+# rather than the interpreter's own packages, so an externally managed
+# interpreter does not refuse it.
+install_uv() {
+  BASSTLER_ENVIRONMENT_OUTPUT="$(pip install --target \
+    "${BASSTLER_UV_DIRECTORY}" uv 2>&1)"
+}
+
+# install_basstler_into_environment: installs the package from
+# basstler_package_source into its environment, which brings every declared
+# dependency with it, leaving the installer's own output (both streams) in
+# BASSTLER_INSTALL_OUTPUT and the command it ran in the array
+# BASSTLER_INSTALL_COMMAND, for a caller to report, and returning the
+# installer's exit status. On success, records the source it installed from.
+#
+# A checkout is installed editable, so `import basstler` there is that
+# checkout's own source rather than a second copy of it in site-packages. With
+# uv where there is one, since pip runs its own code inside the environment's
+# interpreter and an older pip breaks on a newer interpreter; otherwise with
+# the pip on PATH.
+install_basstler_into_environment() {
+  local source uv
+  source="$(basstler_package_source)"
+  local requirement=("${source}")
+  [ -n "${BASSTLER_CHECKOUT}" ] && requirement=(--editable "${source}")
+  if uv="$(available_uv)"; then
+    BASSTLER_INSTALL_COMMAND=("${uv}" pip install --python
+      "${BASSTLER_ENVIRONMENT_INTERPRETER}" "${requirement[@]}")
+  else
+    BASSTLER_INSTALL_COMMAND=(pip --python "${BASSTLER_ENVIRONMENT_INTERPRETER}"
+      install "${requirement[@]}")
+  fi
+  BASSTLER_INSTALL_OUTPUT="$("${BASSTLER_INSTALL_COMMAND[@]}" 2>&1)" || return
+  printf '%s\n' "${source}" > "${BASSTLER_INSTALLED_SOURCE_FILE}"
 }
 
 # PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
 # SHA that was FETCH_HEAD the last time this clone read plan state (either
 # session-start.sh's own auto-discovery, or ./plan-updates-since.sh). This is
-# the "last-seen SHA" the recheck-deltas convention in cram-notes.md is built
+# the "last-seen SHA" the recheck-deltas convention in the personal notes is built
 # around: a session that wants to know what changed since it last looked
 # diffs from this stamp instead of rereading whole files - see
 # ./plan-updates-since.sh, which is also what advances it.
@@ -601,6 +737,7 @@ PLAN_STATE_SYNC_STAMP="${PROJECT_ROOT}/.claude/.plan-state-sync-sha"
 # FETCH_HEAD directly rather than fetching again itself, same reasoning as
 # plan_id_for_branch above.
 record_plan_state_sync_stamp() {
+  mkdir -p "$(dirname "${PLAN_STATE_SYNC_STAMP}")"
   git rev-parse FETCH_HEAD > "${PLAN_STATE_SYNC_STAMP}"
 }
 

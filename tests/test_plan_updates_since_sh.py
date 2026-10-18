@@ -12,43 +12,50 @@ access, no real personal-notes branch, no real GitHub credentials.
 from __future__ import annotations
 
 import json
-import os
 import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
-from .constants import ToolingDirectory
+from basstler.locations import PluginLocation, ProjectLocation
+from basstler.maintenance_constants import GitHubClient
+
+from .constants import (
+    DatasetLocation,
+    EnvironmentVariable,
+    ScratchBranch,
+    ScrubbedEnvironmentPrefix,
+)
 from .script_runner import BashScriptRunner
 
-from .constants import DATASET_DIRECTORY
 from .executable_stubs import (
     ExecutableStubDirectory,
-    path_hiding_executable,
+    path_hiding_executables,
 )
 
 from basstler.plan_updates_since_support import (
-    NO_CHANGES_MESSAGE,
-    NO_TRACKING_ISSUE_MESSAGE,
+    PlanUpdatesSinceMessage,
     IssueComment,
     PlanUpdatesSinceOption,
     no_default_repository_message,
 )
 from .scratch_repository import ScratchRepository
 
-PLAN_MANIFEST_NOT_STARTED = (DATASET_DIRECTORY / "plan.yaml").read_text()
-PLAN_MANIFEST_IN_PROGRESS = (DATASET_DIRECTORY / "plan-in-progress.yaml").read_text()
+PLAN_MANIFEST_NOT_STARTED = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
+PLAN_MANIFEST_IN_PROGRESS = (
+    DatasetLocation.DIRECTORY / "plan-in-progress.yaml"
+).read_text()
 PLAN_MANIFEST_WITH_TRACKING_ISSUE = (
-    DATASET_DIRECTORY / "plan-with-tracking-issue.yaml"
+    DatasetLocation.DIRECTORY / "plan-with-tracking-issue.yaml"
 ).read_text()
 PLAN_MANIFEST_TRACKING_ISSUE_NO_REPOSITORY = (
-    DATASET_DIRECTORY / "plan-tracking-issue-no-repository.yaml"
+    DatasetLocation.DIRECTORY / "plan-tracking-issue-no-repository.yaml"
 ).read_text()
-PLAN_ROADMAP = (DATASET_DIRECTORY / "roadmap.md").read_text()
+PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "roadmap.md").read_text()
 
 PLAN_ID = "test-plan"
-STAMP_RELATIVE_PATH = ".claude/.plan-state-sync-sha"
+STAMP_RELATIVE_PATH = ProjectLocation.CLAUDE_CODE_DIRECTORY / ".plan-state-sync-sha"
 
 TRACKING_ISSUE_REPOSITORY = "octo-org/octo-repo"
 """
@@ -64,7 +71,7 @@ REMOVED_VARIABLE_PREFIXES = (
     "GH_TOKEN",
     "GITHUB_TOKEN",
     "GH_HOST",
-    "CLAUDE_PERSONAL_NOTES_",
+    *ScrubbedEnvironmentPrefix,
 )
 """
 What every subprocess these tests run must not inherit.
@@ -94,8 +101,8 @@ def install_plan_updates_since(repository: ScratchRepository) -> None:
     :param repository: A fixture-built scratch repository.
     """
     repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "plan-updates-since.sh",
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.PLAN_UPDATES_SINCE_SCRIPT.name,
     )
     repository.install_package()
     repository.write("README.md", "scratch repo\n")
@@ -113,7 +120,7 @@ def scratch_repo(scratch_repository: ScratchRepository) -> ScratchRepository:
     """
     install_plan_updates_since(scratch_repository)
     scratch_repository.publish_notes_branch(
-        {".claude/personal/placeholder.md": "notes\n"}
+        {ProjectLocation.PERSONAL_NOTES / "placeholder.md": "notes\n"}
     )
     scratch_repository.resolve_notes_remote_to()
     return scratch_repository
@@ -147,20 +154,20 @@ def write_plan_commit(
         "clone",
         "--quiet",
         "--branch",
-        "claude/personal-notes",
+        ScratchBranch.PERSONAL_NOTES,
         str(repository.notes_remote_path),
         str(checkout),
         cwd=repository.project_root.parent,
     )
     _run_git("config", "user.name", "Scratch Repo", cwd=checkout)
     _run_git("config", "user.email", "scratch-repo@example.com", cwd=checkout)
-    plan_directory = checkout / ".claude" / "personal" / "plans" / plan_id
+    plan_directory = checkout / ProjectLocation.PLANS / plan_id
     plan_directory.mkdir(parents=True, exist_ok=True)
     (plan_directory / "plan.yaml").write_text(manifest)
     (plan_directory / "roadmap.md").write_text(roadmap)
-    _run_git("add", f".claude/personal/plans/{plan_id}", cwd=checkout)
+    _run_git("add", str(plan_directory), cwd=checkout)
     _run_git("commit", "--quiet", "-m", message, cwd=checkout)
-    _run_git("push", "--quiet", "origin", "claude/personal-notes", cwd=checkout)
+    _run_git("push", "--quiet", "origin", ScratchBranch.PERSONAL_NOTES, cwd=checkout)
     sha = _run_git("rev-parse", "HEAD", cwd=checkout).stdout.strip()
     shutil.rmtree(checkout)
     return sha
@@ -182,7 +189,9 @@ def run_plan_updates_since(
         project_root=repository.project_root,
         removed_variable_prefixes=REMOVED_VARIABLE_PREFIXES,
         script_path=(
-            repository.project_root / ToolingDirectory.HOOKS / "plan-updates-since.sh"
+            repository.plugin_root
+            / PluginLocation.HOOKS.value.name
+            / PluginLocation.PLAN_UPDATES_SINCE_SCRIPT.name
         ),
     ).run(*arguments, **(env or {}))
 
@@ -260,7 +269,7 @@ def test_no_changes_since_the_baseline_prints_a_clear_message(
     )
 
     assert result.returncode == 0, result.stderr
-    assert NO_CHANGES_MESSAGE in result.stdout
+    assert PlanUpdatesSinceMessage.NO_CHANGES in result.stdout
 
 
 # %% the recheck stamp
@@ -294,7 +303,7 @@ def test_stamp_is_updated_after_running(scratch_repo: ScratchRepository):
 
     second_result = run_plan_updates_since(scratch_repo, PLAN_ID)
     assert second_result.returncode == 0, second_result.stderr
-    assert NO_CHANGES_MESSAGE in second_result.stdout
+    assert PlanUpdatesSinceMessage.NO_CHANGES in second_result.stdout
 
 
 # %% tracking-issue comments
@@ -310,7 +319,7 @@ def test_no_tracking_issue_skips_the_comments_step(scratch_repo: ScratchReposito
     )
 
     assert result.returncode == 0, result.stderr
-    assert NO_TRACKING_ISSUE_MESSAGE in result.stdout
+    assert PlanUpdatesSinceMessage.NO_TRACKING_ISSUE in result.stdout
 
 
 def test_tracking_issue_without_default_repository_fails_clearly(
@@ -337,7 +346,7 @@ def test_tracking_issue_without_default_repository_fails_clearly(
 def test_prints_tracking_issue_comments_via_the_gh_backend(
     scratch_repo: ScratchRepository, stub_bin: ExecutableStubDirectory, tmp_path: Path
 ):
-    stub_bin.install("gh")
+    stub_bin.install(GitHubClient.COMMAND_LINE)
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
@@ -353,7 +362,7 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
         PlanUpdatesSinceOption.SINCE,
         sha,
         env={
-            "PATH": stub_bin.ahead_of(os.environ.get("PATH", "")),
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
             "STUB_GH_ISSUE_COMMENTS_JSON": comments_json,
             "STUB_GH_CALL_LOG": str(call_log),
         },
@@ -372,7 +381,7 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
 def test_prints_tracking_issue_comments_via_the_curl_fallback(
     scratch_repo: ScratchRepository, stub_bin: ExecutableStubDirectory, tmp_path: Path
 ):
-    stub_bin.install("curl")
+    stub_bin.install(GitHubClient.CURL)
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
@@ -381,7 +390,7 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
         author_login="hubot", created_at="2026-08-01T01:00:00Z", body="Ship it"
     )
     comments_json = json.dumps([comment.to_api_response()])
-    hidden_gh_path = path_hiding_executable("gh", tmp_path)
+    hidden_gh_path = path_hiding_executables(tmp_path, GitHubClient.COMMAND_LINE)
 
     result = run_plan_updates_since(
         scratch_repo,
@@ -389,7 +398,9 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
         PlanUpdatesSinceOption.SINCE,
         sha,
         env={
-            "PATH": stub_bin.ahead_of(hidden_gh_path),
+            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                hidden_gh_path
+            ),
             "GH_TOKEN": "a-token",
             "STUB_CURL_ISSUE_COMMENTS_JSON": comments_json,
             "STUB_CURL_CALL_LOG": str(call_log),
@@ -411,14 +422,14 @@ def test_fails_when_neither_gh_nor_a_token_is_available(
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
-    hidden_gh_path = path_hiding_executable("gh", tmp_path)
+    hidden_gh_path = path_hiding_executables(tmp_path, GitHubClient.COMMAND_LINE)
 
     result = run_plan_updates_since(
         scratch_repo,
         PLAN_ID,
         PlanUpdatesSinceOption.SINCE,
         sha,
-        env={"PATH": hidden_gh_path},
+        env={EnvironmentVariable.EXECUTABLE_SEARCH_PATH: hidden_gh_path},
     )
 
     assert result.returncode != 0

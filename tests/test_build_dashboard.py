@@ -13,7 +13,6 @@ import pytest
 import yaml
 
 from basstler.build_dashboard import (
-    AVAILABLE_MODELS,
     DashboardRenderer,
     DependencyCycle,
     DuplicateItemId,
@@ -25,11 +24,10 @@ from basstler.build_dashboard import (
     ItemStatus,
     LiveState,
     MalformedPullRequestDataError,
-    MAXIMUM_DEPENDENCY_STACK_LEVEL,
     MissingMergeTimestampError,
+    ModelOption,
     Plan,
     PlanValidationError,
-    PullRequestLabel,
     PullRequestRecord,
     PullRequestsByRepository,
     PullRequestState,
@@ -45,9 +43,13 @@ from basstler.build_dashboard import (
     main,
     validate_plan,
 )
+from basstler.locations import PackageLocation
+from basstler.github_labels import GitHubLabel
+
+from .constants import RepositoryLocation, SkillDirectory, StackLabel
 
 EXAMPLE_DIRECTORY = (
-    Path(__file__).parent.parent.parent / ".claude/skills/plan-dashboard/example"
+    RepositoryLocation.PLUGIN / SkillDirectory.PLAN_DASHBOARD / "example"
 )
 """The example-walkthrough.md doc's committed sample plan.yaml/roadmap.md/
 pr_data.json - see the tests at the bottom of this file for why."""
@@ -215,6 +217,18 @@ def test_validate_plan_rejects_unknown_status():
     assert any(isinstance(problem, UnknownStatus) for problem in error.value.problems)
 
 
+@pytest.mark.parametrize("status", ["in_progress", ItemStatus.IN_PROGRESS.value])
+def test_validate_plan_accepts_a_status_in_either_spelling(status):
+    """
+    ``in_progress`` is the spelling manifests were written in before the values took
+    spaces, and stays readable beside the current one.
+    """
+    items = [
+        {"id": "a", "title": "A", "branch": "a", "track": "track-1", "status": status}
+    ]
+    validate_plan(minimal_plan(items=items))
+
+
 def test_validate_plan_collects_every_problem_not_just_the_first():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(schema_version=2, tracks=[]))
@@ -356,15 +370,15 @@ def test_identified_labels_recognizes_known_labels():
         state=PullRequestState.OPEN, labels=["in-review", "merged"]
     )
     assert record.identified_labels == {
-        PullRequestLabel.IN_REVIEW,
-        PullRequestLabel.MERGED,
+        GitHubLabel.IN_REVIEW,
+        GitHubLabel.MERGED,
     }
 
 
 def test_identified_labels_silently_excludes_an_unrecognized_label():
-    # cram2-link-sent is real label traffic on this repo's own PRs (added by
-    # other automation) that this codebase has no reason to recognize.
-    record = PullRequestRecord(state=PullRequestState.OPEN, labels=["cram2-link-sent"])
+    record = PullRequestRecord(
+        state=PullRequestState.OPEN, labels=[StackLabel.SOMEBODY_ELSES]
+    )
     assert record.identified_labels == frozenset()
 
 
@@ -416,6 +430,17 @@ def test_status_and_drift_css_class_with_drift():
     drifted_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
     drifted_item.drift_description = "marked done, but pull request #1 is still open"
     assert drifted_item.status_and_drift_css_class == "status-done has-drift"
+
+
+@pytest.mark.parametrize("status", list(ItemStatus))
+def test_the_dashboard_styles_every_status_css_class(status):
+    """
+    A status value holds spaces, so the class is built from the member's name, and the
+    stylesheet has to know that name.
+    """
+    item = Item(title="A", branch="a", track="track-1", status=status)
+    template = (PackageLocation.TEMPLATES / "dashboard.html").read_text()
+    assert f".item.{item.status_and_drift_css_class} " in template
 
 
 def test_is_ready_to_unblock_dependents_true_when_done():
@@ -1078,7 +1103,7 @@ def test_item_is_a_bug_fix_when_its_pull_request_carries_the_bug_label():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1096,7 +1121,7 @@ def test_item_is_not_a_bug_fix_when_its_pull_request_carries_other_labels():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.IN_REVIEW.value, "enhancement"],
+                labels=[GitHubLabel.IN_REVIEW.value, StackLabel.SOMEBODY_ELSES],
             )
         }
     }
@@ -1122,7 +1147,7 @@ def test_bug_fix_stays_in_its_ordinary_action_group():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1140,7 +1165,7 @@ def test_render_marks_a_bug_fix_sidebar_entry_with_a_bug_chip():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1176,7 +1201,7 @@ def _renderer_with_one_bug_fix_and_one_other_entry() -> DashboardRenderer:
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             ),
             "2": PullRequestRecord(state=PullRequestState.OPEN, draft=False),
         }
@@ -1350,7 +1375,7 @@ def test_action_is_reconsider_for_a_deferred_item():
 
 def test_track_stack_wraps_past_the_maximum_level():
     # A chain one longer than the cap: item N depends on item N-1.
-    chain_length = MAXIMUM_DEPENDENCY_STACK_LEVEL + 2
+    chain_length = DashboardRenderer.maximum_dependency_stack_level + 2
     items = [item("item-0", ItemStatus.NOT_STARTED)]
     for index in range(1, chain_length):
         items.append(
@@ -1368,7 +1393,7 @@ def test_track_stack_wraps_past_the_maximum_level():
 
 def test_track_stack_does_not_wrap_within_the_maximum_level():
     items = [item("item-0", ItemStatus.NOT_STARTED)]
-    for index in range(1, MAXIMUM_DEPENDENCY_STACK_LEVEL):
+    for index in range(1, DashboardRenderer.maximum_dependency_stack_level):
         items.append(
             item(
                 f"item-{index}",
@@ -1749,7 +1774,7 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    for model in AVAILABLE_MODELS:
+    for model in ModelOption:
         assert f'data-value="{model.value}"' in output
         assert f">{model.label}</li>" in output
     assert 'class="model-picker-toggle"' in output
@@ -2041,7 +2066,7 @@ def test_main_prints_the_status_summary_as_json(tmp_path, monkeypatch, capsys):
     )
     main()
     summary = json.loads(capsys.readouterr().out)
-    assert summary["counts"]["not_started"] == 1
+    assert summary["counts"][ItemStatus.NOT_STARTED.value] == 1
 
 
 def test_main_rejects_an_invalid_manifest_instead_of_crashing(

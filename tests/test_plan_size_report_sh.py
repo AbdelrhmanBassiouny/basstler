@@ -6,40 +6,31 @@ needs network access or a real personal-notes branch.
 """
 
 import subprocess
+from pathlib import Path
 
 import pytest
 import yaml
 
-from basstler import dependencies
-from basstler.plan_item_bootstrap import PLANS_DIRECTORY, HookScript, PlanDocument
+from basstler.locations import PluginLocation, ProjectLocation
+from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_size_budget import PlanSize, SizeBudget, SizeReport
 
-from .constants import PACKAGE_DIRECTORY
-from .scratch_repository import ScratchRepository
+from .project_declaration import ProjectDeclaration
+from .scratch_repository import PackageSourceFile, ScratchRepository
 
-DECLARATION_PATH = f"{PACKAGE_DIRECTORY.name}/{dependencies.DECLARATION_PATH.name}"
+UNINSTALLABLE_REQUIREMENT = "basstler-no-such-distribution>=1"
 """
-Where the package declares its dependencies within a checkout, composed from the two
-definitions that own its halves rather than spelled again here.
-"""
-
-ABSENT_DISTRIBUTION = "no-such-distribution-exists"
-"""
-A name no environment can have installed, so a declaration naming it is always reported
+A distribution nothing can have installed, so a declaration naming it is always reported
 as missing.
 """
 
 
-def declaring_only(specifier: str) -> str:
+def declaration_file(repository: ScratchRepository) -> Path:
     """
-    :param specifier: The one requirement the declaration is to state.
-    :return: A ``pyproject.toml`` declaring it and nothing else, written through the
-        table and field names the reader looks them up by.
+    :param repository: A fixture-built scratch repository.
+    :return: Where its scratch checkout declares the package's requirements.
     """
-    return (
-        f"[{dependencies.PROJECT_TABLE}]\n"
-        f'{dependencies.DEPENDENCIES_FIELD} = ["{specifier}"]\n'
-    )
+    return repository.checkout_root / PackageSourceFile.METADATA
 
 
 def plan_files(plan_id: str, item_count: int = 0, roadmap_line_count: int = 0) -> dict:
@@ -51,7 +42,7 @@ def plan_files(plan_id: str, item_count: int = 0, roadmap_line_count: int = 0) -
     :param roadmap_line_count: How many lines its roadmap holds.
     :return: File contents, keyed by path relative to the notes branch's root.
     """
-    plan_directory = f"{PLANS_DIRECTORY}/{plan_id}"
+    plan_directory = f"{ProjectLocation.PLANS}/{plan_id}"
     manifest = {
         "id": plan_id,
         "items": [{"id": f"item-{number}"} for number in range(item_count)],
@@ -74,7 +65,8 @@ def report_repository(scratch_repository: ScratchRepository) -> ScratchRepositor
     :return: The same repository, ready to publish plans and run the report against.
     """
     scratch_repository.install_hook_scripts(
-        HookScript.CONFIGURATION, HookScript.PLAN_SIZE_REPORT
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.PLAN_SIZE_REPORT_SCRIPT.name,
     )
     scratch_repository.install_package()
     scratch_repository.write("README.md", "scratch repo\n")
@@ -90,7 +82,7 @@ def run_report(repository: ScratchRepository) -> subprocess.CompletedProcess[str
     :param repository: A fixture-built scratch repository.
     :return: The finished subprocess.
     """
-    return repository.run_hook_script(HookScript.PLAN_SIZE_REPORT)
+    return repository.run_hook_script(PluginLocation.PLAN_SIZE_REPORT_SCRIPT.name)
 
 
 def report_line_for(report: str, plan_id: str) -> str:
@@ -125,7 +117,7 @@ def test_counts_the_manifest_and_roadmap_lines_together(
     files = plan_files("plan-a", item_count=1, roadmap_line_count=4)
     report_repository.publish_notes_branch(files)
     manifest_line_count = len(
-        files[f"{PLANS_DIRECTORY}/plan-a/{PlanDocument.MANIFEST}"].splitlines()
+        files[f"{ProjectLocation.PLANS}/plan-a/{PlanDocument.MANIFEST}"].splitlines()
     )
     result = run_report(report_repository)
     assert report_line_for(result.stdout, "plan-a").split()[2:5] == [
@@ -166,7 +158,7 @@ def test_generated_data_beside_the_plans_is_not_reported_as_a_plan(
     report_repository.publish_notes_branch(
         {
             **plan_files("plan-a", item_count=1),
-            f"{PLANS_DIRECTORY}/_generated/branch-index.tsv": "a-branch\tplan-a\n",
+            f"{ProjectLocation.PLANS}/_generated/branch-index.tsv": "a-branch\tplan-a\n",
         }
     )
     result = run_report(report_repository)
@@ -180,7 +172,9 @@ def test_generated_data_beside_the_plans_is_not_reported_as_a_plan(
 
 def test_rejects_an_unexpected_argument(report_repository: ScratchRepository):
     report_repository.publish_notes_branch(plan_files("plan-a"))
-    result = report_repository.run_hook_script(HookScript.PLAN_SIZE_REPORT, "plan-a")
+    result = report_repository.run_hook_script(
+        PluginLocation.PLAN_SIZE_REPORT_SCRIPT.name, "plan-a"
+    )
     assert result.returncode == 1
     assert result.stderr.startswith("Unexpected argument: plan-a\n")
 
@@ -196,15 +190,18 @@ def test_fails_when_the_notes_branch_does_not_exist(
 def test_reports_whichever_dependency_is_missing(
     report_repository: ScratchRepository,
 ):
-    report_repository.write(
-        DECLARATION_PATH, declaring_only(f"{ABSENT_DISTRIBUTION}>=2")
+    declaration_file(report_repository).write_text(
+        ProjectDeclaration(
+            name=ProjectDeclaration.of_this_package().name,
+            dependencies=(UNINSTALLABLE_REQUIREMENT,),
+        ).as_toml(),
     )
     report_repository.publish_notes_branch(plan_files("plan-a"))
 
     result = run_report(report_repository)
 
     assert result.returncode == 1
-    assert ABSENT_DISTRIBUTION in result.stderr
+    assert UNINSTALLABLE_REQUIREMENT in result.stderr
 
 
 def test_runs_when_every_dependency_is_installed(
@@ -215,26 +212,4 @@ def test_runs_when_every_dependency_is_installed(
     result = run_report(report_repository)
 
     assert result.returncode == 0, result.stderr
-    assert ABSENT_DISTRIBUTION not in result.stderr
-
-
-def test_the_declaration_path_matches_the_shell_configuration_that_owns_it(
-    report_repository: ScratchRepository,
-):
-    """
-    ``DECLARATION_PATH`` mirrors ``BASSTLER_PYPROJECT_FILE`` in the shell configuration;
-    this is what stops the mirror drifting, since the two are edited in different files.
-    """
-    resolved = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'source "{HookScript.CONFIGURATION.path}" && '
-            'printf "%s\\n" "${BASSTLER_PYPROJECT_FILE}"',
-        ],
-        cwd=report_repository.project_root,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    assert resolved.stdout.strip() == DECLARATION_PATH
+    assert UNINSTALLABLE_REQUIREMENT not in result.stderr

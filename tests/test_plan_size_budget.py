@@ -18,13 +18,7 @@ from basstler.plan_size_budget import (
     main,
 )
 
-from .constants import DATASET_DIRECTORY
-
-UNINDENTED_ITEMS_MANIFEST = DATASET_DIRECTORY / "unindented-items-plan.yaml"
-"""
-A manifest whose item entries sit flush with the ``items:`` key holding them, the shape
-a line-matching count misses.
-"""
+from .constants import DatasetLocation
 
 MANIFEST_FILENAME = PlanDocument.MANIFEST
 """
@@ -113,9 +107,11 @@ def test_counts_no_items_when_the_manifest_declares_none(tmp_path):
 
 def test_counts_items_that_are_not_indented_under_their_key(tmp_path):
     expected_item_count = len(
-        yaml.safe_load(UNINDENTED_ITEMS_MANIFEST.read_text())["items"]
+        yaml.safe_load(DatasetLocation.UNINDENTED_ITEMS_PLAN.read_text())["items"]
     )
-    size = PlanSize.measure(UNINDENTED_ITEMS_MANIFEST, tmp_path / "absent-roadmap.md")
+    size = PlanSize.measure(
+        DatasetLocation.UNINDENTED_ITEMS_PLAN, tmp_path / "absent-roadmap.md"
+    )
     assert size.item_count == expected_item_count
 
 
