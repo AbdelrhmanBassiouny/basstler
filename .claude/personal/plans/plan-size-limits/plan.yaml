@@ -42,29 +42,28 @@ items:
 - id: new-plan-when-full
   title: Open a new plan instead of growing a full one
   branch: claude/plan-size-limits-newplan-ukbbri
-  pull_request_number: 277
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  pull_request_number: 18
   track: gate-and-skills
   depends_on: []
   status: in_progress
   session: https://claude.ai/code/session_01GhTbjxmunfCd5vuXRid6m9
-  notes: '/plan-create and /add-plan-item read the budget and route new work to a new plan
-    when the plan they would otherwise grow is at it. Only needs the budget to exist, not
-    the splits, so it can land ahead of wave 2. This item is the reason the plan exists: without
-    it the budget is a wall with no door.'
+  notes: >-
+    /plan-create and /add-plan-item read the budget and route new work to a new plan when
+    the plan they would otherwise grow is at it. Draft #18, which also carries the retired
+    CRAM #207 budget it was stacked on. Still owed: retarget from that budget to #11's
+    Measure.ITEM_COUNT, by restacking on #11 once it lands.
   blockers:
   - 'Built on #207''s SizeBudget, closed as superseded by #504; must be retargeted to plan_size_limits.Measure.ITEM_COUNT.'
 - id: strict-limits-and-item-slices
   title: Typed per-field limits enforced on every save, and one item loaded per session
   branch: claude/happy-wozniak-nizfnv
-  pull_request_number: 504
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  pull_request_number: 11
   track: gate-and-skills
   depends_on: []
   status: in_progress
   session: https://claude.ai/code/session_01Xxsd3jwKjjEsHdyyfC8Azo
-  notes: 'Stacked on #501 (base claude/brave-archimedes-nonocl); modules under basstler/src/basstler/,
-    hooks run them with BASSTLER_PYTHON. Per-field limits checked on every save: landed items
-    pruned, finished plans removed, progress notes capped, finished branches'' progress notes
-    deleted on each progress save. Session start loads only the branch item. Retarget to main
-    once #501 lands.'
+  notes: >-
+    Per-field limits checked on every save: landed items pruned, finished plans removed,
+    progress notes capped, finished branches' progress notes deleted on each progress save.
+    Session start loads only the branch item. Draft #11 on main; modules under
+    src/basstler/, hooks run them with BASSTLER_PYTHON.
