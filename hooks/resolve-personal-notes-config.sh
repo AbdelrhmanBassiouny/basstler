@@ -296,6 +296,11 @@ PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 # same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
 DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 
+# PLAN_HUB_PATH: the hub file - the one page listing every repository's plans,
+# the registry repository holding the complete list, and that list. Every
+# registered repository's notes carry a copy (see basstler.plan_hub).
+PLAN_HUB_PATH="${PLANS_DIR}/_hub.yaml"
+
 # *_MODULE: every Python entry point in this system - defined once, here, so
 # refresh_dashboard.sh, every SKILL.md and every workflow source this file and
 # use these variables instead of each carrying its own separately-typed literal.
@@ -322,6 +327,11 @@ fi
 BUILD_DASHBOARD_MODULE="basstler.build_dashboard"
 # build_index: renders the master index page listing every plan.
 BUILD_INDEX_MODULE="basstler.build_index"
+# build_hub: renders the plan hub page listing every registered repository.
+BUILD_HUB_MODULE="basstler.build_hub"
+# plan_hub: registers a repository in the hub file, records the hub's URL,
+# and gathers every registered repository's plans for build_hub.
+PLAN_HUB_MODULE="basstler.plan_hub"
 # sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
 SYNC_MANIFEST_STATUS_MODULE="basstler.sync_manifest_status"
@@ -490,6 +500,39 @@ plan_id_for_branch() {
   git cat-file -e "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null || return 1
   git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
     | awk -F'\t' -v branch="${branch}" '$1 == branch { print $2; exit }'
+}
+
+# item_id_for_branch: the id of the item in plan $1 whose branch is $2, read
+# off the fetched manifest with awk alone - dependency-free, like
+# plan_id_for_branch above. Prints nothing when no item names the branch.
+item_id_for_branch() {
+  local plan_id="$1"
+  local branch="$2"
+  git show "FETCH_HEAD:$(plan_manifest_path "${plan_id}")" 2>/dev/null \
+    | awk -v branch="${branch}" '
+        $1 == "-" && $2 == "id:" { item = $3 }
+        $1 == "branch:" && $2 == branch { print item; exit }'
+}
+
+# recorded_hub_url: the plan hub page's URL from the fetched hub file. Fails
+# when the notes branch has no hub file; prints nothing when the hub was never
+# published.
+recorded_hub_url() {
+  git cat-file -e "FETCH_HEAD:${PLAN_HUB_PATH}" 2>/dev/null || return 1
+  git show "FETCH_HEAD:${PLAN_HUB_PATH}" \
+    | awk '$1 == "url:" && $2 != "null" { print $2; exit }'
+}
+
+# repository_name: this clone's origin as owner/repo, whatever URL form the
+# remote takes, or "this repository" for a clone with no origin.
+repository_name() {
+  local url
+  url="$(git remote get-url origin 2>/dev/null || true)"
+  if [ -z "${url}" ]; then
+    printf 'this repository\n'
+    return
+  fi
+  printf '%s\n' "${url}" | sed -E 's#\.git$##; s#^.*[/:]([^/:]+/[^/]+)$#\1#'
 }
 
 # branch_can_hold_plan_item: whether a plan item could ever track the given
