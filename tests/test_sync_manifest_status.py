@@ -10,21 +10,19 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-
-from .constants import DATASET_DIRECTORY
 import yaml
 
 from basstler.build_dashboard import (
     ItemStatus,
     ManifestKey,
     MissingPlanDirectory,
-    PlanFile,
     PlanValidationError,
     PullRequestRecord,
+    InvalidSchemaVersion,
     PullRequestState,
-    SUPPORTED_SCHEMA_VERSION,
     validate_plan,
 )
+from basstler.plan_item_bootstrap import PlanDocument
 from basstler.sync_manifest_status import (
     MissingStatusLineError,
     apply_status_corrections,
@@ -32,8 +30,8 @@ from basstler.sync_manifest_status import (
     main,
 )
 
+from .constants import DatasetLocation
 from .fixture_plans import (
-    FIXTURE_PLANS_DIRECTORY,
     FixturePlanId,
     ForeignItemId,
     PLAN_UNDER_TEST_ID,
@@ -48,7 +46,7 @@ def plan(**overrides: Any) -> dict[str, Any]:
     operates directly on that raw structure, never on a parsed :class:`Plan`.
     """
     data = {
-        ManifestKey.SCHEMA_VERSION.value: SUPPORTED_SCHEMA_VERSION,
+        ManifestKey.SCHEMA_VERSION.value: InvalidSchemaVersion.supported_version,
         ManifestKey.ID.value: PLAN_UNDER_TEST_ID,
         ManifestKey.TITLE.value: "Test Plan",
         ManifestKey.DESCRIPTION.value: "A plan.",
@@ -172,7 +170,7 @@ def test_uses_the_item_repository_override_over_the_plan_default():
 # once and shared read-only by every test below, since apply_status_corrections
 # patches text in place and each test asserts against its own fresh copy of
 # the return value rather than mutating this constant.
-MANIFEST_TEXT = (DATASET_DIRECTORY / "manifest.yaml").read_text()
+MANIFEST_TEXT = (DatasetLocation.DIRECTORY / "manifest.yaml").read_text()
 
 
 def test_patches_only_the_targeted_items_status_line():
@@ -212,6 +210,16 @@ def test_patched_text_still_parses_and_validates():
         reparsed[ManifestKey.ITEMS][0][ManifestKey.NOTES]
         == data[ManifestKey.ITEMS][0][ManifestKey.NOTES]
     )
+
+
+def test_patches_a_status_line_spelled_with_spaces():
+    text = (
+        DatasetLocation.DIRECTORY / "manifest-with-spaced-statuses.yaml"
+    ).read_text()
+    data = yaml.safe_load(text)
+    patched_text, corrections = apply_status_corrections(text, [data["items"][0]])
+    assert yaml.safe_load(patched_text)["items"][0]["status"] == ItemStatus.DONE.value
+    assert [c.previous_status for c in corrections] == [ItemStatus.IN_PROGRESS]
 
 
 def test_no_items_to_correct_returns_original_text_unchanged():
@@ -309,7 +317,9 @@ def test_main_corrects_the_plan_file_in_place_when_no_output_is_given(
     assert exit_code == 0
     assert "    status: done" in plan_path.read_text()
     summary = json.loads(capsys.readouterr().out)
-    assert summary == {"corrected": [{"id": "a", "previous_status": "in_progress"}]}
+    assert summary == {
+        "corrected": [{"id": "a", "previous_status": ItemStatus.IN_PROGRESS.value}]
+    }
 
 
 def test_main_writes_the_corrected_manifest_to_output_leaving_the_plan_file_untouched(
@@ -346,7 +356,7 @@ def _write_plan_depending_on_another_plan(tmp_path: Path) -> tuple[Path, Path]:
     :param tmp_path: pytest's per-test temporary directory.
     :return: The manifest's path and an empty pull request data file's path.
     """
-    plan_path = tmp_path / PlanFile.MANIFEST
+    plan_path = tmp_path / PlanDocument.MANIFEST
     plan_path.write_text(
         yaml.dump(
             plan(
@@ -403,7 +413,7 @@ def test_main_accepts_a_cross_plan_reference_given_the_plans_directory(
         pull_request_data_path,
         monkeypatch,
         "--plans-dir",
-        str(FIXTURE_PLANS_DIRECTORY),
+        str(DatasetLocation.PLANS),
     )
     assert exit_code == 0
     assert json.loads(capsys.readouterr().out) == {"corrected": []}

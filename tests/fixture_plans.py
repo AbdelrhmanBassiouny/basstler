@@ -15,15 +15,10 @@ from typing import Any
 
 import yaml
 
-from basstler.build_dashboard import DependencyReference, ManifestKey, PlanFile
+from basstler.build_dashboard import DependencyReference, ManifestKey
+from basstler.plan_item_bootstrap import PlanDocument
 
-from .constants import DATASET_DIRECTORY
-
-FIXTURE_PLANS_DIRECTORY = DATASET_DIRECTORY / "plans"
-"""
-The plans directory itself, holding one subdirectory per fixture plan plus the
-dashboard-URL cache naming one of them.
-"""
+from .constants import DatasetLocation
 
 PLAN_UNDER_TEST_ID = "test-plan"
 """
@@ -111,7 +106,7 @@ def fixture_manifest(plan_id: str) -> dict[str, Any]:
 
     :param plan_id: The plan's id, which is also its directory's name.
     """
-    manifest_path = FIXTURE_PLANS_DIRECTORY / plan_id / PlanFile.MANIFEST
+    manifest_path = DatasetLocation.PLANS / plan_id / PlanDocument.MANIFEST
     return yaml.safe_load(manifest_path.read_text())
 
 

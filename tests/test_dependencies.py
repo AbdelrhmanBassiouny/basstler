@@ -7,24 +7,25 @@ than restating the four distributions - what they hold is the reading, not the l
 
 from __future__ import annotations
 
-import tomllib
+from importlib.metadata import distributions
 
 import pytest
 
+from .constants import DatasetLocation
+from .project_declaration import ProjectDeclaration
 from .script_runner import PythonModuleRunner
 from basstler import dependencies
-from basstler.dependencies import Dependency
-from basstler.package_layout import PACKAGE_DIRECTORY, REPOSITORY_ROOT
+from basstler.dependencies import (
+    Dependency,
+    DependencyDeclaration,
+    InstalledDistribution,
+    MalformedDependencyDeclarationError,
+    PyprojectKey,
+    UnreadableDependencyDeclarationError,
+)
+from basstler.locations import PackageLocation
 
 # %% the declaration
-
-
-def declared_specifiers() -> list[str]:
-    """
-    :return: The requirement specifiers ``pyproject.toml`` states, read straight from it.
-    """
-    project = tomllib.loads((PACKAGE_DIRECTORY / "pyproject.toml").read_text())
-    return project["project"]["dependencies"]
 
 
 def test_the_declared_dependencies_are_the_ones_pyproject_states():
@@ -32,8 +33,9 @@ def test_the_declared_dependencies_are_the_ones_pyproject_states():
     One declaration: what the package installs is what its metadata says it needs.
     """
     assert [
-        dependency.specifier for dependency in dependencies.declared_dependencies()
-    ] == declared_specifiers()
+        dependency.specifier
+        for dependency in DependencyDeclaration.of_this_package().dependencies()
+    ] == list(ProjectDeclaration.of_this_package().dependencies)
 
 
 def test_the_declaration_is_static_so_a_reader_needs_no_build():
@@ -41,9 +43,7 @@ def test_the_declaration_is_static_so_a_reader_needs_no_build():
     ``dependencies`` resolved by the build backend is invisible to anything that reads
     the file - which is what this module, the session start and the workflows all do.
     """
-    project = tomllib.loads((PACKAGE_DIRECTORY / "pyproject.toml").read_text())
-
-    assert "dependencies" not in project["project"].get("dynamic", [])
+    assert PyprojectKey.DEPENDENCIES not in ProjectDeclaration.of_this_package().dynamic
 
 
 @pytest.mark.parametrize(
@@ -87,15 +87,119 @@ def test_a_distribution_nothing_has_installed_is_reported_missing():
     assert absent.is_missing
 
 
-def test_missing_dependencies_are_a_subset_of_what_is_declared():
+def test_a_dependency_spelled_differently_from_its_installed_distribution_is_present(
+    monkeypatch,
+):
+    """
+    Case and the separators ``-``, ``_`` and ``.`` do not tell distribution names apart,
+    so a declaration need not spell a name the way the distribution itself does.
+    """
+    monkeypatch.syspath_prepend(DatasetLocation.INSTALLED_DISTRIBUTIONS)
+    (installed,) = distributions(path=[str(DatasetLocation.INSTALLED_DISTRIBUTIONS)])
+    respelled = Dependency(f"{installed.name.upper().replace('_', '-')}>=1")
+
+    assert not respelled.is_missing
+
+
+def test_the_requirements_are_the_package_itself_then_its_dependencies():
+    """
+    An environment runs the package only with the package installed in it, so the
+    package is the first thing it requires.
+    """
+    declared = ProjectDeclaration.of_this_package()
+
+    assert [
+        requirement.specifier
+        for requirement in DependencyDeclaration.of_this_package().requirements()
+    ] == [declared.name, *declared.dependencies]
+
+
+def test_a_project_nothing_has_installed_is_reported_missing():
+    """
+    The package itself counts as missing where its distribution is not installed, even
+    with every dependency present.
+    """
+    declaration = DependencyDeclaration(DatasetLocation.UNINSTALLED_PROJECT.value)
+
+    assert declaration.missing() == (Dependency(declaration.project().specifier),)
+
+
+def test_missing_requirements_are_a_subset_of_what_is_declared():
     """
     What the caller installs is drawn from the declaration and nothing else.
     """
-    missing = dependencies.missing_dependencies()
+    missing = DependencyDeclaration.of_this_package().missing()
+    declared = ProjectDeclaration.of_this_package()
 
-    assert {dependency.specifier for dependency in missing} <= set(
-        declared_specifiers()
+    assert {dependency.specifier for dependency in missing} <= {
+        declared.name,
+        *declared.dependencies,
+    }
+
+
+def test_an_absent_declaration_raises_rather_than_declaring_nothing(tmp_path):
+    """
+    An absent file is not an empty declaration: reading nothing from it would tell a
+    caller that nothing is missing.
+    """
+    absent = DependencyDeclaration(
+        tmp_path / PackageLocation.DEPENDENCY_DECLARATION.value.name
     )
+
+    with pytest.raises(UnreadableDependencyDeclarationError):
+        absent.missing()
+
+
+def test_a_declaration_that_is_not_toml_raises_naming_itself(tmp_path):
+    """
+    A declaration that will not parse is reported as the file it is, so a caller can say
+    which file to fix.
+    """
+    malformed = tmp_path / PackageLocation.DEPENDENCY_DECLARATION.value.name
+    malformed.write_text("this is not toml\n")
+
+    with pytest.raises(MalformedDependencyDeclarationError) as raised:
+        DependencyDeclaration(malformed).missing()
+
+    assert raised.value.declaration == malformed
+
+
+# %% an installed copy, which carries no pyproject.toml
+
+
+def test_an_installed_distribution_requires_what_pyproject_declares():
+    """
+    A package installed from its repository rather than run from a checkout has no
+    ``pyproject.toml`` beside it; its installed metadata states the same dependencies.
+
+    Compared without their order, which the build backend is free to change: hatchling
+    writes them sorted.
+    """
+    declared = ProjectDeclaration.of_this_package()
+
+    assert sorted(
+        requirement.specifier
+        for requirement in InstalledDistribution(declared.name).requirements()
+    ) == sorted([declared.name, *declared.dependencies])
+
+
+def test_an_installed_distribution_this_environment_has_misses_nothing():
+    """
+    The suite's own environment has the package installed with everything it needs.
+    """
+    declared = ProjectDeclaration.of_this_package()
+
+    assert InstalledDistribution(declared.name).missing() == ()
+
+
+def test_a_distribution_nothing_installed_is_missing_itself():
+    """
+    With nothing installed there are no dependencies to read, and the package itself is
+    what is missing.
+    """
+    absent = InstalledDistribution("a-distribution-nothing-installed")
+
+    assert absent.missing() == (Dependency(absent.name),)
 
 
 # %% the command line the shell calls
@@ -109,11 +213,12 @@ def run_module(*arguments: str):
     :return: The completed process, with output captured as text.
     """
     return PythonModuleRunner(
-        project_root=REPOSITORY_ROOT, module_name=dependencies.__name__
+        project_root=PackageLocation.SOURCE_TREE.value,
+        module_name=dependencies.__name__,
     ).run(*arguments)
 
 
-def test_the_command_line_prints_one_specifier_per_missing_dependency():
+def test_the_command_line_prints_one_specifier_per_missing_requirement():
     """
     The output is what a caller passes straight to ``pip install``, so it carries the
     version constraints rather than bare names.
@@ -122,7 +227,8 @@ def test_the_command_line_prints_one_specifier_per_missing_dependency():
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.split() == [
-        dependency.specifier for dependency in dependencies.missing_dependencies()
+        dependency.specifier
+        for dependency in DependencyDeclaration.of_this_package().missing()
     ]
 
 
@@ -143,7 +249,8 @@ def test_an_unreadable_declaration_fails_rather_than_reporting_nothing_missing()
     nothing.
     """
     result = PythonModuleRunner(
-        project_root=REPOSITORY_ROOT, module_name=dependencies.__name__
+        project_root=PackageLocation.SOURCE_TREE.value,
+        module_name=dependencies.__name__,
     ).run("--declaration", "/nonexistent/pyproject.toml")
 
     assert result.returncode != 0

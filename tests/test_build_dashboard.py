@@ -13,7 +13,6 @@ import pytest
 import yaml
 
 from basstler.build_dashboard import (
-    AVAILABLE_MODELS,
     DashboardRenderer,
     DependencyCycle,
     DependencyReference,
@@ -28,22 +27,18 @@ from basstler.build_dashboard import (
     MalformedDependencyReference,
     ManifestKey,
     MalformedPullRequestDataError,
-    MAXIMUM_DEPENDENCY_STACK_LEVEL,
     MissingMergeTimestampError,
     MissingPlanDirectory,
+    ModelOption,
     Plan,
-    PLAN_REFERENCE_SEPARATOR,
     PlanDirectory,
-    PlanFile,
     PlanValidationError,
-    PullRequestLabel,
     PullRequestRecord,
     PullRequestsByRepository,
     PullRequestState,
     RefreshDashboardAction,
     SelfPlanReference,
     StackedItem,
-    SUPPORTED_SCHEMA_VERSION,
     Track,
     UnknownDependency,
     UnknownDependencyPlan,
@@ -57,8 +52,12 @@ from basstler.build_dashboard import (
     main,
     validate_plan,
 )
+from basstler.github_labels import GitHubLabel
+from basstler.locations import PackageLocation
+from basstler.plan_item_bootstrap import PlanDocument
+
+from .constants import DatasetLocation, RepositoryLocation, SkillDirectory, StackLabel
 from .fixture_plans import (
-    FIXTURE_PLANS_DIRECTORY,
     FixturePlanId,
     ForeignItemId,
     PLAN_UNDER_TEST_ID,
@@ -69,7 +68,7 @@ from .fixture_plans import (
 )
 
 EXAMPLE_DIRECTORY = (
-    Path(__file__).parent.parent.parent / ".claude/skills/plan-dashboard/example"
+    RepositoryLocation.PLUGIN / SkillDirectory.PLAN_DASHBOARD / "example"
 )
 """The example-walkthrough.md doc's committed sample plan.yaml/roadmap.md/
 pr_data.json - see the tests at the bottom of this file for why."""
@@ -84,7 +83,7 @@ def minimal_plan(**overrides: Any) -> dict[str, Any]:
     :param overrides: Top-level keys to replace in the returned mapping.
     """
     plan = {
-        ManifestKey.SCHEMA_VERSION.value: SUPPORTED_SCHEMA_VERSION,
+        ManifestKey.SCHEMA_VERSION.value: InvalidSchemaVersion.supported_version,
         ManifestKey.ID.value: PLAN_UNDER_TEST_ID,
         ManifestKey.TITLE.value: "Test Plan",
         ManifestKey.DESCRIPTION.value: "A plan.",
@@ -208,6 +207,18 @@ def test_validate_plan_rejects_unknown_status():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(minimal_plan(items=items))
     assert any(isinstance(problem, UnknownStatus) for problem in error.value.problems)
+
+
+@pytest.mark.parametrize("status", ["in_progress", ItemStatus.IN_PROGRESS.value])
+def test_validate_plan_accepts_a_status_in_either_spelling(status):
+    """
+    ``in_progress`` is the spelling manifests were written in before the values took
+    spaces, and stays readable beside the current one.
+    """
+    items = [
+        {"id": "a", "title": "A", "branch": "a", "track": "track-1", "status": status}
+    ]
+    validate_plan(minimal_plan(items=items))
 
 
 def test_validate_plan_collects_every_problem_not_just_the_first():
@@ -337,15 +348,15 @@ def test_identified_labels_recognizes_known_labels():
         state=PullRequestState.OPEN, labels=["in-review", "merged"]
     )
     assert record.identified_labels == {
-        PullRequestLabel.IN_REVIEW,
-        PullRequestLabel.MERGED,
+        GitHubLabel.IN_REVIEW,
+        GitHubLabel.MERGED,
     }
 
 
 def test_identified_labels_silently_excludes_an_unrecognized_label():
-    # cram2-link-sent is real label traffic on this repo's own PRs (added by
-    # other automation) that this codebase has no reason to recognize.
-    record = PullRequestRecord(state=PullRequestState.OPEN, labels=["cram2-link-sent"])
+    record = PullRequestRecord(
+        state=PullRequestState.OPEN, labels=[StackLabel.SOMEBODY_ELSES]
+    )
     assert record.identified_labels == frozenset()
 
 
@@ -397,6 +408,17 @@ def test_status_and_drift_css_class_with_drift():
     drifted_item = Item(title="A", branch="a", track="track-1", status=ItemStatus.DONE)
     drifted_item.drift_description = "marked done, but pull request #1 is still open"
     assert drifted_item.status_and_drift_css_class == "status-done has-drift"
+
+
+@pytest.mark.parametrize("status", list(ItemStatus))
+def test_the_dashboard_styles_every_status_css_class(status):
+    """
+    A status value holds spaces, so the class is built from the member's name, and the
+    stylesheet has to know that name.
+    """
+    item = Item(title="A", branch="a", track="track-1", status=status)
+    template = (PackageLocation.TEMPLATES / "dashboard.html").read_text()
+    assert f".item.{item.status_and_drift_css_class} " in template
 
 
 def test_is_ready_to_unblock_dependents_true_when_done():
@@ -1048,7 +1070,7 @@ def test_item_is_a_bug_fix_when_its_pull_request_carries_the_bug_label():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1066,7 +1088,7 @@ def test_item_is_not_a_bug_fix_when_its_pull_request_carries_other_labels():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.IN_REVIEW.value, "enhancement"],
+                labels=[GitHubLabel.IN_REVIEW.value, StackLabel.SOMEBODY_ELSES],
             )
         }
     }
@@ -1092,7 +1114,7 @@ def test_bug_fix_stays_in_its_ordinary_action_group():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1110,7 +1132,7 @@ def test_render_marks_a_bug_fix_sidebar_entry_with_a_bug_chip():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1146,7 +1168,7 @@ def _renderer_with_one_bug_fix_and_one_other_entry() -> DashboardRenderer:
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             ),
             "2": PullRequestRecord(state=PullRequestState.OPEN, draft=False),
         }
@@ -1341,7 +1363,7 @@ def test_render_shows_the_refresh_button_even_when_no_item_is_actionable():
 
 def test_track_stack_wraps_past_the_maximum_level():
     # A chain one longer than the cap: item N depends on item N-1.
-    chain_length = MAXIMUM_DEPENDENCY_STACK_LEVEL + 2
+    chain_length = DashboardRenderer.maximum_dependency_stack_level + 2
     items = [item("item-0", ItemStatus.NOT_STARTED)]
     for index in range(1, chain_length):
         items.append(
@@ -1359,7 +1381,7 @@ def test_track_stack_wraps_past_the_maximum_level():
 
 def test_track_stack_does_not_wrap_within_the_maximum_level():
     items = [item("item-0", ItemStatus.NOT_STARTED)]
-    for index in range(1, MAXIMUM_DEPENDENCY_STACK_LEVEL):
+    for index in range(1, DashboardRenderer.maximum_dependency_stack_level):
         items.append(
             item(
                 f"item-{index}",
@@ -1740,7 +1762,7 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    for model in AVAILABLE_MODELS:
+    for model in ModelOption:
         assert f'data-value="{model.value}"' in output
         assert f">{model.label}</li>" in output
     assert 'class="model-picker-toggle"' in output
@@ -2032,7 +2054,7 @@ def test_main_prints_the_status_summary_as_json(tmp_path, monkeypatch, capsys):
     )
     main()
     summary = json.loads(capsys.readouterr().out)
-    assert summary["counts"]["not_started"] == 1
+    assert summary["counts"][ItemStatus.NOT_STARTED.value] == 1
 
 
 def test_main_rejects_an_invalid_manifest_instead_of_crashing(
@@ -2156,7 +2178,7 @@ def test_dependency_reference_is_malformed_with_a_second_separator():
     # A third segment would have to mean something - a plan inside a plan - and
     # it means nothing, so it is refused rather than read as part of an id.
     reference = DependencyReference.from_text(
-        PLAN_REFERENCE_SEPARATOR.join(
+        DependencyReference.separator.join(
             [FixturePlanId.OTHER, ManifestKey.WAVE, ForeignItemId.READY]
         )
     )
@@ -2166,8 +2188,8 @@ def test_dependency_reference_is_malformed_with_a_second_separator():
 @pytest.mark.parametrize(
     "text",
     [
-        f"{PLAN_REFERENCE_SEPARATOR}{ForeignItemId.READY}",
-        f"{FixturePlanId.OTHER}{PLAN_REFERENCE_SEPARATOR}",
+        f"{DependencyReference.separator}{ForeignItemId.READY}",
+        f"{FixturePlanId.OTHER}{DependencyReference.separator}",
     ],
 )
 def test_dependency_reference_is_malformed_with_an_empty_half(text: str):
@@ -2178,7 +2200,7 @@ def test_dependency_reference_is_malformed_with_an_empty_half(text: str):
 
 
 def test_plan_directory_reads_one_plans_manifest_by_id():
-    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    directory = PlanDirectory.at(DatasetLocation.PLANS)
     plan = directory.plan(FixturePlanId.OTHER)
     manifest = fixture_manifest(FixturePlanId.OTHER)
     assert plan.title == manifest[ManifestKey.TITLE]
@@ -2189,31 +2211,33 @@ def test_plan_directory_reads_no_manifest_nothing_has_named():
     # One plan's dashboard pulling in every other plan's contents is what the
     # per-plan size budget exists to prevent, so a plan nothing references is
     # never opened.
-    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    directory = PlanDirectory.at(DatasetLocation.PLANS)
     directory.plan(FixturePlanId.OTHER)
     assert set(directory.plans_by_id) == {FixturePlanId.OTHER}
 
 
 def test_plan_directory_reads_the_dashboard_url_cache():
-    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    directory = PlanDirectory.at(DatasetLocation.PLANS)
     cached = yaml.safe_load(
-        (FIXTURE_PLANS_DIRECTORY / PlanDirectory.DASHBOARD_URL_CACHE_PATH).read_text()
+        (DatasetLocation.PLANS / PlanDirectory.dashboard_url_cache_path).read_text()
     )
     assert directory.dashboard_url(FixturePlanId.OTHER) == cached[FixturePlanId.OTHER]
 
 
 def test_plan_directory_has_no_url_for_a_plan_the_cache_does_not_name():
-    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    directory = PlanDirectory.at(DatasetLocation.PLANS)
     assert directory.dashboard_url(FixturePlanId.UNPUBLISHED) is None
 
 
 def test_plan_directory_without_a_url_cache_reads_its_manifests_anyway(tmp_path: Path):
     # A plan's first-ever publish happens before any cache exists, so a
     # missing cache is an ordinary state rather than an error.
-    manifest_path = tmp_path / FixturePlanId.OTHER / PlanFile.MANIFEST
+    manifest_path = tmp_path / FixturePlanId.OTHER / PlanDocument.MANIFEST
     manifest_path.parent.mkdir()
     manifest_path.write_text(
-        (FIXTURE_PLANS_DIRECTORY / FixturePlanId.OTHER / PlanFile.MANIFEST).read_text()
+        (
+            DatasetLocation.PLANS / FixturePlanId.OTHER / PlanDocument.MANIFEST
+        ).read_text()
     )
     directory = PlanDirectory.at(tmp_path)
     assert directory.plan(FixturePlanId.OTHER) is not None
@@ -2221,7 +2245,7 @@ def test_plan_directory_without_a_url_cache_reads_its_manifests_anyway(tmp_path:
 
 
 def test_plan_directory_resolves_an_item_by_reference():
-    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    directory = PlanDirectory.at(DatasetLocation.PLANS)
     resolved = directory.resolve(
         DependencyReference.from_text(foreign_reference(ForeignItemId.READY))
     )
@@ -2238,7 +2262,7 @@ def test_plan_directory_resolves_an_item_by_reference():
     ],
 )
 def test_plan_directory_does_not_resolve_an_unknown_reference(text: str):
-    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    directory = PlanDirectory.at(DatasetLocation.PLANS)
     resolved = directory.resolve(DependencyReference.from_text(text))
     assert resolved == UnresolvedDependency(
         reference=DependencyReference.from_text(text)
@@ -2264,7 +2288,7 @@ def plan_depending_on(dependency_text: str) -> dict[str, Any]:
 def test_validate_plan_accepts_a_reference_into_another_plan():
     validate_plan(
         plan_depending_on(foreign_reference(ForeignItemId.READY)),
-        PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+        PlanDirectory.at(DatasetLocation.PLANS),
     )
 
 
@@ -2274,7 +2298,7 @@ def test_validate_plan_rejects_an_unknown_plan():
             plan_depending_on(
                 foreign_reference(ForeignItemId.READY, FixturePlanId.ABSENT)
             ),
-            PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+            PlanDirectory.at(DatasetLocation.PLANS),
         )
     assert error.value.problems == [
         UnknownDependencyPlan(
@@ -2287,7 +2311,7 @@ def test_validate_plan_rejects_an_unknown_item_in_a_known_plan():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(
             plan_depending_on(foreign_reference(ForeignItemId.ABSENT)),
-            PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+            PlanDirectory.at(DatasetLocation.PLANS),
         )
     assert error.value.problems == [
         UnknownDependency("a", foreign_reference(ForeignItemId.ABSENT))
@@ -2307,18 +2331,18 @@ def test_validate_plan_rejects_a_reference_to_the_plans_own_id():
         ]
     )
     with pytest.raises(PlanValidationError) as error:
-        validate_plan(plan, PlanDirectory.at(FIXTURE_PLANS_DIRECTORY))
+        validate_plan(plan, PlanDirectory.at(DatasetLocation.PLANS))
     assert error.value.problems == [SelfPlanReference("b", own_reference)]
 
 
 def test_validate_plan_rejects_a_malformed_reference():
-    malformed = PLAN_REFERENCE_SEPARATOR.join(
+    malformed = DependencyReference.separator.join(
         [FixturePlanId.OTHER, ManifestKey.WAVE, ForeignItemId.READY]
     )
     with pytest.raises(PlanValidationError) as error:
         validate_plan(
             plan_depending_on(malformed),
-            PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+            PlanDirectory.at(DatasetLocation.PLANS),
         )
     assert error.value.problems == [MalformedDependencyReference("a", malformed)]
 
@@ -2339,7 +2363,7 @@ def test_validate_plan_rejects_a_cycle_that_runs_through_another_plan():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(
             plan_depending_on(reference),
-            PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+            PlanDirectory.at(DatasetLocation.PLANS),
         )
     assert error.value.problems == [DependencyCycle(["a", reference, "a"])]
 
@@ -2377,7 +2401,7 @@ def make_renderer_over_plan_directory(
     return make_renderer(
         items,
         pull_requests_by_repository,
-        plan_directory=PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+        plan_directory=PlanDirectory.at(DatasetLocation.PLANS),
     )
 
 
@@ -2546,7 +2570,7 @@ def test_chip_tooltip_carries_the_foreign_items_title_plan_and_live_state():
 
 
 def test_chip_links_to_the_foreign_plans_dashboard_when_the_cache_has_one():
-    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    directory = PlanDirectory.at(DatasetLocation.PLANS)
     renderer = make_renderer_over_plan_directory(
         [
             item(
@@ -2591,7 +2615,7 @@ def test_chip_for_a_same_plan_dependency_has_no_dashboard_link():
 
 
 def test_render_links_a_foreign_dependency_chip_to_its_plans_dashboard():
-    directory = PlanDirectory.at(FIXTURE_PLANS_DIRECTORY)
+    directory = PlanDirectory.at(DatasetLocation.PLANS)
     reference = foreign_reference(ForeignItemId.DONE)
     plan = Plan(
         id=PLAN_UNDER_TEST_ID,

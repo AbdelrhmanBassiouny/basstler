@@ -11,7 +11,7 @@ Source the shared config script first if you haven't already this session -
 it defines the tool-name constants referenced below:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 ```
 
 For each distinct repository referenced (`items[].repository` if set, else
@@ -54,8 +54,8 @@ response as-is is what the rejection above catches.
 
 `labels` carries two things this codebase reads. A pull request merged
 out-of-band never gets `merged_at` set, and this repo's convention is to add
-a `"merged"` label by hand in that case - see `build_dashboard.py`'s
-`PullRequestLabel`/`was_merged`. That label is a fallback for a real merge
+a `"merged"` label by hand in that case - see `github_labels.py`'s
+`GitHubLabel` and `build_dashboard.py`'s `was_merged`. That label is a fallback for a real merge
 GitHub never recorded, not a substitute for `merged_at` - only pull requests
 that happen to carry it survive a fetch that dropped the timestamp. A
 `"bug"` label separately marks the item as a bug fix wherever it already

@@ -20,7 +20,7 @@ from basstler.build_dashboard import (
     PlanValidationError,
     PullRequestRecord,
     PullRequestState,
-    SUPPORTED_SCHEMA_VERSION,
+    InvalidSchemaVersion,
     Track,
     Wave,
     validate_plan,
@@ -33,8 +33,8 @@ from basstler.check_dependency_readiness import (
     main,
 )
 
+from .constants import DatasetLocation
 from .fixture_plans import (
-    FIXTURE_PLANS_DIRECTORY,
     FixturePlanId,
     ForeignItemId,
     PLAN_UNDER_TEST_ID,
@@ -184,7 +184,7 @@ def test_multiple_dependencies_reported_in_order():
 
 def _minimal_plan_mapping():
     return {
-        ManifestKey.SCHEMA_VERSION.value: SUPPORTED_SCHEMA_VERSION,
+        ManifestKey.SCHEMA_VERSION.value: InvalidSchemaVersion.supported_version,
         ManifestKey.ID.value: PLAN_UNDER_TEST_ID,
         ManifestKey.TITLE.value: "Test Plan",
         ManifestKey.DESCRIPTION.value: "A plan.",
@@ -334,7 +334,7 @@ def test_foreign_dependency_is_read_against_its_own_plans_repository():
                 ): PullRequestRecord(state=PullRequestState.OPEN, draft=False)
             }
         },
-        PlanDirectory.at(FIXTURE_PLANS_DIRECTORY),
+        PlanDirectory.at(DatasetLocation.PLANS),
     )
     assert results == [
         DependencyReadiness(
@@ -381,7 +381,7 @@ def test_main_resolves_a_cross_plan_dependency_against_the_plans_directory(
             "--item",
             "b",
             "--plans-dir",
-            str(FIXTURE_PLANS_DIRECTORY),
+            str(DatasetLocation.PLANS),
         ],
     )
     assert main() == 0

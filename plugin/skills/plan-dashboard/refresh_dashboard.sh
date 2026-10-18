@@ -4,7 +4,7 @@ set -euo pipefail
 # Orchestrates one plan's refresh: sync_manifest_status's auto-correction,
 # pushing that correction back to the personal-notes branch if it changed
 # anything, then build_dashboard's render - the exact sequence
-# .claude/skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
+# skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
 # embedded bash snippet for a session to improvise from. Extracted so that
 # sequence is real, tested-by-construction code (it just calls the two
 # modules test/basstler_test/ already covers) rather than
@@ -96,12 +96,12 @@ if [ -n "${PLANS_DIRECTORY}" ]; then
   PLANS_DIRECTORY_ARGUMENTS=(--plans-dir "${PLANS_DIRECTORY}")
 fi
 
-SYNC_SUMMARY="$(python3 -m "${SYNC_MANIFEST_STATUS_MODULE}" \
+SYNC_SUMMARY="$("${BASSTLER_PYTHON}" -m "${SYNC_MANIFEST_STATUS_MODULE}" \
   --plan "${PLAN_FILE}" \
   --pr-data "${PULL_REQUEST_DATA_FILE}" \
   "${PLANS_DIRECTORY_ARGUMENTS[@]+"${PLANS_DIRECTORY_ARGUMENTS[@]}"}")"
 
-CORRECTED_COUNT="$(python3 -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" count-corrected "${SYNC_SUMMARY}")"
+CORRECTED_COUNT="$("${BASSTLER_PYTHON}" -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" count-corrected "${SYNC_SUMMARY}")"
 
 if [ "${CORRECTED_COUNT}" != "0" ]; then
   DESTINATION_PATH="$(plan_manifest_path "${PLAN_ID}")"
@@ -123,6 +123,6 @@ fi
 if [ -n "${PLANS_DIRECTORY}" ]; then
   BUILD_ARGUMENTS+=(--plans-dir "${PLANS_DIRECTORY}")
 fi
-BUILD_SUMMARY="$(python3 -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
+BUILD_SUMMARY="$("${BASSTLER_PYTHON}" -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
 
-python3 -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" merge-summaries "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"
+"${BASSTLER_PYTHON}" -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" merge-summaries "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"
