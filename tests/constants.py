@@ -97,6 +97,11 @@ class DatasetLocation(PathEnumeration):
     A minimal plan the dashboard builds.
     """
 
+    ROADMAP = DIRECTORY / "roadmap.md"
+    """
+    The roadmap saved beside :attr:`PLAN`.
+    """
+
     PLAN_WITH_UNKNOWN_STATUS = DIRECTORY / "plan-with-unknown-status.yaml"
     """
     The same plan, its item's status one the schema does not define.
@@ -134,6 +139,34 @@ class DatasetLocation(PathEnumeration):
     """
     A committed tree of everything ``check-setup.sh`` requires of a set-up project, copied
     over a scratch project root.
+    """
+
+
+class DatasetPlan(StrEnum):
+    """
+    What the dataset's plans are known by.
+    """
+
+    IDENTIFIER = "test-plan"
+    """
+    The ``id`` :attr:`DatasetLocation.PLAN` carries, and so the plan id it is saved
+    under.
+    """
+
+
+class SavePlanOption(StrEnum):
+    """
+    The options ``save-plan.sh`` reads its plan from files with.
+    """
+
+    MANIFEST = "--manifest"
+    """
+    The plan.yaml to save.
+    """
+
+    ROADMAP = "--roadmap"
+    """
+    The roadmap.md to save beside it.
     """
 
 
@@ -390,6 +423,12 @@ class PersonalNotesPath(PathEnumeration):
     """
     The files the shell hooks read from the personal-notes branch or write into a clone,
     relative to the project root, that the package itself does not name.
+    """
+
+    LOCAL_INSTRUCTIONS = Path("CLAUDE.local.md")
+    """
+    The clone's private instructions, which the session start writes and save-plan.sh
+    reads a plan out of.
     """
 
     GIT_IDENTITY = ProjectLocation.PERSONAL_NOTES / "git-identity"

@@ -1,6 +1,6 @@
 """
-Tests for plan_manifest_tools.py: reading a plan.yaml's id and regenerating the
-branch->plan-id reverse index, used by save-plan.sh.
+Tests for plan_manifest_tools.py: reading a plan.yaml's id, validating it and
+regenerating the branch->plan-id reverse index, used by save-plan.sh.
 """
 
 import sys
@@ -11,19 +11,22 @@ import pytest
 import yaml
 
 from basstler.build_dashboard import PlanValidationError, validate_plan
+from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_manifest_tools import (
+    BranchIndex,
     ManifestToolsCommand,
     ManifestToolsExitCode,
+    PlanManifest,
     YamlBooleanCoercionError,
     main,
-    read_manifest_id,
-    regenerate_branch_index,
 )
 
 from .constants import DatasetLocation
 
 
-def write_manifest(directory: Path, plan_id: str, name: str = "plan.yaml") -> Path:
+def write_manifest(
+    directory: Path, plan_id: str, name: str = PlanDocument.MANIFEST
+) -> Path:
     """
     Write a minimal plan.yaml with just an ``id`` field.
 
@@ -38,33 +41,35 @@ def write_manifest(directory: Path, plan_id: str, name: str = "plan.yaml") -> Pa
     return manifest_path
 
 
-# %% read_manifest_id
+# %% PlanManifest.identifier
 
 
 def test_reads_the_id_field(tmp_path):
     manifest_path = write_manifest(tmp_path, "rdr-refactor")
-    assert read_manifest_id(manifest_path) == "rdr-refactor"
+    assert PlanManifest(manifest_path).identifier == "rdr-refactor"
 
 
 def test_defaults_to_empty_string_when_id_is_missing(tmp_path):
-    manifest_path = tmp_path / "plan.yaml"
+    manifest_path = tmp_path / PlanDocument.MANIFEST
     manifest_path.write_text("title: No id here\n")
-    assert read_manifest_id(manifest_path) == ""
+    assert PlanManifest(manifest_path).identifier == ""
 
 
 def test_raises_when_id_is_coerced_to_a_boolean(tmp_path):
     manifest_path = write_manifest(tmp_path, "no")
     with pytest.raises(YamlBooleanCoercionError, match="'id'"):
-        read_manifest_id(manifest_path)
+        PlanManifest(manifest_path).identifier
 
 
-# %% regenerate_branch_index
+# %% BranchIndex.render
 
 
 def _write_plan(plans_directory: Path, plan_id: str, items_yaml: str) -> None:
     plan_directory = plans_directory / plan_id
     plan_directory.mkdir(parents=True)
-    (plan_directory / "plan.yaml").write_text(f"id: {plan_id}\nitems:\n{items_yaml}")
+    (plan_directory / PlanDocument.MANIFEST).write_text(
+        f"id: {plan_id}\nitems:\n{items_yaml}"
+    )
 
 
 def test_indexes_every_item_branch(tmp_path):
@@ -74,26 +79,26 @@ def test_indexes_every_item_branch(tmp_path):
         "plan-a",
         "  - branch: branch-1\n  - branch: branch-2\n",
     )
-    content = regenerate_branch_index(tmp_path, "plans", "plan.yaml")
+    content = BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render()
     assert content == "branch-1\tplan-a\nbranch-2\tplan-a\n"
 
 
 def test_skips_items_with_no_branch(tmp_path):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "plan-a", "  - title: no branch here\n")
-    assert regenerate_branch_index(tmp_path, "plans", "plan.yaml") == ""
+    assert BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render() == ""
 
 
 def test_empty_when_no_plans_exist(tmp_path):
     (tmp_path / "plans").mkdir()
-    assert regenerate_branch_index(tmp_path, "plans", "plan.yaml") == ""
+    assert BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render() == ""
 
 
 def test_first_plan_wins_on_a_duplicate_branch(tmp_path):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "plan-a", "  - branch: shared\n")
     _write_plan(plans_directory, "plan-b", "  - branch: shared\n")
-    content = regenerate_branch_index(tmp_path, "plans", "plan.yaml")
+    content = BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render()
     # plans are scanned in sorted glob order, so plan-a wins over plan-b.
     assert content == "shared\tplan-a\n"
 
@@ -102,8 +107,8 @@ def test_warns_on_stderr_when_a_duplicate_branch_is_dropped(tmp_path, capsys):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "plan-a", "  - branch: shared\n")
     _write_plan(plans_directory, "plan-b", "  - branch: shared\n")
-    regenerate_branch_index(tmp_path, "plans", "plan.yaml")
-    duplicate_manifest_path = plans_directory / "plan-b" / "plan.yaml"
+    BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render()
+    duplicate_manifest_path = plans_directory / "plan-b" / PlanDocument.MANIFEST
     assert capsys.readouterr().err == (
         f"plan_manifest_tools.py: duplicate branch 'shared' in "
         f"{duplicate_manifest_path} - keeping the first plan it was seen "
@@ -115,14 +120,14 @@ def test_raises_when_plan_id_is_coerced_to_a_boolean(tmp_path):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "no", "  - branch: branch-1\n")
     with pytest.raises(YamlBooleanCoercionError, match="'id'"):
-        regenerate_branch_index(tmp_path, "plans", "plan.yaml")
+        BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render()
 
 
 def test_raises_when_a_branch_is_coerced_to_a_boolean(tmp_path):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "plan-a", "  - branch: no\n")
     with pytest.raises(YamlBooleanCoercionError, match="'branch'"):
-        regenerate_branch_index(tmp_path, "plans", "plan.yaml")
+        BranchIndex(tmp_path, "plans", PlanDocument.MANIFEST).render()
 
 
 # %% main - subcommand dispatch
@@ -131,10 +136,12 @@ def test_raises_when_a_branch_is_coerced_to_a_boolean(tmp_path):
 def test_main_dispatches_read_id(tmp_path, monkeypatch, capsys):
     manifest_path = write_manifest(tmp_path, "rdr-refactor")
     monkeypatch.setattr(
-        sys, "argv", ["plan_manifest_tools.py", "read-id", str(manifest_path)]
+        sys,
+        "argv",
+        ["plan_manifest_tools.py", ManifestToolsCommand.READ_ID, str(manifest_path)],
     )
     exit_code = main()
-    assert exit_code == 0
+    assert exit_code == ManifestToolsExitCode.SUCCESS
     assert capsys.readouterr().out.strip() == "rdr-refactor"
 
 
@@ -147,19 +154,19 @@ def test_main_dispatches_regenerate_branch_index(tmp_path, monkeypatch):
         "argv",
         [
             "plan_manifest_tools.py",
-            "regenerate-branch-index",
+            ManifestToolsCommand.REGENERATE_BRANCH_INDEX,
             "--scratch-dir",
             str(tmp_path),
             "--plans-dir",
             "plans",
             "--manifest-filename",
-            "plan.yaml",
+            PlanDocument.MANIFEST,
             "--output",
             str(output_path),
         ],
     )
     exit_code = main()
-    assert exit_code == 0
+    assert exit_code == ManifestToolsExitCode.SUCCESS
     assert output_path.read_text() == "branch-1\tplan-a\n"
 
 
