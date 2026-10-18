@@ -52,6 +52,7 @@ from basstler.render_common import (
     render_markdown_to_html,
     sanitize_http_url,
 )
+from basstler.repository import GitHubAddress
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -880,7 +881,7 @@ class Plan:
     @property
     def repository_url(self) -> str:
         """:attr:`default_repository`'s GitHub URL, ready for the masthead link."""
-        return f"https://github.com/{self.default_repository}"
+        return f"{GitHubAddress.WEB}/{self.default_repository}"
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Plan:
@@ -1105,7 +1106,7 @@ class DashboardRenderer:
         if item.pull_request_number is None:
             return None
         repository = item.repository or self.plan.default_repository
-        return f"https://github.com/{repository}/pull/{item.pull_request_number}"
+        return f"{GitHubAddress.WEB}/{repository}/pull/{item.pull_request_number}"
 
     def _action_for(self, item: Item) -> ItemAction | None:
         """Build one item's dashboard action button, or ``None`` if it

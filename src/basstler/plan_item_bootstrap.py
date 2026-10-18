@@ -62,17 +62,18 @@ import tempfile
 import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
-from dataclasses import dataclass
-from enum import Enum, IntEnum, StrEnum
+from dataclasses import dataclass, field
+from enum import Enum, StrEnum
 from pathlib import Path
-from typing import Any, ClassVar, Protocol
+from typing import Any, Protocol
 
 import yaml
 
 from basstler.environment import GitHubCredentialVariable
+from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
-from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.plan_model import ItemStatus
+from basstler.repository import GitHubAddress
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.standard_streams import StandardStreamHandler
 
@@ -315,7 +316,7 @@ Matches a key whose value may run over the following lines, derived from
 """
 
 
-class ExitCode(IntEnum):
+class PlanItemBootstrapExitCode(ExitCode):
     """
     The process statuses this tool exits with.
 
@@ -358,22 +359,12 @@ class ExitCode(IntEnum):
     GitHub rejected the creation; its own message says why.
     """
 
-    @property
-    def name_for_a_caller(self) -> str:
-        """
-        The status's own name, for a report a person or a script has to act on.
-
-        Derived from the member rather than a table beside it, so a status can never
-        carry a name belonging to a different one.
-        """
-        return self.name.lower()
-
 
 # %% failures
 
 
 @dataclass
-class BootstrapError(Exception, ABC):
+class BootstrapError(CommandFailure, ABC):
     """
     Base for every refusal this tool reports, each carrying its own exit status.
 
@@ -383,18 +374,13 @@ class BootstrapError(Exception, ABC):
     12 records for this tooling.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.SUCCESS
-    """
-    The process status this refusal exits with.
-    """
-
     def __post_init__(self) -> None:
         """
         Compose the message from the subclass's own description and advice.
         """
         correction = self.suggest_correction()
         message = self.error_message()
-        super().__init__(f"{message}\n{correction}" if correction else message)
+        Exception.__init__(self, f"{message}\n{correction}" if correction else message)
 
     def __str__(self) -> str:
         """
@@ -421,7 +407,9 @@ class UnknownPlanError(BootstrapError):
     Raised when the named plan has no manifest on the personal-notes branch.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_PLAN
+    exit_code: ExitCode = field(
+        default=PlanItemBootstrapExitCode.UNKNOWN_PLAN, init=False
+    )
 
     plan_identifier: str
     """
@@ -449,7 +437,9 @@ class UnknownItemError(BootstrapError):
     Raised when the named item is absent from an otherwise resolvable plan.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_ITEM
+    exit_code: ExitCode = field(
+        default=PlanItemBootstrapExitCode.UNKNOWN_ITEM, init=False
+    )
 
     plan_identifier: str
     """
@@ -478,7 +468,9 @@ class IncompleteNewItemError(BootstrapError):
     write its entry.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.INCOMPLETE_NEW_ITEM
+    exit_code: ExitCode = field(
+        default=PlanItemBootstrapExitCode.INCOMPLETE_NEW_ITEM, init=False
+    )
 
     item_identifier: str
     """
@@ -511,7 +503,9 @@ class BranchAlreadyPublishedError(BootstrapError):
     underway and overwriting it would discard someone's commits.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.BRANCH_ALREADY_PUBLISHED
+    exit_code: ExitCode = field(
+        default=PlanItemBootstrapExitCode.BRANCH_ALREADY_PUBLISHED, init=False
+    )
 
     branch: str
     """
@@ -543,7 +537,9 @@ class PullRequestDetailsMissingError(BootstrapError):
     create it from.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.PULL_REQUEST_DETAILS_MISSING
+    exit_code: ExitCode = field(
+        default=PlanItemBootstrapExitCode.PULL_REQUEST_DETAILS_MISSING, init=False
+    )
 
     item_identifier: str
     """
@@ -569,7 +565,9 @@ class PullRequestRefusedError(BootstrapError):
     Raised when the remote declines to create the pull request.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.PULL_REQUEST_REFUSED
+    exit_code: ExitCode = field(
+        default=PlanItemBootstrapExitCode.PULL_REQUEST_REFUSED, init=False
+    )
 
     detail: str
     """
@@ -593,7 +591,9 @@ class NotesBranchUnavailableError(BootstrapError):
     read or write.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_PLAN
+    exit_code: ExitCode = field(
+        default=PlanItemBootstrapExitCode.UNKNOWN_PLAN, init=False
+    )
 
     detail: str
     """
@@ -1016,7 +1016,7 @@ class BootstrapReport:
     What an operation did, in the shape a caller acts on.
     """
 
-    exit_code: ExitCode
+    exit_code: PlanItemBootstrapExitCode
     """
     The status the process exits with.
     """
@@ -1107,7 +1107,7 @@ def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapRepo
     )
     documents.save(manifest_text, roadmap_text, project_root)
     return BootstrapReport(
-        exit_code=ExitCode.SUCCESS,
+        exit_code=PlanItemBootstrapExitCode.SUCCESS,
         plan_identifier=request.plan_identifier,
         item_identifier=request.item_identifier,
         created_item=created_item,
@@ -1213,7 +1213,7 @@ class GitHubPullRequestOpener:
     absorb.
     """
 
-    api_root: str = GITHUB_API_ROOT
+    api_root: str = GitHubAddress.API
     """
     The API host, overridable for a GitHub Enterprise deployment.
     """
@@ -1452,7 +1452,7 @@ def open_work(
     )
     documents.save(manifest_text, documents.roadmap_text, project_root)
     return BootstrapReport(
-        exit_code=ExitCode.SUCCESS,
+        exit_code=PlanItemBootstrapExitCode.SUCCESS,
         plan_identifier=request.plan_identifier,
         item_identifier=request.item_identifier,
         branch=request.branch,

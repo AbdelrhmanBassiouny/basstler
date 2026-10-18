@@ -357,6 +357,21 @@ class RemoteName(StrEnum):
     The conventional name of the remote a fork was forked from.
     """
 
+    MINE = "mine"
+    """
+    A remote pointing at the user's own fork, under a name no default matches.
+    """
+
+    THEIRS = "theirs"
+    """
+    A remote pointing at somebody else's fork, beside :attr:`MINE`.
+    """
+
+    BACKUP = "backup"
+    """
+    A remote at a local path, which names no repository.
+    """
+
 
 class PluginManifestKey(StrEnum):
     """

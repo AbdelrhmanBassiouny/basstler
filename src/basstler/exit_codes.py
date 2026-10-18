@@ -1,6 +1,9 @@
 """
 The exit statuses the package's commands end with, and the errors that carry their own.
 
+Every command's table of statuses extends :class:`ExitCode`, so a status reads the same
+way, and is typed the same way, whichever command it comes from.
+
 An error a command reports to its caller declares the status it ends the command with,
 as :attr:`CommandFailure.exit_code`. A command's entry point then catches
 :class:`CommandFailure` once and returns ``error.exit_code``, instead of each entry point
@@ -15,11 +18,34 @@ which produced it.
 
 from __future__ import annotations
 
+from dataclasses import dataclass, field
 from enum import IntEnum
-from typing import ClassVar
 
 
-class StackExitCode(IntEnum):
+class ExitCode(IntEnum):
+    """
+    The base every command's table of exit statuses extends.
+
+    It defines no statuses of its own, since an enum with members cannot be extended:
+    each command's table names its own, starting from ``SUCCESS = 0``.
+    """
+
+    @property
+    def name_for_a_caller(self) -> str:
+        """
+        What this status means, in words rather than as a number to be looked up.
+
+        A process exit status can only ever be an integer, so this accompanies the
+        number rather than replacing it. Derived from the member itself, so a status can
+        never end up carrying a name that belongs to a different one.
+
+        :return: The status's name, lowercased, in the form a caller reads or matches
+            on.
+        """
+        return self.name.lower()
+
+
+class StackExitCode(ExitCode):
     """
     What the stacked-pull-request tools' exit status tells a caller.
 
@@ -90,27 +116,28 @@ class StackExitCode(IntEnum):
     @property
     def name_for_a_caller(self) -> str:
         """
-        What this status means, in words rather than as a number to be looked up.
-
-        A process exit status can only ever be an integer, so this accompanies the
-        number rather than replacing it. Derived from the member itself, so a status can
-        never end up carrying a name that belongs to a different one.
+        The status's name hyphenated, as the stacked-pull-request skills match on it.
 
         :return: The status's name, in the form a caller reads or matches on.
         """
-        return self.name.lower().replace("_", "-")
+        return super().name_for_a_caller.replace("_", "-")
 
 
+@dataclass
 class CommandFailure(Exception):
     """
     An error a command reports to its caller by an exit status of its own.
 
     Extended alongside the built-in exception that says what kind of error it is, e.g.
     ``class SomeError(CommandFailure, LookupError)``, so ``except LookupError`` still
-    catches it.
+    catches it. Each concrete error redeclares :attr:`exit_code` with its own status as
+    the default.
     """
 
-    exit_code: ClassVar[int]
+    exit_code: ExitCode = field(init=False)
     """
     The status a command ends with when this error stops it.
+
+    Not a constructor argument: the status belongs to the kind of error, so a subclass
+    fixes it as this field's default rather than a caller choosing it per raise.
     """

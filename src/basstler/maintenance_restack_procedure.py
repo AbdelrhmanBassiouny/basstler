@@ -25,7 +25,13 @@ from basstler.maintenance_restack_steps import (
     SkipBranchAlreadyCurrent,
     WithholdBranchStillConflicting,
 )
-from basstler.stack import CommitMoveChecks, IntegrationStrategy, Stack, restack_plan
+from basstler.stack import (
+    CommitMoveChecks,
+    IntegrationStrategy,
+    RestackPlanKey,
+    Stack,
+    restack_plan,
+)
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -207,9 +213,9 @@ def restack(
         return [
             _restack_branch(
                 BranchUnderRestack(
-                    branch=by_name[entry["branch"]],
-                    parent=entry["parent"],
-                    strategy=IntegrationStrategy(entry["strategy"]),
+                    branch=by_name[entry[RestackPlanKey.BRANCH]],
+                    parent=entry[RestackPlanKey.PARENT],
+                    strategy=IntegrationStrategy(entry[RestackPlanKey.STRATEGY]),
                     stack=stack,
                     git=switching,
                     fork=fork,

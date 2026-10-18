@@ -6,11 +6,23 @@ references and git remote URLs the tooling is handed.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
-GITHUB_ROOT = "https://github.com"
-"""
-Base URL every GitHub web and clone URL this package builds is built on.
-"""
+
+class GitHubAddress(StrEnum):
+    """
+    The base URLs every GitHub address this package builds is built on.
+    """
+
+    WEB = "https://github.com"
+    """
+    The root of every web and clone URL.
+    """
+
+    API = "https://api.github.com"
+    """
+    The root of every REST call.
+    """
 
 
 @dataclass
@@ -116,7 +128,7 @@ class Repository:
         """
         The repository's page on GitHub, which is also the base of every page within it.
         """
-        return f"{GITHUB_ROOT}/{self.full_name}"
+        return f"{GitHubAddress.WEB}/{self.full_name}"
 
     @property
     def clone_url(self) -> str:

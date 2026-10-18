@@ -31,12 +31,12 @@ import sys
 import tomllib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 from importlib.metadata import PackageNotFoundError, distribution, distributions
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
-from basstler.exit_codes import CommandFailure
+from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.locations import PackageLocation
 from basstler.standard_streams import StandardStreamHandler
 
@@ -80,7 +80,7 @@ class RequirementMarker(StrEnum):
     """
 
 
-class ExitCode(IntEnum):
+class DependencyExitCode(ExitCode):
     """
     How the command ended, as its caller reads it.
     """
@@ -106,7 +106,9 @@ class UnreadableDependencyDeclarationError(CommandFailure):
     from an empty answer and act on by installing nothing.
     """
 
-    exit_code: ClassVar[int] = ExitCode.UNREADABLE_DECLARATION
+    exit_code: ExitCode = field(
+        default=DependencyExitCode.UNREADABLE_DECLARATION, init=False
+    )
 
     declaration: Path
     """
@@ -297,7 +299,7 @@ class DependencyDeclaration(RequirementSource):
         return declaration[PyprojectKey.PROJECT]
 
 
-def main() -> ExitCode:
+def main() -> DependencyExitCode:
     """
     Print one specifier per missing requirement, for a caller to report.
 
@@ -324,7 +326,7 @@ def main() -> ExitCode:
         return error.exit_code
     for requirement in missing:
         logger.info(requirement.specifier)
-    return ExitCode.SUCCESS
+    return DependencyExitCode.SUCCESS
 
 
 if __name__ == "__main__":

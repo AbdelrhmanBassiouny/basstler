@@ -16,15 +16,14 @@ import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
-from typing import Any, ClassVar
+from dataclasses import dataclass, field
+from typing import Any
 
-from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.maintenance_board import PullRequestRecord
 from basstler.environment import GitHubCredentialVariable
-from basstler.maintenance_constants import GITHUB_API_ROOT
 from basstler.maintenance_errors import ExternalCallFailed
-from basstler.repository import Repository
+from basstler.repository import GitHubAddress, Repository
 
 
 @dataclass
@@ -33,7 +32,9 @@ class GitHubCredentialUnavailableError(CommandFailure, RuntimeError):
     Raised when no token is available to authenticate the API calls with.
     """
 
-    exit_code: ClassVar[int] = StackExitCode.CREDENTIAL_UNAVAILABLE
+    exit_code: ExitCode = field(
+        default=StackExitCode.CREDENTIAL_UNAVAILABLE, init=False
+    )
 
     variables: tuple[str, ...]
     """
@@ -114,7 +115,7 @@ class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
     Raised when the API refuses a call this module depends on.
     """
 
-    exit_code: ClassVar[int] = StackExitCode.GITHUB_REQUEST_FAILED
+    exit_code: ExitCode = field(default=StackExitCode.GITHUB_REQUEST_FAILED, init=False)
 
     method: str = ""
     """
@@ -231,7 +232,7 @@ class GitHubRepository(ForkPullRequests):
         :raises GitHubRequestFailed: If the API answers with an error status.
         """
         request = urllib.request.Request(
-            f"{GITHUB_API_ROOT}/repos/{self.repository}{path}",
+            f"{GitHubAddress.API}/repos/{self.repository}{path}",
             method=method,
             data=None if payload is None else json.dumps(payload).encode(),
             headers={

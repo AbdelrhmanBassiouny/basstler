@@ -32,7 +32,7 @@ import argparse
 import sys
 from pathlib import Path
 
-from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.maintenance_commands import COMMANDS, MaintenancePass
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.stack import load_configuration
@@ -58,7 +58,7 @@ def _argument_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main() -> StackExitCode:
+def main() -> ExitCode:
     """
     Run the command line and say, in words, what its status means.
 
@@ -74,7 +74,7 @@ def main() -> StackExitCode:
     return status
 
 
-def _dispatch() -> StackExitCode:
+def _dispatch() -> ExitCode:
     """
     Run the requested command, mapping every refusal to its own status.
 

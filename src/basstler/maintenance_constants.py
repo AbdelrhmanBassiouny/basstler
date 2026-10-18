@@ -1,7 +1,7 @@
 """
 The maintenance executor's hand-maintained values.
 
-Everything here is a decision somebody made and may change again - where the API lives, the
+Everything here is a decision somebody made and may change again - the
 heading a promotion link is written under. They are gathered in one module so changing one is an edit rather than a search
 through whichever module happens to read it.
 
@@ -12,11 +12,6 @@ from __future__ import annotations
 
 import re
 from enum import StrEnum
-
-GITHUB_API_ROOT = "https://api.github.com"
-"""
-Base URL every GitHub REST call this package makes is built on.
-"""
 
 
 class GitHubClient(StrEnum):

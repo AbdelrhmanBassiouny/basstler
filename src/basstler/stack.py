@@ -48,7 +48,7 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
-from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
@@ -82,7 +82,7 @@ class Remote:
 class ForkRemoteNotFoundError(CommandFailure, LookupError):
     """Raised when no remote points at a repository other than the upstream."""
 
-    exit_code: ClassVar[int] = StackExitCode.REMOTES_UNRESOLVED
+    exit_code: ExitCode = field(default=StackExitCode.REMOTES_UNRESOLVED, init=False)
 
     upstream_repository: Repository
     """The upstream every candidate turned out to be."""
@@ -99,7 +99,7 @@ class ForkRemoteNotFoundError(CommandFailure, LookupError):
 class AmbiguousForkRemoteError(CommandFailure, LookupError):
     """Raised when several remotes could each be the fork."""
 
-    exit_code: ClassVar[int] = StackExitCode.REMOTES_UNRESOLVED
+    exit_code: ExitCode = field(default=StackExitCode.REMOTES_UNRESOLVED, init=False)
 
     candidates: tuple[Remote, ...]
     """The remotes that are not the upstream, in the order git reported them."""
@@ -479,10 +479,18 @@ class Stack:
         )
 
 
+@dataclass
 class BoardUnavailable(CommandFailure, RuntimeError):
     """Raised when ``board.json`` is missing."""
 
-    exit_code: ClassVar[int] = StackExitCode.BOARD_UNAVAILABLE
+    exit_code: ExitCode = field(default=StackExitCode.BOARD_UNAVAILABLE, init=False)
+
+    board: Path
+    """Where the board export was looked for."""
+
+    def __str__(self) -> str:
+        """:return: Which file is missing."""
+        return f"{self.board.name} not found"
 
 
 def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
@@ -493,7 +501,7 @@ def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
     :raises BoardUnavailable: If *path* does not exist.
     """
     if not path.exists():
-        raise BoardUnavailable(f"{path.name} not found")
+        raise BoardUnavailable(path)
     data = json.loads(path.read_text())
     return [
         PullRequest(
@@ -571,7 +579,7 @@ def build_stack(
 class ContradictoryLabelWriteError(CommandFailure, ValueError):
     """Raised when one write is asked both to carry a label and to drop it."""
 
-    exit_code: ClassVar[int] = StackExitCode.USAGE
+    exit_code: ExitCode = field(default=StackExitCode.USAGE, init=False)
 
     labels: tuple[str, ...]
     """The labels asked for in both directions."""
@@ -626,7 +634,7 @@ class LabelWrite:
 class PromotionLinkTooLongError(CommandFailure, ValueError):
     """Raised when a link cannot fit even with its whole description dropped."""
 
-    exit_code: ClassVar[int] = StackExitCode.USAGE
+    exit_code: ExitCode = field(default=StackExitCode.USAGE, init=False)
 
     branch: str
     """The branch whose link was being built."""
@@ -854,7 +862,20 @@ def next_to_promote(stack: Stack) -> Branch | None:
     return ordered[0] if ordered else None
 
 
-def restack_plan(stack: Stack) -> list[dict[str, str]]:
+class RestackPlanKey(StrEnum):
+    """The keys of one entry of :func:`restack_plan`."""
+
+    BRANCH = "branch"
+    """The branch to bring up to date."""
+
+    PARENT = "parent"
+    """The branch it is brought up to date with."""
+
+    STRATEGY = "strategy"
+    """How it is brought up to date - an :class:`IntegrationStrategy`."""
+
+
+def restack_plan(stack: Stack) -> list[dict[RestackPlanKey, str]]:
     """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
 
     One entry per branch not yet ``merged``, in parent-before-child order. In-review branches are
@@ -871,7 +892,7 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
     :param stack: The stack to plan.
     :return: The restack plan, one entry per not-yet-merged branch.
     """
-    plan: list[dict[str, str]] = []
+    plan: list[dict[RestackPlanKey, str]] = []
     for branch in order(stack):
         if branch.status == BranchStatus.MERGED:
             continue
@@ -882,9 +903,9 @@ def restack_plan(stack: Stack) -> list[dict[str, str]]:
         )
         plan.append(
             {
-                "branch": branch.name,
-                "parent": effective_parent,
-                "strategy": branch.strategy,
+                RestackPlanKey.BRANCH: branch.name,
+                RestackPlanKey.PARENT: effective_parent,
+                RestackPlanKey.STRATEGY: branch.strategy,
             }
         )
     return plan
@@ -1523,7 +1544,7 @@ def _ancestry_predicate(configuration: Configuration) -> Callable[[str, str], bo
     return is_ancestor
 
 
-def main() -> StackExitCode:
+def main() -> ExitCode:
     """Dispatch the command-line invocation, ending with the status the refusal carries.
 
     :return: The process exit code.

@@ -19,6 +19,7 @@ import pytest
 import basstler.stack
 from basstler.exit_codes import StackExitCode
 from basstler.repository import Repository
+from basstler.stack_configuration import StackSetting
 from basstler.stack import (
     AmbiguousForkRemoteError,
     CommitMoveAction,
@@ -47,6 +48,7 @@ from basstler.stack import (
     resolve_remotes,
     order,
     promotion_order,
+    RestackPlanKey,
     restack_plan,
 )
 
@@ -262,7 +264,7 @@ def test_restack_plan_excludes_merged_only():
         PullRequest(3, "wip", "review", draft=True),
     ]
     plan = restack_plan(build(prs, merged={"landed"}))
-    names = [entry["branch"] for entry in plan]
+    names = [entry[RestackPlanKey.BRANCH] for entry in plan]
     assert "landed" not in names
     assert names == ["review", "wip"]  # in-review included, parent before child
 
@@ -272,9 +274,9 @@ def test_restack_plan_carries_parent_and_strategy():
     plan = restack_plan(build(prs))
     assert plan == [
         {
-            "branch": "wip",
-            "parent": "base-branch",
-            "strategy": IntegrationStrategy.REBASE,
+            RestackPlanKey.BRANCH: "wip",
+            RestackPlanKey.PARENT: "base-branch",
+            RestackPlanKey.STRATEGY: IntegrationStrategy.REBASE,
         }
     ]
 
@@ -287,7 +289,13 @@ def test_restack_plan_reparents_child_of_merged_parent_onto_base():
         PullRequest(2, "child", "parent", draft=False),
     ]
     plan = restack_plan(build(prs, merged={"parent"}))
-    assert plan == [{"branch": "child", "parent": "main", "strategy": "merge"}]
+    assert plan == [
+        {
+            RestackPlanKey.BRANCH: "child",
+            RestackPlanKey.PARENT: "main",
+            RestackPlanKey.STRATEGY: "merge",
+        }
+    ]
 
 
 # %% landed parents that no open pull request describes
@@ -299,7 +307,13 @@ def test_restack_plan_reparents_child_of_a_landed_parent_with_no_open_pull_reque
     # must still be reparented onto that base rather than left on the landed branch.
     prs = [PullRequest(2, "child", "landed-elsewhere", draft=False)]
     plan = restack_plan(build(prs, merged={"landed-elsewhere"}))
-    assert plan == [{"branch": "child", "parent": "main", "strategy": "merge"}]
+    assert plan == [
+        {
+            RestackPlanKey.BRANCH: "child",
+            RestackPlanKey.PARENT: "main",
+            RestackPlanKey.STRATEGY: "merge",
+        }
+    ]
 
 
 def test_ready_child_blocked_when_its_only_parent_is_an_unlanded_off_board_branch():
@@ -509,8 +523,8 @@ def test_two_possible_forks_are_rejected_rather_than_guessed():
     with pytest.raises(AmbiguousForkRemoteError):
         resolve(
             {
-                "mine": FORK.clone_url,
-                "theirs": ANOTHER_OWNERS_FORK.clone_url,
+                RemoteName.MINE: FORK.clone_url,
+                RemoteName.THEIRS: ANOTHER_OWNERS_FORK.clone_url,
             }
         )
 
@@ -518,13 +532,13 @@ def test_two_possible_forks_are_rejected_rather_than_guessed():
 def test_configuration_disambiguates_two_possible_forks():
     resolution = resolve(
         {
-            "mine": FORK.clone_url,
-            "theirs": ANOTHER_OWNERS_FORK.clone_url,
+            RemoteName.MINE: FORK.clone_url,
+            RemoteName.THEIRS: ANOTHER_OWNERS_FORK.clone_url,
         },
         fork_repository=FORK,
     )
 
-    assert resolution.fork == Remote("mine", FORK)
+    assert resolution.fork == Remote(RemoteName.MINE, FORK)
 
 
 def test_a_remote_that_names_no_repository_is_ignored():
@@ -534,7 +548,7 @@ def test_a_remote_that_names_no_repository_is_ignored():
     resolution = resolve(
         {
             RemoteName.ORIGIN: FORK.clone_url,
-            "backup": "/srv/git/mirror",
+            RemoteName.BACKUP: "/srv/git/mirror",
         }
     )
 
@@ -554,14 +568,14 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
     printed = dict(line.split("\t") for line in capsys.readouterr().out.splitlines())
 
     assert printed == {
-        "in_review_label": StackLabel.IN_REVIEW,
-        "rebase_label": StackLabel.REBASE,
-        "needs_resolution_label": StackLabel.NEEDS_RESOLUTION,
-        "fork_repository": "a-fork-owner/a-fork",
-        "fork_remote": RemoteName.ORIGIN,
-        "upstream_repository": "an-upstream-owner/a-project",
-        "upstream_remote": RemoteName.UPSTREAM,
-        "upstream_base": "main",
+        StackSetting.IN_REVIEW_LABEL: StackLabel.IN_REVIEW,
+        StackSetting.REBASE_LABEL: StackLabel.REBASE,
+        StackSetting.NEEDS_RESOLUTION_LABEL: StackLabel.NEEDS_RESOLUTION,
+        StackSetting.FORK_REPOSITORY: "a-fork-owner/a-fork",
+        StackSetting.FORK_REMOTE: RemoteName.ORIGIN,
+        StackSetting.UPSTREAM_REPOSITORY: "an-upstream-owner/a-project",
+        StackSetting.UPSTREAM_REMOTE: RemoteName.UPSTREAM,
+        StackSetting.UPSTREAM_BASE: "main",
     }
 
 
@@ -678,9 +692,21 @@ def test_landing_a_root_reparents_only_its_own_child():
     stack = a_deep_stack_beside_an_independent_branch(landed={"engine"})
 
     assert restack_plan(stack) == [
-        {"branch": "engine-ui", "parent": "main", "strategy": "merge"},
-        {"branch": "engine-docs", "parent": "engine-ui", "strategy": "merge"},
-        {"branch": "parser", "parent": "main", "strategy": "merge"},
+        {
+            RestackPlanKey.BRANCH: "engine-ui",
+            RestackPlanKey.PARENT: "main",
+            RestackPlanKey.STRATEGY: "merge",
+        },
+        {
+            RestackPlanKey.BRANCH: "engine-docs",
+            RestackPlanKey.PARENT: "engine-ui",
+            RestackPlanKey.STRATEGY: "merge",
+        },
+        {
+            RestackPlanKey.BRANCH: "parser",
+            RestackPlanKey.PARENT: "main",
+            RestackPlanKey.STRATEGY: "merge",
+        },
     ]
 
 
@@ -695,7 +721,11 @@ def test_landing_a_root_that_no_open_pull_request_describes_still_reparents():
     )
 
     assert restack_plan(orphaned) == [
-        {"branch": "engine-ui", "parent": "main", "strategy": "merge"}
+        {
+            RestackPlanKey.BRANCH: "engine-ui",
+            RestackPlanKey.PARENT: "main",
+            RestackPlanKey.STRATEGY: "merge",
+        }
     ]
     assert orphaned.has_landed_upstream("engine")
 
@@ -710,19 +740,19 @@ def test_a_stack_lands_bottom_up_over_successive_runs():
         landed={"engine", "engine-ui"}
     )
 
-    assert [entry["branch"] for entry in restack_plan(after_first)] == [
+    assert [entry[RestackPlanKey.BRANCH] for entry in restack_plan(after_first)] == [
         "engine-ui",
         "engine-docs",
         "parser",
     ]
-    assert [entry["branch"] for entry in restack_plan(after_second)] == [
+    assert [entry[RestackPlanKey.BRANCH] for entry in restack_plan(after_second)] == [
         "engine-docs",
         "parser",
     ]
     assert restack_plan(after_second)[0] == {
-        "branch": "engine-docs",
-        "parent": "main",
-        "strategy": "merge",
+        RestackPlanKey.BRANCH: "engine-docs",
+        RestackPlanKey.PARENT: "main",
+        RestackPlanKey.STRATEGY: "merge",
     }
 
 

@@ -14,9 +14,9 @@ from collections.abc import Iterable, Mapping
 from dataclasses import asdict, dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
-from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import SESSION_LINK_PATTERN
 from basstler.stack import PullRequest
@@ -184,7 +184,7 @@ class MissingPullRequestFieldError(CommandFailure, ValueError):
     indistinguishable from good.
     """
 
-    exit_code: ClassVar[int] = StackExitCode.USAGE
+    exit_code: ExitCode = dataclasses.field(default=StackExitCode.USAGE, init=False)
 
     field_name: PullRequestField
     """

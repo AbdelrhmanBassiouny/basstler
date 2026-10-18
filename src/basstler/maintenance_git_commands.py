@@ -9,11 +9,10 @@ rewritten is decided in one place rather than at each call site.
 from __future__ import annotations
 
 import subprocess
-from dataclasses import dataclass
-from typing import ClassVar
+from dataclasses import dataclass, field
 from pathlib import Path
 
-from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.maintenance_errors import ExternalCallFailed
 from basstler.stack import Configuration, IntegrationStrategy, resolve_ref
 
@@ -26,7 +25,7 @@ class GitCommandFailed(CommandFailure, ExternalCallFailed):
     Raised when a git command this module depends on the result of fails.
     """
 
-    exit_code: ClassVar[int] = StackExitCode.GIT_COMMAND_FAILED
+    exit_code: ExitCode = field(default=StackExitCode.GIT_COMMAND_FAILED, init=False)
 
     arguments: tuple[str, ...] = ()
     """
