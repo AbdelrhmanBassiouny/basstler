@@ -4,7 +4,7 @@ Plan:
 - Release on merge, minor/major via `release_version bump`, check on PRs. Branch stays at 0.1.0, so merge releases v0.1.1.
 
 Done:
-- Review rounds 1-2. Confirmed that a session start with an untagged plugin version keeps the old package (fresh env: none). Bump-on-merge in e0715bf. 845 tests pass.
+- Review rounds 1-3 (round 3 in 2cd1127: one-statement headers, PublishedCheckout dataclass). Confirmed that a session start with an untagged plugin version keeps the old package (fresh env: none). Bump-on-merge in e0715bf. 845 tests pass.
 
 Next:
 - User to check branch protection lets the release job push to main. Wait for review.
