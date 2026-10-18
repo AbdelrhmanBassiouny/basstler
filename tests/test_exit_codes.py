@@ -15,7 +15,7 @@ import pytest
 
 from basstler.exit_codes import CommandFailure, ExitCode
 
-from .command_failures import command_failure_kinds, command_failures, status_of
+from .command_failures import command_failure_kinds, command_failures
 
 
 @pytest.mark.parametrize(
@@ -35,7 +35,7 @@ def test_every_error_nothing_extends_can_be_raised(failure: type[CommandFailure]
     "failure", command_failures(), ids=lambda failure: failure.__qualname__
 )
 def test_every_command_failure_declares_its_status(failure: type[CommandFailure]):
-    assert isinstance(status_of(failure), ExitCode)
+    assert isinstance(failure.exit_code, ExitCode)
 
 
 @pytest.mark.parametrize(
@@ -44,14 +44,17 @@ def test_every_command_failure_declares_its_status(failure: type[CommandFailure]
 def test_the_status_is_not_a_constructor_argument(failure: type[CommandFailure]):
     """
     The status belongs to the kind of error, so no raise site can pick another.
-    """
-    status = CommandFailure.exit_code.fget.__name__
 
-    assert status not in {field.name for field in dataclasses.fields(failure)}
+    A field named like anything :class:`CommandFailure` defines would shadow it, the
+    status included.
+    """
+    fields = {field.name for field in dataclasses.fields(failure)}
+
+    assert fields.isdisjoint(vars(CommandFailure))
 
 
 def test_no_status_is_a_failure():
     """
     Ending a command on an error with status 0 would tell its caller it succeeded.
     """
-    assert all(status_of(failure) != 0 for failure in command_failures())
+    assert all(failure.exit_code != 0 for failure in command_failures())

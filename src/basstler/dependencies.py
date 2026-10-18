@@ -36,6 +36,7 @@ from importlib.metadata import PackageNotFoundError, distribution, distributions
 from pathlib import Path
 from typing import Any
 
+from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.locations import PackageLocation
 from basstler.standard_streams import StandardStreamHandler
@@ -106,8 +107,8 @@ class UnreadableDependencyDeclarationError(CommandFailure):
     from an empty answer and act on by installing nothing.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> DependencyExitCode:
         """:return: The status this kind of error ends a command with."""
         return DependencyExitCode.UNREADABLE_DECLARATION
 

@@ -56,7 +56,8 @@ from basstler.maintenance_commands import (
     RunReportCommand,
 )
 from basstler.environment import GitHubCredentialVariable
-from basstler.maintenance_constants import MergeableState, RoutineLabel, RoutineText
+from basstler.github_labels import GitHubLabel
+from basstler.maintenance_constants import MergeableState, RoutineText
 from basstler.maintenance_fast_forward import (
     FastForwardOutcome,
     FastForwardReport,
@@ -89,10 +90,12 @@ from basstler.maintenance_restack_steps import (
 from .scratch_repository import initialize_bare_repository
 from .constants import (
     DatasetLocation,
+    PromotionSampleText,
     RemoteName,
     RepositoryLocation,
     StackBranch,
     StackLabel,
+    StackPullRequestNumber,
 )
 from .script_runner import PythonModuleRunner
 
@@ -139,12 +142,6 @@ A_SESSION_LINK = "https://claude.ai/code/session_01ABCdef"
 """
 The session a pull request's description names, written into one and read back out of
 another wherever a test follows that link through the pass.
-"""
-
-A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
-"""
-Stands for whatever else a pull request happens to carry - the labels a write must
-preserve precisely because this tool knows nothing about them.
 """
 
 
@@ -441,7 +438,7 @@ def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
     export = BoardExport.from_api_records(
         [
             an_api_record(
-                number=41,
+                number=StackPullRequestNumber.CHILD,
                 head=StackBranch.CHILD,
                 base=StackBranch.PARENT,
                 draft=True,
@@ -452,7 +449,7 @@ def test_the_export_reads_each_field_out_of_the_shape_the_api_returns_it_in():
     )
 
     exported = export.pull_requests[0]
-    assert exported.number == 41
+    assert exported.number == StackPullRequestNumber.CHILD
     assert exported.head == StackBranch.CHILD
     assert exported.base == StackBranch.PARENT
     assert exported.draft is True
@@ -470,12 +467,15 @@ def test_the_written_board_parses_back_into_the_records_it_was_built_from(
     export = BoardExport.from_api_records(
         [
             an_api_record(
-                number=41, head=StackBranch.CHILD, base=StackBranch.PARENT, draft=True
+                number=StackPullRequestNumber.CHILD,
+                head=StackBranch.CHILD,
+                base=StackBranch.PARENT,
+                draft=True,
             ),
             an_api_record(
-                number=40,
+                number=StackPullRequestNumber.PARENT,
                 head=StackBranch.PARENT,
-                labels=[A_LABEL_THIS_TOOL_NEVER_WRITES],
+                labels=[StackLabel.SOMEBODY_ELSES],
             ),
         ]
     )
@@ -491,14 +491,14 @@ def test_a_pull_request_missing_a_required_field_is_rejected_rather_than_default
     A dropped field is what made #119's bad data indistinguishable from good data, so
     the parser refuses it at the point it enters rather than substituting a default.
     """
-    record = an_api_record(number=41)
+    record = an_api_record(number=StackPullRequestNumber.CHILD)
     del record["draft"]
 
     with pytest.raises(MissingPullRequestFieldError) as raised:
         BoardExport.from_api_records([record])
 
     assert raised.value.field_name == PullRequestField.DRAFT
-    assert raised.value.pull_request_number == 41
+    assert raised.value.pull_request_number == StackPullRequestNumber.CHILD
 
 
 def test_the_board_snapshot_is_never_committable():
@@ -616,10 +616,13 @@ def the_board(labels: list[str] | None = None) -> list[PullRequest]:
     """
     return [
         PullRequest(
-            number=40, head=StackBranch.PARENT, base=UPSTREAM_BASE, draft=False
+            number=StackPullRequestNumber.PARENT,
+            head=StackBranch.PARENT,
+            base=UPSTREAM_BASE,
+            draft=False,
         ),
         PullRequest(
-            number=41,
+            number=StackPullRequestNumber.CHILD,
             head=StackBranch.CHILD,
             base=StackBranch.PARENT,
             draft=False,
@@ -1188,7 +1191,7 @@ class RecordingPullRequests(ForkPullRequests):
         :return: A stand-in for the comment's URL.
         """
         self.comments.append(RecordedComment(number, body))
-        return f"https://example.invalid/comment/{len(self.comments)}"
+        return f"{PromotionSampleText.COMMENT_LINK_PREFIX}{len(self.comments)}"
 
     def set_description(self, number: int, body: str) -> None:
         """
@@ -1279,13 +1282,15 @@ def test_a_conflict_labels_the_branch_and_tells_its_owner(
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.CONFLICT
     assert fork.label_writes == [
-        RecordedLabelWrite(41, (make_configuration().needs_resolution_label,))
+        RecordedLabelWrite(
+            StackPullRequestNumber.CHILD, (make_configuration().needs_resolution_label,)
+        )
     ]
     comment = fork.comments[0]
-    assert comment.pull_request_number == 41
+    assert comment.pull_request_number == StackPullRequestNumber.CHILD
     assert FixtureFile.CONTESTED in comment.body
     assert A_SESSION_LINK in comment.body
-    assert child.reported_at == "https://example.invalid/comment/1"
+    assert child.reported_at == f"{PromotionSampleText.COMMENT_LINK_PREFIX}1"
 
 
 def test_a_label_write_keeps_every_label_the_branch_already_carried(
@@ -1305,16 +1310,16 @@ def test_a_label_write_keeps_every_label_the_branch_already_carried(
     fork = RecordingPullRequests()
 
     restack(
-        a_stack(fork_checkout, the_board(labels=[A_LABEL_THIS_TOOL_NEVER_WRITES])),
+        a_stack(fork_checkout, the_board(labels=[StackLabel.SOMEBODY_ELSES])),
         fork_checkout.git,
         fork,
     )
 
     assert fork.label_writes == [
         RecordedLabelWrite(
-            41,
+            StackPullRequestNumber.CHILD,
             (
-                A_LABEL_THIS_TOOL_NEVER_WRITES,
+                StackLabel.SOMEBODY_ELSES,
                 make_configuration().needs_resolution_label,
             ),
         )
@@ -1334,7 +1339,9 @@ def test_a_branch_still_conflicting_is_withheld_without_being_relabelled(
         fork_checkout.own_file(StackBranch.PARENT),
         "the parent moved\n",
     )
-    fork = RecordingPullRequests(states={41: MergeableState.DIRTY})
+    fork = RecordingPullRequests(
+        states={StackPullRequestNumber.CHILD: MergeableState.DIRTY}
+    )
 
     outcomes = restack(
         a_stack(
@@ -1364,7 +1371,9 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
         fork_checkout.own_file(StackBranch.PARENT),
         "the parent moved\n",
     )
-    fork = RecordingPullRequests(states={41: "clean"})
+    fork = RecordingPullRequests(
+        states={StackPullRequestNumber.CHILD: MergeableState.CLEAN}
+    )
 
     outcomes = restack(
         a_stack(
@@ -1377,7 +1386,7 @@ def test_a_branch_that_no_longer_conflicts_has_its_label_cleared_and_is_restacke
 
     child = next(outcome for outcome in outcomes if outcome.branch == StackBranch.CHILD)
     assert child.outcome == RestackOutcome.PUSHED
-    assert fork.label_writes == [RecordedLabelWrite(41, ())]
+    assert fork.label_writes == [RecordedLabelWrite(StackPullRequestNumber.CHILD, ())]
 
 
 # %% promotion
@@ -1388,20 +1397,26 @@ def test_the_promotion_link_goes_into_the_description_and_the_branch_is_labelled
 ):
     a_parent_and_child(fork_checkout)
     fork = RecordingPullRequests(
-        descriptions={40: "What this branch does.\n\nMore detail.\n"},
-        titles={40: "A parent branch"},
+        descriptions={
+            StackPullRequestNumber.PARENT: (
+                f"{PromotionSampleText.SUMMARY}\n\n{PromotionSampleText.DETAIL}\n"
+            )
+        },
+        titles={StackPullRequestNumber.PARENT: PromotionSampleText.TITLE},
     )
 
     promoted = promote(a_stack(fork_checkout, the_board()), fork)
 
     assert [entry.branch for entry in promoted] == [StackBranch.PARENT]
     written = fork.description_writes[0]
-    assert written.pull_request_number == 40
+    assert written.pull_request_number == StackPullRequestNumber.PARENT
     assert RoutineText.PROMOTION_HEADING in written.body
     assert promoted[0].url in written.body
-    assert "What this branch does." in written.body
+    assert PromotionSampleText.SUMMARY in written.body
     assert fork.label_writes == [
-        RecordedLabelWrite(40, (RoutineLabel.PROMOTION_LINK_SENT,))
+        RecordedLabelWrite(
+            StackPullRequestNumber.PARENT, (GitHubLabel.PROMOTION_LINK_SENT,)
+        )
     ]
 
 
@@ -1409,7 +1424,9 @@ def test_a_branch_already_carrying_the_link_label_is_not_promoted_again(
     fork_checkout: ForkCheckout,
 ):
     a_parent_and_child(fork_checkout)
-    fork = RecordingPullRequests(labels={40: [RoutineLabel.PROMOTION_LINK_SENT]})
+    fork = RecordingPullRequests(
+        labels={StackPullRequestNumber.PARENT: [GitHubLabel.PROMOTION_LINK_SENT]}
+    )
 
     promoted = promote(a_stack(fork_checkout, the_board()), fork)
 
@@ -1429,7 +1446,9 @@ def test_a_branch_labelled_needs_resolution_during_this_pass_is_not_promoted(
     """
     a_parent_and_child(fork_checkout)
     fork = RecordingPullRequests(
-        labels={40: [make_configuration().needs_resolution_label]}
+        labels={
+            StackPullRequestNumber.PARENT: [make_configuration().needs_resolution_label]
+        }
     )
 
     promoted = promote(a_stack(fork_checkout, the_board()), fork)
@@ -1447,13 +1466,16 @@ def test_the_promotion_label_write_keeps_a_label_added_since_the_board_was_taken
     strips anything applied since - including the label the restack applies mid-pass.
     """
     a_parent_and_child(fork_checkout)
-    fork = RecordingPullRequests(labels={40: [A_LABEL_THIS_TOOL_NEVER_WRITES]})
+    fork = RecordingPullRequests(
+        labels={StackPullRequestNumber.PARENT: [StackLabel.SOMEBODY_ELSES]}
+    )
 
     promote(a_stack(fork_checkout, the_board()), fork)
 
     assert fork.label_writes == [
         RecordedLabelWrite(
-            40, (A_LABEL_THIS_TOOL_NEVER_WRITES, RoutineLabel.PROMOTION_LINK_SENT)
+            StackPullRequestNumber.PARENT,
+            (StackLabel.SOMEBODY_ELSES, GitHubLabel.PROMOTION_LINK_SENT),
         )
     ]
 
@@ -1464,14 +1486,16 @@ def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
     be replaced in place - two Promote headings would leave a reader guessing which link
     is current.
     """
-    first = description_with_promotion_link("Prose.\n", "https://example.invalid/first")
+    first = description_with_promotion_link(
+        f"{PromotionSampleText.PROSE}\n", PromotionSampleText.FIRST_LINK
+    )
 
-    second = description_with_promotion_link(first, "https://example.invalid/second")
+    second = description_with_promotion_link(first, PromotionSampleText.SECOND_LINK)
 
     assert second.count(RoutineText.PROMOTION_HEADING) == 1
-    assert "https://example.invalid/second" in second
-    assert "https://example.invalid/first" not in second
-    assert second.startswith("Prose.")
+    assert PromotionSampleText.SECOND_LINK in second
+    assert PromotionSampleText.FIRST_LINK not in second
+    assert second.startswith(PromotionSampleText.PROSE)
 
 
 def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
@@ -1484,7 +1508,7 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
     a_parent_and_child(fork_checkout)
     board = the_board()
     board[0].labels = [
-        RoutineLabel.PROMOTION_LINK_SENT,
+        GitHubLabel.PROMOTION_LINK_SENT,
         make_configuration().in_review_label,
     ]
     fork = RecordingPullRequests()
@@ -1493,7 +1517,9 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
 
     assert cleared == (StackBranch.PARENT,)
     assert fork.label_writes == [
-        RecordedLabelWrite(40, (make_configuration().in_review_label,))
+        RecordedLabelWrite(
+            StackPullRequestNumber.PARENT, (make_configuration().in_review_label,)
+        )
     ]
 
 

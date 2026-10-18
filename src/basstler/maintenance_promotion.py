@@ -10,7 +10,8 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from basstler.maintenance_constants import RoutineLabel, RoutineText
+from basstler.github_labels import GitHubLabel
+from basstler.maintenance_constants import RoutineText
 from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_github import ForkPullRequests, PullRequestWriter
 from basstler.stack import (
@@ -100,7 +101,7 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
         number = branch.pull_request_number
         pull_request = fork.pull_request(number)
         labels = PullRequestField.LABELS.read(pull_request, number)
-        if RoutineLabel.PROMOTION_LINK_SENT in labels or withheld in labels:
+        if GitHubLabel.PROMOTION_LINK_SENT in labels or withheld in labels:
             continue
         description = str(PullRequestField.BODY.read(pull_request, number) or "")
         link = PromotionLink.build(
@@ -116,7 +117,7 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
         fork.replace_labels(
             number,
             LabelWrite.replacing(
-                labels, added=[RoutineLabel.PROMOTION_LINK_SENT]
+                labels, added=[GitHubLabel.PROMOTION_LINK_SENT]
             ).labels,
         )
         promoted.append(
@@ -162,14 +163,14 @@ def clear_spent_promotion_labels(
     spent = [
         branch
         for branch in stack.branches
-        if RoutineLabel.PROMOTION_LINK_SENT in branch.labels
+        if GitHubLabel.PROMOTION_LINK_SENT in branch.labels
         and branch.status in {BranchStatus.IN_REVIEW, BranchStatus.MERGED}
     ]
     for branch in spent:
         fork.replace_labels(
             branch.pull_request_number,
             LabelWrite.replacing(
-                branch.labels, removed=[RoutineLabel.PROMOTION_LINK_SENT]
+                branch.labels, removed=[GitHubLabel.PROMOTION_LINK_SENT]
             ).labels,
         )
     return tuple(branch.name for branch in spent)

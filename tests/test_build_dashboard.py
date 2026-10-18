@@ -29,7 +29,6 @@ from basstler.build_dashboard import (
     MissingMergeTimestampError,
     Plan,
     PlanValidationError,
-    PullRequestLabel,
     PullRequestRecord,
     PullRequestsByRepository,
     PullRequestState,
@@ -46,9 +45,9 @@ from basstler.build_dashboard import (
     validate_plan,
 )
 from basstler.locations import PackageLocation
-from basstler.maintenance_constants import RoutineLabel
+from basstler.github_labels import GitHubLabel
 
-from .constants import RepositoryLocation, SkillDirectory
+from .constants import RepositoryLocation, SkillDirectory, StackLabel
 
 EXAMPLE_DIRECTORY = (
     RepositoryLocation.PLUGIN / SkillDirectory.PLAN_DASHBOARD / "example"
@@ -372,16 +371,14 @@ def test_identified_labels_recognizes_known_labels():
         state=PullRequestState.OPEN, labels=["in-review", "merged"]
     )
     assert record.identified_labels == {
-        PullRequestLabel.IN_REVIEW,
-        PullRequestLabel.MERGED,
+        GitHubLabel.IN_REVIEW,
+        GitHubLabel.MERGED,
     }
 
 
 def test_identified_labels_silently_excludes_an_unrecognized_label():
-    # The promotion-link marker is real label traffic on a fork's PRs (added by the
-    # maintenance pass) that the dashboard has no reason to recognize.
     record = PullRequestRecord(
-        state=PullRequestState.OPEN, labels=[RoutineLabel.PROMOTION_LINK_SENT]
+        state=PullRequestState.OPEN, labels=[StackLabel.SOMEBODY_ELSES]
     )
     assert record.identified_labels == frozenset()
 
@@ -1107,7 +1104,7 @@ def test_item_is_a_bug_fix_when_its_pull_request_carries_the_bug_label():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1125,7 +1122,7 @@ def test_item_is_not_a_bug_fix_when_its_pull_request_carries_other_labels():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.IN_REVIEW.value, "enhancement"],
+                labels=[GitHubLabel.IN_REVIEW.value, StackLabel.SOMEBODY_ELSES],
             )
         }
     }
@@ -1151,7 +1148,7 @@ def test_bug_fix_stays_in_its_ordinary_action_group():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1169,7 +1166,7 @@ def test_render_marks_a_bug_fix_sidebar_entry_with_a_bug_chip():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1205,7 +1202,7 @@ def _renderer_with_one_bug_fix_and_one_other_entry() -> DashboardRenderer:
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             ),
             "2": PullRequestRecord(state=PullRequestState.OPEN, draft=False),
         }

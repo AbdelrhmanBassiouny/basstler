@@ -32,7 +32,6 @@ from basstler.plan_item_mode import (
 
 from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 
-from .command_failures import status_of
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 
@@ -300,7 +299,7 @@ def test_each_refusal_carries_its_own_exit_code():
         MalformedModeSettingsError: PlanItemModeExitCode.MALFORMED_MODE_SETTINGS,
         basstler.plan_item_mode.SettingsWriteRefusedError: PlanItemModeExitCode.SETTINGS_WRITE_REFUSED,
     }
-    assert {error: status_of(error) for error in codes} == codes
+    assert {error: error.exit_code for error in codes} == codes
 
 
 def test_a_refusal_composes_its_message_from_its_own_fields():

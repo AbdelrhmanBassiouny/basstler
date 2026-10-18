@@ -254,6 +254,73 @@ class StackLabel(StrEnum):
     Carried by a fix, and never acted on by this tooling - a label it reads past.
     """
 
+    SOMEBODY_ELSES = "a-label-somebody-else-put-here"
+    """
+    Stands for whatever else a pull request happens to carry - the labels a write must
+    preserve precisely because this tool knows nothing about them.
+    """
+
+
+class StackPullRequestNumber(IntEnum):
+    """
+    The numbers of the fork pull requests the two-branch stack under test is made of.
+
+    A number is written into a board entry, keyed into a recorded write and read back in
+    an assertion, so it is named once rather than spelled at each of those places.
+    """
+
+    PARENT = 40
+    """
+    The pull request of :attr:`StackBranch.PARENT`.
+    """
+
+    CHILD = 41
+    """
+    The pull request of :attr:`StackBranch.CHILD`, based on the parent's.
+    """
+
+
+class PromotionSampleText(StrEnum):
+    """
+    The text a promotion test puts into a fork pull request and finds again in what the
+    routine writes back.
+    """
+
+    TITLE = "A parent branch"
+    """
+    The parent pull request's title.
+    """
+
+    SUMMARY = "What this branch does."
+    """
+    The first paragraph of the parent pull request's description.
+    """
+
+    DETAIL = "More detail."
+    """
+    The paragraph after it.
+    """
+
+    PROSE = "Prose."
+    """
+    A description's text before its Promote section.
+    """
+
+    FIRST_LINK = "https://example.invalid/first"
+    """
+    The create-link a first promotion writes.
+    """
+
+    SECOND_LINK = "https://example.invalid/second"
+    """
+    The create-link a second promotion writes in its place.
+    """
+
+    COMMENT_LINK_PREFIX = "https://example.invalid/comment/"
+    """
+    What a recorded comment's stand-in URL starts with, before the comment's position.
+    """
+
 
 class SkillDirectory(PathEnumeration):
     """

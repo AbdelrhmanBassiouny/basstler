@@ -1,6 +1,6 @@
 """
 The errors the package's commands report to their caller, found by importing every
-module of the package, and the status each one ends a command with.
+module of the package.
 """
 
 from __future__ import annotations
@@ -8,7 +8,7 @@ from __future__ import annotations
 import importlib
 import inspect
 
-from basstler.exit_codes import CommandFailure, ExitCode
+from basstler.exit_codes import CommandFailure
 from basstler.package_layout import package_modules
 
 
@@ -36,12 +36,3 @@ def command_failures() -> list[type[CommandFailure]]:
         for failure in command_failure_kinds()
         if not inspect.isabstract(failure)
     ]
-
-
-def status_of(failure: type[CommandFailure]) -> ExitCode:
-    """
-    :param failure: A concrete kind of error.
-    :return: The status it ends a command with, read off an instance made without its
-        constructor, since the status belongs to the kind rather than to any one raise.
-    """
-    return failure.__new__(failure).exit_code

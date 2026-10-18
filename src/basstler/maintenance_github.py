@@ -19,7 +19,8 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from typing import Any
 
-from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_board import PullRequestRecord
 from basstler.environment import GitHubCredentialVariable
 from basstler.maintenance_errors import ExternalCallFailed
@@ -32,8 +33,8 @@ class GitHubCredentialUnavailableError(CommandFailure, RuntimeError):
     Raised when no token is available to authenticate the API calls with.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
         """:return: The status this kind of error ends a command with."""
         return StackExitCode.CREDENTIAL_UNAVAILABLE
 
@@ -116,8 +117,8 @@ class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
     Raised when the API refuses a call this module depends on.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
         """:return: The status this kind of error ends a command with."""
         return StackExitCode.GITHUB_REQUEST_FAILED
 

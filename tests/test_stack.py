@@ -73,12 +73,6 @@ ANOTHER_OWNERS_FORK = Repository("another-owner", "a-project")
 A second fork of the upstream, beside :data:`FORK`.
 """
 
-A_LABEL_THIS_TOOL_NEVER_WRITES = "a-label-somebody-else-put-here"
-"""
-Stands for whatever else a pull request happens to carry - the labels a write must
-preserve precisely because this tool knows nothing about them.
-"""
-
 STACK_MODULE = basstler.stack.__name__
 """
 The tool under test, invoked as a subprocess wherever an exit status is the assertion.
@@ -843,13 +837,13 @@ def test_adding_a_label_keeps_every_label_the_pull_request_already_carries():
     configuration = make_configuration()
 
     write = LabelWrite.replacing(
-        [configuration.in_review_label, A_LABEL_THIS_TOOL_NEVER_WRITES],
+        [configuration.in_review_label, StackLabel.SOMEBODY_ELSES],
         added=[configuration.needs_resolution_label],
     )
 
     assert write.labels == (
         configuration.in_review_label,
-        A_LABEL_THIS_TOOL_NEVER_WRITES,
+        StackLabel.SOMEBODY_ELSES,
         configuration.needs_resolution_label,
     )
 
@@ -858,8 +852,8 @@ def test_removing_a_label_keeps_every_other_label():
     configuration = make_configuration()
 
     write = LabelWrite.replacing(
-        [configuration.in_review_label, A_LABEL_THIS_TOOL_NEVER_WRITES],
-        removed=[A_LABEL_THIS_TOOL_NEVER_WRITES],
+        [configuration.in_review_label, StackLabel.SOMEBODY_ELSES],
+        removed=[StackLabel.SOMEBODY_ELSES],
     )
 
     assert write.labels == (configuration.in_review_label,)

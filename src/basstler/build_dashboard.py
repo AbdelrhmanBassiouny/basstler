@@ -46,6 +46,7 @@ from typing import Any, ClassVar
 
 import yaml
 
+from basstler.github_labels import GitHubLabel
 from basstler.plan_model import ItemStatus
 from basstler.render_common import (
     create_template_environment,
@@ -103,25 +104,6 @@ class PullRequestState(StrEnum):
 
     OPEN = "open"
     CLOSED = "closed"
-
-
-class PullRequestLabel(StrEnum):
-    """The GitHub labels this repo's own convention attaches to a pull
-    request by hand, that this codebase's logic or a session cares about
-    recognizing.
-
-    Not exhaustive of every label a real pull request can carry - GitHub's
-    own label vocabulary is open-ended, and other automation on this repo
-    may add labels this dashboard never needs to know about. See
-    :attr:`PullRequestRecord.identified_labels` for how an unrecognized
-    label is handled (silently excluded, not an error), and
-    ``hooks/README.md``'s "labels the dashboard reads" list for what
-    each member means and who applies it.
-    """
-
-    MERGED = "merged"
-    IN_REVIEW = "in-review"
-    BUG = "bug"
 
 
 @dataclass
@@ -450,7 +432,7 @@ class PullRequestRecord:
 
     labels: list[str] = field(default_factory=list)
     """The pull request's raw GitHub labels, exactly as GitHub reports them.
-    Kept as ``list[str]`` rather than ``list[PullRequestLabel]``: a real pull
+    Kept as ``list[str]`` rather than ``list[GitHubLabel]``: a real pull
     request can carry labels this codebase has no reason to know about (other
     automation's own labels, GitHub's defaults), so this field must tolerate
     anything - see :attr:`identified_labels` for the subset this codebase
@@ -458,19 +440,19 @@ class PullRequestRecord:
     case in this repo's history: a pull request merged out-of-band (its
     branch pushed directly, then the pull request closed by hand rather than
     through GitHub's merge button) never gets ``merged_at`` set, so the
-    closer manually adds the :attr:`PullRequestLabel.MERGED` label to record
+    closer manually adds the :attr:`GitHubLabel.MERGED` label to record
     what actually happened - see :meth:`was_merged`."""
 
     @property
-    def identified_labels(self) -> frozenset[PullRequestLabel]:
+    def identified_labels(self) -> frozenset[GitHubLabel]:
         """The subset of :attr:`labels` that match a known
-        :class:`PullRequestLabel` - any other raw label this pull request
+        :class:`GitHubLabel` - any other raw label this pull request
         happens to carry is silently excluded, not an error, since
         :attr:`labels` is deliberately not limited to labels this codebase
         recognizes."""
-        known_values = {member.value for member in PullRequestLabel}
+        known_values = {member.value for member in GitHubLabel}
         return frozenset(
-            PullRequestLabel(label) for label in self.labels if label in known_values
+            GitHubLabel(label) for label in self.labels if label in known_values
         )
 
     @classmethod
@@ -501,11 +483,10 @@ class PullRequestRecord:
     def was_merged(self) -> bool:
         """Whether this pull request's changes actually landed - GitHub's own
         :attr:`merged_at`, or (for an out-of-band merge GitHub never
-        recorded) the manually-applied :attr:`PullRequestLabel.MERGED`
+        recorded) the manually-applied :attr:`GitHubLabel.MERGED`
         label."""
         return (
-            self.merged_at is not None
-            or PullRequestLabel.MERGED in self.identified_labels
+            self.merged_at is not None or GitHubLabel.MERGED in self.identified_labels
         )
 
 
@@ -766,7 +747,7 @@ class Item:
     status always gets one: something is always actionable next."""
 
     is_bug_fix: bool = field(default=False, init=False)
-    """Whether this item's pull request carries :attr:`PullRequestLabel.BUG`,
+    """Whether this item's pull request carries :attr:`GitHubLabel.BUG`,
     filled in by :meth:`DashboardRenderer.render`. Marks the item wherever it
     already appears rather than grouping it separately: fixing a bug is a
     property of the work, not a distinct next action, and it can apply to an
@@ -1201,7 +1182,7 @@ class DashboardRenderer:
         pull_request = self._pull_request_record_of(item)
         return (
             pull_request is not None
-            and PullRequestLabel.BUG in pull_request.identified_labels
+            and GitHubLabel.BUG in pull_request.identified_labels
         )
 
     @staticmethod

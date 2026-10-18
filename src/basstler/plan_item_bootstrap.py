@@ -70,6 +70,7 @@ from typing import Any, Protocol
 import yaml
 
 from basstler.environment import GitHubCredentialVariable
+from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
 from basstler.plan_model import ItemStatus
@@ -407,8 +408,8 @@ class UnknownPlanError(BootstrapError):
     Raised when the named plan has no manifest on the personal-notes branch.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
         """:return: The status this kind of error ends a command with."""
         return PlanItemBootstrapExitCode.UNKNOWN_PLAN
 
@@ -438,8 +439,8 @@ class UnknownItemError(BootstrapError):
     Raised when the named item is absent from an otherwise resolvable plan.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
         """:return: The status this kind of error ends a command with."""
         return PlanItemBootstrapExitCode.UNKNOWN_ITEM
 
@@ -470,8 +471,8 @@ class IncompleteNewItemError(BootstrapError):
     write its entry.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
         """:return: The status this kind of error ends a command with."""
         return PlanItemBootstrapExitCode.INCOMPLETE_NEW_ITEM
 
@@ -506,8 +507,8 @@ class BranchAlreadyPublishedError(BootstrapError):
     underway and overwriting it would discard someone's commits.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
         """:return: The status this kind of error ends a command with."""
         return PlanItemBootstrapExitCode.BRANCH_ALREADY_PUBLISHED
 
@@ -541,8 +542,8 @@ class PullRequestDetailsMissingError(BootstrapError):
     create it from.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
         """:return: The status this kind of error ends a command with."""
         return PlanItemBootstrapExitCode.PULL_REQUEST_DETAILS_MISSING
 
@@ -570,8 +571,8 @@ class PullRequestRefusedError(BootstrapError):
     Raised when the remote declines to create the pull request.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
         """:return: The status this kind of error ends a command with."""
         return PlanItemBootstrapExitCode.PULL_REQUEST_REFUSED
 
@@ -597,8 +598,8 @@ class NotesBranchUnavailableError(BootstrapError):
     read or write.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
         """:return: The status this kind of error ends a command with."""
         return PlanItemBootstrapExitCode.UNKNOWN_PLAN
 

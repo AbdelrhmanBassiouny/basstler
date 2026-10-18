@@ -74,18 +74,6 @@ class RoutineText(StrEnum):
     """
 
 
-class RoutineLabel(StrEnum):
-    """
-    The labels the routine puts on a fork pull request for its own later passes, beside
-    the ones a project configures in ``stack.toml``.
-    """
-
-    PROMOTION_LINK_SENT = "promotion-link-sent"
-    """
-    Marks a branch whose link has been built, so a later pass does not rebuild it.
-    """
-
-
 class MergeableState(StrEnum):
     """
     The values GitHub reports as a pull request's ``mergeable_state``.

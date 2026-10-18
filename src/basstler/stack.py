@@ -48,6 +48,7 @@ from pathlib import Path
 from typing import ClassVar
 from urllib.parse import quote
 
+from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
@@ -82,8 +83,8 @@ class Remote:
 class ForkRemoteNotFoundError(CommandFailure, LookupError):
     """Raised when no remote points at a repository other than the upstream."""
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
         """:return: The status this kind of error ends a command with."""
         return StackExitCode.REMOTES_UNRESOLVED
 
@@ -102,8 +103,8 @@ class ForkRemoteNotFoundError(CommandFailure, LookupError):
 class AmbiguousForkRemoteError(CommandFailure, LookupError):
     """Raised when several remotes could each be the fork."""
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
         """:return: The status this kind of error ends a command with."""
         return StackExitCode.REMOTES_UNRESOLVED
 
@@ -489,8 +490,8 @@ class Stack:
 class BoardUnavailable(CommandFailure, RuntimeError):
     """Raised when ``board.json`` is missing."""
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
         """:return: The status this kind of error ends a command with."""
         return StackExitCode.BOARD_UNAVAILABLE
 
@@ -588,8 +589,8 @@ def build_stack(
 class ContradictoryLabelWriteError(CommandFailure, ValueError):
     """Raised when one write is asked both to carry a label and to drop it."""
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
         """:return: The status this kind of error ends a command with."""
         return StackExitCode.USAGE
 
@@ -646,8 +647,8 @@ class LabelWrite:
 class PromotionLinkTooLongError(CommandFailure, ValueError):
     """Raised when a link cannot fit even with its whole description dropped."""
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
         """:return: The status this kind of error ends a command with."""
         return StackExitCode.USAGE
 

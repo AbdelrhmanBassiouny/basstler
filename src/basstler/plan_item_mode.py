@@ -62,6 +62,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.locations import (
     ClaudeCodeVariable,
@@ -321,8 +322,8 @@ class UnknownModeError(ModeError):
     Raised when a mode is named that :class:`ExecutionMode` does not define.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> PlanItemModeExitCode:
         """:return: The status this kind of error ends a command with."""
         return PlanItemModeExitCode.UNKNOWN_MODE
 
@@ -344,8 +345,8 @@ class MalformedModeSettingsError(ModeError):
     Raised when a settings file exists but cannot be read as the modes it should hold.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> PlanItemModeExitCode:
         """:return: The status this kind of error ends a command with."""
         return PlanItemModeExitCode.MALFORMED_MODE_SETTINGS
 
@@ -375,8 +376,8 @@ class SettingsWriteRefusedError(ModeError):
     Raised when the personal settings file could not be pushed to the notes branch.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> PlanItemModeExitCode:
         """:return: The status this kind of error ends a command with."""
         return PlanItemModeExitCode.SETTINGS_WRITE_REFUSED
 

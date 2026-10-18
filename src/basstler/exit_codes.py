@@ -22,6 +22,8 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import IntEnum
 
+from basstler.class_property import classproperty
+
 
 class ExitCode(IntEnum):
     """
@@ -134,9 +136,9 @@ class CommandFailure(Exception, ABC):
     catches it. Each concrete error implements :attr:`exit_code` with its own status.
     """
 
-    @property
+    @classproperty
     @abstractmethod
-    def exit_code(self) -> ExitCode:
+    def exit_code(cls) -> ExitCode:
         """
         The status a command ends with when this error stops it.
 

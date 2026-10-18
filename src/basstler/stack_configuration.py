@@ -17,7 +17,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
 
@@ -74,8 +75,8 @@ class MissingUpstreamRepositoryError(CommandFailure, LookupError):
     Raised when neither the project nor anything above it names the upstream repository.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
         """:return: The status this kind of error ends a command with."""
         return StackExitCode.UPSTREAM_UNCONFIGURED
 

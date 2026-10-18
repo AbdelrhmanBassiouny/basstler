@@ -16,7 +16,8 @@ from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import DescriptionPattern
 from basstler.stack import PullRequest
@@ -184,8 +185,8 @@ class MissingPullRequestFieldError(CommandFailure, ValueError):
     indistinguishable from good.
     """
 
-    @property
-    def exit_code(self) -> ExitCode:
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
         """:return: The status this kind of error ends a command with."""
         return StackExitCode.USAGE
 
