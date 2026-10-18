@@ -12,7 +12,7 @@ every other constant referenced by name in this system, so nothing "more
 shared" exists yet for it to point at):
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 ```
 
 For the item's `depends_on` list, follow `pr-data-fetching.md`'s procedure
@@ -20,7 +20,7 @@ For the item's `depends_on` list, follow `pr-data-fetching.md`'s procedure
 state into `/tmp/pr_data.json`. Then run:
 
 ```bash
-python3 -m "${CHECK_DEPENDENCY_READINESS_MODULE}" \
+"${BASSTLER_PYTHON}" -m "${CHECK_DEPENDENCY_READINESS_MODULE}" \
   --plan /tmp/plan.yaml \
   --pr-data /tmp/pr_data.json \
   --item <item-id> \

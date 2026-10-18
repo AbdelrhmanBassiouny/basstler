@@ -10,13 +10,13 @@ needs: `plan-item-kickoff` reads landed siblings for the pattern to follow;
 `plan-item-resolve` reads the item's pull request state and the tracking
 issue's discussion. Neither should re-derive anything on this page.
 
-## Check the setup is in place, and offer it if not
+## Check the setup is in place, and run it if not
 
 The item's manifest entry and roadmap live on the personal-notes branch,
 which the user may not have set up yet. Follow
-`.claude/skills/setup-personal-notes/prerequisite-check.md` first: run the
-check, and if it reports anything missing, offer `/setup-personal-notes`
-rather than failing later on a branch that isn't there.
+`skills/setup-personal-notes/prerequisite-check.md` first: run the
+check, and if it reports anything missing, run `/setup-personal-notes`
+without asking first, rather than failing later on a branch that isn't there.
 
 ## Resolve the item
 
@@ -26,7 +26,7 @@ remote/branch precedence and defines every other constant referenced below
 others, so nothing "more shared" exists yet for it to point at):
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 ```
 
@@ -103,10 +103,9 @@ it were ready.
 ## Cross-check the standing conventions
 
 Read `roadmap.md`'s standing-conventions section (however it is titled in
-this plan) and this repository's own `AGENTS.md`. Whatever is proposed must
-honor both — SOLID, TDD, no abbreviations, dataclasses, docstring
-conventions, whatever the repo's own rules are — not just what the item's
-own `notes` happen to mention.
+this plan) and the project's own instructions (`AGENTS.md`, else `CLAUDE.md`). Whatever is proposed must
+honor both — whatever the project's own rules are — not just what the
+item's own `notes` happen to mention.
 
 ## Before raising an open question, check whether it is already answered
 
