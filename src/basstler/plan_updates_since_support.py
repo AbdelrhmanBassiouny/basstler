@@ -54,22 +54,27 @@ class IssueCommentField(StrEnum):
     BODY = "body"
 
 
-NO_CHANGES_MESSAGE = "No changes."
-"""
-Printed when the plan directory has no diff since the baseline commit.
-"""
+class PlanUpdatesSinceMessage(StrEnum):
+    """
+    Fixed messages plan-updates-since.sh prints.
+    """
 
-NO_NEW_COMMENTS_MESSAGE = "No new comments."
-"""
-Printed when the tracking issue has no comments newer than the baseline.
-"""
+    NO_CHANGES = "No changes."
+    """
+    Printed when the plan directory has no diff since the baseline commit.
+    """
 
-NO_TRACKING_ISSUE_MESSAGE = (
-    "This plan has no tracking_issue set - nothing to check for new comments."
-)
-"""
-Printed when the plan's manifest has no tracking_issue field.
-"""
+    NO_NEW_COMMENTS = "No new comments."
+    """
+    Printed when the tracking issue has no comments newer than the baseline.
+    """
+
+    NO_TRACKING_ISSUE = (
+        "This plan has no tracking_issue set - nothing to check for new comments."
+    )
+    """
+    Printed when the plan's manifest has no tracking_issue field.
+    """
 
 
 def no_default_repository_message(plan_id: str, tracking_issue: str) -> str:
@@ -153,13 +158,13 @@ def format_issue_comments(comments_json: str) -> str:
 
     :param comments_json: The raw JSON array GitHub's comments endpoint returned.
     :return: One formatted block per comment separated by "---" lines, or
-        NO_NEW_COMMENTS_MESSAGE if the array is empty.
+        :attr:`PlanUpdatesSinceMessage.NO_NEW_COMMENTS` if the array is empty.
     """
     comments = [
         IssueComment.from_api_response(comment) for comment in json.loads(comments_json)
     ]
     if not comments:
-        return NO_NEW_COMMENTS_MESSAGE
+        return PlanUpdatesSinceMessage.NO_NEW_COMMENTS.value
     return "\n---\n".join(comment.formatted() for comment in comments) + "\n---"
 
 
@@ -189,9 +194,9 @@ def main() -> int:
     if arguments.subcommand == "print-comments":
         logger.info(format_issue_comments(sys.stdin.read()))
     elif arguments.subcommand == "print-no-changes-message":
-        logger.info(NO_CHANGES_MESSAGE)
+        logger.info(PlanUpdatesSinceMessage.NO_CHANGES.value)
     elif arguments.subcommand == "print-no-tracking-issue-message":
-        logger.info(NO_TRACKING_ISSUE_MESSAGE)
+        logger.info(PlanUpdatesSinceMessage.NO_TRACKING_ISSUE.value)
     elif arguments.subcommand == "print-no-default-repository-message":
         logger.error(
             no_default_repository_message(arguments.plan_id, arguments.tracking_issue)

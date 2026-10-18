@@ -3,18 +3,24 @@ name: Upstream reviews
 # Reports the review threads a fork branch's upstream pull request has collected.
 #
 # Thread resolved-state is only exposed by GitHub's GraphQL API, which a Claude
-# session cannot reach, so the read happens here and the session reads this job's
-# log. Dispatch-only on purpose: nothing about this should run on a timer.
+# session cannot reach, so the read happens on a runner and the session reads the
+# job's log.
 #
-# Runs unchanged in any fork - the upstream comes from basstler/src/basstler/stack.toml
-# and the fork owner from the runner's own context, so no repository is named here.
+# Reusable: a project calls it from a dispatch-only workflow of its own (see
+# docs/SETUP.md), naming the release of basstler it calls. The upstream comes from the
+# project's own .claude/basstler/stack.toml and the fork owner from the runner's
+# context, so no repository is named here.
 #
 # A runner starts with nothing installed and no session hook runs on it, so this job
-# installs the package's requirements itself before invoking a module.
+# installs the package itself before invoking a module.
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
+      basstler_ref:
+        description: "The basstler release to run, the same ref the caller uses this workflow at"
+        required: true
+        type: string
       pull_request:
         description: "Upstream pull request number (takes precedence over branch)"
         required: false
@@ -45,11 +51,10 @@ jobs:
         with:
           python-version: "3.12"
 
-      - name: Install the basstler dependencies
+      - name: Install basstler
         run: |
           set -euo pipefail
-          source .claude/hooks/resolve-personal-notes-config.sh
-          pip install --editable "./${BASSTLER_SOURCE_TREE}"
+          pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_ref }}"
 
       - name: Read upstream review threads
         env:
@@ -71,5 +76,4 @@ jobs:
           if [ "${{ inputs.include_resolved }}" = "true" ]; then
             ARGUMENTS+=(--include-resolved)
           fi
-          source .claude/hooks/resolve-personal-notes-config.sh
-          "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_MODULE}" "${ARGUMENTS[@]}"
+          python -m basstler.upstream_reviews "${ARGUMENTS[@]}"

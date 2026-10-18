@@ -293,7 +293,7 @@ class ActionsBudget:
         :return: The repository's own budget, or basstler's defaults when the repository
             has no budget file.
         """
-        path = PackageLocation.REPOSITORY_ROOT / ProjectLocation.ACTIONS_BUDGET
+        path = PackageLocation.SOURCE_TREE / ProjectLocation.ACTIONS_BUDGET
         if not path.exists():
             return cls()
         return cls.from_file(path)
@@ -381,7 +381,7 @@ def main() -> None:
     argparse.ArgumentParser(description=main.__doc__).parse_args()
     ActionsBudget.baseline_for(
         Workflow.every_workflow_in_the_repository(), WorkflowLimits()
-    ).write(PackageLocation.REPOSITORY_ROOT / ProjectLocation.ACTIONS_BUDGET)
+    ).write(PackageLocation.SOURCE_TREE / ProjectLocation.ACTIONS_BUDGET)
 
 
 if __name__ == "__main__":

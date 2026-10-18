@@ -43,6 +43,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+from enum import Enum
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -65,8 +66,28 @@ logger = StandardStreamHandler.logger_for(__name__)
 This module's logger, which is also what its command prints through.
 """
 
-_ITEM_START_PATTERN = re.compile(r"^\s*- id:")
-_STATUS_LINE_PATTERN = re.compile(r"^(\s*status:\s*)(\S.*?)\s*$")
+
+class ManifestLinePattern(Enum):
+    """
+    What the status patching looks for in a raw ``plan.yaml`` line.
+    """
+
+    ITEM_START = re.compile(r"^\s*- id:")
+    """
+    Matches the first line of an item block, which is always its ``id``.
+    """
+
+    STATUS_LINE = re.compile(r"^(\s*status:\s*)(\S.*?)\s*$")
+    """
+    Matches an item's ``status:`` line; group 2 is the status.
+    """
+
+    def match(self, line: str) -> re.Match[str] | None:
+        """
+        :param line: One manifest line.
+        :return: This pattern's match at the line's start, if any.
+        """
+        return self.value.match(line)
 
 
 class MissingStatusLineError(ValueError):
@@ -145,7 +166,9 @@ def apply_status_corrections(
     }
     lines = plan_text.split("\n")
     item_starts = [
-        index for index, line in enumerate(lines) if _ITEM_START_PATTERN.match(line)
+        index
+        for index, line in enumerate(lines)
+        if ManifestLinePattern.ITEM_START.match(line)
     ]
     item_starts.append(len(lines))
 
@@ -158,7 +181,7 @@ def apply_status_corrections(
             (
                 offset
                 for offset, line in enumerate(lines[start:end])
-                if _STATUS_LINE_PATTERN.match(line)
+                if ManifestLinePattern.STATUS_LINE.match(line)
             ),
             None,
         )
@@ -167,7 +190,7 @@ def apply_status_corrections(
                 f"item {item_identifier!r} has no status: line to correct"
             )
         line_index = start + status_line_index
-        match = _STATUS_LINE_PATTERN.match(lines[line_index])
+        match = ManifestLinePattern.STATUS_LINE.match(lines[line_index])
         corrections.append(
             StatusCorrection(
                 item_identifier=item_identifier,

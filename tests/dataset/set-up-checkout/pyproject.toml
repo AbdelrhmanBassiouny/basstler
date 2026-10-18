@@ -1,4 +1,4 @@
-# Stands in for the real basstler/pyproject.toml in a scratch clone: check-setup.sh
+# Stands in for the real pyproject.toml in a scratch checkout: check-setup.sh
 # requires the file to exist and reads the dependency declaration out of it.
 [project]
 name = "basstler"

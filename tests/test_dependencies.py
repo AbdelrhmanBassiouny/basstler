@@ -18,6 +18,8 @@ from basstler import dependencies
 from basstler.dependencies import (
     Dependency,
     DependencyDeclaration,
+    InstalledDistribution,
+    MalformedDependencyDeclarationError,
     PyprojectKey,
     UnreadableDependencyDeclarationError,
 )
@@ -148,6 +150,58 @@ def test_an_absent_declaration_raises_rather_than_declaring_nothing(tmp_path):
         absent.missing()
 
 
+def test_a_declaration_that_is_not_toml_raises_naming_itself(tmp_path):
+    """
+    A declaration that will not parse is reported as the file it is, so a caller can say
+    which file to fix.
+    """
+    malformed = tmp_path / PackageLocation.DEPENDENCY_DECLARATION.value.name
+    malformed.write_text("this is not toml\n")
+
+    with pytest.raises(MalformedDependencyDeclarationError) as raised:
+        DependencyDeclaration(malformed).missing()
+
+    assert raised.value.declaration == malformed
+
+
+# %% an installed copy, which carries no pyproject.toml
+
+
+def test_an_installed_distribution_requires_what_pyproject_declares():
+    """
+    A package installed from its repository rather than run from a checkout has no
+    ``pyproject.toml`` beside it; its installed metadata states the same dependencies.
+
+    Compared without their order, which the build backend is free to change: hatchling
+    writes them sorted.
+    """
+    declared = ProjectDeclaration.of_this_package()
+
+    assert sorted(
+        requirement.specifier
+        for requirement in InstalledDistribution(declared.name).requirements()
+    ) == sorted([declared.name, *declared.dependencies])
+
+
+def test_an_installed_distribution_this_environment_has_misses_nothing():
+    """
+    The suite's own environment has the package installed with everything it needs.
+    """
+    declared = ProjectDeclaration.of_this_package()
+
+    assert InstalledDistribution(declared.name).missing() == ()
+
+
+def test_a_distribution_nothing_installed_is_missing_itself():
+    """
+    With nothing installed there are no dependencies to read, and the package itself is
+    what is missing.
+    """
+    absent = InstalledDistribution("a-distribution-nothing-installed")
+
+    assert absent.missing() == (Dependency(absent.name),)
+
+
 # %% the command line the shell calls
 
 
@@ -159,7 +213,7 @@ def run_module(*arguments: str):
     :return: The completed process, with output captured as text.
     """
     return PythonModuleRunner(
-        project_root=PackageLocation.REPOSITORY_ROOT.value,
+        project_root=PackageLocation.SOURCE_TREE.value,
         module_name=dependencies.__name__,
     ).run(*arguments)
 
@@ -195,7 +249,7 @@ def test_an_unreadable_declaration_fails_rather_than_reporting_nothing_missing()
     nothing.
     """
     result = PythonModuleRunner(
-        project_root=PackageLocation.REPOSITORY_ROOT.value,
+        project_root=PackageLocation.SOURCE_TREE.value,
         module_name=dependencies.__name__,
     ).run("--declaration", "/nonexistent/pyproject.toml")
 

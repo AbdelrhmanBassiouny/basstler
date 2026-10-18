@@ -1,9 +1,10 @@
-# Installed editable into basstler's own environment by every session start that finds it
-# missing, so `import basstler` resolves to this clone's own source under src/.
+# Installed into basstler's own environment by every session start that finds it missing or
+# out of date: from the plugin's own release of this repository, or editable from a clone the
+# plugin runs from.
 
 [build-system]
-requires = ["setuptools>=68"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
 
 [project]
 name = "basstler"
@@ -27,9 +28,8 @@ classifiers = [
     "Topic :: Utilities",
 ]
 
-# Stated here and nowhere else, as every package in this repository states them: a
-# session start, an Actions workflow and `pip install ./basstler` all install from this
-# one list. `basstler.dependencies` is what reads it.
+# Stated here and nowhere else: a session start, an Actions workflow and `pip install .` all
+# install from this one list. `basstler.dependencies` is what reads it.
 dependencies = [
     "pyyaml>=6",
     "jinja2>=3",
@@ -39,28 +39,29 @@ dependencies = [
 dynamic = ["version"]
 
 [project.urls]
-"Source" = "https://github.com/cram2/cognitive_robot_abstract_machine"
-"Bug Tracker" = "https://github.com/cram2/cognitive_robot_abstract_machine/issues"
+"Source" = "https://github.com/AbdelrhmanBassiouny/basstler"
+"Bug Tracker" = "https://github.com/AbdelrhmanBassiouny/basstler/issues"
 
-[tool.setuptools.dynamic]
-# The version comes from the repository's own root VERSION file, written into
-# _version.py by scripts/sync_version.py - the same mechanism every other package here
-# uses, so one bump moves all of them together.
-version = {attr = "basstler._version.__version__"}
+# One release for the package and the plugin, written in one place: the plugin's manifest.
+# Claude Code reads the version there and runs nothing first, so it has to be a literal in
+# plugin.json; the build reads it from there rather than keeping a second copy. It is also
+# the tag an installed plugin installs the package at, which the release workflow pushes.
+[tool.hatch.version]
+path = "plugin/.claude-plugin/plugin.json"
+pattern = '"version"\s*:\s*"(?P<version>[^"]+)"'
 
-[tool.setuptools.packages.find]
-where = ["src"]
-include = ["basstler"]
+# The whole package directory, so the files the modules resolve beside themselves rather
+# than by an argument - all named in locations.py: the page templates, the GraphQL
+# documents and the committed defaults - ship with it. An install that left them out would
+# import and then fail at the first render, the first configuration read, or the first
+# query.
+[tool.hatch.build.targets.wheel]
+packages = ["src/basstler"]
 
-# The files the modules resolve beside themselves rather than by an argument, all named
-# in locations.py: the page templates, the GraphQL documents and the committed defaults.
-# An install that left them out would import and then fail at the first render, the first
-# configuration read, or the first query.
-[tool.setuptools.package-data]
-basstler = [
-    "templates/*.html",
-    "templates/*.jinja",
-    "queries/*.graphql",
-    "stack.toml",
-    "plan-item-modes.toml",
-]
+# Docstrings are formatted by docformatter on top of black - scripts/format_docstrings.py
+# runs both, keeping docformatter's change only where black leaves it alone.
+[tool.docformatter]
+make-summary-multi-line = true
+pre-summary-newline = true
+close-quotes-on-newline = true
+black = true

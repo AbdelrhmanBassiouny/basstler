@@ -444,7 +444,7 @@ class Workflow:
         """
         :return: Every workflow GitHub runs from this checkout, in file name order.
         """
-        directory = PackageLocation.REPOSITORY_ROOT / ProjectLocation.WORKFLOWS
+        directory = PackageLocation.SOURCE_TREE / ProjectLocation.WORKFLOWS
         return tuple(cls.at(path) for path in sorted(directory.glob("*.yml")))
 
     @classproperty
