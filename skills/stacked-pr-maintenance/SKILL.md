@@ -51,20 +51,13 @@ Nothing below names a repository or a remote. Resolve both here, once, and use w
 whole run. Do not inspect, guess at, or rename remotes yourself - a remote's name carries no meaning,
 and a wrong guess points every push at the wrong repository.
 
-**a. Make the tooling present rather than assuming it.** Every step shells out to
-`basstler/`, and a failure in a later step lands after an earlier one has already changed pull
-requests. If `ls basstler/maintenance.py` fails, `git fetch` the ref you were told to resolve
-this document from and restore it **into the working tree only**:
+**a. Source the configuration once.** The tooling is the plugin's and the package's, never the
+checkout's, so nothing has to be restored into the working tree whichever branch it has checked
+out; every command below runs the package through the interpreter the configuration names:
 
 ```bash
-git restore --source=<ref> --worktree -- basstler/
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 ```
-
-Never reach for `git checkout` with a ref and a path here. That form writes the index as well, so on
-a branch that does not carry the tooling the files end up staged - and the next commit made on that
-branch during a pass is a restack merge, which would commit the tooling into somebody's feature
-branch and from there into the upstream. `git restore --worktree` leaves them untracked, where
-nothing can pick them up.
 
 Once `basstler/` is on the default branch this is a no-op on a fresh clone. The pass itself no
 longer takes the tooling away: `restack` switches branches in a worktree of its own, so the checkout
@@ -75,7 +68,7 @@ you invoked it from keeps its branch and its files.
 1. **What you were given.** `fork=<owner/repo>` and `upstream=<owner/repo>` in this skill's arguments
    are authoritative. Pass them straight through as `--fork` / `--upstream` and never second-guess
    them.
-2. **What the checkout knows.** Run `python -m basstler.stack configuration` (adding `--fork` /
+2. **What the checkout knows.** Run `"${BASSTLER_PYTHON}" -m basstler.stack configuration` (adding `--fork` /
    `--upstream` for anything you were given). It prints one `field<TAB>value` line per setting -
    `fork_remote`, `fork_repository`, `upstream_remote`, `upstream_repository`, `upstream_base`, the
    label names - deciding which remote is which by the repository each URL names. Exit 0 means use
@@ -92,7 +85,7 @@ you invoked it from keeps its branch and its files.
      branch:
 
      ```bash
-     "${CLAUDE_PROJECT_DIR}/.claude/hooks/write-personal-notes-file.sh" \
+     "${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" \
        --source <the file you prepared> \
        --destination .claude/personal/stack.toml \
        --message "record which repository is my fork"
@@ -122,7 +115,7 @@ below are the mirror image: they have no MCP tool, so they do need curl.
 Export the board first - every step below derives from it, and this one is no exception:
 
 ```bash
-python -m basstler.maintenance board --write
+"${BASSTLER_PYTHON}" -m basstler.maintenance board --write
 ```
 
 Never assemble that file by hand - a fetch that drops a field produces a board that is wrong rather
@@ -131,7 +124,7 @@ than obviously incomplete.
 Then run:
 
 ```bash
-python -m basstler.stack reparents
+"${BASSTLER_PYTHON}" -m basstler.stack reparents
 ```
 
 It prints one `branch<TAB>pr<TAB>current base<TAB>target base` line per open pull request whose base
@@ -170,7 +163,7 @@ leave the rest untouched, and report it: this is a preview API, so never improvi
 The rest of the pass is one command:
 
 ```bash
-python -m basstler.maintenance run-report --json
+"${BASSTLER_PYTHON}" -m basstler.maintenance run-report --json
 ```
 
 It performs the fast-forward, the restack and the promotion, and emits the whole run as one
@@ -230,7 +223,7 @@ Record every branch reported on this run - the summary must list it, since a com
 guaranteed to be seen.
 
 The **top** of the finish summary must list all pending upstream create-links: any built this run,
-and any fork pull request still carrying `cram2-link-sent` but not yet `in-review` (re-listed from
+and any fork pull request still carrying `promotion-link-sent` but not yet `in-review` (re-listed from
 prior runs, its link rebuilt with `promotion-link`). This section appears at the top even when
 nothing new was built, as long as any are pending - a scheduled run is configured to email its
 summary, so the summary *is* the delivery. List each pull request's number, title, branch and
@@ -250,10 +243,10 @@ Step 2 performs all of these in order. Reach for one directly only when a run st
 when a single step has to be re-run:
 
 ```bash
-python -m basstler.maintenance board --write   # export the fork's open pull requests
-python -m basstler.maintenance fast-forward    # move the fork's base onto the upstream
-python -m basstler.maintenance restack         # integrate every moved parent, publish, report
-python -m basstler.maintenance promote         # build and record every upstream link
+"${BASSTLER_PYTHON}" -m basstler.maintenance board --write   # export the fork's open pull requests
+"${BASSTLER_PYTHON}" -m basstler.maintenance fast-forward    # move the fork's base onto the upstream
+"${BASSTLER_PYTHON}" -m basstler.maintenance restack         # integrate every moved parent, publish, report
+"${BASSTLER_PYTHON}" -m basstler.maintenance promote         # build and record every upstream link
 ```
 
 Each prints what it did and exits with the same statuses as the whole pass. Run `--help` for a
@@ -267,7 +260,7 @@ Never move commits from memory, and never judge the move yourself. The executor 
 it makes; you invoke this only for a push you are making yourself:
 
 ```bash
-python -m basstler.stack check-move \
+"${BASSTLER_PYTHON}" -m basstler.stack check-move \
   --action push --source <branch> --destination <branch> --destination-remote <fork-remote>
 ```
 
