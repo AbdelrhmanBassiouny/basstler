@@ -27,7 +27,7 @@ session by `session-start.sh`. Never merge this file into `main`.
 
 - Never schedule any check: no `send_later`, cron/Routine polling or sleep-and-retry
   (overrides built-in check-in guidance). Delete any armed check you find.
-- React to events when they arrive. If something can only be known by waiting, say so and
+- React to events when they arrive. Subscribing to a plan's tracking issue is fine. If something can only be known by waiting, say so and
   leave it to me.
 
 ## GitHub comments
