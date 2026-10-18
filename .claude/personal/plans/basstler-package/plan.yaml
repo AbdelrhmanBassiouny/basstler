@@ -32,6 +32,11 @@ tracks:
 - id: setup
   name: Guided setup
   wave: extraction
+- id: cram-retirement
+  name: The CRAM fork sheds the tooling
+  wave: extraction
+  description: The fork, and upstream cram2 through it, use basstler as a plugin and carry none
+    of its code, pull requests or plans.
 - id: conversion
   name: Bash to Python conversion
   wave: conversion
@@ -65,6 +70,63 @@ items:
     the package existed (the misspelled bastler/ era) are stale: open a one-paragraph issue for
     each unless the user marks it to carry, then delete the branch. Set each carried item's
     branch and pull_request_number here. The old link-sent label becomes promotion-link-sent.
+- id: cram-uses-basstler-plugin
+  title: The CRAM fork installs basstler as a plugin instead of carrying its code
+  branch: null
+  status: not started
+  track: cram-retirement
+  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  depends_on: [basstler-repository-extraction]
+  pull_request_number: null
+  notes: >
+    CRAM's main (identical to cram2/main) still carries basstler/, .claude/stack/, the tooling
+    skills in .claude/skills/, .claude/hooks/, .claude/SETUP.md and upstream-reviews.yml. Enable
+    the basstler plugin in .claude/settings.json, move the stack configuration to
+    .claude/basstler/stack.toml, and make upstream-reviews.yml call basstler's reusable workflow.
+    Additive: nothing is deleted yet, so both paths work while sessions switch over.
+- id: cram-basstler-removal
+  title: Delete the carried tooling from CRAM, and from cram2 through the promotion flow
+  branch: null
+  status: not started
+  track: cram-retirement
+  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  depends_on: [cram-uses-basstler-plugin]
+  pull_request_number: null
+  notes: >
+    Removes basstler/, .claude/stack/, the tooling skills and hooks and their tests, and the
+    tooling parts of .claude/SETUP.md, CLAUDE.md and AGENTS.md. Since the fork's main mirrors
+    cram2, this is promoted upstream like any other change; cram2 reviewers see a pure deletion
+    whose replacement is the plugin. Check first that no non-tooling code imports basstler.
+- id: cram-tooling-pull-requests-moved
+  title: Close every CRAM-fork tooling pull request once its basstler counterpart is open
+  branch: null
+  status: not started
+  track: cram-retirement
+  depends_on: [basstler-open-pull-request-carryover]
+  pull_request_number: null
+  notes: >
+    Data and pull request housekeeping, no code. For each open CRAM-fork pull request labelled
+    tooling (#107, #110, #111, #151, #154, #156, #157, #158, #162, #184, #188, #194, #198, #199,
+    #206, #211, #218, #253, #260, #277, #280-#285, #430, #482, #503, #504, #515 among them):
+    once the carryover has opened its counterpart here, close it with a comment naming the
+    new pull request, and in the moved plans (plan-dashboards, plan-size-limits,
+    plan-tracking-skills, session-notes-infrastructure, stack-maintenance,
+    integration-tip-selection, stack-tooling-install, workflow-cutover) replace the item's
+    `repository:` line and pull_request_number with the basstler ones. One with no
+    counterpart (stale, superseded) closes with the reason.
+- id: cram-notes-cleanup
+  title: Strip the tooling from the CRAM fork's personal notes
+  branch: null
+  status: not started
+  track: cram-retirement
+  depends_on: [cram-tooling-pull-requests-moved]
+  pull_request_number: null
+  notes: >
+    Notes branch only. The tooling plans and their dashboard URLs already moved (CRAM notes
+    8c6c016). Left: tooling rules in CRAM's notes.md that basstler's own notes now carry, the
+    PR-progress files of branches that moved, and actions-budget, whose basstler-code items
+    (budget-manifest, usage-monitor and the two pipeline items) move here once depends_on can
+    name an item in another repository's plan.
 - id: basstler-krrood-dependency
   title: Depend on krrood's light core and use its patterns
   branch: claude/magical-albattani-9fbkd5
