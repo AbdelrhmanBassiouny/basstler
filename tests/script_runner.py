@@ -18,6 +18,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
+from basstler.locations import PluginLocation
+
+from .constants import RepositoryLocation
+
 
 @dataclass(frozen=True, kw_only=True)
 class ScriptRunner(ABC):
@@ -117,3 +121,25 @@ class BashScriptRunner(ScriptRunner):
     def command(self) -> tuple[str, ...]:
         """:return: bash, running that script."""
         return ("bash", str(self.script_path))
+
+
+def configuration_value(variable_name: str) -> str:
+    """
+    :param variable_name: A variable the shell configuration assigns.
+    :return: Its value once this repository's plugin's shell configuration is sourced
+        from the repository root.
+    """
+    return subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$0" && printf "%s" "${!1}"',
+            RepositoryLocation.HOOKS
+            / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name,
+            variable_name,
+        ],
+        cwd=RepositoryLocation.ROOT.value,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
