@@ -37,6 +37,7 @@ items:
 - id: plan-site-builder
   title: One static site over every repository's plans, starting at the hub
   branch: claude/elegant-turing-xvcgs2
+  pull_request_number: 6
   status: in_progress
   session: https://claude.ai/code/session_01XhxoBFCwQFEPXespxzFnc1
   track: cutover
@@ -49,7 +50,9 @@ items:
     claude/plan-dashboard-multi-account-y2vexc, never opened as a pull request) and the hub
     from a599549: the hub file .claude/personal/plans/_hub.yaml on every registered
     repository's notes (registry AbdelrhmanBassiouny/basstler), plan_hub gather and build_hub.
-    The Artifact-only parts of a599549 (the hub URL, set-url) go.
+    The Artifact-only parts of a599549 (the hub URL, set-url) go. Draft #6; a live build
+    rendered 36 plans from both repositories. Both hub files already name the site,
+    https://abdelrhmanbassiouny.github.io/stack-board/.
 - id: plan-site-action
   title: Deploy the plan site to stack-board's Pages, on demand rather than on a timer
   branch: null
