@@ -85,15 +85,10 @@ items:
   status: in_progress
   session: https://claude.ai/code/session_01Q8JfYcge9pLWPxGSE9d9d1
   track: cutover
-  pull_request_number: 280
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  pull_request_number: 16
   blockers:
-  - 'Stacked on #185 (`claude/plan-item-kickoff-workflow-cuare2`) since 2026-10-02. #280 cannot
-    land before #185 does. Its upstream promotion link predates the re-cut and would now carry
-    #185''s diff, so rebuild it after #185 lands.'
-  - 'The gate, one green Action cycle, is reachable now but not yet met. `run-unattended`
-    (`0b6e9776`) treats an already-reported branch as success, so the next real run on #280''s
-    head is the check.'
+  - Waits on one green run of the reusable workflow, called from the CRAM fork, before the
+    live Routine is deleted.
   depends_on: []
   notes: 'Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no
     scheduled LLM run at all, which finally aligns the Routine with the no-scheduled-checks
@@ -133,10 +128,13 @@ items:
 - id: maintenance-rereport-fix
   title: Withhold a conflicted branch until its parent actually integrates (stop re-reporting
     conflicts)
-  branch: claude/compassionate-faraday-0opx3t
+  branch: null
   track: cutover
-  pull_request_number: 482
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  pull_request_number: null
   session: https://claude.ai/code/session_017wfueWmCbN76Z5MQo2EWAv
   depends_on: []
-  status: in_progress
+  status: deferred
+  notes: >-
+    Retired in the carryover: the branch predated the package (.claude/stack/ layout). Its
+    fix is recorded in basstler#25 with the last commit, for a fresh fix on main if the re-
+    reporting recurs.
