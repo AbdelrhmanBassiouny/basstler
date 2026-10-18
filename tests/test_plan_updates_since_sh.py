@@ -35,8 +35,7 @@ from .executable_stubs import (
 )
 
 from basstler.plan_updates_since_support import (
-    NO_CHANGES_MESSAGE,
-    NO_TRACKING_ISSUE_MESSAGE,
+    PlanUpdatesSinceMessage,
     IssueComment,
     PlanUpdatesSinceOption,
     no_default_repository_message,
@@ -102,8 +101,8 @@ def install_plan_updates_since(repository: ScratchRepository) -> None:
     :param repository: A fixture-built scratch repository.
     """
     repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "plan-updates-since.sh",
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.PLAN_UPDATES_SINCE_SCRIPT.name,
     )
     repository.install_package()
     repository.write("README.md", "scratch repo\n")
@@ -192,7 +191,7 @@ def run_plan_updates_since(
         script_path=(
             repository.plugin_root
             / PluginLocation.HOOKS.value.name
-            / "plan-updates-since.sh"
+            / PluginLocation.PLAN_UPDATES_SINCE_SCRIPT.name
         ),
     ).run(*arguments, **(env or {}))
 
@@ -270,7 +269,7 @@ def test_no_changes_since_the_baseline_prints_a_clear_message(
     )
 
     assert result.returncode == 0, result.stderr
-    assert NO_CHANGES_MESSAGE in result.stdout
+    assert PlanUpdatesSinceMessage.NO_CHANGES in result.stdout
 
 
 # %% the recheck stamp
@@ -304,7 +303,7 @@ def test_stamp_is_updated_after_running(scratch_repo: ScratchRepository):
 
     second_result = run_plan_updates_since(scratch_repo, PLAN_ID)
     assert second_result.returncode == 0, second_result.stderr
-    assert NO_CHANGES_MESSAGE in second_result.stdout
+    assert PlanUpdatesSinceMessage.NO_CHANGES in second_result.stdout
 
 
 # %% tracking-issue comments
@@ -320,7 +319,7 @@ def test_no_tracking_issue_skips_the_comments_step(scratch_repo: ScratchReposito
     )
 
     assert result.returncode == 0, result.stderr
-    assert NO_TRACKING_ISSUE_MESSAGE in result.stdout
+    assert PlanUpdatesSinceMessage.NO_TRACKING_ISSUE in result.stdout
 
 
 def test_tracking_issue_without_default_repository_fails_clearly(

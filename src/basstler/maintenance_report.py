@@ -11,9 +11,9 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from enum import IntEnum
 from pathlib import Path
 
+from basstler.exit_codes import StackExitCode
 from basstler.maintenance_board import BoardExport
 from basstler.maintenance_fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance_promotion import Promotion
@@ -189,84 +189,7 @@ def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> N
 # %% the exit status
 
 
-class MaintenanceExitCode(IntEnum):
-    """
-    What this executor's exit status tells a caller.
-
-    The first five match :class:`stack.ExitCode` value for value and meaning, so a
-    caller acting on the two tools' statuses never has to remember which produced one.
-    """
-
-    SUCCESS = 0
-    """
-    The command ran and did what it reports.
-    """
-
-    USAGE = 2
-    """
-    No such command, or the wrong arguments.
-    """
-
-    BOARD_UNAVAILABLE = 3
-    """
-    ``board.json`` is missing, so the stack cannot be derived.
-    """
-
-    REMOTES_UNRESOLVED = 4
-    """
-    The fork could not be identified from this checkout's remotes.
-    """
-
-    MOVE_REFUSED = 5
-    """
-    A push was refused; the reasons are in the report.
-    """
-
-    GIT_COMMAND_FAILED = 6
-    """
-    A git command the run depended on failed; nothing further was attempted.
-    """
-
-    NOT_FAST_FORWARD = 7
-    """
-    The fork's base carries commits the upstream does not.
-    """
-
-    CREDENTIAL_UNAVAILABLE = 8
-    """
-    No GitHub token is set, so the fork cannot be read or written.
-    """
-
-    GITHUB_REQUEST_FAILED = 9
-    """
-    The API refused a call this pass depends on; its status and reason are on stderr.
-    """
-
-    BRANCH_NEEDS_ATTENTION = 10
-    """The pass itself ran, but left at least one branch unpublished for somebody to
-    act on - a conflict, a withheld branch, or a push the fork rejected. Distinct from
-    a move check refusal, which is a fault in the move rather than in the branch."""
-
-    UPSTREAM_UNCONFIGURED = 11
-    """
-    The project names no upstream repository; stderr says where to name it.
-    """
-
-    @property
-    def name_for_a_caller(self) -> str:
-        """
-        What this status means, in words rather than as a number to be looked up.
-
-        A process exit status can only ever be an integer, so this accompanies the
-        number rather than replacing it. Derived from the member itself, so a status can
-        never end up carrying a name that belongs to a different one.
-
-        :return: The status's name, in the form a caller reads or matches on.
-        """
-        return self.name.lower().replace("_", "-")
-
-
-def exit_code_for(report: MaintenanceReport) -> MaintenanceExitCode:
+def exit_code_for(report: MaintenanceReport) -> StackExitCode:
     """
     Decide one pass's exit status from what it actually left behind.
 
@@ -278,10 +201,10 @@ def exit_code_for(report: MaintenanceReport) -> MaintenanceExitCode:
     :return: The process exit code.
     """
     if report.fast_forward_was_refused:
-        return MaintenanceExitCode.NOT_FAST_FORWARD
+        return StackExitCode.NOT_FAST_FORWARD
     unpublished = report.branches_left_unpublished
     if any(outcome.outcome is RestackOutcome.REFUSED for outcome in unpublished):
-        return MaintenanceExitCode.MOVE_REFUSED
+        return StackExitCode.MOVE_REFUSED
     if unpublished:
-        return MaintenanceExitCode.BRANCH_NEEDS_ATTENTION
-    return MaintenanceExitCode.SUCCESS
+        return StackExitCode.BRANCH_NEEDS_ATTENTION
+    return StackExitCode.SUCCESS

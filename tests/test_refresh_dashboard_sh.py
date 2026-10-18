@@ -31,12 +31,6 @@ from .constants import (
 from .scratch_repository import PackageSourceFile, install_hook_scripts_into
 from .script_runner import BashScriptRunner
 
-PLAN_DASHBOARD_DIRECTORY = RepositoryLocation.PLUGIN / SkillDirectory.PLAN_DASHBOARD
-"""
-Where refresh_dashboard.sh itself lives - the skill directory, not the package. Claude
-Code discovers a skill by path, so its shell entry point stays with it.
-"""
-
 
 @pytest.fixture
 def scratch_project_root(tmp_path: Path) -> Path:
@@ -63,10 +57,12 @@ def scratch_project_root(tmp_path: Path) -> Path:
     )
 
     shutil.copy(
-        PLAN_DASHBOARD_DIRECTORY / "refresh_dashboard.sh",
-        plan_dashboard_directory / "refresh_dashboard.sh",
+        RepositoryLocation.PLUGIN / SkillDirectory.DASHBOARD_REFRESH_SCRIPT,
+        plan_dashboard_directory / SkillDirectory.DASHBOARD_REFRESH_SCRIPT.name,
     )
-    install_hook_scripts_into(plugin_root, "resolve-personal-notes-config.sh")
+    install_hook_scripts_into(
+        plugin_root, PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
+    )
 
     # The real support module and the logging it prints through, whose own dependencies
     # are the standard library only, in a scratch package the script's
@@ -84,9 +80,11 @@ def scratch_project_root(tmp_path: Path) -> Path:
     )
     shutil.copy(
         DatasetLocation.STUBS / "write_personal_notes_file_stub.sh",
-        hooks_directory / "write-personal-notes-file.sh",
+        hooks_directory / PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT.name,
     )
-    (hooks_directory / "write-personal-notes-file.sh").chmod(FileMode.EXECUTABLE)
+    (hooks_directory / PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT.name).chmod(
+        FileMode.EXECUTABLE
+    )
 
     return tmp_path
 
@@ -100,8 +98,7 @@ def _refresh_dashboard_script_path(scratch_project_root: Path) -> Path:
     return (
         scratch_checkout_root(scratch_project_root)
         / RepositoryLocation.PLUGIN.value.name
-        / SkillDirectory.PLAN_DASHBOARD
-        / "refresh_dashboard.sh"
+        / SkillDirectory.DASHBOARD_REFRESH_SCRIPT
     )
 
 

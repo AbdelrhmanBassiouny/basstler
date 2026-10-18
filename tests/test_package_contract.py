@@ -11,7 +11,7 @@ directory holding them rather than named.
 
 from __future__ import annotations
 
-import json
+import importlib.metadata
 import os
 import re
 import subprocess
@@ -21,9 +21,8 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ClaudeCodeVariable, PackageLocation
+from basstler.locations import ClaudeCodeVariable, PackageLocation, PluginLocation
 
-from basstler import _version
 from basstler.package_layout import (
     PackageModule,
     command_line_entry_points,
@@ -33,10 +32,10 @@ from basstler.package_layout import (
 from .constants import (
     ConfigurationVariable,
     EnvironmentVariable,
-    PluginManifestKey,
     RepositoryLocation,
 )
-from .project_declaration import ProjectDeclaration
+from .plugin_manifest import PluginManifest
+from .project_declaration import HatchVersionSource, ProjectDeclaration
 from .script_runner import ScriptRunner, configuration_value
 
 WORKFLOWS_DIRECTORY = RepositoryLocation.WORKFLOWS
@@ -48,7 +47,9 @@ without anyone recording that it exists.
 """
 
 
-SHELL_CONFIGURATION = RepositoryLocation.HOOKS / "resolve-personal-notes-config.sh"
+SHELL_CONFIGURATION = (
+    RepositoryLocation.HOOKS / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
+)
 """
 The file the bash callers source, which is where a module gets a shell name and the
 interpreter its import path.
@@ -141,17 +142,26 @@ def test_a_caller_imports_the_checkouts_own_source_with_no_install():
     assert Path(result.stdout.strip()) == PackageLocation.DIRECTORY / "__init__.py"
 
 
-def test_the_package_version_is_the_plugin_version():
+def test_the_build_reads_its_version_from_the_plugin_manifest():
     """
     An installed plugin installs the package at its own version, so the two are one
-    release: a bump that moved only one of them would install a package the hooks were
-    not written against.
+    release. The manifest has to hold the version as a literal, since Claude Code runs
+    nothing before reading it, so the build reads it from there rather than from a second
+    copy a bump could leave behind.
     """
-    manifest = json.loads(
-        (RepositoryLocation.PLUGIN / ".claude-plugin" / "plugin.json").read_text()
-    )
+    version_source = HatchVersionSource.of_this_package()
 
-    assert _version.__version__ == manifest[PluginManifestKey.VERSION]
+    assert version_source.path == RepositoryLocation.PLUGIN_MANIFEST
+    assert version_source.version() == PluginManifest.of_this_plugin().version
+
+
+def test_the_installed_package_is_the_plugin_version():
+    """
+    The version the build read is the one the installed package reports.
+    """
+    manifest = PluginManifest.of_this_plugin()
+
+    assert importlib.metadata.version(manifest.name) == manifest.version
 
 
 # %% each module stands on its own
@@ -239,15 +249,13 @@ def test_the_example_caller_calls_the_plugins_own_release():
     A project copies the example caller as it stands, so it has to call the release its
     plugin installs - both the workflow it uses and the package that workflow installs.
     """
-    manifest = json.loads(
-        (RepositoryLocation.PLUGIN / ".claude-plugin" / "plugin.json").read_text()
-    )
+    manifest = PluginManifest.of_this_plugin()
     caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
 
     references = RELEASE_REFERENCE.findall(caller.read_text())
 
     assert len(references) == 2
-    assert set(references) == {f"v{manifest[PluginManifestKey.VERSION]}"}
+    assert set(references) == {manifest.release_tag}
 
 
 # %% nothing is left behind

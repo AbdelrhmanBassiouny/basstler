@@ -25,7 +25,11 @@ from basstler.maintenance_restack_steps import (
     SkipBranchAlreadyCurrent,
     WithholdBranchStillConflicting,
 )
-from basstler.stack import CommitMoveChecks, IntegrationStrategy, Stack, restack_plan
+from basstler.stack import (
+    CommitMoveChecks,
+    Stack,
+    restack_plan,
+)
 
 if TYPE_CHECKING:
     from types import TracebackType
@@ -33,22 +37,26 @@ if TYPE_CHECKING:
 
 # %% the order that is the procedure
 
-RESTACK_STEPS: tuple[RestackStep, ...] = (
-    WithholdBranchStillConflicting(),
-    SkipBranchAlreadyCurrent(),
-    IntegrateParent(),
-    RefuseAnUnsafeMove(),
-    PublishBranch(),
-)
-"""
-Every step a branch is put through, in the order that is the procedure.
 
-Unlike :data:`maintenance_commands.COMMANDS`, these are listed rather than found from
-their own subclasses: a branch is published only once its move has been checked, so this
-order is a decision about what a pass does, not bookkeeping. Stating it here keeps it
-where it is read, rather than making it a consequence of where the classes happen to be
-defined.
-"""
+def restack_steps() -> tuple[RestackStep, ...]:
+    """
+    Every step a branch is put through, in the order that is the procedure.
+
+    Unlike :meth:`maintenance_commands.MaintenanceCommand.every_command`, these are
+    listed rather than found from their own subclasses: a branch is published only once
+    its move has been checked, so this order is a decision about what a pass does, not
+    bookkeeping. Stating it here keeps it where it is read, rather than making it a
+    consequence of where the classes happen to be defined.
+
+    :return: The steps, in the order a branch is put through them.
+    """
+    return (
+        WithholdBranchStillConflicting(),
+        SkipBranchAlreadyCurrent(),
+        IntegrateParent(),
+        RefuseAnUnsafeMove(),
+        PublishBranch(),
+    )
 
 
 @dataclass
@@ -185,7 +193,7 @@ def restack(
     stack: Stack, git: GitCommandRunner, fork: ForkPullRequests
 ) -> list[BranchOutcome]:
     """
-    Put every branch whose parent moved through :data:`RESTACK_STEPS`, bottom up.
+    Put every branch whose parent moved through :func:`restack_steps`, bottom up.
 
     The steps run in a :class:`RestackWorktree` rather than in the invoking checkout,
     which lends its branch through a :class:`DetachedCheckout` and gets it back with its
@@ -207,9 +215,9 @@ def restack(
         return [
             _restack_branch(
                 BranchUnderRestack(
-                    branch=by_name[entry["branch"]],
-                    parent=entry["parent"],
-                    strategy=IntegrationStrategy(entry["strategy"]),
+                    branch=by_name[entry.branch],
+                    parent=entry.parent,
+                    strategy=entry.strategy,
                     stack=stack,
                     git=switching,
                     fork=fork,
@@ -224,7 +232,7 @@ def _restack_branch(restacking: BranchUnderRestack) -> BranchOutcome:
     """:param restacking: The branch to restack.
     :return: The outcome of the first step that concluded it.
     :raises RestackConcludedNothingError: If no step did."""
-    for step in RESTACK_STEPS:
+    for step in restack_steps():
         outcome = step.attempt(restacking)
         if outcome is not None:
             return outcome

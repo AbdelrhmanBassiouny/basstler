@@ -17,6 +17,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
 
@@ -66,12 +68,23 @@ class StackSetting(StrEnum):
     The upstream branch every stack ultimately targets.
     """
 
+    UPSTREAM_SETUP_COMMAND = "upstream_setup_command"
+    """
+    The command adding a missing upstream remote. Resolved from the checkout rather than
+    read from a ``stack.toml``, and printed only when the remote is missing.
+    """
+
 
 @dataclass
-class MissingUpstreamRepositoryError(LookupError):
+class MissingUpstreamRepositoryError(CommandFailure, LookupError):
     """
     Raised when neither the project nor anything above it names the upstream repository.
     """
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.UPSTREAM_UNCONFIGURED
 
     project_file: Path
     """

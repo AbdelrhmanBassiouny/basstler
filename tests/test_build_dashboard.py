@@ -13,7 +13,6 @@ import pytest
 import yaml
 
 from basstler.build_dashboard import (
-    AVAILABLE_MODELS,
     DashboardRenderer,
     DependencyCycle,
     DuplicateItemId,
@@ -25,11 +24,10 @@ from basstler.build_dashboard import (
     ItemStatus,
     LiveState,
     MalformedPullRequestDataError,
-    MAXIMUM_DEPENDENCY_STACK_LEVEL,
     MissingMergeTimestampError,
+    ModelOption,
     Plan,
     PlanValidationError,
-    PullRequestLabel,
     PullRequestRecord,
     PullRequestsByRepository,
     PullRequestState,
@@ -46,9 +44,9 @@ from basstler.build_dashboard import (
     validate_plan,
 )
 from basstler.locations import PackageLocation
-from basstler.maintenance_constants import PROMOTION_LINK_LABEL
+from basstler.github_labels import GitHubLabel
 
-from .constants import RepositoryLocation, SkillDirectory
+from .constants import RepositoryLocation, SkillDirectory, StackLabel
 
 EXAMPLE_DIRECTORY = (
     RepositoryLocation.PLUGIN / SkillDirectory.PLAN_DASHBOARD / "example"
@@ -372,16 +370,14 @@ def test_identified_labels_recognizes_known_labels():
         state=PullRequestState.OPEN, labels=["in-review", "merged"]
     )
     assert record.identified_labels == {
-        PullRequestLabel.IN_REVIEW,
-        PullRequestLabel.MERGED,
+        GitHubLabel.IN_REVIEW,
+        GitHubLabel.MERGED,
     }
 
 
 def test_identified_labels_silently_excludes_an_unrecognized_label():
-    # The promotion-link marker is real label traffic on a fork's PRs (added by the
-    # maintenance pass) that the dashboard has no reason to recognize.
     record = PullRequestRecord(
-        state=PullRequestState.OPEN, labels=[PROMOTION_LINK_LABEL]
+        state=PullRequestState.OPEN, labels=[StackLabel.SOMEBODY_ELSES]
     )
     assert record.identified_labels == frozenset()
 
@@ -1107,7 +1103,7 @@ def test_item_is_a_bug_fix_when_its_pull_request_carries_the_bug_label():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1125,7 +1121,7 @@ def test_item_is_not_a_bug_fix_when_its_pull_request_carries_other_labels():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.IN_REVIEW.value, "enhancement"],
+                labels=[GitHubLabel.IN_REVIEW.value, StackLabel.SOMEBODY_ELSES],
             )
         }
     }
@@ -1151,7 +1147,7 @@ def test_bug_fix_stays_in_its_ordinary_action_group():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1169,7 +1165,7 @@ def test_render_marks_a_bug_fix_sidebar_entry_with_a_bug_chip():
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             )
         }
     }
@@ -1205,7 +1201,7 @@ def _renderer_with_one_bug_fix_and_one_other_entry() -> DashboardRenderer:
             "1": PullRequestRecord(
                 state=PullRequestState.OPEN,
                 draft=True,
-                labels=[PullRequestLabel.BUG.value],
+                labels=[GitHubLabel.BUG.value],
             ),
             "2": PullRequestRecord(state=PullRequestState.OPEN, draft=False),
         }
@@ -1379,7 +1375,7 @@ def test_action_is_reconsider_for_a_deferred_item():
 
 def test_track_stack_wraps_past_the_maximum_level():
     # A chain one longer than the cap: item N depends on item N-1.
-    chain_length = MAXIMUM_DEPENDENCY_STACK_LEVEL + 2
+    chain_length = DashboardRenderer.maximum_dependency_stack_level + 2
     items = [item("item-0", ItemStatus.NOT_STARTED)]
     for index in range(1, chain_length):
         items.append(
@@ -1397,7 +1393,7 @@ def test_track_stack_wraps_past_the_maximum_level():
 
 def test_track_stack_does_not_wrap_within_the_maximum_level():
     items = [item("item-0", ItemStatus.NOT_STARTED)]
-    for index in range(1, MAXIMUM_DEPENDENCY_STACK_LEVEL):
+    for index in range(1, DashboardRenderer.maximum_dependency_stack_level):
         items.append(
             item(
                 f"item-{index}",
@@ -1778,7 +1774,7 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
     output, _ = renderer.render()
-    for model in AVAILABLE_MODELS:
+    for model in ModelOption:
         assert f'data-value="{model.value}"' in output
         assert f">{model.label}</li>" in output
     assert 'class="model-picker-toggle"' in output

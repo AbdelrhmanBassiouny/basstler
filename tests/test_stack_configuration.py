@@ -12,7 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import PackageLocation, PathEnumeration, ProjectLocation
 from basstler.repository import Repository
 from basstler.stack_configuration import (
     CommittedStackConfiguration,
@@ -22,15 +22,21 @@ from basstler.stack_configuration import (
 
 from .constants import DatasetLocation
 
-SHIPPED = DatasetLocation.STACK_CONFIGURATION / "shipped.toml"
-"""
-Defaults standing in for the shipped file.
-"""
 
-PROJECT = DatasetLocation.STACK_CONFIGURATION / "project.toml"
-"""
-A project's own settings.
-"""
+class ConfigurationLocation(PathEnumeration):
+    """
+    The stack configuration files these tests layer over one another.
+    """
+
+    SHIPPED_CONFIGURATION = DatasetLocation.STACK_CONFIGURATION / "shipped.toml"
+    """
+    Defaults standing in for the shipped file.
+    """
+
+    PROJECT_CONFIGURATION = DatasetLocation.STACK_CONFIGURATION / "project.toml"
+    """
+    A project's own settings.
+    """
 
 
 def project_committing(project_root: Path, settings: Path) -> Path:
@@ -58,10 +64,13 @@ def test_the_shipped_defaults_name_no_repository():
 
 def test_the_projects_settings_outrank_the_shipped_defaults(tmp_path: Path):
     configuration = CommittedStackConfiguration(
-        shipped=SHIPPED, project_root=project_committing(tmp_path, PROJECT)
+        shipped=ConfigurationLocation.SHIPPED_CONFIGURATION,
+        project_root=project_committing(
+            tmp_path, ConfigurationLocation.PROJECT_CONFIGURATION
+        ),
     )
-    project = tomllib.loads(PROJECT.read_text())
-    shipped = tomllib.loads(SHIPPED.read_text())
+    project = tomllib.loads(ConfigurationLocation.PROJECT_CONFIGURATION.read_text())
+    shipped = tomllib.loads(ConfigurationLocation.SHIPPED_CONFIGURATION.read_text())
 
     values = configuration.values()
 
@@ -71,25 +80,36 @@ def test_the_projects_settings_outrank_the_shipped_defaults(tmp_path: Path):
 
 def test_the_upstream_is_the_one_the_project_names(tmp_path: Path):
     configuration = CommittedStackConfiguration(
-        shipped=SHIPPED, project_root=project_committing(tmp_path, PROJECT)
+        shipped=ConfigurationLocation.SHIPPED_CONFIGURATION,
+        project_root=project_committing(
+            tmp_path, ConfigurationLocation.PROJECT_CONFIGURATION
+        ),
     )
 
     assert configuration.upstream_repository() == Repository.parse(
-        tomllib.loads(PROJECT.read_text())[StackSetting.UPSTREAM_REPOSITORY]
+        tomllib.loads(ConfigurationLocation.PROJECT_CONFIGURATION.read_text())[
+            StackSetting.UPSTREAM_REPOSITORY
+        ]
     )
 
 
 def test_a_project_without_settings_runs_on_the_shipped_defaults(tmp_path: Path):
-    configuration = CommittedStackConfiguration(shipped=SHIPPED, project_root=tmp_path)
+    configuration = CommittedStackConfiguration(
+        shipped=ConfigurationLocation.SHIPPED_CONFIGURATION, project_root=tmp_path
+    )
 
-    assert configuration.values() == tomllib.loads(SHIPPED.read_text())
+    assert configuration.values() == tomllib.loads(
+        ConfigurationLocation.SHIPPED_CONFIGURATION.read_text()
+    )
 
 
 def test_a_project_naming_no_upstream_is_told_where_to_name_it(tmp_path: Path):
     """
     Nothing to fall back on: the upstream is the one setting only the project knows.
     """
-    configuration = CommittedStackConfiguration(shipped=SHIPPED, project_root=tmp_path)
+    configuration = CommittedStackConfiguration(
+        shipped=ConfigurationLocation.SHIPPED_CONFIGURATION, project_root=tmp_path
+    )
 
     with pytest.raises(MissingUpstreamRepositoryError) as raised:
         configuration.upstream_repository()

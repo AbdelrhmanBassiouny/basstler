@@ -86,9 +86,14 @@ record_personal_settings_sync() {
 # "abdel-direct/some-branch"), or nothing if it has no upstream (detached
 # HEAD, or a branch that was never pushed with -u/--set-upstream). Shared by
 # fetch_personal_notes_branch below and by create-personal-notes-branch.sh's
-# existence check, so both apply the exact same fallback remote.
+# existence check, so both apply the exact same fallback remote. Having no
+# upstream is an answer, not an error, so this always returns 0 - otherwise a
+# caller under `set -e -o pipefail` (create-personal-notes-branch.sh) exits
+# silently with git's 128 instead of going on to create the branch.
 current_branch_upstream_remote() {
-  git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null | cut -d/ -f1
+  local upstream
+  upstream="$(git rev-parse --abbrev-ref --symbolic-full-name @{upstream} 2>/dev/null)" || return 0
+  printf '%s\n' "${upstream%%/*}"
 }
 
 # fetch_personal_notes_branch: fetches NOTES_BRANCH from NOTES_REMOTE. If that

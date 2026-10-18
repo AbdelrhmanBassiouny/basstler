@@ -14,21 +14,20 @@ from pathlib import Path
 import pytest
 
 import basstler.setup_steps
-from basstler.build_dashboard import PullRequestLabel
+from basstler.github_labels import GitHubLabel
 from basstler.setup_steps import (
-    COMMENT_MARKER,
     ForkLabels,
     git_value,
     PersistentVariables,
     PersonalNotesSetting,
     Host,
     RepositoryAccess,
-    RepositoryLabel,
     SetupChecklist,
     SetupLink,
     resolve_repository,
 )
 
+from basstler.locations import PluginLocation
 from basstler.repository import Repository
 
 from .constants import RepositoryLocation, ScrubbedEnvironmentPrefix
@@ -41,7 +40,9 @@ FORK = Repository(owner="some-user", name="some-repository")
 
 FORK_REMOTE_URL = f"https://github.com/{FORK.full_name}.git"
 
-RESOLVE_CONFIG_SCRIPT = RepositoryLocation.HOOKS / "resolve-personal-notes-config.sh"
+RESOLVE_CONFIG_SCRIPT = (
+    RepositoryLocation.HOOKS / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
+)
 
 
 @pytest.fixture
@@ -174,24 +175,11 @@ def test_a_value_git_does_answer_comes_back_trimmed(
 # %% the labels step
 
 
-def test_every_label_the_tooling_relies_on_is_offered() -> None:
-    """
-    This enum and the dashboard's own name the same labels, member for member.
-
-    Asserted against ``build_dashboard.PullRequestLabel`` itself, by member name as well
-    as by value: a label added there and not here would leave a fork missing one, with
-    nothing else to catch it.
-    """
-    assert {label.name: label.value for label in RepositoryLabel} == {
-        member.name: member.value for member in PullRequestLabel
-    }
-
-
 def test_each_label_carries_the_description_it_is_created_with() -> None:
     """
     Every label says what it means, and the creation command names the fork.
     """
-    for label in RepositoryLabel:
+    for label in GitHubLabel:
         assert label.purpose
         assert label.creation_command(FORK) == (
             f"gh label create {label.value} --repo {FORK.full_name} "
@@ -208,7 +196,7 @@ def test_the_labels_step_leads_with_the_page_that_creates_them_by_hand() -> None
     instructions = step.instructions()
     assert step.labels_url in instructions[0]
     assert [line for line in instructions if line.startswith("gh label create")] == [
-        label.creation_command(FORK) for label in RepositoryLabel
+        label.creation_command(FORK) for label in GitHubLabel
     ]
 
 
@@ -304,7 +292,7 @@ def test_a_value_carrying_a_comment_marker_is_quoted(
     marker, so a branch or path carrying one has to be quoted or it is silently set to a
     prefix of itself.
     """
-    branch = f"claude/notes{COMMENT_MARKER}2"
+    branch = f"claude/notes{PersistentVariables.comment_marker}2"
     step = PersistentVariables.resolve(
         scratch_repository.project_root,
         {PersonalNotesSetting.BRANCH.environment_variable: branch},

@@ -42,25 +42,25 @@ from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
 import yaml
 
+from basstler.class_property import classproperty
+from basstler.github_labels import GitHubLabel
 from basstler.plan_model import ItemStatus
 from basstler.render_common import (
     create_template_environment,
     render_markdown_to_html,
     sanitize_http_url,
 )
+from basstler.repository import GitHubAddress
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
-
-MAXIMUM_DEPENDENCY_STACK_LEVEL = 4
-"""Same-track dependency chains deeper than this wrap back to indent level 0."""
 
 
 class LiveState(StrEnum):
@@ -102,25 +102,6 @@ class PullRequestState(StrEnum):
 
     OPEN = "open"
     CLOSED = "closed"
-
-
-class PullRequestLabel(StrEnum):
-    """The GitHub labels this repo's own convention attaches to a pull
-    request by hand, that this codebase's logic or a session cares about
-    recognizing.
-
-    Not exhaustive of every label a real pull request can carry - GitHub's
-    own label vocabulary is open-ended, and other automation on this repo
-    may add labels this dashboard never needs to know about. See
-    :attr:`PullRequestRecord.identified_labels` for how an unrecognized
-    label is handled (silently excluded, not an error), and
-    ``hooks/README.md``'s "labels the dashboard reads" list for what
-    each member means and who applies it.
-    """
-
-    MERGED = "merged"
-    IN_REVIEW = "in-review"
-    BUG = "bug"
 
 
 @dataclass
@@ -449,7 +430,7 @@ class PullRequestRecord:
 
     labels: list[str] = field(default_factory=list)
     """The pull request's raw GitHub labels, exactly as GitHub reports them.
-    Kept as ``list[str]`` rather than ``list[PullRequestLabel]``: a real pull
+    Kept as ``list[str]`` rather than ``list[GitHubLabel]``: a real pull
     request can carry labels this codebase has no reason to know about (other
     automation's own labels, GitHub's defaults), so this field must tolerate
     anything - see :attr:`identified_labels` for the subset this codebase
@@ -457,19 +438,19 @@ class PullRequestRecord:
     case in this repo's history: a pull request merged out-of-band (its
     branch pushed directly, then the pull request closed by hand rather than
     through GitHub's merge button) never gets ``merged_at`` set, so the
-    closer manually adds the :attr:`PullRequestLabel.MERGED` label to record
+    closer manually adds the :attr:`GitHubLabel.MERGED` label to record
     what actually happened - see :meth:`was_merged`."""
 
     @property
-    def identified_labels(self) -> frozenset[PullRequestLabel]:
+    def identified_labels(self) -> frozenset[GitHubLabel]:
         """The subset of :attr:`labels` that match a known
-        :class:`PullRequestLabel` - any other raw label this pull request
+        :class:`GitHubLabel` - any other raw label this pull request
         happens to carry is silently excluded, not an error, since
         :attr:`labels` is deliberately not limited to labels this codebase
         recognizes."""
-        known_values = {member.value for member in PullRequestLabel}
+        known_values = {member.value for member in GitHubLabel}
         return frozenset(
-            PullRequestLabel(label) for label in self.labels if label in known_values
+            GitHubLabel(label) for label in self.labels if label in known_values
         )
 
     @classmethod
@@ -500,11 +481,10 @@ class PullRequestRecord:
     def was_merged(self) -> bool:
         """Whether this pull request's changes actually landed - GitHub's own
         :attr:`merged_at`, or (for an out-of-band merge GitHub never
-        recorded) the manually-applied :attr:`PullRequestLabel.MERGED`
+        recorded) the manually-applied :attr:`GitHubLabel.MERGED`
         label."""
         return (
-            self.merged_at is not None
-            or PullRequestLabel.MERGED in self.identified_labels
+            self.merged_at is not None or GitHubLabel.MERGED in self.identified_labels
         )
 
 
@@ -651,11 +631,13 @@ class ItemAction(ABC):
     item_identifier: str
     """The item this action's command targets."""
 
-    skill_command_name: ClassVar[str]
-    """The ``/plan-item-...`` skill this action invokes - fixed per
-    subclass, since which skill an action routes to never varies per
-    instance (only :attr:`label` does, e.g. ``"Resolve"`` vs. ``"Resume"``
-    for the same :class:`ResolveAction`)."""
+    @classproperty
+    @abstractmethod
+    def skill_command_name(cls) -> str:
+        """The ``/plan-item-...`` skill this action invokes - fixed per
+        subclass, since which skill an action routes to never varies per
+        instance (only :attr:`label` does, e.g. ``"Resolve"`` vs. ``"Resume"``
+        for the same :class:`ResolveAction`)."""
 
     @property
     def command(self) -> str:
@@ -669,7 +651,10 @@ class StartNowAction(ItemAction):
     """Routes a not-started item, once every dependency is ready, to
     ``plan-item-kickoff``."""
 
-    skill_command_name: ClassVar[str] = "/plan-item-kickoff"
+    @classproperty
+    def skill_command_name(cls) -> str:
+        """:return: The ``plan-item-kickoff`` skill."""
+        return "/plan-item-kickoff"
 
 
 @dataclass(frozen=True)
@@ -678,32 +663,52 @@ class ResolveAction(ItemAction):
     ``plan-item-resolve`` - :attr:`ItemAction.label` is worded to match
     which of those three it actually is."""
 
-    skill_command_name: ClassVar[str] = "/plan-item-resolve"
+    @classproperty
+    def skill_command_name(cls) -> str:
+        """:return: The ``plan-item-resolve`` skill."""
+        return "/plan-item-resolve"
 
 
-@dataclass(frozen=True)
-class ModelOption:
-    """One choice in a dashboard action button's model dropdown."""
+class ModelOption(StrEnum):
+    """One choice in a dashboard action button's model dropdown, in the order the
+    dropdown lists them.
 
-    value: str
-    """The model id to prepend as ``/model <value>`` before the copied
-    command, or ``""`` to copy the command alone and inherit whatever
-    model the pasted-into session is already running."""
+    Every model is offered dashboard-wide - not plan-specific, so declared once
+    here rather than threaded through :class:`Plan`. A member is its own model
+    id, the one to prepend as ``/model <value>`` before the copied command, or
+    ``""`` to copy the command alone and inherit whatever model the
+    pasted-into session is already running.
+    """
 
     label: str
     """The human-readable label shown in the dropdown."""
 
+    def __new__(cls, model_identifier: str, label: str) -> ModelOption:
+        """Make a member that is its own model id and carries its dropdown label.
 
-AVAILABLE_MODELS: list[ModelOption] = [
-    ModelOption(value="", label="Session default"),
-    ModelOption(value="claude-opus-5", label="Opus 5"),
-    ModelOption(value="claude-sonnet-5", label="Sonnet 5"),
-    ModelOption(value="claude-haiku-4-5-20251001", label="Haiku 4.5"),
-    ModelOption(value="claude-fable-5", label="Fable 5"),
-]
-"""Every model offered in an action button's dropdown, dashboard-wide - not
-plan-specific, so declared once at module level rather than threaded through
-:class:`Plan`."""
+        :param model_identifier: The model id, or ``""`` for the session default.
+        :param label: The human-readable label shown in the dropdown.
+        :return: The member.
+        """
+        member = str.__new__(cls, model_identifier)
+        member._value_ = model_identifier
+        member.label = label
+        return member
+
+    SESSION_DEFAULT = ("", "Session default")
+    """Inherit whatever model the pasted-into session is already running."""
+
+    OPUS_5 = ("claude-opus-5", "Opus 5")
+    """Claude Opus 5."""
+
+    SONNET_5 = ("claude-sonnet-5", "Sonnet 5")
+    """Claude Sonnet 5."""
+
+    HAIKU_4_5 = ("claude-haiku-4-5-20251001", "Haiku 4.5")
+    """Claude Haiku 4.5."""
+
+    FABLE_5 = ("claude-fable-5", "Fable 5")
+    """Claude Fable 5."""
 
 
 @dataclass
@@ -765,7 +770,7 @@ class Item:
     status always gets one: something is always actionable next."""
 
     is_bug_fix: bool = field(default=False, init=False)
-    """Whether this item's pull request carries :attr:`PullRequestLabel.BUG`,
+    """Whether this item's pull request carries :attr:`GitHubLabel.BUG`,
     filled in by :meth:`DashboardRenderer.render`. Marks the item wherever it
     already appears rather than grouping it separately: fixing a bug is a
     property of the work, not a distinct next action, and it can apply to an
@@ -880,7 +885,7 @@ class Plan:
     @property
     def repository_url(self) -> str:
         """:attr:`default_repository`'s GitHub URL, ready for the masthead link."""
-        return f"https://github.com/{self.default_repository}"
+        return f"{GitHubAddress.WEB}/{self.default_repository}"
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Plan:
@@ -949,7 +954,7 @@ class StackedItem:
 
     indent_level: int
     """How deeply nested this item is under its same-track dependency chain,
-    capped at :data:`MAXIMUM_DEPENDENCY_STACK_LEVEL`."""
+    capped at :attr:`DashboardRenderer.maximum_dependency_stack_level`."""
 
     wrap_parent: Item | None
     """The item this one visually continues from, if the chain wrapped back
@@ -1031,6 +1036,11 @@ class DashboardRenderer:
     items_by_identifier: dict[str, Item] = field(init=False)
     """Every item, keyed by :attr:`Item.identifier`."""
 
+    @classproperty
+    def maximum_dependency_stack_level(cls) -> int:
+        """Same-track dependency chains deeper than this wrap back to indent level 0."""
+        return 4
+
     def __post_init__(self) -> None:
         self.items_by_identifier = {item.identifier: item for item in self.plan.items}
 
@@ -1064,7 +1074,7 @@ class DashboardRenderer:
             has_bug_fix_next_steps=any(item.is_bug_fix for item in next_step_items),
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             waves=self._build_wave_sections(),
-            available_models=AVAILABLE_MODELS,
+            available_models=list(ModelOption),
         )
 
         summary = DashboardSummary(
@@ -1105,7 +1115,7 @@ class DashboardRenderer:
         if item.pull_request_number is None:
             return None
         repository = item.repository or self.plan.default_repository
-        return f"https://github.com/{repository}/pull/{item.pull_request_number}"
+        return f"{GitHubAddress.WEB}/{repository}/pull/{item.pull_request_number}"
 
     def _action_for(self, item: Item) -> ItemAction | None:
         """Build one item's dashboard action button, or ``None`` if it
@@ -1200,7 +1210,7 @@ class DashboardRenderer:
         pull_request = self._pull_request_record_of(item)
         return (
             pull_request is not None
-            and PullRequestLabel.BUG in pull_request.identified_labels
+            and GitHubLabel.BUG in pull_request.identified_labels
         )
 
     @staticmethod
@@ -1320,11 +1330,11 @@ class DashboardRenderer:
             for wave in self.plan.waves
         ]
 
-    @staticmethod
-    def _build_track_stack(track_items: list[Item]) -> list[StackedItem]:
+    @classmethod
+    def _build_track_stack(cls, track_items: list[Item]) -> list[StackedItem]:
         """Order a track's items into a dependency stack (same-track
         depends_on only), assign an indent level per item capped at
-        :data:`MAXIMUM_DEPENDENCY_STACK_LEVEL`, wrapping back to level 0
+        :attr:`maximum_dependency_stack_level`, wrapping back to level 0
         (with a reference back to the real parent) past the cap. Also
         computes each item's indent as it would be with done items hidden -
         see :class:`StackedItem`."""
@@ -1363,7 +1373,7 @@ class DashboardRenderer:
             else:
                 parent_level, parent_wrap_parent = visible_stack_position(parent)
                 next_level = parent_level + 1
-                if next_level > MAXIMUM_DEPENDENCY_STACK_LEVEL:
+                if next_level > cls.maximum_dependency_stack_level:
                     result = (0, parent)
                 else:
                     result = (next_level, parent_wrap_parent)
@@ -1377,7 +1387,7 @@ class DashboardRenderer:
             appending a :class:`StackedItem` per visit."""
             next_level = level + 1
             wrap_for_children = None
-            if next_level > MAXIMUM_DEPENDENCY_STACK_LEVEL:
+            if next_level > cls.maximum_dependency_stack_level:
                 next_level = 0
                 wrap_for_children = item
             visible_level, visible_wrap_parent = visible_stack_position(item)

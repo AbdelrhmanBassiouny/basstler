@@ -26,6 +26,8 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 
+from basstler.class_property import classproperty
+from basstler.github_labels import GitHubLabel
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
@@ -262,66 +264,6 @@ def resolve_repository(project_root: Path, notes_remote: str) -> Repository | No
     return None
 
 
-# %% the labels a fork has to carry
-
-
-class RepositoryLabel(StrEnum):
-    """
-    Every label this tooling reads or applies, and therefore every one a fork must
-    carry, each with the description it is created with.
-
-    A member is its own label name, so the set mirrors build_dashboard.py's
-    ``PullRequestLabel`` member for member and value for value - held equal by a test
-    rather than by an import, because that module needs the dashboard's dependencies
-    installed, which is one of the things this script exists to run before.
-    """
-
-    purpose: str
-    """
-    What the label means, used as its description when it is created.
-    """
-
-    def __new__(cls, label: str, purpose: str) -> RepositoryLabel:
-        """
-        Make a member that is its own label name and carries what the label means.
-
-        :param label: The label's name, as GitHub stores it.
-        :param purpose: What it means, used as the description when it is created.
-        :return: The member.
-        """
-        member = str.__new__(cls, label)
-        member._value_ = label
-        member.purpose = purpose
-        return member
-
-    MERGED = ("merged", "The changes landed even though GitHub never recorded a merge")
-    """
-    Read by the dashboard, which treats the label exactly like a real merge.
-    """
-
-    IN_REVIEW = ("in-review", "Under review")
-    """
-    Recognized so it does not read as an unknown label; no script acts on it yet.
-    """
-
-    BUG = ("bug", "A bug fix")
-    """
-    Applied by a session opening a bug-fix pull request, and shown as a dashboard chip.
-    """
-
-    def creation_command(self, repository: Repository) -> str:
-        """
-        The ``gh`` command that creates this label.
-
-        :param repository: The repository to create it in.
-        :return: The command, ready to paste.
-        """
-        return (
-            f"gh label create {self.value} --repo {repository.full_name} "
-            f'--description "{self.purpose}"'
-        )
-
-
 # %% the steps themselves
 
 
@@ -399,9 +341,7 @@ class ForkLabels(SetupStep):
 
     def instructions(self) -> list[str]:
         """See :meth:`SetupStep.instructions`."""
-        commands = [
-            label.creation_command(self.repository) for label in RepositoryLabel
-        ]
+        commands = [label.creation_command(self.repository) for label in GitHubLabel]
         return [
             f"By hand: {self.labels_url}",
             "Or, if you have the gh CLI:",
@@ -447,27 +387,6 @@ class RepositoryAccess(SetupStep):
         ]
 
 
-COMMENT_MARKER = "#"
-"""
-What starts a comment in the ``.env`` format an environment's variable list uses.
-"""
-
-
-def quoted_if_needed(value: str) -> str:
-    """
-    Quote a variable's value when leaving it bare would truncate it.
-
-    An unquoted value is read to the first comment marker and the rest of the line is
-    dropped, which is silent - the variable is set, to a prefix of what was pasted.
-
-    :param value: The value to write after the ``=``.
-    :return: The value, quoted only when it carries a comment marker.
-    """
-    if COMMENT_MARKER not in value:
-        return value
-    return f'"{value}"'
-
-
 @dataclass(frozen=True)
 class PersistentVariables(SetupStep):
     """
@@ -479,6 +398,29 @@ class PersistentVariables(SetupStep):
     """
     The ``NAME=value`` lines to paste, empty when every setting is still its default.
     """
+
+    @classproperty
+    def comment_marker(cls) -> str:
+        """
+        What starts a comment in the ``.env`` format an environment's variable list uses.
+        """
+        return "#"
+
+    @classmethod
+    def quoted_if_needed(cls, value: str) -> str:
+        """
+        Quote a variable's value when leaving it bare would truncate it.
+
+        An unquoted value is read to the first comment marker and the rest of the line
+        is dropped, which is silent - the variable is set, to a prefix of what was
+        pasted.
+
+        :param value: The value to write after the ``=``.
+        :return: The value, quoted only when it carries a comment marker.
+        """
+        if cls.comment_marker not in value:
+            return value
+        return f'"{value}"'
 
     @classmethod
     def resolve(
@@ -496,7 +438,7 @@ class PersistentVariables(SetupStep):
             value = setting.resolve(project_root, environment)
             if value != setting.default:
                 lines.append(
-                    f"{setting.environment_variable}={quoted_if_needed(value)}"
+                    f"{setting.environment_variable}={cls.quoted_if_needed(value)}"
                 )
         return cls(variable_lines=tuple(lines))
 
@@ -527,12 +469,6 @@ class PersistentVariables(SetupStep):
 # %% the checklist they add up to
 
 
-HEADING = "These steps are yours - no script can do them:"
-"""
-The line introducing the printed list.
-"""
-
-
 @dataclass(frozen=True)
 class SetupChecklist:
     """
@@ -543,6 +479,13 @@ class SetupChecklist:
     """
     The steps that apply to this clone.
     """
+
+    @classproperty
+    def heading(cls) -> str:
+        """
+        The line introducing the printed list.
+        """
+        return "These steps are yours - no script can do them:"
 
     @classmethod
     def for_clone(
@@ -575,7 +518,7 @@ class SetupChecklist:
         blocks = [
             step.render(number) for number, step in enumerate(self.steps, start=1)
         ]
-        return "\n\n".join([HEADING, *blocks])
+        return "\n\n".join([self.heading, *blocks])
 
 
 def main() -> None:

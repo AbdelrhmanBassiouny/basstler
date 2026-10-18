@@ -58,16 +58,19 @@ import tomllib
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.locations import (
     ClaudeCodeVariable,
     PackageLocation,
     PluginLocation,
     ProjectLocation,
 )
+from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -164,7 +167,7 @@ class CommandLineOption(StrEnum):
     """
 
 
-class ExitCode(IntEnum):
+class PlanItemModeExitCode(ExitCode):
     """
     The process statuses this tool exits with.
 
@@ -200,13 +203,6 @@ class ExitCode(IntEnum):
     """
     The personal settings file could not be pushed to the notes branch.
     """
-
-    @property
-    def name_for_a_caller(self) -> str:
-        """
-        The status as the lowercase name a report and a message both use.
-        """
-        return self.name.lower()
 
 
 # %% settings
@@ -279,7 +275,7 @@ class SettingsFile:
 
 
 @dataclass
-class ModeError(Exception, ABC):
+class ModeError(CommandFailure, ABC):
     """
     Base for every refusal this tool reports, each carrying its own exit status.
 
@@ -293,18 +289,13 @@ class ModeError(Exception, ABC):
     traceback saying the same thing in the library's words instead of ours.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.SUCCESS
-    """
-    The process status this refusal exits with.
-    """
-
     def __post_init__(self) -> None:
         """
         Compose the message from the subclass's own description and advice.
         """
         correction = self.suggest_correction()
         message = self.error_message()
-        super().__init__(f"{message}\n{correction}" if correction else message)
+        Exception.__init__(self, f"{message}\n{correction}" if correction else message)
 
     def __str__(self) -> str:
         """
@@ -331,7 +322,10 @@ class UnknownModeError(ModeError):
     Raised when a mode is named that :class:`ExecutionMode` does not define.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.UNKNOWN_MODE
+    @classproperty
+    def exit_code(cls) -> PlanItemModeExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemModeExitCode.UNKNOWN_MODE
 
     setting: ModeSetting
     """
@@ -351,7 +345,10 @@ class MalformedModeSettingsError(ModeError):
     Raised when a settings file exists but cannot be read as the modes it should hold.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.MALFORMED_MODE_SETTINGS
+    @classproperty
+    def exit_code(cls) -> PlanItemModeExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemModeExitCode.MALFORMED_MODE_SETTINGS
 
     file: SettingsFile
     """
@@ -379,7 +376,10 @@ class SettingsWriteRefusedError(ModeError):
     Raised when the personal settings file could not be pushed to the notes branch.
     """
 
-    exit_code: ClassVar[ExitCode] = ExitCode.SETTINGS_WRITE_REFUSED
+    @classproperty
+    def exit_code(cls) -> PlanItemModeExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemModeExitCode.SETTINGS_WRITE_REFUSED
 
     detail: str
     """
@@ -464,17 +464,12 @@ def fetch_notes_branch(project_root: Path) -> bool:
     :param project_root: The repository to fetch within.
     :return: Whether the branch was reachable.
     """
-    probe = subprocess.run(
-        [
-            "bash",
-            "-c",
-            f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && fetch_personal_notes_branch',
-        ],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
+    return (
+        ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run(
+            project_root
+        ).returncode
+        == 0
     )
-    return probe.returncode == 0
 
 
 # %% reports
@@ -561,7 +556,7 @@ class Report(ABC):
 
     @property
     @abstractmethod
-    def exit_code(self) -> ExitCode:
+    def exit_code(self) -> PlanItemModeExitCode:
         """
         :return: The process status this report exits with.
         """
@@ -597,7 +592,7 @@ class ModeResolution(Report):
     What decided it.
     """
 
-    exit_code: ExitCode = ExitCode.SUCCESS
+    exit_code: PlanItemModeExitCode = PlanItemModeExitCode.SUCCESS
     """
     The process status this resolution exits with.
     """
@@ -675,7 +670,7 @@ class SettingsWriteReport(Report):
     The mode they were pinned to.
     """
 
-    exit_code: ExitCode = ExitCode.SUCCESS
+    exit_code: PlanItemModeExitCode = PlanItemModeExitCode.SUCCESS
     """
     The process status this write exits with.
     """

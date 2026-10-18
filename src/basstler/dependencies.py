@@ -31,11 +31,13 @@ import sys
 import tomllib
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import IntEnum, StrEnum
+from enum import StrEnum
 from importlib.metadata import PackageNotFoundError, distribution, distributions
 from pathlib import Path
 from typing import Any
 
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.locations import PackageLocation
 from basstler.standard_streams import StandardStreamHandler
 
@@ -66,8 +68,37 @@ class PyprojectKey(StrEnum):
     """
 
 
+class RequirementMarker(StrEnum):
+    """
+    The environment-marker fragments of an installed distribution's requirements this
+    module reads.
+    """
+
+    EXTRA = "extra =="
+    """
+    Marks a requirement that applies only when one of the distribution's extras is
+    requested, which a plain install does not.
+    """
+
+
+class DependencyExitCode(ExitCode):
+    """
+    How the command ended, as its caller reads it.
+    """
+
+    SUCCESS = 0
+    """
+    The missing requirements, if any, were printed.
+    """
+
+    UNREADABLE_DECLARATION = 1
+    """
+    The declaration could not be read, so nothing was printed.
+    """
+
+
 @dataclass
-class UnreadableDependencyDeclarationError(Exception):
+class UnreadableDependencyDeclarationError(CommandFailure):
     """
     Raised when the declaration cannot be read, so nothing can be said about what is
     missing.
@@ -75,6 +106,11 @@ class UnreadableDependencyDeclarationError(Exception):
     Distinct from *nothing is missing*, which is what a caller would otherwise conclude
     from an empty answer and act on by installing nothing.
     """
+
+    @classproperty
+    def exit_code(cls) -> DependencyExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return DependencyExitCode.UNREADABLE_DECLARATION
 
     declaration: Path
     """
@@ -200,7 +236,7 @@ class InstalledDistribution(RequirementSource):
             *(
                 Dependency(specifier)
                 for specifier in stated
-                if "extra ==" not in specifier
+                if RequirementMarker.EXTRA not in specifier
             ),
         )
 
@@ -265,23 +301,7 @@ class DependencyDeclaration(RequirementSource):
         return declaration[PyprojectKey.PROJECT]
 
 
-class ExitCode(IntEnum):
-    """
-    How the command ended, as its caller reads it.
-    """
-
-    SUCCESS = 0
-    """
-    The missing requirements, if any, were printed.
-    """
-
-    UNREADABLE_DECLARATION = 1
-    """
-    The declaration could not be read, so nothing was printed.
-    """
-
-
-def main() -> ExitCode:
+def main() -> DependencyExitCode:
     """
     Print one specifier per missing requirement, for a caller to report.
 
@@ -295,21 +315,20 @@ def main() -> ExitCode:
         "own requirements",
     )
     declaration_path = parser.parse_args().declaration
-    if declaration_path is None:
-        source = RequirementSource.for_this_package()
-    elif declaration_path.is_file():
-        source = DependencyDeclaration(declaration_path)
-    else:
-        logger.error(str(UnreadableDependencyDeclarationError(declaration_path)))
-        return ExitCode.UNREADABLE_DECLARATION
     try:
+        if declaration_path is None:
+            source = RequirementSource.for_this_package()
+        elif declaration_path.is_file():
+            source = DependencyDeclaration(declaration_path)
+        else:
+            raise UnreadableDependencyDeclarationError(declaration_path)
         missing = source.missing()
-    except UnreadableDependencyDeclarationError as error:
+    except CommandFailure as error:
         logger.error(str(error))
-        return ExitCode.UNREADABLE_DECLARATION
+        return error.exit_code
     for requirement in missing:
         logger.info(requirement.specifier)
-    return ExitCode.SUCCESS
+    return DependencyExitCode.SUCCESS
 
 
 if __name__ == "__main__":

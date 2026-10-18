@@ -10,7 +10,8 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ProjectLocation
+from basstler.locations import PluginLocation, ProjectLocation
+from basstler.shell_configuration import ShellConfigurationFunction
 
 from .constants import DatasetLocation, PersonalNotesPath
 from .project_declaration import ProjectDeclaration
@@ -31,8 +32,8 @@ def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     :return: The same repository, ready to run save-plan.sh against.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "save-plan.sh",
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
     )
     scratch_repository.install_package()
     scratch_repository.write("README.md", "scratch repo\n")
@@ -54,7 +55,9 @@ def run_save_plan(
     :param arguments: CLI arguments to pass to save-plan.sh.
     :return: The finished subprocess.
     """
-    return repository.run_hook_script("save-plan.sh", *arguments)
+    return repository.run_hook_script(
+        PluginLocation.PLAN_SAVING_SCRIPT.name, *arguments
+    )
 
 
 # %% the dependencies it needs before it can read a manifest
@@ -94,7 +97,7 @@ def test_refuses_when_a_declared_dependency_is_not_installed(
     assert result.returncode == 1
     assert UNINSTALLABLE_REQUIREMENT in result.stderr
     assert (
-        f"install '{save_plan_repository.configuration_output('basstler_package_source').strip()}'"
+        f"install '{save_plan_repository.configuration_output(ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE).strip()}'"
         in result.stderr
     )
 

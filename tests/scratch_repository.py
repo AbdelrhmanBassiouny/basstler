@@ -22,6 +22,7 @@ from pathlib import Path
 
 from .script_runner import BashScriptRunner
 from basstler.locations import PackageLocation, PluginLocation
+from basstler.shell_configuration import ShellConfigurationFunction
 
 from .constants import (
     ConfigurationVariable,
@@ -121,7 +122,7 @@ class SetupPrerequisiteFile(StrEnum):
     The plugin's manifest, naming its version.
     """
 
-    REFRESH_DASHBOARD = str(SkillDirectory.PLAN_DASHBOARD / "refresh_dashboard.sh")
+    REFRESH_DASHBOARD = str(SkillDirectory.DASHBOARD_REFRESH_SCRIPT)
     """
     The refresh entry point the plan-dashboard skill runs.
     """
@@ -314,6 +315,15 @@ class ScratchRepository:
         assert result.returncode == 0, result.stderr
         return result
 
+    def add_remote(self, name: str, url: str) -> None:
+        """
+        Add a git remote to the project.
+
+        :param name: What to call the remote.
+        :param url: Where it points.
+        """
+        self.run_git("remote", "add", name, url)
+
     def run_git_allowing_failure(
         self, *arguments: str, cwd: Path | None = None
     ) -> subprocess.CompletedProcess[str]:
@@ -415,7 +425,11 @@ class ScratchRepository:
         )
         Path(
             self.configuration_value(ConfigurationVariable.INSTALLED_SOURCE_FILE)
-        ).write_text(self.configuration_output("basstler_package_source"))
+        ).write_text(
+            self.configuration_output(
+                ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE
+            )
+        )
         return interpreter
 
     def write_setup_prerequisites(self) -> None:
