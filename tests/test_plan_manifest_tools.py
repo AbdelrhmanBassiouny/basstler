@@ -22,6 +22,7 @@ from basstler.plan_manifest_tools import (
     BranchIndex,
     ManifestToolsCommand,
     ManifestToolsExitCode,
+    ManifestToolsOption,
     PlanManifest,
     YamlBooleanCoercionError,
     main,
@@ -162,13 +163,13 @@ def test_main_dispatches_regenerate_branch_index(tmp_path, monkeypatch):
         [
             "plan_manifest_tools.py",
             ManifestToolsCommand.REGENERATE_BRANCH_INDEX,
-            "--scratch-dir",
+            ManifestToolsOption.SCRATCH_DIRECTORY,
             str(tmp_path),
-            "--plans-dir",
+            ManifestToolsOption.PLANS_DIRECTORY,
             "plans",
-            "--manifest-filename",
+            ManifestToolsOption.MANIFEST_FILENAME,
             PlanDocument.MANIFEST,
-            "--output",
+            ManifestToolsOption.OUTPUT,
             str(output_path),
         ],
     )
@@ -255,7 +256,7 @@ def test_main_dispatches_item_by_id(monkeypatch, capsys):
             "plan_manifest_tools.py",
             ManifestToolsCommand.ITEM,
             str(DatasetLocation.PLAN_WITH_LANDED_ITEMS),
-            "--id",
+            ManifestToolsOption.ITEM_IDENTIFIER,
             item.identifier,
         ],
     )
@@ -273,7 +274,7 @@ def test_main_dispatches_item_by_branch(monkeypatch, capsys):
             "plan_manifest_tools.py",
             ManifestToolsCommand.ITEM,
             str(DatasetLocation.PLAN_WITH_LANDED_ITEMS),
-            "--branch",
+            ManifestToolsOption.BRANCH,
             item.content[ManifestField.BRANCH],
         ],
     )

@@ -64,6 +64,42 @@ class ManifestToolsCommand(StrEnum):
     """
 
 
+class ManifestToolsOption(StrEnum):
+    """
+    The options the subcommands take.
+    """
+
+    SCRATCH_DIRECTORY = "--scratch-dir"
+    """
+    The checkout of the personal-notes branch the index is built from.
+    """
+
+    PLANS_DIRECTORY = "--plans-dir"
+    """
+    The plans directory, relative to the scratch directory.
+    """
+
+    MANIFEST_FILENAME = "--manifest-filename"
+    """
+    The filename every plan's manifest has.
+    """
+
+    OUTPUT = "--output"
+    """
+    Where the regenerated index is written.
+    """
+
+    ITEM_IDENTIFIER = "--id"
+    """
+    The id of the item to print.
+    """
+
+    BRANCH = "--branch"
+    """
+    The branch whose item to print.
+    """
+
+
 class ManifestToolsExitCode(ExitCode):
     """
     How the command ended, as its caller reads it.
@@ -260,11 +296,20 @@ class ManifestToolsCommandLine:
             ManifestToolsCommand.REGENERATE_BRANCH_INDEX,
             help="Rebuild the branch->plan-id index",
         )
-        regenerate_parser.add_argument("--scratch-dir", required=True, type=Path)
-        regenerate_parser.add_argument("--plans-dir", required=True, type=Path)
-        regenerate_parser.add_argument("--manifest-filename", required=True)
         regenerate_parser.add_argument(
-            "--output", required=True, type=Path, help="Path to write the index to"
+            ManifestToolsOption.SCRATCH_DIRECTORY, required=True, type=Path
+        )
+        regenerate_parser.add_argument(
+            ManifestToolsOption.PLANS_DIRECTORY, required=True, type=Path
+        )
+        regenerate_parser.add_argument(
+            ManifestToolsOption.MANIFEST_FILENAME, required=True
+        )
+        regenerate_parser.add_argument(
+            ManifestToolsOption.OUTPUT,
+            required=True,
+            type=Path,
+            help="Path to write the index to",
         )
 
         item_parser = subcommands.add_parser(
@@ -273,8 +318,10 @@ class ManifestToolsCommandLine:
         )
         item_parser.add_argument("manifest_path", type=Path)
         item_selector = item_parser.add_mutually_exclusive_group(required=True)
-        item_selector.add_argument("--id", dest="item_identifier")
-        item_selector.add_argument("--branch")
+        item_selector.add_argument(
+            ManifestToolsOption.ITEM_IDENTIFIER, dest="item_identifier"
+        )
+        item_selector.add_argument(ManifestToolsOption.BRANCH)
         return parser
 
     @classmethod
