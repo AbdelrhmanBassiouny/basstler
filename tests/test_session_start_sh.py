@@ -1067,7 +1067,7 @@ def test_links_a_tracked_branch_to_its_plan_on_the_site(
                 {ScratchBranch.WORK: PLAN_IDENTIFIER}
             ),
             MANIFEST_PATH: PLAN_MANIFEST,
-            PersonalNotesPath.PLAN_HUB: HUB_FILE,
+            ProjectLocation.PLAN_HUB: HUB_FILE,
         },
     )
 

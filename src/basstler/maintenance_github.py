@@ -20,6 +20,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
+from basstler.build_dashboard import PullRequestState
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_board import PullRequestRecord
@@ -114,17 +115,25 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
 
 class PullRequestListState(StrEnum):
     """
-    The pull request states the list API filters on.
+    The pull request states the list API filters on: each :class:`PullRequestState` a
+    pull request reports, plus every state at once.
     """
 
-    OPEN = "open"
+    OPEN = PullRequestState.OPEN.value
     """
-    Only open pull requests, drafts included.
+    Pull requests whose state is :attr:`PullRequestState.OPEN`: drafts and those ready
+    for review alike.
+    """
+
+    CLOSED = PullRequestState.CLOSED.value
+    """
+    Pull requests whose state is :attr:`PullRequestState.CLOSED`: merged and closed
+    unmerged alike.
     """
 
     ALL = "all"
     """
-    Every pull request, whether open, closed or merged.
+    Every pull request, whatever its :class:`PullRequestState`.
     """
 
 

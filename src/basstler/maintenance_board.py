@@ -136,6 +136,18 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
     """
     GitHub's own verdict on whether it currently conflicts with its base.
     """
+    STATE = PullRequestFieldSpecification(key="state")
+    """
+    Whether it is open or closed, a merged one included among the closed.
+    """
+    MERGED_AT = PullRequestFieldSpecification(key="merged_at")
+    """
+    When GitHub merged it, absent for one never merged through GitHub.
+    """
+    HTML_URL = PullRequestFieldSpecification(key="html_url")
+    """
+    Its page on GitHub, which the issues API answers under the same key.
+    """
 
     def read(self, record: PullRequestRecord, number: int | None = None) -> Any:
         """

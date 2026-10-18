@@ -160,6 +160,66 @@ class DatasetPlan(StrEnum):
     """
 
 
+class SitePlan(StrEnum):
+    """
+    The plan directories :attr:`DatasetLocation.SITE_PLANS` holds, each the plan's id.
+    """
+
+    BROKEN = "broken-plan"
+    """
+    A plan whose manifest fails validation, so it is never published.
+    """
+
+    FIRST = "first-plan"
+    """
+    A plan whose items have pull requests in two repositories, and a tracking issue.
+    """
+
+    SECOND = "second-plan"
+    """
+    A plan with no pull requests yet.
+    """
+
+    @property
+    def directory(self) -> Path:
+        """
+        The plan's directory in the dataset.
+        """
+        return DatasetLocation.SITE_PLANS / self
+
+
+class SiteRepository(Enum):
+    """
+    The repositories the plan site suites list in a hub file.
+    """
+
+    NOTES = Repository("owner", "notes")
+    """
+    The repository whose notes the dataset's plans stand in for.
+    """
+
+    MISSING = Repository("owner", "missing")
+    """
+    A listed repository with no notes branch to fetch.
+    """
+
+
+class SiteSampleText(StrEnum):
+    """
+    The values the plan site suites build a site with.
+    """
+
+    SITE_URL = "https://owner.github.io/site/"
+    """
+    The address the site under test is served from.
+    """
+
+    TOKEN = "token"
+    """
+    The credential a recorded GitHub client is handed, and never checks.
+    """
+
+
 class SavePlanOption(StrEnum):
     """
     The options ``save-plan.sh`` reads its plan from files with.
@@ -456,11 +516,6 @@ class PersonalNotesPath(PathEnumeration):
     BRANCH_INDEX = ProjectLocation.PLANS / "_generated" / "branch-index.tsv"
     """
     The generated reverse index mapping an item's branch to the plan tracking it.
-    """
-
-    PLAN_HUB = ProjectLocation.PLANS / "_hub.yaml"
-    """
-    The plan hub file: the hub page's URL and every repository it lists.
     """
 
 

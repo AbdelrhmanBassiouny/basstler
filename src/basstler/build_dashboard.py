@@ -49,8 +49,11 @@ import yaml
 from basstler.class_property import classproperty
 from basstler.github_labels import GitHubLabel
 from basstler.plan_model import ItemStatus
+from basstler.maintenance_board import PullRequestField
+from basstler.maintenance_board import PullRequestRecord as PullRequestAPIRecord
 from basstler.render_common import (
-    create_template_environment,
+    PageTemplate,
+    TemplatePage,
     render_markdown_to_html,
     sanitize_http_url,
 )
@@ -475,6 +478,26 @@ class PullRequestRecord:
             draft=data.get("draft", False),
             merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
             labels=list(data.get("labels") or []),
+        )
+
+    @classmethod
+    def from_api(cls, api_record: PullRequestAPIRecord) -> PullRequestRecord:
+        """Read one pull request object as the REST pulls API answers it.
+
+        :param api_record: The pull request, as the API describes it.
+        :return: The fields a dashboard classifies it by.
+        """
+        number = PullRequestField.NUMBER.read(api_record)
+        return cls.from_mapping(
+            {
+                field.key: field.read(api_record, number)
+                for field in (
+                    PullRequestField.STATE,
+                    PullRequestField.DRAFT,
+                    PullRequestField.MERGED_AT,
+                    PullRequestField.LABELS,
+                )
+            }
         )
 
     @property
@@ -938,6 +961,17 @@ class DashboardSummary:
 
 
 @dataclass
+class RenderedDashboard:
+    """What rendering one plan's dashboard produces."""
+
+    html: str
+    """The dashboard page's rendered HTML."""
+
+    summary: DashboardSummary
+    """The summary of the plan's state the page was rendered from."""
+
+
+@dataclass
 class StackedItem:
     """One item's position within its track's dependency stack, for the
     ``item_card`` template macro to render.
@@ -1009,7 +1043,7 @@ class WaveSection:
 
 
 @dataclass
-class DashboardRenderer:
+class DashboardRenderer(TemplatePage):
     """Renders one :class:`Plan` (plus its live pull request data and roadmap text)
     into the dashboard's HTML.
 
@@ -1047,13 +1081,17 @@ class DashboardRenderer:
         """Same-track dependency chains deeper than this wrap back to indent level 0."""
         return 4
 
+    @classproperty
+    def template(cls) -> PageTemplate:
+        return PageTemplate.DASHBOARD
+
     def __post_init__(self) -> None:
         self.items_by_identifier = {item.identifier: item for item in self.plan.items}
 
-    def render(self) -> tuple[str, DashboardSummary]:
+    def render(self) -> RenderedDashboard:
         """Classify live state/drift for every item, then render the full page.
 
-        :return: The rendered HTML, and the summary to print on stdout.
+        :return: The rendered page, and the summary to print on stdout.
         """
         self._classify_items()
         drift_items = [item for item in self.plan.items if item.drift_description]
@@ -1063,8 +1101,7 @@ class DashboardRenderer:
             drift_items + ready_to_start + blocker_maybe_cleared + ready_to_review
         )
 
-        template = create_template_environment().get_template("dashboard.html")
-        output = template.render(
+        html = self.render_template(
             title=self.plan.title,
             description=self.plan.description,
             repository=self.plan.default_repository,
@@ -1092,7 +1129,7 @@ class DashboardRenderer:
             blocker_maybe_cleared=[item.title for item in blocker_maybe_cleared],
             ready_to_review=[item.title for item in ready_to_review],
         )
-        return output, summary
+        return RenderedDashboard(html=html, summary=summary)
 
     def _classify_items(self) -> None:
         """Fill in every item's :attr:`Item.live_state`,
@@ -1494,10 +1531,10 @@ def main() -> int:
         hub_url=arguments.hub_url,
         index_url=arguments.index_url,
     )
-    output, summary = renderer.render()
+    rendered = renderer.render()
 
-    Path(arguments.output).write_text(output)
-    logger.info(json.dumps(summary.to_json_dict()))
+    Path(arguments.output).write_text(rendered.html)
+    logger.info(json.dumps(rendered.summary.to_json_dict()))
     return 0
 
 

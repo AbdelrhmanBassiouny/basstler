@@ -6,14 +6,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from basstler.build_index import PlanSummary
-from basstler.render_common import create_template_environment
+from basstler.build_index import PlanSummary, ProgressCard
+from basstler.class_property import classproperty
+from basstler.render_common import PageTemplate, TemplatePage
 
 
-@dataclass
-class RepositorySummary:
+@dataclass(kw_only=True)
+class RepositorySummary(ProgressCard):
     """
-    One repository's card on the hub.
+    One repository's card on the hub, counting the items of every one of its plans.
     """
 
     name: str
@@ -36,19 +37,32 @@ class RepositorySummary:
     Why the repository's notes could not be read, if they could not.
     """
 
-    @property
-    def done(self) -> int:
+    @classmethod
+    def over_plans(
+        cls, name: str, index_url: str, plans: list[PlanSummary]
+    ) -> RepositorySummary:
         """
-        How many items are done, across every plan.
+        :param name: The repository, as ``owner/repo``.
+        :param index_url: The repository's own index page.
+        :param plans: The repository's plans.
+        :return: The repository's card, counting every plan's items.
         """
-        return sum(plan.done for plan in self.plans)
+        return cls(
+            name=name,
+            index_url=index_url,
+            plans=plans,
+            done=sum(plan.done for plan in plans),
+            total=sum(plan.total for plan in plans),
+        )
 
-    @property
-    def total(self) -> int:
+    @classmethod
+    def unreadable(cls, name: str, error: str) -> RepositorySummary:
         """
-        How many items there are, across every plan.
+        :param name: The repository, as ``owner/repo``.
+        :param error: Why its notes could not be read.
+        :return: The repository's card, with no plans and no index to open.
         """
-        return sum(plan.total for plan in self.plans)
+        return cls(name=name, index_url=None, error=error, done=0, total=0)
 
     @property
     def progress_label(self) -> str:
@@ -57,26 +71,24 @@ class RepositorySummary:
         """
         return f"{len(self.plans)} plans · {self.done} / {self.total} items done"
 
-    @property
-    def completion_percentage_label(self) -> str:
-        """
-        The share of items done, ready for the progress bar's ``width`` style.
-        """
-        share = self.done / self.total * 100 if self.total else 0.0
-        return f"{share:.1f}%"
 
-    @property
-    def css_class(self) -> str:
-        """
-        The repository card's CSS class list.
-        """
-        return "plan-card"
-
-
-def render_hub_page(repositories: list[RepositorySummary]) -> str:
+@dataclass
+class HubPage(TemplatePage):
     """
-    :param repositories: Every repository to list, in the order they should appear.
-    :return: The rendered HTML page.
+    The hub page: a card per registered repository.
     """
-    template = create_template_environment().get_template("hub.html")
-    return template.render(repositories=repositories)
+
+    repositories: list[RepositorySummary]
+    """
+    Every repository to list, in the order they should appear.
+    """
+
+    @classproperty
+    def template(cls) -> PageTemplate:
+        return PageTemplate.HUB
+
+    def render(self) -> str:
+        """
+        :return: The rendered HTML page.
+        """
+        return self.render_template(repositories=self.repositories)

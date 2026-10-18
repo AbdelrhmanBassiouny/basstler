@@ -27,15 +27,93 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from basstler.render_common import create_template_environment, sanitize_http_url
+from basstler.class_property import classproperty
+from basstler.render_common import PageTemplate, TemplatePage, sanitize_http_url
 
 
-@dataclass
-class PlanSummary:
+@dataclass(kw_only=True)
+class ProgressCard(ABC):
+    """
+    One card on a site page: a heading, a progress label and a bar showing how many
+    items are done.
+
+    The plan cards on a repository's index and the repository cards on the hub are drawn
+    by the same markup, so what the bar and the card's class are worked out from is
+    shared here.
+    """
+
+    done: int
+    """
+    How many items are done.
+    """
+
+    total: int
+    """
+    How many items there are.
+    """
+
+    @classproperty
+    def card_css_class(cls) -> str:
+        """
+        The CSS class every card carries.
+        """
+        return "plan-card"
+
+    @classproperty
+    def complete_css_class(cls) -> str:
+        """
+        The CSS class a card adds once every item is done.
+        """
+        return "complete"
+
+    @property
+    @abstractmethod
+    def progress_label(self) -> str:
+        """
+        The human-readable progress shown on the card.
+        """
+
+    @property
+    def is_complete(self) -> bool:
+        """
+        Whether every item is done.
+        """
+        return self.total > 0 and self.done == self.total
+
+    @property
+    def completion_percentage(self) -> float:
+        """
+        The share of items done, from 0 to 100.
+        """
+        return (self.done / self.total * 100) if self.total else 0.0
+
+    @property
+    def completion_percentage_label(self) -> str:
+        """
+        :attr:`completion_percentage`, formatted to one decimal place with a
+        trailing ``%`` - ready to drop straight into the progress bar's
+        ``width`` style without the template doing any formatting itself.
+        """
+        return f"{self.completion_percentage:.1f}%"
+
+    @property
+    def css_class(self) -> str:
+        """
+        The card's CSS class list: :attr:`card_css_class`, plus
+        :attr:`complete_css_class` once every item is done.
+        """
+        if self.is_complete:
+            return f"{self.card_css_class} {self.complete_css_class}"
+        return self.card_css_class
+
+
+@dataclass(kw_only=True)
+class PlanSummary(ProgressCard):
     """
     One plan's entry in the master index, as gathered by the skill.
     """
@@ -53,20 +131,13 @@ class PlanSummary:
     """
 
     description: str
-    """A one-line description shown under the title."""
-
-    done: int
     """
-    How many of the plan's items are done.
+    A one-line description shown under the title.
     """
-
-    total: int
-    """How many items the plan has in total."""
 
     dashboard_url: str | None = None
     """
-    The plan's published dashboard Artifact URL, or ``None`` if it has never been
-    published yet.
+    The plan's published dashboard URL, or ``None`` if it has never been published yet.
     """
 
     @classmethod
@@ -84,61 +155,44 @@ class PlanSummary:
         )
 
     @property
-    def is_complete(self) -> bool:
-        """
-        Whether every item in the plan is done.
-        """
-        return self.total > 0 and self.done == self.total
-
-    @property
-    def completion_percentage(self) -> float:
-        """
-        The plan's completion, from 0 to 100.
-        """
-        return (self.done / self.total * 100) if self.total else 0.0
-
-    @property
     def progress_label(self) -> str:
-        """
-        The human-readable progress label shown on the plan's card.
-        """
         return f"{self.done} / {self.total} done" if self.total else "no items yet"
 
-    @property
-    def completion_percentage_label(self) -> str:
-        """
-        :attr:`completion_percentage`, formatted to one decimal place with a
-        trailing ``%`` - ready to drop straight into the progress bar's
-        ``width`` style without the template doing any formatting itself.
-        """
-        return f"{self.completion_percentage:.1f}%"
 
-    @property
-    def css_class(self) -> str:
-        """
-        The plan card's CSS class list: ``"plan-card"``, plus ``"complete"`` once every
-        item is done.
-        """
-        return "plan-card complete" if self.is_complete else "plan-card"
-
-
-def render_index_page(
-    plans: list[PlanSummary],
-    repository: str | None = None,
-    hub_url: str | None = None,
-) -> str:
+@dataclass
+class IndexPage(TemplatePage):
     """
-    Render the full master-index page for every known plan.
-
-    :param plans: Every plan to list, in the order they should appear.
-    :param repository: The repository whose plans these are, shown in the header.
-    :param hub_url: The plan hub's URL, linked back to from the header.
-    :return: The rendered HTML page.
+    The master index of one repository's plans, a card per plan.
     """
-    template = create_template_environment().get_template("index.html")
-    return template.render(
-        plans=plans, repository=repository, hub_url=sanitize_http_url(hub_url)
-    )
+
+    plans: list[PlanSummary]
+    """
+    Every plan to list, in the order they should appear.
+    """
+
+    repository: str | None = None
+    """
+    The ``owner/repo`` whose plans these are, shown in the header.
+    """
+
+    hub_url: str | None = None
+    """
+    The plan hub's URL, linked back to from the header.
+    """
+
+    @classproperty
+    def template(cls) -> PageTemplate:
+        return PageTemplate.INDEX
+
+    def render(self) -> str:
+        """
+        :return: The rendered HTML page.
+        """
+        return self.render_template(
+            plans=self.plans,
+            repository=self.repository,
+            hub_url=sanitize_http_url(self.hub_url),
+        )
 
 
 def main() -> int:
@@ -166,7 +220,7 @@ def main() -> int:
         PlanSummary.from_mapping(entry)
         for entry in json.loads(Path(arguments.plans).read_text())
     ]
-    output = render_index_page(plans, arguments.repository, arguments.hub_url)
+    output = IndexPage(plans, arguments.repository, arguments.hub_url).render()
     Path(arguments.output).write_text(output)
     return 0
 

@@ -10,14 +10,17 @@ import it rather than duplicating the logic.
 from __future__ import annotations
 
 import re
+from abc import ABC, abstractmethod
 from enum import IntEnum, StrEnum
 from functools import cache
+from typing import Any
 from urllib.parse import urlsplit
 
 import jinja2
 import markdown as markdown_library
 import nh3
 
+from basstler.class_property import classproperty
 from basstler.locations import PackageLocation
 
 
@@ -105,6 +108,51 @@ def create_template_environment() -> jinja2.Environment:
         lstrip_blocks=True,
     )
     return environment
+
+
+class PageTemplate(StrEnum):
+    """
+    The page templates a site is rendered from, each named once.
+    """
+
+    DASHBOARD = "dashboard.html"
+    """
+    One plan's dashboard.
+    """
+
+    INDEX = "index.html"
+    """
+    One repository's plans, a card per plan.
+    """
+
+    HUB = "hub.html"
+    """
+    Every repository on the site, a card per repository.
+    """
+
+
+class TemplatePage(ABC):
+    """
+    A page rendered from one of the :class:`PageTemplate` templates.
+
+    Every page builder loads its template through the same environment, so autoescaping
+    and whitespace handling cannot differ between pages.
+    """
+
+    @classproperty
+    @abstractmethod
+    def template(cls) -> PageTemplate:
+        """
+        The template this page is rendered from.
+        """
+
+    def render_template(self, **context: Any) -> str:
+        """
+        :param context: The values the template substitutes, by name.
+        :return: The page's rendered HTML.
+        """
+        environment = create_template_environment()
+        return environment.get_template(self.template.value).render(**context)
 
 
 def render_markdown_to_html(markdown_text: str) -> str:

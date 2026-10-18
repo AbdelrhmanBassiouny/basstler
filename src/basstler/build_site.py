@@ -12,7 +12,7 @@ Claude session or belongs to an account, so the site is the same for everyone:
 
 Usage:
     python3 -m basstler.build_site --registry <owner/repo> --output _site \\
-        [--site-url <url>] [--remote-url-template <template>]
+        [--site-url <url>] [--remote-root <url or directory>]
 
 The hub file is read off the registry's notes branch. A plan whose manifest fails
 validation, or a repository whose notes cannot be fetched, is reported and left out;
@@ -30,7 +30,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from http import HTTPStatus
 from pathlib import Path
-from typing import Any
+from typing import Any, Generic, TypeVar
 
 import yaml
 
@@ -40,19 +40,22 @@ from basstler.build_dashboard import (
     PlanValidationError,
     PullRequestRecord,
     PullRequestsByRepository,
+    RenderedDashboard,
     validate_plan,
 )
-from basstler.build_hub import RepositorySummary, render_hub_page
-from basstler.build_index import PlanSummary, render_index_page
+from basstler.build_hub import HubPage, RepositorySummary
+from basstler.build_index import IndexPage, PlanSummary
 from basstler.environment import GitHubCredentialVariable
+from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_github import (
     GitHubCredentialUnavailableError,
     GitHubRepository,
     GitHubRequestFailed,
 )
-from basstler.plan_hub import HubDefault, NotesBranch, PlanHub
+from basstler.plan_hub import NotesBranch, PlanHub
+from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_model import ItemStatus
-from basstler.repository import Repository
+from basstler.repository import GitHubAddress, PullRequestReference, Repository
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -63,7 +66,7 @@ This module's logger, which is also what its command prints through.
 
 class SiteFile(StrEnum):
     """
-    The file and directory names the site and its source are laid out with.
+    The files the site writes beside its pages.
     """
 
     PAGE = "index.html"
@@ -74,16 +77,6 @@ class SiteFile(StrEnum):
     NO_JEKYLL = ".nojekyll"
     """
     The marker that stops GitHub Pages from running Jekyll over already-rendered HTML.
-    """
-
-    MANIFEST = "plan.yaml"
-    """
-    A plan's manifest on the notes branch.
-    """
-
-    ROADMAP = "roadmap.md"
-    """
-    A plan's narrative on the notes branch.
     """
 
 
@@ -119,10 +112,10 @@ class PlanSource:
         :param directory: The directory holding the plan's manifest.
         :return: The plan's source.
         """
-        roadmap = directory / SiteFile.ROADMAP
+        roadmap = directory / PlanDocument.ROADMAP
         return cls(
             directory_name=directory.name,
-            manifest=yaml.safe_load((directory / SiteFile.MANIFEST).read_text()),
+            manifest=yaml.safe_load((directory / PlanDocument.MANIFEST).read_text()),
             roadmap_text=roadmap.read_text() if roadmap.exists() else "",
         )
 
@@ -136,28 +129,11 @@ class PlanSource:
         """
         return [
             cls.from_directory(manifest.parent)
-            for manifest in sorted(plans_directory.glob(f"*/{SiteFile.MANIFEST}"))
+            for manifest in sorted(plans_directory.glob(f"*/{PlanDocument.MANIFEST}"))
         ]
 
 
 # %% live pull request state
-
-
-@dataclass(frozen=True)
-class PullRequestReference:
-    """
-    One pull request a plan item names.
-    """
-
-    repository: str
-    """
-    The ``owner/repo`` the pull request is opened on.
-    """
-
-    number: int
-    """
-    The pull request's number.
-    """
 
 
 class PullRequestSource(ABC):
@@ -173,29 +149,12 @@ class PullRequestSource(ABC):
         """
 
     @abstractmethod
-    def issue_url(self, repository: str, number: int) -> str | None:
+    def issue_url(self, repository: Repository, number: int) -> str | None:
         """
-        :param repository: The ``owner/repo`` the issue or pull request is opened on.
+        :param repository: The repository the issue or pull request is opened on.
         :param number: Its number.
         :return: Its web page, or ``None`` if the repository has no such number.
         """
-
-
-def pull_request_record_from_api(api_record: Mapping[str, Any]) -> PullRequestRecord:
-    """
-    Read the fields a dashboard classifies by out of one REST pull request object.
-
-    :param api_record: The pull request, as the pulls API describes it.
-    :return: The record a dashboard renders from.
-    """
-    return PullRequestRecord.from_mapping(
-        {
-            "state": api_record["state"],
-            "draft": api_record["draft"],
-            "merged_at": api_record["merged_at"],
-            "labels": [label["name"] for label in api_record["labels"]],
-        }
-    )
 
 
 @dataclass
@@ -213,57 +172,70 @@ class GitHubPullRequestSource(PullRequestSource):
     The credential the requests authenticate with.
     """
 
-    listed_pull_requests: dict[str, dict[int, PullRequestRecord]] = field(
+    listed_repositories: set[Repository] = field(default_factory=set)
+    """
+    Every repository whose pull requests have been listed into :attr:`pull_requests`.
+    """
+
+    pull_requests: dict[PullRequestReference, PullRequestRecord] = field(
         default_factory=dict
     )
     """
-    Every repository listed so far, mapped to its pull requests by number.
+    Every pull request read so far, listed or read on its own.
     """
 
-    def client_for(self, repository: str) -> GitHubRepository:
+    def client_for(self, repository: Repository) -> GitHubRepository:
         """
-        :param repository: The ``owner/repo`` to call.
+        :param repository: The repository to call.
         :return: A client for it.
         """
-        return GitHubRepository(Repository.parse(repository), self.token)
+        return GitHubRepository(repository, self.token)
 
     def pull_request(self, reference: PullRequestReference) -> PullRequestRecord | None:
-        listed = self.pull_requests_of(reference.repository)
-        if reference.number in listed:
-            return listed[reference.number]
-        api_record = self.read_if_present(
-            lambda client: client.pull_request(reference.number), reference.repository
-        )
-        return None if api_record is None else pull_request_record_from_api(api_record)
+        self.list_pull_requests_of(reference.repository)
+        if reference not in self.pull_requests:
+            api_record = self.read_if_present(
+                lambda client: client.pull_request(reference.number),
+                reference.repository,
+            )
+            if api_record is None:
+                return None
+            self.pull_requests[reference] = PullRequestRecord.from_api(api_record)
+        return self.pull_requests[reference]
 
-    def issue_url(self, repository: str, number: int) -> str | None:
+    def issue_url(self, repository: Repository, number: int) -> str | None:
         api_record = self.read_if_present(
             lambda client: client.issue(number), repository
         )
-        return None if api_record is None else str(api_record["html_url"])
+        if api_record is None:
+            return None
+        return PullRequestField.HTML_URL.read(api_record, number)
 
-    def pull_requests_of(self, repository: str) -> dict[int, PullRequestRecord]:
+    def list_pull_requests_of(self, repository: Repository) -> None:
         """
-        :param repository: The ``owner/repo`` to list.
-        :return: Every pull request on it, by number, listed on first use.
+        Read every pull request on a repository into :attr:`pull_requests`, once.
+
+        :param repository: The repository to list.
         """
-        if repository not in self.listed_pull_requests:
-            self.listed_pull_requests[repository] = {
-                api_record["number"]: pull_request_record_from_api(api_record)
-                for api_record in self.client_for(repository).all_pull_requests()
-            }
-        return self.listed_pull_requests[repository]
+        if repository in self.listed_repositories:
+            return
+        for api_record in self.client_for(repository).all_pull_requests():
+            number = PullRequestField.NUMBER.read(api_record)
+            self.pull_requests[PullRequestReference(repository, number)] = (
+                PullRequestRecord.from_api(api_record)
+            )
+        self.listed_repositories.add(repository)
 
     def read_if_present(
         self,
         read: Callable[[GitHubRepository], Mapping[str, Any]],
-        repository: str,
+        repository: Repository,
     ) -> Mapping[str, Any] | None:
         """
         Make one read, treating an absent number as an answer rather than a failure.
 
         :param read: The call to make, given the repository's client.
-        :param repository: The ``owner/repo`` to call.
+        :param repository: The repository to call.
         :return: The response, or ``None`` if the API answered that it does not exist.
         :raises GitHubRequestFailed: If the API refused the read for any other reason.
         """
@@ -277,38 +249,34 @@ class GitHubPullRequestSource(PullRequestSource):
 
 # %% the site
 
+SectionListing = TypeVar("SectionListing")
+"""
+What the page above a site section lists it by.
+"""
+
 
 @dataclass
 class PublishedPlan:
     """
-    One plan rendered to its page, with the entry the index lists it under.
+    One plan rendered to its dashboard, with the entry the index lists it under.
     """
 
-    page: str
+    dashboard: RenderedDashboard
     """
-    The plan's rendered dashboard.
+    The plan's rendered dashboard page.
     """
 
     summary: PlanSummary
     """
-    The plan's entry in the index.
+    The plan's card on its repository's index.
     """
 
 
 @dataclass
-class PlanSite:
+class SiteSection(ABC, Generic[SectionListing]):
     """
-    One repository's plans: their dashboards plus the index linking them.
-    """
-
-    repository: str
-    """
-    The ``owner/repo`` whose notes the plans come from.
-    """
-
-    plans_directory: Path
-    """
-    That repository's ``plans`` directory, holding one subdirectory per plan.
+    One part of the site: the pages it writes under the site's root, and the card that
+    stands for it on the page above.
     """
 
     site_url: str
@@ -327,6 +295,41 @@ class PlanSite:
         The hub's address, which every page links back up to.
         """
         return f"{self.site_url.rstrip('/')}/"
+
+    @abstractmethod
+    def build(self, output: Path) -> SectionListing:
+        """
+        Render this part of the site.
+
+        :param output: The site's root directory.
+        :return: What the page above lists this part by.
+        """
+
+    @staticmethod
+    def write_page(directory: Path, html: str) -> None:
+        """
+        :param directory: The directory the page is served from.
+        :param html: The page's rendered HTML.
+        """
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / SiteFile.PAGE).write_text(html)
+
+
+@dataclass
+class RepositorySite(SiteSection[RepositorySummary]):
+    """
+    One repository's plans: their dashboards plus the index linking them.
+    """
+
+    repository: Repository
+    """
+    The repository whose notes the plans come from.
+    """
+
+    plans_directory: Path
+    """
+    That repository's ``plans`` directory, holding one subdirectory per plan.
+    """
 
     @property
     def index_url(self) -> str:
@@ -354,18 +357,15 @@ class PlanSite:
             for source in PlanSource.every_plan_in(self.plans_directory)
             if self.is_publishable(source)
         }
-        repository_directory = output / self.repository
+        repository_directory = output / str(self.repository)
         for directory_name, plan in published.items():
-            page = repository_directory / directory_name / SiteFile.PAGE
-            page.parent.mkdir(parents=True, exist_ok=True)
-            page.write_text(plan.page)
-
+            self.write_page(repository_directory / directory_name, plan.dashboard.html)
         summaries = [plan.summary for plan in published.values()]
-        repository_directory.mkdir(parents=True, exist_ok=True)
-        (repository_directory / SiteFile.PAGE).write_text(
-            render_index_page(summaries, self.repository, self.hub_url)
+        index = IndexPage(summaries, str(self.repository), self.hub_url)
+        self.write_page(repository_directory, index.render())
+        return RepositorySummary.over_plans(
+            str(self.repository), self.index_url, summaries
         )
-        return RepositorySummary(self.repository, self.index_url, summaries)
 
     @staticmethod
     def is_publishable(source: PlanSource) -> bool:
@@ -385,7 +385,7 @@ class PlanSite:
         Render one valid plan.
 
         :param source: The plan to render.
-        :return: Its page and its index entry.
+        :return: Its dashboard and its index entry.
         """
         plan = Plan.from_mapping(source.manifest)
         renderer = DashboardRenderer(
@@ -396,16 +396,16 @@ class PlanSite:
             hub_url=self.hub_url,
             index_url=self.index_url,
         )
-        page, dashboard_summary = renderer.render()
+        dashboard = renderer.render()
         summary = PlanSummary(
             id=plan.id,
             title=plan.title,
             description=plan.description,
-            done=dashboard_summary.status_counts.get(ItemStatus.DONE, 0),
+            done=dashboard.summary.status_counts.get(ItemStatus.DONE, 0),
             total=len(plan.items),
             dashboard_url=self.plan_url(source.directory_name),
         )
-        return PublishedPlan(page=page, summary=summary)
+        return PublishedPlan(dashboard=dashboard, summary=summary)
 
     def pull_requests_of(self, plan: Plan) -> PullRequestsByRepository:
         """
@@ -418,12 +418,12 @@ class PlanSite:
             if item.pull_request_number is None:
                 continue
             reference = PullRequestReference(
-                repository=item.repository or plan.default_repository,
-                number=item.pull_request_number,
+                Repository.parse(item.repository or plan.default_repository),
+                item.pull_request_number,
             )
             record = self.pull_request_source.pull_request(reference)
             if record is not None:
-                pull_requests.setdefault(reference.repository, {})[
+                pull_requests.setdefault(str(reference.repository), {})[
                     str(reference.number)
                 ] = record
         return pull_requests
@@ -436,12 +436,12 @@ class PlanSite:
         if plan.tracking_issue is None:
             return None
         return self.pull_request_source.issue_url(
-            plan.default_repository, plan.tracking_issue
+            Repository.parse(plan.default_repository), plan.tracking_issue
         )
 
 
 @dataclass
-class HubSite:
+class HubSite(SiteSection[list[RepositorySummary]]):
     """
     The whole site: the hub page over every repository the hub file lists.
     """
@@ -451,19 +451,10 @@ class HubSite:
     The hub file, naming the repositories to publish.
     """
 
-    site_url: str
+    remote_root: str = GitHubAddress.WEB.value
     """
-    The address the site is served from.
-    """
-
-    pull_request_source: PullRequestSource
-    """
-    Where the live pull request state comes from.
-    """
-
-    remote_url_template: str = HubDefault.REMOTE_URL_TEMPLATE.value
-    """
-    How a listed repository's name becomes a URL git can fetch.
+    Where the listed repositories are fetched from, as
+    :meth:`Repository.clone_url_under` takes it.
     """
 
     def build(self, output: Path) -> list[RepositorySummary]:
@@ -473,59 +464,40 @@ class HubSite:
         :param output: The directory to write the site into.
         :return: Every repository's card, in the hub file's order.
         """
-        output.mkdir(parents=True, exist_ok=True)
         with tempfile.TemporaryDirectory() as scratch:
             repositories = [
-                self.build_repository(repository, Path(scratch) / str(position), output)
+                self.build_repository(
+                    Repository.parse(repository), Path(scratch) / str(position), output
+                )
                 for position, repository in enumerate(self.hub.repositories)
             ]
-        (output / SiteFile.PAGE).write_text(render_hub_page(repositories))
+        self.write_page(output, HubPage(repositories).render())
         (output / SiteFile.NO_JEKYLL).touch()
         return repositories
 
     def build_repository(
-        self, repository: str, scratch: Path, output: Path
+        self, repository: Repository, scratch: Path, output: Path
     ) -> RepositorySummary:
         """
-        :param repository: The ``owner/repo`` to publish.
+        :param repository: The repository to publish.
         :param scratch: A directory of its own to fetch the notes into.
         :param output: The site's root directory.
         :return: The repository's card, with an error when its notes cannot be read.
         """
         notes = NotesBranch.fetch(
-            repository,
-            self.hub.notes_branch,
-            self.remote_url_template,
-            scratch / "notes.git",
+            repository, self.hub.notes_branch, self.remote_root, scratch
         )
         if notes is None:
-            return RepositorySummary(
-                repository, None, error=f"cannot fetch {self.hub.notes_branch}"
+            return RepositorySummary.unreadable(
+                str(repository), f"cannot fetch {self.hub.notes_branch}"
             )
-        site = PlanSite(
-            repository=repository,
-            plans_directory=notes.export_plans(scratch / "checkout"),
+        site = RepositorySite(
             site_url=self.site_url,
             pull_request_source=self.pull_request_source,
+            repository=repository,
+            plans_directory=notes.check_out_plans(),
         )
         return site.build(output)
-
-
-def load_hub(registry: str, remote_url_template: str) -> PlanHub | None:
-    """
-    :param registry: The ``owner/repo`` whose notes hold the hub file.
-    :param remote_url_template: How that name becomes a URL git can fetch.
-    :return: The hub file, or ``None`` when the registry has none.
-    """
-    with tempfile.TemporaryDirectory() as scratch:
-        notes = NotesBranch.fetch(
-            registry,
-            HubDefault.NOTES_BRANCH.value,
-            remote_url_template,
-            Path(scratch) / "notes.git",
-        )
-        text = None if notes is None else notes.read(HubDefault.HUB_FILE.value)
-    return None if not text else PlanHub.from_mapping(yaml.safe_load(text))
 
 
 def main() -> int:
@@ -545,11 +517,15 @@ def main() -> int:
         "--site-url", default=None, help="The site's address, if not the hub file's"
     )
     parser.add_argument(
-        "--remote-url-template", default=HubDefault.REMOTE_URL_TEMPLATE.value
+        "--remote-root",
+        default=GitHubAddress.WEB.value,
+        help="Where repositories are fetched from, as <root>/<owner>/<repo>.git",
     )
     arguments = parser.parse_args()
 
-    hub = load_hub(arguments.registry, arguments.remote_url_template)
+    hub = PlanHub.from_registry(
+        Repository.parse(arguments.registry), arguments.remote_root
+    )
     if hub is None:
         logger.error(f"{arguments.registry} has no hub file on its notes branch.")
         return 1
@@ -561,10 +537,10 @@ def main() -> int:
     if not token:
         raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
     site = HubSite(
-        hub=hub,
         site_url=site_url,
         pull_request_source=GitHubPullRequestSource(token=token),
-        remote_url_template=arguments.remote_url_template,
+        hub=hub,
+        remote_root=arguments.remote_root,
     )
     repositories = site.build(arguments.output)
     logger.info(

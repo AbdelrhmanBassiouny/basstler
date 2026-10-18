@@ -17,35 +17,74 @@ from basstler.build_dashboard import Plan, PullRequestRecord, PullRequestState
 from basstler.build_site import (
     GitHubPullRequestSource,
     HubSite,
-    PlanSite,
     PlanSource,
-    PullRequestReference,
     PullRequestSource,
+    RepositorySite,
     SiteFile,
-    pull_request_record_from_api,
 )
-from basstler.maintenance_github import GitHubRepository, GitHubRequestFailed
+from basstler.github_labels import GitHubLabel
+from basstler.maintenance_board import PullRequestField
+from basstler.maintenance_github import (
+    GitHubRepository,
+    GitHubRequestFailed,
+    PullRequestListState,
+)
 from basstler.plan_hub import PlanHub
+from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_model import ItemStatus
-from basstler.repository import Repository
+from basstler.repository import PullRequestReference, Repository
 
-from .constants import DatasetLocation
+from .constants import DatasetLocation, SitePlan, SiteRepository, SiteSampleText
 from .test_plan_hub import publish_notes
 
-SITE_URL = "https://owner.github.io/site/"
-"""
-The address the site under test is served from.
-"""
-
-NOTES_REPOSITORY = "owner/notes"
+NOTES_REPOSITORY = SiteRepository.NOTES.value
 """
 The repository whose notes the dataset's plans stand in for.
 """
 
-REPOSITORY_URL = f"{SITE_URL}{NOTES_REPOSITORY}/"
+REPOSITORY_URL = f"{SiteSampleText.SITE_URL}{NOTES_REPOSITORY}/"
 """
 Where that repository's index is served from.
 """
+
+FIRST_PLAN = Plan.from_mapping(
+    PlanSource.from_directory(SitePlan.FIRST.directory).manifest
+)
+"""
+The dataset's first plan, whose items' pull requests and tracking issue the tests look
+up.
+"""
+
+PLAN_REPOSITORY = Repository.parse(FIRST_PLAN.default_repository)
+"""
+The repository the first plan's items are opened on unless they name another.
+"""
+
+MERGED_PULL_REQUEST, OPEN_PULL_REQUEST, ELSEWHERE_PULL_REQUEST = (
+    PullRequestReference(
+        Repository.parse(item.repository or FIRST_PLAN.default_repository),
+        item.pull_request_number,
+    )
+    for item in FIRST_PLAN.items
+)
+"""
+The first plan's pull requests, in item order: a merged one, an open one, and one on a
+repository other than the plan's default.
+"""
+
+PUBLISHED_PLANS = (SitePlan.FIRST, SitePlan.SECOND)
+"""
+The dataset's plans whose manifests pass validation.
+"""
+
+
+def link_to(url: str) -> str:
+    """
+    :param url: The address a page links to.
+    :return: The attribute a rendered link to it carries.
+    """
+    return f'href="{url}"'
+
 
 # %% recorded pull request state
 
@@ -61,7 +100,7 @@ class RecordedPullRequestSource(PullRequestSource):
     The pull requests that exist, by reference.
     """
 
-    issue_urls: dict[tuple[str, int], str] = field(default_factory=dict)
+    issue_urls: dict[PullRequestReference, str] = field(default_factory=dict)
     """
     The issue pages that exist, by repository and number.
     """
@@ -75,24 +114,8 @@ class RecordedPullRequestSource(PullRequestSource):
         self.looked_up.append(reference)
         return self.records.get(reference)
 
-    def issue_url(self, repository: str, number: int) -> str | None:
-        return self.issue_urls.get((repository, number))
-
-
-MERGED_PULL_REQUEST = PullRequestReference("owner/repo", 1)
-"""
-The first plan's merged item's pull request.
-"""
-
-OPEN_PULL_REQUEST = PullRequestReference("owner/repo", 2)
-"""
-The first plan's open item's pull request.
-"""
-
-ELSEWHERE_PULL_REQUEST = PullRequestReference("other/repo", 7)
-"""
-The first plan's pull request on a repository other than the plan's default.
-"""
+    def issue_url(self, repository: Repository, number: int) -> str | None:
+        return self.issue_urls.get(PullRequestReference(repository, number))
 
 
 @pytest.fixture
@@ -103,27 +126,43 @@ def pull_request_source() -> RecordedPullRequestSource:
     return RecordedPullRequestSource(
         records={
             MERGED_PULL_REQUEST: PullRequestRecord(
-                state=PullRequestState.CLOSED, merged_at=None, labels=["merged"]
+                state=PullRequestState.CLOSED, labels=[GitHubLabel.MERGED.value]
             ),
             OPEN_PULL_REQUEST: PullRequestRecord(
                 state=PullRequestState.OPEN, draft=True
             ),
         },
-        issue_urls={("owner/repo", 5): "https://github.com/owner/repo/issues/5"},
+        issue_urls={
+            PullRequestReference(
+                PLAN_REPOSITORY, FIRST_PLAN.tracking_issue
+            ): PLAN_REPOSITORY.issue_url(FIRST_PLAN.tracking_issue)
+        },
     )
 
 
 @pytest.fixture
-def site(pull_request_source: RecordedPullRequestSource) -> PlanSite:
+def site(pull_request_source: RecordedPullRequestSource) -> RepositorySite:
     """
     A site over the dataset's plans directory.
     """
-    return PlanSite(
+    return RepositorySite(
+        site_url=SiteSampleText.SITE_URL,
+        pull_request_source=pull_request_source,
         repository=NOTES_REPOSITORY,
         plans_directory=DatasetLocation.SITE_PLANS.value,
-        site_url=SITE_URL,
-        pull_request_source=pull_request_source,
     )
+
+
+def page_of(output: Path, plan: SitePlan | None = None) -> str:
+    """
+    :param output: The site's root directory.
+    :param plan: The plan whose dashboard to read, or ``None`` for the index.
+    :return: The page the notes repository serves there.
+    """
+    directory = output / str(NOTES_REPOSITORY)
+    if plan is not None:
+        directory /= plan
+    return (directory / SiteFile.PAGE).read_text()
 
 
 # %% the plans the notes branch carries
@@ -131,22 +170,19 @@ def site(pull_request_source: RecordedPullRequestSource) -> PlanSite:
 
 def test_every_plan_in_reads_only_directories_that_carry_a_manifest():
     sources = PlanSource.every_plan_in(DatasetLocation.SITE_PLANS.value)
-    assert [source.directory_name for source in sources] == [
-        "broken-plan",
-        "first-plan",
-        "second-plan",
-    ]
+    assert [source.directory_name for source in sources] == sorted(SitePlan)
 
 
 def test_from_directory_reads_the_roadmap():
-    directory = DatasetLocation.SITE_PLANS / "first-plan"
-    source = PlanSource.from_directory(directory)
-    assert source.roadmap_text == (directory / SiteFile.ROADMAP).read_text()
+    source = PlanSource.from_directory(SitePlan.FIRST.directory)
+    assert source.roadmap_text == (
+        (SitePlan.FIRST.directory / PlanDocument.ROADMAP).read_text()
+    )
 
 
 def test_from_directory_without_a_roadmap_reads_it_as_empty(tmp_path: Path):
-    manifest = DatasetLocation.SITE_PLANS / "second-plan" / SiteFile.MANIFEST
-    (tmp_path / SiteFile.MANIFEST).write_text(manifest.read_text())
+    manifest = SitePlan.SECOND.directory / PlanDocument.MANIFEST
+    (tmp_path / PlanDocument.MANIFEST).write_text(manifest.read_text())
     assert PlanSource.from_directory(tmp_path).roadmap_text == ""
 
 
@@ -154,74 +190,76 @@ def test_from_directory_without_a_roadmap_reads_it_as_empty(tmp_path: Path):
 
 
 def test_build_writes_the_index_and_a_page_per_valid_plan(
-    site: PlanSite, tmp_path: Path
+    site: RepositorySite, tmp_path: Path
 ):
     site.build(tmp_path)
-    written = sorted(
-        str(path.relative_to(tmp_path))
-        for path in tmp_path.rglob("*")
-        if path.is_file()
-    )
+    written = sorted(path for path in tmp_path.rglob("*") if path.is_file())
+    repository_directory = tmp_path / str(NOTES_REPOSITORY)
     assert written == sorted(
-        [
-            f"{NOTES_REPOSITORY}/{SiteFile.PAGE}",
-            f"{NOTES_REPOSITORY}/first-plan/{SiteFile.PAGE}",
-            f"{NOTES_REPOSITORY}/second-plan/{SiteFile.PAGE}",
-        ]
+        [repository_directory / SiteFile.PAGE]
+        + [repository_directory / plan / SiteFile.PAGE for plan in PUBLISHED_PLANS]
     )
 
 
 def test_build_leaves_out_a_plan_whose_manifest_fails_validation(
-    site: PlanSite, tmp_path: Path
+    site: RepositorySite, tmp_path: Path
 ):
     repository = site.build(tmp_path)
-    assert [summary.id for summary in repository.plans] == ["first-plan", "second-plan"]
+    assert [summary.id for summary in repository.plans] == list(PUBLISHED_PLANS)
 
 
-def test_build_links_each_plan_to_its_page_on_the_site(site: PlanSite, tmp_path: Path):
+def test_build_links_each_plan_to_its_page_on_the_site(
+    site: RepositorySite, tmp_path: Path
+):
     repository = site.build(tmp_path)
-    index = (tmp_path / NOTES_REPOSITORY / SiteFile.PAGE).read_text()
+    index = page_of(tmp_path)
     for summary in repository.plans:
         assert summary.dashboard_url == site.plan_url(summary.id)
-        assert f'href="{summary.dashboard_url}"' in index
+        assert link_to(summary.dashboard_url) in index
 
 
 def test_every_page_links_back_up_to_the_hub_and_its_index(
-    site: PlanSite, tmp_path: Path
+    site: RepositorySite, tmp_path: Path
 ):
     site.build(tmp_path)
-    index = (tmp_path / NOTES_REPOSITORY / SiteFile.PAGE).read_text()
-    page = (tmp_path / NOTES_REPOSITORY / "first-plan" / SiteFile.PAGE).read_text()
-    assert f'href="{SITE_URL}"' in index
-    assert f'href="{SITE_URL}"' in page
-    assert f'href="{REPOSITORY_URL}"' in page
+    dashboard = page_of(tmp_path, SitePlan.FIRST)
+    assert link_to(SiteSampleText.SITE_URL) in page_of(tmp_path)
+    assert link_to(SiteSampleText.SITE_URL) in dashboard
+    assert link_to(REPOSITORY_URL) in dashboard
 
 
 def test_plan_url_joins_the_site_address_whether_or_not_it_ends_in_a_slash(
     pull_request_source: RecordedPullRequestSource,
 ):
-    with_slash = PlanSite(NOTES_REPOSITORY, Path(), SITE_URL, pull_request_source)
-    without_slash = PlanSite(
-        NOTES_REPOSITORY, Path(), SITE_URL.rstrip("/"), pull_request_source
+    with_slash, without_slash = (
+        RepositorySite(site_url, pull_request_source, NOTES_REPOSITORY, Path())
+        for site_url in (SiteSampleText.SITE_URL, SiteSampleText.SITE_URL.rstrip("/"))
     )
-    assert with_slash.plan_url("a") == without_slash.plan_url("a")
-    assert with_slash.plan_url("a") == f"{REPOSITORY_URL}a/"
+    assert with_slash.plan_url(SitePlan.FIRST) == without_slash.plan_url(SitePlan.FIRST)
+    assert with_slash.plan_url(SitePlan.FIRST) == f"{REPOSITORY_URL}{SitePlan.FIRST}/"
 
 
-def test_build_counts_done_items_from_the_manifest(site: PlanSite, tmp_path: Path):
+def test_build_counts_done_items_from_the_manifest(
+    site: RepositorySite, tmp_path: Path
+):
     first_plan = next(
-        summary for summary in site.build(tmp_path).plans if summary.id == "first-plan"
+        summary
+        for summary in site.build(tmp_path).plans
+        if summary.id == SitePlan.FIRST
     )
-    manifest = PlanSource.from_directory(
-        DatasetLocation.SITE_PLANS / "first-plan"
-    ).manifest
-    statuses = [ItemStatus(item["status"]) for item in manifest["items"]]
+    statuses = [item.status for item in FIRST_PLAN.items]
     assert first_plan.done == statuses.count(ItemStatus.DONE)
     assert first_plan.total == len(statuses)
 
 
+def test_the_repository_card_counts_every_plan(site: RepositorySite, tmp_path: Path):
+    repository = site.build(tmp_path)
+    assert repository.done == sum(plan.done for plan in repository.plans)
+    assert repository.total == sum(plan.total for plan in repository.plans)
+
+
 def test_build_looks_up_every_referenced_pull_request_in_its_own_repository(
-    site: PlanSite, pull_request_source: RecordedPullRequestSource, tmp_path: Path
+    site: RepositorySite, pull_request_source: RecordedPullRequestSource, tmp_path: Path
 ):
     site.build(tmp_path)
     assert pull_request_source.looked_up == [
@@ -232,12 +270,10 @@ def test_build_looks_up_every_referenced_pull_request_in_its_own_repository(
 
 
 def test_pull_requests_of_leaves_out_a_number_the_repository_does_not_have(
-    site: PlanSite, pull_request_source: RecordedPullRequestSource
+    site: RepositorySite, pull_request_source: RecordedPullRequestSource
 ):
-    source = PlanSource.from_directory(DatasetLocation.SITE_PLANS / "first-plan")
-    pull_requests = site.pull_requests_of(Plan.from_mapping(source.manifest))
-    assert pull_requests == {
-        MERGED_PULL_REQUEST.repository: {
+    assert site.pull_requests_of(FIRST_PLAN) == {
+        str(PLAN_REPOSITORY): {
             str(reference.number): pull_request_source.records[reference]
             for reference in (MERGED_PULL_REQUEST, OPEN_PULL_REQUEST)
         }
@@ -245,11 +281,11 @@ def test_pull_requests_of_leaves_out_a_number_the_repository_does_not_have(
 
 
 def test_build_links_the_tracking_issue_on_the_plan_page(
-    site: PlanSite, pull_request_source: RecordedPullRequestSource, tmp_path: Path
+    site: RepositorySite, tmp_path: Path
 ):
     site.build(tmp_path)
-    page = (tmp_path / NOTES_REPOSITORY / "first-plan" / SiteFile.PAGE).read_text()
-    assert pull_request_source.issue_urls[("owner/repo", 5)] in page
+    tracking_url = PLAN_REPOSITORY.issue_url(FIRST_PLAN.tracking_issue)
+    assert tracking_url in page_of(tmp_path, SitePlan.FIRST)
 
 
 # %% the whole site
@@ -260,23 +296,34 @@ def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
 ):
     remotes = tmp_path / "remotes"
     publish_notes(
-        remotes / f"{NOTES_REPOSITORY}.git",
+        remotes,
+        NOTES_REPOSITORY,
         {
-            str(path.relative_to(DatasetLocation.SITE_PLANS.value)): path.read_text()
+            path.relative_to(DatasetLocation.SITE_PLANS.value): path.read_text()
             for path in DatasetLocation.SITE_PLANS.value.rglob("*")
             if path.is_file()
         },
     )
+    listed = (SiteRepository.NOTES.value, SiteRepository.MISSING.value)
     hub = PlanHub(
-        registry=NOTES_REPOSITORY, repositories=[NOTES_REPOSITORY, "owner/missing"]
+        registry=str(NOTES_REPOSITORY),
+        repositories=[str(repository) for repository in listed],
     )
-    site = HubSite(hub, SITE_URL, pull_request_source, f"{remotes}/{{repository}}.git")
+    site = HubSite(
+        site_url=SiteSampleText.SITE_URL,
+        pull_request_source=pull_request_source,
+        hub=hub,
+        remote_root=str(remotes),
+    )
 
     repositories = site.build(tmp_path / "site")
 
     hub_page = (tmp_path / "site" / SiteFile.PAGE).read_text()
-    assert f'href="{REPOSITORY_URL}"' in hub_page
-    assert [len(repository.plans) for repository in repositories] == [2, 0]
+    assert link_to(REPOSITORY_URL) in hub_page
+    assert [len(repository.plans) for repository in repositories] == [
+        len(PUBLISHED_PLANS),
+        0,
+    ]
     assert repositories[1].error
     assert (tmp_path / "site" / SiteFile.NO_JEKYLL).exists()
 
@@ -284,36 +331,51 @@ def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
 # %% reading pull requests from the GitHub API
 
 
-def api_pull_request(number: int, **overrides: Any) -> dict[str, Any]:
+def api_pull_request(
+    reference: PullRequestReference,
+    overrides: Mapping[PullRequestField, Any] | None = None,
+) -> dict[str, Any]:
     """
     Build one pull request object shaped like the pulls API's.
 
-    :param number: The pull request's number.
+    :param reference: The pull request to describe.
     :param overrides: Fields to replace.
     """
     record = {
-        "number": number,
-        "state": "open",
-        "draft": False,
-        "merged_at": None,
-        "labels": [],
-        "html_url": f"https://github.com/owner/repo/pull/{number}",
+        PullRequestField.NUMBER: reference.number,
+        PullRequestField.STATE: PullRequestState.OPEN.value,
+        PullRequestField.DRAFT: False,
+        PullRequestField.MERGED_AT: None,
+        PullRequestField.LABELS: [],
+        PullRequestField.HTML_URL: reference.url,
     }
-    record.update(overrides)
-    return record
+    record.update(overrides or {})
+    return {
+        pull_request_field.key: value for pull_request_field, value in record.items()
+    }
 
 
-def test_pull_request_record_from_api_reads_label_names():
-    record = pull_request_record_from_api(
-        api_pull_request(1, labels=[{"name": "bug"}, {"name": "merged"}])
+def test_from_api_reads_label_names():
+    labels = [GitHubLabel.BUG.value, GitHubLabel.MERGED.value]
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            MERGED_PULL_REQUEST,
+            {PullRequestField.LABELS: [{"name": label} for label in labels]},
+        )
     )
-    assert record.labels == ["bug", "merged"]
+    assert record.labels == labels
 
 
-def test_pull_request_record_from_api_reads_a_merge():
+def test_from_api_reads_a_merge():
     merged_at = "2026-10-01T12:00:00+00:00"
-    record = pull_request_record_from_api(
-        api_pull_request(1, state="closed", merged_at=merged_at)
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            MERGED_PULL_REQUEST,
+            {
+                PullRequestField.STATE: PullRequestState.CLOSED.value,
+                PullRequestField.MERGED_AT: merged_at,
+            },
+        )
     )
     assert record.was_merged
     assert record.merged_at.isoformat() == merged_at
@@ -351,48 +413,65 @@ class RecordedGitHubPullRequestSource(GitHubPullRequestSource):
     What every repository's client answers, by request path.
     """
 
-    def client_for(self, repository: str) -> GitHubRepository:
-        return RecordedRepository(
-            Repository.parse(repository), self.token, responses=self.responses
-        )
+    def client_for(self, repository: Repository) -> GitHubRepository:
+        return RecordedRepository(repository, self.token, responses=self.responses)
 
 
-LISTING_PATH = "/pulls?state=all&per_page=100&page=1"
-"""
-The path the first page of every pull request is listed from.
-"""
+def listing_path() -> str:
+    """
+    :return: The path the first page of every pull request is listed from.
+    """
+    return (
+        f"/pulls?state={PullRequestListState.ALL}"
+        f"&per_page={GitHubRepository.page_size}&page=1"
+    )
+
+
+def pull_request_path(reference: PullRequestReference) -> str:
+    """
+    :param reference: The pull request to read.
+    :return: The path it is read from on its own.
+    """
+    return f"/pulls/{reference.number}"
 
 
 def test_github_source_answers_a_listed_pull_request_from_the_listing():
+    listed = api_pull_request(OPEN_PULL_REQUEST, {PullRequestField.DRAFT: True})
     source = RecordedGitHubPullRequestSource(
-        token="token", responses={LISTING_PATH: [api_pull_request(1, draft=True)]}
+        token=SiteSampleText.TOKEN, responses={listing_path(): [listed]}
     )
-    record = source.pull_request(PullRequestReference("owner/repo", 1))
-    assert record == pull_request_record_from_api(api_pull_request(1, draft=True))
+    record = source.pull_request(OPEN_PULL_REQUEST)
+    assert record == PullRequestRecord.from_api(listed)
 
 
 def test_github_source_reads_an_unlisted_pull_request_on_its_own():
+    unlisted = api_pull_request(OPEN_PULL_REQUEST, {PullRequestField.DRAFT: True})
     source = RecordedGitHubPullRequestSource(
-        token="token",
-        responses={LISTING_PATH: [], "/pulls/9": api_pull_request(9, draft=True)},
+        token=SiteSampleText.TOKEN,
+        responses={listing_path(): [], pull_request_path(OPEN_PULL_REQUEST): unlisted},
     )
-    record = source.pull_request(PullRequestReference("owner/repo", 9))
-    assert record == pull_request_record_from_api(api_pull_request(9, draft=True))
+    record = source.pull_request(OPEN_PULL_REQUEST)
+    assert record == PullRequestRecord.from_api(unlisted)
 
 
 def test_github_source_answers_none_for_a_pull_request_that_does_not_exist():
     source = RecordedGitHubPullRequestSource(
-        token="token", responses={LISTING_PATH: []}
+        token=SiteSampleText.TOKEN, responses={listing_path(): []}
     )
-    assert source.pull_request(PullRequestReference("owner/repo", 404)) is None
+    assert source.pull_request(ELSEWHERE_PULL_REQUEST) is None
 
 
 def test_github_source_reads_an_issue_url():
-    issue_url = "https://github.com/owner/repo/issues/5"
+    issue_url = PLAN_REPOSITORY.issue_url(FIRST_PLAN.tracking_issue)
     source = RecordedGitHubPullRequestSource(
-        token="token", responses={"/issues/5": {"html_url": issue_url}}
+        token=SiteSampleText.TOKEN,
+        responses={
+            f"/issues/{FIRST_PLAN.tracking_issue}": {
+                PullRequestField.HTML_URL.key: issue_url
+            }
+        },
     )
-    assert source.issue_url("owner/repo", 5) == issue_url
+    assert source.issue_url(PLAN_REPOSITORY, FIRST_PLAN.tracking_issue) == issue_url
 
 
 @dataclass(frozen=True)
@@ -415,11 +494,13 @@ class RefusingGitHubPullRequestSource(GitHubPullRequestSource):
     The GitHub source, with every call refused.
     """
 
-    def client_for(self, repository: str) -> GitHubRepository:
-        return RefusingRepository(Repository.parse(repository), self.token)
+    def client_for(self, repository: Repository) -> GitHubRepository:
+        return RefusingRepository(repository, self.token)
 
 
 def test_github_source_reraises_a_refusal_other_than_not_found():
     with pytest.raises(GitHubRequestFailed) as refused:
-        RefusingGitHubPullRequestSource(token="token").issue_url("owner/repo", 5)
+        RefusingGitHubPullRequestSource(token=SiteSampleText.TOKEN).issue_url(
+            PLAN_REPOSITORY, FIRST_PLAN.tracking_issue
+        )
     assert refused.value.status == HTTPStatus.FORBIDDEN
