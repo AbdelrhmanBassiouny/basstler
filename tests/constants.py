@@ -65,6 +65,12 @@ class DatasetLocation(PathEnumeration):
     The dataset directory itself.
     """
 
+    PLANS = DIRECTORY / "plans"
+    """
+    A plans directory the cross-plan reference tests resolve against: one subdirectory
+    per fixture plan, plus the dashboard-URL cache naming one of them.
+    """
+
     STUBS = DIRECTORY / "stubs"
     """
     Executables copied onto a scratch ``PATH`` to stand in for a real ``gh``, ``curl`` or
