@@ -37,7 +37,7 @@ items:
   session: https://claude.ai/code/session_01JXqGieiBr1kGogq8KKKrmP
   notes: >-
     Retired with the whole integration-branch stack by the user's choice in the carryover;
-    basstler#29 records the branch's last commit.
+    basstler#30 records the branch's last commit.
 - id: derive-tooling-label
   title: Read a pull request's tooling label off the files it changes
   branch: null
