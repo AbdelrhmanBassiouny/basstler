@@ -296,8 +296,8 @@ PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 # same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
 DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 
-# PLAN_HUB_PATH: the hub file - the one page listing every repository's plans,
-# the registry repository holding the complete list, and that list. Every
+# PLAN_HUB_PATH: the hub file - the plan site's address, the registry
+# repository holding the complete list of repositories, and that list. Every
 # registered repository's notes carry a copy (see basstler.plan_hub).
 PLAN_HUB_PATH="${PLANS_DIR}/_hub.yaml"
 
@@ -327,10 +327,10 @@ fi
 BUILD_DASHBOARD_MODULE="basstler.build_dashboard"
 # build_index: renders the master index page listing every plan.
 BUILD_INDEX_MODULE="basstler.build_index"
-# build_hub: renders the plan hub page listing every registered repository.
-BUILD_HUB_MODULE="basstler.build_hub"
-# plan_hub: registers a repository in the hub file, records the hub's URL,
-# and gathers every registered repository's plans for build_hub.
+# build_site: renders the plan site - the hub, every registered repository's
+# index, and every plan's dashboard - from the repositories the hub file lists.
+BUILD_SITE_MODULE="basstler.build_site"
+# plan_hub: registers a repository in the hub file.
 PLAN_HUB_MODULE="basstler.plan_hub"
 # sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
@@ -514,13 +514,12 @@ item_id_for_branch() {
         $1 == "branch:" && $2 == branch { print item; exit }'
 }
 
-# recorded_hub_url: the plan hub page's URL from the fetched hub file. Fails
-# when the notes branch has no hub file; prints nothing when the hub was never
-# published.
-recorded_hub_url() {
+# recorded_site_url: the plan site's address from the fetched hub file. Fails
+# when the notes branch has no hub file; prints nothing when it names no site.
+recorded_site_url() {
   git cat-file -e "FETCH_HEAD:${PLAN_HUB_PATH}" 2>/dev/null || return 1
   git show "FETCH_HEAD:${PLAN_HUB_PATH}" \
-    | awk '$1 == "url:" && $2 != "null" { print $2; exit }'
+    | awk '$1 == "site_url:" && $2 != "null" { print $2; exit }'
 }
 
 # repository_name: this clone's origin as owner/repo, whatever URL form the

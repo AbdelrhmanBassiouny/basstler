@@ -359,19 +359,19 @@ ROADMAP_HEADER
   fi
 fi
 
-# The plan hub: the one page over every repository's plans, and this
-# session's place in it - repository, then plan and item when the branch is
-# tracked - so a session in any repository, under any account, reuses that
-# page rather than publishing another.
+# The plan site: the one place every repository's plans are published, and
+# this session's place on it - the repository's page, or this branch's plan
+# and item when it is tracked - worked out from the hub file alone, so a
+# session in any repository, under any account, knows where its work shows.
 SUMMARY_HUB="$(hub_line_not_registered "${NOTES_BRANCH}")"
-if HUB_URL="$(recorded_hub_url)"; then
-  HUB_POSITION="$(repository_name)"
+if SITE_URL="$(recorded_site_url)"; then
+  HUB_POSITION="${SITE_URL:+${SITE_URL%/}/}$(repository_name)/"
   if [ -n "${PLAN_ID}" ]; then
-    HUB_POSITION="${HUB_POSITION} › ${PLAN_ID}"
+    HUB_POSITION="${HUB_POSITION}${PLAN_ID}/"
     ITEM_ID="$(item_id_for_branch "${PLAN_ID}" "${CURRENT_BRANCH}")"
-    [ -n "${ITEM_ID}" ] && HUB_POSITION="${HUB_POSITION} › ${ITEM_ID}"
+    [ -n "${ITEM_ID}" ] && HUB_POSITION="${HUB_POSITION}#item-${ITEM_ID}"
   fi
-  SUMMARY_HUB="$(hub_line_registered "${HUB_URL}" "${HUB_POSITION}")"
+  SUMMARY_HUB="$(hub_line_registered "${SITE_URL}" "${HUB_POSITION}")"
 fi
 
 if [ "${WROTE_ANYTHING}" = "1" ]; then
@@ -553,7 +553,7 @@ session-start.sh summary:
   local settings:  ${SUMMARY_SETTINGS}
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
-  plan hub:        ${SUMMARY_HUB}
+  plan site:       ${SUMMARY_HUB}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   dependencies:    ${SUMMARY_DEPENDENCIES}
   setup:           ${SUMMARY_SETUP}
