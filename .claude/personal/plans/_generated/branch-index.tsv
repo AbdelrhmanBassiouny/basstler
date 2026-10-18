@@ -7,3 +7,8 @@ claude/integration-priority-labels	integration-tip-selection
 claude/ready-tooling-integration-fkd5b5	integration-tip-selection
 claude/pipeline-relocation-collision-6gehio	integration-tip-selection
 claude/fork-pr-integration-conflicts-7oeulp	integration-tip-selection
+claude/deferred-dependency-drift-pr-qxpfsm	plan-dashboards
+claude/hidden-deferred-plan-items-6weef1	plan-dashboards
+claude/rdr-dashboard-refresh-button-tpuvo9	plan-dashboards
+claude/shared-pr-state-chips	plan-dashboards
+claude/plan-dashboards-cross-dependencies-h3icfd	plan-dashboards
