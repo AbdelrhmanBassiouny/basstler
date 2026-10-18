@@ -57,7 +57,7 @@ fi
 
 if ! fetch_personal_notes_branch; then
   echo "Branch '${NOTES_BRANCH}' doesn't exist yet (tried: ${ATTEMPTED_NOTES_REMOTES})." >&2
-  echo "Run ./create-personal-notes-branch.sh first, then re-run this script." >&2
+  echo "Run ${CREATE_PERSONAL_NOTES_BRANCH_SCRIPT} first, then re-run this script." >&2
   exit 1
 fi
 
