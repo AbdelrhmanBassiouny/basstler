@@ -28,6 +28,11 @@ The version is written in one place, `plugin/.claude-plugin/plugin.json`; the pa
 reads it from there. Bump it in a pull request, and merging that to `main` tags `v<version>`,
 the tag an installed plugin installs the package at.
 
+A pull request that changes the package (`src/` or `pyproject.toml`) has to bump it: an
+installed plugin's hooks come from `main`, but its package comes from the tag, so an unbumped
+change reaches the hooks without the package they call. CI's `release-version` job, which
+runs `python -m basstler.release_version`, fails until the version is bumped.
+
 ## The package's own environment
 
 **Every session start gives `basstler` an environment of its own, without asking:**

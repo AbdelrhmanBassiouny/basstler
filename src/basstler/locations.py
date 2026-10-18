@@ -100,6 +100,31 @@ class PackageLocation(PathEnumeration):
     """
 
 
+class CheckoutLocation(PathEnumeration):
+    """
+    The files of a checkout of this repository that make up a release, relative to the
+    checkout's root.
+
+    Relative rather than absolute, since they are read at a git revision as well as on
+    disk: the release tag a version names, as much as the working tree.
+    """
+
+    PLUGIN_MANIFEST = Path("plugin") / ".claude-plugin" / "plugin.json"
+    """
+    The plugin's manifest, the one place a release's version is written.
+    """
+
+    PACKAGE_SOURCE = Path("src")
+    """
+    The package's source, which an installed plugin installs at its release tag.
+    """
+
+    PACKAGE_METADATA = Path("pyproject.toml")
+    """
+    The package's metadata, installed along with its source.
+    """
+
+
 class BasstlerVariable(EnvironmentVariable):
     """
     The environment variables this package's own shell configuration sets.

@@ -846,3 +846,36 @@ class FileMode(IntEnum):
     """
     Readable and runnable by everyone, writable by its owner.
     """
+
+
+class ReleaseSampleVersion(StrEnum):
+    """
+    The versions a scratch checkout's plugin manifest names in the release-version tests.
+    """
+
+    RELEASED = "1.0.0"
+    """
+    The version the scratch checkout is tagged at.
+    """
+
+    NEXT = "1.0.1"
+    """
+    A bump of :attr:`RELEASED` that is not tagged yet.
+    """
+
+
+class ReleaseSampleFile(PathEnumeration):
+    """
+    The files of a scratch checkout the release-version tests change, relative to its
+    root.
+    """
+
+    PACKAGE_MODULE = Path("src") / "sample" / "__init__.py"
+    """
+    A module of the scratch checkout's package.
+    """
+
+    SKILL = Path("plugin") / "skills" / "sample" / "SKILL.md"
+    """
+    A file of the scratch checkout's plugin, outside the package.
+    """
