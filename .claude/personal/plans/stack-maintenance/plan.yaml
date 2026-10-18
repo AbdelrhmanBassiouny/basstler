@@ -99,7 +99,7 @@ items:
   - integration-branch
   blockers: []
   notes: >-
-    Retired with the integration-branch stack in the carryover; basstler#28 records the
+    Retired with the integration-branch stack in the carryover; basstler#29 records the
     branch's last commit.
 - id: red-candidate-localisation
   title: Localise a red candidate to the branches that caused it
@@ -111,7 +111,7 @@ items:
   depends_on:
   - integration-branch-ci-verdict
   notes: >-
-    Retired with the integration-branch stack in the carryover; basstler#28 records the
+    Retired with the integration-branch stack in the carryover; basstler#29 records the
     branch's last commit.
 - id: per-plan-integration-branches
   title: One integration branch per plan, and a complete branch built from their last green
