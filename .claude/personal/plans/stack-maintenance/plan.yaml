@@ -85,7 +85,7 @@ items:
   - manifest-currency-first
   notes: >-
     Retired with the whole integration-branch stack by the user's choice in the carryover:
-    porting it onto main's layers was a rewrite. basstler#27 records the branch's last
+    porting it onto main's layers was a rewrite. basstler#28 records the branch's last
     commit.
 - id: integration-branch-ci-verdict
   title: Move the integration branch's verdict to CI, with a stable branch and a targeted
