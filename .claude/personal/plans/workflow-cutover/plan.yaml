@@ -50,9 +50,26 @@ items:
     claude/plan-dashboard-multi-account-y2vexc, never opened as a pull request) and the hub
     from a599549: the hub file .claude/personal/plans/_hub.yaml on every registered
     repository's notes (registry AbdelrhmanBassiouny/basstler), plan_hub gather and build_hub.
-    The Artifact-only parts of a599549 (the hub URL, set-url) go. Draft #6; a live build
-    rendered 36 plans from both repositories. Both hub files already name the site,
-    https://abdelrhmanbassiouny.github.io/stack-board/.
+    The Artifact-only parts of a599549 (the hub URL, set-url) go. Draft #6. The owner's
+    2026-10-18 review (37 threads) was answered in 7651471: reuse of ProjectLocation,
+    PersonalNotesSetting, PlanDocument, Repository, GitCommandRunner and PullRequestField;
+    TemplatePage, ProgressCard and SiteSection bases; RenderedDashboard; tests read every
+    value from the dataset or enums. 34 threads resolved; 3 left open for the owner -
+    the HTML-in-Python split (proposed as site-pages-in-python) and two on unifying the
+    pull request classes, where the reply explains why they stay separate.
+- id: site-pages-in-python
+  title: Build the site's pages in Python instead of Jinja templates
+  branch: null
+  status: not_started
+  track: cutover
+  depends_on:
+  - plan-site-builder
+  notes: >
+    Raised by the owner on #6's dashboard.html thread (2026-10-18), offered as its own item;
+    proposed there and awaiting confirmation. htpy (typed, dependency-free) plus dataclass
+    section models, a StrEnum of CSS classes and a factory from Plan to page; the CSS moves
+    to one static stylesheet. Every page already renders through TemplatePage, so only
+    render() changes. If the owner folds it into #6 instead, drop this item.
 - id: plan-site-action
   title: Deploy the plan site to stack-board's Pages, on demand rather than on a timer
   branch: null
