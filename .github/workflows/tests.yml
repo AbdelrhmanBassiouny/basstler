@@ -58,5 +58,5 @@ jobs:
 
       # An install takes the package and the reusable workflow from v<version>, so a
       # change that leaves the version alone reaches some installs and not others.
-      - name: Check the version was bumped if anything basstler ships changed
+      - name: Check the version was bumped since its release
         run: python -m basstler.release_version check --checkout basstler

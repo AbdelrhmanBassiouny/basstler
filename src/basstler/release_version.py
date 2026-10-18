@@ -3,16 +3,19 @@ Releases: whether a checkout's version names what it ships, and bumping it.
 
 An installed plugin installs the package at ``v<version>``, the tag the release workflow
 puts on ``main`` when the plugin manifest's version changes, and a project calls the
-reusable workflow at a tag too. So a version has to name one behaviour: once its tag
-exists, any change to what basstler ships - the package, the plugin's hooks and skills,
-the reusable workflow - is a new release, and needs a new version. Left unbumped, a
+reusable workflow at a tag too. So a version has to name one state of the repository: once
+its tag exists, any change is a new release, and needs a new version. Left unbumped, a
 change reaches some installs and not others: a plugin's hooks call a subcommand the
 package installed at the old tag does not have yet.
 
-``check`` fails when that has happened: the tag the manifest's version names already
-exists, and what basstler ships differs from it. A version whose tag does not exist yet is
-the next release, and passes. CI runs it on every pull request, against a checkout with
-its tags fetched.
+Every change counts, not only those to a list of shipped paths: such a list goes stale
+the day something new ships from outside it, which is how the bug this guards against
+would come back. A change that alters no behaviour costs one more patch release.
+
+``check`` fails when the tag the manifest's version names already exists and the
+checked-out commit differs from it. A version whose tag does not exist yet is the next
+release, and passes. CI runs it on every pull request, against a checkout with its tags
+fetched.
 
 ``bump`` writes the next version everywhere a version is written: the plugin manifest,
 which the build reads it from, and every reference to the release tag.
@@ -56,7 +59,7 @@ class ReleaseVersionExitCode(ExitCode):
 
     UNRELEASED_CHANGE = 1
     """
-    What basstler ships changed since the version's release; the version needs a bump.
+    Something changed since the version's release; the version needs a bump.
     """
 
     VERSION_REFERENCE_MISSING = 2
@@ -77,7 +80,7 @@ class ReleaseCommand(StrEnum):
 
     CHECK = "check"
     """
-    Fail if what basstler ships changed since the release its version names.
+    Fail if anything changed since the release the version names.
     """
 
     BUMP = "bump"
@@ -110,7 +113,7 @@ class VersionPart(StrEnum):
 @dataclass
 class UnreleasedChange(CommandFailure, RuntimeError):
     """
-    Raised when what basstler ships differs from the release its unchanged version names.
+    Raised when anything changed since the release the unchanged version names.
     """
 
     release_tag: str
@@ -120,7 +123,7 @@ class UnreleasedChange(CommandFailure, RuntimeError):
 
     changed_paths: tuple[str, ...]
     """
-    The shipped files that differ from that tag.
+    The files that differ from that tag.
     """
 
     @classproperty
@@ -131,7 +134,7 @@ class UnreleasedChange(CommandFailure, RuntimeError):
     def __str__(self) -> str:
         changed = "\n".join(f"  {path}" for path in self.changed_paths)
         return (
-            f"What basstler ships changed since {self.release_tag}, but "
+            f"These files changed since {self.release_tag}, but "
             f"{CheckoutLocation.PLUGIN_MANIFEST} still names that release:\n{changed}\n"
             "Bump the version with `python -m basstler.release_version bump`; merging "
             "the bump releases it."
@@ -291,18 +294,18 @@ class VersionReference:
         text = (checkout / self.path).read_text()
         if self.pattern.search(text) is None:
             raise VersionReferenceMissing(self.path)
-        return self.pattern.sub(lambda match: _with_version(match, str(version)), text)
+        return self.pattern.sub(lambda match: self.with_version(match, version), text)
 
-
-def _with_version(match: re.Match[str], version: str) -> str:
-    """
-    :param match: A match of a :attr:`VersionReference.pattern`.
-    :param version: The version to put in place of its ``version`` group.
-    :return: The matched text, with the version replaced.
-    """
-    start, end = match.span("version")
-    offset = match.start()
-    return match[0][: start - offset] + version + match[0][end - offset :]
+    @staticmethod
+    def with_version(match: re.Match[str], version: ReleaseVersion) -> str:
+        """
+        :param match: A match of :attr:`pattern`.
+        :param version: The version to put in place of its ``version`` group.
+        :return: The matched text, with the version replaced.
+        """
+        start, end = match.span("version")
+        offset = match.start()
+        return match[0][: start - offset] + str(version) + match[0][end - offset :]
 
 
 @dataclass(frozen=True)
@@ -315,19 +318,6 @@ class Release:
     """
     The root of the checkout.
     """
-
-    @classproperty
-    def shipped_paths(cls) -> tuple[CheckoutLocation, ...]:
-        """
-        :return: Everything an install takes from a release tag: the package, the
-            plugin, and the workflow a project calls.
-        """
-        return (
-            CheckoutLocation.PACKAGE_SOURCE,
-            CheckoutLocation.PACKAGE_METADATA,
-            CheckoutLocation.PLUGIN,
-            CheckoutLocation.REUSABLE_WORKFLOW,
-        )
 
     @property
     def git(self) -> GitCommandRunner:
@@ -348,23 +338,16 @@ class Release:
 
     def paths_changed_since_release(self) -> tuple[str, ...]:
         """
-        :return: The shipped files that differ between the release tag and the
-            checked-out commit.
+        :return: The files that differ between the release tag and the checked-out
+            commit.
         """
-        output = self.git.run(
-            "diff",
-            "--name-only",
-            self.version.tag,
-            "HEAD",
-            "--",
-            *(str(path) for path in self.shipped_paths),
-        )
+        output = self.git.run("diff", "--name-only", self.version.tag, "HEAD")
         return tuple(output.splitlines())
 
     def verify(self) -> None:
         """
-        :raises UnreleasedChange: If the version is released and what basstler ships
-            differs from that release.
+        :raises UnreleasedChange: If the version is released and anything changed since
+            that release.
         """
         tag = self.version.tag
         if not self.is_released():
@@ -373,7 +356,7 @@ class Release:
         changed_paths = self.paths_changed_since_release()
         if changed_paths:
             raise UnreleasedChange(tag, changed_paths)
-        logger.info(f"Nothing basstler ships changed since {tag}.")
+        logger.info(f"Nothing changed since {tag}.")
 
     def bump(self, version: ReleaseVersion) -> None:
         """
@@ -409,7 +392,7 @@ class ReleaseCommandLine:
         subcommands = parser.add_subparsers(dest="subcommand", required=True)
         check_parser = subcommands.add_parser(
             ReleaseCommand.CHECK,
-            help="Fail if what basstler ships changed since its version's release",
+            help="Fail if anything changed since the version's release",
         )
         bump_parser = subcommands.add_parser(
             ReleaseCommand.BUMP,

@@ -897,7 +897,7 @@ class ReleaseSampleFile(PathEnumeration):
 
     DOCUMENTATION = Path("docs") / "guide.md"
     """
-    Documentation, which no install takes.
+    Documentation, which no install runs but which still makes a new release.
     """
 
 

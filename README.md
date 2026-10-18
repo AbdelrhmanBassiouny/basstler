@@ -28,12 +28,12 @@ The version is declared in `plugin/.claude-plugin/plugin.json`; the package's bu
 from there. Bump it in a pull request, and merging that to `main` tags `v<version>`,
 the tag an installed plugin installs the package at.
 
-Any pull request that changes what basstler ships - `src/`, `pyproject.toml`, `plugin/`, or
-the reusable `upstream-reviews.yml` workflow - has to bump it, so each version names one
-behaviour. An install takes the package and the workflow from the tag, so an unbumped change
-reaches some installs and not others: a plugin's hooks call a package that predates them.
-CI's `release-version` job (`python -m basstler.release_version check`) fails until the
-version is bumped.
+Every pull request bumps it, so each version names one state of the repository. An install
+takes the package and the reusable workflow from the tag, so an unbumped change reaches some
+installs and not others: a plugin's hooks call a package that predates them. Every change
+counts, not only those to the package, since a list of shipped paths would go stale. CI's
+`release-version` job (`python -m basstler.release_version check`) fails until the version
+is bumped.
 
 Bump with `python -m basstler.release_version bump` (the patch part by default; `--part
 minor` or `--part major`, or `--version <x.y.z>`). It writes the version everywhere one is

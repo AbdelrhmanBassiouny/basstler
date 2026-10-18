@@ -1,7 +1,7 @@
 """
-Every change to what basstler ships needs a version bump, since an install takes the
-package and the reusable workflow from the tag its version names; and a bump writes the
-version everywhere one is written.
+Every change since a release needs a version bump, since an install takes the package
+and the reusable workflow from the tag its version names; and a bump writes the version
+everywhere one is written.
 
 Each test builds a scratch checkout tagged at a release, changes it, and checks what
 :class:`~basstler.release_version.Release` makes of it.
@@ -51,18 +51,12 @@ def write_version(repository: ScratchRepository, version: ReleaseSampleVersion) 
 @pytest.fixture
 def released_checkout(tmp_path) -> ScratchRepository:
     """
-    :return: A scratch checkout with every shipped part and some documentation, tagged
+    :return: A scratch checkout with a package, a plugin and some documentation, tagged
         at :attr:`ReleaseSampleVersion.RELEASED`.
     """
     repository = ScratchRepository.create(tmp_path)
     write_version(repository, ReleaseSampleVersion.RELEASED)
-    for path in (
-        ReleaseSampleFile.PACKAGE_MODULE,
-        ReleaseSampleFile.SKILL,
-        ReleaseSampleFile.DOCUMENTATION,
-        CheckoutLocation.PACKAGE_METADATA,
-        CheckoutLocation.REUSABLE_WORKFLOW,
-    ):
+    for path in ReleaseSampleFile:
         repository.write(path, "")
     repository.commit_everything("Release")
     repository.run_git("tag", f"v{ReleaseSampleVersion.RELEASED}")
@@ -86,24 +80,20 @@ def test_an_unchanged_checkout_passes(released_checkout):
 
 @pytest.mark.parametrize(
     "changed_file",
-    [
-        ReleaseSampleFile.PACKAGE_MODULE,
-        ReleaseSampleFile.SKILL,
-        CheckoutLocation.PACKAGE_METADATA,
-        CheckoutLocation.REUSABLE_WORKFLOW,
-    ],
+    list(ReleaseSampleFile),
     ids=lambda path: path._name_,
 )
-def test_a_shipped_change_without_a_bump_fails_naming_the_change(
+def test_a_change_without_a_bump_fails_naming_the_change(
     released_checkout, changed_file
 ):
     """
     The reported case was a hook gaining a call into the package while the plugin kept
-    installing the release from before it; a skill or workflow change splits installs
-    the same way.
+    installing the release from before it.
+
+    Any other change counts the same, so no list of shipped paths can leave one out.
     """
     released_checkout.write(changed_file, ReleaseSampleText.CHANGE)
-    released_checkout.commit_everything("Change what basstler ships")
+    released_checkout.commit_everything("Change a file")
 
     with pytest.raises(UnreleasedChange) as raised:
         release_of(released_checkout).verify()
@@ -113,22 +103,12 @@ def test_a_shipped_change_without_a_bump_fails_naming_the_change(
     assert raised.value.exit_code is ReleaseVersionExitCode.UNRELEASED_CHANGE
 
 
-def test_a_shipped_change_with_a_bump_passes(released_checkout):
+def test_a_change_with_a_bump_passes(released_checkout):
     released_checkout.write(ReleaseSampleFile.PACKAGE_MODULE, ReleaseSampleText.CHANGE)
     release_of(released_checkout).bump(
         ReleaseVersion.parse(ReleaseSampleVersion.NEXT_PATCH)
     )
     released_checkout.commit_everything("Change the package and bump the version")
-
-    release_of(released_checkout).verify()
-
-
-def test_a_documentation_change_needs_no_bump(released_checkout):
-    """
-    No install takes documentation from the tag.
-    """
-    released_checkout.write(ReleaseSampleFile.DOCUMENTATION, ReleaseSampleText.CHANGE)
-    released_checkout.commit_everything("Change the documentation")
 
     release_of(released_checkout).verify()
 
