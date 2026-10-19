@@ -152,17 +152,16 @@ items:
 - id: upstream-pull-request-checks
   title: Report a promoted branch's upstream CI alongside its review threads
   branch: claude/review-pr-ci-status-20k6g4
-  status: in progress
+  status: done
   track: carried-across
   depends_on: [basstler-open-pull-request-carryover]
   pull_request_number: 13
   session: https://claude.ai/code/session_01VwERzevnmsLrtNiPbqnT3C
   notes: >-
-    Reads the upstream pull request's statusCheckRollup in the same GraphQL query as its
-    review threads, on the fork's runner, and names every check that did not pass. Carried
-    as draft #13 with main merged in. The owner's review (r4316963874) is addressed in
-    6b9d245: every response is parsed into models (PullRequest, Commit, PageInfo, one result
-    model per query) before anything reads it. Waits on the owner's review of that push.
+    Merged in #13, released in v0.1.3. Reads the upstream pull request's statusCheckRollup
+    in the same GraphQL query as its review threads, on the fork's runner, and names every
+    check that did not pass. Every response is parsed into models (PullRequest, Commit,
+    PageInfo, one result model per query) before anything reads it.
 - id: upstream-check-failure-logs
   title: Say why an upstream check failed, not only that it did
   branch: claude/upstream-check-failure-logs
@@ -171,9 +170,11 @@ items:
   depends_on: [upstream-pull-request-checks]
   pull_request_number: 14
   notes: >-
-    Stacked on upstream-pull-request-checks (#13). Quotes the failing step's log for each
-    failed upstream check, stopping where the step failed. Carried as draft #14; the
-    reusable workflow and its example caller take failure_logs. Lands after its parent.
+    Its parent (#13) merged, and #14 now targets main. Quotes the failing step's log for each
+    failed upstream check, stopping where the step failed; the reusable workflow and its
+    example caller take failure_logs. Next: merge main in. A trial merge conflicts in
+    tests/upstream_reviews_replay.py, and the branch still uses RepositoryJSON and dict
+    access that #13 replaced with models, so it must move onto them (roadmap rule).
 - id: setup-stacked-prs-skill
   title: '/setup-stacked-prs: one guided command that sets up the stacked-pull-request workflow'
   branch: null
