@@ -89,7 +89,10 @@ items:
     Commit .claude/basstler/stack.toml naming cram2/cognitive_robot_abstract_machine and the
     remote cram2, and relabel fork pull requests from cram2-link-sent to promotion-link-sent
     (both flagged on basstler#1). Additive: nothing is deleted yet, so both paths work while
-    sessions switch over.
+    sessions switch over. Also adds .github/workflows/stack-maintenance.yml, copied from
+    basstler's docs/examples/stack-maintenance.yml at a release that carries basstler#16
+    (folded here from workflow-cutover's routine-cutover, owner's call, 2026-10-19). It is
+    event-only, so it keeps to the Actions budget.
 - id: cram-basstler-removal
   title: Delete the carried tooling from CRAM, and from cram2 through the promotion flow
   branch: null
