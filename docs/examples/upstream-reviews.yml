@@ -19,6 +19,11 @@ on:
         required: false
         default: false
         type: boolean
+      failure_logs:
+        description: "Quote the log behind each check that failed"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
@@ -31,3 +36,4 @@ jobs:
       pull_request: ${{ inputs.pull_request }}
       branch: ${{ inputs.branch }}
       include_resolved: ${{ inputs.include_resolved }}
+      failure_logs: ${{ inputs.failure_logs }}

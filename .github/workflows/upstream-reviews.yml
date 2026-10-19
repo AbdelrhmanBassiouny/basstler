@@ -1,10 +1,11 @@
 name: Upstream reviews
 
-# Reports the review threads a fork branch's upstream pull request has collected.
+# Reports the checks and review threads a fork branch's upstream pull request has
+# collected, and on request the log behind each check that failed.
 #
-# Thread resolved-state is only exposed by GitHub's GraphQL API, which a Claude
-# session cannot reach, so the read happens on a runner and the session reads the
-# job's log.
+# Thread resolved-state is only exposed by GitHub's GraphQL API, and a Claude session
+# reaches neither that nor the upstream's REST API at all, so both reads happen on a
+# runner and the session reads the job's log.
 #
 # Reusable: a project calls it from a dispatch-only workflow of its own (see
 # docs/SETUP.md), naming the release of basstler it calls. The upstream comes from the
@@ -34,13 +35,18 @@ on:
         required: false
         default: false
         type: boolean
+      failure_logs:
+        description: "Quote the log behind each check that failed"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   report:
-    name: Report upstream review threads
+    name: Report the upstream pull request
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -56,7 +62,7 @@ jobs:
           set -euo pipefail
           pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_ref }}"
 
-      - name: Read upstream review threads
+      - name: Read the upstream pull request
         env:
           # gh is preinstalled on the runner; this is the only credential it needs,
           # and read-only is all the job is granted.
@@ -75,5 +81,8 @@ jobs:
           fi
           if [ "${{ inputs.include_resolved }}" = "true" ]; then
             ARGUMENTS+=(--include-resolved)
+          fi
+          if [ "${{ inputs.failure_logs }}" = "true" ]; then
+            ARGUMENTS+=(--failure-logs)
           fi
           python -m basstler.upstream_reviews "${ARGUMENTS[@]}"
