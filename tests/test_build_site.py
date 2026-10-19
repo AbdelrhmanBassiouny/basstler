@@ -258,6 +258,37 @@ def test_the_repository_card_counts_every_plan(site: RepositorySite, tmp_path: P
     assert repository.total == sum(plan.total for plan in repository.plans)
 
 
+@pytest.mark.parametrize("draft", [True, False])
+def test_a_plan_card_counts_its_open_pull_requests_and_those_out_of_draft(
+    site: RepositorySite,
+    pull_request_source: RecordedPullRequestSource,
+    tmp_path: Path,
+    draft: bool,
+):
+    pull_request_source.records[OPEN_PULL_REQUEST] = PullRequestRecord(
+        state=PullRequestState.OPEN, draft=draft
+    )
+    first_plan = next(
+        summary
+        for summary in site.build(tmp_path).plans
+        if summary.id == SitePlan.FIRST
+    )
+    assert first_plan.open_pull_requests == 1
+    assert first_plan.reviewed_pull_requests == int(not draft)
+
+
+def test_the_repository_card_counts_every_plan_s_pull_requests(
+    site: RepositorySite, tmp_path: Path
+):
+    repository = site.build(tmp_path)
+    assert repository.open_pull_requests == sum(
+        plan.open_pull_requests for plan in repository.plans
+    )
+    assert repository.reviewed_pull_requests == sum(
+        plan.reviewed_pull_requests for plan in repository.plans
+    )
+
+
 def test_build_looks_up_every_referenced_pull_request_in_its_own_repository(
     site: RepositorySite, pull_request_source: RecordedPullRequestSource, tmp_path: Path
 ):
@@ -328,6 +359,10 @@ def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
     assert repositories[1].error
     assert summary.done == sum(repository.done for repository in repositories)
     assert summary.total == sum(repository.total for repository in repositories)
+    assert summary.open_pull_requests == sum(
+        repository.open_pull_requests for repository in repositories
+    )
+    assert summary.progress_label in hub_page
     assert (tmp_path / "site" / SiteFile.NO_JEKYLL).exists()
 
 
@@ -425,7 +460,7 @@ def listing_path() -> str:
     :return: The path the first page of every pull request is listed from.
     """
     return (
-        f"/pulls?state={PullRequestListState.ALL}"
+        f"/pulls?state={PullRequestListState.ALL.query}"
         f"&per_page={GitHubRepository.page_size}&page=1"
     )
 

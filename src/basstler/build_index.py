@@ -25,9 +25,11 @@ plans.json shape: a JSON list of objects, each:
 from __future__ import annotations
 
 import argparse
+import dataclasses
 import json
 import sys
 from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -56,6 +58,29 @@ class ProgressCard(ABC):
     """
     How many items there are.
     """
+
+    open_pull_requests: int = 0
+    """
+    How many of the items' pull requests are open.
+    """
+
+    reviewed_pull_requests: int = 0
+    """
+    How many of those open pull requests are out of draft: their author has reviewed
+    them and marked them ready for review.
+    """
+
+    @staticmethod
+    def counts_over(cards: Sequence[ProgressCard]) -> dict[str, int]:
+        """
+        :param cards: The cards a larger card stands for.
+        :return: Every count a card carries, summed over *cards*, by field name - ready
+            to pass to the larger card's constructor.
+        """
+        return {
+            count.name: sum(getattr(card, count.name) for card in cards)
+            for count in dataclasses.fields(ProgressCard)
+        }
 
     @classproperty
     def card_css_class(cls) -> str:
@@ -100,6 +125,18 @@ class ProgressCard(ABC):
         ``width`` style without the template doing any formatting itself.
         """
         return f"{self.completion_percentage:.1f}%"
+
+    @property
+    def review_label(self) -> str | None:
+        """
+        How many open pull requests are out of draft, or ``None`` when none are open.
+        """
+        if not self.open_pull_requests:
+            return None
+        return (
+            f"{self.reviewed_pull_requests} / {self.open_pull_requests} open pull "
+            f"requests reviewed"
+        )
 
     @property
     def css_class(self) -> str:

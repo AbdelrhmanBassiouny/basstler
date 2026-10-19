@@ -38,6 +38,7 @@ import argparse
 import json
 import sys
 from abc import ABC, abstractmethod
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -945,6 +946,23 @@ class DashboardSummary:
     """Titles of items with an open draft pull request, not blocked, whose
     dependencies (if any) already have their own open pull request."""
 
+    live_state_counts: dict[LiveState, int] = field(default_factory=dict)
+    """How many items' pull requests are in each :class:`LiveState`."""
+
+    @property
+    def open_pull_requests(self) -> int:
+        """How many items' pull requests are open, drafts included."""
+        return sum(
+            self.live_state_counts.get(state, 0)
+            for state in (LiveState.OPEN_DRAFT, LiveState.OPEN_READY)
+        )
+
+    @property
+    def reviewed_pull_requests(self) -> int:
+        """How many items' pull requests are open and out of draft - reviewed by
+        their author and marked ready for review."""
+        return self.live_state_counts.get(LiveState.OPEN_READY, 0)
+
     def to_json_dict(self) -> dict[str, Any]:
         """Render to the plain-dict shape the calling skill expects."""
         return {
@@ -1127,6 +1145,9 @@ class DashboardRenderer(TemplatePage):
             ready_to_start=[item.title for item in ready_to_start],
             blocker_maybe_cleared=[item.title for item in blocker_maybe_cleared],
             ready_to_review=[item.title for item in ready_to_review],
+            live_state_counts=dict(
+                Counter(item.live_state for item in self.plan.items)
+            ),
         )
         return RenderedDashboard(html=html, summary=summary)
 

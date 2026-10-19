@@ -1960,3 +1960,14 @@ def test_each_list_filter_names_the_pull_request_states_it_covers(
     list_state: PullRequestListState, states: tuple[PullRequestState, ...]
 ) -> None:
     assert list_state.states == states
+
+
+@pytest.mark.parametrize(
+    "list_state",
+    [list_state for list_state in PullRequestListState if len(list_state.states) == 1],
+)
+def test_a_single_state_list_filter_asks_for_that_state(
+    list_state: PullRequestListState,
+) -> None:
+    (state,) = list_state.states
+    assert list_state.query == state.value

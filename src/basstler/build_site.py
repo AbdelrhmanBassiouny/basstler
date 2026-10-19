@@ -404,6 +404,8 @@ class RepositorySite(SiteSection[RepositorySummary]):
             description=plan.description,
             done=dashboard.summary.status_counts.get(ItemStatus.DONE, 0),
             total=len(plan.items),
+            open_pull_requests=dashboard.summary.open_pull_requests,
+            reviewed_pull_requests=dashboard.summary.reviewed_pull_requests,
             dashboard_url=self.plan_url(source.directory_name),
         )
         return PublishedPlan(dashboard=dashboard, summary=summary)
@@ -473,9 +475,10 @@ class HubSite(SiteSection[SiteSummary]):
                 )
                 for position, repository in enumerate(self.hub.repositories)
             ]
-        self.write_page(output, HubPage(repositories).render())
+        summary = SiteSummary.over_repositories(repositories)
+        self.write_page(output, HubPage(summary).render())
         (output / SiteFile.NO_JEKYLL).touch()
-        return SiteSummary.over_repositories(repositories)
+        return summary
 
     def build_repository(
         self, repository: Repository, scratch: Path, output: Path

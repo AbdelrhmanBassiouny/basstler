@@ -21,6 +21,9 @@
         <h2 class="plan-title">{{ plan.title }}</h2>
         <span class="plan-progress mono">{{ plan.progress_label }}</span>
       </div>
+      {% if plan.review_label %}
+      <p class="plan-reviews mono">{{ plan.review_label }}</p>
+      {% endif %}
       <p class="plan-desc">{{ plan.description }}</p>
       {% if not plan.dashboard_url %}
       <p class="no-dashboard">Not published yet — run /plan-dashboard on it.</p>

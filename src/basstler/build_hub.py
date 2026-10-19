@@ -45,14 +45,13 @@ class RepositorySummary(ProgressCard):
         :param name: The repository, as ``owner/repo``.
         :param index_url: The repository's own index page.
         :param plans: The repository's plans.
-        :return: The repository's card, counting every plan's items.
+        :return: The repository's card, counting every plan's items and pull requests.
         """
         return cls(
             name=name,
             index_url=index_url,
             plans=plans,
-            done=sum(plan.done for plan in plans),
-            total=sum(plan.total for plan in plans),
+            **cls.counts_over(plans),
         )
 
     @classmethod
@@ -87,13 +86,10 @@ class SiteSummary(ProgressCard):
     def over_repositories(cls, repositories: list[RepositorySummary]) -> SiteSummary:
         """
         :param repositories: Every repository on the site.
-        :return: The site's summary, counting every repository's items.
+        :return: The site's summary, counting every repository's items and pull
+            requests.
         """
-        return cls(
-            repositories=repositories,
-            done=sum(repository.done for repository in repositories),
-            total=sum(repository.total for repository in repositories),
-        )
+        return cls(repositories=repositories, **cls.counts_over(repositories))
 
     @property
     def plan_count(self) -> int:
@@ -119,9 +115,9 @@ class HubPage(TemplatePage):
     The hub page: a card per registered repository.
     """
 
-    repositories: list[RepositorySummary]
+    site: SiteSummary
     """
-    Every repository to list, in the order they should appear.
+    The whole site, whose repositories are listed in the order they should appear.
     """
 
     @classproperty
@@ -132,4 +128,4 @@ class HubPage(TemplatePage):
         """
         :return: The rendered HTML page.
         """
-        return self.render_template(repositories=self.repositories)
+        return self.render_template(site=self.site, repositories=self.site.repositories)

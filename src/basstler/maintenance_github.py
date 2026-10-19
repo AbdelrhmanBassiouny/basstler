@@ -17,7 +17,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum
 from typing import Any
 
 from basstler.build_dashboard import PullRequestState
@@ -113,37 +113,50 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
     """
 
 
-class PullRequestListState(StrEnum):
+@dataclass(frozen=True)
+class PullRequestListingSpecification:
+    """
+    One filter the pull request list API takes: what it is asked for by, and which
+    :class:`PullRequestState` values it lets through.
+    """
+
+    query: str
+    """
+    The value the list API's ``state`` parameter takes for this filter.
+    """
+
+    states: tuple[PullRequestState, ...]
+    """
+    The pull request states this filter lets through.
+    """
+
+
+class PullRequestListState(PullRequestListingSpecification, Enum):
     """
     The pull request states the list API filters on: each :class:`PullRequestState` a
     pull request reports, plus every state at once.
+
+    Each member *is* a :class:`PullRequestListingSpecification`, written as its fields
+    in declaration order - ``query``, then ``states`` - which the enum passes straight to
+    the dataclass.
     """
 
-    OPEN = PullRequestState.OPEN.value
+    OPEN = PullRequestState.OPEN.value, (PullRequestState.OPEN,)
     """
     Pull requests whose state is :attr:`PullRequestState.OPEN`: drafts and those ready
     for review alike.
     """
 
-    CLOSED = PullRequestState.CLOSED.value
+    CLOSED = PullRequestState.CLOSED.value, (PullRequestState.CLOSED,)
     """
     Pull requests whose state is :attr:`PullRequestState.CLOSED`: merged and closed
     unmerged alike.
     """
 
-    ALL = "all"
+    ALL = "all", tuple(PullRequestState)
     """
     Every pull request, whatever its :class:`PullRequestState`.
     """
-
-    @property
-    def states(self) -> tuple[PullRequestState, ...]:
-        """
-        The :class:`PullRequestState` values this filter lets through.
-        """
-        if self is PullRequestListState.ALL:
-            return tuple(PullRequestState)
-        return (PullRequestState(self.value),)
 
 
 @dataclass
@@ -239,7 +252,7 @@ class GitHubRepository(ForkPullRequests):
         page = 1
         while True:
             query = urllib.parse.urlencode(
-                {"state": state, "per_page": self.page_size, "page": page}
+                {"state": state.query, "per_page": self.page_size, "page": page}
             )
             fetched = self._call("GET", f"/pulls?{query}")
             collected.extend(fetched)
