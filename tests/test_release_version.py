@@ -34,7 +34,7 @@ from basstler.release_version import (
     VersionReferenceMissing,
 )
 
-from .constants.environment import EnvironmentVariable
+from .constants.environment import SearchPathVariable
 from .constants.paths import RepositoryLocation
 from .plugin_manifest import PluginManifest
 from .scratch_repository import ScratchRepository, initialize_bare_repository
@@ -376,10 +376,10 @@ def run_release_step(checkout: Path, summary: Path) -> subprocess.CompletedProce
     """
     environment = {
         **os.environ,
-        EnvironmentVariable.EXECUTABLE_SEARCH_PATH: os.pathsep.join(
+        SearchPathVariable.EXECUTABLE_SEARCH_PATH: os.pathsep.join(
             [
                 str(Path(sys.executable).parent),
-                os.environ[EnvironmentVariable.EXECUTABLE_SEARCH_PATH],
+                os.environ[SearchPathVariable.EXECUTABLE_SEARCH_PATH],
             ]
         ),
         GitHubActionsVariable.STEP_SUMMARY: str(summary),

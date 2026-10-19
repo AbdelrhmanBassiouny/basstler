@@ -62,7 +62,7 @@ import sys
 import tempfile
 import urllib.error
 import urllib.request
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
@@ -72,6 +72,7 @@ import yaml
 
 from basstler.environment import GitHubCredentialVariable
 from basstler.class_property import classproperty
+from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
 from basstler.plan_model import (
@@ -201,41 +202,10 @@ class PlanItemBootstrapExitCode(ExitCode):
 
 
 @dataclass
-class BootstrapError(CommandFailure, ABC):
+class BootstrapError(CommandFailure, DataclassException, ABC):
     """
     Base for every refusal this tool reports, each carrying its own exit status.
-
-    Subclasses hold the context that explains the refusal as typed fields and compose it
-    into the message at construction, so no call site formats one. Mirrors ``krrood``'s
-    ``DataclassException`` idiom rather than importing it, which is the boundary decision
-    12 records for this tooling.
     """
-
-    def __post_init__(self) -> None:
-        """
-        Compose the message from the subclass's own description and advice.
-        """
-        correction = self.suggest_correction()
-        message = self.error_message()
-        Exception.__init__(self, f"{message}\n{correction}" if correction else message)
-
-    def __str__(self) -> str:
-        """
-        The composed message, rather than a repr of the dataclass fields.
-        """
-        return Exception.__str__(self)
-
-    @abstractmethod
-    def error_message(self) -> str:
-        """
-        :return: What went wrong.
-        """
-
-    @abstractmethod
-    def suggest_correction(self) -> str:
-        """
-        :return: What to do about it, or an empty string when there is nothing to add.
-        """
 
 
 @dataclass

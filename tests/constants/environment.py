@@ -6,6 +6,8 @@ from __future__ import annotations
 
 from enum import IntEnum, StrEnum
 
+from basstler.environment import EnvironmentVariable
+
 
 class ScrubbedEnvironmentPrefix(StrEnum):
     """
@@ -94,9 +96,9 @@ class ConfigurationVariable(StrEnum):
     """
 
 
-class EnvironmentVariable(StrEnum):
+class SearchPathVariable(EnvironmentVariable):
     """
-    The standard environment variables a test sets or reads for a subprocess.
+    The search-path variables a test sets or reads for a subprocess.
     """
 
     EXECUTABLE_SEARCH_PATH = "PATH"

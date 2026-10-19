@@ -30,9 +30,9 @@ from basstler.plan_model import ItemStatus, ManifestKey, PlanManifest
 
 from .constants.environment import (
     ConfigurationVariable,
-    EnvironmentVariable,
     FileMode,
     ScrubbedEnvironmentPrefix,
+    SearchPathVariable,
 )
 from .constants.notes import ClaudeLocalSection, ScratchBranch
 from .constants.paths import DatasetLocation, PersonalNotesPath
@@ -648,7 +648,7 @@ def test_installs_nothing_when_every_requirement_is_already_installed(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_hiding_executables(tmp_path, PackageManager.UV)
             ),
             StubVariable.PIP_CALL_LOG: str(call_log),
@@ -680,7 +680,7 @@ def test_installs_the_package_with_pip_when_a_requirement_is_missing(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_hiding_executables(tmp_path, PackageManager.UV)
             ),
             StubVariable.PIP_CALL_LOG: str(call_log),
@@ -716,7 +716,7 @@ def test_installs_the_package_with_uv_where_there_is_one(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
             StubVariable.UV_CALL_LOG: str(install_log),
             StubVariable.PIP_CALL_LOG: str(pip_log),
         },
@@ -752,7 +752,7 @@ def test_reports_a_failed_install_and_finishes_the_run(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_hiding_executables(tmp_path, PackageManager.UV)
             ),
             StubVariable.PIP_STATUS: "1",
@@ -806,7 +806,7 @@ def test_reports_a_missing_installer_without_failing(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: path_hiding_executables(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: path_hiding_executables(
                 tmp_path, PackageManager.PIP, PackageManager.UV
             )
         },
@@ -841,7 +841,7 @@ def test_reinstalls_the_package_when_the_plugin_names_another_source(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_hiding_executables(tmp_path, PackageManager.UV)
             ),
             StubVariable.PIP_CALL_LOG: str(call_log),
@@ -942,7 +942,7 @@ def test_creates_the_environment_with_uv_and_installs_the_package_into_it(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
             StubVariable.UV_CALL_LOG: str(environment_log),
             StubVariable.UV_PYTHON: sys.executable,
             StubVariable.PIP_CALL_LOG: str(install_log),
@@ -977,7 +977,7 @@ def test_creates_the_environment_from_an_interpreter_found_by_name_without_uv(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_hiding_executables(tmp_path, PackageManager.UV)
             ),
         },
@@ -1040,7 +1040,7 @@ def test_installs_uv_when_no_supported_interpreter_is_on_the_path(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_without_a_supported_interpreter(tmp_path)
             ),
             StubVariable.PIP_CALL_LOG: str(install_log),
@@ -1090,7 +1090,7 @@ def test_reuses_the_uv_it_installed_before(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_without_a_supported_interpreter(tmp_path)
             ),
             StubVariable.PIP_CALL_LOG: str(pip_log),
@@ -1127,7 +1127,7 @@ def test_reports_uv_it_could_not_install_and_finishes_the_run(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_without_a_supported_interpreter(tmp_path)
             ),
             StubVariable.PIP_STATUS: "1",
@@ -1162,7 +1162,7 @@ def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
             StubVariable.UV_STATUS: "1",
         },
     )

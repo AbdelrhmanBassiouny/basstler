@@ -15,10 +15,11 @@ from basstler.maintenance_github import GitHubRepository
 from basstler.progress_notes import (
     BranchPullRequests,
     EmptyRemoteBranchListError,
+    NoGitHubCredentialError,
     ProgressNotesDirectory,
     ProgressNotesFile,
     ProgressNotesPruning,
-    PruningSkipped,
+    UnreadableRemoteError,
 )
 from basstler.repository import Repository
 
@@ -169,8 +170,8 @@ def test_pruning_without_a_credential_removes_nothing(
 ):
     without_credentials(monkeypatch)
     directory = progress_directory(tmp_path / "notes", ProgressBranch.MERGED)
-    outcome = pruning(checkout_with_remote, directory).run()
-    assert outcome == PruningSkipped.NO_CREDENTIAL
+    with pytest.raises(NoGitHubCredentialError):
+        pruning(checkout_with_remote, directory).run()
     assert directory.branches() == [ProgressBranch.MERGED]
 
 
@@ -180,8 +181,8 @@ def test_pruning_against_an_unreadable_remote_removes_nothing(
     monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, "token")
     checkout_with_remote.run_git("remote", "set-url", "origin", str(tmp_path / "gone"))
     directory = progress_directory(tmp_path / "notes", ProgressBranch.MERGED)
-    outcome = pruning(checkout_with_remote, directory).run()
-    assert outcome == PruningSkipped.REMOTE_UNREADABLE
+    with pytest.raises(UnreadableRemoteError):
+        pruning(checkout_with_remote, directory).run()
     assert directory.branches() == [ProgressBranch.MERGED]
 
 

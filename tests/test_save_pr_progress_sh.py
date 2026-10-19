@@ -13,7 +13,7 @@ import pytest
 from basstler.environment import GitHubCredentialVariable
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan_size_limits import Measure
-from basstler.progress_notes import ProgressNotesFile, PruningSkipped
+from basstler.progress_notes import NoGitHubCredentialError, ProgressNotesFile
 
 from .constants.notes import ClaudeLocalSection, ProgressBranch, ScratchBranch
 from .constants.paths import PersonalNotesPath
@@ -130,4 +130,4 @@ def test_without_a_credential_the_save_goes_ahead_unpruned(
         progress_repository.project_root.parent / "verify"
     )
     assert (checkout / other_notes).exists()
-    assert str(PruningSkipped.NO_CREDENTIAL) in result.stderr
+    assert str(NoGitHubCredentialError()) in result.stderr
