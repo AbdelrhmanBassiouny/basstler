@@ -179,6 +179,14 @@ def test_the_plugin_is_the_one_the_configuration_exports(tmp_path: Path):
     )
 
 
+def test_the_suite_runs_this_checkouts_plugin_whatever_the_session_exports():
+    """
+    A session running the plugin exports its synced copy as the plugin root; the suite
+    still tests this checkout's hooks, not the release that session synced.
+    """
+    assert PluginLocation.ROOT.value == RepositoryLocation.PLUGIN.value
+
+
 def test_the_plugin_scripts_are_under_its_hooks_directory():
     """
     Every script the package runs is one of the plugin's hooks.
