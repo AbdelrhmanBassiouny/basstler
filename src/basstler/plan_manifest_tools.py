@@ -12,6 +12,7 @@ Usage:
     python3 plan_manifest_tools.py regenerate-branch-index \\
         --scratch-dir <dir> --plans-dir <relative-dir> \\
         --manifest-filename <name> --output <relative-path>
+    python3 plan_manifest_tools.py item <manifest-file> (--id <item-id> | --branch <branch>)
 """
 
 from __future__ import annotations
@@ -27,6 +28,7 @@ from typing import Any
 import yaml
 
 from basstler.build_dashboard import PlanValidationError, validate_plan
+from basstler import plan_model
 from basstler.exit_codes import ExitCode
 from basstler.standard_streams import StandardStreamHandler
 
@@ -54,6 +56,47 @@ class ManifestToolsCommand(StrEnum):
     REGENERATE_BRANCH_INDEX = "regenerate-branch-index"
     """
     Rebuild the branch to plan-id index.
+    """
+
+    ITEM = "item"
+    """
+    Print the plan's header and one item's entry.
+    """
+
+
+class ManifestToolsOption(StrEnum):
+    """
+    The options the subcommands take.
+    """
+
+    SCRATCH_DIRECTORY = "--scratch-dir"
+    """
+    The checkout of the personal-notes branch the index is built from.
+    """
+
+    PLANS_DIRECTORY = "--plans-dir"
+    """
+    The plans directory, relative to the scratch directory.
+    """
+
+    MANIFEST_FILENAME = "--manifest-filename"
+    """
+    The filename every plan's manifest has.
+    """
+
+    OUTPUT = "--output"
+    """
+    Where the regenerated index is written.
+    """
+
+    ITEM_IDENTIFIER = "--id"
+    """
+    The id of the item to print.
+    """
+
+    BRANCH = "--branch"
+    """
+    The branch whose item to print.
     """
 
 
@@ -253,12 +296,32 @@ class ManifestToolsCommandLine:
             ManifestToolsCommand.REGENERATE_BRANCH_INDEX,
             help="Rebuild the branch->plan-id index",
         )
-        regenerate_parser.add_argument("--scratch-dir", required=True, type=Path)
-        regenerate_parser.add_argument("--plans-dir", required=True, type=Path)
-        regenerate_parser.add_argument("--manifest-filename", required=True)
         regenerate_parser.add_argument(
-            "--output", required=True, type=Path, help="Path to write the index to"
+            ManifestToolsOption.SCRATCH_DIRECTORY, required=True, type=Path
         )
+        regenerate_parser.add_argument(
+            ManifestToolsOption.PLANS_DIRECTORY, required=True, type=Path
+        )
+        regenerate_parser.add_argument(
+            ManifestToolsOption.MANIFEST_FILENAME, required=True
+        )
+        regenerate_parser.add_argument(
+            ManifestToolsOption.OUTPUT,
+            required=True,
+            type=Path,
+            help="Path to write the index to",
+        )
+
+        item_parser = subcommands.add_parser(
+            ManifestToolsCommand.ITEM,
+            help="Print the plan's header and one item's entry",
+        )
+        item_parser.add_argument("manifest_path", type=Path)
+        item_selector = item_parser.add_mutually_exclusive_group(required=True)
+        item_selector.add_argument(
+            ManifestToolsOption.ITEM_IDENTIFIER, dest="item_identifier"
+        )
+        item_selector.add_argument(ManifestToolsOption.BRANCH)
         return parser
 
     @classmethod
@@ -282,6 +345,14 @@ class ManifestToolsCommandLine:
                 arguments.scratch_dir, arguments.plans_dir, arguments.manifest_filename
             )
             arguments.output.write_text(index.render())
+        elif arguments.subcommand == ManifestToolsCommand.ITEM:
+            manifest = plan_model.PlanManifest.from_file(arguments.manifest_path)
+            item = (
+                manifest.item_on_branch(arguments.branch)
+                if arguments.branch is not None
+                else manifest.item_named(arguments.item_identifier)
+            )
+            logger.info(manifest.item_summary(item).rstrip("\n"))
         return ManifestToolsExitCode.SUCCESS
 
 
