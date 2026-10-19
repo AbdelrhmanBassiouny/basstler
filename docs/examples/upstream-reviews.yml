@@ -30,9 +30,9 @@ permissions:
 
 jobs:
   report:
-    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@v0.1.4
+    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@v0.1.5
     with:
-      basstler_ref: v0.1.4
+      basstler_ref: v0.1.5
       pull_request: ${{ inputs.pull_request }}
       branch: ${{ inputs.branch }}
       include_resolved: ${{ inputs.include_resolved }}
