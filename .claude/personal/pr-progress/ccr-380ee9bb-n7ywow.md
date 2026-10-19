@@ -1,10 +1,10 @@
 Plan:
-- Draft PR #32 (bug): PRs name their own version; release.yml only tags the merged commit and publishes a GitHub release, so the claude.ai plugin sync gets the version from the merge
+- Draft PR #32 (bug): release = tag on the merge commit; no version in any file (hatch-vcs), labels pick minor/major, hook installs latest tag
 
 Done:
-- GitHub release step; bump-in-PR check (next patch/minor/major), idempotent `bump` (default patch), tag-only release step; tests, README; this PR bumps to 0.1.2
+- Rework pushed (8a723af); full suite 977 passed; PR description updated
 
 Next:
-- Owner reviews/merges #32
-- After merge: confirm a new session's synced plugin.json says 0.1.2 and installs @v0.1.2
-- Optional: hand-create releases for v0.1.0 / v0.1.1
+- Owner creates labels release:minor / release:major, reviews/merges #32
+- After merge: confirm the release run tags v0.1.6 and a new session installs @v0.1.6
+- CLAUDE.local.md's "Every PR decides its release" rule still names `bump --part`; should become the labels
