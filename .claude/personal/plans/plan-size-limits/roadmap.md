@@ -6,3 +6,4 @@ Moved from the CRAM fork's notes on 2026-10-18. An item carrying `repository: Ab
 - branch-index.tsv and dashboard-urls.yaml are keyed by plan id; any split or removal of a plan regenerates both, or session-start.sh stops resolving branches and /plan-dashboard mints duplicate pages.
 - This plan's pull requests stack on #501 (basstler src layout): new modules go under basstler/src/basstler/ and hooks run them with "${BASSTLER_PYTHON}".
 - plan.yaml keys are spelled only in basstler.plan_model.ManifestKey; no other module declares its own key enum.
+- A plan is full at Measure.ITEM_COUNT (landed items pruned), read through plan_size_check; there is no separate size budget.

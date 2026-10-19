@@ -44,16 +44,17 @@ items:
   branch: claude/plan-size-limits-newplan-ukbbri
   pull_request_number: 18
   track: gate-and-skills
-  depends_on: []
+  depends_on:
+  - strict-limits-and-item-slices
   status: in_progress
-  session: https://claude.ai/code/session_01GhTbjxmunfCd5vuXRid6m9
+  session: https://claude.ai/code/session_01FEdxEdq3KNqShdNVPiBYKQ
   notes: >-
-    /plan-create and /add-plan-item read the budget and route new work to a new plan when
-    the plan they would otherwise grow is at it. Draft #18, which also carries the retired
-    CRAM #207 budget it was stacked on. Still owed: retarget from that budget to #11's
-    Measure.ITEM_COUNT, by restacking on #11 once it lands.
-  blockers:
-  - 'Built on #207''s SizeBudget, closed as superseded by #504; must be retargeted to plan_size_limits.Measure.ITEM_COUNT.'
+    /plan-create and /add-plan-item run plan_size_check, which counts unlanded items against
+    #11's Measure.ITEM_COUNT; a plan at the limit is full and new work goes to a new plan.
+    Draft #18, restacked on #11 (base claude/happy-wozniak-nizfnv) on 2026-10-19; CRAM
+    #207's budget module and report hook are deleted. Its tests use plan_model.ManifestField,
+    so they follow #11's rename to ManifestKey when #11 makes it.
+  blockers: []
 - id: strict-limits-and-item-slices
   title: Typed per-field limits enforced on every save, and one item loaded per session
   branch: claude/happy-wozniak-nizfnv
