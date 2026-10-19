@@ -66,4 +66,6 @@ items:
     Per-field limits checked on every save: landed items pruned, finished plans removed,
     progress notes capped, finished branches' progress notes deleted on each progress save.
     Session start loads only the branch item. Draft #11 on main; modules under
-    src/basstler/, hooks run them with BASSTLER_PYTHON.
+    src/basstler/, hooks run them with BASSTLER_PYTHON. Also owns the one plan.yaml key
+    enum: plan_model.ManifestKey, merging bootstrap's ManifestKey and ManifestField (decided
+    2026-10-19). Whichever of #11/#17 lands second deletes build_dashboard.ManifestKey.
