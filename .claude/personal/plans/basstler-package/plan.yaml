@@ -171,12 +171,13 @@ items:
   track: carried-across
   depends_on: [upstream-pull-request-checks]
   pull_request_number: 14
+  session: https://claude.ai/code/session_01KyncMpjhERrpeJNUudMFC9
   notes: >-
-    Its parent (#13) merged, and #14 now targets main. Quotes the failing step's log for each
-    failed upstream check, stopping where the step failed; the reusable workflow and its
-    example caller take failure_logs. Next: merge main in. A trial merge conflicts in
-    tests/upstream_reviews_replay.py, and the branch still uses RepositoryJSON and dict
-    access that #13 replaced with models, so it must move onto them (roadmap rule).
+    Targets main, now merged in (bc5989d), and the suite passes (932). Quotes the failing step's
+    log for each failed upstream check, stopping where the step failed; the reusable workflow
+    and its example caller take failure_logs. Its production code already read CheckResult
+    models, so only the test helpers moved onto #13's models. Waiting on CI for the merge and
+    on review; still a draft.
 - id: setup-stacked-prs-skill
   title: '/setup-stacked-prs: one guided command that sets up the stacked-pull-request workflow'
   branch: null
