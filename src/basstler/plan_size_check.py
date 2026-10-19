@@ -3,14 +3,15 @@
 Report whether a plan is already full, before ``/add-plan-item`` or ``/plan-create``
 writes into or as it.
 
-Measures a manifest and roadmap exactly as ``plan_size_budget.py``'s report does, then
-judges the result against :class:`plan_size_budget.SizeBudget`. Unlike
-``plan_size_gate.py``, this never refuses anything - it only answers the question a
-skill has to ask *before* a save is even attempted, so the routing decision (grow this
-plan, or open a new one) can be made before writing anything doomed to be refused later.
+Counts a manifest's items the way ``save-plan.sh`` does - landed items pruned first -
+and judges the count against :attr:`plan_size_limits.Measure.ITEM_COUNT`. A plan already
+at that limit is full: one more item and the save is refused. Unlike the save, this never
+refuses anything - it only answers the question a skill has to ask *before* a save is
+even attempted, so the routing decision (grow this plan, or open a new one) can be made
+before writing anything doomed to be refused later.
 
 Usage:
-    python3 plan_size_check.py --manifest <path> --roadmap <path>
+    python3 -m basstler.plan_size_check --manifest <path>
 """
 
 from __future__ import annotations
@@ -23,7 +24,8 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.plan_size_budget import PlanSize, SizeBudget
+from basstler.plan_model import PlanManifest
+from basstler.plan_size_limits import Measure
 
 
 class PlanSizeCheckField(StrEnum):
@@ -34,22 +36,17 @@ class PlanSizeCheckField(StrEnum):
 
     ITEM_COUNT = "item_count"
     """
-    How many items the measured manifest declares.
+    How many items the measured manifest keeps once its landed items are pruned.
     """
 
-    LINE_COUNT = "line_count"
+    ITEM_LIMIT = "item_limit"
     """
-    How many lines the measured manifest and roadmap hold together.
+    The most items a plan may hold.
     """
 
     IS_FULL = "is_full"
     """
-    Whether the measured plan blows either half of the size budget.
-    """
-
-    OVERRUNS = "overruns"
-    """
-    Every blown half, rendered as its own string - empty when the plan is within budget.
+    Whether the measured plan has no room for another item.
     """
 
 
@@ -61,40 +58,32 @@ class PlanSizeCheckResult:
 
     item_count: int
     """
-    How many items the measured manifest declares.
+    How many items the measured manifest keeps once its landed items are pruned.
     """
 
-    line_count: int
+    item_limit: int
     """
-    How many lines the measured manifest and roadmap hold together.
-    """
-
-    is_full: bool
-    """
-    Whether the measured plan blows either half of the size budget.
+    The most items a plan may hold.
     """
 
-    overruns: tuple[str, ...]
-    """
-    Every blown half, rendered as its own string - empty when the plan is within budget.
-    """
+    @property
+    def is_full(self) -> bool:
+        """
+        :return: Whether adding one more item would break the limit.
+        """
+        return self.item_count >= self.item_limit
 
     @classmethod
-    def measure(cls, manifest_path: Path, roadmap_path: Path) -> PlanSizeCheckResult:
+    def measure(cls, manifest_path: Path) -> PlanSizeCheckResult:
         """
-        Measure a plan and judge it against the size budget.
+        Count a plan's items and judge them against the item limit.
 
         :param manifest_path: The manifest to measure.
-        :param roadmap_path: The roadmap to measure.
         :return: Whether that plan is already full.
         """
-        size = PlanSize.measure(manifest_path, roadmap_path)
-        overruns = SizeBudget().overruns(size)
+        manifest = PlanManifest.from_file(manifest_path).without_landed_items()
         return cls(
-            item_count=size.item_count,
-            line_count=size.line_count,
-            is_full=bool(overruns),
-            overruns=tuple(str(overrun) for overrun in overruns),
+            item_count=len(manifest.items), item_limit=Measure.ITEM_COUNT.maximum
         )
 
     def to_json(self) -> dict[str, Any]:
@@ -103,9 +92,8 @@ class PlanSizeCheckResult:
         """
         return {
             PlanSizeCheckField.ITEM_COUNT: self.item_count,
-            PlanSizeCheckField.LINE_COUNT: self.line_count,
+            PlanSizeCheckField.ITEM_LIMIT: self.item_limit,
             PlanSizeCheckField.IS_FULL: self.is_full,
-            PlanSizeCheckField.OVERRUNS: list(self.overruns),
         }
 
     @classmethod
@@ -118,26 +106,50 @@ class PlanSizeCheckResult:
         """
         return cls(
             item_count=data[PlanSizeCheckField.ITEM_COUNT],
-            line_count=data[PlanSizeCheckField.LINE_COUNT],
-            is_full=data[PlanSizeCheckField.IS_FULL],
-            overruns=tuple(data[PlanSizeCheckField.OVERRUNS]),
+            item_limit=data[PlanSizeCheckField.ITEM_LIMIT],
         )
+
+
+class PlanSizeCheckOption(StrEnum):
+    """
+    The options this script's command line takes.
+    """
+
+    MANIFEST = "--manifest"
+    """
+    The manifest to measure.
+    """
+
+
+class PlanSizeCheckArgument(StrEnum):
+    """
+    The names this script's command line parses its options under.
+    """
+
+    MANIFEST = "manifest"
+    """
+    The value of :attr:`PlanSizeCheckOption.MANIFEST`.
+    """
 
 
 def main() -> int:
     """
-    Parse arguments and print whether the given manifest and roadmap are already full.
+    Parse arguments and print whether the given manifest is already full.
 
     :return: 0, always - this reports, it never refuses.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--manifest", required=True, type=Path)
-    parser.add_argument("--roadmap", required=True, type=Path)
-    arguments = parser.parse_args()
+    parser.add_argument(
+        PlanSizeCheckOption.MANIFEST,
+        dest=PlanSizeCheckArgument.MANIFEST,
+        required=True,
+        type=Path,
+    )
+    arguments = vars(parser.parse_args())
 
-    result = PlanSizeCheckResult.measure(arguments.manifest, arguments.roadmap)
+    result = PlanSizeCheckResult.measure(arguments[PlanSizeCheckArgument.MANIFEST])
     print(json.dumps(result.to_json()))
     return 0
 

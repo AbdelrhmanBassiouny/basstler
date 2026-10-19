@@ -7,11 +7,10 @@ import json
 import sys
 from pathlib import Path
 
-import pytest
-
 import basstler.plan_size_check
-from basstler.plan_size_budget import PlanSize, SizeBudget
-from basstler.plan_size_check import PlanSizeCheckResult, main
+from basstler.plan_model import ItemStatus, ManifestField, PlanManifest
+from basstler.plan_size_check import PlanSizeCheckOption, PlanSizeCheckResult, main
+from basstler.plan_size_limits import Measure
 
 SCRIPT_NAME = Path(basstler.plan_size_check.__file__).name
 """
@@ -20,108 +19,81 @@ This script's own filename, read from the module rather than spelled again here.
 
 
 def write_plan(
-    tmp_path: Path, item_count: int, roadmap_line_count: int
-) -> tuple[Path, Path]:
+    tmp_path: Path, open_item_count: int, landed_item_count: int = 0
+) -> Path:
     """
-    Write a manifest and roadmap of the given sizes to *tmp_path*.
+    Write a manifest holding the given numbers of open and landed items to *tmp_path*.
 
-    :param tmp_path: Where to write the two files.
-    :param item_count: How many items the manifest declares.
-    :param roadmap_line_count: How many lines the roadmap holds.
-    :return: The manifest and roadmap paths.
+    :param tmp_path: Where to write the manifest.
+    :param open_item_count: How many items are still in progress.
+    :param landed_item_count: How many items have landed.
+    :return: The manifest's path.
     """
+    statuses = [ItemStatus.IN_PROGRESS] * open_item_count + [
+        ItemStatus.DONE
+    ] * landed_item_count
     manifest_path = tmp_path / "plan.yaml"
-    manifest_path.write_text(
-        "id: a-plan\n"
-        "items:\n" + "".join(f"  - id: item-{number}\n" for number in range(item_count))
-    )
-    roadmap_path = tmp_path / "roadmap.md"
-    roadmap_path.write_text(
-        "".join(f"roadmap line {number}\n" for number in range(roadmap_line_count))
-    )
-    return manifest_path, roadmap_path
+    PlanManifest(
+        {
+            ManifestField.IDENTIFIER.value: "a-plan",
+            ManifestField.ITEMS.value: [
+                {
+                    ManifestField.IDENTIFIER.value: f"item-{number}",
+                    ManifestField.STATUS.value: status.value,
+                }
+                for number, status in enumerate(statuses)
+            ],
+        }
+    ).write(manifest_path)
+    return manifest_path
 
 
-def run_check(
-    monkeypatch, capsys, manifest_path: Path, roadmap_path: Path
-) -> PlanSizeCheckResult:
+def run_check(monkeypatch, capsys, manifest_path: Path) -> PlanSizeCheckResult:
     """
-    Run the check's CLI against the given files and parse its printed result.
+    Run the check's command line against *manifest_path* and parse its printed result.
 
     :param monkeypatch: pytest's monkeypatch fixture.
     :param capsys: pytest's stdout/stderr capture fixture.
     :param manifest_path: The manifest to measure.
-    :param roadmap_path: The roadmap to measure.
     :return: The result it printed.
     """
     monkeypatch.setattr(
         sys,
         "argv",
-        [
-            SCRIPT_NAME,
-            "--manifest",
-            str(manifest_path),
-            "--roadmap",
-            str(roadmap_path),
-        ],
+        [SCRIPT_NAME, PlanSizeCheckOption.MANIFEST, str(manifest_path)],
     )
     exit_code = main()
     assert exit_code == 0
     return PlanSizeCheckResult.from_json(json.loads(capsys.readouterr().out))
 
 
-def test_a_plan_within_budget_is_not_full(tmp_path, monkeypatch, capsys):
-    manifest_path, roadmap_path = write_plan(
-        tmp_path, item_count=SizeBudget().maximum_items, roadmap_line_count=0
-    )
-    result = run_check(monkeypatch, capsys, manifest_path, roadmap_path)
+def test_a_plan_with_room_for_one_more_item_is_not_full(tmp_path, monkeypatch, capsys):
+    manifest_path = write_plan(tmp_path, Measure.ITEM_COUNT.maximum - 1)
+    result = run_check(monkeypatch, capsys, manifest_path)
     assert result.is_full is False
-    assert result.overruns == ()
 
 
-def test_a_plan_over_the_item_budget_is_full_and_names_the_overrun(
+def test_a_plan_at_the_item_limit_is_full_since_one_more_would_be_refused(
     tmp_path, monkeypatch, capsys
 ):
-    manifest_path, roadmap_path = write_plan(
-        tmp_path, item_count=SizeBudget().maximum_items + 3, roadmap_line_count=0
-    )
-    result = run_check(monkeypatch, capsys, manifest_path, roadmap_path)
-    size = PlanSize.measure(manifest_path, roadmap_path)
-    (overrun,) = SizeBudget().overruns(size)
+    manifest_path = write_plan(tmp_path, Measure.ITEM_COUNT.maximum)
+    result = run_check(monkeypatch, capsys, manifest_path)
     assert result.is_full is True
-    assert result.overruns == (str(overrun),)
 
 
-def test_a_plan_over_the_line_budget_is_full_and_names_the_overrun(
+def test_landed_items_are_not_counted_since_a_save_prunes_them(
     tmp_path, monkeypatch, capsys
 ):
-    manifest_path, roadmap_path = write_plan(
-        tmp_path,
-        item_count=0,
-        roadmap_line_count=SizeBudget().maximum_lines + 5,
+    manifest_path = write_plan(
+        tmp_path, Measure.ITEM_COUNT.maximum - 1, landed_item_count=3
     )
-    result = run_check(monkeypatch, capsys, manifest_path, roadmap_path)
-    size = PlanSize.measure(manifest_path, roadmap_path)
-    (overrun,) = SizeBudget().overruns(size)
-    assert result.is_full is True
-    assert result.overruns == (str(overrun),)
+    result = run_check(monkeypatch, capsys, manifest_path)
+    assert result.item_count == Measure.ITEM_COUNT.maximum - 1
+    assert result.is_full is False
 
 
-def test_reports_the_measured_item_and_line_counts(tmp_path, monkeypatch, capsys):
-    manifest_path, roadmap_path = write_plan(
-        tmp_path, item_count=4, roadmap_line_count=6
-    )
-    result = run_check(monkeypatch, capsys, manifest_path, roadmap_path)
+def test_reports_the_measured_count_against_the_limit(tmp_path, monkeypatch, capsys):
+    manifest_path = write_plan(tmp_path, 4)
+    result = run_check(monkeypatch, capsys, manifest_path)
     assert result.item_count == 4
-    assert result.line_count == manifest_path.read_text().count("\n") + 6
-
-
-def test_a_missing_roadmap_measures_as_zero_lines_and_never_raises(
-    tmp_path, monkeypatch, capsys
-):
-    manifest_path, roadmap_path = write_plan(
-        tmp_path, item_count=0, roadmap_line_count=0
-    )
-    roadmap_path.unlink()
-    result = run_check(monkeypatch, capsys, manifest_path, roadmap_path)
-    assert result.is_full is False
+    assert result.item_limit == Measure.ITEM_COUNT.maximum
