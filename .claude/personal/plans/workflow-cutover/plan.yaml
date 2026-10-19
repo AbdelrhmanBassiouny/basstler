@@ -56,7 +56,12 @@ items:
     TemplatePage, ProgressCard and SiteSection bases; RenderedDashboard; tests read every
     value from the dataset or enums. 34 threads resolved; 3 left open for the owner -
     the HTML-in-Python split (proposed as site-pages-in-python) and two on unifying the
-    pull request classes, where the reply explains why they stay separate.
+    pull request classes, where the reply explains why they stay separate. The owner's
+    2026-10-19 review (5 threads) was answered in 7ab3682: SiteSection bound to
+    ProgressCard with a SiteSummary card for the hub, PullRequestListState.states, and
+    pages naming their own templates (PageTemplate removed). Open for the owner: the
+    HTML-in-Python split, unifying pull request classes, the SiteSummary model (asked to
+    discuss), and whether _hub.yaml stays in plans/.
 - id: site-pages-in-python
   title: Build the site's pages in Python instead of Jinja templates
   branch: null
