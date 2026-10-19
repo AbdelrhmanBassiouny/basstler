@@ -1,56 +1,14 @@
 #!/bin/bash
 set -euo pipefail
 
-# Persists a plan's edited manifest and roadmap onto the personal-notes
-# branch, at
-# .claude/personal/plans/<plan-id>/{plan.yaml,roadmap.md} - and regenerates
-# the generated branch->plan-id reverse index
-# (.claude/personal/plans/_generated/branch-index.tsv) in the same commit,
-# scanning every plan's plan.yaml so it can never drift out of sync with
-# the manifests it's derived from. See
-# skills/plan-dashboard/plan-schema.md for the
-# full plan.yaml schema, and skills/plan-dashboard/SKILL.md for how
-# the manifest is consumed.
+# Saves a plan's plan.yaml and roadmap.md to the personal-notes branch and
+# regenerates the branch index in the same commit. Landed items are pruned, an
+# emptied plan is removed, and a plan over plan_size_limits is refused.
 #
-# Usage, after copying the plan's files off the personal-notes branch and
-# editing them:
-#   "${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id> \
-#     --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
-# The plan id is always explicit with these flags, since a brand-new plan has
-# no entry in the reverse index yet to derive it from.
-#
-# Without the flags, the manifest and roadmap are read from CLAUDE.local.md
-# between BEGIN-PLAN-MANIFEST/END-PLAN-MANIFEST and
-# BEGIN-PLAN-ROADMAP/END-PLAN-ROADMAP markers a session wrote there itself
-# (session-start.sh loads only the branch's own item, read-only, and writes
-# no such markers), and <plan-id> may be omitted when the current branch is
-# one of the plan's items.
-#
-# Before anything is pushed, landed items are dropped (with every depends_on
-# edge to them), a plan left with no items is removed, and a plan over the
-# limits in src/basstler/plan_size_limits.py is refused, naming each
-# violation.
-#
-# This script pushes data only. It never calls the Artifact tool (only a
-# live Claude session can), so it does not regenerate the dashboard itself -
-# it prints a reminder to run /plan-dashboard <plan-id> afterward.
-#
-# Requires the package's interpreter with its dependencies to parse, prune and
-# check manifests and to regenerate the reverse index (a session start sets that
-# interpreter up).
-#
-# Resolves the remote/branch exactly like the other hook scripts (git
-# config > environment variable > the zero-config default, plus the
-# same-branch-upstream fallback - see fetch_personal_notes_branch in
-# ./resolve-personal-notes-config.sh).
-#
-# Safe to re-run: a no-op if the extracted content already matches what's on
-# the branch (checked across all three files it may touch). Does its work in
-# a scratch worktree, so it never touches your current branch or working
-# tree - and never touches the plan's own branch(es), or anything that could
-# be merged: the manifest lives only on the personal-notes branch. Fails
-# with a clear message if that branch doesn't exist yet on any resolved
-# remote - run ./create-personal-notes-branch.sh first in that case.
+# Usage: save-plan.sh <plan-id> --manifest <plan.yaml> --roadmap <roadmap.md>
+#    or: save-plan.sh [<plan-id>]   (reads the PLAN-MANIFEST/PLAN-ROADMAP
+#                                    markers in CLAUDE.local.md)
+# Pushes data only; run /plan-dashboard <plan-id> afterwards.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
@@ -108,9 +66,7 @@ if [ "${BOOTSTRAP_FROM_FILES}" = "0" ]; then
       || ! grep -q '^<!-- BEGIN-PLAN-ROADMAP:' "${CLAUDE_LOCAL_MD}"; then
     echo "CLAUDE.local.md has no plan-manifest/plan-roadmap section to extract." >&2
     echo "Run session-start.sh first (on a branch a plan already tracks), pass" >&2
-    echo "--manifest/--roadmap file paths instead, or add the marker pairs" >&2
-    echo "yourself when bootstrapping a brand-new plan - see the header" >&2
-    echo "comment in this script." >&2
+    echo "--manifest/--roadmap file paths instead." >&2
     exit 1
   fi
 fi
@@ -140,8 +96,6 @@ fi
 MANIFEST_FILE="$(mktemp)"
 ROADMAP_FILE="$(mktemp)"
 SCRATCH_DIR="$(mktemp -d)"
-# Suffixed with $$ (this process's PID) so two concurrent invocations never
-# race over the same worktree branch name.
 SCRATCH_BRANCH="__save-plan-tmp-$$"
 cleanup() {
   git worktree remove --force "${SCRATCH_DIR}" 2>/dev/null || rm -rf "${SCRATCH_DIR}"
@@ -150,11 +104,6 @@ cleanup() {
 }
 trap cleanup EXIT
 
-# BOOTSTRAP_FROM_FILES was set above from whether --manifest/--roadmap were
-# passed (see the argument-parsing block): "1" reads the manifest/roadmap
-# straight from the given files, "0" extracts them from CLAUDE.local.md's
-# markers instead - see this script's own header comment for when each
-# path applies.
 if [ "${BOOTSTRAP_FROM_FILES}" = "1" ]; then
   cp "${MANIFEST_SOURCE_FILE}" "${MANIFEST_FILE}"
   cp "${ROADMAP_SOURCE_FILE}" "${ROADMAP_FILE}"
@@ -170,8 +119,6 @@ if [ ! -s "${MANIFEST_FILE}" ]; then
   exit 1
 fi
 
-# The dashboard's own validation, so nothing reaches the notes branch that no
-# dashboard could then be built from. It prints every problem it finds.
 if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate "${MANIFEST_FILE}"; then
   echo "Nothing was saved - fix the manifest and save again." >&2
   exit 1
@@ -190,8 +137,7 @@ git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" FETCH_HEAD --quiet
 PLAN_DIRECTORY_PATH="$(plan_directory_path "${PLAN_ID}")"
 MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
 ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
-# Prints "saved", or "removed" once every item has landed; exits 1 naming each
-# limit a plan breaks.
+# Prints "saved" or "removed"; exits 1 naming each broken limit.
 STAGED_PLAN="$("${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" stage \
   "${MANIFEST_FILE}" "${ROADMAP_FILE}" \
   --manifest-destination "${SCRATCH_DIR}/${MANIFEST_PATH}" \
