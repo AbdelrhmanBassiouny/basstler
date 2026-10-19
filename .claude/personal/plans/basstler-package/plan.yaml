@@ -122,7 +122,8 @@ items:
     plan-tracking-skills, session-notes-infrastructure, stack-maintenance,
     integration-tip-selection, stack-tooling-install, workflow-cutover) replace the item's
     `repository:` line and pull_request_number with the basstler ones. One with no
-    counterpart (stale, superseded) closes with the reason.
+    counterpart (stale, superseded) closes with the reason. Done so far: #503 closed for
+    basstler#10, its actions-budget item already pointing there.
 - id: cram-notes-cleanup
   title: Strip the tooling from the CRAM fork's personal notes
   branch: null
@@ -135,7 +136,8 @@ items:
     8c6c016). Left: tooling rules in CRAM's notes.md that basstler's own notes now carry, the
     PR-progress files of branches that moved, and actions-budget, whose basstler-code items
     (budget-manifest, usage-monitor and the two pipeline items) move here once depends_on can
-    name an item in another repository's plan.
+    name an item in another repository's plan. Until then budget-manifest stays there, already
+    repointed at basstler#10 (CRAM notes 19b9f4292).
 - id: basstler-krrood-dependency
   title: Depend on krrood's light core and use its patterns
   branch: claude/magical-albattani-9fbkd5
