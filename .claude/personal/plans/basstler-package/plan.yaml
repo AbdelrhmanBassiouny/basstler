@@ -59,22 +59,20 @@ items:
 - id: basstler-open-pull-request-carryover
   title: Open draft pull requests here for the carried tooling branches, retire the stale ones
   branch: claude/affectionate-curie-6k7tgt
-  status: in progress
+  status: done
   track: carried-across
   depends_on: [basstler-repository-extraction]
-  pull_request_number: 7
+  pull_request_number: null
   session: https://claude.ai/code/session_01XHyFmqJdtdZbCm6Ss8teWA
   notes: >-
-    Carried, each with main merged in and a draft pull request here: #8 notes-core, #9
-    restack merges, #10 Actions budget, #11 size limits, #13 upstream CI, #14 failure logs,
-    #15 fix propagation, #16 stack-maintenance workflow, #17 cross-plan depends_on (with
-    CRAM #206), #18 new-plan routing (with CRAM #207). #12 (krrood) opened without the
-    merge, since its rework replaces it. Retired with an issue each (#19-#31): the bastler/
-    and .claude/stack/ era branches, the superseded #514 and #207, and, by the user's
-    choice, the whole integration-branch stack (#154, #211, #281, #437). Left: the user
-    deletes the 13 retired branches (a session's git proxy refuses deletes); the actions-
-    budget item in the CRAM notes still names CRAM #503 (now #10). #7 tracks it and closes
-    once the branches are gone.
+    Done; tracked in #7, closed without merging since it held no code. Carried as draft pull
+    requests: #8 notes-core, #9 restack merges, #10 Actions budget, #11 size limits, #12
+    krrood (main deliberately not merged), #13 upstream CI, #14 failure logs, #15 fix
+    propagation, #16 stack-maintenance workflow, #17 cross-plan depends_on (with CRAM #206),
+    #18 new-plan routing (with CRAM #207). Retired and deleted, each with an issue recording
+    its last commit (#19-#31): the bastler/ and .claude/stack/ era branches, the superseded
+    #514 and #207, and the integration-branch stack. The actions-budget item in the CRAM
+    notes still names CRAM #503 (now #10).
 - id: cram-uses-basstler-plugin
   title: The CRAM fork installs basstler as a plugin instead of carrying its code
   branch: null
