@@ -18,7 +18,7 @@ set -euo pipefail
 #     --roadmap <roadmap.md path> \
 #     --pr-data <pr_data.json path> \
 #     --output <dashboard.html output path> \
-#     [--tracking-url <url>]
+#     [--tracking-url <url>] [--hub-url <url>] [--index-url <url>]
 #
 # Prints one JSON summary to stdout, merging sync_manifest_status's own
 # {"corrected": [...]} with build_dashboard's status/drift/ready summary,
@@ -42,6 +42,8 @@ ROADMAP_FILE=""
 PULL_REQUEST_DATA_FILE=""
 OUTPUT_FILE=""
 TRACKING_URL=""
+HUB_URL=""
+INDEX_URL=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --plan-id)
@@ -68,6 +70,14 @@ while [ $# -gt 0 ]; do
       TRACKING_URL="$2"
       shift 2
       ;;
+    --hub-url)
+      HUB_URL="$2"
+      shift 2
+      ;;
+    --index-url)
+      INDEX_URL="$2"
+      shift 2
+      ;;
     *)
       echo "Unrecognized argument: $1" >&2
       exit 1
@@ -77,7 +87,7 @@ done
 
 if [ -z "${PLAN_ID}" ] || [ -z "${PLAN_FILE}" ] || [ -z "${ROADMAP_FILE}" ] \
     || [ -z "${PULL_REQUEST_DATA_FILE}" ] || [ -z "${OUTPUT_FILE}" ]; then
-  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>]" >&2
+  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>] [--hub-url <url>] [--index-url <url>]" >&2
   exit 1
 fi
 
@@ -103,6 +113,12 @@ BUILD_ARGUMENTS=(
 )
 if [ -n "${TRACKING_URL}" ]; then
   BUILD_ARGUMENTS+=(--tracking-url "${TRACKING_URL}")
+fi
+if [ -n "${HUB_URL}" ]; then
+  BUILD_ARGUMENTS+=(--hub-url "${HUB_URL}")
+fi
+if [ -n "${INDEX_URL}" ]; then
+  BUILD_ARGUMENTS+=(--index-url "${INDEX_URL}")
 fi
 BUILD_SUMMARY="$("${BASSTLER_PYTHON}" -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
 
