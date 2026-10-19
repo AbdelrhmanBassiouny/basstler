@@ -183,21 +183,22 @@ already require.
 ## 7. Check the draft isn't already full
 
 A plan this large before it has even been saved once is the same failure a
-plan can also grow into later: too much for one manifest and roadmap to hold.
-Catch it here, before the first save, rather than after the fact. Measure the
-draft the same way a save would be measured:
+plan can also grow into later: more items than one plan may hold. Catch it
+here, before the first save, rather than after the fact. Count the draft's
+items against the item limit, `Measure.ITEM_COUNT` in `plan_size_limits.py`:
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <path/to/plan.yaml>
 ```
 
 If `is_full` is `false`, continue to step 8 unchanged.
 
 If `is_full` is `true`, stop — do not call `${SAVE_PLAN_SCRIPT}` on this draft.
-Report which half is blown and by how much, and that the source material
-describes more than one plan's worth of work. Don't re-derive a splitting
+A plan born at `item_limit` has no room for the next item anyone adds. Report
+`item_count` against `item_limit`, and that the source material describes more
+than one plan's worth of work. Don't re-derive a splitting
 methodology from scratch here — a plan that has previously had to split
-itself under this same budget is prior art on how to cut one under real
+itself under this same limit is prior art on how to cut one under real
 constraints (by track/wave first, verified by measuring rather than assumed,
 cut on subject only when a track or wave alone is still over); look for one
 before inventing an approach. Ask, via `AskUserQuestion`, whether to re-draft

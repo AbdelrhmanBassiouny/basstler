@@ -87,23 +87,19 @@ the files are called.
 
 A plan's `description` covering the work is not enough by itself — it also has
 to have room left. For every plan found in step 2 whose `description` covers
-the work, measure its *current* manifest and roadmap (already fetched off
-`FETCH_HEAD`) against the size budget:
+the work, count its *current* items (manifest already fetched off
+`FETCH_HEAD`) against the item limit, `Measure.ITEM_COUNT` in
+`plan_size_limits.py`:
 
 ```bash
 git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/plan.yaml" > /tmp/plan.yaml
-git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/roadmap.md" > /tmp/roadmap.md 2>/dev/null || : > /tmp/roadmap.md
-"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest /tmp/plan.yaml --roadmap /tmp/roadmap.md
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest /tmp/plan.yaml
 ```
 
 `is_full: true` disqualifies that plan for growth, whatever its `description`
-says — cramming one more item into a full plan is exactly the state the
-plan's size budget exists to keep it out of, whether or not the save path is
-already enforcing that, so proposing it here only moves the problem to
-whoever next edits that plan. This reads the plan's size as it stands today,
-not a projection that also counts the item being added — the not-yet-written
-item's own size isn't known yet, and a plan already at the limit has no room
-regardless of how small the addition would be.
+says — the plan is already at `item_limit`, so `save-plan.sh` would refuse it
+one more item, and proposing it here only moves that refusal to whoever next
+saves the plan. Landed items are not counted, since a save prunes them first.
 
 Check every covering plan this way before ruling out **New item in an
 existing plan** entirely — a plan qualifies only if it fits both ways, topic
@@ -124,7 +120,7 @@ fall through to **New plan**.
   sessions, and either no existing plan covers it or every plan that does is
   already full (step 5). Hand off to `/plan-create` via the `Skill` tool
   rather than drafting a manifest here — if the reason is a full plan rather
-  than no coverage at all, say so, citing the overrun step 5 found.
+  than no coverage at all, say so, citing the item count step 5 found.
 - **No item at all** — one self-contained change, done in this session, that
   nothing else depends on. `plan-create`'s own guidance against over-modelling
   applies: a plan that tracks everything is a plan nobody reads.
@@ -164,7 +160,7 @@ Flag explicitly, never silently paper over:
 - Paths that had to be guessed rather than derived in step 1.
 - A duplicate-intent match you are unsure about — say what looks the same and
   let the user settle it.
-- A covering plan step 5 ruled out for being full — name it and the overrun,
+- A covering plan step 5 ruled out for being full — name it and its item count,
   so the user can see why the work landed in a new plan instead.
 
 Do not touch git, create a branch, or write any code in this skill — its only
