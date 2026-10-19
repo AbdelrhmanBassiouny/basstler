@@ -26,6 +26,7 @@ rules at [`example/roadmap.md`](./example/roadmap.md).
 .claude/personal/plans/
   _generated/
     branch-index.tsv          (generated - do not hand-edit, see below)
+  _hub.yaml                   (the plan site's hub file - see basstler.plan_hub)
   <plan-id>/
     plan.yaml
     roadmap.md
@@ -33,6 +34,8 @@ rules at [`example/roadmap.md`](./example/roadmap.md).
 
 `<plan-id>` is a short kebab-case slug — it's the directory name, the `id`
 field inside `plan.yaml`, and the key the generated reverse index uses.
+Entries that are not plans start with `_`, which a kebab-case slug never does, so they
+can never collide with a plan's directory.
 
 ## `plan.yaml` schema (schema_version: 1)
 
