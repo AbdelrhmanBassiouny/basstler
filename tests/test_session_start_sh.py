@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Mapping
+from enum import StrEnum
 from pathlib import Path
 
 import pytest
@@ -27,18 +28,14 @@ from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_model import ItemStatus, ManifestKey, PlanManifest
 
-from .constants import (
-    ClaudeLocalSection,
+from .constants.environment import (
     ConfigurationVariable,
-    DatasetLocation,
     EnvironmentVariable,
     FileMode,
-    PackageManager,
-    PersonalNotesPath,
-    ScratchBranch,
     ScrubbedEnvironmentPrefix,
-    StubVariable,
 )
+from .constants.notes import ClaudeLocalSection, ScratchBranch
+from .constants.paths import DatasetLocation, PersonalNotesPath
 from .plan_dataset import LandedItemsPlan
 from .executable_stubs import ExecutableStubDirectory, path_hiding_executables
 from .plugin_manifest import PluginManifest
@@ -56,6 +53,60 @@ from .session_start_summary import (
     summary_message,
     summary_value,
 )
+
+
+class StubVariable(StrEnum):
+    """
+    The environment variables the stubs under ``dataset/stubs`` read.
+    """
+
+    PIP_CALL_LOG = "STUB_PIP_CALL_LOG"
+    """
+    The file the ``pip`` stub appends each invocation to.
+    """
+
+    PIP_STATUS = "STUB_PIP_STATUS"
+    """
+    The exit status the ``pip`` stub reports.
+    """
+
+    PIP_INSTALLED_UV = "STUB_PIP_INSTALLED_UV"
+    """
+    The script a ``uv`` installed by the ``pip`` stub runs.
+    """
+
+    UV_CALL_LOG = "STUB_UV_CALL_LOG"
+    """
+    The file the ``uv`` stub appends each invocation to.
+    """
+
+    UV_STATUS = "STUB_UV_STATUS"
+    """
+    The exit status the ``uv`` stub reports.
+    """
+
+    UV_PYTHON = "STUB_UV_PYTHON"
+    """
+    The interpreter an environment the ``uv`` stub creates runs.
+    """
+
+
+class PackageManager(StrEnum):
+    """
+    The executables the session start installs packages with, each named as it is on
+    ``PATH`` and as its stub is under ``dataset/stubs``.
+    """
+
+    PIP = "pip"
+    """
+    The package installer every interpreter ships, used where there is no ``uv``.
+    """
+
+    UV = "uv"
+    """
+    The package manager that also creates environments and fetches interpreters.
+    """
+
 
 PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
 

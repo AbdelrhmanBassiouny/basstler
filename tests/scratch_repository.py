@@ -24,15 +24,13 @@ from .script_runner import BashScriptRunner
 from basstler.locations import PackageLocation, PluginLocation
 from basstler.shell_configuration import ShellConfigurationFunction
 
-from .constants import (
+from .constants.environment import (
     ConfigurationVariable,
-    DatasetLocation,
     FileMode,
-    RepositoryLocation,
-    ScratchBranch,
     ScrubbedEnvironmentPrefix,
-    SkillDirectory,
 )
+from .constants.notes import ScratchBranch
+from .constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
 
 
 class PackageSourceFile(StrEnum):

@@ -10,6 +10,8 @@ import pytest
 
 import yaml
 
+import basstler.plan_manifest_tools
+
 from basstler.build_dashboard import PlanValidationError, validate_plan
 from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_model import (
@@ -28,8 +30,13 @@ from basstler.plan_manifest_tools import (
     main,
 )
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 from .plan_dataset import LandedItemsPlan
+
+SCRIPT_NAME = Path(basstler.plan_manifest_tools.__file__).name
+"""
+This script's own filename, read from the module rather than spelled again here.
+"""
 
 
 def write_manifest(
@@ -146,7 +153,7 @@ def test_main_dispatches_read_id(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["plan_manifest_tools.py", ManifestToolsCommand.READ_ID, str(manifest_path)],
+        [SCRIPT_NAME, ManifestToolsCommand.READ_ID, str(manifest_path)],
     )
     exit_code = main()
     assert exit_code == ManifestToolsExitCode.SUCCESS
@@ -161,7 +168,7 @@ def test_main_dispatches_regenerate_branch_index(tmp_path, monkeypatch):
         sys,
         "argv",
         [
-            "plan_manifest_tools.py",
+            SCRIPT_NAME,
             ManifestToolsCommand.REGENERATE_BRANCH_INDEX,
             ManifestToolsOption.SCRATCH_DIRECTORY,
             str(tmp_path),
@@ -190,7 +197,7 @@ def run_validate(monkeypatch, manifest_path: Path) -> int:
     monkeypatch.setattr(
         sys,
         "argv",
-        ["plan_manifest_tools.py", ManifestToolsCommand.VALIDATE, str(manifest_path)],
+        [SCRIPT_NAME, ManifestToolsCommand.VALIDATE, str(manifest_path)],
     )
     return main()
 
@@ -253,7 +260,7 @@ def test_main_dispatches_item_by_id(monkeypatch, capsys):
         sys,
         "argv",
         [
-            "plan_manifest_tools.py",
+            SCRIPT_NAME,
             ManifestToolsCommand.ITEM,
             str(DatasetLocation.PLAN_WITH_LANDED_ITEMS),
             ManifestToolsOption.ITEM_IDENTIFIER,
@@ -271,7 +278,7 @@ def test_main_dispatches_item_by_branch(monkeypatch, capsys):
         sys,
         "argv",
         [
-            "plan_manifest_tools.py",
+            SCRIPT_NAME,
             ManifestToolsCommand.ITEM,
             str(DatasetLocation.PLAN_WITH_LANDED_ITEMS),
             ManifestToolsOption.BRANCH,

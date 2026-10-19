@@ -20,7 +20,7 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 import pytest
@@ -88,16 +88,71 @@ from basstler.maintenance_restack_steps import (
 )
 
 from .scratch_repository import initialize_bare_repository
-from .constants import (
-    DatasetLocation,
-    PromotionSampleText,
-    RemoteName,
-    RepositoryLocation,
-    StackBranch,
-    StackLabel,
-    StackPullRequestNumber,
-)
+from .constants.paths import DatasetLocation, RepositoryLocation
+from .constants.stack import RemoteName, StackBranch, StackLabel
 from .script_runner import PythonModuleRunner
+
+
+class StackPullRequestNumber(IntEnum):
+    """
+    The numbers of the fork pull requests the two-branch stack under test is made of.
+
+    A number is written into a board entry, keyed into a recorded write and read back in
+    an assertion, so it is named once rather than spelled at each of those places.
+    """
+
+    PARENT = 40
+    """
+    The pull request of :attr:`StackBranch.PARENT`.
+    """
+
+    CHILD = 41
+    """
+    The pull request of :attr:`StackBranch.CHILD`, based on the parent's.
+    """
+
+
+class PromotionSampleText(StrEnum):
+    """
+    The text a promotion test puts into a fork pull request and finds again in what the
+    routine writes back.
+    """
+
+    TITLE = "A parent branch"
+    """
+    The parent pull request's title.
+    """
+
+    SUMMARY = "What this branch does."
+    """
+    The first paragraph of the parent pull request's description.
+    """
+
+    DETAIL = "More detail."
+    """
+    The paragraph after it.
+    """
+
+    PROSE = "Prose."
+    """
+    A description's text before its Promote section.
+    """
+
+    FIRST_LINK = "https://example.invalid/first"
+    """
+    The create-link a first promotion writes.
+    """
+
+    SECOND_LINK = "https://example.invalid/second"
+    """
+    The create-link a second promotion writes in its place.
+    """
+
+    COMMENT_LINK_PREFIX = "https://example.invalid/comment/"
+    """
+    What a recorded comment's stand-in URL starts with, before the comment's position.
+    """
+
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
 """

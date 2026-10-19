@@ -1,16 +1,5 @@
 """
-The size every plan document and every pull request's progress notes are held to.
-
-Everything a session reads about a plan or a pull request costs context on every session
-that loads it, so each document may hold only what a future session needs to act: the
-next step, what blocks it, and the standing rules of the plan. History lives in git and on
-the pull requests themselves. The save hooks run these checks and refuse a save that
-breaks one, so the limits hold without anyone having to remember them.
-
-Usage:
-    python3 -m basstler.plan_size_limits stage <manifest-file> <roadmap-file> \\
-        --manifest-destination <path> --roadmap-destination <path>
-    python3 -m basstler.plan_size_limits check-progress <progress-file>
+The size limits every plan and every pull request's progress notes are held to on save.
 """
 
 from __future__ import annotations
@@ -149,10 +138,22 @@ class DocumentPart(StrEnum):
     """
 
 
-@dataclass(frozen=True)
-class DocumentLocation:
+class DocumentLocation(ABC):
     """
     Where in a document a quantity was counted.
+    """
+
+    @abstractmethod
+    def __str__(self) -> str:
+        """
+        :return: The location, as a refusal names it.
+        """
+
+
+@dataclass(frozen=True)
+class WholePartLocation(DocumentLocation):
+    """
+    A part of a document there is only one of.
     """
 
     part: DocumentPart
@@ -160,18 +161,38 @@ class DocumentLocation:
     The part of the document.
     """
 
-    subject: str | int | None = None
+    def __str__(self) -> str:
+        return self.part
+
+
+@dataclass(frozen=True)
+class ItemLocation(DocumentLocation):
     """
-    Which one of several such parts: an item's id or an entry's number.
+    One of the plan's items.
+    """
+
+    item_identifier: str
+    """
+    The item's id.
     """
 
     def __str__(self) -> str:
-        """
-        :return: The part, followed by the subject when there is one.
-        """
-        if self.subject is None:
-            return self.part
-        return f"{self.part} {self.subject!r}"
+        return f"{DocumentPart.ITEM} {self.item_identifier!r}"
+
+
+@dataclass(frozen=True)
+class RoadmapEntryLocation(DocumentLocation):
+    """
+    One of the roadmap's entries.
+    """
+
+    entry_number: int
+    """
+    The entry's number, counted from one.
+    """
+
+    def __str__(self) -> str:
+        return f"{DocumentPart.ROADMAP_ENTRY} {self.entry_number}"
 
 
 @dataclass
@@ -396,11 +417,11 @@ class Roadmap:
         """
         violations: list[Violation] = list(self.format_violations)
         violations += Measure.ROADMAP_ENTRY_COUNT.violations(
-            DocumentLocation(DocumentPart.ROADMAP), len(self.entries)
+            WholePartLocation(DocumentPart.ROADMAP), len(self.entries)
         )
         for number, entry in enumerate(self.entries, start=1):
             violations += Measure.ROADMAP_ENTRY_LENGTH.violations(
-                DocumentLocation(DocumentPart.ROADMAP_ENTRY, number), len(entry)
+                RoadmapEntryLocation(number), len(entry)
             )
         return violations
 
@@ -432,13 +453,13 @@ class Plan(MeasuredDocument):
         manifest = self.manifest
         violations: list[Violation] = []
         violations += Measure.ITEM_COUNT.violations(
-            DocumentLocation(DocumentPart.PLAN), len(manifest.items)
+            WholePartLocation(DocumentPart.PLAN), len(manifest.items)
         )
         violations += Measure.DESCRIPTION_LENGTH.violations(
-            DocumentLocation(DocumentPart.PLAN_DESCRIPTION), len(manifest.description)
+            WholePartLocation(DocumentPart.PLAN_DESCRIPTION), len(manifest.description)
         )
         for item in manifest.items:
-            location = DocumentLocation(DocumentPart.ITEM, item.identifier)
+            location = ItemLocation(item.identifier)
             violations += Measure.NOTE_LENGTH.violations(location, len(item.notes))
             violations += Measure.BLOCKER_COUNT.violations(location, len(item.blockers))
             for blocker in item.blockers:
@@ -474,7 +495,7 @@ class ProgressNotes(MeasuredDocument):
 
     def violations(self) -> list[Violation]:
         return Measure.PROGRESS_LENGTH.violations(
-            DocumentLocation(DocumentPart.PROGRESS_NOTES), len(self.text.strip())
+            WholePartLocation(DocumentPart.PROGRESS_NOTES), len(self.text.strip())
         )
 
 

@@ -1,0 +1,233 @@
+"""
+Paths more than one suite reads: the repository, the dataset, skills and notes.
+"""
+
+from __future__ import annotations
+
+from pathlib import Path
+
+from basstler.locations import PackageLocation, PathEnumeration, ProjectLocation
+
+
+class RepositoryLocation(PathEnumeration):
+    """
+    This repository's own parts the suites read: the plugin the hooks and skills ship
+    in, and the workflows.
+
+    Found from the package's source tree rather than through
+    :class:`basstler.locations.PluginLocation`, so a plugin root set in the environment
+    running the suite cannot point the tests at another copy.
+    """
+
+    ROOT = PackageLocation.SOURCE_TREE.value
+    """
+    The repository root.
+    """
+
+    PLUGIN = ROOT / "plugin"
+    """
+    The Claude Code plugin: its manifest, hooks and skills.
+    """
+
+    PLUGIN_MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
+    """
+    The plugin's manifest, the one place the release's version is written.
+    """
+
+    HOOKS = PLUGIN / "hooks"
+    """
+    The shell entry points under test.
+    """
+
+    WORKFLOWS = ROOT / ".github" / "workflows"
+    """
+    The repository's Actions workflows.
+    """
+
+
+class DatasetLocation(PathEnumeration):
+    """
+    This suite's own test data, next to the tests that read it.
+    """
+
+    DIRECTORY = Path(__file__).parents[1] / "dataset"
+    """
+    The dataset directory itself.
+    """
+
+    PLAN_WITH_LANDED_ITEMS = DIRECTORY / "plan-with-landed-items.yaml"
+    """
+    A plan with a tracking issue and three items: one landed, one in progress that
+    depends on it, and one not started that depends on both.
+    """
+
+    PLAN_ALL_LANDED = DIRECTORY / "plan-all-landed.yaml"
+    """
+    A plan every item of which has landed.
+    """
+
+    ROADMAP_OF_STANDING_RULES = DIRECTORY / "roadmap-of-standing-rules.md"
+    """
+    A roadmap in the shape the limits accept, whose last entry wraps onto a second line.
+    """
+
+    ROADMAP_WITH_DATED_SECTION = DIRECTORY / "roadmap-with-dated-section.md"
+    """
+    A roadmap a session appended a dated section to.
+    """
+
+    PULL_REQUESTS_BY_BRANCH = DIRECTORY / "pull-requests-by-branch.json"
+    """
+    A recorded pull request listing, one pull request for each
+    :class:`ProgressBranch` that has one.
+    """
+
+    STUBS = DIRECTORY / "stubs"
+    """
+    Executables copied onto a scratch ``PATH`` to stand in for a real ``gh``, ``curl`` or
+    hook script.
+    """
+
+    UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"
+    """
+    The recorded GraphQL responses the upstream review reader is replayed against.
+    """
+
+    SITE_PLANS = DIRECTORY / "site-plans"
+    """
+    A ``plans`` directory as the notes branch carries it: two valid plans, one whose
+    manifest fails validation, and the generated directory that holds no plan.
+    """
+
+    INSTALLED_DISTRIBUTIONS = DIRECTORY / "installed-distributions"
+    """
+    A directory that reads as installed distributions once it is on ``sys.path``, holding one
+    whose name is spelled with every separator a distribution name may use.
+    """
+
+    UNINSTALLED_PROJECT = DIRECTORY / "uninstalled-project" / "pyproject.toml"
+    """
+    The metadata of a project no environment has installed, declaring no dependencies.
+    """
+
+    PARTLY_INSTALLED_PROJECT = DIRECTORY / "partly-installed-project" / "pyproject.toml"
+    """
+    A project declaring one dependency that is installed, then one that cannot be.
+    """
+
+    PLAN = DIRECTORY / "plan.yaml"
+    """
+    A minimal plan the dashboard builds.
+    """
+
+    ROADMAP = DIRECTORY / "roadmap.md"
+    """
+    The roadmap saved beside :attr:`PLAN`.
+    """
+
+    PLAN_WITH_UNKNOWN_STATUS = DIRECTORY / "plan-with-unknown-status.yaml"
+    """
+    The same plan, its item's status one the schema does not define.
+    """
+
+    STACK_CONFIGURATION = DIRECTORY / "stack-configuration"
+    """
+    Shipped defaults and a project's own stack settings, for layering one over the other.
+    """
+
+    SCRATCH_FORK_STACK_CONFIGURATION = STACK_CONFIGURATION / "scratch-fork.toml"
+    """
+    The stack settings a scratch fork checkout commits, naming the upstream its tests
+    stand up.
+    """
+
+    COMMITTED_DEFAULT_STACK_CONFIGURATION = (
+        STACK_CONFIGURATION / "committed-default.toml"
+    )
+    """
+    A project's committed settings naming every default, beneath a personal-notes
+    override.
+    """
+
+    SET_UP_CHECKOUT = DIRECTORY / "set-up-checkout"
+    """
+    A committed tree of everything ``check-setup.sh`` requires of the basstler checkout a
+    plugin runs from, copied over a scratch checkout rather than written out file by file.
+
+    Its plugin files stand in for the real ones: the ``tooling_files`` check tests only that
+    each path exists, so nothing there is ever run.
+    """
+
+    SET_UP_PROJECT = DIRECTORY / "set-up-project"
+    """
+    A committed tree of everything ``check-setup.sh`` requires of a set-up project, copied
+    over a scratch project root.
+    """
+
+
+class SkillDirectory(PathEnumeration):
+    """
+    The skills the suites read, relative to the plugin root.
+
+    Claude Code finds a skill by its path, so the path *is* the interface, and the package
+    does not name it.
+    """
+
+    DIRECTORY = Path("skills")
+    """
+    The directory holding every skill.
+    """
+
+    PLAN_DASHBOARD = DIRECTORY / "plan-dashboard"
+    """
+    The dashboard skill: its instructions, its worked example and its shell entry point.
+    """
+
+    STACKED_PULL_REQUEST_MAINTENANCE = DIRECTORY / "stacked-pr-maintenance"
+    """
+    The maintenance pass's own instructions.
+    """
+
+    DASHBOARD_REFRESH_SCRIPT = PLAN_DASHBOARD / "refresh_dashboard.sh"
+    """
+    The dashboard skill's shell entry point.
+    """
+
+
+class PersonalNotesPath(PathEnumeration):
+    """
+    The files the shell hooks read from the personal-notes branch or write into a clone,
+    relative to the project root, that the package itself does not name.
+    """
+
+    LOCAL_INSTRUCTIONS = Path("CLAUDE.local.md")
+    """
+    The clone's private instructions, which the session start writes and save-plan.sh
+    reads a plan out of.
+    """
+
+    GIT_IDENTITY = ProjectLocation.PERSONAL_NOTES / "git-identity"
+    """
+    The recorded git identity a clone with none of its own is given.
+    """
+
+    PULL_REQUEST_PROGRESS = ProjectLocation.PERSONAL_NOTES / "pr-progress"
+    """
+    The directory holding each pull request branch's progress notes, by branch name.
+    """
+
+    SETTINGS_ON_NOTES_BRANCH = ProjectLocation.PERSONAL_NOTES / "settings.local.json"
+    """
+    The Claude Code settings the branch carries.
+    """
+
+    LOCAL_SETTINGS = ProjectLocation.CLAUDE_CODE_DIRECTORY / "settings.local.json"
+    """
+    Where those settings are synced to in the clone - the file Claude Code itself reads,
+    and writes its own permission grants into.
+    """
+
+    BRANCH_INDEX = ProjectLocation.PLANS / "_generated" / "branch-index.tsv"
+    """
+    The generated reverse index mapping an item's branch to the plan tracking it.
+    """

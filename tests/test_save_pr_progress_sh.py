@@ -6,22 +6,29 @@ repository standing in for the personal-notes remote.
 from __future__ import annotations
 
 import subprocess
+from enum import StrEnum
 
 import pytest
 
 from basstler.environment import GitHubCredentialVariable
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan_size_limits import Measure
-from basstler.progress_notes import ProgressNotesFile
+from basstler.progress_notes import ProgressNotesFile, PruningSkipped
 
-from .constants import (
-    ClaudeLocalSection,
-    HookFile,
-    PersonalNotesPath,
-    ProgressBranch,
-    ScratchBranch,
-)
+from .constants.notes import ClaudeLocalSection, ProgressBranch, ScratchBranch
+from .constants.paths import PersonalNotesPath
 from .scratch_repository import ScratchRepository
+
+
+class HookFile(StrEnum):
+    """
+    The hook scripts a suite runs that the package does not name.
+    """
+
+    SAVE_PULL_REQUEST_PROGRESS = "save-pr-progress.sh"
+    """
+    Saves the current branch's progress notes to the personal-notes branch.
+    """
 
 
 @pytest.fixture
@@ -123,3 +130,4 @@ def test_without_a_credential_the_save_goes_ahead_unpruned(
         progress_repository.project_root.parent / "verify"
     )
     assert (checkout / other_notes).exists()
+    assert str(PruningSkipped.NO_CREDENTIAL) in result.stderr

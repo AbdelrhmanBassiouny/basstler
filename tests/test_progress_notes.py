@@ -22,7 +22,8 @@ from basstler.progress_notes import (
 )
 from basstler.repository import Repository
 
-from .constants import DatasetLocation, ProgressBranch
+from .constants.notes import ProgressBranch
+from .constants.paths import DatasetLocation
 from .scratch_repository import ScratchRepository, initialize_bare_repository
 
 PULL_REQUESTS = json.loads(DatasetLocation.PULL_REQUESTS_BY_BRANCH.read_text())

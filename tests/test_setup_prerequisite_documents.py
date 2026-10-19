@@ -19,7 +19,7 @@ from enum import StrEnum
 from pathlib import Path
 
 
-from .constants import RepositoryLocation, SkillDirectory
+from .constants.paths import RepositoryLocation, SkillDirectory
 
 
 class SkillCommand(StrEnum):

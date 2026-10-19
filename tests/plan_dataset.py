@@ -9,7 +9,7 @@ from dataclasses import dataclass
 
 from basstler.plan_model import ItemStatus, PlanItem, PlanManifest
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 
 # %% the plan with landed items
 

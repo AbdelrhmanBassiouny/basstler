@@ -13,7 +13,7 @@ from basstler.plan_item_bootstrap import PlanDocument
 from basstler.repository import Repository
 from basstler.setup_steps import PersonalNotesSetting
 
-from .constants import SitePlan, SiteRepository, SiteSampleText
+from .constants.site import SitePlan, SiteRepository, SiteSampleText
 
 REGISTRY = SiteRepository.NOTES.value
 """

@@ -6,6 +6,7 @@ real remote - no network access or real personal-notes branch involved.
 """
 
 import subprocess
+from enum import StrEnum
 from pathlib import Path
 
 import pytest
@@ -15,9 +16,37 @@ from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_model import PlanManifest
 from basstler.shell_configuration import ShellConfigurationFunction
 
-from .constants import DatasetLocation, DatasetPlan, PersonalNotesPath, SavePlanOption
+from .constants.paths import DatasetLocation, PersonalNotesPath
 from .project_declaration import ProjectDeclaration
 from .scratch_repository import PackageSourceFile, ScratchRepository
+
+
+class DatasetPlan(StrEnum):
+    """
+    What the dataset's plans are known by.
+    """
+
+    IDENTIFIER = "test-plan"
+    """
+    The ``id`` :attr:`DatasetLocation.PLAN` carries, and so the plan id it is saved
+    under.
+    """
+
+
+class SavePlanOption(StrEnum):
+    """
+    The options ``save-plan.sh`` reads its plan from files with.
+    """
+
+    MANIFEST = "--manifest"
+    """
+    The plan.yaml to save.
+    """
+
+    ROADMAP = "--roadmap"
+    """
+    The roadmap.md to save beside it.
+    """
 
 
 @pytest.fixture

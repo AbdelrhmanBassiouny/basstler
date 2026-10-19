@@ -21,12 +21,9 @@ import pytest
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.maintenance_constants import GitHubClient
 
-from .constants import (
-    DatasetLocation,
-    EnvironmentVariable,
-    ScratchBranch,
-    ScrubbedEnvironmentPrefix,
-)
+from .constants.environment import EnvironmentVariable, ScrubbedEnvironmentPrefix
+from .constants.notes import ScratchBranch
+from .constants.paths import DatasetLocation
 from .script_runner import BashScriptRunner
 
 from .executable_stubs import (
