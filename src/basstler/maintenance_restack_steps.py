@@ -80,6 +80,14 @@ class RestackOutcome(StrEnum):
     untouched rather than re-reported.
     """
 
+    @property
+    def is_reported_to_its_owner(self) -> bool:
+        """
+        :return: Whether the branch's owner has been told on its pull request - this
+            pass for a conflict, an earlier one for a branch still withheld.
+        """
+        return self in {RestackOutcome.CONFLICT, RestackOutcome.WITHHELD}
+
 
 @dataclass(frozen=True)
 class BranchOutcome:
@@ -153,7 +161,7 @@ def conflict_report(
         else "\n\nThis pull request's description names no session to address."
     )
     return (
-        f"{RoutineText.CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
+        f"{RoutineText.NEEDS_RESOLUTION_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
         f"conflicts, so this branch was left untouched and skipped.\n\n"
         f"Conflicting files:\n{files}\n\n"
         f"Please resolve and push. This branch is labelled "

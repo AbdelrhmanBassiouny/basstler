@@ -1,0 +1,123 @@
+name: Stack maintenance
+
+# Performs `python -m basstler.maintenance run-unattended` with nobody watching:
+# reparenting every child whose base has landed, fast-forwarding the fork's base onto
+# the upstream, restacking every branch whose parent moved, and promoting every approved
+# unblocked branch. A restack conflict reports itself (a comment plus
+# `needs-resolution`, via `maintenance_restack_steps.conflict_report`); a reparent GitHub
+# refuses this credential is reported the same way, by
+# `maintenance_reparent_notice.resolve_reparents`, for an on-demand session to finish.
+# `run-unattended` is `run-report --json` with one difference: a branch whose owner was
+# already told on its pull request does not fail the job, while anything nobody was told
+# about still does - see `maintenance_report.unattended_exit_code_for`.
+#
+# Reusable: a fork project calls it from a workflow of its own, naming the release of
+# basstler it calls, on the events that should start a pass - a pull request `closed`
+# (a merge or close can drop a branch from the open set), `opened` and
+# `ready_for_review` (the two events most often needing a pass right away), and
+# `workflow_dispatch`. No schedule: the Actions budget allows none. The caller to copy
+# is docs/examples/stack-maintenance.yml. The upstream comes from the project's own
+# .claude/basstler/stack.toml, so no repository is named here.
+#
+# A runner starts with nothing installed and no session hook runs on it, so this job
+# installs the package itself before invoking a module.
+#
+# Interaction with the regenerated integration branch (`integration-branch`/
+# `integration-branch-ci-verdict`, not yet on `main`): that pipeline opens its own,
+# non-draft pull requests to judge a build - candidates this pass must never restack or
+# promote as though they were ordinary stack members. The exclusion
+# (`BoardExport.is_a_candidate`) lives in the board export both a build and this pass
+# derive their work from, in the same pull request that starts opening candidates, so
+# this workflow inherits it with no change. The two can still fire on the same pull
+# request event, but they write to disjoint refs - a feature branch or the fork's own
+# base here, a separate build branch there - and a rebuild is regenerated from scratch,
+# so a race is benign rather than an interruption.
+
+on:
+  workflow_call:
+    inputs:
+      basstler_ref:
+        description: "The basstler release to run, the same ref the caller uses this workflow at"
+        required: true
+        type: string
+
+permissions:
+  # contents: write for the fast-forward and every restack push; pull-requests: write
+  # for the label and comment writes (promotion, conflict and reparent notices).
+  contents: write
+  pull-requests: write
+
+jobs:
+  maintain:
+    name: Run the maintenance pass
+    # A pull request from a fork gets a read-only token, which can write neither the
+    # branches nor the labels this pass changes.
+    if: >-
+      github.event_name != 'pull_request'
+      || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    concurrency:
+      # A pass moves commits (fast-forward, restack); two overlapping runs could push
+      # past each other, so a superseded run waits rather than being cancelled mid-push.
+      group: stack-maintenance
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Full history: fast-forward and restack both push, and the personal-notes
+          # fetch `stack.py`'s configuration resolution makes on every call cannot run
+          # from a shallow clone either.
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install basstler
+        run: |
+          set -euo pipefail
+          pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_ref }}"
+
+      - name: Resolve the upstream remote
+        # A plain checkout carries only this repository's own remote. basstler.stack
+        # decides which remote is which by the repository each URL names rather than by
+        # name, and hands back the exact command to add whichever one is missing - see
+        # RemoteResolution.upstream_setup_command and the SKILL.md step this mirrors,
+        # rather than hardcoding a remote name or URL here.
+        run: |
+          set -euo pipefail
+          SETUP_COMMAND="$(python -m basstler.stack configuration \
+            | awk -F'\t' '$1 == "upstream_setup_command" { print $2 }')"
+          if [ -n "${SETUP_COMMAND}" ]; then
+            eval "${SETUP_COMMAND}"
+          fi
+
+      - name: Run the maintenance pass
+        env:
+          # gh is preinstalled on the runner, and this is the only credential either it
+          # or the executor's own GitHub client needs - see
+          # basstler.environment.GitHubCredentialVariable.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          # The identity every push this pass makes is committed under.
+          git config user.name "${GITHUB_ACTOR}"
+          git config user.email "${GITHUB_ACTOR}@users.noreply.github.com"
+          # The pass reads board.json and deletes it once it concludes - see
+          # `RunReportCommand.perform`'s own docstring - so every run starts by exporting
+          # a fresh one; running it stale would only replay one snapshot old.
+          python -m basstler.maintenance board --write
+          REPORT="${RUNNER_TEMP}/maintenance-report.json"
+          STATUS=0
+          python -m basstler.maintenance run-unattended > "${REPORT}" || STATUS=$?
+          cat "${REPORT}"
+          {
+            echo '### Maintenance pass'
+            echo '```json'
+            cat "${REPORT}"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+          exit "${STATUS}"

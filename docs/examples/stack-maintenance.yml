@@ -1,0 +1,22 @@
+# Copy into a fork project as .github/workflows/stack-maintenance.yml, so a
+# maintenance pass runs whenever the stack can have changed. Keep the two refs below
+# on the same basstler release as the plugin.
+#
+# Event triggers only: the Actions budget allows no schedule, so the fork's base is
+# fast-forwarded on the next pull request event or dispatch rather than on a timer.
+name: Stack maintenance
+
+on:
+  pull_request:
+    types: [opened, ready_for_review, closed]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  maintain:
+    uses: AbdelrhmanBassiouny/basstler/.github/workflows/stack-maintenance.yml@v0.1.2
+    with:
+      basstler_ref: v0.1.2

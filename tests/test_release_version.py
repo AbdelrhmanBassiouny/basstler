@@ -62,10 +62,10 @@ def write_version(repository: ScratchRepository, sample: ReleaseSampleVersion) -
         CheckoutLocation.PLUGIN_MANIFEST,
         ReleaseSampleText.MANIFEST.format(version=sample),
     )
-    repository.write(
-        CheckoutLocation.EXAMPLE_CALLER,
-        ReleaseSampleText.EXAMPLE_CALLER.format(version=sample),
-    )
+    for caller in CheckoutLocation.example_callers():
+        repository.write(
+            caller, ReleaseSampleText.EXAMPLE_CALLER.format(version=sample)
+        )
 
 
 def change_and_commit(
@@ -408,12 +408,12 @@ def test_a_bump_writes_the_version_everywhere_one_is_written(released_checkout):
 
 
 def test_a_bump_with_a_reference_missing_writes_nothing(released_checkout):
-    released_checkout.write(CheckoutLocation.EXAMPLE_CALLER, "")
+    released_checkout.write(CheckoutLocation.STACK_MAINTENANCE_CALLER, "")
 
     with pytest.raises(VersionReferenceMissing) as raised:
         release_of(released_checkout).bump(version(ReleaseSampleVersion.NEXT_MINOR))
 
-    assert raised.value.path == CheckoutLocation.EXAMPLE_CALLER
+    assert raised.value.path == CheckoutLocation.STACK_MAINTENANCE_CALLER
     assert release_of(released_checkout).version == version(
         ReleaseSampleVersion.RELEASED
     )

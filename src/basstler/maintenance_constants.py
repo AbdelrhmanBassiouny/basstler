@@ -12,7 +12,7 @@ Values a program derives for itself belong beside the code that derives them, no
 from __future__ import annotations
 
 import re
-from enum import Enum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 
 
 class GitHubClient(StrEnum):
@@ -55,15 +55,33 @@ class DescriptionPattern(Enum):
         return found.group(0) if found else None
 
 
+class RetargetRefusal(IntEnum):
+    """
+    The two ways GitHub can refuse a base-branch retarget that a caller cannot act on
+    but must fall back from. Any other status is a genuine failure.
+    """
+
+    CREDENTIAL_REFUSED = 403
+    """
+    This credential is refused the write.
+    """
+
+    STACK_MEMBER = 422
+    """
+    The pull request is a member of a GitHub Stack, which must be moved through native
+    Stack mechanics instead of a plain base change.
+    """
+
+
 class RoutineText(StrEnum):
     """
     Text the routine writes onto GitHub, and later finds again by.
     """
 
-    CONFLICT_COMMENT_PREFIX = "🔴 ROUTINE - NEEDS RESOLUTION:"
+    NEEDS_RESOLUTION_COMMENT_PREFIX = "🔴 ROUTINE - NEEDS RESOLUTION:"
     """
-    Opens the comment a conflict is reported in, so the branch's owner can find every one
-    of them at a glance.
+    Opens a comment reporting anything a branch's owner alone can resolve - a restack
+    conflict or a pending reparent - so every one of them can be found at a glance.
     """
 
     PROMOTION_HEADING = "## Promote"

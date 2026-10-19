@@ -1016,3 +1016,30 @@ class ReleaseSampleText(StrEnum):
     """
     What a test writes to change a file.
     """
+
+
+class StackMaintenanceTrigger(StrEnum):
+    """
+    The events the stack-maintenance example caller starts a pass on. A ``schedule`` is
+    not one: the Actions budget allows none, so the caller is event-only.
+    """
+
+    PULL_REQUEST = "pull_request"
+    """
+    A pull request event, narrowed to the types in :class:`StackMaintenancePullRequestType`.
+    """
+
+    WORKFLOW_DISPATCH = "workflow_dispatch"
+    """
+    A pass started by hand, or by a session.
+    """
+
+
+class StackMaintenancePullRequestType(StrEnum):
+    """
+    The pull request event types the stack-maintenance example caller answers.
+    """
+
+    OPENED = "opened"
+    READY_FOR_REVIEW = "ready_for_review"
+    CLOSED = "closed"
