@@ -38,33 +38,19 @@ items:
   title: One static site over every repository's plans, starting at the hub
   branch: claude/elegant-turing-xvcgs2
   pull_request_number: 6
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_01XhxoBFCwQFEPXespxzFnc1
   track: cutover
   depends_on: []
   notes: >
-    Artifacts belong to the account that publishes them, and sessions run under two accounts,
-    so plan pages are built as a static site instead: the hub at the root, one card per
-    repository; <owner>/<repo>/ that repository's plans; <owner>/<repo>/<plan>/ a dashboard
-    with live pull request state. Folds in basstler.build_site from cc27198 (branch
-    claude/plan-dashboard-multi-account-y2vexc, never opened as a pull request) and the hub
-    from a599549: the hub file .claude/personal/plans/_hub.yaml on every registered
-    repository's notes (registry AbdelrhmanBassiouny/basstler), plan_hub gather and build_hub.
-    The Artifact-only parts of a599549 (the hub URL, set-url) go. Draft #6. The owner's
-    2026-10-18 review (37 threads) was answered in 7651471: reuse of ProjectLocation,
-    PersonalNotesSetting, PlanDocument, Repository, GitCommandRunner and PullRequestField;
-    TemplatePage, ProgressCard and SiteSection bases; RenderedDashboard; tests read every
-    value from the dataset or enums. 34 threads resolved; 3 left open for the owner -
-    the HTML-in-Python split (proposed as site-pages-in-python) and two on unifying the
-    pull request classes, where the reply explains why they stay separate. The owner's
-    2026-10-19 review (5 threads) was answered in 7ab3682: SiteSection bound to
-    ProgressCard with a SiteSummary card for the hub, PullRequestListState.states, and
-    pages naming their own templates (PageTemplate removed). The third round (2 threads)
-    was answered in 329bb81: every card counts open and reviewed (out-of-draft) pull
-    requests, shown on the hub header, and PullRequestListState is a specification enum
-    carrying its query and covered states. Open for the owner: the
-    HTML-in-Python split, unifying pull request classes, the SiteSummary model (asked to
-    discuss), and whether _hub.yaml stays in plans/.
+    Merged 2026-10-19 as #6 and released as v0.1.2 (the release workflow's patch bump).
+    basstler.build_site renders the hub at the root, <owner>/<repo>/ per repository and
+    <owner>/<repo>/<plan>/ per dashboard, from the hub file .claude/personal/plans/_hub.yaml
+    on the registry's notes (registry AbdelrhmanBassiouny/basstler). Every card counts done
+    items and open/reviewed pull requests. Three owner review rounds were answered before
+    merge. Merged with four threads still open, now for later items: the HTML-in-Python
+    split (site-pages-in-python), unifying the pull request classes, the SiteSummary model,
+    and whether _hub.yaml stays in plans/.
 - id: site-pages-in-python
   title: Build the site's pages in Python instead of Jinja templates
   branch: null
