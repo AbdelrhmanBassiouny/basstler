@@ -124,7 +124,8 @@ items:
     dependencies are not representable" and choosing the reference form `<plan-id>/<item-id>`
     (a slash cannot occur in either kebab-case id, so a bare id keeps meaning this plan).
     Not a bug fix: tooling that never existed, so no `bug` label. What it changes. The schema
-    (plan-schema.md) admits the form.'
+    (plan-schema.md) admits the form. build_dashboard.ManifestKey duplicates #11''s
+    plan_model.ManifestKey: whichever of #11/#17 lands second deletes it and imports plan_model''s.'
 - id: ready-to-promote-upstream-links
   title: 'PR 5: ready-to-promote sidebar list + one-click upstream create-pull-request links'
   branch: null
