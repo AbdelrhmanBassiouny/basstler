@@ -29,21 +29,20 @@ from basstler.plan_item_bootstrap import (
     PlanItemBootstrapExitCode,
     ItemRecordRequest,
     ItemStatus,
+    ManifestText,
     PlanDocument,
     PullRequestRequest,
     UnknownItemError,
     UnknownPlanError,
+    WorkOpener,
     WorkOpenRequest,
-    append_roadmap_entry,
-    apply_item_fields,
-    open_work,
-    record_item,
 )
 from basstler.plan_model import KeySpecification, ManifestKey, ValueStyle
 from basstler.plan_size_limits import Roadmap
 
 from .scratch_repository import ScratchRepository
-from .constants import DatasetLocation, ScratchBranch
+from .constants.notes import ScratchBranch
+from .constants.paths import DatasetLocation
 
 from .script_runner import PythonModuleRunner
 
@@ -246,9 +245,8 @@ def open_request(**overrides: object) -> WorkOpenRequest:
 def test_recording_an_existing_item_sets_its_status(
     bootstrap_repository: ScratchRepository,
 ):
-    result = record_item(
-        record_request(bootstrap_repository),
-        project_root=bootstrap_repository.project_root,
+    result = record_request(bootstrap_repository).record(
+        project_root=bootstrap_repository.project_root
     )
 
     assert result.exit_code is PlanItemBootstrapExitCode.SUCCESS
@@ -262,9 +260,8 @@ def test_recording_an_existing_item_sets_its_status(
 def test_recording_leaves_every_other_manifest_line_byte_identical(
     bootstrap_repository: ScratchRepository,
 ):
-    record_item(
-        record_request(bootstrap_repository),
-        project_root=bootstrap_repository.project_root,
+    record_request(bootstrap_repository).record(
+        project_root=bootstrap_repository.project_root
     )
 
     expected = PLAN_MANIFEST.replace(
@@ -279,22 +276,22 @@ def test_recording_appends_the_roadmap_entry_without_rewriting_the_roadmap(
     bootstrap_repository: ScratchRepository,
 ):
     entry = "A rule the item settled,\nwritten over two lines."
-    record_item(
-        record_request(bootstrap_repository, roadmap_entry=entry),
-        project_root=bootstrap_repository.project_root,
+    record_request(bootstrap_repository, roadmap_entry=entry).record(
+        project_root=bootstrap_repository.project_root
     )
 
     roadmap = published_plan(bootstrap_repository)[PlanDocument.ROADMAP]
-    assert roadmap == append_roadmap_entry(PLAN_ROADMAP, entry)
+    assert roadmap == record_request(
+        bootstrap_repository, roadmap_entry=entry
+    ).roadmap_after(PLAN_ROADMAP)
     assert Roadmap.from_text(roadmap).entries[-1] == " ".join(entry.split())
 
 
 def test_recording_without_a_roadmap_entry_leaves_the_roadmap_untouched(
     bootstrap_repository: ScratchRepository,
 ):
-    record_item(
-        record_request(bootstrap_repository),
-        project_root=bootstrap_repository.project_root,
+    record_request(bootstrap_repository).record(
+        project_root=bootstrap_repository.project_root
     )
 
     assert published_plan(bootstrap_repository)[PlanDocument.ROADMAP] == PLAN_ROADMAP
@@ -303,16 +300,13 @@ def test_recording_without_a_roadmap_entry_leaves_the_roadmap_untouched(
 def test_recording_a_new_item_appends_it_to_the_manifest(
     bootstrap_repository: ScratchRepository,
 ):
-    record_item(
-        record_request(
-            bootstrap_repository,
-            item_identifier=NEW_ITEM,
-            title="A brand new item",
-            track="a-track",
-            status=ItemStatus.NOT_STARTED,
-        ),
-        project_root=bootstrap_repository.project_root,
-    )
+    record_request(
+        bootstrap_repository,
+        item_identifier=NEW_ITEM,
+        title="A brand new item",
+        track="a-track",
+        status=ItemStatus.NOT_STARTED,
+    ).record(project_root=bootstrap_repository.project_root)
 
     manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
     assert manifest.startswith(PLAN_MANIFEST)
@@ -330,15 +324,12 @@ def test_recording_a_new_item_without_a_title_names_the_key_it_needs(
     bootstrap_repository: ScratchRepository,
 ):
     with pytest.raises(basstler.plan_item_bootstrap.IncompleteNewItemError) as refusal:
-        record_item(
-            record_request(
-                bootstrap_repository,
-                item_identifier=NEW_ITEM,
-                track="a-track",
-                status=ItemStatus.NOT_STARTED,
-            ),
-            project_root=bootstrap_repository.project_root,
-        )
+        record_request(
+            bootstrap_repository,
+            item_identifier=NEW_ITEM,
+            track="a-track",
+            status=ItemStatus.NOT_STARTED,
+        ).record(project_root=bootstrap_repository.project_root)
 
     assert refusal.value.missing_keys == (ManifestKey.TITLE,)
 
@@ -347,9 +338,8 @@ def test_recording_against_an_unknown_plan_is_refused(
     bootstrap_repository: ScratchRepository,
 ):
     with pytest.raises(UnknownPlanError) as refusal:
-        record_item(
-            record_request(bootstrap_repository, plan_identifier="no-such-plan"),
-            project_root=bootstrap_repository.project_root,
+        record_request(bootstrap_repository, plan_identifier="no-such-plan").record(
+            project_root=bootstrap_repository.project_root
         )
 
     assert refusal.value.plan_identifier == "no-such-plan"
@@ -363,9 +353,8 @@ def test_opening_writes_the_branch_pull_request_and_session_onto_the_item(
 ):
     opener = RecordingPullRequestOpener(number=143)
 
-    result = open_work(
+    result = WorkOpener(bootstrap_repository.project_root).open(
         open_request(),
-        project_root=bootstrap_repository.project_root,
         pull_request_opener=opener,
     )
 
@@ -386,9 +375,8 @@ def test_opening_asks_for_a_draft_pull_request_against_the_plans_repository(
 ):
     opener = RecordingPullRequestOpener()
 
-    open_work(
+    WorkOpener(bootstrap_repository.project_root).open(
         open_request(),
-        project_root=bootstrap_repository.project_root,
         pull_request_opener=opener,
     )
 
@@ -403,9 +391,8 @@ def test_opening_asks_for_a_draft_pull_request_against_the_plans_repository(
 def test_opening_publishes_the_branch_to_the_repositorys_own_remote(
     bootstrap_repository: ScratchRepository,
 ):
-    open_work(
+    WorkOpener(bootstrap_repository.project_root).open(
         open_request(),
-        project_root=bootstrap_repository.project_root,
         pull_request_opener=RecordingPullRequestOpener(),
     )
 
@@ -422,18 +409,16 @@ def test_opening_an_already_published_branch_is_refused(
     bootstrap_repository: ScratchRepository,
 ):
     opener = RecordingPullRequestOpener()
-    open_work(
+    WorkOpener(bootstrap_repository.project_root).open(
         open_request(),
-        project_root=bootstrap_repository.project_root,
         pull_request_opener=opener,
     )
 
     with pytest.raises(
         basstler.plan_item_bootstrap.BranchAlreadyPublishedError
     ) as refusal:
-        open_work(
+        WorkOpener(bootstrap_repository.project_root).open(
             open_request(),
-            project_root=bootstrap_repository.project_root,
             pull_request_opener=opener,
         )
     assert refusal.value.branch == NEW_BRANCH
@@ -446,9 +431,8 @@ def test_opening_an_unknown_item_is_refused_before_anything_is_created(
     opener = RecordingPullRequestOpener()
 
     with pytest.raises(UnknownItemError):
-        open_work(
+        WorkOpener(bootstrap_repository.project_root).open(
             open_request(item_identifier="no-such-item"),
-            project_root=bootstrap_repository.project_root,
             pull_request_opener=opener,
         )
 
@@ -463,9 +447,8 @@ def test_a_refused_pull_request_leaves_the_manifest_untouched(
     bootstrap_repository: ScratchRepository,
 ):
     with pytest.raises(basstler.plan_item_bootstrap.PullRequestRefusedError):
-        open_work(
+        WorkOpener(bootstrap_repository.project_root).open(
             open_request(),
-            project_root=bootstrap_repository.project_root,
             pull_request_opener=RefusingPullRequestOpener(),
         )
 
@@ -476,9 +459,8 @@ def test_a_refused_pull_request_leaves_the_branch_it_already_published(
     bootstrap_repository: ScratchRepository,
 ):
     with pytest.raises(basstler.plan_item_bootstrap.PullRequestRefusedError):
-        open_work(
+        WorkOpener(bootstrap_repository.project_root).open(
             open_request(),
-            project_root=bootstrap_repository.project_root,
             pull_request_opener=RefusingPullRequestOpener(),
         )
 
@@ -496,9 +478,8 @@ def test_a_supplied_pull_request_number_is_recorded_without_creating_one(
 ):
     opener = RecordingPullRequestOpener()
 
-    result = open_work(
+    result = WorkOpener(bootstrap_repository.project_root).open(
         open_request(pull_request_number=57),
-        project_root=bootstrap_repository.project_root,
         pull_request_opener=opener,
     )
 
@@ -514,9 +495,8 @@ def test_creating_a_pull_request_without_a_title_or_body_is_refused_before_publi
     bootstrap_repository: ScratchRepository,
 ):
     with pytest.raises(basstler.plan_item_bootstrap.PullRequestDetailsMissingError):
-        open_work(
+        WorkOpener(bootstrap_repository.project_root).open(
             open_request(pull_request_title=None, pull_request_body=None),
-            project_root=bootstrap_repository.project_root,
             pull_request_opener=RecordingPullRequestOpener(),
         )
 
@@ -529,15 +509,13 @@ def test_creating_a_pull_request_without_a_title_or_body_is_refused_before_publi
 def test_a_supplied_pull_request_number_adopts_the_branch_its_caller_published(
     bootstrap_repository: ScratchRepository,
 ):
-    open_work(
+    WorkOpener(bootstrap_repository.project_root).open(
         open_request(),
-        project_root=bootstrap_repository.project_root,
         pull_request_opener=RecordingPullRequestOpener(number=99),
     )
 
-    result = open_work(
+    result = WorkOpener(bootstrap_repository.project_root).open(
         open_request(pull_request_number=57),
-        project_root=bootstrap_repository.project_root,
         pull_request_opener=RecordingPullRequestOpener(),
     )
 
@@ -577,8 +555,7 @@ def test_patching_a_field_matches_the_items_own_indentation_rather_than_a_fixed_
     instead of beside it, the moment a manifest's own indentation differs from the
     module's assumed one - which stops the result parsing as YAML at all.
     """
-    patched = apply_item_fields(
-        NARROWLY_INDENTED_MANIFEST,
+    patched = ManifestText.from_text(NARROWLY_INDENTED_MANIFEST).with_item_fields(
         "narrow-plan",
         "an-item",
         {ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value},

@@ -454,42 +454,50 @@ class NotesBranchUnavailableError(BootstrapError):
 # %% the plan on the personal-notes branch
 
 
-def run_git(*arguments: str, project_root: Path) -> str:
+@dataclass(frozen=True)
+class ProjectCheckout:
     """
-    Run git in *project_root* and return its standard output.
-
-    :param arguments: The arguments to pass to git.
-    :param project_root: The repository to run within.
-    :raises subprocess.CalledProcessError: If git reports an error.
-    :return: Standard output, stripped of its trailing newline.
+    The repository a plan item is bootstrapped in, and the git commands run within it.
     """
-    result = subprocess.run(
-        ["git", *arguments],
-        cwd=project_root,
-        capture_output=True,
-        text=True,
-        check=True,
-    )
-    return result.stdout.rstrip("\n")
 
-
-def fetch_notes_branch(project_root: Path) -> None:
+    project_root: Path
     """
-    Fetch the personal-notes branch, leaving ``FETCH_HEAD`` pointing at it.
-
-    Sources the shell configuration and calls its own fetch function rather than
-    re-deriving the remote and branch precedence, so this and the hook scripts can never
-    disagree about which branch a plan is on. Where a plan sits *within* that branch is
-    :meth:`PlanDocument.path_within_notes_branch`'s to say.
-
-    :param project_root: The repository to fetch within.
-    :raises NotesBranchUnavailableError: If the notes branch cannot be fetched.
+    The repository to run within.
     """
-    probe = ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run(project_root)
-    if probe.returncode != 0:
-        raise NotesBranchUnavailableError(
-            detail=probe.stderr.strip() or "no personal-notes branch found"
+
+    def run_git(self, *arguments: str) -> str:
+        """
+        Run git in the checkout and return its standard output.
+
+        :param arguments: The arguments to pass to git.
+        :raises subprocess.CalledProcessError: If git reports an error.
+        :return: Standard output, stripped of its trailing newline.
+        """
+        result = subprocess.run(
+            ["git", *arguments],
+            cwd=self.project_root,
+            capture_output=True,
+            text=True,
+            check=True,
         )
+        return result.stdout.rstrip("\n")
+
+    def fetch_notes_branch(self) -> None:
+        """
+        Fetch the personal-notes branch, leaving ``FETCH_HEAD`` pointing at it.
+
+        Calls the shell configuration's own fetch function, so this and the hook scripts
+        never disagree about which branch a plan is on.
+
+        :raises NotesBranchUnavailableError: If the notes branch cannot be fetched.
+        """
+        probe = ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run(
+            self.project_root
+        )
+        if probe.returncode != 0:
+            raise NotesBranchUnavailableError(
+                detail=probe.stderr.strip() or "no personal-notes branch found"
+            )
 
 
 @dataclass(frozen=True)
@@ -526,14 +534,14 @@ class PlanDocuments:
         :raises UnknownPlanError: If the plan has no manifest on the branch.
         :return: The loaded documents.
         """
-        fetch_notes_branch(project_root)
+        checkout = ProjectCheckout(project_root)
+        checkout.fetch_notes_branch()
         contents = {}
         for document in PlanDocument:
             path = document.path_within_notes_branch(plan_identifier)
             try:
                 contents[document] = (
-                    run_git("show", f"FETCH_HEAD:{path}", project_root=project_root)
-                    + "\n"
+                    checkout.run_git("show", f"FETCH_HEAD:{path}") + "\n"
                 )
             except subprocess.CalledProcessError as error:
                 raise UnknownPlanError(
@@ -634,184 +642,162 @@ class PlanDocuments:
 # %% patching one item's fields in the manifest text
 
 
-def item_block_bounds(manifest_lines: list[str]) -> list[tuple[int, int]]:
+@dataclass
+class ManifestText:
     """
-    The half-open line range of every item block in the manifest.
+    A manifest's raw lines, patched by line so every untouched line survives byte for
+    byte: comments, key order, string wrapping and quoting.
+    """
 
-    :param manifest_lines: The manifest, split into lines.
-    :return: One ``(start, end)`` pair per item, in manifest order.
+    lines: list[str]
     """
-    starts = [
-        index
-        for index, line in enumerate(manifest_lines)
-        if ManifestLinePattern.ITEM_START.matches(line)
-    ]
-    if not starts:
-        return []
-    end_of_items = next(
-        (
+    The manifest, split into lines.
+    """
+
+    @classmethod
+    def from_text(cls, manifest_text: str) -> ManifestText:
+        """
+        :param manifest_text: The manifest's raw text.
+        :return: The manifest, split into lines.
+        """
+        return cls(lines=manifest_text.split("\n"))
+
+    @property
+    def text(self) -> str:
+        """
+        The manifest's raw text.
+        """
+        return "\n".join(self.lines)
+
+    def item_block_bounds(self) -> list[tuple[int, int]]:
+        """
+        :return: The half-open line range of every item block, in manifest order.
+        """
+        starts = [
             index
-            for index in range(starts[-1] + 1, len(manifest_lines))
-            if ManifestLinePattern.TOP_LEVEL_KEY.matches(manifest_lines[index])
-        ),
-        len(manifest_lines),
-    )
-    return list(zip(starts, starts[1:] + [end_of_items]))
-
-
-def locate_item_block(
-    manifest_lines: list[str], plan_identifier: str, item_identifier: str
-) -> tuple[int, int]:
-    """
-    Find one item's block within the manifest text.
-
-    :param manifest_lines: The manifest, split into lines.
-    :param plan_identifier: The plan being edited, for the error message.
-    :param item_identifier: The item's id.
-    :raises UnknownItemError: If no block starts with that id.
-    :return: The block's half-open line range.
-    """
-    opener = f"- {ManifestKey.IDENTIFIER.key}:"
-    for start, end in item_block_bounds(manifest_lines):
-        if (
-            manifest_lines[start].strip().removeprefix(opener).strip()
-            == item_identifier
-        ):
-            return start, end
-    raise UnknownItemError(
-        plan_identifier=plan_identifier, item_identifier=item_identifier
-    )
-
-
-def existing_field_indent(manifest_lines: list[str], start: int, end: int) -> str:
-    """
-    The whitespace this item's own fields are indented by, in the manifest they live in.
-
-    Read from the block itself rather than assumed: a manifest written before
-    ``/plan-create``'s own convention keeps whichever indentation it already has, and a
-    fixed indent would silently nest a patched field under whichever key happens to
-    precede it instead of beside it.
-
-    :param manifest_lines: The manifest, split into lines.
-    :param start: The block's first line (the ``- id:`` line).
-    :param end: One past the block's last line.
-    :return: The leading whitespace of the block's second populated line, or this
-        module's own default when the block holds only its opening line.
-    """
-    for index in range(start + 1, end):
-        if manifest_lines[index].strip():
-            stripped = manifest_lines[index].lstrip(" ")
-            return manifest_lines[index][: len(manifest_lines[index]) - len(stripped)]
-    return ItemLayout.FIELD_INDENT.value
-
-
-def apply_item_fields(
-    manifest_text: str,
-    plan_identifier: str,
-    item_identifier: str,
-    values_by_key: dict[ManifestKey, str],
-) -> str:
-    """
-    Set each of *values_by_key* on one item, patching an existing line or inserting a new
-    one.
-
-    Every other line is left byte-for-byte untouched, so comments, key order, string
-    wrapping and quoting all survive.
-
-    :param manifest_text: The manifest's raw text.
-    :param plan_identifier: The plan being edited.
-    :param item_identifier: The item to patch.
-    :param values_by_key: The value to write to each key, applied in insertion order. A
-        mapping rather than pairs, since one key cannot be set twice.
-    :raises UnknownItemError: If the item has no block in the text.
-    :return: The patched manifest text.
-    """
-    lines = manifest_text.split("\n")
-    start, end = locate_item_block(lines, plan_identifier, item_identifier)
-    field_indent = existing_field_indent(lines, start, end)
-    for manifest_key, value in values_by_key.items():
-        rendered = manifest_key.render(value, field_indent=field_indent).rstrip("\n")
-        existing = next(
+            for index, line in enumerate(self.lines)
+            if ManifestLinePattern.ITEM_START.matches(line)
+        ]
+        if not starts:
+            return []
+        end_of_items = next(
             (
                 index
-                for index in range(start, end)
-                if manifest_key.pattern.match(lines[index])
+                for index in range(starts[-1] + 1, len(self.lines))
+                if ManifestLinePattern.TOP_LEVEL_KEY.matches(self.lines[index])
             ),
-            None,
+            len(self.lines),
         )
-        if existing is not None:
-            lines[existing] = rendered
-            continue
-        insertion = next(
-            (
-                index
-                for index in range(start, end)
-                if ManifestLinePattern.BLOCK_VALUE.matches(lines[index])
-            ),
-            last_populated_line(lines, start, end) + 1,
+        return list(zip(starts, starts[1:] + [end_of_items]))
+
+    def locate_item_block(
+        self, plan_identifier: str, item_identifier: str
+    ) -> tuple[int, int]:
+        """
+        Find one item's block.
+
+        :param plan_identifier: The plan being edited, for the error message.
+        :param item_identifier: The item's id.
+        :raises UnknownItemError: If no block starts with that id.
+        :return: The block's half-open line range.
+        """
+        opener = f"- {ManifestKey.IDENTIFIER.key}:"
+        for start, end in self.item_block_bounds():
+            if (
+                self.lines[start].strip().removeprefix(opener).strip()
+                == item_identifier
+            ):
+                return start, end
+        raise UnknownItemError(
+            plan_identifier=plan_identifier, item_identifier=item_identifier
         )
-        lines.insert(insertion, rendered)
-        end += 1
-    return "\n".join(lines)
 
+    def existing_field_indent(self, start: int, end: int) -> str:
+        """
+        The whitespace an item's own fields are indented by, read from the block rather
+        than assumed, so a patched field lands beside its siblings and not under one.
 
-def last_populated_line(manifest_lines: list[str], start: int, end: int) -> int:
-    """
-    The last non-blank line of a block, so an appended field lands inside it.
+        :param start: The block's first line (the ``- id:`` line).
+        :param end: One past the block's last line.
+        :return: The leading whitespace of the block's second populated line, or the
+            default when the block holds only its opening line.
+        """
+        for line in self.lines[start + 1 : end]:
+            if line.strip():
+                return line[: len(line) - len(line.lstrip(" "))]
+        return ItemLayout.FIELD_INDENT.value
 
-    :param manifest_lines: The manifest, split into lines.
-    :param start: The block's first line.
-    :param end: One past the block's last line.
-    :return: The index of the block's last non-blank line.
-    """
-    return max(
-        (index for index in range(start, end) if manifest_lines[index].strip()),
-        default=start,
-    )
-
-
-def render_new_item(request: ItemRecordRequest) -> str:
-    """
-    Render a brand-new item block, in the field order ``plan-schema.md`` documents.
-
-    :param request: The item to record.
-    :raises IncompleteNewItemError: If a field a new entry cannot omit is missing.
-    :return: The block's text, newline-terminated.
-    """
-    required = {ManifestKey.TITLE: request.title, ManifestKey.TRACK: request.track}
-    missing = tuple(
-        manifest_key for manifest_key, value in required.items() if not value
-    )
-    if missing:
-        raise IncompleteNewItemError(
-            item_identifier=request.item_identifier, missing_keys=missing
+    def last_populated_line(self, start: int, end: int) -> int:
+        """
+        :param start: The block's first line.
+        :param end: One past the block's last line.
+        :return: The index of the block's last non-blank line.
+        """
+        return max(
+            (index for index in range(start, end) if self.lines[index].strip()),
+            default=start,
         )
-    body = {
-        ManifestKey.TITLE: request.title,
-        ManifestKey.BRANCH: "null",
-        ManifestKey.TRACK: request.track,
-        ManifestKey.DEPENDS_ON: "[]",
-        ManifestKey.STATUS: request.status.value,
-    }
-    return ManifestKey.IDENTIFIER.render(
-        request.item_identifier, opening_the_item=True
-    ) + "".join(manifest_key.render(value) for manifest_key, value in body.items())
 
+    def with_item_fields(
+        self,
+        plan_identifier: str,
+        item_identifier: str,
+        values_by_key: dict[ManifestKey, str],
+    ) -> str:
+        """
+        Set each of *values_by_key* on one item, patching an existing line or inserting
+        a new one.
 
-def append_item(manifest_text: str, block: str) -> str:
-    """
-    Add a rendered item block after the manifest's last item.
+        :param plan_identifier: The plan being edited.
+        :param item_identifier: The item to patch.
+        :param values_by_key: The value to write to each key, in insertion order.
+        :raises UnknownItemError: If the item has no block in the text.
+        :return: The patched manifest text.
+        """
+        patched = ManifestText(lines=list(self.lines))
+        lines = patched.lines
+        start, end = patched.locate_item_block(plan_identifier, item_identifier)
+        field_indent = patched.existing_field_indent(start, end)
+        for manifest_key, value in values_by_key.items():
+            rendered = manifest_key.render(value, field_indent=field_indent).rstrip(
+                "\n"
+            )
+            existing = next(
+                (
+                    index
+                    for index in range(start, end)
+                    if manifest_key.pattern.match(lines[index])
+                ),
+                None,
+            )
+            if existing is not None:
+                lines[existing] = rendered
+                continue
+            insertion = next(
+                (
+                    index
+                    for index in range(start, end)
+                    if ManifestLinePattern.BLOCK_VALUE.matches(lines[index])
+                ),
+                patched.last_populated_line(start, end) + 1,
+            )
+            lines.insert(insertion, rendered)
+            end += 1
+        return patched.text
 
-    :param manifest_text: The manifest's raw text.
-    :param block: The block to append, as :func:`render_new_item` renders it.
-    :return: The extended manifest text.
-    """
-    lines = manifest_text.split("\n")
-    bounds = item_block_bounds(lines)
-    insertion = bounds[-1][1] if bounds else len(lines)
-    tail = "\n".join(lines[insertion:])
-    head = "\n".join(lines[:insertion]).rstrip("\n")
-    return f"{head}\n\n{block}{tail}"
+    def with_item(self, block: str) -> str:
+        """
+        Add a rendered item block after the manifest's last item.
+
+        :param block: The block to append, as :meth:`ItemRecordRequest.render_new_item`
+            renders it.
+        :return: The extended manifest text.
+        """
+        bounds = self.item_block_bounds()
+        insertion = bounds[-1][1] if bounds else len(self.lines)
+        tail = "\n".join(self.lines[insertion:])
+        head = "\n".join(self.lines[:insertion]).rstrip("\n")
+        return f"{head}\n\n{block}{tail}"
 
 
 # %% recording an item
@@ -853,6 +839,73 @@ class ItemRecordRequest:
     A standing rule of the plan the item settled, added to its roadmap; ``None`` leaves
     the roadmap as it is.
     """
+
+    def render_new_item(self) -> str:
+        """
+        Render a brand-new item block, in the field order ``plan-schema.md`` documents.
+
+        :raises IncompleteNewItemError: If a field a new entry cannot omit is missing.
+        :return: The block's text, newline-terminated.
+        """
+        required = {ManifestKey.TITLE: self.title, ManifestKey.TRACK: self.track}
+        missing = tuple(
+            manifest_key for manifest_key, value in required.items() if not value
+        )
+        if missing:
+            raise IncompleteNewItemError(
+                item_identifier=self.item_identifier, missing_keys=missing
+            )
+        body = {
+            ManifestKey.TITLE: self.title,
+            ManifestKey.BRANCH: "null",
+            ManifestKey.TRACK: self.track,
+            ManifestKey.DEPENDS_ON: "[]",
+            ManifestKey.STATUS: self.status.value,
+        }
+        return ManifestKey.IDENTIFIER.render(
+            self.item_identifier, opening_the_item=True
+        ) + "".join(manifest_key.render(value) for manifest_key, value in body.items())
+
+    def roadmap_after(self, roadmap_text: str) -> str:
+        """
+        :param roadmap_text: The roadmap as it stands.
+        :return: The roadmap with :attr:`roadmap_entry` appended as one standing rule,
+            or unchanged when there is none.
+        """
+        if self.roadmap_entry is None:
+            return roadmap_text
+        return f"{roadmap_text.rstrip(chr(10))}\n- {' '.join(self.roadmap_entry.split())}\n"
+
+    def record(self, project_root: Path) -> BootstrapReport:
+        """
+        Write or update the item's manifest entry, and add its roadmap entry when it has
+        one, then push both.
+
+        :param project_root: The repository to run within.
+        :raises UnknownPlanError: If the plan has no manifest on the notes branch.
+        :raises IncompleteNewItemError: If a new entry is missing a field it cannot omit.
+        :return: What was recorded.
+        """
+        documents = PlanDocuments.load(self.plan_identifier, project_root)
+        manifest = ManifestText.from_text(documents.manifest_text)
+        created_item = not documents.has_item(self.item_identifier)
+        if created_item:
+            manifest_text = manifest.with_item(self.render_new_item())
+        else:
+            manifest_text = manifest.with_item_fields(
+                self.plan_identifier,
+                self.item_identifier,
+                {ManifestKey.STATUS: self.status.value},
+            )
+        documents.save(
+            manifest_text, self.roadmap_after(documents.roadmap_text), project_root
+        )
+        return BootstrapReport(
+            exit_code=PlanItemBootstrapExitCode.SUCCESS,
+            plan_identifier=self.plan_identifier,
+            item_identifier=self.item_identifier,
+            created_item=created_item,
+        )
 
 
 @dataclass(frozen=True)
@@ -922,53 +975,6 @@ class BootstrapReport:
             document[ManifestKey.PULL_REQUEST_NUMBER.key] = self.pull_request_number
             document["pull_request_url"] = self.pull_request_url
         return document
-
-
-def record_item(request: ItemRecordRequest, project_root: Path) -> BootstrapReport:
-    """
-    Write or update one item's manifest entry, and add its roadmap entry when it has
-    one, then push both.
-
-    :param request: The item to record.
-    :param project_root: The repository to run within.
-    :raises UnknownPlanError: If the plan has no manifest on the notes branch.
-    :raises IncompleteNewItemError: If a new entry is missing a field it cannot omit.
-    :return: What was recorded.
-    """
-    documents = PlanDocuments.load(request.plan_identifier, project_root)
-    created_item = not documents.has_item(request.item_identifier)
-
-    if created_item:
-        manifest_text = append_item(documents.manifest_text, render_new_item(request))
-    else:
-        manifest_text = apply_item_fields(
-            documents.manifest_text,
-            request.plan_identifier,
-            request.item_identifier,
-            {ManifestKey.STATUS: request.status.value},
-        )
-
-    roadmap_text = documents.roadmap_text
-    if request.roadmap_entry is not None:
-        roadmap_text = append_roadmap_entry(roadmap_text, request.roadmap_entry)
-    documents.save(manifest_text, roadmap_text, project_root)
-    return BootstrapReport(
-        exit_code=PlanItemBootstrapExitCode.SUCCESS,
-        plan_identifier=request.plan_identifier,
-        item_identifier=request.item_identifier,
-        created_item=created_item,
-    )
-
-
-def append_roadmap_entry(roadmap_text: str, entry: str) -> str:
-    """
-    Add one entry to the end of a roadmap's list of standing rules.
-
-    :param roadmap_text: The roadmap as it stands.
-    :param entry: The rule, on one or several lines.
-    :return: The extended roadmap.
-    """
-    return f"{roadmap_text.rstrip(chr(10))}\n- {' '.join(entry.split())}\n"
 
 
 # %% opening the work
@@ -1194,8 +1200,8 @@ class WorkOpener:
         :param branch: The branch to look for.
         :return: True when the remote already carries it.
         """
-        listing = run_git(
-            "ls-remote", "--heads", self.remote, branch, project_root=self.project_root
+        listing = ProjectCheckout(self.project_root).run_git(
+            "ls-remote", "--heads", self.remote, branch
         )
         return bool(listing.strip())
 
@@ -1209,152 +1215,150 @@ class WorkOpener:
 
         :param request: The work being opened.
         """
-        run_git(
-            "checkout",
-            "-b",
-            request.branch,
-            request.base_branch,
-            project_root=self.project_root,
-        )
-        run_git(
+        checkout = ProjectCheckout(self.project_root)
+        checkout.run_git("checkout", "-b", request.branch, request.base_branch)
+        checkout.run_git(
             "commit",
             "--allow-empty",
             "--quiet",
             "-m",
             f"Bootstrap {request.item_identifier}",
-            project_root=self.project_root,
         )
-        run_git(
-            "push", "-u", self.remote, request.branch, project_root=self.project_root
-        )
+        checkout.run_git("push", "-u", self.remote, request.branch)
 
+    def open(
+        self,
+        request: WorkOpenRequest,
+        pull_request_opener: PullRequestOpener | None = None,
+    ) -> BootstrapReport:
+        """
+        Create the item's branch and draft pull request, then record both on the item.
 
-def open_work(
-    request: WorkOpenRequest,
-    project_root: Path,
-    pull_request_opener: PullRequestOpener | None = None,
-    remote: str = "origin",
-) -> BootstrapReport:
-    """
-    Create the item's branch and draft pull request, then record both on the item.
+        Both refusals this can raise before publishing - an untracked item, an already
+        published branch - are checked first, so neither leaves anything behind. A pull
+        request the remote declines is the one case that does: the branch is already
+        published by then and stays, since a session cannot delete a remote branch. The
+        manifest is left untouched rather than pointing at a pull request that does not
+        exist, and re-running once the refusal is understood is refused by the
+        already-published guard rather than silently overwriting those commits.
 
-    Both refusals this can raise before publishing - an untracked item, an already
-    published branch - are checked first, so neither leaves anything behind. A pull
-    request the remote declines is the one case that does: the branch is already
-    published by then and stays, since a session cannot delete a remote branch. The
-    manifest is left untouched rather than pointing at a pull request that does not
-    exist, and re-running once the refusal is understood is refused by the
-    already-published guard rather than silently overwriting those commits.
+        :param request: The work to open.
+        :param pull_request_opener: What creates the pull request, defaulting to GitHub.
+        :raises UnknownItemError: If the plan does not track the item yet.
+        :raises PullRequestDetailsMissingError: If it must create a pull request but was
+            given nothing to create one from.
+        :raises BranchAlreadyPublishedError: If the branch already exists on the remote.
+        :raises PullRequestRefusedError: If the pull request could not be created.
+        :return: What was opened.
+        """
+        opener = pull_request_opener or GitHubPullRequestOpener()
+        if request.pull_request_number is None and not (
+            request.pull_request_title and request.pull_request_body
+        ):
+            raise PullRequestDetailsMissingError(
+                item_identifier=request.item_identifier
+            )
+        documents = PlanDocuments.load(request.plan_identifier, self.project_root)
+        repository = documents.repository_for(request.item_identifier)
 
-    :param request: The work to open.
-    :param project_root: The repository to run within.
-    :param pull_request_opener: What creates the pull request, defaulting to GitHub.
-    :param remote: The remote to publish the branch to.
-    :raises UnknownItemError: If the plan does not track the item yet.
-    :raises PullRequestDetailsMissingError: If it must create a pull request but was
-        given nothing to create one from.
-    :raises BranchAlreadyPublishedError: If the branch already exists on the remote.
-    :raises PullRequestRefusedError: If the pull request could not be created.
-    :return: What was opened.
-    """
-    opener = pull_request_opener or GitHubPullRequestOpener()
-    if request.pull_request_number is None and not (
-        request.pull_request_title and request.pull_request_body
-    ):
-        raise PullRequestDetailsMissingError(item_identifier=request.item_identifier)
-    documents = PlanDocuments.load(request.plan_identifier, project_root)
-    repository = documents.repository_for(request.item_identifier)
+        if not self.branch_is_published(request.branch):
+            self.publish(request)
+        elif request.pull_request_number is None:
+            raise BranchAlreadyPublishedError(branch=request.branch, remote=self.remote)
 
-    work = WorkOpener(project_root=project_root, remote=remote)
-    if not work.branch_is_published(request.branch):
-        work.publish(request)
-    elif request.pull_request_number is None:
-        raise BranchAlreadyPublishedError(branch=request.branch, remote=remote)
-
-    created = (
-        CreatedPullRequest(number=request.pull_request_number, html_url=None)
-        if request.pull_request_number is not None
-        else opener.open_pull_request(
-            PullRequestRequest(
-                repository=repository,
-                title=request.pull_request_title,
-                body=request.pull_request_body,
-                head=request.branch,
-                base=request.base_branch,
+        created = (
+            CreatedPullRequest(number=request.pull_request_number, html_url=None)
+            if request.pull_request_number is not None
+            else opener.open_pull_request(
+                PullRequestRequest(
+                    repository=repository,
+                    title=request.pull_request_title,
+                    body=request.pull_request_body,
+                    head=request.branch,
+                    base=request.base_branch,
+                )
             )
         )
-    )
 
-    manifest_text = apply_item_fields(
-        documents.manifest_text,
-        request.plan_identifier,
-        request.item_identifier,
-        {
-            ManifestKey.BRANCH: request.branch,
-            ManifestKey.PULL_REQUEST_NUMBER: str(created.number),
-            ManifestKey.SESSION: request.session_url,
-            ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value,
-        },
-    )
-    documents.save(manifest_text, documents.roadmap_text, project_root)
-    return BootstrapReport(
-        exit_code=PlanItemBootstrapExitCode.SUCCESS,
-        plan_identifier=request.plan_identifier,
-        item_identifier=request.item_identifier,
-        branch=request.branch,
-        pull_request_number=created.number,
-        pull_request_url=created.html_url,
-    )
+        manifest_text = ManifestText.from_text(
+            documents.manifest_text
+        ).with_item_fields(
+            request.plan_identifier,
+            request.item_identifier,
+            {
+                ManifestKey.BRANCH: request.branch,
+                ManifestKey.PULL_REQUEST_NUMBER: str(created.number),
+                ManifestKey.SESSION: request.session_url,
+                ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value,
+            },
+        )
+        documents.save(manifest_text, documents.roadmap_text, self.project_root)
+        return BootstrapReport(
+            exit_code=PlanItemBootstrapExitCode.SUCCESS,
+            plan_identifier=request.plan_identifier,
+            item_identifier=request.item_identifier,
+            branch=request.branch,
+            pull_request_number=created.number,
+            pull_request_url=created.html_url,
+        )
 
 
 # %% command line
 
 
-def build_parser() -> argparse.ArgumentParser:
+class PlanItemBootstrapCommandLine:
     """
-    Build the argument parser for both subcommands.
-
-    :return: The parser.
+    This module's command line: ``record`` and ``open``.
     """
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    subcommands = parser.add_subparsers(dest="subcommand", required=True)
 
-    record = subcommands.add_parser(
-        "record", help="Write an item's manifest entry and its roadmap entry, if any"
-    )
-    record.add_argument("--plan", required=True)
-    record.add_argument("--item", required=True)
-    record.add_argument("--status", required=True, type=ItemStatus)
-    record.add_argument("--roadmap-entry")
-    record.add_argument("--title")
-    record.add_argument("--track")
+    @staticmethod
+    def parser() -> argparse.ArgumentParser:
+        """
+        Build the argument parser for both subcommands.
 
-    open_command = subcommands.add_parser(
-        "open", help="Create the item's branch and draft pull request"
-    )
-    open_command.add_argument("--plan", required=True)
-    open_command.add_argument("--item", required=True)
-    open_command.add_argument("--branch", required=True)
-    open_command.add_argument("--base", required=True)
-    open_command.add_argument("--session", required=True)
-    open_command.add_argument(
-        "--pull-request-title", help="Required unless --pull-request-number is given"
-    )
-    open_command.add_argument(
-        "--pull-request-body",
-        type=Path,
-        help="Required unless --pull-request-number is given",
-    )
-    open_command.add_argument(
-        "--pull-request-number",
-        type=int,
-        help="Record a pull request the caller already created, instead of creating one",
-    )
-    open_command.add_argument("--remote", default="origin")
+        :return: The parser.
+        """
+        parser = argparse.ArgumentParser(
+            description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+        )
+        subcommands = parser.add_subparsers(dest="subcommand", required=True)
 
-    return parser
+        record = subcommands.add_parser(
+            "record",
+            help="Write an item's manifest entry and its roadmap entry, if any",
+        )
+        record.add_argument("--plan", required=True)
+        record.add_argument("--item", required=True)
+        record.add_argument("--status", required=True, type=ItemStatus)
+        record.add_argument("--roadmap-entry")
+        record.add_argument("--title")
+        record.add_argument("--track")
+
+        open_command = subcommands.add_parser(
+            "open", help="Create the item's branch and draft pull request"
+        )
+        open_command.add_argument("--plan", required=True)
+        open_command.add_argument("--item", required=True)
+        open_command.add_argument("--branch", required=True)
+        open_command.add_argument("--base", required=True)
+        open_command.add_argument("--session", required=True)
+        open_command.add_argument(
+            "--pull-request-title",
+            help="Required unless --pull-request-number is given",
+        )
+        open_command.add_argument(
+            "--pull-request-body",
+            type=Path,
+            help="Required unless --pull-request-number is given",
+        )
+        open_command.add_argument(
+            "--pull-request-number",
+            type=int,
+            help="Record a pull request the caller already created, instead of creating one",
+        )
+        open_command.add_argument("--remote", default="origin")
+
+        return parser
 
 
 def main() -> int:
@@ -1363,26 +1367,25 @@ def main() -> int:
 
     See the module docstring for the command line contract.
     """
-    arguments = build_parser().parse_args()
+    arguments = PlanItemBootstrapCommandLine.parser().parse_args()
     project_root = Path(
         os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
     )
 
     try:
         if arguments.subcommand == "record":
-            report = record_item(
-                ItemRecordRequest(
-                    plan_identifier=arguments.plan,
-                    item_identifier=arguments.item,
-                    status=arguments.status,
-                    roadmap_entry=arguments.roadmap_entry,
-                    title=arguments.title,
-                    track=arguments.track,
-                ),
-                project_root=project_root,
-            )
+            report = ItemRecordRequest(
+                plan_identifier=arguments.plan,
+                item_identifier=arguments.item,
+                status=arguments.status,
+                roadmap_entry=arguments.roadmap_entry,
+                title=arguments.title,
+                track=arguments.track,
+            ).record(project_root)
         else:
-            report = open_work(
+            report = WorkOpener(
+                project_root=project_root, remote=arguments.remote
+            ).open(
                 WorkOpenRequest(
                     plan_identifier=arguments.plan,
                     item_identifier=arguments.item,
@@ -1396,9 +1399,7 @@ def main() -> int:
                         else None
                     ),
                     pull_request_number=arguments.pull_request_number,
-                ),
-                project_root=project_root,
-                remote=arguments.remote,
+                )
             )
     except BootstrapError as error:
         logger.error(f"{error.exit_code.name_for_a_caller}: {error}")
