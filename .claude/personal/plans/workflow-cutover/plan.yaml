@@ -94,20 +94,26 @@ items:
   title: 'Retire the scheduled LLM Routine: deterministic Action + on-demand sessions'
   branch: claude/stack-maintenance-action
   status: in_progress
-  session: https://claude.ai/code/session_01Q8JfYcge9pLWPxGSE9d9d1
+  session: https://claude.ai/code/session_012gHZc1PvDAEg6dwZioYRug
   track: cutover
   pull_request_number: 16
   blockers:
-  - Waits on one green run of the reusable workflow, called from the CRAM fork, before the
-    live Routine is deleted.
+  - The CRAM fork's caller lands with basstler-package's cram-uses-basstler-plugin (CRAM's
+    main has no .claude/basstler/stack.toml yet) and must name a release that carries #16.
+  - Waits on one green run of that caller before the live Routine is deleted.
   depends_on: []
-  notes: 'Target revised 2026-07-31 (native-stacks pivot, user-approved): the endgame is no
-    scheduled LLM run at all, which finally aligns the Routine with the no-scheduled-checks
-    rule. A plain scheduled Action takes the deterministic duties - fork-main fast-forward
-    from cram2/main, label hygiene, the cram2-link comment, the plans-site build, and the
-    happy-path cascade, since `gh stack sync` is documented as safe in automation and Actions
-    runners ship `gh`. The judgment residue - cascade conflicts, red CI after a restack -
-    runs in on-demand sessions surfaced by the dashboard rather than by a timer.'
+  notes: >
+    Resolved 2026-10-19 with the owner: the caller is event-only (pull_request opened,
+    ready_for_review and closed, plus workflow_dispatch). No schedule, and no exception in
+    the budget file, matching CRAM actions-budget's stack-maintenance-event-only. #10's
+    WorkflowLimits has no schedule override anyway. The fork's base fast-forwards on the
+    next event or dispatch. #16 ships docs/examples/stack-maintenance.yml, and the release
+    rewrites every CheckoutLocation.example_callers() ref. stack-maintenance-event-only's
+    fan-out ask is folded here, with no code needed: restack already pushes one branch at
+    a time, parent first. Pushes made with GITHUB_TOKEN start no workflows, so restacked
+    pull requests get no CI from the Action's own pushes. Earlier target (2026-07-31): no
+    scheduled LLM run. A plain Action takes the deterministic duties, and the judgment
+    residue (cascade conflicts, red CI after a restack) runs in on-demand sessions.
 - id: artifact-path-retirement
   title: Retire the Artifact publishing path once the Pages site has run one green cycle
   branch: null
