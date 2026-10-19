@@ -289,9 +289,11 @@ class VersionReference:
         """
         return (
             cls.manifest(),
-            cls(
-                CheckoutLocation.EXAMPLE_CALLER,
-                re.compile(r"(?:@|basstler_ref: )v(?P<version>[0-9][^\s]*)"),
+            *(
+                cls(
+                    caller, re.compile(r"(?:@|basstler_ref: )v(?P<version>[0-9][^\s]*)")
+                )
+                for caller in CheckoutLocation.example_callers()
             ),
         )
 

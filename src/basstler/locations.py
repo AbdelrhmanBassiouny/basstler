@@ -111,10 +111,22 @@ class CheckoutLocation(PathEnumeration):
     The plugin's manifest, where a release's version is declared.
     """
 
-    EXAMPLE_CALLER = Path("docs") / "examples" / "upstream-reviews.yml"
+    UPSTREAM_REVIEWS_CALLER = Path("docs") / "examples" / "upstream-reviews.yml"
     """
-    The caller a project copies, naming the release it calls.
+    The upstream-reviews caller a project copies, naming the release it calls.
     """
+
+    STACK_MAINTENANCE_CALLER = Path("docs") / "examples" / "stack-maintenance.yml"
+    """
+    The stack-maintenance caller a project copies, naming the release it calls.
+    """
+
+    @classmethod
+    def example_callers(cls) -> tuple[CheckoutLocation, ...]:
+        """
+        :return: Every caller a project copies, each naming the release it calls.
+        """
+        return cls.UPSTREAM_REVIEWS_CALLER, cls.STACK_MAINTENANCE_CALLER
 
 
 class BasstlerVariable(EnvironmentVariable):

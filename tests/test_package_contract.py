@@ -21,7 +21,12 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import ClaudeCodeVariable, PackageLocation, PluginLocation
+from basstler.locations import (
+    CheckoutLocation,
+    ClaudeCodeVariable,
+    PackageLocation,
+    PluginLocation,
+)
 
 from basstler.package_layout import (
     PackageModule,
@@ -244,13 +249,16 @@ A ``@<ref>`` or ``basstler_ref: <ref>`` naming a basstler release.
 """
 
 
-def test_the_example_caller_calls_the_plugins_own_release():
+@pytest.mark.parametrize(
+    "location", CheckoutLocation.example_callers(), ids=lambda p: p._name_
+)
+def test_every_example_caller_calls_the_plugins_own_release(location):
     """
-    A project copies the example caller as it stands, so it has to call the release its
+    A project copies an example caller as it stands, so it has to call the release its
     plugin installs - both the workflow it uses and the package that workflow installs.
     """
     manifest = PluginManifest.of_this_plugin()
-    caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
+    caller = RepositoryLocation.ROOT / location
 
     references = RELEASE_REFERENCE.findall(caller.read_text())
 

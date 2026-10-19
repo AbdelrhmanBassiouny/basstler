@@ -12,11 +12,12 @@ name: Stack maintenance
 # about still does - see `maintenance_report.unattended_exit_code_for`.
 #
 # Reusable: a fork project calls it from a workflow of its own, naming the release of
-# basstler it calls, on the events that should start a pass - typically a pull request
-# `closed` (a merge or close can drop a branch from the open set), `opened` and
-# `ready_for_review` (the two events most often needing a pass right away), a schedule
-# keeping the fork's base fresh, and `workflow_dispatch`. The upstream comes from the
-# project's own .claude/basstler/stack.toml, so no repository is named here.
+# basstler it calls, on the events that should start a pass - a pull request `closed`
+# (a merge or close can drop a branch from the open set), `opened` and
+# `ready_for_review` (the two events most often needing a pass right away), and
+# `workflow_dispatch`. No schedule: the Actions budget allows none. The caller to copy
+# is docs/examples/stack-maintenance.yml. The upstream comes from the project's own
+# .claude/basstler/stack.toml, so no repository is named here.
 #
 # A runner starts with nothing installed and no session hook runs on it, so this job
 # installs the package itself before invoking a module.

@@ -59,7 +59,9 @@ upstream_repository = "<owner>/<name>"
 
 and, for `/upstream-reviews`, copy [`examples/upstream-reviews.yml`](examples/upstream-reviews.yml)
 to the project's `.github/workflows/upstream-reviews.yml` on its default branch. It calls this
-repository's reusable workflow at the plugin's release.
+repository's reusable workflow at the plugin's release. For a maintenance pass with nobody
+watching, copy [`examples/stack-maintenance.yml`](examples/stack-maintenance.yml) to
+`.github/workflows/stack-maintenance.yml` the same way.
 
 ## 4. Check it worked
 

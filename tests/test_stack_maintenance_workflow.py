@@ -14,9 +14,14 @@ from __future__ import annotations
 import yaml
 
 import basstler.maintenance
+from basstler.locations import CheckoutLocation
 from basstler.maintenance_commands import BoardCommand, UnattendedRunCommand
 
-from .constants import RepositoryLocation
+from .constants import (
+    RepositoryLocation,
+    StackMaintenancePullRequestType,
+    StackMaintenanceTrigger,
+)
 
 STACK_MAINTENANCE_WORKFLOW = RepositoryLocation.WORKFLOWS / "stack-maintenance.yml"
 """
@@ -46,3 +51,34 @@ def test_the_board_is_exported_before_the_report_is_run():
     unattended_run = script.index(f"{module} {UnattendedRunCommand.invoked_as}")
 
     assert board_export < unattended_run
+
+
+def _example_caller_triggers() -> dict:
+    """:return: The example caller's ``on`` table, which YAML 1.1 reads as ``True``."""
+    document = yaml.safe_load(
+        (
+            RepositoryLocation.ROOT / CheckoutLocation.STACK_MAINTENANCE_CALLER
+        ).read_text()
+    )
+    return document[True]
+
+
+def test_the_example_caller_runs_on_events_only():
+    """
+    The Actions budget allows no ``schedule``, so a pass starts on the pull request
+    events that can change the stack, or by dispatch.
+    """
+    triggers = _example_caller_triggers()
+
+    assert set(triggers) == set(StackMaintenanceTrigger)
+    assert set(triggers[StackMaintenanceTrigger.PULL_REQUEST]["types"]) == set(
+        StackMaintenancePullRequestType
+    )
+
+
+def test_the_example_caller_calls_this_workflow():
+    caller = (
+        RepositoryLocation.ROOT / CheckoutLocation.STACK_MAINTENANCE_CALLER
+    ).read_text()
+
+    assert f"/.github/workflows/{STACK_MAINTENANCE_WORKFLOW.name}@" in caller
