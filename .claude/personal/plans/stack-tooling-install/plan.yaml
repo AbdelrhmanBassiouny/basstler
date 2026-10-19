@@ -6,7 +6,7 @@ description: 'Getting the stacked-pull-request workflow''s machinery out of a pe
   natively and for a fork that has to overlay it. Portability is the rule throughout: no repository
   names outside configuration defaults.'
 default_repository: AbdelrhmanBassiouny/basstler
-tracking_issue: 4
+tracking_issue: 41
 waves:
 - id: landing
   name: The tooling reaches main

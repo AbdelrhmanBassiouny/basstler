@@ -7,7 +7,7 @@ description: The personal-notes branch and the SessionStart hook that reads it. 
   branch belongs to, and a setup verdict - and the conventions those carry, each made a mechanism
   rather than a line of prose someone has to remember.
 default_repository: AbdelrhmanBassiouny/basstler
-tracking_issue: 4
+tracking_issue: 39
 waves:
 - id: slimming
   name: What the notes branch holds

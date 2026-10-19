@@ -6,7 +6,7 @@ description: The skills a session uses to place a piece of work and to keep the 
   an item's branch and draft pull request before implementation rather than after, and choosing
   whether a kickoff asks for approval or proceeds.
 default_repository: AbdelrhmanBassiouny/basstler
-tracking_issue: 4
+tracking_issue: 38
 waves:
 - id: skills
   name: The skills themselves

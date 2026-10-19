@@ -6,7 +6,7 @@ description: The renderer behind /plan-dashboard. Bug fixes to what it computes 
   module that lets one page carry CI, size and conflict information rather than only the manifest's
   own view of itself.
 default_repository: AbdelrhmanBassiouny/basstler
-tracking_issue: 4
+tracking_issue: 34
 waves:
 - id: corrections
   name: What the dashboard computes

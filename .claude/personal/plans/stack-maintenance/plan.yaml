@@ -6,7 +6,7 @@ description: 'What keeps a stack of pull requests moving without a person drivin
   a child whose parent has landed; reading upstream review threads from a fork; and a regenerated
   integration branch that answers whether the in-flight branches actually coexist.'
 default_repository: AbdelrhmanBassiouny/basstler
-tracking_issue: 4
+tracking_issue: 40
 waves:
 - id: pass
   name: The maintenance pass

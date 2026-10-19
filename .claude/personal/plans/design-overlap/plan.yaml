@@ -8,7 +8,7 @@ description: Parallel branches converge on the same design independently, and it
   graph and the definition graph from it, and gives the reconcile verdict the automation the
   other integration verdicts already have.
 default_repository: AbdelrhmanBassiouny/basstler
-tracking_issue: 4
+tracking_issue: 35
 waves:
 - id: detection
   name: What each branch defines, and where two collide

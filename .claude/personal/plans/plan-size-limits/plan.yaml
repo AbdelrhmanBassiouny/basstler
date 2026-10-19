@@ -8,7 +8,7 @@ description: Make plan size a property the tooling holds rather than one session
   skills stops asking for detail the budget cannot afford. Because the budget is enforced
   by refusal, the two plans already over it are split first.
 default_repository: AbdelrhmanBassiouny/basstler
-tracking_issue: 4
+tracking_issue: 37
 waves:
 - id: budget
   name: Wave 1 - the budget, measured

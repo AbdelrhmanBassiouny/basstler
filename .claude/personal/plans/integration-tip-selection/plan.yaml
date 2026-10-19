@@ -7,7 +7,7 @@ description: The integration build's selection step, split out of stack-maintena
   when merging it would take the build's own pipeline out of the tree; and a comment on every
   branch a build left out, so the reason is readable instead of being rediscovered days later.
 default_repository: AbdelrhmanBassiouny/basstler
-tracking_issue: 4
+tracking_issue: 36
 waves:
 - id: selection
   name: The selection step
