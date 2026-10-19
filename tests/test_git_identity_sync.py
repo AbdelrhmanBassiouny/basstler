@@ -18,7 +18,8 @@ import pytest
 
 from basstler.locations import PluginLocation, ProjectLocation
 
-from .constants import PersonalNotesPath, ScratchBranch
+from .constants.notes import ScratchBranch
+from .constants.paths import PersonalNotesPath
 from .scratch_repository import SCRATCH_IDENTITY, GitIdentity, ScratchRepository
 from .session_start_summary import (
     SummaryLine,

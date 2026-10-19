@@ -29,11 +29,8 @@ from basstler.package_layout import (
     package_modules,
 )
 
-from .constants import (
-    ConfigurationVariable,
-    EnvironmentVariable,
-    RepositoryLocation,
-)
+from .constants.environment import ConfigurationVariable, EnvironmentVariable
+from .constants.paths import RepositoryLocation
 from .plugin_manifest import PluginManifest
 from .project_declaration import HatchVersionSource, ProjectDeclaration
 from .script_runner import ScriptRunner, configuration_value

@@ -15,7 +15,7 @@ import subprocess
 from basstler.repository import Repository
 from basstler.stack_configuration import CommittedStackConfiguration
 
-from .constants import RepositoryLocation, SkillDirectory
+from .constants.paths import RepositoryLocation, SkillDirectory
 
 MAINTENANCE_SKILL_DOCUMENT = (
     RepositoryLocation.PLUGIN

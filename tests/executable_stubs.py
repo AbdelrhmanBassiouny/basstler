@@ -13,7 +13,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .constants import DatasetLocation, EnvironmentVariable, FileMode
+from .constants.environment import EnvironmentVariable, FileMode
+from .constants.paths import DatasetLocation
 
 
 @dataclass(frozen=True)

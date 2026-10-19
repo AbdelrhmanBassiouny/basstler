@@ -11,7 +11,7 @@ from importlib.metadata import distributions
 
 import pytest
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 from .project_declaration import ProjectDeclaration
 from .script_runner import PythonModuleRunner
 from basstler import dependencies

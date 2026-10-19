@@ -16,7 +16,8 @@ import pytest
 
 from basstler.locations import PluginLocation, ProjectLocation
 
-from .constants import DatasetLocation, PersonalNotesPath, ScratchBranch
+from .constants.notes import ScratchBranch
+from .constants.paths import DatasetLocation, PersonalNotesPath
 from .project_declaration import ProjectDeclaration
 from .scratch_repository import (
     SCRATCH_IDENTITY,
