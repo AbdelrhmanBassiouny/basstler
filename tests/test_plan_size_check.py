@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 import basstler.plan_size_check
-from basstler.plan_model import ItemStatus, ManifestField, PlanManifest
+from basstler.plan_model import ItemStatus, ManifestKey, PlanManifest
 from basstler.plan_size_check import PlanSizeCheckOption, PlanSizeCheckResult, main
 from basstler.plan_size_limits import Measure
 
@@ -35,11 +35,11 @@ def write_plan(
     manifest_path = tmp_path / "plan.yaml"
     PlanManifest(
         {
-            ManifestField.IDENTIFIER.value: "a-plan",
-            ManifestField.ITEMS.value: [
+            ManifestKey.IDENTIFIER.key: "a-plan",
+            ManifestKey.ITEMS.key: [
                 {
-                    ManifestField.IDENTIFIER.value: f"item-{number}",
-                    ManifestField.STATUS.value: status.value,
+                    ManifestKey.IDENTIFIER.key: f"item-{number}",
+                    ManifestKey.STATUS.key: status.value,
                 }
                 for number, status in enumerate(statuses)
             ],
