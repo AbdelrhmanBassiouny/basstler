@@ -648,15 +648,17 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
     bootstrap_repository: ScratchRepository,
 ):
     """
-    ``ProjectLocation.PLANS`` mirrors ``PLANS_DIR`` in the shell configuration; this is
-    what stops the mirror drifting, since the two are edited in different files.
+    ``ProjectLocation.PLANS`` mirrors ``PLANS_DIR`` in the shell configuration, and
+    ``ProjectLocation.PLAN_HUB`` mirrors ``PLAN_HUB_PATH``; this is what stops the
+    mirrors drifting, since each pair is edited in different files.
     """
     resolved = subprocess.run(
         [
             "bash",
             "-c",
             f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && '
-            'printf "%s\\n%s\\n" "${PLANS_DIR}" "$(plan_manifest_path "$1")"',
+            'printf "%s\\n%s\\n%s\\n" "${PLANS_DIR}" "$(plan_manifest_path "$1")" '
+            '"${PLAN_HUB_PATH}"',
             "test",
             PLAN_IDENTIFIER,
         ],
@@ -665,8 +667,9 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
         text=True,
         check=True,
     )
-    plans_directory, manifest_path = resolved.stdout.strip().split("\n")
+    plans_directory, manifest_path, hub_path = resolved.stdout.strip().split("\n")
     assert plans_directory == str(ProjectLocation.PLANS)
+    assert hub_path == str(ProjectLocation.PLAN_HUB)
     assert manifest_path == PlanDocument.MANIFEST.path_within_notes_branch(
         PLAN_IDENTIFIER
     )

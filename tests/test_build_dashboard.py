@@ -31,6 +31,7 @@ from basstler.build_dashboard import (
     PullRequestRecord,
     PullRequestsByRepository,
     PullRequestState,
+    RenderedDashboard,
     StackedItem,
     Track,
     UnknownDependency,
@@ -708,7 +709,7 @@ def item(
 
 def test_item_with_no_pull_request_has_no_pull_request_live_state_and_no_drift():
     renderer = make_renderer([item("a", ItemStatus.NOT_STARTED)])
-    output, summary = renderer.render()
+    summary = renderer.render().summary
     assert renderer.plan.items[0].live_state is LiveState.NO_PULL_REQUEST
     assert summary.drift_items == []
 
@@ -725,7 +726,7 @@ def test_merged_pull_request_marks_not_started_item_as_drifted():
         [item("a", ItemStatus.NOT_STARTED, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.drift_items == ["a"]
     assert renderer.plan.items[0].live_state is LiveState.MERGED
 
@@ -742,7 +743,7 @@ def test_closed_pull_request_with_merged_label_is_merged_not_closed_unmerged():
         [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert renderer.plan.items[0].live_state is LiveState.MERGED
     assert summary.drift_items == ["a"]
 
@@ -755,7 +756,7 @@ def test_open_pull_request_marks_done_item_as_drifted():
         [item("a", ItemStatus.DONE, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.drift_items == ["a"]
 
 
@@ -763,7 +764,7 @@ def test_pull_request_missing_from_live_data_is_not_found_and_drifted():
     renderer = make_renderer(
         [item("a", ItemStatus.NOT_STARTED, pull_request_number=999)]
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert renderer.plan.items[0].live_state is LiveState.NOT_FOUND
     assert summary.drift_items == ["a"]
 
@@ -776,7 +777,7 @@ def test_closed_unmerged_pull_request_marks_done_item_as_drifted():
         [item("a", ItemStatus.DONE, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert renderer.plan.items[0].live_state is LiveState.CLOSED_UNMERGED
     assert summary.drift_items == ["a"]
 
@@ -792,7 +793,7 @@ def test_closed_unmerged_pull_request_marks_in_progress_or_blocked_item_as_drift
         [item("a", status, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.drift_items == ["a"]
 
 
@@ -804,7 +805,7 @@ def test_matching_status_and_live_state_is_not_drifted():
         [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.drift_items == []
 
 
@@ -817,7 +818,7 @@ def test_item_becomes_ready_to_start_once_all_dependencies_are_done():
         item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
     ]
     renderer = make_renderer(items)
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_start == ["b"]
 
 
@@ -828,7 +829,7 @@ def test_blocked_item_with_partial_dependencies_done_is_recheck_candidate():
         item("c", ItemStatus.BLOCKED, depends_on=["a", "b"]),
     ]
     renderer = make_renderer(items)
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.blocker_maybe_cleared == ["c"]
     assert summary.ready_to_start == []
 
@@ -843,7 +844,7 @@ def test_blocked_item_with_every_dependency_done_is_recheck_not_ready_to_start()
         item("b", ItemStatus.BLOCKED, depends_on=["a"]),
     ]
     renderer = make_renderer(items)
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.blocker_maybe_cleared == ["b"]
     assert summary.ready_to_start == []
 
@@ -862,7 +863,7 @@ def test_item_becomes_ready_to_start_once_dependency_is_open_and_ready_for_revie
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_start == ["b"]
 
 
@@ -877,7 +878,7 @@ def test_item_not_ready_to_start_while_dependency_is_still_a_draft():
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_start == []
 
 
@@ -888,7 +889,7 @@ def test_not_started_item_with_partial_dependencies_is_neither_list():
         item("c", ItemStatus.NOT_STARTED, depends_on=["a", "b"]),
     ]
     renderer = make_renderer(items)
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_start == []
     assert summary.blocker_maybe_cleared == []
 
@@ -896,14 +897,14 @@ def test_not_started_item_with_partial_dependencies_is_neither_list():
 def test_dependency_free_not_started_item_is_ready_to_start():
     items = [item("a", ItemStatus.NOT_STARTED)]
     renderer = make_renderer(items)
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_start == ["a"]
 
 
 def test_dependency_free_blocked_item_is_neither_list():
     items = [item("a", ItemStatus.BLOCKED)]
     renderer = make_renderer(items)
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_start == []
     assert summary.blocker_maybe_cleared == []
 
@@ -978,7 +979,7 @@ def test_item_with_no_dependency_and_draft_pull_request_is_ready_to_review():
         [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_review == ["a"]
 
 
@@ -990,7 +991,7 @@ def test_blocked_item_with_draft_pull_request_is_not_ready_to_review():
         [item("a", ItemStatus.BLOCKED, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_review == []
 
 
@@ -1002,7 +1003,7 @@ def test_deferred_item_with_draft_pull_request_is_not_ready_to_review():
         [item("a", ItemStatus.DEFERRED, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_review == []
 
 
@@ -1017,7 +1018,7 @@ def test_item_not_ready_to_review_while_dependency_has_no_pull_request():
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_review == []
 
 
@@ -1037,7 +1038,7 @@ def test_item_ready_to_review_once_dependency_has_an_open_pull_request():
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_review == ["a", "b"]
 
 
@@ -1057,7 +1058,7 @@ def test_item_ready_to_review_once_its_dependency_has_merged():
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_review == ["b"]
 
 
@@ -1072,7 +1073,7 @@ def test_item_ready_to_review_when_its_dependency_is_done_without_a_pull_request
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_review == ["b"]
 
 
@@ -1090,7 +1091,7 @@ def test_item_not_ready_to_review_while_its_dependency_is_closed_unmerged():
     renderer = make_renderer(
         items, pull_requests_by_repository=pull_requests_by_repository
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_review == []
 
 
@@ -1155,7 +1156,7 @@ def test_bug_fix_stays_in_its_ordinary_action_group():
         [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.ready_to_review == ["a"]
 
 
@@ -1173,7 +1174,7 @@ def test_render_marks_a_bug_fix_sidebar_entry_with_a_bug_chip():
         [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert '<span class="next-bug-chip">bug</span>' in output
 
 
@@ -1185,7 +1186,7 @@ def test_render_leaves_a_non_bug_sidebar_entry_without_a_bug_chip():
         [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert '<span class="next-bug-chip">bug</span>' not in output
 
 
@@ -1217,7 +1218,7 @@ def _renderer_with_one_bug_fix_and_one_other_entry() -> DashboardRenderer:
 
 def test_bug_fixes_only_toggle_is_offered_when_a_sidebar_entry_is_a_bug_fix():
     renderer = _renderer_with_one_bug_fix_and_one_other_entry()
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'id="bug-fixes-only-toggle"' in output
 
 
@@ -1229,27 +1230,27 @@ def test_bug_fixes_only_toggle_is_omitted_when_no_sidebar_entry_is_a_bug_fix():
         [item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
         pull_requests_by_repository=pull_requests_by_repository,
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'id="bug-fixes-only-toggle"' not in output
 
 
 def test_bug_fix_entry_is_marked_so_the_filter_can_keep_it():
     renderer = _renderer_with_one_bug_fix_and_one_other_entry()
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert '<li class="next-entry next-entry-bug">' in output
     assert '<li class="next-entry">' in output
 
 
 def test_group_holding_a_bug_fix_is_marked_so_the_filter_can_keep_it():
     renderer = _renderer_with_one_bug_fix_and_one_other_entry()
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert '<div class="next-group next-review next-group-has-bugs">' in output
     assert '<div class="next-group next-drift">' in output
 
 
 def test_group_heading_carries_both_the_total_and_the_bug_fix_count():
     renderer = _renderer_with_one_bug_fix_and_one_other_entry()
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert (
         'Ready to review <span class="next-count-all">(1)</span>'
         '<span class="next-count-bug">(1)</span>' in output
@@ -1503,7 +1504,7 @@ def test_render_wires_an_item_into_its_wave_and_track_sections():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert "Wave One" in output
     assert "Track One" in output
     assert 'id="wave-wave-1"' in output
@@ -1529,7 +1530,7 @@ def test_render_shows_placeholder_for_a_track_with_no_items():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert "Nothing here yet." in output
 
 
@@ -1552,7 +1553,7 @@ def test_render_shows_pull_request_link_when_item_has_one():
         pull_requests_by_repository=pull_requests_by_repository,
         tracking_url=None,
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'href="https://github.com/owner/repo/pull/5"' in output
     assert "#5" in output
 
@@ -1570,7 +1571,7 @@ def test_render_shows_start_now_button_for_a_not_started_item():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'data-action-command="/plan-item-kickoff test-plan a"' in output
     assert "Start now" in output
 
@@ -1592,7 +1593,7 @@ def test_render_shows_resolve_resume_reconsider_buttons_for_underway_items():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'data-action-command="/plan-item-resolve test-plan a"' in output
     assert 'data-action-command="/plan-item-resolve test-plan b"' in output
     assert 'data-action-command="/plan-item-resolve test-plan c"' in output
@@ -1620,7 +1621,7 @@ def test_render_shows_review_button_for_an_item_with_a_draft_pull_request():
         pull_requests_by_repository=pull_requests_by_repository,
         tracking_url=None,
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'class="review-button" href="https://github.com/owner/repo/pull/5"' in output
     assert "Review" in output
 
@@ -1644,7 +1645,7 @@ def test_render_omits_review_button_once_pull_request_is_ready_for_review():
         pull_requests_by_repository=pull_requests_by_repository,
         tracking_url=None,
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'class="review-button"' not in output
 
 
@@ -1667,7 +1668,7 @@ def test_render_omits_review_button_for_a_deferred_item_with_a_draft_pull_reques
         pull_requests_by_repository=pull_requests_by_repository,
         tracking_url=None,
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'class="review-button"' not in output
 
 
@@ -1690,7 +1691,7 @@ def test_render_shows_ready_to_review_sidebar_section():
         pull_requests_by_repository=pull_requests_by_repository,
         tracking_url=None,
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert '<div class="next-group next-review">' in output
     assert (
         'class="next-review-link" href="https://github.com/owner/repo/pull/5"' in output
@@ -1720,7 +1721,7 @@ def test_render_shows_ready_to_review_section_last_in_the_sidebar():
         pull_requests_by_repository=pull_requests_by_repository,
         tracking_url=None,
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert output.index("Ready to review") > output.index("Ready to start")
 
 
@@ -1737,7 +1738,7 @@ def test_render_omits_action_button_for_a_done_item():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'data-action-command="' not in output
 
 
@@ -1754,7 +1755,7 @@ def test_render_hides_done_items_by_default_with_a_sidebar_toggle():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'id="plan-dashboard-page"' in output
     assert 'class="page hide-done"' in output
     assert 'id="show-done-toggle"' in output
@@ -1773,7 +1774,7 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     for model in ModelOption:
         assert f'data-value="{model.value}"' in output
         assert f">{model.label}</li>" in output
@@ -1797,7 +1798,7 @@ def test_render_exposes_both_indent_levels_as_css_variables_on_the_item():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert "--indent-level: 1; --indent-level-hidden-done: 0;" in output
 
 
@@ -1830,7 +1831,7 @@ def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'title="Item A"' in output
 
 
@@ -1889,7 +1890,7 @@ def test_render_marks_an_unmet_dependency_chip_with_the_chip_unmet_class():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'class="chip chip-unmet"' in output
 
 
@@ -1909,7 +1910,7 @@ def test_render_does_not_mark_a_ready_dependency_chip_as_unmet():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'class="chip"' in output
     assert 'class="chip chip-unmet"' not in output
 
@@ -1930,7 +1931,7 @@ def test_render_gives_each_item_card_a_stable_id_anchor():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'id="item-a"' in output
 
 
@@ -1950,7 +1951,7 @@ def test_render_links_a_ready_to_start_sidebar_entry_to_its_item_card():
     renderer = DashboardRenderer(
         plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'href="#item-b"' in output
     assert 'data-item-identifier="b"' in output
     assert 'onclick="planDashboardHighlightItem(event, this)"' in output
@@ -1975,7 +1976,7 @@ def test_render_links_a_drift_sidebar_entry_to_its_item_card():
         pull_requests_by_repository=pull_requests_by_repository,
         tracking_url=None,
     )
-    output, _ = renderer.render()
+    output = renderer.render().html
     assert 'href="#item-a"' in output
     assert 'data-item-identifier="a"' in output
 
@@ -1985,14 +1986,14 @@ def test_render_links_a_drift_sidebar_entry_to_its_item_card():
 
 def test_status_counts_cover_every_status_even_when_zero():
     renderer = make_renderer([item("a", ItemStatus.DONE)])
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     assert summary.status_counts[ItemStatus.DONE] == 1
     assert summary.status_counts[ItemStatus.BLOCKED] == 0
 
 
 def test_summary_to_json_dict_uses_plain_string_status_keys():
     renderer = make_renderer([item("a", ItemStatus.DONE)])
-    _, summary = renderer.render()
+    summary = renderer.render().summary
     json_dict = summary.to_json_dict()
     assert json_dict["counts"]["done"] == 1
     assert json_dict["drift_count"] == 0
@@ -2105,7 +2106,7 @@ def test_main_rejects_an_invalid_manifest_instead_of_crashing(
 # %% example-walkthrough.md's committed sample plan
 
 
-def _render_example_plan():
+def _render_example_plan() -> RenderedDashboard:
     plan_mapping = yaml.safe_load((EXAMPLE_DIRECTORY / "plan.yaml").read_text())
     validate_plan(plan_mapping)
     plan = Plan.from_mapping(plan_mapping)
@@ -2130,7 +2131,7 @@ def test_example_plan_renders_the_counts_and_sections_the_walkthrough_describes(
     """Locks example-walkthrough.md's screenshots and prose to the actual
     schema/logic - a future change to either would fail this test instead of
     silently leaving the doc showing stale numbers."""
-    _, summary = _render_example_plan()
+    summary = _render_example_plan().summary
     assert summary.status_counts[ItemStatus.NOT_STARTED] == 1
     assert summary.status_counts[ItemStatus.IN_PROGRESS] == 2
     assert summary.status_counts[ItemStatus.BLOCKED] == 1
@@ -2150,7 +2151,7 @@ def test_example_plan_demonstrates_the_bug_chip_and_its_filter():
     """The walkthrough's screenshots show both, so the sample data has to keep
     producing them - and the chip must not disturb the grouping the test above
     pins."""
-    output, _ = _render_example_plan()
+    output = _render_example_plan().html
     assert output.count('<span class="next-bug-chip">bug</span>') == 1
     assert 'id="bug-fixes-only-toggle"' in output
     assert '<div class="next-group next-drift next-group-has-bugs">' in output

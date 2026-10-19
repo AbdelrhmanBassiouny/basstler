@@ -138,6 +138,8 @@
     aside.sidebar { position: static; max-height: none; overflow-y: visible; }
   }
 
+  .crumbs { font-size: 0.8rem; margin: 0 0 0.9rem; color: var(--text-muted); overflow-wrap: anywhere; }
+  .crumbs a { text-decoration: none; }
   header.masthead {
     border-bottom: 1px solid var(--border);
     padding-bottom: 1.5rem;
@@ -695,6 +697,7 @@
 
 <div class="page hide-done" id="plan-dashboard-page">
   <header class="masthead">
+    {% if hub_url or index_url %}<p class="crumbs">{% if hub_url %}<a href="{{ hub_url }}" target="_blank" rel="noopener">All repositories</a> › {% endif %}{% if index_url %}<a href="{{ index_url }}" target="_blank" rel="noopener">{{ repository }}</a>{% else %}{{ repository }}{% endif %} › {{ title }}</p>{% endif %}
     <p class="eyebrow">Plan Dashboard</p>
     <h1>{{ title }}</h1>
     <p class="description">{{ description }}</p>

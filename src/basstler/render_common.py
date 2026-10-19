@@ -10,14 +10,17 @@ import it rather than duplicating the logic.
 from __future__ import annotations
 
 import re
+from abc import ABC, abstractmethod
 from enum import IntEnum, StrEnum
 from functools import cache
+from typing import Any
 from urllib.parse import urlsplit
 
 import jinja2
 import markdown as markdown_library
 import nh3
 
+from basstler.class_property import classproperty
 from basstler.locations import PackageLocation
 
 
@@ -105,6 +108,31 @@ def create_template_environment() -> jinja2.Environment:
         lstrip_blocks=True,
     )
     return environment
+
+
+class TemplatePage(ABC):
+    """
+    A page rendered from one of the package's Jinja2 templates.
+
+    Every page builder loads its template through the same environment, so autoescaping
+    and whitespace handling cannot differ between pages.
+    """
+
+    @classproperty
+    @abstractmethod
+    def template(cls) -> str:
+        """
+        The file name of the template this page is rendered from, in
+        :attr:`PackageLocation.TEMPLATES`.
+        """
+
+    def render_template(self, **context: Any) -> str:
+        """
+        :param context: The values the template substitutes, by name.
+        :return: The page's rendered HTML.
+        """
+        environment = create_template_environment()
+        return environment.get_template(self.template).render(**context)
 
 
 def render_markdown_to_html(markdown_text: str) -> str:
