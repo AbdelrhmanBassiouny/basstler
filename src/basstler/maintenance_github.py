@@ -21,8 +21,10 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
+from enum import Enum
 from typing import Any
 
+from basstler.build_dashboard import PullRequestState
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_board import PullRequestRecord
@@ -133,6 +135,52 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
     """
 
 
+@dataclass(frozen=True)
+class PullRequestListingSpecification:
+    """
+    One filter the pull request list API takes: what it is asked for by, and which
+    :class:`PullRequestState` values it lets through.
+    """
+
+    query: str
+    """
+    The value the list API's ``state`` parameter takes for this filter.
+    """
+
+    states: tuple[PullRequestState, ...]
+    """
+    The pull request states this filter lets through.
+    """
+
+
+class PullRequestListState(PullRequestListingSpecification, Enum):
+    """
+    The pull request states the list API filters on: each :class:`PullRequestState` a
+    pull request reports, plus every state at once.
+
+    Each member *is* a :class:`PullRequestListingSpecification`, written as its fields
+    in declaration order - ``query``, then ``states`` - which the enum passes straight to
+    the dataclass.
+    """
+
+    OPEN = PullRequestState.OPEN.value, (PullRequestState.OPEN,)
+    """
+    Pull requests whose state is :attr:`PullRequestState.OPEN`: drafts and those ready
+    for review alike.
+    """
+
+    CLOSED = PullRequestState.CLOSED.value, (PullRequestState.CLOSED,)
+    """
+    Pull requests whose state is :attr:`PullRequestState.CLOSED`: merged and closed
+    unmerged alike.
+    """
+
+    ALL = "all", tuple(PullRequestState)
+    """
+    Every pull request, whatever its :class:`PullRequestState`.
+    """
+
+
 @dataclass
 class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
     """
@@ -202,11 +250,31 @@ class GitHubRepository(ForkPullRequests):
 
     def open_pull_requests(self) -> list[PullRequestRecord]:
         """:return: Every open pull request on the repository, oldest page first."""
+        return self._pull_requests_in_state(PullRequestListState.OPEN)
+
+    def all_pull_requests(self) -> list[PullRequestRecord]:
+        """:return: Every pull request on the repository, open or closed."""
+        return self._pull_requests_in_state(PullRequestListState.ALL)
+
+    def issue(self, number: int) -> Mapping[str, Any]:
+        """:param number: The issue or pull request to read.
+        :return: It, as the issues API describes it."""
+        return self._call("GET", f"/issues/{number}")
+
+    def _pull_requests_in_state(
+        self, state: PullRequestListState
+    ) -> list[PullRequestRecord]:
+        """
+        Read every page of pull requests in one state.
+
+        :param state: Which pull requests to list.
+        :return: Them, oldest page first.
+        """
         collected: list[PullRequestRecord] = []
         page = 1
         while True:
             query = urllib.parse.urlencode(
-                {"state": "open", "per_page": self.page_size, "page": page}
+                {"state": state.query, "per_page": self.page_size, "page": page}
             )
             fetched = self._call("GET", f"/pulls?{query}")
             collected.extend(fetched)

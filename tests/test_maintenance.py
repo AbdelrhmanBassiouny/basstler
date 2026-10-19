@@ -70,7 +70,8 @@ from basstler.maintenance_git_commands import (
     GitCommandRunner,
     ProposedPush,
 )
-from basstler.maintenance_github import ForkPullRequests
+from basstler.build_dashboard import PullRequestState
+from basstler.maintenance_github import ForkPullRequests, PullRequestListState
 from basstler.maintenance_promotion import (
     clear_spent_promotion_labels,
     description_with_promotion_link,
@@ -2229,3 +2230,28 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
         run_maintenance(fork_checkout, RestackCommand()).returncode
         == StackExitCode.BOARD_UNAVAILABLE
     )
+
+
+@pytest.mark.parametrize(
+    "list_state, states",
+    [
+        (PullRequestListState.OPEN, (PullRequestState.OPEN,)),
+        (PullRequestListState.CLOSED, (PullRequestState.CLOSED,)),
+        (PullRequestListState.ALL, tuple(PullRequestState)),
+    ],
+)
+def test_each_list_filter_names_the_pull_request_states_it_covers(
+    list_state: PullRequestListState, states: tuple[PullRequestState, ...]
+) -> None:
+    assert list_state.states == states
+
+
+@pytest.mark.parametrize(
+    "list_state",
+    [list_state for list_state in PullRequestListState if len(list_state.states) == 1],
+)
+def test_a_single_state_list_filter_asks_for_that_state(
+    list_state: PullRequestListState,
+) -> None:
+    (state,) = list_state.states
+    assert list_state.query == state.value
