@@ -21,6 +21,8 @@ from basstler.upstream_reviews import (
     GitHubCommandLineClient,
     GraphQLErrorsReturned,
     JSONModel,
+    PageInfo,
+    PullRequest,
     PullRequestJSONKey,
     UpstreamPullRequestSnapshot,
     QueryVariable,
@@ -79,6 +81,14 @@ class RecordedCheck(StrEnum):
     LEGACY = "continuous-integration/legacy"
 
 
+class RecordedCheckOutput(StrEnum):
+    """
+    Where the recorded checks link their own output, keyed as :class:`RecordedCheck`.
+    """
+
+    FAILING = "https://github.com/example-upstream/example-repo/actions/runs/1/job/22"
+
+
 class ThreadCursor(StrEnum):
     """
     The cursors the recorded pages hand back.
@@ -113,18 +123,6 @@ def make_reader(client: ReplayingClient) -> UpstreamPullRequestReader:
     return UpstreamPullRequestReader(client, UPSTREAM, Example.FORK_OWNER)
 
 
-def recorded_rollup() -> dict:
-    """:return: The status check rollup the last recorded page carries."""
-    pull_request = RecordedResponse.PULL_REQUEST_PAGE_TWO.recorded().pull_request
-    [commit] = pull_request[PullRequestJSONKey.COMMITS][PullRequestJSONKey.NODES]
-    return commit[PullRequestJSONKey.COMMIT][PullRequestJSONKey.STATUS_CHECK_ROLLUP]
-
-
-def recorded_check_nodes() -> list[dict]:
-    """:return: The rollup context nodes the last recorded page carries."""
-    return recorded_rollup()[PullRequestJSONKey.CONTEXTS][PullRequestJSONKey.NODES]
-
-
 def recorded_thread(
     fixture: RecordedResponse, identifier: ThreadIdentifier
 ) -> ReviewThread:
@@ -139,7 +137,7 @@ def recorded_thread(
     :return: The recorded thread.
     :raises KeyError: If the fixture carries no such thread.
     """
-    for thread in fixture.recorded().review_thread_page.threads:
+    for thread in fixture.recorded().pull_request.review_threads.threads:
         if thread.identifier == identifier:
             return thread
     raise KeyError(identifier)
@@ -191,7 +189,7 @@ def test_the_snapshot_identifies_the_pull_request_it_read(paginated_client):
         RECORDED_PULL_REQUEST_NUMBER
     )
 
-    recorded = RecordedResponse.PULL_REQUEST_PAGE_ONE.recorded().pull_request_snapshot
+    recorded = RecordedResponse.PULL_REQUEST_PAGE_ONE.recorded().pull_request
     assert snapshot.number == recorded.number
     assert snapshot.title == recorded.title
     assert snapshot.url == recorded.url
@@ -242,6 +240,48 @@ def test_a_thread_anchored_to_a_line_is_located_by_it(paginated_client):
     assert anchored.location == f"{anchored.path}:{anchored.line}"
 
 
+# %% the models a response is parsed into
+
+
+def test_a_pull_request_reads_its_checks_off_its_head_commit():
+    pull_request = RecordedResponse.PULL_REQUEST_PAGE_TWO.recorded().pull_request
+
+    [head] = pull_request.commits
+
+    assert pull_request.checks == head.commit.checks
+    assert pull_request.checks.state is RollupState.FAILURE
+
+
+def test_a_pull_request_listing_no_commits_has_no_checks():
+    data = RecordedResponse.PULL_REQUEST_PAGE_TWO.load()[PullRequestJSONKey.REPOSITORY][
+        PullRequestJSONKey.PULL_REQUEST
+    ]
+    data[PullRequestJSONKey.COMMITS][PullRequestJSONKey.NODES] = []
+
+    assert PullRequest.from_json(data).checks is None
+
+
+def test_a_thread_page_reads_its_cursor_from_its_page_info():
+    page = RecordedResponse.PULL_REQUEST_PAGE_ONE.recorded().pull_request.review_threads
+
+    assert page.page_info == PageInfo(
+        has_next_page=True, end_cursor=ThreadCursor.PAGE_ONE
+    )
+
+
+def test_the_snapshot_is_assembled_from_the_parsed_pull_request():
+    pull_request = RecordedResponse.PULL_REQUEST_PAGE_TWO.recorded().pull_request
+
+    snapshot = UpstreamPullRequestSnapshot.assemble(
+        pull_request, pull_request.review_threads.threads
+    )
+
+    assert snapshot.number == pull_request.number
+    assert snapshot.reviews == pull_request.reviews
+    assert snapshot.threads == pull_request.review_threads.threads
+    assert snapshot.checks == pull_request.checks
+
+
 # %% checks
 
 
@@ -256,13 +296,13 @@ def current_checks(paginated_client) -> CheckStatus:
 
 
 def test_the_rollup_verdict_is_read_rather_than_recomputed(current_checks):
-    assert (
-        current_checks.state is RollupState[recorded_rollup()[PullRequestJSONKey.STATE]]
-    )
+    """The recorded rollup says failure while a check is still pending, which a
+    verdict recomputed from the worst outcome would not say."""
+    assert current_checks.state is RollupState.FAILURE
 
 
 def test_every_recorded_check_is_read(current_checks):
-    assert len(current_checks.results) == len(recorded_check_nodes())
+    assert [result.name for result in current_checks.results] == list(RecordedCheck)
 
 
 def test_a_finished_check_run_carries_its_conclusion(current_checks):
@@ -276,18 +316,13 @@ def test_a_finished_check_run_carries_its_conclusion(current_checks):
 
 
 def test_a_check_run_links_to_its_own_output(current_checks):
-    [recorded] = [
-        node
-        for node in recorded_check_nodes()
-        if node.get(PullRequestJSONKey.NAME) == RecordedCheck.FAILING
-    ]
     [failed] = [
         result
         for result in current_checks.results
         if result.name == RecordedCheck.FAILING
     ]
 
-    assert failed.url == recorded[PullRequestJSONKey.DETAILS_URL]
+    assert failed.url == RecordedCheckOutput.FAILING
 
 
 def test_an_unfinished_check_run_reads_as_pending(current_checks):

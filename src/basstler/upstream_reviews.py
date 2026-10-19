@@ -53,9 +53,10 @@ class JSONModel(ABC):
     is trusted to have followed, and a model that spelled it differently would fail
     only when something happened to parse that field.
 
-    ..note:: A reader needing more than the object itself cannot state this
-        contract, so :class:`UpstreamPullRequestSnapshot`, which is assembled from
-        threads gathered across several responses, does not implement it.
+    Every response is parsed into these models as soon as it arrives, and every
+    decision after that is made on their attributes, never on the raw object. A
+    reader reads its own object's fields and hands each nested object to that
+    object's own model, so no access path into a response is spelled out twice.
     """
 
     @classmethod
@@ -670,14 +671,9 @@ class BranchPullRequest(JSONModel):
 
 
 @dataclass(frozen=True)
-class ReviewThreadPage(JSONModel):
+class PageInfo(JSONModel):
     """
-    One page of review threads, with the cursor that follows it.
-    """
-
-    threads: list[ReviewThread]
-    """
-    The threads on this page.
+    Where one page of a paged list stands in the whole list.
     """
 
     has_next_page: bool
@@ -691,19 +687,48 @@ class ReviewThreadPage(JSONModel):
     """
 
     @classmethod
+    def from_json(cls, data: dict[str, Any]) -> PageInfo:
+        """
+        Read a ``pageInfo`` object.
+
+        :param data: The object to read.
+        :return: The parsed page position.
+        """
+        return cls(
+            has_next_page=data[PullRequestJSONKey.HAS_NEXT_PAGE],
+            end_cursor=data[PullRequestJSONKey.END_CURSOR],
+        )
+
+
+@dataclass(frozen=True)
+class ReviewThreadPage(JSONModel):
+    """
+    One page of review threads, with where it stands in the whole list.
+    """
+
+    threads: list[ReviewThread]
+    """
+    The threads on this page.
+    """
+
+    page_info: PageInfo
+    """
+    Whether another page follows, and the cursor to request it with.
+    """
+
+    @classmethod
     def from_json(cls, data: dict[str, Any]) -> ReviewThreadPage:
         """
-        Build a page from a ``pullRequest`` node.
+        Build a page from a ``reviewThreads`` object.
 
-        :param data: The node to read.
+        :param data: The object to read.
         :return: The parsed page.
         """
-        threads_field = data[PullRequestJSONKey.REVIEW_THREADS]
-        page_info = threads_field[PullRequestJSONKey.PAGE_INFO]
         return cls(
-            threads=PullRequestJSONKey.REVIEW_THREADS.read_list(data, ReviewThread),
-            has_next_page=page_info[PullRequestJSONKey.HAS_NEXT_PAGE],
-            end_cursor=page_info[PullRequestJSONKey.END_CURSOR],
+            threads=[
+                ReviewThread.from_json(node) for node in data[PullRequestJSONKey.NODES]
+            ],
+            page_info=PageInfo.from_json(data[PullRequestJSONKey.PAGE_INFO]),
         )
 
 
@@ -797,6 +822,121 @@ class CheckStatus(JSONModel):
 
 
 @dataclass(frozen=True)
+class Commit(JSONModel):
+    """
+    A commit, carrying the checks reported against it.
+    """
+
+    checks: CheckStatus | None
+    """
+    The checks reported against this commit, absent when none have reported.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> Commit:
+        """
+        Read a ``commit`` object, whose rollup GitHub leaves null while nothing has
+        reported against it.
+
+        :param data: The object to read.
+        :return: The parsed commit.
+        """
+        rollup = data[PullRequestJSONKey.STATUS_CHECK_ROLLUP]
+        return cls(checks=CheckStatus.from_json(rollup) if rollup else None)
+
+
+@dataclass(frozen=True)
+class PullRequestCommit(JSONModel):
+    """
+    One entry of a pull request's commit list, which wraps the commit itself.
+    """
+
+    commit: Commit
+    """
+    The commit this entry stands for.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> PullRequestCommit:
+        """
+        Read one ``commits`` node.
+
+        :param data: The node to read.
+        :return: The parsed entry.
+        """
+        return cls(commit=Commit.from_json(data[PullRequestJSONKey.COMMIT]))
+
+
+@dataclass(frozen=True)
+class PullRequest(JSONModel):
+    """
+    One upstream pull request, as a single page of the review-threads query reads it.
+    """
+
+    number: int
+    """
+    Its number on the upstream repository.
+    """
+
+    title: str
+    """
+    Its title.
+    """
+
+    url: str
+    """
+    Its web URL.
+    """
+
+    commits: list[PullRequestCommit]
+    """
+    The commits the query selected, which is the head commit alone.
+    """
+
+    reviews: list[Review]
+    """
+    Every submitted review, oldest first.
+    """
+
+    review_threads: ReviewThreadPage
+    """
+    The page of review threads this response carried.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> PullRequest:
+        """
+        Read a ``pullRequest`` object.
+
+        :param data: The object to read.
+        :return: The parsed pull request.
+        """
+        return cls(
+            number=data[PullRequestJSONKey.NUMBER],
+            title=data[PullRequestJSONKey.TITLE],
+            url=data[PullRequestJSONKey.URL],
+            commits=PullRequestJSONKey.COMMITS.read_list(data, PullRequestCommit),
+            reviews=PullRequestJSONKey.REVIEWS.read_list(data, Review),
+            review_threads=ReviewThreadPage.from_json(
+                data[PullRequestJSONKey.REVIEW_THREADS]
+            ),
+        )
+
+    @property
+    def checks(self) -> CheckStatus | None:
+        """
+        The checks reported against the head commit.
+
+        GitHub hangs the rollup off the commit rather than the pull request.
+
+        :return: The checks, or ``None`` when nothing has reported.
+        """
+        if not self.commits:
+            return None
+        return self.commits[-1].commit.checks
+
+
+@dataclass(frozen=True)
 class UpstreamPullRequestSnapshot:
     """
     Everything read from one upstream pull request in a single run.
@@ -833,43 +973,24 @@ class UpstreamPullRequestSnapshot:
     """
 
     @classmethod
-    def from_json(
-        cls, data: dict[str, Any], threads: list[ReviewThread]
+    def assemble(
+        cls, pull_request: PullRequest, threads: list[ReviewThread]
     ) -> UpstreamPullRequestSnapshot:
         """
-        Build a snapshot from a ``pullRequest`` node and its collected threads.
+        Combine a parsed pull request with every thread its pages carried.
 
-        :param data: The node to read.
+        :param pull_request: The pull request, as the last page read it.
         :param threads: Every thread gathered across the paged reads.
-        :return: The parsed snapshot.
+        :return: The assembled snapshot.
         """
         return cls(
-            number=data[PullRequestJSONKey.NUMBER],
-            title=data[PullRequestJSONKey.TITLE],
-            url=data[PullRequestJSONKey.URL],
-            reviews=PullRequestJSONKey.REVIEWS.read_list(data, Review),
+            number=pull_request.number,
+            title=pull_request.title,
+            url=pull_request.url,
+            reviews=pull_request.reviews,
             threads=threads,
-            checks=cls._read_checks(data),
+            checks=pull_request.checks,
         )
-
-    @staticmethod
-    def _read_checks(data: dict[str, Any]) -> CheckStatus | None:
-        """
-        Read the checks reported against the pull request's head commit.
-
-        GitHub hangs the rollup off the commit rather than the pull request, and
-        leaves it null while nothing has reported against that commit.
-
-        :param data: The ``pullRequest`` node to read.
-        :return: The checks, or ``None`` when nothing has reported.
-        """
-        commits = data[PullRequestJSONKey.COMMITS][PullRequestJSONKey.NODES]
-        if not commits:
-            return None
-        rollup = commits[-1][PullRequestJSONKey.COMMIT][
-            PullRequestJSONKey.STATUS_CHECK_ROLLUP
-        ]
-        return CheckStatus.from_json(rollup) if rollup else None
 
     @property
     def unresolved_threads(self) -> list[ReviewThread]:
@@ -891,54 +1012,55 @@ class UpstreamPullRequestSnapshot:
 
 
 @dataclass(frozen=True)
-class RepositoryJSON(JSONModel):
+class PullRequestForBranchResult(JSONModel):
     """
-    The ``repository`` object every query in this script selects.
-
-    Owns the one access path from a response's data down to the nodes the models parse,
-    so no caller spells that path out again.
+    What :attr:`GraphQLDocument.PULL_REQUEST_FOR_BRANCH` returns.
     """
 
-    data: dict[str, Any]
+    pull_requests: list[BranchPullRequest]
     """
-    The repository object as returned.
+    Every pull request the head-branch search matched, newest first.
     """
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RepositoryJSON:
+    def from_json(cls, data: dict[str, Any]) -> PullRequestForBranchResult:
         """
-        Read the repository out of a response's ``data``.
+        Read the query's ``data``, whose ``repository`` object selects nothing else.
 
         :param data: The response's ``data`` object.
-        :return: The wrapped repository.
+        :return: The parsed result.
         """
-        return cls(data[PullRequestJSONKey.REPOSITORY])
-
-    @property
-    def pull_request(self) -> dict[str, Any]:
-        """:return: The single ``pullRequest`` this response selected."""
-        return self.data[PullRequestJSONKey.PULL_REQUEST]
-
-    @property
-    def review_thread_page(self) -> ReviewThreadPage:
-        """:return: The pull request's page of review threads."""
-        return ReviewThreadPage.from_json(self.pull_request)
-
-    @property
-    def pull_request_snapshot(self) -> UpstreamPullRequestSnapshot:
-        """:return: The pull request's state, from this response alone.
-
-        Only complete when the response carried every page of threads; a paged
-        read assembles the snapshot itself from the threads it accumulated.
-        """
-        return UpstreamPullRequestSnapshot.from_json(
-            self.pull_request, self.review_thread_page.threads
+        return cls(
+            pull_requests=PullRequestJSONKey.PULL_REQUESTS.read_list(
+                data[PullRequestJSONKey.REPOSITORY], BranchPullRequest
+            )
         )
 
-    @property
-    def branch_pull_requests(self) -> list[BranchPullRequest]:
-        """:return: Every pull request the head-branch search matched."""
-        return PullRequestJSONKey.PULL_REQUESTS.read_list(self.data, BranchPullRequest)
+
+@dataclass(frozen=True)
+class ReviewThreadsPageResult(JSONModel):
+    """
+    What :attr:`GraphQLDocument.REVIEW_THREADS_PAGE` returns.
+    """
+
+    pull_request: PullRequest
+    """
+    The pull request, carrying one page of its review threads.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> ReviewThreadsPageResult:
+        """
+        Read the query's ``data``, whose ``repository`` object selects nothing else.
+
+        :param data: The response's ``data`` object.
+        :return: The parsed result.
+        """
+        return cls(
+            pull_request=PullRequest.from_json(
+                data[PullRequestJSONKey.REPOSITORY][PullRequestJSONKey.PULL_REQUEST]
+            )
+        )
 
 
 @dataclass(frozen=True)
@@ -1092,7 +1214,7 @@ class UpstreamPullRequestReader:
         )
         candidates = [
             pull_request
-            for pull_request in RepositoryJSON.from_json(data).branch_pull_requests
+            for pull_request in PullRequestForBranchResult.from_json(data).pull_requests
             if pull_request.head_owner.login == self.fork_owner
         ]
         if not candidates:
@@ -1117,23 +1239,23 @@ class UpstreamPullRequestReader:
         """
         threads: list[ReviewThread] = []
         cursor: str | None = None
-        repository = None
         while True:
-            data = self.client.execute(
-                GraphQLDocument.REVIEW_THREADS_PAGE.read(),
-                {
-                    **self._repository_variables,
-                    QueryVariable.NUMBER: pull_request_number,
-                    QueryVariable.THREAD_CURSOR: cursor,
-                },
-            )
-            repository = RepositoryJSON.from_json(data)
-            page = repository.review_thread_page
+            pull_request = ReviewThreadsPageResult.from_json(
+                self.client.execute(
+                    GraphQLDocument.REVIEW_THREADS_PAGE.read(),
+                    {
+                        **self._repository_variables,
+                        QueryVariable.NUMBER: pull_request_number,
+                        QueryVariable.THREAD_CURSOR: cursor,
+                    },
+                )
+            ).pull_request
+            page = pull_request.review_threads
             threads.extend(page.threads)
-            if not page.has_next_page:
+            if not page.page_info.has_next_page:
                 break
-            cursor = page.end_cursor
-        return UpstreamPullRequestSnapshot.from_json(repository.pull_request, threads)
+            cursor = page.page_info.end_cursor
+        return UpstreamPullRequestSnapshot.assemble(pull_request, threads)
 
 
 # %% configuration
