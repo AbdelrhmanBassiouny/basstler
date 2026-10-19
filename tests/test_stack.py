@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import subprocess
 from collections.abc import Container
+from enum import Enum, StrEnum
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
@@ -58,16 +59,117 @@ from basstler.stack import (
 
 from basstler.locations import ProjectLocation
 
-from .constants import (
-    DatasetLocation,
-    RemoteName,
-    StackBranch,
-    StackLabel,
-    StackRepository,
-    StackSampleText,
-)
+from .constants.paths import DatasetLocation
+from .constants.stack import RemoteName, StackBranch, StackLabel
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
+
+
+class StackRepository(Enum):
+    """
+    The repositories the stack suites' checkouts and configurations name.
+    """
+
+    FORK = Repository("a-fork-owner", "a-fork")
+    """
+    The fork a scratch checkout's remote points at.
+    """
+
+    SOMEBODY_ELSES_FORK = Repository("someone-else", "their-fork")
+    """
+    A fork other than the one the configuration names.
+    """
+
+    SAME_NAMED_FORK = Repository("a-fork-owner", "a-project")
+    """
+    A fork named like the upstream it was forked from.
+    """
+
+    ANOTHER_OWNERS_FORK = Repository("another-owner", "a-project")
+    """
+    A second fork of the upstream, beside :attr:`SAME_NAMED_FORK`.
+    """
+
+    UPSTREAM = Repository("an-upstream-owner", "a-project")
+    """
+    The upstream every fork here is forked from.
+    """
+
+    DIFFERENT_UPSTREAM = Repository("a-different-upstream", "a-project")
+    """
+    An upstream named on the command line in place of the committed one.
+    """
+
+
+class StackSampleText(StrEnum):
+    """
+    The text the stack suites feed in where only its shape matters.
+    """
+
+    CHECK_CONCLUSION = "failure"
+    """
+    A pull request's CI conclusion, carried through untouched.
+    """
+
+    SESSION_LINK = "https://claude.ai/code/session_x"
+    """
+    The session a pull request was opened from.
+    """
+
+    TITLE = "A title"
+    """
+    A promotion link's title.
+    """
+
+    BODY = "A body"
+    """
+    A promotion link's description.
+    """
+
+    SHORT_BODY = "short"
+    """
+    A description well within the link's length limit.
+    """
+
+    TITLE_WITH_SEPARATORS = "Fix A & B"
+    """
+    A title holding a character that would end a query parameter unencoded.
+    """
+
+    BODY_WITH_FRAGMENT = "see #106"
+    """
+    A description holding a character that would start a URL fragment unencoded.
+    """
+
+    FILLER = "x"
+    """
+    One character, repeated to make a text too long for a link.
+    """
+
+    LOCAL_PATH_REMOTE = "/srv/git/mirror"
+    """
+    A remote URL that is a local path rather than a repository.
+    """
+
+    UNRELATED_FILE = "README.md"
+    """
+    A notes-branch file that is not the stack configuration.
+    """
+
+    UNRELATED_CONTENT = "unrelated\n"
+    """
+    Its content.
+    """
+
+    UNKNOWN_COMMAND = "not-a-command"
+    """
+    A command the tool does not answer.
+    """
+
+    NOT_A_REPOSITORY = "not-a-repository"
+    """
+    A repository reference missing its ``owner/`` part.
+    """
 
 
 def make_configuration(upstream_setup_command: str | None = None) -> Configuration:

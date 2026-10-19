@@ -9,9 +9,26 @@ from __future__ import annotations
 
 import json
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
-from .constants import PluginManifestKey, RepositoryLocation
+from .constants.paths import RepositoryLocation
+
+
+class PluginManifestKey(StrEnum):
+    """
+    The keys of a Claude Code plugin's ``plugin.json`` the suites read.
+    """
+
+    NAME = "name"
+    """
+    The plugin's name, which is also its package's distribution name.
+    """
+
+    VERSION = "version"
+    """
+    The plugin's release, which its package is installed at.
+    """
 
 
 @dataclass(frozen=True)

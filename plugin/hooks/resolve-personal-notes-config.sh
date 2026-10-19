@@ -175,13 +175,14 @@ default_branch_name() {
 # Shared by session-start.sh and save-pr-progress.sh so both agree on exactly
 # the same key for exactly the same branch - there is no other place this
 # path is computed, so it can never drift between reading and writing it.
+PR_PROGRESS_DIRECTORY=".claude/personal/pr-progress"
 pr_progress_path() {
   local branch
   branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
   case "${branch}" in
     HEAD|"$(default_branch_name)"|"${NOTES_BRANCH}"|"") return 1 ;;
   esac
-  printf '.claude/personal/pr-progress/%s.md\n' "${branch}"
+  printf '%s/%s.md\n' "${PR_PROGRESS_DIRECTORY}" "${branch}"
 }
 
 # PERSONAL_GIT_IDENTITY_PATH: where the human contributor's git identity is
@@ -296,6 +297,11 @@ PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 # same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
 DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 
+# PLAN_HUB_PATH: the hub file - the plan site's address, the registry
+# repository holding the complete list of repositories, and that list. Every
+# registered repository's notes carry a copy (see basstler.plan_hub).
+PLAN_HUB_PATH="${PLANS_DIR}/_hub.yaml"
+
 # *_MODULE: every Python entry point in this system - defined once, here, so
 # refresh_dashboard.sh, every SKILL.md and every workflow source this file and
 # use these variables instead of each carrying its own separately-typed literal.
@@ -322,6 +328,11 @@ fi
 BUILD_DASHBOARD_MODULE="basstler.build_dashboard"
 # build_index: renders the master index page listing every plan.
 BUILD_INDEX_MODULE="basstler.build_index"
+# build_site: renders the plan site - the hub, every registered repository's
+# index, and every plan's dashboard - from the repositories the hub file lists.
+BUILD_SITE_MODULE="basstler.build_site"
+# plan_hub: registers a repository in the hub file.
+PLAN_HUB_MODULE="basstler.plan_hub"
 # sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
 SYNC_MANIFEST_STATUS_MODULE="basstler.sync_manifest_status"
@@ -346,6 +357,12 @@ PLAN_ITEM_MODE_MODULE="basstler.plan_item_mode"
 # plan_manifest_tools: reads a plan id out of a manifest and regenerates
 # the branch index - the manifest plumbing save-plan.sh calls.
 PLAN_MANIFEST_TOOLS_MODULE="basstler.plan_manifest_tools"
+# plan_size_limits: prunes landed items and refuses a plan or progress
+# notes over their limits - the gate save-plan.sh and save-pr-progress.sh run.
+PLAN_SIZE_LIMITS_MODULE="basstler.plan_size_limits"
+# progress_notes: deletes the progress notes of branches whose pull requests
+# have all merged or closed, or that are gone from the remote.
+PROGRESS_NOTES_MODULE="basstler.progress_notes"
 # plan_updates_since_support: renders the plan-state delta
 # plan-updates-since.sh reports.
 PLAN_UPDATES_SINCE_SUPPORT_MODULE="basstler.plan_updates_since_support"
@@ -492,6 +509,38 @@ plan_id_for_branch() {
     | awk -F'\t' -v branch="${branch}" '$1 == branch { print $2; exit }'
 }
 
+# item_id_for_branch: the id of the item in plan $1 whose branch is $2, read
+# off the fetched manifest with awk alone - dependency-free, like
+# plan_id_for_branch above. Prints nothing when no item names the branch.
+item_id_for_branch() {
+  local plan_id="$1"
+  local branch="$2"
+  git show "FETCH_HEAD:$(plan_manifest_path "${plan_id}")" 2>/dev/null \
+    | awk -v branch="${branch}" '
+        $1 == "-" && $2 == "id:" { item = $3 }
+        $1 == "branch:" && $2 == branch { print item; exit }'
+}
+
+# recorded_site_url: the plan site's address from the fetched hub file. Fails
+# when the notes branch has no hub file; prints nothing when it names no site.
+recorded_site_url() {
+  git cat-file -e "FETCH_HEAD:${PLAN_HUB_PATH}" 2>/dev/null || return 1
+  git show "FETCH_HEAD:${PLAN_HUB_PATH}" \
+    | awk '$1 == "site_url:" && $2 != "null" { print $2; exit }'
+}
+
+# repository_name: this clone's origin as owner/repo, whatever URL form the
+# remote takes, or "this repository" for a clone with no origin.
+repository_name() {
+  local url
+  url="$(git remote get-url origin 2>/dev/null || true)"
+  if [ -z "${url}" ]; then
+    printf 'this repository\n'
+    return
+  fi
+  printf '%s\n' "${url}" | sed -E 's#\.git$##; s#^.*[/:]([^/:]+/[^/]+)$#\1#'
+}
+
 # branch_can_hold_plan_item: whether a plan item could ever track the given
 # branch. False for a detached HEAD, the repo's default branch, and the
 # personal-notes branch: none of the three is per-change work, so telling a
@@ -623,6 +672,27 @@ missing_dependencies() {
   # printed back as one space separated line.
   # shellcheck disable=SC2086
   echo ${missing}
+}
+
+# require_basstler_python: exits the calling script, saying what to run, unless
+# BASSTLER_PYTHON exists and has every requirement of the package. A session
+# start installs them; a checkout where that never ran reaches this message
+# instead of a traceback.
+require_basstler_python() {
+  if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
+    echo "${BASSTLER_PYTHON} is required to run the basstler package." >&2
+    exit 1
+  fi
+  local missing
+  if ! missing="$(missing_dependencies)"; then
+    echo "Could not read what the basstler package requires." >&2
+    exit 1
+  fi
+  if [ -n "${missing}" ]; then
+    echo "The basstler package's requirements are not installed for ${BASSTLER_PYTHON}: ${missing}" >&2
+    echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install '$(basstler_package_source)'" >&2
+    exit 1
+  fi
 }
 
 # create_basstler_environment: creates BASSTLER_ENVIRONMENT_DIRECTORY from an

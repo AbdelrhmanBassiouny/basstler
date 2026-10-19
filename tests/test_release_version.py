@@ -1,11 +1,11 @@
 """
-Every change merged to ``main`` is a release, at the next patch, minor or major version
-the pull request making it wrote; the release workflow only tags the merged commit.
+Every change merged to ``main`` is a release: the release workflow makes patch releases
+on merge, and a pull request may only name a minor or major one.
 
 Each test builds a scratch checkout tagged at a release, changes it, and checks what
-:class:`~basstler.release_version.Release` makes of it. The workflow's own tag step is
-run against a scratch remote, since pushing nothing but the tag is what lets a synced
-plugin take the version from the merge itself.
+:class:`~basstler.release_version.Release` makes of it. The workflow's own push step is
+run against a scratch remote, since its atomic push is what keeps ``main`` from ever
+carrying a version without its tag.
 """
 
 from __future__ import annotations
@@ -14,13 +14,14 @@ import os
 import subprocess
 import sys
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import pytest
 import yaml
 
 from basstler.environment import GitHubActionsVariable
-from basstler.locations import CheckoutLocation
+from basstler.locations import CheckoutLocation, PathEnumeration
 from basstler.release_version import (
     MalformedVersion,
     PlannedRelease,
@@ -33,16 +34,114 @@ from basstler.release_version import (
     VersionReferenceMissing,
 )
 
-from .constants import (
-    EnvironmentVariable,
-    ReleaseSampleFile,
-    ReleaseSampleTag,
-    ReleaseSampleText,
-    ReleaseSampleVersion,
-    RepositoryLocation,
-)
+from .constants.environment import SearchPathVariable
+from .constants.paths import RepositoryLocation
 from .plugin_manifest import PluginManifest
 from .scratch_repository import ScratchRepository, initialize_bare_repository
+
+
+class ReleaseSampleVersion(StrEnum):
+    """
+    The versions a scratch checkout's plugin manifest names in the release-version tests.
+    """
+
+    RELEASED = "1.0.0"
+    """
+    The version the scratch checkout is tagged at.
+    """
+
+    NEXT_PATCH = "1.0.1"
+    """
+    :attr:`RELEASED` with its patch part bumped: what a release on merge makes.
+    """
+
+    NEXT_MINOR = "1.1.0"
+    """
+    :attr:`RELEASED` with its minor part bumped, which a pull request may name.
+    """
+
+    NEXT_MAJOR = "2.0.0"
+    """
+    :attr:`RELEASED` with its major part bumped, which a pull request may name.
+    """
+
+    SKIPPING = "1.2.0"
+    """
+    A minor release past the next one, which a pull request may not name.
+    """
+
+    OLDER = "0.9.0"
+    """
+    A version behind :attr:`RELEASED`.
+    """
+
+    UNMERGED = "3.0.0"
+    """
+    A version tagged on a branch the checked-out commit does not contain.
+    """
+
+
+class ReleaseSampleTag(StrEnum):
+    """
+    Tags the release-version tests put on a scratch checkout that release nothing.
+    """
+
+    NOT_A_RELEASE = "nightly"
+    """
+    A tag that names no version.
+    """
+
+    MALFORMED = "v1.x"
+    """
+    A tag shaped like a release whose version is not one.
+    """
+
+
+class ReleaseSampleFile(PathEnumeration):
+    """
+    The files of a scratch checkout the release-version tests change, relative to its
+    root.
+    """
+
+    PACKAGE_MODULE = Path("src") / "sample" / "__init__.py"
+    """
+    A module of the scratch checkout's package.
+    """
+
+    SKILL = Path("plugin") / "skills" / "sample" / "SKILL.md"
+    """
+    A skill of the scratch checkout's plugin.
+    """
+
+    DOCUMENTATION = Path("docs") / "guide.md"
+    """
+    Documentation, which no install runs but which still makes a new release.
+    """
+
+
+class ReleaseSampleText(StrEnum):
+    """
+    File contents the release-version tests write.
+    """
+
+    MANIFEST = '{{\n  "name": "basstler",\n  "version": "{version}"\n}}\n'
+    """
+    A plugin manifest, formatted with its ``version``.
+    """
+
+    EXAMPLE_CALLER = (
+        "    uses: owner/basstler/.github/workflows/upstream-reviews.yml@v{version}\n"
+        "    with:\n"
+        "      basstler_ref: v{version}\n"
+    )
+    """
+    The example caller's two references to the release, formatted with its ``version``.
+    """
+
+    CHANGE = "changed = True\n"
+    """
+    What a test writes to change a file.
+    """
 
 
 def version(sample: ReleaseSampleVersion) -> ReleaseVersion:
@@ -142,12 +241,12 @@ def test_there_is_no_latest_release_before_the_first(tmp_path):
 @pytest.mark.parametrize(
     "named",
     [
-        ReleaseSampleVersion.NEXT_PATCH,
+        None,
         ReleaseSampleVersion.NEXT_MINOR,
         ReleaseSampleVersion.NEXT_MAJOR,
     ],
 )
-def test_a_pull_request_may_name_the_next_patch_minor_or_major(
+def test_a_pull_request_may_leave_the_version_or_name_the_next_minor_or_major(
     released_checkout, named
 ):
     change_and_commit(released_checkout, named)
@@ -155,22 +254,17 @@ def test_a_pull_request_may_name_the_next_patch_minor_or_major(
     release_of(released_checkout).verify()
 
 
-def test_a_checkout_unchanged_since_the_latest_release_passes(released_checkout):
-    release_of(released_checkout).verify()
-
-
 @pytest.mark.parametrize(
     "named",
     [
-        ReleaseSampleVersion.RELEASED,
+        ReleaseSampleVersion.NEXT_PATCH,
         ReleaseSampleVersion.SKIPPING,
         ReleaseSampleVersion.OLDER,
     ],
 )
 def test_a_pull_request_may_not_name_any_other_version(released_checkout, named):
     """
-    Leaving the latest release's version would make the workflow write the next one
-    after the merge, in a commit a synced plugin was seen to miss.
+    A patch release is made on merge; a pull request naming one would race it.
     """
     change_and_commit(released_checkout, named)
 
@@ -179,7 +273,7 @@ def test_a_pull_request_may_not_name_any_other_version(released_checkout, named)
 
     assert raised.value.version == version(named)
     assert raised.value.allowed == (
-        version(ReleaseSampleVersion.NEXT_PATCH),
+        version(ReleaseSampleVersion.RELEASED),
         version(ReleaseSampleVersion.NEXT_MINOR),
         version(ReleaseSampleVersion.NEXT_MAJOR),
     )
@@ -196,7 +290,7 @@ def test_nothing_changed_since_the_latest_release_releases_nothing(released_chec
 @pytest.mark.parametrize(
     "changed_file", list(ReleaseSampleFile), ids=lambda p: p._name_
 )
-def test_any_change_without_a_new_version_is_refused_and_writes_nothing(
+def test_any_change_is_released_as_the_next_patch_written_everywhere(
     released_checkout, changed_file
 ):
     """
@@ -208,19 +302,16 @@ def test_any_change_without_a_new_version_is_refused_and_writes_nothing(
     released_checkout.write(changed_file, ReleaseSampleText.CHANGE)
     released_checkout.commit_everything("Change a file")
 
-    with pytest.raises(UnexpectedVersion):
-        release_of(released_checkout).plan()
+    planned = release_of(released_checkout).plan()
 
-    assert released_checkout.run_git("status", "--porcelain").stdout == ""
+    assert planned == PlannedRelease(version(ReleaseSampleVersion.NEXT_PATCH), True)
+    for reference in VersionReference.every():
+        versions = reference.versions_in(released_checkout.project_root)
+        assert set(versions) == {ReleaseSampleVersion.NEXT_PATCH}, reference.path
 
 
 @pytest.mark.parametrize(
-    "named",
-    [
-        ReleaseSampleVersion.NEXT_PATCH,
-        ReleaseSampleVersion.NEXT_MINOR,
-        ReleaseSampleVersion.NEXT_MAJOR,
-    ],
+    "named", [ReleaseSampleVersion.NEXT_MINOR, ReleaseSampleVersion.NEXT_MAJOR]
 )
 def test_a_version_a_pull_request_named_is_released_as_it_stands(
     released_checkout, named
@@ -229,7 +320,7 @@ def test_a_version_a_pull_request_named_is_released_as_it_stands(
 
     planned = release_of(released_checkout).plan()
 
-    assert planned == PlannedRelease(version(named))
+    assert planned == PlannedRelease(version(named), False)
     assert released_checkout.run_git("status", "--porcelain").stdout == ""
 
 
@@ -247,13 +338,15 @@ def test_the_first_release_is_the_manifests_version(tmp_path):
 
     planned = release_of(repository).plan()
 
-    assert planned == PlannedRelease(version(ReleaseSampleVersion.RELEASED))
+    assert planned == PlannedRelease(version(ReleaseSampleVersion.RELEASED), False)
 
 
-def test_a_planned_release_prints_its_tag():
-    planned = PlannedRelease(version(ReleaseSampleVersion.NEXT_PATCH))
+def test_a_planned_release_prints_its_outputs():
+    planned = PlannedRelease(version(ReleaseSampleVersion.NEXT_PATCH), True)
 
-    assert planned.output_lines() == f"tag=v{ReleaseSampleVersion.NEXT_PATCH}"
+    assert planned.output_lines() == (
+        f"tag=v{ReleaseSampleVersion.NEXT_PATCH}\nbumped=true"
+    )
 
 
 # %% the workflow's release step
@@ -261,7 +354,7 @@ def test_a_planned_release_prints_its_tag():
 
 def release_step_script() -> str:
     """
-    :return: The shell the release workflow runs to tag and push a release.
+    :return: The shell the release workflow runs to commit, tag and push a release.
     """
     workflow = yaml.safe_load(
         (RepositoryLocation.WORKFLOWS / "release.yml").read_text()
@@ -272,28 +365,24 @@ def release_step_script() -> str:
     )
 
 
-def run_release_step(
-    checkout: Path, summary: Path, output: Path
-) -> subprocess.CompletedProcess[str]:
+def run_release_step(checkout: Path, summary: Path) -> subprocess.CompletedProcess[str]:
     """
     Run the release step in *checkout*, as the workflow does, with this interpreter's
     package on the path.
 
     :param checkout: A clone whose ``origin`` is the scratch remote.
     :param summary: The file standing in for ``$GITHUB_STEP_SUMMARY``.
-    :param output: The file standing in for ``$GITHUB_OUTPUT``.
     :return: The finished step.
     """
     environment = {
         **os.environ,
-        EnvironmentVariable.EXECUTABLE_SEARCH_PATH: os.pathsep.join(
+        SearchPathVariable.EXECUTABLE_SEARCH_PATH: os.pathsep.join(
             [
                 str(Path(sys.executable).parent),
-                os.environ[EnvironmentVariable.EXECUTABLE_SEARCH_PATH],
+                os.environ[SearchPathVariable.EXECUTABLE_SEARCH_PATH],
             ]
         ),
         GitHubActionsVariable.STEP_SUMMARY: str(summary),
-        GitHubActionsVariable.OUTPUT: str(output),
     }
     return subprocess.run(
         ["bash", "-e", "-c", release_step_script()],
@@ -307,34 +396,18 @@ def run_release_step(
 @dataclass(frozen=True)
 class PublishedCheckout:
     """
-    A released checkout pushed to a scratch remote, and a clone of that remote standing
-    in for the runner's checkout.
+    A released checkout pushed to a scratch remote, and a clone of that remote standing in
+    for the runner's checkout.
     """
 
     repository: ScratchRepository
     """
     The released checkout, with the scratch remote as its ``origin``.
     """
-
     runner: Path
     """
     The runner's clone of the scratch remote.
     """
-
-    def merge(self, new_version: ReleaseSampleVersion | None = None) -> None:
-        """
-        Push a change to the remote's ``main``, and check it out in the runner's clone
-        as the workflow's checkout does for the push that started it.
-
-        :param new_version: The version the merged pull request names, if it names one.
-        """
-        change_and_commit(self.repository, new_version)
-        self.repository.run_git("push", "--quiet", "origin", "HEAD:main")
-        for command in (
-            ["git", "fetch", "--quiet", "origin"],
-            ["git", "checkout", "--quiet", "--detach", "origin/main"],
-        ):
-            subprocess.run(command, cwd=self.runner, check=True)
 
     def remote_commit(self, reference: str) -> str:
         """
@@ -368,69 +441,42 @@ def published_checkout(released_checkout, tmp_path) -> PublishedCheckout:
     return PublishedCheckout(released_checkout, runner)
 
 
-def test_the_release_step_tags_the_merged_commit_and_pushes_nothing_else(
+def test_the_release_step_pushes_the_bump_and_its_tag_together(
     published_checkout, tmp_path
 ):
     """
-    The tag lands on the commit ``main`` already names, carrying the version the pull
-    request wrote, so a plugin synced from that merge installs its own release.
-
-    The tag is the step's output, for the GitHub release.
+    ``main`` and the new tag land on the same commit, so no plugin can sync a version
+    whose tag does not exist yet.
     """
-    published_checkout.merge(ReleaseSampleVersion.NEXT_PATCH)
-    merged_commit = published_checkout.remote_commit("origin/main")
-    output = tmp_path / "output"
+    change_and_commit(published_checkout.repository)
+    published_checkout.repository.run_git("push", "--quiet", "origin", "HEAD:main")
 
-    result = run_release_step(
-        published_checkout.runner, tmp_path / "summary.md", output
-    )
+    result = run_release_step(published_checkout.runner, tmp_path / "summary.md")
 
     assert result.returncode == 0, result.stderr
+    main_commit = published_checkout.remote_commit("origin/main")
     tag = version(ReleaseSampleVersion.NEXT_PATCH).tag
-    assert published_checkout.remote_commit("origin/main") == merged_commit
-    assert published_checkout.remote_commit(tag) == merged_commit
-    assert output.read_text() == f"tag={tag}\n"
-
-
-def test_the_release_step_fails_on_a_change_naming_no_new_version(
-    published_checkout, tmp_path
-):
-    """
-    No version is written after the merge, so the release is refused rather than tagged
-    at a version the synced plugin does not name.
-    """
-    published_checkout.merge()
-    output = tmp_path / "output"
-
-    result = run_release_step(
-        published_checkout.runner, tmp_path / "summary.md", output
-    )
-
-    assert result.returncode != 0
-    remote_tags = subprocess.run(
-        ["git", "ls-remote", "--tags", "origin"],
+    assert main_commit == published_checkout.remote_commit(tag)
+    released = subprocess.run(
+        ["git", "show", f"{main_commit}:{CheckoutLocation.PLUGIN_MANIFEST}"],
         cwd=published_checkout.runner,
         capture_output=True,
         text=True,
     ).stdout
-    assert version(ReleaseSampleVersion.NEXT_PATCH).tag not in remote_tags
-    assert not output.exists()
+    assert released == ReleaseSampleText.MANIFEST.format(
+        version=ReleaseSampleVersion.NEXT_PATCH
+    )
 
 
 def test_the_release_step_does_nothing_when_nothing_changed(
     published_checkout, tmp_path
 ):
-    """
-    No tag is output, so no GitHub release is published.
-    """
     summary = tmp_path / "summary.md"
-    output = tmp_path / "output"
 
-    result = run_release_step(published_checkout.runner, summary, output)
+    result = run_release_step(published_checkout.runner, summary)
 
     assert result.returncode == 0, result.stderr
     assert "Nothing changed" in summary.read_text()
-    assert not output.exists()
 
 
 # %% bump
@@ -446,17 +492,6 @@ def test_the_release_step_does_nothing_when_nothing_changed(
 )
 def test_a_version_bumps_by_the_part_named(part, expected):
     assert version(ReleaseSampleVersion.RELEASED).bumped(part) == version(expected)
-
-
-def test_the_next_version_bumps_the_latest_release_so_bumping_twice_names_it_once(
-    released_checkout,
-):
-    release = release_of(released_checkout)
-    release.bump(release.next_version(VersionPart.PATCH))
-
-    assert release.next_version(VersionPart.PATCH) == version(
-        ReleaseSampleVersion.NEXT_PATCH
-    )
 
 
 def test_a_bump_writes_the_version_everywhere_one_is_written(released_checkout):

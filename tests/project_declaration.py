@@ -13,12 +13,72 @@ import json
 import re
 import tomllib
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from basstler.dependencies import PyprojectKey
 from basstler.locations import PackageLocation
 
-from .constants import HatchVersionKey, ProjectTableKey, RepositoryLocation
+from .constants.paths import RepositoryLocation
+
+
+class ProjectTableKey(StrEnum):
+    """
+    The ``[project]`` keys the suites read that :class:`basstler.dependencies.PyprojectKey`
+    does not name, since the package itself never reads them.
+    """
+
+    REQUIRES_PYTHON = "requires-python"
+    """
+    The version specifier an interpreter has to satisfy.
+    """
+
+    DYNAMIC = "dynamic"
+    """
+    The keys the build backend resolves rather than the table stating them.
+    """
+
+
+class HatchVersionKey(StrEnum):
+    """
+    The path through ``pyproject.toml`` to the build's version source, and that source's
+    keys.
+    """
+
+    TOOL = "tool"
+    """
+    The table every tool's settings sit under.
+    """
+
+    HATCH = "hatch"
+    """
+    The build backend's own table.
+    """
+
+    VERSION = "version"
+    """
+    Where the backend is told to read the version from, and the name it requires of the
+    pattern's group that captures the version.
+    """
+
+    PATH = "path"
+    """
+    The file the version is read out of, relative to the repository root.
+    """
+
+    PATTERN = "pattern"
+    """
+    The regular expression whose ``version`` group is the version.
+    """
+
+    @classmethod
+    def version_table(cls, pyproject: dict[str, Any]) -> dict[str, str]:
+        """
+        :param pyproject: A parsed ``pyproject.toml``.
+        :return: Its ``[tool.hatch.version]`` table.
+        """
+        return pyproject[cls.TOOL][cls.HATCH][cls.VERSION]
 
 
 @dataclass(frozen=True)

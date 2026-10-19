@@ -21,13 +21,8 @@ import basstler.refresh_dashboard_support
 import basstler.standard_streams
 from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 
-from .constants import (
-    DatasetLocation,
-    FileMode,
-    RepositoryLocation,
-    ScrubbedEnvironmentPrefix,
-    SkillDirectory,
-)
+from .constants.environment import FileMode, ScrubbedEnvironmentPrefix
+from .constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
 from .scratch_repository import PackageSourceFile, install_hook_scripts_into
 from .script_runner import BashScriptRunner
 

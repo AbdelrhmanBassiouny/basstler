@@ -19,15 +19,21 @@ on:
         required: false
         default: false
         type: boolean
+      failure_logs:
+        description: "Quote the log behind each check that failed"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   report:
-    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@v0.1.2
+    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@v0.1.5
     with:
-      basstler_ref: v0.1.2
+      basstler_ref: v0.1.5
       pull_request: ${{ inputs.pull_request }}
       branch: ${{ inputs.branch }}
       include_resolved: ${{ inputs.include_resolved }}
+      failure_logs: ${{ inputs.failure_logs }}

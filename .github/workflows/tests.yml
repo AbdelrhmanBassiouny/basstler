@@ -56,7 +56,7 @@ jobs:
       - name: Install basstler
         run: pip install --editable basstler
 
-      # A pull request that changes anything names the next patch, minor or major
-      # version; `python -m basstler.release_version bump` writes it.
-      - name: Check the version is the one merging releases
+      # Patch releases are made on merge; a pull request may only name the latest
+      # release's version, or its next minor or major one.
+      - name: Check the version is one a pull request may name
         run: python -m basstler.release_version check --checkout basstler

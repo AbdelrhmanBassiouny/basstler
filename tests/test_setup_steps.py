@@ -30,7 +30,8 @@ from basstler.setup_steps import (
 from basstler.locations import PluginLocation
 from basstler.repository import Repository
 
-from .constants import RepositoryLocation, ScrubbedEnvironmentPrefix
+from .constants.environment import ScrubbedEnvironmentPrefix
+from .constants.paths import RepositoryLocation
 from .scratch_repository import ScratchRepository
 from .script_runner import PythonModuleRunner
 

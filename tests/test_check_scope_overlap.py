@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 
 import basstler.check_scope_overlap
-from .constants import RepositoryLocation
+from .constants.paths import RepositoryLocation
 from basstler.check_scope_overlap import (
     Candidate,
     ReportKey,

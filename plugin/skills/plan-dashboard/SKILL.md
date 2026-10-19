@@ -275,6 +275,23 @@ is in the cache), mention that it wasn't refreshed automatically and the
 user can run `/plan-dashboard` with no argument to update it too — don't do
 it unprompted, since that republishes a second, separate page.
 
+## The plan site
+
+The same pages are also built as one static site that belongs to no account:
+the hub at its root, one card per repository; `<owner>/<repo>/` that
+repository's plans; `<owner>/<repo>/<plan>/` a plan's dashboard, each linking
+back up. The hub file, `${PLAN_HUB_PATH}` on every registered repository's
+notes branch, names the site's address, the registry repository and every
+repository listed; the session-start summary's `plan site` line prints where
+this session's work sits on it. To build the site by hand:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${BUILD_SITE_MODULE}" --registry <owner/repo> --output /tmp/site
+```
+
+Never publish a hub page as an Artifact: an Artifact belongs to the account
+that published it, which is exactly what the site exists to avoid.
+
 ## Refreshing after a manifest edit
 
 This skill is the second half of the refresh loop
