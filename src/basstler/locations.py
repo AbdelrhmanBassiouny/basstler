@@ -187,11 +187,6 @@ class PluginLocation(PathEnumeration):
     Pushes an edited plan manifest and roadmap to the personal-notes branch.
     """
 
-    PLAN_SIZE_REPORT_SCRIPT = HOOKS / "plan-size-report.sh"
-    """
-    Reports every plan on the notes branch against the size budget.
-    """
-
     PLAN_UPDATES_SINCE_SCRIPT = HOOKS / "plan-updates-since.sh"
     """
     Reports what changed in the plans since this clone last read them.

@@ -421,14 +421,9 @@ CHECK_SETUP_SCRIPT="${HOOKS_DIR}/check-setup.sh"
 # branch, named once here because a script that finds the branch missing tells
 # the user to run it.
 CREATE_PERSONAL_NOTES_BRANCH_SCRIPT="${HOOKS_DIR}/create-personal-notes-branch.sh"
-# PLAN_SIZE_BUDGET_MODULE / PLAN_SIZE_REPORT_SCRIPT: the budget every plan is
-# measured against and the command that reports it, same defined-once reasoning
-# as every path above.
-PLAN_SIZE_BUDGET_MODULE="basstler.plan_size_budget"
-PLAN_SIZE_REPORT_SCRIPT="${HOOKS_DIR}/plan-size-report.sh"
 # PLAN_SIZE_CHECK_MODULE: whether a plan is already full, for `/add-plan-item`
 # and `/plan-create` to check before writing into or as it - never refuses,
-# unlike a future save-time gate, since the routing decision has to happen
+# unlike save-plan.sh's limits, since the routing decision has to happen
 # before a save is even attempted. Same defined-once reasoning as every path
 # above.
 PLAN_SIZE_CHECK_MODULE="basstler.plan_size_check"
