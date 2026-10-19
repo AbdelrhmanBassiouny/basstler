@@ -24,7 +24,6 @@ from basstler.upstream_reviews import (
     LogMarker,
     GitHubCommandFailed,
     GitHubCommandLineClient,
-    GitHubEndpoint,
     GraphQLErrorsReturned,
     JSONModel,
     PageInfo,
@@ -765,8 +764,8 @@ def test_a_job_log_is_asked_for_by_the_job_s_own_endpoint(
 
     GitHubCommandLineClient().read_job_log(UPSTREAM, RECORDED_JOB_IDENTIFIER)
 
-    assert call_log.read_text().strip() == GitHubEndpoint.JOB_LOG.format(
-        repository=UPSTREAM, job=RECORDED_JOB_IDENTIFIER
+    assert call_log.read_text().strip() == UPSTREAM.job_log_path(
+        RECORDED_JOB_IDENTIFIER
     )
 
 
@@ -891,19 +890,19 @@ def test_a_job_that_died_before_pytest_is_excerpted_from_its_error_annotations()
 
 
 def test_a_log_with_neither_marker_falls_back_to_its_last_lines():
-    log = "\n".join(f"line {number}" for number in range(FailureLog.LINE_LIMIT + 10))
+    log = "\n".join(f"line {number}" for number in range(FailureLog.line_limit + 10))
 
     excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
 
-    assert excerpt.lines[-1] == f"line {FailureLog.LINE_LIMIT + 9}"
+    assert excerpt.lines[-1] == f"line {FailureLog.line_limit + 9}"
 
 
 def test_an_excerpt_is_capped_at_the_line_limit():
-    log = "\n".join(f"line {number}" for number in range(FailureLog.LINE_LIMIT + 10))
+    log = "\n".join(f"line {number}" for number in range(FailureLog.line_limit + 10))
 
     excerpt = FailureLog.excerpt(str(RecordedCheck.FAILING), log)
 
-    assert len(excerpt.lines) == FailureLog.LINE_LIMIT
+    assert len(excerpt.lines) == FailureLog.line_limit
 
 
 def test_an_excerpt_names_the_check_its_job_reported_for():

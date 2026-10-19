@@ -1,37 +1,12 @@
 #!/bin/bash
 set -uo pipefail
 
-# Test stub standing in for the `gh` CLI, so every caller that shells out to it can be
-# exercised without reaching GitHub. Copied into place as an executable named `gh`,
-# earlier on PATH than any real one - see the stub_bin fixture in
-# test_plan_updates_since_sh.py and the stubbed_gh fixture in test_upstream_reviews.py.
-#
-# One stub rather than one per suite: the recognized invocations are disjoint, and a
-# second copy is what drifts when the contract moves.
-#
-# `gh api graphql --input -`, the one call upstream_reviews' transport makes:
-#   STUB_GH_GRAPHQL_JSON - the JSON body to print
-#   STUB_GH_EXIT_CODE    - the exit code to return, defaulting to 0
-#   STUB_GH_CALL_LOG     - file the request body is appended to, so a test can
-#                          assert the exact query and variables sent
-#
-# `gh api --allow-escape-sequences <endpoint>`, the job-log read upstream_reviews'
-# transport makes:
-#   STUB_GH_JOB_LOG      - the job log to print
-#   STUB_GH_EXIT_CODE    - the exit code to return, defaulting to 0
-#   STUB_GH_CALL_LOG     - file the endpoint asked for is appended to
-# The escape-sequences flag is matched rather than skipped over: gh returns a coloured
-# log and then declines to print it without that flag, so a transport that stopped
-# passing it must fail here rather than pass.
-#
-# `gh api --paginate repos/<owner>/<repo>/issues/<n>/comments?...`, the one call
-# plan-updates-since.sh makes through this backend:
-#   STUB_GH_ISSUE_COMMENTS_JSON - the JSON body to print
-#   STUB_GH_CALL_LOG            - file the invocation is appended to, so a
-#                                 test can assert the exact call made
-#
-# Exits 64 on an invocation it doesn't recognize, rather than a plausible-looking
-# success: a test must fail loudly if a caller changes the call it makes.
+# Stands in for `gh` on PATH in tests (stub_bin, stubbed_gh fixtures). One stub for every
+# suite; an unrecognized invocation exits 64 so a changed call fails loudly.
+#   api graphql --input -              prints STUB_GH_GRAPHQL_JSON
+#   api --allow-escape-sequences <ep>  prints STUB_GH_JOB_LOG (the flag must be passed)
+#   api --paginate .../comments?...    prints STUB_GH_ISSUE_COMMENTS_JSON
+# STUB_GH_EXIT_CODE simulates a failure; STUB_GH_CALL_LOG records each request.
 
 if [ "${1:-}" = "api" ] && [ "${2:-}" = "graphql" ] && [ "${3:-}" = "--input" ]; then
   REQUEST_BODY="$(cat)"

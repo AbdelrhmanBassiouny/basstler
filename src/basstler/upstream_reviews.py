@@ -24,7 +24,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum, StrEnum
 from pathlib import Path
-from typing import Any, ClassVar, TypeVar
+from typing import Any, TypeVar
 
 
 from basstler.class_property import classproperty
@@ -1165,17 +1165,19 @@ class FailedJob:
     The job's own number, which is what a log read asks for.
     """
 
-    IDENTIFIER_GROUP: ClassVar[str] = "identifier"
-    """
-    What the job's number is called inside :attr:`LINK_PATTERN`.
-    """
+    @classproperty
+    def identifier_group(cls) -> str:
+        """
+        What the job's number is called inside :attr:`link_pattern`.
+        """
+        return "identifier"
 
-    LINK_PATTERN: ClassVar[re.Pattern[str]] = re.compile(
-        rf"/actions/runs/\d+/job/(?P<{IDENTIFIER_GROUP}>\d+)"
-    )
-    """
-    Where a check's own output link carries the job that produced it.
-    """
+    @classproperty
+    def link_pattern(cls) -> re.Pattern[str]:
+        """
+        Where a check's own output link carries the job that produced it.
+        """
+        return re.compile(rf"/actions/runs/\d+/job/(?P<{cls.identifier_group}>\d+)")
 
     @classmethod
     def behind(cls, result: CheckResult) -> FailedJob | None:
@@ -1188,10 +1190,10 @@ class FailedJob:
         :param result: The check to locate.
         :return: The job, or ``None`` where the link names none.
         """
-        match = cls.LINK_PATTERN.search(result.url)
+        match = cls.link_pattern.search(result.url)
         if match is None:
             return None
-        return cls(int(match.group(cls.IDENTIFIER_GROUP)))
+        return cls(int(match.group(cls.identifier_group)))
 
 
 @dataclass(frozen=True)
@@ -1210,10 +1212,12 @@ class FailureLog:
     The excerpt, oldest line first, with the runner's timestamps taken off.
     """
 
-    LINE_LIMIT: ClassVar[int] = 40
-    """
-    How many lines of one job's log the report is willing to quote.
-    """
+    @classproperty
+    def line_limit(cls) -> int:
+        """
+        How many lines of one job's log the report is willing to quote.
+        """
+        return 40
 
     @classmethod
     def excerpt(cls, check_name: str, log: str) -> FailureLog:
@@ -1233,11 +1237,11 @@ class FailureLog:
         summary = cls._from_marker(lines, LogMarker.PYTEST_SUMMARY)
         if summary:
             ended = cls._until_marker(summary, LogMarker.ERROR_ANNOTATION)
-            return cls(check_name, ended[: cls.LINE_LIMIT])
+            return cls(check_name, ended[: cls.line_limit])
         annotations = [line for line in lines if LogMarker.ERROR_ANNOTATION in line]
         if annotations:
-            return cls(check_name, annotations[: cls.LINE_LIMIT])
-        return cls(check_name, lines[-cls.LINE_LIMIT :])
+            return cls(check_name, annotations[: cls.line_limit])
+        return cls(check_name, lines[-cls.line_limit :])
 
     @staticmethod
     def _from_marker(lines: list[str], marker: LogMarker) -> list[str]:
@@ -1267,17 +1271,6 @@ class FailureLog:
 
 
 # %% client
-
-
-class GitHubEndpoint(StrEnum):
-    """
-    The REST paths this script asks ``gh`` for.
-    """
-
-    JOB_LOG = "repos/{repository}/actions/jobs/{job}/logs"
-    """
-    One Actions job's whole recorded log.
-    """
 
 
 class JobLogReader(ABC):
@@ -1326,11 +1319,14 @@ class GitHubCommandLineClient(GraphQLClient, JobLogReader):
     The command to invoke, overridable for testing.
     """
 
-    ALLOW_ESCAPE_SEQUENCES: ClassVar[str] = "--allow-escape-sequences"
-    """
-    What ``gh`` wants before it will print a log at all: a test runner colours its own
-    output, and ``gh`` refuses to write terminal escape sequences it was not asked for.
-    """
+    @classproperty
+    def allow_escape_sequences(cls) -> str:
+        """
+        What ``gh`` wants before it will print a log at all: a test runner colours its
+        own output, and ``gh`` refuses to write terminal escape sequences it was not
+        asked for.
+        """
+        return "--allow-escape-sequences"
 
     def execute(self, query: str, variables: dict[str, Any]) -> dict[str, Any]:
         """
@@ -1364,10 +1360,8 @@ class GitHubCommandLineClient(GraphQLClient, JobLogReader):
         return self._run(
             [
                 "api",
-                self.ALLOW_ESCAPE_SEQUENCES,
-                GitHubEndpoint.JOB_LOG.format(
-                    repository=repository, job=job_identifier
-                ),
+                self.allow_escape_sequences,
+                repository.job_log_path(job_identifier),
             ]
         )
 

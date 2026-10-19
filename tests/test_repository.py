@@ -55,3 +55,13 @@ def test_repository_reads_the_owner_and_name_from_a_remote_url(url: str):
 def test_repository_rejects_a_remote_url_naming_no_repository(malformed: str):
     with pytest.raises(MalformedRepositoryError):
         Repository.from_remote_url(malformed)
+
+
+# %% REST paths
+
+
+def test_a_job_log_path_is_the_one_the_actions_api_serves_it_from():
+    assert (
+        REPOSITORY.job_log_path(7)
+        == f"repos/{REPOSITORY.full_name}/actions/jobs/7/logs"
+    )

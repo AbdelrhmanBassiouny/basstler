@@ -159,6 +159,21 @@ class Repository:
         """
         return f"{self.url}/issues/{number}"
 
+    @property
+    def api_path(self) -> str:
+        """
+        The repository's REST path, relative to :attr:`GitHubAddress.API`, which is also
+        the base of every REST path within it and what ``gh api`` takes.
+        """
+        return f"repos/{self.full_name}"
+
+    def job_log_path(self, job: int) -> str:
+        """
+        :param job: The Actions job's own number.
+        :return: The REST path of that job's whole recorded log.
+        """
+        return f"{self.api_path}/actions/jobs/{job}/logs"
+
     def git_requirement(self, distribution: str, reference: str) -> str:
         """
         A pip requirement installing a distribution straight from this repository.
