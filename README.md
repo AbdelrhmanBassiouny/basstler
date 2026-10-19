@@ -33,7 +33,8 @@ shipped paths would go stale.
 - **Patch releases need nothing from a pull request.** On merge, the workflow writes the next
   patch version everywhere a version is written (`plugin/.claude-plugin/plugin.json`, which
   the build reads it from, and the example caller's references to the release tag), commits
-  it, and pushes the commit and its tag together.
+  it, pushes the commit and its tag together, and publishes the tag as a GitHub release with
+  generated notes.
 - **A pull request names a minor or major release** with
   `python -m basstler.release_version bump --part minor` (or `--part major`, or
   `--version <x.y.z>`). The workflow then tags that version as it stands.

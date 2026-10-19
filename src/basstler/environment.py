@@ -61,6 +61,11 @@ class GitHubActionsVariable(EnvironmentVariable):
     The file a step appends its Markdown job summary to.
     """
 
+    OUTPUT = "GITHUB_OUTPUT"
+    """
+    The file a step appends its ``name=value`` outputs to.
+    """
+
     REPOSITORY_OWNER = "GITHUB_REPOSITORY_OWNER"
     """
     The owner of the repository the workflow runs in.

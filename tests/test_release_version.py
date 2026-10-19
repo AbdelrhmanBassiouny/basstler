@@ -266,13 +266,16 @@ def release_step_script() -> str:
     )
 
 
-def run_release_step(checkout: Path, summary: Path) -> subprocess.CompletedProcess[str]:
+def run_release_step(
+    checkout: Path, summary: Path, output: Path
+) -> subprocess.CompletedProcess[str]:
     """
     Run the release step in *checkout*, as the workflow does, with this interpreter's
     package on the path.
 
     :param checkout: A clone whose ``origin`` is the scratch remote.
     :param summary: The file standing in for ``$GITHUB_STEP_SUMMARY``.
+    :param output: The file standing in for ``$GITHUB_OUTPUT``.
     :return: The finished step.
     """
     environment = {
@@ -284,6 +287,7 @@ def run_release_step(checkout: Path, summary: Path) -> subprocess.CompletedProce
             ]
         ),
         GitHubActionsVariable.STEP_SUMMARY: str(summary),
+        GitHubActionsVariable.OUTPUT: str(output),
     }
     return subprocess.run(
         ["bash", "-e", "-c", release_step_script()],
@@ -347,17 +351,21 @@ def test_the_release_step_pushes_the_bump_and_its_tag_together(
 ):
     """
     ``main`` and the new tag land on the same commit, so no plugin can sync a version
-    whose tag does not exist yet.
+    whose tag does not exist yet. The tag is the step's output, for the GitHub release.
     """
     change_and_commit(published_checkout.repository)
     published_checkout.repository.run_git("push", "--quiet", "origin", "HEAD:main")
+    output = tmp_path / "output"
 
-    result = run_release_step(published_checkout.runner, tmp_path / "summary.md")
+    result = run_release_step(
+        published_checkout.runner, tmp_path / "summary.md", output
+    )
 
     assert result.returncode == 0, result.stderr
     main_commit = published_checkout.remote_commit("origin/main")
     tag = version(ReleaseSampleVersion.NEXT_PATCH).tag
     assert main_commit == published_checkout.remote_commit(tag)
+    assert output.read_text() == f"tag={tag}\n"
     released = subprocess.run(
         ["git", "show", f"{main_commit}:{CheckoutLocation.PLUGIN_MANIFEST}"],
         cwd=published_checkout.runner,
@@ -372,12 +380,17 @@ def test_the_release_step_pushes_the_bump_and_its_tag_together(
 def test_the_release_step_does_nothing_when_nothing_changed(
     published_checkout, tmp_path
 ):
+    """
+    No tag is output, so no GitHub release is published.
+    """
     summary = tmp_path / "summary.md"
+    output = tmp_path / "output"
 
-    result = run_release_step(published_checkout.runner, summary)
+    result = run_release_step(published_checkout.runner, summary, output)
 
     assert result.returncode == 0, result.stderr
     assert "Nothing changed" in summary.read_text()
+    assert not output.exists()
 
 
 # %% bump
