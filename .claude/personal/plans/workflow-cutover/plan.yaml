@@ -59,7 +59,10 @@ items:
     pull request classes, where the reply explains why they stay separate. The owner's
     2026-10-19 review (5 threads) was answered in 7ab3682: SiteSection bound to
     ProgressCard with a SiteSummary card for the hub, PullRequestListState.states, and
-    pages naming their own templates (PageTemplate removed). Open for the owner: the
+    pages naming their own templates (PageTemplate removed). The third round (2 threads)
+    was answered in 329bb81: every card counts open and reviewed (out-of-draft) pull
+    requests, shown on the hub header, and PullRequestListState is a specification enum
+    carrying its query and covered states. Open for the owner: the
     HTML-in-Python split, unifying pull request classes, the SiteSummary model (asked to
     discuss), and whether _hub.yaml stays in plans/.
 - id: site-pages-in-python
