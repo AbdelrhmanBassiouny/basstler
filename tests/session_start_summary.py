@@ -18,7 +18,7 @@ from enum import StrEnum
 
 from basstler.locations import PluginLocation
 
-from .constants import RepositoryLocation
+from .constants.paths import RepositoryLocation
 
 MESSAGES_SCRIPT = (
     RepositoryLocation.HOOKS / PluginLocation.SESSION_START_MESSAGES_SCRIPT.name

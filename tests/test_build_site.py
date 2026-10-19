@@ -34,7 +34,8 @@ from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_model import ItemStatus
 from basstler.repository import PullRequestReference, Repository
 
-from .constants import DatasetLocation, SitePlan, SiteRepository, SiteSampleText
+from .constants.paths import DatasetLocation
+from .constants.site import SitePlan, SiteRepository, SiteSampleText
 from .test_plan_hub import publish_notes
 
 NOTES_REPOSITORY = SiteRepository.NOTES.value

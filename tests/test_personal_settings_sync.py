@@ -13,11 +13,8 @@ import pytest
 
 from basstler.locations import PluginLocation, ProjectLocation
 
-from .constants import (
-    DatasetLocation,
-    PersonalNotesPath,
-    ScratchBranch,
-)
+from .constants.notes import ScratchBranch
+from .constants.paths import DatasetLocation, PersonalNotesPath
 from .scratch_repository import ScratchRepository
 
 PERSONAL_SETTINGS = (DatasetLocation.DIRECTORY / "personal-settings.json").read_text()

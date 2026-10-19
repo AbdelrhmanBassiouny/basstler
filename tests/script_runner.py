@@ -20,7 +20,7 @@ from pathlib import Path
 
 from basstler.locations import PluginLocation
 
-from .constants import RepositoryLocation
+from .constants.paths import RepositoryLocation
 
 
 @dataclass(frozen=True, kw_only=True)

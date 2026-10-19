@@ -29,11 +29,8 @@ from basstler.package_layout import (
     package_modules,
 )
 
-from .constants import (
-    ConfigurationVariable,
-    EnvironmentVariable,
-    RepositoryLocation,
-)
+from .constants.environment import ConfigurationVariable, SearchPathVariable
+from .constants.paths import RepositoryLocation
 from .plugin_manifest import PluginManifest
 from .project_declaration import HatchVersionSource, ProjectDeclaration
 from .script_runner import ScriptRunner, configuration_value
@@ -88,7 +85,7 @@ def run_as_a_caller(*arguments: str) -> subprocess.CompletedProcess[str]:
     """
     return ConfiguredInterpreterRunner(
         project_root=RepositoryLocation.ROOT.value,
-        removed_variable_prefixes=(EnvironmentVariable.IMPORT_PATH,),
+        removed_variable_prefixes=(SearchPathVariable.IMPORT_PATH,),
     ).run(*arguments)
 
 
@@ -329,8 +326,8 @@ def variables_the_configuration_defines() -> frozenset[str]:
             text=True,
             check=True,
             env={
-                EnvironmentVariable.EXECUTABLE_SEARCH_PATH: os.environ[
-                    EnvironmentVariable.EXECUTABLE_SEARCH_PATH
+                SearchPathVariable.EXECUTABLE_SEARCH_PATH: os.environ[
+                    SearchPathVariable.EXECUTABLE_SEARCH_PATH
                 ]
             },
         ).stdout.split()

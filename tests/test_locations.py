@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 
 import basstler
-from .constants import RepositoryLocation, ScrubbedEnvironmentPrefix
+from .constants.environment import ScrubbedEnvironmentPrefix
+from .constants.paths import RepositoryLocation
 from basstler import locations
 from basstler.locations import (
     BasstlerVariable,

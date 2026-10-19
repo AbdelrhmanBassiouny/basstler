@@ -10,18 +10,33 @@ import pytest
 
 import yaml
 
+import basstler.plan_manifest_tools
+
 from basstler.build_dashboard import PlanValidationError, validate_plan
 from basstler.plan_item_bootstrap import PlanDocument
+from basstler.plan_model import (
+    ItemNotTrackedError,
+    ItemStatus,
+    ItemSummaryKey,
+    ManifestKey,
+)
 from basstler.plan_manifest_tools import (
     BranchIndex,
     ManifestToolsCommand,
     ManifestToolsExitCode,
+    ManifestToolsOption,
     PlanManifest,
     YamlBooleanCoercionError,
     main,
 )
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
+from .plan_dataset import LandedItemsPlan
+
+SCRIPT_NAME = Path(basstler.plan_manifest_tools.__file__).name
+"""
+This script's own filename, read from the module rather than spelled again here.
+"""
 
 
 def write_manifest(
@@ -138,7 +153,7 @@ def test_main_dispatches_read_id(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(
         sys,
         "argv",
-        ["plan_manifest_tools.py", ManifestToolsCommand.READ_ID, str(manifest_path)],
+        [SCRIPT_NAME, ManifestToolsCommand.READ_ID, str(manifest_path)],
     )
     exit_code = main()
     assert exit_code == ManifestToolsExitCode.SUCCESS
@@ -153,15 +168,15 @@ def test_main_dispatches_regenerate_branch_index(tmp_path, monkeypatch):
         sys,
         "argv",
         [
-            "plan_manifest_tools.py",
+            SCRIPT_NAME,
             ManifestToolsCommand.REGENERATE_BRANCH_INDEX,
-            "--scratch-dir",
+            ManifestToolsOption.SCRATCH_DIRECTORY,
             str(tmp_path),
-            "--plans-dir",
+            ManifestToolsOption.PLANS_DIRECTORY,
             "plans",
-            "--manifest-filename",
+            ManifestToolsOption.MANIFEST_FILENAME,
             PlanDocument.MANIFEST,
-            "--output",
+            ManifestToolsOption.OUTPUT,
             str(output_path),
         ],
     )
@@ -182,7 +197,7 @@ def run_validate(monkeypatch, manifest_path: Path) -> int:
     monkeypatch.setattr(
         sys,
         "argv",
-        ["plan_manifest_tools.py", ManifestToolsCommand.VALIDATE, str(manifest_path)],
+        [SCRIPT_NAME, ManifestToolsCommand.VALIDATE, str(manifest_path)],
     )
     return main()
 
@@ -209,3 +224,66 @@ def test_validate_refuses_a_manifest_the_dashboard_rejects_and_says_why(
 
     assert status == ManifestToolsExitCode.INVALID_MANIFEST
     assert str(expected.value) in capsys.readouterr().err
+
+
+# %% item - one item's slice of a plan
+
+
+def test_item_summary_holds_the_one_item_and_the_plan_header():
+    plan = LandedItemsPlan.read()
+    item = plan.item_with_status(ItemStatus.IN_PROGRESS)
+    summary = yaml.safe_load(plan.manifest.item_summary(item))
+    assert summary == {
+        ManifestKey.IDENTIFIER.key: plan.manifest.identifier,
+        ManifestKey.TITLE.key: plan.manifest.content[ManifestKey.TITLE.key],
+        ManifestKey.TRACKING_ISSUE.key: plan.manifest.content[
+            ManifestKey.TRACKING_ISSUE.key
+        ],
+        ItemSummaryKey.ITEM.value: item.content,
+    }
+
+
+def test_an_item_the_plan_does_not_track_is_refused():
+    with pytest.raises(ItemNotTrackedError):
+        LandedItemsPlan.read().manifest.item_named("missing")
+
+
+def test_a_branch_no_item_is_worked_on_is_refused():
+    with pytest.raises(ItemNotTrackedError):
+        LandedItemsPlan.read().manifest.item_on_branch("missing")
+
+
+def test_main_dispatches_item_by_id(monkeypatch, capsys):
+    plan = LandedItemsPlan.read()
+    item = plan.item_with_status(ItemStatus.NOT_STARTED)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            SCRIPT_NAME,
+            ManifestToolsCommand.ITEM,
+            str(DatasetLocation.PLAN_WITH_LANDED_ITEMS),
+            ManifestToolsOption.ITEM_IDENTIFIER,
+            item.identifier,
+        ],
+    )
+    assert main() == ManifestToolsExitCode.SUCCESS
+    assert capsys.readouterr().out == plan.manifest.item_summary(item)
+
+
+def test_main_dispatches_item_by_branch(monkeypatch, capsys):
+    plan = LandedItemsPlan.read()
+    item = plan.item_with_status(ItemStatus.IN_PROGRESS)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            SCRIPT_NAME,
+            ManifestToolsCommand.ITEM,
+            str(DatasetLocation.PLAN_WITH_LANDED_ITEMS),
+            ManifestToolsOption.BRANCH,
+            item.content[ManifestKey.BRANCH.key],
+        ],
+    )
+    assert main() == ManifestToolsExitCode.SUCCESS
+    assert capsys.readouterr().out == plan.manifest.item_summary(item)
