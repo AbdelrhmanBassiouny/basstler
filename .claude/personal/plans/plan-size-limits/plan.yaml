@@ -52,8 +52,8 @@ items:
     /plan-create and /add-plan-item run plan_size_check, which counts unlanded items against
     #11's Measure.ITEM_COUNT; a plan at the limit is full and new work goes to a new plan.
     Draft #18, restacked on #11 (base claude/happy-wozniak-nizfnv) on 2026-10-19; CRAM
-    #207's budget module and report hook are deleted. Its tests use plan_model.ManifestField,
-    so they follow #11's rename to ManifestKey when #11 makes it.
+    #207's budget module and report hook are deleted. Re-merged after #11 merged main
+    (2026-10-19); tests use #11's plan_model.ManifestKey.
   blockers: []
 - id: strict-limits-and-item-slices
   title: Typed per-field limits enforced on every save, and one item loaded per session
