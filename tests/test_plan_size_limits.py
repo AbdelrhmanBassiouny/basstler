@@ -16,20 +16,23 @@ from basstler.plan_size_limits import (
     DocumentLocation,
     DocumentOverLimitError,
     DocumentPart,
+    ItemLocation,
     LimitedDocument,
     Measure,
     Plan,
     PlanFiles,
     ProgressNotes,
     Roadmap,
+    RoadmapEntryLocation,
     RoadmapFormatViolation,
     RoadmapLine,
     SizeViolation,
     StagedPlan,
     Violation,
+    WholePartLocation,
 )
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 from .plan_dataset import LandedItemsPlan
 
 
@@ -69,7 +72,7 @@ def open_item_location() -> DocumentLocation:
     :return: Where the open item's quantities are counted.
     """
     open_item = LandedItemsPlan.read().item_with_status(ItemStatus.IN_PROGRESS)
-    return DocumentLocation(DocumentPart.ITEM, open_item.identifier)
+    return ItemLocation(open_item.identifier)
 
 
 # %% pruning landed items
@@ -201,7 +204,9 @@ def test_too_many_items_are_a_violation():
     ]
     oversized = PlanManifest({**plan.manifest.content, ManifestKey.ITEMS.key: items})
     assert manifest_violations(oversized) == [
-        SizeViolation(Measure.ITEM_COUNT, DocumentLocation(DocumentPart.PLAN), measured)
+        SizeViolation(
+            Measure.ITEM_COUNT, WholePartLocation(DocumentPart.PLAN), measured
+        )
     ]
 
 
@@ -238,7 +243,7 @@ def test_too_many_roadmap_entries_are_a_violation():
     assert roadmap.violations() == [
         SizeViolation(
             Measure.ROADMAP_ENTRY_COUNT,
-            DocumentLocation(DocumentPart.ROADMAP),
+            WholePartLocation(DocumentPart.ROADMAP),
             measured,
         )
     ]
@@ -250,7 +255,7 @@ def test_a_long_roadmap_entry_is_a_violation():
     assert roadmap.violations() == [
         SizeViolation(
             Measure.ROADMAP_ENTRY_LENGTH,
-            DocumentLocation(DocumentPart.ROADMAP_ENTRY, 1),
+            RoadmapEntryLocation(1),
             measured,
         )
     ]
@@ -274,7 +279,7 @@ def test_progress_notes_over_the_limit_are_a_violation(tmp_path):
         [
             SizeViolation(
                 Measure.PROGRESS_LENGTH,
-                DocumentLocation(DocumentPart.PROGRESS_NOTES),
+                WholePartLocation(DocumentPart.PROGRESS_NOTES),
                 measured,
             )
         ],
