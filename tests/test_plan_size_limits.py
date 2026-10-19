@@ -11,7 +11,7 @@ from pathlib import Path
 import pytest
 
 from basstler.plan_item_bootstrap import PlanDocument
-from basstler.plan_model import ItemStatus, ManifestField, PlanManifest
+from basstler.plan_model import ItemStatus, ManifestKey, PlanManifest
 from basstler.plan_size_limits import (
     DocumentLocation,
     DocumentOverLimitError,
@@ -53,7 +53,7 @@ def manifest_with_open_item_fields(**fields: object) -> PlanManifest:
         {**item.content, **fields} if item == open_item else item.content
         for item in plan.manifest.items
     ]
-    return PlanManifest({**plan.manifest.content, ManifestField.ITEMS.value: items})
+    return PlanManifest({**plan.manifest.content, ManifestKey.ITEMS.key: items})
 
 
 def manifest_violations(manifest: PlanManifest) -> list[Violation]:
@@ -99,9 +99,9 @@ def test_pruning_keeps_every_other_field_of_a_remaining_item():
     plan = LandedItemsPlan.read()
     original = plan.item_with_status(ItemStatus.IN_PROGRESS)
     remaining = plan.manifest.without_landed_items().item_named(original.identifier)
-    assert {**remaining.content, ManifestField.DEPENDS_ON.value: None} == {
+    assert {**remaining.content, ManifestKey.DEPENDS_ON.key: None} == {
         **original.content,
-        ManifestField.DEPENDS_ON.value: None,
+        ManifestKey.DEPENDS_ON.key: None,
     }
 
 
@@ -196,12 +196,10 @@ def test_too_many_items_are_a_violation():
     template = plan.item_with_status(ItemStatus.NOT_STARTED).content
     measured = Measure.ITEM_COUNT.maximum + 1
     items = [
-        {**template, ManifestField.IDENTIFIER.value: f"item-{number}"}
+        {**template, ManifestKey.IDENTIFIER.key: f"item-{number}"}
         for number in range(measured)
     ]
-    oversized = PlanManifest(
-        {**plan.manifest.content, ManifestField.ITEMS.value: items}
-    )
+    oversized = PlanManifest({**plan.manifest.content, ManifestKey.ITEMS.key: items})
     assert manifest_violations(oversized) == [
         SizeViolation(Measure.ITEM_COUNT, DocumentLocation(DocumentPart.PLAN), measured)
     ]

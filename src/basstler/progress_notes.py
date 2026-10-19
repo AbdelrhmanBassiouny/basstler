@@ -22,10 +22,11 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from basstler.build_dashboard import PullRequestState
 from basstler.environment import GitHubCredentialVariable
 from basstler.maintenance_board import PullRequestRecord
 from basstler.maintenance_git_commands import GitCommandRunner
-from basstler.maintenance_github import GitHubRepository, ListedPullRequestState
+from basstler.maintenance_github import GitHubRepository
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
 
@@ -116,7 +117,7 @@ class BranchPullRequests:
                 continue
             branch = head[PullRequestField.REFERENCE]
             branches_with_pull_requests.add(branch)
-            if pull_request[PullRequestField.STATE] == ListedPullRequestState.OPEN:
+            if pull_request[PullRequestField.STATE] == PullRequestState.OPEN:
                 open_branches.add(branch)
         return cls(
             open_branches=frozenset(open_branches),
@@ -262,9 +263,7 @@ class ProgressNotesPruning:
             return PruningSkipped.REMOTE_UNREADABLE
         repository = Repository.from_remote_url(url.output)
         pull_requests = BranchPullRequests.from_pull_requests(
-            GitHubRepository(repository, token).pull_requests(
-                ListedPullRequestState.ALL
-            ),
+            GitHubRepository(repository, token).all_pull_requests(),
             repository,
         )
         remote_branches = frozenset(

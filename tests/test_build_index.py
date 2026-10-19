@@ -6,7 +6,7 @@ import json
 import sys
 from typing import Any
 
-from basstler.build_index import PlanSummary, main, render_index_page
+from basstler.build_index import IndexPage, PlanSummary, main
 
 
 def summary(**overrides: Any) -> PlanSummary:
@@ -98,41 +98,41 @@ def test_css_class_marks_a_complete_plan():
     assert summary(done=4, total=4).css_class == "plan-card complete"
 
 
-# %% render_index_page - per-card rendering
+# %% IndexPage - per-card rendering
 
 
 def test_card_links_to_dashboard_when_published():
-    rendered = render_index_page(
+    rendered = IndexPage(
         [summary(dashboard_url="https://claude.ai/code/artifact/abc")]
-    )
+    ).render()
     assert '<a class="plan-card' in rendered
     assert 'href="https://claude.ai/code/artifact/abc"' in rendered
     assert "Not published yet" not in rendered
 
 
 def test_card_shows_unpublished_notice_when_no_dashboard_url():
-    rendered = render_index_page([summary(dashboard_url=None)])
+    rendered = IndexPage([summary(dashboard_url=None)]).render()
     assert '<div class="plan-card' in rendered
     assert "Not published yet" in rendered
 
 
 def test_card_marks_complete_plans():
-    rendered = render_index_page([summary(done=4, total=4)])
+    rendered = IndexPage([summary(done=4, total=4)]).render()
     assert "plan-card complete" in rendered
 
 
-# %% render_index_page - full page
+# %% IndexPage - full page
 
 
 def test_index_page_shows_placeholder_when_no_plans():
-    rendered = render_index_page([])
+    rendered = IndexPage([]).render()
     assert "No plans found" in rendered
 
 
 def test_index_page_renders_every_plan_card():
-    rendered = render_index_page(
+    rendered = IndexPage(
         [summary(id="a", title="Plan A"), summary(id="b", title="Plan B")]
-    )
+    ).render()
     assert "Plan A" in rendered
     assert "Plan B" in rendered
 
@@ -171,3 +171,11 @@ def test_main_renders_every_plan_from_the_plans_json_file(tmp_path, monkeypatch)
     exit_code = main()
     assert exit_code == 0
     assert "Plan A" in output_path.read_text()
+
+
+def test_index_page_links_back_to_the_plan_hub():
+    page = IndexPage(
+        [summary()], "owner/repo", "https://claude.ai/artifact/hub"
+    ).render()
+    assert "https://claude.ai/artifact/hub" in page
+    assert "owner/repo" in page

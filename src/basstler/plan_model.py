@@ -8,8 +8,9 @@ The dependency runs one way only.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -81,63 +82,243 @@ class ItemStatus(StrEnum):
         return cls.underscore_spellings().get(value)
 
 
-# %% manifest reading
+# %% the vocabulary a plan manifest is written in
 
 
-class ManifestField(StrEnum):
+class ItemLayout(StrEnum):
     """
-    The ``plan.yaml`` keys the typed reading below interprets.
-    """
-
-    IDENTIFIER = "id"
-    """
-    A plan's or an item's id.
+    The whitespace and markers an item block in ``plan.yaml`` is laid out with.
     """
 
-    TITLE = "title"
+    FIELD_INDENT = " " * 4
     """
-    A plan's or an item's title.
+    The indentation ``plan.yaml`` item fields carry, one level inside the list marker.
     """
 
-    DESCRIPTION = "description"
+    MARKER = " " * 2 + "- "
+    """
+    What opens an item block, the list marker its first field sits behind.
+    """
+
+
+class ValueStyle(StrEnum):
+    """
+    How a key's value is written, in YAML's own vocabulary.
+
+    Mutually exclusive by construction, which the two booleans this replaced could not
+    say: a value is written one of these ways, never two.
+    """
+
+    PLAIN = "plain"
+    """
+    A bare scalar on the key's own line.
+    """
+
+    DOUBLE_QUOTED = "double_quoted"
+    """
+    A quoted scalar, for prose that would otherwise need escaping.
+    """
+
+    BLOCK = "block"
+    """
+    A value written across the lines beneath the key - a folded scalar or a sequence.
+
+    Anything inserted after such a key would be swallowed by its value, so a new key
+    goes before the first block-styled one in an item rather than at the end.
+    """
+
+
+@dataclass(frozen=True)
+class KeySpecification:
+    """
+    How one ``plan.yaml`` key is written, so no caller has to decide per key.
+    """
+
+    key: str
+    """
+    The key as it appears in the manifest.
+
+    Named ``key`` rather than ``name`` for two reasons: it is YAML's own term for the
+    left-hand side of a mapping, and :class:`ManifestKey` mixes this class into an
+    ``Enum``, whose ``name`` is reserved for the member's own name.
+    """
+
+    style: ValueStyle = ValueStyle.PLAIN
+    """
+    How this key's value is written.
+    """
+
+
+class ManifestKey(KeySpecification, Enum):
+    """
+    Every ``plan.yaml`` key, each carrying how it is written - the one place a tool
+    spells one.
+
+    A member *is* a :class:`KeySpecification`, so ``isinstance`` and ``issubclass`` hold
+    and a key's own style is reached directly: ``ManifestKey.TITLE.style``. That is what
+    lets :meth:`render` produce a correct line from the key alone - a caller never
+    chooses quoting, and every assertion about a manifest line derives from the same
+    place the line is written. The schema itself is documented in ``plan-schema.md``.
+
+    .. note::
+       A member's value is the argument tuple its specification is built from, not a
+       built :class:`KeySpecification`. Passing an instance is accepted silently by the
+       enum machinery and lands the whole instance in :attr:`KeySpecification.key`, so a
+       test asserts every key is a string.
+    """
+
+    IDENTIFIER = ("id",)
+    """
+    The item's own id, and the line that opens its block.
+    """
+
+    TITLE = ("title", ValueStyle.DOUBLE_QUOTED)
+    """
+    What the item does, quoted because it is prose.
+    """
+
+    BRANCH = ("branch",)
+    """
+    The git branch the work happens on, once one exists.
+    """
+
+    REPOSITORY = ("repository",)
+    """
+    The item's own repository, overriding the plan's default.
+    """
+
+    DEFAULT_REPOSITORY = ("default_repository",)
+    """
+    The repository every item uses unless it sets its own.
+    """
+
+    PULL_REQUEST_NUMBER = ("pull_request_number",)
+    """
+    The real pull request number, once one exists.
+    """
+
+    TRACK = ("track",)
+    """
+    The parallel line of work the item belongs to.
+    """
+
+    DEPENDS_ON = ("depends_on",)
+    """
+    The items this one stacks on, by id.
+    """
+
+    STATUS = ("status",)
+    """
+    The session's own planning assessment - see :class:`ItemStatus`.
+    """
+
+    SESSION = ("session",)
+    """
+    The session doing the work.
+    """
+
+    NOTES = ("notes", ValueStyle.BLOCK)
+    """
+    Freeform detail, routinely folded over many lines.
+    """
+
+    BLOCKERS = ("blockers", ValueStyle.BLOCK)
+    """
+    Why the item is stuck, written as a sequence.
+    """
+
+    ITEMS = ("items",)
+    """
+    The manifest's top-level list of items.
+    """
+
+    DESCRIPTION = ("description",)
     """
     What the plan is for.
     """
 
-    TRACKING_ISSUE = "tracking_issue"
+    TRACKING_ISSUE = ("tracking_issue",)
     """
     The issue structural changes to the plan are recorded on.
     """
 
-    ITEMS = "items"
+    SCHEMA_VERSION = ("schema_version",)
     """
-    The plan's list of items.
-    """
-
-    BRANCH = "branch"
-    """
-    The branch an item is worked on.
+    The version of the schema the manifest is written against.
     """
 
-    STATUS = "status"
+    WAVES = ("waves",)
     """
-    An item's status.
-    """
-
-    NOTES = "notes"
-    """
-    What an item's next session needs to know about it.
+    The plan's sequential phases.
     """
 
-    BLOCKERS = "blockers"
+    TRACKS = ("tracks",)
     """
-    Why an item is stuck.
+    The plan's parallel lines of work.
     """
 
-    DEPENDS_ON = "depends_on"
+    NAME = ("name",)
     """
-    The ids of the items an item builds on.
+    A wave's or a track's display name.
     """
+
+    WAVE = ("wave",)
+    """
+    The wave a track belongs to.
+    """
+
+    def render(
+        self,
+        value: str,
+        opening_the_item: bool = False,
+        field_indent: str = ItemLayout.FIELD_INDENT.value,
+    ) -> str:
+        """
+        The manifest line setting this key to *value*, newline included.
+
+        Quoting comes from the key's own style rather than from the caller.
+
+        :param value: The value to write.
+        :param opening_the_item: Whether this is the item block's first line, which
+            carries the list marker instead of the key indent.
+        :param field_indent: The whitespace this item's own fields are indented by,
+            read from the block being edited rather than assumed, since a manifest
+            written before this module's own convention keeps whichever indentation
+            it already has.
+        :return: The rendered line.
+        """
+        prefix = ItemLayout.MARKER.value if opening_the_item else field_indent
+        written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
+        return f"{prefix}{self.key}: {written}\n"
+
+    @property
+    def pattern(self) -> re.Pattern[str]:
+        """
+        Matches this key wherever it already appears in an item block.
+        """
+        return re.compile(rf"^\s*{re.escape(self.key)}:\s*.*$")
+
+    @property
+    def is_block_styled(self) -> bool:
+        """
+        Whether this key's value runs over the lines beneath it.
+        """
+        return self.style is ValueStyle.BLOCK
+
+    @classmethod
+    def block_styled(cls) -> frozenset[ManifestKey]:
+        """
+        The keys whose values run over the lines beneath them, derived from the keys
+        themselves rather than listed a second time.
+
+        :return: Every block-styled key.
+        """
+        return frozenset(
+            manifest_key for manifest_key in cls if manifest_key.is_block_styled
+        )
+
+
+# %% manifest reading
 
 
 @dataclass(frozen=True)
@@ -156,21 +337,21 @@ class PlanItem:
         """
         :return: The item's id.
         """
-        return str(self.content[ManifestField.IDENTIFIER])
+        return str(self.content[ManifestKey.IDENTIFIER.key])
 
     @property
     def status(self) -> ItemStatus:
         """
         :return: The item's status.
         """
-        return ItemStatus(self.content[ManifestField.STATUS])
+        return ItemStatus(self.content[ManifestKey.STATUS.key])
 
     @property
     def notes(self) -> str:
         """
         :return: The item's notes with their line folding undone, empty when it has none.
         """
-        return " ".join(str(self.content.get(ManifestField.NOTES) or "").split())
+        return " ".join(str(self.content.get(ManifestKey.NOTES.key) or "").split())
 
     @property
     def blockers(self) -> list[str]:
@@ -179,7 +360,7 @@ class PlanItem:
         """
         return [
             " ".join(str(blocker).split())
-            for blocker in self.content.get(ManifestField.BLOCKERS) or []
+            for blocker in self.content.get(ManifestKey.BLOCKERS.key) or []
         ]
 
     @property
@@ -189,7 +370,7 @@ class PlanItem:
         """
         return [
             str(dependency)
-            for dependency in self.content.get(ManifestField.DEPENDS_ON) or []
+            for dependency in self.content.get(ManifestKey.DEPENDS_ON.key) or []
         ]
 
     def without_dependencies(self, identifiers: set[str]) -> PlanItem:
@@ -204,7 +385,7 @@ class PlanItem:
             for dependency in self.dependencies
             if dependency not in identifiers
         ]
-        return PlanItem({**self.content, ManifestField.DEPENDS_ON.value: remaining})
+        return PlanItem({**self.content, ManifestKey.DEPENDS_ON.key: remaining})
 
 
 class ItemSummaryKey(StrEnum):
@@ -252,21 +433,25 @@ class PlanManifest:
         """
         :return: The plan's id.
         """
-        return str(self.content[ManifestField.IDENTIFIER])
+        return str(self.content[ManifestKey.IDENTIFIER.key])
 
     @property
     def description(self) -> str:
         """
         :return: The plan's description with its line folding undone.
         """
-        return " ".join(str(self.content.get(ManifestField.DESCRIPTION) or "").split())
+        return " ".join(
+            str(self.content.get(ManifestKey.DESCRIPTION.key) or "").split()
+        )
 
     @property
     def items(self) -> list[PlanItem]:
         """
         :return: The plan's items, in manifest order.
         """
-        return [PlanItem(item) for item in self.content.get(ManifestField.ITEMS) or []]
+        return [
+            PlanItem(item) for item in self.content.get(ManifestKey.ITEMS.key) or []
+        ]
 
     @property
     def landed_identifiers(self) -> set[str]:
@@ -297,7 +482,7 @@ class PlanManifest:
         :return: The item worked on that branch.
         """
         for item in self.items:
-            if item.content.get(ManifestField.BRANCH) == branch:
+            if item.content.get(ManifestKey.BRANCH.key) == branch:
                 return item
         raise ItemNotTrackedError(
             plan_identifier=self.identifier, item_identifier=branch
@@ -312,11 +497,11 @@ class PlanManifest:
         :return: The summary as YAML.
         """
         summary = {
-            field_name.value: self.content.get(field_name)
+            field_name.key: self.content.get(field_name.key)
             for field_name in (
-                ManifestField.IDENTIFIER,
-                ManifestField.TITLE,
-                ManifestField.TRACKING_ISSUE,
+                ManifestKey.IDENTIFIER,
+                ManifestKey.TITLE,
+                ManifestKey.TRACKING_ISSUE,
             )
         }
         summary[ItemSummaryKey.ITEM.value] = item.content
@@ -336,7 +521,7 @@ class PlanManifest:
             for item in self.items
             if item.identifier not in landed
         ]
-        return PlanManifest({**self.content, ManifestField.ITEMS.value: remaining})
+        return PlanManifest({**self.content, ManifestKey.ITEMS.key: remaining})
 
 
 @dataclass

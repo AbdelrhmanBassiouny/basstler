@@ -38,6 +38,7 @@ import argparse
 import json
 import sys
 from abc import ABC, abstractmethod
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
@@ -49,8 +50,10 @@ import yaml
 from basstler.class_property import classproperty
 from basstler.github_labels import GitHubLabel
 from basstler.plan_model import ItemStatus
+from basstler.maintenance_board import PullRequestField
+from basstler.maintenance_board import PullRequestRecord as PullRequestAPIRecord
 from basstler.render_common import (
-    create_template_environment,
+    TemplatePage,
     render_markdown_to_html,
     sanitize_http_url,
 )
@@ -475,6 +478,26 @@ class PullRequestRecord:
             draft=data.get("draft", False),
             merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
             labels=list(data.get("labels") or []),
+        )
+
+    @classmethod
+    def from_api(cls, api_record: PullRequestAPIRecord) -> PullRequestRecord:
+        """Read one pull request object as the REST pulls API answers it.
+
+        :param api_record: The pull request, as the API describes it.
+        :return: The fields a dashboard classifies it by.
+        """
+        number = PullRequestField.NUMBER.read(api_record)
+        return cls.from_mapping(
+            {
+                field.key: field.read(api_record, number)
+                for field in (
+                    PullRequestField.STATE,
+                    PullRequestField.DRAFT,
+                    PullRequestField.MERGED_AT,
+                    PullRequestField.LABELS,
+                )
+            }
         )
 
     @property
@@ -923,6 +946,23 @@ class DashboardSummary:
     """Titles of items with an open draft pull request, not blocked, whose
     dependencies (if any) already have their own open pull request."""
 
+    live_state_counts: dict[LiveState, int] = field(default_factory=dict)
+    """How many items' pull requests are in each :class:`LiveState`."""
+
+    @property
+    def open_pull_requests(self) -> int:
+        """How many items' pull requests are open, drafts included."""
+        return sum(
+            self.live_state_counts.get(state, 0)
+            for state in (LiveState.OPEN_DRAFT, LiveState.OPEN_READY)
+        )
+
+    @property
+    def reviewed_pull_requests(self) -> int:
+        """How many items' pull requests are open and out of draft - reviewed by
+        their author and marked ready for review."""
+        return self.live_state_counts.get(LiveState.OPEN_READY, 0)
+
     def to_json_dict(self) -> dict[str, Any]:
         """Render to the plain-dict shape the calling skill expects."""
         return {
@@ -935,6 +975,17 @@ class DashboardSummary:
             "blocker_maybe_cleared": self.blocker_maybe_cleared,
             "ready_to_review": self.ready_to_review,
         }
+
+
+@dataclass
+class RenderedDashboard:
+    """What rendering one plan's dashboard produces."""
+
+    html: str
+    """The dashboard page's rendered HTML."""
+
+    summary: DashboardSummary
+    """The summary of the plan's state the page was rendered from."""
 
 
 @dataclass
@@ -1009,7 +1060,7 @@ class WaveSection:
 
 
 @dataclass
-class DashboardRenderer:
+class DashboardRenderer(TemplatePage):
     """Renders one :class:`Plan` (plus its live pull request data and roadmap text)
     into the dashboard's HTML.
 
@@ -1033,6 +1084,12 @@ class DashboardRenderer:
     tracking_url: str | None
     """The tracking issue's or pull request's ``html_url``, if the plan has one."""
 
+    hub_url: str | None = None
+    """The plan hub's URL, the first link of the page's breadcrumb."""
+
+    index_url: str | None = None
+    """The repository's own index page, the breadcrumb's second link."""
+
     items_by_identifier: dict[str, Item] = field(init=False)
     """Every item, keyed by :attr:`Item.identifier`."""
 
@@ -1041,13 +1098,17 @@ class DashboardRenderer:
         """Same-track dependency chains deeper than this wrap back to indent level 0."""
         return 4
 
+    @classproperty
+    def template(cls) -> str:
+        return "dashboard.html"
+
     def __post_init__(self) -> None:
         self.items_by_identifier = {item.identifier: item for item in self.plan.items}
 
-    def render(self) -> tuple[str, DashboardSummary]:
+    def render(self) -> RenderedDashboard:
         """Classify live state/drift for every item, then render the full page.
 
-        :return: The rendered HTML, and the summary to print on stdout.
+        :return: The rendered page, and the summary to print on stdout.
         """
         self._classify_items()
         drift_items = [item for item in self.plan.items if item.drift_description]
@@ -1057,14 +1118,15 @@ class DashboardRenderer:
             drift_items + ready_to_start + blocker_maybe_cleared + ready_to_review
         )
 
-        template = create_template_environment().get_template("dashboard.html")
-        output = template.render(
+        html = self.render_template(
             title=self.plan.title,
             description=self.plan.description,
             repository=self.plan.default_repository,
             repository_url=self.plan.repository_url,
             total_items=len(self.plan.items),
             tracking_url=self.tracking_url,
+            hub_url=sanitize_http_url(self.hub_url),
+            index_url=sanitize_http_url(self.index_url),
             item_statuses=list(ItemStatus),
             status_counts=self._status_counts(),
             drift_items=drift_items,
@@ -1083,8 +1145,11 @@ class DashboardRenderer:
             ready_to_start=[item.title for item in ready_to_start],
             blocker_maybe_cleared=[item.title for item in blocker_maybe_cleared],
             ready_to_review=[item.title for item in ready_to_review],
+            live_state_counts=dict(
+                Counter(item.live_state for item in self.plan.items)
+            ),
         )
-        return output, summary
+        return RenderedDashboard(html=html, summary=summary)
 
     def _classify_items(self) -> None:
         """Fill in every item's :attr:`Item.live_state`,
@@ -1458,6 +1523,10 @@ def main() -> int:
         default=None,
         help="The plan's tracking_issue html_url, if it has one",
     )
+    parser.add_argument("--hub-url", default=None, help="The plan hub's URL")
+    parser.add_argument(
+        "--index-url", default=None, help="The repository's own index page URL"
+    )
     arguments = parser.parse_args()
 
     raw_plan = yaml.safe_load(Path(arguments.plan).read_text())
@@ -1479,11 +1548,13 @@ def main() -> int:
         roadmap_text=roadmap_text,
         pull_requests_by_repository=pull_requests_by_repository,
         tracking_url=arguments.tracking_url,
+        hub_url=arguments.hub_url,
+        index_url=arguments.index_url,
     )
-    output, summary = renderer.render()
+    rendered = renderer.render()
 
-    Path(arguments.output).write_text(output)
-    logger.info(json.dumps(summary.to_json_dict()))
+    Path(arguments.output).write_text(rendered.html)
+    logger.info(json.dumps(rendered.summary.to_json_dict()))
     return 0
 
 

@@ -190,7 +190,7 @@ def test_pruning_removes_the_finished_and_deleted_branches_notes(
     without_credentials(monkeypatch)
     monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, "token")
     monkeypatch.setattr(
-        GitHubRepository, "pull_requests", lambda self, state: PULL_REQUESTS
+        GitHubRepository, "all_pull_requests", lambda self: PULL_REQUESTS
     )
     directory = progress_directory(
         tmp_path / "notes",
