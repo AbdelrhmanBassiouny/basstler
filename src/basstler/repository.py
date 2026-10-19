@@ -135,7 +135,15 @@ class Repository:
         """
         The HTTPS URL git clones and fetches the repository from.
         """
-        return f"{self.url}.git"
+        return self.clone_url_under()
+
+    def clone_url_under(self, root: str = GitHubAddress.WEB) -> str:
+        """
+        :param root: Where repositories are kept as ``<root>/owner/name.git``: GitHub
+            itself, or a directory of bare repositories standing in for it.
+        :return: The URL git clones and fetches this repository from there.
+        """
+        return f"{root}/{self.full_name}.git"
 
     def pull_request_url(self, number: int) -> str:
         """
@@ -143,6 +151,13 @@ class Repository:
         :return: The pull request's page on GitHub.
         """
         return f"{self.url}/pull/{number}"
+
+    def issue_url(self, number: int) -> str:
+        """
+        :param number: The issue's number.
+        :return: The issue's page on GitHub.
+        """
+        return f"{self.url}/issues/{number}"
 
     def git_requirement(self, distribution: str, reference: str) -> str:
         """
@@ -157,3 +172,30 @@ class Repository:
     def __str__(self) -> str:
         """:return: :attr:`full_name`."""
         return self.full_name
+
+
+@dataclass(frozen=True)
+class PullRequestReference:
+    """
+    One pull request, named by the repository it is opened on and its number.
+
+    Identity only: what a pull request currently *is* - open, merged, labelled - is read
+    into a record of its own by whichever caller needs it.
+    """
+
+    repository: Repository
+    """
+    The repository the pull request is opened on.
+    """
+
+    number: int
+    """
+    The pull request's number.
+    """
+
+    @property
+    def url(self) -> str:
+        """
+        The pull request's page on GitHub.
+        """
+        return self.repository.pull_request_url(self.number)

@@ -240,6 +240,13 @@ class ProjectLocation(PathEnumeration):
     half of the same tooling; a test holds the two equal so the mirror cannot drift.
     """
 
+    PLAN_HUB = PLANS / "_hub.yaml"
+    """
+    The plan hub file: the site's address and every repository it publishes.
+
+    Mirrors ``PLAN_HUB_PATH`` in ``resolve-personal-notes-config.sh``.
+    """
+
     PERSONAL_STACK_CONFIGURATION = PERSONAL_NOTES / "stack.toml"
     """
     The per-user override of :attr:`PROJECT_STACK_CONFIGURATION`.
