@@ -16,16 +16,52 @@ from __future__ import annotations
 import subprocess
 from enum import StrEnum
 
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import PluginLocation
+
+from .constants.paths import RepositoryLocation
 
 MESSAGES_SCRIPT = (
-    PackageLocation.REPOSITORY_ROOT
-    / ProjectLocation.HOOKS
-    / "session-start-messages.sh"
+    RepositoryLocation.HOOKS / PluginLocation.SESSION_START_MESSAGES_SCRIPT.name
 )
 """
 The shell file defining the wording of every summary line.
 """
+
+
+class SummaryLine(StrEnum):
+    """
+    The labels of the summary report's lines, as session-start.sh prints them.
+    """
+
+    PERSONAL_NOTES = "personal notes"
+    """
+    Whether the personal notes were loaded, and from where.
+    """
+
+    PLAN = "plan"
+    """
+    Which plan, if any, tracks the current branch.
+    """
+
+    PLAN_SITE = "plan site"
+    """
+    The plan site, and where this session's work sits on it.
+    """
+
+    GIT_IDENTITY = "git identity"
+    """
+    Which git identity the clone commits with.
+    """
+
+    DEPENDENCIES = "dependencies"
+    """
+    Whether the package's environment exists and holds everything the package requires.
+    """
+
+    SETUP = "setup"
+    """
+    check-setup.sh's verdict.
+    """
 
 
 class SummaryMessage(StrEnum):
@@ -61,6 +97,16 @@ class SummaryMessage(StrEnum):
     BRANCH_TRACKED_IN_PLAN = "plan_line_tracked"
     """
     The branch is a tracked item of a plan that resolved.
+    """
+
+    HUB_NOT_REGISTERED = "hub_line_not_registered"
+    """
+    The notes branch has no hub file.
+    """
+
+    HUB_REGISTERED = "hub_line_registered"
+    """
+    The hub file names the plan site, and this session's place on it.
     """
 
     NO_GIT_IDENTITY_RECORDED = "git_identity_line_not_recorded"
@@ -100,17 +146,30 @@ class SummaryMessage(StrEnum):
 
     DEPENDENCIES_NOT_CHECKED = "dependencies_line_not_checked"
     """
-    Nothing could be looked up, because python3 or the package metadata is missing.
+    Nothing could be looked up, because the interpreter or the package metadata is
+    missing.
     """
 
     DEPENDENCIES_ALREADY_INSTALLED = "dependencies_line_already_installed"
     """
-    Every declared dependency was already installed, so nothing was installed.
+    The package's environment already had every requirement, so nothing was installed.
     """
 
     DEPENDENCIES_INSTALLED = "dependencies_line_installed"
     """
-    What was missing has just been installed.
+    What was missing has just been installed into the package's environment.
+    """
+
+    DEPENDENCIES_ENVIRONMENT_CREATED = "dependencies_line_environment_created"
+    """
+    The package's environment did not exist, and has just been created with the package
+    installed into it.
+    """
+
+    DEPENDENCIES_ENVIRONMENT_NOT_CREATED = "dependencies_line_environment_not_created"
+    """
+    The package's environment did not exist and could not be created, and the run
+    carried on regardless.
     """
 
     DEPENDENCIES_INSTALL_FAILED = "dependencies_line_install_failed"
@@ -119,12 +178,12 @@ class SummaryMessage(StrEnum):
     """
 
 
-def summary_value(output: str, label: str) -> str:
+def summary_value(output: str, label: SummaryLine) -> str:
     """
     Extract one line's value from the summary report.
 
     :param output: session-start.sh's standard output.
-    :param label: The summary line's label, such as ``plan``.
+    :param label: The summary line to read.
     :return: Everything after the label, stripped.
     :raises AssertionError: If the report has no such line.
     """

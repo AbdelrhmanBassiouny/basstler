@@ -29,7 +29,7 @@ from basstler.record_dashboard_url import (
     resolve_artifact_url,
 )
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 
 CACHE_TEXT = (DatasetLocation.DIRECTORY / "dashboard-urls.yaml").read_text()
 LISTING = load_artifact_listing(

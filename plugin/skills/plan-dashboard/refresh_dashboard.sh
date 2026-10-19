@@ -4,7 +4,7 @@ set -euo pipefail
 # Orchestrates one plan's refresh: sync_manifest_status's auto-correction,
 # pushing that correction back to the personal-notes branch if it changed
 # anything, then build_dashboard's render - the exact sequence
-# .claude/skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
+# skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
 # embedded bash snippet for a session to improvise from. Extracted so that
 # sequence is real, tested-by-construction code (it just calls the two
 # modules test/basstler_test/ already covers) rather than
@@ -18,7 +18,7 @@ set -euo pipefail
 #     --roadmap <roadmap.md path> \
 #     --pr-data <pr_data.json path> \
 #     --output <dashboard.html output path> \
-#     [--tracking-url <url>]
+#     [--tracking-url <url>] [--hub-url <url>] [--index-url <url>]
 #
 # Prints one JSON summary to stdout, merging sync_manifest_status's own
 # {"corrected": [...]} with build_dashboard's status/drift/ready summary,
@@ -42,6 +42,8 @@ ROADMAP_FILE=""
 PULL_REQUEST_DATA_FILE=""
 OUTPUT_FILE=""
 TRACKING_URL=""
+HUB_URL=""
+INDEX_URL=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --plan-id)
@@ -68,6 +70,14 @@ while [ $# -gt 0 ]; do
       TRACKING_URL="$2"
       shift 2
       ;;
+    --hub-url)
+      HUB_URL="$2"
+      shift 2
+      ;;
+    --index-url)
+      INDEX_URL="$2"
+      shift 2
+      ;;
     *)
       echo "Unrecognized argument: $1" >&2
       exit 1
@@ -77,15 +87,15 @@ done
 
 if [ -z "${PLAN_ID}" ] || [ -z "${PLAN_FILE}" ] || [ -z "${ROADMAP_FILE}" ] \
     || [ -z "${PULL_REQUEST_DATA_FILE}" ] || [ -z "${OUTPUT_FILE}" ]; then
-  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>]" >&2
+  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>] [--hub-url <url>] [--index-url <url>]" >&2
   exit 1
 fi
 
-SYNC_SUMMARY="$(python3 -m "${SYNC_MANIFEST_STATUS_MODULE}" \
+SYNC_SUMMARY="$("${BASSTLER_PYTHON}" -m "${SYNC_MANIFEST_STATUS_MODULE}" \
   --plan "${PLAN_FILE}" \
   --pr-data "${PULL_REQUEST_DATA_FILE}")"
 
-CORRECTED_COUNT="$(python3 -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" count-corrected "${SYNC_SUMMARY}")"
+CORRECTED_COUNT="$("${BASSTLER_PYTHON}" -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" count-corrected "${SYNC_SUMMARY}")"
 
 if [ "${CORRECTED_COUNT}" != "0" ]; then
   DESTINATION_PATH="$(plan_manifest_path "${PLAN_ID}")"
@@ -104,6 +114,12 @@ BUILD_ARGUMENTS=(
 if [ -n "${TRACKING_URL}" ]; then
   BUILD_ARGUMENTS+=(--tracking-url "${TRACKING_URL}")
 fi
-BUILD_SUMMARY="$(python3 -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
+if [ -n "${HUB_URL}" ]; then
+  BUILD_ARGUMENTS+=(--hub-url "${HUB_URL}")
+fi
+if [ -n "${INDEX_URL}" ]; then
+  BUILD_ARGUMENTS+=(--index-url "${INDEX_URL}")
+fi
+BUILD_SUMMARY="$("${BASSTLER_PYTHON}" -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
 
-python3 -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" merge-summaries "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"
+"${BASSTLER_PYTHON}" -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" merge-summaries "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"

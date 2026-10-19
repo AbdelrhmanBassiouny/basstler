@@ -14,6 +14,7 @@ from pathlib import Path
 import pytest
 
 import basstler.check_scope_overlap
+from .constants.paths import RepositoryLocation
 from basstler.check_scope_overlap import (
     Candidate,
     ReportKey,
@@ -21,7 +22,7 @@ from basstler.check_scope_overlap import (
     build_scope_report,
 )
 
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import ProjectLocation
 
 from .scratch_repository import ScratchRepository
 
@@ -243,7 +244,7 @@ def test_command_line_prints_the_report_as_json(
         ],
         capture_output=True,
         text=True,
-        cwd=PackageLocation.REPOSITORY_ROOT,
+        cwd=RepositoryLocation.ROOT,
     )
     assert result.returncode == 0, result.stderr
 
@@ -277,7 +278,7 @@ def test_command_line_reports_an_unresolvable_branch_as_a_failure(
         ],
         capture_output=True,
         text=True,
-        cwd=PackageLocation.REPOSITORY_ROOT,
+        cwd=RepositoryLocation.ROOT,
     )
 
     assert result.returncode != 0

@@ -7,19 +7,14 @@ Runs the real scripts against a local `git init --bare` fixture instead of a rea
 remote - no network access or real personal-notes branch involved.
 """
 
-import os
 import subprocess
 
 import pytest
 
-from basstler.locations import ProjectLocation
+from basstler.locations import PluginLocation, ProjectLocation
 
-from .constants import (
-    DatasetLocation,
-    PersonalNotesPath,
-    ScratchBranch,
-    ScrubbedEnvironmentPrefix,
-)
+from .constants.notes import ScratchBranch
+from .constants.paths import DatasetLocation, PersonalNotesPath
 from .scratch_repository import ScratchRepository
 
 PERSONAL_SETTINGS = (DatasetLocation.DIRECTORY / "personal-settings.json").read_text()
@@ -42,11 +37,11 @@ def settings_repository(scratch_repository: ScratchRepository) -> ScratchReposit
     :return: The same repository, ready to run the settings scripts against.
     """
     scratch_repository.install_hook_scripts(
-        "resolve-personal-notes-config.sh",
-        "session-start-messages.sh",
-        "session-start.sh",
-        "save-personal-settings.sh",
-        "write-personal-notes-file.sh",
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.SESSION_START_MESSAGES_SCRIPT.name,
+        PluginLocation.SESSION_START_SCRIPT.name,
+        PluginLocation.PERSONAL_SETTINGS_SAVING_SCRIPT.name,
+        PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT.name,
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
@@ -68,21 +63,10 @@ def run_hook(
     the tests can never change what they assert.
 
     :param repository: A fixture-built scratch repository.
-    :param script_name: File name of the script under ``.claude/hooks``.
+    :param script_name: File name of the script within the plugin's hooks.
     :return: The finished subprocess, whether it succeeded or not.
     """
-    environment = {
-        name: value
-        for name, value in os.environ.items()
-        if not name.startswith(ScrubbedEnvironmentPrefix.PERSONAL_NOTES)
-    }
-    return subprocess.run(
-        ["bash", str(repository.project_root / ProjectLocation.HOOKS / script_name)],
-        cwd=repository.project_root,
-        capture_output=True,
-        text=True,
-        env=environment,
-    )
+    return repository.run_hook_script(script_name)
 
 
 def local_settings_of(repository: ScratchRepository) -> str:
@@ -119,7 +103,7 @@ def test_writes_the_branch_settings_when_the_project_has_none(
         PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, PERSONAL_SETTINGS
     )
 
-    result = run_hook(settings_repository, "session-start.sh")
+    result = run_hook(settings_repository, PluginLocation.SESSION_START_SCRIPT.name)
 
     assert result.returncode == 0, result.stderr
     assert local_settings_of(settings_repository) == PERSONAL_SETTINGS
@@ -132,7 +116,7 @@ def test_writes_the_branch_settings_when_the_project_has_none(
 def test_writes_no_settings_when_the_branch_has_none(
     settings_repository: ScratchRepository,
 ):
-    result = run_hook(settings_repository, "session-start.sh")
+    result = run_hook(settings_repository, PluginLocation.SESSION_START_SCRIPT.name)
 
     assert result.returncode == 0, result.stderr
     assert not (
@@ -150,12 +134,12 @@ def test_updates_settings_untouched_since_the_last_sync(
     settings_repository.update_notes_branch_file(
         PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, PERSONAL_SETTINGS
     )
-    run_hook(settings_repository, "session-start.sh")
+    run_hook(settings_repository, PluginLocation.SESSION_START_SCRIPT.name)
     settings_repository.update_notes_branch_file(
         PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, UPDATED_PERSONAL_SETTINGS
     )
 
-    result = run_hook(settings_repository, "session-start.sh")
+    result = run_hook(settings_repository, PluginLocation.SESSION_START_SCRIPT.name)
 
     assert result.returncode == 0, result.stderr
     assert local_settings_of(settings_repository) == UPDATED_PERSONAL_SETTINGS
@@ -167,13 +151,13 @@ def test_keeps_settings_edited_since_the_last_sync(
     settings_repository.update_notes_branch_file(
         PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, PERSONAL_SETTINGS
     )
-    run_hook(settings_repository, "session-start.sh")
+    run_hook(settings_repository, PluginLocation.SESSION_START_SCRIPT.name)
     settings_repository.write(PersonalNotesPath.LOCAL_SETTINGS, LOCALLY_EDITED_SETTINGS)
     settings_repository.update_notes_branch_file(
         PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, UPDATED_PERSONAL_SETTINGS
     )
 
-    result = run_hook(settings_repository, "session-start.sh")
+    result = run_hook(settings_repository, PluginLocation.SESSION_START_SCRIPT.name)
 
     assert result.returncode == 0, result.stderr
     assert local_settings_of(settings_repository) == LOCALLY_EDITED_SETTINGS
@@ -191,7 +175,7 @@ def test_keeps_settings_that_were_never_synced(
         PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, PERSONAL_SETTINGS
     )
 
-    result = run_hook(settings_repository, "session-start.sh")
+    result = run_hook(settings_repository, PluginLocation.SESSION_START_SCRIPT.name)
 
     assert result.returncode == 0, result.stderr
     assert local_settings_of(settings_repository) == LOCALLY_EDITED_SETTINGS
@@ -203,7 +187,9 @@ def test_keeps_settings_that_were_never_synced(
 def test_saves_local_settings_to_the_branch(settings_repository: ScratchRepository):
     settings_repository.write(PersonalNotesPath.LOCAL_SETTINGS, PERSONAL_SETTINGS)
 
-    result = run_hook(settings_repository, "save-personal-settings.sh")
+    result = run_hook(
+        settings_repository, PluginLocation.PERSONAL_SETTINGS_SAVING_SCRIPT.name
+    )
 
     assert result.returncode == 0, result.stderr
     assert settings_on_notes_branch(settings_repository) == PERSONAL_SETTINGS
@@ -213,12 +199,12 @@ def test_saved_settings_are_no_longer_treated_as_local_edits(
     settings_repository: ScratchRepository,
 ):
     settings_repository.write(PersonalNotesPath.LOCAL_SETTINGS, LOCALLY_EDITED_SETTINGS)
-    run_hook(settings_repository, "save-personal-settings.sh")
+    run_hook(settings_repository, PluginLocation.PERSONAL_SETTINGS_SAVING_SCRIPT.name)
     settings_repository.update_notes_branch_file(
         PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, UPDATED_PERSONAL_SETTINGS
     )
 
-    result = run_hook(settings_repository, "session-start.sh")
+    result = run_hook(settings_repository, PluginLocation.SESSION_START_SCRIPT.name)
 
     assert result.returncode == 0, result.stderr
     assert local_settings_of(settings_repository) == UPDATED_PERSONAL_SETTINGS
@@ -227,7 +213,9 @@ def test_saved_settings_are_no_longer_treated_as_local_edits(
 def test_saving_without_local_settings_fails_with_a_clear_message(
     settings_repository: ScratchRepository,
 ):
-    result = run_hook(settings_repository, "save-personal-settings.sh")
+    result = run_hook(
+        settings_repository, PluginLocation.PERSONAL_SETTINGS_SAVING_SCRIPT.name
+    )
 
     assert result.returncode == 1
     assert result.stderr.startswith(

@@ -1,0 +1,39 @@
+# Copy into a project as .github/workflows/upstream-reviews.yml, so the
+# /upstream-reviews skill can dispatch it there. Keep the two refs below on the
+# same basstler release as the plugin.
+name: Upstream reviews
+
+on:
+  workflow_dispatch:
+    inputs:
+      pull_request:
+        description: "Upstream pull request number (takes precedence over branch)"
+        required: false
+        type: string
+      branch:
+        description: "Fork branch whose upstream pull request to read"
+        required: false
+        type: string
+      include_resolved:
+        description: "Include threads already marked resolved"
+        required: false
+        default: false
+        type: boolean
+      failure_logs:
+        description: "Quote the log behind each check that failed"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@v0.1.5
+    with:
+      basstler_ref: v0.1.5
+      pull_request: ${{ inputs.pull_request }}
+      branch: ${{ inputs.branch }}
+      include_resolved: ${{ inputs.include_resolved }}
+      failure_logs: ${{ inputs.failure_logs }}

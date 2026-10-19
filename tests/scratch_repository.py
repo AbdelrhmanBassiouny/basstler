@@ -1,10 +1,12 @@
 """
 The throwaway git repository the hook integration tests run against.
 
-Every hook in this directory reads git config, fetches a personal-notes branch, or
-pushes to one, so testing any of them needs a real repository with a real remote. Both
-are built locally here - a project root, and a bare repository standing in for the
-notes remote - so no test needs network access or a real personal-notes branch.
+Every hook reads git config, fetches a personal-notes branch, or pushes to one, so
+testing any of them needs a real repository with a real remote. Both are built locally
+here - a project root, and a bare repository standing in for the notes remote - so no
+test needs network access or a real personal-notes branch. Beside them sits a scratch
+basstler checkout holding the plugin under test, since the plugin lives outside the
+project it serves.
 """
 
 from __future__ import annotations
@@ -12,62 +14,100 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
 from .script_runner import BashScriptRunner
-from basstler.locations import PackageLocation, ProjectLocation
+from basstler.locations import PackageLocation, PluginLocation
+from basstler.shell_configuration import ShellConfigurationFunction
 
-from .constants import (
-    DatasetLocation,
-    ScratchBranch,
+from .constants.environment import (
+    ConfigurationVariable,
+    FileMode,
     ScrubbedEnvironmentPrefix,
-    SkillDirectory,
 )
-
-HOOKS_SOURCE_DIRECTORY = PackageLocation.REPOSITORY_ROOT / ProjectLocation.HOOKS
-"""
-The real hooks directory the scripts under test are copied from.
-"""
+from .constants.notes import ScratchBranch
+from .constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
 
 
-def install_hook_scripts_into(project_root: Path, *script_names: str) -> None:
+class PackageSourceFile(StrEnum):
     """
-    Copy the real hook scripts under test into a checkout.
+    The parts of a basstler checkout that make it one, relative to its root.
+    """
 
-    :param project_root: The checkout to copy them into.
+    METADATA = "pyproject.toml"
+    """
+    The package's metadata, declaring its dependencies.
+    """
+
+    README = "README.md"
+    """
+    The readme the metadata names.
+    """
+
+    SOURCE = "src"
+    """
+    The directory holding the package itself.
+    """
+
+
+def install_hook_scripts_into(plugin_root: Path, *script_names: str) -> None:
+    """
+    Copy the real hook scripts under test into a plugin.
+
+    :param plugin_root: The plugin to copy them into.
     :param script_names: File names within the hooks directory.
     """
-    hooks_directory = project_root / ProjectLocation.HOOKS
+    hooks_directory = plugin_root / PluginLocation.HOOKS.value.name
     hooks_directory.mkdir(parents=True, exist_ok=True)
     for script_name in script_names:
-        shutil.copy(HOOKS_SOURCE_DIRECTORY / script_name, hooks_directory / script_name)
+        shutil.copy(
+            RepositoryLocation.HOOKS / script_name, hooks_directory / script_name
+        )
 
 
-def install_package_into(project_root: Path) -> None:
+def install_package_into(checkout_root: Path) -> None:
     """
-    Copy the real :mod:`basstler` package into a checkout, so a command line run there
-    resolves ``python3 -m basstler.<module>`` the way it does in a clone.
+    Copy the real :mod:`basstler` package and its metadata into a checkout, so a plugin in
+    that checkout runs ``python3 -m basstler.<module>`` from the checkout's own source,
+    the way a plugin run from a clone of its repository does.
 
-    The whole package rather than the modules one script happens to call: a scratch
-    clone *is* a clone, so it carries what a clone carries, and a test then never has to
-    track which sibling a module imports.
+    Build output and the board snapshot are left behind, as a fresh clone has neither.
 
-    :param project_root: The checkout to copy it into.
+    :param checkout_root: The checkout to copy it into.
     """
+    checkout_root.mkdir(parents=True, exist_ok=True)
+    for file in (PackageSourceFile.METADATA, PackageSourceFile.README):
+        shutil.copy(RepositoryLocation.ROOT / file, checkout_root / file)
     shutil.copytree(
-        PackageLocation.DIRECTORY,
-        project_root / ProjectLocation.PACKAGE,
-        ignore=shutil.ignore_patterns("__pycache__"),
+        RepositoryLocation.ROOT / PackageSourceFile.SOURCE,
+        checkout_root / PackageSourceFile.SOURCE,
+        ignore=shutil.ignore_patterns(
+            "__pycache__", "*.egg-info", f"{PackageLocation.BOARD.value.name}*"
+        ),
         dirs_exist_ok=True,
     )
 
 
+def write_interpreter_wrapper(destination: Path) -> Path:
+    """
+    Write an executable at *destination* that runs the interpreter running this suite.
+
+    :param destination: Where to write it, its directories created as needed.
+    :return: *destination*.
+    """
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    destination.write_text(f'#!/bin/sh\nexec "{sys.executable}" "$@"\n')
+    destination.chmod(FileMode.EXECUTABLE)
+    return destination
+
+
 class SetupPrerequisiteFile(StrEnum):
     """
-    The files check-setup.sh's ``tooling_files`` check requires, relative to the project
+    The files check-setup.sh's ``tooling_files`` check requires, relative to the plugin
     root.
 
     Stated here as well as in the fixture tree deliberately. A rename that breaks the
@@ -75,20 +115,14 @@ class SetupPrerequisiteFile(StrEnum):
     following each other silently and asserting nothing.
     """
 
-    PACKAGE = "basstler/__init__.py"
+    PLUGIN_MANIFEST = ".claude-plugin/plugin.json"
     """
-    The package holding every module the hooks and skills run.
+    The plugin's manifest, naming its version.
     """
 
-    REFRESH_DASHBOARD = str(SkillDirectory.PLAN_DASHBOARD / "refresh_dashboard.sh")
+    REFRESH_DASHBOARD = str(SkillDirectory.DASHBOARD_REFRESH_SCRIPT)
     """
     The refresh entry point the plan-dashboard skill runs.
-    """
-
-    PACKAGE_METADATA = "basstler/pyproject.toml"
-    """
-    The package's own metadata, which is where its dependencies are declared and so what
-    check-setup.sh derives the dependency check from.
     """
 
     PLAN_SCHEMA = str(SkillDirectory.PLAN_DASHBOARD / "plan-schema.md")
@@ -201,18 +235,39 @@ class ScratchRepository:
     ``origin`` it did not ask for.
     """
 
+    @property
+    def checkout_root(self) -> Path:
+        """
+        The scratch basstler checkout the plugin under test sits in, beside the project.
+        """
+        return self.project_root.parent / "basstler-checkout"
+
+    @property
+    def plugin_root(self) -> Path:
+        """
+        The plugin under test, whose hooks are run against the project.
+        """
+        return self.checkout_root / RepositoryLocation.PLUGIN.value.name
+
+    @property
+    def basstler_home(self) -> Path:
+        """
+        The scratch stand-in for the per-user directory the package's environment lives in.
+        """
+        return self.project_root.parent / "basstler-home"
+
     @classmethod
     def create(cls, parent_directory: Path) -> ScratchRepository:
         """
         Build a scratch repository with git initialized and its notes remote created,
         but nothing committed yet.
 
-        :param parent_directory: Where to put the project root and the notes remote,
-            typically pytest's per-test temporary directory.
+        :param parent_directory: Where to put the project root, the plugin and the notes
+            remote, typically pytest's per-test temporary directory.
         :return: The new scratch repository.
         """
         project_root = parent_directory / "project"
-        (project_root / ProjectLocation.HOOKS).mkdir(parents=True)
+        project_root.mkdir(parents=True)
         repository = cls(
             project_root,
             initialize_bare_repository(parent_directory / "personal-notes.git"),
@@ -258,6 +313,15 @@ class ScratchRepository:
         assert result.returncode == 0, result.stderr
         return result
 
+    def add_remote(self, name: str, url: str) -> None:
+        """
+        Add a git remote to the project.
+
+        :param name: What to call the remote.
+        :param url: Where it points.
+        """
+        self.run_git("remote", "add", name, url)
+
     def run_git_allowing_failure(
         self, *arguments: str, cwd: Path | None = None
     ) -> subprocess.CompletedProcess[str]:
@@ -278,47 +342,132 @@ class ScratchRepository:
 
     def install_hook_scripts(self, *script_names: str) -> None:
         """
-        Copy the real hook scripts under test into the scratch layout.
+        Copy the real hook scripts under test into the scratch plugin.
 
         :param script_names: File names within the hooks directory.
         """
-        install_hook_scripts_into(self.project_root, *script_names)
+        install_hook_scripts_into(self.plugin_root, *script_names)
 
     def install_stack_configuration(self, content: str) -> Path:
         """
-        Write and commit the package's committed ``stack.toml`` defaults, beside the
-        shell file the personal-notes override is fetched through.
+        Write the package's shipped ``stack.toml`` defaults into the scratch checkout,
+        beside the shell file the personal-notes override is fetched through.
 
         :param content: The configuration to write.
         :return: The path :func:`basstler.stack.load_configuration` should be pointed at.
         """
         self.install_hook_scripts(
-            ProjectLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name
+            PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name
         )
-        written = self.write(
-            f"{ProjectLocation.PACKAGE}/{PackageLocation.STACK_CONFIGURATION.value.name}",
-            content,
+        written = (
+            self.checkout_root
+            / PackageSourceFile.SOURCE
+            / PackageLocation.DIRECTORY.value.name
+            / PackageLocation.STACK_CONFIGURATION.value.name
         )
-        self.commit_everything("add stack.toml")
+        written.parent.mkdir(parents=True, exist_ok=True)
+        written.write_text(content)
         return written
 
     def install_package(self) -> None:
         """
-        Copy the real :mod:`basstler` package into the scratch layout.
+        Copy the real :mod:`basstler` package into the scratch checkout.
         """
-        install_package_into(self.project_root)
+        install_package_into(self.checkout_root)
+
+    def configuration_value(self, variable_name: str) -> str:
+        """
+        :param variable_name: A variable the scratch plugin's shell configuration assigns.
+        :return: Its value once that configuration is sourced in the project.
+        """
+        return self.configuration_output(f'printf "%s" "${{{variable_name}}}"')
+
+    def configuration_output(self, command: str) -> str:
+        """
+        :param command: A shell command run once the scratch plugin's configuration is
+            sourced in the project, such as a call to one of its functions.
+        :return: What it printed.
+        """
+        self.install_hook_scripts(
+            PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name
+        )
+        script = (
+            self.plugin_root
+            / PluginLocation.HOOKS.value.name
+            / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name
+        )
+        return subprocess.run(
+            ["bash", "-c", f'source "{script}" && {command}'],
+            cwd=self.project_root,
+            capture_output=True,
+            text=True,
+            check=True,
+            env=self.runner_environment(),
+        ).stdout
+
+    def install_package_environment(self) -> Path:
+        """
+        Stand in for the package's own environment, as a set up machine has one: its
+        interpreter runs the one running this suite, which has every requirement, and it
+        records the package as installed from what the plugin names now.
+
+        A script rather than a link, because an interpreter reached through a link outside
+        its own environment no longer finds that environment's installed packages.
+
+        :return: The interpreter written.
+        """
+        interpreter = write_interpreter_wrapper(
+            Path(
+                self.configuration_value(ConfigurationVariable.ENVIRONMENT_INTERPRETER)
+            )
+        )
+        Path(
+            self.configuration_value(ConfigurationVariable.INSTALLED_SOURCE_FILE)
+        ).write_text(
+            self.configuration_output(
+                ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE
+            )
+        )
+        return interpreter
 
     def write_setup_prerequisites(self) -> None:
         """
-        Write everything check-setup.sh requires of a set up clone, apart from the
-        personal-notes branch and CLAUDE.local.md.
+        Write everything check-setup.sh requires of a set up plugin and project, apart
+        from the personal-notes branch and CLAUDE.local.md.
 
         Leaves CLAUDE.local.md out deliberately: session-start.sh writes it, so a test
         of that script must not find it already there - which is why this is a named
         step rather than part of building the repository.
         """
         shutil.copytree(
-            DatasetLocation.SET_UP_CLONE, self.project_root, dirs_exist_ok=True
+            DatasetLocation.SET_UP_CHECKOUT, self.checkout_root, dirs_exist_ok=True
+        )
+        shutil.copytree(
+            DatasetLocation.SET_UP_PROJECT, self.project_root, dirs_exist_ok=True
+        )
+
+    def runner_environment(self, **overrides: str) -> dict[str, str]:
+        """
+        :param overrides: Variables a run sets.
+        :return: The environment a hook runs with here: this process's own, scrubbed of
+            everything that could change what a test asserts (see
+            :class:`ScrubbedEnvironmentPrefix`), with the package's home in the scratch
+            layout.
+        """
+        return self.hook_runner(Path()).environment(
+            {ConfigurationVariable.HOME: str(self.basstler_home), **overrides}
+        )
+
+    def hook_runner(self, script_path: Path) -> BashScriptRunner:
+        """
+        :param script_path: The script to run.
+        :return: A runner for it from the project root, scrubbing what
+            :class:`ScrubbedEnvironmentPrefix` names.
+        """
+        return BashScriptRunner(
+            project_root=self.project_root,
+            removed_variable_prefixes=tuple(ScrubbedEnvironmentPrefix),
+            script_path=script_path,
         )
 
     def run_hook_script(
@@ -341,11 +490,15 @@ class ScratchRepository:
             exercise resolution from the environment.
         :return: The finished subprocess.
         """
-        return BashScriptRunner(
-            project_root=self.project_root,
-            removed_variable_prefixes=tuple(ScrubbedEnvironmentPrefix),
-            script_path=self.project_root / ProjectLocation.HOOKS / script_name,
-        ).run(*arguments, **environment_overrides)
+        return self.hook_runner(
+            self.plugin_root / PluginLocation.HOOKS.value.name / script_name
+        ).run(
+            *arguments,
+            **{
+                ConfigurationVariable.HOME: str(self.basstler_home),
+                **environment_overrides,
+            },
+        )
 
     def write(self, relative_path: str | os.PathLike[str], content: str) -> Path:
         """
