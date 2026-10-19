@@ -25,7 +25,7 @@ from basstler.locations import BasstlerVariable, PluginLocation, ProjectLocation
 from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.plan_item_bootstrap import PlanDocument
-from basstler.plan_model import ItemStatus, ManifestField, PlanManifest
+from basstler.plan_model import ItemStatus, ManifestKey, PlanManifest
 
 from .constants import (
     ClaudeLocalSection,
@@ -306,14 +306,14 @@ def tracked_plan() -> LandedItemsPlan:
     open_item = plan.item_with_status(ItemStatus.IN_PROGRESS)
     items = [
         (
-            {**item.content, ManifestField.BRANCH.value: str(ScratchBranch.WORK)}
+            {**item.content, ManifestKey.BRANCH.key: str(ScratchBranch.WORK)}
             if item == open_item
             else item.content
         )
         for item in plan.manifest.items
     ]
     return LandedItemsPlan(
-        PlanManifest({**plan.manifest.content, ManifestField.ITEMS.value: items})
+        PlanManifest({**plan.manifest.content, ManifestKey.ITEMS.key: items})
     )
 
 

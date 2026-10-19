@@ -16,7 +16,7 @@ from basstler.plan_model import (
     ItemNotTrackedError,
     ItemStatus,
     ItemSummaryKey,
-    ManifestField,
+    ManifestKey,
 )
 from basstler.plan_manifest_tools import (
     BranchIndex,
@@ -227,10 +227,10 @@ def test_item_summary_holds_the_one_item_and_the_plan_header():
     item = plan.item_with_status(ItemStatus.IN_PROGRESS)
     summary = yaml.safe_load(plan.manifest.item_summary(item))
     assert summary == {
-        ManifestField.IDENTIFIER.value: plan.manifest.identifier,
-        ManifestField.TITLE.value: plan.manifest.content[ManifestField.TITLE],
-        ManifestField.TRACKING_ISSUE.value: plan.manifest.content[
-            ManifestField.TRACKING_ISSUE
+        ManifestKey.IDENTIFIER.key: plan.manifest.identifier,
+        ManifestKey.TITLE.key: plan.manifest.content[ManifestKey.TITLE.key],
+        ManifestKey.TRACKING_ISSUE.key: plan.manifest.content[
+            ManifestKey.TRACKING_ISSUE.key
         ],
         ItemSummaryKey.ITEM.value: item.content,
     }
@@ -275,7 +275,7 @@ def test_main_dispatches_item_by_branch(monkeypatch, capsys):
             ManifestToolsCommand.ITEM,
             str(DatasetLocation.PLAN_WITH_LANDED_ITEMS),
             ManifestToolsOption.BRANCH,
-            item.content[ManifestField.BRANCH],
+            item.content[ManifestKey.BRANCH.key],
         ],
     )
     assert main() == ManifestToolsExitCode.SUCCESS

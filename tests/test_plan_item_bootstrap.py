@@ -29,19 +29,17 @@ from basstler.plan_item_bootstrap import (
     PlanItemBootstrapExitCode,
     ItemRecordRequest,
     ItemStatus,
-    KeySpecification,
-    ManifestKey,
     PlanDocument,
     PullRequestRequest,
     UnknownItemError,
     UnknownPlanError,
-    ValueStyle,
     WorkOpenRequest,
     append_roadmap_entry,
     apply_item_fields,
     open_work,
     record_item,
 )
+from basstler.plan_model import KeySpecification, ManifestKey, ValueStyle
 from basstler.plan_size_limits import Roadmap
 
 from .scratch_repository import ScratchRepository
