@@ -1,17 +1,5 @@
 """
-Removes the progress notes of pull requests whose work is over.
-
-A branch's progress notes are read only while its pull request is open. Once every pull
-request from that branch has merged or closed, or the branch itself is gone, the notes are
-never read again, so they are deleted rather than left to accumulate on the personal-notes
-branch.
-
-Usage:
-    python3 -m basstler.progress_notes prune --directory <pr-progress-directory> \\
-        --remote <name> --keep <branch>
-
-Pruning is never fatal to a save: without a GitHub credential or a readable remote it
-says why and removes nothing.
+Deletes the progress notes of branches whose pull requests have all merged or closed.
 """
 
 from __future__ import annotations
@@ -19,7 +7,7 @@ from __future__ import annotations
 import argparse
 import sys
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum, StrEnum
 from pathlib import Path
 
 from basstler.build_dashboard import PullRequestState
@@ -203,20 +191,56 @@ class EmptyRemoteBranchListError(ValueError):
 # %% pruning against the remote
 
 
-class PruningSkipped(StrEnum):
+@dataclass(frozen=True)
+class SkipExplanation:
+    """
+    Why a prune was skipped, and what makes the next save prune.
+    """
+
+    reason: str
+    """
+    Why no branch could be judged.
+    """
+
+    correction: str
+    """
+    What to change so the next save prunes.
+    """
+
+
+class PruningSkipped(SkipExplanation, Enum):
     """
     Why a prune removed nothing without judging any branch.
     """
 
-    NO_CREDENTIAL = "no GH_TOKEN or GITHUB_TOKEN is set"
+    NO_CREDENTIAL = (
+        "no GH_TOKEN or GITHUB_TOKEN is set, so the branches' pull requests cannot be "
+        "listed",
+        "set GH_TOKEN or GITHUB_TOKEN to a token that can read this repository's pull "
+        "requests",
+    )
     """
     The pull requests cannot be listed.
     """
 
-    REMOTE_UNREADABLE = "the remote's URL or branches could not be read"
+    REMOTE_UNREADABLE = (
+        "the remote's URL or branches could not be read, so which branches still exist "
+        "is unknown",
+        "make sure the branch's remote names a GitHub repository and can be reached",
+    )
     """
     Which branches still exist is unknown.
     """
+
+    def __str__(self) -> str:
+        """
+        :return: The warning a save prints: what was skipped, why, and how to fix it.
+        """
+        return (
+            "Finished branches' progress notes were not pruned and stay on the "
+            f"personal-notes branch: {self.reason}. To prune them, {self.correction}, "
+            "then save again."
+        )
 
 
 @dataclass(frozen=True)
@@ -371,7 +395,7 @@ def main() -> int:
         kept_branch=arguments[ProgressNotesArgument.KEEP],
     ).run()
     if isinstance(outcome, PruningSkipped):
-        logger.warning(f"Finished branches' progress notes were not pruned: {outcome}.")
+        logger.warning(str(outcome))
     elif outcome:
         logger.info(
             "Removed the progress notes of finished branches:\n" + "\n".join(outcome)
