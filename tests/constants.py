@@ -860,7 +860,7 @@ class ReleaseSampleVersion(StrEnum):
 
     NEXT_PATCH = "1.0.1"
     """
-    :attr:`RELEASED` with its patch part bumped: what a release on merge makes.
+    :attr:`RELEASED` with its patch part bumped: what a bump names unless told otherwise.
     """
 
     NEXT_MINOR = "1.1.0"

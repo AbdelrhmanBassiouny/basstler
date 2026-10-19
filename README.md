@@ -30,18 +30,21 @@ without one would reach some installs and not others: a plugin's hooks would cal
 that predates them. Every change counts, not only those to the package, since a list of
 shipped paths would go stale.
 
-- **Patch releases need nothing from a pull request.** On merge, the workflow writes the next
-  patch version everywhere a version is written (`plugin/.claude-plugin/plugin.json`, which
-  the build reads it from, and the example caller's references to the release tag), commits
-  it, pushes the commit and its tag together, and publishes the tag as a GitHub release with
-  generated notes.
-- **A pull request names a minor or major release** with
-  `python -m basstler.release_version bump --part minor` (or `--part major`, or
-  `--version <x.y.z>`). The workflow then tags that version as it stands.
+- **A pull request names its own release.** `python -m basstler.release_version bump` writes
+  the latest release's next patch version everywhere a version is written
+  (`plugin/.claude-plugin/plugin.json`, which the build reads it from, and the example
+  caller's references to the release tag); `--part minor`, `--part major` or
+  `--version <x.y.z>` name another. Running it again names the same version.
+- **On merge, the workflow tags the merged commit** with that version and publishes the tag
+  as a GitHub release with generated notes. It never pushes to `main`: a claude.ai plugin
+  synced from the repository syncs on the merge, which a release commit pushed afterwards
+  by the workflow was seen not to reach, leaving synced plugins installing the release
+  before.
 
 CI's `release-version` job (`python -m basstler.release_version check`) fails a pull request
-whose manifest names anything else: it may only name the latest release's version, or that
-release's next minor or major one.
+that changes anything without naming the latest release's next patch, minor or major
+version. Two pull requests naming the same version both pass on their own; merge the second
+only after bringing the first in, which turns its check red until it bumps again.
 
 ## The package's own environment
 

@@ -1,5 +1,5 @@
 """
-Releases: every change to ``main`` is one; a pull request names only minor or major ones.
+Releases: every change to ``main`` is one, and the pull request making it names its version.
 """
 
 from __future__ import annotations
@@ -35,8 +35,8 @@ class ReleaseVersionExitCode(ExitCode):
 
     UNEXPECTED_VERSION = 1
     """
-    The manifest names a version a pull request may not set, or one behind the latest
-    release.
+    The manifest names a version other than the next patch, minor or major one after the
+    latest release, though something changed since it.
     """
 
     VERSION_REFERENCE_MISSING = 2
@@ -57,7 +57,7 @@ class ReleaseCommand(StrEnum):
 
     CHECK = "check"
     """
-    Fail if the manifest names a version a pull request may not set.
+    Fail if the manifest does not name the version merging the checkout releases.
     """
 
     BUMP = "bump"
@@ -67,8 +67,8 @@ class ReleaseCommand(StrEnum):
 
     RELEASE = "release"
     """
-    Prepare the release of everything since the latest one, for the workflow to commit
-    and tag.
+    Name the tag releasing everything since the latest release, for the workflow to put
+    on the merged commit.
     """
 
 
@@ -89,7 +89,7 @@ class VersionPart(StrEnum):
 
     PATCH = "patch"
     """
-    A fix, or any other change; the part a release on merge increments.
+    A fix, or any other change; the part a bump increments unless told otherwise.
     """
 
 
@@ -101,20 +101,15 @@ class ReleaseOutputKey(StrEnum):
 
     TAG = "tag"
     """
-    The tag to create, or empty when there is nothing to release.
-    """
-
-    BUMPED = "bumped"
-    """
-    ``true`` when the release wrote a new version, which then needs committing.
+    The tag to create; ``release`` prints nothing when there is nothing to release.
     """
 
 
 @dataclass
 class UnexpectedVersion(CommandFailure, ValueError):
     """
-    Raised when the manifest names a version a pull request may not set, or one behind
-    the latest release.
+    Raised when the manifest names a version other than the next patch, minor or major
+    one after the latest release, though something changed since it.
     """
 
     version: ReleaseVersion
@@ -135,10 +130,10 @@ class UnexpectedVersion(CommandFailure, ValueError):
     def __str__(self) -> str:
         allowed = ", ".join(str(version) for version in self.allowed)
         return (
-            f"{CheckoutLocation.PLUGIN_MANIFEST} names {self.version}, but it may only "
-            f"name one of: {allowed}. Patch releases are made on merge; a pull request "
-            "names a minor or major one with `python -m basstler.release_version bump "
-            "--part minor` (or `--part major`)."
+            f"{CheckoutLocation.PLUGIN_MANIFEST} names {self.version}, but a change "
+            f"since the latest release must name one of: {allowed}. Write the next "
+            "patch everywhere a version is written with `python -m "
+            "basstler.release_version bump` (or `--part minor`, or `--part major`)."
         )
 
 
@@ -338,18 +333,9 @@ class PlannedRelease:
     The version to tag.
     """
 
-    bumped: bool
-    """
-    Whether the version was written by the release, and so needs committing before the
-    tag.
-    """
-
     def output_lines(self) -> str:
         """:return: The release as ``<key>=<value>`` lines for ``$GITHUB_OUTPUT``."""
-        return (
-            f"{ReleaseOutputKey.TAG}={self.version.tag}\n"
-            f"{ReleaseOutputKey.BUMPED}={str(self.bumped).lower()}"
-        )
+        return f"{ReleaseOutputKey.TAG}={self.version.tag}"
 
 
 @dataclass(frozen=True)
@@ -393,28 +379,33 @@ class Release:
     def allowed_versions(self, latest: ReleaseVersion) -> tuple[ReleaseVersion, ...]:
         """
         :param latest: The latest release.
-        :return: The versions a pull request may leave in the manifest: the latest
-            release's, for a patch release made on merge, or its next minor or major one.
+        :return: The versions a change since it may name: its next patch, minor or major
+            one.
         """
         return (
-            latest,
+            latest.bumped(VersionPart.PATCH),
             latest.bumped(VersionPart.MINOR),
             latest.bumped(VersionPart.MAJOR),
         )
 
+    def next_version(self, part: VersionPart) -> ReleaseVersion:
+        """
+        :param part: The part to increment.
+        :return: The latest release with *part* bumped, or the manifest's version with it
+            bumped before the first release; bumping twice names the same version.
+        """
+        return (self.latest_release() or self.version).bumped(part)
+
     def verify(self) -> None:
         """
-        :raises UnexpectedVersion: If the manifest names a version a pull request may not
-            set.
+        :raises UnexpectedVersion: If the manifest does not name the version merging the
+            checkout releases.
         """
-        latest = self.latest_release()
-        if latest is None:
-            logger.info(f"No release yet; merging releases {self.version}.")
-            return
-        allowed = self.allowed_versions(latest)
-        if self.version not in allowed:
-            raise UnexpectedVersion(self.version, allowed)
-        logger.info(f"{self.version} is a version a pull request may name.")
+        planned = self.plan()
+        if planned is None:
+            logger.info("Nothing changed since the latest release.")
+        else:
+            logger.info(f"Merging this releases {planned.version.tag}.")
 
     def bump(self, version: ReleaseVersion) -> None:
         """
@@ -434,26 +425,23 @@ class Release:
 
     def plan(self) -> PlannedRelease | None:
         """
-        Decide the release of everything since the latest one, writing the next patch
-        version when no pull request named a version of its own.
+        Decide the release of everything since the latest one: the version the manifest
+        names, which the change itself wrote. A release never writes a version, so the
+        commit a plugin syncs from already names the release it installs.
 
-        :raises UnexpectedVersion: If the manifest names a version behind the latest
-            release.
-        :raises VersionReferenceMissing: If a bump finds a file naming no version.
+        :raises UnexpectedVersion: If something changed and the manifest does not name
+            the next patch, minor or major version.
         :return: The release, or ``None`` when nothing changed since the latest one.
         """
         latest = self.latest_release()
         if latest is None:
-            return PlannedRelease(self.version, bumped=False)
+            return PlannedRelease(self.version)
         if not self.changed_since(latest):
             return None
-        if self.version > latest:
-            return PlannedRelease(self.version, bumped=False)
-        if self.version < latest:
-            raise UnexpectedVersion(self.version, self.allowed_versions(latest))
-        next_version = latest.bumped(VersionPart.PATCH)
-        self.bump(next_version)
-        return PlannedRelease(next_version, bumped=True)
+        allowed = self.allowed_versions(latest)
+        if self.version not in allowed:
+            raise UnexpectedVersion(self.version, allowed)
+        return PlannedRelease(self.version)
 
 
 class ReleaseCommandLine:
@@ -472,7 +460,7 @@ class ReleaseCommandLine:
         subcommands = parser.add_subparsers(dest="subcommand", required=True)
         check_parser = subcommands.add_parser(
             ReleaseCommand.CHECK,
-            help="Fail if the manifest names a version a pull request may not set",
+            help="Fail if the manifest does not name the version merging releases",
         )
         bump_parser = subcommands.add_parser(
             ReleaseCommand.BUMP,
@@ -481,9 +469,9 @@ class ReleaseCommandLine:
         bump_parser.add_argument(
             "--part",
             type=VersionPart,
-            choices=[VersionPart.MINOR, VersionPart.MAJOR],
-            default=VersionPart.MINOR,
-            help="The part to increment (default: minor); patch releases are made on merge",
+            choices=list(VersionPart),
+            default=VersionPart.PATCH,
+            help="The part of the latest release to increment (default: patch)",
         )
         bump_parser.add_argument(
             "--version",
@@ -492,7 +480,7 @@ class ReleaseCommandLine:
         )
         release_parser = subcommands.add_parser(
             ReleaseCommand.RELEASE,
-            help="Prepare the release of everything since the latest one",
+            help="Name the tag releasing everything since the latest release",
         )
         for subcommand_parser in (check_parser, bump_parser, release_parser):
             subcommand_parser.add_argument(
@@ -516,7 +504,7 @@ class ReleaseCommandLine:
             if arguments.subcommand == ReleaseCommand.CHECK:
                 release.verify()
             elif arguments.subcommand == ReleaseCommand.BUMP:
-                version = arguments.version or release.version.bumped(arguments.part)
+                version = arguments.version or release.next_version(arguments.part)
                 release.bump(version)
                 logger.info(f"Bumped to {version}; merging it releases {version.tag}.")
             elif arguments.subcommand == ReleaseCommand.RELEASE:
