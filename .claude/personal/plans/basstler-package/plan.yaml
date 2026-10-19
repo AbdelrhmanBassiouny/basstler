@@ -142,7 +142,8 @@ items:
   pull_request_number: 12
   notes: Depend on plain krrood (its light core, with a krrood[all] extra for the rest) instead of
     a separate krrood_core package. Exceptions in exceptions.py as DataclassExceptions, board.json
-    through krrood's serializer. The branch predates that choice and needs reworking.
+    through krrood's serializer. The branch predates that choice and needs reworking. Its
+    TYPE_CHECKING import of ManifestKey moves to basstler.plan_model once #11 lands.
   blockers:
   - Waits on krrood publishing its light core with the krrood[all] extra.
 - id: upstream-pull-request-checks
