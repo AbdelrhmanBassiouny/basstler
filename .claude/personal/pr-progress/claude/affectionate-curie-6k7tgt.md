@@ -1,11 +1,10 @@
-basstler#7: tracking PR for basstler-open-pull-request-carryover (no code; close once the retired branches are deleted).
+basstler#7 is closed: basstler-open-pull-request-carryover is done.
 
 Plan
-- Carry the live branches as draft PRs with main merged in; retire the rest with an issue each; update the manifests.
+- Nothing left on this branch.
 
 Done
-- Carried #8-#18 (#12 deliberately unmerged); retired 13 branches with issues #19-#31 (the integration stack by the user's choice); 7 manifests saved; structural change recorded on #4.
+- Carried #8-#18; retired and deleted 13 branches (issues #19-#31); manifests and all seven dashboards updated; item marked done.
 
 Next
-- User deletes the 13 retired branches (session proxy refuses deletes; commands are in the session report).
-- Then close #7 and mark the item done. Dashboards still need republishing.
+- Follow-ups go to other sessions, using the prompts in this session's report: manifest-key unification, the #16 caller and budget conflict, retargeting #18 onto #11, and the CRAM actions-budget item.
