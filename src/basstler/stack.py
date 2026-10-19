@@ -843,6 +843,30 @@ def order(stack: Stack) -> list[Branch]:
     return ordered
 
 
+def branches_stacked_on(stack: Stack, branch_name: str) -> list[Branch]:
+    """Every not-yet-merged branch whose parent chain reaches *branch_name*.
+
+    A branch is stacked on another when its pull request's base is that branch, directly or
+    through the branches between them - the same parent relation :func:`restack_plan` works
+    from. A merged branch is left out along with everything only it carries, since its
+    commits are already in the upstream base.
+
+    :param stack: The stack to search.
+    :param branch_name: The branch whose subtree is wanted; it is never in the result.
+    :return: The branches stacked on it, parent before child.
+    """
+    stacked: set[str] = set()
+    found = []
+    for branch in order(stack):
+        if branch.status == BranchStatus.MERGED:
+            continue
+        if branch.parent != branch_name and branch.parent not in stacked:
+            continue
+        stacked.add(branch.name)
+        found.append(branch)
+    return found
+
+
 def parent_landed(stack: Stack, branch: Branch, by_name: dict[str, Branch]) -> bool:
     """Whether a branch's parent has reached the upstream (merged or in-review), so it can promote.
 
@@ -910,7 +934,7 @@ class RestackPlanEntry:
     """How it is brought up to date."""
 
 
-def restack_plan(stack: Stack) -> list[RestackPlanEntry]:
+def restack_plan(stack: Stack, stacked_on: str | None = None) -> list[RestackPlanEntry]:
     """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
 
     One entry per branch not yet ``merged``, in parent-before-child order. In-review branches are
@@ -924,11 +948,19 @@ def restack_plan(stack: Stack) -> list[RestackPlanEntry]:
     including when its own pull request was closed rather than merged, leaving the board with no
     entry for it at all.
 
+    Naming a branch in *stacked_on* limits the plan to that branch's own subtree, which is
+    what lets a fix just made on it be carried into the branches stacked on it without
+    moving the rest of the board.
+
     :param stack: The stack to plan.
-    :return: The restack plan, one entry per not-yet-merged branch.
+    :param stacked_on: The branch whose subtree to plan, or ``None`` for every branch.
+    :return: The restack plan, one entry per planned branch.
     """
+    planned = (
+        order(stack) if stacked_on is None else branches_stacked_on(stack, stacked_on)
+    )
     plan: list[RestackPlanEntry] = []
-    for branch in order(stack):
+    for branch in planned:
         if branch.status == BranchStatus.MERGED:
             continue
         effective_parent = (

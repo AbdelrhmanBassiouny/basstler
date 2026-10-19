@@ -341,6 +341,16 @@ class StackBranch(StrEnum):
     A branch beside :attr:`STUCK` that nothing holds back.
     """
 
+    GRANDCHILD = "a-grandchild"
+    """
+    Stacked on the child, so it reaches the parent only through it.
+    """
+
+    OFF_THE_CHAIN = "off-the-chain"
+    """
+    Cut from the base beside the chain, so nothing stacks it on the parent.
+    """
+
 
 class StackLabel(StrEnum):
     """
@@ -463,10 +473,22 @@ class SkillDirectory(PathEnumeration):
     The maintenance pass's own instructions.
     """
 
+    PLAN_ITEM_RESOLVE = DIRECTORY / "plan-item-resolve"
+    """
+    The resolve skill's instructions, and the documents cited beside them.
+    """
+
     DASHBOARD_REFRESH_SCRIPT = PLAN_DASHBOARD / "refresh_dashboard.sh"
     """
     The dashboard skill's shell entry point.
     """
+
+    @classmethod
+    def skills(cls) -> tuple[SkillDirectory, ...]:
+        """
+        :return: Every member that is a skill's own directory.
+        """
+        return tuple(member for member in cls if member.parent == cls.DIRECTORY.value)
 
 
 class ScratchBranch(StrEnum):
