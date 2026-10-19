@@ -8,7 +8,7 @@ from dataclasses import dataclass, field
 
 from basstler.build_index import PlanSummary, ProgressCard
 from basstler.class_property import classproperty
-from basstler.render_common import PageTemplate, TemplatePage
+from basstler.render_common import TemplatePage
 
 
 @dataclass(kw_only=True)
@@ -72,6 +72,47 @@ class RepositorySummary(ProgressCard):
         return f"{len(self.plans)} plans · {self.done} / {self.total} items done"
 
 
+@dataclass(kw_only=True)
+class SiteSummary(ProgressCard):
+    """
+    The whole site at a glance: every repository's card, counting all their items.
+    """
+
+    repositories: list[RepositorySummary]
+    """
+    Every repository on the site, in the hub file's order.
+    """
+
+    @classmethod
+    def over_repositories(cls, repositories: list[RepositorySummary]) -> SiteSummary:
+        """
+        :param repositories: Every repository on the site.
+        :return: The site's summary, counting every repository's items.
+        """
+        return cls(
+            repositories=repositories,
+            done=sum(repository.done for repository in repositories),
+            total=sum(repository.total for repository in repositories),
+        )
+
+    @property
+    def plan_count(self) -> int:
+        """
+        How many plans the site publishes, across every repository.
+        """
+        return sum(len(repository.plans) for repository in self.repositories)
+
+    @property
+    def progress_label(self) -> str:
+        """
+        How many repositories and plans the site has, and how many items are done.
+        """
+        return (
+            f"{len(self.repositories)} repositories · {self.plan_count} plans · "
+            f"{self.done} / {self.total} items done"
+        )
+
+
 @dataclass
 class HubPage(TemplatePage):
     """
@@ -84,8 +125,8 @@ class HubPage(TemplatePage):
     """
 
     @classproperty
-    def template(cls) -> PageTemplate:
-        return PageTemplate.HUB
+    def template(cls) -> str:
+        return "hub.html"
 
     def render(self) -> str:
         """

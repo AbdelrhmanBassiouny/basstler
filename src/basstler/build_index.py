@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Any
 
 from basstler.class_property import classproperty
-from basstler.render_common import PageTemplate, TemplatePage, sanitize_http_url
+from basstler.render_common import TemplatePage, sanitize_http_url
 
 
 @dataclass(kw_only=True)
@@ -181,8 +181,8 @@ class IndexPage(TemplatePage):
     """
 
     @classproperty
-    def template(cls) -> PageTemplate:
-        return PageTemplate.INDEX
+    def template(cls) -> str:
+        return "index.html"
 
     def render(self) -> str:
         """

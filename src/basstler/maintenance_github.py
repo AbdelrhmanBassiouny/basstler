@@ -136,6 +136,15 @@ class PullRequestListState(StrEnum):
     Every pull request, whatever its :class:`PullRequestState`.
     """
 
+    @property
+    def states(self) -> tuple[PullRequestState, ...]:
+        """
+        The :class:`PullRequestState` values this filter lets through.
+        """
+        if self is PullRequestListState.ALL:
+            return tuple(PullRequestState)
+        return (PullRequestState(self.value),)
+
 
 @dataclass
 class GitHubRequestFailed(CommandFailure, ExternalCallFailed):

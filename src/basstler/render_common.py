@@ -110,30 +110,9 @@ def create_template_environment() -> jinja2.Environment:
     return environment
 
 
-class PageTemplate(StrEnum):
-    """
-    The page templates a site is rendered from, each named once.
-    """
-
-    DASHBOARD = "dashboard.html"
-    """
-    One plan's dashboard.
-    """
-
-    INDEX = "index.html"
-    """
-    One repository's plans, a card per plan.
-    """
-
-    HUB = "hub.html"
-    """
-    Every repository on the site, a card per repository.
-    """
-
-
 class TemplatePage(ABC):
     """
-    A page rendered from one of the :class:`PageTemplate` templates.
+    A page rendered from one of the package's Jinja2 templates.
 
     Every page builder loads its template through the same environment, so autoescaping
     and whitespace handling cannot differ between pages.
@@ -141,9 +120,10 @@ class TemplatePage(ABC):
 
     @classproperty
     @abstractmethod
-    def template(cls) -> PageTemplate:
+    def template(cls) -> str:
         """
-        The template this page is rendered from.
+        The file name of the template this page is rendered from, in
+        :attr:`PackageLocation.TEMPLATES`.
         """
 
     def render_template(self, **context: Any) -> str:
@@ -152,7 +132,7 @@ class TemplatePage(ABC):
         :return: The page's rendered HTML.
         """
         environment = create_template_environment()
-        return environment.get_template(self.template.value).render(**context)
+        return environment.get_template(self.template).render(**context)
 
 
 def render_markdown_to_html(markdown_text: str) -> str:

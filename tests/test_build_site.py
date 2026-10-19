@@ -316,15 +316,18 @@ def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
         remote_root=str(remotes),
     )
 
-    repositories = site.build(tmp_path / "site")
+    summary = site.build(tmp_path / "site")
 
     hub_page = (tmp_path / "site" / SiteFile.PAGE).read_text()
     assert link_to(REPOSITORY_URL) in hub_page
+    repositories = summary.repositories
     assert [len(repository.plans) for repository in repositories] == [
         len(PUBLISHED_PLANS),
         0,
     ]
     assert repositories[1].error
+    assert summary.done == sum(repository.done for repository in repositories)
+    assert summary.total == sum(repository.total for repository in repositories)
     assert (tmp_path / "site" / SiteFile.NO_JEKYLL).exists()
 
 

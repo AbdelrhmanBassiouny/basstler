@@ -52,7 +52,6 @@ from basstler.plan_model import ItemStatus
 from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_board import PullRequestRecord as PullRequestAPIRecord
 from basstler.render_common import (
-    PageTemplate,
     TemplatePage,
     render_markdown_to_html,
     sanitize_http_url,
@@ -1082,8 +1081,8 @@ class DashboardRenderer(TemplatePage):
         return 4
 
     @classproperty
-    def template(cls) -> PageTemplate:
-        return PageTemplate.DASHBOARD
+    def template(cls) -> str:
+        return "dashboard.html"
 
     def __post_init__(self) -> None:
         self.items_by_identifier = {item.identifier: item for item in self.plan.items}

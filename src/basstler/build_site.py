@@ -43,8 +43,8 @@ from basstler.build_dashboard import (
     RenderedDashboard,
     validate_plan,
 )
-from basstler.build_hub import HubPage, RepositorySummary
-from basstler.build_index import IndexPage, PlanSummary
+from basstler.build_hub import HubPage, RepositorySummary, SiteSummary
+from basstler.build_index import IndexPage, PlanSummary, ProgressCard
 from basstler.environment import GitHubCredentialVariable
 from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_github import (
@@ -249,9 +249,10 @@ class GitHubPullRequestSource(PullRequestSource):
 
 # %% the site
 
-SectionListing = TypeVar("SectionListing")
+SectionCard = TypeVar("SectionCard", bound=ProgressCard)
 """
-What the page above a site section lists it by.
+The card a site section is summed up by: a repository's on the hub, or the whole
+site's.
 """
 
 
@@ -273,7 +274,7 @@ class PublishedPlan:
 
 
 @dataclass
-class SiteSection(ABC, Generic[SectionListing]):
+class SiteSection(ABC, Generic[SectionCard]):
     """
     One part of the site: the pages it writes under the site's root, and the card that
     stands for it on the page above.
@@ -297,12 +298,12 @@ class SiteSection(ABC, Generic[SectionListing]):
         return f"{self.site_url.rstrip('/')}/"
 
     @abstractmethod
-    def build(self, output: Path) -> SectionListing:
+    def build(self, output: Path) -> SectionCard:
         """
         Render this part of the site.
 
         :param output: The site's root directory.
-        :return: What the page above lists this part by.
+        :return: The card summing this part up.
         """
 
     @staticmethod
@@ -441,7 +442,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
 
 
 @dataclass
-class HubSite(SiteSection[list[RepositorySummary]]):
+class HubSite(SiteSection[SiteSummary]):
     """
     The whole site: the hub page over every repository the hub file lists.
     """
@@ -457,12 +458,13 @@ class HubSite(SiteSection[list[RepositorySummary]]):
     :meth:`Repository.clone_url_under` takes it.
     """
 
-    def build(self, output: Path) -> list[RepositorySummary]:
+    def build(self, output: Path) -> SiteSummary:
         """
         Render every repository, then the hub linking them.
 
         :param output: The directory to write the site into.
-        :return: Every repository's card, in the hub file's order.
+        :return: The site's summary, holding every repository's card in the hub file's
+            order.
         """
         with tempfile.TemporaryDirectory() as scratch:
             repositories = [
@@ -473,7 +475,7 @@ class HubSite(SiteSection[list[RepositorySummary]]):
             ]
         self.write_page(output, HubPage(repositories).render())
         (output / SiteFile.NO_JEKYLL).touch()
-        return repositories
+        return SiteSummary.over_repositories(repositories)
 
     def build_repository(
         self, repository: Repository, scratch: Path, output: Path
@@ -542,11 +544,8 @@ def main() -> int:
         hub=hub,
         remote_root=arguments.remote_root,
     )
-    repositories = site.build(arguments.output)
-    logger.info(
-        f"published {sum(len(r.plans) for r in repositories)} plans from "
-        f"{len(repositories)} repositories to {arguments.output}"
-    )
+    summary = site.build(arguments.output)
+    logger.info(f"published {summary.progress_label} to {arguments.output}")
     return 0
 
 
