@@ -6,12 +6,14 @@ from __future__ import annotations
 
 import argparse
 import sys
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum, StrEnum
+from enum import StrEnum
 from pathlib import Path
 
 from basstler.build_dashboard import PullRequestState
 from basstler.environment import GitHubCredentialVariable
+from basstler.exceptions import DataclassException
 from basstler.maintenance_board import PullRequestRecord
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.maintenance_github import GitHubRepository
@@ -168,7 +170,7 @@ class ProgressNotesDirectory:
 
 
 @dataclass
-class EmptyRemoteBranchListError(ValueError):
+class EmptyRemoteBranchListError(DataclassException, ValueError):
     """
     Raised when pruning is asked to judge branches against a remote that lists none.
     """
@@ -178,68 +180,79 @@ class EmptyRemoteBranchListError(ValueError):
     The progress-notes directory that was to be pruned.
     """
 
-    def __str__(self) -> str:
-        """
-        :return: Why nothing was pruned.
-        """
+    def error_message(self) -> str:
         return (
             f"no remote branches were listed, so every note in {self.directory} would "
             "read as belonging to a deleted branch; nothing was pruned"
         )
 
+    def suggest_correction(self) -> str:
+        return ""
+
 
 # %% pruning against the remote
 
 
-@dataclass(frozen=True)
-class SkipExplanation:
+@dataclass
+class PruningSkipped(DataclassException, ABC):
     """
-    Why a prune was skipped, and what makes the next save prune.
-    """
-
-    reason: str
-    """
-    Why no branch could be judged.
+    Raised when a prune cannot judge any branch, so it removes nothing.
     """
 
-    correction: str
-    """
-    What to change so the next save prunes.
-    """
-
-
-class PruningSkipped(SkipExplanation, Enum):
-    """
-    Why a prune removed nothing without judging any branch.
-    """
-
-    NO_CREDENTIAL = (
-        "no GH_TOKEN or GITHUB_TOKEN is set, so the branches' pull requests cannot be "
-        "listed",
-        "set GH_TOKEN or GITHUB_TOKEN to a token that can read this repository's pull "
-        "requests",
-    )
-    """
-    The pull requests cannot be listed.
-    """
-
-    REMOTE_UNREADABLE = (
-        "the remote's URL or branches could not be read, so which branches still exist "
-        "is unknown",
-        "make sure the branch's remote names a GitHub repository and can be reached",
-    )
-    """
-    Which branches still exist is unknown.
-    """
-
-    def __str__(self) -> str:
-        """
-        :return: The warning a save prints: what was skipped, why, and how to fix it.
-        """
+    def error_message(self) -> str:
         return (
             "Finished branches' progress notes were not pruned and stay on the "
-            f"personal-notes branch: {self.reason}. To prune them, {self.correction}, "
-            "then save again."
+            f"personal-notes branch: {self.reason()}."
+        )
+
+    @abstractmethod
+    def reason(self) -> str:
+        """
+        :return: Why no branch could be judged.
+        """
+
+
+@dataclass
+class NoGitHubCredentialError(PruningSkipped):
+    """
+    Raised when no GitHub token is set, so the branches' pull requests cannot be listed.
+    """
+
+    def reason(self) -> str:
+        return (
+            f"no {' or '.join(GitHubCredentialVariable)} is set, so the branches' pull "
+            "requests cannot be listed"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Set {' or '.join(GitHubCredentialVariable)} to a token that can read this "
+            "repository's pull requests, then save again."
+        )
+
+
+@dataclass
+class UnreadableRemoteError(PruningSkipped):
+    """
+    Raised when the remote's URL or branches cannot be read, so which branches still
+    exist is unknown.
+    """
+
+    remote: str
+    """
+    The remote that could not be read.
+    """
+
+    def reason(self) -> str:
+        return (
+            f"the URL or branches of remote {self.remote!r} could not be read, so which "
+            "branches still exist is unknown"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Make sure remote {self.remote!r} names a GitHub repository and can be "
+            "reached, then save again."
         )
 
 
@@ -269,13 +282,15 @@ class ProgressNotesPruning:
     The branch whose notes are being saved.
     """
 
-    def run(self) -> list[str] | PruningSkipped:
+    def run(self) -> list[str]:
         """
-        :return: The branches whose notes were deleted, or why nothing was judged.
+        :raises NoGitHubCredentialError: If no GitHub token is set.
+        :raises UnreadableRemoteError: If the remote's URL or branches cannot be read.
+        :return: The branches whose notes were deleted.
         """
         token = GitHubCredentialVariable.first_token()
         if token is None:
-            return PruningSkipped.NO_CREDENTIAL
+            raise NoGitHubCredentialError()
         url = self.git.attempt("remote", "get-url", self.remote)
         heads = self.git.attempt("ls-remote", "--heads", self.remote)
         if not (
@@ -284,7 +299,7 @@ class ProgressNotesPruning:
             and heads.succeeded
             and heads.output
         ):
-            return PruningSkipped.REMOTE_UNREADABLE
+            raise UnreadableRemoteError(remote=self.remote)
         repository = Repository.from_remote_url(url.output)
         pull_requests = BranchPullRequests.from_pull_requests(
             GitHubRepository(repository, token).all_pull_requests(),
@@ -388,17 +403,21 @@ def main() -> int:
     )
     arguments = vars(parser.parse_args())
 
-    outcome = ProgressNotesPruning(
-        directory=ProgressNotesDirectory(arguments[ProgressNotesArgument.DIRECTORY]),
-        git=GitCommandRunner(Path.cwd()),
-        remote=arguments[ProgressNotesArgument.REMOTE],
-        kept_branch=arguments[ProgressNotesArgument.KEEP],
-    ).run()
-    if isinstance(outcome, PruningSkipped):
-        logger.warning(str(outcome))
-    elif outcome:
+    try:
+        removed = ProgressNotesPruning(
+            directory=ProgressNotesDirectory(
+                arguments[ProgressNotesArgument.DIRECTORY]
+            ),
+            git=GitCommandRunner(Path.cwd()),
+            remote=arguments[ProgressNotesArgument.REMOTE],
+            kept_branch=arguments[ProgressNotesArgument.KEEP],
+        ).run()
+    except PruningSkipped as skipped:
+        logger.warning(str(skipped))
+        return 0
+    if removed:
         logger.info(
-            "Removed the progress notes of finished branches:\n" + "\n".join(outcome)
+            "Removed the progress notes of finished branches:\n" + "\n".join(removed)
         )
     return 0
 
