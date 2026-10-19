@@ -31,8 +31,8 @@ class ShellConfigurationFunction(StrEnum):
 
     BASSTLER_PACKAGE_SOURCE = "basstler_package_source"
     """
-    Prints what the package is installed from: the checkout the plugin sits in, else the
-    plugin's own release of its repository.
+    Prints what the package is installed from: the checkout the plugin sits in, else its
+    repository at the latest release a session start recorded.
     """
 
     def run(self, project_root: Path | None = None) -> subprocess.CompletedProcess[str]:

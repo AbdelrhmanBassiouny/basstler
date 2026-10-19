@@ -39,6 +39,7 @@ SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
 # Installs the package environment only where something is missing; never
 # fatal. Runs before the plan section and the setup check, which rely on it.
 ensure_basstler_environment() {
+  record_latest_basstler_release
   if [ ! -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
     create_and_install_basstler_environment
     return

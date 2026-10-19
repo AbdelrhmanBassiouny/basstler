@@ -89,6 +89,11 @@ class ConfigurationVariable(StrEnum):
     The repository an installed plugin's package is installed from.
     """
 
+    RELEASE_FILE = "BASSTLER_RELEASE_FILE"
+    """
+    The file recording the latest release a session start read from that repository.
+    """
+
     UV_DIRECTORY = "BASSTLER_UV_DIRECTORY"
     """
     Where a session start installs ``uv`` when it finds neither ``uv`` nor a supported

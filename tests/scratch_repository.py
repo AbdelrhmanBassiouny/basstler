@@ -382,10 +382,11 @@ class ScratchRepository:
         """
         return self.configuration_output(f'printf "%s" "${{{variable_name}}}"')
 
-    def configuration_output(self, command: str) -> str:
+    def configuration_output(self, command: str, **overrides: str) -> str:
         """
         :param command: A shell command run once the scratch plugin's configuration is
             sourced in the project, such as a call to one of its functions.
+        :param overrides: Variables the run sets.
         :return: What it printed.
         """
         self.install_hook_scripts(
@@ -402,7 +403,7 @@ class ScratchRepository:
             capture_output=True,
             text=True,
             check=True,
-            env=self.runner_environment(),
+            env=self.runner_environment(**overrides),
         ).stdout
 
     def install_package_environment(self) -> Path:

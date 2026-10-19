@@ -44,7 +44,6 @@ from .scratch_repository import (
     SCRATCH_IDENTITY,
     PackageSourceFile,
     ScratchRepository,
-    SetupPrerequisiteFile,
 )
 from .script_runner import configuration_value
 from .session_start_summary import (
@@ -859,27 +858,136 @@ def test_reinstalls_the_package_when_the_plugin_names_another_source(
     ]
 
 
-def test_a_plugin_outside_a_checkout_installs_its_own_release_of_the_package(
+class ReleaseFunction(StrEnum):
+    """
+    The shell configuration's function a session start reads the latest release with.
+    """
+
+    RECORD_LATEST = "record_latest_basstler_release"
+    """
+    Records the highest release tag of the package's repository, for a plugin outside a
+    checkout.
+    """
+
+
+class SampleReleaseTag(StrEnum):
+    """
+    Tags on the scratch repository standing in for the package's own.
+    """
+
+    OLDER = "v0.2.0"
+    """
+    A release whose minor part sorts after :attr:`LATEST`'s as text, not as a number.
+    """
+
+    LATEST = "v0.10.0"
+    """
+    The highest release.
+    """
+
+    PRERELEASE = "v1.0.0-rc1"
+    """
+    A tag past :attr:`LATEST` that is not a release.
+    """
+
+    NOT_A_RELEASE = "nightly"
+    """
+    A tag that names no version.
+    """
+
+
+def record_latest_release(repository: ScratchRepository, url: str) -> str:
+    """
+    Record the latest release of *url* as a session start does, then read the package
+    source back.
+
+    :param repository: The fixture-built scratch repository.
+    :param url: The repository standing in for the package's own.
+    :return: What the package would be installed from.
+    """
+    return repository.configuration_output(
+        f"{ReleaseFunction.RECORD_LATEST} && "
+        f"{ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE}",
+        **{ConfigurationVariable.REPOSITORY_URL: url},
+    ).strip()
+
+
+@pytest.fixture
+def tagged_release_repository(session_start_repository: ScratchRepository) -> str:
+    """
+    :return: The scratch project, tagged with every :class:`SampleReleaseTag`, as a
+        repository URL a session start reads releases from.
+    """
+    for tag in SampleReleaseTag:
+        session_start_repository.run_git("tag", tag)
+    return str(session_start_repository.project_root)
+
+
+def test_a_plugin_outside_a_checkout_installs_the_latest_release_of_the_package(
+    session_start_repository: ScratchRepository, tagged_release_repository: str
+):
+    """
+    A release is only a tag on its merge commit, so an installed plugin installs the
+    highest one: a pre-release and a tag naming no version are not releases.
+    """
+    declaration_file(session_start_repository).unlink()
+    manifest = PluginManifest.of_this_plugin()
+
+    source = record_latest_release(session_start_repository, tagged_release_repository)
+
+    assert source == (
+        f"{manifest.name} @ git+{tagged_release_repository}@{SampleReleaseTag.LATEST}"
+    )
+
+
+def test_an_unreadable_repository_keeps_the_release_last_recorded(
+    session_start_repository: ScratchRepository,
+    tagged_release_repository: str,
+    tmp_path: Path,
+):
+    """
+    A session start offline keeps the package it has rather than reinstalling.
+    """
+    declaration_file(session_start_repository).unlink()
+    record_latest_release(session_start_repository, tagged_release_repository)
+
+    source = record_latest_release(session_start_repository, str(tmp_path / "missing"))
+
+    assert source.endswith(f"@{SampleReleaseTag.LATEST}")
+
+
+def test_a_plugin_outside_a_checkout_installs_the_default_branch_before_any_release(
     session_start_repository: ScratchRepository,
 ):
     """
-    An installed plugin carries no package source, so the package comes from the
-    plugin's repository at the plugin's own version.
+    With no release recorded yet, as on a first session start offline, the package
+    still comes from its repository.
     """
     declaration_file(session_start_repository).unlink()
-    manifest = PluginManifest.read(
-        session_start_repository.plugin_root / SetupPrerequisiteFile.PLUGIN_MANIFEST
-    )
-
+    manifest = PluginManifest.of_this_plugin()
     repository = Repository.from_remote_url(
         session_start_repository.configuration_value(
             ConfigurationVariable.REPOSITORY_URL
         )
     )
 
-    assert package_source(session_start_repository) == repository.git_requirement(
-        manifest.name, manifest.release_tag
+    assert package_source(session_start_repository) == (
+        f"{manifest.name} @ git+{repository.url}"
     )
+
+
+def test_a_plugin_in_a_checkout_records_no_release(
+    session_start_repository: ScratchRepository, tagged_release_repository: str
+):
+    """
+    A checkout installs itself, so a session start there reads no release.
+    """
+    record_latest_release(session_start_repository, tagged_release_repository)
+
+    release_file = Path(
+        session_start_repository.configuration_value(ConfigurationVariable.RELEASE_FILE)
+    )
+    assert not release_file.exists()
 
 
 def test_tells_the_session_where_the_plugin_is(
