@@ -156,10 +156,13 @@ items:
   track: carried-across
   depends_on: [basstler-open-pull-request-carryover]
   pull_request_number: 13
+  session: https://claude.ai/code/session_01VwERzevnmsLrtNiPbqnT3C
   notes: >-
     Reads the upstream pull request's statusCheckRollup in the same GraphQL query as its
     review threads, on the fork's runner, and names every check that did not pass. Carried
-    as draft #13 with main merged in.
+    as draft #13 with main merged in. The owner's review (r4316963874) is addressed in
+    6b9d245: every response is parsed into models (PullRequest, Commit, PageInfo, one result
+    model per query) before anything reads it. Waits on the owner's review of that push.
 - id: upstream-check-failure-logs
   title: Say why an upstream check failed, not only that it did
   branch: claude/upstream-check-failure-logs
