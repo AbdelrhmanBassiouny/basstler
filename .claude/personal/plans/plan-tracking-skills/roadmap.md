@@ -1,7 +1,5 @@
 # plan-tracking-skills — standing rules
 
-Moved from the CRAM fork's notes on 2026-10-18. An item carrying `repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine` still points at its CRAM-fork pull request; basstler-package's basstler-open-pull-request-carryover reopens it here and clears that line.
-
 - Two operations, not one shared procedure. Recording an item and *opening* the work are separate, and each skill takes only the one it needs, in that order - the pull request number does not exist until the pull request does. Referencing the whole thing from `/add-plan-item` would have handed a branch-and-push step to a skill whose own opening paragraph promises it never creates a branch.
 - A pull request a script creates is attributed to the app its requests are proxied through, while the same creation through a session's own tool is attributed to the user - verified minutes apart on the same repository. That is the authorship problem `AGENTS.md` rules out for commits, so a session creates the pull request and the script records its number.
 - Within a session the credential is irrelevant. The identical response comes back with an exported token, a junk token and no authorization header at all, because the proxy supplies the identity. Portability is why a token still matters: the same script run from a terminal or an Action has no proxy.

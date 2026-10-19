@@ -25,15 +25,9 @@ items:
   session: https://claude.ai/code/session_01CfwosnvBeiWvRLXxcnfHPk
   track: cutover
   depends_on: []
-  notes: 'Superseded 2026-10-18 by plan-site-builder and plan-site-action: one site over every
-    repository''s plans, hosted on AbdelrhmanBassiouny/stack-board''s Pages. Close #218 once
-    plan-site-action has deployed, naming them. Before: Re-scoped 2026-07-31 to the user''s one-dashboard decision: no board index is built
-    at all. GitHub''s native stack map covers derived stack mechanics, so the plan dashboards
-    are the single surface, published as `_site/plans/<id>/` with no live session. Shipped
-    2026-08-30 as draft #218 off `main` rather than stacked on #111, at the user''s instruction
-    not to wait - the workflow does nothing until it is on a base branch, and #111 has been
-    conflict-blocked since the 2026-08-29 maintenance pass. Both recorded dependencies were
-    dropped for the same reason; neither is needed by what shipped.'
+  notes: >-
+    Superseded by plan-site-builder (#6) and plan-site-action: one site over every repository's
+    plans, on AbdelrhmanBassiouny/stack-board's Pages. CRAM #218 is closed.
 - id: plan-site-builder
   title: One static site over every repository's plans, starting at the hub
   branch: claude/elegant-turing-xvcgs2

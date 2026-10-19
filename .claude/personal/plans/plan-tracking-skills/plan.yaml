@@ -25,15 +25,11 @@ items:
   session: https://claude.ai/code/session_0157EHWeTzFSYf1nqHX5J7NC
   track: skills
   depends_on: []
-  notes: '#160 was closed unmerged; the roadmap records it folded into #151
-    (manifest-currency-first, still open), so the fix lands with that. Recheck at #151''s
-    landing whether plan_item_bootstrap still hardcodes the indent. Before: Bug fix off `main`, found by using the bootstrap script on `rdr-refactor`. `open`
-    patched the item''s fields at a hardcoded four-space indent, which does not parse in a
-    manifest whose items are written flush with `items:` - `rdr-refactor`''s style - so `save-plan.sh`
-    failed in `yaml.safe_load`. The depth is now read off the manifest being edited. Two defects
-    in the same path are fixed with it: the save swallowed `save-plan.sh`''s output, and it
-    reported success without checking the write landed. It now raises with the script''s own
-    message and reads the plan back off the notes branch afterwards.'
+  notes: >-
+    plan_item_bootstrap patched item fields at a hardcoded indent, which does not parse in a
+    manifest whose items sit flush with items:. CRAM #160 was folded into #151, now draft #48
+    (manifest-currency-first), which carries the fix; when #48 lands, check that the indent is
+    read off the manifest.
 - id: plan-item-edit-guard
   title: 'PreToolUse guard: refuse source edits from a branch with no plan item'
   branch: null
@@ -62,12 +58,9 @@ items:
   pull_request_number: 15
   session: https://claude.ai/code/session_01Mkoj43S6gvqMaFzRpiGwHX
   track: skills
-  notes: 'Placed by `/add-plan-item` rather than by default, against nineteen unlanded tooling
-    branches: nothing in flight builds downstream propagation, under this name or any other,
-    so it is new work rather than a fold. **Based on `basstler-package`''s `basstler-package`
-    (#185, `claude/plan-item-kickoff-workflow-cuare2`), not on `main`.** The new code is Python,
-    and on #185 every `.claude/` Python module has moved into `basstler/` with its tests in
-    `test/basstler_test/`; writing it against `main`''s `.claude/stack/` layout would mean
-    writing it twice.'
+  notes: >-
+    Merges a resolved item's fix down into the pull requests stacked on it. Placed by
+    /add-plan-item: nothing in flight did this, so it is new work. Draft #15, carried from CRAM
+    #430, against main.
   depends_on: []
   status: in_progress

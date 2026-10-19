@@ -66,13 +66,12 @@ items:
   session: https://claude.ai/code/session_01XHyFmqJdtdZbCm6Ss8teWA
   notes: >-
     Done; tracked in #7, closed without merging since it held no code. Carried as draft pull
-    requests: #8 notes-core, #9 restack merges, #10 Actions budget, #11 size limits, #12
-    krrood (main deliberately not merged), #13 upstream CI, #14 failure logs, #15 fix
-    propagation, #16 stack-maintenance workflow, #17 cross-plan depends_on (with CRAM #206),
-    #18 new-plan routing (with CRAM #207). Retired and deleted, each with an issue recording
-    its last commit (#19-#31): the bastler/ and .claude/stack/ era branches, the superseded
-    #514 and #207, and the integration-branch stack. The actions-budget item in the CRAM
-    notes still names CRAM #503 (now #10).
+    requests: #8 notes-core, #9 restack merges, #10 Actions budget, #11 size limits, #12 krrood
+    (main deliberately not merged), #13 upstream CI, #14 failure logs, #15 fix propagation, #16
+    stack-maintenance workflow, #17 cross-plan depends_on (with CRAM #206), #18 new-plan routing
+    (with CRAM #207). Retired and deleted, each with an issue recording its last commit
+    (#19-#31): the bastler/ and .claude/stack/ era branches, the superseded #514 and #207, and
+    the integration-branch stack. The actions-budget item in the CRAM notes names #10.
 - id: cram-uses-basstler-plugin
   title: The CRAM fork installs basstler as a plugin instead of carrying its code
   branch: null
@@ -109,21 +108,15 @@ items:
 - id: cram-tooling-pull-requests-moved
   title: Close every CRAM-fork tooling pull request once its basstler counterpart is open
   branch: null
-  status: not started
+  status: done
   track: cram-retirement
   depends_on: [basstler-open-pull-request-carryover]
   pull_request_number: null
-  notes: >
-    Data and pull request housekeeping, no code. For each open CRAM-fork pull request labelled
-    tooling (#107, #110, #111, #151, #154, #156, #157, #158, #162, #184, #188, #194, #198, #199,
-    #206, #211, #218, #253, #260, #277, #280-#285, #430, #482, #503, #504, #515 among them):
-    once the carryover has opened its counterpart here, close it with a comment naming the
-    new pull request, and in the moved plans (plan-dashboards, plan-size-limits,
-    plan-tracking-skills, session-notes-infrastructure, stack-maintenance,
-    integration-tip-selection, stack-tooling-install, workflow-cutover) replace the item's
-    `repository:` line and pull_request_number with the basstler ones. One with no
-    counterpart (stale, superseded) closes with the reason. Done so far: #503 closed for
-    basstler#10, its actions-budget item already pointing there.
+  notes: >-
+    Done 2026-10-19: every open CRAM-fork tooling pull request is closed, naming where its work
+    went. Carried with history as #43-#48 (CRAM #194, #198, #107, #157, #184, #151); retired
+    with an issue each as #49-#54 (CRAM #110, #162, #188, #111, #158, #199); the rest pointed at
+    their existing equivalents. The full mapping is on #4.
 - id: cram-notes-cleanup
   title: Strip the tooling from the CRAM fork's personal notes
   branch: null
@@ -167,17 +160,12 @@ items:
 - id: upstream-check-failure-logs
   title: Say why an upstream check failed, not only that it did
   branch: claude/upstream-check-failure-logs
-  status: in progress
+  status: done
   track: carried-across
   depends_on: [upstream-pull-request-checks]
   pull_request_number: 14
   session: https://claude.ai/code/session_01KyncMpjhERrpeJNUudMFC9
-  notes: >-
-    Targets main, merged in (bc5989d). Quotes the failing step's log for each failed upstream
-    check, stopping where the step failed; the reusable workflow and its example caller take
-    failure_logs. The owner's first review is addressed in 6756a56 (classproperty constants,
-    Repository.job_log_path, a shorter gh stub) and its threads are resolved; the suite passes
-    (933). Waiting on CI and the next review; still a draft.
+  notes: Merged in #14 and released in v0.1.4.
 - id: setup-stacked-prs-skill
   title: '/setup-stacked-prs: one guided command that sets up the stacked-pull-request workflow'
   branch: null
@@ -185,21 +173,20 @@ items:
   track: setup
   depends_on: []
   pull_request_number: null
-  notes: >
+  notes: >-
     A guided skill over a scripted setup, mirroring /setup-personal-notes: the skill only asks
-    the questions, every mechanical step is a basstler.setup_steps subcommand. Two install modes:
-    native (the tooling on the target repository's main) and fork overlay (a never-merged tooling
-    branch on the user's fork, where re-running the skill is the updater). It creates missing labels,
-    writes the personal configuration and emits the maintenance prompt.
-
-    Folded in (agreed at https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238):
-    a `configure-upstream --repository <owner>/<name>` subcommand writes the project's
+    the questions, every mechanical step is a basstler.setup_steps subcommand. Two install
+    modes: native (the tooling on the target repository's main) and fork overlay (a never-merged
+    tooling branch on the user's fork, where re-running the skill is the updater). It creates
+    missing labels, writes the personal configuration and emits the maintenance prompt. Folded
+    in (agreed at
+    https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238): a
+    `configure-upstream --repository <owner>/<name>` subcommand writes the project's
     .claude/basstler/stack.toml and copies the example upstream-reviews.yml caller into
     .github/workflows/; the skill asks for the upstream, suggesting it from the remotes;
-    check-setup.sh gains a row for it; docs/SETUP.md section 3 becomes "the setup asks you".
-    No user copies files by hand.
-
-    Build it fresh on main: an earlier draft sourced a github-api.sh that no longer exists.
+    check-setup.sh gains a row for it; docs/SETUP.md section 3 becomes "the setup asks you". No
+    user copies files by hand. Build it fresh on main: the earlier draft, CRAM #110, sources a
+    github-api.sh that no longer exists (retired in #49).
 - id: basstler-typed-invocations
   title: 'Typed invocations: every process and GitHub API call as a dataclass'
   branch: null

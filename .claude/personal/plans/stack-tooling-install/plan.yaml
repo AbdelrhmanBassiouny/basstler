@@ -33,50 +33,39 @@ items:
 - id: setup-personal-notes-script
   title: Extract a deterministic setup script from /setup-personal-notes
   branch: claude/setup-personal-notes-script
-  pull_request_number: 107
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  pull_request_number: 45
   status: in_progress
   session: https://claude.ai/code/session_01DbUfzLJEFqE4U3fKBFd2WA
   track: install
   depends_on: []
-  blockers:
-  - 'Cross-plan dependency, not representable in depends_on: stacked on basstler-package (#185,
-    basstler-package plan, upstream cram2#659) since 2026-10-04.'
-  notes: Extracts the mechanical half of `/setup-personal-notes` into a script, leaving the
-    skill only the questions. **The item's original premise is disproved and no longer applies.**
-    Two steps recorded as session-only are both scriptable - the login and the label read
-    and create are all plain API calls, and the "no create-label tool" limit is true of MCP,
-    not of the API. So the whole setup runs with no session, and the skill became a thin question-asking
-    wrapper (238 lines to 153) rather than the "script plus two API steps" split originally
-    described.
+  notes: >-
+    The mechanical half of /setup-personal-notes as a script, the skill only asking the
+    questions; the whole setup runs with no session. Draft #45, carried from CRAM #107 with its
+    history; main is not merged in yet. Three owner threads stay open: rename the promotion
+    label (main says promotion-link-sent) and drop the unused merged and rebase labels.
 - id: unfetched-parent-branches
   title: Fetch every parent branch the pass decides about, and refuse to decide from a missing
     ref
   branch: claude/maintenance-tooling-pinning-gdod18
-  pull_request_number: 198
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  pull_request_number: 44
   status: in_progress
   session: https://claude.ai/code/session_01THzpHsajMptZ3X1DmwAU2c
   track: base-correctness
   depends_on: []
-  notes: Bug fix, root-caused while asking why a pull request was never reparented onto main
-    nor promoted after its parent merged that morning. `load_stack()` fetches only the *head*
-    branches of the open pull requests on the board, so a parent whose own pull request is
-    closed or merged is never fetched; the merged predicate then runs `merge-base --is-ancestor`
-    through a helper that cannot tell exit 128 (ref missing) from exit 1 (not an ancestor).
+  notes: >-
+    load_stack fetches only the open pull requests' head branches, so a parent whose pull
+    request merged is never fetched, and the merged check cannot tell a missing ref (exit 128)
+    from not-an-ancestor (exit 1). Still on main. Draft #44, carried from CRAM #198 with its
+    history; main is not merged in yet.
 - id: session-branch-base
   title: Cut session branches from main, not the integration branch
-  branch: claude/plan-item-kickoff-workflow-s3mfvk
-  pull_request_number: 199
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  status: in_progress
+  branch: null
+  pull_request_number: null
+  status: deferred
   session: https://claude.ai/code/session_014Fp9aaMYx1E6toT2jDDWdW
   track: base-correctness
   depends_on: []
-  notes: 'Found while checking whether the fork''s default branch caused the sibling bug.
-    It did not, but it is causing something else and is already live: the fork''s `HEAD` resolves
-    to the regenerated `integration` branch, whose whole design is to be rebuilt and never
-    merged out of. A session investigating that bug was handed a branch byte-identical to
-    `origin/integration` - 78 commits behind main, carrying eight unlanded branches'' merge
-    commits - because the branch existed only locally, so the clone created it at the default
-    branch''s tip. Every future session cut from this fork does the same.'
+  notes: >-
+    No longer needed: it refused a session branch cut from the regenerated integration branch,
+    which the CRAM fork's default branch once was. The integration stack is retired and that
+    default is main again. CRAM #199's branch is retired in #54.

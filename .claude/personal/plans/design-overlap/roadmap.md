@@ -1,7 +1,5 @@
 # design-overlap — standing rules
 
-Moved from the CRAM fork's notes on 2026-10-18. An item carrying `repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine` still points at its CRAM-fork pull request; basstler-package's basstler-open-pull-request-carryover reopens it here and clears that line.
-
 - The catalogue is derived, not written. `ast` over each branch's diff. A hand-written or model-summarized record drifts the moment a session forgets to update it, and the whole system's philosophy - visible in `plan-schema.md`'s "why status is deliberately thin" - is to derive what can be derived and never store it.
 - No model call in the detector. Scoring is deterministic: name equality, path equality, normalized name similarity, docstring-summary token overlap. It runs in CI, costs nothing, and is reproducible. It reports ranked pairs and no verdict, keeping the existing split where a script gathers evidence and a skill judges it.
 - Non-Python files are catalogued too. The #110/#106 collision was two sessions building the same markdown artifact under two names. A Python-only catalogue would have missed the very case that motivates this plan.
@@ -10,6 +8,6 @@ Moved from the CRAM fork's notes on 2026-10-18. An item carrying `repository: Ab
 - Writing to feature branches is a deliberate exception, approved 2026-09-06. `integration-conflict-triage` never writes a fix to a feature branch, and that rule stands for the integration build.
 - Freshness is tied to the dashboard publish, not to the scheduled Action. The Action would be better, but `integration-refresh.yml` is unlanded on `integration`; taking a dependency on it would block this plan on that one. Rebuilding on publish means the index is current whenever anyone looks at it, which is the case that matters. Wiring it into the Action is a later item, not a prerequisite.
 - Reusing tracking issue #102 rather than minting a new mailbox. Seven workflow tooling plans already share it; a new one would fragment the channel sessions subscribe to.
-- #185 moves every `.claude/` Python module into the `basstler` package. Every Python item here lands in files it moves. Whichever lands second re-applies its delta in the new location - the pattern #111 already exercised. Check #185's state before starting `definition-catalogue`, not after.
-- `templates/dashboard.html` has four open editors: #218 (Pages site), #206 (refresh button), #157 (hide deferred items), #111 (state chips). `plan-graphs` should be cut after as many have landed as possible, and its scope check re-run at kickoff. #253 (cross-plan `depends_on`) changes the edge data it reads.
+- Every Python module lives in `src/basstler/` since the extraction (#1), so items here are written against main's layout.
+- `templates/dashboard.html` has two open editors: #46 (hide deferred items) and #17 (cross-plan `depends_on`, carrying the refresh button); plan-dashboards' state chips will edit it when rebuilt. `plan-graphs` should be cut after as many have landed as possible, and its scope check re-run at kickoff. #17 also changes the edge data it reads.
 - #282 already comments on branches an integration build leaves out. The post-review re-check in `skill-wiring` may belong there rather than as a third surface; decide at kickoff.

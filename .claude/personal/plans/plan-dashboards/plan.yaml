@@ -34,84 +34,54 @@ items:
   title: Flag an item stacked on a deferred/closed dependency instead of leaving it to a stale
     note
   branch: claude/deferred-dependency-drift-pr-qxpfsm
-  pull_request_number: 184
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  pull_request_number: 47
   status: in_progress
   session: https://claude.ai/code/session_01VBa9VPHJW4VjpWtdq1XLE2
   track: corrections
   depends_on: []
-  notes: 'Found 2026-08-12 in `rdr-refactor`''s D-ui stack: `D-ui-splice-fix` was closed as
-    superseded, but `D-ui-rendering` still depends on it and is still in progress, with no
-    automated signal anywhere that its base is dead - only a previous session''s freeform
-    note, which nothing re-reads. `_drift_description_of` only compared an item''s own status
-    against its own live state, and `_compute_next_steps` only evaluates not-started and blocked
-    items, so an in-progress item stacked on a dead dependency slipped past every check.'
+  notes: >-
+    Flags an in-progress item whose dependency is deferred or whose pull request closed unmerged
+    (StalledDependencyDrift, StallReason), with a reparent suggestion. Draft #47, carried from
+    CRAM #184 with its history; main is not merged in yet (conflicts in build_dashboard.py and
+    its tests).
 - id: deferred-items-hidden-by-default
   title: Hide deferred items in the dashboard by default, behind their own toggle
   branch: claude/hidden-deferred-plan-items-6weef1
-  pull_request_number: 157
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  pull_request_number: 46
   status: in_progress
   session: https://claude.ai/code/session_01KzZzsqTc7Ub6ceYP9wDyAN
   track: legibility
-  blockers:
-    - >-
-      Under upstream review as cram2/cognitive_robot_abstract_machine#725 (tomsch420 approved;
-      sunava requested changes). sunava's thread at basstler/templates/dashboard.html:705 (sidebar
-      links to hidden items did nothing) is fixed in 16d8f77b8; it is waiting for a reply and
-      resolution upstream, then sunava's re-review.
   depends_on: []
-  notes: >
-    A deferred item is intentionally paused or superseded, so it is the same kind of noise on a
-    dashboard as a done one, and done items have been hidden behind a sidebar toggle since the
-    dashboard existed. `rdr-refactor` shows it: eight of its items are deferred and sit inline among
-    the live ones. This gives deferred its own checkbox, hidden by default, parallel to "Show done /
-    merged items". The substance is the indentation, not the checkbox.
-
-    2026-10-13: upstream review read via /upstream-reviews. One open thread (sunava): sidebar links
-    to hidden items must reveal the card. Not yet fixed on the branch.
-
-    2026-10-13: 16d8f77b8 fixes sunava's thread. A sidebar link to a card hidden by its status now
-    ticks that status's checkbox, so the card shows. 730 basstler tests pass.
+  notes: >-
+    Deferred items get their own sidebar checkbox, hidden by default, parallel to done; indents
+    and wrap arrows are computed per combination of hidden statuses. Draft #46, carried from
+    CRAM #157 with its history, including the fix for the last upstream review thread
+    (16d8f77b8). main is not merged in yet: it reworked the same stacked-item rendering in
+    build_dashboard.py.
 - id: dashboard-refresh-button
   title: Refresh button in the dashboard masthead, copying the command that rebuilds the page
-  branch: claude/rdr-dashboard-refresh-button-tpuvo9
-  pull_request_number: 206
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
+  branch: null
+  pull_request_number: 17
   status: in_progress
   session: https://claude.ai/code/session_0112C4kGpRE6uLmi5Lwkghx2
   track: legibility
   depends_on: []
   notes: >-
-    The masthead carries a Refresh button copying /plan-dashboard <plan-id>, so a published
-    page offers the command that republishes it. Its branch was not carried to basstler; the
-    work rides draft basstler#17 (cross-plan-dependencies), which merged it in on the CRAM
-    side. CRAM #206 closes once #17 lands.
+    The masthead carries a Refresh button copying /plan-dashboard <plan-id>, so a published page
+    offers the command that republishes it. It rides #17, which merged it in; CRAM #206 is
+    closed.
 - id: shared-pr-state-chips
   title: 'PR 3: shared pull_request_state module + LOC/CI/conflict chips in plan dashboards'
-  branch: claude/shared-pr-state-chips
-  pull_request_number: 111
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  status: in_progress
-  session: https://claude.ai/code/session_01PDkiMhjnoromH2KP2z8Koy
+  branch: null
+  pull_request_number: null
+  status: not_started
   track: live-state
   depends_on: []
-  notes: One pull-request-state fetch/compute module - CI rollup, lines changed against base,
-    mergeable probe, session-link parse - shared by `stack.py` and the dashboard's own pull-request
-    data fetching, plus board-semantics chips on dashboard items and a headless static-HTML
-    build entry point for the Pages Action, with the Artifact path still working during the
-    transition. `pr_state` also reads a pull request's native stack object through REST, GraphQL
-    being unusable from sessions, and renders a stack chip when the pull request is a stack
-    member; that addition is specified but not yet implemented.
-  blockers:
-  - 'Cross-plan dependency, not representable in depends_on: this branch is stacked on basstler-package
-    (#185, basstler-package plan) since 2026-09-02 - its base is that branch and its modules
-    are folded into the package. #185 is open, out of draft and promoted upstream (cram2-link-sent)
-    but unmerged.'
-  - 'Two review threads from the 2026-08-30 round are left open on purpose, each answered
-    on the thread and waiting on the user: GitCommandRunner in the tests (answered with ScratchRepository,
-    because GitCommandRunner imports basstler.stack, which imports pull_request_state) and
-    the "discuss the rebase…'
+  notes: >-
+    One pull-request-state module (CI rollup, lines changed, mergeable probe, session link)
+    shared by stack.py and the dashboard, plus LOC/CI/conflict chips and a stack chip on
+    dashboard items. Not started here: CRAM #111's bastler/-era branch is retired in #52, whose
+    last commit is the reference; its headless build is superseded by build_site.
 - id: cross-plan-dependencies
   title: Let depends_on name an item in another plan, resolved live at dashboard time
   branch: claude/plan-dashboards-cross-dependencies-h3icfd

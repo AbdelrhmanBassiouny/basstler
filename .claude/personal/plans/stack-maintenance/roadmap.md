@@ -1,7 +1,5 @@
 # stack-maintenance — standing rules
 
-Moved from the CRAM fork's notes on 2026-10-18. An item carrying `repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine` still points at its CRAM-fork pull request; basstler-package's basstler-open-pull-request-carryover reopens it here and clears that line.
-
 - Compute a write from what the pull request carries now, not from the snapshot the pass opened with.
 - A command's exit status must agree with its own report. A restack that hit a conflict exited 0, as did a run whose fast-forward was refused - and a caller acting on the status alone is precisely what the no-LLM endgame is. Every command derives its status from one mapping over the report.
 - A test that reads ambient state cannot assert about the state it is reading. Met twice in one pull request: a local board file the pass writes, and a token a session environment exports.

@@ -1,7 +1,5 @@
 # plan-dashboards — standing rules
 
-Moved from the CRAM fork's notes on 2026-10-18. An item carrying `repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine` still points at its CRAM-fork pull request; basstler-package's basstler-open-pull-request-carryover reopens it here and clears that line.
-
 - Whichever lands second merges. Seven items here edit `build_dashboard.py` and its template with no dependency between them. That is textual overlap, not ownership, and it has been the working arrangement throughout.
 - Bug-fix pull requests carry the `bug` label; tooling that never existed does not. An item that *surfaces* bug fixes is not itself a bug fix.
 - Wording is not pinned by tests. Twice a round added a test asserting a rendered sentence, and twice the user cut it: nobody parses a drift description or a summary line, so pinning the sentence buys a failing test per reword and catches no defect. What survives asserts that each case renders *something*, and pins rules rather than phrasings.

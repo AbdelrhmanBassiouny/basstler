@@ -41,10 +41,7 @@ items:
     Added non-Python files are recorded too, by path and first heading: the #110/#106 collision
     was two sessions building the same markdown artifact under two names, which a Python-only
     catalogue would miss.'
-  blockers:
-  - '#185 moves every `.claude/` Python module into the `basstler` package. Whichever lands
-    second re-applies its delta in the new location - the pattern #111 already exercised.
-    Worth checking #185''s state before starting rather than after.'
+  blockers: []
 - id: overlap-detector
   title: Report the branch pairs that define the same thing under different names
   branch: null
@@ -76,10 +73,10 @@ items:
     where two parallel branches are about to collide. The definition graph groups definitions
     by owning branch, draws inheritance, and links overlap pairs.
   blockers:
-  - 'Four open pull requests already edit `templates/dashboard.html`: #218 (Pages site), #206
-    (refresh button), #157 (hide deferred items) and #111 (state chips). This item should
-    be cut after as many of them as possible have landed, and its own scope check re-run at
-    kickoff.'
+  - >-
+    #46 (hide deferred items) and #17 (cross-plan depends_on, with the refresh button) edit
+    templates/dashboard.html, as will the rebuilt state chips. Cut this item after as many as
+    possible have land, and re-run its scope check at kickoff.
 - id: common-parent
   title: Give a set of branches a new common parent, after costing the move
   branch: null
