@@ -379,6 +379,9 @@ CHECK_SCOPE_OVERLAP_MODULE="basstler.check_scope_overlap"
 # pull request has collected, run by /upstream-reviews in a session or the
 # upstream-reviews Action on a runner.
 UPSTREAM_REVIEWS_MODULE="basstler.upstream_reviews"
+# upstream_reviews_helper: the same read through a helper session, for a cloud
+# session that cannot attach the upstream next to its same-named fork.
+UPSTREAM_REVIEWS_HELPER_MODULE="basstler.upstream_reviews_helper"
 # dependencies: prints the package's requirements an environment does not
 # have - what missing_dependencies below calls.
 BASSTLER_DEPENDENCIES_MODULE="basstler.dependencies"
