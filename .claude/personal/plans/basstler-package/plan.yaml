@@ -78,11 +78,12 @@ items:
     on 2026-10-20; its changed_libraries.py work is #55 here.'
 - id: upstream-reviews-without-project-files
   title: /upstream-reviews works for a project that commits no basstler files
-  branch: null
-  status: not started
+  branch: claude/upstream-reviews-no-project-files-m09n3k
+  status: in progress
   track: cram-retirement
   depends_on: []
-  pull_request_number: null
+  pull_request_number: 56
+  session: https://claude.ai/code/session_01Q1iqg88K6XLGdBgtyy24KD
   notes: 'CRAM #523 deletes its upstream-reviews.yml and .claude/basstler/stack.toml, so the
     skill stops working there: GitHub dispatches only a workflow on the default branch, and the
     runner reads the upstream from the committed stack.toml, not personal notes. Options: dispatch
