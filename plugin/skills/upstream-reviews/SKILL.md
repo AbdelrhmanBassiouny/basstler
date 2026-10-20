@@ -25,6 +25,11 @@ which GitHub otherwise keeps behind GraphQL. So once the upstream is attached,
 models a runner's GraphQL read builds. Nothing runs in Actions, and nothing is
 committed to the project.
 
+Anywhere else — Claude Code in a terminal on the user's own machine, or a
+runner — there is no proxy: the module reads GraphQL with whatever `gh` is
+logged in as. Reading needs only read access to the upstream (any account can
+read a public one), never push access.
+
 ## 0. One-time prerequisites
 
 The upstream has to be named somewhere `stack configuration` reads it: the
@@ -51,9 +56,14 @@ Take the target from the skill's argument: a bare number is an upstream pull
 request number, anything else is a branch name. With no argument, use the
 current branch (`git rev-parse --abbrev-ref HEAD`).
 
-## 2. Attach the upstream to the session
+## 2. Attach the upstream to the session (cloud sessions only)
 
-Call `mcp__claude-code-remote__add_repo` with the upstream's owner and name and
+Outside a Claude Code cloud session (`CLAUDE_CODE_REMOTE` is not `true`) skip
+this step: there is nothing to attach. If step 3 then fails to authenticate,
+tell the user to run `gh auth login` (or set `GH_TOKEN`) with an account that
+can read the upstream, and stop.
+
+In a cloud session, call `mcp__claude-code-remote__add_repo` with the upstream's owner and name and
 `access: "push"`. The access level is what makes the proxy answer the
 upstream's REST API at all — `"read"` covers git clones only. Nothing is ever
 pushed: a result saying pushes would be refused is expected and fine. Skip the

@@ -65,7 +65,10 @@ A project that wants every contributor to share the answer commits
 
 `/upstream-reviews` needs nothing else in the project: in a Claude Code cloud session it
 attaches the upstream to the session and reads it over REST. That attach needs the
-upstream to be a repository your GitHub account can read.
+upstream to be a repository your GitHub account can read. Anywhere else, such as Claude
+Code in your own terminal, it reads GraphQL as whoever `gh` is logged in as
+(`gh auth login`, or `GH_TOKEN`). Either way, reading needs only read access to the
+upstream, never push access.
 
 A project that prefers its own Actions may still copy
 [`examples/upstream-reviews.yml`](examples/upstream-reviews.yml) to its
