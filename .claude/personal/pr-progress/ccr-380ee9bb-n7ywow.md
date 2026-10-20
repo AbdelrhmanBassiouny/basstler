@@ -5,6 +5,6 @@ Done:
 - Rework pushed (8a723af); full suite 977 passed; PR description updated
 
 Next:
-- Owner creates labels release:minor / release:major, reviews/merges #32
+- Owner reviews/merges #32 (labels release:minor / release:major now exist)
 - After merge: confirm the release run tags v0.1.6 and a new session installs @v0.1.6
-- CLAUDE.local.md's "Every PR decides its release" rule still names `bump --part`; should become the labels
+- After merge: drop the "Until #32 merges" sentence from the notes' release rule
