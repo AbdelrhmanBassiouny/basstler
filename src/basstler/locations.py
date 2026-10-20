@@ -267,3 +267,9 @@ class ClaudeCodeVariable(EnvironmentVariable):
     """
     The root of the project the session runs in.
     """
+
+    REMOTE = "CLAUDE_CODE_REMOTE"
+    """
+    ``true`` in a Claude Code cloud session, whose proxy answers GitHub's REST API but
+    not its GraphQL API.
+    """

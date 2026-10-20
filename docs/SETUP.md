@@ -63,14 +63,9 @@ A project that wants every contributor to share the answer commits
 `upstream_repository = "<owner>/<name>"` in `.claude/basstler/stack.toml` instead.
 `check-setup.sh --require-upstream` reports whether either names one.
 
-`/upstream-reviews` needs nothing else in the project: it dispatches this repository's
-`upstream-reviews-dispatch.yml`, naming the upstream and your fork's owner. Dispatching
-takes write access to the repository the workflow runs in, so if you cannot push to this
-one, keep a copy of it and name that copy in your personal `stack.toml`:
-
-```toml
-reviews_repository = "<owner>/<name>"
-```
+`/upstream-reviews` needs nothing else in the project: in a Claude Code cloud session it
+attaches the upstream to the session and reads it over REST. That attach needs the
+upstream to be a repository your GitHub account can read.
 
 A project that prefers its own Actions may still copy
 [`examples/upstream-reviews.yml`](examples/upstream-reviews.yml) to its

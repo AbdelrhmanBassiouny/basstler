@@ -1,6 +1,6 @@
 """
-Replaying the recorded GraphQL responses and job logs ``test_upstream_reviews.py``
-reads.
+Replaying the recorded GraphQL and REST responses and job logs the upstream-reviews
+suites read.
 
 The reader is exercised against responses captured from a real pull request rather than
 against GitHub, so the suite needs no network access and no upstream pull request of its
@@ -19,6 +19,7 @@ from basstler.repository import Repository
 from basstler.upstream_reviews import (
     GraphQLClient,
     JobLogReader,
+    RestClient,
     ReviewThreadsPageResult,
 )
 
@@ -165,3 +166,71 @@ class ReplayingJobLogReader(JobLogReader):
         """
         self.calls.append(RecordedJobLogCall(repository, job_identifier))
         return self.logs[job_identifier]
+
+
+REST_RESPONSE_DIRECTORY = RECORDED_RESPONSE_DIRECTORY / "rest"
+"""
+Where the recorded REST responses live, each exactly as ``gh api`` prints it - a
+paginated route's as the list of pages ``--slurp`` collects.
+"""
+
+
+class RecordedRestResponse(StrEnum):
+    """
+    The recorded REST responses, named by their filename stem.
+
+    They describe the same pull request the GraphQL recordings do, so the two readers
+    can be held to the same answer.
+    """
+
+    PULL_REQUEST = "pull_request"
+    REVIEWS = "reviews"
+    REVIEW_COMMENTS = "review_comments"
+    REVIEW_THREADS = "review_threads"
+    CHECK_RUNS = "check_runs"
+    CHECK_RUNS_NONE = "check_runs_none"
+    STATUS = "status"
+    STATUS_NONE = "status_none"
+    PULL_REQUESTS_FOR_BRANCH = "pull_requests_for_branch"
+    PULL_REQUESTS_FOR_BRANCH_FOREIGN_OWNER = "pull_requests_for_branch_foreign_owner"
+    PULL_REQUESTS_FOR_BRANCH_NONE = "pull_requests_for_branch_none"
+
+    def load(self) -> Any:
+        """:return: The recorded response."""
+        return json.loads((REST_RESPONSE_DIRECTORY / f"{self}.json").read_text())
+
+
+@dataclass
+class ReplayingRestClient(RestClient):
+    """
+    A REST client that answers each path from a recorded response instead of calling
+    GitHub.
+
+    Records every path asked for, so a test can assert the exact request made.
+    """
+
+    responses: dict[str, Any]
+    """
+    The response each path answers with.
+    """
+
+    calls: list[str] = field(default_factory=list)
+    """
+    Every path asked for, oldest first.
+    """
+
+    def get(self, path: str) -> Any:
+        """
+        :param path: The REST path, recorded for assertions.
+        :return: The response recorded for it.
+        """
+        self.calls.append(path)
+        return self.responses[path]
+
+    def get_pages(self, path: str) -> list[Any]:
+        """
+        :param path: The REST path, recorded for assertions.
+        :return: The pages recorded for it.
+        """
+        self.calls.append(path)
+        return self.responses[path]

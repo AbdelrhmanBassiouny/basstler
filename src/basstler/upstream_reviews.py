@@ -3,11 +3,14 @@
 Report the checks, failing job logs and review threads a fork's pull request has
 collected upstream.
 
-Thread resolved-state is only exposed by GitHub's GraphQL API, which is unreachable from
-a Claude session, so this runs in the fork's own GitHub Actions runner and the session
-reads its job log. ``gh`` is what talks to GitHub, rather than a hand-rolled client:
-runners ship it and ``GITHUB_TOKEN`` authenticates it, so no access rule is implemented
-here a fourth time.
+It reads through whichever API the place it runs in can reach. A Claude Code cloud
+session's proxy refuses GitHub's GraphQL API but answers REST for the repositories the
+session has attached, with a review-threads route of its own carrying the resolved
+state GitHub otherwise keeps behind GraphQL; anywhere else - a runner, a developer's
+machine - reads through GraphQL. Both readers parse into the same models, so the report
+is the same either way. ``gh`` is what talks to GitHub, rather than a hand-rolled client:
+runners ship it, ``GITHUB_TOKEN`` or the session proxy authenticates it, so no access
+rule is implemented here a fourth time.
 
 Every repository name comes from configuration or the runner's own environment, so the
 script works unchanged in any contributor's fork.
@@ -25,11 +28,12 @@ from dataclasses import dataclass, field
 from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any, TypeVar
+from urllib.parse import urlencode
 
 
 from basstler.class_property import classproperty
 from basstler.environment import GitHubActionsVariable
-from basstler.locations import PackageLocation
+from basstler.locations import ClaudeCodeVariable, PackageLocation
 from basstler.maintenance_constants import GitHubClient
 from basstler.repository import Repository
 from basstler.stack_configuration import (
@@ -308,6 +312,19 @@ class CheckOutcome(StrEnum):
     A required commit status that has not been reported yet.
     """
 
+    @property
+    def rolls_up_to(self) -> RollupState:
+        """
+        :return: The verdict this outcome alone would give the whole rollup, the way
+            GitHub counts it: a neutral or skipped check does not hold a pull request
+            back, and everything that ended without passing fails it.
+        """
+        if self in {CheckOutcome.SUCCESS, CheckOutcome.NEUTRAL, CheckOutcome.SKIPPED}:
+            return RollupState.SUCCESS
+        if self in {CheckOutcome.ERROR, CheckOutcome.PENDING, CheckOutcome.EXPECTED}:
+            return RollupState[self.name]
+        return RollupState.FAILURE
+
 
 class RollupState(StrEnum):
     """
@@ -341,6 +358,25 @@ class RollupState(StrEnum):
     """
     At least one required commit status has not been reported yet.
     """
+
+    @classmethod
+    def over(cls, outcomes: list[CheckOutcome]) -> RollupState:
+        """
+        Compute the verdict GitHub would over a set of checks, for a source that does
+        not report one: the worst any single check would give.
+
+        :param outcomes: Every check's outcome, at least one.
+        :return: The verdict.
+        """
+        reached = {outcome.rolls_up_to for outcome in outcomes}
+        return next(state for state in cls.severity_order() if state in reached)
+
+    @classmethod
+    def severity_order(cls) -> list[RollupState]:
+        """
+        :return: Every verdict, worst first.
+        """
+        return [cls.FAILURE, cls.ERROR, cls.PENDING, cls.EXPECTED, cls.SUCCESS]
 
 
 class ThreadMarker(StrEnum):
@@ -817,6 +853,21 @@ class CheckStatus(JSONModel):
             results=PullRequestJSONKey.CONTEXTS.read_list(data, CheckResult),
         )
 
+    @classmethod
+    def over(cls, results: list[CheckResult]) -> CheckStatus | None:
+        """
+        Gather checks read one by one, computing the verdict GitHub would give them.
+
+        :param results: Every check, in the order to report them.
+        :return: The status, or ``None`` when nothing has reported.
+        """
+        if not results:
+            return None
+        return cls(
+            state=RollupState.over([result.outcome for result in results]),
+            results=results,
+        )
+
     @property
     def unsuccessful(self) -> list[CheckResult]:
         """:return: The checks that did not report success."""
@@ -1108,6 +1159,396 @@ class GraphQLResponse:
         return self.data or {}
 
 
+# %% models mirroring the REST data
+
+
+class RestJSONKey(StrEnum):
+    """
+    Every field name this script reads out of a REST response.
+
+    REST spells its fields apart from GraphQL, so they are named here rather than
+    shared with :class:`PullRequestJSONKey`.
+    """
+
+    NUMBER = "number"
+    TITLE = "title"
+    HTML_URL = "html_url"
+    STATE = "state"
+    MERGED_AT = "merged_at"
+    HEAD = "head"
+    SHA = "sha"
+    USER = "user"
+    BODY = "body"
+    SUBMITTED_AT = "submitted_at"
+    IDENTIFIER = "id"
+    CREATED_AT = "created_at"
+    RESOLVED = "resolved"
+    OUTDATED = "outdated"
+    PATH = "path"
+    LINE = "line"
+    COMMENT_IDENTIFIERS = "comment_ids"
+    CHECK_RUNS = "check_runs"
+    NAME = "name"
+    CONCLUSION = "conclusion"
+    DETAILS_URL = "details_url"
+    STATUSES = "statuses"
+    CONTEXT = "context"
+    TARGET_URL = "target_url"
+
+
+class RestPullRequestState(StrEnum):
+    """
+    The two states REST reports a pull request in; a merged one reads as closed.
+    """
+
+    OPEN = "open"
+    CLOSED = "closed"
+
+
+@dataclass(frozen=True)
+class RestPullRequestHead(JSONModel):
+    """
+    The branch a pull request was opened from.
+    """
+
+    sha: str
+    """
+    The commit the branch points at, which the checks are reported against.
+    """
+
+    owner: Author
+    """
+    Whoever owns the branch.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> RestPullRequestHead:
+        """
+        Read a ``head`` object.
+
+        :param data: The object to read.
+        :return: The parsed head.
+        """
+        return cls(
+            sha=data[RestJSONKey.SHA],
+            owner=Author.from_json(data[RestJSONKey.USER]),
+        )
+
+
+@dataclass(frozen=True)
+class RestPullRequestSummary(JSONModel):
+    """
+    One pull request as REST describes it, whether listed or read on its own.
+    """
+
+    number: int
+    """
+    Its number on the upstream repository.
+    """
+
+    title: str
+    """
+    Its title.
+    """
+
+    url: str
+    """
+    Its web URL.
+    """
+
+    state: RestPullRequestState
+    """
+    Whether it is open or closed.
+    """
+
+    merged: bool
+    """
+    Whether it closed by merging.
+    """
+
+    head: RestPullRequestHead
+    """
+    The branch it was opened from.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> RestPullRequestSummary:
+        """
+        Read a pull request object.
+
+        :param data: The object to read.
+        :return: The parsed summary.
+        """
+        return cls(
+            number=data[RestJSONKey.NUMBER],
+            title=data[RestJSONKey.TITLE],
+            url=data[RestJSONKey.HTML_URL],
+            state=RestPullRequestState(data[RestJSONKey.STATE]),
+            merged=data[RestJSONKey.MERGED_AT] is not None,
+            head=RestPullRequestHead.from_json(data[RestJSONKey.HEAD]),
+        )
+
+    @property
+    def branch_pull_request(self) -> BranchPullRequest:
+        """
+        :return: The summary a branch search compares, in the lifecycle GraphQL names.
+        """
+        if self.merged:
+            state = PullRequestState.MERGED
+        else:
+            state = PullRequestState[self.state.name]
+        return BranchPullRequest(
+            number=self.number, state=state, head_owner=self.head.owner
+        )
+
+
+@dataclass(frozen=True)
+class RestReview(JSONModel):
+    """
+    One submitted review, as REST lists it.
+    """
+
+    review: Review
+    """
+    The review it describes.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> RestReview:
+        """
+        Read a review object, whose body and submission time are null until submitted.
+
+        :param data: The object to read.
+        :return: The parsed review.
+        """
+        return cls(
+            Review(
+                author=Author.from_json(data[RestJSONKey.USER]),
+                state=ReviewState[data[RestJSONKey.STATE]],
+                body=data[RestJSONKey.BODY] or "",
+                submitted_at=data[RestJSONKey.SUBMITTED_AT] or "",
+            )
+        )
+
+
+@dataclass(frozen=True)
+class RestReviewComment(JSONModel):
+    """
+    One review comment, as REST lists every comment on a pull request.
+    """
+
+    comment: ThreadComment
+    """
+    The comment it describes.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> RestReviewComment:
+        """
+        Read a review comment object.
+
+        :param data: The object to read.
+        :return: The parsed comment.
+        """
+        return cls(
+            ThreadComment(
+                database_identifier=data[RestJSONKey.IDENTIFIER],
+                author=Author.from_json(data[RestJSONKey.USER]),
+                body=data[RestJSONKey.BODY],
+                created_at=data[RestJSONKey.CREATED_AT],
+                url=data[RestJSONKey.HTML_URL],
+            )
+        )
+
+
+@dataclass(frozen=True)
+class RestReviewThread(JSONModel):
+    """
+    One review thread, as a Claude Code session's proxy reports it: its state and
+    location, and the comments in it named by identifier only.
+    """
+
+    is_resolved: bool
+    """
+    Whether a reviewer has marked the thread resolved.
+    """
+
+    is_outdated: bool
+    """
+    Whether the diff hunk the thread was anchored to has since changed.
+    """
+
+    path: str
+    """
+    The file the thread is attached to.
+    """
+
+    line: int | None
+    """
+    The line the thread is attached to, absent once the hunk is outdated.
+    """
+
+    comment_identifiers: list[int]
+    """
+    The comments in the thread, oldest first.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> RestReviewThread:
+        """
+        Read a review thread object.
+
+        :param data: The object to read.
+        :return: The parsed thread.
+        """
+        return cls(
+            is_resolved=data[RestJSONKey.RESOLVED],
+            is_outdated=data[RestJSONKey.OUTDATED],
+            path=data[RestJSONKey.PATH],
+            line=data[RestJSONKey.LINE],
+            comment_identifiers=list(data[RestJSONKey.COMMENT_IDENTIFIERS]),
+        )
+
+    def thread(self, comments: dict[int, ThreadComment]) -> ReviewThread:
+        """
+        Fill the thread in with its comments.
+
+        The route carries no identifier of the thread's own, so its first comment's
+        stands in for one. A comment deleted since the comments were listed is left
+        out rather than failing the whole read.
+
+        :param comments: Every comment on the pull request, by identifier.
+        :return: The thread, as the report reads it.
+        """
+        return ReviewThread(
+            identifier=str(self.comment_identifiers[0]),
+            is_resolved=self.is_resolved,
+            is_outdated=self.is_outdated,
+            path=self.path,
+            line=self.line,
+            comments=[
+                comments[identifier]
+                for identifier in self.comment_identifiers
+                if identifier in comments
+            ],
+        )
+
+
+@dataclass(frozen=True)
+class RestCheckRun(JSONModel):
+    """
+    One check run, such as a GitHub Actions job.
+    """
+
+    result: CheckResult
+    """
+    The check it describes.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> RestCheckRun:
+        """
+        Read a check run object, whose conclusion is null until it finishes.
+
+        :param data: The object to read.
+        :return: The parsed check run.
+        """
+        conclusion = data[RestJSONKey.CONCLUSION]
+        return cls(
+            CheckResult(
+                name=data[RestJSONKey.NAME],
+                outcome=(
+                    CheckOutcome[conclusion.upper()]
+                    if conclusion
+                    else CheckOutcome.PENDING
+                ),
+                url=data[RestJSONKey.DETAILS_URL] or "",
+            )
+        )
+
+
+@dataclass(frozen=True)
+class RestCheckRunPage(JSONModel):
+    """
+    One page of the check runs reported against a commit.
+    """
+
+    check_runs: list[RestCheckRun]
+    """
+    The check runs on this page.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> RestCheckRunPage:
+        """
+        Read one page of the check-runs listing.
+
+        :param data: The page to read.
+        :return: The parsed page.
+        """
+        return cls(
+            [RestCheckRun.from_json(run) for run in data[RestJSONKey.CHECK_RUNS]]
+        )
+
+
+@dataclass(frozen=True)
+class RestCommitStatus(JSONModel):
+    """
+    One status posted through the commit-status API.
+    """
+
+    result: CheckResult
+    """
+    The check it describes.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> RestCommitStatus:
+        """
+        Read a commit status object.
+
+        :param data: The object to read.
+        :return: The parsed status.
+        """
+        return cls(
+            CheckResult(
+                name=data[RestJSONKey.CONTEXT],
+                outcome=CheckOutcome[data[RestJSONKey.STATE].upper()],
+                url=data[RestJSONKey.TARGET_URL] or "",
+            )
+        )
+
+
+@dataclass(frozen=True)
+class RestCombinedStatusPage(JSONModel):
+    """
+    One page of the statuses posted against a commit.
+
+    Its own combined state is left unread: GitHub reports it pending when nothing has
+    posted at all, which would misreport a commit no status applies to.
+    """
+
+    statuses: list[RestCommitStatus]
+    """
+    The statuses on this page.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> RestCombinedStatusPage:
+        """
+        Read one page of the combined status.
+
+        :param data: The page to read.
+        :return: The parsed page.
+        """
+        return cls(
+            [
+                RestCommitStatus.from_json(status)
+                for status in data[RestJSONKey.STATUSES]
+            ]
+        )
+
+
 # %% the log behind a failed check
 
 
@@ -1305,13 +1746,38 @@ class GraphQLClient(ABC):
         """
 
 
-@dataclass
-class GitHubCommandLineClient(GraphQLClient, JobLogReader):
+class RestClient(ABC):
     """
-    A client that shells out to ``gh api graphql``.
+    Reads REST responses from GitHub.
+    """
 
-    The runner already ships ``gh`` and authenticates it from ``GITHUB_TOKEN``, so this
-    holds no credential handling of its own.
+    @abstractmethod
+    def get(self, path: str) -> Any:
+        """
+        Read one response.
+
+        :param path: The REST path, query included.
+        :return: The parsed response.
+        """
+
+    @abstractmethod
+    def get_pages(self, path: str) -> list[Any]:
+        """
+        Read every page of a paged response.
+
+        :param path: The REST path of the first page, query included.
+        :return: Each page's parsed response, in order.
+        """
+
+
+@dataclass
+class GitHubCommandLineClient(GraphQLClient, RestClient, JobLogReader):
+    """
+    A client that shells out to ``gh api``.
+
+    A runner ships ``gh`` and authenticates it from ``GITHUB_TOKEN``, and a Claude Code
+    session's proxy authenticates it for the repositories the session has attached, so
+    this holds no credential handling of its own.
     """
 
     executable: str = GitHubClient.COMMAND_LINE
@@ -1344,6 +1810,27 @@ class GitHubCommandLineClient(GraphQLClient, JobLogReader):
         return GraphQLResponse.from_json(
             self._run(["api", "graphql", "--input", "-"], request)
         ).result()
+
+    def get(self, path: str) -> Any:
+        """
+        Read one REST response through ``gh``.
+
+        :param path: The REST path, query included.
+        :return: The parsed response.
+        :raises GitHubCommandFailed: If ``gh`` exits non-zero.
+        """
+        return json.loads(self._run(["api", path]))
+
+    def get_pages(self, path: str) -> list[Any]:
+        """
+        Read every page of a REST response through ``gh``, which follows the pages and
+        collects them into one list.
+
+        :param path: The REST path of the first page, query included.
+        :return: Each page's parsed response, in order.
+        :raises GitHubCommandFailed: If ``gh`` exits non-zero.
+        """
+        return json.loads(self._run(["api", "--paginate", "--slurp", path]))
 
     def read_job_log(self, repository: Repository, job_identifier: int) -> str:
         """
@@ -1390,10 +1877,77 @@ class GitHubCommandLineClient(GraphQLClient, JobLogReader):
 # %% reading
 
 
-@dataclass
-class UpstreamPullRequestReader:
+class PullRequestSource(ABC):
     """
-    Reads one upstream pull request's checks and review state through a client.
+    Reads one upstream pull request's checks and review state, by whichever API the
+    place it runs in can reach.
+    """
+
+    upstream_repository: Repository
+    """
+    The repository the fork's pull requests are opened against.
+    """
+
+    fork_owner: str
+    """
+    The owner whose branches this reader will claim as its own.
+    """
+
+    @abstractmethod
+    def resolve_pull_request_number(self, branch: str) -> int:
+        """
+        Find the upstream pull request opened from *branch*.
+
+        :param branch: The fork branch name.
+        :return: The upstream pull request number.
+        :raises UpstreamPullRequestNotFound: If the fork has no such pull request.
+        """
+
+    @abstractmethod
+    def read_current_state(
+        self, pull_request_number: int
+    ) -> UpstreamPullRequestSnapshot:
+        """
+        Read the checks, reviews and review threads on one upstream pull request.
+
+        :param pull_request_number: The upstream pull request's number.
+        :return: The assembled snapshot.
+        """
+
+    def choose(self, branch: str, pull_requests: list[BranchPullRequest]) -> int:
+        """
+        Pick the fork's own pull request out of those a branch search matched.
+
+        Prefers an open pull request, falling back to the most recent closed one so a
+        branch under post-merge discussion still resolves.
+
+        :param branch: The fork branch searched for.
+        :param pull_requests: Every match, newest first.
+        :return: The chosen pull request's number.
+        :raises UpstreamPullRequestNotFound: If none of them is the fork's.
+        """
+        candidates = [
+            pull_request
+            for pull_request in pull_requests
+            if pull_request.head_owner.login == self.fork_owner
+        ]
+        if not candidates:
+            raise UpstreamPullRequestNotFound(
+                branch, self.upstream_repository, self.fork_owner
+            )
+        open_candidates = [
+            pull_request
+            for pull_request in candidates
+            if pull_request.state is PullRequestState.OPEN
+        ]
+        return (open_candidates or candidates)[0].number
+
+
+@dataclass
+class UpstreamPullRequestReader(PullRequestSource):
+    """
+    Reads one upstream pull request's checks and review state through GraphQL, which a
+    runner reaches and a Claude Code session does not.
     """
 
     client: GraphQLClient
@@ -1420,45 +1974,19 @@ class UpstreamPullRequestReader:
         }
 
     def resolve_pull_request_number(self, branch: str) -> int:
-        """
-        Find the upstream pull request opened from *branch*.
-
-        Prefers an open pull request, falling back to the most recent closed one so a
-        branch under post-merge discussion still resolves.
-
-        :param branch: The fork branch name.
-        :return: The upstream pull request number.
-        :raises UpstreamPullRequestNotFound: If the fork has no such pull request.
-        """
+        """See :meth:`PullRequestSource.resolve_pull_request_number`."""
         data = self.client.execute(
             GraphQLDocument.PULL_REQUEST_FOR_BRANCH.read(),
             {**self._repository_variables, QueryVariable.HEAD_REF_NAME: branch},
         )
-        candidates = [
-            pull_request
-            for pull_request in PullRequestForBranchResult.from_json(data).pull_requests
-            if pull_request.head_owner.login == self.fork_owner
-        ]
-        if not candidates:
-            raise UpstreamPullRequestNotFound(
-                branch, self.upstream_repository, self.fork_owner
-            )
-        open_candidates = [
-            pull_request
-            for pull_request in candidates
-            if pull_request.state is PullRequestState.OPEN
-        ]
-        return (open_candidates or candidates)[0].number
+        return self.choose(
+            branch, PullRequestForBranchResult.from_json(data).pull_requests
+        )
 
     def read_current_state(
         self, pull_request_number: int
     ) -> UpstreamPullRequestSnapshot:
-        """
-        Read the checks, reviews and review threads on one upstream pull request.
-
-        :param pull_request_number: The upstream pull request's number.
-        :return: The assembled snapshot.
-        """
+        """See :meth:`PullRequestSource.read_current_state`."""
         threads: list[ReviewThread] = []
         cursor: str | None = None
         while True:
@@ -1478,6 +2006,241 @@ class UpstreamPullRequestReader:
                 break
             cursor = page.page_info.end_cursor
         return UpstreamPullRequestSnapshot.assemble(pull_request, threads)
+
+
+@dataclass(frozen=True)
+class UpstreamRestRoute:
+    """
+    The REST paths reading one upstream repository's pull requests takes.
+    """
+
+    repository: Repository
+    """
+    The repository the paths are under.
+    """
+
+    @classproperty
+    def page_size(cls) -> int:
+        """
+        The most entries GitHub hands back per page, asked for so a long list takes
+        as few requests as it can.
+        """
+        return 100
+
+    def pull_requests_for_head(self, owner: str, branch: str) -> str:
+        """
+        :param owner: Whose branch to search for.
+        :param branch: The branch's name.
+        :return: The search for pull requests opened from it, in any state.
+        """
+        query = urlencode(
+            {"head": f"{owner}:{branch}", "state": "all", "per_page": self.page_size},
+            safe=":",
+        )
+        return f"{self.repository.api_path}/pulls?{query}"
+
+    def pull_request(self, number: int) -> str:
+        """
+        :param number: The pull request's number.
+        :return: The pull request itself.
+        """
+        return f"{self.repository.api_path}/pulls/{number}"
+
+    def reviews(self, number: int) -> str:
+        """
+        :param number: The pull request's number.
+        :return: Its submitted reviews.
+        """
+        return f"{self.pull_request(number)}/reviews?per_page={self.page_size}"
+
+    def review_comments(self, number: int) -> str:
+        """
+        :param number: The pull request's number.
+        :return: Every review comment on it, across all its threads.
+        """
+        return f"{self.pull_request(number)}/comments?per_page={self.page_size}"
+
+    def review_threads(self, number: int) -> str:
+        """
+        The threads with their resolved state - a route of the Claude Code session
+        proxy's own, standing in for the GraphQL GitHub keeps that state behind, which
+        answers with every thread at once.
+
+        :param number: The pull request's number.
+        :return: Its review threads.
+        """
+        return f"{self.pull_request(number)}/ccr/review_threads"
+
+    def check_runs(self, sha: str) -> str:
+        """
+        :param sha: The commit.
+        :return: The check runs reported against it.
+        """
+        return (
+            f"{self.repository.api_path}/commits/{sha}/check-runs"
+            f"?per_page={self.page_size}"
+        )
+
+    def commit_status(self, sha: str) -> str:
+        """
+        :param sha: The commit.
+        :return: The statuses posted against it.
+        """
+        return (
+            f"{self.repository.api_path}/commits/{sha}/status"
+            f"?per_page={self.page_size}"
+        )
+
+
+@dataclass
+class RestPullRequestReader(PullRequestSource):
+    """
+    Reads one upstream pull request's checks and review state over REST, which is
+    what a Claude Code session's proxy answers once the upstream is attached to it.
+    """
+
+    client: RestClient
+    """
+    How REST requests reach GitHub.
+    """
+
+    upstream_repository: Repository
+    """
+    The repository the fork's pull requests are opened against.
+    """
+
+    fork_owner: str
+    """
+    The owner whose branches this reader will claim as its own.
+    """
+
+    @property
+    def route(self) -> UpstreamRestRoute:
+        """:return: The paths under the upstream."""
+        return UpstreamRestRoute(self.upstream_repository)
+
+    def resolve_pull_request_number(self, branch: str) -> int:
+        """See :meth:`PullRequestSource.resolve_pull_request_number`."""
+        pages = self.client.get_pages(
+            self.route.pull_requests_for_head(self.fork_owner, branch)
+        )
+        return self.choose(
+            branch,
+            [
+                RestPullRequestSummary.from_json(entry).branch_pull_request
+                for page in pages
+                for entry in page
+            ],
+        )
+
+    def read_current_state(
+        self, pull_request_number: int
+    ) -> UpstreamPullRequestSnapshot:
+        """See :meth:`PullRequestSource.read_current_state`."""
+        pull_request = RestPullRequestSummary.from_json(
+            self.client.get(self.route.pull_request(pull_request_number))
+        )
+        return UpstreamPullRequestSnapshot(
+            number=pull_request.number,
+            title=pull_request.title,
+            url=pull_request.url,
+            reviews=self._reviews(pull_request_number),
+            threads=self._threads(pull_request_number),
+            checks=self._checks(pull_request.head.sha),
+        )
+
+    def _reviews(self, pull_request_number: int) -> list[Review]:
+        """
+        :param pull_request_number: The pull request's number.
+        :return: Every submitted review, oldest first.
+        """
+        return [
+            RestReview.from_json(entry).review
+            for page in self.client.get_pages(self.route.reviews(pull_request_number))
+            for entry in page
+        ]
+
+    def _threads(self, pull_request_number: int) -> list[ReviewThread]:
+        """
+        Read the threads, then fill each in from the comments listed separately.
+
+        :param pull_request_number: The pull request's number.
+        :return: Every review thread, in the order the route returned them.
+        """
+        comments = {
+            comment.database_identifier: comment
+            for comment in (
+                RestReviewComment.from_json(entry).comment
+                for page in self.client.get_pages(
+                    self.route.review_comments(pull_request_number)
+                )
+                for entry in page
+            )
+        }
+        return [
+            RestReviewThread.from_json(entry).thread(comments)
+            for entry in self.client.get(self.route.review_threads(pull_request_number))
+        ]
+
+    def _checks(self, sha: str) -> CheckStatus | None:
+        """
+        Read the check runs and the commit statuses, which REST reports apart.
+
+        :param sha: The head commit.
+        :return: The checks, or ``None`` when nothing has reported.
+        """
+        runs = [
+            run.result
+            for page in self.client.get_pages(self.route.check_runs(sha))
+            for run in RestCheckRunPage.from_json(page).check_runs
+        ]
+        statuses = [
+            status.result
+            for page in self.client.get_pages(self.route.commit_status(sha))
+            for status in RestCombinedStatusPage.from_json(page).statuses
+        ]
+        return CheckStatus.over(runs + statuses)
+
+
+class ReadSource(StrEnum):
+    """
+    The two APIs a pull request can be read through.
+    """
+
+    REST = "rest"
+    """
+    REST, the only one a Claude Code cloud session's proxy answers.
+    """
+
+    GRAPHQL = "graphql"
+    """
+    GraphQL, which a runner or a developer's own machine reaches.
+    """
+
+    @classmethod
+    def detect(cls) -> ReadSource:
+        """
+        :return: The API the place this runs in can reach.
+        """
+        if ClaudeCodeVariable.REMOTE.read() == "true":
+            return cls.REST
+        return cls.GRAPHQL
+
+    def reader(
+        self,
+        client: GitHubCommandLineClient,
+        upstream_repository: Repository,
+        fork_owner: str,
+    ) -> PullRequestSource:
+        """
+        :param client: The client both readers go through.
+        :param upstream_repository: The repository to read.
+        :param fork_owner: Whose branches to claim.
+        :return: The reader for this API.
+        """
+        if self is ReadSource.REST:
+            return RestPullRequestReader(client, upstream_repository, fork_owner)
+        return UpstreamPullRequestReader(client, upstream_repository, fork_owner)
 
 
 @dataclass
@@ -1722,6 +2485,13 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         "--upstream", help="an owner/name upstream outranking the configured one"
     )
     parser.add_argument(
+        "--source",
+        type=ReadSource,
+        choices=list(ReadSource),
+        default=None,
+        help="the API to read through, defaulting to the one this place can reach",
+    )
+    parser.add_argument(
         "--include-resolved",
         action="store_true",
         help="show threads already marked resolved as well",
@@ -1769,7 +2539,8 @@ def _build_report(arguments: argparse.Namespace) -> str:
     upstream = resolve_upstream_repository(
         CommittedStackConfiguration(), override=arguments.upstream
     )
-    reader = UpstreamPullRequestReader(client, upstream, arguments.fork_owner)
+    source = arguments.source or ReadSource.detect()
+    reader = source.reader(client, upstream, arguments.fork_owner)
     number = arguments.pull_request or reader.resolve_pull_request_number(
         arguments.branch
     )

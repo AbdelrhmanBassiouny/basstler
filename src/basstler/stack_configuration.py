@@ -68,12 +68,6 @@ class StackSetting(StrEnum):
     The upstream branch every stack ultimately targets.
     """
 
-    REVIEWS_REPOSITORY = "reviews_repository"
-    """
-    The repository whose Actions run the upstream-reviews read, defaulting to the
-    package's own.
-    """
-
     UPSTREAM_SETUP_COMMAND = "upstream_setup_command"
     """
     The command adding a missing upstream remote. Resolved from the checkout rather than

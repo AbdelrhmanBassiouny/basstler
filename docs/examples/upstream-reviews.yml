@@ -1,7 +1,7 @@
 # Optional: copy into a project as .github/workflows/upstream-reviews.yml to run the
 # upstream-reviews read in the project's own Actions. The /upstream-reviews skill needs
-# no copy - it dispatches basstler's own upstream-reviews-dispatch.yml. Keep the two
-# refs below on the same basstler release as the plugin.
+# no copy - a Claude Code session reads the upstream itself. Keep the two refs below on
+# the same basstler release as the plugin.
 name: Upstream reviews
 
 on:

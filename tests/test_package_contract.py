@@ -28,7 +28,6 @@ from basstler.package_layout import (
     command_line_entry_points,
     package_modules,
 )
-from basstler.repository import PACKAGE_REPOSITORY
 
 from .constants.environment import ConfigurationVariable, SearchPathVariable
 from .constants.paths import RepositoryLocation
@@ -301,17 +300,6 @@ def test_the_shell_asks_for_the_interpreters_the_package_supports():
     assert (
         configuration_value(ConfigurationVariable.PYTHON_REQUIREMENT)
         == ProjectDeclaration.of_this_package().requires_python
-    )
-
-
-def test_the_shell_installs_from_the_repository_the_package_names_as_its_own():
-    """
-    The upstream-reviews read runs in the package's own repository by default, so the
-    repository a session dispatches to is the one its package was installed from.
-    """
-    assert (
-        configuration_value(ConfigurationVariable.REPOSITORY_URL)
-        == PACKAGE_REPOSITORY.url
     )
 
 

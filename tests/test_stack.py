@@ -20,7 +20,7 @@ import pytest
 
 import basstler.stack
 from basstler.exit_codes import StackExitCode
-from basstler.repository import PACKAGE_REPOSITORY, Repository
+from basstler.repository import Repository
 from basstler.stack_configuration import StackSetting
 from basstler.stack import (
     AmbiguousForkRemoteError,
@@ -98,12 +98,6 @@ class StackRepository(Enum):
     DIFFERENT_UPSTREAM = Repository("a-different-upstream", "a-project")
     """
     An upstream named on the command line in place of the committed one.
-    """
-
-    REVIEWS_RUNNER = Repository("a-fork-owner", "a-basstler-copy")
-    """
-    A repository of the user's own named to run the upstream-reviews read in place of
-    the package's.
     """
 
 
@@ -189,7 +183,6 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
         upstream_remote=RemoteName.UPSTREAM,
         upstream_base=StackBranch.BASE,
         upstream_setup_command=upstream_setup_command,
-        reviews_repository=StackRepository.REVIEWS_RUNNER.value,
     )
 
 
@@ -759,7 +752,6 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
         StackSetting.UPSTREAM_REPOSITORY: StackRepository.UPSTREAM.value.full_name,
         StackSetting.UPSTREAM_REMOTE: RemoteName.UPSTREAM,
         StackSetting.UPSTREAM_BASE: StackBranch.BASE,
-        StackSetting.REVIEWS_REPOSITORY: StackRepository.REVIEWS_RUNNER.value.full_name,
     }
 
 
@@ -1302,46 +1294,6 @@ def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
 
     assert configuration.fork_repository == StackRepository.SOMEBODY_ELSES_FORK.value
     assert configuration.fork_remote == RemoteName.THEIRS
-
-
-def test_the_upstream_reviews_run_in_the_package_repository_unless_told_otherwise(
-    scratch_repository: ScratchRepository, monkeypatch
-):
-    """
-    The package's own repository holds the dispatch workflow, so a project that commits
-    no workflow of its own still has somewhere to run the read.
-    """
-    configuration_path = _committed_configuration_path(scratch_repository)
-    scratch_repository.resolve_notes_remote_to()
-    monkeypatch.chdir(scratch_repository.project_root)
-
-    configuration = load_configuration(configuration_path)
-
-    assert configuration.reviews_repository == PACKAGE_REPOSITORY
-
-
-def test_a_personal_reviews_repository_replaces_the_package_repository(
-    scratch_repository: ScratchRepository, monkeypatch
-):
-    """
-    Dispatching a workflow takes write access to the repository it runs in, so a user
-    who cannot dispatch the package's names a copy of their own.
-    """
-    configuration_path = _committed_configuration_path(scratch_repository)
-    scratch_repository.publish_notes_branch(
-        {
-            ProjectLocation.PERSONAL_STACK_CONFIGURATION: a_setting_line(
-                StackSetting.REVIEWS_REPOSITORY,
-                StackRepository.REVIEWS_RUNNER.value.full_name,
-            )
-        }
-    )
-    scratch_repository.resolve_notes_remote_to()
-    monkeypatch.chdir(scratch_repository.project_root)
-
-    configuration = load_configuration(configuration_path)
-
-    assert configuration.reviews_repository == StackRepository.REVIEWS_RUNNER.value
 
 
 def test_a_project_committing_no_stack_file_takes_its_upstream_from_personal_notes(

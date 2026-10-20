@@ -376,7 +376,8 @@ MAINTENANCE_MODULE="basstler.maintenance"
 # already touches - the mechanical half of add-plan-item's scope decision.
 CHECK_SCOPE_OVERLAP_MODULE="basstler.check_scope_overlap"
 # upstream_reviews: reports the review threads a fork branch's upstream
-# pull request has collected, run by the upstream-reviews Action.
+# pull request has collected, run by /upstream-reviews in a session or the
+# upstream-reviews Action on a runner.
 UPSTREAM_REVIEWS_MODULE="basstler.upstream_reviews"
 # dependencies: prints the package's requirements an environment does not
 # have - what missing_dependencies below calls.

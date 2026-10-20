@@ -50,7 +50,7 @@ from urllib.parse import quote
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.locations import PackageLocation, ProjectLocation
-from basstler.repository import PACKAGE_REPOSITORY, Repository
+from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.stack_configuration import (
     CommittedStackConfiguration,
@@ -250,9 +250,6 @@ class Configuration:
     upstream_setup_command: str | None
     """The command adding the upstream remote, or ``None`` once this checkout has one."""
 
-    reviews_repository: Repository = PACKAGE_REPOSITORY
-    """The repository whose Actions run the upstream-reviews read for this checkout."""
-
 
 def load_configuration(
     path: Path = PackageLocation.STACK_CONFIGURATION.value,
@@ -290,18 +287,7 @@ def load_configuration(
         upstream_remote=resolution.upstream_name,
         upstream_base=values.get("upstream_base", "main"),
         upstream_setup_command=resolution.upstream_setup_command,
-        reviews_repository=_reviews_repository_in(values),
     )
-
-
-def _reviews_repository_in(values: dict[str, str]) -> Repository:
-    """Pick the repository whose Actions run the upstream-reviews read.
-
-    :param values: Layered stack settings.
-    :return: The repository they name, else the package's own.
-    """
-    configured = values.get(StackSetting.REVIEWS_REPOSITORY)
-    return Repository.parse(configured) if configured else PACKAGE_REPOSITORY
 
 
 def _configuration_values(path: Path) -> dict[str, str]:

@@ -7,12 +7,10 @@ name: Upstream reviews
 # reaches neither that nor the upstream's REST API at all, so both reads happen on a
 # runner and the session reads the job's log.
 #
-# Reusable, from either of two callers. This repository's upstream-reviews-dispatch.yml
-# names the upstream and fork owner as inputs, so a project needs no file of its own.
-# A project may instead call it from a dispatch-only workflow of its own (see
-# docs/SETUP.md), naming the release of basstler it calls; left out, the upstream then
-# comes from the project's own .claude/basstler/stack.toml and the fork owner from the
-# runner's context. Either way no repository is named here.
+# Reusable: a project calls it from a dispatch-only workflow of its own (see
+# docs/SETUP.md), naming the release of basstler it calls. The upstream comes from the
+# project's own .claude/basstler/stack.toml and the fork owner from the runner's
+# context, so no repository is named here.
 #
 # A runner starts with nothing installed and no session hook runs on it, so this job
 # installs the package itself before invoking a module.
@@ -42,14 +40,6 @@ on:
         required: false
         default: false
         type: boolean
-      upstream:
-        description: "The owner/name repository the pull request is reviewed on, outranking the project's committed one"
-        required: false
-        type: string
-      fork_owner:
-        description: "The owner whose branches to claim, defaulting to the runner's own"
-        required: false
-        type: string
 
 permissions:
   contents: read
@@ -94,11 +84,5 @@ jobs:
           fi
           if [ "${{ inputs.failure_logs }}" = "true" ]; then
             ARGUMENTS+=(--failure-logs)
-          fi
-          if [ -n "${{ inputs.upstream }}" ]; then
-            ARGUMENTS+=(--upstream "${{ inputs.upstream }}")
-          fi
-          if [ -n "${{ inputs.fork_owner }}" ]; then
-            ARGUMENTS+=(--fork-owner "${{ inputs.fork_owner }}")
           fi
           python -m basstler.upstream_reviews "${ARGUMENTS[@]}"
