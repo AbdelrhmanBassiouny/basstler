@@ -1,6 +1,6 @@
 schema_version: 1
 id: plan-graph
-title: One queryable graph of plans, items and what they define, and a procedure for every collision it finds
+title: "Plan graph: dependencies and design overlap, caught before they collide"
 description: >-
   Plans and branches collide in two ways nothing catches early: an item depends on work in
   another plan or repository, and two items build the same thing under different names. This
