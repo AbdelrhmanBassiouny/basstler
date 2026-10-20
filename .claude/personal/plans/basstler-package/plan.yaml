@@ -44,11 +44,11 @@ items:
   repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
   depends_on: []
   pull_request_number: 523
-  notes: 'Folded into CRAM #523 with cram-basstler-removal. On review, the user ruled CRAM commits
-    no basstler file: no settings.json plugin entry, no .claude/basstler/stack.toml, no
-    upstream-reviews.yml caller. The upstream is named in CRAM''s personal stack.toml instead.
-    Open PRs #488, #265, #202 relabelled to promotion-link-sent. Gaps this leaves are
-    upstream-reviews-without-project-files and stamps-in-git-directory.'
+  notes: 'Folded into CRAM #523 with cram-basstler-removal. On review, the user ruled CRAM
+    commits no basstler file: no settings.json plugin entry, no .claude/basstler/stack.toml,
+    no upstream-reviews.yml caller. The upstream is named in CRAM''s personal stack.toml instead.
+    Open PRs #488, #265, #202 relabelled to promotion-link-sent. Gaps this leaves are upstream-reviews-without-project-files
+    and stamps-in-git-directory.'
 - id: cram-basstler-removal
   title: Delete the carried tooling from CRAM, and from cram2 through the promotion flow
   branch: claude/compassionate-darwin-ek7d2u
@@ -59,23 +59,10 @@ items:
   pull_request_number: 523
   notes: 'Draft CRAM #523 removes basstler/, its tests, hooks, stack, SETUP.md, the plugin''s
     skills, the test_basstler job and every basstler mention, and moves PathEnumeration into
-    krrood. Promotion link to cram2 built and recorded on #523; the upstream pull request opens
-    when the user clicks Create.
+    krrood. Promotion link to cram2 built and recorded on #523; the upstream pull request
+    opens when the user clicks Create.
 
     '
-- id: cram-notes-cleanup
-  title: Strip the tooling from the CRAM fork's personal notes
-  branch: null
-  status: in progress
-  track: cram-retirement
-  depends_on: []
-  pull_request_number: null
-  notes: 'Notes branch only. Done: the tooling plans, their dashboard URLs and their branches''
-    progress notes moved here (CRAM notes 8c6c016, 111e30ec5), and CRAM''s notes.md no longer
-    names in-tree tooling paths; its remaining rules are the user''s own, for both repositories.
-    Left: actions-budget, whose basstler-code items (budget-manifest, usage-monitor) move
-    here once depends_on can name an item in another repository''s plan. CRAM #515 closed
-    on 2026-10-20; its changed_libraries.py work is #55 here.'
 - id: upstream-reviews-without-project-files
   title: /upstream-reviews works for a project that commits no basstler files
   branch: claude/upstream-reviews-no-project-files-m09n3k
@@ -84,11 +71,11 @@ items:
   depends_on: []
   pull_request_number: 56
   session: https://claude.ai/code/session_01Q1iqg88K6XLGdBgtyy24KD
-  notes: 'Implemented on #56 (draft, release:minor -> 0.2.0): basstler''s own
-    upstream-reviews-dispatch.yml takes upstream and fork_owner as inputs; stack configuration
-    prints reviews_repository (default basstler, overridable for users who cannot dispatch
-    there); the upstream may live in the personal stack.toml. Local read rejected (GraphQL
-    blocked). Not verified live until the dispatch workflow is on main.'
+  notes: 'Implemented on #56 (draft, release:minor -> 0.2.0): basstler''s own upstream-reviews-dispatch.yml
+    takes upstream and fork_owner as inputs; stack configuration prints reviews_repository
+    (default basstler, overridable for users who cannot dispatch there); the upstream may
+    live in the personal stack.toml. Local read rejected (GraphQL blocked). Not verified live
+    until the dispatch workflow is on main.'
 - id: stamps-in-git-directory
   title: The plugin keeps its per-clone stamp files where git never tracks them
   branch: null
@@ -96,11 +83,11 @@ items:
   track: cram-retirement
   depends_on: []
   pull_request_number: null
-  notes: 'CRAM #523 drops the .gitignore entries for .claude/.plan-state-sync-sha and
-    .claude/.personal-settings-sync-hash, so they show as untracked in a plugin clone. Proposed:
-    write them under $(git rev-parse --git-dir)/basstler/, which git never tracks; alternative:
-    session-start.sh adds them to .git/info/exclude and check-setup.sh verifies with git
-    check-ignore. The user has not picked yet.'
+  notes: 'CRAM #523 drops the .gitignore entries for .claude/.plan-state-sync-sha and .claude/.personal-settings-sync-hash,
+    so they show as untracked in a plugin clone. Proposed: write them under $(git rev-parse
+    --git-dir)/basstler/, which git never tracks; alternative: session-start.sh adds them
+    to .git/info/exclude and check-setup.sh verifies with git check-ignore. The user has not
+    picked yet.'
 - id: basstler-krrood-dependency
   title: Depend on krrood's light core and use its patterns
   branch: claude/magical-albattani-9fbkd5
@@ -125,8 +112,9 @@ items:
   notes: 'A guided skill over basstler.setup_steps subcommands, mirroring /setup-personal-notes:
     the skill only asks the questions. Native or fork-overlay install; creates labels, writes
     the personal configuration, emits the maintenance prompt. Folds in `configure-upstream
-    --repository <owner>/<name>`, writing upstream_repository to the personal stack.toml
-    (after #56 the committed stack.toml and caller are optional), a check-setup.sh row and docs/SETUP.md section 3. Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238.
+    --repository <owner>/<name>`, writing upstream_repository to the personal stack.toml (after
+    #56 the committed stack.toml and caller are optional), a check-setup.sh row and docs/SETUP.md
+    section 3. Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238.
     Build fresh on main; CRAM #110 is stale.'
 - id: cram-development-tools
   title: Install the docstring formatter and a generated AGENTS.md from the shared cram-development-tools
