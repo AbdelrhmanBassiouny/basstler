@@ -210,7 +210,7 @@ items:
     It mutates nothing, so it is the cost report a direction change is decided against. From
     design-overlap.
 - id: plan-graphs
-  title: Draw the dependency graph and the definition graph on the dashboard, from the model
+  title: A clean, always-current graph view one click from the dashboard, drawn from the model
   branch: null
   pull_request_number: null
   track: visibility
@@ -219,11 +219,13 @@ items:
   - overlap-detector
   status: not started
   notes: >-
-    In `templates/dashboard.html`, Cytoscape from cdnjs at a pinned version, reading only
-    plan_graph's query output. The dependency graph draws items across plans, with edges from
-    depends_on and the real pull request base, highlighting where they disagree; overlap pairs
-    are dashed edges across parallel paths. The definition graph groups definitions by owning
-    item, declared and derived styled apart, with inheritance. From design-overlap.
+    A Graph tab in the dashboard masthead, and a graph link on each item card opening it on
+    that item; rebuilt every render from plan_graph's query output, so never stale.
+    Cytoscape with ELK layered layout, pinned on cdnjs, in the dashboard's light and dark
+    tokens. Low clutter by default: the focused item's neighbourhood, other plans as one
+    node each, done hidden; click to expand. Marks where depends_on and the PR base
+    disagree; overlaps dashed; declared and derived definitions styled apart. No script: a
+    plain list.
   blockers:
   - >-
     #46 (hide deferred items) and #17 (cross-plan depends_on) edit templates/dashboard.html, as
