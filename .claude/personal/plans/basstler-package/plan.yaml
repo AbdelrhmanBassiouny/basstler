@@ -39,7 +39,7 @@ items:
 - id: cram-uses-basstler-plugin
   title: The CRAM fork uses basstler as a per-user plugin and commits none of its configuration
   branch: claude/compassionate-darwin-ek7d2u
-  status: in progress
+  status: done
   track: cram-retirement
   repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
   depends_on: []
@@ -52,7 +52,7 @@ items:
 - id: cram-basstler-removal
   title: Delete the carried tooling from CRAM, and from cram2 through the promotion flow
   branch: claude/compassionate-darwin-ek7d2u
-  status: in progress
+  status: done
   track: cram-retirement
   repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
   depends_on: []
