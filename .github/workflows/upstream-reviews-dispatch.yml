@@ -1,0 +1,55 @@
+name: Upstream reviews (dispatch)
+
+# Runs the upstream-reviews read for any project, from this repository, so the project
+# itself commits neither a workflow nor a stack.toml. The /upstream-reviews skill
+# dispatches it with the upstream and the fork owner its session resolved, since
+# neither this checkout's configuration nor the runner's owner says anything about the
+# fork being read.
+#
+# It calls the reusable workflow at the commit it runs from, so the read always matches
+# this repository's default branch.
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream:
+        description: "The owner/name repository the pull request is reviewed on"
+        required: true
+        type: string
+      fork_owner:
+        description: "The owner of the fork whose branch to read"
+        required: true
+        type: string
+      pull_request:
+        description: "Upstream pull request number (takes precedence over branch)"
+        required: false
+        type: string
+      branch:
+        description: "Fork branch whose upstream pull request to read"
+        required: false
+        type: string
+      include_resolved:
+        description: "Include threads already marked resolved"
+        required: false
+        default: false
+        type: boolean
+      failure_logs:
+        description: "Quote the log behind each check that failed"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  report:
+    uses: ./.github/workflows/upstream-reviews.yml
+    with:
+      basstler_ref: ${{ github.sha }}
+      upstream: ${{ inputs.upstream }}
+      fork_owner: ${{ inputs.fork_owner }}
+      pull_request: ${{ inputs.pull_request }}
+      branch: ${{ inputs.branch }}
+      include_resolved: ${{ inputs.include_resolved }}
+      failure_logs: ${{ inputs.failure_logs }}

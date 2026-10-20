@@ -49,17 +49,30 @@ It prints these three, already filled in for your fork:
 
 ## 3. For the stacked-PR workflow: name the project's upstream
 
-Only if the project uses `/stacked-pr-maintenance` or `/upstream-reviews`. Commit
-`.claude/basstler/stack.toml` naming the repository the project's pull requests are
-reviewed on:
+Only if the project uses `/stacked-pr-maintenance` or `/upstream-reviews`. Name the
+repository the project's pull requests are reviewed on:
 
 ```toml
 upstream_repository = "<owner>/<name>"
 ```
 
-and, for `/upstream-reviews`, copy [`examples/upstream-reviews.yml`](examples/upstream-reviews.yml)
-to the project's `.github/workflows/upstream-reviews.yml` on its default branch. It calls this
-repository's reusable workflow at the plugin's release.
+either in `.claude/basstler/stack.toml`, committed to the project so every contributor
+shares it, or in `.claude/personal/stack.toml` on your personal-notes branch, so the
+project commits nothing of basstler's.
+
+`/upstream-reviews` needs nothing else in the project: it dispatches this repository's
+`upstream-reviews-dispatch.yml`, naming the upstream and your fork's owner. Dispatching
+takes write access to the repository the workflow runs in, so if you cannot push to this
+one, keep a copy of it and name that copy in your personal `stack.toml`:
+
+```toml
+reviews_repository = "<owner>/<name>"
+```
+
+A project that prefers its own Actions may still copy
+[`examples/upstream-reviews.yml`](examples/upstream-reviews.yml) to its
+`.github/workflows/upstream-reviews.yml`; that caller reads the committed
+`.claude/basstler/stack.toml`.
 
 ## 4. Check it worked
 

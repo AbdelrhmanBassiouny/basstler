@@ -68,6 +68,12 @@ class StackSetting(StrEnum):
     The upstream branch every stack ultimately targets.
     """
 
+    REVIEWS_REPOSITORY = "reviews_repository"
+    """
+    The repository whose Actions run the upstream-reviews read, defaulting to the
+    package's own.
+    """
+
     UPSTREAM_SETUP_COMMAND = "upstream_setup_command"
     """
     The command adding a missing upstream remote. Resolved from the checkout rather than
@@ -91,11 +97,22 @@ class MissingUpstreamRepositoryError(CommandFailure, LookupError):
     The file the project names its upstream in.
     """
 
+    personal_file: Path | None = None
+    """
+    The personal-notes file that can name it instead, for a caller that reads that layer.
+    """
+
     def __str__(self) -> str:
         """:return: Where to name the upstream, and how."""
+        alternative = (
+            f", or to {self.personal_file} on your personal-notes branch"
+            if self.personal_file
+            else ""
+        )
         return (
             f"no {StackSetting.UPSTREAM_REPOSITORY} is configured - add "
             f'{StackSetting.UPSTREAM_REPOSITORY} = "<owner>/<name>" to {self.project_file}'
+            f"{alternative}"
         )
 
 
@@ -139,13 +156,17 @@ class CommittedStackConfiguration:
         return upstream_repository_in(self.values(), self.project_file)
 
 
-def upstream_repository_in(values: dict[str, Any], project_file: Path) -> Repository:
+def upstream_repository_in(
+    values: dict[str, Any], project_file: Path, personal_file: Path | None = None
+) -> Repository:
     """
     :param values: Layered stack settings.
     :param project_file: Where the project would name its upstream, for the error.
+    :param personal_file: Where the user could name it instead, when *values* include
+        the personal-notes layer.
     :return: The upstream repository the settings name.
     :raises MissingUpstreamRepositoryError: If they name none.
     """
     if StackSetting.UPSTREAM_REPOSITORY not in values:
-        raise MissingUpstreamRepositoryError(project_file)
+        raise MissingUpstreamRepositoryError(project_file, personal_file)
     return Repository.parse(values[StackSetting.UPSTREAM_REPOSITORY])

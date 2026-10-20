@@ -189,6 +189,13 @@ class Repository:
         return self.full_name
 
 
+PACKAGE_REPOSITORY = Repository("AbdelrhmanBassiouny", "basstler")
+"""
+The repository this package is developed and released from, which also holds the
+dispatch-only workflow that reads a project's upstream pull request for it.
+"""
+
+
 @dataclass(frozen=True)
 class PullRequestReference:
     """
