@@ -188,6 +188,16 @@ class SkillDirectory(PathEnumeration):
     The maintenance pass's own instructions.
     """
 
+    PLAN_ITEM_RESOLVE = DIRECTORY / "plan-item-resolve"
+    """
+    The instructions a resolve run follows.
+    """
+
+    UPSTREAM_REVIEWS = DIRECTORY / "upstream-reviews"
+    """
+    The instructions for reading a branch's upstream review threads.
+    """
+
     DASHBOARD_REFRESH_SCRIPT = PLAN_DASHBOARD / "refresh_dashboard.sh"
     """
     The dashboard skill's shell entry point.
