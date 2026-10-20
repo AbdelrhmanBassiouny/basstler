@@ -49,16 +49,19 @@ It prints these three, already filled in for your fork:
 
 ## 3. For the stacked-PR workflow: name the project's upstream
 
-Only if the project uses `/stacked-pr-maintenance` or `/upstream-reviews`. Name the
-repository the project's pull requests are reviewed on:
+Only if the project uses `/stacked-pr-maintenance` or `/upstream-reviews`. Both skills
+ask for it themselves the first time they need it, so there is nothing to do ahead of
+time. To name it yourself, save the repository the project's pull requests are reviewed
+on to `.claude/personal/stack.toml` on your personal-notes branch, so the project commits
+nothing of basstler's:
 
-```toml
-upstream_repository = "<owner>/<name>"
+```bash
+~/.local/share/basstler/venv/bin/python -m basstler.setup_steps configure-upstream --repository <owner>/<name>
 ```
 
-either in `.claude/basstler/stack.toml`, committed to the project so every contributor
-shares it, or in `.claude/personal/stack.toml` on your personal-notes branch, so the
-project commits nothing of basstler's.
+A project that wants every contributor to share the answer commits
+`upstream_repository = "<owner>/<name>"` in `.claude/basstler/stack.toml` instead.
+`check-setup.sh --require-upstream` reports whether either names one.
 
 `/upstream-reviews` needs nothing else in the project: it dispatches this repository's
 `upstream-reviews-dispatch.yml`, naming the upstream and your fork's owner. Dispatching

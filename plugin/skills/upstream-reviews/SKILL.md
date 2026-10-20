@@ -35,9 +35,11 @@ skill to work there.
 
 The upstream has to be named somewhere `stack configuration` reads it: the
 project's committed `.claude/basstler/stack.toml`, or the user's own
-`.claude/personal/stack.toml` on the personal-notes branch. If step 1 exits
-with the upstream unconfigured, relay its message — it names both files —
-and stop.
+`.claude/personal/stack.toml` on the personal-notes branch. Check for it, and
+everything else this skill relies on, first: follow
+`skills/setup-personal-notes/prerequisite-check.md`, passing
+`--require-upstream` to `check-setup.sh` so a missing upstream runs the setup
+(which asks for it) instead of failing in step 1.
 
 Dispatching a workflow takes write access to the repository it runs in, so
 the reviews repository (step 1) must be one the user can push to. A user who

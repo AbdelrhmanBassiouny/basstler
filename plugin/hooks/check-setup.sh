@@ -7,7 +7,12 @@ set -euo pipefail
 #
 # Usage (from anywhere - always inspects this repo specifically, see
 # resolve-personal-notes-config.sh):
-#   "${BASSTLER_PLUGIN_ROOT}"/hooks/check-setup.sh
+#   "${BASSTLER_PLUGIN_ROOT}"/hooks/check-setup.sh [--require-upstream]
+#
+# --require-upstream makes a project naming no upstream a needs-setup row
+# rather than info. Only /upstream-reviews and /stacked-pr-maintenance need
+# one, so they pass it; any other caller would otherwise fail every project
+# that simply has no upstream.
 #
 # Read-only: it fetches (into FETCH_HEAD) and reads git config, but never
 # writes config, branches, files, or remotes. Running it can't change the
@@ -39,6 +44,41 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
 EXIT_CODE=0
+
+REQUIRE_UPSTREAM=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --require-upstream) REQUIRE_UPSTREAM=true; shift ;;
+    *) echo "Unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+# names_upstream: succeeds when the stack.toml text on stdin names an
+# upstream_repository.
+names_upstream() {
+  grep -Eq '^[[:space:]]*upstream_repository[[:space:]]*='
+}
+
+# report_upstream: prints the stack_upstream row, given whether the
+# personal-notes branch could be read at all. Run while FETCH_HEAD still
+# points at that branch.
+report_upstream() {
+  local notes_branch_read="$1"
+  local configure_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} configure-upstream --repository <owner>/<name>"
+  if [ -f "${PROJECT_ROOT}/${PROJECT_STACK_CONFIGURATION_PATH}" ] \
+      && names_upstream < "${PROJECT_ROOT}/${PROJECT_STACK_CONFIGURATION_PATH}"; then
+    report stack_upstream ok "named in the project's committed ${PROJECT_STACK_CONFIGURATION_PATH}"
+  elif [ "${notes_branch_read}" = true ] \
+      && git show "FETCH_HEAD:${PERSONAL_STACK_CONFIGURATION_PATH}" 2>/dev/null | names_upstream; then
+    report stack_upstream ok "named in ${PERSONAL_STACK_CONFIGURATION_PATH} on '${NOTES_BRANCH}'"
+  elif [ "${REQUIRE_UPSTREAM}" = true ]; then
+    report stack_upstream needs-setup \
+      "no upstream named, which /upstream-reviews and /stacked-pr-maintenance need - run: ${configure_command}"
+  else
+    report stack_upstream info \
+      "no upstream named - only /upstream-reviews and /stacked-pr-maintenance need one, set with: ${configure_command}"
+  fi
+}
 
 # report: prints one TSV row, and remembers that the overall run failed if the
 # status is needs-setup, so the exit code never has to be tracked by hand at
@@ -135,6 +175,8 @@ if fetch_personal_notes_branch; then
       "'${NOTES_BRANCH}' exists but has no '${NOTES_PATH}' - session-start.sh will write no notes"
   fi
 
+  report_upstream true
+
   # %% who commits here would be authored as
 
   # Reported in terms of the identity a commit would really carry (see
@@ -165,6 +207,7 @@ else
   report notes_branch needs-setup \
     "no '${NOTES_BRANCH}' branch on any of: ${ATTEMPTED_NOTES_REMOTES} - run ./create-personal-notes-branch.sh (after pointing the remote at your own fork if it isn't already)"
   report notes_file needs-setup "not checked - the branch that would hold it doesn't exist yet"
+  report_upstream false
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 

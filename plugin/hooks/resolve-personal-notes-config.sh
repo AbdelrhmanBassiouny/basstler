@@ -384,6 +384,14 @@ BASSTLER_DEPENDENCIES_MODULE="basstler.dependencies"
 # plan-item-modes.toml on the personal-notes branch: the per-user override
 # plan_item_mode layers on top of the package's shipped defaults.
 PERSONAL_PLAN_ITEM_MODES_PATH=".claude/personal/plan-item-modes.toml"
+# setup_steps: prints the setup steps no script can do, and performs
+# configure-upstream, which names a project's upstream for the stacked-PR
+# workflow.
+SETUP_STEPS_MODULE="basstler.setup_steps"
+# The stack settings a project commits, and the personal-notes override
+# layered on top of them - either may name the upstream.
+PROJECT_STACK_CONFIGURATION_PATH=".claude/basstler/stack.toml"
+PERSONAL_STACK_CONFIGURATION_PATH=".claude/personal/stack.toml"
 
 # PLAN_DASHBOARD_DIRECTORY / REFRESH_DASHBOARD_SCRIPT: what the
 # plan-dashboard skill keeps outside the package - Claude Code discovers a
