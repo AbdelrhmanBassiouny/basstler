@@ -36,33 +36,6 @@ tracks:
   name: Development tools package
   wave: shared-tooling
 items:
-- id: cram-uses-basstler-plugin
-  title: The CRAM fork uses basstler as a per-user plugin and commits none of its configuration
-  branch: claude/compassionate-darwin-ek7d2u
-  status: done
-  track: cram-retirement
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  depends_on: []
-  pull_request_number: 523
-  notes: 'Folded into CRAM #523 with cram-basstler-removal. On review, the user ruled CRAM
-    commits no basstler file: no settings.json plugin entry, no .claude/basstler/stack.toml,
-    no upstream-reviews.yml caller. The upstream is named in CRAM''s personal stack.toml instead.
-    Open PRs #488, #265, #202 relabelled to promotion-link-sent. Gaps this leaves are upstream-reviews-without-project-files
-    and stamps-in-git-directory.'
-- id: cram-basstler-removal
-  title: Delete the carried tooling from CRAM, and from cram2 through the promotion flow
-  branch: claude/compassionate-darwin-ek7d2u
-  status: done
-  track: cram-retirement
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  depends_on: []
-  pull_request_number: 523
-  notes: 'Draft CRAM #523 removes basstler/, its tests, hooks, stack, SETUP.md, the plugin''s
-    skills, the test_basstler job and every basstler mention, and moves PathEnumeration into
-    krrood. Promotion link to cram2 built and recorded on #523; the upstream pull request
-    opens when the user clicks Create.
-
-    '
 - id: upstream-reviews-without-project-files
   title: /upstream-reviews works for a project that commits no basstler files
   branch: claude/upstream-reviews-no-project-files-m09n3k
@@ -71,11 +44,11 @@ items:
   depends_on: []
   pull_request_number: 56
   session: https://claude.ai/code/session_01Q1iqg88K6XLGdBgtyy24KD
-  notes: 'Implemented on #56 (draft, release:minor -> 0.2.0): basstler''s own
-    upstream-reviews-dispatch.yml takes upstream and fork_owner; stack configuration prints
-    reviews_repository. Also folded in: setup_steps configure-upstream writes the personal
-    stack.toml, check-setup.sh stack_upstream row (needs-setup only with --require-upstream),
-    and the setup skill asks for it. Overlaps #45 in setup files. Not verified live until on main.'
+  notes: 'Implemented on #56 (draft, release:minor -> 0.2.0): the session attaches the upstream
+    and basstler.upstream_reviews reads it over REST (proxy route ccr/review_threads), beside
+    the GraphQL reader runners keep. Also: setup_steps configure-upstream, check-setup.sh
+    stack_upstream row (--require-upstream). Verified live on cram2 #773. Overlaps #45 in
+    setup files.'
 - id: stamps-in-git-directory
   title: The plugin keeps its per-clone stamp files where git never tracks them
   branch: null
@@ -111,10 +84,10 @@ items:
   pull_request_number: null
   notes: 'A guided skill over basstler.setup_steps subcommands, mirroring /setup-personal-notes:
     the skill only asks the questions. Native or fork-overlay install; creates labels, writes
-    the personal configuration, emits the maintenance prompt. configure-upstream, its
-    check-setup.sh row and docs/SETUP.md section 3 landed in #56 - reuse them rather than
-    rebuild. Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238.
-    Build fresh on main; CRAM #110 is stale.'
+    the personal configuration, emits the maintenance prompt. configure-upstream, its check-setup.sh
+    row and docs/SETUP.md section 3 landed in #56 - reuse them rather than rebuild. Design:
+    https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238. Build fresh
+    on main; CRAM #110 is stale.'
 - id: cram-development-tools
   title: Install the docstring formatter and a generated AGENTS.md from the shared cram-development-tools
     package
