@@ -1,11 +1,11 @@
 ## PR #56 - /upstream-reviews without committed project files
 
 Plan
-- Dispatch basstler's `upstream-reviews-dispatch.yml`; upstream in personal stack.toml, saved by `setup_steps configure-upstream` and checked by check-setup.sh's `stack_upstream` row (`--require-upstream`).
+- Session attaches the upstream (add_repo push) and reads it over REST; GraphQL stays for runners. Upstream in personal stack.toml via `setup_steps configure-upstream`, checked by `stack_upstream` (`--require-upstream`).
 
 Done
-- Workflows, `reviews_repository`, skill, docs, tests, 0.2.0 (`release:minor`).
-- Folded in configure-upstream + check row + setup/maintenance skill steps; description and plan notes updated.
+- REST reader + models + equivalence test; skill rewritten; dispatch workflow and reviews_repository removed; verified live on cram2 #773.
+- Setup step, check row, skill steps; 0.2.0 (`release:minor`); description and plan notes current.
 
 Next
-- Review on #56 (conflicts with #45 in setup files go to whichever lands second); after merge, verify live from a CRAM session.
+- Review on #56 (conflicts with #45 in setup files go to whichever lands second).
