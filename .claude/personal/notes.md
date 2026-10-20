@@ -18,9 +18,10 @@ session by `session-start.sh`. Never merge this file into `main`.
 - Bug-fix PRs carry the `bug` label, fix one root cause, and are based off `main`.
 - Every PR decides its release: a new feature or capability is a minor bump, a breaking
   change (removed or renamed commands, flags, files or settings a user relies on) is a
-  major one - set it in the PR with `python -m basstler.release_version bump --part minor`
-  (or `--part major`) and say which and why in the description. Anything else sets
-  nothing, and the release workflow patch-bumps it on merge.
+  major one - set it by labelling the PR `release:minor` (or `release:major`) and say which
+  and why in the description. Anything else gets no label, and the release workflow tags
+  the merge commit as the next patch. (Until #32 merges, `main` still sets it with
+  `python -m basstler.release_version bump --part minor` or `--part major`.)
 - The PR description links the creating session and always describes the current state:
   after any push that changes what the PR does, update the description in the same turn.
 - Never subscribe to a PR's activity, never offer to watch one, and unsubscribe any
