@@ -65,7 +65,10 @@ A project that wants every contributor to share the answer commits
 
 `/upstream-reviews` needs nothing else in the project: in a Claude Code cloud session it
 attaches the upstream to the session and reads it over REST. That attach needs the
-upstream to be a repository your GitHub account can read. Anywhere else, such as Claude
+upstream to be a repository your GitHub account can read. A session working in your
+fork cannot attach the same-named upstream beside it, so there the skill starts a
+short-lived helper session with only the upstream, reads its result and archives it,
+all in the same turn. Anywhere else, such as Claude
 Code in your own terminal, it reads GraphQL as whoever `gh` is logged in as
 (`gh auth login`, or `GH_TOKEN`). Either way, reading needs only read access to the
 upstream, never push access.

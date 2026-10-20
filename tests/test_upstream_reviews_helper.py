@@ -1,34 +1,34 @@
 """
 Tests for reading an upstream pull request through a helper session.
 
-The helper runs this module's ``fetch`` command from a basstler checkout; its output
-reaches this session's transcript, and ``report`` replays it through the same reader.
-These tests run ``fetch`` as the helper does, against a ``gh`` stub answering the
-recorded REST responses, and hold the replayed report to a direct REST read's.
+The helper runs the command its prompt carries; its output reaches this session's
+transcript, and ``report`` replays it through the same reader. These tests run that very
+command against a ``gh`` stub answering the recorded REST responses, and hold the
+replayed report to a direct REST read's.
 """
 
 from __future__ import annotations
 
 import json
 import os
-import shlex
 import shutil
 import stat
 import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
-import basstler
+from basstler import upstream_reviews_fetch
 from basstler.locations import ClaudeCodeVariable
 from basstler.upstream_reviews import (
     FailureLogReader,
+    PullRequestJSONKey,
+    RestJSONKey,
+    RestPullRequestSummary,
     UpstreamPullRequestNotFound,
     UpstreamPullRequestReport,
 )
 from basstler.upstream_reviews_helper import (
-    BASSTLER_REPOSITORY,
     HelperChunk,
     HelperOutputIncomplete,
     HelperOutputMissing,
@@ -37,12 +37,11 @@ from basstler.upstream_reviews_helper import (
     HelperRecording,
     HelperRequest,
     HelperResponseMissing,
+    HelperScript,
     NoHelperRequest,
     RecordedFields,
-    RecordedRestResponse,
     ReplayingClient,
     SessionTranscript,
-    _parse_arguments,
     build_report,
     main,
 )
@@ -66,11 +65,6 @@ The job behind the recorded check run that failed.
 FAILED_JOB_LOG = "line one\nFAILED test_something - assert 1 == 2\n"
 """
 What the stub answers for that job's log.
-"""
-
-SOURCE_ROOT = Path(basstler.__file__).parent.parent
-"""
-The directory the package is imported from, as a helper's checkout puts it on the path.
 """
 
 
@@ -122,23 +116,13 @@ def add_responses(responses: Path, extra: dict[str, object]) -> None:
 
 def run_fetch(helper_request: HelperRequest) -> str:
     """
-    Run ``fetch`` as the helper does: from the package's source, with only the standard
-    library besides.
+    Run the exact command the prompt hands the helper.
 
     :param helper_request: The read.
     :return: What it printed.
     """
     completed = subprocess.run(
-        [
-            sys.executable,
-            "-I",
-            "-c",
-            "import sys; sys.path.insert(0, sys.argv[1]); "
-            "from basstler.upstream_reviews_helper import main; "
-            "sys.exit(main(sys.argv[2:]))",
-            str(SOURCE_ROOT),
-            *helper_request.fetch_arguments,
-        ],
+        ["bash", "-c", HelperScript(helper_request).render()],
         capture_output=True,
         text=True,
         check=True,
@@ -197,7 +181,7 @@ def test_the_helper_read_reports_what_a_direct_read_does(
     )
 
 
-def test_a_branch_is_chosen_by_the_reader_in_the_helper(stubbed_gh):
+def test_a_branch_is_chosen_by_the_reader_on_replay(stubbed_gh):
     add_responses(
         stubbed_gh,
         {
@@ -211,6 +195,39 @@ def test_a_branch_is_chosen_by_the_reader_in_the_helper(stubbed_gh):
     recording = recording_of(helper_request, run_fetch(helper_request))
 
     assert build_report(helper_request, recording, False) == direct_report()
+
+
+@pytest.mark.parametrize(
+    "recorded",
+    [
+        Recorded.PULL_REQUESTS_FOR_BRANCH,
+        Recorded.PULL_REQUESTS_FOR_BRANCH_FOREIGN_OWNER,
+        Recorded.PULL_REQUESTS_FOR_BRANCH_NONE,
+    ],
+)
+def test_the_helper_reads_the_pull_request_the_reader_chooses(recorded):
+    pages = recorded.load()
+    reader = make_reader({})
+    fetch = upstream_reviews_fetch.Fetch(
+        HelperScript(request(pull_request=None, branch=Example.BRANCH)).configuration
+    )
+    fetch.get_pages = lambda path: pages
+
+    try:
+        chosen = [
+            reader.choose(
+                Example.BRANCH,
+                [
+                    RestPullRequestSummary.from_json(entry).branch_pull_request
+                    for page in pages
+                    for entry in page
+                ],
+            )
+        ]
+    except UpstreamPullRequestNotFound:
+        chosen = []
+
+    assert fetch.numbers() == chosen
 
 
 def test_a_branch_never_promoted_replays_into_the_same_answer(stubbed_gh):
@@ -269,65 +286,51 @@ def test_a_failing_gh_fails_the_fetch_with_its_error(stubbed_gh):
 
 
 def test_only_the_fields_the_models_read_are_kept():
-    kept = RecordedFields.kept(
-        {"title": "t", "body": "b", "head": {"sha": "s", "repo": {}}, "_links": {}}
+    kept = upstream_reviews_fetch.keep_fields(
+        {"title": "t", "body": "b", "head": {"sha": "s", "repo": {}}, "_links": {}},
+        set(HelperScript(request()).configuration["fields"]),
     )
 
     assert kept == {"title": "t", "body": "b", "head": {"sha": "s"}}
 
 
+def test_the_kept_fields_are_every_field_a_rest_model_reads():
+    assert RecordedFields.names == {key.value for key in RestJSONKey} | {
+        PullRequestJSONKey.LOGIN.value
+    }
+
+
 def test_output_too_long_for_one_command_is_split_into_files(stubbed_gh, monkeypatch):
-    helper_request = request()
     monkeypatch.setattr(HelperChunk, "size", 100)
-    lines = recording_of(helper_request, run_fetch(helper_request)).output_lines()
+    helper_request = request()
 
-    printed = []
-    monkeypatch.setattr("basstler.upstream_reviews_helper.logger.info", printed.append)
-    from basstler.upstream_reviews_helper import _print_output
-
-    _print_output(lines)
+    printed = run_fetch(helper_request)
     output = "".join(
         Path(line.removeprefix("cat ")).read_text()
-        for line in printed[0].splitlines()
+        for line in printed.splitlines()
         if line.startswith("cat ")
     )
 
-    assert len(lines) > 1
+    assert "chunks; print each with its own command" in printed
     assert recording_of(helper_request, output).nonce == helper_request.nonce
 
 
 # %% what the helper is told
 
 
-def test_the_prompt_runs_fetch_from_basstler_at_the_given_reference():
-    helper_request = request()
-    prompt = HelperPrompt(helper_request, "v9.9.9")
+def test_the_shipped_source_is_code_alone_and_runs_without_basstler():
+    source = HelperScript.code_only(Path(upstream_reviews_fetch.__file__).read_text())
 
-    words = shlex.split(prompt.command)
-
-    assert BASSTLER_REPOSITORY.url in words
-    assert "v9.9.9" in words
-    fetch_arguments = words[words.index("basstler.upstream_reviews_helper") + 1 :]
-    assert (
-        HelperRequest.from_arguments(_parse_arguments(fetch_arguments))
-        == helper_request
-    )
+    assert '"""' not in source
+    assert "import basstler" not in source and "from basstler" not in source
+    compile(source, "<helper>", "exec")
 
 
-def test_the_prompt_defaults_to_the_version_running_here(monkeypatch):
-    monkeypatch.setattr(
-        "basstler.upstream_reviews_helper.metadata.version", lambda name: "1.2.3"
-    )
+def test_the_prompt_carries_the_command_and_how_to_answer():
+    prompt = HelperPrompt(request()).render()
 
-    assert HelperPrompt.own_reference() == "v1.2.3"
-
-
-def test_a_branch_request_round_trips_through_the_command_line():
-    helper_request = request(pull_request=None, branch="a/b", failure_logs=True)
-
-    parsed = _parse_arguments(helper_request.fetch_arguments)
-
-    assert HelperRequest.from_arguments(parsed) == helper_request
+    assert HelperScript(request()).render() in prompt
+    assert "DONE" in prompt
 
 
 # %% reading the output back
@@ -337,10 +340,11 @@ def chunks_of(helper_request: HelperRequest, count: int) -> list[HelperChunk]:
     """
     :return: A real recording's output, split into ``count`` chunks.
     """
-    recording = HelperRecording(
-        helper_request.nonce, [RecordedRestResponse("p", {"a": 1})]
+    fetch = upstream_reviews_fetch.Fetch(
+        HelperScript(helper_request).configuration | {"chunk_size": 10**9}
     )
-    [line] = recording.output_lines()
+    fetch.responses.append({"path": "p", "body": {"a": 1}})
+    [line] = fetch.output_lines()
     encoded = line.split(":", 1)[1]
     size = -(-len(encoded) // count)
     return [
@@ -355,7 +359,9 @@ def test_chunks_reassemble_in_order_whatever_order_they_are_found_in():
 
     recording = HelperRecording.assemble(helper_request.nonce, chunks[::-1] + chunks)
 
-    assert recording.responses == [RecordedRestResponse("p", {"a": 1})]
+    assert [(entry.path, entry.body) for entry in recording.responses] == [
+        ("p", {"a": 1})
+    ]
 
 
 def test_no_chunk_found_is_reported_as_missing_output():
@@ -388,9 +394,8 @@ def test_output_answering_another_request_is_unreadable():
 def test_a_chunk_is_found_however_deeply_the_transcript_quotes_it():
     helper_request = request()
     [chunk] = chunks_of(helper_request, 1)
-    quoted = json.dumps(
-        {"content": json.dumps({"stdout": chunk.line(helper_request.nonce)})}
-    )
+    line = f"{HelperChunk.marker(helper_request.nonce)}-1-1:{chunk.text}"
+    quoted = json.dumps({"content": json.dumps({"stdout": line})})
 
     assert HelperChunk.found_in(helper_request.nonce, quoted) == [chunk]
 
@@ -447,8 +452,6 @@ def test_prompt_then_report_reads_the_helper_output_from_the_transcript(
                 Example.FORK_OWNER,
                 "--pull-request",
                 str(NUMBER),
-                "--reference",
-                "v0.0.0",
             ]
         )
         == 0

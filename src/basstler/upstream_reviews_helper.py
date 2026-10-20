@@ -5,28 +5,26 @@ that cannot attach the upstream itself.
 
 A cloud session checks every attached repository out at a directory named after it, so
 a session working in a fork can never attach the fork's same-named upstream beside it.
-The read then happens in a helper session that has only the upstream attached. That
-helper checks basstler out at the exact version this session runs - it needs nothing
-beyond the standard library, so no installation - and runs :class:`RestPullRequestReader`
-through a client that records every response. The recording reaches this session's
-transcript when its events are read, and the report replays it through the same reader,
-so every request, the branch choice and every failure match a direct read by
-construction.
+The read then happens in a helper session that has only the upstream attached. A helper
+runs no code from any repository outside its own scope, so its prompt carries the
+program: :mod:`basstler.upstream_reviews_fetch`, code alone, configured with the paths
+of :class:`UpstreamRestRoute` and the fields the REST models read. Its output reaches
+this session's transcript once the helper's events are read, and the report replays it
+through :class:`RestPullRequestReader`, so it renders exactly what a direct read does.
 
-Three commands::
+Two commands, run around the helper session::
 
-    # here: record the request and print the helper session's first message
+    # record the request and print the helper session's first message
     python -m basstler.upstream_reviews_helper prompt --upstream O/N --fork-owner F \\
-        (--pull-request N | --branch B) [--failure-logs] [--reference REF]
-    # in the helper: read and print the recording
-    python -m basstler.upstream_reviews_helper fetch --nonce X --upstream O/N ...
-    # here, once the helper's events are read: render the report
+        (--pull-request N | --branch B) [--failure-logs]
+    # once the helper's events are read: render the report
     python -m basstler.upstream_reviews_helper report [--include-resolved]
 """
 
 from __future__ import annotations
 
 import argparse
+import ast
 import base64
 import binascii
 import json
@@ -38,18 +36,18 @@ import tempfile
 import zlib
 from dataclasses import dataclass, field
 from enum import StrEnum
-from importlib import metadata
 from pathlib import Path
 from typing import Any
 
+from basstler import upstream_reviews_fetch
 from basstler.class_property import classproperty
 from basstler.locations import ClaudeCodeVariable
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews import (
+    CheckOutcome,
+    FailedJob,
     FailureLogReader,
-    GitHubCommandFailed,
-    GitHubCommandLineClient,
     JobLogReader,
     JSONModel,
     PullRequestJSONKey,
@@ -57,21 +55,14 @@ from basstler.upstream_reviews import (
     RestJSONKey,
     RestPullRequestReader,
     UpstreamPullRequestReport,
-    UpstreamPullRequestSnapshot,
     UpstreamReadError,
+    UpstreamRestRoute,
 )
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its commands print through.
 """
-
-BASSTLER_REPOSITORY = Repository("AbdelrhmanBassiouny", "basstler")
-"""
-Where the helper checks basstler out from; ``BASSTLER_REPOSITORY_URL`` in
-``resolve-personal-notes-config.sh`` names the same repository.
-"""
-
 
 # %% errors
 
@@ -172,17 +163,6 @@ class NoHelperRequest(UpstreamReadError):
         return f"no helper request recorded at {self.location} - run 'prompt' first"
 
 
-@dataclass
-class UnknownBasstlerVersion(UpstreamReadError):
-    """
-    Raised when the version for the helper to check out cannot be told.
-    """
-
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
-        return "basstler is not installed as a distribution - pass --reference"
-
-
 # %% the request
 
 
@@ -269,11 +249,11 @@ class HelperRequest(JSONModel):
     @classmethod
     def from_arguments(cls, arguments: argparse.Namespace) -> HelperRequest:
         """
-        :param arguments: A ``prompt`` or ``fetch`` command line.
-        :return: The request it describes, with a fresh nonce unless it names one.
+        :param arguments: A ``prompt`` command line.
+        :return: The request it describes, with a fresh nonce.
         """
         return cls(
-            getattr(arguments, "nonce", None) or secrets.token_hex(8),
+            secrets.token_hex(8),
             arguments.upstream,
             arguments.fork_owner,
             arguments.pull_request,
@@ -291,27 +271,6 @@ class HelperRequest(JSONModel):
             HelperJSONKey.BRANCH: self.branch,
             HelperJSONKey.FAILURE_LOGS: self.failure_logs,
         }
-
-    @property
-    def fetch_arguments(self) -> list[str]:
-        """:return: The ``fetch`` command line performing this request."""
-        target = (
-            ["--pull-request", str(self.pull_request)]
-            if self.pull_request
-            else ["--branch", self.branch or ""]
-        )
-        flags = ["--failure-logs"] if self.failure_logs else []
-        return [
-            HelperCommand.FETCH,
-            "--nonce",
-            self.nonce,
-            "--upstream",
-            str(self.upstream),
-            "--fork-owner",
-            self.fork_owner,
-            *target,
-            *flags,
-        ]
 
     def save(self) -> None:
         """Record this as the latest request."""
@@ -332,6 +291,123 @@ class HelperRequest(JSONModel):
 # %% what the helper is told
 
 
+class HelperPlaceholder(StrEnum):
+    """
+    Stand-ins in the script's path templates, which the script fills in once it knows
+    them.
+    """
+
+    NUMBER = "{number}"
+    SHA = "{sha}"
+    JOB = "{job}"
+
+
+@dataclass(frozen=True)
+class HelperScript:
+    """
+    What the helper session runs: :mod:`basstler.upstream_reviews_fetch`, configured.
+
+    Its paths come from :class:`UpstreamRestRoute` and its fields from the REST models,
+    so the helper fetches exactly what :class:`RestPullRequestReader` asks the
+    recording for, and nothing the models do not read.
+    """
+
+    request: HelperRequest
+    """
+    The read to perform.
+    """
+
+    @property
+    def configuration(self) -> dict[str, Any]:
+        """:return: Everything the script reads, passed to it as JSON."""
+        route = UpstreamRestRoute(self.request.upstream)
+        # The route is asked for its paths with placeholders standing in for values the
+        # script only learns as it reads, so it fills in the reader's own paths.
+        number, sha = HelperPlaceholder.NUMBER.value, HelperPlaceholder.SHA.value
+        return {
+            "marker": HelperChunk.marker(self.request.nonce),
+            "nonce": self.request.nonce,
+            "fork_owner": self.request.fork_owner,
+            "pull_request": self.request.pull_request,
+            "failure_logs": self.request.failure_logs,
+            "chunk_size": HelperChunk.size,
+            "log_line_limit": RecordedJobLog.line_limit,
+            "job_link": FailedJob.link_pattern.pattern,
+            "fields": sorted(RecordedFields.names),
+            "log_outcomes": [
+                outcome.name.lower()
+                for outcome in CheckOutcome
+                if outcome not in {CheckOutcome.SUCCESS, CheckOutcome.PENDING}
+            ],
+            "paths": {
+                "pull_requests_for_head": (
+                    route.pull_requests_for_head(
+                        self.request.fork_owner, self.request.branch
+                    )
+                    if self.request.branch
+                    else None
+                ),
+                "pull_request": route.pull_request(number),  # type: ignore[arg-type]
+                "reviews": route.reviews(number),  # type: ignore[arg-type]
+                "review_comments": route.review_comments(number),  # type: ignore[arg-type]
+                "review_threads": route.review_threads(number),  # type: ignore[arg-type]
+                "check_runs": route.check_runs(sha),
+                "commit_status": route.commit_status(sha),
+                "job_log": self.request.upstream.job_log_path(
+                    HelperPlaceholder.JOB.value  # type: ignore[arg-type]
+                ),
+            },
+        }
+
+    @staticmethod
+    def code_only(source: str) -> str:
+        """
+        Drop a module's docstrings, comments and parameter and return annotations,
+        which the helper would only copy back out, token for token, when it runs the
+        command.
+
+        :param source: The module's source.
+        :return: The same program, code alone.
+        """
+        tree = ast.parse(source)
+        for node in ast.walk(tree):
+            if isinstance(node, ast.arg):
+                node.annotation = None
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                node.returns = None
+            body = getattr(node, "body", None)
+            if (
+                isinstance(body, list)
+                and body
+                and isinstance(body[0], ast.Expr)
+                and isinstance(body[0].value, ast.Constant)
+                and isinstance(body[0].value.value, str)
+            ):
+                node.body = body[1:] or [ast.Pass()]  # type: ignore[attr-defined]
+        return ast.unparse(tree)
+
+    @classproperty
+    def delimiter(cls) -> str:
+        """
+        Ends the here-document carrying the source, a word the source never holds.
+        """
+        return "UPSTREAM_REVIEWS_FETCH"
+
+    def render(self) -> str:
+        """
+        :return: The shell command running the fetch module from its own source.
+        """
+        source = self.code_only(Path(upstream_reviews_fetch.__file__).read_text())
+        configuration = json.dumps(self.configuration, separators=(",", ":"))
+        return "\n".join(
+            [
+                f"python3 - {shlex.quote(configuration)} <<'{self.delimiter}'",
+                source,
+                self.delimiter,
+            ]
+        )
+
+
 @dataclass(frozen=True)
 class HelperPrompt:
     """
@@ -343,47 +419,17 @@ class HelperPrompt:
     The read to perform.
     """
 
-    reference: str
-    """
-    The basstler tag or commit the helper runs: the one this session runs, so both
-    sides read and replay with the same code.
-    """
-
-    @classmethod
-    def own_reference(cls) -> str:
-        """
-        :return: The release tag of the basstler this runs.
-        :raises UnknownBasstlerVersion: If it is not installed as a distribution.
-        """
-        try:
-            return f"v{metadata.version(BASSTLER_REPOSITORY.name)}"
-        except metadata.PackageNotFoundError as missing:
-            raise UnknownBasstlerVersion() from missing
-
-    @property
-    def command(self) -> str:
-        """
-        :return: The one shell command the helper runs: check basstler out at
-            :attr:`reference` into a scratch directory, and run ``fetch`` from it.
-        """
-        fetch = shlex.join(
-            ["python3", "-m", __spec__.name if __spec__ else __name__]
-            + self.request.fetch_arguments
-        )
-        return (
-            'cd "$(mktemp -d)" && git init -q && git fetch -q --depth 1 '
-            f"{shlex.quote(BASSTLER_REPOSITORY.url)} {shlex.quote(self.reference)} "
-            f"&& git checkout -q FETCH_HEAD && PYTHONPATH=src {fetch}"
-        )
-
     def render(self) -> str:
         """:return: The message."""
         return "\n".join(
             [
-                "Read-only helper for another session: change nothing on GitHub or in "
-                "git. Run this in one Bash call, exactly as written:",
+                "Read-only helper for another session: change nothing on GitHub. Run "
+                "this in one Bash call, exactly as written; it only reads through "
+                "`gh api`:",
                 "",
-                self.command,
+                "```bash",
+                HelperScript(self.request).render(),
+                "```",
                 "",
                 "If it prints `cat` commands, run each as its own Bash call. Never "
                 "repeat or summarize output; the other session reads it from your "
@@ -398,7 +444,7 @@ class HelperPrompt:
 
 class RecordedFields:
     """
-    The REST fields the models read, which are all a recording keeps.
+    The REST fields the models read, which are all a helper keeps of a response.
     """
 
     @classproperty
@@ -409,22 +455,6 @@ class RecordedFields:
         return frozenset(key.value for key in RestJSONKey) | {
             PullRequestJSONKey.LOGIN.value
         }
-
-    @classmethod
-    def kept(cls, value: Any) -> Any:
-        """
-        :param value: A parsed response, or any part of one.
-        :return: The value with every other field of every object dropped.
-        """
-        if isinstance(value, dict):
-            return {
-                name: cls.kept(entry)
-                for name, entry in value.items()
-                if name in cls.names
-            }
-        if isinstance(value, list):
-            return [cls.kept(entry) for entry in value]
-        return value
 
 
 @dataclass(frozen=True)
@@ -450,10 +480,6 @@ class RecordedRestResponse(JSONModel):
         :return: The parsed response.
         """
         return cls(data[HelperJSONKey.PATH], data[HelperJSONKey.BODY])
-
-    def to_json(self) -> dict[str, Any]:
-        """:return: The response as recorded."""
-        return {HelperJSONKey.PATH: self.path, HelperJSONKey.BODY: self.body}
 
 
 @dataclass(frozen=True)
@@ -487,10 +513,6 @@ class RecordedJobLog(JSONModel):
         :return: The parsed log.
         """
         return cls(data[HelperJSONKey.JOB], data[HelperJSONKey.LOG])
-
-    def to_json(self) -> dict[str, Any]:
-        """:return: The log as recorded."""
-        return {HelperJSONKey.JOB: self.job, HelperJSONKey.LOG: self.log}
 
 
 @dataclass(frozen=True)
@@ -539,33 +561,6 @@ class HelperRecording(JSONModel):
                 for entry in data[HelperJSONKey.JOB_LOGS]
             ],
         )
-
-    def to_json(self) -> dict[str, Any]:
-        """:return: The recording, as encoded."""
-        return {
-            HelperJSONKey.NONCE: self.nonce,
-            HelperJSONKey.RESPONSES: [entry.to_json() for entry in self.responses],
-            HelperJSONKey.JOB_LOGS: [entry.to_json() for entry in self.job_logs],
-        }
-
-    def output_lines(self) -> list[str]:
-        """
-        Encode the recording: compressed, then base64, so it is small and no escaping
-        in any transcript layer can alter it, and split into marked chunks.
-
-        :return: One line per chunk.
-        """
-        encoded = base64.b64encode(
-            zlib.compress(json.dumps(self.to_json(), separators=(",", ":")).encode(), 9)
-        ).decode()
-        size = HelperChunk.size
-        texts = [
-            encoded[start : start + size] for start in range(0, len(encoded), size)
-        ]
-        return [
-            HelperChunk(index, len(texts), text).line(self.nonce)
-            for index, text in enumerate(texts, 1)
-        ]
 
     @classmethod
     def assemble(cls, nonce: str, chunks: list[HelperChunk]) -> HelperRecording:
@@ -638,13 +633,6 @@ class HelperChunk:
         """
         return f"BASSTLER-UPSTREAM-REVIEWS-{nonce}"
 
-    def line(self, nonce: str) -> str:
-        """
-        :param nonce: The request's nonce.
-        :return: The chunk as printed.
-        """
-        return f"{self.marker(nonce)}-{self.index}-{self.count}:{self.text}"
-
     @classmethod
     def pattern(cls, nonce: str) -> re.Pattern[str]:
         """
@@ -669,56 +657,7 @@ class HelperChunk:
         ]
 
 
-# %% reading through the recording
-
-
-@dataclass
-class RecordingClient(RestClient, JobLogReader):
-    """
-    Reads GitHub through ``gh`` like :class:`GitHubCommandLineClient`, keeping the
-    read fields of every response: what the helper reads through.
-    """
-
-    client: RestClient | JobLogReader = field(default_factory=GitHubCommandLineClient)
-    """
-    What actually reaches GitHub.
-    """
-
-    responses: list[RecordedRestResponse] = field(default_factory=list)
-    """
-    Every response read, in order.
-    """
-
-    job_logs: list[RecordedJobLog] = field(default_factory=list)
-    """
-    Every log read, in order.
-    """
-
-    def get(self, path: str) -> Any:
-        """See :meth:`RestClient.get`."""
-        body = self.client.get(path)  # type: ignore[union-attr]
-        self.responses.append(RecordedRestResponse(path, RecordedFields.kept(body)))
-        return body
-
-    def get_pages(self, path: str) -> list[Any]:
-        """See :meth:`RestClient.get_pages`."""
-        pages = self.client.get_pages(path)  # type: ignore[union-attr]
-        self.responses.append(RecordedRestResponse(path, RecordedFields.kept(pages)))
-        return pages
-
-    def read_job_log(self, repository: Repository, job_identifier: int) -> str:
-        """See :meth:`JobLogReader.read_job_log`."""
-        log = self.client.read_job_log(repository, job_identifier)  # type: ignore[union-attr]
-        kept = "\n".join(log.splitlines()[-RecordedJobLog.line_limit :])
-        self.job_logs.append(RecordedJobLog(job_identifier, kept))
-        return kept
-
-    def recording(self, nonce: str) -> HelperRecording:
-        """
-        :param nonce: The request read.
-        :return: Everything read.
-        """
-        return HelperRecording(nonce, self.responses, self.job_logs)
+# %% replaying the recording
 
 
 @dataclass
@@ -759,29 +698,6 @@ class ReplayingClient(RestClient, JobLogReader):
         raise HelperResponseMissing(repository.job_log_path(job_identifier))
 
 
-def read(
-    request: HelperRequest, client: RestClient | JobLogReader
-) -> tuple[UpstreamPullRequestSnapshot, list]:
-    """
-    Read the requested pull request the way a direct read does, through any client.
-
-    :param request: The read.
-    :param client: What answers it: GitHub while recording, the recording on replay.
-    :return: The snapshot and, when asked for, the failed checks' log excerpts.
-    """
-    reader = RestPullRequestReader(client, request.upstream, request.fork_owner)  # type: ignore[arg-type]
-    number = request.pull_request or reader.resolve_pull_request_number(
-        request.branch or ""
-    )
-    snapshot = reader.read_current_state(number)
-    failure_logs = (
-        FailureLogReader(client, request.upstream).read(snapshot.checks)  # type: ignore[arg-type]
-        if request.failure_logs
-        else []
-    )
-    return snapshot, failure_logs
-
-
 def build_report(
     request: HelperRequest, recording: HelperRecording, include_resolved: bool
 ) -> str:
@@ -793,32 +709,20 @@ def build_report(
     :param include_resolved: Whether to list resolved threads too.
     :return: The rendered markdown.
     """
-    snapshot, failure_logs = read(request, ReplayingClient(recording))
+    client = ReplayingClient(recording)
+    reader = RestPullRequestReader(client, request.upstream, request.fork_owner)
+    number = request.pull_request or reader.resolve_pull_request_number(
+        request.branch or ""
+    )
+    snapshot = reader.read_current_state(number)
+    failure_logs = (
+        FailureLogReader(client, request.upstream).read(snapshot.checks)
+        if request.failure_logs
+        else []
+    )
     return UpstreamPullRequestReport(
         snapshot, include_resolved=include_resolved, failure_logs=failure_logs
     ).render()
-
-
-def fetch(request: HelperRequest, client: RecordingClient) -> list[str]:
-    """
-    Read the request through the recording client, as the helper does.
-
-    A read that ends in this module's own error - a branch never promoted upstream -
-    still yields its recording, so the replay reaches the same error and reports it
-    the same way. Only ``gh`` itself failing leaves nothing to replay.
-
-    :param request: The read.
-    :param client: The recording client.
-    :return: The output lines to print.
-    :raises GitHubCommandFailed: If ``gh`` fails.
-    """
-    try:
-        read(request, client)
-    except GitHubCommandFailed:
-        raise
-    except UpstreamReadError:
-        pass
-    return client.recording(request.nonce).output_lines()
 
 
 @dataclass(frozen=True)
@@ -876,7 +780,7 @@ class SessionTranscript:
 
 class HelperCommand(StrEnum):
     """
-    The module's three commands.
+    The module's two commands.
     """
 
     PROMPT = "prompt"
@@ -884,27 +788,10 @@ class HelperCommand(StrEnum):
     Record a request and print the helper session's first message.
     """
 
-    FETCH = "fetch"
-    """
-    In the helper: read the request and print its recording.
-    """
-
     REPORT = "report"
     """
     Build the report from the helper's output in this session's transcript.
     """
-
-
-def _add_request_arguments(parser: argparse.ArgumentParser) -> None:
-    """
-    :param parser: A ``prompt`` or ``fetch`` parser, given what a request needs.
-    """
-    target = parser.add_mutually_exclusive_group(required=True)
-    target.add_argument("--pull-request", type=int)
-    target.add_argument("--branch")
-    parser.add_argument("--upstream", required=True, type=Repository.parse)
-    parser.add_argument("--fork-owner", required=True)
-    parser.add_argument("--failure-logs", action="store_true")
 
 
 def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
@@ -917,36 +804,15 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     commands = parser.add_subparsers(dest="command", required=True)
     prompt = commands.add_parser(HelperCommand.PROMPT)
-    _add_request_arguments(prompt)
-    prompt.add_argument(
-        "--reference",
-        help="the basstler tag or commit the helper runs, defaulting to this one's",
-    )
-    fetch_parser = commands.add_parser(HelperCommand.FETCH)
-    _add_request_arguments(fetch_parser)
-    fetch_parser.add_argument("--nonce", required=True)
+    target = prompt.add_mutually_exclusive_group(required=True)
+    target.add_argument("--pull-request", type=int)
+    target.add_argument("--branch")
+    prompt.add_argument("--upstream", required=True, type=Repository.parse)
+    prompt.add_argument("--fork-owner", required=True)
+    prompt.add_argument("--failure-logs", action="store_true")
     report = commands.add_parser(HelperCommand.REPORT)
     report.add_argument("--include-resolved", action="store_true")
     return parser.parse_args(argv)
-
-
-def _print_output(lines: list[str]) -> None:
-    """
-    Print the output: a single chunk directly, several as files to print one command
-    at a time, since a session keeps only so much of one command's output.
-
-    :param lines: The chunk lines.
-    """
-    if len(lines) == 1:
-        logger.info(lines[0])
-        return
-    directory = Path(tempfile.mkdtemp(prefix="basstler-upstream-reviews-"))
-    commands = [f"{len(lines)} chunks; print each with its own command:"]
-    for index, line in enumerate(lines, 1):
-        chunk = directory / f"chunk-{index}"
-        chunk.write_text(line + "\n")
-        commands.append(f"cat {chunk}")
-    logger.info("\n".join(commands))
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -960,21 +826,14 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if arguments.command == HelperCommand.PROMPT:
             request = HelperRequest.from_arguments(arguments)
-            prompt = HelperPrompt(
-                request, arguments.reference or HelperPrompt.own_reference()
-            )
             request.save()
-            logger.info(prompt.render())
-        elif arguments.command == HelperCommand.FETCH:
-            _print_output(
-                fetch(HelperRequest.from_arguments(arguments), RecordingClient())
-            )
-        else:
-            request = HelperRequest.load()
-            recording = HelperRecording.assemble(
-                request.nonce, SessionTranscript.current().chunks(request.nonce)
-            )
-            logger.info(build_report(request, recording, arguments.include_resolved))
+            logger.info(HelperPrompt(request).render())
+            return 0
+        request = HelperRequest.load()
+        recording = HelperRecording.assemble(
+            request.nonce, SessionTranscript.current().chunks(request.nonce)
+        )
+        logger.info(build_report(request, recording, arguments.include_resolved))
     except UpstreamReadError as failure:
         logger.error(failure)
         return 1

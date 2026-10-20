@@ -1,7 +1,7 @@
 ---
 name: upstream-reviews
-description: Report the CI checks and review threads a fork branch's upstream pull request has collected, including which checks failed, the log behind each failure, and which threads are still unresolved, by attaching the upstream to the session and reading it over REST, so the project itself commits nothing. Invoke as "/upstream-reviews [<pull-request-number>|<branch>]". Use when the user asks what the upstream reviewers said, how a promoted branch's CI is doing upstream, why an upstream check failed, whether it has outstanding review comments, or to check upstream state before resolving or resuming work on a branch.
-allowed-tools: Bash, Read, Skill, mcp__claude-code-remote__add_repo
+description: Report the CI checks and review threads a fork branch's upstream pull request has collected, including which checks failed, the log behind each failure, and which threads are still unresolved, by attaching the upstream to the session and reading it over REST - or, when the fork's same-named upstream cannot be attached beside it, through a short-lived helper session - so the project itself commits nothing. Invoke as "/upstream-reviews [<pull-request-number>|<branch>]". Use when the user asks what the upstream reviewers said, how a promoted branch's CI is doing upstream, why an upstream check failed, whether it has outstanding review comments, or to check upstream state before resolving or resuming work on a branch.
+allowed-tools: Bash, Read, Skill, mcp__claude-code-remote__add_repo, mcp__claude-code-remote__create_session, mcp__claude-code-remote__get_session, mcp__claude-code-remote__list_events, mcp__claude-code-remote__archive_session
 ---
 
 # Upstream reviews
@@ -24,6 +24,12 @@ which GitHub otherwise keeps behind GraphQL. So once the upstream is attached,
 `basstler.upstream_reviews` reads everything itself and parses it into the same
 models a runner's GraphQL read builds. Nothing runs in Actions, and nothing is
 committed to the project.
+
+A session working in the fork cannot attach the upstream, though: both share a
+name, and a session checks each repository out at a directory of that name. A
+helper session with only the upstream attached then reads it, running the
+fetch program this session hands it, and this session replays what it
+recorded through the same reader (step 2a).
 
 Anywhere else — Claude Code in a terminal on the user's own machine, or a
 runner — there is no proxy: the module reads GraphQL with whatever `gh` is
@@ -69,7 +75,52 @@ upstream's REST API at all — `"read"` covers git clones only. Nothing is ever
 pushed: a result saying pushes would be refused is expected and fine. Skip the
 clone the result suggests; the read needs none.
 
-If the attach itself is refused, relay its reason and stop.
+If the attach is refused because a repository of the same name is already
+attached - the fork itself, almost always - read through a helper session
+instead (step 2a) and skip step 3. Any other refusal: relay its reason and stop.
+
+## 2a. Read through a helper session (when the upstream cannot be attached)
+
+A session checks every attached repository out at a directory named after it,
+so the fork and its same-named upstream cannot share one. A helper session with
+only the upstream attached does the read; this session never needs it attached.
+Do every step in this turn, without asking the user: waiting for the helper and
+archiving it are part of the skill.
+
+1. Record the request and print the helper's first message:
+
+   ```bash
+   "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_HELPER_MODULE}" prompt \
+     --upstream <upstream owner/name> --fork-owner <fork owner> \
+     (--pull-request <number> | --branch <branch>) [--failure-logs]
+   ```
+
+   The message carries the program the helper runs - basstler's own
+   `upstream_reviews_fetch`, code only - since a helper runs no code from
+   repositories outside its session.
+2. `mcp__claude-code-remote__create_session` with `source_url`
+   `https://github.com/<upstream owner/name>`, `clone_depth: 1`,
+   `model: "claude-haiku-5-5"`, `title: "basstler upstream-reviews helper"`,
+   and the printed message, verbatim, as `prompt`.
+3. Wait: run `sleep 30` as a background Bash command, and when it completes call
+   `mcp__claude-code-remote__get_session` on the helper. Until its
+   `status_bucket` is completed or failed, wait 15 seconds more the same way,
+   for at most five minutes in all.
+4. `mcp__claude-code-remote__list_events` on the helper with `kinds: ["user"]`
+   and `limit: 10`. If that page holds no tool result, read the page before it
+   (`before_id` set to its `first_id`), and so on.
+5. Build the report from what those events brought into this session:
+
+   ```bash
+   "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_HELPER_MODULE}" report [--include-resolved]
+   ```
+
+   If it reports chunks missing, read the helper's earlier events and run it
+   again. If the helper replied with an error instead, relay it.
+6. `mcp__claude-code-remote__archive_session` on the helper, whatever the
+   outcome, so it leaves nothing in the user's session list.
+
+Then present the report as step 4 describes.
 
 ## 3. Read it
 
