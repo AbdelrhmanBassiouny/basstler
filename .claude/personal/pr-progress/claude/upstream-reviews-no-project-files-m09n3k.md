@@ -1,13 +1,10 @@
 ## PR #56 - /upstream-reviews without committed project files
 
 Plan
-- Reusable workflow takes optional `upstream`/`fork_owner` inputs.
-- basstler gets a dispatch-only `upstream-reviews-dispatch.yml` calling it at `github.sha`.
-- `stack configuration` prints `reviews_repository` (default: basstler; override in stack.toml).
-- Skill dispatches there with upstream + fork owner from `stack configuration`; SETUP.md section 3 made optional.
+- Dispatch basstler's own `upstream-reviews-dispatch.yml` with upstream + fork_owner; `reviews_repository` overridable; upstream may live in personal stack.toml.
 
 Done
-- Branch, draft PR #56, manifest `in progress`.
+- Workflows, `reviews_repository` in `stack configuration`, skill, SETUP.md, tests; bumped 0.2.0 (`release:minor`); PR description written; setup-stacked-prs-skill notes updated.
 
 Next
-- Tests first (stack configuration, workflow inputs), then the code, skill and docs.
+- Review on #56; after merge, dispatch once from a CRAM session to verify live.
