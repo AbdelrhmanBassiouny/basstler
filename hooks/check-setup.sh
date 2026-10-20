@@ -62,14 +62,18 @@ names_upstream() {
 # report_upstream: prints the stack_upstream row, given whether the
 # personal-notes branch could be read at all. Run while FETCH_HEAD still
 # points at that branch.
+UPSTREAM_NAMED=false
+
 report_upstream() {
   local notes_branch_read="$1"
   local configure_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} configure-upstream --repository <owner>/<name>"
   if [ -f "${PROJECT_ROOT}/${PROJECT_STACK_CONFIGURATION_PATH}" ] \
       && names_upstream < "${PROJECT_ROOT}/${PROJECT_STACK_CONFIGURATION_PATH}"; then
+    UPSTREAM_NAMED=true
     report stack_upstream ok "named in the project's committed ${PROJECT_STACK_CONFIGURATION_PATH}"
   elif [ "${notes_branch_read}" = true ] \
       && git show "FETCH_HEAD:${PERSONAL_STACK_CONFIGURATION_PATH}" 2>/dev/null | names_upstream; then
+    UPSTREAM_NAMED=true
     report stack_upstream ok "named in ${PERSONAL_STACK_CONFIGURATION_PATH} on '${NOTES_BRANCH}'"
   elif [ "${REQUIRE_UPSTREAM}" = true ]; then
     report stack_upstream needs-setup \
@@ -83,6 +87,39 @@ report_upstream() {
 # report: prints one TSV row, and remembers that the overall run failed if the
 # status is needs-setup, so the exit code never has to be tracked by hand at
 # each call site.
+# report_upstream_reviews_action: prints the upstream_reviews_action row,
+# checked only once an upstream is named, since only /upstream-reviews runs the
+# Action. Not
+# installed is info, since the skill reads the upstream another way; installed
+# at another release than the plugin's is needs-setup, since the run and the
+# session replaying it must be one release.
+report_upstream_reviews_action() {
+  if [ "${UPSTREAM_NAMED}" != true ]; then
+    report upstream_reviews_action info "not checked - no upstream named for it to read"
+    return 0
+  fi
+  local release="v$(plugin_version)"
+  local install_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --ref ${release}"
+  local state
+  if ! state="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+      --remote "${NOTES_REMOTE}" status --ref "${release}" 2>/dev/null)"; then
+    report upstream_reviews_action info \
+      "could not read the ${UPSTREAM_REVIEWS_ACTION_BRANCH} branch on '${NOTES_REMOTE}' - to install it, run: ${install_command}"
+    return 0
+  fi
+  case "${state}" in
+    current*)
+      report upstream_reviews_action ok \
+        "'${NOTES_REMOTE}' runs basstler ${release}'s Action on ${UPSTREAM_REVIEWS_ACTION_BRANCH}" ;;
+    stale*)
+      report upstream_reviews_action needs-setup \
+        "'${NOTES_REMOTE}' runs the Action at ${state#stale }, not ${release} - run: ${install_command}" ;;
+    *)
+      report upstream_reviews_action info \
+        "not installed on '${NOTES_REMOTE}' - /upstream-reviews reads the upstream from the session instead; to read it in the fork's Actions, run: ${install_command}" ;;
+  esac
+}
+
 report() {
   local check="$1" status="$2" detail="$3"
   [ "${status}" != "needs-setup" ] || EXIT_CODE=1
@@ -176,6 +213,7 @@ if fetch_personal_notes_branch; then
   fi
 
   report_upstream true
+  report_upstream_reviews_action
 
   # %% who commits here would be authored as
 
@@ -208,6 +246,7 @@ else
     "no '${NOTES_BRANCH}' branch on any of: ${ATTEMPTED_NOTES_REMOTES} - run ./create-personal-notes-branch.sh (after pointing the remote at your own fork if it isn't already)"
   report notes_file needs-setup "not checked - the branch that would hold it doesn't exist yet"
   report_upstream false
+  report_upstream_reviews_action
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 

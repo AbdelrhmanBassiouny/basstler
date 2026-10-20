@@ -382,6 +382,11 @@ UPSTREAM_REVIEWS_MODULE="basstler.upstream_reviews"
 # upstream_reviews_helper: the same read through a helper session, for a cloud
 # session that cannot attach the upstream next to its same-named fork.
 UPSTREAM_REVIEWS_HELPER_MODULE="basstler.upstream_reviews_helper"
+# upstream_reviews_action: the same read in the fork's own Actions, started by
+# pushing a request to UPSTREAM_REVIEWS_ACTION_BRANCH, which holds the caller
+# workflow and nothing of the project's.
+UPSTREAM_REVIEWS_ACTION_MODULE="basstler.upstream_reviews_action"
+UPSTREAM_REVIEWS_ACTION_BRANCH="basstler/upstream-reviews"
 # dependencies: prints the package's requirements an environment does not
 # have - what missing_dependencies below calls.
 BASSTLER_DEPENDENCIES_MODULE="basstler.dependencies"
@@ -390,7 +395,7 @@ BASSTLER_DEPENDENCIES_MODULE="basstler.dependencies"
 PERSONAL_PLAN_ITEM_MODES_PATH=".claude/personal/plan-item-modes.toml"
 # setup_steps: prints the setup steps no script can do, and performs
 # configure-upstream, which names a project's upstream for the stacked-PR
-# workflow.
+# workflow, and install-upstream-reviews-action.
 SETUP_STEPS_MODULE="basstler.setup_steps"
 # The stack settings a project commits, and the personal-notes override
 # layered on top of them - either may name the upstream.
