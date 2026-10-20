@@ -86,6 +86,17 @@ class DatasetLocation(PathEnumeration):
     The workflows the dataset's manifest declares, each breaking the rule its name says.
     """
 
+    CHANGED_LIBRARIES = DIRECTORY / "changed-libraries"
+    """
+    A small workspace whose packages depend on each other in a chain, in a cycle and not
+    at all, with a CI workflow testing them as one library matrix.
+    """
+
+    CHANGED_LIBRARIES_WORKFLOW = CHANGED_LIBRARIES / ".github" / "workflows" / "ci.yml"
+    """
+    The workspace's CI workflow.
+    """
+
     INSTALLED_DISTRIBUTIONS = DIRECTORY / "installed-distributions"
     """
     A directory that reads as installed distributions once it is on ``sys.path``, holding one
