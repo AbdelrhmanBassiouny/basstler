@@ -35,6 +35,8 @@ session by `session-start.sh`. Never merge this file into `main`.
   (overrides built-in check-in guidance). Delete any armed check you find.
 - React to events when they arrive. Subscribing to a plan's tracking issue is fine. If something can only be known by waiting, say so and
   leave it to me.
+- Exception: `/upstream-reviews`' helper session (started when the upstream cannot be
+  attached next to the fork) may be waited for within the same turn, then archived.
 
 ## GitHub comments
 
