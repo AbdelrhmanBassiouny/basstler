@@ -44,11 +44,12 @@ items:
   depends_on: []
   pull_request_number: 56
   session: https://claude.ai/code/session_01Q1iqg88K6XLGdBgtyy24KD
-  notes: '#56 (draft, release:minor -> 0.2.0): the session attaches the upstream and reads it
-    over REST (proxy route ccr/review_threads); GraphQL stays for runners and terminals. A session
-    in the fork cannot attach the same-named upstream, so a Haiku helper session runs an inline
-    fetch program and report replays its output from the transcript. Also configure-upstream and
-    the stack_upstream check row. Verified live on cram2 #773 and #777. Overlaps #45 in setup files.'
+  notes: '#56 (draft, release:minor -> 0.2.0). Preferred: the fork''s own Action on a
+    basstler/upstream-reviews branch (setup_steps install-upstream-reviews-action, check row);
+    a pushed request runs it and the session replays its committed result through the GraphQL
+    reader. Fallbacks: attach the upstream and read REST; a Haiku helper session when the
+    fork''s same-named upstream cannot be attached. Verified live on cram2 #773 and #777.
+    Overlaps #45 in setup files.'
 - id: stamps-in-git-directory
   title: The plugin keeps its per-clone stamp files where git never tracks them
   branch: null
