@@ -84,11 +84,11 @@ items:
   depends_on: []
   pull_request_number: 56
   session: https://claude.ai/code/session_01Q1iqg88K6XLGdBgtyy24KD
-  notes: 'CRAM #523 deletes its upstream-reviews.yml and .claude/basstler/stack.toml, so the
-    skill stops working there: GitHub dispatches only a workflow on the default branch, and the
-    runner reads the upstream from the committed stack.toml, not personal notes. Options: dispatch
-    basstler''s own reusable workflow in this repository with upstream and fork as inputs, or
-    read locally when no workflow exists. Revisit setup-stacked-prs-skill''s configure-upstream.'
+  notes: 'Implemented on #56 (draft, release:minor -> 0.2.0): basstler''s own
+    upstream-reviews-dispatch.yml takes upstream and fork_owner as inputs; stack configuration
+    prints reviews_repository (default basstler, overridable for users who cannot dispatch
+    there); the upstream may live in the personal stack.toml. Local read rejected (GraphQL
+    blocked). Not verified live until the dispatch workflow is on main.'
 - id: stamps-in-git-directory
   title: The plugin keeps its per-clone stamp files where git never tracks them
   branch: null
@@ -125,8 +125,8 @@ items:
   notes: 'A guided skill over basstler.setup_steps subcommands, mirroring /setup-personal-notes:
     the skill only asks the questions. Native or fork-overlay install; creates labels, writes
     the personal configuration, emits the maintenance prompt. Folds in `configure-upstream
-    --repository <owner>/<name>` (writes .claude/basstler/stack.toml, copies the upstream-reviews.yml
-    caller), a check-setup.sh row and docs/SETUP.md section 3. Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238.
+    --repository <owner>/<name>`, writing upstream_repository to the personal stack.toml
+    (after #56 the committed stack.toml and caller are optional), a check-setup.sh row and docs/SETUP.md section 3. Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238.
     Build fresh on main; CRAM #110 is stale.'
 - id: cram-development-tools
   title: Install the docstring formatter and a generated AGENTS.md from the shared cram-development-tools
