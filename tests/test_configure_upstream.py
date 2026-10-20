@@ -68,6 +68,11 @@ UPSTREAM_CHECK = "stack_upstream"
 The check-setup.sh row this step answers.
 """
 
+ACTION_CHECK = "upstream_reviews_action"
+"""
+The check-setup.sh row install-upstream-reviews-action answers.
+"""
+
 REQUIRE_UPSTREAM = "--require-upstream"
 """
 What a caller needing an upstream passes check-setup.sh.
@@ -129,12 +134,15 @@ def published_stack_settings(
     )
 
 
-def upstream_row(repository: ScratchRepository, *arguments: str) -> tuple[str, str]:
+def upstream_row(
+    repository: ScratchRepository, *arguments: str, row: str = UPSTREAM_CHECK
+) -> tuple[str, str]:
     """
-    Run check-setup.sh and pick out the upstream row.
+    Run check-setup.sh and pick out one row.
 
     :param repository: A fixture-built scratch repository.
     :param arguments: Arguments to pass the check.
+    :param row: The row to pick out, the upstream's by default.
     :return: The row's status and detail.
     """
     finished = repository.run_hook_script(
@@ -142,9 +150,9 @@ def upstream_row(repository: ScratchRepository, *arguments: str) -> tuple[str, s
     )
     for line in finished.stdout.splitlines():
         check, status, detail = line.split("\t")
-        if check == UPSTREAM_CHECK:
+        if check == row:
             return status, detail
-    raise AssertionError(f"no {UPSTREAM_CHECK} row in:\n{finished.stdout}")
+    raise AssertionError(f"no {row} row in:\n{finished.stdout}")
 
 
 # %% the step
@@ -234,3 +242,67 @@ def test_an_upstream_the_project_commits_passes_the_check(
 
     assert status == "ok"
     assert str(ProjectLocation.PROJECT_STACK_CONFIGURATION) in detail
+
+
+# %% the Action
+
+
+def install_action(repository: ScratchRepository, ref: str) -> None:
+    """
+    Run the step installing the Action at *ref*.
+
+    :param repository: A fixture-built scratch repository.
+    :param ref: The release it runs.
+    """
+    finished = PythonModuleRunner(
+        project_root=repository.project_root, module_name=SETUP_STEPS_MODULE
+    ).run(SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION, SetupCommandOption.REF, ref)
+    assert finished.returncode == 0, finished.stderr
+
+
+def plugin_release(detail: str) -> str:
+    """:return: The release a row's install command names."""
+    return detail.split(f"{SetupCommandOption.REF} ")[1].split()[0]
+
+
+def test_the_action_is_not_checked_without_an_upstream(
+    upstream_repository: ScratchRepository,
+):
+    status, _ = upstream_row(upstream_repository, row=ACTION_CHECK)
+
+    assert status == "info"
+
+
+def test_an_action_not_installed_is_context_naming_the_step(
+    upstream_repository: ScratchRepository,
+):
+    configure_upstream(upstream_repository, UpstreamSample.UPSTREAM)
+
+    status, detail = upstream_row(upstream_repository, row=ACTION_CHECK)
+
+    assert status == "info"
+    assert SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION in detail
+
+
+def test_an_action_the_step_installed_passes_the_check(
+    upstream_repository: ScratchRepository,
+):
+    configure_upstream(upstream_repository, UpstreamSample.UPSTREAM)
+    _, detail = upstream_row(upstream_repository, row=ACTION_CHECK)
+    install_action(upstream_repository, plugin_release(detail))
+
+    status, _ = upstream_row(upstream_repository, REQUIRE_UPSTREAM, row=ACTION_CHECK)
+
+    assert status == "ok"
+
+
+def test_an_action_at_another_release_needs_setup(
+    upstream_repository: ScratchRepository,
+):
+    configure_upstream(upstream_repository, UpstreamSample.UPSTREAM)
+    install_action(upstream_repository, "v0.0.1")
+
+    status, detail = upstream_row(upstream_repository, row=ACTION_CHECK)
+
+    assert status == "needs-setup"
+    assert "v0.0.1" in detail

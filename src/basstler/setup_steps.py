@@ -15,9 +15,14 @@ It also performs the one step a script can that check-setup.sh reports on but
 session start cannot fill in for itself: naming the project's upstream in the user's
 personal ``stack.toml``, which only the user knows.
 
+It also installs ``/upstream-reviews``' Action on the fork's own branch, which a
+script can do once the user has asked for it - everything but switching a fork's
+Actions on, which is printed here.
+
 Usage:
     python3 -m basstler.setup_steps
     python3 -m basstler.setup_steps configure-upstream --repository <owner>/<name>
+    python3 -m basstler.setup_steps install-upstream-reviews-action --ref v<version>
 """
 
 from __future__ import annotations
@@ -42,6 +47,13 @@ from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.stack_configuration import StackSetting
 from basstler.standard_streams import StandardStreamHandler
+from basstler.upstream_reviews import UpstreamReadError
+from basstler.upstream_reviews_action import (
+    ActionBranch,
+    ActionInstallation,
+    Git,
+    RemoteBranch,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -399,6 +411,40 @@ class RepositoryAccess(SetupStep):
 
 
 @dataclass(frozen=True)
+class ForkActions(SetupStep):
+    """
+    Switching Actions on in a fork, where ``/upstream-reviews``' Action runs.
+    """
+
+    repository: Repository
+    """
+    The fork.
+    """
+
+    @property
+    def title(self) -> str:
+        """See :attr:`SetupStep.title`."""
+        return f"Enable Actions on {self.repository.full_name}, if it is a fork"
+
+    @property
+    def reason(self) -> str:
+        """See :attr:`SetupStep.reason`."""
+        return (
+            "GitHub starts every fork with Actions off, and /upstream-reviews reads "
+            f"the upstream from a run on the fork's {ActionBranch.NAME} branch."
+        )
+
+    def instructions(self) -> list[str]:
+        """See :meth:`SetupStep.instructions`."""
+        return [
+            f"Open {Host.GITHUB.url}/{self.repository.full_name}/actions and press "
+            '"I understand my workflows, go ahead and enable them".',
+            "Nothing to do if that page lists workflows already, or the repository "
+            "is not a fork.",
+        ]
+
+
+@dataclass(frozen=True)
 class PersistentVariables(SetupStep):
     """
     Carrying the personal-notes settings into environments that clone fresh every
@@ -516,7 +562,13 @@ class SetupChecklist:
         repository = resolve_repository(project_root, notes_remote)
         steps: list[SetupStep] = []
         if repository is not None:
-            steps.extend([ForkLabels(repository), RepositoryAccess(repository)])
+            steps.extend(
+                [
+                    ForkLabels(repository),
+                    RepositoryAccess(repository),
+                    ForkActions(repository),
+                ]
+            )
         steps.append(PersistentVariables.resolve(project_root, environment))
         return cls(steps=tuple(steps))
 
@@ -653,6 +705,11 @@ class SetupCommand(StrEnum):
     Name the project's upstream in the personal ``stack.toml``.
     """
 
+    INSTALL_UPSTREAM_REVIEWS_ACTION = "install-upstream-reviews-action"
+    """
+    Write ``/upstream-reviews``' Action onto the fork's own branch, or update it.
+    """
+
 
 class SetupCommandOption(StrEnum):
     """
@@ -662,6 +719,11 @@ class SetupCommandOption(StrEnum):
     REPOSITORY = "--repository"
     """
     The ``owner/name`` a command is about.
+    """
+
+    REF = "--ref"
+    """
+    The basstler release an installed workflow runs.
     """
 
 
@@ -683,6 +745,15 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         type=Repository.parse,
         required=True,
         help="the owner/name repository the project's pull requests are reviewed on",
+    )
+    install_action = commands.add_parser(
+        SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION,
+        help="write /upstream-reviews' Action onto the fork's own branch",
+    )
+    install_action.add_argument(
+        SetupCommandOption.REF,
+        required=True,
+        help="the basstler release it runs: v followed by the plugin's version",
     )
     return parser.parse_args(argv)
 
@@ -708,6 +779,19 @@ def main(argv: list[str] | None = None) -> int:
             f"{StackSetting.UPSTREAM_REPOSITORY} = {arguments.repository.full_name} "
             f"saved to {ProjectLocation.PERSONAL_STACK_CONFIGURATION} on the "
             "personal-notes branch"
+        )
+        return 0
+    if arguments.command == SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION:
+        remote = PersonalNotesSetting.REMOTE.resolve(project_root, os.environ)
+        branch = RemoteBranch(Git(project_root), remote)
+        try:
+            changed = ActionInstallation(arguments.ref).install(branch)
+        except UpstreamReadError as failure:
+            logger.error(failure)
+            return 1
+        logger.info(
+            f"{ActionBranch.NAME} on {branch.description} "
+            f"{'now runs' if changed else 'already runs'} basstler {arguments.ref}"
         )
         return 0
     logger.info(SetupChecklist.for_clone(project_root, os.environ).render())

@@ -1,6 +1,6 @@
 ---
 name: upstream-reviews
-description: Report the CI checks and review threads a fork branch's upstream pull request has collected, including which checks failed, the log behind each failure, and which threads are still unresolved, by attaching the upstream to the session and reading it over REST - or, when the fork's same-named upstream cannot be attached beside it, through a short-lived helper session - so the project itself commits nothing. Invoke as "/upstream-reviews [<pull-request-number>|<branch>]". Use when the user asks what the upstream reviewers said, how a promoted branch's CI is doing upstream, why an upstream check failed, whether it has outstanding review comments, or to check upstream state before resolving or resuming work on a branch.
+description: Report the CI checks and review threads a fork branch's upstream pull request has collected, including which checks failed, the log behind each failure, and which threads are still unresolved - read by the fork's own Action on a branch of its own, or, where that cannot run, by attaching the upstream to the session or through a short-lived helper session - so the project's own branches carry nothing of basstler's. Invoke as "/upstream-reviews [<pull-request-number>|<branch>]". Use when the user asks what the upstream reviewers said, how a promoted branch's CI is doing upstream, why an upstream check failed, whether it has outstanding review comments, or to check upstream state before resolving or resuming work on a branch.
 allowed-tools: Bash, Read, Skill, mcp__claude-code-remote__add_repo, mcp__claude-code-remote__create_session, mcp__claude-code-remote__get_session, mcp__claude-code-remote__list_events, mcp__claude-code-remote__archive_session
 ---
 
@@ -17,19 +17,30 @@ reviewers, and the report is the entire deliverable.
 
 ## How the read reaches the upstream
 
-A Claude Code cloud session's proxy refuses GitHub's GraphQL API, but answers
-REST for every repository attached to the session — including a
-review-threads route of its own that carries each thread's resolved state,
-which GitHub otherwise keeps behind GraphQL. So once the upstream is attached,
-`basstler.upstream_reviews` reads everything itself and parses it into the same
-models a runner's GraphQL read builds. Nothing runs in Actions, and nothing is
-committed to the project.
+Preferably through the fork's own Actions. The fork carries one branch of
+basstler's, `basstler/upstream-reviews`, sharing no history with the project and
+holding only a workflow that calls basstler's reusable one. Pushing a request to
+it starts a run, which reads the upstream over GraphQL and commits everything it
+read back to the branch; `basstler.upstream_reviews_action` fetches that and
+replays it through the same reader a direct read uses. It works the same from a
+cloud session, a terminal or a runner, and the fork's default branch never
+changes. Setup installs it (`setup_steps install-upstream-reviews-action`); the
+one step no script can do is switching Actions on in a fork, which GitHub starts
+with them off.
+
+Where the Action cannot answer, the session reads the upstream itself. A Claude
+Code cloud session's proxy refuses GitHub's GraphQL API, but answers REST for
+every repository attached to the session — including a review-threads route of
+its own that carries each thread's resolved state, which GitHub otherwise keeps
+behind GraphQL. So once the upstream is attached, `basstler.upstream_reviews`
+reads everything itself and parses it into the same models a GraphQL read
+builds.
 
 A session working in the fork cannot attach the upstream, though: both share a
 name, and a session checks each repository out at a directory of that name. A
 helper session with only the upstream attached then reads it, running the
 fetch program this session hands it, and this session replays what it
-recorded through the same reader (step 2a).
+recorded through the same reader (step 3a).
 
 Anywhere else — Claude Code in a terminal on the user's own machine, or a
 runner — there is no proxy: the module reads GraphQL with whatever `gh` is
@@ -62,10 +73,40 @@ Take the target from the skill's argument: a bare number is an upstream pull
 request number, anything else is a branch name. With no argument, use the
 current branch (`git rev-parse --abbrev-ref HEAD`).
 
-## 2. Attach the upstream to the session (cloud sessions only)
+## 2. Read through the fork's Action
+
+```bash
+"${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" --remote "${NOTES_REMOTE}" read \
+  --upstream <upstream owner/name> --fork-owner <fork owner> \
+  (--pull-request <number> | --branch <branch>) \
+  [--include-resolved] [--failure-logs]
+```
+
+Run it with a Bash timeout of 600000 ms: it pushes the request, waits for the
+run - usually under a minute - and prints the report. The flags mean what they
+mean in step 4. Then, by exit status:
+
+- **0** — present the report (step 5).
+- **1** — the read itself failed, for instance the branch was never promoted
+  upstream. That is the answer: relay it as step 5 says, and stop.
+- **3** — the Action could not answer. Its message says why:
+  - *no `basstler/upstream-reviews` branch* — install it, then run the read once
+    more:
+
+    ```bash
+    "${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" install-upstream-reviews-action --ref "v$(plugin_version)"
+    ```
+
+  - *no run started* — Actions are off on the fork. Carry on with step 3 for
+    this read, and end the report by giving the user the link the message
+    names: enabling Actions there once makes every later read take this path.
+  - anything else (the run failed, or no result in time) — carry on with step 3,
+    and say in one line that the Action failed, with the link the message names.
+
+## 3. Attach the upstream to the session (cloud sessions only)
 
 Outside a Claude Code cloud session (`CLAUDE_CODE_REMOTE` is not `true`) skip
-this step: there is nothing to attach. If step 3 then fails to authenticate,
+this step: there is nothing to attach. If step 4 then fails to authenticate,
 tell the user to run `gh auth login` (or set `GH_TOKEN`) with an account that
 can read the upstream, and stop.
 
@@ -77,9 +118,9 @@ clone the result suggests; the read needs none.
 
 If the attach is refused because a repository of the same name is already
 attached - the fork itself, almost always - read through a helper session
-instead (step 2a) and skip step 3. Any other refusal: relay its reason and stop.
+instead (step 3a) and skip step 4. Any other refusal: relay its reason and stop.
 
-## 2a. Read through a helper session (when the upstream cannot be attached)
+## 3a. Read through a helper session (when the upstream cannot be attached)
 
 A session checks every attached repository out at a directory named after it,
 so the fork and its same-named upstream cannot share one. A helper session with
@@ -120,9 +161,9 @@ archiving it are part of the skill.
 6. `mcp__claude-code-remote__archive_session` on the helper, whatever the
    outcome, so it leaves nothing in the user's session list.
 
-Then present the report as step 4 describes.
+Then present the report as step 5 describes.
 
-## 3. Read it
+## 4. Read it
 
 ```bash
 "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_MODULE}" \
@@ -139,7 +180,7 @@ ask for it when a red check needs explaining, not on every read.
 It picks the REST reader by itself inside a cloud session; `--source rest`
 forces it if it ever guesses wrong.
 
-## 4. Present it
+## 5. Present it
 
 Reproduce the report's substance in the session: the checks verdict with every
 check that did not pass, and every unresolved thread with its author,

@@ -1,0 +1,65 @@
+name: Upstream reviews (Action branch)
+
+# Answers the request on a fork's basstler/upstream-reviews branch: reads the upstream
+# pull request it names over GraphQL, records every response, and commits the recording
+# back to the same branch as result.json, where the session replays it.
+#
+# Reusable: python -m basstler.setup_steps install-upstream-reviews-action writes the
+# caller onto that branch, naming the release of basstler it calls (see
+# basstler.upstream_reviews_action). A push made with the job's own token starts no
+# further run, so committing the result cannot loop.
+#
+# A runner starts with nothing installed and no session hook runs on it, so this job
+# installs the package itself before invoking a module.
+
+on:
+  workflow_call:
+    inputs:
+      basstler_ref:
+        description: "The basstler release to run, the same ref the caller uses this workflow at"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  read:
+    name: Read the requested upstream pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install basstler
+        run: |
+          set -euo pipefail
+          pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_ref }}"
+
+      - name: Read the upstream pull request
+        env:
+          # gh is preinstalled on the runner; reading a public upstream needs no more
+          # than the job's own token.
+          GH_TOKEN: ${{ github.token }}
+        run: python -m basstler.upstream_reviews_action run
+
+      - name: Commit the result
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add result.json
+          git commit --quiet -m "Answer upstream reviews $(python -c 'import json; print(json.load(open("result.json"))["nonce"])')"
+          for attempt in 1 2 3; do
+            if git pull --quiet --rebase origin "${GITHUB_REF_NAME}" \
+                && git push --quiet origin "HEAD:${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1
