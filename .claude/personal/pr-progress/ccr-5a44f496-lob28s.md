@@ -1,17 +1,14 @@
-PR #57 - plan session-notes-infrastructure, item fresh-base-at-session-start.
+PR #57 (draft, release:minor) - plan session-notes-infrastructure, item fresh-base-at-session-start.
 Reference: CRAM fork #188 commit 9b8d6d1 (issue #51).
 
 Plan
-- Python module basstler.default_branch_sync: resolve upstream via stack.load_configuration,
-  fetch upstream base without touching FETCH_HEAD, fast-forward local base (merge --ff-only if
-  checked out, else fetch into ref), push to fork when fork tip differs, report rows.
-- session-start.sh: run it as a subprocess, never fatal, print a "default branch:" line;
-  plan state SHA read from the stamp, not FETCH_HEAD.
-- Tests: forked scratch repo (owner/name.git stand-ins + url.insteadOf), every outcome.
-- README section + safety bullets.
+- basstler.default_branch_sync (dataclass report) run by session-start.sh as "default branch:".
+- Fast-forward only; fetch with --no-write-fetch-head; summary SHA from the stamp.
 
 Done
-- Branch, draft PR #57, manifest open/record.
+- Module, tests/test_default_branch_sync.py (14) + forked_scratch_repository.py, hook wiring,
+  README section + safety bullets. Full suite 1000 passed (needs venv python first on PATH).
+- PR description, label, manifest notes, dashboard.
 
 Next
-- Write failing tests, then the module, then the hook wiring.
+- Review on #57; address comments when prompted.
