@@ -40,7 +40,7 @@ items:
 - id: basstler-notes-core-python
   title: 'Bash to Python 1: notes-core modules (config, git seam, writer, markers)'
   branch: claude/basstler-notes-core-python
-  status: not started
+  status: blocked
   track: conversion
   depends_on:
   - basstler-typed-invocations
@@ -49,6 +49,9 @@ items:
     NotesBranchWriter (detached scratch worktree, PUSHED/UNCHANGED, None removes), NotesMarker.section_in,
     in src/basstler/. The branch exists but predates typed invocations; rebase its git calls onto them.
     Step 2 is the first caller.'
+  blockers:
+  - 'Waits on basstler-typed-invocations: draft #8 predates it, and its git calls are rebased onto it
+    once it lands.'
 - id: basstler-save-commands-python
   title: 'Bash to Python 2: the notes writers become python -m subcommands that commit files directly'
   branch: null

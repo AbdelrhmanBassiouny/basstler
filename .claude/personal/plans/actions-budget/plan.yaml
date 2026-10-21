@@ -1,10 +1,10 @@
 schema_version: 1
 id: actions-budget
 title: 'Actions budget: every workflow checked, event-driven, measured and warned on'
-description: GitHub once disabled Actions on the CRAM fork for wasted compute. basstler checks
-  every workflow file against a tested budget, narrows pull request CI to the libraries a change
-  touches, and warns before a run rate is exceeded. Moved from the CRAM fork's notes on 2026-10-20;
-  the CRAM-side ci.yml halves belong to basstler-package/cram-uses-basstler-plugin.
+description: GitHub once disabled Actions on the CRAM fork for wasted compute. basstler checks every workflow
+  file against a tested budget, narrows pull request CI to the libraries a change touches, and warns before
+  a run rate is exceeded. Moved from the CRAM fork's notes on 2026-10-20; the CRAM-side ci.yml half is
+  changed-library-matrix's.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 4
 waves:
@@ -33,13 +33,12 @@ items:
   status: in progress
   session: https://claude.ai/code/session_01RiyB21wDi8SaFucjBG6K3Y
   pull_request_number: 10
-  notes: >-
-    Draft #10 (carried from CRAM #503). No per-workflow manifest: basstler checks every
-    workflow file against generic rules (no schedule, cancel on every pull-request push, job
-    timeouts, fork-push skip, label check, at most jobs_per_push_run jobs per push run). A
-    project's `.github/actions_budget.py` holds only limits and per-workflow overrides;
-    `python -m basstler.actions_budget` writes its first version. Open design call: a
-    project-root argument, so it checks a plugin user's project. #10 has a merge conflict with main.
+  notes: 'Draft #10 (carried from CRAM #503). No per-workflow manifest: basstler checks every workflow
+    file against generic rules (no schedule, cancel on every pull-request push, job timeouts, fork-push
+    skip, label check, at most jobs_per_push_run jobs per push run). A project''s `.github/actions_budget.py`
+    holds only limits and per-workflow overrides; `python -m basstler.actions_budget` writes its first
+    version. Open design call: a project-root argument, so it checks a plugin user''s project. #10 has
+    a merge conflict with main.'
 - id: changed-library-matrix
   title: Pull request CI tests the libraries a change touches and their dependents
   branch: claude/changed-library-matrix
@@ -49,17 +48,15 @@ items:
   status: in progress
   pull_request_number: 55
   session: https://claude.ai/code/session_015LhBh1bQL2RDTPBjwCgtpQ
-  notes: >-
-    Package half is draft #55 on #10: basstler.changed_libraries selects the matrix libraries a
-    change touches plus their pyproject dependents (.claude and --tooling dirs run the tooling
-    alone, docs nothing, other paths everything), with --project-root. CRAM half (ci.yml
-    changed-libraries job; jobs_per_push_run override stays 16, decided with the user) is kept
-    on CRAM ccr-81db28df-4rban1 at 9c946ecb3.
+  notes: 'Package half is draft #55 on #10: basstler.changed_libraries selects the matrix libraries a
+    change touches plus their pyproject dependents (.claude and --tooling dirs run the tooling alone,
+    docs nothing, other paths everything), with --project-root. CRAM half (ci.yml changed-libraries job;
+    jobs_per_push_run override stays 16, decided with the user) is kept on CRAM ccr-81db28df-4rban1 at
+    9c946ecb3.'
   blockers:
-  - >-
-    The CRAM ci.yml half waits for basstler-package/cram-basstler-removal, which puts the plugin
-    in CRAM's CI; it then needs a real run to confirm the run-time exclude and the all-excluded
-    skip on GitHub.
+  - 'The CRAM ci.yml half: CRAM #523 (merged 2026-10-20) removed basstler from CRAM, so first decide how
+    CRAM''s CI gets the plugin; then it needs a real run to confirm the run-time exclude and the all-excluded
+    skip on GitHub.'
 - id: usage-monitor
   title: Measure run volume against the budget and warn before it is exceeded
   branch: null
@@ -67,12 +64,11 @@ items:
   depends_on:
   - budget-manifest
   status: not started
-  notes: >-
-    A basstler module counts the last 24 hours of runs and jobs per workflow from the Actions
-    API against daily ceilings added to `WorkflowLimits`. Three surfaces, none on a timer: a
-    session-start warning at 80% and over-budget line at 100%; ci.yml's first job writes the
-    comparison as a `::warning::` and step summary, and past the hard limit skips the heavy
-    matrix unless the pull request carries `budget-override`; and an on-demand report command.
+  notes: 'A basstler module counts the last 24 hours of runs and jobs per workflow from the Actions API
+    against daily ceilings added to `WorkflowLimits`. Three surfaces, none on a timer: a session-start
+    warning at 80% and over-budget line at 100%; ci.yml''s first job writes the comparison as a `::warning::`
+    and step summary, and past the hard limit skips the heavy matrix unless the pull request carries `budget-override`;
+    and an on-demand report command.'
 - id: dead-workflows-and-branches
   title: Delete the CRAM fork's stale integration probe branches
   branch: null
@@ -81,12 +77,10 @@ items:
   session: https://claude.ai/code/session_01HpHnFV9u2zyPbpe2ECMMdt
   depends_on: []
   status: blocked
-  notes: >-
-    Dead workflows are done (disabled 2026-10-13, history kept by choice). Left: the 12
-    integration-probe-20260913-085124-narrowing-0..11 branches, still on the fork on 2026-10-20.
-    The user approved deleting them; nothing recurs, since the integration stack is retired.
+  notes: 'Dead workflows are done (disabled 2026-10-13, history kept by choice). Left: the 12 integration-probe-20260913-085124-narrowing-0..11
+    branches, still on the fork on 2026-10-21. The user approved deleting them; nothing recurs, since
+    the integration stack is retired.'
   blockers:
-  - >-
-    The user deletes them: git push origin --delete $(git ls-remote --heads origin
-    'integration-probe-20260913-085124-narrowing-*' | sed 's|.*refs/heads/||'). A cloud session
-    is refused (HTTP 403) when deleting branches other than its own. Mark done once gone.
+  - 'The user deletes them: git push origin --delete $(git ls-remote --heads origin ''integration-probe-20260913-085124-narrowing-*''
+    | sed ''s|.*refs/heads/||''). A cloud session is refused (HTTP 403) when deleting branches other than
+    its own. Mark done once gone.'

@@ -1,27 +1,12 @@
 schema_version: 1
 id: plan-size-limits
 title: Plans and roadmaps stay small, enforced by tooling
-description: Make plan size a property the tooling holds rather than one sessions have to
-  remember. A hard budget covers a plan's plan.yaml and roadmap.md together; save-plan.sh
-  refuses a save that breaks it; /plan-create and /add-plan-item read the budget and open
-  a new plan instead of growing a full one; and the roadmap-writing guidance across the plan
-  skills stops asking for detail the budget cannot afford. Because the budget is enforced
-  by refusal, the two plans already over it are split first.
+description: 'Plan size is a property the tooling holds: #11 enforces per-field limits on
+  every save and loads one item per session (released in v0.1.5). What is left is routing
+  new work to a new plan once a plan is full.'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 37
 waves:
-- id: budget
-  name: Wave 1 - the budget, measured
-  description: 'The budget exists and every plan can be measured against it, but nothing is
-    refused yet. Report-only, so no plan is stranded while the migration below is still outstanding.
-
-    '
-- id: migration
-  name: Wave 2 - split the plans already over it
-  description: 'The two oversized plans come under budget. This must land before any refusal,
-    or their own state becomes unsaveable mid-flight.
-
-    '
 - id: enforcement
   name: Wave 3 - refusal and the skills
   description: 'The gate starts refusing, and the skills that write plans learn to route new
@@ -29,12 +14,6 @@ waves:
 
     '
 tracks:
-- id: budget-measurement
-  name: The budget and its report
-  wave: budget
-- id: plan-splits
-  name: Splitting the oversized plans
-  wave: migration
 - id: gate-and-skills
   name: The save gate and the writing skills
   wave: enforcement
@@ -44,26 +23,11 @@ items:
   branch: claude/plan-size-limits-newplan-ukbbri
   pull_request_number: 18
   track: gate-and-skills
-  depends_on:
-  - strict-limits-and-item-slices
+  depends_on: []
   status: in_progress
   session: https://claude.ai/code/session_01FEdxEdq3KNqShdNVPiBYKQ
-  notes: >-
-    /plan-create and /add-plan-item run plan_size_check, which counts unlanded items against
-    #11's Measure.ITEM_COUNT; a plan at the limit is full and new work goes to a new plan. Draft
-    #18, on main since #11 merged; CRAM #207's budget module and report hook are deleted.
+  notes: '/plan-create and /add-plan-item run plan_size_check, which counts unlanded items
+    against #11''s Measure.ITEM_COUNT; a plan at the limit is full and new work goes to a
+    new plan. Draft #18, on main since #11 merged; CRAM #207''s budget module and report hook
+    are deleted.'
   blockers: []
-- id: strict-limits-and-item-slices
-  title: Typed per-field limits enforced on every save, and one item loaded per session
-  branch: claude/happy-wozniak-nizfnv
-  pull_request_number: 11
-  track: gate-and-skills
-  depends_on: []
-  status: done
-  session: https://claude.ai/code/session_01Xxsd3jwKjjEsHdyyfC8Azo
-  notes: >-
-    Merged in #11 on 2026-10-19 and released in v0.1.5. Per-field limits checked on every save:
-    landed items pruned, finished plans removed, progress notes capped, finished branches'
-    progress notes deleted on each progress save. Session start loads only the branch item. Also
-    owns the one plan.yaml key enum: plan_model.ManifestKey, merging bootstrap's ManifestKey and
-    ManifestField. #17, landing after it, deletes build_dashboard.ManifestKey.

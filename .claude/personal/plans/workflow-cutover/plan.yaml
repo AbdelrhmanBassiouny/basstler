@@ -1,10 +1,10 @@
 schema_version: 1
 id: workflow-cutover
 title: 'Cutover: one published site, no scheduled LLM run, the old branches retired'
-description: The end state the workflow-unification work was for. Plan dashboards publish
-  themselves from a single Pages site; the scheduled LLM Routine is replaced by a plain Action
-  for the deterministic duties and on-demand sessions for the judgment ones; and the superseded
-  tooling branch is tagged and deleted once one green cycle has run on the new paths.
+description: The end state the workflow-unification work was for. Plan dashboards publish themselves from
+  a single Pages site; the scheduled LLM Routine is replaced by a plain Action for the deterministic duties
+  and on-demand sessions for the judgment ones; and the superseded tooling branch is tagged and deleted
+  once one green cycle has run on the new paths.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 42
 waves:
@@ -16,55 +16,34 @@ tracks:
   name: Cutover and retirements
   wave: cutover
 items:
-- id: stack-board-single-site
-  title: 'PR 4: plans-only Pages site (stack board retired for the native stack map)'
-  branch: claude/dashboard-publish-automation-hnfi5a
-  pull_request_number: 218
-  repository: AbdelrhmanBassiouny/cognitive_robot_abstract_machine
-  status: deferred
-  session: https://claude.ai/code/session_01CfwosnvBeiWvRLXxcnfHPk
-  track: cutover
-  depends_on: []
-  notes: 'Superseded by plan-site-builder (#6) and plan-site-action: one site over every repository''s
-    plans, on AbdelrhmanBassiouny/stack-board''s Pages. CRAM #218 is closed.'
 - id: site-pages-in-python
   title: Build the site's pages in Python instead of Jinja templates
   branch: null
   status: not_started
   track: cutover
   depends_on: []
-  notes: 'Raised by the owner on #6''s dashboard.html thread (2026-10-18), offered as its
-    own item; proposed there and awaiting confirmation. htpy (typed, dependency-free) plus
-    dataclass section models, a StrEnum of CSS classes and a factory from Plan to page; the
-    CSS moves to one static stylesheet. Every page already renders through TemplatePage, so
-    only render() changes. If the owner folds it into #6 instead, drop this item.
-
-    '
+  notes: |
+    Raised by the owner on #6's dashboard.html thread (2026-10-18), offered as its own item; proposed there and awaiting confirmation. htpy (typed, dependency-free) plus dataclass section models, a StrEnum of CSS classes and a factory from Plan to page; the CSS moves to one static stylesheet. Every page already renders through TemplatePage, so only render() changes. If the owner folds it into #6 instead, drop this item.
 - id: plan-site-action
   title: Deploy the plan site to stack-board's Pages, on demand rather than on a timer
   branch: null
   status: not_started
   track: cutover
   depends_on: []
-  notes: 'A reusable workflow in basstler builds the site from every repository the hub file
-    lists; AbdelrhmanBassiouny/stack-board calls it, reworking the draft plan-dashboards.yml
-    on claude/plan-dashboards-site-y2vexc and dropping the 10-minute cron. No schedule. Rebuilt
-    on every plan change by anyone: every notes writer (save-plan, sync_manifest_status, write-personal-notes-file,
-    bootstrap) dispatches it after a push under plans/, as a GITHUB_TOKEN push starts no workflow,
-    and a push-triggered caller on each notes branch catches hand pushes. One concurrency
-    group. Retires board.yml.'
+  notes: 'A reusable workflow in basstler builds the site from every repository the hub file lists; AbdelrhmanBassiouny/stack-board
+    calls it, reworking the draft plan-dashboards.yml on claude/plan-dashboards-site-y2vexc and dropping
+    the 10-minute cron. No schedule. Rebuilt on every plan change by anyone: every notes writer (save-plan,
+    sync_manifest_status, write-personal-notes-file, bootstrap) dispatches it after a push under plans/,
+    as a GITHUB_TOKEN push starts no workflow, and a push-triggered caller on each notes branch catches
+    hand pushes. One concurrency group. Retires board.yml.'
 - id: plan-site-setup
   title: Setup registers the repository in the hub, and sessions are told the site links
   branch: null
   status: not_started
   track: cutover
   depends_on: []
-  notes: '/setup-personal-notes adds the repository to the registry''s hub file and copies
-    the file onto this repository''s notes, with no question asked; a repository with no registry
-    configured becomes its own. The session-start summary prints the site links worked out
-    from the hub file - the hub, this repository, and this branch''s plan and item.
-
-    '
+  notes: |
+    /setup-personal-notes adds the repository to the registry's hub file and copies the file onto this repository's notes, with no question asked; a repository with no registry configured becomes its own. The session-start summary prints the site links worked out from the hub file - the hub, this repository, and this branch's plan and item.
 - id: routine-cutover
   title: 'Retire the scheduled LLM Routine: deterministic Action + on-demand sessions'
   branch: claude/stack-maintenance-action
@@ -73,17 +52,17 @@ items:
   track: cutover
   pull_request_number: 16
   blockers:
-  - The CRAM fork's caller lands with basstler-package's cram-uses-basstler-plugin (CRAM's
-    main has no .claude/basstler/stack.toml yet) and must name a release that carries
+  - 'The CRAM fork''s caller has no home: CRAM #523 (merged 2026-10-20) removed every basstler file. Decide
+    whether it is committed in CRAM or runs with no committed files, like /upstream-reviews, and which
+    release it names.'
   - Waits on one green run of that caller before the live Routine is deleted.
   depends_on: []
-  notes: 'Resolved 2026-10-19 with the owner: the caller is event-only (pull_request opened,
-    ready_for_review and closed, plus workflow_dispatch), with no schedule and no budget exception,
-    matching CRAM actions-budget''s stack-maintenance-event-only. The fork''s base fast-forwards
-    on the next event or dispatch. #16 ships docs/examples/stack-maintenance.yml; the release
-    rewrites every CheckoutLocation.example_callers() ref. The fan-out ask needs no code:
-    restack already pushes one branch at a time, parent first. Judgment residue (cascade conflicts,
-    red CI after a restack) runs in on-demand sessions.'
+  notes: 'Resolved 2026-10-19 with the owner: the caller is event-only (pull_request opened, ready_for_review
+    and closed, plus workflow_dispatch), with no schedule and no budget exception, matching CRAM actions-budget''s
+    stack-maintenance-event-only. The fork''s base fast-forwards on the next event or dispatch. #16 ships
+    docs/examples/stack-maintenance.yml; the release rewrites every CheckoutLocation.example_callers()
+    ref. The fan-out ask needs no code: restack already pushes one branch at a time, parent first. Judgment
+    residue (cascade conflicts, red CI after a restack) runs in on-demand sessions.'
 - id: artifact-path-retirement
   title: Retire the Artifact publishing path once the Pages site has run one green cycle
   branch: null
@@ -91,12 +70,12 @@ items:
   track: cutover
   depends_on:
   - plan-site-action
-  notes: 'Raised by the user on #218''s review (2026-09-04), widened 2026-10-20: the site
-    is the one surface, always current, so every Artifact page goes, the master index included
-    - the site''s hub and per-repository pages are the index, rebuilt by plan-site-action
-    on every plan change. It removes `record_dashboard_url.py` and its tests, the `_generated/dashboard-urls.yaml`
-    cache, `plan-dashboard/SKILL.md` step 3 and its index mode, and the republish instruction
-    every plan skill and the personal notes carry, each of which dispatches the workflow instead.'
+  notes: 'Raised by the user on #218''s review (2026-09-04), widened 2026-10-20: the site is the one surface,
+    always current, so every Artifact page goes, the master index included - the site''s hub and per-repository
+    pages are the index, rebuilt by plan-site-action on every plan change. It removes `record_dashboard_url.py`
+    and its tests, the `_generated/dashboard-urls.yaml` cache, `plan-dashboard/SKILL.md` step 3 and its
+    index mode, and the republish instruction every plan skill and the personal notes carry, each of which
+    dispatches the workflow instead.'
 - id: tooling-branch-retirement
   title: Tag and delete claude/stack-workflow-tooling after one green cycle
   branch: null
@@ -104,22 +83,8 @@ items:
   track: cutover
   depends_on:
   - routine-cutover
-  - stack-board-single-site
-  notes: 'Only after one full Routine cycle and one site-Action cycle have run green on the
-    new paths. Tag for history first. Platform constraint, recorded 2026-07-29 and unchanged:
-    tag pushes and branch deletes get a 403 through a session''s git proxy, so those two steps
-    run outside the harness - the user''s machine, or `gh api`. A session can still do every
-    verification and prepare the exact commands. The sibling `session-hooks-retirement` hit
-    the same wall and the user ran the delete.'
-- id: maintenance-rereport-fix
-  title: Withhold a conflicted branch until its parent actually integrates (stop re-reporting
-    conflicts)
-  branch: null
-  track: cutover
-  pull_request_number: null
-  session: https://claude.ai/code/session_017wfueWmCbN76Z5MQo2EWAv
-  depends_on: []
-  status: deferred
-  notes: 'Retired in the carryover: the branch predated the package (.claude/stack/ layout).
-    Its fix is recorded in basstler#25 with the last commit, for a fresh fix on main if the
-    re- reporting recurs.'
+  - plan-site-action
+  notes: Only after one full maintenance cycle and one site-Action cycle have run green on the new paths.
+    claude/stack-workflow-tooling is still on the CRAM fork (checked 2026-10-21). Tag for history first.
+    Tag pushes and branch deletes get a 403 through a session's git proxy, so those two steps run outside
+    the harness; a session can verify and prepare the commands.

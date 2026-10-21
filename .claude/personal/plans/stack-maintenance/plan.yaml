@@ -1,27 +1,19 @@
 schema_version: 1
 id: stack-maintenance
-title: 'The maintenance pass and the integration branch: running a stack of pull requests'
-description: 'What keeps a stack of pull requests moving without a person driving each step:
-  a deterministic executor that fast-forwards, restacks, promotes and reports; reparenting
-  a child whose parent has landed; reading upstream review threads from a fork; and a regenerated
-  integration branch that answers whether the in-flight branches actually coexist.'
+title: 'The maintenance pass: running a stack of pull requests'
+description: 'What keeps a stack of pull requests moving without a person driving each step: a deterministic
+  executor that fast-forwards, restacks, promotes and reports, and the manifest kept current at every
+  transition. The integration branch was retired with the carryover (basstler#19, #28, #29).'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 40
 waves:
 - id: pass
   name: The maintenance pass
   description: The executor, what it decides for itself, and the version of itself it runs.
-- id: integration
-  name: The integration branch
-  description: A branch regenerated from upstream plus every reviewed tip, built to be worked
-    from rather than merged out of, and judged by real CI.
 tracks:
 - id: pass
   name: Maintenance pass
   wave: pass
-- id: integration
-  name: Integration branch
-  wave: integration
 items:
 - id: manifest-currency-first
   title: Write the manifest and republish the dashboard before anything else, at every transition
@@ -32,24 +24,11 @@ items:
   track: pass
   blockers: []
   depends_on: []
-  notes: >-
-    Every skill that can affect a plan writes the manifest and republishes the dashboard first,
-    at every point that makes a recorded field stale; also fixes the manifest writer's
-    corruption bugs and carries plan-tracking-skills' indent fix. Draft #48, carried from CRAM
-    #151 with its history; main is not merged in yet (conflicts listed on the pull request).
-- id: pinned-stack-tooling
-  title: Pin the stack tooling for the length of a maintenance pass
-  branch: null
-  pull_request_number: null
-  status: deferred
-  session: https://claude.ai/code/session_016DukdvsJzggwAAF3CkKaDZ
-  track: pass
-  depends_on: []
-  notes: >-
-    No longer needed: the skill runs "${BASSTLER_PYTHON}" -m basstler from the per-user
-    environment at the plugin's release, so a pass switching branches no longer changes the
-    tooling. The exception is a pass over basstler's own editable checkout. CRAM #158's branch
-    is retired in #53.
+  notes: 'Every skill that can affect a plan writes the manifest and republishes the dashboard first,
+    at every point that makes a recorded field stale; also fixes the manifest writer''s corruption bugs
+    and carries plan-tracking-skills'' indent fix. Draft #48, carried from CRAM #151 with its history;
+    main is not merged in yet (conflicts listed on the pull request). Absorbs plan-tracking-skills'' plan-item-bootstrap-yaml-indent
+    (CRAM #160): when #48 lands, check that the item indent is read off the manifest.'
 - id: promotion-summaries-and-table
   title: Promote with a written summary, and report the links as a table rather than a notification
   branch: null
@@ -57,76 +36,15 @@ items:
   status: not_started
   track: pass
   depends_on: []
-  notes: >-
-    The script builds the compare-and-create link; the upstream pull request opens with a title
-    and a point-based summary linking back to the fork pull request; nothing sends a
-    notification; every promoted branch is reported as a table in the session. Not started here:
-    CRAM #162's bastler/-era branch is retired in #50, whose last commit is the reference.
-- id: integration-branch
-  title: 'Regenerated personal integration branch: build, check, resolve, report'
-  branch: null
-  pull_request_number: null
-  status: deferred
-  session: https://claude.ai/code/session_01Ra51SAHQKy7TVYRG2HRERW
-  track: integration
-  depends_on:
-  - manifest-currency-first
-  notes: >-
-    Retired with the whole integration-branch stack by the user's choice in the carryover:
-    porting it onto main's layers was a rewrite. basstler#28 records the branch's last
-    commit.
-- id: integration-branch-ci-verdict
-  title: Move the integration branch's verdict to CI, with a stable branch and a targeted
-    job
-  branch: null
-  pull_request_number: null
-  status: deferred
-  session: https://claude.ai/code/session_01KgTu7rha5xxBYAVm41e3uV
-  track: integration
-  depends_on:
-  - integration-branch
-  blockers: []
-  notes: >-
-    Retired with the integration-branch stack in the carryover; basstler#29 records the
-    branch's last commit.
-- id: red-candidate-localisation
-  title: Localise a red candidate to the branches that caused it
-  branch: null
-  pull_request_number: null
-  status: deferred
-  session: https://claude.ai/code/session_0138w5mqzbkyMPtotF7PD59Z
-  track: integration
-  depends_on:
-  - integration-branch-ci-verdict
-  notes: >-
-    Retired with the integration-branch stack in the carryover; basstler#29 records the
-    branch's last commit.
-- id: per-plan-integration-branches
-  title: One integration branch per plan, and a complete branch built from their last green
-    builds
-  branch: null
-  status: deferred
-  track: integration
-  depends_on:
-  - integration-branch-ci-verdict
-  notes: 'Proposed by the user and recorded without being built: one integration branch per
-    plan, plus a complete branch merging them. Everything below is settled by measurement;
-    **the deferral is the only part that is a judgement.** The scope check was run rather
-    than eyeballed, and the answer is that this is a new item: strip the edits to the files
-    its siblings introduce and what remains is nine build branches, nine candidate cycles,
-    a complete branch with a build rule of its own and per-plan cleanup - substantial and
-    standing alone by a wide margin.'
-- id: integrated-label
-  title: Label every pull request the integration branch carries, and unlabel the ones it
-    drops
-  branch: null
-  pull_request_number: null
-  status: deferred
-  session: https://claude.ai/code/session_016Fms9hs3XuS3a5wgc5ts3x
-  track: integration
-  depends_on:
-  - integration-branch-ci-verdict
-  - red-candidate-localisation
-  notes: >-
-    Retired in the carryover (bastler/ era, stacked on the retired integration branch);
-    basstler#19 records the branch's last commit.
+  notes: 'The script builds the compare-and-create link; the upstream pull request opens with a title
+    and a point-based summary linking back to the fork pull request; nothing sends a notification; every
+    promoted branch is reported as a table in the session. Not started here: CRAM #162''s bastler/-era
+    branch is retired in #50, whose last commit is the reference.'
+- id: one-restack-merge-per-branch
+  title: Keep one restack merge per branch instead of one per pass
+  branch: claude/trusting-clarke-32il0l
+  pull_request_number: 9
+  status: in_progress
+  track: pass
+  depends_on: []
+  notes: 'Draft #9, open on basstler but tracked by no plan until the 2026-10-21 cleanup.'

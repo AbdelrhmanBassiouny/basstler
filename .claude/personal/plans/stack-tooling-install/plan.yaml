@@ -1,28 +1,20 @@
 schema_version: 1
 id: stack-tooling-install
 title: Stack tooling on main, and the skills that install it anywhere
-description: 'Getting the stacked-pull-request workflow''s machinery out of a personal tooling
-  branch and onto main as reviewed code, with guided setup for a repository that takes it
-  natively and for a fork that has to overlay it. Portability is the rule throughout: no repository
-  names outside configuration defaults.'
+description: 'Getting the stacked-pull-request workflow''s machinery out of a personal tooling branch
+  and onto main as reviewed code, with guided setup for a repository that takes it natively and for a
+  fork that has to overlay it. Portability is the rule throughout: no repository names outside configuration
+  defaults.'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 41
 waves:
-- id: landing
-  name: The tooling reaches main
-  description: The base pull request, the tooling port, and the native-stacks evaluation that
-    re-scoped it.
 - id: install
   name: Setup, scripted
-  description: Each setup skill keeps only the questions; everything mechanical becomes a
-    script.
+  description: Each setup skill keeps only the questions; everything mechanical becomes a script.
 - id: base-correctness
   name: What a branch is cut from
   description: Bugs in which refs the tooling fetches and which branch new work is based on.
 tracks:
-- id: landing
-  name: Tooling onto main
-  wave: landing
 - id: install
   name: Guided setup
   wave: install
@@ -38,34 +30,19 @@ items:
   session: https://claude.ai/code/session_01DbUfzLJEFqE4U3fKBFd2WA
   track: install
   depends_on: []
-  notes: >-
-    The mechanical half of /setup-personal-notes as a script, the skill only asking the
-    questions; the whole setup runs with no session. Draft #45, carried from CRAM #107 with its
-    history; main is not merged in yet. Three owner threads stay open: rename the promotion
-    label (main says promotion-link-sent) and drop the unused merged and rebase labels.
+  notes: 'The mechanical half of /setup-personal-notes as a script, the skill only asking the questions;
+    the whole setup runs with no session. Draft #45, carried from CRAM #107 with its history; main is
+    not merged in yet. Three owner threads stay open: rename the promotion label (main says promotion-link-sent)
+    and drop the unused merged and rebase labels.'
 - id: unfetched-parent-branches
-  title: Fetch every parent branch the pass decides about, and refuse to decide from a missing
-    ref
+  title: Fetch every parent branch the pass decides about, and refuse to decide from a missing ref
   branch: claude/maintenance-tooling-pinning-gdod18
   pull_request_number: 44
   status: in_progress
   session: https://claude.ai/code/session_01THzpHsajMptZ3X1DmwAU2c
   track: base-correctness
   depends_on: []
-  notes: >-
-    load_stack fetches only the open pull requests' head branches, so a parent whose pull
-    request merged is never fetched, and the merged check cannot tell a missing ref (exit 128)
-    from not-an-ancestor (exit 1). Still on main. Draft #44, carried from CRAM #198 with its
-    history; main is not merged in yet.
-- id: session-branch-base
-  title: Cut session branches from main, not the integration branch
-  branch: null
-  pull_request_number: null
-  status: deferred
-  session: https://claude.ai/code/session_014Fp9aaMYx1E6toT2jDDWdW
-  track: base-correctness
-  depends_on: []
-  notes: >-
-    No longer needed: it refused a session branch cut from the regenerated integration branch,
-    which the CRAM fork's default branch once was. The integration stack is retired and that
-    default is main again. CRAM #199's branch is retired in #54.
+  notes: 'load_stack fetches only the open pull requests'' head branches, so a parent whose pull request
+    merged is never fetched, and the merged check cannot tell a missing ref (exit 128) from not-an-ancestor
+    (exit 1). Still on main. Draft #44, carried from CRAM #198 with its history; main is not merged in
+    yet.'
