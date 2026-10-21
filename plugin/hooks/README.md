@@ -208,6 +208,13 @@ the narrative that doesn't belong in structured data.
   `.claude/.plan-state-sync-sha`), so this can diff the plan's directory from that stamp and print
   only the tracking-issue comments newer than it. Needs no Claude Code session: it prefers the `gh`
   CLI when installed, otherwise `GH_TOKEN`/`GITHUB_TOKEN` with `curl`.
+- Know which Python dependencies are absent →
+  [`src/basstler/dependencies.py`](../../src/basstler/dependencies.py), which prints the
+  requirement specifiers [`pyproject.toml`](../../pyproject.toml) declares and the interpreter
+  does not have. That declaration is the one place a tooling dependency is written down, so no
+  script names a distribution of its own: `check-setup.sh` reports what is missing and
+  `session-start.sh` installs it, both through the `missing_dependencies` helper in
+  [`resolve-personal-notes-config.sh`](./resolve-personal-notes-config.sh).
 
 **Auto-discovery.** If your branch is an item in some plan, that plan's `plan.yaml` and `roadmap.md`
 are pulled into `CLAUDE.local.md` too, via a generated branch-to-plan index that `save-plan.sh`
