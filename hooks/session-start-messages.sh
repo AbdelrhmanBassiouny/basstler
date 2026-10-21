@@ -106,6 +106,16 @@ git_identity_line_written() {
   printf "set from '%s' (%s): %s" "${notes_branch}" "${identity_path}" "${identity}"
 }
 
+# %% the default branch line
+
+# default_branch_line_not_synced: the module that catches the default branch
+# up could not run at all, so there is no outcome to report rather than a
+# clean one. Every outcome it can reach is worded by the module itself.
+default_branch_line_not_synced() {
+  local module="$1"
+  printf 'not synced - %s did not run' "${module}"
+}
+
 # %% the setup line
 
 # setup_line_not_checked: check-setup.sh is not in this plugin, so there is
