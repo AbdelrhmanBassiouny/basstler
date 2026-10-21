@@ -39,6 +39,6 @@ items:
   track: handover
   depends_on: []
   session: https://claude.ai/code/session_01YPtqHLUXGEXUS2JHHUK2pU
-  notes: 'Fast-forward the fork''s default branch to the upstream at session start, so no
-    session plans against a stale base (one was found 86 commits behind). Draft #57, built
-    fresh on main; CRAM #188''s bastler/-era branch is the reference, retired in #51.'
+  notes: 'Draft #57 implements it as basstler.default_branch_sync, run by session-start.sh:
+    fast-forward only, never fatal, checked-out branch measured not moved. Tests and full
+    suite pass; awaiting review. Reference: CRAM #188 (retired in #51).'
