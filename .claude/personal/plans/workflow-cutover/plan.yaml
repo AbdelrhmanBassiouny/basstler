@@ -52,17 +52,15 @@ items:
   track: cutover
   pull_request_number: 16
   blockers:
-  - 'The CRAM fork''s caller has no home: CRAM #523 (merged 2026-10-20) removed every basstler file. Decide
-    whether it is committed in CRAM or runs with no committed files, like /upstream-reviews, and which
-    release it names.'
+  - 'Waits on basstler-package/upstream-reviews-without-project-files (#56): the CRAM caller reuses its
+    fork-only branch installer and request handling.'
   - Waits on one green run of that caller before the live Routine is deleted.
   depends_on: []
-  notes: 'Resolved 2026-10-19 with the owner: the caller is event-only (pull_request opened, ready_for_review
-    and closed, plus workflow_dispatch), with no schedule and no budget exception, matching CRAM actions-budget''s
-    stack-maintenance-event-only. The fork''s base fast-forwards on the next event or dispatch. #16 ships
-    docs/examples/stack-maintenance.yml; the release rewrites every CheckoutLocation.example_callers()
-    ref. The fan-out ask needs no code: restack already pushes one branch at a time, parent first. Judgment
-    residue (cascade conflicts, red CI after a restack) runs in on-demand sessions.'
+  notes: 'Decided 2026-10-21 with the owner: on a fork whose main mirrors its upstream (CRAM after #523),
+    the caller lives on a history-less basstler/stack-maintenance branch and runs on push. /stacked-pr-maintenance,
+    the plan-item skills after opening or merging a PR, and session start (merged PRs since the last run)
+    push a request; config is the personal stack.toml; setup_steps installs it. A repository that commits
+    its files keeps #16''s event-only docs/examples caller.'
 - id: artifact-path-retirement
   title: Retire the Artifact publishing path once the Pages site has run one green cycle
   branch: null
@@ -70,12 +68,11 @@ items:
   track: cutover
   depends_on:
   - plan-site-action
-  notes: 'Raised by the user on #218''s review (2026-09-04), widened 2026-10-20: the site is the one surface,
-    always current, so every Artifact page goes, the master index included - the site''s hub and per-repository
-    pages are the index, rebuilt by plan-site-action on every plan change. It removes `record_dashboard_url.py`
-    and its tests, the `_generated/dashboard-urls.yaml` cache, `plan-dashboard/SKILL.md` step 3 and its
-    index mode, and the republish instruction every plan skill and the personal notes carry, each of which
-    dispatches the workflow instead.'
+  notes: 'Widened 2026-10-20/21: the site is the one surface, so every Artifact page goes, the index included.
+    A session first deletes every page each repository''s _generated/dashboard-urls.yaml lists (the Artifact
+    tool''s delete; an Action cannot), then removes that cache, record_dashboard_url.py and its tests,
+    plan-dashboard step 3 and index mode, and the republish instruction in every plan skill and the personal
+    notes, which dispatch the site workflow instead.'
 - id: tooling-branch-retirement
   title: Tag and delete claude/stack-workflow-tooling after one green cycle
   branch: null

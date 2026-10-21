@@ -75,8 +75,10 @@ items:
   - landed-record
   status: not started
   notes: 'save-plan.sh loads every plan on the notes branch and refuses a save that leaves an unresolved
-    reference or a cycle through another plan, naming each. Today #17 only checks when a dashboard is
-    built, so a broken reference is pushed and every later dashboard run of the plans it touches fails.'
+    reference or a cycle through another plan, naming each. #17 only checks at dashboard time. Widened
+    2026-10-21: a blocker naming another item uses a structured blocked_by (plan/item or PR) instead of
+    prose, and any plan/item written in notes or blockers must resolve too - the cleanup found several
+    naming removed items.'
 - id: cross-repository-references
   title: Let depends_on name an item in another repository's plans, through the hub
   branch: null

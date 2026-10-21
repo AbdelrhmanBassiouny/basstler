@@ -87,3 +87,23 @@ items:
     from it. This is the Routine''s phase-3 link building turned into a surface instead of an emailed
     summary: the same compare URL, computed at dashboard build time, so it reaches the user with no scheduled
     run - which is what the cutover requires of every deterministic duty.'
+- id: untracked-pull-requests
+  title: List each repository's open pull requests that no plan item tracks
+  branch: null
+  pull_request_number: null
+  track: corrections
+  depends_on: []
+  status: not_started
+  notes: 'Added 2026-10-21: the cleanup found basstler #9, #32 and #33 open with no item. Each repository''s
+    site page lists its open pull requests whose number and branch match no item in any plan, each with
+    an add-plan-item link. Rendered by the site builder, not the Artifact page.'
+- id: duplicate-plan-ids
+  title: Flag a plan id used by more than one hub repository
+  branch: null
+  pull_request_number: null
+  track: corrections
+  depends_on: []
+  status: not_started
+  notes: 'Added 2026-10-21: basstler-package existed on both basstler''s and CRAM''s notes. The site build
+    warns on the hub page for every id two hub repositories share, and /plan-create refuses an id another
+    hub repository already uses.'
