@@ -1,0 +1,423 @@
+"""
+Keeping the base every session starts from level with the upstream this fork tracks.
+
+Sessions are cut from the fork's default branch. When that branch has drifted behind the
+upstream it is forked from, every session in the clone plans, reviews and implements
+against a base that is already stale - and nothing in the session says so, because the
+clone is perfectly consistent with itself. Noticing is the step that gets skipped, and by
+the time a rebase surfaces the drift the work is already written against the old base.
+
+So session start runs this, in one pass:
+
+1. resolves the upstream and its base branch through :func:`basstler.stack.load_configuration`,
+   the same resolution the stacked-PR tooling runs on, so nothing here names a repository;
+2. fetches that branch, without touching ``FETCH_HEAD``, which the hook reads the
+   personal-notes branch through;
+3. fast-forwards this clone's copy of it;
+4. pushes the result to the fork, whose default branch is what the *next* session is cloned
+   from.
+
+Fast-forward only, in every step: a base carrying commits the upstream does not is reported
+and left as it is, and nothing is ever force-pushed. Only that one branch moves - the
+checked-out branch is never merged or rebased, since whether to take a moved base into work
+in progress is the session's call, but how far behind it now is gets reported, so the
+choice is made rather than missed.
+
+Never fatal. Every refusal - no upstream named, unresolvable remotes, an unreachable
+upstream, a diverged or pinned-down base, a rejected push - is reported and exits 0,
+because a session that cannot sync its base must still start.
+
+Usage::
+
+    python -m basstler.default_branch_sync
+
+Prints the outcome on its first line and zero or more indented rows naming what is left
+for the session to do; session-start.sh prints the block as its ``default branch`` line.
+Also runnable by hand, to catch a long-running session's clone up mid-session.
+"""
+
+from __future__ import annotations
+
+import sys
+from dataclasses import dataclass
+from enum import StrEnum
+from pathlib import Path
+
+from basstler.exit_codes import CommandFailure
+from basstler.maintenance_git_commands import GitCommandRunner, ProposedPush
+from basstler.repository import MalformedRepositoryError
+from basstler.stack import Configuration, load_configuration
+
+FOLLOW_UP_ROW_INDENT = "    "
+"""
+What each row under the outcome is indented by, matching the setup line's rows.
+"""
+
+
+class BaseOutcome(StrEnum):
+    """
+    What became of this clone's copy of the upstream's base branch.
+    """
+
+    NOT_SYNCED = "not-synced"
+    """
+    No upstream could be resolved, so there was nothing to catch up with.
+    """
+
+    UPSTREAM_UNREACHABLE = "upstream-unreachable"
+    """
+    The upstream is named but could not be fetched, so how stale the clone is stays
+    unknown.
+    """
+
+    DIVERGED = "diverged"
+    """
+    The base carries commits the upstream does not, which a fast-forward cannot reconcile
+    and a force push must never resolve.
+    """
+
+    LOCAL_UPDATE_REFUSED = "local-update-refused"
+    """
+    The base is checked out with changes git will not overwrite.
+    """
+
+    CURRENT = "current"
+    """
+    The base already carried the upstream's tip.
+    """
+
+    FAST_FORWARDED = "fast-forwarded"
+    """
+    The base was behind and has been brought up to the upstream's tip.
+    """
+
+
+class ForkPublication(StrEnum):
+    """
+    What became of the fork's copy of the base, once this clone's was level.
+    """
+
+    ALREADY_CURRENT = "already-current"
+    """
+    The fork already carried the upstream's tip.
+    """
+
+    PUSHED = "pushed"
+    """
+    The fork was behind and the upstream's tip was pushed to it.
+    """
+
+    REFUSED = "refused"
+    """
+    The push was refused, so the next clone of the fork starts stale.
+    """
+
+
+@dataclass(frozen=True)
+class DefaultBranchReport:
+    """
+    What one catching-up pass did, and what it leaves for the session to do.
+    """
+
+    outcome: BaseOutcome
+    """
+    What became of this clone's copy of the base.
+    """
+
+    base_branch: str = ""
+    """
+    The branch caught up, as the upstream names it.
+    """
+
+    upstream: str = ""
+    """
+    The upstream, as ``owner/name``.
+    """
+
+    reason: str = ""
+    """
+    Why nothing was synced, in the words the resolution refused with.
+    """
+
+    commits_behind: int = 0
+    """
+    How many commits this clone's base was behind the upstream.
+    """
+
+    fork_remote: str = ""
+    """
+    The remote the fork's copy was published to.
+    """
+
+    fork_publication: ForkPublication = ForkPublication.ALREADY_CURRENT
+    """
+    What became of the fork's copy.
+    """
+
+    checked_out_branch_behind: int = 0
+    """
+    How many commits the checked-out branch is now behind the base.
+    """
+
+    @property
+    def outcome_line(self) -> str:
+        """
+        :return: The first line of the report, saying what became of the base.
+        """
+        match self.outcome:
+            case BaseOutcome.NOT_SYNCED:
+                return f"not synced - {self.reason}"
+            case BaseOutcome.UPSTREAM_UNREACHABLE:
+                return f"'{self.base_branch}' left as it is - {self.upstream} is unreachable"
+            case BaseOutcome.DIVERGED:
+                return (
+                    f"'{self.base_branch}' has commits {self.upstream} does not - "
+                    f"left as it is, nothing force-pushed"
+                )
+            case BaseOutcome.LOCAL_UPDATE_REFUSED:
+                return (
+                    f"'{self.base_branch}' is behind {self.upstream} but is checked out "
+                    f"with changes git will not overwrite - left as it is"
+                )
+            case BaseOutcome.CURRENT:
+                return f"'{self.base_branch}' already matches {self.upstream}"
+            case BaseOutcome.FAST_FORWARDED:
+                return (
+                    f"'{self.base_branch}' fast-forwarded {self.commits_behind} "
+                    f"commit(s) to {self.upstream}"
+                )
+
+    @property
+    def follow_up_rows(self) -> tuple[str, ...]:
+        """
+        :return: What is left for the session to do, one row each.
+        """
+        rows = []
+        if self.fork_publication is ForkPublication.PUSHED:
+            rows.append(f"pushed it to '{self.fork_remote}', which was behind")
+        if self.fork_publication is ForkPublication.REFUSED:
+            rows.append(
+                f"pushing it to '{self.fork_remote}' was refused - the fork is still "
+                f"behind, so the next clone starts stale"
+            )
+        if self.checked_out_branch_behind:
+            rows.append(
+                f"this branch is {self.checked_out_branch_behind} commit(s) behind "
+                f"'{self.base_branch}' - merge or rebase it before planning on a stale base"
+            )
+        return tuple(rows)
+
+    def render(self) -> str:
+        """
+        :return: The outcome, then each follow-up row indented beneath it.
+        """
+        return "\n".join(
+            [
+                self.outcome_line,
+                *(f"{FOLLOW_UP_ROW_INDENT}{row}" for row in self.follow_up_rows),
+            ]
+        )
+
+
+@dataclass(frozen=True)
+class DefaultBranchSync:
+    """
+    Catches one clone's copy of the upstream's base branch up, and the fork's after it.
+    """
+
+    configuration: Configuration
+    """
+    The resolved stacked-PR configuration naming the upstream, its base and the fork.
+    """
+
+    git: GitCommandRunner
+    """
+    The runner every git command against the clone goes through.
+    """
+
+    @property
+    def base_branch(self) -> str:
+        """
+        :return: The branch every session starts from.
+        """
+        return self.configuration.upstream_base
+
+    @property
+    def upstream_tracking_reference(self) -> str:
+        """
+        The ref the upstream's base is fetched into - the one the stacked-PR tooling reads
+        it from, whether or not this clone has added the upstream as a remote.
+        """
+        return f"refs/remotes/{self.configuration.upstream_remote}/{self.base_branch}"
+
+    @property
+    def fork_tracking_reference(self) -> str:
+        """
+        :return: The ref the fork's copy of the base is fetched into.
+        """
+        return f"refs/remotes/{self.configuration.fork_remote}/{self.base_branch}"
+
+    @property
+    def local_reference(self) -> str:
+        """
+        :return: This clone's own copy of the base.
+        """
+        return f"refs/heads/{self.base_branch}"
+
+    @property
+    def upstream_location(self) -> str:
+        """
+        A clone that has added the upstream remote fetches it by name; one that has not
+        fetches it by URL, which saves adding a remote nothing else here would use.
+        """
+        if self.configuration.upstream_setup_command is None:
+            return self.configuration.upstream_remote
+        return self.configuration.upstream_repository.clone_url
+
+    def report(self, outcome: BaseOutcome, **details: object) -> DefaultBranchReport:
+        """
+        :param outcome: What became of the base.
+        :param details: The rest of the report's fields.
+        :return: The report, naming this pass's base and upstream.
+        """
+        return DefaultBranchReport(
+            outcome=outcome,
+            base_branch=self.base_branch,
+            upstream=self.configuration.upstream_repository.full_name,
+            fork_remote=self.configuration.fork_remote,
+            **details,
+        )
+
+    def fetch_quietly(self, location: str, destination: str) -> bool:
+        """
+        Fetch the base into a tracking ref, leaving ``FETCH_HEAD`` alone.
+
+        :param location: The remote name or URL to fetch from.
+        :param destination: The ref to fetch into.
+        :return: Whether the fetch worked.
+        """
+        return self.git.attempt(
+            "fetch",
+            "--quiet",
+            "--no-write-fetch-head",
+            location,
+            f"+refs/heads/{self.base_branch}:{destination}",
+        ).succeeded
+
+    def commit_or_none(self, reference: str) -> str | None:
+        """
+        :param reference: A ref that may not exist.
+        :return: The commit it names, or ``None`` if it does not exist.
+        """
+        resolved = self.git.attempt("rev-parse", "--verify", "--quiet", reference)
+        return resolved.output if resolved.succeeded else None
+
+    def run(self) -> DefaultBranchReport:
+        """
+        Catch the base up, then the fork's copy of it.
+
+        :return: What was done, and what is left for the session to do.
+        """
+        if not self.fetch_quietly(
+            self.upstream_location, self.upstream_tracking_reference
+        ):
+            return self.report(BaseOutcome.UPSTREAM_UNREACHABLE)
+        upstream_tip = self.git.commit_at(self.upstream_tracking_reference)
+        local_tip = self.commit_or_none(self.local_reference)
+
+        commits_behind = 0
+        if local_tip is not None and local_tip != upstream_tip:
+            if not self.git.contains(local_tip, upstream_tip):
+                return self.report(BaseOutcome.DIVERGED)
+            commits_behind = int(
+                self.git.run("rev-list", "--count", f"{local_tip}..{upstream_tip}")
+            )
+        if local_tip != upstream_tip and not self.move_local_base(
+            local_tip, upstream_tip
+        ):
+            return self.report(BaseOutcome.LOCAL_UPDATE_REFUSED)
+
+        return self.report(
+            BaseOutcome.FAST_FORWARDED if commits_behind else BaseOutcome.CURRENT,
+            commits_behind=commits_behind,
+            fork_publication=self.publish_to_fork(upstream_tip),
+            checked_out_branch_behind=int(
+                self.git.run("rev-list", "--count", f"HEAD..{self.local_reference}")
+            ),
+        )
+
+    def move_local_base(self, local_tip: str | None, upstream_tip: str) -> bool:
+        """
+        Fast-forward this clone's base onto the upstream's tip.
+
+        Two ways to move the same ref, because git refuses to fetch into the branch that is
+        checked out: a fast-forward merge when the session is sitting on the base, and a
+        ref update guarded by the old tip otherwise, which needs no working-tree change.
+
+        :param local_tip: Where the base points now, ``None`` if this clone has none.
+        :param upstream_tip: Where it is to point.
+        :return: Whether it moved.
+        """
+        if self.git.attempt("branch", "--show-current").output == self.base_branch:
+            return self.git.attempt(
+                "merge", "--ff-only", "--quiet", upstream_tip
+            ).succeeded
+        return self.git.attempt(
+            "update-ref", self.local_reference, upstream_tip, local_tip or ""
+        ).succeeded
+
+    def publish_to_fork(self, upstream_tip: str) -> ForkPublication:
+        """
+        Bring the fork's copy of the base level too.
+
+        Decided on the fork's own evidence rather than on the local base having moved: a
+        clone whose base was already current still leaves every later clone stale if an
+        earlier session's push was refused and nobody noticed.
+
+        :param upstream_tip: The commit the fork's base is to point at.
+        :return: What became of the fork's copy.
+        """
+        self.fetch_quietly(self.configuration.fork_remote, self.fork_tracking_reference)
+        if self.commit_or_none(self.fork_tracking_reference) == upstream_tip:
+            return ForkPublication.ALREADY_CURRENT
+        pushed = self.git.push(
+            ProposedPush(
+                remote=self.configuration.fork_remote,
+                refspec=f"{upstream_tip}:refs/heads/{self.base_branch}",
+            )
+        )
+        if not pushed.succeeded:
+            return ForkPublication.REFUSED
+        self.fetch_quietly(self.configuration.fork_remote, self.fork_tracking_reference)
+        return ForkPublication.PUSHED
+
+
+def sync_this_checkout(project_root: Path) -> DefaultBranchReport:
+    """
+    Resolve this checkout's upstream and catch its base up, reporting rather than raising
+    whatever stops it.
+
+    :param project_root: The clone to catch up, which must be the current directory, since
+        the configuration resolves the project from it.
+    :return: What was done.
+    """
+    try:
+        return DefaultBranchSync(
+            load_configuration(), GitCommandRunner(project_root)
+        ).run()
+    except (CommandFailure, MalformedRepositoryError) as refusal:
+        return DefaultBranchReport(BaseOutcome.NOT_SYNCED, reason=str(refusal))
+
+
+def main() -> int:
+    """
+    Catch the current checkout's base up and print what was done.
+
+    :return: The process exit code, 0 whatever the outcome.
+    """
+    print(sync_this_checkout(Path.cwd()).render())
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())
