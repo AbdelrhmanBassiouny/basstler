@@ -6,6 +6,7 @@ description: 'The hub page recommends what to do next across all plans and repos
   of side work. basstler fixes rank high because they keep the workflow running; basstler features rank
   by how much they help the PhD work.'
 default_repository: AbdelrhmanBassiouny/basstler
+tracking_issue: 58
 waves:
 - id: recommender
   name: The recommender
