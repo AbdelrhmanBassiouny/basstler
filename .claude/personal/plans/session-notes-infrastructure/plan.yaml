@@ -33,24 +33,15 @@ tracks:
 items:
 - id: fresh-base-at-session-start
   title: Fast-forward the fork's default branch at session start
-  branch: null
-  pull_request_number: null
-  status: not_started
+  branch: ccr-5a44f496-lob28s
+  pull_request_number: 57
+  status: in progress
   track: handover
   depends_on: []
-  notes: >-
-    Fast-forward the fork's default branch to the upstream at session start, so no session plans
-    against a stale base (one was found 86 commits behind). Not started here: CRAM #188's
-    bastler/-era branch is retired in #51, whose last commit is the reference.
-- id: setup-runs-without-asking
-  title: Run the personal-notes setup from the planning skills instead of asking first
-  branch: claude/auto-run-setup-notes-02nhxv
-  pull_request_number: null
-  status: done
-  session: https://claude.ai/code/session_01RydZutnNtFBYeT73Qt4Bxv
-  track: conventions
-  depends_on: []
-  notes: Landed upstream as cram2#726, and on main through the extraction (14ca3ec).
+  session: https://claude.ai/code/session_01YPtqHLUXGEXUS2JHHUK2pU
+  notes: 'Fast-forward the fork''s default branch to the upstream at session start, so no
+    session plans against a stale base (one was found 86 commits behind). Not started here:
+    CRAM #188''s bastler/-era branch is retired in #51, whose last commit is the reference.'
 - id: always-read-upstream-reviews
   title: Read upstream review threads whether or not the fork pull request is labelled
   branch: claude/plan-item-kickoff-workflow-y2xfva
@@ -59,7 +50,6 @@ items:
   session: https://claude.ai/code/session_01Cs9MvTBPS4hsd1HJimooVy
   track: conventions
   depends_on: []
-  notes: >-
-    /plan-item-resolve reads a branch's upstream review threads whatever its fork pull request's
-    labels say, since the promotion label is added by hand afterwards. Draft #43, carried from
-    CRAM #194 with its history, main merged in.
+  notes: '/plan-item-resolve reads a branch''s upstream review threads whatever its fork pull
+    request''s labels say, since the promotion label is added by hand afterwards. Draft #43,
+    carried from CRAM #194 with its history, main merged in.'
