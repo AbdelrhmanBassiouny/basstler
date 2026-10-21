@@ -73,7 +73,8 @@ items:
   notes: 'Decided 2026-09-03: depends_on admits `<plan-id>/<item-id>` (a slash cannot occur in a kebab-case
     id, so a bare id still means this plan); plan-schema.md documents it. Not a bug fix, so no `bug` label.
     build_dashboard.ManifestKey duplicates plan_model.ManifestKey from #11, so #17 deletes it and imports
-    plan_model''s. #17 also carries the masthead Refresh button (formerly its own item; CRAM #206 is closed).'
+    plan_model''s. The masthead Refresh button CRAM #206 merged in was removed from #17 on 2026-10-21,
+    since the site rebuilds on every plan change.'
 - id: ready-to-promote-upstream-links
   title: Ready-to-promote sidebar list with one-click upstream create-pull-request links
   branch: null
