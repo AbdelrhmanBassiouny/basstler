@@ -268,8 +268,8 @@ if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
 fi
 
 # Default branch, caught up with the upstream this fork tracks: a stale base is
-# invisible from inside the clone. Fast-forward only, that branch only, never
-# fatal; the checked-out branch is measured against it, not moved.
+# invisible from inside the clone. Fast-forward only, never fatal; the
+# checked-out branch moves along only when it has no commits of its own.
 SUMMARY_DEFAULT_BRANCH="$(default_branch_line_not_synced "${DEFAULT_BRANCH_SYNC_MODULE}")"
 if DEFAULT_BRANCH_REPORT="$("${BASSTLER_PYTHON}" -m "${DEFAULT_BRANCH_SYNC_MODULE}" \
     2>/dev/null)"; then

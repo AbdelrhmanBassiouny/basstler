@@ -17,11 +17,15 @@ So session start runs this, in one pass:
 4. pushes the result to the fork, whose default branch is what the *next* session is cloned
    from.
 
+5. fast-forwards the checked-out branch onto the base too, when it has no commits of its
+   own - a session branch cut from a stale base before this pass ran.
+
 Fast-forward only, in every step: a base carrying commits the upstream does not is reported
-and left as it is, and nothing is ever force-pushed. Only that one branch moves - the
-checked-out branch is never merged or rebased, since whether to take a moved base into work
-in progress is the session's call, but how far behind it now is gets reported, so the
-choice is made rather than missed.
+and left as it is, and nothing is ever force-pushed. A checked-out branch with commits of
+its own is never merged or rebased, since whether to take a moved base into work in
+progress is the session's call, but how far behind it now is gets reported, so the choice
+is made rather than missed. One without any holds no work a moved base could conflict
+with, so moving it is no such call.
 
 Never fatal. Every refusal - no upstream named, unresolvable remotes, an unreachable
 upstream, a diverged or pinned-down base, a rejected push - is reported and exits 0,
@@ -154,9 +158,19 @@ class DefaultBranchReport:
     What became of the fork's copy.
     """
 
+    checked_out_branch: str = ""
+    """
+    The branch the session is on, empty when it is the base or no branch at all.
+    """
+
+    checked_out_branch_fast_forwarded: int = 0
+    """
+    How many commits the checked-out branch was fast-forwarded onto the base.
+    """
+
     checked_out_branch_behind: int = 0
     """
-    How many commits the checked-out branch is now behind the base.
+    How many commits the checked-out branch is still behind the base.
     """
 
     @property
@@ -199,6 +213,12 @@ class DefaultBranchReport:
             rows.append(
                 f"pushing it to '{self.fork_remote}' was refused - the fork is still "
                 f"behind, so the next clone starts stale"
+            )
+        if self.checked_out_branch_fast_forwarded:
+            rows.append(
+                f"fast-forwarded '{self.checked_out_branch}' "
+                f"{self.checked_out_branch_fast_forwarded} commit(s) onto "
+                f"'{self.base_branch}' - it had no commits of its own"
             )
         if self.checked_out_branch_behind:
             rows.append(
@@ -341,10 +361,35 @@ class DefaultBranchSync:
             BaseOutcome.FAST_FORWARDED if commits_behind else BaseOutcome.CURRENT,
             commits_behind=commits_behind,
             fork_publication=self.publish_to_fork(upstream_tip),
-            checked_out_branch_behind=int(
-                self.git.run("rev-list", "--count", f"HEAD..{self.local_reference}")
-            ),
+            **self.catch_up_checked_out_branch(upstream_tip),
         )
+
+    def catch_up_checked_out_branch(self, base_tip: str) -> dict[str, object]:
+        """
+        Fast-forward the checked-out branch onto the base when it has no commits of its
+        own, and otherwise measure how far behind the base it is.
+
+        A branch with nothing of its own is one a session was cut onto from a stale base,
+        before this pass ran; moving it changes no work. A dirty tree that the
+        fast-forward would overwrite stops it, in which case the branch is reported behind
+        like one with work on it.
+
+        :param base_tip: The commit the base now points at.
+        :return: The report's checked-out-branch fields.
+        """
+        branch = self.git.attempt("branch", "--show-current").output
+        behind = int(self.git.run("rev-list", "--count", f"HEAD..{base_tip}"))
+        if not branch or branch == self.base_branch or not behind:
+            return {"checked_out_branch_behind": behind}
+        head = self.git.commit_at("HEAD")
+        if self.git.contains(head, base_tip) and (
+            self.git.attempt("merge", "--ff-only", "--quiet", base_tip).succeeded
+        ):
+            return {
+                "checked_out_branch": branch,
+                "checked_out_branch_fast_forwarded": behind,
+            }
+        return {"checked_out_branch": branch, "checked_out_branch_behind": behind}
 
     def move_local_base(self, local_tip: str | None, upstream_tip: str) -> bool:
         """

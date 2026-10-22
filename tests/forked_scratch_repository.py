@@ -63,6 +63,11 @@ upstream_base = "{DEFAULT_BRANCH}"
 The project's committed settings naming the upstream.
 """
 
+SESSION_BRANCH = "a-session-branch"
+"""
+A branch cut from the default branch with nothing committed on it yet.
+"""
+
 SHARED_FILE = "a-source-file.txt"
 """
 The one file every copy of the default branch carries, rewritten by each commit the
@@ -226,6 +231,15 @@ class ForkedScratchRepository:
         Put the working tree on the default branch, as a session doing trunk work is.
         """
         self.repository.run_git("checkout", "--quiet", DEFAULT_BRANCH)
+
+    def start_a_session_branch(self) -> None:
+        """
+        Cut a branch from this clone's default branch and check it out, as a cloud session
+        is started on one with no commits of its own.
+        """
+        self.repository.run_git(
+            "checkout", "--quiet", "-B", SESSION_BRANCH, DEFAULT_BRANCH
+        )
 
     def publish_default_branch_to(self, destination: str) -> None:
         """

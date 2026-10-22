@@ -21,6 +21,7 @@ from basstler.locations import PluginLocation
 from .constants.notes import ScratchBranch
 from .forked_scratch_repository import (
     DEFAULT_BRANCH,
+    SESSION_BRANCH,
     SHARED_FILE,
     UPSTREAM_REMOTE,
     ForkedScratchRepository,
@@ -79,6 +80,35 @@ def test_never_moves_the_checked_out_branch_but_says_how_far_behind_it_is(
     assert forked.commit_at("HEAD") == work_tip
     assert report.checked_out_branch_behind == 2
     assert str(report.checked_out_branch_behind) in report.render().splitlines()[-1]
+
+
+def test_fast_forwards_a_session_branch_with_no_commits_of_its_own(
+    forked: ForkedScratchRepository,
+):
+    upstream_tip = forked.advance_upstream(2)
+    forked.start_a_session_branch()
+
+    report = sync(forked)
+
+    assert forked.commit_at(f"refs/heads/{SESSION_BRANCH}") == upstream_tip
+    assert report.checked_out_branch == SESSION_BRANCH
+    assert report.checked_out_branch_fast_forwarded == 2
+    assert report.checked_out_branch_behind == 0
+
+
+def test_leaves_a_session_branch_alone_when_its_uncommitted_changes_are_in_the_way(
+    forked: ForkedScratchRepository,
+):
+    forked.advance_upstream(1)
+    forked.start_a_session_branch()
+    starting_point = forked.commit_at("HEAD")
+    forked.repository.write(SHARED_FILE, "an uncommitted edit\n")
+
+    report = sync(forked)
+
+    assert forked.commit_at("HEAD") == starting_point
+    assert report.checked_out_branch_fast_forwarded == 0
+    assert report.checked_out_branch_behind == 1
 
 
 def test_reports_a_base_that_already_matches(forked: ForkedScratchRepository):
