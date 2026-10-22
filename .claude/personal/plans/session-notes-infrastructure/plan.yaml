@@ -40,5 +40,7 @@ items:
   depends_on: []
   session: https://claude.ai/code/session_01YPtqHLUXGEXUS2JHHUK2pU
   notes: 'Draft #57 implements it as basstler.default_branch_sync, run by session-start.sh:
-    fast-forward only, never fatal, checked-out branch measured not moved. Tests and full
-    suite pass; awaiting review. Reference: CRAM #188 (retired in #51).'
+    fast-forward only, never fatal; follows the clone''s own remote when no upstream is
+    named; a checked-out branch with no commits of its own moves along, one with commits
+    is only measured. Tests and full suite pass; awaiting review. Reference: CRAM #188
+    (retired in #51).'
