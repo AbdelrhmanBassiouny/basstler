@@ -183,8 +183,9 @@ So every `session-start.sh` run brings that branch level, via
 [`src/basstler/default_branch_sync.py`](../../src/basstler/default_branch_sync.py): it fetches the
 upstream's base branch, fast-forwards this clone's copy of it, and pushes the result to your fork,
 whose default branch is what the *next* session gets cloned from. The summary's `default branch`
-line says what it did, and an indented row under it says how far behind the checked-out branch now
-is — merging or rebasing that branch is left to you.
+line says what it did. A checked-out branch with no commits of its own — a session branch cut from
+the stale base — is fast-forwarded onto the new one too; one with commits of its own gets an
+indented row saying how far behind it now is, and merging or rebasing it is left to you.
 
 Which repository is the upstream comes from the same resolution the stacked-PR tooling runs on: the
 project's committed `.claude/basstler/stack.toml` names it, and a personal
@@ -257,10 +258,10 @@ Any other label is preserved but not interpreted.
 - Never merges and never checks anything out — the hook and `plan-updates-since.sh` only read the
   branch off `FETCH_HEAD`.
 - Catching the default branch up is fast-forward only, in every step: a default branch carrying
-  commits the upstream does not is reported and left alone, and nothing is ever force-pushed. Only
-  that one branch moves — your checked-out branch is never merged or rebased for you, only measured
-  against it. The one fast-forward merge it makes is of the default branch itself, when that is what
-  you have checked out.
+  commits the upstream does not is reported and left alone, and nothing is ever force-pushed. Your
+  checked-out branch is never merged or rebased for you: it is fast-forwarded only when it has no
+  commits of its own and no uncommitted change is in the way, and otherwise only measured against
+  the default branch.
 - A base that cannot be synced never stops a session: no upstream named, unresolvable remotes, an
   unreachable upstream, a diverged or uncommitted-over base and a refused push are each reported.
 - Never touches your current branch or working tree: every script that writes works in a scratch
