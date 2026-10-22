@@ -190,7 +190,10 @@ indented row saying how far behind it now is, and merging or rebasing it is left
 Which repository is the upstream comes from the same resolution the stacked-PR tooling runs on: the
 project's committed `.claude/basstler/stack.toml` names it, and a personal
 `.claude/personal/stack.toml` on the notes branch can override it. A project that names no upstream
-just gets a `not synced` line saying so.
+— one that is not a fork, like basstler itself — is caught up with its own remote instead: the
+clone's default branch and a checked-out branch with no commits of its own move to that remote's
+default branch, and nothing is pushed, since the remote is already what the next clone starts from.
+Only a clone with no such remote gets a `not synced` line.
 
 Run it by hand to catch a long-running session's clone up mid-session:
 

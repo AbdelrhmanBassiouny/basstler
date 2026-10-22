@@ -237,8 +237,31 @@ def test_reports_an_unreachable_upstream(forked: ForkedScratchRepository):
     assert forked.local_default_branch_tip() == starting_point
 
 
-def test_reports_a_clone_that_names_no_upstream(forked: ForkedScratchRepository):
+def test_follows_its_own_remote_when_no_upstream_is_named(
+    forked: ForkedScratchRepository,
+):
+    """
+    A project that is not a fork still goes stale against the repository it was cloned
+    from, and its own remote is all there is to catch up with.
+    """
+    fork_tip = forked.advance_fork(2)
+    forked.start_a_session_branch()
     forked.forget_the_stack_configuration()
+
+    report = sync(forked)
+
+    assert report.outcome is BaseOutcome.FAST_FORWARDED
+    assert report.upstream == forked.fork.repository.full_name
+    assert report.fork_publication is ForkPublication.NO_FORK
+    assert forked.local_default_branch_tip() == fork_tip
+    assert forked.commit_at("HEAD") == fork_tip
+
+
+def test_reports_a_clone_with_nothing_to_catch_up_with(
+    forked: ForkedScratchRepository,
+):
+    forked.forget_the_stack_configuration()
+    forked.forget_the_fork_remote()
 
     report = sync(forked)
 

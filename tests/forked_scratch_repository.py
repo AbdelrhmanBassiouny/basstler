@@ -187,13 +187,34 @@ class ForkedScratchRepository:
         :param commit_count: How many commits to add.
         :return: The upstream's new tip.
         """
+        return self.advance_default_branch_of(self.upstream.url, commit_count)
+
+    def advance_fork(self, commit_count: int) -> str:
+        """
+        Add commits to the fork's default branch that this clone does not have, as another
+        clone pushing to it does.
+
+        :param commit_count: How many commits to add.
+        :return: The fork's new tip.
+        """
+        return self.advance_default_branch_of(FORK_REMOTE, commit_count)
+
+    def advance_default_branch_of(self, destination: str, commit_count: int) -> str:
+        """
+        Add commits to a remote's default branch that this clone does not have, leaving
+        this clone's own copy where it was and the work branch checked out.
+
+        :param destination: The remote name or URL to publish the commits to.
+        :param commit_count: How many commits to add.
+        :return: The remote's new tip.
+        """
         starting_point = self.local_default_branch_tip()
         self.check_out_default_branch()
         for index in range(commit_count):
-            self.repository.write(SHARED_FILE, f"an upstream revision ({index})\n")
-            self.repository.commit_everything(f"an upstream commit ({index})")
+            self.repository.write(SHARED_FILE, f"a revision from elsewhere ({index})\n")
+            self.repository.commit_everything(f"a commit from elsewhere ({index})")
         tip = self.local_default_branch_tip()
-        self.publish_default_branch_to(self.upstream.url)
+        self.publish_default_branch_to(destination)
         self.repository.run_git("checkout", "--quiet", ScratchBranch.WORK)
         self.set_local_default_branch_to(starting_point)
         return tip
@@ -296,6 +317,12 @@ class ForkedScratchRepository:
         (
             self.repository.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION
         ).unlink()
+
+    def forget_the_fork_remote(self) -> None:
+        """
+        Remove the fork remote, leaving a clone with no remote to catch up with.
+        """
+        self.repository.run_git("remote", "remove", FORK_REMOTE)
 
     # %% reading the copies back
 

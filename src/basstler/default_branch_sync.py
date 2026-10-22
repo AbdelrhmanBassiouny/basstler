@@ -27,8 +27,14 @@ progress is the session's call, but how far behind it now is gets reported, so t
 is made rather than missed. One without any holds no work a moved base could conflict
 with, so moving it is no such call.
 
-Never fatal. Every refusal - no upstream named, unresolvable remotes, an unreachable
-upstream, a diverged or pinned-down base, a rejected push - is reported and exits 0,
+A project that names no upstream - one that is not a fork, such as basstler itself - has no
+upstream to catch up with, but a session's clone of it still goes stale against the
+repository it was cloned from. Its own remote takes the upstream's place: the clone's base
+and the checked-out branch are caught up with that remote's base, and nothing is pushed,
+since the remote is already where the next clone comes from.
+
+Never fatal. Every refusal - no remote to catch up with, unresolvable remotes, an
+unreachable upstream, a diverged or pinned-down base, a rejected push - is reported and exits 0,
 because a session that cannot sync its base must still start.
 
 Usage::
@@ -49,8 +55,13 @@ from pathlib import Path
 
 from basstler.exit_codes import CommandFailure
 from basstler.maintenance_git_commands import GitCommandRunner, ProposedPush
-from basstler.repository import MalformedRepositoryError
+from basstler.repository import MalformedRepositoryError, Repository
 from basstler.stack import Configuration, load_configuration
+from basstler.stack_configuration import (
+    CommittedStackConfiguration,
+    MissingUpstreamRepositoryError,
+    StackSetting,
+)
 
 FOLLOW_UP_ROW_INDENT = "    "
 """
@@ -114,6 +125,12 @@ class ForkPublication(StrEnum):
     REFUSED = "refused"
     """
     The push was refused, so the next clone of the fork starts stale.
+    """
+
+    NO_FORK = "no-fork"
+    """
+    No upstream is named, so the base was caught up with the clone's own remote, which
+    the next clone already starts from.
     """
 
 
@@ -209,6 +226,10 @@ class DefaultBranchReport:
         rows = []
         if self.fork_publication is ForkPublication.PUSHED:
             rows.append(f"pushed it to '{self.fork_remote}', which was behind")
+        if self.fork_publication is ForkPublication.NO_FORK:
+            rows.append(
+                f"no upstream is named, so this follows '{self.fork_remote}' itself"
+            )
         if self.fork_publication is ForkPublication.REFUSED:
             rows.append(
                 f"pushing it to '{self.fork_remote}' was refused - the fork is still "
@@ -240,14 +261,97 @@ class DefaultBranchReport:
 
 
 @dataclass(frozen=True)
-class DefaultBranchSync:
+class BaseSource:
     """
-    Catches one clone's copy of the upstream's base branch up, and the fork's after it.
+    Where the base is caught up from, and where the result is published.
     """
 
-    configuration: Configuration
+    base_branch: str
     """
-    The resolved stacked-PR configuration naming the upstream, its base and the fork.
+    The branch every session starts from.
+    """
+
+    location: str
+    """
+    The remote name or URL the base is fetched from.
+    """
+
+    remote_name: str
+    """
+    The remote whose tracking refs the fetched base is kept under.
+    """
+
+    name: str
+    """
+    The repository caught up with, as ``owner/name`` where it can be read.
+    """
+
+    fork_remote: str
+    """
+    The fork's remote, or the clone's own remote when no upstream is named.
+    """
+
+    publishes_to_fork: bool
+    """
+    Whether the fork's copy is a separate copy that needs bringing level too.
+    """
+
+    @classmethod
+    def upstream_of(cls, configuration: Configuration) -> BaseSource:
+        """
+        :param configuration: The resolved stacked-PR configuration.
+        :return: The upstream it names, published to the fork after.
+
+        A clone that has added the upstream remote fetches it by name; one that has not
+        fetches it by URL, which saves adding a remote nothing else here would use.
+        """
+        return cls(
+            base_branch=configuration.upstream_base,
+            location=(
+                configuration.upstream_remote
+                if configuration.upstream_setup_command is None
+                else configuration.upstream_repository.clone_url
+            ),
+            remote_name=configuration.upstream_remote,
+            name=configuration.upstream_repository.full_name,
+            fork_remote=configuration.fork_remote,
+            publishes_to_fork=True,
+        )
+
+    @classmethod
+    def own_remote_of(cls, project_root: Path, git: GitCommandRunner) -> BaseSource:
+        """
+        :param project_root: The clone, whose committed settings name its remote and base.
+        :param git: The runner to read the remote's URL through.
+        :return: The clone's own remote, for a project that names no upstream.
+        :raises GitCommandFailed: If the clone has no such remote.
+        """
+        values = CommittedStackConfiguration(project_root=project_root).values()
+        remote = values[StackSetting.FORK_REMOTE]
+        url = git.run("remote", "get-url", remote)
+        try:
+            name = Repository.from_remote_url(url).full_name
+        except MalformedRepositoryError:
+            name = remote
+        return cls(
+            base_branch=values[StackSetting.UPSTREAM_BASE],
+            location=remote,
+            remote_name=remote,
+            name=name,
+            fork_remote=remote,
+            publishes_to_fork=False,
+        )
+
+
+@dataclass(frozen=True)
+class DefaultBranchSync:
+    """
+    Catches one clone's copy of the base branch up, and the fork's after it.
+    """
+
+    source: BaseSource
+    """
+    Where the base is caught up from, and where it is published.
     """
 
     git: GitCommandRunner
@@ -260,7 +364,7 @@ class DefaultBranchSync:
         """
         :return: The branch every session starts from.
         """
-        return self.configuration.upstream_base
+        return self.source.base_branch
 
     @property
     def upstream_tracking_reference(self) -> str:
@@ -268,14 +372,14 @@ class DefaultBranchSync:
         The ref the upstream's base is fetched into - the one the stacked-PR tooling reads
         it from, whether or not this clone has added the upstream as a remote.
         """
-        return f"refs/remotes/{self.configuration.upstream_remote}/{self.base_branch}"
+        return f"refs/remotes/{self.source.remote_name}/{self.base_branch}"
 
     @property
     def fork_tracking_reference(self) -> str:
         """
         :return: The ref the fork's copy of the base is fetched into.
         """
-        return f"refs/remotes/{self.configuration.fork_remote}/{self.base_branch}"
+        return f"refs/remotes/{self.source.fork_remote}/{self.base_branch}"
 
     @property
     def local_reference(self) -> str:
@@ -283,16 +387,6 @@ class DefaultBranchSync:
         :return: This clone's own copy of the base.
         """
         return f"refs/heads/{self.base_branch}"
-
-    @property
-    def upstream_location(self) -> str:
-        """
-        A clone that has added the upstream remote fetches it by name; one that has not
-        fetches it by URL, which saves adding a remote nothing else here would use.
-        """
-        if self.configuration.upstream_setup_command is None:
-            return self.configuration.upstream_remote
-        return self.configuration.upstream_repository.clone_url
 
     def report(self, outcome: BaseOutcome, **details: object) -> DefaultBranchReport:
         """
@@ -303,8 +397,8 @@ class DefaultBranchSync:
         return DefaultBranchReport(
             outcome=outcome,
             base_branch=self.base_branch,
-            upstream=self.configuration.upstream_repository.full_name,
-            fork_remote=self.configuration.fork_remote,
+            upstream=self.source.name,
+            fork_remote=self.source.fork_remote,
             **details,
         )
 
@@ -339,7 +433,7 @@ class DefaultBranchSync:
         :return: What was done, and what is left for the session to do.
         """
         if not self.fetch_quietly(
-            self.upstream_location, self.upstream_tracking_reference
+            self.source.location, self.upstream_tracking_reference
         ):
             return self.report(BaseOutcome.UPSTREAM_UNREACHABLE)
         upstream_tip = self.git.commit_at(self.upstream_tracking_reference)
@@ -422,34 +516,39 @@ class DefaultBranchSync:
         :param upstream_tip: The commit the fork's base is to point at.
         :return: What became of the fork's copy.
         """
-        self.fetch_quietly(self.configuration.fork_remote, self.fork_tracking_reference)
+        if not self.source.publishes_to_fork:
+            return ForkPublication.NO_FORK
+        self.fetch_quietly(self.source.fork_remote, self.fork_tracking_reference)
         if self.commit_or_none(self.fork_tracking_reference) == upstream_tip:
             return ForkPublication.ALREADY_CURRENT
         pushed = self.git.push(
             ProposedPush(
-                remote=self.configuration.fork_remote,
+                remote=self.source.fork_remote,
                 refspec=f"{upstream_tip}:refs/heads/{self.base_branch}",
             )
         )
         if not pushed.succeeded:
             return ForkPublication.REFUSED
-        self.fetch_quietly(self.configuration.fork_remote, self.fork_tracking_reference)
+        self.fetch_quietly(self.source.fork_remote, self.fork_tracking_reference)
         return ForkPublication.PUSHED
 
 
 def sync_this_checkout(project_root: Path) -> DefaultBranchReport:
     """
-    Resolve this checkout's upstream and catch its base up, reporting rather than raising
-    whatever stops it.
+    Resolve this checkout's upstream - or, when it names none, its own remote - and catch
+    its base up, reporting rather than raising whatever stops it.
 
     :param project_root: The clone to catch up, which must be the current directory, since
         the configuration resolves the project from it.
     :return: What was done.
     """
+    git = GitCommandRunner(project_root)
     try:
-        return DefaultBranchSync(
-            load_configuration(), GitCommandRunner(project_root)
-        ).run()
+        try:
+            source = BaseSource.upstream_of(load_configuration())
+        except MissingUpstreamRepositoryError:
+            source = BaseSource.own_remote_of(project_root, git)
+        return DefaultBranchSync(source, git).run()
     except (CommandFailure, MalformedRepositoryError) as refusal:
         return DefaultBranchReport(BaseOutcome.NOT_SYNCED, reason=str(refusal))
 
