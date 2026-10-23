@@ -98,6 +98,17 @@ items:
   notes: 'Added 2026-10-21: the cleanup found basstler #9, #32 and #33 open with no item. Each repository''s
     site page lists its open pull requests whose number and branch match no item in any plan, each with
     an add-plan-item link. Rendered by the site builder, not the Artifact page.'
+- id: resolve-untracked-pull-requests
+  title: /plan-item-resolve resolves a pull request no plan tracks
+  branch: claude/plan-item-resolve-untracked
+  pull_request_number: 59
+  track: corrections
+  depends_on: []
+  status: in_progress
+  session: https://claude.ai/code/session_01GxGmZpx98EUH77miUZF23X
+  notes: 'Draft #59 (release:minor), skill docs only. Given an untracked pull request, resolve skips only
+    the plan-reading steps, offers /add-plan-item when a plan fits, and records in the PR-progress note.
+    Complements untracked-pull-requests, which lists such pull requests.'
 - id: duplicate-plan-ids
   title: Flag a plan id used by more than one hub repository
   branch: null
