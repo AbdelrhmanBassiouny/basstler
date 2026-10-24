@@ -13,7 +13,8 @@ branch, a PR, prior review, a recorded blocker - and needs that state
 understood before deciding what to do next. A pull request no plan tracks is
 resolved the same way; see *Untracked pull requests* below for what changes.
 
-**Step 1 is research only — it creates nothing and writes no code.**
+**Step 1 is research only — apart from the stack pass it starts with, it creates
+nothing and writes no code.**
 Step 2 resolves the item's execution mode, and that mode decides what
 happens next: `plan` presents the plan and stops until the user approves it,
 `auto` carries it out on the item's existing branch without asking, and
