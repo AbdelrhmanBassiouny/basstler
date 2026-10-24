@@ -170,15 +170,16 @@ class StackReport:
                 parent_reference,
                 reference,
             ).returncode
-            if status == MergeTreeStatus.CLEAN:
-                verdict = f"{MergeVerdict.CLEAN}"
-            elif status == MergeTreeStatus.CONFLICTED:
-                verdict = f"{MergeVerdict.CONFLICTS} onto {branch.parent}"
-            else:
-                verdict = (
-                    f"{MergeVerdict.UNKNOWN} (reference missing: "
-                    f"{parent_reference} / {reference})"
-                )
+            match status:
+                case MergeTreeStatus.CLEAN:
+                    verdict = f"{MergeVerdict.CLEAN}"
+                case MergeTreeStatus.CONFLICTED:
+                    verdict = f"{MergeVerdict.CONFLICTS} onto {branch.parent}"
+                case _:
+                    verdict = (
+                        f"{MergeVerdict.UNKNOWN} (reference missing: "
+                        f"{parent_reference} / {reference})"
+                    )
             logger.info(f"  {branch.name:<{StatusColumn.BRANCH.width + 2}} {verdict}")
 
     def print_next(self) -> None:

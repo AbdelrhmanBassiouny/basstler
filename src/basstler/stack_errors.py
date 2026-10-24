@@ -4,11 +4,13 @@ The errors the stack commands end with, each carrying the status it exits with.
 
 from __future__ import annotations
 
+from abc import ABC
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from basstler.class_property import classproperty
+from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.repository import Repository
 from basstler.stack_configuration import StackSetting
@@ -16,11 +18,21 @@ from basstler.stack_configuration import StackSetting
 if TYPE_CHECKING:
     from basstler.stack_settings import Remote
 
+# %% base
+
+
+@dataclass
+class StackError(CommandFailure, DataclassException, ABC):
+    """
+    Base for every refusal the stack commands report, each carrying its own exit status.
+    """
+
+
 # %% remotes
 
 
 @dataclass
-class ForkRemoteNotFoundError(CommandFailure, LookupError):
+class ForkRemoteNotFoundError(StackError, LookupError):
     """
     Raised when no remote points at a repository other than the upstream.
     """
@@ -33,16 +45,18 @@ class ForkRemoteNotFoundError(CommandFailure, LookupError):
     upstream_repository: Repository
     """The upstream every candidate turned out to be."""
 
-    def __str__(self) -> str:
-        """:return: What was searched for and why nothing qualified."""
+    def error_message(self) -> str:
+        return f"no remote points at a fork: every remote is {self.upstream_repository}"
+
+    def suggest_correction(self) -> str:
         return (
-            f"no remote points at a fork: every remote is {self.upstream_repository}. "
-            f"Add a remote for your fork, or set {StackSetting.FORK_REPOSITORY} in stack.toml."
+            f"Add a remote for your fork, or set {StackSetting.FORK_REPOSITORY} in "
+            f"stack.toml."
         )
 
 
 @dataclass
-class AmbiguousForkRemoteError(CommandFailure, LookupError):
+class AmbiguousForkRemoteError(StackError, LookupError):
     """
     Raised when several remotes could each be the fork.
     """
@@ -55,22 +69,21 @@ class AmbiguousForkRemoteError(CommandFailure, LookupError):
     candidates: tuple[Remote, ...]
     """The remotes that are not the upstream, in the order git reported them."""
 
-    def __str__(self) -> str:
-        """:return: The candidates and how to disambiguate them."""
+    def error_message(self) -> str:
         listed = ", ".join(
             f"{remote.name} -> {remote.repository}" for remote in self.candidates
         )
-        return (
-            f"several remotes could be the fork ({listed}). "
-            f"Set {StackSetting.FORK_REPOSITORY} in stack.toml to say which."
-        )
+        return f"several remotes could be the fork ({listed})"
+
+    def suggest_correction(self) -> str:
+        return f"Set {StackSetting.FORK_REPOSITORY} in stack.toml to say which."
 
 
 # %% the board
 
 
 @dataclass
-class BoardUnavailable(CommandFailure, RuntimeError):
+class BoardUnavailable(StackError, RuntimeError):
     """
     Raised when ``board.json`` is missing.
     """
@@ -85,16 +98,18 @@ class BoardUnavailable(CommandFailure, RuntimeError):
     Where the board export was looked for.
     """
 
-    def __str__(self) -> str:
-        """:return: Which file is missing."""
+    def error_message(self) -> str:
         return f"{self.board.name} not found"
+
+    def suggest_correction(self) -> str:
+        return "Export it with `python -m basstler.maintenance board --write`."
 
 
 # %% label writes
 
 
 @dataclass
-class ContradictoryLabelWriteError(CommandFailure, ValueError):
+class ContradictoryLabelWriteError(StackError, ValueError):
     """
     Raised when one write is asked both to carry a label and to drop it.
     """
@@ -109,19 +124,21 @@ class ContradictoryLabelWriteError(CommandFailure, ValueError):
     The labels asked for in both directions.
     """
 
-    def __str__(self) -> str:
-        """:return: Which labels contradict, and why no outcome is safe."""
+    def error_message(self) -> str:
         return (
             f"cannot both add and remove {', '.join(self.labels)}: "
             f"either outcome would be a guess at what was meant"
         )
+
+    def suggest_correction(self) -> str:
+        return "Ask for each label to be either added or removed, not both."
 
 
 # %% promotion links
 
 
 @dataclass
-class PromotionLinkTooLongError(CommandFailure, ValueError):
+class PromotionLinkTooLongError(StackError, ValueError):
     """
     Raised when a link cannot fit even with its whole description dropped.
     """
@@ -144,10 +161,12 @@ class PromotionLinkTooLongError(CommandFailure, ValueError):
     The longest URL the link may be.
     """
 
-    def __str__(self) -> str:
-        """:return: Which link overflowed, and by how much before the body counts."""
+    def error_message(self) -> str:
         return (
             f"the compare link for {self.branch} is {self.length_without_a_description} "
             f"characters before its description, over the "
-            f"{self.url_character_limit}-character limit: shorten the title"
+            f"{self.url_character_limit}-character limit"
         )
+
+    def suggest_correction(self) -> str:
+        return "Shorten the title."
