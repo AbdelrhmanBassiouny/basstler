@@ -44,7 +44,7 @@ items:
   title: Keep one restack merge per branch instead of one per pass
   branch: claude/trusting-clarke-32il0l
   pull_request_number: 9
-  status: in_progress
+  status: done
   track: pass
   depends_on: []
   notes: 'Draft #9, open on basstler but tracked by no plan until the 2026-10-21 cleanup.'
