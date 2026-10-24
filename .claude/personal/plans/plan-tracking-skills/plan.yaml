@@ -41,9 +41,11 @@ items:
   title: Merge a resolved item's fix down into the pull requests stacked on it
   branch: claude/plan-item-kickoff-resolve-ic3qnu
   pull_request_number: 15
-  session: https://claude.ai/code/session_01Mkoj43S6gvqMaFzRpiGwHX
+  session: https://claude.ai/code/session_01CbsPWbbD7feNc5wbJhEC9K
   track: skills
-  notes: 'Merges a resolved item''s fix down into the pull requests stacked on it. Placed by /add-plan-item:
-    nothing in flight did this, so it is new work. Draft #15, carried from CRAM #430, against main.'
+  notes: 'Merges a resolved item''s fix down into the pull requests stacked on it. Draft #15
+    against main. Main merged in 2026-10-24. The first review round is pushed: stack.py''s
+    functions moved onto classes, and a test checks the chosen ConflictResponse type. One thread
+    is left open for the reviewer to confirm that reading.'
   depends_on: []
   status: in_progress
