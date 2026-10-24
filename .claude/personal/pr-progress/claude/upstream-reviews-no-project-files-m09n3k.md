@@ -1,12 +1,16 @@
-## PR #56 - /upstream-reviews without committed project files
+**Plan** (resolving #56's 22 review threads, all yours, 2026-10-24)
+- Split `upstream_reviews.py` (2561 lines) and the Action, helper, fetch modules into a
+  `basstler.upstream_reviews` package of files under ~500 lines; errors in its `exceptions.py`.
+- Module-level constants and functions -> classproperties / methods of their class.
+- Caller workflow and README -> jinja2 templates (jinja2 is already a dependency).
+- Action's own `Git` -> the shared `GitCommandRunner`.
+- `nonce` -> `request_identifier`; run conclusion -> `CheckOutcome`; run URL derived from
+  `Repository` and the run's id.
+- `upstream-reviews-action.yml` header trimmed; the two SKILL.md passages reworded.
+- Reply inline on all 22 threads; resolve the done ones, leave questions open.
 
-Plan
-- Preferred: the fork's Action on its own basstler/upstream-reviews branch (push a request, run commits result.json, session replays it through the GraphQL reader). Fallbacks: attach the upstream and read REST; a Haiku helper session when the fork's same-named upstream can't be attached.
+**Done**
+- Merged main (#33).
 
-Done
-- REST reader + models; setup step, check row; helper path (27 tests); Action path (31 tests); live on cram2 #777.
-- main merged through v0.1.8 (#32 tag-only release): plugin_version replaced by basstler_branch_or_tag; input basstler_ref and flag --ref renamed to basstler_branch_or_tag / --branch-or-tag, no alias. 1084 tests pass.
-
-Next
-- Review on #56; owner confirms release:minor despite the input rename (or relabels release:major). Conflicts with #45 in setup files go to whichever lands second.
-- User to delete basstler/push-probe and basstler/upstream-reviews on basstler.
+**Next**
+- Implement, run the suite, format, push, update the PR description, back to draft.
