@@ -9,5 +9,5 @@ basstler#16 (workflow-cutover / routine-cutover), reshaped with the owner on 202
 - Checked the other open PRs: #15 complements this but will conflict at the import level (stack.py split); #57 doesn't overlap.
 
 **Next**
-- Owner review. The live Routine deletion on CRAM, plus the Routine docs (routine-prompt.md, docs/stack/README.md), come after.
+- Owner review (release:major: routine-prompt.md and --non-interactive removed in a7f2e00). Deleting the live Routine trigger on CRAM is the owner's step.
 - An open thread asks whether to do a suite-wide sweep of retyped strings.
