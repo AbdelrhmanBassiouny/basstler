@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import Any
 
 from basstler.class_property import classproperty
+from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.standard_streams import StandardStreamHandler
@@ -79,31 +80,28 @@ class VersionPart(StrEnum):
     An incompatible change.
     """
 
+    @classproperty
+    def label_prefix(cls) -> str:
+        """:return: What a part's pull request label puts before its name."""
+        return "release:"
+
     @property
     def significance(self) -> int:
         """:return: Its rank: a release of several parts increments the highest."""
         return list(VersionPart).index(self)
 
-
-class ReleaseLabel(StrEnum):
-    """
-    The pull request labels that choose a part other than the patch.
-    """
-
-    MINOR = "release:minor"
-    """
-    The pull request adds a capability.
-    """
-
-    MAJOR = "release:major"
-    """
-    The pull request removes or renames something a user relies on.
-    """
-
     @property
-    def part(self) -> VersionPart:
-        """:return: The part this label increments."""
-        return VersionPart(self.removeprefix("release:"))
+    def label(self) -> str:
+        """:return: The pull request label that asks a release to increment it."""
+        return f"{self.label_prefix}{self}"
+
+    @classmethod
+    def labelled(cls, label: str) -> VersionPart:
+        """
+        :param label: A pull request label's name.
+        :return: The part it is the label of, else the patch.
+        """
+        return next((part for part in cls if part.label == label), cls.PATCH)
 
 
 class ReleaseOutputKey(StrEnum):
@@ -150,9 +148,7 @@ class PullRequestLabel:
     @property
     def part(self) -> VersionPart:
         """:return: The part it asks a release to increment."""
-        if self.name in set(ReleaseLabel):
-            return ReleaseLabel(self.name).part
-        return VersionPart.PATCH
+        return VersionPart.labelled(self.name)
 
 
 @dataclass(frozen=True)
@@ -206,7 +202,7 @@ class MergedPullRequest:
 
 
 @dataclass
-class MalformedVersion(CommandFailure, ValueError):
+class MalformedVersion(CommandFailure, DataclassException, ValueError):
     """
     Raised when a version is not ``<major>.<minor>.<patch>``.
     """
@@ -221,8 +217,14 @@ class MalformedVersion(CommandFailure, ValueError):
         """:return: The status this kind of error ends a command with."""
         return ReleaseVersionExitCode.MALFORMED_VERSION
 
-    def __str__(self) -> str:
+    def error_message(self) -> str:
         return f"{self.text!r} is not a <major>.<minor>.<patch> version."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Write three dot-separated numbers, e.g. 0.1.1, with no "
+            f"{ReleaseVersion.tag_prefix!r} prefix; that belongs to the tag."
+        )
 
 
 @dataclass(frozen=True, order=True)
@@ -445,20 +447,21 @@ class ReleaseCommandLine:
         """
         release = Release(arguments.checkout)
         try:
-            if arguments.subcommand == ReleaseCommand.UNRELEASED:
-                for commit in release.unreleased_commits():
-                    logger.info(commit)
-            elif arguments.subcommand == ReleaseCommand.RELEASE:
-                merged = (
-                    MergedPullRequest.read_all(arguments.pull_requests)
-                    if arguments.pull_requests
-                    else ()
-                )
-                planned = release.plan(merged)
-                if planned is None:
-                    logger.warning("Nothing changed since the latest release.")
-                else:
-                    logger.info(planned.output_lines())
+            match arguments.subcommand:
+                case ReleaseCommand.UNRELEASED:
+                    for commit in release.unreleased_commits():
+                        logger.info(commit)
+                case ReleaseCommand.RELEASE:
+                    merged = (
+                        MergedPullRequest.read_all(arguments.pull_requests)
+                        if arguments.pull_requests
+                        else ()
+                    )
+                    planned = release.plan(merged)
+                    if planned is None:
+                        logger.warning("Nothing changed since the latest release.")
+                    else:
+                        logger.info(planned.output_lines())
         except MalformedVersion as error:
             logger.error(str(error))
             return error.exit_code

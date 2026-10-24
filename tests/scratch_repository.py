@@ -22,6 +22,7 @@ from pathlib import Path
 
 from .script_runner import BashScriptRunner
 from basstler.locations import PackageLocation, PluginLocation
+from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.shell_configuration import ShellConfigurationFunction
 
 from .constants.environment import (
@@ -298,6 +299,11 @@ class ScratchRepository:
                 return None
             values.append(result.stdout.strip())
         return GitIdentity(*values)
+
+    @property
+    def git(self) -> GitCommandRunner:
+        """:return: A runner for git in the project root."""
+        return GitCommandRunner(working_directory=self.project_root)
 
     def run_git(
         self, *arguments: str, cwd: Path | None = None

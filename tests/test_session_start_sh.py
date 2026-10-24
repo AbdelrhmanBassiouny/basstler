@@ -858,18 +858,6 @@ def test_reinstalls_the_package_when_the_plugin_names_another_source(
     ]
 
 
-class ReleaseFunction(StrEnum):
-    """
-    The shell configuration's function a session start reads the latest release with.
-    """
-
-    RECORD_LATEST = "record_latest_basstler_release"
-    """
-    Records the highest release tag of the package's repository, for a plugin outside a
-    checkout.
-    """
-
-
 class SampleReleaseTag(StrEnum):
     """
     Tags on the scratch repository standing in for the package's own.
@@ -906,7 +894,7 @@ def record_latest_release(repository: ScratchRepository, url: str) -> str:
     :return: What the package would be installed from.
     """
     return repository.configuration_output(
-        f"{ReleaseFunction.RECORD_LATEST} && "
+        f"{ShellConfigurationFunction.RECORD_LATEST_BASSTLER_RELEASE} && "
         f"{ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE}",
         **{ConfigurationVariable.REPOSITORY_URL: url},
     ).strip()

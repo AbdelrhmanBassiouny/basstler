@@ -123,6 +123,23 @@ class BashScriptRunner(ScriptRunner):
         return ("bash", str(self.script_path))
 
 
+@dataclass(frozen=True, kw_only=True)
+class BashCommandRunner(ScriptRunner):
+    """
+    Runs a script given as text, such as a workflow step's ``run``, as Actions runs one.
+    """
+
+    script: str
+    """
+    The script to run.
+    """
+
+    @property
+    def command(self) -> tuple[str, ...]:
+        """:return: bash, exiting at the script's first failing command."""
+        return ("bash", "-e", "-c", self.script)
+
+
 def configuration_value(variable_name: str) -> str:
     """
     :param variable_name: A variable the shell configuration assigns.

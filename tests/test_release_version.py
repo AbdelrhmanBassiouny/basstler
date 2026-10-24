@@ -1,12 +1,5 @@
 """
-Every change merged to ``main`` is a release: the release workflow tags the merge commit
-itself, with the latest release's patch incremented, or its minor or major part when a
-merged pull request is labelled for one.
-
-Each test builds a scratch checkout tagged at a release, changes it, and checks what
-:class:`~basstler.release_version.Release` makes of it. The workflow's own tag step is run
-against a scratch remote, since pushing only a tag is what leaves the merge commit, which a
-plugin syncs from, as the release.
+What the release workflow tags a merge commit as, and its tag step against a scratch remote.
 """
 
 from __future__ import annotations
@@ -25,6 +18,7 @@ import yaml
 
 from basstler.environment import GitHubActionsVariable
 from basstler.locations import PathEnumeration
+from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.release_version import (
     MalformedVersion,
     MergedPullRequest,
@@ -32,13 +26,13 @@ from basstler.release_version import (
     PullRequestJSONKey,
     PullRequestLabel,
     Release,
-    ReleaseLabel,
     ReleaseVersion,
     VersionPart,
 )
 
 from .constants.environment import SearchPathVariable
 from .constants.paths import RepositoryLocation
+from .script_runner import BashCommandRunner
 from .scratch_repository import ScratchRepository, initialize_bare_repository
 
 
@@ -183,7 +177,7 @@ def released_checkout(tmp_path) -> ScratchRepository:
     for path in ReleaseSampleFile:
         repository.write(path, "")
     repository.commit_everything("Release")
-    repository.run_git("tag", version(ReleaseSampleVersion.RELEASED).tag)
+    repository.git.run("tag", version(ReleaseSampleVersion.RELEASED).tag)
     return repository
 
 
@@ -203,12 +197,12 @@ def test_the_latest_release_is_the_highest_tag_the_commit_contains(released_chec
     Tags that name no version, and releases on a branch never merged, are not releases
     of this commit.
     """
-    released_checkout.run_git("tag", ReleaseSampleTag.NOT_A_RELEASE)
-    released_checkout.run_git("tag", ReleaseSampleTag.MALFORMED)
-    released_checkout.run_git("checkout", "--quiet", "-b", "side")
+    released_checkout.git.run("tag", ReleaseSampleTag.NOT_A_RELEASE)
+    released_checkout.git.run("tag", ReleaseSampleTag.MALFORMED)
+    released_checkout.git.run("checkout", "--quiet", "-b", "side")
     change_and_commit(released_checkout, ReleaseSampleFile.DOCUMENTATION)
-    released_checkout.run_git("tag", version(ReleaseSampleVersion.UNMERGED).tag)
-    released_checkout.run_git("checkout", "--quiet", "-")
+    released_checkout.git.run("tag", version(ReleaseSampleVersion.UNMERGED).tag)
+    released_checkout.git.run("checkout", "--quiet", "-")
 
     assert release_of(released_checkout).latest_release() == version(
         ReleaseSampleVersion.RELEASED
@@ -230,13 +224,13 @@ def test_the_unreleased_commits_are_the_first_parent_line_since_the_latest_relea
     A merge commit stands for its whole pull request, so the commits merged in are not
     listed: each listed commit is one GitHub associates a pull request with.
     """
-    released_checkout.run_git("checkout", "--quiet", "-b", "feature")
+    released_checkout.git.run("checkout", "--quiet", "-b", "feature")
     change_and_commit(released_checkout, ReleaseSampleFile.SKILL)
-    released_checkout.run_git("checkout", "--quiet", "-")
+    released_checkout.git.run("checkout", "--quiet", "-")
     change_and_commit(released_checkout, ReleaseSampleFile.DOCUMENTATION)
-    direct_push = released_checkout.run_git("rev-parse", "HEAD").stdout.strip()
-    released_checkout.run_git("merge", "--quiet", "--no-ff", "--no-edit", "feature")
-    merge = released_checkout.run_git("rev-parse", "HEAD").stdout.strip()
+    direct_push = released_checkout.git.commit_at("HEAD")
+    released_checkout.git.run("merge", "--quiet", "--no-ff", "--no-edit", "feature")
+    merge = released_checkout.git.commit_at("HEAD")
 
     assert release_of(released_checkout).unreleased_commits() == (direct_push, merge)
 
@@ -255,8 +249,8 @@ def test_a_commit_a_release_already_contains_releases_nothing(released_checkout)
     """
     change_and_commit(released_checkout, ReleaseSampleFile.PACKAGE_MODULE)
     change_and_commit(released_checkout, ReleaseSampleFile.SKILL)
-    released_checkout.run_git("tag", version(ReleaseSampleVersion.NEXT_PATCH).tag)
-    released_checkout.run_git("checkout", "--quiet", "HEAD~1")
+    released_checkout.git.run("tag", version(ReleaseSampleVersion.NEXT_PATCH).tag)
+    released_checkout.git.run("checkout", "--quiet", "HEAD~1")
 
     assert release_of(released_checkout).plan(()) is None
 
@@ -283,9 +277,12 @@ def test_any_change_is_released_as_the_next_patch(released_checkout, changed_fil
 @pytest.mark.parametrize(
     "labels, expected",
     [
-        ((ReleaseLabel.MINOR,), ReleaseSampleVersion.NEXT_MINOR),
-        ((ReleaseLabel.MAJOR,), ReleaseSampleVersion.NEXT_MAJOR),
-        ((ReleaseLabel.MINOR, ReleaseLabel.MAJOR), ReleaseSampleVersion.NEXT_MAJOR),
+        ((VersionPart.MINOR.label,), ReleaseSampleVersion.NEXT_MINOR),
+        ((VersionPart.MAJOR.label,), ReleaseSampleVersion.NEXT_MAJOR),
+        (
+            (VersionPart.MINOR.label, VersionPart.MAJOR.label),
+            ReleaseSampleVersion.NEXT_MAJOR,
+        ),
     ],
 )
 def test_a_labelled_pull_request_releases_its_part(released_checkout, labels, expected):
@@ -306,7 +303,7 @@ def test_several_merged_pull_requests_release_the_most_significant_part(
     change_and_commit(released_checkout, ReleaseSampleFile.PACKAGE_MODULE)
 
     planned = release_of(released_checkout).plan(
-        (merged(1, ReleaseLabel.MINOR), merged(2))
+        (merged(1, VersionPart.MINOR.label), merged(2))
     )
 
     assert planned == PlannedRelease(version(ReleaseSampleVersion.NEXT_MINOR))
@@ -340,29 +337,26 @@ def test_a_pull_request_reached_by_several_commits_is_read_once(tmp_path):
     listed.write_text(
         json.dumps(
             [
-                pull_request_json(1, ReleaseLabel.MINOR),
-                pull_request_json(1, ReleaseLabel.MINOR),
+                pull_request_json(1, VersionPart.MINOR.label),
+                pull_request_json(1, VersionPart.MINOR.label),
                 pull_request_json(2),
             ]
         )
     )
 
     assert MergedPullRequest.read_all(listed) == (
-        merged(1, ReleaseLabel.MINOR),
+        merged(1, VersionPart.MINOR.label),
         merged(2),
     )
 
 
-@pytest.mark.parametrize(
-    "label, part",
-    [
-        (ReleaseLabel.MINOR, VersionPart.MINOR),
-        (ReleaseLabel.MAJOR, VersionPart.MAJOR),
-        (ReleaseSampleLabel.UNRELATED, VersionPart.PATCH),
-    ],
-)
-def test_a_label_names_its_part(label, part):
-    assert PullRequestLabel(label).part is part
+@pytest.mark.parametrize("part", list(VersionPart), ids=str)
+def test_a_part_s_own_label_releases_it(part):
+    assert PullRequestLabel(part.label).part is part
+
+
+def test_any_other_label_releases_a_patch():
+    assert PullRequestLabel(ReleaseSampleLabel.UNRELATED).part is VersionPart.PATCH
 
 
 # %% the workflow's tag step
@@ -421,24 +415,18 @@ def run_release_step(
     :return: The finished step.
     """
     files.pull_requests.write_text(json.dumps([pull_request_json(1, *labels)]))
-    environment = {
-        **os.environ,
-        SearchPathVariable.EXECUTABLE_SEARCH_PATH: os.pathsep.join(
-            [
-                str(Path(sys.executable).parent),
-                os.environ[SearchPathVariable.EXECUTABLE_SEARCH_PATH],
-            ]
-        ),
-        GitHubActionsVariable.STEP_SUMMARY: str(files.summary),
-        GitHubActionsVariable.OUTPUT: str(files.output),
-        GitHubActionsVariable.RUNNER_TEMPORARY_DIRECTORY: str(files.directory),
-    }
-    return subprocess.run(
-        ["bash", "-e", "-c", release_step_script()],
-        cwd=checkout,
-        env=environment,
-        capture_output=True,
-        text=True,
+    return BashCommandRunner(project_root=checkout, script=release_step_script()).run(
+        **{
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: os.pathsep.join(
+                [
+                    str(Path(sys.executable).parent),
+                    os.environ[SearchPathVariable.EXECUTABLE_SEARCH_PATH],
+                ]
+            ),
+            GitHubActionsVariable.STEP_SUMMARY: str(files.summary),
+            GitHubActionsVariable.OUTPUT: str(files.output),
+            GitHubActionsVariable.RUNNER_TEMPORARY_DIRECTORY: str(files.directory),
+        }
     )
 
 
@@ -454,9 +442,9 @@ class PublishedCheckout:
     The released checkout, with the scratch remote as its ``origin``.
     """
 
-    runner: Path
+    runner: GitCommandRunner
     """
-    The runner's clone of the scratch remote.
+    Git in the runner's clone of the scratch remote.
     """
 
     def remote_commit(self, reference: str) -> str:
@@ -464,14 +452,7 @@ class PublishedCheckout:
         :param reference: A branch or tag on the scratch remote.
         :return: The commit it names there, or an empty string when there is none.
         """
-        listed = subprocess.run(
-            ["git", "ls-remote", "origin", reference],
-            cwd=self.runner,
-            capture_output=True,
-            text=True,
-            check=True,
-        ).stdout
-        return listed.split("\t", 1)[0]
+        return self.runner.run("ls-remote", "origin", reference).split("\t", 1)[0]
 
     def merge(self) -> str:
         """
@@ -481,13 +462,10 @@ class PublishedCheckout:
         :return: The merged commit.
         """
         change_and_commit(self.repository, ReleaseSampleFile.PACKAGE_MODULE)
-        self.repository.run_git("push", "--quiet", "origin", "HEAD:main")
-        for arguments in (
-            ("fetch", "--quiet", "--tags", "origin"),
-            ("checkout", "--quiet", "--detach", "origin/main"),
-        ):
-            subprocess.run(["git", *arguments], cwd=self.runner, check=True)
-        return self.repository.run_git("rev-parse", "HEAD").stdout.strip()
+        self.repository.git.run("push", "--quiet", "origin", "HEAD:main")
+        self.runner.run("fetch", "--quiet", "--tags", "origin")
+        self.runner.run("checkout", "--quiet", "--detach", "origin/main")
+        return self.repository.git.commit_at("HEAD")
 
 
 @pytest.fixture
@@ -496,14 +474,13 @@ def published_checkout(released_checkout, tmp_path) -> PublishedCheckout:
     :return: The released checkout, published to a scratch remote with its tag.
     """
     remote = initialize_bare_repository(tmp_path / "origin.git")
-    released_checkout.run_git("push", "--quiet", "--tags", str(remote), "HEAD:main")
+    released_checkout.git.run("push", "--quiet", "--tags", str(remote), "HEAD:main")
     runner = tmp_path / "runner"
-    subprocess.run(
-        ["git", "clone", "--quiet", "--branch", "main", str(remote), str(runner)],
-        check=True,
+    GitCommandRunner(tmp_path).run(
+        "clone", "--quiet", "--branch", "main", str(remote), str(runner)
     )
     released_checkout.add_remote("origin", str(remote))
-    return PublishedCheckout(released_checkout, runner)
+    return PublishedCheckout(released_checkout, GitCommandRunner(runner))
 
 
 @pytest.fixture
@@ -526,7 +503,9 @@ def test_the_release_step_tags_the_merge_commit_and_pushes_nothing_else(
     merge_commit = published_checkout.merge()
 
     result = run_release_step(
-        published_checkout.runner, release_step_files, ReleaseLabel.MINOR
+        published_checkout.runner.working_directory,
+        release_step_files,
+        VersionPart.MINOR.label,
     )
 
     assert result.returncode == 0, result.stderr
@@ -539,7 +518,9 @@ def test_the_release_step_tags_the_merge_commit_and_pushes_nothing_else(
 def test_the_release_step_does_nothing_when_nothing_changed(
     published_checkout, release_step_files
 ):
-    result = run_release_step(published_checkout.runner, release_step_files)
+    result = run_release_step(
+        published_checkout.runner.working_directory, release_step_files
+    )
 
     assert result.returncode == 0, result.stderr
     assert "Nothing changed" in release_step_files.summary.read_text()
@@ -561,6 +542,6 @@ def test_a_version_bumps_by_the_part_named(part, expected):
     assert version(ReleaseSampleVersion.RELEASED).bumped(part) == version(expected)
 
 
-def test_a_version_that_is_not_three_numbers_is_refused():
-    with pytest.raises(MalformedVersion):
+def test_a_version_that_is_not_three_numbers_is_refused_with_a_correction():
+    with pytest.raises(MalformedVersion, match="Suggestion: "):
         ReleaseVersion.parse(f"v{ReleaseSampleVersion.RELEASED}")
