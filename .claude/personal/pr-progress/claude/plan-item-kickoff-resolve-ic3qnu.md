@@ -1,25 +1,20 @@
-Moved from the CRAM fork's notes on 2026-10-19. CRAM #430 is closed; this branch continues here as draft #15.
-
-## Next
-- Nothing outstanding on the branch. It waits on review, and on #185 landing before it can.
-- `test_stack.py`'s older tests still spell their branch names per test (`engine`,
-  `parser`, `wip`, `stuck`). Offered in the review reply, not done: they read as each
-  test's own role rather than a shared vocabulary. That sweep would belong on #185 too.
-
+Draft #15, continued here from CRAM #430.
 
 ## Plan
-1. `branches_stacked_on(stack, branch)` in `basstler/stack.py` - the not-yet-merged
-   branches whose parent chain reaches the named one, parent before child. Walks
-   `Branch.parent`, not git containment (reasons in the roadmap section).
-2. `restack_plan(stack, stacked_on=None)` and `restack(..., stacked_on=None)` - the
-   existing `RESTACK_STEPS` restricted to that subtree, no second propagation path.
-3. A conflict response chosen by the same argument: `TellTheBranchOwner` (label +
-   comment, today's behaviour) for a whole-board pass, `LeaveItToTheCaller` (the
-   outcome and its conflicting paths, nothing written to GitHub) for a named subtree.
-4. `maintenance restack --stacked-on <branch>` as the session-facing entry point.
-5. `.claude/skills/plan-item-resolve/propagating-a-fix.md` - the parent-to-descendant
-   judgement - referenced by one line from that skill's `SKILL.md` (contended file).
+- Restack one branch's subtree: `Stack.branches_stacked_on`, `Stack.restack_plan(stacked_on=)`
+  and `maintenance restack --stacked-on`, with collisions answered by
+  `ConflictResponse.chosen_for` (`TellTheBranchOwner` / `LeaveItToTheCaller`).
+- `propagating-a-fix.md` holds the parent-to-descendant judgement, linked from the
+  resolve skill's `SKILL.md`.
 
-Tests first throughout, in `test/basstler_test/test_stack.py` and
-`test_maintenance.py`, plus one guarding the skill's reference to the new document.
-Suite: `python -m pytest test/basstler_test --confcutdir=test/basstler_test`.
+## Done
+- Merged main (2026-10-24): moved the test constants into main's `tests/constants/` split,
+  and kept main's superseded-merge integration in `IntegrateParent`.
+- Review: every module-level function in `stack.py` moved onto a class (0c72f1d).
+- Review: added tests asserting which `ConflictResponse` type is chosen (7a90808).
+
+## Next
+- Thread r4368631657 is left open: confirm the reading (the response type) or say what
+  was meant instead.
+- Asked on the PR whether `Stack.next_to_promote`, which only tests call, can go.
+- PR needs the `release:minor` label (not verified from this session).
