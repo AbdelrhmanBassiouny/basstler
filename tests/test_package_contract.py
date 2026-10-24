@@ -239,15 +239,15 @@ BASSTLER_REFERENCE = re.compile(
     r"(?:basstler/\.github/workflows/upstream-reviews\.yml@|basstler_ref: )(\S+)"
 )
 """
-The ``@<ref>`` the caller uses basstler's workflow at, or the ``basstler_ref: <ref>`` it
-installs the package at.
+The ``@<branch or tag>`` the caller uses basstler's workflow at, or the
+``basstler_ref: <branch or tag>`` it installs the package at.
 """
 
 
-def test_the_example_caller_calls_one_ref_throughout():
+def test_the_example_caller_uses_one_branch_or_tag_throughout():
     """
     A project copies the example caller as it stands, so the workflow it uses and the
-    package that workflow installs have to be the same ref.
+    package that workflow installs have to come from the same branch or tag.
     """
     caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
 

@@ -1,6 +1,6 @@
 # Copy into a project as .github/workflows/upstream-reviews.yml, so the
-# /upstream-reviews skill can dispatch it there. Both refs below follow basstler's
-# main branch; to pin a release instead, change both to its tag.
+# /upstream-reviews skill can dispatch it there. Both references below follow
+# basstler's main branch; to pin a release instead, change both to its tag.
 name: Upstream reviews
 
 on:
