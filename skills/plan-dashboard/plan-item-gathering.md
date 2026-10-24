@@ -43,7 +43,11 @@ Given a pull request number instead of the two ids, find the item from the
 pull request's branch: read its head branch with
 `${GITHUB_PULL_REQUEST_READ_TOOL}` (`method: "get"`), take the plan id from
 `plan_id_for_branch <branch>` (it reads the fetch above), and print the item
-with `--branch <branch>`. If no plan tracks that branch, say so and stop.
+with `--branch <branch>`. If no plan tracks that branch, the pull request is
+*untracked*: say so in one line, skip every section below that reads a plan -
+the tracking issue, the item's recorded state, the plan's standing rules and
+the dependency chain - and run the rest. A skill that cannot work without a
+plan item stops here instead.
 
 If the plan id or item id doesn't resolve, stop and list what's actually
 available — every plan id under `plans/*/plan.yaml`, or every item id in
