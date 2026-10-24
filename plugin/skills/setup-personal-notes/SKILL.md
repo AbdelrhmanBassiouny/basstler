@@ -172,9 +172,12 @@ nothing but a branch of its own on the user's fork:
 "${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
 ```
 
-It writes `basstler/upstream-reviews` - the caller workflow and a README, sharing
-no history with the project's branches - or brings it to the branch or tag this
-session's package was installed at. Then tell
+It creates a new branch named `basstler/upstream-reviews` on the user's fork,
+with no history in common with the project's branches. The branch holds only a
+README and a short workflow file that calls basstler's reusable workflow by
+reference, so it works on a fork of any repository. Run again, it updates that
+workflow to the basstler branch or tag this session's package was installed at.
+Then tell
 the user the one step left to them, which `python -m basstler.setup_steps` also
 prints: a fork starts with Actions off, so they enable them once at
 `https://github.com/<fork>/actions`. Until they do, `/upstream-reviews` reads

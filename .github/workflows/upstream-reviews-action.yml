@@ -1,16 +1,7 @@
 name: Upstream reviews (Action branch)
 
-# Answers the request on a fork's basstler/upstream-reviews branch: reads the upstream
-# pull request it names over GraphQL, records every response, and commits the recording
-# back to the same branch as result.json, where the session replays it.
-#
-# Reusable: python -m basstler.setup_steps install-upstream-reviews-action writes the
-# caller onto that branch, naming the release of basstler it calls (see
-# basstler.upstream_reviews_action). A push made with the job's own token starts no
-# further run, so committing the result cannot loop.
-#
-# A runner starts with nothing installed and no session hook runs on it, so this job
-# installs the package itself before invoking a module.
+# Reads the upstream pull request a fork's basstler/upstream-reviews branch requests,
+# and commits what it read back to that branch as result.json.
 
 on:
   workflow_call:
@@ -43,8 +34,6 @@ jobs:
 
       - name: Read the upstream pull request
         env:
-          # gh is preinstalled on the runner; reading a public upstream needs no more
-          # than the job's own token.
           GH_TOKEN: ${{ github.token }}
         run: python -m basstler.upstream_reviews_action run
 

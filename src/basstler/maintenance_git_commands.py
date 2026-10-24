@@ -8,7 +8,9 @@ rewritten is decided in one place rather than at each call site.
 
 from __future__ import annotations
 
+import os
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -149,11 +151,15 @@ class GitCommandRunner:
     The checkout every command runs in.
     """
 
-    def attempt(self, *arguments: str) -> GitCommandResult:
+    def attempt(
+        self, *arguments: str, environment: Mapping[str, str] | None = None
+    ) -> GitCommandResult:
         """
         Run a command whose failure is an expected outcome.
 
         :param arguments: The git subcommand and its arguments.
+        :param environment: Variables to set for this command on top of the process's
+            own.
         :return: The finished command.
         """
         completed = subprocess.run(
@@ -161,6 +167,7 @@ class GitCommandRunner:
             cwd=self.working_directory,
             capture_output=True,
             text=True,
+            env={**os.environ, **(environment or {})},
         )
         return GitCommandResult(
             arguments=arguments,
@@ -169,15 +176,19 @@ class GitCommandRunner:
             error_output=completed.stderr.strip(),
         )
 
-    def run(self, *arguments: str) -> str:
+    def run(self, *arguments: str, environment: Mapping[str, str] | None = None) -> str:
         """
         Run a command this module depends on the result of.
 
         :param arguments: The git subcommand and its arguments.
+        :param environment: Variables to set for this command on top of the process's
+            own.
         :return: Git's stripped stdout.
         :raises GitCommandFailed: If git exits non-zero.
         """
-        return self.attempt(*arguments).raise_if_failed().output
+        return (
+            self.attempt(*arguments, environment=environment).raise_if_failed().output
+        )
 
     def fetch(self, remote: str, *references: str) -> None:
         """

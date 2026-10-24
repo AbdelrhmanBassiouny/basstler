@@ -57,6 +57,13 @@ def test_repository_rejects_a_remote_url_naming_no_repository(malformed: str):
         Repository.from_remote_url(malformed)
 
 
+# %% pages
+
+
+def test_a_workflow_run_url_is_the_run_s_page_under_the_repository_s_actions():
+    assert REPOSITORY.workflow_run_url(7) == f"{REPOSITORY.url}/actions/runs/7"
+
+
 # %% REST paths
 
 

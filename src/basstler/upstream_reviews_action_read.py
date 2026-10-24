@@ -21,8 +21,6 @@ from basstler.upstream_reviews_vocabulary import (
 )
 from basstler.upstream_reviews_action_recording import (
     ActionResult,
-    ReplayingGraphQLClient,
-    read_upstream,
 )
 from basstler.upstream_reviews_clients import (
     RestClient,
@@ -38,6 +36,7 @@ from basstler.upstream_reviews_request import (
     UpstreamReadRequest,
 )
 from basstler.upstream_reviews_vocabulary import (
+    CheckOutcome,
     JSONModel,
 )
 
@@ -50,8 +49,8 @@ class WorkflowRunJSONKey(StrEnum):
     """
 
     WORKFLOW_RUNS = "workflow_runs"
+    IDENTIFIER = "id"
     HEAD_SHA = "head_sha"
-    HTML_URL = "html_url"
     CONCLUSION = "conclusion"
 
 
@@ -61,19 +60,19 @@ class WorkflowRun(JSONModel):
     One run of the fork's workflow.
     """
 
-    head_sha: str
+    identifier: int
+    """
+    The run's own number, which its page is addressed by.
+    """
+
+    commit: str
     """
     The commit it ran on - the request's, for the run answering it.
     """
 
-    url: str
+    outcome: CheckOutcome
     """
-    Its page.
-    """
-
-    conclusion: str | None
-    """
-    How it ended, ``None`` while it runs.
+    How it ended, :attr:`CheckOutcome.PENDING` while it runs.
     """
 
     @classmethod
@@ -82,16 +81,17 @@ class WorkflowRun(JSONModel):
         :param data: One listed run.
         :return: The parsed run.
         """
+        conclusion = data[WorkflowRunJSONKey.CONCLUSION]
         return cls(
+            data[WorkflowRunJSONKey.IDENTIFIER],
             data[WorkflowRunJSONKey.HEAD_SHA],
-            data[WorkflowRunJSONKey.HTML_URL],
-            data[WorkflowRunJSONKey.CONCLUSION],
+            CheckOutcome[conclusion.upper()] if conclusion else CheckOutcome.PENDING,
         )
 
     @property
     def failed(self) -> bool:
         """:return: Whether it ended without succeeding."""
-        return self.conclusion not in (None, "success")
+        return self.outcome not in {CheckOutcome.SUCCESS, CheckOutcome.PENDING}
 
 
 @dataclass(frozen=True)
@@ -131,7 +131,7 @@ class WorkflowRunPage(JSONModel):
         :param commit: A pushed request.
         :return: The run answering it, if GitHub started one.
         """
-        return next((run for run in self.runs if run.head_sha == commit), None)
+        return next((run for run in self.runs if run.commit == commit), None)
 
 
 @dataclass(frozen=True)
@@ -176,7 +176,7 @@ class ActionRead:
         if self.branch.fetch() is None:
             raise ActionNotInstalled(self.branch.remote)
         return self.branch.write(
-            {ActionFile.REQUEST: json.dumps(self.request.to_json(), indent=2) + "\n"},
+            {ActionFile.REQUEST: json.dumps(self.request.to_json(), indent=2)},
             f"Request upstream reviews {self.request.identifier}",
         )
 
@@ -234,17 +234,6 @@ class ActionRead:
         if run is None:
             raise ActionRunNotStarted(fork, elapsed)
         if run.failed and self.collect() is None:
-            raise ActionRunFailed(f"its run ended {run.conclusion}: {run.url}")
-
-    def report(self, result: ActionResult, include_resolved: bool) -> str:
-        """
-        :param result: The run's result.
-        :param include_resolved: Whether to list resolved threads too.
-        :return: The rendered markdown.
-        :raises ActionRunFailed: If the run reported an error instead.
-        """
-        if result.error is not None:
-            raise ActionRunFailed(result.error)
-        return read_upstream(
-            ReplayingGraphQLClient(result), self.request, include_resolved
-        )
+            raise ActionRunFailed(
+                f"its run ended {run.outcome}: {fork.workflow_run_url(run.identifier)}"
+            )

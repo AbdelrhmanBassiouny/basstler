@@ -24,6 +24,7 @@ import subprocess
 import sys
 import tempfile
 import zlib
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -34,68 +35,77 @@ class FetchFailed(Exception):
     """
 
 
-def gh(arguments: list[str]) -> str:
-    """
-    :param arguments: What to pass ``gh api``.
-    :return: What it printed.
-    :raises FetchFailed: If it exits non-zero.
-    """
-    completed = subprocess.run(
-        ["gh", "api", *arguments], capture_output=True, text=True
-    )
-    if completed.returncode != 0:
-        raise FetchFailed(
-            f"gh api {' '.join(arguments)} failed: {completed.stderr.strip()}"
-        )
-    return completed.stdout
-
-
-def keep_fields(value: Any, fields: set[str]) -> Any:
-    """
-    :param value: A parsed response, or any part of one.
-    :param fields: The field names worth keeping, at any depth.
-    :return: The value with every other field of every object dropped.
-    """
-    if isinstance(value, dict):
-        return {
-            name: keep_fields(entry, fields)
-            for name, entry in value.items()
-            if name in fields
-        }
-    if isinstance(value, list):
-        return [keep_fields(entry, fields) for entry in value]
-    return value
-
-
-def fill(template: str, **values: object) -> str:
-    """
-    :param template: A path with ``{name}`` placeholders.
-    :return: The path with each placeholder replaced.
-    """
-    for name, value in values.items():
-        template = template.replace("{" + name + "}", str(value))
-    return template
-
-
+@dataclass
 class Fetch:
     """
     One run: the responses and logs read so far, and how to read more.
     """
 
-    def __init__(self, configuration: dict[str, Any]) -> None:
-        self.configuration = configuration
-        self.paths: dict[str, str] = configuration["paths"]
-        self.fields = set(configuration["fields"])
-        self.responses: list[dict[str, Any]] = []
-        self.job_logs: list[dict[str, Any]] = []
+    configuration: dict[str, Any]
+    """
+    Everything the run reads, as the helper module configured it.
+    """
+
+    responses: list[dict[str, Any]] = field(default_factory=list)
+    """
+    The responses read so far, each cut to the kept fields.
+    """
+
+    job_logs: list[dict[str, Any]] = field(default_factory=list)
+    """
+    The ends of the job logs read so far.
+    """
+
+    @staticmethod
+    def gh(arguments: list[str]) -> str:
+        """
+        :param arguments: What to pass ``gh api``.
+        :return: What it printed.
+        :raises FetchFailed: If it exits non-zero.
+        """
+        completed = subprocess.run(
+            ["gh", "api", *arguments], capture_output=True, text=True
+        )
+        if completed.returncode != 0:
+            raise FetchFailed(
+                f"gh api {' '.join(arguments)} failed: {completed.stderr.strip()}"
+            )
+        return completed.stdout
+
+    def path(self, name: str, **values: object) -> str:
+        """
+        :param name: Which configured path to fill in.
+        :param values: The value of each ``{name}`` placeholder in it.
+        :return: The path with each placeholder replaced.
+        """
+        path = self.configuration["paths"][name]
+        for placeholder, value in values.items():
+            path = path.replace("{" + placeholder + "}", str(value))
+        return path
+
+    def kept(self, value: Any) -> Any:
+        """
+        :param value: A parsed response, or any part of one.
+        :return: The value with every field of every object dropped that the
+            configuration does not name.
+        """
+        if isinstance(value, dict):
+            return {
+                name: self.kept(entry)
+                for name, entry in value.items()
+                if name in self.configuration["fields"]
+            }
+        if isinstance(value, list):
+            return [self.kept(entry) for entry in value]
+        return value
 
     def get(self, path: str) -> Any:
         """
         :param path: A REST path.
         :return: Its response, unfiltered, after recording the kept fields.
         """
-        body = json.loads(gh([path]))
-        self.responses.append({"path": path, "body": keep_fields(body, self.fields)})
+        body = json.loads(self.gh([path]))
+        self.responses.append({"path": path, "body": self.kept(body)})
         return body
 
     def get_pages(self, path: str) -> list[Any]:
@@ -103,8 +113,8 @@ class Fetch:
         :param path: A paged REST path.
         :return: Every page, unfiltered, after recording the kept fields.
         """
-        pages = json.loads(gh(["--paginate", "--slurp", path]))
-        self.responses.append({"path": path, "body": keep_fields(pages, self.fields)})
+        pages = json.loads(self.gh(["--paginate", "--slurp", path]))
+        self.responses.append({"path": path, "body": self.kept(pages)})
         return pages
 
     def read_job_log(self, url: str | None) -> None:
@@ -119,7 +129,7 @@ class Fetch:
         job = int(match.group(1))
         if any(entry["job"] == job for entry in self.job_logs):
             return
-        log = gh(["--allow-escape-sequences", fill(self.paths["job_log"], job=job)])
+        log = self.gh(["--allow-escape-sequences", self.path("job_log", job=job)])
         lines = log.splitlines()[-self.configuration["log_line_limit"] :]
         self.job_logs.append({"job": job, "log": "\n".join(lines)})
 
@@ -133,7 +143,9 @@ class Fetch:
             return [self.configuration["pull_request"]]
         owned = [
             entry
-            for page in self.get_pages(self.paths["pull_requests_for_head"])
+            for page in self.get_pages(
+                self.configuration["paths"]["pull_requests_for_head"]
+            )
             for entry in page
             if (entry["head"]["user"] or {}).get("login")
             == self.configuration["fork_owner"]
@@ -147,13 +159,13 @@ class Fetch:
 
         :param number: The pull request.
         """
-        pull_request = self.get(fill(self.paths["pull_request"], number=number))
-        self.get_pages(fill(self.paths["reviews"], number=number))
-        self.get_pages(fill(self.paths["review_comments"], number=number))
-        self.get(fill(self.paths["review_threads"], number=number))
+        pull_request = self.get(self.path("pull_request", number=number))
+        self.get_pages(self.path("reviews", number=number))
+        self.get_pages(self.path("review_comments", number=number))
+        self.get(self.path("review_threads", number=number))
         sha = pull_request["head"]["sha"]
-        runs = self.get_pages(fill(self.paths["check_runs"], sha=sha))
-        statuses = self.get_pages(fill(self.paths["commit_status"], sha=sha))
+        runs = self.get_pages(self.path("check_runs", sha=sha))
+        statuses = self.get_pages(self.path("commit_status", sha=sha))
         if not self.configuration["failure_logs"]:
             return
         outcomes = set(self.configuration["log_outcomes"])

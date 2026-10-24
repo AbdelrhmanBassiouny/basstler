@@ -43,17 +43,14 @@ from pathlib import Path
 from basstler.class_property import classproperty
 from basstler.github_labels import GitHubLabel
 from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
+from basstler.maintenance_git_commands import GitCommandFailed, GitCommandRunner
 from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.stack_configuration import StackSetting
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews_action_branch import (
     ActionInstallation,
-    Git,
     RemoteBranch,
-)
-from basstler.upstream_reviews_errors import (
-    UpstreamReadError,
 )
 from basstler.upstream_reviews_vocabulary import (
     ActionBranch,
@@ -788,10 +785,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if arguments.command == SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION:
         remote = PersonalNotesSetting.REMOTE.resolve(project_root, os.environ)
-        branch = RemoteBranch(Git(project_root), remote)
+        branch = RemoteBranch(GitCommandRunner(project_root), remote)
         try:
             changed = ActionInstallation(arguments.branch_or_tag).install(branch)
-        except UpstreamReadError as failure:
+        except GitCommandFailed as failure:
             logger.error(failure)
             return 1
         logger.info(

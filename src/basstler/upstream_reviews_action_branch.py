@@ -4,16 +4,17 @@ The branch of the fork the upstream-reviews Action lives on, and installing it.
 
 from __future__ import annotations
 
-import os
 import re
-import subprocess
 import tempfile
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
-from basstler.repository import MalformedRepositoryError, Repository
-from basstler.upstream_reviews_errors import UpstreamReadError
+from basstler.class_property import classproperty
+from basstler.maintenance_git_commands import GitCommandRunner, ProposedPush
+from basstler.render_common import create_template_environment
+from basstler.repository import Repository
 from basstler.upstream_reviews_vocabulary import (
     ActionBranch,
     ActionFile,
@@ -23,119 +24,13 @@ from basstler.upstream_reviews_vocabulary import (
 # %% the branch
 
 
-@dataclass
-class GitCommandFailed(UpstreamReadError):
-    """
-    Raised when a git command this module runs exits non-zero.
-    """
-
-    arguments: list[str]
-    """
-    What git was given.
-    """
-
-    error_output: str
-    """
-    What it wrote to standard error.
-    """
-
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
-        return f"git {' '.join(self.arguments)} failed: {self.error_output}"
-
-
-WORKFLOW_TEMPLATE = """\
-# Written by basstler's /setup-personal-notes (python -m basstler.setup_steps
-# install-upstream-reviews-action); re-run that to update it rather than editing it here.
-name: Upstream reviews
-
-on:
-  push:
-    branches: [{branch}]
-    paths: [{request}]
-
-permissions:
-  contents: write
-
-concurrency:
-  group: basstler-upstream-reviews
-  cancel-in-progress: false
-
-jobs:
-  read:
-    uses: {repository}/{reusable_workflow}@{branch_or_tag}
-    with:
-      basstler_branch_or_tag: {branch_or_tag}
-"""
-"""
-The caller workflow, filled in by :meth:`ActionInstallation.workflow`.
-"""
-
-README_TEXT = f"""\
-# basstler upstream reviews
-
-Kept by basstler's `/upstream-reviews` skill. Pushing a new `{ActionFile.REQUEST}` runs
-`{ActionFile.WORKFLOW}`, which reads the upstream pull request it names and commits
-`{ActionFile.RESULT}`. Nothing on this branch is ever merged anywhere.
-
-Install or update it with `/setup-personal-notes`, which runs
-`python -m basstler.setup_steps install-upstream-reviews-action`.
-"""
-"""
-What a reader browsing the fork's branches finds there.
-"""
-
-WORKFLOW_REFERENCE = re.compile(
-    r"^\s*basstler_branch_or_tag:\s*(?P<branch_or_tag>\S+)\s*$", re.MULTILINE
-)
-"""
-The line of an installed workflow naming the basstler branch or tag it runs.
-"""
-
-
-@dataclass(frozen=True)
-class Git:
-    """
-    Runs git in one clone.
-    """
-
-    project_root: Path
-    """
-    The clone.
-    """
-
-    def run(
-        self,
-        *arguments: str,
-        environment: dict[str, str] | None = None,
-        check: bool = True,
-    ) -> str:
-        """
-        :param arguments: What to pass git.
-        :param environment: Variables to add to the process's own.
-        :param check: Whether a non-zero exit is an error.
-        :return: What git printed, stripped.
-        :raises GitCommandFailed: If it exits non-zero and *check* is set.
-        """
-        completed = subprocess.run(
-            ["git", *arguments],
-            cwd=self.project_root,
-            capture_output=True,
-            text=True,
-            env={**os.environ, **(environment or {})},
-        )
-        if check and completed.returncode != 0:
-            raise GitCommandFailed(list(arguments), completed.stderr.strip())
-        return completed.stdout.strip() if completed.returncode == 0 else ""
-
-
 @dataclass(frozen=True)
 class RemoteBranch:
     """
     The Action branch on one remote, read and written without touching the working tree.
     """
 
-    git: Git
+    git: GitCommandRunner
     """
     The clone to work in.
     """
@@ -151,11 +46,10 @@ class RemoteBranch:
         :return: The repository the remote points at, ``None`` when it names none - a
             remote given as a local path.
         """
-        url = self.git.run("remote", "get-url", self.remote, check=False) or self.remote
-        try:
-            return Repository.from_remote_url(url)
-        except MalformedRepositoryError:
+        url = self.git.attempt("remote", "get-url", self.remote).output or self.remote
+        if not Repository.names_a_repository(url):
             return None
+        return Repository.from_remote_url(url)
 
     @property
     def description(self) -> str:
@@ -167,32 +61,26 @@ class RemoteBranch:
         """
         :return: The branch's tip commit, or ``None`` when the remote has no such branch.
         """
-        if not self.git.run(
-            "ls-remote", "--heads", self.remote, ActionBranch.NAME, check=False
-        ):
+        if not self.git.attempt(
+            "ls-remote", "--heads", self.remote, ActionBranch.NAME
+        ).output:
             return None
-        self.git.run(
-            "fetch",
-            "--quiet",
-            "--no-tags",
+        self.git.fetch(
             self.remote,
+            "--no-tags",
             f"+refs/heads/{ActionBranch.NAME}:{ActionBranch.LOCAL_REFERENCE}",
         )
-        return self.git.run("rev-parse", ActionBranch.LOCAL_REFERENCE)
+        return self.git.commit_at(ActionBranch.LOCAL_REFERENCE)
 
     def read(self, commit: str, path: ActionFile) -> str | None:
         """
         :param commit: The commit to read from.
         :param path: The file.
-        :return: Its text, or ``None`` when the commit has no such file.
+        :return: Its text without the final newline, or ``None`` when the commit has
+            no such file.
         """
-        shown = subprocess.run(
-            ["git", "show", f"{commit}:{path}"],
-            cwd=self.git.project_root,
-            capture_output=True,
-            text=True,
-        )
-        return shown.stdout if shown.returncode == 0 else None
+        shown = self.git.attempt("show", f"{commit}:{path}")
+        return shown.output if shown.succeeded else None
 
     def commit(
         self, parent: str | None, files: dict[ActionFile, str], message: str
@@ -201,7 +89,7 @@ class RemoteBranch:
         Commit files on top of the branch, keeping every file not given.
 
         :param parent: The commit to build on, ``None`` for the branch's first.
-        :param files: What to write, by path.
+        :param files: What to write, by path, each without its final newline.
         :param message: The commit message.
         :return: The new commit.
         """
@@ -213,7 +101,7 @@ class RemoteBranch:
                 self.git.run("read-tree", parent, environment=index)
             for path, text in files.items():
                 blob_file = Path(scratch) / "blob"
-                blob_file.write_text(text)
+                blob_file.write_text(text + "\n")
                 blob = self.git.run("hash-object", "-w", str(blob_file))
                 self.git.run(
                     "update-index",
@@ -226,37 +114,55 @@ class RemoteBranch:
         parents = ["-p", parent] if parent else []
         return self.git.run("commit-tree", tree, *parents, "-m", message)
 
-    def push(self, commit: str) -> None:
+    def write(
+        self, files: dict[ActionFile, str], message: str, attempts: int = 3
+    ) -> str:
         """
-        Move the branch to *commit*, which has to descend from where it is now.
+        Commit files onto the branch's latest tip and push them, again on top of a run's
+        own commit when that landed first.
 
-        :param commit: The new tip.
-        """
-        self.git.run(
-            "push", "--quiet", self.remote, f"{commit}:refs/heads/{ActionBranch.NAME}"
-        )
-
-    def write(self, files: dict[ActionFile, str], message: str) -> str:
-        """
-        Commit files onto the branch's latest tip and push them, once more if a run's
-        own commit landed first.
-
-        :param files: What to write, by path.
+        :param files: What to write, by path, each without its final newline.
         :param message: The commit message.
+        :param attempts: How many times to commit and push before giving up.
         :return: The pushed commit.
+        :raises GitCommandFailed: If the last push is refused too.
         """
-        for attempt in range(3):
+        for _ in range(attempts):
             commit = self.commit(self.fetch(), files, message)
-            try:
-                self.push(commit)
+            pushed = self.git.push(
+                ProposedPush(self.remote, f"{commit}:refs/heads/{ActionBranch.NAME}")
+            )
+            if pushed.succeeded:
                 return commit
-            except GitCommandFailed:
-                if attempt == 2:
-                    raise
-        raise AssertionError("unreachable")
+        pushed.raise_if_failed()
+        return commit
 
 
 # %% installing
+
+
+class ActionTemplate(StrEnum):
+    """
+    The templates in :attr:`PackageLocation.TEMPLATES` the Action's files are rendered
+    from.
+    """
+
+    WORKFLOW = "upstream_reviews_action_workflow.yml"
+    """
+    The caller workflow.
+    """
+
+    README = "upstream_reviews_action_readme.md"
+    """
+    What a reader browsing the fork's branches finds there.
+    """
+
+    def render(self, **context: Any) -> str:
+        """
+        :param context: The values the template substitutes, by name.
+        :return: The rendered file, without its final newline.
+        """
+        return create_template_environment().get_template(self.value).render(**context)
 
 
 class InstallationState(StrEnum):
@@ -280,10 +186,19 @@ class ActionInstallation:
     The basstler branch or release tag the workflow runs.
     """
 
+    @classproperty
+    def branch_or_tag_line(cls) -> re.Pattern[str]:
+        """
+        The line of an installed workflow naming the basstler branch or tag it runs.
+        """
+        return re.compile(
+            r"^\s*basstler_branch_or_tag:\s*(?P<branch_or_tag>\S+)\s*$", re.MULTILINE
+        )
+
     @property
     def workflow(self) -> str:
         """:return: The caller workflow."""
-        return WORKFLOW_TEMPLATE.format(
+        return ActionTemplate.WORKFLOW.render(
             branch=ActionBranch.NAME,
             request=ActionFile.REQUEST,
             repository=BasstlerSource.REPOSITORY,
@@ -294,7 +209,14 @@ class ActionInstallation:
     @property
     def files(self) -> dict[ActionFile, str]:
         """:return: What installing writes."""
-        return {ActionFile.WORKFLOW: self.workflow, ActionFile.README: README_TEXT}
+        return {
+            ActionFile.WORKFLOW: self.workflow,
+            ActionFile.README: ActionTemplate.README.render(
+                request=ActionFile.REQUEST,
+                workflow=ActionFile.WORKFLOW,
+                result=ActionFile.RESULT,
+            ),
+        }
 
     def state(self, branch: RemoteBranch) -> tuple[InstallationState, str | None]:
         """
@@ -306,7 +228,7 @@ class ActionInstallation:
         workflow = branch.read(tip, ActionFile.WORKFLOW) if tip else None
         if workflow is None:
             return InstallationState.MISSING, None
-        match = WORKFLOW_REFERENCE.search(workflow)
+        match = self.branch_or_tag_line.search(workflow)
         installed = match["branch_or_tag"] if match else None
         if workflow == self.workflow:
             return InstallationState.CURRENT, installed

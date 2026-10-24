@@ -35,15 +35,10 @@ from basstler.upstream_reviews_clients import (
 from basstler.upstream_reviews_errors import (
     UpstreamReadError,
 )
-from basstler.upstream_reviews_failure_logs import (
-    FailureLogReader,
-)
 from basstler.upstream_reviews_readers import (
     ReadSource,
 )
-from basstler.upstream_reviews_report import (
-    UpstreamPullRequestReport,
-)
+from basstler.upstream_reviews_request import UpstreamReadRequest
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -156,21 +151,11 @@ def _build_report(arguments: argparse.Namespace) -> str:
         CommittedStackConfiguration(), override=arguments.upstream
     )
     source = arguments.source or ReadSource.detect()
-    reader = source.reader(client, upstream, arguments.fork_owner)
-    number = arguments.pull_request or reader.resolve_pull_request_number(
-        arguments.branch
+    return UpstreamReadRequest.from_arguments(arguments, upstream).report(
+        source.reader(client, upstream, arguments.fork_owner),
+        client,
+        arguments.include_resolved,
     )
-    snapshot = reader.read_current_state(number)
-    failure_logs = (
-        FailureLogReader(client, upstream).read(snapshot.checks)
-        if arguments.failure_logs
-        else []
-    )
-    return UpstreamPullRequestReport(
-        snapshot,
-        include_resolved=arguments.include_resolved,
-        failure_logs=failure_logs,
-    ).render()
 
 
 if __name__ == "__main__":

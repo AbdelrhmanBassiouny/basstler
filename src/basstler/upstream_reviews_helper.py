@@ -42,22 +42,16 @@ from basstler.upstream_reviews_errors import (
 )
 from basstler.upstream_reviews_failure_logs import (
     FailedJob,
-    FailureLogReader,
 )
 from basstler.upstream_reviews_helper_recording import (
     HelperChunk,
     HelperRecording,
     RecordedFields,
     RecordedJobLog,
-    ReplayingClient,
     SessionTranscript,
 )
 from basstler.upstream_reviews_readers import (
-    RestPullRequestReader,
     UpstreamRestRoute,
-)
-from basstler.upstream_reviews_report import (
-    UpstreamPullRequestReport,
 )
 from basstler.upstream_reviews_request import (
     UpstreamReadRequest,
@@ -223,36 +217,6 @@ class HelperPrompt:
         )
 
 
-# %% building the report
-
-
-def build_report(
-    request: UpstreamReadRequest, recording: HelperRecording, include_resolved: bool
-) -> str:
-    """
-    Render the report a direct read would, from the helper's recording.
-
-    :param request: The read the helper performed.
-    :param recording: What it recorded.
-    :param include_resolved: Whether to list resolved threads too.
-    :return: The rendered markdown.
-    """
-    client = ReplayingClient(recording)
-    reader = RestPullRequestReader(client, request.upstream, request.fork_owner)
-    number = request.pull_request or reader.resolve_pull_request_number(
-        request.branch or ""
-    )
-    snapshot = reader.read_current_state(number)
-    failure_logs = (
-        FailureLogReader(client, request.upstream).read(snapshot.checks)
-        if request.failure_logs
-        else []
-    )
-    return UpstreamPullRequestReport(
-        snapshot, include_resolved=include_resolved, failure_logs=failure_logs
-    ).render()
-
-
 # %% command line
 
 
@@ -303,7 +267,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _parse_arguments(argv)
     try:
         if arguments.command == HelperCommand.PROMPT:
-            request = UpstreamReadRequest.from_arguments(arguments)
+            request = UpstreamReadRequest.from_arguments(arguments, arguments.upstream)
             request.save()
             logger.info(HelperPrompt(request).render())
             return 0
@@ -311,7 +275,7 @@ def main(argv: list[str] | None = None) -> int:
         recording = HelperRecording.assemble(
             request.identifier, SessionTranscript.current().chunks(request.identifier)
         )
-        logger.info(build_report(request, recording, arguments.include_resolved))
+        logger.info(recording.report(request, arguments.include_resolved))
     except UpstreamReadError as failure:
         logger.error(failure)
         return 1

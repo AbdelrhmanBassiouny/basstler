@@ -17,19 +17,14 @@ from basstler.upstream_reviews_clients import (
 )
 from basstler.upstream_reviews_errors import (
     ActionResponseMissing,
+    ActionRunFailed,
     UpstreamReadError,
-)
-from basstler.upstream_reviews_failure_logs import (
-    FailureLogReader,
 )
 from basstler.upstream_reviews_helper_recording import (
     RecordedJobLog,
 )
 from basstler.upstream_reviews_readers import (
     UpstreamPullRequestReader,
-)
-from basstler.upstream_reviews_report import (
-    UpstreamPullRequestReport,
 )
 from basstler.upstream_reviews_request import (
     UpstreamReadRequest,
@@ -53,14 +48,6 @@ class ActionJSONKey(StrEnum):
     QUERY = "query"
     VARIABLES = "variables"
     DATA = "data"
-
-
-def query_digest(query: str) -> str:
-    """
-    :param query: A GraphQL document.
-    :return: A short name for it, the same in any release that sends the same text.
-    """
-    return hashlib.sha256(query.encode()).hexdigest()[:16]
 
 
 @dataclass(frozen=True)
@@ -95,6 +82,14 @@ class RecordedGraphQLResponse(JSONModel):
             data[ActionJSONKey.VARIABLES],
             data[ActionJSONKey.DATA],
         )
+
+    @staticmethod
+    def digest(query: str) -> str:
+        """
+        :param query: A GraphQL document.
+        :return: A short name for it, the same in any release that sends the same text.
+        """
+        return hashlib.sha256(query.encode()).hexdigest()[:16]
 
     def to_json(self) -> dict[str, Any]:
         """:return: The response as recorded."""
@@ -150,6 +145,48 @@ class ActionResult(JSONModel):
             ],
         )
 
+    @classmethod
+    def answering(
+        cls, request: UpstreamReadRequest, client: GitHubCommandLineClient
+    ) -> ActionResult:
+        """
+        What the run commits: the recording of a read, or what stopped it.
+
+        :param request: The branch's request.
+        :param client: What reads GitHub.
+        :return: The result.
+        """
+        recording = RecordingClient(client)
+        try:
+            request.report(
+                UpstreamPullRequestReader(
+                    recording, request.upstream, request.fork_owner
+                ),
+                recording,
+                include_resolved=False,
+            )
+        except UpstreamReadError as failure:
+            return cls(request.identifier, error=str(failure))
+        return cls(request.identifier, None, recording.responses, recording.job_logs)
+
+    def report(self, request: UpstreamReadRequest, include_resolved: bool) -> str:
+        """
+        Render the report a direct read would, from this recording.
+
+        :param request: The read the run performed.
+        :param include_resolved: Whether to list resolved threads too.
+        :return: The rendered markdown.
+        :raises ActionRunFailed: If the run reported an error instead.
+        """
+        if self.error is not None:
+            raise ActionRunFailed(self.error)
+        client = ReplayingGraphQLClient(self)
+        return request.report(
+            UpstreamPullRequestReader(client, request.upstream, request.fork_owner),
+            client,
+            include_resolved,
+        )
+
     def to_json(self) -> dict[str, Any]:
         """:return: The result as committed."""
         return {
@@ -191,7 +228,9 @@ class RecordingClient(GraphQLClient, JobLogReader):
         """
         data = self.client.execute(query, variables)
         self.responses.append(
-            RecordedGraphQLResponse(query_digest(query), variables, data)
+            RecordedGraphQLResponse(
+                RecordedGraphQLResponse.digest(query), variables, data
+            )
         )
         return data
 
@@ -220,7 +259,7 @@ class ReplayingGraphQLClient(GraphQLClient, JobLogReader):
         """
         See :meth:`GraphQLClient.execute`.
         """
-        digest = query_digest(query)
+        digest = RecordedGraphQLResponse.digest(query)
         for response in self.result.responses:
             if response.query == digest and response.variables == variables:
                 return response.data
@@ -234,51 +273,3 @@ class ReplayingGraphQLClient(GraphQLClient, JobLogReader):
             if log.job == job_identifier:
                 return log.log
         raise ActionResponseMissing(repository.job_log_path(job_identifier))
-
-
-def read_upstream(
-    client: GraphQLClient | JobLogReader,
-    request: UpstreamReadRequest,
-    include_resolved: bool,
-) -> str:
-    """
-    Read the requested pull request through *client* and render its report.
-
-    :param client: What answers the reader: GitHub, recorded or replayed.
-    :param request: The read.
-    :param include_resolved: Whether to list resolved threads too.
-    :return: The rendered markdown.
-    """
-    reader = UpstreamPullRequestReader(client, request.upstream, request.fork_owner)
-    number = request.pull_request or reader.resolve_pull_request_number(
-        request.branch or ""
-    )
-    snapshot = reader.read_current_state(number)
-    failure_logs = (
-        FailureLogReader(client, request.upstream).read(snapshot.checks)
-        if request.failure_logs
-        else []
-    )
-    return UpstreamPullRequestReport(
-        snapshot, include_resolved=include_resolved, failure_logs=failure_logs
-    ).render()
-
-
-def answer(
-    request: UpstreamReadRequest, client: GitHubCommandLineClient
-) -> ActionResult:
-    """
-    What the run commits: the recording of a read, or what stopped it.
-
-    :param request: The branch's request.
-    :param client: What reads GitHub.
-    :return: The result.
-    """
-    recording = RecordingClient(client)
-    try:
-        read_upstream(recording, request, include_resolved=False)
-    except UpstreamReadError as failure:
-        return ActionResult(request.identifier, error=str(failure))
-    return ActionResult(
-        request.identifier, None, recording.responses, recording.job_logs
-    )

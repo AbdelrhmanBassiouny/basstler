@@ -34,7 +34,6 @@ from basstler.upstream_reviews_failure_logs import (
 from basstler.upstream_reviews_helper import (
     HelperPrompt,
     HelperScript,
-    build_report,
     main,
 )
 from basstler.upstream_reviews_helper_recording import (
@@ -194,7 +193,7 @@ def test_the_helper_read_reports_what_a_direct_read_does(
 
     recording = recording_of(helper_request, run_fetch(helper_request))
 
-    assert build_report(helper_request, recording, include_resolved) == direct_report(
+    assert recording.report(helper_request, include_resolved) == direct_report(
         include_resolved
     )
 
@@ -212,7 +211,7 @@ def test_a_branch_is_chosen_by_the_reader_on_replay(stubbed_gh):
 
     recording = recording_of(helper_request, run_fetch(helper_request))
 
-    assert build_report(helper_request, recording, False) == direct_report()
+    assert recording.report(helper_request, False) == direct_report()
 
 
 @pytest.mark.parametrize(
@@ -262,7 +261,7 @@ def test_a_branch_never_promoted_replays_into_the_same_answer(stubbed_gh):
     recording = recording_of(helper_request, run_fetch(helper_request))
 
     with pytest.raises(UpstreamPullRequestNotFound):
-        build_report(helper_request, recording, False)
+        recording.report(helper_request, False)
 
 
 def test_the_log_behind_a_failed_check_is_read_and_quoted(stubbed_gh):
@@ -271,9 +270,7 @@ def test_the_log_behind_a_failed_check_is_read_and_quoted(stubbed_gh):
     recording = recording_of(helper_request, run_fetch(helper_request))
 
     assert [log.job for log in recording.job_logs] == [FAILED_JOB]
-    assert build_report(helper_request, recording, False) == direct_report(
-        failure_logs=True
-    )
+    assert recording.report(helper_request, False) == direct_report(failure_logs=True)
 
 
 def test_no_log_is_read_unless_asked_for(stubbed_gh):
@@ -304,9 +301,8 @@ def test_a_failing_gh_fails_the_fetch_with_its_error(stubbed_gh):
 
 
 def test_only_the_fields_the_models_read_are_kept():
-    kept = upstream_reviews_fetch.keep_fields(
-        {"title": "t", "body": "b", "head": {"sha": "s", "repo": {}}, "_links": {}},
-        set(HelperScript(request()).configuration["fields"]),
+    kept = upstream_reviews_fetch.Fetch(HelperScript(request()).configuration).kept(
+        {"title": "t", "body": "b", "head": {"sha": "s", "repo": {}}, "_links": {}}
     )
 
     assert kept == {"title": "t", "body": "b", "head": {"sha": "s"}}

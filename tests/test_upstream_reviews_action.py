@@ -23,10 +23,9 @@ from basstler.upstream_reviews_action import (
     ActionExitCode,
     main,
 )
+from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.upstream_reviews_action_branch import (
-    WORKFLOW_REFERENCE,
     ActionInstallation,
-    Git,
     InstallationState,
     RemoteBranch,
 )
@@ -38,8 +37,6 @@ from basstler.upstream_reviews_action_recording import (
     ActionResult,
     RecordedGraphQLResponse,
     ReplayingGraphQLClient,
-    answer,
-    read_upstream,
 )
 from basstler.upstream_reviews_clients import (
     GitHubCommandLineClient,
@@ -54,6 +51,7 @@ from basstler.upstream_reviews_errors import (
     GitHubCommandFailed,
     UpstreamPullRequestNotFound,
 )
+from basstler.upstream_reviews_readers import UpstreamPullRequestReader
 from basstler.upstream_reviews_request import (
     UpstreamReadRequest,
 )
@@ -149,6 +147,17 @@ def request(
     )
 
 
+def direct_report(
+    client: RecordedGitHub, read: UpstreamReadRequest, include_resolved: bool
+) -> str:
+    """:return: The report a direct GraphQL read through *client* renders."""
+    return read.report(
+        UpstreamPullRequestReader(client, read.upstream, read.fork_owner),
+        client,
+        include_resolved,
+    )
+
+
 def committed(result: ActionResult) -> ActionResult:
     """:return: The result as the session reads it back from the branch."""
     return ActionResult.from_json(json.loads(json.dumps(result.to_json())))
@@ -168,18 +177,19 @@ def committed(result: ActionResult) -> ActionResult:
 )
 @pytest.mark.parametrize("include_resolved", [False, True])
 def test_the_replayed_report_is_the_direct_read(read, by_branch, include_resolved):
-    result = committed(answer(read, github(by_branch)))
-    direct = read_upstream(github(by_branch), read, include_resolved)
+    result = committed(ActionResult.answering(read, github(by_branch)))
+    direct = direct_report(github(by_branch), read, include_resolved)
 
-    replayed = ActionRead(None, read).report(result, include_resolved)
+    replayed = result.report(read, include_resolved)
 
     assert replayed == direct
 
 
 def test_failure_logs_are_recorded_only_when_asked_for():
-    assert answer(request(), github()).job_logs == []
+    assert ActionResult.answering(request(), github()).job_logs == []
     assert [
-        log.job for log in answer(request(failure_logs=True), github()).job_logs
+        log.job
+        for log in ActionResult.answering(request(failure_logs=True), github()).job_logs
     ] == [failing_job_identifier()]
 
 
@@ -189,15 +199,15 @@ def test_a_branch_never_promoted_is_recorded_as_the_run_s_error():
     )
     read = request(pull_request=None, branch=Example.UNPROMOTED_BRANCH)
 
-    result = committed(answer(read, client))
+    result = committed(ActionResult.answering(read, client))
 
     assert Example.UNPROMOTED_BRANCH in result.error
     with pytest.raises(ActionRunFailed, match=Example.UNPROMOTED_BRANCH):
-        ActionRead(None, read).report(result, include_resolved=False)
+        result.report(read, include_resolved=False)
 
 
 def test_a_result_from_another_release_s_queries_is_refused_by_name():
-    result = committed(answer(request(), github()))
+    result = committed(ActionResult.answering(request(), github()))
     altered = ActionResult(
         result.request_identifier,
         None,
@@ -210,7 +220,7 @@ def test_a_result_from_another_release_s_queries_is_refused_by_name():
     with pytest.raises(ActionResponseMissing, match="basstler release"):
         ReplayingGraphQLClient(altered).execute("query", {})
     with pytest.raises(ActionResponseMissing):
-        ActionRead(None, request()).report(altered, include_resolved=False)
+        altered.report(request(), include_resolved=False)
 
 
 def test_the_error_is_what_the_reader_raises():
@@ -220,9 +230,9 @@ def test_the_error_is_what_the_reader_raises():
     read = request(pull_request=None, branch=Example.UNPROMOTED_BRANCH)
 
     with pytest.raises(UpstreamPullRequestNotFound) as raised:
-        read_upstream(client, read, include_resolved=False)
+        direct_report(client, read, include_resolved=False)
 
-    assert answer(
+    assert ActionResult.answering(
         read,
         RecordedGitHub(responses=[RecordedResponse.BRANCH_PULL_REQUESTS_NONE.load()]),
     ).error == str(raised.value)
@@ -238,9 +248,21 @@ def test_the_caller_runs_the_release_it_names_on_pushes_of_a_request():
         f"{BasstlerSource.REPOSITORY}/{BasstlerSource.REUSABLE_WORKFLOW}@{BRANCH_OR_TAG}"
         in workflow
     )
-    assert WORKFLOW_REFERENCE.search(workflow)["branch_or_tag"] == BRANCH_OR_TAG
+    assert (
+        ActionInstallation.branch_or_tag_line.search(workflow)["branch_or_tag"]
+        == BRANCH_OR_TAG
+    )
     assert f"branches: [{ActionBranch.NAME}]" in workflow
     assert f"paths: [{ActionFile.REQUEST}]" in workflow
+
+
+def test_the_caller_workflow_is_rendered_without_html_escaping():
+    workflow = ActionInstallation("tag&<name>").workflow
+
+    assert (
+        ActionInstallation.branch_or_tag_line.search(workflow)["branch_or_tag"]
+        == "tag&<name>"
+    )
 
 
 def test_the_reusable_workflow_runs_this_module_and_commits_its_result():
@@ -268,15 +290,16 @@ class Fork:
     @property
     def branch(self) -> RemoteBranch:
         """:return: The Action branch on the fork."""
-        return RemoteBranch(Git(self.clone), "origin")
+        return RemoteBranch(GitCommandRunner(self.clone), "origin")
 
     def files(self) -> dict[str, str]:
-        """:return: Every file on the remote's Action branch, by path."""
+        """:return: Every file on the remote's Action branch, by path, without its
+        final newline as the branch is written."""
         names = git(
             self.remote, "ls-tree", "-r", "--name-only", ActionBranch.NAME
         ).split()
         return {
-            name: git(self.remote, "show", f"{ActionBranch.NAME}:{name}", strip=False)
+            name: git(self.remote, "show", f"{ActionBranch.NAME}:{name}")
             for name in names
         }
 
@@ -285,12 +308,11 @@ class Fork:
         self.branch.write({ActionFile.RESULT: json.dumps(result.to_json())}, "Answer")
 
 
-def git(directory: Path, *arguments: str, strip: bool = True) -> str:
-    """:return: What git printed in *directory*, stripped unless asked not to."""
-    output = subprocess.run(
+def git(directory: Path, *arguments: str) -> str:
+    """:return: What git printed in *directory*, stripped."""
+    return subprocess.run(
         ["git", *arguments], cwd=directory, check=True, capture_output=True, text=True
-    ).stdout
-    return output.strip() if strip else output
+    ).stdout.strip()
 
 
 @pytest.fixture
@@ -376,11 +398,11 @@ def test_a_request_to_a_fork_without_the_action_is_refused(fork):
 def test_the_result_answering_the_request_is_collected(fork):
     ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
     ActionRead(fork.branch, request()).send()
-    fork.answer(answer(request(), github()))
+    fork.answer(ActionResult.answering(request(), github()))
 
     result = ActionRead(fork.branch, request()).wait(timeout=0)
 
-    assert result == committed(answer(request(), github()))
+    assert result == committed(ActionResult.answering(request(), github()))
 
 
 def test_a_result_answering_another_request_is_not_collected(fork):
@@ -424,11 +446,7 @@ class ListedRuns(RestClient):
 
 def run(commit: str, conclusion: str | None) -> dict[str, Any]:
     """:return: One listed run of the fork's workflow."""
-    return {
-        "head_sha": commit,
-        "html_url": f"{FORK.url}/actions/runs/7",
-        "conclusion": conclusion,
-    }
+    return {"id": 7, "head_sha": commit, "conclusion": conclusion}
 
 
 def waiting(fork: Fork, runs: ListedRuns) -> tuple[ActionRead, str]:
@@ -485,7 +503,7 @@ def test_a_result_is_collected_even_if_its_run_failed_afterwards(fork):
     runs = ListedRuns([])
     read, commit = waiting(fork, runs)
     runs.runs = [run(commit, "failure")]
-    fork.answer(answer(request(), github()))
+    fork.answer(ActionResult.answering(request(), github()))
 
     assert read.wait(timeout=60, commit=commit).request_identifier == REQUEST_IDENTIFIER
 
@@ -500,7 +518,7 @@ def test_read_prints_the_report_from_the_committed_result(fork, monkeypatch, cap
 
     def send_and_run(read: ActionRead) -> str:
         commit = send(read)
-        fork.answer(answer(read.request, github()))
+        fork.answer(ActionResult.answering(read.request, github()))
         return commit
 
     monkeypatch.setattr(ActionRead, "send", send_and_run)
@@ -524,7 +542,7 @@ def test_read_prints_the_report_from_the_committed_result(fork, monkeypatch, cap
     assert status == 0
     assert (
         capsys.readouterr().out.strip()
-        == read_upstream(github(), request(), include_resolved=False).strip()
+        == direct_report(github(), request(), include_resolved=False).strip()
     )
 
 

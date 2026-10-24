@@ -33,22 +33,18 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.exit_codes import ExitCode
+from basstler.maintenance_git_commands import GitCommandFailed, GitCommandRunner
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews_action_branch import (
     ActionInstallation,
-    Git,
     RemoteBranch,
-)
-from basstler.upstream_reviews_vocabulary import (
-    ActionBranch,
-    ActionFile,
 )
 from basstler.upstream_reviews_action_read import (
     ActionRead,
 )
 from basstler.upstream_reviews_action_recording import (
-    answer,
+    ActionResult,
 )
 from basstler.upstream_reviews_clients import (
     GitHubCommandLineClient,
@@ -59,6 +55,10 @@ from basstler.upstream_reviews_errors import (
 )
 from basstler.upstream_reviews_request import (
     UpstreamReadRequest,
+)
+from basstler.upstream_reviews_vocabulary import (
+    ActionBranch,
+    ActionFile,
 )
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -173,10 +173,12 @@ def main(argv: list[str] | None = None) -> int:
             request = UpstreamReadRequest.from_json(
                 json.loads(arguments.request.read_text())
             )
-            result = answer(request, GitHubCommandLineClient())
+            result = ActionResult.answering(request, GitHubCommandLineClient())
             arguments.result.write_text(json.dumps(result.to_json()) + "\n")
             return 0
-        branch = RemoteBranch(Git(arguments.project_root), arguments.remote)
+        branch = RemoteBranch(
+            GitCommandRunner(arguments.project_root), arguments.remote
+        )
         if arguments.command == ActionCommand.INSTALL:
             installation = ActionInstallation(arguments.branch_or_tag)
             changed = installation.install(branch)
@@ -191,16 +193,16 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         action_read = ActionRead(
             branch,
-            UpstreamReadRequest.from_arguments(arguments),
+            UpstreamReadRequest.from_arguments(arguments, arguments.upstream),
             GitHubCommandLineClient(),
         )
         commit = action_read.send()
         result = action_read.wait(arguments.timeout, commit)
-        logger.info(action_read.report(result, arguments.include_resolved))
+        logger.info(result.report(action_read.request, arguments.include_resolved))
     except ActionUnavailable as failure:
         logger.error(failure)
         return ActionExitCode.UNAVAILABLE
-    except UpstreamReadError as failure:
+    except (UpstreamReadError, GitCommandFailed) as failure:
         logger.error(failure)
         return ActionExitCode.READ_FAILED
     return ActionExitCode.SUCCESS

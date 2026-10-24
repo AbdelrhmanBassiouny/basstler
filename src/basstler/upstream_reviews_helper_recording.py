@@ -26,8 +26,10 @@ from basstler.upstream_reviews_errors import (
     HelperOutputUnreadable,
     HelperResponseMissing,
 )
+from basstler.upstream_reviews_readers import RestPullRequestReader
 from basstler.upstream_reviews_request import (
     HelperJSONKey,
+    UpstreamReadRequest,
 )
 from basstler.upstream_reviews_rest_models import (
     RestJSONKey,
@@ -200,6 +202,21 @@ class HelperRecording(JSONModel):
                 request_identifier, f"it answers request {recording.request_identifier}"
             )
         return recording
+
+    def report(self, request: UpstreamReadRequest, include_resolved: bool) -> str:
+        """
+        Render the report a direct read would, from this recording.
+
+        :param request: The read the helper performed.
+        :param include_resolved: Whether to list resolved threads too.
+        :return: The rendered markdown.
+        """
+        client = ReplayingClient(self)
+        return request.report(
+            RestPullRequestReader(client, request.upstream, request.fork_owner),
+            client,
+            include_resolved,
+        )
 
 
 @dataclass(frozen=True)

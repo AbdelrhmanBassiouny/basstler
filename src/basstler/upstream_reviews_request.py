@@ -16,9 +16,13 @@ from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.repository import Repository
+from basstler.upstream_reviews_clients import JobLogReader
 from basstler.upstream_reviews_errors import (
     NoRecordedReadRequest,
 )
+from basstler.upstream_reviews_failure_logs import FailureLogReader
+from basstler.upstream_reviews_readers import PullRequestSource
+from basstler.upstream_reviews_report import UpstreamPullRequestReport
 from basstler.upstream_reviews_vocabulary import (
     JSONModel,
 )
@@ -48,8 +52,7 @@ class HelperJSONKey(StrEnum):
 @dataclass(frozen=True)
 class UpstreamReadRequest(JSONModel):
     """
-    One read handed to a helper session, recorded so the report can be built from its
-    output later.
+    One read of an upstream pull request: what to read, and how much of it.
     """
 
     identifier: str
@@ -107,14 +110,18 @@ class UpstreamReadRequest(JSONModel):
         )
 
     @classmethod
-    def from_arguments(cls, arguments: argparse.Namespace) -> UpstreamReadRequest:
+    def from_arguments(
+        cls, arguments: argparse.Namespace, upstream: Repository
+    ) -> UpstreamReadRequest:
         """
-        :param arguments: A ``prompt`` command line.
-        :return: The request it describes, with a fresh identifier.
+        :param arguments: A command line naming the pull request or branch, the fork
+            owner and whether to read failure logs.
+        :param upstream: The repository to read.
+        :return: The request they describe, with a fresh identifier.
         """
         return cls(
             secrets.token_hex(8),
-            arguments.upstream,
+            upstream,
             arguments.fork_owner,
             arguments.pull_request,
             arguments.branch,
@@ -148,3 +155,31 @@ class UpstreamReadRequest(JSONModel):
         if not cls.location.is_file():
             raise NoRecordedReadRequest(cls.location)
         return cls.from_json(json.loads(cls.location.read_text()))
+
+    def report(
+        self,
+        reader: PullRequestSource,
+        job_logs: JobLogReader,
+        include_resolved: bool,
+    ) -> str:
+        """
+        Read the requested pull request and render its report.
+
+        :param reader: What reads the pull request.
+        :param job_logs: What reads the log behind a failed check.
+        :param include_resolved: Whether to list resolved threads too.
+        :return: The rendered markdown.
+        :raises UpstreamPullRequestNotFound: If the branch has no upstream pull request.
+        """
+        number = self.pull_request or reader.resolve_pull_request_number(
+            self.branch or ""
+        )
+        snapshot = reader.read_current_state(number)
+        failure_logs = (
+            FailureLogReader(job_logs, self.upstream).read(snapshot.checks)
+            if self.failure_logs
+            else []
+        )
+        return UpstreamPullRequestReport(
+            snapshot, include_resolved=include_resolved, failure_logs=failure_logs
+        ).render()
