@@ -20,7 +20,7 @@ from basstler.stack_configuration import (
     StackSetting,
 )
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 
 
 class ConfigurationLocation(PathEnumeration):

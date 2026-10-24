@@ -100,23 +100,6 @@ class PackageLocation(PathEnumeration):
     """
 
 
-class CheckoutLocation(PathEnumeration):
-    """
-    The files of a checkout of this repository that write a release's version, relative
-    to the checkout's root.
-    """
-
-    PLUGIN_MANIFEST = Path("plugin") / ".claude-plugin" / "plugin.json"
-    """
-    The plugin's manifest, where a release's version is declared.
-    """
-
-    EXAMPLE_CALLER = Path("docs") / "examples" / "upstream-reviews.yml"
-    """
-    The caller a project copies, naming the release it calls.
-    """
-
-
 class BasstlerVariable(EnvironmentVariable):
     """
     The environment variables this package's own shell configuration sets.
@@ -240,6 +223,13 @@ class ProjectLocation(PathEnumeration):
     half of the same tooling; a test holds the two equal so the mirror cannot drift.
     """
 
+    PLAN_HUB = PLANS / "_hub.yaml"
+    """
+    The plan hub file: the site's address and every repository it publishes.
+
+    Mirrors ``PLAN_HUB_PATH`` in ``resolve-personal-notes-config.sh``.
+    """
+
     PERSONAL_STACK_CONFIGURATION = PERSONAL_NOTES / "stack.toml"
     """
     The per-user override of :attr:`PROJECT_STACK_CONFIGURATION`.
@@ -259,4 +249,20 @@ class ClaudeCodeVariable(EnvironmentVariable):
     PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR"
     """
     The root of the project the session runs in.
+    """
+
+    REMOTE = "CLAUDE_CODE_REMOTE"
+    """
+    ``true`` in a Claude Code cloud session, whose proxy answers GitHub's REST API but
+    not its GraphQL API.
+    """
+
+    SESSION_IDENTIFIER = "CLAUDE_CODE_SESSION_ID"
+    """
+    The session's own identifier, which names its transcript file.
+    """
+
+    CONFIGURATION_DIRECTORY = "CLAUDE_CONFIG_DIR"
+    """
+    Where Claude Code keeps its state, transcripts included, when not ``~/.claude``.
     """

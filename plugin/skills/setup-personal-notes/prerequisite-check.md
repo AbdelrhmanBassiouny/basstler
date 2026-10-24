@@ -20,6 +20,10 @@ source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 bash "${CHECK_SETUP_SCRIPT}" || true
 ```
 
+A skill that needs the stacked-PR workflow's upstream (`/upstream-reviews`)
+passes `--require-upstream`, which turns a project naming none from context
+into a `needs-setup` row; every other skill runs it bare.
+
 **Exit code 0 — set up.** Say nothing about setup at all; carry straight on
 with the skill. A user who is already set up must never hear about it.
 
@@ -30,7 +34,9 @@ exactly that, and duplicating a piece of it here is how the two drift apart.
 1. Tell the user, in one or two sentences, what is missing and that setup is
    running now — from the `needs-setup` rows' own `<detail>` text, not a guess.
    This is a statement, not a question: never ask whether to run the setup.
-2. Invoke `/setup-personal-notes` via the `Skill` tool and let it finish. It
+2. Invoke `/setup-personal-notes` via the `Skill` tool and let it finish,
+   passing it any flag your skill gave `check-setup.sh` (such as
+   `--require-upstream`) as its argument, so it checks the same things. It
    asks its own questions for the decisions that are genuinely the user's —
    which repository their notes live in, what goes in them, whether to create
    labels — and does the mechanical parts without asking.

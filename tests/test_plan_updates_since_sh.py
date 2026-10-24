@@ -21,12 +21,9 @@ import pytest
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.maintenance_constants import GitHubClient
 
-from .constants import (
-    DatasetLocation,
-    EnvironmentVariable,
-    ScratchBranch,
-    ScrubbedEnvironmentPrefix,
-)
+from .constants.environment import ScrubbedEnvironmentPrefix, SearchPathVariable
+from .constants.notes import ScratchBranch
+from .constants.paths import DatasetLocation
 from .script_runner import BashScriptRunner
 
 from .executable_stubs import (
@@ -362,7 +359,7 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
         PlanUpdatesSinceOption.SINCE,
         sha,
         env={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
             "STUB_GH_ISSUE_COMMENTS_JSON": comments_json,
             "STUB_GH_CALL_LOG": str(call_log),
         },
@@ -398,7 +395,7 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
         PlanUpdatesSinceOption.SINCE,
         sha,
         env={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 hidden_gh_path
             ),
             "GH_TOKEN": "a-token",
@@ -429,7 +426,7 @@ def test_fails_when_neither_gh_nor_a_token_is_available(
         PLAN_ID,
         PlanUpdatesSinceOption.SINCE,
         sha,
-        env={EnvironmentVariable.EXECUTABLE_SEARCH_PATH: hidden_gh_path},
+        env={SearchPathVariable.EXECUTABLE_SEARCH_PATH: hidden_gh_path},
     )
 
     assert result.returncode != 0

@@ -13,7 +13,7 @@ import re
 
 import pytest
 
-from .constants import RepositoryLocation, SkillDirectory
+from .constants.paths import RepositoryLocation, SkillDirectory
 
 LINK_TARGET = re.compile(r"\]\(([^)]+)\)")
 """

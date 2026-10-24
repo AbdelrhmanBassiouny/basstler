@@ -17,6 +17,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Mapping
+from enum import StrEnum
 from pathlib import Path
 
 import pytest
@@ -24,18 +25,18 @@ import pytest
 from basstler.locations import BasstlerVariable, PluginLocation, ProjectLocation
 from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
+from basstler.plan_item_bootstrap import PlanDocument
+from basstler.plan_model import ItemStatus, ManifestKey, PlanManifest
 
-from .constants import (
+from .constants.environment import (
     ConfigurationVariable,
-    DatasetLocation,
-    EnvironmentVariable,
     FileMode,
-    PackageManager,
-    PersonalNotesPath,
-    ScratchBranch,
     ScrubbedEnvironmentPrefix,
-    StubVariable,
+    SearchPathVariable,
 )
+from .constants.notes import ClaudeLocalSection, ScratchBranch
+from .constants.paths import DatasetLocation, PersonalNotesPath
+from .plan_dataset import LandedItemsPlan
 from .executable_stubs import ExecutableStubDirectory, path_hiding_executables
 from .plugin_manifest import PluginManifest
 from .project_declaration import ProjectDeclaration
@@ -43,7 +44,6 @@ from .scratch_repository import (
     SCRATCH_IDENTITY,
     PackageSourceFile,
     ScratchRepository,
-    SetupPrerequisiteFile,
 )
 from .script_runner import configuration_value
 from .session_start_summary import (
@@ -52,6 +52,60 @@ from .session_start_summary import (
     summary_message,
     summary_value,
 )
+
+
+class StubVariable(StrEnum):
+    """
+    The environment variables the stubs under ``dataset/stubs`` read.
+    """
+
+    PIP_CALL_LOG = "STUB_PIP_CALL_LOG"
+    """
+    The file the ``pip`` stub appends each invocation to.
+    """
+
+    PIP_STATUS = "STUB_PIP_STATUS"
+    """
+    The exit status the ``pip`` stub reports.
+    """
+
+    PIP_INSTALLED_UV = "STUB_PIP_INSTALLED_UV"
+    """
+    The script a ``uv`` installed by the ``pip`` stub runs.
+    """
+
+    UV_CALL_LOG = "STUB_UV_CALL_LOG"
+    """
+    The file the ``uv`` stub appends each invocation to.
+    """
+
+    UV_STATUS = "STUB_UV_STATUS"
+    """
+    The exit status the ``uv`` stub reports.
+    """
+
+    UV_PYTHON = "STUB_UV_PYTHON"
+    """
+    The interpreter an environment the ``uv`` stub creates runs.
+    """
+
+
+class PackageManager(StrEnum):
+    """
+    The executables the session start installs packages with, each named as it is on
+    ``PATH`` and as its stub is under ``dataset/stubs``.
+    """
+
+    PIP = "pip"
+    """
+    The package installer every interpreter ships, used where there is no ``uv``.
+    """
+
+    UV = "uv"
+    """
+    The package manager that also creates environments and fetches interpreters.
+    """
+
 
 PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "plan.yaml").read_text()
 
@@ -65,8 +119,6 @@ PLAN_IDENTIFIER = "test-plan"
 
 
 MANIFEST_PATH = ProjectLocation.PLANS / PLAN_IDENTIFIER / "plan.yaml"
-
-CLAUDE_LOCAL_MD = "CLAUDE.local.md"
 
 
 def branch_index(plan_identifier_by_branch: Mapping[str, str]) -> str:
@@ -175,7 +227,9 @@ def test_runs_in_a_project_with_no_claude_code_directory(
     result = run_session_start(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
+    ).exists()
 
 
 # %% someone who uses neither plans nor personal notes
@@ -190,7 +244,9 @@ def test_reports_nothing_when_no_notes_branch_exists(
 
     assert result.returncode == 0, result.stderr
     assert result.stdout == ""
-    assert not (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert not (
+        session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
+    ).exists()
 
 
 # %% the plan line
@@ -286,6 +342,83 @@ def test_reports_a_tracked_branch_whose_manifest_is_missing(
         str(MANIFEST_PATH),
         ScratchBranch.PERSONAL_NOTES,
     )
+
+
+# %% the item a tracked branch loads
+
+
+@pytest.fixture
+def tracked_plan() -> LandedItemsPlan:
+    """
+    The three-item plan, with its open item moved onto the work branch.
+    """
+    plan = LandedItemsPlan.read()
+    open_item = plan.item_with_status(ItemStatus.IN_PROGRESS)
+    items = [
+        (
+            {**item.content, ManifestKey.BRANCH.key: str(ScratchBranch.WORK)}
+            if item == open_item
+            else item.content
+        )
+        for item in plan.manifest.items
+    ]
+    return LandedItemsPlan(
+        PlanManifest({**plan.manifest.content, ManifestKey.ITEMS.key: items})
+    )
+
+
+def run_on_tracked_branch(
+    repository: ScratchRepository, manifest: PlanManifest, scratch_directory: Path
+) -> str:
+    """
+    Publish *manifest* as the plan tracking the work branch, run session-start.sh, and
+    return the CLAUDE.local.md it wrote.
+
+    :param scratch_directory: Where the manifest is written before it is published.
+    """
+    manifest_path = scratch_directory / PlanDocument.MANIFEST
+    manifest.write(manifest_path)
+    plan_directory = ProjectLocation.PLANS / manifest.identifier
+    result = publish_and_run(
+        repository,
+        {
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
+                {ScratchBranch.WORK: manifest.identifier}
+            ),
+            plan_directory / PlanDocument.MANIFEST: manifest_path.read_text(),
+            plan_directory
+            / PlanDocument.ROADMAP: DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(),
+        },
+    )
+    assert result.returncode == 0, result.stderr
+    return (repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS).read_text()
+
+
+def test_a_tracked_branch_loads_only_its_own_item(
+    session_start_repository: ScratchRepository,
+    tracked_plan: LandedItemsPlan,
+    tmp_path: Path,
+):
+    claude_local = run_on_tracked_branch(
+        session_start_repository, tracked_plan.manifest, tmp_path
+    )
+    manifest = tracked_plan.manifest
+    assert ClaudeLocalSection.PLAN_ITEM.within(claude_local) == manifest.item_summary(
+        manifest.item_on_branch(ScratchBranch.WORK)
+    )
+    queued_item = tracked_plan.item_with_status(ItemStatus.NOT_STARTED)
+    assert queued_item.identifier not in claude_local
+
+
+def test_a_tracked_branch_loads_the_plan_s_standing_rules(
+    session_start_repository: ScratchRepository,
+    tracked_plan: LandedItemsPlan,
+    tmp_path: Path,
+):
+    claude_local = run_on_tracked_branch(
+        session_start_repository, tracked_plan.manifest, tmp_path
+    )
+    assert DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text() in claude_local
 
 
 # %% branches no plan item can ever track
@@ -389,7 +522,9 @@ def test_a_failing_setup_check_does_not_fail_the_hook(
     result = publish_and_run(session_start_repository)
 
     assert result.returncode == 0, result.stderr
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
+    ).exists()
 
 
 # %% the dependencies line
@@ -512,7 +647,7 @@ def test_installs_nothing_when_every_requirement_is_already_installed(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_hiding_executables(tmp_path, PackageManager.UV)
             ),
             StubVariable.PIP_CALL_LOG: str(call_log),
@@ -544,7 +679,7 @@ def test_installs_the_package_with_pip_when_a_requirement_is_missing(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_hiding_executables(tmp_path, PackageManager.UV)
             ),
             StubVariable.PIP_CALL_LOG: str(call_log),
@@ -580,7 +715,7 @@ def test_installs_the_package_with_uv_where_there_is_one(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
             StubVariable.UV_CALL_LOG: str(install_log),
             StubVariable.PIP_CALL_LOG: str(pip_log),
         },
@@ -616,7 +751,7 @@ def test_reports_a_failed_install_and_finishes_the_run(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_hiding_executables(tmp_path, PackageManager.UV)
             ),
             StubVariable.PIP_STATUS: "1",
@@ -633,7 +768,9 @@ def test_reports_a_failed_install_and_finishes_the_run(
             "",
         ).split(" - ")[0]
     )
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
+    ).exists()
     assert summary_value(result.stdout, SummaryLine.PERSONAL_NOTES) != ""
 
 
@@ -668,7 +805,7 @@ def test_reports_a_missing_installer_without_failing(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: path_hiding_executables(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: path_hiding_executables(
                 tmp_path, PackageManager.PIP, PackageManager.UV
             )
         },
@@ -678,7 +815,9 @@ def test_reports_a_missing_installer_without_failing(
     assert UNINSTALLABLE_REQUIREMENT in summary_value(
         result.stdout, SummaryLine.DEPENDENCIES
     )
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
+    ).exists()
 
 
 def test_reinstalls_the_package_when_the_plugin_names_another_source(
@@ -701,7 +840,7 @@ def test_reinstalls_the_package_when_the_plugin_names_another_source(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_hiding_executables(tmp_path, PackageManager.UV)
             ),
             StubVariable.PIP_CALL_LOG: str(call_log),
@@ -719,27 +858,169 @@ def test_reinstalls_the_package_when_the_plugin_names_another_source(
     ]
 
 
-def test_a_plugin_outside_a_checkout_installs_its_own_release_of_the_package(
+class SampleReleaseTag(StrEnum):
+    """
+    Tags on the scratch repository standing in for the package's own.
+    """
+
+    OLDER = "v0.2.0"
+    """
+    A release whose minor part sorts after :attr:`LATEST`'s as text, not as a number.
+    """
+
+    LATEST = "v0.10.0"
+    """
+    The highest release.
+    """
+
+    PRERELEASE = "v1.0.0-rc1"
+    """
+    A tag past :attr:`LATEST` that is not a release.
+    """
+
+    NOT_A_RELEASE = "nightly"
+    """
+    A tag that names no version.
+    """
+
+
+class BasstlerBranch(StrEnum):
+    """
+    Branches of the package's own repository.
+    """
+
+    MAIN = "main"
+    """
+    The default branch, which a workflow runs before any release is recorded.
+    """
+
+
+def record_latest_release(repository: ScratchRepository, url: str) -> str:
+    """
+    Record the latest release of *url* as a session start does, then read the package
+    source back.
+
+    :param repository: The fixture-built scratch repository.
+    :param url: The repository standing in for the package's own.
+    :return: What the package would be installed from.
+    """
+    return repository.configuration_output(
+        f"{ShellConfigurationFunction.RECORD_LATEST_BASSTLER_RELEASE} && "
+        f"{ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE}",
+        **{ConfigurationVariable.REPOSITORY_URL: url},
+    ).strip()
+
+
+@pytest.fixture
+def tagged_release_repository(session_start_repository: ScratchRepository) -> str:
+    """
+    :return: The scratch project, tagged with every :class:`SampleReleaseTag`, as a
+        repository URL a session start reads releases from.
+    """
+    for tag in SampleReleaseTag:
+        session_start_repository.run_git("tag", tag)
+    return str(session_start_repository.project_root)
+
+
+def test_a_plugin_outside_a_checkout_installs_the_latest_release_of_the_package(
+    session_start_repository: ScratchRepository, tagged_release_repository: str
+):
+    """
+    A release is only a tag on its merge commit, so an installed plugin installs the
+    highest one: a pre-release and a tag naming no version are not releases.
+    """
+    declaration_file(session_start_repository).unlink()
+    manifest = PluginManifest.of_this_plugin()
+
+    source = record_latest_release(session_start_repository, tagged_release_repository)
+
+    assert source == (
+        f"{manifest.name} @ git+{tagged_release_repository}@{SampleReleaseTag.LATEST}"
+    )
+
+
+def test_an_unreadable_repository_keeps_the_release_last_recorded(
+    session_start_repository: ScratchRepository,
+    tagged_release_repository: str,
+    tmp_path: Path,
+):
+    """
+    A session start offline keeps the package it has rather than reinstalling.
+    """
+    declaration_file(session_start_repository).unlink()
+    record_latest_release(session_start_repository, tagged_release_repository)
+
+    source = record_latest_release(session_start_repository, str(tmp_path / "missing"))
+
+    assert source.endswith(f"@{SampleReleaseTag.LATEST}")
+
+
+def test_a_plugin_outside_a_checkout_installs_the_default_branch_before_any_release(
     session_start_repository: ScratchRepository,
 ):
     """
-    An installed plugin carries no package source, so the package comes from the
-    plugin's repository at the plugin's own version.
+    With no release recorded yet, as on a first session start offline, the package
+    still comes from its repository.
     """
     declaration_file(session_start_repository).unlink()
-    manifest = PluginManifest.read(
-        session_start_repository.plugin_root / SetupPrerequisiteFile.PLUGIN_MANIFEST
-    )
-
+    manifest = PluginManifest.of_this_plugin()
     repository = Repository.from_remote_url(
         session_start_repository.configuration_value(
             ConfigurationVariable.REPOSITORY_URL
         )
     )
 
-    assert package_source(session_start_repository) == repository.git_requirement(
-        manifest.name, manifest.release_tag
+    assert package_source(session_start_repository) == (
+        f"{manifest.name} @ git+{repository.url}"
     )
+
+
+def test_a_workflow_runs_the_release_the_package_is_installed_at(
+    session_start_repository: ScratchRepository, tagged_release_repository: str
+):
+    """
+    A workflow replaying for the session runs the same package, so it follows the
+    release recorded for the install.
+    """
+    declaration_file(session_start_repository).unlink()
+
+    branch_or_tag = session_start_repository.configuration_output(
+        f"{ShellConfigurationFunction.RECORD_LATEST_BASSTLER_RELEASE} && "
+        f"{ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG}",
+        **{ConfigurationVariable.REPOSITORY_URL: tagged_release_repository},
+    ).strip()
+
+    assert branch_or_tag == SampleReleaseTag.LATEST
+
+
+def test_a_workflow_runs_the_default_branch_before_any_release(
+    session_start_repository: ScratchRepository,
+):
+    """
+    With no release recorded, the package comes from the default branch, and so does
+    the workflow.
+    """
+    declaration_file(session_start_repository).unlink()
+
+    branch_or_tag = session_start_repository.configuration_output(
+        ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG
+    ).strip()
+
+    assert branch_or_tag == BasstlerBranch.MAIN
+
+
+def test_a_plugin_in_a_checkout_records_no_release(
+    session_start_repository: ScratchRepository, tagged_release_repository: str
+):
+    """
+    A checkout installs itself, so a session start there reads no release.
+    """
+    record_latest_release(session_start_repository, tagged_release_repository)
+
+    release_file = Path(
+        session_start_repository.configuration_value(ConfigurationVariable.RELEASE_FILE)
+    )
+    assert not release_file.exists()
 
 
 def test_tells_the_session_where_the_plugin_is(
@@ -802,7 +1083,7 @@ def test_creates_the_environment_with_uv_and_installs_the_package_into_it(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
             StubVariable.UV_CALL_LOG: str(environment_log),
             StubVariable.UV_PYTHON: sys.executable,
             StubVariable.PIP_CALL_LOG: str(install_log),
@@ -837,7 +1118,7 @@ def test_creates_the_environment_from_an_interpreter_found_by_name_without_uv(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_hiding_executables(tmp_path, PackageManager.UV)
             ),
         },
@@ -900,7 +1181,7 @@ def test_installs_uv_when_no_supported_interpreter_is_on_the_path(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_without_a_supported_interpreter(tmp_path)
             ),
             StubVariable.PIP_CALL_LOG: str(install_log),
@@ -950,7 +1231,7 @@ def test_reuses_the_uv_it_installed_before(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_without_a_supported_interpreter(tmp_path)
             ),
             StubVariable.PIP_CALL_LOG: str(pip_log),
@@ -987,7 +1268,7 @@ def test_reports_uv_it_could_not_install_and_finishes_the_run(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
                 path_without_a_supported_interpreter(tmp_path)
             ),
             StubVariable.PIP_STATUS: "1",
@@ -1003,7 +1284,9 @@ def test_reports_uv_it_could_not_install_and_finishes_the_run(
         ).split(" - ")[0]
     )
     assert not environment_interpreter(session_start_repository).exists()
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
+    ).exists()
 
 
 def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
@@ -1020,7 +1303,7 @@ def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
     result = publish_and_run(
         session_start_repository,
         environment={
-            EnvironmentVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
             StubVariable.UV_STATUS: "1",
         },
     )
@@ -1034,7 +1317,49 @@ def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
         ).split(" - ")[0]
     )
     assert not environment_interpreter(session_start_repository).exists()
-    assert (session_start_repository.project_root / CLAUDE_LOCAL_MD).exists()
+    assert (
+        session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
+    ).exists()
+
+
+# %% the plan site line
+
+SITE_URL = "https://owner.github.io/site/"
+
+HUB_FILE = (
+    f"site_url: {SITE_URL}\nregistry: owner/registry\nrepositories:\n- owner/registry\n"
+)
+
+
+def test_reports_no_hub_when_the_notes_branch_has_no_hub_file(
+    session_start_repository: ScratchRepository,
+):
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.PLAN_SITE) == summary_message(
+        SummaryMessage.HUB_NOT_REGISTERED, ScratchBranch.PERSONAL_NOTES
+    )
+
+
+def test_links_a_tracked_branch_to_its_plan_on_the_site(
+    session_start_repository: ScratchRepository,
+):
+    result = publish_and_run(
+        session_start_repository,
+        {
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
+                {ScratchBranch.WORK: PLAN_IDENTIFIER}
+            ),
+            MANIFEST_PATH: PLAN_MANIFEST,
+            ProjectLocation.PLAN_HUB: HUB_FILE,
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    site_line = summary_value(result.stdout, SummaryLine.PLAN_SITE)
+    assert site_line.startswith(SITE_URL)
+    assert site_line.endswith(f"/{PLAN_IDENTIFIER}/")
 
 
 # %% every message renders
