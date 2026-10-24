@@ -18,7 +18,7 @@ Draft #15, continued here from CRAM #430.
   the merge probe uses `match`.
 
 ## Next
-- Open threads waiting on the reviewer: prose and URL strings as enums? (r4368761444); can
-  the dead `ci` field go? (r4368763692); derive `in-review` from the upstream pull request
-  instead of the label, as its own item or in this PR? (r4368773879).
-- `ci` field: delete it, or type it `CheckOutcome` (r4368875261, same question as r4368763692).
+- Open thread waiting on the reviewer: prose and URL strings as enums? (r4368761444).
+- `in-review` from the upstream and the `ci` field (r4368773879, r4368763692, r4368875261)
+  belong to `stack-maintenance/stack-state-from-github`, stacked on this branch; those
+  threads stay open until it lands.
