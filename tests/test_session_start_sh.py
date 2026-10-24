@@ -884,6 +884,17 @@ class SampleReleaseTag(StrEnum):
     """
 
 
+class BasstlerBranch(StrEnum):
+    """
+    Branches of the package's own repository.
+    """
+
+    MAIN = "main"
+    """
+    The default branch, which a workflow runs before any release is recorded.
+    """
+
+
 def record_latest_release(repository: ScratchRepository, url: str) -> str:
     """
     Record the latest release of *url* as a session start does, then read the package
@@ -962,6 +973,40 @@ def test_a_plugin_outside_a_checkout_installs_the_default_branch_before_any_rele
     assert package_source(session_start_repository) == (
         f"{manifest.name} @ git+{repository.url}"
     )
+
+
+def test_a_workflow_runs_the_release_the_package_is_installed_at(
+    session_start_repository: ScratchRepository, tagged_release_repository: str
+):
+    """
+    A workflow replaying for the session runs the same package, so it follows the
+    release recorded for the install.
+    """
+    declaration_file(session_start_repository).unlink()
+
+    branch_or_tag = session_start_repository.configuration_output(
+        f"{ShellConfigurationFunction.RECORD_LATEST_BASSTLER_RELEASE} && "
+        f"{ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG}",
+        **{ConfigurationVariable.REPOSITORY_URL: tagged_release_repository},
+    ).strip()
+
+    assert branch_or_tag == SampleReleaseTag.LATEST
+
+
+def test_a_workflow_runs_the_default_branch_before_any_release(
+    session_start_repository: ScratchRepository,
+):
+    """
+    With no release recorded, the package comes from the default branch, and so does
+    the workflow.
+    """
+    declaration_file(session_start_repository).unlink()
+
+    branch_or_tag = session_start_repository.configuration_output(
+        ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG
+    ).strip()
+
+    assert branch_or_tag == BasstlerBranch.MAIN
 
 
 def test_a_plugin_in_a_checkout_records_no_release(

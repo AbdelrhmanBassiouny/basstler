@@ -376,14 +376,31 @@ MAINTENANCE_MODULE="basstler.maintenance"
 # already touches - the mechanical half of add-plan-item's scope decision.
 CHECK_SCOPE_OVERLAP_MODULE="basstler.check_scope_overlap"
 # upstream_reviews: reports the review threads a fork branch's upstream
-# pull request has collected, run by the upstream-reviews Action.
+# pull request has collected, run by /upstream-reviews in a session or the
+# upstream-reviews Action on a runner.
 UPSTREAM_REVIEWS_MODULE="basstler.upstream_reviews"
+# upstream_reviews_helper: the same read through a helper session, for a cloud
+# session that cannot attach the upstream next to its same-named fork.
+UPSTREAM_REVIEWS_HELPER_MODULE="basstler.upstream_reviews_helper"
+# upstream_reviews_action: the same read in the fork's own Actions, started by
+# pushing a request to UPSTREAM_REVIEWS_ACTION_BRANCH, which holds the caller
+# workflow and nothing of the project's.
+UPSTREAM_REVIEWS_ACTION_MODULE="basstler.upstream_reviews_action"
+UPSTREAM_REVIEWS_ACTION_BRANCH="basstler/upstream-reviews"
 # dependencies: prints the package's requirements an environment does not
 # have - what missing_dependencies below calls.
 BASSTLER_DEPENDENCIES_MODULE="basstler.dependencies"
 # plan-item-modes.toml on the personal-notes branch: the per-user override
 # plan_item_mode layers on top of the package's shipped defaults.
 PERSONAL_PLAN_ITEM_MODES_PATH=".claude/personal/plan-item-modes.toml"
+# setup_steps: prints the setup steps no script can do, and performs
+# configure-upstream, which names a project's upstream for the stacked-PR
+# workflow, and install-upstream-reviews-action.
+SETUP_STEPS_MODULE="basstler.setup_steps"
+# The stack settings a project commits, and the personal-notes override
+# layered on top of them - either may name the upstream.
+PROJECT_STACK_CONFIGURATION_PATH=".claude/basstler/stack.toml"
+PERSONAL_STACK_CONFIGURATION_PATH=".claude/personal/stack.toml"
 
 # PLAN_DASHBOARD_DIRECTORY / REFRESH_DASHBOARD_SCRIPT: what the
 # plan-dashboard skill keeps outside the package - Claude Code discovers a
@@ -651,6 +668,17 @@ basstler_package_source() {
   local reference=""
   [ -s "${BASSTLER_RELEASE_FILE}" ] && reference="@$(cat "${BASSTLER_RELEASE_FILE}")"
   printf 'basstler @ git+%s%s\n' "${BASSTLER_REPOSITORY_URL}" "${reference}"
+}
+
+# basstler_branch_or_tag: prints the basstler branch or tag the package is
+# installed at outside a checkout - the latest release recorded, or main before
+# any was - for a workflow that has to run the same package as the session.
+basstler_branch_or_tag() {
+  if [ -s "${BASSTLER_RELEASE_FILE}" ]; then
+    cat "${BASSTLER_RELEASE_FILE}"
+  else
+    printf 'main\n'
+  fi
 }
 
 # resolve_basstler_python: sets BASSTLER_PYTHON, the interpreter every caller

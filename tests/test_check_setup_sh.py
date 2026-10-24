@@ -44,6 +44,8 @@ class SetupCheck(StrEnum):
     NOTES_PATH = "notes_path"
     NOTES_BRANCH = "notes_branch"
     NOTES_FILE = "notes_file"
+    STACK_UPSTREAM = "stack_upstream"
+    UPSTREAM_REVIEWS_ACTION = "upstream_reviews_action"
     GIT_IDENTITY = "git_identity"
     DASHBOARD_DEPENDENCIES = "dashboard_dependencies"
     CLAUDE_LOCAL_MD = "claude_local_md"

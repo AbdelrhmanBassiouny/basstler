@@ -18,7 +18,7 @@ name: Upstream reviews
 on:
   workflow_call:
     inputs:
-      basstler_ref:
+      basstler_branch_or_tag:
         description: "The basstler branch or tag to run, the same one the caller uses this workflow at"
         required: true
         type: string
@@ -60,7 +60,7 @@ jobs:
       - name: Install basstler
         run: |
           set -euo pipefail
-          pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_ref }}"
+          pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_branch_or_tag }}"
 
       - name: Read the upstream pull request
         env:

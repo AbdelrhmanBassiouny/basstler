@@ -16,6 +16,7 @@ import pytest
 import basstler.setup_steps
 from basstler.github_labels import GitHubLabel
 from basstler.setup_steps import (
+    ForkActions,
     ForkLabels,
     git_value,
     PersistentVariables,
@@ -357,6 +358,12 @@ def test_the_settings_are_the_ones_the_hooks_resolve() -> None:
 # %% the list as a whole
 
 
+def test_enabling_actions_links_the_fork_s_own_actions_page():
+    instructions = "\n".join(ForkActions(FORK).instructions())
+
+    assert f"{Host.GITHUB.url}/{FORK.full_name}/actions" in instructions
+
+
 def test_a_resolvable_fork_gets_every_step(
     clone_with_fork_remote: ScratchRepository,
 ) -> None:
@@ -367,6 +374,7 @@ def test_a_resolvable_fork_gets_every_step(
     assert checklist.steps == (
         ForkLabels(FORK),
         RepositoryAccess(FORK),
+        ForkActions(FORK),
         PersistentVariables(variable_lines=()),
     )
 
