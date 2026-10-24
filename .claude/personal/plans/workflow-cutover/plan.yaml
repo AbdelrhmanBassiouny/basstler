@@ -48,19 +48,14 @@ items:
   title: 'Retire the scheduled LLM Routine: deterministic Action + on-demand sessions'
   branch: claude/stack-maintenance-action
   status: in_progress
-  session: https://claude.ai/code/session_012gHZc1PvDAEg6dwZioYRug
+  session: https://claude.ai/code/session_019sAtT3YPyFe7yminnDEdSG
   track: cutover
   pull_request_number: 16
   blockers:
-  - 'Waits on basstler-package/upstream-reviews-without-project-files (#56): the CRAM caller reuses its
-    fork-only branch installer and request handling.'
-  - Waits on one green run of that caller before the live Routine is deleted.
+  - 'Owner to decide on #16 (SETUP.md thread): build the branch-based basstler/stack-maintenance caller in #16, or as its own item (proposed).'
+  - Waits on one green run of a real caller before the live Routine is deleted.
   depends_on: []
-  notes: 'Decided 2026-10-21 with the owner: on a fork whose main mirrors its upstream (CRAM after #523),
-    the caller lives on a history-less basstler/stack-maintenance branch and runs on push. /stacked-pr-maintenance,
-    the plan-item skills after opening or merging a PR, and session start (merged PRs since the last run)
-    push a request; config is the personal stack.toml; setup_steps installs it. A repository that commits
-    its files keeps #16''s event-only docs/examples caller.'
+  notes: '2026-10-24: main merged (#56 landed, tag-only release), and 9 of 12 review threads were fixed in b8cda95. The caller calls @main with basstler_branch_or_tag, and MaintenanceReport/ReparentResolution are classes. Open threads: the branch caller, the PullRequestActivity enum (events, not PullRequestState), and a suite-wide literal sweep. Decided 2026-10-21: on a fork whose main mirrors its upstream, the caller lives on a history-less basstler/stack-maintenance branch and runs on push. A repository that commits its files keeps #16''s docs/examples caller.'
 - id: artifact-path-retirement
   title: Retire the Artifact publishing path once the Pages site has run one green cycle
   branch: null
