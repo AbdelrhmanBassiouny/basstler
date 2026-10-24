@@ -45,11 +45,11 @@ items:
   depends_on: []
   pull_request_number: 56
   session: https://claude.ai/code/session_01Q1iqg88K6XLGdBgtyy24KD
-  notes: '#56 (draft, release:minor -> 0.2.0). Preferred: the fork''s own Action on a basstler/upstream-reviews
-    branch (setup_steps install-upstream-reviews-action, check row); a pushed request runs it and the
-    session replays its committed result through the GraphQL reader. Fallbacks: attach the upstream and
-    read REST; a Haiku helper session when the fork''s same-named upstream cannot be attached. Verified
-    live on cram2 #773 and #777. Overlaps #45 in setup files.'
+  notes: '#56 (draft, release:minor -> v0.2.0; main merged through v0.1.8). Preferred: the fork''s own
+    Action on a basstler/upstream-reviews branch, installed at basstler_branch_or_tag (the recorded release,
+    else main); the session replays its committed result. Fallbacks: attach the upstream and read REST;
+    a Haiku helper session. The workflows'' input is basstler_branch_or_tag (basstler_ref dropped, no alias).
+    Overlaps #45 in setup files.'
 - id: stamps-in-git-directory
   title: The plugin keeps its per-clone stamp files where git never tracks them
   branch: null
