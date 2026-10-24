@@ -1,11 +1,15 @@
 """
 krrood's ``DataclassException``, copied rather than imported, which is the boundary decision 12
-records for this tooling.
+records for this tooling, and the personal-notes errors built on it.
 """
 
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
+from pathlib import PurePosixPath
+
+from basstler.locations import PluginLocation
 
 
 class DataclassException(Exception, ABC):
@@ -46,3 +50,47 @@ class DataclassException(Exception, ABC):
         """
         :return: Advice on how to fix the error, or an empty string if there is no specific advice.
         """
+
+
+@dataclass
+class NotesBranchMissingError(DataclassException, RuntimeError):
+    """
+    Raised when no remote tried holds the personal-notes branch.
+    """
+
+    branch: str
+    """
+    The personal-notes branch that was looked for.
+    """
+
+    attempted_remotes: tuple[str, ...]
+    """
+    Every remote it was fetched from, in order.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"branch '{self.branch}' doesn't exist yet (tried: "
+            f"{', '.join(self.attempted_remotes)})"
+        )
+
+    def suggest_correction(self) -> str:
+        return f"run {PluginLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first"
+
+
+@dataclass
+class UnsafeNotesPathError(DataclassException, ValueError):
+    """
+    Raised when a path to write on the personal-notes branch could leave it.
+    """
+
+    path: PurePosixPath
+    """
+    The refused path.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.path} would be written outside the personal-notes branch's root"
+
+    def suggest_correction(self) -> str:
+        return "give a path relative to the branch's root, with no '..' component"
