@@ -76,7 +76,7 @@ from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
 from basstler.plan_model import (
-    ItemLayout,
+    ItemIndentation,
     ItemStatus,
     ManifestKey,
 )
@@ -682,20 +682,31 @@ class ManifestText:
             plan_identifier=plan_identifier, item_identifier=item_identifier
         )
 
-    def existing_field_indent(self, start: int, end: int) -> str:
+    def item_indentation(self, block: tuple[int, int] | None = None) -> ItemIndentation:
         """
-        The whitespace an item's own fields are indented by, read from the block rather
-        than assumed, so a patched field lands beside its siblings and not under one.
+        How this manifest indents its items, read off one item block so a written line
+        lands beside its siblings and not under one.
 
-        :param start: The block's first line (the ``- id:`` line).
-        :param end: One past the block's last line.
-        :return: The leading whitespace of the block's second populated line, or the
-            default when the block holds only its opening line.
+        :param block: The half-open line range of the block to read, or ``None`` for
+            the manifest's first item.
+        :return: The block's indentation, or the default when the manifest has no item
+            to read it from.
         """
+        if block is None:
+            bounds = self.item_block_bounds()
+            if not bounds:
+                return ItemIndentation()
+            block = bounds[0]
+        start, end = block
+        opening = self.lines[start]
+        marker = opening[: len(opening) - len(opening.lstrip(" "))] + "- "
         for line in self.lines[start + 1 : end]:
             if line.strip():
-                return line[: len(line) - len(line.lstrip(" "))]
-        return ItemLayout.FIELD_INDENT.value
+                return ItemIndentation(
+                    marker=marker,
+                    field_indent=line[: len(line) - len(line.lstrip(" "))],
+                )
+        return ItemIndentation(marker=marker, field_indent=" " * len(marker))
 
     def last_populated_line(self, start: int, end: int) -> int:
         """
@@ -727,11 +738,9 @@ class ManifestText:
         patched = ManifestText(lines=list(self.lines))
         lines = patched.lines
         start, end = patched.locate_item_block(plan_identifier, item_identifier)
-        field_indent = patched.existing_field_indent(start, end)
+        indentation = patched.item_indentation((start, end))
         for manifest_key, value in values_by_key.items():
-            rendered = manifest_key.render(value, field_indent=field_indent).rstrip(
-                "\n"
-            )
+            rendered = manifest_key.render(value, indentation=indentation).rstrip("\n")
             existing = next(
                 (
                     index
@@ -810,10 +819,11 @@ class ItemRecordRequest:
     the roadmap as it is.
     """
 
-    def render_new_item(self) -> str:
+    def render_new_item(self, indentation: ItemIndentation) -> str:
         """
         Render a brand-new item block, in the field order ``plan-schema.md`` documents.
 
+        :param indentation: How the manifest it is added to indents its items.
         :raises IncompleteNewItemError: If a field a new entry cannot omit is missing.
         :return: The block's text, newline-terminated.
         """
@@ -833,8 +843,11 @@ class ItemRecordRequest:
             ManifestKey.STATUS: self.status.value,
         }
         return ManifestKey.IDENTIFIER.render(
-            self.item_identifier, opening_the_item=True
-        ) + "".join(manifest_key.render(value) for manifest_key, value in body.items())
+            self.item_identifier, opening_the_item=True, indentation=indentation
+        ) + "".join(
+            manifest_key.render(value, indentation=indentation)
+            for manifest_key, value in body.items()
+        )
 
     def roadmap_after(self, roadmap_text: str) -> str:
         """
@@ -860,7 +873,9 @@ class ItemRecordRequest:
         manifest = ManifestText.from_text(documents.manifest_text)
         created_item = not documents.has_item(self.item_identifier)
         if created_item:
-            manifest_text = manifest.with_item(self.render_new_item())
+            manifest_text = manifest.with_item(
+                self.render_new_item(manifest.item_indentation())
+            )
         else:
             manifest_text = manifest.with_item_fields(
                 self.plan_identifier,
