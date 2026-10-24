@@ -21,18 +21,28 @@ import pytest
 
 from basstler.locations import ClaudeCodeVariable
 from basstler.repository import Repository
-from basstler.upstream_reviews import (
-    CheckOutcome,
+from basstler.upstream_reviews_clients import (
     GitHubCommandLineClient,
-    PullRequestState,
+)
+from basstler.upstream_reviews_errors import (
+    UpstreamPullRequestNotFound,
+)
+from basstler.upstream_reviews_readers import (
     ReadSource,
     RestPullRequestReader,
-    RestPullRequestSummary,
-    RollupState,
-    UpstreamPullRequestNotFound,
     UpstreamPullRequestReader,
-    UpstreamPullRequestReport,
     UpstreamRestRoute,
+)
+from basstler.upstream_reviews_report import (
+    UpstreamPullRequestReport,
+)
+from basstler.upstream_reviews_rest_models import (
+    RestPullRequestSummary,
+)
+from basstler.upstream_reviews_vocabulary import (
+    CheckOutcome,
+    PullRequestState,
+    RollupState,
 )
 
 from .upstream_reviews_replay import (

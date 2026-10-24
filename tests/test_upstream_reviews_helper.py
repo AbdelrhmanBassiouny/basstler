@@ -20,30 +20,42 @@ import pytest
 
 from basstler import upstream_reviews_fetch
 from basstler.locations import ClaudeCodeVariable
-from basstler.upstream_reviews import (
-    FailureLogReader,
-    PullRequestJSONKey,
-    RestJSONKey,
-    RestPullRequestSummary,
-    UpstreamPullRequestNotFound,
-    UpstreamPullRequestReport,
-)
-from basstler.upstream_reviews_helper import (
-    HelperChunk,
+from basstler.upstream_reviews_errors import (
     HelperOutputIncomplete,
     HelperOutputMissing,
     HelperOutputUnreadable,
-    HelperPrompt,
-    HelperRecording,
-    HelperRequest,
     HelperResponseMissing,
+    NoRecordedReadRequest,
+    UpstreamPullRequestNotFound,
+)
+from basstler.upstream_reviews_failure_logs import (
+    FailureLogReader,
+)
+from basstler.upstream_reviews_helper import (
+    HelperPrompt,
     HelperScript,
-    NoHelperRequest,
+    build_report,
+    main,
+)
+from basstler.upstream_reviews_helper_recording import (
+    HelperChunk,
+    HelperRecording,
     RecordedFields,
     ReplayingClient,
     SessionTranscript,
-    build_report,
-    main,
+)
+from basstler.upstream_reviews_report import (
+    UpstreamPullRequestReport,
+)
+from basstler.upstream_reviews_request import (
+    UpstreamReadRequest,
+)
+from basstler.upstream_reviews_rest_models import (
+    RestJSONKey,
+    RestPullRequestSummary,
+)
+from basstler.upstream_reviews_vocabulary import (
+    PullRequestJSONKey,
 )
 
 from .test_upstream_reviews_rest import (
@@ -72,13 +84,18 @@ def request(
     pull_request: int | None = NUMBER,
     branch: str | None = None,
     failure_logs: bool = False,
-    nonce: str = "0123456789abcdef",
-) -> HelperRequest:
+    request_identifier: str = "0123456789abcdef",
+) -> UpstreamReadRequest:
     """
     :return: A request over the recorded upstream and fork.
     """
-    return HelperRequest(
-        nonce, UPSTREAM, Example.FORK_OWNER, pull_request, branch, failure_logs
+    return UpstreamReadRequest(
+        request_identifier,
+        UPSTREAM,
+        Example.FORK_OWNER,
+        pull_request,
+        branch,
+        failure_logs,
     )
 
 
@@ -114,7 +131,7 @@ def add_responses(responses: Path, extra: dict[str, object]) -> None:
     responses.write_text(json.dumps(json.loads(responses.read_text()) | extra))
 
 
-def run_fetch(helper_request: HelperRequest) -> str:
+def run_fetch(helper_request: UpstreamReadRequest) -> str:
     """
     Run the exact command the prompt hands the helper.
 
@@ -130,12 +147,13 @@ def run_fetch(helper_request: HelperRequest) -> str:
     return completed.stdout
 
 
-def recording_of(helper_request: HelperRequest, output: str) -> HelperRecording:
+def recording_of(helper_request: UpstreamReadRequest, output: str) -> HelperRecording:
     """
     :return: The recording the helper's output carries.
     """
     return HelperRecording.assemble(
-        helper_request.nonce, HelperChunk.found_in(helper_request.nonce, output)
+        helper_request.identifier,
+        HelperChunk.found_in(helper_request.identifier, output),
     )
 
 
@@ -312,7 +330,10 @@ def test_output_too_long_for_one_command_is_split_into_files(stubbed_gh, monkeyp
     )
 
     assert "chunks; print each with its own command" in printed
-    assert recording_of(helper_request, output).nonce == helper_request.nonce
+    assert (
+        recording_of(helper_request, output).request_identifier
+        == helper_request.identifier
+    )
 
 
 # %% what the helper is told
@@ -336,7 +357,7 @@ def test_the_prompt_carries_the_command_and_how_to_answer():
 # %% reading the output back
 
 
-def chunks_of(helper_request: HelperRequest, count: int) -> list[HelperChunk]:
+def chunks_of(helper_request: UpstreamReadRequest, count: int) -> list[HelperChunk]:
     """
     :return: A real recording's output, split into ``count`` chunks.
     """
@@ -357,7 +378,9 @@ def test_chunks_reassemble_in_order_whatever_order_they_are_found_in():
     helper_request = request()
     chunks = chunks_of(helper_request, 3)
 
-    recording = HelperRecording.assemble(helper_request.nonce, chunks[::-1] + chunks)
+    recording = HelperRecording.assemble(
+        helper_request.identifier, chunks[::-1] + chunks
+    )
 
     assert [(entry.path, entry.body) for entry in recording.responses] == [
         ("p", {"a": 1})
@@ -366,7 +389,7 @@ def test_chunks_reassemble_in_order_whatever_order_they_are_found_in():
 
 def test_no_chunk_found_is_reported_as_missing_output():
     with pytest.raises(HelperOutputMissing):
-        HelperRecording.assemble(request().nonce, [])
+        HelperRecording.assemble(request().identifier, [])
 
 
 def test_a_missing_chunk_is_named():
@@ -374,30 +397,32 @@ def test_a_missing_chunk_is_named():
     chunks = chunks_of(helper_request, 3)
 
     with pytest.raises(HelperOutputIncomplete) as raised:
-        HelperRecording.assemble(helper_request.nonce, [chunks[0], chunks[2]])
+        HelperRecording.assemble(helper_request.identifier, [chunks[0], chunks[2]])
 
     assert raised.value.missing == [2]
 
 
 def test_output_that_does_not_decode_is_unreadable():
     with pytest.raises(HelperOutputUnreadable):
-        HelperRecording.assemble(request().nonce, [HelperChunk(1, 1, "bm90IHpsaWI=")])
+        HelperRecording.assemble(
+            request().identifier, [HelperChunk(1, 1, "bm90IHpsaWI=")]
+        )
 
 
 def test_output_answering_another_request_is_unreadable():
-    chunks = chunks_of(request(nonce="ffffffffffffffff"), 1)
+    chunks = chunks_of(request(request_identifier="ffffffffffffffff"), 1)
 
     with pytest.raises(HelperOutputUnreadable):
-        HelperRecording.assemble(request().nonce, chunks)
+        HelperRecording.assemble(request().identifier, chunks)
 
 
 def test_a_chunk_is_found_however_deeply_the_transcript_quotes_it():
     helper_request = request()
     [chunk] = chunks_of(helper_request, 1)
-    line = f"{HelperChunk.marker(helper_request.nonce)}-1-1:{chunk.text}"
+    line = f"{HelperChunk.marker(helper_request.identifier)}-1-1:{chunk.text}"
     quoted = json.dumps({"content": json.dumps({"stdout": line})})
 
-    assert HelperChunk.found_in(helper_request.nonce, quoted) == [chunk]
+    assert HelperChunk.found_in(helper_request.identifier, quoted) == [chunk]
 
 
 def test_the_transcript_is_every_file_named_after_the_session(tmp_path):
@@ -426,7 +451,7 @@ def session(tmp_path, monkeypatch) -> Path:
 
     :return: The transcript file.
     """
-    monkeypatch.setattr(HelperRequest, "location", tmp_path / "request.json")
+    monkeypatch.setattr(UpstreamReadRequest, "location", tmp_path / "request.json")
     monkeypatch.setenv(ClaudeCodeVariable.CONFIGURATION_DIRECTORY, str(tmp_path))
     monkeypatch.setenv(ClaudeCodeVariable.SESSION_IDENTIFIER, "session")
     transcript = tmp_path / "projects" / "-home-user" / "session.jsonl"
@@ -435,8 +460,8 @@ def session(tmp_path, monkeypatch) -> Path:
 
 
 def test_report_before_any_prompt_says_so(session):
-    with pytest.raises(NoHelperRequest):
-        HelperRequest.load()
+    with pytest.raises(NoRecordedReadRequest):
+        UpstreamReadRequest.load()
 
 
 def test_prompt_then_report_reads_the_helper_output_from_the_transcript(
@@ -457,7 +482,9 @@ def test_prompt_then_report_reads_the_helper_output_from_the_transcript(
         == 0
     )
     capsys.readouterr()
-    session.write_text(json.dumps({"stdout": run_fetch(HelperRequest.load())}) + "\n")
+    session.write_text(
+        json.dumps({"stdout": run_fetch(UpstreamReadRequest.load())}) + "\n"
+    )
 
     assert main(["report"]) == 0
     assert capsys.readouterr().out.strip() == direct_report().strip()

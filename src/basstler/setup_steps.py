@@ -47,12 +47,16 @@ from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.stack_configuration import StackSetting
 from basstler.standard_streams import StandardStreamHandler
-from basstler.upstream_reviews import UpstreamReadError
-from basstler.upstream_reviews_action import (
-    ActionBranch,
+from basstler.upstream_reviews_action_branch import (
     ActionInstallation,
     Git,
     RemoteBranch,
+)
+from basstler.upstream_reviews_errors import (
+    UpstreamReadError,
+)
+from basstler.upstream_reviews_vocabulary import (
+    ActionBranch,
 )
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -603,14 +607,6 @@ class PersonalNotesWriteRefusedError(RuntimeError):
         return f"could not save to the personal-notes branch: {self.detail}"
 
 
-UPSTREAM_SETTING_LINE = re.compile(
-    rf"^[ \t]*{StackSetting.UPSTREAM_REPOSITORY}[ \t]*=.*(?:\n|$)", re.MULTILINE
-)
-"""
-A ``stack.toml`` line naming the upstream, wherever it sits in the file.
-"""
-
-
 @dataclass(frozen=True)
 class PersonalUpstream:
     """
@@ -623,6 +619,15 @@ class PersonalUpstream:
     The repository the project's pull requests are reviewed on.
     """
 
+    @classproperty
+    def setting_line(cls) -> re.Pattern[str]:
+        """
+        A ``stack.toml`` line naming the upstream, wherever it sits in the file.
+        """
+        return re.compile(
+            rf"^[ \t]*{StackSetting.UPSTREAM_REPOSITORY}[ \t]*=.*(?:\n|$)", re.MULTILINE
+        )
+
     def written_over(self, existing: str) -> str:
         """
         Name the upstream in a personal ``stack.toml``, keeping every other setting.
@@ -630,7 +635,7 @@ class PersonalUpstream:
         :param existing: The file as it is, empty when there is none yet.
         :return: The file with any earlier upstream replaced by this one.
         """
-        kept = UPSTREAM_SETTING_LINE.sub("", existing)
+        kept = self.setting_line.sub("", existing)
         if kept and not kept.endswith("\n"):
             kept += "\n"
         return (

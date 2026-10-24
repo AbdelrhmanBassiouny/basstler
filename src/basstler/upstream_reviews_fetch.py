@@ -169,7 +169,7 @@ class Fetch:
     def recording(self) -> dict[str, Any]:
         """:return: Everything read, as the helper module parses it."""
         return {
-            "nonce": self.configuration["nonce"],
+            "request_identifier": self.configuration["request_identifier"],
             "responses": self.responses,
             "job_logs": self.job_logs,
         }

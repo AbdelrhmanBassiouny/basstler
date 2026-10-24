@@ -16,10 +16,12 @@ from pathlib import Path
 from typing import Any
 
 from basstler.repository import Repository
-from basstler.upstream_reviews import (
+from basstler.upstream_reviews_clients import (
     GraphQLClient,
     JobLogReader,
     RestClient,
+)
+from basstler.upstream_reviews_pull_request_models import (
     ReviewThreadsPageResult,
 )
 

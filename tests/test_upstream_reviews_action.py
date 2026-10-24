@@ -19,37 +19,49 @@ import pytest
 
 from basstler.locations import PackageLocation
 from basstler.repository import Repository
-from basstler.upstream_reviews import (
-    GitHubCommandFailed,
-    GitHubCommandLineClient,
-    RestClient,
-    UpstreamPullRequestNotFound,
-)
 from basstler.upstream_reviews_action import (
     ActionExitCode,
-    ActionRunNotStarted,
-    WorkflowRunPage,
+    main,
+)
+from basstler.upstream_reviews_action_branch import (
     WORKFLOW_REFERENCE,
-    ActionBranch,
-    ActionFile,
     ActionInstallation,
-    ActionNotInstalled,
-    ActionRead,
-    ActionResponseMissing,
-    ActionResult,
-    ActionResultMissing,
-    ActionRunFailed,
-    BasstlerSource,
     Git,
     InstallationState,
-    RecordedGraphQLResponse,
     RemoteBranch,
+)
+from basstler.upstream_reviews_action_read import (
+    ActionRead,
+    WorkflowRunPage,
+)
+from basstler.upstream_reviews_action_recording import (
+    ActionResult,
+    RecordedGraphQLResponse,
     ReplayingGraphQLClient,
     answer,
-    main,
     read_upstream,
 )
-from basstler.upstream_reviews_helper import HelperRequest
+from basstler.upstream_reviews_clients import (
+    GitHubCommandLineClient,
+    RestClient,
+)
+from basstler.upstream_reviews_errors import (
+    ActionNotInstalled,
+    ActionResponseMissing,
+    ActionResultMissing,
+    ActionRunFailed,
+    ActionRunNotStarted,
+    GitHubCommandFailed,
+    UpstreamPullRequestNotFound,
+)
+from basstler.upstream_reviews_request import (
+    UpstreamReadRequest,
+)
+from basstler.upstream_reviews_vocabulary import (
+    ActionBranch,
+    ActionFile,
+    BasstlerSource,
+)
 
 from .constants.paths import RepositoryLocation
 from .test_upstream_reviews import (
@@ -65,7 +77,7 @@ BRANCH_OR_TAG = "v9.9.9"
 The release the tests install.
 """
 
-NONCE = "0123456789abcdef"
+REQUEST_IDENTIFIER = "0123456789abcdef"
 """
 The request every read here makes.
 """
@@ -125,10 +137,15 @@ def request(
     pull_request: int | None = RECORDED_PULL_REQUEST_NUMBER,
     branch: str | None = None,
     failure_logs: bool = False,
-) -> HelperRequest:
+) -> UpstreamReadRequest:
     """:return: A request over the recorded upstream."""
-    return HelperRequest(
-        NONCE, UPSTREAM, Example.FORK_OWNER, pull_request, branch, failure_logs
+    return UpstreamReadRequest(
+        REQUEST_IDENTIFIER,
+        UPSTREAM,
+        Example.FORK_OWNER,
+        pull_request,
+        branch,
+        failure_logs,
     )
 
 
@@ -182,7 +199,7 @@ def test_a_branch_never_promoted_is_recorded_as_the_run_s_error():
 def test_a_result_from_another_release_s_queries_is_refused_by_name():
     result = committed(answer(request(), github()))
     altered = ActionResult(
-        result.nonce,
+        result.request_identifier,
         None,
         [
             RecordedGraphQLResponse("0" * 16, response.variables, response.data)
@@ -344,7 +361,7 @@ def test_a_request_is_pushed_beside_the_workflow(fork):
 
     ActionRead(fork.branch, request(failure_logs=True)).send()
 
-    sent = HelperRequest.from_json(json.loads(fork.files()[ActionFile.REQUEST]))
+    sent = UpstreamReadRequest.from_json(json.loads(fork.files()[ActionFile.REQUEST]))
     assert sent == request(failure_logs=True)
     assert (
         fork.files()[ActionFile.WORKFLOW] == ActionInstallation(BRANCH_OR_TAG).workflow
@@ -470,7 +487,7 @@ def test_a_result_is_collected_even_if_its_run_failed_afterwards(fork):
     runs.runs = [run(commit, "failure")]
     fork.answer(answer(request(), github()))
 
-    assert read.wait(timeout=60, commit=commit).nonce == NONCE
+    assert read.wait(timeout=60, commit=commit).request_identifier == REQUEST_IDENTIFIER
 
 
 def test_the_fork_is_named_by_its_remote(fork):

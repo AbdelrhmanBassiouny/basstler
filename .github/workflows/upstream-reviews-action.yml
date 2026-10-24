@@ -54,7 +54,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add result.json
-          git commit --quiet -m "Answer upstream reviews $(python -c 'import json; print(json.load(open("result.json"))["nonce"])')"
+          git commit --quiet -m "Answer upstream reviews $(python -c 'import json; print(json.load(open("result.json"))["request_identifier"])')"
           for attempt in 1 2 3; do
             if git pull --quiet --rebase origin "${GITHUB_REF_NAME}" \
                 && git push --quiet origin "HEAD:${GITHUB_REF_NAME}"; then
