@@ -235,20 +235,23 @@ def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():
     ] == []
 
 
-RELEASE_REFERENCE = re.compile(r"(?:@|basstler_ref: )(v[0-9][^\s]*)")
+BASSTLER_REFERENCE = re.compile(
+    r"(?:basstler/\.github/workflows/upstream-reviews\.yml@|basstler_ref: )(\S+)"
+)
 """
-A ``@<ref>`` or ``basstler_ref: <ref>`` naming a basstler release.
+The ``@<ref>`` the caller uses basstler's workflow at, or the ``basstler_ref: <ref>`` it
+installs the package at.
 """
 
 
-def test_the_example_caller_calls_one_release_throughout():
+def test_the_example_caller_calls_one_ref_throughout():
     """
     A project copies the example caller as it stands, so the workflow it uses and the
-    package that workflow installs have to be the same release.
+    package that workflow installs have to be the same ref.
     """
     caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
 
-    references = RELEASE_REFERENCE.findall(caller.read_text())
+    references = BASSTLER_REFERENCE.findall(caller.read_text())
 
     assert len(references) == 2
     assert len(set(references)) == 1

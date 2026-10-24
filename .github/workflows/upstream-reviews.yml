@@ -19,7 +19,7 @@ on:
   workflow_call:
     inputs:
       basstler_ref:
-        description: "The basstler release to run, the same ref the caller uses this workflow at"
+        description: "The basstler ref to run, the same ref the caller uses this workflow at"
         required: true
         type: string
       pull_request:
