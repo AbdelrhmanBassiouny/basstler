@@ -44,8 +44,9 @@ items:
   session: https://claude.ai/code/session_01CbsPWbbD7feNc5wbJhEC9K
   track: skills
   notes: 'Merges a resolved item''s fix down into the pull requests stacked on it. Draft #15
-    against main. Main merged in 2026-10-24. The first review round is pushed: stack.py''s
-    functions moved onto classes, and a test checks the chosen ConflictResponse type. One thread
-    is left open for the reviewer to confirm that reading.'
+    against main, labelled release:minor. Two review rounds are pushed; the second split stack.py
+    into stack_* modules and named its strings. Three threads wait on the reviewer: whether
+    prose strings become enums too, whether the dead ci field can go, and whether in-review
+    should come from the upstream pull request instead of the label.'
   depends_on: []
   status: in_progress
