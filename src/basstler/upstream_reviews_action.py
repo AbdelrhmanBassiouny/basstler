@@ -14,9 +14,9 @@ to the same branch; the session fetches it and replays it through
 Commands::
 
     # once, and again after each basstler upgrade (setup_steps runs it)
-    python -m basstler.upstream_reviews_action install --ref vX.Y.Z
-    # what check-setup.sh reports: missing, stale <ref> or current
-    python -m basstler.upstream_reviews_action status --ref vX.Y.Z
+    python -m basstler.upstream_reviews_action install --branch-or-tag vX.Y.Z
+    # what check-setup.sh reports: missing, stale <branch or tag> or current
+    python -m basstler.upstream_reviews_action status --branch-or-tag vX.Y.Z
     # request a read, wait for the run, print the report
     python -m basstler.upstream_reviews_action read --upstream O/N --fork-owner F \\
         (--pull-request N | --branch B) [--failure-logs] [--include-resolved]
@@ -41,7 +41,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.class_property import classproperty
 from basstler.exit_codes import ExitCode
 from basstler.repository import MalformedRepositoryError, Repository
 from basstler.standard_streams import StandardStreamHandler
@@ -66,7 +65,8 @@ This module's logger, which is also what its commands print through.
 
 INSTALL_COMMAND = (
     "python -m basstler.setup_steps install-upstream-reviews-action "
-    "--ref v<the plugin's version> (/setup-personal-notes runs it)"
+    "--branch-or-tag <the basstler release the session runs> (/setup-personal-notes "
+    "runs it)"
 )
 """
 How a reader is told to install or update the Action.
@@ -307,9 +307,9 @@ concurrency:
 
 jobs:
   read:
-    uses: {repository}/{reusable_workflow}@{ref}
+    uses: {repository}/{reusable_workflow}@{branch_or_tag}
     with:
-      basstler_ref: {ref}
+      basstler_branch_or_tag: {branch_or_tag}
 """
 """
 The caller workflow, filled in by :meth:`ActionInstallation.workflow`.
@@ -329,9 +329,11 @@ Install or update it with `/setup-personal-notes`, which runs
 What a reader browsing the fork's branches finds there.
 """
 
-WORKFLOW_REFERENCE = re.compile(r"^\s*basstler_ref:\s*(?P<ref>\S+)\s*$", re.MULTILINE)
+WORKFLOW_REFERENCE = re.compile(
+    r"^\s*basstler_branch_or_tag:\s*(?P<branch_or_tag>\S+)\s*$", re.MULTILINE
+)
 """
-The line of an installed workflow naming the release it runs.
+The line of an installed workflow naming the basstler branch or tag it runs.
 """
 
 
@@ -517,9 +519,9 @@ class ActionInstallation:
     The Action as one basstler release writes it.
     """
 
-    ref: str
+    branch_or_tag: str
     """
-    The basstler release (or any ref) the workflow runs.
+    The basstler branch or release tag the workflow runs.
     """
 
     @property
@@ -530,7 +532,7 @@ class ActionInstallation:
             request=ActionFile.REQUEST,
             repository=BasstlerSource.REPOSITORY,
             reusable_workflow=BasstlerSource.REUSABLE_WORKFLOW,
-            ref=self.ref,
+            branch_or_tag=self.branch_or_tag,
         )
 
     @property
@@ -541,14 +543,15 @@ class ActionInstallation:
     def state(self, branch: RemoteBranch) -> tuple[InstallationState, str | None]:
         """
         :param branch: The fork's branch.
-        :return: How it compares, and the ref it runs when it is installed at all.
+        :return: How it compares, and the branch or tag it runs when it is installed at
+            all.
         """
         tip = branch.fetch()
         workflow = branch.read(tip, ActionFile.WORKFLOW) if tip else None
         if workflow is None:
             return InstallationState.MISSING, None
         match = WORKFLOW_REFERENCE.search(workflow)
-        installed = match["ref"] if match else None
+        installed = match["branch_or_tag"] if match else None
         if workflow == self.workflow:
             return InstallationState.CURRENT, installed
         return InstallationState.STALE, installed
@@ -560,7 +563,9 @@ class ActionInstallation:
         """
         if self.state(branch)[0] is InstallationState.CURRENT:
             return False
-        branch.write(self.files, f"Run basstler {self.ref}'s upstream-reviews Action")
+        branch.write(
+            self.files, f"Run basstler {self.branch_or_tag}'s upstream-reviews Action"
+        )
         return True
 
 
@@ -1048,7 +1053,9 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     for command in (ActionCommand.INSTALL, ActionCommand.STATUS):
         subcommand = commands.add_parser(command)
         subcommand.add_argument(
-            "--ref", required=True, help="the basstler release the workflow runs"
+            "--branch-or-tag",
+            required=True,
+            help="the basstler branch or release tag the workflow runs",
         )
     read = commands.add_parser(ActionCommand.READ)
     target = read.add_mutually_exclusive_group(required=True)
@@ -1083,15 +1090,15 @@ def main(argv: list[str] | None = None) -> int:
             return 0
         branch = RemoteBranch(Git(arguments.project_root), arguments.remote)
         if arguments.command == ActionCommand.INSTALL:
-            installation = ActionInstallation(arguments.ref)
+            installation = ActionInstallation(arguments.branch_or_tag)
             changed = installation.install(branch)
             logger.info(
                 f"{ActionBranch.NAME} on {branch.description} "
-                f"{'now runs' if changed else 'already runs'} basstler {arguments.ref}"
+                f"{'now runs' if changed else 'already runs'} basstler {arguments.branch_or_tag}"
             )
             return 0
         if arguments.command == ActionCommand.STATUS:
-            state, installed = ActionInstallation(arguments.ref).state(branch)
+            state, installed = ActionInstallation(arguments.branch_or_tag).state(branch)
             logger.info(f"{state} {installed}" if installed else state)
             return 0
         action_read = ActionRead(

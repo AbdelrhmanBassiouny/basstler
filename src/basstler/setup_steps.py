@@ -22,7 +22,7 @@ Actions on, which is printed here.
 Usage:
     python3 -m basstler.setup_steps
     python3 -m basstler.setup_steps configure-upstream --repository <owner>/<name>
-    python3 -m basstler.setup_steps install-upstream-reviews-action --ref v<version>
+    python3 -m basstler.setup_steps install-upstream-reviews-action --branch-or-tag <branch or tag>
 """
 
 from __future__ import annotations
@@ -721,9 +721,9 @@ class SetupCommandOption(StrEnum):
     The ``owner/name`` a command is about.
     """
 
-    REF = "--ref"
+    BRANCH_OR_TAG = "--branch-or-tag"
     """
-    The basstler release an installed workflow runs.
+    The basstler branch or release tag an installed workflow runs.
     """
 
 
@@ -751,9 +751,9 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
         help="write /upstream-reviews' Action onto the fork's own branch",
     )
     install_action.add_argument(
-        SetupCommandOption.REF,
+        SetupCommandOption.BRANCH_OR_TAG,
         required=True,
-        help="the basstler release it runs: v followed by the plugin's version",
+        help="the basstler branch or release tag it runs, the one the session installed",
     )
     return parser.parse_args(argv)
 
@@ -785,13 +785,13 @@ def main(argv: list[str] | None = None) -> int:
         remote = PersonalNotesSetting.REMOTE.resolve(project_root, os.environ)
         branch = RemoteBranch(Git(project_root), remote)
         try:
-            changed = ActionInstallation(arguments.ref).install(branch)
+            changed = ActionInstallation(arguments.branch_or_tag).install(branch)
         except UpstreamReadError as failure:
             logger.error(failure)
             return 1
         logger.info(
             f"{ActionBranch.NAME} on {branch.description} "
-            f"{'now runs' if changed else 'already runs'} basstler {arguments.ref}"
+            f"{'now runs' if changed else 'already runs'} basstler {arguments.branch_or_tag}"
         )
         return 0
     logger.info(SetupChecklist.for_clone(project_root, os.environ).render())

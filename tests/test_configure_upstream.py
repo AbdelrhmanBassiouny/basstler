@@ -247,22 +247,26 @@ def test_an_upstream_the_project_commits_passes_the_check(
 # %% the Action
 
 
-def install_action(repository: ScratchRepository, ref: str) -> None:
+def install_action(repository: ScratchRepository, branch_or_tag: str) -> None:
     """
-    Run the step installing the Action at *ref*.
+    Run the step installing the Action at *branch_or_tag*.
 
     :param repository: A fixture-built scratch repository.
-    :param ref: The release it runs.
+    :param branch_or_tag: The basstler branch or tag it runs.
     """
     finished = PythonModuleRunner(
         project_root=repository.project_root, module_name=SETUP_STEPS_MODULE
-    ).run(SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION, SetupCommandOption.REF, ref)
+    ).run(
+        SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION,
+        SetupCommandOption.BRANCH_OR_TAG,
+        branch_or_tag,
+    )
     assert finished.returncode == 0, finished.stderr
 
 
 def plugin_release(detail: str) -> str:
     """:return: The release a row's install command names."""
-    return detail.split(f"{SetupCommandOption.REF} ")[1].split()[0]
+    return detail.split(f"{SetupCommandOption.BRANCH_OR_TAG} ")[1].split()[0]
 
 
 def test_the_action_is_not_checked_without_an_upstream(

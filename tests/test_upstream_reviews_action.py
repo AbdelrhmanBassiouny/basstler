@@ -60,7 +60,7 @@ from .test_upstream_reviews import (
 )
 from .upstream_reviews_replay import RecordedJobLog, RecordedResponse
 
-REF = "v9.9.9"
+BRANCH_OR_TAG = "v9.9.9"
 """
 The release the tests install.
 """
@@ -215,13 +215,13 @@ def test_the_error_is_what_the_reader_raises():
 
 
 def test_the_caller_runs_the_release_it_names_on_pushes_of_a_request():
-    workflow = ActionInstallation(REF).workflow
+    workflow = ActionInstallation(BRANCH_OR_TAG).workflow
 
     assert (
-        f"{BasstlerSource.REPOSITORY}/{BasstlerSource.REUSABLE_WORKFLOW}@{REF}"
+        f"{BasstlerSource.REPOSITORY}/{BasstlerSource.REUSABLE_WORKFLOW}@{BRANCH_OR_TAG}"
         in workflow
     )
-    assert WORKFLOW_REFERENCE.search(workflow)["ref"] == REF
+    assert WORKFLOW_REFERENCE.search(workflow)["branch_or_tag"] == BRANCH_OR_TAG
     assert f"branches: [{ActionBranch.NAME}]" in workflow
     assert f"paths: [{ActionFile.REQUEST}]" in workflow
 
@@ -299,36 +299,38 @@ def fork(tmp_path, monkeypatch) -> Fork:
 
 
 def test_installing_writes_only_the_workflow_and_readme_on_their_own_branch(fork):
-    assert ActionInstallation(REF).install(fork.branch)
+    assert ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
 
     assert set(fork.files()) == {ActionFile.WORKFLOW, ActionFile.README}
-    assert fork.files()[ActionFile.WORKFLOW] == ActionInstallation(REF).workflow
+    assert (
+        fork.files()[ActionFile.WORKFLOW] == ActionInstallation(BRANCH_OR_TAG).workflow
+    )
     assert git(fork.remote, "ls-tree", "--name-only", "main") == "project.txt"
     assert git(fork.remote, "rev-list", "--count", ActionBranch.NAME) == "1"
 
 
 def test_installing_again_pushes_nothing(fork):
-    ActionInstallation(REF).install(fork.branch)
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
     tip = git(fork.remote, "rev-parse", ActionBranch.NAME)
 
-    assert not ActionInstallation(REF).install(fork.branch)
+    assert not ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
     assert git(fork.remote, "rev-parse", ActionBranch.NAME) == tip
 
 
 def test_the_state_is_missing_then_current_then_stale(fork):
-    installation = ActionInstallation(REF)
+    installation = ActionInstallation(BRANCH_OR_TAG)
 
     assert installation.state(fork.branch) == (InstallationState.MISSING, None)
     installation.install(fork.branch)
-    assert installation.state(fork.branch) == (InstallationState.CURRENT, REF)
+    assert installation.state(fork.branch) == (InstallationState.CURRENT, BRANCH_OR_TAG)
     assert ActionInstallation("v10.0.0").state(fork.branch) == (
         InstallationState.STALE,
-        REF,
+        BRANCH_OR_TAG,
     )
 
 
 def test_upgrading_keeps_the_last_request_and_result(fork):
-    ActionInstallation(REF).install(fork.branch)
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
     ActionRead(fork.branch, request()).send()
 
     ActionInstallation("v10.0.0").install(fork.branch)
@@ -338,13 +340,15 @@ def test_upgrading_keeps_the_last_request_and_result(fork):
 
 
 def test_a_request_is_pushed_beside_the_workflow(fork):
-    ActionInstallation(REF).install(fork.branch)
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
 
     ActionRead(fork.branch, request(failure_logs=True)).send()
 
     sent = HelperRequest.from_json(json.loads(fork.files()[ActionFile.REQUEST]))
     assert sent == request(failure_logs=True)
-    assert fork.files()[ActionFile.WORKFLOW] == ActionInstallation(REF).workflow
+    assert (
+        fork.files()[ActionFile.WORKFLOW] == ActionInstallation(BRANCH_OR_TAG).workflow
+    )
 
 
 def test_a_request_to_a_fork_without_the_action_is_refused(fork):
@@ -353,7 +357,7 @@ def test_a_request_to_a_fork_without_the_action_is_refused(fork):
 
 
 def test_the_result_answering_the_request_is_collected(fork):
-    ActionInstallation(REF).install(fork.branch)
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
     ActionRead(fork.branch, request()).send()
     fork.answer(answer(request(), github()))
 
@@ -363,7 +367,7 @@ def test_the_result_answering_the_request_is_collected(fork):
 
 
 def test_a_result_answering_another_request_is_not_collected(fork):
-    ActionInstallation(REF).install(fork.branch)
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
     fork.answer(ActionResult("fedcba9876543210"))
 
     with pytest.raises(ActionResultMissing) as raised:
@@ -412,7 +416,7 @@ def run(commit: str, conclusion: str | None) -> dict[str, Any]:
 
 def waiting(fork: Fork, runs: ListedRuns) -> tuple[ActionRead, str]:
     """:return: A read whose request was pushed, looking for its run at once."""
-    ActionInstallation(REF).install(fork.branch)
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
     read = ActionRead(fork.branch, request(), runs, poll_interval=0, start_allowance=0)
     return read, read.send()
 
@@ -474,7 +478,7 @@ def test_the_fork_is_named_by_its_remote(fork):
 
 
 def test_read_prints_the_report_from_the_committed_result(fork, monkeypatch, capsys):
-    ActionInstallation(REF).install(fork.branch)
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
     send = ActionRead.send
 
     def send_and_run(read: ActionRead) -> str:
@@ -527,17 +531,25 @@ def test_read_without_the_action_fails_with_how_to_install_it(fork, capsys):
 
 
 def test_status_prints_the_state_and_the_installed_release(fork, capsys):
-    arguments = ["--project-root", str(fork.clone), "status", "--ref", REF]
+    arguments = [
+        "--project-root",
+        str(fork.clone),
+        "status",
+        "--branch-or-tag",
+        BRANCH_OR_TAG,
+    ]
     main(arguments)
-    main(["--project-root", str(fork.clone), "install", "--ref", REF])
+    main(
+        ["--project-root", str(fork.clone), "install", "--branch-or-tag", BRANCH_OR_TAG]
+    )
     capsys.readouterr()
 
     main(arguments)
-    main(["--project-root", str(fork.clone), "status", "--ref", "v10.0.0"])
+    main(["--project-root", str(fork.clone), "status", "--branch-or-tag", "v10.0.0"])
 
     assert capsys.readouterr().out.split("\n")[:2] == [
-        f"{InstallationState.CURRENT} {REF}",
-        f"{InstallationState.STALE} {REF}",
+        f"{InstallationState.CURRENT} {BRANCH_OR_TAG}",
+        f"{InstallationState.STALE} {BRANCH_OR_TAG}",
     ]
 
 

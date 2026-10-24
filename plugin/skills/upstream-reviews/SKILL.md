@@ -94,7 +94,7 @@ mean in step 4. Then, by exit status:
     more:
 
     ```bash
-    "${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" install-upstream-reviews-action --ref "v$(plugin_version)"
+    "${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
     ```
 
   - *no run started* — Actions are off on the fork. Carry on with step 3 for

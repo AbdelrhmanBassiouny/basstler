@@ -313,7 +313,7 @@ PLAN_HUB_PATH="${PLANS_DIR}/_hub.yaml"
 # BASSTLER_CHECKOUT: the basstler source checkout this plugin sits in, when it
 # sits in one - a development clone, or a plugin run straight from a clone of
 # its repository. Empty for a plugin installed on its own, whose package comes
-# from its repository at the plugin's own version instead (see
+# from its repository at the latest release instead (see
 # basstler_package_source below).
 BASSTLER_CHECKOUT=""
 if [ -f "${PLUGIN_ROOT}/../pyproject.toml" ] && [ -d "${PLUGIN_ROOT}/../src/basstler" ]; then
@@ -622,26 +622,63 @@ BASSTLER_INTERPRETER_CANDIDATES="python3.14 python3.13 python3.12"
 # package still gets an environment, from an interpreter uv fetches.
 BASSTLER_UV_DIRECTORY="${BASSTLER_HOME}/uv"
 BASSTLER_INSTALLED_UV="${BASSTLER_UV_DIRECTORY}/bin/uv"
-# BASSTLER_REPOSITORY_URL / PLUGIN_MANIFEST: where an installed plugin's package
-# comes from, and the manifest naming the version it comes at.
-BASSTLER_REPOSITORY_URL="https://github.com/AbdelrhmanBassiouny/basstler"
+# BASSTLER_REPOSITORY_URL: where an installed plugin's package comes from, at
+# its latest release.
+BASSTLER_REPOSITORY_URL="${BASSTLER_REPOSITORY_URL:-https://github.com/AbdelrhmanBassiouny/basstler}"
+# PLUGIN_MANIFEST: the plugin's manifest, which names no version: a release is
+# only a tag on its merge commit, so the plugin a session syncs from that merge
+# is already the release, with nothing committed after it to miss.
 PLUGIN_MANIFEST="${PLUGIN_ROOT}/.claude-plugin/plugin.json"
+# BASSTLER_RELEASE_FILE: the latest release tag session-start.sh last read from
+# BASSTLER_REPOSITORY_URL - the one the package is installed at, read once per
+# session start rather than by every caller.
+BASSTLER_RELEASE_FILE="${BASSTLER_HOME}/release"
 
-# plugin_version: prints the version PLUGIN_MANIFEST declares.
-plugin_version() {
-  sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*/\1/p' \
-    "${PLUGIN_MANIFEST}" | head -1
+# latest_basstler_release: prints the highest v<major>.<minor>.<patch> tag
+# BASSTLER_REPOSITORY_URL has; fails when it cannot be read or has none.
+latest_basstler_release() {
+  local tags
+  tags="$(git ls-remote --tags --refs "${BASSTLER_REPOSITORY_URL}" 'v*' 2>/dev/null)" \
+    || return 1
+  printf '%s\n' "${tags}" \
+    | sed -n 's|.*refs/tags/v\([0-9][0-9]*\.[0-9][0-9]*\.[0-9][0-9]*\)$|\1|p' \
+    | sort -t . -k 1,1n -k 2,2n -k 3,3n | tail -1 | sed 's/^/v/' | grep .
+}
+
+# record_latest_basstler_release: records latest_basstler_release in
+# BASSTLER_RELEASE_FILE for a plugin outside a checkout. Keeps the last one
+# recorded when the repository cannot be read, so a session offline keeps the
+# package it has rather than reinstalling.
+record_latest_basstler_release() {
+  [ -z "${BASSTLER_CHECKOUT}" ] || return 0
+  local release
+  release="$(latest_basstler_release)" || return 0
+  mkdir -p "$(dirname "${BASSTLER_RELEASE_FILE}")"
+  printf '%s\n' "${release}" > "${BASSTLER_RELEASE_FILE}"
 }
 
 # basstler_package_source: prints what to install the package from - the
-# checkout this plugin sits in, else the plugin's own version of its
-# repository, so the package and the hooks calling it are always one release.
+# checkout this plugin sits in, else its repository at the latest release
+# recorded, or at its default branch before any was.
 basstler_package_source() {
   if [ -n "${BASSTLER_CHECKOUT}" ]; then
     printf '%s\n' "${BASSTLER_CHECKOUT}"
     return
   fi
-  printf 'basstler @ git+%s@v%s\n' "${BASSTLER_REPOSITORY_URL}" "$(plugin_version)"
+  local reference=""
+  [ -s "${BASSTLER_RELEASE_FILE}" ] && reference="@$(cat "${BASSTLER_RELEASE_FILE}")"
+  printf 'basstler @ git+%s%s\n' "${BASSTLER_REPOSITORY_URL}" "${reference}"
+}
+
+# basstler_branch_or_tag: prints the basstler branch or tag the package is
+# installed at outside a checkout - the latest release recorded, or main before
+# any was - for a workflow that has to run the same package as the session.
+basstler_branch_or_tag() {
+  if [ -s "${BASSTLER_RELEASE_FILE}" ]; then
+    cat "${BASSTLER_RELEASE_FILE}"
+  else
+    printf 'main\n'
+  fi
 }
 
 # resolve_basstler_python: sets BASSTLER_PYTHON, the interpreter every caller

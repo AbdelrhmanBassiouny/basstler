@@ -100,23 +100,6 @@ class PackageLocation(PathEnumeration):
     """
 
 
-class CheckoutLocation(PathEnumeration):
-    """
-    The files of a checkout of this repository that write a release's version, relative
-    to the checkout's root.
-    """
-
-    PLUGIN_MANIFEST = Path("plugin") / ".claude-plugin" / "plugin.json"
-    """
-    The plugin's manifest, where a release's version is declared.
-    """
-
-    EXAMPLE_CALLER = Path("docs") / "examples" / "upstream-reviews.yml"
-    """
-    The caller a project copies, naming the release it calls.
-    """
-
-
 class BasstlerVariable(EnvironmentVariable):
     """
     The environment variables this package's own shell configuration sets.

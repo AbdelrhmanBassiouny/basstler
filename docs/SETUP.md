@@ -69,7 +69,7 @@ fork's default branch carries a basstler file. `/setup-personal-notes` installs 
 an upstream is named; to do it yourself, or to bring it to a new release:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.setup_steps install-upstream-reviews-action --ref v<the plugin's version>
+~/.local/share/basstler/venv/bin/python -m basstler.setup_steps install-upstream-reviews-action --branch-or-tag <a basstler release tag, or main>
 ```
 
 That writes `basstler/upstream-reviews` on your fork: a workflow calling basstler's
@@ -89,7 +89,9 @@ terminal, it reads GraphQL as whoever `gh` is logged in as (`gh auth login`, or
 A project that prefers a dispatch-only workflow on its default branch may still copy
 [`examples/upstream-reviews.yml`](examples/upstream-reviews.yml) to its
 `.github/workflows/upstream-reviews.yml`; that caller reads the committed
-`.claude/basstler/stack.toml`.
+`.claude/basstler/stack.toml`. It calls this repository's reusable workflow and installs
+the package, both from `main`; to pin a release instead, change both references to its
+tag.
 
 ## 4. Check it worked
 
