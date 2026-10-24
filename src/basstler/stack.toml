@@ -14,13 +14,13 @@
 #                            upstream itself is not readable from the cloud, so the label
 #                            carries that fact).
 #   * merged               = branch is an ancestor of `<upstream_remote>/<upstream_base>` (pure git).
-#   * needs-resolution     = the `needs_resolution_label` on the fork PR (set by the routine when it
+#   * needs-resolution     = the `needs_resolution_label` on the fork PR (set by a maintenance pass when it
 #                            delegates a restack conflict to the branch's owning session; withholds
 #                            the branch from promotion until cleared).
 
 in_review_label = "in-review"  # fork-PR label marking "promoted upstream, under review"
 rebase_label = "rebase"        # fork-PR label opting a branch into rebase instead of the default merge
-needs_resolution_label = "needs-resolution"  # set by the routine on a delegated restack conflict
+needs_resolution_label = "needs-resolution"  # set by a maintenance pass on a delegated restack conflict
 # fork_repository: deliberately unset - the fork is derived from `fork_remote`'s URL, so this file
 # names nobody's fork. Set it (in a personal override) only for a checkout whose fork remote is not
 # the fork.

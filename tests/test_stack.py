@@ -345,7 +345,7 @@ def test_promotion_order_includes_every_ready_unblocked_branch_in_dependency_ord
 
 
 def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
-    # a branch the routine delegated (needs-resolution) is stuck mid-restack, so it must
+    # a branch a maintenance pass delegated (needs-resolution) is stuck mid-restack, so it must
     # not be promoted even though it is otherwise ready and unblocked.
     prs = [
         PullRequest(
@@ -426,7 +426,7 @@ def test_restack_plan_carries_parent_and_strategy():
 
 def test_restack_plan_reparents_child_of_merged_parent_onto_base():
     # parent merged into main -> its commits are in the base, so the child is reparented
-    # onto main (the routine mirrors this by retargeting the child PR's base on GitHub).
+    # onto main (the maintenance skill mirrors this by retargeting the child PR's base on GitHub).
     prs = [
         PullRequest(1, StackBranch.PARENT, StackBranch.BASE, draft=False),
         PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),

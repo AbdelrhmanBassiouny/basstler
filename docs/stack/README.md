@@ -90,10 +90,9 @@ next to the workflow it describes, because it is read rather than run.
   `maintenance_restack_procedure.py` (the steps, and the order that is the procedure),
   `maintenance_promotion.py`, `maintenance_report.py` and `maintenance_commands.py`.
 - **`skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
-  as `/stacked-pr-maintenance` from any session and the whole of what a scheduled run executes.
-  It takes `fork=` / `upstream=` arguments, falls back to `configuration`, and asks (or, with
-  `--non-interactive`, stops) when neither answers. Its `routine-prompt.md` is the template to
-  register when you want the pass to run unattended.
+  as `/stacked-pr-maintenance` from any session, and run first by `/plan-item-kickoff` and
+  `/plan-item-resolve`. It takes `fork=` / `upstream=` arguments, falls back to
+  `configuration`, and asks when neither answers.
 
 ## The state machine (your approval gate)
 
@@ -132,8 +131,8 @@ never asks twice. Pass them explicitly to skip resolution entirely:
 /stacked-pr-maintenance fork=<owner/repo> upstream=<owner/repo>
 ```
 
-To run it unattended, register it as a scheduled Routine; the prompt to paste is in
-[`routine-prompt.md`](../skills/stacked-pr-maintenance/routine-prompt.md).
+Nothing runs it on a schedule: `/plan-item-kickoff` and `/plan-item-resolve` run it before
+they start on an item, so a stack is brought up to date when someone works on it.
 
 ### One restack merge per branch
 
@@ -155,11 +154,10 @@ published tip as before.
 - **The branch is the durable state** - commit + push often; cloud containers are ephemeral.
 - **Restack only after the parent has landed/updated.** Restacking onto a still-conflicting,
   unmerged parent is premature - land the parent first.
-- **Refresh `board.json` before acting.** It's a snapshot; the routine brings it current with
+- **Refresh `board.json` before acting.** It's a snapshot; a pass exports a fresh one from
   GitHub.
 - **CI is the validator.** A suite the cloud container cannot run (missing system
   dependencies, hardware, services) is never run locally - poll a PR's CI with the GitHub MCP and treat its
-  red/green as the oracle (no session subscribes to a PR's activity - scheduled or interactive,
-  CI is learned by polling; see the maintenance skill's HARD RULES). A
+  red/green as the oracle (no session subscribes to a PR's activity - CI is learned by polling; see the maintenance skill's HARD RULES). A
   maintenance pass never fixes a failing check: it reports the branch to its owner and moves on.
   Never disable a leak/CI check to go green.

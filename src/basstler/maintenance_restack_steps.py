@@ -16,7 +16,7 @@ from typing import Any
 
 from basstler.maintenance_constants import (
     MergeableState,
-    RoutineText,
+    MaintenanceText,
 )
 from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_git_commands import (
@@ -154,7 +154,7 @@ def conflict_report(
         else "\n\nThis pull request's description names no session to address."
     )
     return (
-        f"{RoutineText.CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
+        f"{MaintenanceText.CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
         f"conflicts, so this branch was left untouched and skipped.\n\n"
         f"Conflicting files:\n{files}\n\n"
         f"Please resolve and push. This branch is labelled "

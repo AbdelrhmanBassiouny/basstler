@@ -50,7 +50,7 @@ from basstler.maintenance_commands import (
 )
 from basstler.environment import GitHubCredentialVariable
 from basstler.github_labels import GitHubLabel
-from basstler.maintenance_constants import MergeableState, RoutineText
+from basstler.maintenance_constants import MergeableState, MaintenanceText
 from basstler.maintenance_fast_forward import (
     FastForwardOutcome,
     FastForwardReport,
@@ -69,11 +69,7 @@ from basstler.maintenance_promotion import (
     description_with_promotion_link,
     promote,
 )
-from basstler.maintenance_report import (
-    MaintenanceReport,
-    build_report,
-    exit_code_for,
-)
+from basstler.maintenance_report import MaintenanceReport, MaintenanceReportKey
 from basstler.maintenance_restack_procedure import restack
 from basstler.maintenance_restack_steps import (
     BranchOutcome,
@@ -112,7 +108,7 @@ class StackPullRequestNumber(IntEnum):
 class PromotionSampleText(StrEnum):
     """
     The text a promotion test puts into a fork pull request and finds again in what the
-    routine writes back.
+    pass writes back.
     """
 
     TITLE = "A parent branch"
@@ -1797,7 +1793,7 @@ def test_the_promotion_link_goes_into_the_description_and_the_branch_is_labelled
     assert [entry.branch for entry in promoted] == [StackBranch.PARENT]
     written = fork.description_writes[0]
     assert written.pull_request_number == StackPullRequestNumber.PARENT
-    assert RoutineText.PROMOTION_HEADING in written.body
+    assert MaintenanceText.PROMOTION_HEADING in written.body
     assert promoted[0].url in written.body
     assert PromotionSampleText.SUMMARY in written.body
     assert fork.label_writes == [
@@ -1879,7 +1875,7 @@ def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
 
     second = description_with_promotion_link(first, PromotionSampleText.SECOND_LINK)
 
-    assert second.count(RoutineText.PROMOTION_HEADING) == 1
+    assert second.count(MaintenanceText.PROMOTION_HEADING) == 1
     assert PromotionSampleText.SECOND_LINK in second
     assert PromotionSampleText.FIRST_LINK not in second
     assert second.startswith(PromotionSampleText.PROSE)
@@ -1946,7 +1942,7 @@ def test_the_report_serialises_every_command_s_outcome(fork_checkout: ForkChecko
     )
     stack = a_stack(fork_checkout, the_board())
 
-    report = build_report(
+    report = MaintenanceReport.of_pass(
         stack,
         fast_forward(make_configuration(), fork_checkout.git),
         restack(stack, fork_checkout.git, RecordingPullRequests()),
@@ -2011,9 +2007,9 @@ def a_report(
 
 
 def test_a_pass_that_published_everything_is_a_success():
-    assert exit_code_for(a_report()) == StackExitCode.SUCCESS
+    assert a_report().exit_code == StackExitCode.SUCCESS
     assert (
-        exit_code_for(a_report(restack_outcome=RestackOutcome.UP_TO_DATE))
+        a_report(restack_outcome=RestackOutcome.UP_TO_DATE).exit_code
         == StackExitCode.SUCCESS
     )
 
@@ -2025,7 +2021,7 @@ def test_a_refused_fast_forward_is_never_reported_as_a_clean_pass():
     """
     refused = a_report(fast_forward_outcome=FastForwardOutcome.REFUSED_NOT_FAST_FORWARD)
 
-    assert exit_code_for(refused) == StackExitCode.NOT_FAST_FORWARD
+    assert refused.exit_code == StackExitCode.NOT_FAST_FORWARD
 
 
 @pytest.mark.parametrize(
@@ -2045,7 +2041,7 @@ def test_a_branch_left_unpublished_is_never_reported_as_a_clean_pass(
     the status alone would have read the pass as having nothing outstanding.
     """
     assert (
-        exit_code_for(a_report(restack_outcome=left_behind))
+        a_report(restack_outcome=left_behind).exit_code
         == StackExitCode.BRANCH_NEEDS_ATTENTION
     )
 
@@ -2069,8 +2065,13 @@ def test_the_report_carries_what_its_status_means(fork_checkout: ForkCheckout):
     """
     document = json.loads(a_report(restack_outcome=RestackOutcome.CONFLICT).as_json())
 
-    assert document["status"] == "branch-needs-attention"
-    assert document["exit_code"] == StackExitCode.BRANCH_NEEDS_ATTENTION
+    assert (
+        document[MaintenanceReportKey.STATUS]
+        == StackExitCode.BRANCH_NEEDS_ATTENTION.name_for_a_caller
+    )
+    assert (
+        document[MaintenanceReportKey.EXIT_CODE] == StackExitCode.BRANCH_NEEDS_ATTENTION
+    )
 
 
 def test_a_non_zero_status_says_what_it_means_on_the_way_out(
@@ -2102,7 +2103,7 @@ def test_a_refused_move_keeps_its_own_status():
     Distinct from a branch needing attention: the branch is fine and the move was wrong.
     """
     assert (
-        exit_code_for(a_report(restack_outcome=RestackOutcome.REFUSED))
+        a_report(restack_outcome=RestackOutcome.REFUSED).exit_code
         == StackExitCode.MOVE_REFUSED
     )
 
