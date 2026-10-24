@@ -1,0 +1,12 @@
+[
+  {
+    "state": "error",
+    "statuses": [
+      {
+        "context": "continuous-integration/legacy",
+        "state": "error",
+        "target_url": "https://github.com/example-upstream/example-repo/statuses/legacy"
+      }
+    ]
+  }
+]

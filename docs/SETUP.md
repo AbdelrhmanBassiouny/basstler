@@ -49,18 +49,49 @@ It prints these three, already filled in for your fork:
 
 ## 3. For the stacked-PR workflow: name the project's upstream
 
-Only if the project uses `/stacked-pr-maintenance` or `/upstream-reviews`. Commit
-`.claude/basstler/stack.toml` naming the repository the project's pull requests are
-reviewed on:
+Only if the project uses `/stacked-pr-maintenance` or `/upstream-reviews`. Both skills
+ask for it themselves the first time they need it, so there is nothing to do ahead of
+time. To name it yourself, save the repository the project's pull requests are reviewed
+on to `.claude/personal/stack.toml` on your personal-notes branch, so the project commits
+nothing of basstler's:
 
-```toml
-upstream_repository = "<owner>/<name>"
+```bash
+~/.local/share/basstler/venv/bin/python -m basstler.setup_steps configure-upstream --repository <owner>/<name>
 ```
 
-and, for `/upstream-reviews`, copy [`examples/upstream-reviews.yml`](examples/upstream-reviews.yml)
-to the project's `.github/workflows/upstream-reviews.yml` on its default branch. It calls this
-repository's reusable workflow and installs the package, both from `main`; to pin a release
-instead, change both references to its tag.
+A project that wants every contributor to share the answer commits
+`upstream_repository = "<owner>/<name>"` in `.claude/basstler/stack.toml` instead.
+`check-setup.sh --require-upstream` reports whether either names one.
+
+`/upstream-reviews` reads the upstream in your fork's own Actions, from a branch of
+basstler's that shares no history with the project - so neither the project nor your
+fork's default branch carries a basstler file. `/setup-personal-notes` installs it once
+an upstream is named; to do it yourself, or to bring it to a new release:
+
+```bash
+~/.local/share/basstler/venv/bin/python -m basstler.setup_steps install-upstream-reviews-action --branch-or-tag <a basstler release tag, or main>
+```
+
+That writes `basstler/upstream-reviews` on your fork: a workflow calling basstler's
+reusable one, and a README. Each read pushes a request there, and the run commits what
+it read back to the same branch. The one step left to you: GitHub starts every fork with
+Actions off, so enable them once at `https://github.com/<your fork>/actions`.
+
+Until then, or wherever the Action cannot answer, the skill reads the upstream from the
+session. In a Claude Code cloud session it attaches the upstream and reads it over REST;
+that needs the upstream to be a repository your GitHub account can read. A session
+working in your fork cannot attach the same-named upstream beside it, so there the skill
+starts a short-lived helper session with only the upstream, reads its result and
+archives it, all in the same turn. Anywhere else, such as Claude Code in your own
+terminal, it reads GraphQL as whoever `gh` is logged in as (`gh auth login`, or
+`GH_TOKEN`). Every way needs only read access to the upstream, never push access.
+
+A project that prefers a dispatch-only workflow on its default branch may still copy
+[`examples/upstream-reviews.yml`](examples/upstream-reviews.yml) to its
+`.github/workflows/upstream-reviews.yml`; that caller reads the committed
+`.claude/basstler/stack.toml`. It calls this repository's reusable workflow and installs
+the package, both from `main`; to pin a release instead, change both references to its
+tag.
 
 ## 4. Check it worked
 

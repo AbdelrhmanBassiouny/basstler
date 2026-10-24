@@ -250,3 +250,19 @@ class ClaudeCodeVariable(EnvironmentVariable):
     """
     The root of the project the session runs in.
     """
+
+    REMOTE = "CLAUDE_CODE_REMOTE"
+    """
+    ``true`` in a Claude Code cloud session, whose proxy answers GitHub's REST API but
+    not its GraphQL API.
+    """
+
+    SESSION_IDENTIFIER = "CLAUDE_CODE_SESSION_ID"
+    """
+    The session's own identifier, which names its transcript file.
+    """
+
+    CONFIGURATION_DIRECTORY = "CLAUDE_CONFIG_DIR"
+    """
+    Where Claude Code keeps its state, transcripts included, when not ``~/.claude``.
+    """

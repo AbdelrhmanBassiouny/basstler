@@ -1,6 +1,7 @@
-# Copy into a project as .github/workflows/upstream-reviews.yml, so the
-# /upstream-reviews skill can dispatch it there. Both references below follow
-# basstler's main branch; to pin a release instead, change both to its tag.
+# Optional: copy into a project as .github/workflows/upstream-reviews.yml to run the
+# upstream-reviews read in the project's own Actions. The /upstream-reviews skill needs
+# no copy - a Claude Code session reads the upstream itself. Both references below
+# follow basstler's main branch; to pin a release instead, change both to its tag.
 name: Upstream reviews
 
 on:
@@ -32,7 +33,7 @@ jobs:
   report:
     uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@main
     with:
-      basstler_ref: main
+      basstler_branch_or_tag: main
       pull_request: ${{ inputs.pull_request }}
       branch: ${{ inputs.branch }}
       include_resolved: ${{ inputs.include_resolved }}

@@ -94,6 +94,13 @@ you invoked it from keeps its branch and its files.
      That branch is fetched by every run, so the answer survives the fresh clone a scheduled run
      starts from. Re-run `configuration` and continue.
 
+4. **Exit status 11 - the project names no upstream.**
+   - **If you were invoked with `--non-interactive`**: stop and report stderr, which names where
+     to set it.
+   - **Otherwise**: ask the developer for the `<owner>/<name>` the project is reviewed on, save it
+     with `"${BASSTLER_PYTHON}" -m basstler.setup_steps configure-upstream --repository
+     <owner>/<name>`, re-run `configuration` and continue.
+
 Any other non-zero exit is a stop-and-report, not something to work around.
 
 ## Step 1 - reparent every orphaned child, before anything moves

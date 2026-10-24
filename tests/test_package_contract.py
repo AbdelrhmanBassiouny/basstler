@@ -236,11 +236,11 @@ def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():
 
 
 BASSTLER_REFERENCE = re.compile(
-    r"(?:basstler/\.github/workflows/upstream-reviews\.yml@|basstler_ref: )(\S+)"
+    r"(?:basstler/\.github/workflows/upstream-reviews\.yml@|basstler_branch_or_tag: )(\S+)"
 )
 """
 The ``@<branch or tag>`` the caller uses basstler's workflow at, or the
-``basstler_ref: <branch or tag>`` it installs the package at.
+``basstler_branch_or_tag: <branch or tag>`` it installs the package at.
 """
 
 

@@ -35,6 +35,12 @@ class ShellConfigurationFunction(StrEnum):
     repository at the latest release a session start recorded.
     """
 
+    BASSTLER_BRANCH_OR_TAG = "basstler_branch_or_tag"
+    """
+    Prints the basstler branch or tag the package is installed at outside a checkout:
+    the latest release a session start recorded, else ``main``.
+    """
+
     RECORD_LATEST_BASSTLER_RELEASE = "record_latest_basstler_release"
     """
     Records the highest release tag of the package's repository, for a plugin outside a
