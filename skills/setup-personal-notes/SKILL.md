@@ -169,11 +169,12 @@ the row is `ok`, install it without asking - it is mechanical, and touches
 nothing but a branch of its own on the user's fork:
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" install-upstream-reviews-action --ref "v$(plugin_version)"
+"${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
 ```
 
 It writes `basstler/upstream-reviews` - the caller workflow and a README, sharing
-no history with the project's branches - or brings it to this release. Then tell
+no history with the project's branches - or brings it to the branch or tag this
+session's package was installed at. Then tell
 the user the one step left to them, which `python -m basstler.setup_steps` also
 prints: a fork starts with Actions off, so they enable them once at
 `https://github.com/<fork>/actions`. Until they do, `/upstream-reviews` reads

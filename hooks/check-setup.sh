@@ -91,18 +91,19 @@ report_upstream() {
 # checked only once an upstream is named, since only /upstream-reviews runs the
 # Action. Not
 # installed is info, since the skill reads the upstream another way; installed
-# at another release than the plugin's is needs-setup, since the run and the
-# session replaying it must be one release.
+# at another branch or tag than the session's package is needs-setup, since the
+# run and the session replaying it must run the same package.
 report_upstream_reviews_action() {
   if [ "${UPSTREAM_NAMED}" != true ]; then
     report upstream_reviews_action info "not checked - no upstream named for it to read"
     return 0
   fi
-  local release="v$(plugin_version)"
-  local install_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --ref ${release}"
+  local branch_or_tag
+  branch_or_tag="$(basstler_branch_or_tag)"
+  local install_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --branch-or-tag ${branch_or_tag}"
   local state
   if ! state="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
-      --remote "${NOTES_REMOTE}" status --ref "${release}" 2>/dev/null)"; then
+      --remote "${NOTES_REMOTE}" status --branch-or-tag "${branch_or_tag}" 2>/dev/null)"; then
     report upstream_reviews_action info \
       "could not read the ${UPSTREAM_REVIEWS_ACTION_BRANCH} branch on '${NOTES_REMOTE}' - to install it, run: ${install_command}"
     return 0
@@ -110,10 +111,10 @@ report_upstream_reviews_action() {
   case "${state}" in
     current*)
       report upstream_reviews_action ok \
-        "'${NOTES_REMOTE}' runs basstler ${release}'s Action on ${UPSTREAM_REVIEWS_ACTION_BRANCH}" ;;
+        "'${NOTES_REMOTE}' runs basstler ${branch_or_tag}'s Action on ${UPSTREAM_REVIEWS_ACTION_BRANCH}" ;;
     stale*)
       report upstream_reviews_action needs-setup \
-        "'${NOTES_REMOTE}' runs the Action at ${state#stale }, not ${release} - run: ${install_command}" ;;
+        "'${NOTES_REMOTE}' runs the Action at ${state#stale }, not ${branch_or_tag} - run: ${install_command}" ;;
     *)
       report upstream_reviews_action info \
         "not installed on '${NOTES_REMOTE}' - /upstream-reviews reads the upstream from the session instead; to read it in the fork's Actions, run: ${install_command}" ;;
