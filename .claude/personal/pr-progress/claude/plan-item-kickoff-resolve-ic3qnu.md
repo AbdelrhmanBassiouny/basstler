@@ -14,8 +14,11 @@ Draft #15, continued here from CRAM #430.
   `ConflictResponse` type (7a90808). The reviewer resolved both threads.
 - Review round 2 (23dac4d): `stack.py` split into `stack_*` modules, strings are enums,
   abbreviations spelled out, `next_to_promote` removed. `release:minor` label set.
+- Review round 3 (f459472): stack errors share a `StackError` base on `DataclassException`;
+  the merge probe uses `match`.
 
 ## Next
 - Open threads waiting on the reviewer: prose and URL strings as enums? (r4368761444); can
   the dead `ci` field go? (r4368763692); derive `in-review` from the upstream pull request
   instead of the label, as its own item or in this PR? (r4368773879).
+- `ci` field: delete it, or type it `CheckOutcome` (r4368875261, same question as r4368763692).
