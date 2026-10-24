@@ -63,6 +63,10 @@ session by `session-start.sh`. Never merge this file into `main`.
   boundary; every decision and query afterwards runs on the models, never on raw dicts.
   Each model reads only its own object's fields and hands nested objects to their own
   models. Agreed at https://github.com/AbdelrhmanBassiouny/basstler/pull/13#discussion_r4316972597.
+- Model related concepts' relationship in the source, never only in a test that checks two
+  separate definitions agree: derive one from the other, or unify them into one concept
+  when that is the cleaner design by SOLID and the domain's semantics. Agreed at
+  https://github.com/AbdelrhmanBassiouny/basstler/pull/32#discussion_r4367446315.
 
 ## PR progress notes
 
