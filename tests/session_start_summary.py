@@ -63,6 +63,16 @@ class SummaryLine(StrEnum):
     check-setup.sh's verdict.
     """
 
+    DEFAULT_BRANCH = "default branch"
+    """
+    What became of the default branch every session starts from.
+    """
+
+    PLAN_STATE_SHA = "plan state SHA"
+    """
+    The personal-notes commit this clone read plan state at.
+    """
+
 
 class SummaryMessage(StrEnum):
     """
@@ -127,6 +137,11 @@ class SummaryMessage(StrEnum):
     GIT_IDENTITY_WRITTEN = "git_identity_line_written"
     """
     The recorded identity was written into this clone's repository-local config.
+    """
+
+    DEFAULT_BRANCH_NOT_SYNCED = "default_branch_line_not_synced"
+    """
+    The module that catches the default branch up could not run at all.
     """
 
     SETUP_SCRIPT_MISSING = "setup_line_not_checked"

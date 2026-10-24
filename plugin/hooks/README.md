@@ -172,6 +172,35 @@ name other than `origin`, with no configuration at all.
 Reads use the fallback; `create-personal-notes-branch.sh` never creates there. `save-personal-notes.sh`
 writes back to whichever remote actually served the notes, and the header always names it.
 
+## Starting from a fresh base
+
+Sessions are cut from your fork's default branch. When that branch has drifted behind the upstream
+it is forked from, every session in that clone plans, reviews and implements against a stale base —
+and nothing looks wrong from inside the clone, because the clone is perfectly consistent with
+itself. By the time a rebase surfaces the drift, the work is already written against the old base.
+
+So every `session-start.sh` run brings that branch level, via
+[`src/basstler/default_branch_sync.py`](../../src/basstler/default_branch_sync.py): it fetches the
+upstream's base branch, fast-forwards this clone's copy of it, and pushes the result to your fork,
+whose default branch is what the *next* session gets cloned from. The summary's `default branch`
+line says what it did. A checked-out branch with no commits of its own — a session branch cut from
+the stale base — is fast-forwarded onto the new one too; one with commits of its own gets an
+indented row saying how far behind it now is, and merging or rebasing it is left to you.
+
+Which repository is the upstream comes from the same resolution the stacked-PR tooling runs on: the
+project's committed `.claude/basstler/stack.toml` names it, and a personal
+`.claude/personal/stack.toml` on the notes branch can override it. A project that names no upstream
+— one that is not a fork, like basstler itself — is caught up with its own remote instead: the
+clone's default branch and a checked-out branch with no commits of its own move to that remote's
+default branch, and nothing is pushed, since the remote is already what the next clone starts from.
+Only a clone with no such remote gets a `not synced` line.
+
+Run it by hand to catch a long-running session's clone up mid-session:
+
+```bash
+~/.local/share/basstler/venv/bin/python -m basstler.default_branch_sync
+```
+
 ## Plan dashboards (multi-PR initiatives)
 
 When one PR's progress note isn't enough — a stacked refactor, a multi-wave programme, anything
@@ -231,6 +260,13 @@ Any other label is preserved but not interpreted.
   never written.
 - Never merges and never checks anything out — the hook and `plan-updates-since.sh` only read the
   branch off `FETCH_HEAD`.
+- Catching the default branch up is fast-forward only, in every step: a default branch carrying
+  commits the upstream does not is reported and left alone, and nothing is ever force-pushed. Your
+  checked-out branch is never merged or rebased for you: it is fast-forwarded only when it has no
+  commits of its own and no uncommitted change is in the way, and otherwise only measured against
+  the default branch.
+- A base that cannot be synced never stops a session: no upstream named, unresolvable remotes, an
+  unreachable upstream, a diverged or uncommitted-over base and a refused push are each reported.
 - Never touches your current branch or working tree: every script that writes works in a scratch
   worktree.
 - `create-personal-notes-branch.sh` refuses to run if the branch already exists anywhere it can see,

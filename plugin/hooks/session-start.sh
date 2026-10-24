@@ -6,8 +6,9 @@ set -euo pipefail
 # git config or environment, see ./README.md): the notes, this branch's PR
 # progress, and this branch's plan item with the plan's standing rules. Also
 # syncs personal settings and git identity, keeps the package environment
-# installed, stamps the plan state SHA for plan-updates-since.sh, and prints a
-# summary of what it did. Never fails the session on a setup gap.
+# installed, stamps the plan state SHA for plan-updates-since.sh, fast-forwards
+# the default branch to the upstream (see basstler.default_branch_sync), and
+# prints a summary of what it did. Never fails the session on a setup gap.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
@@ -22,6 +23,7 @@ fetch_personal_notes_branch || exit 0
 
 # Reads below use FETCH_HEAD, which also works for a URL-form remote.
 
+# The summary reports the stamp rather than FETCH_HEAD: later steps fetch too.
 record_plan_state_sync_stamp
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -265,6 +267,15 @@ if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
   fi
 fi
 
+# Default branch, caught up with the upstream this fork tracks: a stale base is
+# invisible from inside the clone. Fast-forward only, never fatal; the
+# checked-out branch moves along only when it has no commits of its own.
+SUMMARY_DEFAULT_BRANCH="$(default_branch_line_not_synced "${DEFAULT_BRANCH_SYNC_MODULE}")"
+if DEFAULT_BRANCH_REPORT="$("${BASSTLER_PYTHON}" -m "${DEFAULT_BRANCH_SYNC_MODULE}" \
+    2>/dev/null)"; then
+  SUMMARY_DEFAULT_BRANCH="${DEFAULT_BRANCH_REPORT}"
+fi
+
 # Setup verdict from check-setup.sh, run last so it sees what this run wrote.
 SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
 if [ -f "${CHECK_SETUP_SCRIPT}" ]; then
@@ -286,8 +297,9 @@ session-start.sh summary:
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
   plan site:       ${SUMMARY_HUB}
+  default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   dependencies:    ${SUMMARY_DEPENDENCIES}
   setup:           ${SUMMARY_SETUP}
-  plan state SHA:  $(git rev-parse FETCH_HEAD) (run plan-updates-since.sh <plan-id> to recheck from here later)
+  plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY
