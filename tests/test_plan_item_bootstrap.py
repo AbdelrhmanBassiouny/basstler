@@ -566,6 +566,28 @@ def test_patching_a_field_matches_the_items_own_indentation_rather_than_a_fixed_
     assert item[ManifestKey.TITLE.key] == "An item indented two spaces, not four"
 
 
+def test_a_new_item_matches_the_existing_items_indentation_rather_than_a_fixed_one():
+    """
+    A new item rendered at a fixed indentation lands inside the previous item instead of
+    beside it whenever the manifest's own items sit flush with ``items:``, and the
+    result stops parsing as YAML at all.
+    """
+    request = ItemRecordRequest(
+        plan_identifier="narrow-plan",
+        item_identifier=NEW_ITEM,
+        status=ItemStatus.NOT_STARTED,
+        title="A brand new item",
+        track="a-track",
+    )
+    manifest = ManifestText.from_text(NARROWLY_INDENTED_MANIFEST)
+
+    extended = manifest.with_item(request.render_new_item(manifest.item_indentation()))
+
+    items = yaml.safe_load(extended)[ManifestKey.ITEMS.key]
+    assert [item[ManifestKey.IDENTIFIER.key] for item in items] == ["an-item", NEW_ITEM]
+    assert items[1][ManifestKey.TRACK.key] == "a-track"
+
+
 def test_a_key_quotes_its_own_value_when_its_style_says_to():
     """
     Quoting is the key's to decide, so no caller has to know that a title is prose and a

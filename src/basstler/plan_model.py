@@ -101,6 +101,24 @@ class ItemLayout(StrEnum):
     """
 
 
+@dataclass(frozen=True)
+class ItemIndentation:
+    """
+    How far one manifest's item blocks are indented, read off the manifest rather than
+    assumed, since YAML admits items flush with ``items:`` as well as one level in.
+    """
+
+    marker: str = ItemLayout.MARKER.value
+    """
+    What opens an item block: the whitespace before the list marker, and the marker.
+    """
+
+    field_indent: str = ItemLayout.FIELD_INDENT.value
+    """
+    The whitespace an item's own fields are indented by.
+    """
+
+
 class ValueStyle(StrEnum):
     """
     How a key's value is written, in YAML's own vocabulary.
@@ -271,7 +289,7 @@ class ManifestKey(KeySpecification, Enum):
         self,
         value: str,
         opening_the_item: bool = False,
-        field_indent: str = ItemLayout.FIELD_INDENT.value,
+        indentation: ItemIndentation = ItemIndentation(),
     ) -> str:
         """
         The manifest line setting this key to *value*, newline included.
@@ -281,13 +299,10 @@ class ManifestKey(KeySpecification, Enum):
         :param value: The value to write.
         :param opening_the_item: Whether this is the item block's first line, which
             carries the list marker instead of the key indent.
-        :param field_indent: The whitespace this item's own fields are indented by,
-            read from the block being edited rather than assumed, since a manifest
-            written before this module's own convention keeps whichever indentation
-            it already has.
+        :param indentation: How the manifest being edited indents its items.
         :return: The rendered line.
         """
-        prefix = ItemLayout.MARKER.value if opening_the_item else field_indent
+        prefix = indentation.marker if opening_the_item else indentation.field_indent
         written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
         return f"{prefix}{self.key}: {written}\n"
 
