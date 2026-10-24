@@ -1,0 +1,20 @@
+[
+  [
+    {
+      "user": {
+        "login": "first-reviewer"
+      },
+      "state": "CHANGES_REQUESTED",
+      "body": "A few naming things.",
+      "submitted_at": "2026-08-06T09:15:00Z"
+    },
+    {
+      "user": {
+        "login": "second-reviewer"
+      },
+      "state": "COMMENTED",
+      "body": "",
+      "submitted_at": "2026-08-06T11:02:00Z"
+    }
+  ]
+]

@@ -55,7 +55,6 @@ from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.stack_configuration import (
     CommittedStackConfiguration,
     StackSetting,
-    upstream_repository_in,
 )
 from basstler.standard_streams import StandardStreamHandler
 
@@ -271,9 +270,9 @@ def load_configuration(
     :return: The layered configuration.
     """
     values = _configuration_values(path)
-    upstream_repository = upstream_repository or upstream_repository_in(
-        values, CommittedStackConfiguration(path).project_file
-    )
+    upstream_repository = upstream_repository or CommittedStackConfiguration(
+        path
+    ).upstream_repository_in(values, ProjectLocation.PERSONAL_STACK_CONFIGURATION.value)
     resolution = resolved_remotes(path, fork_repository, upstream_repository)
     return Configuration(
         in_review_label=values.get("in_review_label", "in-review"),
@@ -319,8 +318,8 @@ def resolved_remotes(
     return resolve_remotes(
         _remote_urls(),
         upstream_repository
-        or upstream_repository_in(
-            values, CommittedStackConfiguration(path).project_file
+        or CommittedStackConfiguration(path).upstream_repository_in(
+            values, ProjectLocation.PERSONAL_STACK_CONFIGURATION.value
         ),
         values[StackSetting.UPSTREAM_REMOTE],
         fork_repository
@@ -389,7 +388,8 @@ class IntegrationStrategy(StrEnum):
     """How a branch integrates its parent's moved tip during a restack."""
 
     MERGE = "merge"
-    """Merge the parent's tip in, which adds a commit and needs no force-push."""
+    """Merge the parent's tip in, replacing the merges earlier restacks left that only
+    brought in an older state of the parent, so the branch carries one such merge."""
 
     REBASE = "rebase"
     """Replay the branch onto the parent's tip, which rewrites published history and is
@@ -914,8 +914,8 @@ def restack_plan(stack: Stack) -> list[RestackPlanEntry]:
     """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
 
     One entry per branch not yet ``merged``, in parent-before-child order. In-review branches are
-    included so they pick up a moved parent; their ``merge`` strategy keeps that update conflict-free
-    and force-push-free, so an open review is never disrupted.
+    included so they pick up a moved parent; their ``merge`` strategy never rewrites their own
+    commits, only replaces the merges earlier restacks left, so an open review keeps its history.
 
     When a branch's parent has **merged** into the upstream, its commits are already in the base, so
     the child is reparented onto the upstream base: the restack rebases it there and it stops

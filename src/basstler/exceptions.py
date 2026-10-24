@@ -1,15 +1,59 @@
 """
-Exceptions raised across the personal-notes modules.
+krrood's ``DataclassException``, copied rather than imported, which is the boundary decision 12
+records for this tooling, and the personal-notes errors built on it.
 """
 
 from __future__ import annotations
 
+from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import PurePosixPath
 
+from basstler.locations import PluginLocation
+
+
+class DataclassException(Exception, ABC):
+    """
+    A base exception class for dataclass-based exceptions.
+    Subclasses implement error_message() and suggest_correction(); both are evaluated at
+    construction time and composed into the actual exception message (the args passed to
+    Exception). A non-empty suggest_correction() is rendered as a trailing "Suggestion: ..." line.
+    Subclasses that override __post_init__ must call super().__post_init__() at the end.
+    """
+
+    def __post_init__(self):
+        # BaseException.__new__ bypasses the usual ABC instantiation check, so enforce it here.
+        if getattr(type(self), "__abstractmethods__", None):
+            raise TypeError(
+                f"Can't instantiate abstract class {type(self).__name__} without an implementation of "
+                f"{', '.join(sorted(type(self).__abstractmethods__))}."
+            )
+        message = self.error_message()
+        correction = self.suggest_correction()
+        if correction:
+            message = f"{message}\nSuggestion: {correction}"
+        super().__init__(message)
+
+    def __str__(self) -> str:
+        # Stdlib mixins like KeyError override __str__ to repr their args; always render the
+        # plain message that __post_init__ baked into the args.
+        return Exception.__str__(self)
+
+    @abstractmethod
+    def error_message(self) -> str:
+        """
+        :return: A human-readable description of what went wrong.
+        """
+
+    @abstractmethod
+    def suggest_correction(self) -> str:
+        """
+        :return: Advice on how to fix the error, or an empty string if there is no specific advice.
+        """
+
 
 @dataclass
-class NotesBranchMissingError(RuntimeError):
+class NotesBranchMissingError(DataclassException, RuntimeError):
     """
     Raised when no remote tried holds the personal-notes branch.
     """
@@ -24,19 +68,18 @@ class NotesBranchMissingError(RuntimeError):
     Every remote it was fetched from, in order.
     """
 
-    def __str__(self) -> str:
-        """
-        :return: What was tried, and how to create the branch.
-        """
+    def error_message(self) -> str:
         return (
-            f"Branch '{self.branch}' doesn't exist yet (tried: "
-            f"{', '.join(self.attempted_remotes)}). Run "
-            "./create-personal-notes-branch.sh first."
+            f"branch '{self.branch}' doesn't exist yet (tried: "
+            f"{', '.join(self.attempted_remotes)})"
         )
+
+    def suggest_correction(self) -> str:
+        return f"run {PluginLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first"
 
 
 @dataclass
-class UnsafeNotesPathError(ValueError):
+class UnsafeNotesPathError(DataclassException, ValueError):
     """
     Raised when a path to write on the personal-notes branch could leave it.
     """
@@ -46,11 +89,8 @@ class UnsafeNotesPathError(ValueError):
     The refused path.
     """
 
-    def __str__(self) -> str:
-        """
-        :return: The path, and what a path must look like instead.
-        """
-        return (
-            f"{self.path} must be relative to the notes branch's root, with no '..' "
-            "component"
-        )
+    def error_message(self) -> str:
+        return f"{self.path} would be written outside the personal-notes branch's root"
+
+    def suggest_correction(self) -> str:
+        return "give a path relative to the branch's root, with no '..' component"

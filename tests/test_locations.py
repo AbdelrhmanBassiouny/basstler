@@ -12,7 +12,8 @@ from pathlib import Path
 import pytest
 
 import basstler
-from .constants import RepositoryLocation, ScrubbedEnvironmentPrefix
+from .constants.environment import ScrubbedEnvironmentPrefix
+from .constants.paths import RepositoryLocation
 from basstler import locations
 from basstler.locations import (
     BasstlerVariable,
@@ -177,6 +178,14 @@ def test_the_plugin_is_the_one_the_configuration_exports(tmp_path: Path):
         plugin_root_resolved_with({BasstlerVariable.PLUGIN_ROOT: str(tmp_path)})
         == tmp_path
     )
+
+
+def test_the_suite_runs_this_checkouts_plugin_whatever_the_session_exports():
+    """
+    A session running the plugin exports its synced copy as the plugin root; the suite
+    still tests this checkout's hooks, not the release that session synced.
+    """
+    assert PluginLocation.ROOT.value == RepositoryLocation.PLUGIN.value
 
 
 def test_the_plugin_scripts_are_under_its_hooks_directory():

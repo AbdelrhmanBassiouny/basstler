@@ -11,7 +11,7 @@ from typing import Any
 
 import pytest
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 import yaml
 
 from basstler.build_dashboard import (

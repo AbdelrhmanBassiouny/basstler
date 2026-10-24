@@ -11,15 +11,29 @@ has to carry. Those are the steps a first-time user is left holding, so they are
 printed here as a short list with the values already substituted, rather than
 described in prose the reader has to translate.
 
+It also performs the one step a script can that check-setup.sh reports on but
+session start cannot fill in for itself: naming the project's upstream in the user's
+personal ``stack.toml``, which only the user knows.
+
+It also installs ``/upstream-reviews``' Action on the fork's own branch, which a
+script can do once the user has asked for it - everything but switching a fork's
+Actions on, which is printed here.
+
 Usage:
     python3 -m basstler.setup_steps
+    python3 -m basstler.setup_steps configure-upstream --repository <owner>/<name>
+    python3 -m basstler.setup_steps install-upstream-reviews-action --branch-or-tag <branch or tag>
 """
 
 from __future__ import annotations
 
+import argparse
 import dataclasses
 import os
+import re
 import subprocess
+import sys
+import tempfile
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
@@ -28,9 +42,19 @@ from pathlib import Path
 
 from basstler.class_property import classproperty
 from basstler.github_labels import GitHubLabel
-from basstler.locations import ClaudeCodeVariable, ProjectLocation
+from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
+from basstler.maintenance_git_commands import GitCommandFailed, GitCommandRunner
 from basstler.repository import Repository
+from basstler.shell_configuration import ShellConfigurationFunction
+from basstler.stack_configuration import StackSetting
 from basstler.standard_streams import StandardStreamHandler
+from basstler.upstream_reviews_action_branch import (
+    ActionInstallation,
+    RemoteBranch,
+)
+from basstler.upstream_reviews_vocabulary import (
+    ActionBranch,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -388,6 +412,40 @@ class RepositoryAccess(SetupStep):
 
 
 @dataclass(frozen=True)
+class ForkActions(SetupStep):
+    """
+    Switching Actions on in a fork, where ``/upstream-reviews``' Action runs.
+    """
+
+    repository: Repository
+    """
+    The fork.
+    """
+
+    @property
+    def title(self) -> str:
+        """See :attr:`SetupStep.title`."""
+        return f"Enable Actions on {self.repository.full_name}, if it is a fork"
+
+    @property
+    def reason(self) -> str:
+        """See :attr:`SetupStep.reason`."""
+        return (
+            "GitHub starts every fork with Actions off, and /upstream-reviews reads "
+            f"the upstream from a run on the fork's {ActionBranch.NAME} branch."
+        )
+
+    def instructions(self) -> list[str]:
+        """See :meth:`SetupStep.instructions`."""
+        return [
+            f"Open {Host.GITHUB.url}/{self.repository.full_name}/actions and press "
+            '"I understand my workflows, go ahead and enable them".',
+            "Nothing to do if that page lists workflows already, or the repository "
+            "is not a fork.",
+        ]
+
+
+@dataclass(frozen=True)
 class PersistentVariables(SetupStep):
     """
     Carrying the personal-notes settings into environments that clone fresh every
@@ -505,7 +563,13 @@ class SetupChecklist:
         repository = resolve_repository(project_root, notes_remote)
         steps: list[SetupStep] = []
         if repository is not None:
-            steps.extend([ForkLabels(repository), RepositoryAccess(repository)])
+            steps.extend(
+                [
+                    ForkLabels(repository),
+                    RepositoryAccess(repository),
+                    ForkActions(repository),
+                ]
+            )
         steps.append(PersistentVariables.resolve(project_root, environment))
         return cls(steps=tuple(steps))
 
@@ -521,17 +585,220 @@ class SetupChecklist:
         return "\n\n".join([self.heading, *blocks])
 
 
-def main() -> None:
+# %% the steps a script performs
+
+
+@dataclass
+class PersonalNotesWriteRefusedError(RuntimeError):
     """
-    Print the checklist for this clone.
+    Raised when the personal-notes writer would not push a file.
     """
-    logger.info(
-        SetupChecklist.for_clone(
-            Path(os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())),
-            os.environ,
-        ).render()
+
+    detail: str
+    """
+    What the writer said.
+    """
+
+    def __str__(self) -> str:
+        """:return: Why nothing was saved."""
+        return f"could not save to the personal-notes branch: {self.detail}"
+
+
+@dataclass(frozen=True)
+class PersonalUpstream:
+    """
+    Naming the project's upstream in the user's personal ``stack.toml``, so a project
+    that commits nothing of basstler's still has one.
+    """
+
+    repository: Repository
+    """
+    The repository the project's pull requests are reviewed on.
+    """
+
+    @classproperty
+    def setting_line(cls) -> re.Pattern[str]:
+        """
+        A ``stack.toml`` line naming the upstream, wherever it sits in the file.
+        """
+        return re.compile(
+            rf"^[ \t]*{StackSetting.UPSTREAM_REPOSITORY}[ \t]*=.*(?:\n|$)", re.MULTILINE
+        )
+
+    def written_over(self, existing: str) -> str:
+        """
+        Name the upstream in a personal ``stack.toml``, keeping every other setting.
+
+        :param existing: The file as it is, empty when there is none yet.
+        :return: The file with any earlier upstream replaced by this one.
+        """
+        kept = self.setting_line.sub("", existing)
+        if kept and not kept.endswith("\n"):
+            kept += "\n"
+        return (
+            f"{kept}{StackSetting.UPSTREAM_REPOSITORY} = "
+            f'"{self.repository.full_name}"\n'
+        )
+
+    @staticmethod
+    def existing(project_root: Path) -> str:
+        """
+        :param project_root: The clone to fetch the personal-notes branch from.
+        :return: The personal ``stack.toml`` on that branch, empty when there is none.
+        """
+        fetched = ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run(
+            project_root
+        )
+        if fetched.returncode != 0:
+            return ""
+        shown = subprocess.run(
+            [
+                "git",
+                "show",
+                f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}",
+            ],
+            cwd=project_root,
+            capture_output=True,
+            text=True,
+        )
+        return shown.stdout if shown.returncode == 0 else ""
+
+    def save(self, project_root: Path) -> None:
+        """
+        Push the personal ``stack.toml`` naming this upstream to the notes branch.
+
+        :param project_root: The clone to save from.
+        :raises PersonalNotesWriteRefusedError: If the writer would not push it.
+        """
+        with tempfile.TemporaryDirectory() as scratch_directory:
+            scratch_file = Path(scratch_directory) / "stack.toml"
+            scratch_file.write_text(self.written_over(self.existing(project_root)))
+            written = subprocess.run(
+                [
+                    "bash",
+                    PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT,
+                    "--source",
+                    str(scratch_file),
+                    "--destination",
+                    ProjectLocation.PERSONAL_STACK_CONFIGURATION,
+                    "--message",
+                    f"Name {self.repository.full_name} as the upstream",
+                ],
+                cwd=project_root,
+                capture_output=True,
+                text=True,
+            )
+        if written.returncode != 0:
+            raise PersonalNotesWriteRefusedError(
+                written.stderr.strip() or "the notes writer reported no detail"
+            )
+
+
+# %% command line
+
+
+class SetupCommand(StrEnum):
+    """
+    The steps this module performs rather than prints.
+    """
+
+    CONFIGURE_UPSTREAM = "configure-upstream"
+    """
+    Name the project's upstream in the personal ``stack.toml``.
+    """
+
+    INSTALL_UPSTREAM_REVIEWS_ACTION = "install-upstream-reviews-action"
+    """
+    Write ``/upstream-reviews``' Action onto the fork's own branch, or update it.
+    """
+
+
+class SetupCommandOption(StrEnum):
+    """
+    Every option a command takes, named once so no caller spells one out.
+    """
+
+    REPOSITORY = "--repository"
+    """
+    The ``owner/name`` a command is about.
+    """
+
+    BRANCH_OR_TAG = "--branch-or-tag"
+    """
+    The basstler branch or release tag an installed workflow runs.
+    """
+
+
+def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
+    """
+    Parse the command line.
+
+    :param argv: The arguments to parse, defaulting to the process's own.
+    :return: The parsed arguments, with no command when the checklist is wanted.
+    """
+    parser = argparse.ArgumentParser(description=__doc__)
+    commands = parser.add_subparsers(dest="command")
+    configure_upstream = commands.add_parser(
+        SetupCommand.CONFIGURE_UPSTREAM,
+        help="name the project's upstream in your personal stack.toml",
     )
+    configure_upstream.add_argument(
+        SetupCommandOption.REPOSITORY,
+        type=Repository.parse,
+        required=True,
+        help="the owner/name repository the project's pull requests are reviewed on",
+    )
+    install_action = commands.add_parser(
+        SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION,
+        help="write /upstream-reviews' Action onto the fork's own branch",
+    )
+    install_action.add_argument(
+        SetupCommandOption.BRANCH_OR_TAG,
+        required=True,
+        help="the basstler branch or release tag it runs, the one the session installed",
+    )
+    return parser.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> int:
+    """
+    Print the checklist for this clone, or perform the step a command names.
+
+    :param argv: The arguments to parse, defaulting to the process's own.
+    :return: The process exit status.
+    """
+    arguments = _parse_arguments(argv)
+    project_root = Path(
+        os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
+    )
+    if arguments.command == SetupCommand.CONFIGURE_UPSTREAM:
+        try:
+            PersonalUpstream(arguments.repository).save(project_root)
+        except PersonalNotesWriteRefusedError as failure:
+            logger.error(failure)
+            return 1
+        logger.info(
+            f"{StackSetting.UPSTREAM_REPOSITORY} = {arguments.repository.full_name} "
+            f"saved to {ProjectLocation.PERSONAL_STACK_CONFIGURATION} on the "
+            "personal-notes branch"
+        )
+        return 0
+    if arguments.command == SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION:
+        remote = PersonalNotesSetting.REMOTE.resolve(project_root, os.environ)
+        branch = RemoteBranch(GitCommandRunner(project_root), remote)
+        try:
+            changed = ActionInstallation(arguments.branch_or_tag).install(branch)
+        except GitCommandFailed as failure:
+            logger.error(failure)
+            return 1
+        logger.info(
+            f"{ActionBranch.NAME} on {branch.description} "
+            f"{'now runs' if changed else 'already runs'} basstler {arguments.branch_or_tag}"
+        )
+        return 0
+    logger.info(SetupChecklist.for_clone(project_root, os.environ).render())
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())

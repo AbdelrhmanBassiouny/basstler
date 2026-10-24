@@ -63,6 +63,7 @@ from pathlib import Path
 from typing import Any
 
 from basstler.class_property import classproperty
+from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.locations import (
     ClaudeCodeVariable,
@@ -275,45 +276,15 @@ class SettingsFile:
 
 
 @dataclass
-class ModeError(CommandFailure, ABC):
+class ModeError(CommandFailure, DataclassException, ABC):
     """
     Base for every refusal this tool reports, each carrying its own exit status.
-
-    Subclasses hold the context that explains the refusal as typed fields and compose it
-    into the message at construction, so no call site formats one. Mirrors the
-    ``plan_item_bootstrap.py`` idiom beside it.
 
     Where one of these translates a library exception - ``ValueError`` from an enum,
     ``TOMLDecodeError`` from a parse - the refusal is raised ``from None``: everything the
     original said is already folded into these fields, so chaining it would print a second
     traceback saying the same thing in the library's words instead of ours.
     """
-
-    def __post_init__(self) -> None:
-        """
-        Compose the message from the subclass's own description and advice.
-        """
-        correction = self.suggest_correction()
-        message = self.error_message()
-        Exception.__init__(self, f"{message}\n{correction}" if correction else message)
-
-    def __str__(self) -> str:
-        """
-        The composed message, rather than a repr of the dataclass fields.
-        """
-        return Exception.__str__(self)
-
-    @abstractmethod
-    def error_message(self) -> str:
-        """
-        :return: What went wrong.
-        """
-
-    @abstractmethod
-    def suggest_correction(self) -> str:
-        """
-        :return: What to do about it, or an empty string when there is nothing to add.
-        """
 
 
 @dataclass

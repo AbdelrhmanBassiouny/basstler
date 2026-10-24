@@ -20,7 +20,7 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 import pytest
@@ -68,7 +68,8 @@ from basstler.maintenance_git_commands import (
     GitCommandRunner,
     ProposedPush,
 )
-from basstler.maintenance_github import ForkPullRequests
+from basstler.build_dashboard import PullRequestState
+from basstler.maintenance_github import ForkPullRequests, PullRequestListState
 from basstler.maintenance_promotion import (
     clear_spent_promotion_labels,
     description_with_promotion_link,
@@ -87,16 +88,71 @@ from basstler.maintenance_restack_steps import (
 )
 
 from .scratch_repository import initialize_bare_repository
-from .constants import (
-    DatasetLocation,
-    PromotionSampleText,
-    RemoteName,
-    RepositoryLocation,
-    StackBranch,
-    StackLabel,
-    StackPullRequestNumber,
-)
+from .constants.paths import DatasetLocation, RepositoryLocation
+from .constants.stack import RemoteName, StackBranch, StackLabel
 from .script_runner import PythonModuleRunner
+
+
+class StackPullRequestNumber(IntEnum):
+    """
+    The numbers of the fork pull requests the two-branch stack under test is made of.
+
+    A number is written into a board entry, keyed into a recorded write and read back in
+    an assertion, so it is named once rather than spelled at each of those places.
+    """
+
+    PARENT = 40
+    """
+    The pull request of :attr:`StackBranch.PARENT`.
+    """
+
+    CHILD = 41
+    """
+    The pull request of :attr:`StackBranch.CHILD`, based on the parent's.
+    """
+
+
+class PromotionSampleText(StrEnum):
+    """
+    The text a promotion test puts into a fork pull request and finds again in what the
+    routine writes back.
+    """
+
+    TITLE = "A parent branch"
+    """
+    The parent pull request's title.
+    """
+
+    SUMMARY = "What this branch does."
+    """
+    The first paragraph of the parent pull request's description.
+    """
+
+    DETAIL = "More detail."
+    """
+    The paragraph after it.
+    """
+
+    PROSE = "Prose."
+    """
+    A description's text before its Promote section.
+    """
+
+    FIRST_LINK = "https://example.invalid/first"
+    """
+    The create-link a first promotion writes.
+    """
+
+    SECOND_LINK = "https://example.invalid/second"
+    """
+    The create-link a second promotion writes in its place.
+    """
+
+    COMMENT_LINK_PREFIX = "https://example.invalid/comment/"
+    """
+    What a recorded comment's stand-in URL starts with, before the comment's position.
+    """
+
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
 """
@@ -867,6 +923,199 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
     assert (
         fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.PARENT) == before
     )
+
+
+# %% one merge per branch, however many passes it waits through
+
+
+def restack_once(
+    fork_checkout: ForkCheckout, board: list[PullRequest] | None = None
+) -> dict[str, BranchOutcome]:
+    """
+    Run one restack over a freshly derived stack, as each pass does.
+
+    :param fork_checkout: The checkout to restack.
+    :param board: The board entries, the parent-and-child board when not given.
+    :return: Every branch's outcome, by branch name.
+    """
+    outcomes = restack(
+        a_stack(fork_checkout, board or the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+    )
+    return {outcome.branch: outcome for outcome in outcomes}
+
+
+def merges_between(fork_checkout: ForkCheckout, parent: str, branch: str) -> int:
+    """
+    :param fork_checkout: The checkout to read the fork's branches from.
+    :param parent: The branch the merges are counted against.
+    :param branch: The branch whose own merges are counted.
+    :return: How many merge commits the fork's *branch* holds that *parent* does not.
+    """
+    return int(
+        fork_checkout.run_git(
+            "rev-list", "--merges", "--count", f"origin/{parent}..origin/{branch}"
+        )
+    )
+
+
+def test_a_second_restack_replaces_the_merge_the_first_one_left(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    child_s_own = fork_checkout.published_commit("origin", "a-child")
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    restack_once(fork_checkout)
+    first_merge = fork_checkout.published_commit("origin", "a-child")
+    parent_tip = fork_checkout.commit_on("a-parent", "a-parent-file", "moved again\n")
+
+    child = restack_once(fork_checkout)["a-child"]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert merges_between(fork_checkout, "a-parent", "a-child") == 1
+    assert not fork_checkout.git.contains(first_merge, "origin/a-child")
+    assert fork_checkout.git.contains(child_s_own, "origin/a-child")
+    assert fork_checkout.git.contains(parent_tip, "origin/a-child")
+
+
+def test_a_child_replaces_its_merge_of_a_parent_whose_own_merge_was_replaced(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The child's earlier merge brought in a parent tip that the parent's own restack has
+    since replaced, so it is no longer contained in the parent at all - yet everything it
+    brought in still is.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "the base moved\n")
+    restack_once(fork_checkout)
+    fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "the base moved again\n")
+
+    outcomes = restack_once(fork_checkout)
+
+    assert outcomes["a-parent"].outcome == RestackOutcome.PUSHED
+    assert outcomes["a-child"].outcome == RestackOutcome.PUSHED
+    assert merges_between(fork_checkout, UPSTREAM_BASE, "a-parent") == 1
+    assert merges_between(fork_checkout, "a-parent", "a-child") == 1
+
+
+def test_a_merge_carrying_a_change_of_its_own_is_kept(fork_checkout: ForkCheckout):
+    """
+    A merge whose content differs from what merging its parents produces holds somebody's
+    own work - a conflict resolution, an edit made while merging - which no later merge
+    would reproduce.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    fork_checkout.run_git("checkout", "--quiet", "a-child")
+    fork_checkout.run_git("merge", "--quiet", "--no-commit", "a-parent")
+    (fork_checkout.project_root / "a-child-file").write_text("edited while merging\n")
+    fork_checkout.run_git("commit", "--quiet", "--all", "--no-edit")
+    fork_checkout.run_git("push", "--quiet", "origin", "a-child:a-child")
+    fork_checkout.run_git("fetch", "--quiet", "origin")
+    own_merge = fork_checkout.published_commit("origin", "a-child")
+    fork_checkout.commit_on("a-parent", "a-parent-file", "moved again\n")
+
+    child = restack_once(fork_checkout)["a-child"]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(own_merge, "origin/a-child")
+
+
+def test_a_merge_of_a_branch_the_parent_does_not_hold_is_kept(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    sibling_s = fork_checkout.branch_from("a-sibling", UPSTREAM_BASE)
+    fork_checkout.run_git("checkout", "--quiet", "a-child")
+    fork_checkout.run_git("merge", "--quiet", "--no-edit", "a-sibling")
+    fork_checkout.run_git("push", "--quiet", "origin", "a-child:a-child")
+    fork_checkout.run_git("fetch", "--quiet", "origin")
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+
+    child = restack_once(fork_checkout)["a-child"]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(sibling_s, "origin/a-child")
+
+
+def test_a_merge_with_work_committed_on_top_of_it_is_kept(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    restack_once(fork_checkout)
+    first_merge = fork_checkout.published_commit("origin", "a-child")
+    fork_checkout.commit_on("a-child", "a-later-file", "work after the merge\n")
+    fork_checkout.commit_on("a-parent", "a-parent-file", "moved again\n")
+
+    child = restack_once(fork_checkout)["a-child"]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(first_merge, "origin/a-child")
+
+
+def test_a_replacement_that_conflicts_falls_back_to_merging_onto_the_tip(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The branch and its parent made the same change, so the earlier merge was clean;
+    the parent then changed that line again. Merging onto the earlier merge sees only
+    the parent's second change, while merging onto the branch's own commit sees both
+    sides change one line differently - replacing the merge must not turn a clean
+    restack into a reported conflict.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-shared-file", "the same change\n")
+    fork_checkout.commit_on("a-child", "a-shared-file", "the same change\n")
+    restack_once(fork_checkout)
+    first_merge = fork_checkout.published_commit("origin", "a-child")
+    fork_checkout.commit_on("a-parent", "a-shared-file", "the parent changed it\n")
+    fork = RecordingPullRequests()
+
+    outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git, fork)
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(first_merge, "origin/a-child")
+    assert fork.label_writes == []
+    assert fork.comments == []
+
+
+def test_replacing_a_merge_never_overwrites_a_push_the_pass_did_not_see(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Staleness is arranged by winding the remote-tracking ref back to the merge, which is
+    the state a concurrent push leaves this checkout in.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    restack_once(fork_checkout)
+    stale = fork_checkout.published_commit("origin", "a-child")
+    fork_checkout.run_git("checkout", "--quiet", "-B", "a-side-line", stale)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "moved again\n")
+    fork_checkout.run_git("checkout", "--quiet", "a-side-line")
+    somebody_else_s = fork_checkout.commit("a-file-somebody-else-pushed", "not ours\n")
+    fork_checkout.run_git("push", "--quiet", "origin", "a-side-line:a-child")
+    fork_checkout.run_git("update-ref", "refs/remotes/origin/a-child", stale)
+
+    child = restack_once(fork_checkout)["a-child"]
+
+    assert child.outcome == RestackOutcome.PUSH_REJECTED
+    assert fork_checkout.commit_on_the_fork("a-child") == somebody_else_s
+
+
+def test_replacing_superseded_merges_authorises_rewriting_published_history():
+    replacing = ProposedPush.publishing(
+        make_configuration(),
+        "a-branch",
+        IntegrationStrategy.MERGE,
+        replaces_superseded_merges=True,
+    )
+
+    assert replacing.with_lease
 
 
 # %% the checkout the pass was invoked in
@@ -1945,3 +2194,28 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
         run_maintenance(fork_checkout, RestackCommand()).returncode
         == StackExitCode.BOARD_UNAVAILABLE
     )
+
+
+@pytest.mark.parametrize(
+    "list_state, states",
+    [
+        (PullRequestListState.OPEN, (PullRequestState.OPEN,)),
+        (PullRequestListState.CLOSED, (PullRequestState.CLOSED,)),
+        (PullRequestListState.ALL, tuple(PullRequestState)),
+    ],
+)
+def test_each_list_filter_names_the_pull_request_states_it_covers(
+    list_state: PullRequestListState, states: tuple[PullRequestState, ...]
+) -> None:
+    assert list_state.states == states
+
+
+@pytest.mark.parametrize(
+    "list_state",
+    [list_state for list_state in PullRequestListState if len(list_state.states) == 1],
+)
+def test_a_single_state_list_filter_asks_for_that_state(
+    list_state: PullRequestListState,
+) -> None:
+    (state,) = list_state.states
+    assert list_state.query == state.value
