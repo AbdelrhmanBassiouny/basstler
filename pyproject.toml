@@ -3,7 +3,7 @@
 # plugin runs from.
 
 [build-system]
-requires = ["hatchling>=1.24"]
+requires = ["hatchling>=1.24", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"
 
 [project]
@@ -42,13 +42,13 @@ dynamic = ["version"]
 "Source" = "https://github.com/AbdelrhmanBassiouny/basstler"
 "Bug Tracker" = "https://github.com/AbdelrhmanBassiouny/basstler/issues"
 
-# One release for the package and the plugin, written in one place: the plugin's manifest.
-# Claude Code reads the version there and runs nothing first, so it has to be a literal in
-# plugin.json; the build reads it from there rather than keeping a second copy. It is also
-# the tag an installed plugin installs the package at, which the release workflow pushes.
+# One release for the package and the plugin: the tag the release workflow puts on a merge
+# commit. The build reads the version from that tag, so no file names it and nothing is
+# committed after a merge; a commit past the latest tag builds as the next development
+# version, and a source with no git history at all as 0.0.0.
 [tool.hatch.version]
-path = "plugin/.claude-plugin/plugin.json"
-pattern = '"version"\s*:\s*"(?P<version>[^"]+)"'
+source = "vcs"
+fallback-version = "0.0.0"
 
 # The whole package directory, so the files the modules resolve beside themselves rather
 # than by an argument - all named in locations.py: the page templates, the GraphQL

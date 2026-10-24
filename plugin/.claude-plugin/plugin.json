@@ -1,6 +1,5 @@
 {
   "name": "basstler",
-  "version": "0.1.7",
   "description": "Personal notes, PR progress, multi-PR plans with live dashboards, and stacked-PR maintenance for Claude Code sessions.",
   "author": {
     "name": "Abdelrhman Bassiouny"

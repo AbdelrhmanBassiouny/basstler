@@ -59,7 +59,8 @@ upstream_repository = "<owner>/<name>"
 
 and, for `/upstream-reviews`, copy [`examples/upstream-reviews.yml`](examples/upstream-reviews.yml)
 to the project's `.github/workflows/upstream-reviews.yml` on its default branch. It calls this
-repository's reusable workflow at the plugin's release.
+repository's reusable workflow and installs the package, both from `main`; to pin a release
+instead, change both references to its tag.
 
 ## 4. Check it worked
 

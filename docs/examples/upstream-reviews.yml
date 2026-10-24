@@ -1,6 +1,6 @@
 # Copy into a project as .github/workflows/upstream-reviews.yml, so the
-# /upstream-reviews skill can dispatch it there. Keep the two refs below on the
-# same basstler release as the plugin.
+# /upstream-reviews skill can dispatch it there. Both references below follow
+# basstler's main branch; to pin a release instead, change both to its tag.
 name: Upstream reviews
 
 on:
@@ -30,9 +30,9 @@ permissions:
 
 jobs:
   report:
-    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@v0.1.7
+    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@main
     with:
-      basstler_ref: v0.1.7
+      basstler_ref: main
       pull_request: ${{ inputs.pull_request }}
       branch: ${{ inputs.branch }}
       include_resolved: ${{ inputs.include_resolved }}

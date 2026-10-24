@@ -18,7 +18,7 @@ from basstler.locations import PluginLocation
 
 class ShellConfigurationFunction(StrEnum):
     """
-    The functions of the shell configuration this package calls.
+    The functions of the shell configuration, named once here for every caller.
     """
 
     FETCH_PERSONAL_NOTES_BRANCH = "fetch_personal_notes_branch"
@@ -31,8 +31,14 @@ class ShellConfigurationFunction(StrEnum):
 
     BASSTLER_PACKAGE_SOURCE = "basstler_package_source"
     """
-    Prints what the package is installed from: the checkout the plugin sits in, else the
-    plugin's own release of its repository.
+    Prints what the package is installed from: the checkout the plugin sits in, else its
+    repository at the latest release a session start recorded.
+    """
+
+    RECORD_LATEST_BASSTLER_RELEASE = "record_latest_basstler_release"
+    """
+    Records the highest release tag of the package's repository, for a plugin outside a
+    checkout, which :attr:`BASSTLER_PACKAGE_SOURCE` then installs.
     """
 
     def run(self, project_root: Path | None = None) -> subprocess.CompletedProcess[str]:
