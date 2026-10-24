@@ -35,7 +35,6 @@ from basstler.stack import (
     ProposedCommitMove,
     RefusalReason,
     Stack,
-    resolve_ref,
 )
 
 # %% what became of one branch
@@ -317,12 +316,12 @@ class BranchUnderRestack:
     @property
     def branch_reference(self) -> str:
         """:return: The fork's copy of this branch, which every step starts from."""
-        return resolve_ref(self.configuration, self.branch.name)
+        return self.configuration.reference_on_fork(self.branch.name)
 
     @property
     def parent_reference(self) -> str:
         """:return: The fork's copy of the parent being integrated."""
-        return resolve_ref(self.configuration, self.parent)
+        return self.configuration.reference_on_fork(self.parent)
 
     def concluded(self, outcome: RestackOutcome, **detail: Any) -> BranchOutcome:
         """
@@ -463,11 +462,10 @@ class SkipBranchAlreadyCurrent(RestackStep):
 @dataclass(frozen=True)
 class IntegrateParent(RestackStep):
     """
-    Integrates the parent's tip, reporting a conflict to the branch's owner.
+    Integrates the parent's tip, answering a conflict through the branch's
+    :class:`ConflictResponse`.
 
-    A conflict is never resolved here - that is a change to somebody else's branch. It
-    is labelled and commented on, so the next pass withholds the branch rather than
-    re-reporting it.
+    A conflict is never resolved here - that is a change to somebody else's branch.
 
     A merge is made onto the commit beneath the branch's :class:`SupersededMerges`, so
     the branch carries one merge of its parent however many passes it waits through.

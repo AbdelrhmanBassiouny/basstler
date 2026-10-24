@@ -36,7 +36,7 @@ from pathlib import Path
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.maintenance_commands import MaintenanceCommand, MaintenancePass
 from basstler.maintenance_git_commands import GitCommandRunner
-from basstler.stack import load_configuration
+from basstler.stack import Configuration
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -89,7 +89,7 @@ def _dispatch() -> ExitCode:
     )
     try:
         maintenance = MaintenancePass(
-            configuration=load_configuration(),
+            configuration=Configuration.load(),
             git=GitCommandRunner(working_directory=Path.cwd()),
         )
         return requested.run(maintenance, arguments)

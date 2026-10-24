@@ -19,7 +19,6 @@ from basstler.stack import (
     LabelWrite,
     PromotionLink,
     Stack,
-    promotion_order,
 )
 
 
@@ -97,7 +96,7 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
     """
     promoted: list[Promotion] = []
     withheld = stack.configuration.needs_resolution_label
-    for branch in promotion_order(stack):
+    for branch in stack.promotion_order():
         number = branch.pull_request_number
         pull_request = fork.pull_request(number)
         labels = PullRequestField.LABELS.read(pull_request, number)

@@ -281,7 +281,7 @@ class BoardExport:
         )
 
     def as_json(self) -> str:
-        """:return: The export, in the document :func:`stack.load_board` parses."""
+        """:return: The export, in the document :meth:`stack.PullRequest.read_board` parses."""
         return json.dumps(
             {"pull_requests": [asdict(entry) for entry in self.pull_requests]},
             indent=2,

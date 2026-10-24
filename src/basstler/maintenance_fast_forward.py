@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from basstler.maintenance_git_commands import GitCommandRunner, ProposedPush
-from basstler.stack import Configuration, resolve_ref
+from basstler.stack import Configuration
 
 
 class FastForwardOutcome(StrEnum):
@@ -85,7 +85,7 @@ def fast_forward(
     upstream_reference = (
         f"{configuration.upstream_remote}/{configuration.upstream_base}"
     )
-    fork_reference = resolve_ref(configuration, configuration.upstream_base)
+    fork_reference = configuration.reference_on_fork(configuration.upstream_base)
     git.fetch(configuration.upstream_remote, configuration.upstream_base)
     git.fetch(configuration.fork_remote, configuration.upstream_base)
     upstream_commit = git.commit_at(upstream_reference)

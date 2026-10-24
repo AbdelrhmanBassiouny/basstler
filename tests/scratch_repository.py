@@ -360,7 +360,7 @@ class ScratchRepository:
         beside the shell file the personal-notes override is fetched through.
 
         :param content: The configuration to write.
-        :return: The path :func:`basstler.stack.load_configuration` should be pointed at.
+        :return: The path :meth:`basstler.stack.Configuration.load` should be pointed at.
         """
         self.install_hook_scripts(
             PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name

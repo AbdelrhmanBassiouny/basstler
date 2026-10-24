@@ -17,7 +17,7 @@ from pathlib import Path
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_errors import ExternalCallFailed
-from basstler.stack import Configuration, IntegrationStrategy, resolve_ref
+from basstler.stack import Configuration, IntegrationStrategy
 
 # %% running git
 
@@ -129,7 +129,7 @@ class ProposedPush:
         :param configuration: The resolved configuration.
         :param branch: The branch to publish.
         :param strategy: How its parent was integrated, which authorises a rewrite when
-            it is a rebase - and which ``build_stack`` sets to rebase only from the label.
+            it is a rebase - and which ``Stack.build`` sets to rebase only from the label.
         :param replaces_superseded_merges: Whether the integration replaced merges that
             only brought in an earlier state of the parent, the one rewrite a merge is
             authorised to make.
@@ -332,4 +332,6 @@ class BranchAncestry:
         """:param candidate: A fork branch that may be contained.
         :param descendant: A local branch that may contain it.
         :return: Whether the fork's copy of *candidate* is contained in *descendant*."""
-        return self.git.contains(resolve_ref(self.configuration, candidate), descendant)
+        return self.git.contains(
+            self.configuration.reference_on_fork(candidate), descendant
+        )

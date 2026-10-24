@@ -29,7 +29,6 @@ from basstler.maintenance_restack_steps import (
 from basstler.stack import (
     CommitMoveChecks,
     Stack,
-    restack_plan,
 )
 
 if TYPE_CHECKING:
@@ -237,7 +236,7 @@ def restack(
                     conflict_response=conflict_response,
                 )
             )
-            for entry in restack_plan(stack, stacked_on)
+            for entry in stack.restack_plan(stacked_on)
         ]
 
 

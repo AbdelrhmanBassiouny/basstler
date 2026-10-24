@@ -12,7 +12,7 @@ GitHub is the single source of truth. The stack is **not** declared in a ledger:
 ``stack.toml`` carries the shipped defaults (label names, the base branch); the project's committed
 ``.claude/basstler/stack.toml`` names its upstream, and a ``.claude/personal/stack.toml`` on the
 personal-notes branch, if present, layers per-user overrides on top of both (see
-:func:`load_configuration`).
+:meth:`Configuration.load`).
 
 Commands (run from the repo root; ``--help`` on any of them for its flags)::
 
@@ -62,6 +62,98 @@ logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
+
+# %% git plumbing
+
+
+@dataclass(frozen=True)
+class CurrentCheckout:
+    """The git checkout the command runs in, asked through plain ``git``."""
+
+    @staticmethod
+    def output(*args: str) -> str:
+        """Run a git command and return its stripped stdout (empty string on failure).
+
+        :param args: The git subcommand and its arguments.
+        :return: The command's stripped stdout.
+        """
+        result = subprocess.run(
+            ["git", *args], capture_output=True, text=True, cwd=Path.cwd()
+        )
+        return result.stdout.strip()
+
+    @staticmethod
+    def succeeds(*args: str) -> bool:
+        """Run a git command, discarding its output.
+
+        :param args: The git subcommand and its arguments.
+        :return: Whether the command exited successfully.
+        """
+        result = subprocess.run(
+            ["git", *args], capture_output=True, text=True, cwd=Path.cwd()
+        )
+        return result.returncode == 0
+
+    @classmethod
+    def remote_urls(cls) -> dict[str, str]:
+        """:return: Every remote in this checkout, mapped to its fetch URL."""
+        listed = cls.output("remote").splitlines()
+        return {name: cls.output("remote", "get-url", name) for name in listed if name}
+
+    @classmethod
+    def commit_count(cls, revision_range: str) -> int | None:
+        """:param revision_range: A git revision-range expression.
+        :return: The number of commits in it, or ``None`` if a reference is missing."""
+        out = cls.output("rev-list", "--count", revision_range)
+        return int(out) if out.isdigit() else None
+
+    @classmethod
+    def fetch(cls, configuration: Configuration, branches: list[str]) -> None:
+        """Refresh the refs the stack references so drift and merged-detection are current.
+
+        :param configuration: The static configuration.
+        :param branches: The fork branch names to fetch.
+        """
+        cls.output(
+            "fetch", configuration.upstream_remote, configuration.upstream_base, "-q"
+        )
+        cls.output("fetch", configuration.fork_remote, "-q", *branches)
+
+    @classmethod
+    def merged_predicate(cls, configuration: Configuration) -> Callable[[str], bool]:
+        """:param configuration: The static configuration.
+        :return: A predicate testing whether a fork branch is an ancestor of the upstream base.
+        """
+        upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
+
+        def is_merged(name: str) -> bool:
+            return cls.succeeds(
+                "merge-base",
+                "--is-ancestor",
+                configuration.reference_on_fork(name),
+                upstream,
+            )
+
+        return is_merged
+
+    @classmethod
+    def ancestry_predicate(
+        cls, configuration: Configuration
+    ) -> Callable[[str, str], bool]:
+        """:param configuration: The resolved configuration naming the fork remote.
+        :return: A predicate testing whether a fork branch is contained in a local branch.
+        """
+
+        def is_ancestor(candidate: str, descendant: str) -> bool:
+            return cls.succeeds(
+                "merge-base",
+                "--is-ancestor",
+                configuration.reference_on_fork(candidate),
+                descendant,
+            )
+
+        return is_ancestor
+
 
 # %% configuration
 
@@ -121,6 +213,46 @@ class AmbiguousForkRemoteError(CommandFailure, LookupError):
 
 
 @dataclass(frozen=True)
+class LayeredStackSettings:
+    """The stack settings this checkout runs on: the shipped defaults and the project's
+    settings, with any personal-notes overrides layered on top."""
+
+    defaults: Path = PackageLocation.STACK_CONFIGURATION.value
+    """The shipped defaults file."""
+
+    def values(self) -> dict[str, str]:
+        """:return: The layered values."""
+        values = CommittedStackConfiguration(self.defaults).values()
+        values.update(self._personal_overrides())
+        return values
+
+    @staticmethod
+    def _personal_overrides() -> dict[str, object]:
+        """Fetch the personal-notes branch and parse its configuration override file, if any.
+
+        The shell configuration's own fetch function decides which remote and branch the
+        notes are on, so this and the hook scripts can never disagree about it.
+
+        :return: The parsed contents of :attr:`ProjectLocation.PERSONAL_STACK_CONFIGURATION`
+            on the personal-notes branch, or an empty mapping if the branch or the file
+            doesn't exist (e.g. before it has ever been written).
+        """
+        if ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run().returncode != 0:
+            return {}
+        if not CurrentCheckout.succeeds(
+            "cat-file",
+            "-e",
+            f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}",
+        ):
+            return {}
+        return tomllib.loads(
+            CurrentCheckout.output(
+                "show", f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}"
+            )
+        )
+
+
+@dataclass(frozen=True)
 class RemoteResolution:
     """Which remote is the fork and which is the upstream, decided without trusting names."""
 
@@ -151,71 +283,104 @@ class RemoteResolution:
             f"{self.upstream_repository.clone_url}"
         )
 
+    @classmethod
+    def resolve(
+        cls,
+        remote_urls: Mapping[str, str],
+        upstream_repository: Repository,
+        preferred_upstream_name: str,
+        fork_repository: Repository | None = None,
+    ) -> RemoteResolution:
+        """Decide which remote is the fork and which is the upstream.
 
-def resolve_remotes(
-    remote_urls: Mapping[str, str],
-    upstream_repository: Repository,
-    preferred_upstream_name: str,
-    fork_repository: Repository | None = None,
-) -> RemoteResolution:
-    """Decide which remote is the fork and which is the upstream.
+        Remotes are matched by the repository their URL names, so a checkout whose remotes
+        are called anything at all resolves the same way.
 
-    Remotes are matched by the repository their URL names, so a checkout whose remotes are
-    called anything at all resolves the same way.
-
-    :param remote_urls: Remote name to URL, as git reports them.
-    :param upstream_repository: The repository every fork is forked from.
-    :param preferred_upstream_name: What to call the upstream remote if one must be added.
-    :param fork_repository: The fork, when configuration names it outright.
-    :return: The resolved remotes.
-    :raises ForkRemoteNotFoundError: If no remote points at a fork.
-    :raises AmbiguousForkRemoteError: If several do and configuration does not disambiguate.
-    """
-    remotes = [
-        Remote(name, Repository.from_remote_url(url))
-        for name, url in remote_urls.items()
-        if Repository.names_a_repository(url)
-    ]
-    upstream = next(
-        (remote for remote in remotes if remote.repository == upstream_repository), None
-    )
-    candidates = tuple(
-        remote for remote in remotes if remote.repository != upstream_repository
-    )
-    return RemoteResolution(
-        fork=_select_fork(candidates, fork_repository, upstream_repository),
-        upstream=upstream,
-        upstream_repository=upstream_repository,
-        preferred_upstream_name=preferred_upstream_name,
-    )
-
-
-def _select_fork(
-    candidates: tuple[Remote, ...],
-    fork_repository: Repository | None,
-    upstream_repository: Repository,
-) -> Remote:
-    """Pick the fork from the remotes that are not the upstream.
-
-    :param candidates: The non-upstream remotes.
-    :param fork_repository: The fork, when configuration names it outright.
-    :param upstream_repository: The upstream, for reporting when nothing qualifies.
-    :return: The fork's remote.
-    :raises ForkRemoteNotFoundError: If no candidate qualifies.
-    :raises AmbiguousForkRemoteError: If several do and configuration does not disambiguate.
-    """
-    if fork_repository:
-        named = [
-            remote for remote in candidates if remote.repository == fork_repository
+        :param remote_urls: Remote name to URL, as git reports them.
+        :param upstream_repository: The repository every fork is forked from.
+        :param preferred_upstream_name: What to call the upstream remote if one must be added.
+        :param fork_repository: The fork, when configuration names it outright.
+        :return: The resolved remotes.
+        :raises ForkRemoteNotFoundError: If no remote points at a fork.
+        :raises AmbiguousForkRemoteError: If several do and configuration does not
+            disambiguate.
+        """
+        remotes = [
+            Remote(name, Repository.from_remote_url(url))
+            for name, url in remote_urls.items()
+            if Repository.names_a_repository(url)
         ]
-        if not named:
+        upstream = next(
+            (remote for remote in remotes if remote.repository == upstream_repository),
+            None,
+        )
+        candidates = tuple(
+            remote for remote in remotes if remote.repository != upstream_repository
+        )
+        return cls(
+            fork=cls._select_fork(candidates, fork_repository, upstream_repository),
+            upstream=upstream,
+            upstream_repository=upstream_repository,
+            preferred_upstream_name=preferred_upstream_name,
+        )
+
+    @classmethod
+    def of_checkout(
+        cls,
+        path: Path = PackageLocation.STACK_CONFIGURATION.value,
+        fork_repository: Repository | None = None,
+        upstream_repository: Repository | None = None,
+    ) -> RemoteResolution:
+        """Resolve this checkout's fork and upstream remotes.
+
+        :param path: The committed defaults file.
+        :param fork_repository: The fork, when the caller already knows it.
+        :param upstream_repository: The upstream, when the caller already knows it.
+        :return: The resolved remotes.
+        :raises ForkRemoteNotFoundError: If no remote points at a fork.
+        :raises AmbiguousForkRemoteError: If several do and nothing names which one it is.
+        """
+        values = LayeredStackSettings(path).values()
+        configured_fork = values.get("fork_repository")
+        return cls.resolve(
+            CurrentCheckout.remote_urls(),
+            upstream_repository
+            or CommittedStackConfiguration(path).upstream_repository_in(
+                values, ProjectLocation.PERSONAL_STACK_CONFIGURATION.value
+            ),
+            values[StackSetting.UPSTREAM_REMOTE],
+            fork_repository
+            or (Repository.parse(configured_fork) if configured_fork else None),
+        )
+
+    @staticmethod
+    def _select_fork(
+        candidates: tuple[Remote, ...],
+        fork_repository: Repository | None,
+        upstream_repository: Repository,
+    ) -> Remote:
+        """Pick the fork from the remotes that are not the upstream.
+
+        :param candidates: The non-upstream remotes.
+        :param fork_repository: The fork, when configuration names it outright.
+        :param upstream_repository: The upstream, for reporting when nothing qualifies.
+        :return: The fork's remote.
+        :raises ForkRemoteNotFoundError: If no candidate qualifies.
+        :raises AmbiguousForkRemoteError: If several do and configuration does not
+            disambiguate.
+        """
+        if fork_repository:
+            named = [
+                remote for remote in candidates if remote.repository == fork_repository
+            ]
+            if not named:
+                raise ForkRemoteNotFoundError(upstream_repository)
+            return named[0]
+        if not candidates:
             raise ForkRemoteNotFoundError(upstream_repository)
-        return named[0]
-    if not candidates:
-        raise ForkRemoteNotFoundError(upstream_repository)
-    if len(candidates) > 1:
-        raise AmbiguousForkRemoteError(candidates)
-    return candidates[0]
+        if len(candidates) > 1:
+            raise AmbiguousForkRemoteError(candidates)
+        return candidates[0]
 
 
 @dataclass
@@ -249,120 +414,67 @@ class Configuration:
     upstream_setup_command: str | None
     """The command adding the upstream remote, or ``None`` once this checkout has one."""
 
+    @classmethod
+    def load(
+        cls,
+        path: Path = PackageLocation.STACK_CONFIGURATION.value,
+        fork_repository: Repository | None = None,
+        upstream_repository: Repository | None = None,
+    ) -> Configuration:
+        """Parse the layered configuration.
 
-def load_configuration(
-    path: Path = PackageLocation.STACK_CONFIGURATION.value,
-    fork_repository: Repository | None = None,
-    upstream_repository: Repository | None = None,
-) -> Configuration:
-    """Parse the layered configuration into a :class:`Configuration`.
+        Values from the shipped *path* are the defaults; the project's committed
+        ``.claude/basstler/stack.toml`` overrides them, and any key present in
+        ``.claude/personal/stack.toml`` on the personal-notes branch overrides both, so a
+        user's own remotes/labels never have to be hand-edited into a checked-in file. A
+        repository passed here outranks all three, so a caller that has been told which
+        repository is which never has one inferred for it.
 
-    Values from the shipped *path* are the defaults; the project's committed
-    ``.claude/basstler/stack.toml`` overrides them, and any key present in
-    ``.claude/personal/stack.toml`` on the personal-notes branch overrides both, so a user's own
-    remotes/labels never have to be hand-edited into a checked-in file. A repository passed
-    here outranks all three, so a caller that has been told which repository is which never has
-    one inferred for it.
-
-    :param path: The shipped defaults file.
-    :param fork_repository: The fork, when the caller already knows it.
-    :param upstream_repository: The upstream, when the caller already knows it.
-    :return: The layered configuration.
-    """
-    values = _configuration_values(path)
-    upstream_repository = upstream_repository or CommittedStackConfiguration(
-        path
-    ).upstream_repository_in(values, ProjectLocation.PERSONAL_STACK_CONFIGURATION.value)
-    resolution = resolved_remotes(path, fork_repository, upstream_repository)
-    return Configuration(
-        in_review_label=values.get("in_review_label", "in-review"),
-        rebase_label=values.get("rebase_label", "rebase"),
-        needs_resolution_label=values.get("needs_resolution_label", "needs-resolution"),
-        fork_repository=resolution.fork.repository,
-        fork_remote=resolution.fork.name,
-        upstream_repository=upstream_repository,
-        upstream_remote=resolution.upstream_name,
-        upstream_base=values.get("upstream_base", "main"),
-        upstream_setup_command=resolution.upstream_setup_command,
-    )
-
-
-def _configuration_values(path: Path) -> dict[str, str]:
-    """Read the shipped defaults and the project's settings, with any personal-notes overrides
-    layered on top.
-
-    :param path: The shipped defaults file.
-    :return: The layered values.
-    """
-    values = CommittedStackConfiguration(path).values()
-    values.update(_personal_configuration_overrides())
-    return values
-
-
-def resolved_remotes(
-    path: Path = PackageLocation.STACK_CONFIGURATION.value,
-    fork_repository: Repository | None = None,
-    upstream_repository: Repository | None = None,
-) -> RemoteResolution:
-    """Resolve this checkout's fork and upstream remotes.
-
-    :param path: The committed defaults file.
-    :param fork_repository: The fork, when the caller already knows it.
-    :param upstream_repository: The upstream, when the caller already knows it.
-    :return: The resolved remotes.
-    :raises ForkRemoteNotFoundError: If no remote points at a fork.
-    :raises AmbiguousForkRemoteError: If several do and nothing names which one it is.
-    """
-    values = _configuration_values(path)
-    configured_fork = values.get("fork_repository")
-    return resolve_remotes(
-        _remote_urls(),
-        upstream_repository
-        or CommittedStackConfiguration(path).upstream_repository_in(
+        :param path: The shipped defaults file.
+        :param fork_repository: The fork, when the caller already knows it.
+        :param upstream_repository: The upstream, when the caller already knows it.
+        :return: The layered configuration.
+        """
+        values = LayeredStackSettings(path).values()
+        upstream_repository = upstream_repository or CommittedStackConfiguration(
+            path
+        ).upstream_repository_in(
             values, ProjectLocation.PERSONAL_STACK_CONFIGURATION.value
-        ),
-        values[StackSetting.UPSTREAM_REMOTE],
-        fork_repository
-        or (Repository.parse(configured_fork) if configured_fork else None),
-    )
+        )
+        resolution = RemoteResolution.of_checkout(
+            path, fork_repository, upstream_repository
+        )
+        return cls(
+            in_review_label=values.get("in_review_label", "in-review"),
+            rebase_label=values.get("rebase_label", "rebase"),
+            needs_resolution_label=values.get(
+                "needs_resolution_label", "needs-resolution"
+            ),
+            fork_repository=resolution.fork.repository,
+            fork_remote=resolution.fork.name,
+            upstream_repository=upstream_repository,
+            upstream_remote=resolution.upstream_name,
+            upstream_base=values.get("upstream_base", "main"),
+            upstream_setup_command=resolution.upstream_setup_command,
+        )
 
+    def reference_on_fork(self, name: str) -> str:
+        """:param name: A branch or parent name.
+        :return: Its reference on the fork remote."""
+        return f"{self.fork_remote}/{name}"
 
-def _remote_urls() -> dict[str, str]:
-    """:return: Every remote in this checkout, mapped to its fetch URL."""
-    listed = _git("remote").splitlines()
-    return {name: _git("remote", "get-url", name) for name in listed if name}
+    def print_settings(self) -> None:
+        """Print the resolved configuration as one ``field<TAB>value`` line per setting.
 
-
-def _fetch_personal_notes_branch() -> bool:
-    """Fetch the personal-notes branch, leaving ``FETCH_HEAD`` pointing at it.
-
-    Sources the shell file and calls its own fetch function rather than re-deriving which remote
-    and branch the notes are on, so this and the hook scripts can never disagree about it. The
-    shell's answer is also the fuller one: it falls back to the current branch's upstream remote
-    when the configured one does not carry the branch, which this had no equivalent of.
-
-    :return: Whether the branch was fetched.
-    """
-    return ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run().returncode == 0
-
-
-def _personal_configuration_overrides() -> dict[str, object]:
-    """Fetch the personal-notes branch and parse its configuration override file, if any.
-
-    :return: The parsed contents of :attr:`ProjectLocation.PERSONAL_STACK_CONFIGURATION` on the
-        personal-notes branch, or
-        an empty mapping if the branch or the file doesn't exist (e.g. before it has ever been
-        written).
-    """
-    if not _fetch_personal_notes_branch():
-        return {}
-    if not _git_succeeds(
-        "cat-file", "-e", f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}"
-    ):
-        return {}
-    return tomllib.loads(
-        _git("show", f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}")
-    )
+        Keys are this class's own field names, so a caller reading one by name cannot be
+        reading a name this module never prints. A setting with no value is omitted rather
+        than printed empty, which is what keeps ``upstream_setup_command`` readable as "run
+        this".
+        """
+        for name, value in vars(self).items():
+            if value is None:
+                continue
+            logger.info(f"{name}{PrintedConfiguration.FIELD_SEPARATOR}{value}")
 
 
 # %% domain model
@@ -382,6 +494,25 @@ class BranchStatus(StrEnum):
 
     MERGED = "merged"
     """Its own commits are already contained in the upstream base."""
+
+    @classmethod
+    def derive(cls, draft: bool, merged: bool, in_review: bool) -> BranchStatus:
+        """Map a PR's raw facts to a lifecycle status.
+
+        Precedence: a merged branch is ``merged``; an ``in-review``-labelled branch is
+        ``in-review``; an un-drafted branch is ``ready`` (self-approved for promotion);
+        otherwise ``draft``.
+
+        :param draft: Whether the PR is still a draft.
+        :param merged: Whether the branch has landed upstream (git ancestry).
+        :param in_review: Whether the PR carries the in-review label.
+        :return: The derived status.
+        """
+        if merged:
+            return cls.MERGED
+        if in_review:
+            return cls.IN_REVIEW
+        return cls.DRAFT if draft else cls.READY
 
 
 class IntegrationStrategy(StrEnum):
@@ -421,6 +552,30 @@ class PullRequest:
     session: str | None = None
     """URL of the Claude session working this PR, parsed from the PR body (None if none)."""
 
+    @classmethod
+    def read_board(cls, path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
+        """Parse ``board.json`` into the list of fork pull requests.
+
+        :param path: The board export file.
+        :return: The exported pull requests.
+        :raises BoardUnavailable: If *path* does not exist.
+        """
+        if not path.exists():
+            raise BoardUnavailable(path)
+        data = json.loads(path.read_text())
+        return [
+            cls(
+                number=pull_request["number"],
+                head=pull_request["head"],
+                base=pull_request["base"],
+                draft=bool(pull_request["draft"]),
+                labels=list(pull_request.get("labels", [])),
+                ci=pull_request.get("ci"),
+                session=pull_request.get("session"),
+            )
+            for pull_request in data["pull_requests"]
+        ]
+
 
 @dataclass
 class Branch:
@@ -450,6 +605,71 @@ class Branch:
     session: str | None = None
     """URL of the Claude session working this PR, if any."""
 
+    @classmethod
+    def from_pull_request(
+        cls,
+        pull_request: PullRequest,
+        configuration: Configuration,
+        is_merged: Callable[[str], bool],
+    ) -> Branch:
+        """:param pull_request: The exported pull request the node names.
+        :param configuration: The static configuration naming the labels.
+        :param is_merged: Maps a branch name to whether it has landed upstream.
+        :return: The stack node the pull request describes."""
+        return cls(
+            name=pull_request.head,
+            parent=pull_request.base,
+            pull_request_number=pull_request.number,
+            status=BranchStatus.derive(
+                pull_request.draft,
+                is_merged(pull_request.head),
+                configuration.in_review_label in pull_request.labels,
+            ),
+            strategy=(
+                IntegrationStrategy.REBASE
+                if configuration.rebase_label in pull_request.labels
+                else IntegrationStrategy.MERGE
+            ),
+            labels=pull_request.labels,
+            ci=pull_request.ci,
+            session=pull_request.session,
+        )
+
+
+@dataclass(frozen=True)
+class RestackPlanEntry:
+    """One entry of :meth:`Stack.restack_plan`: a branch, and what and how it is brought up to date with."""
+
+    branch: str
+    """The branch to bring up to date."""
+
+    parent: str
+    """The branch it is brought up to date with."""
+
+    strategy: IntegrationStrategy
+    """How it is brought up to date."""
+
+
+@dataclass(frozen=True)
+class Reparent:
+    """A pull request whose base has landed and must be retargeted at the upstream base.
+
+    A child left on a landed base cannot reach the upstream, and is closed outright the
+    moment that base branch is deleted.
+    """
+
+    branch: str
+    """The child branch that has to move."""
+
+    pull_request_number: int
+    """The child's fork pull request."""
+
+    current_base: str
+    """The landed branch it is still targeting."""
+
+    target_base: str
+    """The base it must be retargeted at."""
+
 
 @dataclass
 class Stack:
@@ -464,6 +684,46 @@ class Stack:
     is_merged: Callable[[str], bool]
     """Maps any branch name - tracked by this stack or not - to whether it has landed
     upstream."""
+
+    @classmethod
+    def build(
+        cls,
+        configuration: Configuration,
+        pull_requests: list[PullRequest],
+        is_merged: Callable[[str], bool],
+    ) -> Stack:
+        """Assemble the stack from the pull request export and a merged-branch predicate.
+
+        :param configuration: The static configuration.
+        :param pull_requests: The exported pull requests.
+        :param is_merged: Maps a branch name to whether it has landed upstream; injected so
+            the pure assembly logic can be tested without git.
+        :return: The assembled stack.
+        """
+        return cls(
+            configuration=configuration,
+            branches=[
+                Branch.from_pull_request(pull_request, configuration, is_merged)
+                for pull_request in pull_requests
+            ],
+            is_merged=is_merged,
+        )
+
+    @classmethod
+    def load(cls, board: Path = PackageLocation.BOARD.value) -> Stack:
+        """:param board: The exported board to derive the stack from.
+        :return: The full live stack: configuration + board export + git merged-detection.
+        """
+        configuration = Configuration.load()
+        pull_requests = PullRequest.read_board(board)
+        CurrentCheckout.fetch(
+            configuration, [pull_request.head for pull_request in pull_requests]
+        )
+        return cls.build(
+            configuration,
+            pull_requests,
+            CurrentCheckout.merged_predicate(configuration),
+        )
 
     def needs_resolution(self, branch: Branch) -> bool:
         """:param branch: The branch to check.
@@ -484,6 +744,172 @@ class Stack:
             branch_name
         )
 
+    def ordered(self) -> list[Branch]:
+        """:return: The branches, topologically ordered so a parent always precedes its
+        children."""
+        by_name = {branch.name: branch for branch in self.branches}
+        ordered: list[Branch] = []
+        seen: set[str] = set()
+
+        def visit(branch: Branch) -> None:
+            if branch.name in seen:
+                return
+            seen.add(branch.name)
+            parent = by_name.get(branch.parent)
+            if parent is not None:
+                visit(parent)
+            ordered.append(branch)
+
+        for branch in self.branches:
+            visit(branch)
+        return ordered
+
+    def branches_stacked_on(self, branch_name: str) -> list[Branch]:
+        """Every not-yet-merged branch whose parent chain reaches *branch_name*.
+
+        A branch is stacked on another when its pull request's base is that branch,
+        directly or through the branches between them - the same parent relation
+        :meth:`restack_plan` works from. A merged branch is left out along with everything
+        only it carries, since its commits are already in the upstream base.
+
+        :param branch_name: The branch whose subtree is wanted; it is never in the result.
+        :return: The branches stacked on it, parent before child.
+        """
+        stacked: set[str] = set()
+        found = []
+        for branch in self.ordered():
+            if branch.status == BranchStatus.MERGED:
+                continue
+            if branch.parent != branch_name and branch.parent not in stacked:
+                continue
+            stacked.add(branch.name)
+            found.append(branch)
+        return found
+
+    def parent_landed(self, branch: Branch) -> bool:
+        """Whether a branch's parent has reached the upstream (merged or in-review), so it
+        can promote.
+
+        A parent no open pull request describes cannot carry an in-review label, so git
+        ancestry is the only evidence available for it - and absence from the board is not
+        itself evidence of a root branch.
+
+        :param branch: The branch to check.
+        :return: Whether the branch's parent has landed.
+        """
+        parent = next(
+            (
+                candidate
+                for candidate in self.branches
+                if candidate.name == branch.parent
+            ),
+            None,
+        )
+        if parent is None:
+            return self.has_landed_upstream(branch.parent)
+        return parent.status in {
+            BranchStatus.IN_REVIEW,
+            BranchStatus.MERGED,
+        }
+
+    def promotion_order(self) -> list[Branch]:
+        """The branches to submit to the upstream next, in dependency order.
+
+        A branch is a candidate when it is approved (``ready``), its parent has landed, and
+        it has not been withheld pending conflict resolution. Every such branch promotes
+        together - there is no admission cap or per-stack slot limit.
+
+        :return: The promotable branches, in dependency order.
+        """
+        return [
+            branch
+            for branch in self.ordered()
+            if branch.status == BranchStatus.READY
+            and self.parent_landed(branch)
+            and not self.needs_resolution(branch)
+        ]
+
+    def next_to_promote(self) -> Branch | None:
+        """:return: The first branch to submit to the upstream next, or ``None`` if nothing
+        is ready."""
+        ordered = self.promotion_order()
+        return ordered[0] if ordered else None
+
+    def restack_plan(self, stacked_on: str | None = None) -> list[RestackPlanEntry]:
+        """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
+
+        One entry per branch not yet ``merged``, in parent-before-child order. In-review
+        branches are included so they pick up a moved parent; their ``merge`` strategy never
+        rewrites their own commits, only replaces the merges earlier restacks left, so an
+        open review keeps its history.
+
+        When a branch's parent has **merged** into the upstream, its commits are already in
+        the base, so the child is reparented onto the upstream base: the restack rebases it
+        there and it stops depending on a landed (and about-to-be-closed) branch. The
+        routine mirrors this by retargeting the child PR's base to the upstream base on
+        GitHub. This holds however the parent landed - including when its own pull request
+        was closed rather than merged, leaving the board with no entry for it at all.
+
+        Naming a branch in *stacked_on* limits the plan to that branch's own subtree.
+
+        :param stacked_on: The branch whose subtree to plan, or ``None`` for every branch.
+        :return: The restack plan, one entry per planned branch.
+        """
+        planned = (
+            self.ordered()
+            if stacked_on is None
+            else self.branches_stacked_on(stacked_on)
+        )
+        return [
+            RestackPlanEntry(
+                branch=branch.name,
+                parent=(
+                    self.configuration.upstream_base
+                    if self.has_landed_upstream(branch.parent)
+                    else branch.parent
+                ),
+                strategy=branch.strategy,
+            )
+            for branch in planned
+            if branch.status != BranchStatus.MERGED
+        ]
+
+    def reparents(self) -> list[Reparent]:
+        """Every open pull request whose base has already landed upstream.
+
+        Decided by git ancestry rather than by the base's own pull-request state, so it also
+        covers a parent whose pull request was closed rather than merged - which leaves the
+        board with no entry for it at all.
+
+        :return: The children to retarget, parent before child.
+        """
+        base = self.configuration.upstream_base
+        return [
+            Reparent(
+                branch=branch.name,
+                pull_request_number=branch.pull_request_number,
+                current_base=branch.parent,
+                target_base=base,
+            )
+            for branch in self.ordered()
+            if branch.status != BranchStatus.MERGED
+            and branch.parent != base
+            and self.has_landed_upstream(branch.parent)
+        ]
+
+    def landed_branches(self) -> list[Branch]:
+        """Every open fork pull request whose own branch is already in the upstream base.
+
+        These are the ones to label as landed and close; their children are named
+        separately by :meth:`reparents`, which must be acted on first so none is ever
+        orphaned.
+
+        :return: The landed branches, parent before child.
+        """
+        return [
+            branch for branch in self.ordered() if branch.status == BranchStatus.MERGED
+        ]
+
 
 @dataclass
 class BoardUnavailable(CommandFailure, RuntimeError):
@@ -500,85 +926,6 @@ class BoardUnavailable(CommandFailure, RuntimeError):
     def __str__(self) -> str:
         """:return: Which file is missing."""
         return f"{self.board.name} not found"
-
-
-def load_board(path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
-    """Parse ``board.json`` into the list of fork pull requests.
-
-    :param path: The board export file.
-    :return: The exported pull requests.
-    :raises BoardUnavailable: If *path* does not exist.
-    """
-    if not path.exists():
-        raise BoardUnavailable(path)
-    data = json.loads(path.read_text())
-    return [
-        PullRequest(
-            number=pull_request["number"],
-            head=pull_request["head"],
-            base=pull_request["base"],
-            draft=bool(pull_request["draft"]),
-            labels=list(pull_request.get("labels", [])),
-            ci=pull_request.get("ci"),
-            session=pull_request.get("session"),
-        )
-        for pull_request in data["pull_requests"]
-    ]
-
-
-def derive_status(draft: bool, merged: bool, in_review: bool) -> BranchStatus:
-    """Map a PR's raw facts to a lifecycle status.
-
-    Precedence: a merged branch is ``merged``; an ``in-review``-labelled branch is ``in-review``; an
-    un-drafted branch is ``ready`` (self-approved for promotion); otherwise ``draft``.
-
-    :param draft: Whether the PR is still a draft.
-    :param merged: Whether the branch has landed upstream (git ancestry).
-    :param in_review: Whether the PR carries the in-review label.
-    :return: The derived status.
-    """
-    if merged:
-        return BranchStatus.MERGED
-    if in_review:
-        return BranchStatus.IN_REVIEW
-    return BranchStatus.DRAFT if draft else BranchStatus.READY
-
-
-def build_stack(
-    configuration: Configuration,
-    pull_requests: list[PullRequest],
-    is_merged: Callable[[str], bool],
-) -> Stack:
-    """Assemble the :class:`Stack` from the pull request export and a merged-branch predicate.
-
-    :param configuration: The static configuration.
-    :param pull_requests: The exported pull requests.
-    :param is_merged: Maps a branch name to whether it has landed upstream; injected so the pure
-        assembly logic can be tested without git.
-    :return: The assembled stack.
-    """
-    branches = [
-        Branch(
-            name=pull_request.head,
-            parent=pull_request.base,
-            pull_request_number=pull_request.number,
-            status=derive_status(
-                pull_request.draft,
-                is_merged(pull_request.head),
-                configuration.in_review_label in pull_request.labels,
-            ),
-            strategy=(
-                IntegrationStrategy.REBASE
-                if configuration.rebase_label in pull_request.labels
-                else IntegrationStrategy.MERGE
-            ),
-            labels=pull_request.labels,
-            ci=pull_request.ci,
-            session=pull_request.session,
-        )
-        for pull_request in pull_requests
-    ]
-    return Stack(configuration=configuration, branches=branches, is_merged=is_merged)
 
 
 # %% label writes
@@ -637,6 +984,15 @@ class LabelWrite:
             raise ContradictoryLabelWriteError(contradictory)
         kept = [label for label in current if label not in removed]
         return cls(tuple(kept + [label for label in added if label not in kept]))
+
+    def print_labels(self) -> None:
+        """Print the complete label set, one label per line.
+
+        One per line rather than a separator-joined list, because a label may contain any
+        character a separator could be.
+        """
+        for label in self.labels:
+            logger.info(label)
 
 
 # %% promotion links
@@ -743,298 +1099,11 @@ class PromotionLink:
             url_for(body[:shortest] + cls.truncation_marker), body_was_truncated=True
         )
 
-
-# %% git plumbing
-
-
-def _git(*args: str) -> str:
-    """Run a git command and return its stripped stdout (empty string on failure).
-
-    :param args: The git subcommand and its arguments.
-    :return: The command's stripped stdout.
-    """
-    result = subprocess.run(
-        ["git", *args], capture_output=True, text=True, cwd=Path.cwd()
-    )
-    return result.stdout.strip()
-
-
-def _git_succeeds(*args: str) -> bool:
-    """Run a git command, discarding its output.
-
-    :param args: The git subcommand and its arguments.
-    :return: Whether the command exited successfully.
-    """
-    result = subprocess.run(
-        ["git", *args], capture_output=True, text=True, cwd=Path.cwd()
-    )
-    return result.returncode == 0
-
-
-def _merged_predicate(configuration: Configuration):
-    """:param configuration: The static configuration.
-    :return: A predicate testing whether a fork branch is an ancestor of the upstream base.
-    """
-    upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
-
-    def is_merged(name: str) -> bool:
-        ref = f"{configuration.fork_remote}/{name}"
-        return _git_succeeds("merge-base", "--is-ancestor", ref, upstream)
-
-    return is_merged
-
-
-def load_stack(board: Path = PackageLocation.BOARD.value) -> Stack:
-    """:param board: The exported board to derive the stack from.
-    :return: the full live stack: configuration + board export + git merged-detection.
-    """
-    configuration = load_configuration()
-    pull_requests = load_board(board)
-    fetch(configuration, [pull_request.head for pull_request in pull_requests])
-    return build_stack(configuration, pull_requests, _merged_predicate(configuration))
-
-
-def resolve_ref(configuration: Configuration, name: str) -> str:
-    """:param configuration: The static configuration.
-    :param name: A branch or parent name.
-    :return: Its ref on the fork remote."""
-    return f"{configuration.fork_remote}/{name}"
-
-
-def fetch(configuration: Configuration, branches: list[str]) -> None:
-    """Refresh the refs the stack references so drift and merged-detection are current.
-
-    :param configuration: The static configuration.
-    :param branches: The fork branch names to fetch.
-    """
-    _git("fetch", configuration.upstream_remote, configuration.upstream_base, "-q")
-    _git("fetch", configuration.fork_remote, "-q", *branches)
-
-
-def _count(rev_range: str) -> int | None:
-    """:param rev_range: A git rev-range expression.
-    :return: The number of commits in it, or ``None`` if a ref is missing."""
-    out = _git("rev-list", "--count", rev_range)
-    return int(out) if out.isdigit() else None
-
-
-# %% stack assembly
-
-
-def order(stack: Stack) -> list[Branch]:
-    """:param stack: The stack to order.
-    :return: Its branches, topologically ordered so a parent always precedes its children.
-    """
-    by_name = {b.name: b for b in stack.branches}
-    ordered: list[Branch] = []
-    seen: set[str] = set()
-
-    def visit(branch: Branch) -> None:
-        if branch.name in seen:
-            return
-        seen.add(branch.name)
-        parent = by_name.get(branch.parent)
-        if parent is not None:
-            visit(parent)
-        ordered.append(branch)
-
-    for branch in stack.branches:
-        visit(branch)
-    return ordered
-
-
-def branches_stacked_on(stack: Stack, branch_name: str) -> list[Branch]:
-    """Every not-yet-merged branch whose parent chain reaches *branch_name*.
-
-    A branch is stacked on another when its pull request's base is that branch, directly or
-    through the branches between them - the same parent relation :func:`restack_plan` works
-    from. A merged branch is left out along with everything only it carries, since its
-    commits are already in the upstream base.
-
-    :param stack: The stack to search.
-    :param branch_name: The branch whose subtree is wanted; it is never in the result.
-    :return: The branches stacked on it, parent before child.
-    """
-    stacked: set[str] = set()
-    found = []
-    for branch in order(stack):
-        if branch.status == BranchStatus.MERGED:
-            continue
-        if branch.parent != branch_name and branch.parent not in stacked:
-            continue
-        stacked.add(branch.name)
-        found.append(branch)
-    return found
-
-
-def parent_landed(stack: Stack, branch: Branch, by_name: dict[str, Branch]) -> bool:
-    """Whether a branch's parent has reached the upstream (merged or in-review), so it can promote.
-
-    A parent no open pull request describes cannot carry an in-review label, so git ancestry is the
-    only evidence available for it - and absence from the board is not itself evidence of a root
-    branch.
-
-    :param stack: The stack the branch belongs to.
-    :param branch: The branch to check.
-    :param by_name: Every branch in the stack, keyed by name.
-    :return: Whether the branch's parent has landed.
-    """
-    parent = by_name.get(branch.parent)
-    if parent is None:
-        return stack.has_landed_upstream(branch.parent)
-    return parent.status in {
-        BranchStatus.IN_REVIEW,
-        BranchStatus.MERGED,
-    }
-
-
-# %% promotion policy
-
-
-def promotion_order(stack: Stack) -> list[Branch]:
-    """The branches to submit to the upstream next, in dependency order.
-
-    A branch is a candidate when it is approved (``ready``), its parent has landed, and it has not
-    been withheld pending conflict resolution. Every such branch promotes together - there is no
-    admission cap or per-stack slot limit (see the module's history for why: a ``wip_cap`` large
-    enough to never bind made that machinery a no-op, so it was removed rather than fixed).
-
-    :param stack: The stack to evaluate.
-    :return: The promotable branches, in dependency order.
-    """
-    by_name = {b.name: b for b in stack.branches}
-    return [
-        branch
-        for branch in order(stack)
-        if branch.status == BranchStatus.READY
-        and parent_landed(stack, branch, by_name)
-        and not stack.needs_resolution(branch)
-    ]
-
-
-def next_to_promote(stack: Stack) -> Branch | None:
-    """:param stack: The stack to evaluate.
-    :return: The first branch to submit to the upstream next, or ``None`` if nothing is ready.
-    """
-    ordered = promotion_order(stack)
-    return ordered[0] if ordered else None
-
-
-@dataclass(frozen=True)
-class RestackPlanEntry:
-    """One entry of :func:`restack_plan`: a branch, and what and how it is brought up to date with."""
-
-    branch: str
-    """The branch to bring up to date."""
-
-    parent: str
-    """The branch it is brought up to date with."""
-
-    strategy: IntegrationStrategy
-    """How it is brought up to date."""
-
-
-def restack_plan(stack: Stack, stacked_on: str | None = None) -> list[RestackPlanEntry]:
-    """The bottom-up restack plan the ``restack`` workflow consumes as its ``args``.
-
-    One entry per branch not yet ``merged``, in parent-before-child order. In-review branches are
-    included so they pick up a moved parent; their ``merge`` strategy never rewrites their own
-    commits, only replaces the merges earlier restacks left, so an open review keeps its history.
-
-    When a branch's parent has **merged** into the upstream, its commits are already in the base, so
-    the child is reparented onto the upstream base: the restack rebases it there and it stops
-    depending on a landed (and about-to-be-closed) branch. The routine mirrors this by retargeting
-    the child PR's base to the upstream base on GitHub. This holds however the parent landed -
-    including when its own pull request was closed rather than merged, leaving the board with no
-    entry for it at all.
-
-    Naming a branch in *stacked_on* limits the plan to that branch's own subtree, which is
-    what lets a fix just made on it be carried into the branches stacked on it without
-    moving the rest of the board.
-
-    :param stack: The stack to plan.
-    :param stacked_on: The branch whose subtree to plan, or ``None`` for every branch.
-    :return: The restack plan, one entry per planned branch.
-    """
-    planned = (
-        order(stack) if stacked_on is None else branches_stacked_on(stack, stacked_on)
-    )
-    plan: list[RestackPlanEntry] = []
-    for branch in planned:
-        if branch.status == BranchStatus.MERGED:
-            continue
-        effective_parent = (
-            stack.configuration.upstream_base
-            if stack.has_landed_upstream(branch.parent)
-            else branch.parent
-        )
-        plan.append(
-            RestackPlanEntry(
-                branch=branch.name, parent=effective_parent, strategy=branch.strategy
-            )
-        )
-    return plan
-
-
-# %% landed parents
-
-
-@dataclass(frozen=True)
-class Reparent:
-    """A pull request whose base has landed and must be retargeted at the upstream base.
-
-    A child left on a landed base cannot reach the upstream, and is closed outright the
-    moment that base branch is deleted.
-    """
-
-    branch: str
-    """The child branch that has to move."""
-
-    pull_request_number: int
-    """The child's fork pull request."""
-
-    current_base: str
-    """The landed branch it is still targeting."""
-
-    target_base: str
-    """The base it must be retargeted at."""
-
-
-def reparents(stack: Stack) -> list[Reparent]:
-    """Every open pull request whose base has already landed upstream.
-
-    Decided by git ancestry rather than by the base's own pull-request state, so it also
-    covers a parent whose pull request was closed rather than merged - which leaves the
-    board with no entry for it at all.
-
-    :param stack: The stack to sweep.
-    :return: The children to retarget, parent before child.
-    """
-    base = stack.configuration.upstream_base
-    return [
-        Reparent(
-            branch=branch.name,
-            pull_request_number=branch.pull_request_number,
-            current_base=branch.parent,
-            target_base=base,
-        )
-        for branch in order(stack)
-        if branch.status != BranchStatus.MERGED
-        and branch.parent != base
-        and stack.has_landed_upstream(branch.parent)
-    ]
-
-
-def landed_branches(stack: Stack) -> list[Branch]:
-    """Every open fork pull request whose own branch is already in the upstream base.
-
-    These are the ones to label as landed and close; their children are named separately
-    by :func:`reparents`, which must be acted on first so none is ever orphaned.
-
-    :param stack: The stack to sweep.
-    :return: The landed branches, parent before child.
-    """
-    return [branch for branch in order(stack) if branch.status == BranchStatus.MERGED]
+    def print_url(self) -> None:
+        """Print the compare-and-create URL, reporting on stderr if the body was shortened."""
+        logger.info(self.url)
+        if self.body_was_truncated:
+            logger.error("the description was shortened to fit the URL length limit")
 
 
 # %% move check
@@ -1119,6 +1188,16 @@ class CommitMoveChecks:
     """Maps a candidate ancestor branch and a descendant branch to whether the first is
     contained in the second; injected so the checks are testable without git."""
 
+    @classmethod
+    def of_checkout(cls, stack: Stack) -> CommitMoveChecks:
+        """:param stack: The stack the branches belong to.
+        :return: The checks against the branch this checkout has checked out."""
+        return cls(
+            stack=stack,
+            checked_out_branch=CurrentCheckout.output("branch", "--show-current"),
+            is_ancestor=CurrentCheckout.ancestry_predicate(stack.configuration),
+        )
+
     def refusals(self, move: ProposedCommitMove) -> list[CommitMoveRefusal]:
         """Every reason the move must not be made.
 
@@ -1174,213 +1253,157 @@ class CommitMoveChecks:
             and self.is_ancestor(child.name, move.source)
         ]
 
+    def print_verdict(self, move: ProposedCommitMove) -> StackExitCode:
+        """Print whether a move may be made, and every reason it may not.
+
+        :param move: The proposed move.
+        :return: Success when the move is clear, refusal otherwise.
+        """
+        refusals = self.refusals(move)
+        if not refusals:
+            logger.info(
+                f"{move.action} {move.source} onto "
+                f"{move.destination_remote}/{move.destination}: clear"
+            )
+            return StackExitCode.SUCCESS
+        for refusal in refusals:
+            logger.error(f"{refusal.reason}: {refusal.explanation}")
+        return StackExitCode.MOVE_REFUSED
+
 
 # %% commands
 
 
-def print_status(stack: Stack) -> None:
-    """Print the whole stack: parent, state, and drift versus the upstream.
+@dataclass(frozen=True)
+class StackReport:
+    """The read-only reports the commands print about one derived stack."""
 
-    :param stack: The stack to report.
-    """
-    configuration = stack.configuration
-    upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
-    logger.info(f"Stack ({len(stack.branches)} branches) vs {upstream}\n")
-    logger.info(
-        f"{'branch':<38} {'state':<10} {'PR':>4}  ahead/behind parent   behind base"
-    )
-    logger.info("-" * 92)
-    for branch in order(stack):
-        ref = resolve_ref(configuration, branch.name)
-        parent_ref = resolve_ref(configuration, branch.parent)
-        ahead = _count(f"{parent_ref}..{ref}")
-        behind_parent = _count(f"{ref}..{parent_ref}")
-        behind_base = _count(f"{ref}..{upstream}")
-        drift = f"+{ahead}/-{behind_parent} ({branch.strategy} onto {branch.parent})"
+    stack: Stack
+    """The stack reported on."""
+
+    def print_status(self) -> None:
+        """Print the whole stack: parent, state, and drift versus the upstream."""
+        configuration = self.stack.configuration
+        upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
+        logger.info(f"Stack ({len(self.stack.branches)} branches) vs {upstream}\n")
         logger.info(
-            f"{branch.name:<38} {branch.status:<10} #{branch.pull_request_number:<3}  {drift:<28} {behind_base}"
+            f"{'branch':<38} {'state':<10} {'PR':>4}  ahead/behind parent   behind base"
         )
-
-
-def print_check(stack: Stack) -> None:
-    """Print whether each branch would merge cleanly onto its parent right now.
-
-    :param stack: The stack to probe.
-    """
-    configuration = stack.configuration
-    logger.info(
-        "Integration probe - would each branch merge cleanly onto its parent right now?\n"
-    )
-    for branch in order(stack):
-        ref = resolve_ref(configuration, branch.name)
-        parent_ref = resolve_ref(configuration, branch.parent)
-        result = subprocess.run(
-            ["git", "merge-tree", "--write-tree", parent_ref, ref],
-            capture_output=True,
-            text=True,
-        )
-        if result.returncode == 0:
-            verdict = "CLEAN"
-        elif result.returncode == 1:
-            verdict = f"CONFLICTS onto {branch.parent}"
-        else:
-            verdict = f"UNKNOWN (ref missing: {parent_ref} / {ref})"
-        logger.info(f"  {branch.name:<40} {verdict}")
-
-
-def print_next(stack: Stack) -> None:
-    """Print which branch(es) are ready to submit to the upstream next.
-
-    :param stack: The stack to report.
-    """
-    configuration = stack.configuration
-    by_name = {b.name: b for b in stack.branches}
-    promotable = promotion_order(stack)
-    withheld = [
-        b
-        for b in stack.branches
-        if b.status == BranchStatus.READY
-        and parent_landed(stack, b, by_name)
-        and stack.needs_resolution(b)
-    ]
-
-    def report_withheld() -> None:
-        if withheld:
+        logger.info("-" * 92)
+        for branch in self.stack.ordered():
+            ref = configuration.reference_on_fork(branch.name)
+            parent_ref = configuration.reference_on_fork(branch.parent)
+            ahead = CurrentCheckout.commit_count(f"{parent_ref}..{ref}")
+            behind_parent = CurrentCheckout.commit_count(f"{ref}..{parent_ref}")
+            behind_base = CurrentCheckout.commit_count(f"{ref}..{upstream}")
+            drift = (
+                f"+{ahead}/-{behind_parent} ({branch.strategy} onto {branch.parent})"
+            )
             logger.info(
-                f"  Withheld (delegated, needs-resolution): {', '.join(b.name for b in withheld)}"
+                f"{branch.name:<38} {branch.status:<10} #{branch.pull_request_number:<3}  {drift:<28} {behind_base}"
             )
 
-    if promotable:
-        plural = "es" if len(promotable) != 1 else ""
+    def print_check(self) -> None:
+        """Print whether each branch would merge cleanly onto its parent right now."""
+        configuration = self.stack.configuration
         logger.info(
-            f"NEXT to submit to {configuration.upstream_remote} ({len(promotable)} branch{plural}):"
+            "Integration probe - would each branch merge cleanly onto its parent right now?\n"
         )
-        for branch in promotable:
+        for branch in self.stack.ordered():
+            ref = configuration.reference_on_fork(branch.name)
+            parent_ref = configuration.reference_on_fork(branch.parent)
+            result = subprocess.run(
+                ["git", "merge-tree", "--write-tree", parent_ref, ref],
+                capture_output=True,
+                text=True,
+            )
+            if result.returncode == 0:
+                verdict = "CLEAN"
+            elif result.returncode == 1:
+                verdict = f"CONFLICTS onto {branch.parent}"
+            else:
+                verdict = f"UNKNOWN (ref missing: {parent_ref} / {ref})"
+            logger.info(f"  {branch.name:<40} {verdict}")
+
+    def print_next(self) -> None:
+        """Print which branch(es) are ready to submit to the upstream next."""
+        configuration = self.stack.configuration
+        promotable = self.stack.promotion_order()
+        withheld = [
+            b
+            for b in self.stack.branches
+            if b.status == BranchStatus.READY
+            and self.stack.parent_landed(b)
+            and self.stack.needs_resolution(b)
+        ]
+
+        def report_withheld() -> None:
+            if withheld:
+                logger.info(
+                    f"  Withheld (delegated, needs-resolution): {', '.join(b.name for b in withheld)}"
+                )
+
+        if promotable:
+            plural = "es" if len(promotable) != 1 else ""
             logger.info(
-                f"  {branch.name} (PR #{branch.pull_request_number}) - approved, parent '{branch.parent}' landed"
+                f"NEXT to submit to {configuration.upstream_remote} ({len(promotable)} branch{plural}):"
+            )
+            for branch in promotable:
+                logger.info(
+                    f"  {branch.name} (PR #{branch.pull_request_number}) - approved, parent '{branch.parent}' landed"
+                )
+            report_withheld()
+            return
+
+        ready_blocked = [
+            b
+            for b in self.stack.branches
+            if b.status == BranchStatus.READY and not self.stack.parent_landed(b)
+        ]
+        draft_candidates = [
+            b for b in self.stack.ordered() if b.status == BranchStatus.DRAFT
+        ]
+
+        logger.info("Nothing to promote - no branch is both approved and unblocked.")
+        if ready_blocked:
+            logger.info(
+                f"  Approved but waiting on a parent to land: {', '.join(b.name for b in ready_blocked)}"
             )
         report_withheld()
-        return
+        if draft_candidates:
+            logger.info(
+                "  The gate: self-review a fork PR, then un-draft it (or set its status ready). "
+                f"Draft candidates: {draft_candidates[0].name}"
+            )
 
-    ready_blocked = [
-        b
-        for b in stack.branches
-        if b.status == BranchStatus.READY and not parent_landed(stack, b, by_name)
-    ]
-    draft_candidates = [b for b in order(stack) if b.status == BranchStatus.DRAFT]
+    def print_next_porcelain(self) -> None:
+        """Print machine-readable :meth:`print_next`: one ``name<TAB>pr`` line per promotable branch."""
+        for branch in self.stack.promotion_order():
+            logger.info(f"{branch.name}\t{branch.pull_request_number}")
 
-    logger.info("Nothing to promote - no branch is both approved and unblocked.")
-    if ready_blocked:
+    def print_restack_plan(self) -> None:
+        """Print the bottom-up restack plan as JSON, one object per not-yet-landed branch."""
         logger.info(
-            f"  Approved but waiting on a parent to land: {', '.join(b.name for b in ready_blocked)}"
-        )
-    report_withheld()
-    if draft_candidates:
-        logger.info(
-            "  The gate: self-review a fork PR, then un-draft it (or set its status ready). "
-            f"Draft candidates: {draft_candidates[0].name}"
+            json.dumps([asdict(entry) for entry in self.stack.restack_plan()], indent=2)
         )
 
+    def print_reparents(self) -> None:
+        """Print one ``branch<TAB>pr<TAB>current base<TAB>target base`` line per orphaned child."""
+        for reparent in self.stack.reparents():
+            logger.info(
+                f"{reparent.branch}\t{reparent.pull_request_number}\t"
+                f"{reparent.current_base}\t{reparent.target_base}"
+            )
 
-def print_next_porcelain(stack: Stack) -> None:
-    """Print machine-readable :func:`print_next`: one ``name<TAB>pr`` line per promotable branch.
-
-    :param stack: The stack to report.
-    """
-    for branch in promotion_order(stack):
-        logger.info(f"{branch.name}\t{branch.pull_request_number}")
-
-
-def print_restack_plan(stack: Stack) -> None:
-    """Print the bottom-up restack plan as JSON, one object per not-yet-landed branch.
-
-    :param stack: The stack to plan.
-    """
-    logger.info(json.dumps([asdict(entry) for entry in restack_plan(stack)], indent=2))
-
-
-def print_label_write(write: LabelWrite) -> None:
-    """Print the complete label set, one label per line.
-
-    One per line rather than a separator-joined list, because a label may contain any
-    character a separator could be.
-
-    :param write: The computed set.
-    """
-    for label in write.labels:
-        logger.info(label)
-
-
-def print_promotion_link(link: PromotionLink) -> None:
-    """Print the compare-and-create URL, reporting on stderr if the body was shortened.
-
-    :param link: The built link.
-    """
-    logger.info(link.url)
-    if link.body_was_truncated:
-        logger.error("the description was shortened to fit the URL length limit")
-
-
-def print_reparents(stack: Stack) -> None:
-    """Print one ``branch<TAB>pr<TAB>current base<TAB>target base`` line per orphaned child.
-
-    :param stack: The stack to sweep.
-    """
-    for reparent in reparents(stack):
-        logger.info(
-            f"{reparent.branch}\t{reparent.pull_request_number}\t"
-            f"{reparent.current_base}\t{reparent.target_base}"
-        )
-
-
-def print_landed(stack: Stack) -> None:
-    """Print one ``branch<TAB>pr`` line per open pull request whose branch has landed.
-
-    :param stack: The stack to sweep.
-    """
-    for branch in landed_branches(stack):
-        logger.info(f"{branch.name}\t{branch.pull_request_number}")
-
-
-def print_move_checks(
-    move_checks: CommitMoveChecks, move: ProposedCommitMove
-) -> StackExitCode:
-    """Print whether a move may be made, and every reason it may not.
-
-    :param move_checks: The checks to run.
-    :param move: The proposed move.
-    :return: Success when the move is clear, refusal otherwise.
-    """
-    refusals = move_checks.refusals(move)
-    if not refusals:
-        logger.info(
-            f"{move.action} {move.source} onto "
-            f"{move.destination_remote}/{move.destination}: clear"
-        )
-        return StackExitCode.SUCCESS
-    for refusal in refusals:
-        logger.error(f"{refusal.reason}: {refusal.explanation}")
-    return StackExitCode.MOVE_REFUSED
-
-
-def print_configuration(configuration: Configuration) -> None:
-    """Print the resolved configuration as one ``field<TAB>value`` line per setting.
-
-    Keys are :class:`Configuration`'s own field names, so a caller reading one by name cannot
-    be reading a name this module never prints. A setting with no value is omitted rather than
-    printed empty, which is what keeps ``upstream_setup_command`` readable as "run this".
-
-    :param configuration: The configuration to report.
-    """
-    for name, value in vars(configuration).items():
-        if value is None:
-            continue
-        logger.info(f"{name}{PrintedConfiguration.FIELD_SEPARATOR}{value}")
+    def print_landed(self) -> None:
+        """Print one ``branch<TAB>pr`` line per open pull request whose branch has landed."""
+        for branch in self.stack.landed_branches():
+            logger.info(f"{branch.name}\t{branch.pull_request_number}")
 
 
 class PrintedConfiguration(StrEnum):
     """
-    How :func:`print_configuration` lays a setting out on its line.
+    How :meth:`Configuration.print_settings` lays a setting out on its line.
     """
 
     FIELD_SEPARATOR = "\t"
@@ -1393,7 +1416,7 @@ class PrintedConfiguration(StrEnum):
         """
         Read printed configuration back into its settings.
 
-        :param output: What :func:`print_configuration` printed.
+        :param output: What :meth:`Configuration.print_settings` printed.
         :return: Each printed setting's value, by name.
         """
         return dict(line.split(cls.FIELD_SEPARATOR) for line in output.splitlines())
@@ -1494,204 +1517,199 @@ class CommandOption(StrEnum):
 # %% entry point
 
 
-def _argument_parser() -> argparse.ArgumentParser:
-    """:return: The parser for every command and its own flags."""
-    parser = argparse.ArgumentParser(
-        prog="stack.py",
-        description="Stacked-PR helper: read state, compute the writes.",
-    )
-    parser.set_defaults(porcelain=False)
-    commands = parser.add_subparsers(dest="command", required=True)
+@dataclass(frozen=True)
+class StackCommandLine:
+    """This module's command line: one subcommand per :class:`Command`."""
 
-    commands.add_parser(Command.STATUS, help="the whole stack: parent, state, drift")
-    commands.add_parser(
-        Command.CHECK, help="would each branch merge cleanly onto its parent"
-    )
-    promote = commands.add_parser(
-        Command.NEXT, help="which branches to submit upstream next"
-    )
-    promote.add_argument(
-        CommandOption.PORCELAIN,
-        action="store_true",
-        help="print only 'name<TAB>pr' per branch to promote",
-    )
-    commands.add_parser(Command.RESTACK_PLAN, help="the bottom-up restack plan as JSON")
-    commands.add_parser(
-        Command.REPARENTS, help="children whose base has landed, and the base they need"
-    )
-    commands.add_parser(
-        Command.LANDED, help="open pull requests whose branch has landed"
-    )
-
-    configuration = commands.add_parser(
-        Command.CONFIGURATION, help="every resolved setting, including the remotes"
-    )
-    configuration.add_argument(
-        CommandOption.FORK,
-        type=Repository.parse,
-        help="the fork as 'owner/name', when you already know it",
-    )
-    configuration.add_argument(
-        CommandOption.UPSTREAM,
-        type=Repository.parse,
-        help="the upstream as 'owner/name', when you already know it",
-    )
-
-    labels = commands.add_parser(
-        Command.LABELS, help="the complete label set a label write must send"
-    )
-    labels.add_argument(
-        CommandOption.CURRENT,
-        action="append",
-        default=[],
-        metavar="LABEL",
-        help="a label the pull request carries now; repeat per label",
-    )
-    labels.add_argument(
-        CommandOption.ADD,
-        action="append",
-        default=[],
-        metavar="LABEL",
-        help="a label to end up with",
-    )
-    labels.add_argument(
-        CommandOption.REMOVE,
-        action="append",
-        default=[],
-        metavar="LABEL",
-        help="a label to end up without",
-    )
-
-    link = commands.add_parser(
-        Command.PROMOTION_LINK, help="the upstream compare-and-create URL for a branch"
-    )
-    link.add_argument(
-        CommandOption.BRANCH, required=True, help="the fork branch to promote"
-    )
-    link.add_argument(CommandOption.TITLE, required=True, help="title to prefill")
-    link.add_argument(CommandOption.BODY, default="", help="description to prefill")
-
-    check_move = commands.add_parser(
-        Command.CHECK_MOVE, help="may these commits move onto that branch?"
-    )
-    check_move.add_argument(
-        CommandOption.ACTION,
-        required=True,
-        type=CommitMoveAction,
-        choices=list(CommitMoveAction),
-        help="what the move would do",
-    )
-    check_move.add_argument(
-        CommandOption.SOURCE, required=True, help="the branch whose commits move"
-    )
-    check_move.add_argument(
-        CommandOption.DESTINATION, required=True, help="the branch they would land on"
-    )
-    check_move.add_argument(
-        CommandOption.DESTINATION_REMOTE,
-        required=True,
-        help="the remote holding the destination",
-    )
-    return parser
-
-
-def _run_without_a_board(
-    command: Command, arguments: argparse.Namespace
-) -> StackExitCode:
-    """Run a command that needs no ``board.json``.
-
-    :param command: The command to run.
-    :param arguments: The parsed command line.
-    :return: The process exit code.
-    """
-    if command is Command.LABELS:
-        print_label_write(
-            LabelWrite.replacing(arguments.current, arguments.add, arguments.remove)
+    @staticmethod
+    def parser() -> argparse.ArgumentParser:
+        """:return: The parser for every command and its own flags."""
+        parser = argparse.ArgumentParser(
+            prog="stack.py",
+            description="Stacked-PR helper: read state, compute the writes.",
         )
-        return StackExitCode.SUCCESS
-    if command is Command.CONFIGURATION:
-        print_configuration(
-            load_configuration(
+        parser.set_defaults(porcelain=False)
+        commands = parser.add_subparsers(dest="command", required=True)
+
+        commands.add_parser(
+            Command.STATUS, help="the whole stack: parent, state, drift"
+        )
+        commands.add_parser(
+            Command.CHECK, help="would each branch merge cleanly onto its parent"
+        )
+        promote = commands.add_parser(
+            Command.NEXT, help="which branches to submit upstream next"
+        )
+        promote.add_argument(
+            CommandOption.PORCELAIN,
+            action="store_true",
+            help="print only 'name<TAB>pr' per branch to promote",
+        )
+        commands.add_parser(
+            Command.RESTACK_PLAN, help="the bottom-up restack plan as JSON"
+        )
+        commands.add_parser(
+            Command.REPARENTS,
+            help="children whose base has landed, and the base they need",
+        )
+        commands.add_parser(
+            Command.LANDED, help="open pull requests whose branch has landed"
+        )
+
+        configuration = commands.add_parser(
+            Command.CONFIGURATION, help="every resolved setting, including the remotes"
+        )
+        configuration.add_argument(
+            CommandOption.FORK,
+            type=Repository.parse,
+            help="the fork as 'owner/name', when you already know it",
+        )
+        configuration.add_argument(
+            CommandOption.UPSTREAM,
+            type=Repository.parse,
+            help="the upstream as 'owner/name', when you already know it",
+        )
+
+        labels = commands.add_parser(
+            Command.LABELS, help="the complete label set a label write must send"
+        )
+        labels.add_argument(
+            CommandOption.CURRENT,
+            action="append",
+            default=[],
+            metavar="LABEL",
+            help="a label the pull request carries now; repeat per label",
+        )
+        labels.add_argument(
+            CommandOption.ADD,
+            action="append",
+            default=[],
+            metavar="LABEL",
+            help="a label to end up with",
+        )
+        labels.add_argument(
+            CommandOption.REMOVE,
+            action="append",
+            default=[],
+            metavar="LABEL",
+            help="a label to end up without",
+        )
+
+        link = commands.add_parser(
+            Command.PROMOTION_LINK,
+            help="the upstream compare-and-create URL for a branch",
+        )
+        link.add_argument(
+            CommandOption.BRANCH, required=True, help="the fork branch to promote"
+        )
+        link.add_argument(CommandOption.TITLE, required=True, help="title to prefill")
+        link.add_argument(CommandOption.BODY, default="", help="description to prefill")
+
+        check_move = commands.add_parser(
+            Command.CHECK_MOVE, help="may these commits move onto that branch?"
+        )
+        check_move.add_argument(
+            CommandOption.ACTION,
+            required=True,
+            type=CommitMoveAction,
+            choices=list(CommitMoveAction),
+            help="what the move would do",
+        )
+        check_move.add_argument(
+            CommandOption.SOURCE, required=True, help="the branch whose commits move"
+        )
+        check_move.add_argument(
+            CommandOption.DESTINATION,
+            required=True,
+            help="the branch they would land on",
+        )
+        check_move.add_argument(
+            CommandOption.DESTINATION_REMOTE,
+            required=True,
+            help="the remote holding the destination",
+        )
+        return parser
+
+    @staticmethod
+    def main() -> ExitCode:
+        """Dispatch the command-line invocation, ending with the status the refusal carries.
+
+        :return: The process exit code.
+        """
+        arguments = StackCommandLine.parser().parse_args()
+        command = Command(arguments.command)
+        try:
+            if not command.needs_a_board:
+                return StackCommandLine._run_without_a_board(command, arguments)
+            return StackCommandLine._run_against_the_board(
+                command, arguments, Stack.load()
+            )
+        except CommandFailure as error:
+            logger.error(f"{error}")
+            return error.exit_code
+
+    @staticmethod
+    def _run_without_a_board(
+        command: Command, arguments: argparse.Namespace
+    ) -> StackExitCode:
+        """Run a command that needs no ``board.json``.
+
+        :param command: The command to run.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        if command is Command.LABELS:
+            LabelWrite.replacing(
+                arguments.current, arguments.add, arguments.remove
+            ).print_labels()
+            return StackExitCode.SUCCESS
+        if command is Command.CONFIGURATION:
+            Configuration.load(
                 fork_repository=arguments.fork,
                 upstream_repository=arguments.upstream,
-            )
-        )
-        return StackExitCode.SUCCESS
-    print_promotion_link(
+            ).print_settings()
+            return StackExitCode.SUCCESS
         PromotionLink.build(
-            load_configuration(), arguments.branch, arguments.title, arguments.body
-        )
-    )
-    return StackExitCode.SUCCESS
+            Configuration.load(), arguments.branch, arguments.title, arguments.body
+        ).print_url()
+        return StackExitCode.SUCCESS
 
+    @staticmethod
+    def _run_against_the_board(
+        command: Command, arguments: argparse.Namespace, stack: Stack
+    ) -> StackExitCode:
+        """Run a command that reads the derived stack.
 
-def _run_against_the_board(
-    command: Command, arguments: argparse.Namespace, stack: Stack
-) -> StackExitCode:
-    """Run a command that reads the derived stack.
-
-    :param command: The command to run.
-    :param arguments: The parsed command line.
-    :param stack: The derived stack.
-    :return: The process exit code.
-    """
-    if command is Command.CHECK_MOVE:
-        return print_move_checks(
-            CommitMoveChecks(
-                stack=stack,
-                checked_out_branch=_git("branch", "--show-current"),
-                is_ancestor=_ancestry_predicate(stack.configuration),
+        :param command: The command to run.
+        :param arguments: The parsed command line.
+        :param stack: The derived stack.
+        :return: The process exit code.
+        """
+        if command is Command.CHECK_MOVE:
+            return CommitMoveChecks.of_checkout(stack).print_verdict(
+                ProposedCommitMove(
+                    action=arguments.action,
+                    source=arguments.source,
+                    destination=arguments.destination,
+                    destination_remote=arguments.destination_remote,
+                ),
+            )
+        report = StackReport(stack)
+        reporters = {
+            Command.STATUS: report.print_status,
+            Command.CHECK: report.print_check,
+            Command.NEXT: (
+                report.print_next_porcelain
+                if arguments.porcelain
+                else report.print_next
             ),
-            ProposedCommitMove(
-                action=arguments.action,
-                source=arguments.source,
-                destination=arguments.destination,
-                destination_remote=arguments.destination_remote,
-            ),
-        )
-    reporters = {
-        Command.STATUS: print_status,
-        Command.CHECK: print_check,
-        Command.NEXT: print_next_porcelain if arguments.porcelain else print_next,
-        Command.RESTACK_PLAN: print_restack_plan,
-        Command.REPARENTS: print_reparents,
-        Command.LANDED: print_landed,
-    }
-    reporters[command](stack)
-    return StackExitCode.SUCCESS
-
-
-def _ancestry_predicate(configuration: Configuration) -> Callable[[str, str], bool]:
-    """:param configuration: The resolved configuration naming the fork remote.
-    :return: A predicate testing whether a fork branch is contained in a local branch.
-    """
-
-    def is_ancestor(candidate: str, descendant: str) -> bool:
-        return _git_succeeds(
-            "merge-base",
-            "--is-ancestor",
-            resolve_ref(configuration, candidate),
-            descendant,
-        )
-
-    return is_ancestor
-
-
-def main() -> ExitCode:
-    """Dispatch the command-line invocation, ending with the status the refusal carries.
-
-    :return: The process exit code.
-    """
-    arguments = _argument_parser().parse_args()
-    command = Command(arguments.command)
-    try:
-        if not command.needs_a_board:
-            return _run_without_a_board(command, arguments)
-        return _run_against_the_board(command, arguments, load_stack())
-    except CommandFailure as error:
-        logger.error(f"{error}")
-        return error.exit_code
+            Command.RESTACK_PLAN: report.print_restack_plan,
+            Command.REPARENTS: report.print_reparents,
+            Command.LANDED: report.print_landed,
+        }
+        reporters[command]()
+        return StackExitCode.SUCCESS
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(StackCommandLine.main())

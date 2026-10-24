@@ -32,7 +32,7 @@ from basstler.maintenance_report import (
     print_restack,
 )
 from basstler.maintenance_restack_procedure import restack
-from basstler.stack import Configuration, Stack, load_stack
+from basstler.stack import Configuration, Stack
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -72,7 +72,7 @@ class MaintenancePass:
 
     def stack(self) -> Stack:
         """:return: The derived stack, read from the exported board."""
-        return load_stack(self.board)
+        return Stack.load(self.board)
 
 
 @dataclass(frozen=True)
