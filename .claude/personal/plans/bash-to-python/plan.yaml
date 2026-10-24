@@ -38,17 +38,18 @@ items:
     modules still define module-level constants. Move them into named enums or dataclasses in tests/constants.py,
     as test_stack.py does, so no test spells a value of its own. Recorded from PR 1's follow-up list.
 - id: basstler-notes-core-python
-  title: 'Bash to Python 1: notes-core modules (config, git seam, writer, markers)'
+  title: 'Bash to Python 1: notes-core modules (config, git seam, writer)'
   branch: claude/basstler-notes-core-python
   status: blocked
   track: conversion
   depends_on:
   - basstler-typed-invocations
   pull_request_number: 8
+  session: https://claude.ai/code/session_01Aw1thewwFoEPCp8spVTdkX
   notes: 'Pure addition, no bash changes: PersonalNotesLocation, PersonalNotesBranch.fetch (upstream fallback),
-    NotesBranchWriter (detached scratch worktree, PUSHED/UNCHANGED, None removes), NotesMarker.section_in,
-    in src/basstler/. The branch exists but predates typed invocations; rebase its git calls onto them.
-    Step 2 is the first caller.'
+    NotesBranchWriter (detached scratch worktree, PUSHED/UNCHANGED, None removes), in src/basstler/. Main
+    merged in on 2026-10-24. NotesMarker is dropped: nothing reads marker sections back under step 2''s
+    design. Rebase the git calls onto typed invocations. Step 2 is the first caller.'
   blockers:
   - 'Waits on basstler-typed-invocations: draft #8 predates it, and its git calls are rebased onto it
     once it lands.'
