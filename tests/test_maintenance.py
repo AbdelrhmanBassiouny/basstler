@@ -33,8 +33,6 @@ from basstler.stack import (
     PullRequest,
     RefusalReason,
     Stack,
-    build_stack,
-    load_board,
 )
 
 import basstler.maintenance
@@ -83,8 +81,11 @@ from basstler.maintenance_report import (
 from basstler.maintenance_restack_procedure import restack
 from basstler.maintenance_restack_steps import (
     BranchOutcome,
+    ConflictResponse,
+    LeaveItToTheCaller,
     RestackOutcome,
     RestackStep,
+    TellTheBranchOwner,
 )
 
 from .scratch_repository import initialize_bare_repository
@@ -433,7 +434,7 @@ def a_stack(checkout: ForkCheckout, pull_requests: list[PullRequest]):
     def is_merged(name: str) -> bool:
         return ancestry.is_ancestor(name, upstream)
 
-    return build_stack(configuration, pull_requests, is_merged)
+    return Stack.build(configuration, pull_requests, is_merged)
 
 
 # %% running git
@@ -525,7 +526,7 @@ def test_the_written_board_parses_back_into_the_records_it_was_built_from(
     tmp_path: Path,
 ):
     """
-    The export's only contract is that ``stack.load_board`` reads it, so the expected
+    The export's only contract is that ``PullRequest.read_board`` reads it, so the expected
     value is derived by reading it rather than by hand-writing the shape twice.
     """
     export = BoardExport.from_api_records(
@@ -547,7 +548,7 @@ def test_the_written_board_parses_back_into_the_records_it_was_built_from(
 
     export.write(destination)
 
-    assert load_board(destination) == list(export.pull_requests)
+    assert PullRequest.read_board(destination) == list(export.pull_requests)
 
 
 def test_a_pull_request_missing_a_required_field_is_rejected_rather_than_defaulted():
@@ -1037,6 +1038,14 @@ def test_a_collision_with_the_fix_is_handed_back_rather_than_reported_to_its_own
     assert collision.reported_at is None
     assert fork.label_writes == []
     assert fork.comments == []
+
+
+def test_naming_a_subtree_leaves_its_collisions_to_the_caller():
+    assert type(ConflictResponse.chosen_for(StackBranch.PARENT)) is LeaveItToTheCaller
+
+
+def test_a_whole_board_pass_tells_the_branch_owner_of_its_collisions():
+    assert type(ConflictResponse.chosen_for(None)) is TellTheBranchOwner
 
 
 def test_the_restack_command_passes_the_subtree_it_was_given(
