@@ -9,10 +9,15 @@ here, so the repository-root test/conftest.py - which imports the robotics stack
 job does not install - is never loaded for it.
 """
 
+import os
 from pathlib import Path
 
 import pytest
 
+# A session running the plugin exports BASSTLER_PLUGIN_ROOT as its synced copy, which
+# basstler.locations reads on import; pinned before anything imports it, so the suite
+# tests this checkout's plugin rather than whichever release that session synced.
+os.environ["BASSTLER_PLUGIN_ROOT"] = str(Path(__file__).resolve().parents[1] / "plugin")
 
 from .executable_stubs import ExecutableStubDirectory
 from .scratch_repository import ScratchRepository
