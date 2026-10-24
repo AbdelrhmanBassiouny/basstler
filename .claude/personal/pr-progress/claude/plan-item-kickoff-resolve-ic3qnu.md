@@ -10,11 +10,12 @@ Draft #15, continued here from CRAM #430.
 ## Done
 - Merged main (2026-10-24): moved the test constants into main's `tests/constants/` split,
   and kept main's superseded-merge integration in `IntegrateParent`.
-- Review: every module-level function in `stack.py` moved onto a class (0c72f1d).
-- Review: added tests asserting which `ConflictResponse` type is chosen (7a90808).
+- Review round 1: `stack.py` functions moved onto classes (0c72f1d), and a test checks the
+  `ConflictResponse` type (7a90808). The reviewer resolved both threads.
+- Review round 2 (23dac4d): `stack.py` split into `stack_*` modules, strings are enums,
+  abbreviations spelled out, `next_to_promote` removed. `release:minor` label set.
 
 ## Next
-- Thread r4368631657 is left open: confirm the reading (the response type) or say what
-  was meant instead.
-- Asked on the PR whether `Stack.next_to_promote`, which only tests call, can go.
-- PR needs the `release:minor` label (not verified from this session).
+- Open threads waiting on the reviewer: prose and URL strings as enums? (r4368761444); can
+  the dead `ci` field go? (r4368763692); derive `in-review` from the upstream pull request
+  instead of the label, as its own item or in this PR? (r4368773879).
