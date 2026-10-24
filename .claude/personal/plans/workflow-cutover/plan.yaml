@@ -52,9 +52,9 @@ items:
   track: cutover
   pull_request_number: 16
   blockers:
-  - Deleting the live Routine on CRAM is the owner's step; the Routine's own docs (routine-prompt.md, docs/stack/README.md) go with it.
+  - Deleting the live Routine trigger on CRAM is the owner's step; after #16 merges its prompt names a removed flag (--non-interactive).
   depends_on: []
-  notes: 'Reshaped 2026-10-24 with the owner (ba02b79): no Action. A mirror fork cannot carry a pull-request-triggered caller, and a session can run the pass itself, so plan-item-gathering.md starts kickoff and resolve with /stacked-pr-maintenance when an upstream is named. The workflow, example caller, run-unattended and in-pass reparent are dropped; reparents stay with the skill''s MCP step. #15 (restack --stacked-on, after a fix) complements this, and #16 will conflict with its stack.py split at the import level.'
+  notes: 'Reshaped 2026-10-24 with the owner: no Action and no schedule. plan-item-gathering.md starts kickoff and resolve with /stacked-pr-maintenance when an upstream is named (ba02b79); reparents stay with its MCP step. a7f2e00 removes the Routine from the code (routine-prompt.md, --non-interactive, RoutineText), so #16 is release:major. #15 (restack --stacked-on) complements it and will conflict at the import level.'
 - id: artifact-path-retirement
   title: Retire the Artifact publishing path once the Pages site has run one green cycle
   branch: null
