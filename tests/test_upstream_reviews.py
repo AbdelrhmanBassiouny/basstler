@@ -3,6 +3,7 @@ Tests for upstream_reviews.py's data parsing, check reading, failure-log excerpt
 thread pagination, pull request resolution, report rendering, and the gh-backed client.
 """
 
+import inspect
 import json
 import os
 import shutil
@@ -12,6 +13,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.exceptions import DataclassException
 from basstler.locations import ProjectLocation
 from basstler.repository import Repository
 from basstler.stack_configuration import CommittedStackConfiguration
@@ -23,6 +25,7 @@ from basstler.upstream_reviews_clients import (
     GitHubCommandLineClient,
 )
 from basstler.upstream_reviews_errors import (
+    UpstreamReadError,
     GitHubCommandFailed,
     GraphQLErrorsReturned,
     UpstreamPullRequestNotFound,
@@ -515,6 +518,42 @@ def test_a_branch_never_promoted_upstream_is_reported_clearly():
         make_reader(client).resolve_pull_request_number(Example.UNPROMOTED_BRANCH)
 
     assert raised.value.upstream == UPSTREAM
+
+
+# %% errors
+
+
+def declared_errors() -> list[type[UpstreamReadError]]:
+    """
+    :return: Every error class declared as a dataclass of its own, at any depth below
+        :class:`UpstreamReadError`.
+    """
+    declared, pending = [], [UpstreamReadError]
+    while pending:
+        error = pending.pop()
+        pending.extend(error.__subclasses__())
+        if "__dataclass_params__" in vars(error):
+            declared.append(error)
+    return declared
+
+
+def test_every_upstream_read_error_is_a_dataclass_exception():
+    assert issubclass(UpstreamReadError, DataclassException)
+
+
+@pytest.mark.parametrize("error", declared_errors(), ids=lambda error: error.__name__)
+def test_every_declared_error_implements_its_message_and_correction(error):
+    assert not inspect.isabstract(error)
+
+
+def test_an_error_s_message_carries_its_correction():
+    error = UpstreamPullRequestNotFound(
+        Example.UNPROMOTED_BRANCH, UPSTREAM, Example.FORK_OWNER
+    )
+
+    assert str(error) == (
+        f"{error.error_message()}\nSuggestion: {error.suggest_correction()}"
+    )
 
 
 # %% portability

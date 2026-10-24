@@ -4,28 +4,21 @@ Every error reading an upstream pull request can end in, whichever way it is rea
 
 from __future__ import annotations
 
-from abc import ABC, abstractmethod
+from abc import ABC
 from dataclasses import dataclass
 from pathlib import Path
 
+from basstler.exceptions import DataclassException
 from basstler.repository import Repository
 from basstler.upstream_reviews_vocabulary import ActionBranch, ActionFile
 
 # %% errors
 
 
-@dataclass
-class UpstreamReadError(Exception, ABC):
+class UpstreamReadError(DataclassException, ABC):
     """
-    Base class for every failure this script raises.
+    Base class for every failure reading an upstream pull request.
     """
-
-    def __post_init__(self) -> None:
-        Exception.__init__(self, self.describe())
-
-    @abstractmethod
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
 
 
 @dataclass
@@ -49,9 +42,14 @@ class GitHubCommandFailed(UpstreamReadError):
     Whatever it wrote to standard error.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
+    def error_message(self) -> str:
         return f"{self.executable} exited {self.exit_code}: {self.error_output}"
+
+    def suggest_correction(self) -> str:
+        return (
+            "Check that gh is installed and logged in with read access to the "
+            "upstream: gh auth status"
+        )
 
 
 @dataclass
@@ -65,9 +63,14 @@ class GraphQLErrorsReturned(UpstreamReadError):
     Every message GitHub reported.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
-        return "; ".join(self.messages)
+    def error_message(self) -> str:
+        return "GitHub answered with errors: " + "; ".join(self.messages)
+
+    def suggest_correction(self) -> str:
+        return (
+            "Check that the upstream repository and pull request exist and that the "
+            "logged-in account can read them"
+        )
 
 
 @dataclass
@@ -91,12 +94,16 @@ class UpstreamPullRequestNotFound(UpstreamReadError):
     The owner whose head branches were being claimed.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
+    def error_message(self) -> str:
         return (
             f"no pull request on {self.upstream} has head "
-            f"'{self.fork_owner}:{self.branch}' - the branch has most likely not "
-            "been promoted upstream yet"
+            f"'{self.fork_owner}:{self.branch}'"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "The branch has most likely not been promoted upstream yet; read it once "
+            "its upstream pull request is open"
         )
 
 
@@ -114,12 +121,14 @@ class HelperOutputMissing(UpstreamReadError):
     The request whose output was looked for.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
+    def error_message(self) -> str:
         return (
-            f"no output of helper request {self.request_identifier} in this session's transcript - "
-            'read the helper session\'s events (list_events, kinds ["user"]) first'
+            f"no output of helper request {self.request_identifier} in this "
+            "session's transcript"
         )
+
+    def suggest_correction(self) -> str:
+        return 'Read the helper session\'s events (list_events, kinds ["user"]) first'
 
 
 @dataclass
@@ -138,12 +147,14 @@ class HelperOutputIncomplete(UpstreamReadError):
     The chunks not found.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
+    def error_message(self) -> str:
         return (
-            f"helper request {self.request_identifier} is missing chunks {self.missing} - read the "
-            "helper session's earlier events"
+            f"helper request {self.request_identifier} is missing chunks "
+            f"{self.missing}"
         )
+
+    def suggest_correction(self) -> str:
+        return "Read the helper session's earlier events"
 
 
 @dataclass
@@ -162,9 +173,14 @@ class HelperOutputUnreadable(UpstreamReadError):
     What failed.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
-        return f"helper request {self.request_identifier}'s output is unreadable: {self.reason}"
+    def error_message(self) -> str:
+        return (
+            f"helper request {self.request_identifier}'s output is unreadable: "
+            f"{self.reason}"
+        )
+
+    def suggest_correction(self) -> str:
+        return "Run 'prompt' again and start a new helper session with its message"
 
 
 @dataclass
@@ -178,9 +194,14 @@ class HelperResponseMissing(UpstreamReadError):
     The REST path asked for.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
+    def error_message(self) -> str:
         return f"the helper's recording holds no response for {self.path}"
+
+    def suggest_correction(self) -> str:
+        return (
+            "Run 'prompt' again with this basstler release and start a new helper "
+            "session with its message"
+        )
 
 
 @dataclass
@@ -194,9 +215,11 @@ class NoRecordedReadRequest(UpstreamReadError):
     Where the request was looked for.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
-        return f"no helper request recorded at {self.location} - run 'prompt' first"
+    def error_message(self) -> str:
+        return f"no helper request recorded at {self.location}"
+
+    def suggest_correction(self) -> str:
+        return "Run 'prompt' first"
 
 
 # %% reading through the fork's Action
@@ -220,12 +243,11 @@ class ActionNotInstalled(ActionUnavailable):
     The remote that was looked at.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
-        return (
-            f"'{self.remote}' has no {ActionBranch.NAME} branch - install it with "
-            f"{ActionBranch.install_command}"
-        )
+    def error_message(self) -> str:
+        return f"'{self.remote}' has no {ActionBranch.NAME} branch"
+
+    def suggest_correction(self) -> str:
+        return f"Install it with {ActionBranch.install_command}"
 
 
 @dataclass
@@ -244,13 +266,14 @@ class ActionRunNotStarted(ActionUnavailable):
     How many seconds passed without one.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
+    def error_message(self) -> str:
+        return f"no run started within {self.waited} s of the request"
+
+    def suggest_correction(self) -> str:
         actions = f"{self.fork.url}/actions" if self.fork else "the fork's Actions page"
         return (
-            f"no run started within {self.waited} s of the request: Actions are most "
-            f"likely disabled on the fork, as GitHub starts every fork - enable them "
-            f"at {actions}"
+            "Actions are most likely disabled on the fork, as GitHub starts every "
+            f"fork - enable them at {actions}"
         )
 
 
@@ -275,13 +298,14 @@ class ActionResultMissing(ActionUnavailable):
     How many seconds were spent waiting.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
+    def error_message(self) -> str:
+        return f"no result for request {self.request_identifier} after {self.waited} s"
+
+    def suggest_correction(self) -> str:
         actions = f"{self.fork.url}/actions" if self.fork else "the fork's Actions page"
         return (
-            f"no result for request {self.request_identifier} after {self.waited} s. Either Actions "
-            f"are disabled on the fork (a fork starts with them off - enable them at "
-            f"{actions}), or the run failed: see "
+            "Either Actions are disabled on the fork (a fork starts with them off - "
+            f"enable them at {actions}), or the run failed: see "
             f"{actions}/workflows/{ActionFile.WORKFLOW.file_name}"
         )
 
@@ -297,9 +321,11 @@ class ActionRunFailed(UpstreamReadError):
     What the run reported.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
+    def error_message(self) -> str:
         return f"the Action could not read the upstream: {self.error}"
+
+    def suggest_correction(self) -> str:
+        return ""
 
 
 @dataclass
@@ -314,9 +340,11 @@ class ActionResponseMissing(UpstreamReadError):
     The digest of the query asked for.
     """
 
-    def describe(self) -> str:
-        """:return: The message a caller should see."""
+    def error_message(self) -> str:
         return (
             f"the Action's recording holds no response for query {self.query} - its "
-            f"basstler release differs from this one; re-run {ActionBranch.install_command}"
+            "basstler release differs from this one"
         )
+
+    def suggest_correction(self) -> str:
+        return f"Re-run {ActionBranch.install_command}"
