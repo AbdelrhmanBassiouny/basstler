@@ -45,17 +45,16 @@ items:
   notes: |
     /setup-personal-notes adds the repository to the registry's hub file and copies the file onto this repository's notes, with no question asked; a repository with no registry configured becomes its own. The session-start summary prints the site links worked out from the hub file - the hub, this repository, and this branch's plan and item.
 - id: routine-cutover
-  title: 'Retire the scheduled LLM Routine: deterministic Action + on-demand sessions'
+  title: 'Retire the scheduled LLM Routine: stack maintenance runs at the start of plan-item work'
   branch: claude/stack-maintenance-action
   status: in_progress
   session: https://claude.ai/code/session_019sAtT3YPyFe7yminnDEdSG
   track: cutover
   pull_request_number: 16
   blockers:
-  - 'Owner to decide on #16 (SETUP.md thread): build the branch-based basstler/stack-maintenance caller in #16, or as its own item (proposed).'
-  - Waits on one green run of a real caller before the live Routine is deleted.
+  - Deleting the live Routine on CRAM is the owner's step; the Routine's own docs (routine-prompt.md, docs/stack/README.md) go with it.
   depends_on: []
-  notes: '2026-10-24: main merged (#56 landed, tag-only release), and 9 of 12 review threads were fixed in b8cda95. The caller calls @main with basstler_branch_or_tag, and MaintenanceReport/ReparentResolution are classes. Open threads: the branch caller, the PullRequestActivity enum (events, not PullRequestState), and a suite-wide literal sweep. Decided 2026-10-21: on a fork whose main mirrors its upstream, the caller lives on a history-less basstler/stack-maintenance branch and runs on push. A repository that commits its files keeps #16''s docs/examples caller.'
+  notes: 'Reshaped 2026-10-24 with the owner (ba02b79): no Action. A mirror fork cannot carry a pull-request-triggered caller, and a session can run the pass itself, so plan-item-gathering.md starts kickoff and resolve with /stacked-pr-maintenance when an upstream is named. The workflow, example caller, run-unattended and in-pass reparent are dropped; reparents stay with the skill''s MCP step. #15 (restack --stacked-on, after a fix) complements this, and #16 will conflict with its stack.py split at the import level.'
 - id: artifact-path-retirement
   title: Retire the Artifact publishing path once the Pages site has run one green cycle
   branch: null
