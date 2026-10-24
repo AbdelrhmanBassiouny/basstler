@@ -20,8 +20,7 @@ session by `session-start.sh`. Never merge this file into `main`.
   change (removed or renamed commands, flags, files or settings a user relies on) is a
   major one - set it by labelling the PR `release:minor` (or `release:major`) and say which
   and why in the description. Anything else gets no label, and the release workflow tags
-  the merge commit as the next patch. (Until #32 merges, `main` still sets it with
-  `python -m basstler.release_version bump --part minor` or `--part major`.)
+  the merge commit as the next patch.
 - The PR description links the creating session and always describes the current state:
   after any push that changes what the PR does, update the description in the same turn.
 - Never subscribe to a PR's activity, never offer to watch one, and unsubscribe any
@@ -63,10 +62,6 @@ session by `session-start.sh`. Never merge this file into `main`.
   boundary; every decision and query afterwards runs on the models, never on raw dicts.
   Each model reads only its own object's fields and hands nested objects to their own
   models. Agreed at https://github.com/AbdelrhmanBassiouny/basstler/pull/13#discussion_r4316972597.
-- Model related concepts' relationship in the source, never only in a test that checks two
-  separate definitions agree: derive one from the other, or unify them into one concept
-  when that is the cleaner design by SOLID and the domain's semantics. Agreed at
-  https://github.com/AbdelrhmanBassiouny/basstler/pull/32#discussion_r4367446315.
 
 ## PR progress notes
 
