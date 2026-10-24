@@ -18,7 +18,7 @@ from basstler.maintenance_board import BoardExport
 from basstler.maintenance_fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance_promotion import Promotion
 from basstler.maintenance_restack_steps import BranchOutcome, RestackOutcome
-from basstler.stack import Reparent, Stack
+from basstler.stack_model import Reparent, Stack
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

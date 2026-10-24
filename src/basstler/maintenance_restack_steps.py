@@ -25,17 +25,15 @@ from basstler.maintenance_git_commands import (
     ProposedPush,
 )
 from basstler.maintenance_github import ForkPullRequests
-from basstler.stack import (
-    Branch,
+from basstler.stack_commit_move import (
     CommitMoveAction,
     CommitMoveChecks,
-    Configuration,
-    IntegrationStrategy,
-    LabelWrite,
     ProposedCommitMove,
     RefusalReason,
-    Stack,
 )
+from basstler.stack_label_write import LabelWrite
+from basstler.stack_model import Branch, IntegrationStrategy, Stack
+from basstler.stack_settings import Configuration
 
 # %% what became of one branch
 

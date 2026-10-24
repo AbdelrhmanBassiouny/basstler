@@ -26,10 +26,8 @@ from basstler.maintenance_restack_steps import (
     SkipBranchAlreadyCurrent,
     WithholdBranchStillConflicting,
 )
-from basstler.stack import (
-    CommitMoveChecks,
-    Stack,
-)
+from basstler.stack_commit_move import CommitMoveChecks
+from basstler.stack_model import Stack
 
 if TYPE_CHECKING:
     from types import TracebackType

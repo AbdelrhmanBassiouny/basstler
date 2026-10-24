@@ -17,7 +17,8 @@ from pathlib import Path
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_errors import ExternalCallFailed
-from basstler.stack import Configuration, IntegrationStrategy
+from basstler.stack_model import IntegrationStrategy
+from basstler.stack_settings import Configuration
 
 # %% running git
 
@@ -148,7 +149,7 @@ class GitCommandRunner:
     """
     Runs git in one checkout, reporting failures rather than swallowing them.
 
-    ``stack.py`` reads git through a helper that returns an empty string when a command
+    ``stack_checkout.py`` reads git through a helper that returns an empty string when a command
     fails. That is right for derivation, where a missing ref simply means "no answer",
     and wrong here: a push that silently did nothing would be indistinguishable from one
     that worked.

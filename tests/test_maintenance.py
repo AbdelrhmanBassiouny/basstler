@@ -27,13 +27,9 @@ import pytest
 
 from basstler.exit_codes import StackExitCode
 from basstler.repository import Repository
-from basstler.stack import (
-    Configuration,
-    IntegrationStrategy,
-    PullRequest,
-    RefusalReason,
-    Stack,
-)
+from basstler.stack_commit_move import RefusalReason
+from basstler.stack_model import IntegrationStrategy, PullRequest, Stack
+from basstler.stack_settings import Configuration
 
 import basstler.maintenance
 import basstler.maintenance_restack_procedure

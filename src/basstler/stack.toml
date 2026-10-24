@@ -3,7 +3,7 @@
 # This file carries the shipped defaults only, and names nobody's repository. A project
 # names its own upstream in its committed `.claude/basstler/stack.toml`, which outranks
 # these values, and a `.claude/personal/stack.toml` on the personal-notes branch, if present,
-# layers per-user overrides on top of both (see `stack.py`'s `load_configuration`).
+# layers per-user overrides on top of both (see `Configuration.load` in `stack_settings.py`).
 #
 # The stack itself (which branches exist, how they depend on each other, and their review state) is
 # read live from GitHub, not declared here:

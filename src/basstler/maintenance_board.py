@@ -20,7 +20,7 @@ from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import DescriptionPattern
-from basstler.stack import PullRequest
+from basstler.stack_model import BoardKey, PullRequest
 
 PullRequestRecord = Mapping[str, Any]
 """
@@ -281,9 +281,9 @@ class BoardExport:
         )
 
     def as_json(self) -> str:
-        """:return: The export, in the document :meth:`stack.PullRequest.read_board` parses."""
+        """:return: The export, in the document :meth:`basstler.stack_model.PullRequest.read_board` parses."""
         return json.dumps(
-            {"pull_requests": [asdict(entry) for entry in self.pull_requests]},
+            {BoardKey.PULL_REQUESTS: [asdict(entry) for entry in self.pull_requests]},
             indent=2,
         )
 

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 
 from basstler.maintenance_git_commands import GitCommandRunner, ProposedPush
-from basstler.stack import Configuration
+from basstler.stack_settings import Configuration
 
 
 class FastForwardOutcome(StrEnum):

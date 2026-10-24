@@ -22,30 +22,35 @@ import basstler.stack
 from basstler.exit_codes import StackExitCode
 from basstler.repository import Repository
 from basstler.stack_configuration import StackSetting
-from basstler.stack import (
-    AmbiguousForkRemoteError,
+from basstler.stack import Command, CommandOption
+from basstler.stack_commit_move import (
     CommitMoveAction,
-    BranchStatus,
-    Configuration,
-    ContradictoryLabelWriteError,
-    ForkRemoteNotFoundError,
-    LabelWrite,
-    IntegrationStrategy,
     CommitMoveChecks,
-    Command,
-    CommandOption,
     ProposedCommitMove,
     RefusalReason,
-    PromotionLink,
-    PromotionLinkParameter,
+)
+from basstler.stack_errors import (
+    AmbiguousForkRemoteError,
+    ContradictoryLabelWriteError,
+    ForkRemoteNotFoundError,
     PromotionLinkTooLongError,
-    PrintedConfiguration,
+)
+from basstler.stack_label_write import LabelWrite
+from basstler.stack_model import (
+    BranchStatus,
+    IntegrationStrategy,
     PullRequest,
+    Reparent,
+    RestackPlanEntry,
+    Stack,
+)
+from basstler.stack_promotion_link import PromotionLink, PromotionLinkParameter
+from basstler.stack_report import StatusColumn
+from basstler.stack_settings import (
+    Configuration,
+    PrintedConfiguration,
     Remote,
     RemoteResolution,
-    Reparent,
-    Stack,
-    RestackPlanEntry,
 )
 
 from basstler.locations import PackageLocation, ProjectLocation
@@ -274,12 +279,14 @@ def test_order_places_parent_before_child():
 
 def test_promotes_ready_root():
     prs = [PullRequest(11, StackBranch.FEATURE, StackBranch.BASE, draft=False)]
-    assert build(prs).next_to_promote().name == StackBranch.FEATURE
+    assert [branch.name for branch in build(prs).promotion_order()] == [
+        StackBranch.FEATURE
+    ]
 
 
 def test_nothing_promotes_when_all_draft():
     prs = [PullRequest(5, StackBranch.WORK_IN_PROGRESS, StackBranch.BASE, draft=True)]
-    assert build(prs).next_to_promote() is None
+    assert build(prs).promotion_order() == []
 
 
 def test_ready_child_blocked_until_parent_lands():
@@ -291,7 +298,7 @@ def test_ready_child_blocked_until_parent_lands():
             2, StackBranch.CHILD, StackBranch.PARENT, draft=False
         ),  # approved but parent hasn't landed
     ]
-    assert build(prs).next_to_promote() is None
+    assert build(prs).promotion_order() == []
 
 
 def test_child_promotable_once_parent_reaches_review():
@@ -308,7 +315,9 @@ def test_child_promotable_once_parent_reaches_review():
         ),
         PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
     ]
-    assert build(prs).next_to_promote().name == StackBranch.CHILD
+    assert [branch.name for branch in build(prs).promotion_order()] == [
+        StackBranch.CHILD
+    ]
 
 
 def test_child_promotable_once_parent_merged():
@@ -316,10 +325,8 @@ def test_child_promotable_once_parent_merged():
         PullRequest(1, StackBranch.PARENT, StackBranch.BASE, draft=False),
         PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
     ]
-    assert (
-        build(prs, merged={StackBranch.PARENT}).next_to_promote().name
-        == StackBranch.CHILD
-    )
+    promotable = build(prs, merged={StackBranch.PARENT}).promotion_order()
+    assert [branch.name for branch in promotable] == [StackBranch.CHILD]
 
 
 def test_promotion_order_includes_every_ready_unblocked_branch_in_dependency_order():
@@ -562,15 +569,13 @@ def test_ready_child_blocked_when_its_only_parent_is_an_unlanded_off_board_branc
     prs = [
         PullRequest(2, StackBranch.CHILD, StackBranch.UNLANDED_ELSEWHERE, draft=False)
     ]
-    assert build(prs).next_to_promote() is None
+    assert build(prs).promotion_order() == []
 
 
 def test_ready_child_promotable_when_its_off_board_parent_has_landed():
     prs = [PullRequest(2, StackBranch.CHILD, StackBranch.LANDED_ELSEWHERE, draft=False)]
-    assert (
-        build(prs, merged={StackBranch.LANDED_ELSEWHERE}).next_to_promote().name
-        == StackBranch.CHILD
-    )
+    promotable = build(prs, merged={StackBranch.LANDED_ELSEWHERE}).promotion_order()
+    assert [branch.name for branch in promotable] == [StackBranch.CHILD]
 
 
 # %% configuration layering (personal-notes overrides)
@@ -1646,3 +1651,15 @@ def test_a_promotion_link_is_built_from_the_resolved_repositories(
             "",
         ).url
     )
+
+
+# %% status table
+
+
+def test_status_rows_start_each_cell_where_its_heading_starts():
+    columns = list(StatusColumn)
+    heading = StatusColumn.line(*columns)
+    row = StatusColumn.line(*range(len(columns)))
+    assert [heading.index(column) for column in columns] == [
+        row.index(str(position)) for position in range(len(columns))
+    ]

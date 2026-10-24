@@ -36,7 +36,7 @@ from pathlib import Path
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.maintenance_commands import MaintenanceCommand, MaintenancePass
 from basstler.maintenance_git_commands import GitCommandRunner
-from basstler.stack import Configuration
+from basstler.stack_settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

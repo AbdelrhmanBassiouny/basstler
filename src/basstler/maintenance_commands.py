@@ -32,7 +32,8 @@ from basstler.maintenance_report import (
     print_restack,
 )
 from basstler.maintenance_restack_procedure import restack
-from basstler.stack import Configuration, Stack
+from basstler.stack_model import Stack
+from basstler.stack_settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
