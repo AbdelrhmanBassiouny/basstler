@@ -147,20 +147,18 @@ class CommittedStackConfiguration:
         :return: The repository the project's pull requests are reviewed on.
         :raises MissingUpstreamRepositoryError: If the project names none.
         """
-        return upstream_repository_in(self.values(), self.project_file)
+        return self.upstream_repository_in(self.values())
 
-
-def upstream_repository_in(
-    values: dict[str, Any], project_file: Path, personal_file: Path | None = None
-) -> Repository:
-    """
-    :param values: Layered stack settings.
-    :param project_file: Where the project would name its upstream, for the error.
-    :param personal_file: Where the user could name it instead, when *values* include
-        the personal-notes layer.
-    :return: The upstream repository the settings name.
-    :raises MissingUpstreamRepositoryError: If they name none.
-    """
-    if StackSetting.UPSTREAM_REPOSITORY not in values:
-        raise MissingUpstreamRepositoryError(project_file, personal_file)
-    return Repository.parse(values[StackSetting.UPSTREAM_REPOSITORY])
+    def upstream_repository_in(
+        self, values: dict[str, Any], personal_file: Path | None = None
+    ) -> Repository:
+        """
+        :param values: Layered stack settings, of which this project's are a layer.
+        :param personal_file: Where the user could name the upstream instead, when
+            *values* include the personal-notes layer.
+        :return: The upstream repository the settings name.
+        :raises MissingUpstreamRepositoryError: If they name none.
+        """
+        if StackSetting.UPSTREAM_REPOSITORY not in values:
+            raise MissingUpstreamRepositoryError(self.project_file, personal_file)
+        return Repository.parse(values[StackSetting.UPSTREAM_REPOSITORY])

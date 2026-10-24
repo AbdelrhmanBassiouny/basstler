@@ -55,7 +55,6 @@ from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.stack_configuration import (
     CommittedStackConfiguration,
     StackSetting,
-    upstream_repository_in,
 )
 from basstler.standard_streams import StandardStreamHandler
 
@@ -271,11 +270,9 @@ def load_configuration(
     :return: The layered configuration.
     """
     values = _configuration_values(path)
-    upstream_repository = upstream_repository or upstream_repository_in(
-        values,
-        CommittedStackConfiguration(path).project_file,
-        ProjectLocation.PERSONAL_STACK_CONFIGURATION.value,
-    )
+    upstream_repository = upstream_repository or CommittedStackConfiguration(
+        path
+    ).upstream_repository_in(values, ProjectLocation.PERSONAL_STACK_CONFIGURATION.value)
     resolution = resolved_remotes(path, fork_repository, upstream_repository)
     return Configuration(
         in_review_label=values.get("in_review_label", "in-review"),
@@ -321,10 +318,8 @@ def resolved_remotes(
     return resolve_remotes(
         _remote_urls(),
         upstream_repository
-        or upstream_repository_in(
-            values,
-            CommittedStackConfiguration(path).project_file,
-            ProjectLocation.PERSONAL_STACK_CONFIGURATION.value,
+        or CommittedStackConfiguration(path).upstream_repository_in(
+            values, ProjectLocation.PERSONAL_STACK_CONFIGURATION.value
         ),
         values[StackSetting.UPSTREAM_REMOTE],
         fork_repository
