@@ -84,6 +84,11 @@ class RoutineText(StrEnum):
     conflict or a pending reparent - so every one of them can be found at a glance.
     """
 
+    UNADDRESSED_NOTICE = "This pull request's description names no session to address."
+    """
+    Closes a notice on a pull request whose description links no session.
+    """
+
     PROMOTION_HEADING = "## Promote"
     """
     Heading the compare-and-create link is written under, in the fork pull request's own

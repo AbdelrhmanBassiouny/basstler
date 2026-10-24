@@ -11,7 +11,7 @@ directory holding them rather than named.
 
 from __future__ import annotations
 
-import importlib.metadata
+import json
 import os
 import re
 import subprocess
@@ -21,12 +21,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import (
-    CheckoutLocation,
-    ClaudeCodeVariable,
-    PackageLocation,
-    PluginLocation,
-)
+from basstler.locations import ClaudeCodeVariable, PackageLocation, PluginLocation
 
 from basstler.package_layout import (
     PackageModule,
@@ -34,14 +29,12 @@ from basstler.package_layout import (
     package_modules,
 )
 
-from .constants import (
-    ConfigurationVariable,
-    EnvironmentVariable,
-    RepositoryLocation,
-)
-from .plugin_manifest import PluginManifest
+from .constants.environment import ConfigurationVariable, SearchPathVariable
+from .constants.paths import ExampleCaller, RepositoryLocation
+from .plugin_manifest import PluginManifestKey
 from .project_declaration import HatchVersionSource, ProjectDeclaration
 from .script_runner import ScriptRunner, configuration_value
+from .workflow_document import WorkflowDocument, WorkflowInput
 
 WORKFLOWS_DIRECTORY = RepositoryLocation.WORKFLOWS
 """
@@ -93,7 +86,7 @@ def run_as_a_caller(*arguments: str) -> subprocess.CompletedProcess[str]:
     """
     return ConfiguredInterpreterRunner(
         project_root=RepositoryLocation.ROOT.value,
-        removed_variable_prefixes=(EnvironmentVariable.IMPORT_PATH,),
+        removed_variable_prefixes=(SearchPathVariable.IMPORT_PATH,),
     ).run(*arguments)
 
 
@@ -147,26 +140,26 @@ def test_a_caller_imports_the_checkouts_own_source_with_no_install():
     assert Path(result.stdout.strip()) == PackageLocation.DIRECTORY / "__init__.py"
 
 
-def test_the_build_reads_its_version_from_the_plugin_manifest():
+def test_the_build_reads_its_version_from_the_release_tag():
     """
-    An installed plugin installs the package at its own version, so the two are one
-    release. The manifest has to hold the version as a literal, since Claude Code runs
-    nothing before reading it, so the build reads it from there rather than from a second
-    copy a bump could leave behind.
+    A release is only a tag on its merge commit, so the build reads the version from git
+    rather than from a file a merge would then have to commit; a source with no history
+    still builds.
     """
     version_source = HatchVersionSource.of_this_package()
 
-    assert version_source.path == RepositoryLocation.PLUGIN_MANIFEST
-    assert version_source.version() == PluginManifest.of_this_plugin().version
+    assert version_source.source == "vcs"
+    assert version_source.fallback_version is not None
 
 
-def test_the_installed_package_is_the_plugin_version():
+def test_the_plugin_manifest_names_no_version():
     """
-    The version the build read is the one the installed package reports.
+    A version in the manifest would need a commit after each merge, which a plugin synced
+    from the merge misses, and would keep marketplace installs on it until it changed.
     """
-    manifest = PluginManifest.of_this_plugin()
+    manifest = json.loads(RepositoryLocation.PLUGIN_MANIFEST.read_text())
 
-    assert importlib.metadata.version(manifest.name) == manifest.version
+    assert PluginManifestKey.VERSION not in manifest
 
 
 # %% each module stands on its own
@@ -243,27 +236,15 @@ def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():
     ] == []
 
 
-RELEASE_REFERENCE = re.compile(r"(?:@|basstler_ref: )(v[0-9][^\s]*)")
-"""
-A ``@<ref>`` or ``basstler_ref: <ref>`` naming a basstler release.
-"""
-
-
-@pytest.mark.parametrize(
-    "location", CheckoutLocation.example_callers(), ids=lambda p: p._name_
-)
-def test_every_example_caller_calls_the_plugins_own_release(location):
+@pytest.mark.parametrize("caller", list(ExampleCaller), ids=lambda p: p._name_)
+def test_every_example_caller_uses_one_branch_or_tag_throughout(caller):
     """
-    A project copies an example caller as it stands, so it has to call the release its
-    plugin installs - both the workflow it uses and the package that workflow installs.
+    A project copies an example caller as it stands, so the workflow it uses and the
+    package that workflow installs have to come from the same branch or tag.
     """
-    manifest = PluginManifest.of_this_plugin()
-    caller = RepositoryLocation.ROOT / location
+    job = WorkflowDocument.read(caller).only_job
 
-    references = RELEASE_REFERENCE.findall(caller.read_text())
-
-    assert len(references) == 2
-    assert set(references) == {manifest.release_tag}
+    assert job.call.branch_or_tag == job.inputs[WorkflowInput.BASSTLER_BRANCH_OR_TAG]
 
 
 # %% nothing is left behind
@@ -337,8 +318,8 @@ def variables_the_configuration_defines() -> frozenset[str]:
             text=True,
             check=True,
             env={
-                EnvironmentVariable.EXECUTABLE_SEARCH_PATH: os.environ[
-                    EnvironmentVariable.EXECUTABLE_SEARCH_PATH
+                SearchPathVariable.EXECUTABLE_SEARCH_PATH: os.environ[
+                    SearchPathVariable.EXECUTABLE_SEARCH_PATH
                 ]
             },
         ).stdout.split()

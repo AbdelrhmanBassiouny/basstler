@@ -1,0 +1,30 @@
+[
+  {
+    "total_count": 3,
+    "check_runs": [
+      {
+        "name": "test (krrood)",
+        "status": "completed",
+        "conclusion": "success",
+        "details_url": "https://github.com/example-upstream/example-repo/actions/runs/1/job/21"
+      },
+      {
+        "name": "test (robokudo)",
+        "status": "completed",
+        "conclusion": "failure",
+        "details_url": "https://github.com/example-upstream/example-repo/actions/runs/1/job/22"
+      }
+    ]
+  },
+  {
+    "total_count": 3,
+    "check_runs": [
+      {
+        "name": "test (coraplex)",
+        "status": "in_progress",
+        "conclusion": null,
+        "details_url": "https://github.com/example-upstream/example-repo/actions/runs/1/job/23"
+      }
+    ]
+  }
+]

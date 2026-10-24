@@ -22,18 +22,8 @@ from basstler.maintenance_fast_forward import fast_forward
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.maintenance_github import GitHubRepository
 from basstler.maintenance_promotion import clear_spent_promotion_labels, promote
-from basstler.maintenance_reparent_notice import resolve_reparents
-from basstler.maintenance_report import (
-    MaintenanceReport,
-    build_report,
-    exit_code_for,
-    print_board_export,
-    print_fast_forward,
-    print_promotions,
-    print_reparents,
-    print_restack,
-    unattended_exit_code_for,
-)
+from basstler.maintenance_reparent_notice import ReparentResolution
+from basstler.maintenance_report import MaintenanceReport
 from basstler.maintenance_restack_procedure import restack
 from basstler.stack import Configuration, Stack, load_stack, reparents
 from basstler.standard_streams import StandardStreamHandler
@@ -176,9 +166,11 @@ class BoardCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code."""
         export = BoardExport.from_api_records(maintenance.fork().open_pull_requests())
-        print_board_export(
-            export, export.write(maintenance.board) if arguments.write else None
-        )
+        if not arguments.write:
+            logger.info(export.as_json())
+            return StackExitCode.SUCCESS
+        written_to = export.write(maintenance.board)
+        logger.info(f"{len(export.pull_requests)} open pull request(s) -> {written_to}")
         return StackExitCode.SUCCESS
 
 
@@ -208,9 +200,11 @@ class FastForwardCommand(MaintenanceCommand):
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
-        report = fast_forward(maintenance.configuration, maintenance.git)
-        print_fast_forward(report)
-        return exit_code_for(MaintenanceReport(fast_forward=report))
+        report = MaintenanceReport(
+            fast_forward=fast_forward(maintenance.configuration, maintenance.git)
+        )
+        report.print_summary()
+        return report.exit_code
 
 
 @dataclass(frozen=True)
@@ -240,9 +234,11 @@ class RestackCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code."""
         stack = maintenance.stack()
-        outcomes = restack(stack, maintenance.git, maintenance.fork())
-        print_restack(outcomes)
-        return exit_code_for(MaintenanceReport(restacked=tuple(outcomes)))
+        report = MaintenanceReport(
+            restacked=tuple(restack(stack, maintenance.git, maintenance.fork()))
+        )
+        report.print_summary()
+        return report.exit_code
 
 
 @dataclass(frozen=True)
@@ -273,10 +269,12 @@ class PromoteCommand(MaintenanceCommand):
         :return: The process exit code."""
         stack = maintenance.stack()
         fork = maintenance.fork()
-        print_promotions(
-            promote(stack, fork), clear_spent_promotion_labels(stack, fork)
+        report = MaintenanceReport(
+            promoted=tuple(promote(stack, fork)),
+            promotion_labels_cleared=tuple(clear_spent_promotion_labels(stack, fork)),
         )
-        return StackExitCode.SUCCESS
+        report.print_summary()
+        return report.exit_code
 
 
 @dataclass(frozen=True)
@@ -315,7 +313,7 @@ class RunReportCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code.
         """
-        return exit_code_for(self.perform(maintenance, as_json=arguments.json))
+        return self.perform(maintenance, as_json=arguments.json).exit_code
 
     def perform(self, maintenance: MaintenancePass, as_json: bool) -> MaintenanceReport:
         """
@@ -337,9 +335,9 @@ class RunReportCommand(MaintenanceCommand):
         # session-driven pass this replaces always gave it: a restack integrates a
         # branch onto its *current* parent, so a child left on a landed one is
         # restacked onto a dead end until it is retargeted first.
-        reparent_outcomes = resolve_reparents(reparents(stack), stack, fork)
+        reparent_outcomes = ReparentResolution(stack, fork).resolve(reparents(stack))
         fast_forward_report = fast_forward(stack.configuration, maintenance.git)
-        report = build_report(
+        report = MaintenanceReport.of_pass(
             stack,
             fast_forward_report,
             restack(stack, maintenance.git, fork),
@@ -350,11 +348,8 @@ class RunReportCommand(MaintenanceCommand):
         maintenance.board.unlink(missing_ok=True)
         if as_json:
             logger.info(report.as_json())
-        else:
-            print_fast_forward(fast_forward_report)
-            print_reparents(reparent_outcomes)
-            print_restack(report.restacked)
-            print_promotions(report.promoted, report.promotion_labels_cleared)
+            return report
+        report.print_summary()
         return report
 
 
@@ -364,7 +359,7 @@ class UnattendedRunCommand(MaintenanceCommand):
     Performs the whole pass for a job nobody watches, and reports it as one document.
 
     The pass is :class:`RunReportCommand`'s; only the exit status differs, per
-    :func:`maintenance_report.unattended_exit_code_for`.
+    :attr:`maintenance_report.MaintenanceReport.unattended_exit_code`.
     """
 
     @classproperty
@@ -392,8 +387,8 @@ class UnattendedRunCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code.
         """
-        return unattended_exit_code_for(
-            RunReportCommand().perform(maintenance, as_json=True)
+        return (
+            RunReportCommand().perform(maintenance, as_json=True).unattended_exit_code
         )
 
 

@@ -1,9 +1,5 @@
 """
 What a pass did, as a document, as printed lines, and as an exit status.
-
-Every command that produces a report derives its status through the same function, so no
-two can disagree about what a clean pass is - a refused fast-forward reported as success
-is exactly the silence this exists to prevent.
 """
 
 from __future__ import annotations
@@ -11,10 +7,9 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from pathlib import Path
+from enum import StrEnum
 
 from basstler.exit_codes import StackExitCode
-from basstler.maintenance_board import BoardExport
 from basstler.maintenance_fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance_promotion import Promotion
 from basstler.maintenance_reparent_notice import RetargetOutcome
@@ -27,6 +22,41 @@ logger = StandardStreamHandler.logger_for(__name__)
 This module's logger, which is also what its command prints through.
 """
 
+# %% vocabulary
+
+
+class MaintenanceReportKey(StrEnum):
+    """
+    The keys :meth:`MaintenanceReport.as_json` adds beside the report's own fields.
+    """
+
+    STATUS = "status"
+    """
+    The exit status, by the name a caller reads.
+    """
+
+    EXIT_CODE = "exit_code"
+    """
+    The exit status, as the process exit code.
+    """
+
+
+class ReparentState(StrEnum):
+    """
+    What became of a pending reparent, as a printed line names it.
+    """
+
+    RETARGETED = "retargeted"
+    """
+    This pass's own credential retargeted it.
+    """
+
+    REFUSED_NOTIFIED = "refused-notified"
+    """
+    GitHub refused the retarget, and the branch's owner was labelled and commented at.
+    """
+
+
 # %% the report a caller renders or emits
 
 
@@ -34,12 +64,6 @@ This module's logger, which is also what its command prints through.
 class MaintenanceReport:
     """
     Everything one pass did, and what it could not.
-
-    ``reparents`` is every child whose base has landed, as :func:`stack.reparents`
-    found it; ``reparents_retargeted`` is which of them this pass's own credential
-    retargeted itself. A retarget GitHub refuses is labelled and commented at instead -
-    see :func:`maintenance_reparent_notice.resolve_reparents` - and is the one write
-    left for a session to perform through the GitHub MCP server.
 
     Every field defaults to nothing done, so a single command reports the part of the
     pass it performed through the same object - and therefore through the same exit
@@ -90,13 +114,51 @@ class MaintenanceReport:
     The branches approved and unblocked, whether or not a link was built this pass.
     """
 
+    @classmethod
+    def of_pass(
+        cls,
+        stack: Stack,
+        fast_forward_report: FastForwardReport | None,
+        restacked: Sequence[BranchOutcome],
+        promoted: Sequence[Promotion] = (),
+        promotion_labels_cleared: Sequence[str] = (),
+        reparent_outcomes: Sequence[RetargetOutcome] = (),
+    ) -> MaintenanceReport:
+        """
+        Assemble one pass's outcomes and its leftovers into a single report.
+
+        :param stack: The derived stack, read for what the caller still has to do.
+        :param fast_forward_report: What became of the fork's base branch, if attempted.
+        :param restacked: What became of each branch in the restack plan.
+        :param promoted: The branches whose upstream link was built this pass.
+        :param promotion_labels_cleared: The branches whose spent link label was
+            removed.
+        :param reparent_outcomes: What became of every pending reparent; empty when
+            reparents were not attempted.
+        :return: The report.
+        """
+        return cls(
+            fast_forward=fast_forward_report,
+            restacked=tuple(restacked),
+            promoted=tuple(promoted),
+            promotion_labels_cleared=tuple(promotion_labels_cleared),
+            reparents=tuple(reparents(stack)),
+            reparents_retargeted=tuple(
+                outcome.reparent.branch
+                for outcome in reparent_outcomes
+                if outcome.retargeted
+            ),
+            landed=tuple(branch.name for branch in landed_branches(stack)),
+            promotable=tuple(branch.name for branch in promotion_order(stack)),
+        )
+
     def as_json(self) -> str:
         """:return: The report as one machine-readable document."""
-        status = exit_code_for(self)
+        status = self.exit_code
         return json.dumps(
             {
-                "status": status.name_for_a_caller,
-                "exit_code": int(status),
+                MaintenanceReportKey.STATUS: status.name_for_a_caller,
+                MaintenanceReportKey.EXIT_CODE: int(status),
                 **asdict(self),
             },
             indent=2,
@@ -119,144 +181,97 @@ class MaintenanceReport:
             and self.fast_forward.outcome is FastForwardOutcome.REFUSED_NOT_FAST_FORWARD
         )
 
+    @property
+    def exit_code(self) -> StackExitCode:
+        """
+        One pass's exit status, from what it actually left behind.
 
-def build_report(
-    stack: Stack,
-    fast_forward_report: FastForwardReport | None,
-    restacked: Sequence[BranchOutcome],
-    promoted: Sequence[Promotion] = (),
-    promotion_labels_cleared: Sequence[str] = (),
-    reparent_outcomes: Sequence[RetargetOutcome] = (),
-) -> MaintenanceReport:
-    """
-    Assemble one pass's outcomes and its leftovers into a single report.
-
-    :param stack: The derived stack, read for what the caller still has to do.
-    :param fast_forward_report: What became of the fork's base branch, if attempted.
-    :param restacked: What became of each branch in the restack plan.
-    :param promoted: The branches whose upstream link was built this pass.
-    :param promotion_labels_cleared: The branches whose spent link label was removed.
-    :param reparent_outcomes: What became of every pending reparent, from
-        :func:`maintenance_reparent_notice.resolve_reparents` - empty when reparents
-        were not attempted this command.
-    :return: The report.
-    """
-    return MaintenanceReport(
-        fast_forward=fast_forward_report,
-        restacked=tuple(restacked),
-        promoted=tuple(promoted),
-        promotion_labels_cleared=tuple(promotion_labels_cleared),
-        reparents=tuple(reparents(stack)),
-        reparents_retargeted=tuple(
-            outcome.reparent.branch
-            for outcome in reparent_outcomes
-            if outcome.retargeted
-        ),
-        landed=tuple(branch.name for branch in landed_branches(stack)),
-        promotable=tuple(branch.name for branch in promotion_order(stack)),
-    )
-
-
-# %% printing
-
-
-def print_board_export(export: BoardExport, written_to: Path | None) -> None:
-    """
-    Report what the export contains, and where it went.
-
-    :param export: The export.
-    :param written_to: Where it was written, or ``None`` when it was only printed.
-    """
-    if written_to is None:
-        logger.info(export.as_json())
-        return
-    logger.info(f"{len(export.pull_requests)} open pull request(s) -> {written_to}")
-
-
-def print_fast_forward(report: FastForwardReport) -> None:
-    """:param report: What became of the fork's base branch."""
-    logger.info(f"{report.fork_reference}\t{report.outcome}\t{report.commit}")
-    if report.explanation:
-        logger.error(report.explanation)
-
-
-def print_restack(outcomes: Sequence[BranchOutcome]) -> None:
-    """:param outcomes: What became of each branch."""
-    for outcome in outcomes:
-        detail = (
-            ",".join(outcome.conflicting_paths)
-            or ",".join(outcome.refusals)
-            or outcome.pushed_commit
-            or outcome.explanation
-            or ""
-        )
-        logger.info(f"{outcome.branch}\t{outcome.outcome}\t{detail}")
-
-
-def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> None:
-    """:param promoted: The branches whose link was built this pass.
-    :param cleared: The branches whose spent link label was removed."""
-    for promotion in promoted:
-        logger.info(
-            f"{promotion.branch}\t#{promotion.pull_request_number}\t{promotion.url}"
-        )
-        if promotion.body_was_truncated:
-            logger.error(
-                f"{promotion.branch}: the prefilled description was shortened to fit "
-                f"the URL limit"
-            )
-    for branch in cleared:
-        logger.info(f"{branch}\tlink-label-cleared\t")
-
-
-def print_reparents(outcomes: Sequence[RetargetOutcome]) -> None:
-    """:param outcomes: What became of each pending reparent."""
-    for outcome in outcomes:
-        state = "retargeted" if outcome.retargeted else "refused-notified"
-        logger.info(
-            f"{outcome.reparent.branch}\t{state}\t{outcome.reparent.target_base}"
-        )
-
-
-# %% the exit status
-
-
-def exit_code_for(report: MaintenanceReport) -> StackExitCode:
-    """
-    Decide one pass's exit status from what it actually left behind.
-
-    Shared by every command that produces a report, so none of them can disagree about
-    what counts as a clean pass - a refused fast-forward reported as success is exactly
-    the kind of silence this exists to prevent.
-
-    :param report: What the pass did.
-    :return: The process exit code.
-    """
-    if report.fast_forward_was_refused:
-        return StackExitCode.NOT_FAST_FORWARD
-    unpublished = report.branches_left_unpublished
-    if any(outcome.outcome is RestackOutcome.REFUSED for outcome in unpublished):
-        return StackExitCode.MOVE_REFUSED
-    if unpublished:
-        return StackExitCode.BRANCH_NEEDS_ATTENTION
-    return StackExitCode.SUCCESS
-
-
-def unattended_exit_code_for(report: MaintenanceReport) -> StackExitCode:
-    """
-    Decide the exit status of a pass nobody is watching.
-
-    A branch whose owner has already been told on its pull request is theirs to act on,
-    so it does not fail the run; anything else :func:`exit_code_for` fails on still
-    does, since the run's status is the only place nobody-was-told surfaces.
-
-    :param report: What the pass did.
-    :return: The process exit code.
-    """
-    exit_code = exit_code_for(report)
-    if exit_code is StackExitCode.BRANCH_NEEDS_ATTENTION and all(
-        outcome.outcome.is_reported_to_its_owner
-        for outcome in report.branches_left_unpublished
-    ):
+        Every command that produces a report derives its status here, so none of them
+        can disagree about what counts as a clean pass.
+        """
+        if self.fast_forward_was_refused:
+            return StackExitCode.NOT_FAST_FORWARD
+        unpublished = self.branches_left_unpublished
+        if any(outcome.outcome is RestackOutcome.REFUSED for outcome in unpublished):
+            return StackExitCode.MOVE_REFUSED
+        if unpublished:
+            return StackExitCode.BRANCH_NEEDS_ATTENTION
         return StackExitCode.SUCCESS
-    return exit_code
+
+    @property
+    def unattended_exit_code(self) -> StackExitCode:
+        """
+        The exit status of a pass nobody is watching.
+
+        As :attr:`exit_code`, except that a branch whose owner has already been told on
+        its pull request does not fail the run.
+        """
+        exit_code = self.exit_code
+        if exit_code is StackExitCode.BRANCH_NEEDS_ATTENTION and all(
+            outcome.outcome.is_reported_to_its_owner
+            for outcome in self.branches_left_unpublished
+        ):
+            return StackExitCode.SUCCESS
+        return exit_code
+
+    def print_summary(self) -> None:
+        """
+        Print one line per thing the pass did, in the order the pass did them.
+        """
+        self.print_fast_forward()
+        self.print_reparents()
+        self.print_restack()
+        self.print_promotions()
+
+    def print_fast_forward(self) -> None:
+        """
+        Print what became of the fork's base branch, if it was attempted.
+        """
+        if self.fast_forward is None:
+            return
+        report = self.fast_forward
+        logger.info(f"{report.fork_reference}\t{report.outcome}\t{report.commit}")
+        if report.explanation:
+            logger.error(report.explanation)
+
+    def print_reparents(self) -> None:
+        """
+        Print what became of each pending reparent.
+        """
+        for reparent in self.reparents:
+            state = (
+                ReparentState.RETARGETED
+                if reparent.branch in self.reparents_retargeted
+                else ReparentState.REFUSED_NOTIFIED
+            )
+            logger.info(f"{reparent.branch}\t{state}\t{reparent.target_base}")
+
+    def print_restack(self) -> None:
+        """
+        Print what became of each branch in the restack plan.
+        """
+        for outcome in self.restacked:
+            detail = (
+                ",".join(outcome.conflicting_paths)
+                or ",".join(outcome.refusals)
+                or outcome.pushed_commit
+                or outcome.explanation
+                or ""
+            )
+            logger.info(f"{outcome.branch}\t{outcome.outcome}\t{detail}")
+
+    def print_promotions(self) -> None:
+        """
+        Print every upstream link built this pass, and every spent link label removed.
+        """
+        for promotion in self.promoted:
+            logger.info(
+                f"{promotion.branch}\t#{promotion.pull_request_number}\t{promotion.url}"
+            )
+            if promotion.body_was_truncated:
+                logger.error(
+                    f"{promotion.branch}: the prefilled description was shortened to "
+                    f"fit the URL limit"
+                )
+        for branch in self.promotion_labels_cleared:
+            logger.info(f"{branch}\tlink-label-cleared\t")

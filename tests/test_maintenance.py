@@ -20,7 +20,7 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 from pathlib import Path
 
 import pytest
@@ -78,16 +78,11 @@ from basstler.maintenance_promotion import (
     promote,
 )
 from basstler.maintenance_reparent_notice import (
+    ReparentNotice,
+    ReparentResolution,
     RetargetOutcome,
-    reparent_notice,
-    resolve_reparents,
 )
-from basstler.maintenance_report import (
-    MaintenanceReport,
-    build_report,
-    exit_code_for,
-    unattended_exit_code_for,
-)
+from basstler.maintenance_report import MaintenanceReport, MaintenanceReportKey
 from basstler.maintenance_restack_procedure import restack
 from basstler.maintenance_restack_steps import (
     BranchOutcome,
@@ -96,16 +91,71 @@ from basstler.maintenance_restack_steps import (
 )
 
 from .scratch_repository import initialize_bare_repository
-from .constants import (
-    DatasetLocation,
-    PromotionSampleText,
-    RemoteName,
-    RepositoryLocation,
-    StackBranch,
-    StackLabel,
-    StackPullRequestNumber,
-)
+from .constants.paths import DatasetLocation, RepositoryLocation
+from .constants.stack import RemoteName, StackBranch, StackLabel
 from .script_runner import PythonModuleRunner
+
+
+class StackPullRequestNumber(IntEnum):
+    """
+    The numbers of the fork pull requests the two-branch stack under test is made of.
+
+    A number is written into a board entry, keyed into a recorded write and read back in
+    an assertion, so it is named once rather than spelled at each of those places.
+    """
+
+    PARENT = 40
+    """
+    The pull request of :attr:`StackBranch.PARENT`.
+    """
+
+    CHILD = 41
+    """
+    The pull request of :attr:`StackBranch.CHILD`, based on the parent's.
+    """
+
+
+class PromotionSampleText(StrEnum):
+    """
+    The text a promotion test puts into a fork pull request and finds again in what the
+    routine writes back.
+    """
+
+    TITLE = "A parent branch"
+    """
+    The parent pull request's title.
+    """
+
+    SUMMARY = "What this branch does."
+    """
+    The first paragraph of the parent pull request's description.
+    """
+
+    DETAIL = "More detail."
+    """
+    The paragraph after it.
+    """
+
+    PROSE = "Prose."
+    """
+    A description's text before its Promote section.
+    """
+
+    FIRST_LINK = "https://example.invalid/first"
+    """
+    The create-link a first promotion writes.
+    """
+
+    SECOND_LINK = "https://example.invalid/second"
+    """
+    The create-link a second promotion writes in its place.
+    """
+
+    COMMENT_LINK_PREFIX = "https://example.invalid/comment/"
+    """
+    What a recorded comment's stand-in URL starts with, before the comment's position.
+    """
+
 
 MAINTENANCE_MODULE = basstler.maintenance.__name__
 """
@@ -878,6 +928,199 @@ def test_a_push_the_move_checks_refuse_is_not_made(fork_checkout: ForkCheckout):
     )
 
 
+# %% one merge per branch, however many passes it waits through
+
+
+def restack_once(
+    fork_checkout: ForkCheckout, board: list[PullRequest] | None = None
+) -> dict[str, BranchOutcome]:
+    """
+    Run one restack over a freshly derived stack, as each pass does.
+
+    :param fork_checkout: The checkout to restack.
+    :param board: The board entries, the parent-and-child board when not given.
+    :return: Every branch's outcome, by branch name.
+    """
+    outcomes = restack(
+        a_stack(fork_checkout, board or the_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+    )
+    return {outcome.branch: outcome for outcome in outcomes}
+
+
+def merges_between(fork_checkout: ForkCheckout, parent: str, branch: str) -> int:
+    """
+    :param fork_checkout: The checkout to read the fork's branches from.
+    :param parent: The branch the merges are counted against.
+    :param branch: The branch whose own merges are counted.
+    :return: How many merge commits the fork's *branch* holds that *parent* does not.
+    """
+    return int(
+        fork_checkout.run_git(
+            "rev-list", "--merges", "--count", f"origin/{parent}..origin/{branch}"
+        )
+    )
+
+
+def test_a_second_restack_replaces_the_merge_the_first_one_left(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    child_s_own = fork_checkout.published_commit("origin", "a-child")
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    restack_once(fork_checkout)
+    first_merge = fork_checkout.published_commit("origin", "a-child")
+    parent_tip = fork_checkout.commit_on("a-parent", "a-parent-file", "moved again\n")
+
+    child = restack_once(fork_checkout)["a-child"]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert merges_between(fork_checkout, "a-parent", "a-child") == 1
+    assert not fork_checkout.git.contains(first_merge, "origin/a-child")
+    assert fork_checkout.git.contains(child_s_own, "origin/a-child")
+    assert fork_checkout.git.contains(parent_tip, "origin/a-child")
+
+
+def test_a_child_replaces_its_merge_of_a_parent_whose_own_merge_was_replaced(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The child's earlier merge brought in a parent tip that the parent's own restack has
+    since replaced, so it is no longer contained in the parent at all - yet everything it
+    brought in still is.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "the base moved\n")
+    restack_once(fork_checkout)
+    fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "the base moved again\n")
+
+    outcomes = restack_once(fork_checkout)
+
+    assert outcomes["a-parent"].outcome == RestackOutcome.PUSHED
+    assert outcomes["a-child"].outcome == RestackOutcome.PUSHED
+    assert merges_between(fork_checkout, UPSTREAM_BASE, "a-parent") == 1
+    assert merges_between(fork_checkout, "a-parent", "a-child") == 1
+
+
+def test_a_merge_carrying_a_change_of_its_own_is_kept(fork_checkout: ForkCheckout):
+    """
+    A merge whose content differs from what merging its parents produces holds somebody's
+    own work - a conflict resolution, an edit made while merging - which no later merge
+    would reproduce.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    fork_checkout.run_git("checkout", "--quiet", "a-child")
+    fork_checkout.run_git("merge", "--quiet", "--no-commit", "a-parent")
+    (fork_checkout.project_root / "a-child-file").write_text("edited while merging\n")
+    fork_checkout.run_git("commit", "--quiet", "--all", "--no-edit")
+    fork_checkout.run_git("push", "--quiet", "origin", "a-child:a-child")
+    fork_checkout.run_git("fetch", "--quiet", "origin")
+    own_merge = fork_checkout.published_commit("origin", "a-child")
+    fork_checkout.commit_on("a-parent", "a-parent-file", "moved again\n")
+
+    child = restack_once(fork_checkout)["a-child"]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(own_merge, "origin/a-child")
+
+
+def test_a_merge_of_a_branch_the_parent_does_not_hold_is_kept(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    sibling_s = fork_checkout.branch_from("a-sibling", UPSTREAM_BASE)
+    fork_checkout.run_git("checkout", "--quiet", "a-child")
+    fork_checkout.run_git("merge", "--quiet", "--no-edit", "a-sibling")
+    fork_checkout.run_git("push", "--quiet", "origin", "a-child:a-child")
+    fork_checkout.run_git("fetch", "--quiet", "origin")
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+
+    child = restack_once(fork_checkout)["a-child"]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(sibling_s, "origin/a-child")
+
+
+def test_a_merge_with_work_committed_on_top_of_it_is_kept(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    restack_once(fork_checkout)
+    first_merge = fork_checkout.published_commit("origin", "a-child")
+    fork_checkout.commit_on("a-child", "a-later-file", "work after the merge\n")
+    fork_checkout.commit_on("a-parent", "a-parent-file", "moved again\n")
+
+    child = restack_once(fork_checkout)["a-child"]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(first_merge, "origin/a-child")
+
+
+def test_a_replacement_that_conflicts_falls_back_to_merging_onto_the_tip(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The branch and its parent made the same change, so the earlier merge was clean;
+    the parent then changed that line again. Merging onto the earlier merge sees only
+    the parent's second change, while merging onto the branch's own commit sees both
+    sides change one line differently - replacing the merge must not turn a clean
+    restack into a reported conflict.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-shared-file", "the same change\n")
+    fork_checkout.commit_on("a-child", "a-shared-file", "the same change\n")
+    restack_once(fork_checkout)
+    first_merge = fork_checkout.published_commit("origin", "a-child")
+    fork_checkout.commit_on("a-parent", "a-shared-file", "the parent changed it\n")
+    fork = RecordingPullRequests()
+
+    outcomes = restack(a_stack(fork_checkout, the_board()), fork_checkout.git, fork)
+
+    child = next(outcome for outcome in outcomes if outcome.branch == "a-child")
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(first_merge, "origin/a-child")
+    assert fork.label_writes == []
+    assert fork.comments == []
+
+
+def test_replacing_a_merge_never_overwrites_a_push_the_pass_did_not_see(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Staleness is arranged by winding the remote-tracking ref back to the merge, which is
+    the state a concurrent push leaves this checkout in.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "the parent moved\n")
+    restack_once(fork_checkout)
+    stale = fork_checkout.published_commit("origin", "a-child")
+    fork_checkout.run_git("checkout", "--quiet", "-B", "a-side-line", stale)
+    fork_checkout.commit_on("a-parent", "a-parent-file", "moved again\n")
+    fork_checkout.run_git("checkout", "--quiet", "a-side-line")
+    somebody_else_s = fork_checkout.commit("a-file-somebody-else-pushed", "not ours\n")
+    fork_checkout.run_git("push", "--quiet", "origin", "a-side-line:a-child")
+    fork_checkout.run_git("update-ref", "refs/remotes/origin/a-child", stale)
+
+    child = restack_once(fork_checkout)["a-child"]
+
+    assert child.outcome == RestackOutcome.PUSH_REJECTED
+    assert fork_checkout.commit_on_the_fork("a-child") == somebody_else_s
+
+
+def test_replacing_superseded_merges_authorises_rewriting_published_history():
+    replacing = ProposedPush.publishing(
+        make_configuration(),
+        "a-branch",
+        IntegrationStrategy.MERGE,
+        replaces_superseded_merges=True,
+    )
+
+    assert replacing.with_lease
+
+
 # %% the checkout the pass was invoked in
 
 TOOLING_PATH = str(
@@ -1463,7 +1706,11 @@ def the_board_with_only_the_child(
     """
     return [
         PullRequest(
-            number=41, head="a-child", base="a-parent", draft=False, labels=labels or []
+            number=StackPullRequestNumber.CHILD,
+            head=StackBranch.CHILD,
+            base=StackBranch.PARENT,
+            draft=False,
+            labels=labels or [],
         )
     ]
 
@@ -1481,10 +1728,12 @@ def test_a_reparent_this_credential_may_retarget_is_retargeted_without_notifying
     stack = a_stack(fork_checkout, the_board_with_only_the_child())
     fork = RecordingPullRequests()
 
-    outcomes = resolve_reparents(reparents(stack), stack, fork)
+    outcomes = ReparentResolution(stack, fork).resolve(reparents(stack))
 
     assert outcomes == (RetargetOutcome(reparents(stack)[0], retargeted=True),)
-    assert fork.retargets == [RecordedRetarget(41, UPSTREAM_BASE)]
+    assert fork.retargets == [
+        RecordedRetarget(StackPullRequestNumber.CHILD, UPSTREAM_BASE)
+    ]
     assert fork.label_writes == []
     assert fork.comments == []
 
@@ -1497,21 +1746,25 @@ def test_a_refused_reparent_is_labelled_and_reported(fork_checkout: ForkCheckout
     """
     a_landed_parent_and_unreparented_child(fork_checkout)
     board = the_board_with_only_the_child()
-    board[0].session = "https://claude.ai/code/session_01ABCdef"
+    board[0].session = A_SESSION_LINK
     stack = a_stack(fork_checkout, board)
-    fork = RecordingPullRequests(retarget_refusals=frozenset({41}))
+    fork = RecordingPullRequests(
+        retarget_refusals=frozenset({StackPullRequestNumber.CHILD})
+    )
 
-    outcomes = resolve_reparents(reparents(stack), stack, fork)
+    outcomes = ReparentResolution(stack, fork).resolve(reparents(stack))
 
     assert outcomes == (RetargetOutcome(reparents(stack)[0], retargeted=False),)
     assert fork.label_writes == [
-        RecordedLabelWrite(41, (make_configuration().needs_resolution_label,))
+        RecordedLabelWrite(
+            StackPullRequestNumber.CHILD, (make_configuration().needs_resolution_label,)
+        )
     ]
     comment = fork.comments[0]
-    assert comment.pull_request_number == 41
-    assert "a-child" in comment.body
+    assert comment.pull_request_number == StackPullRequestNumber.CHILD
+    assert StackBranch.CHILD in comment.body
     assert f"`{UPSTREAM_BASE}`" in comment.body
-    assert "https://claude.ai/code/session_01ABCdef" in comment.body
+    assert A_SESSION_LINK in comment.body
 
 
 def test_a_refused_reparent_notice_keeps_every_label_the_branch_already_carried(
@@ -1528,15 +1781,15 @@ def test_a_refused_reparent_notice_keeps_every_label_the_branch_already_carried(
     a_landed_parent_and_unreparented_child(fork_checkout)
     stack = a_stack(fork_checkout, the_board_with_only_the_child())
     fork = RecordingPullRequests(
-        labels={41: [StackLabel.SOMEBODY_ELSES]},
-        retarget_refusals=frozenset({41}),
+        labels={StackPullRequestNumber.CHILD: [StackLabel.SOMEBODY_ELSES]},
+        retarget_refusals=frozenset({StackPullRequestNumber.CHILD}),
     )
 
-    resolve_reparents(reparents(stack), stack, fork)
+    ReparentResolution(stack, fork).resolve(reparents(stack))
 
     assert fork.label_writes == [
         RecordedLabelWrite(
-            41,
+            StackPullRequestNumber.CHILD,
             (
                 StackLabel.SOMEBODY_ELSES,
                 make_configuration().needs_resolution_label,
@@ -1550,7 +1803,7 @@ def test_no_reparents_writes_nothing(fork_checkout: ForkCheckout):
     stack = a_stack(fork_checkout, the_board())
     fork = RecordingPullRequests()
 
-    assert resolve_reparents(reparents(stack), stack, fork) == ()
+    assert ReparentResolution(stack, fork).resolve(reparents(stack)) == ()
     assert fork.retargets == []
     assert fork.label_writes == []
     assert fork.comments == []
@@ -1561,11 +1814,14 @@ def test_a_reparent_notice_names_no_session_when_the_description_has_none(
 ):
     a_landed_parent_and_unreparented_child(fork_checkout)
     stack = a_stack(fork_checkout, the_board_with_only_the_child())
-    branch = next(branch for branch in stack.branches if branch.name == "a-child")
+    branch = next(
+        branch for branch in stack.branches if branch.name == StackBranch.CHILD
+    )
+    label = make_configuration().needs_resolution_label
 
-    body = reparent_notice(branch, reparents(stack)[0])
+    body = ReparentNotice(branch, reparents(stack)[0], label).body
 
-    assert "names no session to address" in body
+    assert body.endswith(RoutineText.UNADDRESSED_NOTICE)
 
 
 # %% promotion
@@ -1738,7 +1994,7 @@ def test_the_report_serialises_every_command_s_outcome(fork_checkout: ForkChecko
     )
     stack = a_stack(fork_checkout, the_board())
 
-    report = build_report(
+    report = MaintenanceReport.of_pass(
         stack,
         fast_forward(make_configuration(), fork_checkout.git),
         restack(stack, fork_checkout.git, RecordingPullRequests()),
@@ -1786,7 +2042,7 @@ def test_a_whole_pass_retargets_a_pending_reparent(fork_checkout: ForkCheckout):
     RunReportCommand().run(maintenance_pass, argparse.Namespace(json=True))
 
     assert maintenance_pass.recorded_fork.retargets == [
-        RecordedRetarget(41, UPSTREAM_BASE)
+        RecordedRetarget(StackPullRequestNumber.CHILD, UPSTREAM_BASE)
     ]
     needs_resolution = make_configuration().needs_resolution_label
     assert all(
@@ -1806,7 +2062,9 @@ def test_a_whole_pass_reports_a_reparent_github_refuses(fork_checkout: ForkCheck
         configuration=make_configuration(),
         git=fork_checkout.git,
         resolved_stack=a_stack(fork_checkout, the_board_with_only_the_child()),
-        recorded_fork=RecordingPullRequests(retarget_refusals=frozenset({41})),
+        recorded_fork=RecordingPullRequests(
+            retarget_refusals=frozenset({StackPullRequestNumber.CHILD})
+        ),
     )
 
     RunReportCommand().run(maintenance_pass, argparse.Namespace(json=True))
@@ -1817,8 +2075,10 @@ def test_a_whole_pass_reports_a_reparent_github_refuses(fork_checkout: ForkCheck
         for write in maintenance_pass.recorded_fork.label_writes
         if needs_resolution in write.labels
     )
-    assert reparent_write == RecordedLabelWrite(41, (needs_resolution,))
-    assert "a-child" in maintenance_pass.recorded_fork.comments[0].body
+    assert reparent_write == RecordedLabelWrite(
+        StackPullRequestNumber.CHILD, (needs_resolution,)
+    )
+    assert StackBranch.CHILD in maintenance_pass.recorded_fork.comments[0].body
 
 
 # %% the exit status every command derives from what it left behind
@@ -1851,9 +2111,9 @@ def a_report(
 
 
 def test_a_pass_that_published_everything_is_a_success():
-    assert exit_code_for(a_report()) == StackExitCode.SUCCESS
+    assert a_report().exit_code == StackExitCode.SUCCESS
     assert (
-        exit_code_for(a_report(restack_outcome=RestackOutcome.UP_TO_DATE))
+        a_report(restack_outcome=RestackOutcome.UP_TO_DATE).exit_code
         == StackExitCode.SUCCESS
     )
 
@@ -1865,7 +2125,7 @@ def test_a_refused_fast_forward_is_never_reported_as_a_clean_pass():
     """
     refused = a_report(fast_forward_outcome=FastForwardOutcome.REFUSED_NOT_FAST_FORWARD)
 
-    assert exit_code_for(refused) == StackExitCode.NOT_FAST_FORWARD
+    assert refused.exit_code == StackExitCode.NOT_FAST_FORWARD
 
 
 @pytest.mark.parametrize(
@@ -1885,7 +2145,7 @@ def test_a_branch_left_unpublished_is_never_reported_as_a_clean_pass(
     the status alone would have read the pass as having nothing outstanding.
     """
     assert (
-        exit_code_for(a_report(restack_outcome=left_behind))
+        a_report(restack_outcome=left_behind).exit_code
         == StackExitCode.BRANCH_NEEDS_ATTENTION
     )
 
@@ -1900,8 +2160,7 @@ def test_an_unattended_pass_succeeds_when_every_branch_left_behind_was_reported(
     well would turn every scheduled run red while any branch anywhere waits on a person.
     """
     assert (
-        unattended_exit_code_for(a_report(restack_outcome=reported))
-        == StackExitCode.SUCCESS
+        a_report(restack_outcome=reported).unattended_exit_code == StackExitCode.SUCCESS
     )
 
 
@@ -1916,15 +2175,16 @@ def test_an_unattended_pass_fails_on_a_branch_nobody_was_told_about(
     pass rather than in the branch, and nobody is commented at for it - so the job
     status is the only place it surfaces.
     """
-    assert unattended_exit_code_for(
-        a_report(restack_outcome=unreported)
-    ) == exit_code_for(a_report(restack_outcome=unreported))
+    assert (
+        a_report(restack_outcome=unreported).unattended_exit_code
+        == a_report(restack_outcome=unreported).exit_code
+    )
 
 
 def test_an_unattended_pass_still_fails_on_a_refused_fast_forward():
     refused = a_report(fast_forward_outcome=FastForwardOutcome.REFUSED_NOT_FAST_FORWARD)
 
-    assert unattended_exit_code_for(refused) == StackExitCode.NOT_FAST_FORWARD
+    assert refused.unattended_exit_code == StackExitCode.NOT_FAST_FORWARD
 
 
 def test_an_unattended_run_reports_a_conflict_on_its_pull_request_and_succeeds(
@@ -1935,16 +2195,26 @@ def test_an_unattended_run_reports_a_conflict_on_its_pull_request_and_succeeds(
     owner as a comment, the document reaches the job log, and the job stays green.
     """
     a_parent_and_child(fork_checkout)
-    fork_checkout.commit_on("a-parent", "a-contested-file", "the parent's version\n")
-    fork_checkout.commit_on("a-child", "a-contested-file", "the child's version\n")
+    fork_checkout.commit_on(
+        StackBranch.PARENT, FixtureFile.CONTESTED, "the parent's version\n"
+    )
+    fork_checkout.commit_on(
+        StackBranch.CHILD, FixtureFile.CONTESTED, "the child's version\n"
+    )
     maintenance_pass = AlreadyResolvedPass.over(fork_checkout, the_board())
 
     status = UnattendedRunCommand().run(maintenance_pass, argparse.Namespace())
 
     assert status == StackExitCode.SUCCESS
-    assert maintenance_pass.recorded_fork.comments[0].pull_request_number == 41
+    assert (
+        maintenance_pass.recorded_fork.comments[0].pull_request_number
+        == StackPullRequestNumber.CHILD
+    )
     document = json.loads(capsys.readouterr().out)
-    assert document["status"] == StackExitCode.BRANCH_NEEDS_ATTENTION.name_for_a_caller
+    assert (
+        document[MaintenanceReportKey.STATUS]
+        == StackExitCode.BRANCH_NEEDS_ATTENTION.name_for_a_caller
+    )
 
 
 def test_every_status_names_itself_distinctly():
@@ -1966,8 +2236,13 @@ def test_the_report_carries_what_its_status_means(fork_checkout: ForkCheckout):
     """
     document = json.loads(a_report(restack_outcome=RestackOutcome.CONFLICT).as_json())
 
-    assert document["status"] == "branch-needs-attention"
-    assert document["exit_code"] == StackExitCode.BRANCH_NEEDS_ATTENTION
+    assert (
+        document[MaintenanceReportKey.STATUS]
+        == StackExitCode.BRANCH_NEEDS_ATTENTION.name_for_a_caller
+    )
+    assert (
+        document[MaintenanceReportKey.EXIT_CODE] == StackExitCode.BRANCH_NEEDS_ATTENTION
+    )
 
 
 def test_a_non_zero_status_says_what_it_means_on_the_way_out(
@@ -1999,7 +2274,7 @@ def test_a_refused_move_keeps_its_own_status():
     Distinct from a branch needing attention: the branch is fine and the move was wrong.
     """
     assert (
-        exit_code_for(a_report(restack_outcome=RestackOutcome.REFUSED))
+        a_report(restack_outcome=RestackOutcome.REFUSED).exit_code
         == StackExitCode.MOVE_REFUSED
     )
 

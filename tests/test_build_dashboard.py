@@ -47,7 +47,8 @@ from basstler.build_dashboard import (
 from basstler.locations import PackageLocation
 from basstler.github_labels import GitHubLabel
 
-from .constants import RepositoryLocation, SkillDirectory, StackLabel
+from .constants.paths import RepositoryLocation, SkillDirectory
+from .constants.stack import StackLabel
 
 EXAMPLE_DIRECTORY = (
     RepositoryLocation.PLUGIN / SkillDirectory.PLAN_DASHBOARD / "example"

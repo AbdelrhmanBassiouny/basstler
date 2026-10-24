@@ -1,6 +1,7 @@
-# Copy into a project as .github/workflows/upstream-reviews.yml, so the
-# /upstream-reviews skill can dispatch it there. Keep the two refs below on the
-# same basstler release as the plugin.
+# Optional: copy into a project as .github/workflows/upstream-reviews.yml to run the
+# upstream-reviews read in the project's own Actions. The /upstream-reviews skill needs
+# no copy - a Claude Code session reads the upstream itself. Both references below
+# follow basstler's main branch; to pin a release instead, change both to its tag.
 name: Upstream reviews
 
 on:
@@ -19,15 +20,21 @@ on:
         required: false
         default: false
         type: boolean
+      failure_logs:
+        description: "Quote the log behind each check that failed"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   report:
-    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@v0.1.2
+    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@main
     with:
-      basstler_ref: v0.1.2
+      basstler_branch_or_tag: main
       pull_request: ${{ inputs.pull_request }}
       branch: ${{ inputs.branch }}
       include_resolved: ${{ inputs.include_resolved }}
+      failure_logs: ${{ inputs.failure_logs }}

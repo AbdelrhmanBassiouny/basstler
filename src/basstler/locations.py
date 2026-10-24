@@ -100,35 +100,6 @@ class PackageLocation(PathEnumeration):
     """
 
 
-class CheckoutLocation(PathEnumeration):
-    """
-    The files of a checkout of this repository that write a release's version, relative
-    to the checkout's root.
-    """
-
-    PLUGIN_MANIFEST = Path("plugin") / ".claude-plugin" / "plugin.json"
-    """
-    The plugin's manifest, where a release's version is declared.
-    """
-
-    UPSTREAM_REVIEWS_CALLER = Path("docs") / "examples" / "upstream-reviews.yml"
-    """
-    The upstream-reviews caller a project copies, naming the release it calls.
-    """
-
-    STACK_MAINTENANCE_CALLER = Path("docs") / "examples" / "stack-maintenance.yml"
-    """
-    The stack-maintenance caller a project copies, naming the release it calls.
-    """
-
-    @classmethod
-    def example_callers(cls) -> tuple[CheckoutLocation, ...]:
-        """
-        :return: Every caller a project copies, each naming the release it calls.
-        """
-        return cls.UPSTREAM_REVIEWS_CALLER, cls.STACK_MAINTENANCE_CALLER
-
-
 class BasstlerVariable(EnvironmentVariable):
     """
     The environment variables this package's own shell configuration sets.
@@ -278,4 +249,20 @@ class ClaudeCodeVariable(EnvironmentVariable):
     PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR"
     """
     The root of the project the session runs in.
+    """
+
+    REMOTE = "CLAUDE_CODE_REMOTE"
+    """
+    ``true`` in a Claude Code cloud session, whose proxy answers GitHub's REST API but
+    not its GraphQL API.
+    """
+
+    SESSION_IDENTIFIER = "CLAUDE_CODE_SESSION_ID"
+    """
+    The session's own identifier, which names its transcript file.
+    """
+
+    CONFIGURATION_DIRECTORY = "CLAUDE_CONFIG_DIR"
+    """
+    Where Claude Code keeps its state, transcripts included, when not ``~/.claude``.
     """

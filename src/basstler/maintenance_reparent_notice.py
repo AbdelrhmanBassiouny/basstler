@@ -1,15 +1,5 @@
 """
 Retargeting a branch whose base has landed, or telling its owner when GitHub refuses.
-
-A Claude session's own proxied credential was probed against the live API and refused a
-base-branch retarget - the one write that probe found unavailable to it, so
-:func:`stack.reparents` only ever reported it for a session to perform through the
-GitHub MCP server. This module's own credential authenticates its requests directly
-rather than through that proxy, so it attempts the retarget itself and reports what
-GitHub says here rather than assuming the same refusal. Only a genuine refusal falls
-back to a notice: a restack conflict already reaches its owner through
-:func:`maintenance_restack_steps.conflict_report`, but a pending reparent, left to a run
-summary nobody without a session watches, reached nobody at all before this.
 """
 
 from __future__ import annotations
@@ -21,6 +11,8 @@ from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_constants import RoutineText
 from basstler.maintenance_github import ForkPullRequests
 from basstler.stack import Branch, LabelWrite, Reparent, Stack
+
+# %% outcome
 
 
 @dataclass(frozen=True)
@@ -43,65 +35,99 @@ class RetargetOutcome:
     """
 
 
-def reparent_notice(branch: Branch, reparent: Reparent) -> str:
+# %% notice
+
+
+@dataclass(frozen=True)
+class ReparentNotice:
     """
-    Write the comment telling a branch's owner that their branch needs retargeting.
-
-    :param branch: The branch whose base has landed.
-    :param reparent: What it must be retargeted at.
-    :return: The comment body.
+    The comment telling a branch's owner that their branch needs retargeting.
     """
-    addressed = (
-        f"\n\n{branch.session}"
-        if branch.session
-        else "\n\nThis pull request's description names no session to address."
-    )
-    return (
-        f"{RoutineText.NEEDS_RESOLUTION_COMMENT_PREFIX} `{reparent.current_base}` has landed "
-        f"upstream, so `{branch.name}` needs to be retargeted at "
-        f"`{reparent.target_base}`.\n\n"
-        f"GitHub refused this pass's own attempt to retarget it - a session must do it "
-        f"through the GitHub MCP server. This branch is labelled `needs-resolution` so "
-        f"later passes do not re-report the same reparent.{addressed}"
-    )
 
-
-def resolve_reparents(
-    reparents: Sequence[Reparent], stack: Stack, fork: ForkPullRequests
-) -> tuple[RetargetOutcome, ...]:
+    branch: Branch
     """
-    Retarget every branch a base landed under, or label and comment where GitHub
-    refuses.
-
-    The label write, for a retarget GitHub refuses, reads the labels the branch carries
-    *now*, not the ones the board was exported with: promotion and restack both run
-    before this and can have written one since, so a snapshot read here would silently
-    drop it - the same staleness :func:`maintenance_promotion.promote` already reads
-    around.
-
-    :param reparents: What :func:`stack.reparents` found.
-    :param stack: The derived stack the reparents were read from, for each branch's
-        session (a pull request's description, unlike its labels, does not change
-        underneath this pass).
-    :param fork: The fork to retarget through, and to read current labels from and
-        write the label and comment to when it refuses.
-    :return: One outcome per reparent, in the order given.
+    The branch whose base has landed.
     """
-    branches_by_name = {branch.name: branch for branch in stack.branches}
-    outcomes = []
-    for reparent in reparents:
-        number = reparent.pull_request_number
-        if fork.retarget_base(number, reparent.target_base):
-            outcomes.append(RetargetOutcome(reparent, retargeted=True))
-            continue
-        branch = branches_by_name[reparent.branch]
-        current_labels = PullRequestField.LABELS.read(fork.pull_request(number), number)
-        fork.replace_labels(
-            number,
-            LabelWrite.replacing(
-                current_labels, added=[stack.configuration.needs_resolution_label]
-            ).labels,
+
+    reparent: Reparent
+    """
+    What it must be retargeted at.
+    """
+
+    needs_resolution_label: str
+    """
+    The label the branch is given so later passes do not report it again.
+    """
+
+    @property
+    def body(self) -> str:
+        """:return: The comment body."""
+        addressed = self.branch.session or RoutineText.UNADDRESSED_NOTICE
+        return (
+            f"{RoutineText.NEEDS_RESOLUTION_COMMENT_PREFIX} "
+            f"`{self.reparent.current_base}` has landed upstream, so "
+            f"`{self.branch.name}` needs to be retargeted at "
+            f"`{self.reparent.target_base}`.\n\n"
+            f"GitHub refused this pass's own attempt to retarget it - a session must do "
+            f"it through the GitHub MCP server. This branch is labelled "
+            f"`{self.needs_resolution_label}` so later passes do not re-report the same "
+            f"reparent.\n\n{addressed}"
         )
-        fork.add_comment(number, reparent_notice(branch, reparent))
-        outcomes.append(RetargetOutcome(reparent, retargeted=False))
-    return tuple(outcomes)
+
+
+# %% resolution
+
+
+@dataclass(frozen=True)
+class ReparentResolution:
+    """
+    Retargets every branch a base landed under through one fork, or labels and comments
+    where GitHub refuses.
+    """
+
+    stack: Stack
+    """
+    The derived stack the reparents were read from.
+    """
+
+    fork: ForkPullRequests
+    """
+    The fork to retarget through, and to label and comment on when it refuses.
+    """
+
+    def resolve(self, reparents: Sequence[Reparent]) -> tuple[RetargetOutcome, ...]:
+        """
+        :param reparents: What :func:`stack.reparents` found in :attr:`stack`.
+        :return: One outcome per reparent, in the order given.
+        """
+        outcomes = []
+        for reparent in reparents:
+            retargeted = self.fork.retarget_base(
+                reparent.pull_request_number, reparent.target_base
+            )
+            if not retargeted:
+                self.notify(reparent)
+            outcomes.append(RetargetOutcome(reparent, retargeted=retargeted))
+        return tuple(outcomes)
+
+    def notify(self, reparent: Reparent) -> None:
+        """
+        Label a refused reparent's pull request and comment the notice on it.
+
+        The labels are read as the pull request carries them now, not as the board was
+        exported: an earlier step of the pass can have written one since.
+
+        :param reparent: The reparent GitHub refused.
+        """
+        number = reparent.pull_request_number
+        branch = next(
+            branch for branch in self.stack.branches if branch.name == reparent.branch
+        )
+        label = self.stack.configuration.needs_resolution_label
+        current_labels = PullRequestField.LABELS.read(
+            self.fork.pull_request(number), number
+        )
+        self.fork.replace_labels(
+            number, LabelWrite.replacing(current_labels, added=[label]).labels
+        )
+        self.fork.add_comment(number, ReparentNotice(branch, reparent, label).body)

@@ -25,8 +25,12 @@ and what goes in them are personal; ask, with a default. Everything else
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-bash "${CHECK_SETUP_SCRIPT}" || true
+bash "${CHECK_SETUP_SCRIPT}" $ARGUMENTS || true
 ```
+
+`$ARGUMENTS` is whatever this skill was invoked with: `--require-upstream`
+when a skill needing the stacked-PR workflow's upstream ran it, nothing
+otherwise. Pass the same to every run of the check below.
 
 The script prints one tab-separated `<check>` / `<status>` / `<detail>` row per
 check and exits non-zero if any row is `needs-setup` (`|| true` above keeps a
@@ -138,6 +142,47 @@ To seed it:
 
 That helper is idempotent — it pushes nothing if the content already matches.
 
+## 5a. `stack_upstream` — the repository the project is reviewed on
+
+Only when this row is `needs-setup`: an `info` row means nothing asked for an
+upstream, and most projects have none.
+
+The upstream is the repository the project's pull requests are reviewed on,
+which is the user's to name. Ask for it as `<owner>/<name>`, offering as the
+default the repository the clone's `upstream` remote points at, if it has
+one. Then save it to their
+personal `stack.toml`, which keeps it out of the project's tracked files:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" configure-upstream --repository <owner>/<name>
+```
+
+It keeps every other personal stack setting and replaces an upstream named
+before. A project that wants every contributor to share the answer can commit
+`upstream_repository` in `.claude/basstler/stack.toml` instead; the check
+accepts either.
+
+## 5b. `upstream_reviews_action` — the fork's own upstream-reviews Action
+
+Only once an upstream is named (the row says "not checked" otherwise). Unless
+the row is `ok`, install it without asking - it is mechanical, and touches
+nothing but a branch of its own on the user's fork:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
+```
+
+It creates a new branch named `basstler/upstream-reviews` on the user's fork,
+with no history in common with the project's branches. The branch holds only a
+README and a short workflow file that calls basstler's reusable workflow by
+reference, so it works on a fork of any repository. Run again, it updates that
+workflow to the basstler branch or tag this session's package was installed at.
+Then tell
+the user the one step left to them, which `python -m basstler.setup_steps` also
+prints: a fork starts with Actions off, so they enable them once at
+`https://github.com/<fork>/actions`. Until they do, `/upstream-reviews` reads
+the upstream from the session instead.
+
 ## 6. `dashboard_dependencies` — what the dashboards need
 
 Mechanical, not a preference. Say what's missing and install it, into the
@@ -214,7 +259,7 @@ report and carry on.
 ## 9. Confirm, by re-running the check
 
 ```bash
-bash "${CHECK_SETUP_SCRIPT}" || true
+bash "${CHECK_SETUP_SCRIPT}" $ARGUMENTS || true
 ```
 
 Report what the second run says, not what you expect it to say. If a row is

@@ -90,20 +90,21 @@ class HeadingShift(IntEnum):
 
 def create_template_environment() -> jinja2.Environment:
     """
-    Build the Jinja2 environment every page template renders through.
+    Build the Jinja2 environment every template renders through.
 
-    Autoescaping is on for every value substituted into a template - the
+    Autoescaping is on for every value substituted into an HTML template - the
     one deliberately unescaped value either script ever passes in
     (already-rendered roadmap markdown HTML) is marked with Jinja2's
     ``| safe`` filter at its point of use in the template itself, rather
     than disabling escaping globally and trusting every call site to
-    remember to escape by hand.
+    remember to escape by hand. A template of any other format is rendered as
+    written.
 
     :return: A configured, ready-to-use Jinja2 environment.
     """
     environment = jinja2.Environment(
         loader=jinja2.FileSystemLoader(PackageLocation.TEMPLATES.value),
-        autoescape=True,
+        autoescape=jinja2.select_autoescape(["html"]),
         trim_blocks=True,
         lstrip_blocks=True,
     )
