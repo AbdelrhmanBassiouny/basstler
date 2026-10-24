@@ -86,6 +86,19 @@ items:
     emits the maintenance prompt. configure-upstream, its check-setup.sh row and docs/SETUP.md section
     3 landed in #56 - reuse them rather than rebuild. Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238.
     Build fresh on main; CRAM #110 is stale.'
+- id: plugin-from-installed-package
+  title: Hooks and skill documents run from the installed package's copy of the plugin
+  branch: null
+  status: not started
+  track: extraction
+  depends_on: []
+  pull_request_number: null
+  notes: 'Option (c) of https://github.com/AbdelrhmanBassiouny/basstler/pull/32#discussion_r4367494752,
+    agreed as a later item there (#32 itself merges as option (a)). Ship plugin/ inside the wheel; hooks
+    and the documents skills tell Claude to read resolve against the installed package''s copy, so the
+    synced plugin shrinks to the SessionStart hook plus thin SKILL.md stubs that stay a stable pointer.
+    Removes skew between a lagging synced plugin and a newer installed package for everything except the
+    SKILL.md text Claude Code loads itself. Starts once #32 has merged.'
 - id: cram-development-tools
   title: Install the docstring formatter and a generated AGENTS.md from the shared cram-development-tools
     package
@@ -94,11 +107,10 @@ items:
   track: development-tools
   depends_on: []
   pull_request_number: null
-  notes: 'Design and build prompt: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306714398.
-    A PyPI package, cram-development-tools, with `format` (today''s scripts/format_docstrings.py) and
-    `agents-md [--check]` (a generic AGENTS.md followed by the repository''s AGENTS.project.md), both
-    pre-commit hooks. basstler''s part: pin it in .pre-commit-config.yaml, run pre-commit in CI, delete
-    scripts/format_docstrings.py, write AGENTS.project.md and commit the generated AGENTS.md. Open: a
-    more neutral package name.'
+  notes: 'Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306714398. A PyPI
+    package with `format` (today''s scripts/format_docstrings.py) and `agents-md [--check]`, both pre-commit
+    hooks; per cram fork #517, `agents-md` rewrites only a marked block of AGENTS.md. basstler''s part:
+    pin it in .pre-commit-config.yaml, run pre-commit in CI, delete scripts/format_docstrings.py, and wrap
+    the shared rules in AGENTS.md (hand-copied in #32) in that block. Open: a more neutral package name.'
   blockers:
   - Waits on the package's first PyPI release, built in the repository that hosts it.
