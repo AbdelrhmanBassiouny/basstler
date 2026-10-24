@@ -44,12 +44,12 @@ items:
   track: cram-retirement
   depends_on: []
   pull_request_number: 56
-  session: https://claude.ai/code/session_01Q1iqg88K6XLGdBgtyy24KD
-  notes: '#56 (draft, release:minor -> v0.2.0; main merged through v0.1.8). Preferred: the fork''s own
-    Action on a basstler/upstream-reviews branch, installed at basstler_branch_or_tag (the recorded release,
-    else main); the session replays its committed result. Fallbacks: attach the upstream and read REST;
-    a Haiku helper session. The workflows'' input is basstler_branch_or_tag (basstler_ref dropped, no alias).
-    Overlaps #45 in setup files.'
+  session: https://claude.ai/code/session_011SJzqjiUyPK1Ra6WixNNB1
+  notes: '#56 (draft, release:minor -> v0.2.0; main merged through #33). 2026-10-24 review round
+    answered (22 threads, 17 resolved); code split into flat upstream_reviews_* modules under 500 lines.
+    Waiting on 5 open threads: shared URL and commit-id types, branch wording. Preferred read: the fork''s
+    own Action on a basstler/upstream-reviews branch; fallbacks: attached upstream over REST, a Haiku helper
+    session. Overlaps #45 in setup files.'
 - id: stamps-in-git-directory
   title: The plugin keeps its per-clone stamp files where git never tracks them
   branch: null
