@@ -55,12 +55,12 @@ class DescriptionPattern(Enum):
         return found.group(0) if found else None
 
 
-class RoutineText(StrEnum):
+class MaintenanceText(StrEnum):
     """
-    Text the routine writes onto GitHub, and later finds again by.
+    Text a maintenance pass writes onto GitHub, and later finds again by.
     """
 
-    CONFLICT_COMMENT_PREFIX = "🔴 ROUTINE - NEEDS RESOLUTION:"
+    CONFLICT_COMMENT_PREFIX = "🔴 MAINTENANCE - NEEDS RESOLUTION:"
     """
     Opens the comment a conflict is reported in, so the branch's owner can find every one
     of them at a glance.

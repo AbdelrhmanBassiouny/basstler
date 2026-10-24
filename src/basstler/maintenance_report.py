@@ -1,9 +1,5 @@
 """
 What a pass did, as a document, as printed lines, and as an exit status.
-
-Every command that produces a report derives its status through the same function, so no
-two can disagree about what a clean pass is - a refused fast-forward reported as success
-is exactly the silence this exists to prevent.
 """
 
 from __future__ import annotations
@@ -11,10 +7,9 @@ from __future__ import annotations
 import json
 from collections.abc import Sequence
 from dataclasses import asdict, dataclass
-from pathlib import Path
+from enum import StrEnum
 
 from basstler.exit_codes import StackExitCode
-from basstler.maintenance_board import BoardExport
 from basstler.maintenance_fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance_promotion import Promotion
 from basstler.maintenance_restack_steps import BranchOutcome, RestackOutcome
@@ -25,6 +20,25 @@ logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
+
+# %% vocabulary
+
+
+class MaintenanceReportKey(StrEnum):
+    """
+    The keys :meth:`MaintenanceReport.as_json` adds beside the report's own fields.
+    """
+
+    STATUS = "status"
+    """
+    The exit status, by the name a caller reads.
+    """
+
+    EXIT_CODE = "exit_code"
+    """
+    The exit status, as the process exit code.
+    """
+
 
 # %% the report a caller renders or emits
 
@@ -63,8 +77,9 @@ class MaintenanceReport:
     """
 
     reparents: tuple[Reparent, ...] = ()
-    """The children whose base has landed, for the caller to retarget - the one step
-    this cannot perform itself."""
+    """
+    The children whose base has landed, for the caller to retarget.
+    """
 
     landed: tuple[str, ...] = ()
     """
@@ -76,13 +91,43 @@ class MaintenanceReport:
     The branches approved and unblocked, whether or not a link was built this pass.
     """
 
+    @classmethod
+    def of_pass(
+        cls,
+        stack: Stack,
+        fast_forward_report: FastForwardReport | None,
+        restacked: Sequence[BranchOutcome],
+        promoted: Sequence[Promotion] = (),
+        promotion_labels_cleared: Sequence[str] = (),
+    ) -> MaintenanceReport:
+        """
+        Assemble one pass's outcomes and its leftovers into a single report.
+
+        :param stack: The derived stack, read for what the caller still has to do.
+        :param fast_forward_report: What became of the fork's base branch, if attempted.
+        :param restacked: What became of each branch in the restack plan.
+        :param promoted: The branches whose upstream link was built this pass.
+        :param promotion_labels_cleared: The branches whose spent link label was
+            removed.
+        :return: The report.
+        """
+        return cls(
+            fast_forward=fast_forward_report,
+            restacked=tuple(restacked),
+            promoted=tuple(promoted),
+            promotion_labels_cleared=tuple(promotion_labels_cleared),
+            reparents=tuple(reparents(stack)),
+            landed=tuple(branch.name for branch in landed_branches(stack)),
+            promotable=tuple(branch.name for branch in promotion_order(stack)),
+        )
+
     def as_json(self) -> str:
         """:return: The report as one machine-readable document."""
-        status = exit_code_for(self)
+        status = self.exit_code
         return json.dumps(
             {
-                "status": status.name_for_a_caller,
-                "exit_code": int(status),
+                MaintenanceReportKey.STATUS: status.name_for_a_caller,
+                MaintenanceReportKey.EXIT_CODE: int(status),
                 **asdict(self),
             },
             indent=2,
@@ -105,106 +150,68 @@ class MaintenanceReport:
             and self.fast_forward.outcome is FastForwardOutcome.REFUSED_NOT_FAST_FORWARD
         )
 
+    @property
+    def exit_code(self) -> StackExitCode:
+        """
+        One pass's exit status, from what it actually left behind.
 
-def build_report(
-    stack: Stack,
-    fast_forward_report: FastForwardReport | None,
-    restacked: Sequence[BranchOutcome],
-    promoted: Sequence[Promotion] = (),
-    promotion_labels_cleared: Sequence[str] = (),
-) -> MaintenanceReport:
-    """
-    Assemble one pass's outcomes and its leftovers into a single report.
+        Every command that produces a report derives its status here, so none of them
+        can disagree about what counts as a clean pass.
+        """
+        if self.fast_forward_was_refused:
+            return StackExitCode.NOT_FAST_FORWARD
+        unpublished = self.branches_left_unpublished
+        if any(outcome.outcome is RestackOutcome.REFUSED for outcome in unpublished):
+            return StackExitCode.MOVE_REFUSED
+        if unpublished:
+            return StackExitCode.BRANCH_NEEDS_ATTENTION
+        return StackExitCode.SUCCESS
 
-    :param stack: The derived stack, read for what the caller still has to do.
-    :param fast_forward_report: What became of the fork's base branch, if attempted.
-    :param restacked: What became of each branch in the restack plan.
-    :param promoted: The branches whose upstream link was built this pass.
-    :param promotion_labels_cleared: The branches whose spent link label was removed.
-    :return: The report.
-    """
-    return MaintenanceReport(
-        fast_forward=fast_forward_report,
-        restacked=tuple(restacked),
-        promoted=tuple(promoted),
-        promotion_labels_cleared=tuple(promotion_labels_cleared),
-        reparents=tuple(reparents(stack)),
-        landed=tuple(branch.name for branch in landed_branches(stack)),
-        promotable=tuple(branch.name for branch in promotion_order(stack)),
-    )
+    def print_summary(self) -> None:
+        """
+        Print one line per thing the pass did, in the order the pass did them.
+        """
+        self.print_fast_forward()
+        self.print_restack()
+        self.print_promotions()
 
+    def print_fast_forward(self) -> None:
+        """
+        Print what became of the fork's base branch, if it was attempted.
+        """
+        if self.fast_forward is None:
+            return
+        report = self.fast_forward
+        logger.info(f"{report.fork_reference}\t{report.outcome}\t{report.commit}")
+        if report.explanation:
+            logger.error(report.explanation)
 
-# %% printing
-
-
-def print_board_export(export: BoardExport, written_to: Path | None) -> None:
-    """
-    Report what the export contains, and where it went.
-
-    :param export: The export.
-    :param written_to: Where it was written, or ``None`` when it was only printed.
-    """
-    if written_to is None:
-        logger.info(export.as_json())
-        return
-    logger.info(f"{len(export.pull_requests)} open pull request(s) -> {written_to}")
-
-
-def print_fast_forward(report: FastForwardReport) -> None:
-    """:param report: What became of the fork's base branch."""
-    logger.info(f"{report.fork_reference}\t{report.outcome}\t{report.commit}")
-    if report.explanation:
-        logger.error(report.explanation)
-
-
-def print_restack(outcomes: Sequence[BranchOutcome]) -> None:
-    """:param outcomes: What became of each branch."""
-    for outcome in outcomes:
-        detail = (
-            ",".join(outcome.conflicting_paths)
-            or ",".join(outcome.refusals)
-            or outcome.pushed_commit
-            or outcome.explanation
-            or ""
-        )
-        logger.info(f"{outcome.branch}\t{outcome.outcome}\t{detail}")
-
-
-def print_promotions(promoted: Sequence[Promotion], cleared: Sequence[str]) -> None:
-    """:param promoted: The branches whose link was built this pass.
-    :param cleared: The branches whose spent link label was removed."""
-    for promotion in promoted:
-        logger.info(
-            f"{promotion.branch}\t#{promotion.pull_request_number}\t{promotion.url}"
-        )
-        if promotion.body_was_truncated:
-            logger.error(
-                f"{promotion.branch}: the prefilled description was shortened to fit "
-                f"the URL limit"
+    def print_restack(self) -> None:
+        """
+        Print what became of each branch in the restack plan.
+        """
+        for outcome in self.restacked:
+            detail = (
+                ",".join(outcome.conflicting_paths)
+                or ",".join(outcome.refusals)
+                or outcome.pushed_commit
+                or outcome.explanation
+                or ""
             )
-    for branch in cleared:
-        logger.info(f"{branch}\tlink-label-cleared\t")
+            logger.info(f"{outcome.branch}\t{outcome.outcome}\t{detail}")
 
-
-# %% the exit status
-
-
-def exit_code_for(report: MaintenanceReport) -> StackExitCode:
-    """
-    Decide one pass's exit status from what it actually left behind.
-
-    Shared by every command that produces a report, so none of them can disagree about
-    what counts as a clean pass - a refused fast-forward reported as success is exactly
-    the kind of silence this exists to prevent.
-
-    :param report: What the pass did.
-    :return: The process exit code.
-    """
-    if report.fast_forward_was_refused:
-        return StackExitCode.NOT_FAST_FORWARD
-    unpublished = report.branches_left_unpublished
-    if any(outcome.outcome is RestackOutcome.REFUSED for outcome in unpublished):
-        return StackExitCode.MOVE_REFUSED
-    if unpublished:
-        return StackExitCode.BRANCH_NEEDS_ATTENTION
-    return StackExitCode.SUCCESS
+    def print_promotions(self) -> None:
+        """
+        Print every upstream link built this pass, and every spent link label removed.
+        """
+        for promotion in self.promoted:
+            logger.info(
+                f"{promotion.branch}\t#{promotion.pull_request_number}\t{promotion.url}"
+            )
+            if promotion.body_was_truncated:
+                logger.error(
+                    f"{promotion.branch}: the prefilled description was shortened to "
+                    f"fit the URL limit"
+                )
+        for branch in self.promotion_labels_cleared:
+            logger.info(f"{branch}\tlink-label-cleared\t")

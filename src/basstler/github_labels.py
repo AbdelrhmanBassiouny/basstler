@@ -1,7 +1,7 @@
 """
 The GitHub labels this tooling reads or applies, in one table.
 
-The dashboard reads some of them, the maintenance routine writes one, and setup creates
+The dashboard reads some of them, a maintenance pass writes one, and setup creates
 all of them on a fork. One enum names them all, so a label one part recognizes cannot be
 missing from the set setup creates.
 
@@ -60,10 +60,10 @@ class GitHubLabel(StrEnum):
 
     PROMOTION_LINK_SENT = (
         "promotion-link-sent",
-        "The maintenance routine has written this branch's upstream create-link",
+        "A maintenance pass has written this branch's upstream create-link",
     )
     """
-    Applied by the maintenance routine to a fork pull request whose link it has built,
+    Applied by a maintenance pass to a fork pull request whose link it has built,
     so a later pass does not rebuild it.
     """
 

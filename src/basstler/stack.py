@@ -919,7 +919,7 @@ def restack_plan(stack: Stack) -> list[RestackPlanEntry]:
 
     When a branch's parent has **merged** into the upstream, its commits are already in the base, so
     the child is reparented onto the upstream base: the restack rebases it there and it stops
-    depending on a landed (and about-to-be-closed) branch. The routine mirrors this by retargeting
+    depending on a landed (and about-to-be-closed) branch. The maintenance skill mirrors this by retargeting
     the child PR's base to the upstream base on GitHub. This holds however the parent landed -
     including when its own pull request was closed rather than merged, leaving the board with no
     entry for it at all.
