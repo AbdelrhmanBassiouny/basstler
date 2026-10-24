@@ -13,7 +13,7 @@ from basstler.exit_codes import StackExitCode
 from basstler.maintenance_fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance_promotion import Promotion
 from basstler.maintenance_restack_steps import BranchOutcome, RestackOutcome
-from basstler.stack import Reparent, Stack, landed_branches, promotion_order, reparents
+from basstler.stack_model import Reparent, Stack
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -116,9 +116,9 @@ class MaintenanceReport:
             restacked=tuple(restacked),
             promoted=tuple(promoted),
             promotion_labels_cleared=tuple(promotion_labels_cleared),
-            reparents=tuple(reparents(stack)),
-            landed=tuple(branch.name for branch in landed_branches(stack)),
-            promotable=tuple(branch.name for branch in promotion_order(stack)),
+            reparents=tuple(stack.reparents()),
+            landed=tuple(branch.name for branch in stack.landed_branches()),
+            promotable=tuple(branch.name for branch in stack.promotion_order()),
         )
 
     def as_json(self) -> str:

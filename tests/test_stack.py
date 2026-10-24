@@ -2,7 +2,7 @@
 Tests for the stacked-PR helper's pure logic (no git, no network) and its personal-notes
 configuration layering (real scratch git repositories, no network).
 
-The data layer is injected - :func:`build_stack` takes a merged-branch predicate - so
+The data layer is injected - :meth:`Stack.build` takes a merged-branch predicate - so
 status derivation, topological ordering, promotion policy, and the restack plan are all
 exercised against in-memory pull-request exports. Configuration layering genuinely needs a git
 remote, so those tests run against a :class:`ScratchRepository` instead.
@@ -22,39 +22,35 @@ import basstler.stack
 from basstler.exit_codes import StackExitCode
 from basstler.repository import Repository
 from basstler.stack_configuration import StackSetting
-from basstler.stack import (
-    AmbiguousForkRemoteError,
+from basstler.stack import Command, CommandOption
+from basstler.stack_commit_move import (
     CommitMoveAction,
-    BranchStatus,
-    Configuration,
-    ContradictoryLabelWriteError,
-    ForkRemoteNotFoundError,
-    LabelWrite,
-    IntegrationStrategy,
     CommitMoveChecks,
-    Command,
-    CommandOption,
     ProposedCommitMove,
     RefusalReason,
-    PromotionLink,
-    PromotionLinkParameter,
+)
+from basstler.stack_errors import (
+    AmbiguousForkRemoteError,
+    ContradictoryLabelWriteError,
+    ForkRemoteNotFoundError,
     PromotionLinkTooLongError,
-    PrintedConfiguration,
+)
+from basstler.stack_label_write import LabelWrite
+from basstler.stack_model import (
+    BranchStatus,
+    IntegrationStrategy,
     PullRequest,
-    Remote,
     Reparent,
-    build_stack,
-    derive_status,
-    landed_branches,
-    load_configuration,
-    next_to_promote,
-    print_configuration,
-    reparents,
-    resolve_remotes,
-    order,
-    promotion_order,
     RestackPlanEntry,
-    restack_plan,
+    Stack,
+)
+from basstler.stack_promotion_link import PromotionLink, PromotionLinkParameter
+from basstler.stack_report import StatusColumn
+from basstler.stack_settings import (
+    Configuration,
+    PrintedConfiguration,
+    Remote,
+    RemoteResolution,
 )
 
 from basstler.locations import PackageLocation, ProjectLocation
@@ -187,32 +183,37 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
 
 
 def build(prs: list[PullRequest], merged: Container[str] = frozenset()):
-    return build_stack(make_configuration(), prs, lambda name: name in merged)
+    return Stack.build(make_configuration(), prs, lambda name: name in merged)
 
 
-# %% derive_status
+# %% deriving a branch status
 
 
 def test_merged_wins_over_everything():
-    assert derive_status(draft=True, merged=True, in_review=True) == BranchStatus.MERGED
+    assert (
+        BranchStatus.derive(draft=True, merged=True, in_review=True)
+        == BranchStatus.MERGED
+    )
 
 
 def test_in_review_label_beats_draft_flag():
     assert (
-        derive_status(draft=True, merged=False, in_review=True)
+        BranchStatus.derive(draft=True, merged=False, in_review=True)
         == BranchStatus.IN_REVIEW
     )
 
 
 def test_undrafted_is_ready():
     assert (
-        derive_status(draft=False, merged=False, in_review=False) == BranchStatus.READY
+        BranchStatus.derive(draft=False, merged=False, in_review=False)
+        == BranchStatus.READY
     )
 
 
 def test_drafted_is_draft():
     assert (
-        derive_status(draft=True, merged=False, in_review=False) == BranchStatus.DRAFT
+        BranchStatus.derive(draft=True, merged=False, in_review=False)
+        == BranchStatus.DRAFT
     )
 
 
@@ -269,7 +270,7 @@ def test_order_places_parent_before_child():
         PullRequest(3, StackBranch.CHILD, StackBranch.PARENT, draft=True),
         PullRequest(2, StackBranch.PARENT, StackBranch.BASE, draft=True),
     ]
-    names = [b.name for b in order(build(prs))]
+    names = [b.name for b in build(prs).ordered()]
     assert names.index(StackBranch.PARENT) < names.index(StackBranch.CHILD)
 
 
@@ -278,12 +279,14 @@ def test_order_places_parent_before_child():
 
 def test_promotes_ready_root():
     prs = [PullRequest(11, StackBranch.FEATURE, StackBranch.BASE, draft=False)]
-    assert next_to_promote(build(prs)).name == StackBranch.FEATURE
+    assert [branch.name for branch in build(prs).promotion_order()] == [
+        StackBranch.FEATURE
+    ]
 
 
 def test_nothing_promotes_when_all_draft():
     prs = [PullRequest(5, StackBranch.WORK_IN_PROGRESS, StackBranch.BASE, draft=True)]
-    assert next_to_promote(build(prs)) is None
+    assert build(prs).promotion_order() == []
 
 
 def test_ready_child_blocked_until_parent_lands():
@@ -295,7 +298,7 @@ def test_ready_child_blocked_until_parent_lands():
             2, StackBranch.CHILD, StackBranch.PARENT, draft=False
         ),  # approved but parent hasn't landed
     ]
-    assert next_to_promote(build(prs)) is None
+    assert build(prs).promotion_order() == []
 
 
 def test_child_promotable_once_parent_reaches_review():
@@ -312,7 +315,9 @@ def test_child_promotable_once_parent_reaches_review():
         ),
         PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
     ]
-    assert next_to_promote(build(prs)).name == StackBranch.CHILD
+    assert [branch.name for branch in build(prs).promotion_order()] == [
+        StackBranch.CHILD
+    ]
 
 
 def test_child_promotable_once_parent_merged():
@@ -320,10 +325,8 @@ def test_child_promotable_once_parent_merged():
         PullRequest(1, StackBranch.PARENT, StackBranch.BASE, draft=False),
         PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
     ]
-    assert (
-        next_to_promote(build(prs, merged={StackBranch.PARENT})).name
-        == StackBranch.CHILD
-    )
+    promotable = build(prs, merged={StackBranch.PARENT}).promotion_order()
+    assert [branch.name for branch in promotable] == [StackBranch.CHILD]
 
 
 def test_promotion_order_includes_every_ready_unblocked_branch_in_dependency_order():
@@ -337,7 +340,7 @@ def test_promotion_order_includes_every_ready_unblocked_branch_in_dependency_ord
         ),  # its parent is only ready
         PullRequest(3, StackBranch.SECOND_ROOT, StackBranch.BASE, draft=False),
     ]
-    names = [b.name for b in promotion_order(build(prs))]
+    names = [b.name for b in build(prs).promotion_order()]
     assert names == [StackBranch.FIRST_ROOT, StackBranch.SECOND_ROOT]
 
 
@@ -354,7 +357,7 @@ def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
         ),
         PullRequest(2, StackBranch.FINE, StackBranch.BASE, draft=False),
     ]
-    names = [b.name for b in promotion_order(build(prs))]
+    names = [b.name for b in build(prs).promotion_order()]
     assert names == [StackBranch.FINE]
 
 
@@ -392,7 +395,7 @@ def test_restack_plan_excludes_merged_only():
             3, StackBranch.WORK_IN_PROGRESS, StackBranch.UNDER_REVIEW, draft=True
         ),
     ]
-    plan = restack_plan(build(prs, merged={StackBranch.LANDED}))
+    plan = build(prs, merged={StackBranch.LANDED}).restack_plan()
     names = [entry.branch for entry in plan]
     assert StackBranch.LANDED not in names
     assert names == [
@@ -411,7 +414,7 @@ def test_restack_plan_carries_parent_and_strategy():
             labels=[StackLabel.REBASE],
         )
     ]
-    plan = restack_plan(build(prs))
+    plan = build(prs).restack_plan()
     assert plan == [
         RestackPlanEntry(
             branch=StackBranch.WORK_IN_PROGRESS,
@@ -428,13 +431,117 @@ def test_restack_plan_reparents_child_of_merged_parent_onto_base():
         PullRequest(1, StackBranch.PARENT, StackBranch.BASE, draft=False),
         PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
     ]
-    plan = restack_plan(build(prs, merged={StackBranch.PARENT}))
+    plan = build(prs, merged={StackBranch.PARENT}).restack_plan()
     assert plan == [
         RestackPlanEntry(
             branch=StackBranch.CHILD,
             parent=StackBranch.BASE,
             strategy=IntegrationStrategy.MERGE,
         )
+    ]
+
+
+# %% what is stacked on one branch
+
+
+def a_three_deep_stack(
+    merged: Container[str] = frozenset(), rebasing: Container[str] = frozenset()
+):
+    """
+    :param merged: Which of its branches have already landed upstream.
+    :param rebasing: Which of them carry the label authorising a rebase.
+    :return: The chain of three, beside the branch cut from the base.
+    """
+    configuration = make_configuration()
+
+    def pull_request(number: int, branch: StackBranch, parent: str) -> PullRequest:
+        return PullRequest(
+            number,
+            branch,
+            parent,
+            draft=True,
+            labels=[configuration.rebase_label] if branch in rebasing else [],
+        )
+
+    return build(
+        [
+            pull_request(1, StackBranch.PARENT, configuration.upstream_base),
+            pull_request(2, StackBranch.CHILD, StackBranch.PARENT),
+            pull_request(3, StackBranch.GRANDCHILD, StackBranch.CHILD),
+            pull_request(4, StackBranch.OFF_THE_CHAIN, configuration.upstream_base),
+        ],
+        merged,
+    )
+
+
+def test_every_branch_along_the_chain_is_stacked_on_the_named_one():
+    stacked = a_three_deep_stack().branches_stacked_on(StackBranch.PARENT)
+    assert [branch.name for branch in stacked] == [
+        StackBranch.CHILD,
+        StackBranch.GRANDCHILD,
+    ]
+
+
+def test_the_named_branch_is_not_stacked_on_itself():
+    stacked = a_three_deep_stack().branches_stacked_on(StackBranch.PARENT)
+    assert StackBranch.PARENT not in [branch.name for branch in stacked]
+
+
+def test_a_branch_on_another_parent_is_not_stacked_on_the_named_one():
+    stacked = a_three_deep_stack().branches_stacked_on(StackBranch.PARENT)
+    assert StackBranch.OFF_THE_CHAIN not in [branch.name for branch in stacked]
+
+
+def test_a_branch_with_nothing_above_it_has_nothing_stacked_on_it():
+    assert a_three_deep_stack().branches_stacked_on(StackBranch.GRANDCHILD) == []
+
+
+def test_a_chain_is_stacked_only_up_to_the_branch_that_has_landed():
+    # A merged branch has nothing to take from the branch below it, and whatever sits on
+    # it is no longer reached from below either: its parent has landed, so what it needs
+    # is a reparent onto the upstream base, which a whole-board pass owns.
+    stack = a_three_deep_stack(merged={StackBranch.CHILD})
+
+    assert stack.branches_stacked_on(StackBranch.PARENT) == []
+
+
+# %% the restack plan for one subtree
+
+
+def test_a_named_subtree_plans_only_what_is_stacked_on_it():
+    plan = a_three_deep_stack().restack_plan(stacked_on=StackBranch.PARENT)
+    assert plan == [
+        RestackPlanEntry(
+            branch=StackBranch.CHILD,
+            parent=StackBranch.PARENT,
+            strategy=IntegrationStrategy.MERGE,
+        ),
+        RestackPlanEntry(
+            branch=StackBranch.GRANDCHILD,
+            parent=StackBranch.CHILD,
+            strategy=IntegrationStrategy.MERGE,
+        ),
+    ]
+
+
+def test_naming_no_subtree_plans_the_whole_board():
+    plan = a_three_deep_stack().restack_plan()
+    assert [entry.branch for entry in plan] == [
+        StackBranch.PARENT,
+        StackBranch.CHILD,
+        StackBranch.GRANDCHILD,
+        StackBranch.OFF_THE_CHAIN,
+    ]
+
+
+def test_a_subtree_carries_each_branch_own_integration_strategy():
+    stack = a_three_deep_stack(rebasing={StackBranch.CHILD})
+
+    plan = stack.restack_plan(stacked_on=StackBranch.PARENT)
+
+    assert [entry.strategy for entry in plan] == [
+        IntegrationStrategy.REBASE,
+        IntegrationStrategy.MERGE,
     ]
 
 
@@ -446,7 +553,7 @@ def test_restack_plan_reparents_child_of_a_landed_parent_with_no_open_pull_reque
     # absent from it entirely - yet its commits are in the upstream base, so its child
     # must still be reparented onto that base rather than left on the landed branch.
     prs = [PullRequest(2, StackBranch.CHILD, StackBranch.LANDED_ELSEWHERE, draft=False)]
-    plan = restack_plan(build(prs, merged={StackBranch.LANDED_ELSEWHERE}))
+    plan = build(prs, merged={StackBranch.LANDED_ELSEWHERE}).restack_plan()
     assert plan == [
         RestackPlanEntry(
             branch=StackBranch.CHILD,
@@ -462,15 +569,13 @@ def test_ready_child_blocked_when_its_only_parent_is_an_unlanded_off_board_branc
     prs = [
         PullRequest(2, StackBranch.CHILD, StackBranch.UNLANDED_ELSEWHERE, draft=False)
     ]
-    assert next_to_promote(build(prs)) is None
+    assert build(prs).promotion_order() == []
 
 
 def test_ready_child_promotable_when_its_off_board_parent_has_landed():
     prs = [PullRequest(2, StackBranch.CHILD, StackBranch.LANDED_ELSEWHERE, draft=False)]
-    assert (
-        next_to_promote(build(prs, merged={StackBranch.LANDED_ELSEWHERE})).name
-        == StackBranch.CHILD
-    )
+    promotable = build(prs, merged={StackBranch.LANDED_ELSEWHERE}).promotion_order()
+    assert [branch.name for branch in promotable] == [StackBranch.CHILD]
 
 
 # %% configuration layering (personal-notes overrides)
@@ -500,7 +605,7 @@ def _committed_configuration_path(scratch_repository: ScratchRepository) -> Path
     the shell file the personal-notes override is fetched through.
 
     :param scratch_repository: The scratch repository to write into.
-    :return: The path :func:`load_configuration` should be pointed at.
+    :return: The path :meth:`Configuration.load` should be pointed at.
     """
     path = scratch_repository.install_stack_configuration(
         DatasetLocation.COMMITTED_DEFAULT_STACK_CONFIGURATION.read_text()
@@ -518,7 +623,7 @@ def test_load_configuration_uses_committed_defaults_when_no_personal_notes_branc
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    configuration = load_configuration(configuration_path)
+    configuration = Configuration.load(configuration_path)
 
     assert configuration.upstream_remote == RemoteName.UPSTREAM
 
@@ -537,7 +642,7 @@ def test_load_configuration_layers_personal_notes_override_on_top_of_defaults(
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    configuration = load_configuration(configuration_path)
+    configuration = Configuration.load(configuration_path)
 
     assert configuration.upstream_remote == RemoteName.PERSONAL_UPSTREAM
     assert configuration.upstream_base == StackBranch.BASE  # untouched default
@@ -553,7 +658,7 @@ def test_load_configuration_ignores_personal_notes_branch_without_a_stack_file(
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    configuration = load_configuration(configuration_path)
+    configuration = Configuration.load(configuration_path)
 
     assert configuration.upstream_remote == RemoteName.UPSTREAM
 
@@ -568,7 +673,7 @@ def test_load_configuration_resolves_the_fork_whatever_the_remote_is_called(
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    configuration = load_configuration(configuration_path)
+    configuration = Configuration.load(configuration_path)
 
     assert configuration.fork_repository == StackRepository.FORK.value
     assert configuration.fork_remote == RemoteName.UNEXPECTED
@@ -596,7 +701,7 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    configuration = load_configuration(configuration_path)
+    configuration = Configuration.load(configuration_path)
 
     assert configuration.fork_repository == StackRepository.SOMEBODY_ELSES_FORK.value
     assert configuration.fork_remote == RemoteName.THEIRS
@@ -606,7 +711,7 @@ def test_load_configuration_takes_the_fork_from_a_personal_notes_override(
 
 
 def resolve(remote_urls: dict[str, str], fork_repository: Repository | None = None):
-    return resolve_remotes(
+    return RemoteResolution.resolve(
         remote_urls,
         StackRepository.UPSTREAM.value,
         RemoteName.PREFERRED_UPSTREAM,
@@ -739,7 +844,7 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
     Callers read one setting by name out of this output, so a key that is not a field name
     is a key nobody can look up - and a field that never prints is a setting nobody can read.
     """
-    print_configuration(make_configuration())
+    make_configuration().print_settings()
 
     printed = PrintedConfiguration.read(capsys.readouterr().out)
 
@@ -761,7 +866,7 @@ def test_a_checkout_missing_its_upstream_remote_is_printed_the_command_that_adds
     setup_command = a_remote_addition_command(
         RemoteName.UPSTREAM, StackRepository.UPSTREAM.value
     )
-    print_configuration(make_configuration(upstream_setup_command=setup_command))
+    make_configuration(upstream_setup_command=setup_command).print_settings()
 
     printed = PrintedConfiguration.read(capsys.readouterr().out)
 
@@ -773,7 +878,7 @@ def test_nothing_is_printed_for_a_setup_command_that_is_not_needed(capsys):
     An empty value would read as a command to run, so the line is absent rather than
     blank.
     """
-    print_configuration(make_configuration())
+    make_configuration().print_settings()
 
     assert StackSetting.UPSTREAM_SETUP_COMMAND not in capsys.readouterr().out
 
@@ -823,7 +928,7 @@ def a_deep_stack_beside_an_independent_branch(
 
 
 def test_nothing_promotes_while_the_whole_stack_is_still_draft():
-    assert promotion_order(a_deep_stack_beside_an_independent_branch()) == []
+    assert a_deep_stack_beside_an_independent_branch().promotion_order() == []
 
 
 def test_approving_a_root_promotes_it_and_nothing_above_it():
@@ -835,7 +940,7 @@ def test_approving_a_root_promotes_it_and_nothing_above_it():
         approved={StackBranch.ENGINE, StackBranch.ENGINE_UI}
     )
 
-    assert [branch.name for branch in promotion_order(stack)] == [StackBranch.ENGINE]
+    assert [branch.name for branch in stack.promotion_order()] == [StackBranch.ENGINE]
 
 
 def test_promoting_a_parent_unblocks_the_child_behind_it():
@@ -848,7 +953,9 @@ def test_promoting_a_parent_unblocks_the_child_behind_it():
         promoted={StackBranch.ENGINE},
     )
 
-    assert [branch.name for branch in promotion_order(stack)] == [StackBranch.ENGINE_UI]
+    assert [branch.name for branch in stack.promotion_order()] == [
+        StackBranch.ENGINE_UI
+    ]
 
 
 def test_both_stacks_promote_together_since_they_do_not_depend_on_each_other():
@@ -856,7 +963,7 @@ def test_both_stacks_promote_together_since_they_do_not_depend_on_each_other():
         approved={StackBranch.ENGINE, StackBranch.PARSER}
     )
 
-    assert [branch.name for branch in promotion_order(stack)] == [
+    assert [branch.name for branch in stack.promotion_order()] == [
         StackBranch.ENGINE,
         StackBranch.PARSER,
     ]
@@ -870,7 +977,7 @@ def test_a_branch_delegated_for_conflict_resolution_is_held_back_alone():
         approved={StackBranch.ENGINE, StackBranch.PARSER}, withheld={StackBranch.ENGINE}
     )
 
-    assert [branch.name for branch in promotion_order(stack)] == [StackBranch.PARSER]
+    assert [branch.name for branch in stack.promotion_order()] == [StackBranch.PARSER]
 
 
 def test_landing_a_root_reparents_only_its_own_child():
@@ -880,7 +987,7 @@ def test_landing_a_root_reparents_only_its_own_child():
     """
     stack = a_deep_stack_beside_an_independent_branch(landed={StackBranch.ENGINE})
 
-    assert restack_plan(stack) == [
+    assert stack.restack_plan() == [
         RestackPlanEntry(
             branch=StackBranch.ENGINE_UI,
             parent=StackBranch.BASE,
@@ -910,7 +1017,7 @@ def test_landing_a_root_that_no_open_pull_request_describes_still_reparents():
         merged={StackBranch.ENGINE},
     )
 
-    assert restack_plan(orphaned) == [
+    assert orphaned.restack_plan() == [
         RestackPlanEntry(
             branch=StackBranch.ENGINE_UI,
             parent=StackBranch.BASE,
@@ -930,16 +1037,16 @@ def test_a_stack_lands_bottom_up_over_successive_runs():
         landed={StackBranch.ENGINE, StackBranch.ENGINE_UI}
     )
 
-    assert [entry.branch for entry in restack_plan(after_first)] == [
+    assert [entry.branch for entry in after_first.restack_plan()] == [
         StackBranch.ENGINE_UI,
         StackBranch.ENGINE_DOCS,
         StackBranch.PARSER,
     ]
-    assert [entry.branch for entry in restack_plan(after_second)] == [
+    assert [entry.branch for entry in after_second.restack_plan()] == [
         StackBranch.ENGINE_DOCS,
         StackBranch.PARSER,
     ]
-    assert restack_plan(after_second)[0] == RestackPlanEntry(
+    assert after_second.restack_plan()[0] == RestackPlanEntry(
         branch=StackBranch.ENGINE_DOCS,
         parent=StackBranch.BASE,
         strategy=IntegrationStrategy.MERGE,
@@ -1229,7 +1336,7 @@ def test_a_link_that_cannot_fit_even_without_a_description_is_refused():
 def test_a_child_of_a_landed_parent_is_named_with_the_base_it_should_get():
     stack = a_deep_stack_beside_an_independent_branch(landed={StackBranch.ENGINE})
 
-    assert reparents(stack) == [
+    assert stack.reparents() == [
         Reparent(
             branch=StackBranch.ENGINE_UI,
             pull_request_number=2,
@@ -1240,7 +1347,7 @@ def test_a_child_of_a_landed_parent_is_named_with_the_base_it_should_get():
 
 
 def test_a_child_already_based_on_the_upstream_base_needs_no_reparent():
-    assert reparents(a_deep_stack_beside_an_independent_branch()) == []
+    assert a_deep_stack_beside_an_independent_branch().reparents() == []
 
 
 def test_a_child_of_a_landed_parent_with_no_open_pull_request_is_still_named():
@@ -1253,7 +1360,7 @@ def test_a_child_of_a_landed_parent_with_no_open_pull_request_is_still_named():
         merged={StackBranch.ENGINE},
     )
 
-    assert [reparent.branch for reparent in reparents(orphaned)] == [
+    assert [reparent.branch for reparent in orphaned.reparents()] == [
         StackBranch.ENGINE_UI
     ]
 
@@ -1261,11 +1368,11 @@ def test_a_child_of_a_landed_parent_with_no_open_pull_request_is_still_named():
 def test_a_branch_that_has_landed_is_named_for_labelling_and_closing():
     stack = a_deep_stack_beside_an_independent_branch(landed={StackBranch.ENGINE})
 
-    assert [branch.name for branch in landed_branches(stack)] == [StackBranch.ENGINE]
+    assert [branch.name for branch in stack.landed_branches()] == [StackBranch.ENGINE]
 
 
 def test_nothing_has_landed_while_the_whole_stack_is_still_open():
-    assert landed_branches(a_deep_stack_beside_an_independent_branch()) == []
+    assert a_deep_stack_beside_an_independent_branch().landed_branches() == []
 
 
 # %% configuration named rather than inferred
@@ -1286,9 +1393,9 @@ def test_a_named_fork_is_used_where_inference_would_have_refused_to_guess(
     monkeypatch.chdir(scratch_repository.project_root)
 
     with pytest.raises(AmbiguousForkRemoteError):
-        load_configuration(configuration_path)
+        Configuration.load(configuration_path)
 
-    configuration = load_configuration(
+    configuration = Configuration.load(
         configuration_path, fork_repository=StackRepository.SOMEBODY_ELSES_FORK.value
     )
 
@@ -1320,7 +1427,7 @@ def test_a_project_committing_no_stack_file_takes_its_upstream_from_personal_not
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    configuration = load_configuration(configuration_path)
+    configuration = Configuration.load(configuration_path)
 
     assert configuration.upstream_repository == StackRepository.DIFFERENT_UPSTREAM.value
 
@@ -1332,7 +1439,7 @@ def test_a_named_upstream_replaces_the_committed_default(
     scratch_repository.resolve_notes_remote_to()
     monkeypatch.chdir(scratch_repository.project_root)
 
-    configuration = load_configuration(
+    configuration = Configuration.load(
         configuration_path,
         upstream_repository=StackRepository.DIFFERENT_UPSTREAM.value,
     )
@@ -1544,3 +1651,15 @@ def test_a_promotion_link_is_built_from_the_resolved_repositories(
             "",
         ).url
     )
+
+
+# %% status table
+
+
+def test_status_rows_start_each_cell_where_its_heading_starts():
+    columns = list(StatusColumn)
+    heading = StatusColumn.line(*columns)
+    row = StatusColumn.line(*range(len(columns)))
+    assert [heading.index(column) for column in columns] == [
+        row.index(str(position)) for position in range(len(columns))
+    ]

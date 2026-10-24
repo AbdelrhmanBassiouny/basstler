@@ -17,7 +17,8 @@ from pathlib import Path
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_errors import ExternalCallFailed
-from basstler.stack import Configuration, IntegrationStrategy, resolve_ref
+from basstler.stack_model import IntegrationStrategy
+from basstler.stack_settings import Configuration
 
 # %% running git
 
@@ -129,7 +130,7 @@ class ProposedPush:
         :param configuration: The resolved configuration.
         :param branch: The branch to publish.
         :param strategy: How its parent was integrated, which authorises a rewrite when
-            it is a rebase - and which ``build_stack`` sets to rebase only from the label.
+            it is a rebase - and which ``Stack.build`` sets to rebase only from the label.
         :param replaces_superseded_merges: Whether the integration replaced merges that
             only brought in an earlier state of the parent, the one rewrite a merge is
             authorised to make.
@@ -148,7 +149,7 @@ class GitCommandRunner:
     """
     Runs git in one checkout, reporting failures rather than swallowing them.
 
-    ``stack.py`` reads git through a helper that returns an empty string when a command
+    ``stack_checkout.py`` reads git through a helper that returns an empty string when a command
     fails. That is right for derivation, where a missing ref simply means "no answer",
     and wrong here: a push that silently did nothing would be indistinguishable from one
     that worked.
@@ -332,4 +333,6 @@ class BranchAncestry:
         """:param candidate: A fork branch that may be contained.
         :param descendant: A local branch that may contain it.
         :return: Whether the fork's copy of *candidate* is contained in *descendant*."""
-        return self.git.contains(resolve_ref(self.configuration, candidate), descendant)
+        return self.git.contains(
+            self.configuration.reference_on_fork(candidate), descendant
+        )

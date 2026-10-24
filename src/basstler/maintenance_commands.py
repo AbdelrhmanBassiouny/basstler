@@ -24,7 +24,8 @@ from basstler.maintenance_github import GitHubRepository
 from basstler.maintenance_promotion import clear_spent_promotion_labels, promote
 from basstler.maintenance_report import MaintenanceReport
 from basstler.maintenance_restack_procedure import restack
-from basstler.stack import Configuration, Stack, load_stack
+from basstler.stack_model import Stack
+from basstler.stack_settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -64,7 +65,7 @@ class MaintenancePass:
 
     def stack(self) -> Stack:
         """:return: The derived stack, read from the exported board."""
-        return load_stack(self.board)
+        return Stack.load(self.board)
 
 
 @dataclass(frozen=True)
@@ -226,6 +227,17 @@ class RestackCommand(MaintenanceCommand):
         """
         return "integrate every moved parent and publish the result"
 
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--stacked-on`` on."""
+        parser.add_argument(
+            "--stacked-on",
+            help=(
+                "carry only this branch into what is stacked on it, leaving the rest "
+                "of the board alone and handing any collision back rather than "
+                "reporting it to the branch's owner"
+            ),
+        )
+
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
     ) -> StackExitCode:
@@ -234,7 +246,11 @@ class RestackCommand(MaintenanceCommand):
         :return: The process exit code."""
         stack = maintenance.stack()
         report = MaintenanceReport(
-            restacked=tuple(restack(stack, maintenance.git, maintenance.fork()))
+            restacked=tuple(
+                restack(
+                    stack, maintenance.git, maintenance.fork(), arguments.stacked_on
+                )
+            )
         )
         report.print_summary()
         return report.exit_code

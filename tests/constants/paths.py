@@ -203,6 +203,13 @@ class SkillDirectory(PathEnumeration):
     The dashboard skill's shell entry point.
     """
 
+    @classmethod
+    def skills(cls) -> tuple[SkillDirectory, ...]:
+        """
+        :return: Every member that is a skill's own directory.
+        """
+        return tuple(member for member in cls if member.parent == cls.DIRECTORY.value)
+
 
 class PersonalNotesPath(PathEnumeration):
     """

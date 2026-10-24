@@ -14,13 +14,9 @@ from basstler.github_labels import GitHubLabel
 from basstler.maintenance_constants import MaintenanceText
 from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_github import ForkPullRequests, PullRequestWriter
-from basstler.stack import (
-    BranchStatus,
-    LabelWrite,
-    PromotionLink,
-    Stack,
-    promotion_order,
-)
+from basstler.stack_label_write import LabelWrite
+from basstler.stack_model import BranchStatus, Stack
+from basstler.stack_promotion_link import PromotionLink
 
 
 @dataclass(frozen=True)
@@ -97,7 +93,7 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
     """
     promoted: list[Promotion] = []
     withheld = stack.configuration.needs_resolution_label
-    for branch in promotion_order(stack):
+    for branch in stack.promotion_order():
         number = branch.pull_request_number
         pull_request = fork.pull_request(number)
         labels = PullRequestField.LABELS.read(pull_request, number)

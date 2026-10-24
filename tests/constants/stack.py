@@ -112,6 +112,16 @@ class StackBranch(StrEnum):
     A branch beside :attr:`STUCK` that nothing holds back.
     """
 
+    GRANDCHILD = "a-grandchild"
+    """
+    Stacked on the child, so it reaches the parent only through it.
+    """
+
+    OFF_THE_CHAIN = "off-the-chain"
+    """
+    Cut from the base beside the chain, so nothing stacks it on the parent.
+    """
+
 
 class StackLabel(StrEnum):
     """

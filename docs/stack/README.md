@@ -39,7 +39,7 @@ next to the workflow it describes, because it is read rather than run.
   *whichever remote is not the upstream*, matched by the repository each URL points at rather
   than by what the remote is called, so `origin` may be either one. A
   `.claude/personal/stack.toml` on the personal-notes branch layers your own overrides on top of
-  both (see `stack.py`'s `load_configuration`), including a `fork_repository` to pick between
+  both (see `Configuration.load` in `stack_settings.py`), including a `fork_repository` to pick between
   remotes when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
   `session`) that `stack.py` reads. Written from GitHub as scratch by whatever refreshes it -
