@@ -10,7 +10,8 @@ Generic, plan-agnostic — nothing here may hardcode a specific plan id, item,
 or branch. Gathers everything a session doing this item's work would
 actually want before starting, then starts it.
 
-**Step 1 is research only — it creates nothing and writes no code.**
+**Step 1 is research only — apart from the stack pass it starts with, it creates
+nothing and writes no code.**
 Step 2 resolves the item's execution mode, and that mode decides what
 happens next: `plan` presents the plan and stops until the user approves it,
 `auto` records the plan and implements it without asking, and `ask` puts the

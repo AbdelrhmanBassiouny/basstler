@@ -1,6 +1,6 @@
 ---
 name: stacked-pr-maintenance
-description: Run one maintenance pass over a stacked-PR fork-staging workflow - reparent any pull request whose base has landed, restack branches whose parent moved, and promote every approved unblocked branch to the upstream review queue. Invoke as "/stacked-pr-maintenance [fork=<owner/repo>] [upstream=<owner/repo>] [--non-interactive]". Use when asked to run a stack maintenance pass, restack the stack, promote ready branches, or clean up after a branch has landed upstream, and when a scheduled routine hands this document its values.
+description: Run one maintenance pass over a stacked-PR fork-staging workflow - reparent any pull request whose base has landed, restack branches whose parent moved, and promote every approved unblocked branch to the upstream review queue. Invoke as "/stacked-pr-maintenance [fork=<owner/repo>] [upstream=<owner/repo>]". Use when asked to run a stack maintenance pass, restack the stack, promote ready branches,, or clean up after a branch has landed upstream, and as the first step of plan-item-kickoff and plan-item-resolve.
 allowed-tools: Bash, Read, Grep, AskUserQuestion, mcp__github__pull_request_read, mcp__github__list_pull_requests, mcp__github__update_pull_request, mcp__github__issue_write, mcp__github__add_issue_comment
 ---
 
@@ -78,31 +78,24 @@ you invoked it from keeps its branch and its files.
    it. If an `upstream_setup_command` line appears, run exactly that command and re-run
    `configuration`.
 3. **Exit status 4 - the fork could not be identified.** The checkout has no fork remote, or has more
-   than one candidate, and there is no safe guess.
-   - **If you were invoked with `--non-interactive`** (a scheduled routine always is): stop and
-     report what `git remote -v` shows. Asking would break the hard rule against opening a
-     discussion.
-   - **Otherwise**: ask the developer with `AskUserQuestion`, offering the repositories from
-     `git remote -v` as options, then persist the answer so the next run needs no question - write
-     `fork_repository = "<owner/repo>"` into `.claude/personal/stack.toml` on the personal-notes
-     branch:
+   than one candidate, and there is no safe guess. Ask the developer with `AskUserQuestion`,
+   offering the repositories from `git remote -v` as options, then persist the answer so the next
+   run needs no question - write `fork_repository = "<owner/repo>"` into
+   `.claude/personal/stack.toml` on the personal-notes branch:
 
-     ```bash
-     "${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" \
-       --source <the file you prepared> \
-       --destination .claude/personal/stack.toml \
-       --message "record which repository is my fork"
-     ```
+   ```bash
+   "${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" \
+     --source <the file you prepared> \
+     --destination .claude/personal/stack.toml \
+     --message "record which repository is my fork"
+   ```
 
-     That branch is fetched by every run, so the answer survives the fresh clone a scheduled run
-     starts from. Re-run `configuration` and continue.
+   That branch is fetched by every run, so the answer survives a fresh clone. Re-run
+   `configuration` and continue.
 
-4. **Exit status 11 - the project names no upstream.**
-   - **If you were invoked with `--non-interactive`**: stop and report stderr, which names where
-     to set it.
-   - **Otherwise**: ask the developer for the `<owner>/<name>` the project is reviewed on, save it
-     with `"${BASSTLER_PYTHON}" -m basstler.setup_steps configure-upstream --repository
-     <owner>/<name>`, re-run `configuration` and continue.
+4. **Exit status 11 - the project names no upstream.** Ask the developer for the `<owner>/<name>`
+   the project is reviewed on, save it with `"${BASSTLER_PYTHON}" -m basstler.setup_steps
+   configure-upstream --repository <owner>/<name>`, re-run `configuration` and continue.
 
 Any other non-zero exit is a stop-and-report, not something to work around.
 
@@ -215,7 +208,7 @@ yourself.
   compare-and-create link and stops there, and the developer clicks Create.
 - **It never debugs or fixes a red check.** Report it to the branch's owner the same way a conflict
   is reported: find the session link in the fork pull request's description, post a comment prefixed
-  `🔴 ROUTINE - NEEDS RESOLUTION:` stating the failing check and its conclusion, and label the pull
+  `🔴 MAINTENANCE - NEEDS RESOLUTION:` stating the failing check and its conclusion, and label the pull
   request `needs-resolution` via `stack.py labels` so the rest of its labels survive. That comment is
   the only channel available to you: no session subscribes to a pull request's activity, so it sits
   on GitHub until the owner reads it - write it to stand alone. Never disable a check to go green.
@@ -235,8 +228,7 @@ guaranteed to be seen.
 The **top** of the finish summary must list all pending upstream create-links: any built this run,
 and any fork pull request still carrying `promotion-link-sent` but not yet `in-review` (re-listed from
 prior runs, its link rebuilt with `promotion-link`). This section appears at the top even when
-nothing new was built, as long as any are pending - a scheduled run is configured to email its
-summary, so the summary *is* the delivery. List each pull request's number, title, branch and
+nothing new was built, as long as any are pending. List each pull request's number, title, branch and
 one-click link.
 
 Right after the links, list every branch reported on this run: its number and branch, the
