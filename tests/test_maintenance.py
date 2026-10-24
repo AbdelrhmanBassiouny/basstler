@@ -56,7 +56,7 @@ from basstler.maintenance_commands import (
 )
 from basstler.environment import GitHubCredentialVariable
 from basstler.github_labels import GitHubLabel
-from basstler.maintenance_constants import MergeableState, RoutineText
+from basstler.maintenance_constants import MergeableState, MaintenanceText
 from basstler.maintenance_fast_forward import (
     FastForwardOutcome,
     FastForwardReport,
@@ -111,7 +111,7 @@ class StackPullRequestNumber(IntEnum):
 class PromotionSampleText(StrEnum):
     """
     The text a promotion test puts into a fork pull request and finds again in what the
-    routine writes back.
+    pass writes back.
     """
 
     TITLE = "A parent branch"
@@ -1654,7 +1654,7 @@ def test_the_promotion_link_goes_into_the_description_and_the_branch_is_labelled
     assert [entry.branch for entry in promoted] == [StackBranch.PARENT]
     written = fork.description_writes[0]
     assert written.pull_request_number == StackPullRequestNumber.PARENT
-    assert RoutineText.PROMOTION_HEADING in written.body
+    assert MaintenanceText.PROMOTION_HEADING in written.body
     assert promoted[0].url in written.body
     assert PromotionSampleText.SUMMARY in written.body
     assert fork.label_writes == [
@@ -1736,7 +1736,7 @@ def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
 
     second = description_with_promotion_link(first, PromotionSampleText.SECOND_LINK)
 
-    assert second.count(RoutineText.PROMOTION_HEADING) == 1
+    assert second.count(MaintenanceText.PROMOTION_HEADING) == 1
     assert PromotionSampleText.SECOND_LINK in second
     assert PromotionSampleText.FIRST_LINK not in second
     assert second.startswith(PromotionSampleText.PROSE)

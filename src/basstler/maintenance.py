@@ -22,8 +22,8 @@ GitHub refuses to the credential this runs on - probed directly, alongside the l
 comment and description writes it does allow - so that step alone is reported for the
 caller to perform through the GitHub MCP server.
 
-The exit status is the result. ``run-report --json`` is the machine-readable form, so a
-scheduled job with no model in the loop can emit it directly.
+The exit status is the result. ``run-report --json`` is the machine-readable form
+``/stacked-pr-maintenance`` reads.
 """
 
 from __future__ import annotations
