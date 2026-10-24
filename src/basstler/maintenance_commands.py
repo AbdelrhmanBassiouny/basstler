@@ -22,10 +22,9 @@ from basstler.maintenance_fast_forward import fast_forward
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.maintenance_github import GitHubRepository
 from basstler.maintenance_promotion import clear_spent_promotion_labels, promote
-from basstler.maintenance_reparent_notice import ReparentResolution
 from basstler.maintenance_report import MaintenanceReport
 from basstler.maintenance_restack_procedure import restack
-from basstler.stack import Configuration, Stack, load_stack, reparents
+from basstler.stack import Configuration, Stack, load_stack
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -331,11 +330,6 @@ class RunReportCommand(MaintenanceCommand):
         """
         stack = maintenance.stack()
         fork = maintenance.fork()
-        # Reparenting runs before anything else moves, the same precedence the
-        # session-driven pass this replaces always gave it: a restack integrates a
-        # branch onto its *current* parent, so a child left on a landed one is
-        # restacked onto a dead end until it is retargeted first.
-        reparent_outcomes = ReparentResolution(stack, fork).resolve(reparents(stack))
         fast_forward_report = fast_forward(stack.configuration, maintenance.git)
         report = MaintenanceReport.of_pass(
             stack,
@@ -343,7 +337,6 @@ class RunReportCommand(MaintenanceCommand):
             restack(stack, maintenance.git, fork),
             promote(stack, fork),
             clear_spent_promotion_labels(stack, fork),
-            reparent_outcomes,
         )
         maintenance.board.unlink(missing_ok=True)
         if as_json:
@@ -351,45 +344,6 @@ class RunReportCommand(MaintenanceCommand):
             return report
         report.print_summary()
         return report
-
-
-@dataclass(frozen=True)
-class UnattendedRunCommand(MaintenanceCommand):
-    """
-    Performs the whole pass for a job nobody watches, and reports it as one document.
-
-    The pass is :class:`RunReportCommand`'s; only the exit status differs, per
-    :attr:`maintenance_report.MaintenanceReport.unattended_exit_code`.
-    """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "run-unattended"
-
-    @classproperty
-    def description(cls) -> str:
-        """
-        What it does, as ``--help`` puts it.
-        """
-        return (
-            "perform the whole pass for a job nobody watches, succeeding when every "
-            "branch left behind was reported on its pull request"
-        )
-
-    def run(
-        self, maintenance: MaintenancePass, arguments: argparse.Namespace
-    ) -> StackExitCode:
-        """
-        :param maintenance: What this run has resolved.
-        :param arguments: The parsed command line.
-        :return: The process exit code.
-        """
-        return (
-            RunReportCommand().perform(maintenance, as_json=True).unattended_exit_code
-        )
 
 
 # Built now rather than on first use, so a command that cannot say what it is called is

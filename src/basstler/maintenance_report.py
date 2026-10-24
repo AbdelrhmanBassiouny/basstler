@@ -12,7 +12,6 @@ from enum import StrEnum
 from basstler.exit_codes import StackExitCode
 from basstler.maintenance_fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance_promotion import Promotion
-from basstler.maintenance_reparent_notice import RetargetOutcome
 from basstler.maintenance_restack_steps import BranchOutcome, RestackOutcome
 from basstler.stack import Reparent, Stack, landed_branches, promotion_order, reparents
 from basstler.standard_streams import StandardStreamHandler
@@ -41,29 +40,16 @@ class MaintenanceReportKey(StrEnum):
     """
 
 
-class ReparentState(StrEnum):
-    """
-    What became of a pending reparent, as a printed line names it.
-    """
-
-    RETARGETED = "retargeted"
-    """
-    This pass's own credential retargeted it.
-    """
-
-    REFUSED_NOTIFIED = "refused-notified"
-    """
-    GitHub refused the retarget, and the branch's owner was labelled and commented at.
-    """
-
-
 # %% the report a caller renders or emits
 
 
 @dataclass(frozen=True)
 class MaintenanceReport:
     """
-    Everything one pass did, and what it could not.
+    Everything one pass did, and the one thing it leaves for its caller.
+
+    ``reparents`` is that one thing: retargeting a base is the single write GitHub
+    refuses to the credential this runs on, so it is reported rather than performed.
 
     Every field defaults to nothing done, so a single command reports the part of the
     pass it performed through the same object - and therefore through the same exit
@@ -92,16 +78,7 @@ class MaintenanceReport:
 
     reparents: tuple[Reparent, ...] = ()
     """
-    Every child whose base has landed, as :func:`stack.reparents` found it - whether or
-    not this pass's own credential went on to retarget it.
-    """
-
-    reparents_retargeted: tuple[str, ...] = ()
-    """
-    The branches in ``reparents`` this pass's own credential retargeted itself.
-
-    Every other one in ``reparents`` was refused and left labelled and commented at for
-    a session to retarget instead.
+    The children whose base has landed, for the caller to retarget.
     """
 
     landed: tuple[str, ...] = ()
@@ -122,7 +99,6 @@ class MaintenanceReport:
         restacked: Sequence[BranchOutcome],
         promoted: Sequence[Promotion] = (),
         promotion_labels_cleared: Sequence[str] = (),
-        reparent_outcomes: Sequence[RetargetOutcome] = (),
     ) -> MaintenanceReport:
         """
         Assemble one pass's outcomes and its leftovers into a single report.
@@ -133,8 +109,6 @@ class MaintenanceReport:
         :param promoted: The branches whose upstream link was built this pass.
         :param promotion_labels_cleared: The branches whose spent link label was
             removed.
-        :param reparent_outcomes: What became of every pending reparent; empty when
-            reparents were not attempted.
         :return: The report.
         """
         return cls(
@@ -143,11 +117,6 @@ class MaintenanceReport:
             promoted=tuple(promoted),
             promotion_labels_cleared=tuple(promotion_labels_cleared),
             reparents=tuple(reparents(stack)),
-            reparents_retargeted=tuple(
-                outcome.reparent.branch
-                for outcome in reparent_outcomes
-                if outcome.retargeted
-            ),
             landed=tuple(branch.name for branch in landed_branches(stack)),
             promotable=tuple(branch.name for branch in promotion_order(stack)),
         )
@@ -198,28 +167,11 @@ class MaintenanceReport:
             return StackExitCode.BRANCH_NEEDS_ATTENTION
         return StackExitCode.SUCCESS
 
-    @property
-    def unattended_exit_code(self) -> StackExitCode:
-        """
-        The exit status of a pass nobody is watching.
-
-        As :attr:`exit_code`, except that a branch whose owner has already been told on
-        its pull request does not fail the run.
-        """
-        exit_code = self.exit_code
-        if exit_code is StackExitCode.BRANCH_NEEDS_ATTENTION and all(
-            outcome.outcome.is_reported_to_its_owner
-            for outcome in self.branches_left_unpublished
-        ):
-            return StackExitCode.SUCCESS
-        return exit_code
-
     def print_summary(self) -> None:
         """
         Print one line per thing the pass did, in the order the pass did them.
         """
         self.print_fast_forward()
-        self.print_reparents()
         self.print_restack()
         self.print_promotions()
 
@@ -233,18 +185,6 @@ class MaintenanceReport:
         logger.info(f"{report.fork_reference}\t{report.outcome}\t{report.commit}")
         if report.explanation:
             logger.error(report.explanation)
-
-    def print_reparents(self) -> None:
-        """
-        Print what became of each pending reparent.
-        """
-        for reparent in self.reparents:
-            state = (
-                ReparentState.RETARGETED
-                if reparent.branch in self.reparents_retargeted
-                else ReparentState.REFUSED_NOTIFIED
-            )
-            logger.info(f"{reparent.branch}\t{state}\t{reparent.target_base}")
 
     def print_restack(self) -> None:
         """

@@ -44,32 +44,6 @@ class RepositoryLocation(PathEnumeration):
     The repository's Actions workflows.
     """
 
-    STACK_MAINTENANCE_WORKFLOW = WORKFLOWS / "stack-maintenance.yml"
-    """
-    The reusable workflow that runs the maintenance pass unattended.
-    """
-
-    EXAMPLES = ROOT / "docs" / "examples"
-    """
-    The example callers a project copies.
-    """
-
-
-class ExampleCaller(PathEnumeration):
-    """
-    The workflows a project copies to call one of this repository's reusable workflows.
-    """
-
-    UPSTREAM_REVIEWS = RepositoryLocation.EXAMPLES / "upstream-reviews.yml"
-    """
-    Calls the upstream-reviews read.
-    """
-
-    STACK_MAINTENANCE = RepositoryLocation.EXAMPLES / "stack-maintenance.yml"
-    """
-    Calls :attr:`RepositoryLocation.STACK_MAINTENANCE_WORKFLOW`.
-    """
-
 
 class DatasetLocation(PathEnumeration):
     """

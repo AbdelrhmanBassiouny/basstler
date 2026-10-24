@@ -93,11 +93,6 @@ A project that prefers a dispatch-only workflow on its default branch may still 
 the package, both from `main`; to pin a release instead, change both references to its
 tag.
 
-For a maintenance pass with nobody watching, copy
-[`examples/stack-maintenance.yml`](examples/stack-maintenance.yml) to the project's
-`.github/workflows/stack-maintenance.yml` the same way. It runs in the project's own
-Actions, with the project's own token, on pull request events and on dispatch.
-
 ## 4. Check it worked
 
 ```bash

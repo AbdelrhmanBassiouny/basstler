@@ -30,11 +30,10 @@ from basstler.package_layout import (
 )
 
 from .constants.environment import ConfigurationVariable, SearchPathVariable
-from .constants.paths import ExampleCaller, RepositoryLocation
+from .constants.paths import RepositoryLocation
 from .plugin_manifest import PluginManifestKey
 from .project_declaration import HatchVersionSource, ProjectDeclaration
 from .script_runner import ScriptRunner, configuration_value
-from .workflow_document import WorkflowDocument, WorkflowInput
 
 WORKFLOWS_DIRECTORY = RepositoryLocation.WORKFLOWS
 """
@@ -236,15 +235,26 @@ def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():
     ] == []
 
 
-@pytest.mark.parametrize("caller", list(ExampleCaller), ids=lambda p: p._name_)
-def test_every_example_caller_uses_one_branch_or_tag_throughout(caller):
+BASSTLER_REFERENCE = re.compile(
+    r"(?:basstler/\.github/workflows/upstream-reviews\.yml@|basstler_branch_or_tag: )(\S+)"
+)
+"""
+The ``@<branch or tag>`` the caller uses basstler's workflow at, or the
+``basstler_branch_or_tag: <branch or tag>`` it installs the package at.
+"""
+
+
+def test_the_example_caller_uses_one_branch_or_tag_throughout():
     """
-    A project copies an example caller as it stands, so the workflow it uses and the
+    A project copies the example caller as it stands, so the workflow it uses and the
     package that workflow installs have to come from the same branch or tag.
     """
-    job = WorkflowDocument.read(caller).only_job
+    caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
 
-    assert job.call.branch_or_tag == job.inputs[WorkflowInput.BASSTLER_BRANCH_OR_TAG]
+    references = BASSTLER_REFERENCE.findall(caller.read_text())
+
+    assert len(references) == 2
+    assert len(set(references)) == 1
 
 
 # %% nothing is left behind
