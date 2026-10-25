@@ -8,7 +8,7 @@ non-trivial branches later) tested like any other code.
 
 Usage:
     python3 plan/manifest_tools.py read-id <manifest-file>
-    python3 plan/manifest_tools.py validate <manifest-file>
+    python3 plan/manifest_tools.py validate <manifest-file> [--plans-dir <dir>]
     python3 plan/manifest_tools.py regenerate-branch-index \\
         --scratch-dir <dir> --plans-dir <relative-dir> \\
         --manifest-filename <name> --output <relative-path>
@@ -28,6 +28,7 @@ from typing import Any
 import yaml
 
 from basstler.exceptions import PlanValidationError
+from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.validation import PlanValidator
 from basstler.plan import model
 from basstler.exit_codes import ExitCode
@@ -77,7 +78,8 @@ class ManifestToolsOption(StrEnum):
 
     PLANS_DIRECTORY = "--plans-dir"
     """
-    The plans directory, relative to the scratch directory.
+    The plans directory: relative to the scratch directory when rebuilding the index,
+    and what a ``<plan-id>/<item-id>`` entry resolves against when validating.
     """
 
     MANIFEST_FILENAME = "--manifest-filename"
@@ -173,15 +175,17 @@ class PlanManifest:
                 branches.append(branch)
         return branches
 
-    def validate(self) -> None:
+    def validate(self, plan_directory: PlanDirectory | None = None) -> None:
         """
         Check the manifest against the same rules a dashboard is built under, so nothing
         is saved that no dashboard could then be built from.
 
+        :param plan_directory: The plans a ``<plan-id>/<item-id>`` entry resolves
+            against; without one, such an entry is refused.
         :raises PlanValidationError: If it breaks any rule, carrying every problem
             found.
         """
-        PlanValidator(self.content).validate()
+        PlanValidator(self.content, plan_directory).validate()
 
     def string_field(self, value: object, field_name: str) -> str:
         """
@@ -292,6 +296,13 @@ class ManifestToolsCommandLine:
             help="Check a manifest against the rules a dashboard is built under",
         )
         validate_parser.add_argument("manifest_path", type=Path)
+        validate_parser.add_argument(
+            ManifestToolsOption.PLANS_DIRECTORY,
+            dest="plans_dir",
+            type=Path,
+            default=None,
+            help="The plans a <plan-id>/<item-id> depends_on entry resolves against",
+        )
 
         regenerate_parser = subcommands.add_parser(
             ManifestToolsCommand.REGENERATE_BRANCH_INDEX,
@@ -337,7 +348,9 @@ class ManifestToolsCommandLine:
             logger.info(PlanManifest(arguments.manifest_path).identifier)
         elif arguments.subcommand == ManifestToolsCommand.VALIDATE:
             try:
-                PlanManifest(arguments.manifest_path).validate()
+                PlanManifest(arguments.manifest_path).validate(
+                    PlanDirectory(arguments.plans_dir) if arguments.plans_dir else None
+                )
             except PlanValidationError as error:
                 logger.error(f"{arguments.manifest_path} failed validation: {error}")
                 return ManifestToolsExitCode.INVALID_MANIFEST

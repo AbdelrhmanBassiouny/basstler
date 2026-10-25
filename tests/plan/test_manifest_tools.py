@@ -32,6 +32,8 @@ from basstler.plan.manifest_tools import (
 )
 
 from ..constants.paths import DatasetLocation
+from ..fixture_plans import FixturePlanId, ForeignItemId, foreign_reference
+from ..manifest_builders import manifest_item, minimal_plan
 from ..plan_dataset import LandedItemsPlan
 
 SCRIPT_NAME = Path(basstler.plan.manifest_tools.__file__).name
@@ -225,6 +227,59 @@ def test_validate_refuses_a_manifest_the_dashboard_rejects_and_says_why(
 
     assert status == ManifestToolsExitCode.INVALID_MANIFEST
     assert str(expected.value) in capsys.readouterr().err
+
+
+# %% main - validating a manifest that names another plan
+
+
+def run_validate_against_plans(
+    monkeypatch, tmp_path: Path, dependency_text: str
+) -> int:
+    """
+    Validate a one-item manifest depending on *dependency_text* against the fixture
+    plans directory.
+
+    :param monkeypatch: pytest's monkeypatch fixture.
+    :param tmp_path: Where the manifest is written.
+    :param dependency_text: The one entry of that item's ``depends_on``.
+    :return: The exit status the command line returns.
+    """
+    manifest_path = tmp_path / PlanDocument.MANIFEST
+    manifest_path.write_text(
+        yaml.safe_dump(
+            minimal_plan(items=[manifest_item("a", depends_on=[dependency_text])])
+        )
+    )
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            SCRIPT_NAME,
+            ManifestToolsCommand.VALIDATE,
+            str(manifest_path),
+            ManifestToolsOption.PLANS_DIRECTORY,
+            str(DatasetLocation.PLANS.value),
+        ],
+    )
+    return main()
+
+
+def test_validate_accepts_a_reference_the_plans_directory_resolves(
+    monkeypatch, tmp_path
+):
+    assert run_validate_against_plans(
+        monkeypatch, tmp_path, foreign_reference(ForeignItemId.READY)
+    ) == (ManifestToolsExitCode.SUCCESS)
+
+
+def test_validate_refuses_a_reference_to_a_plan_the_directory_lacks(
+    monkeypatch, tmp_path
+):
+    assert run_validate_against_plans(
+        monkeypatch,
+        tmp_path,
+        foreign_reference(ForeignItemId.READY, FixturePlanId.ABSENT),
+    ) == (ManifestToolsExitCode.INVALID_MANIFEST)
 
 
 # %% item - one item's slice of a plan
