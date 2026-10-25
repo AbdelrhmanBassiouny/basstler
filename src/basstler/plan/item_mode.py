@@ -62,6 +62,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.bash import Bash
 from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, ExitCode
@@ -719,8 +720,7 @@ def write_mode(
         scratch_file = Path(scratch_directory) / "plan-item-modes.toml"
         scratch_file.write_text(render_settings(modes))
         written = subprocess.run(
-            [
-                "bash",
+            Bash.locate(os.environ).command(
                 PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT,
                 "--source",
                 str(scratch_file),
@@ -728,7 +728,7 @@ def write_mode(
                 ProjectLocation.PERSONAL_PLAN_ITEM_MODES,
                 "--message",
                 f"Set {pinned} to {mode}",
-            ],
+            ),
             cwd=project_root,
             capture_output=True,
             text=True,

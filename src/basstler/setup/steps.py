@@ -40,6 +40,7 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 
+from basstler.bash import Bash
 from basstler.class_property import classproperty
 from basstler.github_labels import GitHubLabel
 from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
@@ -674,8 +675,7 @@ class PersonalUpstream:
             scratch_file = Path(scratch_directory) / "stack.toml"
             scratch_file.write_text(self.written_over(self.existing(project_root)))
             written = subprocess.run(
-                [
-                    "bash",
+                Bash.locate(os.environ).command(
                     PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT,
                     "--source",
                     str(scratch_file),
@@ -683,7 +683,7 @@ class PersonalUpstream:
                     ProjectLocation.PERSONAL_STACK_CONFIGURATION,
                     "--message",
                     f"Name {self.repository.full_name} as the upstream",
-                ],
+                ),
                 cwd=project_root,
                 capture_output=True,
                 text=True,

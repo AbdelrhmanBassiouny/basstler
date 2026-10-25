@@ -24,6 +24,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from basstler.bash import Bash
 from basstler.class_property import classproperty
 from basstler.email_address import EmailAddress
 from basstler.environment import GitHubCredentialVariable
@@ -388,7 +389,9 @@ class PersonalNotesSetup:
         :return: The finished process, its report captured.
         """
         return subprocess.run(
-            ["bash", str(self.plugin_file(PluginLocation.SETUP_CHECK_SCRIPT))],
+            Bash.locate(self.environment).command(
+                self.plugin_file(PluginLocation.SETUP_CHECK_SCRIPT)
+            ),
             cwd=self.project_root,
             env=dict(self.environment),
             capture_output=True,
@@ -405,7 +408,7 @@ class PersonalNotesSetup:
         """
         path = self.plugin_file(script)
         completed = subprocess.run(
-            ["bash", str(path), *arguments],
+            Bash.locate(self.environment).command(path, *arguments),
             cwd=self.project_root,
             env=dict(self.environment),
         )
