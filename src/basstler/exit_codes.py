@@ -126,19 +126,35 @@ class StackExitCode(ExitCode):
         return super().name_for_a_caller.replace("_", "-")
 
 
-class PersonalNotesSetupExitCode(ExitCode):
+class SetupCheckExitCode(ExitCode):
     """
-    What the personal-notes setup's exit status tells a caller.
-
-    The first two are check-setup.sh's own, which a completed run passes on.
+    What check-setup.sh's exit status tells a caller.
     """
 
     SUCCESS = 0
     """
-    The run finished and check-setup.sh reports nothing left to set up.
+    Nothing is left to set up.
     """
 
     SETUP_INCOMPLETE = 1
+    """
+    At least one check still needs setting up.
+    """
+
+
+class PersonalNotesSetupExitCode(ExitCode):
+    """
+    What the personal-notes setup's exit status tells a caller.
+
+    The first two are :class:`SetupCheckExitCode`'s, which a completed run passes on.
+    """
+
+    SUCCESS = SetupCheckExitCode.SUCCESS.value
+    """
+    The run finished and check-setup.sh reports nothing left to set up.
+    """
+
+    SETUP_INCOMPLETE = SetupCheckExitCode.SETUP_INCOMPLETE.value
     """
     The run finished and check-setup.sh still reports something to set up.
     """

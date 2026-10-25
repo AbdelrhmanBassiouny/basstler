@@ -469,3 +469,21 @@ class PlanValidationError(DataclassException):
 
     def suggest_correction(self) -> str:
         return ""
+
+
+@dataclass
+class MalformedEmailAddressError(DataclassException, ValueError):
+    """
+    Raised when text is not an email address in ``local-part@domain`` form.
+    """
+
+    text: str
+    """
+    The value that could not be parsed.
+    """
+
+    def error_message(self) -> str:
+        return f"expected an email address as 'local-part@domain', got {self.text!r}"
+
+    def suggest_correction(self) -> str:
+        return "give the address your commits should carry, e.g. you@example.com"

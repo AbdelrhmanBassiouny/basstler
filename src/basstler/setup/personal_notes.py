@@ -25,6 +25,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.class_property import classproperty
+from basstler.email_address import EmailAddress
 from basstler.environment import GitHubCredentialVariable
 from basstler.exit_codes import CommandFailure, PersonalNotesSetupExitCode
 from basstler.github_labels import GitHubLabel
@@ -89,9 +90,9 @@ class GitIdentity:
     The value of ``user.name``.
     """
 
-    email: str
+    email: EmailAddress
     """
-    The value of ``user.email``.
+    The address ``user.email`` is set to.
     """
 
 
@@ -140,7 +141,11 @@ class SetupRequest:
             "a wrong guess pushes them to a repository you may not own",
         )
         parser.add_argument(SetupOption.NAME, help="the name your commits carry")
-        parser.add_argument(SetupOption.EMAIL, help="the email your commits carry")
+        parser.add_argument(
+            SetupOption.EMAIL,
+            type=EmailAddress.parse,
+            help="the email your commits carry",
+        )
         parser.add_argument(
             SetupOption.STARTER_NOTES,
             action="store_true",
@@ -251,7 +256,8 @@ class PersonalNotesSetup:
         logger.info(
             f"Setup finished. check-setup.sh now reports:\n{final_check.stdout}"
         )
-        return PersonalNotesSetupExitCode(final_check.returncode)
+        final_report = SetupReport.from_completed_process(final_check)
+        return PersonalNotesSetupExitCode(final_report.exit_code)
 
     def verify_notes_remote_owner(self) -> None:
         """
@@ -340,7 +346,7 @@ class PersonalNotesSetup:
             "--name",
             self.request.identity.name,
             "--email",
-            self.request.identity.email,
+            str(self.request.identity.email),
         )
 
     def check_labels(self) -> None:

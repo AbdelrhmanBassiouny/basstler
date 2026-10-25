@@ -21,7 +21,12 @@ import pytest
 from basstler.exit_codes import PersonalNotesSetupExitCode
 from basstler.github_labels import GitHubLabel
 from basstler.locations import PluginLocation, PluginSkillLocation, ProjectLocation
-from basstler.maintenance.github import GitHubPath, GitHubRepository
+from basstler.maintenance.github import (
+    AccountField,
+    GitHubPath,
+    GitHubRepository,
+    LabelField,
+)
 from basstler.repository import Repository
 from basstler.setup.exceptions import ForeignNotesRemoteError
 from basstler.setup.personal_notes import (
@@ -89,13 +94,13 @@ class GitHubAnsweringFromMemory(GitHubRepository):
     def _request(
         self, method: str, path: str, payload: Mapping[str, Any] | None = None
     ) -> Any:
-        if path == GitHubPath.AUTHENTICATED_USER:
-            return {"login": self.login}
+        if path == str(GitHubPath.AUTHENTICATED_USER):
+            return {AccountField.LOGIN: self.login}
         if payload is not None:
             self.created_labels.append(payload)
-            self.present_labels.add(payload["name"])
+            self.present_labels.add(payload[LabelField.NAME])
             return payload
-        return [{"name": label} for label in sorted(self.present_labels)]
+        return [{LabelField.NAME: label} for label in sorted(self.present_labels)]
 
 
 # %% the scratch layout
@@ -201,8 +206,16 @@ def labels_setup(*arguments: str, github: GitHubRepository) -> PersonalNotesSetu
         [],
         [SetupOption.REMOTE, "origin", "--not-an-option"],
         [SetupOption.REMOTE, "origin", SetupOption.NAME, SCRATCH_IDENTITY.name],
+        [
+            SetupOption.REMOTE,
+            "origin",
+            SetupOption.NAME,
+            SCRATCH_IDENTITY.name,
+            SetupOption.EMAIL,
+            "not-an-email-address",
+        ],
     ],
-    ids=["no remote", "unknown option", "name without email"],
+    ids=["no remote", "unknown option", "name without email", "malformed email"],
 )
 def test_refuses_an_incomplete_or_unknown_command_line(arguments: list[str]):
     with pytest.raises(SystemExit) as refusal:
@@ -362,7 +375,10 @@ def test_creates_only_the_missing_labels_when_asked():
     labels_setup(SetupOption.CREATE_LABELS, github=github).check_labels()
 
     assert github.created_labels == [
-        {"name": GitHubLabel.IN_REVIEW, "description": GitHubLabel.IN_REVIEW.purpose}
+        {
+            LabelField.NAME: GitHubLabel.IN_REVIEW,
+            LabelField.DESCRIPTION: GitHubLabel.IN_REVIEW.purpose,
+        }
     ]
 
 

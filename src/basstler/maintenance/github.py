@@ -18,12 +18,14 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum, StrEnum
+from pathlib import Path
 from typing import Any
 
 from basstler.pull_request_state import PullRequestState
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.github_labels import GitHubLabel
+from basstler.locations import PathEnumeration
 from basstler.maintenance.board import PullRequestRecord
 from basstler.environment import GitHubCredentialVariable
 from basstler.maintenance.exceptions import ExternalCallFailed
@@ -140,14 +142,78 @@ class CredentialHolder(ABC):
         """:return: The login of the account the credential belongs to."""
 
 
-class GitHubPath(StrEnum):
+class GitHubPath(PathEnumeration):
     """
     The API paths that are not below a repository.
     """
 
-    AUTHENTICATED_USER = "/user"
+    AUTHENTICATED_USER = Path("/user")
     """
     The account the request's credential belongs to.
+    """
+
+
+class RepositoryPath(PathEnumeration):
+    """
+    The API paths below a repository.
+    """
+
+    PULL_REQUESTS = Path("/pulls")
+    """
+    The repository's pull requests.
+    """
+
+    LABELS = Path("/labels")
+    """
+    The labels defined on the repository.
+    """
+
+
+class ListingParameter(StrEnum):
+    """
+    The query parameters a paged listing takes.
+    """
+
+    STATE = "state"
+    """
+    Which pull requests to list, by state.
+    """
+
+    PAGE_SIZE = "per_page"
+    """
+    How many entries one page holds.
+    """
+
+    PAGE = "page"
+    """
+    Which page to read, counting from one.
+    """
+
+
+class LabelField(StrEnum):
+    """
+    The fields of a label the API reads and writes.
+    """
+
+    NAME = "name"
+    """
+    The label's name.
+    """
+
+    DESCRIPTION = "description"
+    """
+    What the label means.
+    """
+
+
+class AccountField(StrEnum):
+    """
+    The fields of an account the API describes.
+    """
+
+    LOGIN = "login"
+    """
+    The account's login.
     """
 
 
@@ -286,18 +352,30 @@ class GitHubRepository(ForkPullRequests, RepositoryLabels, CredentialHolder):
         :param state: Which pull requests to list.
         :return: Them, oldest page first.
         """
-        return self._every_page("/pulls", {"state": state.query})
+        return self._every_page(
+            RepositoryPath.PULL_REQUESTS, {ListingParameter.STATE: state.query}
+        )
 
     def labels(self) -> set[str]:
-        return {label["name"] for label in self._every_page("/labels", {})}
+        return {
+            label[LabelField.NAME]
+            for label in self._every_page(RepositoryPath.LABELS, {})
+        }
 
     def create_label(self, label: GitHubLabel) -> None:
-        self._call("POST", "/labels", {"name": label, "description": label.purpose})
+        self._call(
+            "POST",
+            str(RepositoryPath.LABELS),
+            {LabelField.NAME: label, LabelField.DESCRIPTION: label.purpose},
+        )
 
     def authenticated_login(self) -> str:
-        return str(self._request("GET", GitHubPath.AUTHENTICATED_USER)["login"])
+        account = self._request("GET", str(GitHubPath.AUTHENTICATED_USER))
+        return str(account[AccountField.LOGIN])
 
-    def _every_page(self, path: str, filters: Mapping[str, str]) -> list[Any]:
+    def _every_page(
+        self, path: RepositoryPath, filters: Mapping[ListingParameter, str]
+    ) -> list[Any]:
         """
         Read a listing below the repository to its end.
 
@@ -309,7 +387,11 @@ class GitHubRepository(ForkPullRequests, RepositoryLabels, CredentialHolder):
         page = 1
         while True:
             query = urllib.parse.urlencode(
-                {**filters, "per_page": self.page_size, "page": page}
+                {
+                    **filters,
+                    ListingParameter.PAGE_SIZE: self.page_size,
+                    ListingParameter.PAGE: page,
+                }
             )
             fetched = self._call("GET", f"{path}?{query}")
             collected.extend(fetched)
@@ -320,7 +402,7 @@ class GitHubRepository(ForkPullRequests, RepositoryLabels, CredentialHolder):
     def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
         :return: That pull request."""
-        return self._call("GET", f"/pulls/{number}")
+        return self._call("GET", f"{RepositoryPath.PULL_REQUESTS}/{number}")
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
         """
@@ -346,7 +428,7 @@ class GitHubRepository(ForkPullRequests, RepositoryLabels, CredentialHolder):
         :param number: The pull request to write.
         :param body: The new description.
         """
-        self._call("PATCH", f"/pulls/{number}", {"body": body})
+        self._call("PATCH", f"{RepositoryPath.PULL_REQUESTS}/{number}", {"body": body})
 
     def _call(
         self, method: str, path: str, payload: Mapping[str, Any] | None = None

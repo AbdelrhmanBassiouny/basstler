@@ -11,6 +11,8 @@ import subprocess
 from dataclasses import dataclass
 from enum import StrEnum
 
+from basstler.exit_codes import SetupCheckExitCode
+
 # %% what a report is made of
 
 
@@ -145,9 +147,9 @@ class SetupReport:
     One parsed run of check-setup.sh: what it reported, and how it exited.
     """
 
-    exit_code: int
+    exit_code: SetupCheckExitCode
     """
-    The script's exit code: 0 when nothing needs setup, 1 otherwise.
+    The status the script exited with.
     """
 
     results: dict[SetupCheck, CheckResult]
@@ -164,11 +166,11 @@ class SetupReport:
 
         :param process: The finished check-setup.sh subprocess, its output captured.
         :return: The parsed report.
-        :raises ValueError: If a row names a check or a status this module does not
-            declare, so a new check cannot go unread.
+        :raises ValueError: If a row names a check or a status, or the script exits
+            with a status, this module does not declare, so a new one cannot go unread.
         """
         results = {}
         for line in process.stdout.splitlines():
             check, status, detail = line.split(ReportRowField.SEPARATOR)
             results[SetupCheck(check)] = CheckResult(CheckStatus(status), detail)
-        return cls(process.returncode, results)
+        return cls(SetupCheckExitCode(process.returncode), results)

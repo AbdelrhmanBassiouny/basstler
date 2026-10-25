@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 
 from basstler.locations import PluginLocation, ProjectLocation
+from basstler.exit_codes import SetupCheckExitCode
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 
 from ..constants.notes import ScratchBranch
@@ -88,7 +89,7 @@ def test_reports_no_work_needed_when_everything_is_in_place(
     check_setup_repository: ScratchRepository,
 ):
     report = run_check_setup(check_setup_repository)
-    assert report.exit_code == 0
+    assert report.exit_code is SetupCheckExitCode.SUCCESS
     needing_setup = [
         check
         for check, result in report.results.items()
@@ -112,7 +113,7 @@ def test_reports_a_missing_notes_branch_and_the_remotes_it_tried(
     check_setup_repository.resolve_notes_remote_to(empty_remote)
 
     report = run_check_setup(check_setup_repository)
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert report.results[SetupCheck.NOTES_BRANCH].status == CheckStatus.NEEDS_SETUP
     assert str(empty_remote) in report.results[SetupCheck.NOTES_BRANCH].detail
 
@@ -138,7 +139,7 @@ def test_reports_a_notes_branch_that_exists_but_holds_no_notes_file(
     check_setup_repository.run_git("config", "claude.personalNotesPath", other_notes)
 
     report = run_check_setup(check_setup_repository)
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert report.results[SetupCheck.NOTES_BRANCH].status == CheckStatus.OK
     assert report.results[SetupCheck.NOTES_FILE].status == CheckStatus.NEEDS_SETUP
     assert other_notes in report.results[SetupCheck.NOTES_FILE].detail
@@ -164,7 +165,7 @@ def test_reports_a_notes_branch_that_records_no_identity(
     check_setup_repository.remove_from_notes_branch(PersonalNotesPath.GIT_IDENTITY)
 
     report = run_check_setup(check_setup_repository)
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert report.results[SetupCheck.GIT_IDENTITY].status == CheckStatus.NEEDS_SETUP
     assert (
         f"{SCRATCH_IDENTITY.name} <{SCRATCH_IDENTITY.email}>"
@@ -178,7 +179,7 @@ def test_reports_a_recorded_identity_this_clone_does_not_commit_as(
     check_setup_repository.run_git("config", "user.name", "Somebody Else")
 
     report = run_check_setup(check_setup_repository)
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert report.results[SetupCheck.GIT_IDENTITY].status == CheckStatus.NEEDS_SETUP
     detail = report.results[SetupCheck.GIT_IDENTITY].detail
     assert f"{SCRATCH_IDENTITY.name} <{SCRATCH_IDENTITY.email}>" in detail
@@ -193,7 +194,7 @@ def test_reads_the_identity_the_environment_overrides_config_with(
         GIT_AUTHOR_NAME="Environment Author",
         GIT_AUTHOR_EMAIL="environment@example.com",
     )
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert report.results[SetupCheck.GIT_IDENTITY].status == CheckStatus.NEEDS_SETUP
     assert (
         "Environment Author <environment@example.com>"
@@ -255,7 +256,7 @@ def test_reports_which_tooling_files_the_plugin_is_missing(
     (check_setup_repository.plugin_root / SetupPrerequisiteFile.PLAN_SCHEMA).unlink()
 
     report = run_check_setup(check_setup_repository)
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert report.results[SetupCheck.TOOLING_FILES].status == CheckStatus.NEEDS_SETUP
     assert (
         SetupPrerequisiteFile.PLAN_SCHEMA
@@ -277,7 +278,7 @@ def test_reports_a_session_start_hook_that_is_not_registered(
     ).write_text("{}\n")
 
     report = run_check_setup(check_setup_repository)
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert (
         report.results[SetupCheck.SESSION_START_HOOK].status == CheckStatus.NEEDS_SETUP
     )
@@ -289,7 +290,7 @@ def test_reports_a_claude_local_md_that_is_not_gitignored(
     check_setup_repository.write(".gitignore", "something-else\n")
 
     report = run_check_setup(check_setup_repository)
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert (
         report.results[SetupCheck.CLAUDE_LOCAL_MD_IGNORED].status
         == CheckStatus.NEEDS_SETUP
@@ -311,7 +312,7 @@ def test_reports_declared_dependencies_that_are_not_installed(
 
     report = run_check_setup(check_setup_repository)
     detail = report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert (
         report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
         == CheckStatus.NEEDS_SETUP
@@ -333,7 +334,7 @@ def test_reports_a_declaration_it_cannot_read_rather_than_nothing_missing(
 
     report = run_check_setup(check_setup_repository)
 
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert (
         report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
         == CheckStatus.NEEDS_SETUP
@@ -349,5 +350,5 @@ def test_reports_a_claude_local_md_that_was_never_written(
     (check_setup_repository.project_root / "CLAUDE.local.md").unlink()
 
     report = run_check_setup(check_setup_repository)
-    assert report.exit_code == 1
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert report.results[SetupCheck.CLAUDE_LOCAL_MD].status == CheckStatus.NEEDS_SETUP
