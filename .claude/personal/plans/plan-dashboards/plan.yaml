@@ -103,7 +103,7 @@ items:
     The site build warns on the hub page for every id two hub repositories share, and /plan-create
     refuses an id another hub repository already uses.'
 - id: split-build-dashboard
-  title: Split build_dashboard.py and its tests into modules by concern
+  title: Split build_dashboard.py by concern and group the package and its tests into subpackages
   branch: claude/brave-einstein-eg0vsz
   pull_request_number: 66
   track: corrections
