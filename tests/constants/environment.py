@@ -126,3 +126,14 @@ class FileMode(IntEnum):
     """
     Readable and runnable by everyone, writable by its owner.
     """
+
+
+class BashStubVariable(StrEnum):
+    """
+    The variables ``dataset/stubs/bash.sh`` reads.
+    """
+
+    CALL_LOG = "STUB_BASH_CALL_LOG"
+    """
+    The file every script the stub is asked to run is recorded in, one per line.
+    """

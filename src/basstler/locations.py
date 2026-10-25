@@ -287,3 +287,8 @@ class ClaudeCodeVariable(EnvironmentVariable):
     """
     Where Claude Code keeps its state, transcripts included, when not ``~/.claude``.
     """
+
+    GIT_BASH_PATH = "CLAUDE_CODE_GIT_BASH_PATH"
+    """
+    The bash Claude Code runs its commands in on Windows, when set.
+    """
