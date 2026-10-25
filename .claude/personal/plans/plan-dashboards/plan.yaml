@@ -110,8 +110,8 @@ items:
   depends_on: []
   status: in progress
   session: https://claude.ai/code/session_018iudUBraUAiX5vMijyCNYM
-  notes: 'Added 2026-10-25 from the review of #17: build_dashboard.py (2,300 lines) and test_build_dashboard.py
-    (2,600) are too big. Split into plan validation, dependencies, pull request state and
-    rendering, tests to match, and move the validation exceptions into exceptions.py. Kept
-    out of #17 so its diff stays reviewable; every other branch editing build_dashboard.py
-    re-ports onto the new modules when it lands second.'
+  notes: 'Draft #66. build_dashboard.py is split by concern, and, as the user asked, the
+    whole package and its tests are grouped into subpackages by topic: stack, maintenance,
+    upstream_reviews, plan, dashboard, plan_site, personal_notes, setup. Labelled release:major,
+    because the python -m paths change for every command but stack and maintenance. Every other
+    branch editing the package re-ports onto the new paths when it lands second.'
