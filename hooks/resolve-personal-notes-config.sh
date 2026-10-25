@@ -430,11 +430,6 @@ DEPENDENCY_READINESS_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/dependency-readiness.
 # every plan-*/SKILL.md that assembles pr_data.json, instead of each
 # restating the GitHub API calls involved.
 PULL_REQUEST_DATA_FETCHING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetching.md"
-# manifest-staleness.md: the shared "write the manifest and refresh the
-# dashboard first, at every transition that makes a recorded field stale"
-# rule, referenced by every skill that can change what a plan records
-# instead of each restating it.
-MANIFEST_STALENESS_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/manifest-staleness.md"
 # MAINTENANCE_BLOCKER_OWNER: the name stack maintenance writes its own
 # blockers under, so it replaces and clears its own entries and never one a
 # person wrote. Named here once, since the writer and the clearer have to

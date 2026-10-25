@@ -209,7 +209,7 @@ unprompted — to replace that old doc with a short pointer stub at its
 original location, so anyone still reading the old path finds the new one
 immediately.
 
-Every later change to the plan follows `${MANIFEST_STALENESS_DOCUMENT}`.
+Every later change to the plan follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
 
 ## 9. Report back
 

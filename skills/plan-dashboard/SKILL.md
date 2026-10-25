@@ -304,7 +304,7 @@ for both, since a new plan changes the index.
 
 ## When to refresh
 
-`${MANIFEST_STALENESS_DOCUMENT}` says when: once per turn, after its last manifest write.
+[`manifest-staleness.md`](manifest-staleness.md) says when: once per turn, after its last manifest write.
 
 ## The plan site
 
