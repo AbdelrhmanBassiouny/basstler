@@ -36,13 +36,14 @@ items:
     and drop the unused merged and rebase labels.'
 - id: unfetched-parent-branches
   title: Fetch every parent branch the pass decides about, and refuse to decide from a missing ref
-  branch: claude/maintenance-tooling-pinning-gdod18
-  pull_request_number: 44
+  branch: claude/modest-franklin-am8ivt
+  pull_request_number: 64
   status: in_progress
-  session: https://claude.ai/code/session_01THzpHsajMptZ3X1DmwAU2c
+  session: https://claude.ai/code/session_019KWVkGLe21Y7WvquDE9mfH
   track: base-correctness
   depends_on: []
-  notes: 'load_stack fetches only the open pull requests'' head branches, so a parent whose pull request
-    merged is never fetched, and the merged check cannot tell a missing ref (exit 128) from not-an-ancestor
-    (exit 1). Still on main. Draft #44, carried from CRAM #198 with its history; main is not merged in
-    yet.'
+  notes: 'Stack.load fetched only the board''s heads, so a base no open pull request has as its head
+    was never fetched and adds_only_merges failed on git 128 (seen on CRAM #429). Draft #64 off main
+    fetches every board entry''s base and raises UnresolvableReferenceError on a missing ref. It takes
+    over this half of #44 (pre-package-move, main not merged in), which keeps only the Stack.effective_parent
+    reparenting change.'
