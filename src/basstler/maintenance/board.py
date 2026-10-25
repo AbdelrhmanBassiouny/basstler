@@ -19,7 +19,7 @@ from typing import Any
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation
-from basstler.maintenance.constants import DescriptionPattern
+from basstler.maintenance.description import PullRequestDescription
 from basstler.stack.model import BoardKey, PullRequest
 
 PullRequestRecord = Mapping[str, Any]
@@ -246,16 +246,6 @@ class MissingPullRequestFieldError(CommandFailure, ValueError):
         )
 
 
-def get_session_link_in(body: str | None) -> str | None:
-    """
-    Read the session link out of a pull request description.
-
-    :param body: The description to search, which may be absent.
-    :return: The first session link, or ``None`` if the description names none.
-    """
-    return DescriptionPattern.SESSION_LINK.first_in(body)
-
-
 # %% the export itself
 
 
@@ -291,6 +281,9 @@ class BoardExport:
         :raises MissingPullRequestFieldError: If a required field is absent.
         """
         number = int(PullRequestField.NUMBER.read(record))
+        description = PullRequestDescription(
+            str(PullRequestField.BODY.read(record, number) or "")
+        )
         return PullRequest(
             number=number,
             head=PullRequestField.HEAD.read(record, number),
@@ -299,7 +292,9 @@ class BoardExport:
             head_repository=BoardExport._head_repository(record, number),
             labels=PullRequestField.LABELS.read(record, number),
             ci=record.get("ci"),
-            session=get_session_link_in(PullRequestField.BODY.read(record, number)),
+            session=description.session_link,
+            title=PullRequestField.TITLE.read(record, number),
+            promotion_link=description.promotion_link,
         )
 
     @staticmethod

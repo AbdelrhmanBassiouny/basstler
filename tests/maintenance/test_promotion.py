@@ -12,7 +12,6 @@ from basstler.github_labels import GitHubLabel
 from basstler.maintenance.constants import MaintenanceText
 from basstler.maintenance.promotion import (
     clear_spent_promotion_labels,
-    description_with_promotion_link,
     promote,
 )
 from basstler.maintenance.restack_procedure import restack
@@ -123,24 +122,6 @@ def test_the_promotion_label_write_keeps_a_label_added_since_the_board_was_taken
             (StackLabel.SOMEBODY_ELSES, GitHubLabel.PROMOTION_LINK_SENT),
         )
     ]
-
-
-def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
-    """
-    The description is rewritten on every run that rebuilds a link, so the section has to
-    be replaced in place - two Promote headings would leave a reader guessing which link
-    is current.
-    """
-    first = description_with_promotion_link(
-        f"{PromotionSampleText.PROSE}\n", PromotionSampleText.FIRST_LINK
-    )
-
-    second = description_with_promotion_link(first, PromotionSampleText.SECOND_LINK)
-
-    assert second.count(MaintenanceText.PROMOTION_HEADING) == 1
-    assert PromotionSampleText.SECOND_LINK in second
-    assert PromotionSampleText.FIRST_LINK not in second
-    assert second.startswith(PromotionSampleText.PROSE)
 
 
 def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(

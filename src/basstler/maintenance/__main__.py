@@ -15,6 +15,7 @@ This module is the command line onto the modules that perform those steps::
     python -m basstler.maintenance restack           # integrate every moved parent, report every conflict
     python -m basstler.maintenance restack --stacked-on <branch>  # carry one branch into what is stacked on it
     python -m basstler.maintenance promote           # record the upstream link on every ready branch
+    python -m basstler.maintenance run-report        # the whole pass, as its finish summary
     python -m basstler.maintenance run-report --json # the whole pass as one document
 
 It executes an already-derived plan: structure still comes from ``basstler.stack`` and from
@@ -23,8 +24,8 @@ GitHub refuses to the credential this runs on - probed directly, alongside the l
 comment and description writes it does allow - so that step alone is reported for the
 caller to perform through the GitHub MCP server.
 
-The exit status is the result. ``run-report --json`` is the machine-readable form
-``/stacked-pr-maintenance`` reads.
+The exit status is the result. ``run-report`` prints the finish summary
+``/stacked-pr-maintenance`` relays; ``--json`` is the machine-readable form for tooling.
 """
 
 from __future__ import annotations

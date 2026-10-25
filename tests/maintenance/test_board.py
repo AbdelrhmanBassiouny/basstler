@@ -19,9 +19,9 @@ from basstler.maintenance.board import (
     MissingPullRequestFieldError,
     PullRequestField,
     PullRequestHeadKey,
-    get_session_link_in,
 )
 from basstler.maintenance.git_commands import GitCommandFailed
+from basstler.maintenance.description import PullRequestDescription
 
 from ..constants.stack import StackBranch, StackLabel
 
@@ -30,6 +30,7 @@ from .fork import (
     PullRequestHeadRepository,
     A_SESSION_LINK,
     ForkCheckout,
+    PromotionSampleText,
     an_api_record,
 )
 
@@ -188,11 +189,14 @@ def test_the_board_snapshot_is_never_committable():
     assert ignored.returncode == 0
 
 
-def test_a_session_link_is_read_out_of_the_description():
-    body = f"Some prose.\n\nSession: {A_SESSION_LINK}\n"
+def test_the_export_reads_the_title_and_the_recorded_promotion_link():
+    body = PullRequestDescription(PromotionSampleText.PROSE).with_promotion_link(
+        PromotionSampleText.FIRST_LINK
+    )
+    export = BoardExport.from_api_records(
+        [an_api_record(body=body, title=PromotionSampleText.TITLE)]
+    )
 
-    assert get_session_link_in(body) == A_SESSION_LINK
-
-
-def test_a_description_naming_no_session_yields_none():
-    assert get_session_link_in("Some prose with no link.") is None
+    exported = export.pull_requests[0]
+    assert exported.title == PromotionSampleText.TITLE
+    assert exported.promotion_link == PromotionSampleText.FIRST_LINK

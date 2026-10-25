@@ -11,8 +11,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from basstler.github_labels import GitHubLabel
-from basstler.maintenance.constants import MaintenanceText
 from basstler.maintenance.board import PullRequestField
+from basstler.maintenance.description import PullRequestDescription
 from basstler.maintenance.github import ForkPullRequests, PullRequestWriter
 from basstler.stack.label_write import LabelWrite
 from basstler.stack.model import BranchStatus, Stack
@@ -46,33 +46,6 @@ class Promotion:
     """
 
 
-def description_with_promotion_link(description: str, url: str) -> str:
-    """
-    Put a promotion link into a description, replacing any already there.
-
-    :param description: The pull request's current description.
-    :param url: The link to record.
-    :return: The description to write back.
-    """
-    before, _, _ = description.partition(MaintenanceText.PROMOTION_HEADING)
-    return f"{before.rstrip()}\n\n{MaintenanceText.PROMOTION_HEADING}\n\n{url}\n"
-
-
-def promotion_summary(description: str) -> str:
-    """
-    Take the one paragraph of a description that prefills the upstream pull request.
-
-    A compare URL discards an over-long prefill silently, so the whole description is
-    never sent - the link back to the fork pull request carries the rest.
-
-    :param description: The fork pull request's description.
-    :return: Its first paragraph, empty if it has none.
-    """
-    before, _, _ = description.partition(MaintenanceText.PROMOTION_HEADING)
-    paragraphs = [block.strip() for block in before.split("\n\n") if block.strip()]
-    return paragraphs[0] if paragraphs else ""
-
-
 def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
     """
     Build and record the upstream link for every branch ready to be promoted.
@@ -99,7 +72,9 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
         labels = PullRequestField.LABELS.read(pull_request, number)
         if GitHubLabel.PROMOTION_LINK_SENT in labels or withheld in labels:
             continue
-        description = str(PullRequestField.BODY.read(pull_request, number) or "")
+        description = PullRequestDescription(
+            str(PullRequestField.BODY.read(pull_request, number) or "")
+        )
         link = PromotionLink.build(
             stack.configuration,
             branch.name,
@@ -108,7 +83,7 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
         )
         fork.set_description(
             number,
-            description_with_promotion_link(description, link.url),
+            description.with_promotion_link(link.url),
         )
         fork.replace_labels(
             number,
@@ -128,7 +103,7 @@ def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
 
 
 def _prefilled_description(
-    description: str, pull_request_number: int, stack: Stack
+    description: PullRequestDescription, pull_request_number: int, stack: Stack
 ) -> str:
     """
     Build what the upstream pull request opens with.
@@ -138,7 +113,7 @@ def _prefilled_description(
     :param stack: The derived stack, naming the fork.
     :return: One paragraph plus a link back to the full detail.
     """
-    summary = promotion_summary(description)
+    summary = description.summary
     detail = (
         "Full detail: "
         f"{stack.configuration.fork_repository.pull_request_url(pull_request_number)}"
