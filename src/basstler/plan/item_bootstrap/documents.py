@@ -24,6 +24,7 @@ from basstler.plan.item_bootstrap.exceptions import (
 from basstler.plan.model import (
     ManifestKey,
     PlanDocument,
+    PlanManifest,
 )
 from basstler.shell_configuration import ShellConfigurationFunction
 
@@ -245,7 +246,8 @@ class PlanDocuments:
         self, written: dict[PlanDocument, str], project_root: Path
     ) -> None:
         """
-        Check that the notes branch carries what was just saved.
+        Check that the notes branch carries what was just saved, as the save stores it:
+        the manifest without its landed items.
 
         :param written: The content each document was saved with.
         :param project_root: The repository to read within.
@@ -253,14 +255,22 @@ class PlanDocuments:
             saved.
         """
         landed = PlanDocuments.load(self.plan_identifier, project_root)
+        expected = {
+            PlanDocument.MANIFEST: PlanManifest(
+                yaml.safe_load(written[PlanDocument.MANIFEST])
+            )
+            .without_landed_items()
+            .content,
+            PlanDocument.ROADMAP: written[PlanDocument.ROADMAP].strip(),
+        }
         on_the_branch = {
-            PlanDocument.MANIFEST: landed.manifest_text,
-            PlanDocument.ROADMAP: landed.roadmap_text,
+            PlanDocument.MANIFEST: landed.manifest,
+            PlanDocument.ROADMAP: landed.roadmap_text.strip(),
         }
         unwritten = tuple(
             document
-            for document, content in written.items()
-            if on_the_branch[document].strip() != content.strip()
+            for document in written
+            if on_the_branch[document] != expected[document]
         )
         if unwritten:
             raise PlanNotWrittenError(

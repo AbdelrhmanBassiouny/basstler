@@ -284,3 +284,13 @@ def test_a_save_the_notes_branch_does_not_carry_is_refused(
         )
 
     assert refusal.value.documents == (PlanDocument.ROADMAP,)
+
+
+def test_finishing_an_item_saves_the_plan_without_it(
+    bootstrap_repository: ScratchRepository,
+):
+    update_request(values_by_key={ManifestKey.STATUS: ItemStatus.DONE.value}).update(
+        bootstrap_repository.project_root
+    )
+
+    assert EXISTING_ITEM not in published_items(bootstrap_repository)
