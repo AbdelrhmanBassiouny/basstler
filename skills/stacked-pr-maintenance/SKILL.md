@@ -193,8 +193,8 @@ and commented on it, so name it in the summary and move on.
 
 A `skipped` entry is a pull request open on the fork whose head the pass cannot maintain, so it was
 left out of the restack, the promotion and the landed list, and nothing was labelled or commented on
-it. Its `reason` says why: `head-on-another-fork` - the head lives on another contributor's fork
-(`head_repository` names it), which this credential cannot push to - or `head-repository-deleted` -
+it. Its `pull_request` is the board's entry for it, and its `reason` says why it was skipped:
+`head-on-another-fork` - the head lives on another contributor's fork (`head_repository` names it), which this credential cannot push to - or `head-repository-deleted` -
 the repository its head lived in is gone. Its base is still on the fork, so step 1 still reparents it
 when that base lands. List it in the summary as skipped, with its reason; it is not yours to fix.
 
