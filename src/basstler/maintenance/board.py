@@ -19,7 +19,7 @@ from typing import Any
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation
-from basstler.maintenance.constants import DescriptionPattern, MaintenanceText
+from basstler.maintenance.description import PullRequestDescription
 from basstler.stack.model import BoardKey, PullRequest
 
 PullRequestRecord = Mapping[str, Any]
@@ -246,29 +246,6 @@ class MissingPullRequestFieldError(CommandFailure, ValueError):
         )
 
 
-def get_session_link_in(body: str | None) -> str | None:
-    """
-    Read the session link out of a pull request description.
-
-    :param body: The description to search, which may be absent.
-    :return: The first session link, or ``None`` if the description names none.
-    """
-    return DescriptionPattern.SESSION_LINK.first_in(body)
-
-
-def get_promotion_link_in(body: str | None) -> str | None:
-    """
-    Read the upstream create-link a pass recorded out of a pull request description.
-
-    :param body: The description to search, which may be absent.
-    :return: The link under the promotion heading, or ``None`` if the description has
-        no such section.
-    """
-    _, heading, recorded = (body or "").partition(MaintenanceText.PROMOTION_HEADING)
-    words = recorded.split()
-    return words[0] if heading and words else None
-
-
 # %% the export itself
 
 
@@ -304,7 +281,9 @@ class BoardExport:
         :raises MissingPullRequestFieldError: If a required field is absent.
         """
         number = int(PullRequestField.NUMBER.read(record))
-        body = PullRequestField.BODY.read(record, number)
+        description = PullRequestDescription(
+            str(PullRequestField.BODY.read(record, number) or "")
+        )
         return PullRequest(
             number=number,
             head=PullRequestField.HEAD.read(record, number),
@@ -313,9 +292,9 @@ class BoardExport:
             head_repository=BoardExport._head_repository(record, number),
             labels=PullRequestField.LABELS.read(record, number),
             ci=record.get("ci"),
-            session=get_session_link_in(body),
+            session=description.session_link,
             title=PullRequestField.TITLE.read(record, number),
-            promotion_link=get_promotion_link_in(body),
+            promotion_link=description.promotion_link,
         )
 
     @staticmethod

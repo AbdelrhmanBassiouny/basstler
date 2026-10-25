@@ -85,7 +85,8 @@ next to the workflow it describes, because it is read rather than run.
   `run-report` (the finish summary, or `--json` for tooling); see [Running a maintenance pass](#running-a-maintenance-pass). It is the
   command line onto modules named for what they do, so nothing has to be hunted for inside one
   long file: `maintenance/constants.py` (every value edited by hand),
-  `maintenance/git_commands.py`, `maintenance/board.py`, `maintenance/github.py`,
+  `maintenance/git_commands.py`, `maintenance/board.py`, `maintenance/description.py`,
+  `maintenance/github.py`,
   `maintenance/fast_forward.py`, `maintenance/restack_steps.py` and
   `maintenance/restack_procedure.py` (the steps, and the order that is the procedure),
   `maintenance/promotion.py`, `maintenance/report.py`, `maintenance/finish_summary.py` and
