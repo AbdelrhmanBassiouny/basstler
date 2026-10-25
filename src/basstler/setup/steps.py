@@ -346,7 +346,7 @@ class ForkLabels(SetupStep):
     @property
     def title(self) -> str:
         """See :attr:`SetupStep.title`."""
-        return f"Add three labels to {self.repository.full_name}"
+        return f"Add {len(GitHubLabel)} labels to {self.repository.full_name}"
 
     @property
     def reason(self) -> str:

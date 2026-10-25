@@ -202,6 +202,19 @@ def test_the_labels_step_leads_with_the_page_that_creates_them_by_hand() -> None
     ]
 
 
+def test_the_labels_step_title_counts_the_labels_it_creates() -> None:
+    """
+    The title states how many labels the step creates, so it has to follow the label
+    list rather than a number written when the list was shorter.
+    """
+    step = ForkLabels(FORK)
+    created = [
+        line for line in step.instructions() if line.startswith("gh label create")
+    ]
+    stated = [int(word) for word in step.title.split() if word.isdigit()]
+    assert stated == [len(created)]
+
+
 # %% the access step
 
 
