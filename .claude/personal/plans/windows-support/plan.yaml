@@ -1,7 +1,10 @@
 schema_version: 1
 id: windows-support
 title: basstler sets up and runs on Windows
-description: Fix what stopped /setup-personal-notes on Windows (Git Bash, python.org Python, WSL with no usable distribution) - bare bash resolving to WSL's launcher, the environment interpreter path, crashes on a failed check-setup.sh, an unset plugin root, a partial setup after a failed run - then keep it fixed with a Windows CI job.
+description: Fix what stopped /setup-personal-notes on Windows (Git Bash, python.org Python,
+  WSL with no usable distribution) - bare bash resolving to WSL's launcher, the environment
+  interpreter path, crashes on a failed check-setup.sh, an unset plugin root, a partial setup
+  after a failed run - then keep it fixed with a Windows CI job.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 70
 waves:
@@ -12,15 +15,6 @@ tracks:
   name: Windows bug fixes
   wave: fixes
 items:
-- id: windows-bash-resolution
-  title: Resolve bash to Git Bash, never WSL's System32 launcher
-  branch: claude/tender-ramanujan-76hdpl
-  status: done
-  track: fixes
-  depends_on: []
-  pull_request_number: 71
-  session: https://claude.ai/code/session_012b9U43tySLc3HAsst8fo23
-  notes: 'Every subprocess.run(["bash", ...]) in src/ (setup/personal_notes.py x2, shell_configuration.py, setup/steps.py, plan/item_mode.py, plan/item_bootstrap.py) runs a bash resolved once: CLAUDE_CODE_GIT_BASH_PATH, else the Git Bash beside the git on PATH, else shutil.which. A path under %SystemRoot%\System32 is refused with a custom error. bash-to-python/basstler-typed-invocations absorbs this resolver into ProcessRunner.'
 - id: windows-environment-interpreter
   title: Find the package environment's interpreter on Windows
   branch: claude/blissful-goodall-l5com5
@@ -29,7 +23,10 @@ items:
   depends_on: []
   pull_request_number: 73
   session: https://claude.ai/code/session_01AXLLt2epPWBnUpHZ3S5TLz
-  notes: 'resolve-personal-notes-config.sh points BASSTLER_ENVIRONMENT_INTERPRETER at venv/bin/python; Windows has venv/Scripts/python.exe, so BASSTLER_PYTHON falls back to python3 (the report''s issue 1). Also check uv/bin/uv vs Scripts. Proceeds on venv\Scripts\python.exe without the reporter''s confirmation (user''s call); the interpreter candidates moved to windows-interpreter-candidates.'
+  notes: resolve-personal-notes-config.sh points BASSTLER_ENVIRONMENT_INTERPRETER at venv/bin/python;
+    Windows has venv/Scripts/python.exe, so BASSTLER_PYTHON falls back to python3 (the report's
+    issue 1). Also check uv/bin/uv vs Scripts. Proceeds on venv\Scripts\python.exe without
+    the reporter's confirmation (user's call); the interpreter candidates moved to windows-interpreter-candidates.
 - id: windows-interpreter-candidates
   title: Create the package environment on Windows without uv
   branch: null
@@ -38,7 +35,11 @@ items:
   depends_on:
   - windows-environment-interpreter
   pull_request_number: null
-  notes: BASSTLER_INTERPRETER_CANDIDATES names python3.14/3.13/3.12, which Windows does not install, so without uv on PATH create_basstler_environment always falls back to installing uv with pip. Also try py -3.14/-3.13/-3.12 (and a python on PATH checked against BASSTLER_PYTHON_REQUIREMENT), each resolved to a full path before it runs. Split out of windows-environment-interpreter as its own root cause.
+  notes: BASSTLER_INTERPRETER_CANDIDATES names python3.14/3.13/3.12, which Windows does not
+    install, so without uv on PATH create_basstler_environment always falls back to installing
+    uv with pip. Also try py -3.14/-3.13/-3.12 (and a python on PATH checked against BASSTLER_PYTHON_REQUIREMENT),
+    each resolved to a full path before it runs. Split out of windows-environment-interpreter
+    as its own root cause.
 - id: setup-report-strict-parsing
   title: Refuse an incomplete or failed check-setup.sh report with its stderr
   branch: null
@@ -46,15 +47,21 @@ items:
   track: fixes
   depends_on: []
   pull_request_number: null
-  notes: SetupReport.from_completed_process raises a custom CheckSetupFailedError carrying exit code and stderr when a row is missing or the exit code is neither 0 nor 1, instead of KeyError/ValueError; the setup command exits with a documented code for it.
+  notes: SetupReport.from_completed_process raises a custom CheckSetupFailedError carrying
+    exit code and stderr when a row is missing or the exit code is neither 0 nor 1, instead
+    of KeyError/ValueError; the setup command exits with a documented code for it.
 - id: plugin-root-required
   title: Refuse a missing plugin root instead of guessing one
-  branch: null
-  status: not started
+  branch: claude/exciting-mayer-qsgl9w
+  status: in progress
   track: fixes
+  session: https://claude.ai/code/session_01LTrTZ659gSv9PFHUgVAmdS
   depends_on: []
-  pull_request_number: null
-  notes: PluginLocation.ROOT's fallback to <source tree>/plugin is wrong for an installed package; raise when BASSTLER_PLUGIN_ROOT is unset or not a directory. Find out from the reporter why session-start.sh's CLAUDE_ENV_FILE export did not reach the session, and have skills export the root on the same line if it cannot.
+  pull_request_number: 76
+  notes: PluginLocation.ROOT's fallback to <source tree>/plugin is wrong for an installed
+    package; raise when BASSTLER_PLUGIN_ROOT is unset or not a directory. Find out from the
+    reporter why session-start.sh's CLAUDE_ENV_FILE export did not reach the session, and
+    have skills export the root on the same line if it cannot.
 - id: setup-no-partial-writes
   title: Check setup before writing the notes remote to git config
   branch: null
@@ -63,24 +70,29 @@ items:
   depends_on:
   - setup-report-strict-parsing
   pull_request_number: null
-  notes: PersonalNotesSetup.run writes claude.personalNotesRemote before the first check, so every failed run leaves it set. Run and validate the first check before any write, or name what was changed in the failure.
+  notes: PersonalNotesSetup.run writes claude.personalNotesRemote before the first check,
+    so every failed run leaves it set. Run and validate the first check before any write,
+    or name what was changed in the failure.
 - id: setup-skill-windows-guidance
-  title: 'Setup skill: install the package before step 5, and say when ownership cannot be checked'
+  title: 'Setup skill: install the package before step 5, and say when ownership cannot be
+    checked'
   branch: null
   status: not started
   track: fixes
   depends_on:
   - windows-environment-interpreter
   pull_request_number: null
-  notes: setup-personal-notes/SKILL.md installs the package before running its module when dashboard_dependencies is needs-setup, and says to ask the user for the notes remote's owner when there is neither a token nor mcp__github__get_me.
+  notes: setup-personal-notes/SKILL.md installs the package before running its module when
+    dashboard_dependencies is needs-setup, and says to ask the user for the notes remote's
+    owner when there is neither a token nor mcp__github__get_me.
 - id: windows-ci-smoke
   title: Windows CI job running the setup check end to end
   branch: null
   status: not started
   track: fixes
   depends_on:
-  - windows-bash-resolution
   - windows-environment-interpreter
   - plugin-root-required
   pull_request_number: null
-  notes: A windows-latest job runs check-setup.sh through python -m basstler.setup.personal_notes. Costs Actions minutes, so needs the owner's decision against actions-budget before starting.
+  notes: A windows-latest job runs check-setup.sh through python -m basstler.setup.personal_notes.
+    Costs Actions minutes, so needs the owner's decision against actions-budget before starting.
