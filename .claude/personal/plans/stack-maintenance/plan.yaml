@@ -20,15 +20,17 @@ items:
   branch: claude/plan-manifest-update-priority-ex2zst
   pull_request_number: 48
   status: in_progress
-  session: https://claude.ai/code/session_01Rm1Xa8ujsXWBai4U8v6ThY
+  session: https://claude.ai/code/session_01VWwD8nsdKr9wHaRgN1J2du
   track: pass
   blockers: []
   depends_on: []
-  notes: 'Every skill that can affect a plan writes the manifest and republishes the dashboard first,
-    at every point that makes a recorded field stale; also fixes the manifest writer''s corruption bugs
-    and carries plan-tracking-skills'' indent fix. Draft #48, carried from CRAM #151 with its history;
-    main is not merged in yet (conflicts listed on the pull request). Absorbs plan-tracking-skills'' plan-item-bootstrap-yaml-indent
-    (CRAM #160): when #48 lands, check that the item indent is read off the manifest.'
+  notes: >
+    Every skill that can affect a plan writes the manifest and republishes the dashboard first, at
+    every point that makes a recorded field stale; adds item_bootstrap's update, check, resolve, block
+    and unblock, and fixes the manifest writer's multi-line-value corruption. Draft #48, carried from
+    CRAM #151; main merged in (5940e8f), porting the work onto basstler.plan's subpackage and main's
+    standing-rule record. Absorbs plan-tracking-skills' plan-item-bootstrap-yaml-indent (CRAM #160),
+    now covered by main's indent reading plus this branch's indentless-manifest tests.
 - id: promotion-summaries-and-table
   title: Promote with a written summary, and send no notification
   branch: null
