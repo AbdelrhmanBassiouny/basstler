@@ -31,20 +31,6 @@ tracks:
   name: Conventions made mechanical
   wave: conventions
 items:
-- id: fresh-base-at-session-start
-  title: Fast-forward the fork's default branch at session start
-  branch: ccr-5a44f496-lob28s
-  pull_request_number: 57
-  status: in progress
-  track: handover
-  depends_on: []
-  session: https://claude.ai/code/session_01YPtqHLUXGEXUS2JHHUK2pU
-  notes: 'Draft #57 implements it as basstler.maintenance.default_branch_sync (moved there
-    when main was merged in after the subpackage reorganization), run by session-start.sh:
-    fast-forward only, never fatal; follows the clone''s own remote when no upstream is named;
-    a checked-out branch with no commits of its own moves along, one with commits is only
-    measured. Merged with main, full suite passes; awaiting review. Reference: CRAM #188
-    (retired in #51).'
 - id: stamps-in-git-directory
   title: The plugin keeps its per-clone stamp files where git never tracks them
   branch: null
