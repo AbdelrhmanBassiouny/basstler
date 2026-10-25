@@ -123,4 +123,4 @@ items:
   depends_on:
   - item-issues
   - lean-kickoff
-  notes: 'A python -m command ranks: the caller''s own in-progress items first (resume), then unassigned not-started items whose every dependency is merged or is an open pull request marked ready for review (a draft dependency disqualifies), in wave order, skipping items with blockers. Shows the top three with the reason; claims by assigning the issue and re-reading it, backing off if someone else holds it; then runs /plan-item-kickoff.'
+  notes: 'A python -m command ranks: the caller''s own in-progress items first (resume), then unassigned not-started items whose every dependency is merged or an open pull request ready for review (a draft dependency disqualifies), in wave order, skipping items with blockers. When nothing is ready because dependencies are drafts, it says so and suggests reviewing those draft pull requests instead, ranked by how many items each would unblock. Claims by assigning the issue and re-reading it, backing off if someone else holds it; then runs /plan-item-kickoff.'
