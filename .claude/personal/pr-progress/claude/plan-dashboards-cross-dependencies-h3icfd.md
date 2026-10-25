@@ -7,6 +7,8 @@
 ## Done
 - Review round 2 (15 threads): rustworkx graph, PlanValidator, functions moved onto classes,
   DependencyReadiness/DependencyChip hold their Dependency, PlanCommandArguments, Plan item index.
+- Review round 3 (1 thread): sync_manifest_status's apply_to tuple -> ManifestText/ItemBlock;
+  stale duplicate tests removed (22b93d0).
 
 ## Next
 - Waiting on review. Open threads by design: file size (-> split-build-dashboard item),
