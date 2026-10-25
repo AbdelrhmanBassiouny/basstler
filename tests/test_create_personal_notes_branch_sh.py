@@ -11,7 +11,7 @@ import pytest
 
 from basstler.locations import PluginLocation
 
-from .constants import ScratchBranch
+from .constants.notes import ScratchBranch
 from .scratch_repository import ScratchRepository
 
 

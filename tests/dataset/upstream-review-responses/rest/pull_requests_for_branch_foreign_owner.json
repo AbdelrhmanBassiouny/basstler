@@ -1,0 +1,18 @@
+[
+  [
+    {
+      "number": 400,
+      "title": "t",
+      "html_url": "https://github.com/example-upstream/example-repo/pull/400",
+      "state": "open",
+      "merged_at": null,
+      "head": {
+        "sha": "0123456789abcdef0123456789abcdef01234567",
+        "ref": "some-branch",
+        "user": {
+          "login": "another-contributor"
+        }
+      }
+    }
+  ]
+]

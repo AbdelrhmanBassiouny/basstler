@@ -30,7 +30,7 @@ from basstler.sync_manifest_status import (
     main,
 )
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 from .fixture_plans import (
     FixturePlanId,
     ForeignItemId,

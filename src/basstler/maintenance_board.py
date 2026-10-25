@@ -20,7 +20,7 @@ from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import PackageLocation
 from basstler.maintenance_constants import DescriptionPattern
-from basstler.stack import PullRequest
+from basstler.stack_model import BoardKey, PullRequest
 
 PullRequestRecord = Mapping[str, Any]
 """
@@ -28,6 +28,27 @@ One pull request as the REST API answers it, before any field is read.
 """
 
 # %% the fields a board is read from
+
+
+class PullRequestHeadKey(StrEnum):
+    """
+    The keys of the object a pull request's head arrives as.
+    """
+
+    REFERENCE = "ref"
+    """
+    The head branch's name.
+    """
+
+    HEAD_REPOSITORY = "repo"
+    """
+    The repository the head branch lives in, ``null`` once that repository is deleted.
+    """
+
+    FULL_NAME = "full_name"
+    """
+    A repository's ``owner/name``, under :attr:`HEAD_REPOSITORY`.
+    """
 
 
 class PullRequestFieldShape(StrEnum):
@@ -136,6 +157,18 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
     """
     GitHub's own verdict on whether it currently conflicts with its base.
     """
+    STATE = PullRequestFieldSpecification(key="state")
+    """
+    Whether it is open or closed, a merged one included among the closed.
+    """
+    MERGED_AT = PullRequestFieldSpecification(key="merged_at")
+    """
+    When GitHub merged it, absent for one never merged through GitHub.
+    """
+    HTML_URL = PullRequestFieldSpecification(key="html_url")
+    """
+    Its page on GitHub, which the issues API answers under the same key.
+    """
 
     def read(self, record: PullRequestRecord, number: int | None = None) -> Any:
         """
@@ -170,8 +203,8 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
         :raises MissingPullRequestFieldError: If it names none."""
         if isinstance(value, str):
             return value
-        if isinstance(value, Mapping) and value.get("ref"):
-            return str(value["ref"])
+        if isinstance(value, Mapping) and value.get(PullRequestHeadKey.REFERENCE):
+            return str(value[PullRequestHeadKey.REFERENCE])
         raise MissingPullRequestFieldError(self, number)
 
 
@@ -263,15 +296,36 @@ class BoardExport:
             head=PullRequestField.HEAD.read(record, number),
             base=PullRequestField.BASE.read(record, number),
             draft=bool(PullRequestField.DRAFT.read(record, number)),
+            head_repository=BoardExport._head_repository(record, number),
             labels=PullRequestField.LABELS.read(record, number),
             ci=record.get("ci"),
             session=get_session_link_in(PullRequestField.BODY.read(record, number)),
         )
 
+    @staticmethod
+    def _head_repository(record: PullRequestRecord, number: int) -> str | None:
+        """
+        :param record: The fetched pull request.
+        :param number: The pull request being read, named in any rejection.
+        :return: The ``owner/name`` of the repository its head lives in, ``None`` when
+            that repository was deleted.
+        :raises MissingPullRequestFieldError: If the head does not say where it lives.
+        """
+        head = record.get(PullRequestField.HEAD.key)
+        if (
+            not isinstance(head, Mapping)
+            or PullRequestHeadKey.HEAD_REPOSITORY not in head
+        ):
+            raise MissingPullRequestFieldError(PullRequestField.HEAD, number)
+        repository = head[PullRequestHeadKey.HEAD_REPOSITORY]
+        if repository is None:
+            return None
+        return str(repository[PullRequestHeadKey.FULL_NAME])
+
     def as_json(self) -> str:
-        """:return: The export, in the document :func:`stack.load_board` parses."""
+        """:return: The export, in the document :meth:`basstler.stack_model.PullRequest.read_board` parses."""
         return json.dumps(
-            {"pull_requests": [asdict(entry) for entry in self.pull_requests]},
+            {BoardKey.PULL_REQUESTS: [asdict(entry) for entry in self.pull_requests]},
             indent=2,
         )
 

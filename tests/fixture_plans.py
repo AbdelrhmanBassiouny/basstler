@@ -18,7 +18,7 @@ import yaml
 from basstler.build_dashboard import DependencyReference, ManifestKey
 from basstler.plan_item_bootstrap import PlanDocument
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 
 PLAN_UNDER_TEST_ID = "test-plan"
 """

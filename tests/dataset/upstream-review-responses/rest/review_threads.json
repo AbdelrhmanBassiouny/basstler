@@ -1,0 +1,30 @@
+[
+  {
+    "resolved": true,
+    "outdated": false,
+    "path": ".claude/stack/maintenance.py",
+    "line": 1031,
+    "comment_ids": [
+      3728009027
+    ]
+  },
+  {
+    "resolved": false,
+    "outdated": false,
+    "path": ".claude/stack/maintenance.py",
+    "line": 506,
+    "comment_ids": [
+      3727247950,
+      3727247999
+    ]
+  },
+  {
+    "resolved": false,
+    "outdated": true,
+    "path": ".claude/stack/maintenance.py",
+    "line": null,
+    "comment_ids": [
+      3728039105
+    ]
+  }
+]

@@ -1,5 +1,6 @@
 """
-Replaying the recorded GraphQL responses ``test_upstream_reviews.py`` reads.
+Replaying the recorded GraphQL and REST responses and job logs the upstream-reviews
+suites read.
 
 The reader is exercised against responses captured from a real pull request rather than
 against GitHub, so the suite needs no network access and no upstream pull request of its
@@ -14,13 +15,21 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.upstream_reviews import GraphQLClient, RepositoryJSON
+from basstler.repository import Repository
+from basstler.upstream_reviews_clients import (
+    GraphQLClient,
+    JobLogReader,
+    RestClient,
+)
+from basstler.upstream_reviews_pull_request_models import (
+    ReviewThreadsPageResult,
+)
 
 RECORDED_RESPONSE_DIRECTORY = (
     Path(__file__).parent / "dataset" / "upstream-review-responses"
 )
 """
-Where the recorded GraphQL responses live.
+Where the recorded GraphQL responses and job logs live.
 """
 
 
@@ -31,6 +40,7 @@ class RecordedResponse(StrEnum):
 
     PULL_REQUEST_PAGE_ONE = "pull_request_page_one"
     PULL_REQUEST_PAGE_TWO = "pull_request_page_two"
+    PULL_REQUEST_WITHOUT_CHECKS = "pull_request_without_checks"
     BRANCH_PULL_REQUESTS = "branch_pull_requests"
     BRANCH_PULL_REQUESTS_FOREIGN_OWNER = "branch_pull_requests_foreign_owner"
     BRANCH_PULL_REQUESTS_NONE = "branch_pull_requests_none"
@@ -39,16 +49,16 @@ class RecordedResponse(StrEnum):
         """:return: The recorded ``data`` object this response holds."""
         return json.loads((RECORDED_RESPONSE_DIRECTORY / f"{self}.json").read_text())
 
-    def recorded(self) -> RepositoryJSON:
+    def recorded(self) -> ReviewThreadsPageResult:
         """
-        Read this response through the same model the production code uses.
+        Read this pull request page through the same model the production code uses.
 
         Lets a test reach recorded values as typed attributes rather than indexing the
         raw data at the call site.
 
-        :return: The recorded repository.
+        :return: The recorded page.
         """
-        return RepositoryJSON.from_json(self.load())
+        return ReviewThreadsPageResult.from_json(self.load())
 
 
 @dataclass(frozen=True)
@@ -97,3 +107,132 @@ class ReplayingClient(GraphQLClient):
         """
         self.calls.append(RecordedCall(query, variables))
         return self.responses.pop(0)
+
+
+class RecordedJobLog(StrEnum):
+    """
+    The recorded job logs the tests read, named by their filename stem.
+    """
+
+    FAILED_JOB = "failed_job"
+    FAILED_JOB_WITHOUT_SUMMARY = "failed_job_without_summary"
+
+    def load(self) -> str:
+        """:return: The recorded log, exactly as recorded."""
+        return (RECORDED_RESPONSE_DIRECTORY / f"{self}.log").read_text()
+
+
+@dataclass(frozen=True)
+class RecordedJobLogCall:
+    """
+    One job log the reader asked for, kept so a test can assert on it.
+    """
+
+    repository: Repository
+    """
+    The repository it was asked of.
+    """
+
+    job_identifier: int
+    """
+    The job it named.
+    """
+
+
+@dataclass
+class ReplayingJobLogReader(JobLogReader):
+    """
+    A log reader that answers from recorded logs instead of calling GitHub.
+
+    Records every read, so a test can assert which job the reader went after and in
+    which repository.
+    """
+
+    logs: dict[int, str] = field(default_factory=dict)
+    """
+    The log each job identifier answers with.
+    """
+
+    calls: list[RecordedJobLogCall] = field(default_factory=list)
+    """
+    Every read that was asked for, oldest first.
+    """
+
+    def read_job_log(self, repository: Repository, job_identifier: int) -> str:
+        """
+        Answer with the recorded log for *job_identifier*.
+
+        :param repository: The repository, recorded for assertions.
+        :param job_identifier: The job whose log to answer with.
+        :return: The recorded log.
+        """
+        self.calls.append(RecordedJobLogCall(repository, job_identifier))
+        return self.logs[job_identifier]
+
+
+REST_RESPONSE_DIRECTORY = RECORDED_RESPONSE_DIRECTORY / "rest"
+"""
+Where the recorded REST responses live, each exactly as ``gh api`` prints it - a
+paginated route's as the list of pages ``--slurp`` collects.
+"""
+
+
+class RecordedRestResponse(StrEnum):
+    """
+    The recorded REST responses, named by their filename stem.
+
+    They describe the same pull request the GraphQL recordings do, so the two readers
+    can be held to the same answer.
+    """
+
+    PULL_REQUEST = "pull_request"
+    REVIEWS = "reviews"
+    REVIEW_COMMENTS = "review_comments"
+    REVIEW_THREADS = "review_threads"
+    CHECK_RUNS = "check_runs"
+    CHECK_RUNS_NONE = "check_runs_none"
+    STATUS = "status"
+    STATUS_NONE = "status_none"
+    PULL_REQUESTS_FOR_BRANCH = "pull_requests_for_branch"
+    PULL_REQUESTS_FOR_BRANCH_FOREIGN_OWNER = "pull_requests_for_branch_foreign_owner"
+    PULL_REQUESTS_FOR_BRANCH_NONE = "pull_requests_for_branch_none"
+
+    def load(self) -> Any:
+        """:return: The recorded response."""
+        return json.loads((REST_RESPONSE_DIRECTORY / f"{self}.json").read_text())
+
+
+@dataclass
+class ReplayingRestClient(RestClient):
+    """
+    A REST client that answers each path from a recorded response instead of calling
+    GitHub.
+
+    Records every path asked for, so a test can assert the exact request made.
+    """
+
+    responses: dict[str, Any]
+    """
+    The response each path answers with.
+    """
+
+    calls: list[str] = field(default_factory=list)
+    """
+    Every path asked for, oldest first.
+    """
+
+    def get(self, path: str) -> Any:
+        """
+        :param path: The REST path, recorded for assertions.
+        :return: The response recorded for it.
+        """
+        self.calls.append(path)
+        return self.responses[path]
+
+    def get_pages(self, path: str) -> list[Any]:
+        """
+        :param path: The REST path, recorded for assertions.
+        :return: The pages recorded for it.
+        """
+        self.calls.append(path)
+        return self.responses[path]

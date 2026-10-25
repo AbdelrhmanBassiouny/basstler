@@ -10,14 +10,17 @@ import it rather than duplicating the logic.
 from __future__ import annotations
 
 import re
+from abc import ABC, abstractmethod
 from enum import IntEnum, StrEnum
 from functools import cache
+from typing import Any
 from urllib.parse import urlsplit
 
 import jinja2
 import markdown as markdown_library
 import nh3
 
+from basstler.class_property import classproperty
 from basstler.locations import PackageLocation
 
 
@@ -87,24 +90,50 @@ class HeadingShift(IntEnum):
 
 def create_template_environment() -> jinja2.Environment:
     """
-    Build the Jinja2 environment every page template renders through.
+    Build the Jinja2 environment every template renders through.
 
-    Autoescaping is on for every value substituted into a template - the
+    Autoescaping is on for every value substituted into an HTML template - the
     one deliberately unescaped value either script ever passes in
     (already-rendered roadmap markdown HTML) is marked with Jinja2's
     ``| safe`` filter at its point of use in the template itself, rather
     than disabling escaping globally and trusting every call site to
-    remember to escape by hand.
+    remember to escape by hand. A template of any other format is rendered as
+    written.
 
     :return: A configured, ready-to-use Jinja2 environment.
     """
     environment = jinja2.Environment(
         loader=jinja2.FileSystemLoader(PackageLocation.TEMPLATES.value),
-        autoescape=True,
+        autoescape=jinja2.select_autoescape(["html"]),
         trim_blocks=True,
         lstrip_blocks=True,
     )
     return environment
+
+
+class TemplatePage(ABC):
+    """
+    A page rendered from one of the package's Jinja2 templates.
+
+    Every page builder loads its template through the same environment, so autoescaping
+    and whitespace handling cannot differ between pages.
+    """
+
+    @classproperty
+    @abstractmethod
+    def template(cls) -> str:
+        """
+        The file name of the template this page is rendered from, in
+        :attr:`PackageLocation.TEMPLATES`.
+        """
+
+    def render_template(self, **context: Any) -> str:
+        """
+        :param context: The values the template substitutes, by name.
+        :return: The page's rendered HTML.
+        """
+        environment = create_template_environment()
+        return environment.get_template(self.template).render(**context)
 
 
 def render_markdown_to_html(markdown_text: str) -> str:

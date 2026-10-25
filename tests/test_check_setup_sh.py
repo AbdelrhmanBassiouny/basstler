@@ -16,7 +16,8 @@ import pytest
 
 from basstler.locations import PluginLocation, ProjectLocation
 
-from .constants import DatasetLocation, PersonalNotesPath, ScratchBranch
+from .constants.notes import ScratchBranch
+from .constants.paths import DatasetLocation, PersonalNotesPath
 from .project_declaration import ProjectDeclaration
 from .scratch_repository import (
     SCRATCH_IDENTITY,
@@ -43,6 +44,8 @@ class SetupCheck(StrEnum):
     NOTES_PATH = "notes_path"
     NOTES_BRANCH = "notes_branch"
     NOTES_FILE = "notes_file"
+    STACK_UPSTREAM = "stack_upstream"
+    UPSTREAM_REVIEWS_ACTION = "upstream_reviews_action"
     GIT_IDENTITY = "git_identity"
     DASHBOARD_DEPENDENCIES = "dashboard_dependencies"
     CLAUDE_LOCAL_MD = "claude_local_md"

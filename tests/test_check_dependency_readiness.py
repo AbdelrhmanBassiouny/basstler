@@ -33,7 +33,7 @@ from basstler.check_dependency_readiness import (
     main,
 )
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 from .fixture_plans import (
     FixturePlanId,
     ForeignItemId,

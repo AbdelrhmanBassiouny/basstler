@@ -1,19 +1,24 @@
 """
-Releases: every change to ``main`` is one; a pull request names only minor or major ones.
+Releases: every change merged to ``main`` is one, tagged on the merge commit itself.
+
+No file names the version, so nothing is committed after a merge: the release is the
+latest release tag with one part incremented - the patch, unless a merged pull request is
+labelled ``release:minor`` or ``release:major``.
 """
 
 from __future__ import annotations
 
 import argparse
-import re
+import json
 import sys
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from basstler.class_property import classproperty
+from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, ExitCode
-from basstler.locations import CheckoutLocation
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.standard_streams import StandardStreamHandler
 
@@ -33,18 +38,7 @@ class ReleaseVersionExitCode(ExitCode):
     The subcommand did what it was asked.
     """
 
-    UNEXPECTED_VERSION = 1
-    """
-    The manifest names a version a pull request may not set, or one behind the latest
-    release.
-    """
-
-    VERSION_REFERENCE_MISSING = 2
-    """
-    A file that should name the release does not; nothing was written.
-    """
-
-    MALFORMED_VERSION = 3
+    MALFORMED_VERSION = 1
     """
     A version is not ``<major>.<minor>.<patch>``.
     """
@@ -55,31 +49,25 @@ class ReleaseCommand(StrEnum):
     The subcommands this module answers.
     """
 
-    CHECK = "check"
+    UNRELEASED = "unreleased"
     """
-    Fail if the manifest names a version a pull request may not set.
-    """
-
-    BUMP = "bump"
-    """
-    Write a version everywhere a version is written.
+    Print the commits since the latest release, whose pull requests choose its part.
     """
 
     RELEASE = "release"
     """
-    Prepare the release of everything since the latest one, for the workflow to commit
-    and tag.
+    Decide the release of everything since the latest one, for the workflow to tag.
     """
 
 
 class VersionPart(StrEnum):
     """
-    The part of a version a bump increments.
+    The part of a version a release increments, ordered from least to most significant.
     """
 
-    MAJOR = "major"
+    PATCH = "patch"
     """
-    An incompatible change.
+    A fix, or any other change; what a release increments unless a label says otherwise.
     """
 
     MINOR = "minor"
@@ -87,16 +75,39 @@ class VersionPart(StrEnum):
     A new capability.
     """
 
-    PATCH = "patch"
+    MAJOR = "major"
     """
-    A fix, or any other change; the part a release on merge increments.
+    An incompatible change.
     """
+
+    @classproperty
+    def label_prefix(cls) -> str:
+        """:return: What a part's pull request label puts before its name."""
+        return "release:"
+
+    @property
+    def significance(self) -> int:
+        """:return: Its rank: a release of several parts increments the highest."""
+        return list(VersionPart).index(self)
+
+    @property
+    def label(self) -> str:
+        """:return: The pull request label that asks a release to increment it."""
+        return f"{self.label_prefix}{self}"
+
+    @classmethod
+    def labelled(cls, label: str) -> VersionPart:
+        """
+        :param label: A pull request label's name.
+        :return: The part it is the label of, else the patch.
+        """
+        return next((part for part in cls if part.label == label), cls.PATCH)
 
 
 class ReleaseOutputKey(StrEnum):
     """
-    The ``<key>=<value>`` lines ``release`` prints, in the form a workflow step appends to
-    ``$GITHUB_OUTPUT``.
+    The ``<key>=<value>`` lines ``release`` prints, in the form a workflow step appends
+    to ``$GITHUB_OUTPUT``.
     """
 
     TAG = "tag"
@@ -104,68 +115,94 @@ class ReleaseOutputKey(StrEnum):
     The tag to create, or empty when there is nothing to release.
     """
 
-    BUMPED = "bumped"
+
+class PullRequestJSONKey(StrEnum):
     """
-    ``true`` when the release wrote a new version, which then needs committing.
+    The fields read out of GitHub's ``commits/<sha>/pulls`` response.
     """
 
+    NUMBER = "number"
+    LABELS = "labels"
+    NAME = "name"
 
-@dataclass
-class UnexpectedVersion(CommandFailure, ValueError):
-    """
-    Raised when the manifest names a version a pull request may not set, or one behind
-    the latest release.
-    """
 
-    version: ReleaseVersion
+@dataclass(frozen=True)
+class PullRequestLabel:
     """
-    The version the manifest names.
+    One label on a merged pull request.
     """
 
-    allowed: tuple[ReleaseVersion, ...]
+    name: str
     """
-    The versions it may name.
+    The label's name.
     """
 
-    @classproperty
-    def exit_code(cls) -> ReleaseVersionExitCode:
-        """:return: The status this kind of error ends a command with."""
-        return ReleaseVersionExitCode.UNEXPECTED_VERSION
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> PullRequestLabel:
+        """
+        :param data: A label object GitHub returned.
+        :return: The parsed label.
+        """
+        return cls(name=data[PullRequestJSONKey.NAME])
 
-    def __str__(self) -> str:
-        allowed = ", ".join(str(version) for version in self.allowed)
-        return (
-            f"{CheckoutLocation.PLUGIN_MANIFEST} names {self.version}, but it may only "
-            f"name one of: {allowed}. Patch releases are made on merge; a pull request "
-            "names a minor or major one with `python -m basstler.release_version bump "
-            "--part minor` (or `--part major`)."
+    @property
+    def part(self) -> VersionPart:
+        """:return: The part it asks a release to increment."""
+        return VersionPart.labelled(self.name)
+
+
+@dataclass(frozen=True)
+class MergedPullRequest:
+    """
+    A pull request merged since the latest release, and the labels it carries.
+    """
+
+    number: int
+    """
+    Its number.
+    """
+
+    labels: tuple[PullRequestLabel, ...]
+    """
+    Its labels.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> MergedPullRequest:
+        """
+        :param data: A pull request object GitHub returned.
+        :return: The parsed pull request.
+        """
+        return cls(
+            number=data[PullRequestJSONKey.NUMBER],
+            labels=tuple(
+                PullRequestLabel.from_json(label)
+                for label in data[PullRequestJSONKey.LABELS]
+            ),
+        )
+
+    @classmethod
+    def read_all(cls, path: Path) -> tuple[MergedPullRequest, ...]:
+        """
+        :param path: A JSON array of pull request objects, one per entry GitHub returned;
+            a pull request reached by several commits appears more than once.
+        :return: Each pull request once.
+        """
+        parsed = (cls.from_json(entry) for entry in json.loads(path.read_text()))
+        return tuple({pull.number: pull for pull in parsed}.values())
+
+    @property
+    def part(self) -> VersionPart:
+        """:return: The most significant part its labels ask for."""
+        return max(
+            (label.part for label in self.labels),
+            key=lambda part: part.significance,
+            default=VersionPart.PATCH,
         )
 
 
 @dataclass
-class VersionReferenceMissing(CommandFailure, LookupError):
-    """
-    Raised when a file that should name the release names no version.
-    """
-
-    path: Path
-    """
-    The file, relative to the checkout.
-    """
-
-    @classproperty
-    def exit_code(cls) -> ReleaseVersionExitCode:
-        """:return: The status this kind of error ends a command with."""
-        return ReleaseVersionExitCode.VERSION_REFERENCE_MISSING
-
-    def __str__(self) -> str:
-        return (
-            f"{self.path} names no version where one is expected; nothing was written."
-        )
-
-
-@dataclass
-class MalformedVersion(CommandFailure, ValueError):
+class MalformedVersion(CommandFailure, DataclassException, ValueError):
     """
     Raised when a version is not ``<major>.<minor>.<patch>``.
     """
@@ -180,8 +217,14 @@ class MalformedVersion(CommandFailure, ValueError):
         """:return: The status this kind of error ends a command with."""
         return ReleaseVersionExitCode.MALFORMED_VERSION
 
-    def __str__(self) -> str:
+    def error_message(self) -> str:
         return f"{self.text!r} is not a <major>.<minor>.<patch> version."
+
+    def suggest_correction(self) -> str:
+        return (
+            "Write three dot-separated numbers, e.g. 0.1.1, with no "
+            f"{ReleaseVersion.tag_prefix!r} prefix; that belongs to the tag."
+        )
 
 
 @dataclass(frozen=True, order=True)
@@ -256,78 +299,6 @@ class ReleaseVersion:
 
 
 @dataclass(frozen=True)
-class VersionReference:
-    """
-    One file that writes the release's version, and how it writes it.
-    """
-
-    path: CheckoutLocation
-    """
-    The file, relative to a checkout.
-    """
-
-    pattern: re.Pattern[str]
-    """
-    Where the version is written in it: every match's ``version`` group is one.
-    """
-
-    @classmethod
-    def manifest(cls) -> VersionReference:
-        """
-        :return: The plugin manifest's version, the one the build and the check read.
-        """
-        return cls(
-            CheckoutLocation.PLUGIN_MANIFEST,
-            re.compile(r'"version"\s*:\s*"(?P<version>[^"]+)"'),
-        )
-
-    @classmethod
-    def every(cls) -> tuple[VersionReference, ...]:
-        """
-        :return: Every place a version is written: the manifest, and each reference to
-            the release tag.
-        """
-        return (
-            cls.manifest(),
-            cls(
-                CheckoutLocation.EXAMPLE_CALLER,
-                re.compile(r"(?:@|basstler_ref: )v(?P<version>[0-9][^\s]*)"),
-            ),
-        )
-
-    def versions_in(self, checkout: Path) -> tuple[str, ...]:
-        """
-        :param checkout: The checkout's root.
-        :return: Every version the file writes, in order.
-        """
-        text = (checkout / self.path).read_text()
-        return tuple(match["version"] for match in self.pattern.finditer(text))
-
-    def rewritten(self, checkout: Path, version: ReleaseVersion) -> str:
-        """
-        :param checkout: The checkout's root.
-        :param version: The version to write.
-        :raises VersionReferenceMissing: If the file names no version.
-        :return: The file's text with every version it writes replaced by *version*.
-        """
-        text = (checkout / self.path).read_text()
-        if self.pattern.search(text) is None:
-            raise VersionReferenceMissing(self.path)
-        return self.pattern.sub(lambda match: self.with_version(match, version), text)
-
-    @staticmethod
-    def with_version(match: re.Match[str], version: ReleaseVersion) -> str:
-        """
-        :param match: A match of :attr:`pattern`.
-        :param version: The version to put in place of its ``version`` group.
-        :return: The matched text, with the version replaced.
-        """
-        start, end = match.span("version")
-        offset = match.start()
-        return match[0][: start - offset] + str(version) + match[0][end - offset :]
-
-
-@dataclass(frozen=True)
 class PlannedRelease:
     """
     What ``release`` decided to release.
@@ -338,24 +309,15 @@ class PlannedRelease:
     The version to tag.
     """
 
-    bumped: bool
-    """
-    Whether the version was written by the release, and so needs committing before the
-    tag.
-    """
-
     def output_lines(self) -> str:
         """:return: The release as ``<key>=<value>`` lines for ``$GITHUB_OUTPUT``."""
-        return (
-            f"{ReleaseOutputKey.TAG}={self.version.tag}\n"
-            f"{ReleaseOutputKey.BUMPED}={str(self.bumped).lower()}"
-        )
+        return f"{ReleaseOutputKey.TAG}={self.version.tag}"
 
 
 @dataclass(frozen=True)
 class Release:
     """
-    One checkout, the version its plugin manifest names, and the releases before it.
+    One checkout, the commit checked out in it, and the releases before it.
     """
 
     checkout: Path
@@ -363,25 +325,39 @@ class Release:
     The root of the checkout.
     """
 
+    @classproperty
+    def first(cls) -> ReleaseVersion:
+        """:return: The version a repository with no release yet releases."""
+        return ReleaseVersion(0, 1, 0)
+
     @property
     def git(self) -> GitCommandRunner:
         """:return: A runner for git in the checkout."""
         return GitCommandRunner(working_directory=self.checkout)
 
-    @property
-    def version(self) -> ReleaseVersion:
-        """:return: The version the checkout's plugin manifest declares."""
-        manifest = VersionReference.manifest()
-        return ReleaseVersion.parse(manifest.versions_in(self.checkout)[0])
+    @staticmethod
+    def released(tags: str) -> list[ReleaseVersion]:
+        """
+        :param tags: Tag names, one per line.
+        :return: The versions those that are release tags release.
+        """
+        versions = (ReleaseVersion.from_tag(tag) for tag in tags.splitlines())
+        return [version for version in versions if version]
 
     def latest_release(self) -> ReleaseVersion | None:
         """
         :return: The highest version whose tag the checked-out commit contains, or
             ``None`` before the first release.
         """
-        tags = self.git.run("tag", "--merged", "HEAD", "--list").splitlines()
-        released = [ReleaseVersion.from_tag(tag) for tag in tags]
-        return max((version for version in released if version), default=None)
+        tags = self.git.run("tag", "--merged", "HEAD", "--list")
+        return max(self.released(tags), default=None)
+
+    def is_released(self) -> bool:
+        """
+        :return: Whether a release tag already contains the checked-out commit, as when
+            a later merge's run has released it, or this run is run again.
+        """
+        return bool(self.released(self.git.run("tag", "--contains", "HEAD", "--list")))
 
     def changed_since(self, release: ReleaseVersion) -> bool:
         """
@@ -390,70 +366,38 @@ class Release:
         """
         return not self.git.attempt("diff", "--quiet", release.tag, "HEAD").succeeded
 
-    def allowed_versions(self, latest: ReleaseVersion) -> tuple[ReleaseVersion, ...]:
+    def unreleased_commits(self) -> tuple[str, ...]:
         """
-        :param latest: The latest release.
-        :return: The versions a pull request may leave in the manifest: the latest
-            release's, for a patch release made on merge, or its next minor or major one.
-        """
-        return (
-            latest,
-            latest.bumped(VersionPart.MINOR),
-            latest.bumped(VersionPart.MAJOR),
-        )
-
-    def verify(self) -> None:
-        """
-        :raises UnexpectedVersion: If the manifest names a version a pull request may not
-            set.
+        :return: The commits on the first-parent line since the latest release, oldest
+            first: one merge commit per merged pull request, plus any direct push.
         """
         latest = self.latest_release()
-        if latest is None:
-            logger.info(f"No release yet; merging releases {self.version}.")
-            return
-        allowed = self.allowed_versions(latest)
-        if self.version not in allowed:
-            raise UnexpectedVersion(self.version, allowed)
-        logger.info(f"{self.version} is a version a pull request may name.")
+        revisions = f"{latest.tag}..HEAD" if latest else "HEAD"
+        listed = self.git.run("rev-list", "--first-parent", "--reverse", revisions)
+        return tuple(listed.splitlines())
 
-    def bump(self, version: ReleaseVersion) -> None:
+    def plan(self, merged: tuple[MergedPullRequest, ...]) -> PlannedRelease | None:
         """
-        Write *version* everywhere a version is written. Every file is read and rewritten
-        in memory before any is written, so a missing reference leaves them all as they
-        were.
+        Decide the release of everything since the latest one: the latest release with
+        the most significant part any merged pull request's labels ask for, else its
+        patch, incremented.
 
-        :param version: The version to write.
-        :raises VersionReferenceMissing: If a file names no version.
-        """
-        rewritten = {
-            reference.path: reference.rewritten(self.checkout, version)
-            for reference in VersionReference.every()
-        }
-        for path, text in rewritten.items():
-            (self.checkout / path).write_text(text)
-
-    def plan(self) -> PlannedRelease | None:
-        """
-        Decide the release of everything since the latest one, writing the next patch
-        version when no pull request named a version of its own.
-
-        :raises UnexpectedVersion: If the manifest names a version behind the latest
-            release.
-        :raises VersionReferenceMissing: If a bump finds a file naming no version.
+        :param merged: The pull requests merged since the latest release.
         :return: The release, or ``None`` when nothing changed since the latest one.
         """
+        if self.is_released():
+            return None
         latest = self.latest_release()
         if latest is None:
-            return PlannedRelease(self.version, bumped=False)
+            return PlannedRelease(self.first)
         if not self.changed_since(latest):
             return None
-        if self.version > latest:
-            return PlannedRelease(self.version, bumped=False)
-        if self.version < latest:
-            raise UnexpectedVersion(self.version, self.allowed_versions(latest))
-        next_version = latest.bumped(VersionPart.PATCH)
-        self.bump(next_version)
-        return PlannedRelease(next_version, bumped=True)
+        part = max(
+            (pull.part for pull in merged),
+            key=lambda part: part.significance,
+            default=VersionPart.PATCH,
+        )
+        return PlannedRelease(latest.bumped(part))
 
 
 class ReleaseCommandLine:
@@ -470,31 +414,21 @@ class ReleaseCommandLine:
             description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
         )
         subcommands = parser.add_subparsers(dest="subcommand", required=True)
-        check_parser = subcommands.add_parser(
-            ReleaseCommand.CHECK,
-            help="Fail if the manifest names a version a pull request may not set",
-        )
-        bump_parser = subcommands.add_parser(
-            ReleaseCommand.BUMP,
-            help="Write a version everywhere a version is written",
-        )
-        bump_parser.add_argument(
-            "--part",
-            type=VersionPart,
-            choices=[VersionPart.MINOR, VersionPart.MAJOR],
-            default=VersionPart.MINOR,
-            help="The part to increment (default: minor); patch releases are made on merge",
-        )
-        bump_parser.add_argument(
-            "--version",
-            type=ReleaseVersion.parse,
-            help="The version to write, instead of incrementing a part",
+        unreleased_parser = subcommands.add_parser(
+            ReleaseCommand.UNRELEASED,
+            help="Print the commits since the latest release, oldest first",
         )
         release_parser = subcommands.add_parser(
             ReleaseCommand.RELEASE,
-            help="Prepare the release of everything since the latest one",
+            help="Decide the release of everything since the latest one",
         )
-        for subcommand_parser in (check_parser, bump_parser, release_parser):
+        release_parser.add_argument(
+            "--pull-requests",
+            type=Path,
+            help="A JSON array of the pull requests GitHub associates with the "
+            "unreleased commits (default: none, so a patch release)",
+        )
+        for subcommand_parser in (unreleased_parser, release_parser):
             subcommand_parser.add_argument(
                 "--checkout",
                 type=Path,
@@ -513,19 +447,22 @@ class ReleaseCommandLine:
         """
         release = Release(arguments.checkout)
         try:
-            if arguments.subcommand == ReleaseCommand.CHECK:
-                release.verify()
-            elif arguments.subcommand == ReleaseCommand.BUMP:
-                version = arguments.version or release.version.bumped(arguments.part)
-                release.bump(version)
-                logger.info(f"Bumped to {version}; merging it releases {version.tag}.")
-            elif arguments.subcommand == ReleaseCommand.RELEASE:
-                planned = release.plan()
-                if planned is None:
-                    logger.warning("Nothing changed since the latest release.")
-                else:
-                    logger.info(planned.output_lines())
-        except (UnexpectedVersion, VersionReferenceMissing, MalformedVersion) as error:
+            match arguments.subcommand:
+                case ReleaseCommand.UNRELEASED:
+                    for commit in release.unreleased_commits():
+                        logger.info(commit)
+                case ReleaseCommand.RELEASE:
+                    merged = (
+                        MergedPullRequest.read_all(arguments.pull_requests)
+                        if arguments.pull_requests
+                        else ()
+                    )
+                    planned = release.plan(merged)
+                    if planned is None:
+                        logger.warning("Nothing changed since the latest release.")
+                    else:
+                        logger.info(planned.output_lines())
+        except MalformedVersion as error:
             logger.error(str(error))
             return error.exit_code
         return ReleaseVersionExitCode.SUCCESS

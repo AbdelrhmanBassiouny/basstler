@@ -10,29 +10,30 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
 from basstler.maintenance_constants import (
     MergeableState,
-    RoutineText,
+    MaintenanceText,
 )
 from basstler.maintenance_board import PullRequestField
-from basstler.maintenance_git_commands import GitCommandRunner, ProposedPush
+from basstler.maintenance_git_commands import (
+    GitCommandResult,
+    GitCommandRunner,
+    ProposedPush,
+)
 from basstler.maintenance_github import ForkPullRequests
-from basstler.stack import (
-    Branch,
+from basstler.stack_commit_move import (
     CommitMoveAction,
     CommitMoveChecks,
-    Configuration,
-    IntegrationStrategy,
-    LabelWrite,
     ProposedCommitMove,
     RefusalReason,
-    Stack,
-    resolve_ref,
 )
+from basstler.stack_label_write import LabelWrite
+from basstler.stack_model import Branch, IntegrationStrategy, Stack
+from basstler.stack_settings import Configuration
 
 # %% what became of one branch
 
@@ -153,7 +154,7 @@ def conflict_report(
         else "\n\nThis pull request's description names no session to address."
     )
     return (
-        f"{RoutineText.CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
+        f"{MaintenanceText.CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
         f"conflicts, so this branch was left untouched and skipped.\n\n"
         f"Conflicting files:\n{files}\n\n"
         f"Please resolve and push. This branch is labelled "
@@ -161,6 +162,102 @@ def conflict_report(
         f"conflict; the label is cleared automatically once it merges cleanly again, "
         f"and the branch rejoins the pass.{addressed}"
     )
+
+
+# %% who answers a collision
+
+
+@dataclass(frozen=True)
+class ConflictResponse(ABC):
+    """
+    What becomes of a branch whose parent could not be integrated cleanly.
+
+    The collision itself is never resolved by a pass - that is a change to somebody's
+    branch, made by whoever is in a position to judge which side is right. Who that is
+    depends on why the pass is running, which is what the members of this family differ
+    on.
+    """
+
+    @classmethod
+    def chosen_for(cls, stacked_on: str | None) -> ConflictResponse:
+        """
+        The response a pass answers its collisions through.
+
+        :param stacked_on: The branch whose subtree is being restacked, or ``None`` when
+            the whole board is.
+        :return: The response to answer through.
+        """
+        if stacked_on is None:
+            return TellTheBranchOwner()
+        return LeaveItToTheCaller()
+
+    @abstractmethod
+    def answer(
+        self, restacking: BranchUnderRestack, conflicting_paths: Sequence[str]
+    ) -> BranchOutcome:
+        """
+        Conclude the branch that could not take its parent's tip.
+
+        :param restacking: The branch being restacked.
+        :param conflicting_paths: The paths that conflicted.
+        :return: The outcome concluding the branch.
+        """
+
+
+@dataclass(frozen=True)
+class TellTheBranchOwner(ConflictResponse):
+    """
+    Labels the branch and comments on its pull request.
+
+    What an unattended pass over the whole board owes a branch it had to leave alone:
+    nobody is watching the run, so a report reaching only its summary reaches nobody.
+    The label is what makes the next pass withhold the branch rather than re-report the
+    same collision.
+    """
+
+    def answer(
+        self, restacking: BranchUnderRestack, conflicting_paths: Sequence[str]
+    ) -> BranchOutcome:
+        """:param restacking: The branch being restacked.
+        :param conflicting_paths: The paths that conflicted.
+        :return: The outcome, carrying where its owner was told."""
+        branch = restacking.branch
+        restacking.fork.replace_labels(
+            branch.pull_request_number,
+            LabelWrite.replacing(
+                branch.labels,
+                added=[restacking.configuration.needs_resolution_label],
+            ).labels,
+        )
+        return restacking.concluded(
+            RestackOutcome.CONFLICT,
+            conflicting_paths=conflicting_paths,
+            reported_at=restacking.fork.add_comment(
+                branch.pull_request_number,
+                conflict_report(branch, conflicting_paths, restacking.parent),
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class LeaveItToTheCaller(ConflictResponse):
+    """
+    Returns the collision without writing anything to the fork.
+
+    What a pass over one named subtree owes it instead: the caller named that subtree
+    because a fix they just made is what the parent carries, so they are present, the
+    judgement is theirs, and both writes would be addressed to themselves.
+    """
+
+    def answer(
+        self, restacking: BranchUnderRestack, conflicting_paths: Sequence[str]
+    ) -> BranchOutcome:
+        """:param restacking: The branch being restacked.
+        :param conflicting_paths: The paths that conflicted.
+        :return: The outcome, naming the branch, its parent and what collided."""
+        return restacking.concluded(
+            RestackOutcome.CONFLICT, conflicting_paths=conflicting_paths
+        )
 
 
 @dataclass(frozen=True)
@@ -204,6 +301,11 @@ class BranchUnderRestack:
     The checks its push is put through.
     """
 
+    conflict_response: ConflictResponse = field(default_factory=TellTheBranchOwner)
+    """
+    How a collision with the parent is answered.
+    """
+
     @property
     def configuration(self) -> Configuration:
         """:return: The resolved configuration."""
@@ -212,12 +314,12 @@ class BranchUnderRestack:
     @property
     def branch_reference(self) -> str:
         """:return: The fork's copy of this branch, which every step starts from."""
-        return resolve_ref(self.configuration, self.branch.name)
+        return self.configuration.reference_on_fork(self.branch.name)
 
     @property
     def parent_reference(self) -> str:
         """:return: The fork's copy of the parent being integrated."""
-        return resolve_ref(self.configuration, self.parent)
+        return self.configuration.reference_on_fork(self.parent)
 
     def concluded(self, outcome: RestackOutcome, **detail: Any) -> BranchOutcome:
         """
@@ -230,6 +332,57 @@ class BranchUnderRestack:
         return BranchOutcome(
             self.branch.name, self.parent, self.strategy, outcome, **detail
         )
+
+
+# %% merges a restack replaces
+
+
+@dataclass(frozen=True)
+class SupersededMerges:
+    """
+    The merges at a branch's tip that only brought in an earlier state of its parent.
+
+    Every restack merges the parent's moved tip in, so a branch waiting through many
+    passes would collect one merge per pass. A merge is superseded when the parent now
+    holds every change it brought in, and its content is exactly what merging its two
+    parents produces - so it carries no work of its own, and merging the parent's current
+    tip into the commit beneath it reproduces everything it held.
+    """
+
+    git: GitCommandRunner
+    """
+    The runner to read history through.
+    """
+
+    parent_reference: str
+    """
+    The fork's copy of the parent about to be integrated.
+    """
+
+    def commit_beneath(self, tip: str) -> str:
+        """
+        :param tip: The branch's published tip.
+        :return: The first commit along the branch's own line that is not a superseded
+            merge, which is *tip* itself when it is not one.
+        """
+        commit = tip
+        while self.is_superseded(commit):
+            commit = self.git.parents_of(commit)[0]
+        return commit
+
+    def is_superseded(self, commit: str) -> bool:
+        """:param commit: A commit on the branch's own line.
+        :return: Whether it is a merge the parent's current tip supersedes."""
+        match self.git.parents_of(commit):
+            case (own_line, merged_in):
+                return (
+                    not self.git.contains(own_line, self.parent_reference)
+                    and self.git.adds_only_merges(merged_in, self.parent_reference)
+                    and self.git.automatic_merge_tree(own_line, merged_in)
+                    == self.git.tree_of(commit)
+                )
+            case _:
+                return False
 
 
 # %% the steps themselves
@@ -307,11 +460,15 @@ class SkipBranchAlreadyCurrent(RestackStep):
 @dataclass(frozen=True)
 class IntegrateParent(RestackStep):
     """
-    Integrates the parent's tip, reporting a conflict to the branch's owner.
+    Integrates the parent's tip, answering a conflict through the branch's
+    :class:`ConflictResponse`.
 
-    A conflict is never resolved here - that is a change to somebody else's branch. It
-    is labelled and commented on, so the next pass withholds the branch rather than
-    re-reporting it.
+    A conflict is never resolved here - that is a change to somebody else's branch.
+
+    A merge is made onto the commit beneath the branch's :class:`SupersededMerges`, so
+    the branch carries one merge of its parent however many passes it waits through.
+    When that merge fails, the parent is merged onto the published tip instead, so
+    replacing earlier merges never turns a clean restack into a reported conflict.
 
     Unmerged paths are what make a failed integration a conflict, not its exit status:
     a merge also refuses when an untracked file is in the way, when the histories are
@@ -325,12 +482,7 @@ class IntegrateParent(RestackStep):
         :return: A conflict outcome when the parent left unmerged paths, a failure
             outcome when the integration failed without any, otherwise ``None``."""
         git = restacking.git
-        git.checkout(restacking.branch.name, restacking.branch_reference)
-        integration = (
-            git.rebase(restacking.parent_reference)
-            if restacking.strategy is IntegrationStrategy.REBASE
-            else git.merge(restacking.parent_reference)
-        )
+        integration = self._integrate(restacking)
         if integration.succeeded:
             return None
         conflicting = git.unmerged_paths()
@@ -340,35 +492,43 @@ class IntegrateParent(RestackStep):
                 RestackOutcome.INTEGRATION_FAILED,
                 explanation=integration.error_output,
             )
-        return restacking.concluded(
-            RestackOutcome.CONFLICT,
-            conflicting_paths=conflicting,
-            reported_at=self._report(restacking, conflicting),
-        )
+        return restacking.conflict_response.answer(restacking, conflicting)
+
+    @classmethod
+    def _integrate(cls, restacking: BranchUnderRestack) -> GitCommandResult:
+        """
+        :param restacking: The branch being restacked.
+        :return: The integration that stands - the merge replacing the superseded merges
+            when there are any and it succeeded, otherwise the one onto the published tip.
+        """
+        tip = restacking.branch_reference
+        if restacking.strategy is IntegrationStrategy.REBASE:
+            return cls._integrate_onto(restacking, tip)
+        beneath = SupersededMerges(
+            restacking.git, restacking.parent_reference
+        ).commit_beneath(tip)
+        if beneath == tip:
+            return cls._integrate_onto(restacking, tip)
+        replacing = cls._integrate_onto(restacking, beneath)
+        if replacing.succeeded:
+            return replacing
+        restacking.git.abandon(restacking.strategy)
+        return cls._integrate_onto(restacking, tip)
 
     @staticmethod
-    def _report(
-        restacking: BranchUnderRestack, conflicting_paths: Sequence[str]
-    ) -> str:
+    def _integrate_onto(
+        restacking: BranchUnderRestack, start_point: str
+    ) -> GitCommandResult:
         """
-        Tell the branch's owner, and label it so the next pass withholds it.
-
         :param restacking: The branch being restacked.
-        :param conflicting_paths: The paths that conflicted.
-        :return: The URL of the comment posted.
+        :param start_point: The commit to put the branch at before integrating.
+        :return: The finished integration of the parent's tip.
         """
-        branch = restacking.branch
-        restacking.fork.replace_labels(
-            branch.pull_request_number,
-            LabelWrite.replacing(
-                branch.labels,
-                added=[restacking.configuration.needs_resolution_label],
-            ).labels,
-        )
-        return restacking.fork.add_comment(
-            branch.pull_request_number,
-            conflict_report(branch, conflicting_paths, restacking.parent),
-        )
+        git = restacking.git
+        git.checkout(restacking.branch.name, start_point)
+        if restacking.strategy is IntegrationStrategy.REBASE:
+            return git.rebase(restacking.parent_reference)
+        return git.merge(restacking.parent_reference)
 
 
 @dataclass(frozen=True)
@@ -405,6 +565,9 @@ class RefuseAnUnsafeMove(RestackStep):
 class PublishBranch(RestackStep):
     """
     Publishes the integrated branch, reporting rather than forcing a rejection.
+
+    A merge that no longer contains the published tip replaced superseded merges, which
+    is the one rewrite a merge publishes - under a lease, like a rebase.
     """
 
     def attempt(self, restacking: BranchUnderRestack) -> BranchOutcome:
@@ -413,7 +576,12 @@ class PublishBranch(RestackStep):
         git = restacking.git
         push = git.push(
             ProposedPush.publishing(
-                restacking.configuration, restacking.branch.name, restacking.strategy
+                restacking.configuration,
+                restacking.branch.name,
+                restacking.strategy,
+                replaces_superseded_merges=not git.contains(
+                    restacking.branch_reference, "HEAD"
+                ),
             )
         )
         if not push.succeeded:

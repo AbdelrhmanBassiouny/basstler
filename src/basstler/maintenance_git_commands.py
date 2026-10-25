@@ -8,14 +8,18 @@ rewritten is decided in one place rather than at each call site.
 
 from __future__ import annotations
 
+import os
 import subprocess
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 from basstler.class_property import classproperty
+from basstler.exceptions import UnresolvableReferenceError
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_errors import ExternalCallFailed
-from basstler.stack import Configuration, IntegrationStrategy, resolve_ref
+from basstler.stack_model import IntegrationStrategy
+from basstler.stack_settings import Configuration
 
 # %% running git
 
@@ -115,21 +119,29 @@ class ProposedPush:
 
     @classmethod
     def publishing(
-        cls, configuration: Configuration, branch: str, strategy: IntegrationStrategy
+        cls,
+        configuration: Configuration,
+        branch: str,
+        strategy: IntegrationStrategy,
+        replaces_superseded_merges: bool = False,
     ) -> ProposedPush:
         """
         Build the push that publishes a restacked branch.
 
         :param configuration: The resolved configuration.
         :param branch: The branch to publish.
-        :param strategy: How its parent was integrated, which is what authorises a
-            rewrite - and which ``build_stack`` sets to rebase only from the label.
+        :param strategy: How its parent was integrated, which authorises a rewrite when
+            it is a rebase - and which ``Stack.build`` sets to rebase only from the label.
+        :param replaces_superseded_merges: Whether the integration replaced merges that
+            only brought in an earlier state of the parent, the one rewrite a merge is
+            authorised to make.
         :return: The push.
         """
         return cls(
             remote=configuration.fork_remote,
             refspec=f"{branch}:{branch}",
-            with_lease=strategy is IntegrationStrategy.REBASE,
+            with_lease=strategy is IntegrationStrategy.REBASE
+            or replaces_superseded_merges,
         )
 
 
@@ -138,7 +150,7 @@ class GitCommandRunner:
     """
     Runs git in one checkout, reporting failures rather than swallowing them.
 
-    ``stack.py`` reads git through a helper that returns an empty string when a command
+    ``stack_checkout.py`` reads git through a helper that returns an empty string when a command
     fails. That is right for derivation, where a missing ref simply means "no answer",
     and wrong here: a push that silently did nothing would be indistinguishable from one
     that worked.
@@ -149,11 +161,15 @@ class GitCommandRunner:
     The checkout every command runs in.
     """
 
-    def attempt(self, *arguments: str) -> GitCommandResult:
+    def attempt(
+        self, *arguments: str, environment: Mapping[str, str] | None = None
+    ) -> GitCommandResult:
         """
         Run a command whose failure is an expected outcome.
 
         :param arguments: The git subcommand and its arguments.
+        :param environment: Variables to set for this command on top of the process's
+            own.
         :return: The finished command.
         """
         completed = subprocess.run(
@@ -161,6 +177,7 @@ class GitCommandRunner:
             cwd=self.working_directory,
             capture_output=True,
             text=True,
+            env={**os.environ, **(environment or {})},
         )
         return GitCommandResult(
             arguments=arguments,
@@ -169,15 +186,19 @@ class GitCommandRunner:
             error_output=completed.stderr.strip(),
         )
 
-    def run(self, *arguments: str) -> str:
+    def run(self, *arguments: str, environment: Mapping[str, str] | None = None) -> str:
         """
         Run a command this module depends on the result of.
 
         :param arguments: The git subcommand and its arguments.
+        :param environment: Variables to set for this command on top of the process's
+            own.
         :return: Git's stripped stdout.
         :raises GitCommandFailed: If git exits non-zero.
         """
-        return self.attempt(*arguments).raise_if_failed().output
+        return (
+            self.attempt(*arguments, environment=environment).raise_if_failed().output
+        )
 
     def fetch(self, remote: str, *references: str) -> None:
         """
@@ -192,6 +213,45 @@ class GitCommandRunner:
         """:param reference: Any reference git can resolve.
         :return: The commit it names."""
         return self.run("rev-parse", reference)
+
+    def parents_of(self, commit: str) -> tuple[str, ...]:
+        """:param commit: Any reference git can resolve to a commit.
+        :return: The commit's parents, its first parent first."""
+        return tuple(
+            self.run("rev-list", "--parents", "--max-count=1", commit).split()[1:]
+        )
+
+    def tree_of(self, commit: str) -> str:
+        """:param commit: Any reference git can resolve to a commit.
+        :return: The tree the commit records."""
+        return self.run("rev-parse", f"{commit}^{{tree}}")
+
+    def automatic_merge_tree(self, first: str, second: str) -> str | None:
+        """
+        Merge two commits without touching any branch or the working tree.
+
+        :param first: One side of the merge.
+        :param second: The other side.
+        :return: The tree merging them produces, or ``None`` when it conflicts.
+        """
+        merge = self.attempt("merge-tree", "--write-tree", first, second)
+        return merge.output.splitlines()[0] if merge.succeeded else None
+
+    def adds_only_merges(self, candidate: str, reference: str) -> bool:
+        """:param candidate: The reference whose history is examined.
+        :param reference: The reference it is compared against.
+        :return: Whether every commit *candidate* holds beyond *reference* is a merge.
+        :raises UnresolvableReferenceError: If either reference names no commit here.
+        """
+        for compared in (reference, candidate):
+            if not self.attempt(
+                "rev-parse", "--verify", "--quiet", f"{compared}^{{commit}}"
+            ).succeeded:
+                raise UnresolvableReferenceError(reference=compared)
+        beyond = self.run(
+            "rev-list", "--no-merges", "--max-count=1", f"{reference}..{candidate}"
+        )
+        return not beyond
 
     def checkout(self, branch: str, start_point: str) -> None:
         """
@@ -280,4 +340,6 @@ class BranchAncestry:
         """:param candidate: A fork branch that may be contained.
         :param descendant: A local branch that may contain it.
         :return: Whether the fork's copy of *candidate* is contained in *descendant*."""
-        return self.git.contains(resolve_ref(self.configuration, candidate), descendant)
+        return self.git.contains(
+            self.configuration.reference_on_fork(candidate), descendant
+        )

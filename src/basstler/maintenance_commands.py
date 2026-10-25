@@ -22,17 +22,10 @@ from basstler.maintenance_fast_forward import fast_forward
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.maintenance_github import GitHubRepository
 from basstler.maintenance_promotion import clear_spent_promotion_labels, promote
-from basstler.maintenance_report import (
-    MaintenanceReport,
-    build_report,
-    exit_code_for,
-    print_board_export,
-    print_fast_forward,
-    print_promotions,
-    print_restack,
-)
+from basstler.maintenance_report import MaintenanceReport
 from basstler.maintenance_restack_procedure import restack
-from basstler.stack import Configuration, Stack, load_stack
+from basstler.stack_model import Stack
+from basstler.stack_settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -72,7 +65,7 @@ class MaintenancePass:
 
     def stack(self) -> Stack:
         """:return: The derived stack, read from the exported board."""
-        return load_stack(self.board)
+        return Stack.load(self.board)
 
 
 @dataclass(frozen=True)
@@ -173,9 +166,11 @@ class BoardCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code."""
         export = BoardExport.from_api_records(maintenance.fork().open_pull_requests())
-        print_board_export(
-            export, export.write(maintenance.board) if arguments.write else None
-        )
+        if not arguments.write:
+            logger.info(export.as_json())
+            return StackExitCode.SUCCESS
+        written_to = export.write(maintenance.board)
+        logger.info(f"{len(export.pull_requests)} open pull request(s) -> {written_to}")
         return StackExitCode.SUCCESS
 
 
@@ -205,9 +200,11 @@ class FastForwardCommand(MaintenanceCommand):
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
-        report = fast_forward(maintenance.configuration, maintenance.git)
-        print_fast_forward(report)
-        return exit_code_for(MaintenanceReport(fast_forward=report))
+        report = MaintenanceReport(
+            fast_forward=fast_forward(maintenance.configuration, maintenance.git)
+        )
+        report.print_summary()
+        return report.exit_code
 
 
 @dataclass(frozen=True)
@@ -230,6 +227,17 @@ class RestackCommand(MaintenanceCommand):
         """
         return "integrate every moved parent and publish the result"
 
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--stacked-on`` on."""
+        parser.add_argument(
+            "--stacked-on",
+            help=(
+                "carry only this branch into what is stacked on it, leaving the rest "
+                "of the board alone and handing any collision back rather than "
+                "reporting it to the branch's owner"
+            ),
+        )
+
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
     ) -> StackExitCode:
@@ -237,9 +245,15 @@ class RestackCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code."""
         stack = maintenance.stack()
-        outcomes = restack(stack, maintenance.git, maintenance.fork())
-        print_restack(outcomes)
-        return exit_code_for(MaintenanceReport(restacked=tuple(outcomes)))
+        report = MaintenanceReport(
+            restacked=tuple(
+                restack(
+                    stack, maintenance.git, maintenance.fork(), arguments.stacked_on
+                )
+            )
+        )
+        report.print_summary()
+        return report.exit_code
 
 
 @dataclass(frozen=True)
@@ -270,10 +284,12 @@ class PromoteCommand(MaintenanceCommand):
         :return: The process exit code."""
         stack = maintenance.stack()
         fork = maintenance.fork()
-        print_promotions(
-            promote(stack, fork), clear_spent_promotion_labels(stack, fork)
+        report = MaintenanceReport(
+            promoted=tuple(promote(stack, fork)),
+            promotion_labels_cleared=tuple(clear_spent_promotion_labels(stack, fork)),
         )
-        return StackExitCode.SUCCESS
+        report.print_summary()
+        return report.exit_code
 
 
 @dataclass(frozen=True)
@@ -308,20 +324,30 @@ class RunReportCommand(MaintenanceCommand):
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
     ) -> StackExitCode:
         """
-        Perform every step of the pass, then discard the board it derived from.
+        :param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code.
+        """
+        return self.perform(maintenance, as_json=arguments.json).exit_code
+
+    def perform(self, maintenance: MaintenancePass, as_json: bool) -> MaintenanceReport:
+        """
+        Perform every step of the pass, print it, then discard the board it derived
+        from.
 
         The board is a snapshot of one moment's open pull requests, and a stale one read
         by a later run is worse than none at all - so a whole pass ends without one, and
         the next begins by exporting a fresh one.
 
         :param maintenance: What this run has resolved.
-        :param arguments: The parsed command line.
-        :return: The process exit code.
+        :param as_json: Whether to print the machine-readable document rather than a
+            summary.
+        :return: What the pass did.
         """
         stack = maintenance.stack()
         fork = maintenance.fork()
         fast_forward_report = fast_forward(stack.configuration, maintenance.git)
-        report = build_report(
+        report = MaintenanceReport.of_pass(
             stack,
             fast_forward_report,
             restack(stack, maintenance.git, fork),
@@ -329,13 +355,11 @@ class RunReportCommand(MaintenanceCommand):
             clear_spent_promotion_labels(stack, fork),
         )
         maintenance.board.unlink(missing_ok=True)
-        if arguments.json:
+        if as_json:
             logger.info(report.as_json())
-        else:
-            print_fast_forward(fast_forward_report)
-            print_restack(report.restacked)
-            print_promotions(report.promoted, report.promotion_labels_cleared)
-        return exit_code_for(report)
+            return report
+        report.print_summary()
+        return report
 
 
 # Built now rather than on first use, so a command that cannot say what it is called is
