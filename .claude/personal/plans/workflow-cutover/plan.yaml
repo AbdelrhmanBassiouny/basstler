@@ -24,18 +24,6 @@ items:
   depends_on: []
   notes: |
     Raised by the owner on #6's dashboard.html thread (2026-10-18), offered as its own item; proposed there and awaiting confirmation. htpy (typed, dependency-free) plus dataclass section models, a StrEnum of CSS classes and a factory from Plan to page; the CSS moves to one static stylesheet. Every page already renders through TemplatePage, so only render() changes. If the owner folds it into #6 instead, drop this item.
-- id: plan-site-action
-  title: Deploy the plan site to stack-board's Pages, on demand rather than on a timer
-  branch: null
-  status: not_started
-  track: cutover
-  depends_on: []
-  notes: 'A reusable workflow in basstler builds the site from every repository the hub file lists; AbdelrhmanBassiouny/stack-board
-    calls it, reworking the draft plan-dashboards.yml on claude/plan-dashboards-site-y2vexc and dropping
-    the 10-minute cron. No schedule. Rebuilt on every plan change by anyone: every notes writer (save-plan,
-    sync_manifest_status, write-personal-notes-file, bootstrap) dispatches it after a push under plans/,
-    as a GITHUB_TOKEN push starts no workflow, and a push-triggered caller on each notes branch catches
-    hand pushes. One concurrency group. Retires board.yml.'
 - id: plan-site-setup
   title: Setup registers the repository in the hub, and sessions are told the site links
   branch: null
@@ -55,18 +43,6 @@ items:
   - Deleting the live Routine trigger on CRAM is the owner's step; after #16 merges its prompt names a removed flag (--non-interactive).
   depends_on: []
   notes: 'Reshaped 2026-10-24 with the owner: no Action and no schedule. plan-item-gathering.md starts kickoff and resolve with /stacked-pr-maintenance when an upstream is named (ba02b79); reparents stay with its MCP step. a7f2e00 removes the Routine from the code (routine-prompt.md, --non-interactive, RoutineText), so #16 is release:major. #15 (restack --stacked-on) complements it and will conflict at the import level.'
-- id: artifact-path-retirement
-  title: Retire the Artifact publishing path once the Pages site has run one green cycle
-  branch: null
-  status: not_started
-  track: cutover
-  depends_on:
-  - plan-site-action
-  notes: 'Widened 2026-10-20/21: the site is the one surface, so every Artifact page goes, the index included.
-    A session first deletes every page each repository''s _generated/dashboard-urls.yaml lists (the Artifact
-    tool''s delete; an Action cannot), then removes that cache, record_dashboard_url.py and its tests,
-    plan-dashboard step 3 and index mode, and the republish instruction in every plan skill and the personal
-    notes, which dispatch the site workflow instead.'
 - id: tooling-branch-retirement
   title: Tag and delete claude/stack-workflow-tooling after one green cycle
   branch: null
@@ -74,8 +50,7 @@ items:
   track: cutover
   depends_on:
   - routine-cutover
-  - plan-site-action
-  notes: Only after one full maintenance cycle and one site-Action cycle have run green on the new paths.
+  notes: Only after one full maintenance cycle and one site-Action cycle (team-basstler/site-action) have run green on the new paths.
     claude/stack-workflow-tooling is still on the CRAM fork (checked 2026-10-21). Tag for history first.
     Tag pushes and branch deletes get a 403 through a session's git proxy, so those two steps run outside
     the harness; a session can verify and prepare the commands.

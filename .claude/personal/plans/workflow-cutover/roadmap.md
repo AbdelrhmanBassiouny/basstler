@@ -5,4 +5,4 @@
 - Site code names nothing twice (owner, #6). Locations, branches, repository URLs, REST fields and pull request states come from `ProjectLocation`, `PersonalNotesSetting`, `Repository`, `PullRequestField` and `PullRequestState`; git runs through `GitCommandRunner`, pages render through `TemplatePage`, and tests read values from the dataset or those enums.
 - Nothing basstler ships runs on a `schedule`: the Actions budget allows none. A duty that would want a timer runs when a session works on what it concerns (stack maintenance runs at the start of plan-item work), or on a pull request event or `workflow_dispatch`.
 - A push made with the Action's `GITHUB_TOKEN` starts no workflow. A restack the Action pushes gets no CI on the restacked pull request, and nothing may assume that it does.
-- plan-site-action goes before any further Artifact-only dashboard work: a feature that only improves the Artifact page waits for the site, or lands as shared rendering.
+- The site deploy and Artifact retirement moved to team-basstler (site-action, artifact-path-retirement); no further Artifact-only dashboard work.
