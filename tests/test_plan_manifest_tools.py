@@ -12,7 +12,7 @@ import yaml
 
 import basstler.plan_manifest_tools
 
-from basstler.build_dashboard import PlanValidationError, validate_plan
+from basstler.build_dashboard import PlanValidationError, PlanValidator
 from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_model import (
     ItemNotTrackedError,
@@ -216,9 +216,9 @@ def test_validate_refuses_a_manifest_the_dashboard_rejects_and_says_why(
     built from, so the save refuses it with the same problems the build would report.
     """
     with pytest.raises(PlanValidationError) as expected:
-        validate_plan(
+        PlanValidator(
             yaml.safe_load(DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.read_text())
-        )
+        ).validate()
 
     status = run_validate(monkeypatch, DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.value)
 

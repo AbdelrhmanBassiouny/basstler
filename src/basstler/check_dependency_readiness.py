@@ -14,16 +14,19 @@ Usage:
     python3 check_dependency_readiness.py \\
         --plan /tmp/plan.yaml \\
         --pr-data /tmp/pr_data.json \\
-        --item <item-id>
+        --item <item-id> \\
+        [--plans-dir /tmp/plans]
 
-pr_data.json shape: identical to build_dashboard.py's module docstring.
+pr_data.json shape: identical to build_dashboard.py's module docstring, and
+--plans-dir is the same directory build_dashboard.py takes, so a dependency
+naming <plan-id>/<item-id> resolves the way the dashboard resolves it.
 
 Prints a one-line JSON list to stdout, one entry per entry in the item's
 ``depends_on``, in that order:
-    [{"identifier": "<dependency id>", "title": "<dependency title>",
+    [{"identifier": "<dependency reference>", "title": "<dependency title>",
       "live_state": "<LiveState value>", "is_ready": <bool>}, ...]
-A dependency identifier that doesn't resolve to a known item is reported
-with ``"title": null, "live_state": null, "is_ready": false`` - a broken
+A dependency that doesn't resolve to a known item is reported with
+``"title": null, "live_state": null, "is_ready": false`` - a broken
 ``depends_on`` reference is never silently treated as ready.
 """
 
@@ -32,18 +35,19 @@ from __future__ import annotations
 import argparse
 import json
 import sys
-from pathlib import Path
+from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 
-import yaml
-
 from basstler.build_dashboard import (
+    Dependency,
+    DependencyResolver,
     Plan,
+    PlanCommandArguments,
+    PlanDirectory,
     PlanValidationError,
+    PlanValidator,
     PullRequestsByRepository,
-    classify_live_state,
-    load_pull_requests_by_repository,
-    validate_plan,
 )
 from basstler.standard_streams import StandardStreamHandler
 
@@ -59,55 +63,70 @@ class UnknownItemError(ValueError):
     """
 
 
-def dependency_readiness(
-    plan: Plan,
-    item_identifier: str,
-    pull_requests_by_repository: PullRequestsByRepository,
-) -> list[dict[str, Any]]:
+class ReadinessField(StrEnum):
     """
-    Classify every dependency of ``item_identifier`` as ready or not.
-
-    :param plan: The already-validated plan.
-    :param item_identifier: The effective identifier (``id`` or ``branch``) of the item
-        whose dependencies should be checked.
-    :param pull_requests_by_repository: Live pull request state for every repository
-        referenced by the plan's items.
-    :raises UnknownItemError: If ``item_identifier`` isn't in the plan.
-    :return: One ready-to-serialize dict per entry in the item's ``depends_on``, in that
-        order.
+    The keys one dependency's readiness carries once serialized.
     """
-    items_by_identifier = {item.identifier: item for item in plan.items}
-    item = items_by_identifier.get(item_identifier)
-    if item is None:
-        raise UnknownItemError(f"no item {item_identifier!r} in plan {plan.id!r}")
 
-    results: list[dict[str, Any]] = []
-    for dependency_identifier in item.depends_on:
-        dependency = items_by_identifier.get(dependency_identifier)
-        if dependency is None:
-            results.append(
-                {
-                    "identifier": dependency_identifier,
-                    "title": None,
-                    "live_state": None,
-                    "is_ready": False,
-                }
-            )
-            continue
-        dependency.live_state = classify_live_state(
-            dependency.pull_request_number,
-            dependency.repository or plan.default_repository,
-            pull_requests_by_repository,
-        )
-        results.append(
-            {
-                "identifier": dependency.identifier,
-                "title": dependency.title,
-                "live_state": dependency.live_state.value,
-                "is_ready": dependency.is_ready_to_unblock_dependents(),
-            }
-        )
-    return results
+    IDENTIFIER = "identifier"
+    TITLE = "title"
+    LIVE_STATE = "live_state"
+    IS_READY = "is_ready"
+
+
+@dataclass(frozen=True)
+class DependencyReadiness:
+    """
+    One ``depends_on`` entry, and whether it is safe to build on.
+    """
+
+    dependency: Dependency
+    """
+    The dependency, with its live state already classified.
+    """
+
+    def to_json(self) -> dict[str, Any]:
+        """
+        This readiness as the one entry the script prints for it.
+        """
+        live_state = self.dependency.live_state
+        return {
+            ReadinessField.IDENTIFIER.value: self.dependency.reference.text,
+            ReadinessField.TITLE.value: self.dependency.title,
+            ReadinessField.LIVE_STATE.value: live_state.value if live_state else None,
+            ReadinessField.IS_READY.value: (
+                self.dependency.is_ready_to_unblock_dependents()
+            ),
+        }
+
+    @classmethod
+    def of_item(
+        cls,
+        plan: Plan,
+        item_identifier: str,
+        pull_requests_by_repository: PullRequestsByRepository,
+        plan_directory: PlanDirectory | None = None,
+    ) -> list[DependencyReadiness]:
+        """
+        Classify every dependency of ``item_identifier`` as ready or not.
+
+        :param plan: The already-validated plan.
+        :param item_identifier: The effective identifier (``id`` or ``branch``) of the
+            item whose dependencies should be checked.
+        :param pull_requests_by_repository: Live pull request state for every repository
+            referenced by the plan's items, and by any plan they depend on.
+        :param plan_directory: The other plans a ``<plan-id>/<item-id>`` dependency
+            resolves against, or ``None`` when only this plan's own items are available.
+        :raises UnknownItemError: If ``item_identifier`` isn't in the plan.
+        :return: One readiness per entry in the item's ``depends_on``, in that order.
+        """
+        item = plan.items_by_identifier.get(item_identifier)
+        if item is None:
+            raise UnknownItemError(f"no item {item_identifier!r} in plan {plan.id!r}")
+
+        resolver = DependencyResolver(plan=plan, plan_directory=plan_directory)
+        resolver.classify_live_states(pull_requests_by_repository)
+        return [cls(dependency) for dependency in resolver.dependencies_of(item)]
 
 
 def main() -> int:
@@ -119,37 +138,32 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--plan", required=True, help="Path to plan.yaml")
-    parser.add_argument(
-        "--pr-data",
-        required=True,
-        help='Path to a JSON file: {"owner/repo": {"pr_number": {...}}}',
-    )
+    PlanCommandArguments.add_to(parser)
     parser.add_argument("--item", required=True, help="The item id to check")
     arguments = parser.parse_args()
+    plan_arguments = PlanCommandArguments.from_namespace(arguments)
 
-    raw_plan = yaml.safe_load(Path(arguments.plan).read_text())
+    raw_plan = plan_arguments.read_manifest()
     try:
-        validate_plan(raw_plan)
+        PlanValidator(raw_plan, plan_arguments.plan_directory).validate()
     except PlanValidationError as error:
         logger.error(str(error))
         return 1
     plan = Plan.from_mapping(raw_plan)
-
-    raw_pull_request_data = json.loads(Path(arguments.pr_data).read_text())
-    pull_requests_by_repository = load_pull_requests_by_repository(
-        raw_pull_request_data
-    )
+    pull_requests_by_repository = plan_arguments.read_pull_requests_by_repository()
 
     try:
-        results = dependency_readiness(
-            plan, arguments.item, pull_requests_by_repository
+        results = DependencyReadiness.of_item(
+            plan,
+            arguments.item,
+            pull_requests_by_repository,
+            plan_arguments.plan_directory,
         )
     except UnknownItemError as error:
         logger.error(str(error))
         return 1
 
-    logger.info(json.dumps(results))
+    logger.info(json.dumps([readiness.to_json() for readiness in results]))
     return 0
 
 

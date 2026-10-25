@@ -124,3 +124,22 @@ class UnresolvableReferenceError(CommandFailure, DataclassException, LookupError
             "fetch the branch it names from its remote, and check that the branch "
             "still exists there"
         )
+
+
+@dataclass
+class MissingStatusLineError(DataclassException, ValueError):
+    """
+    Raised when an item slated for a status correction has no ``status:`` line in its
+    plan.yaml block.
+    """
+
+    item_identifier: str
+    """
+    The id of the item whose block has no ``status:`` line.
+    """
+
+    def error_message(self) -> str:
+        return f"item {self.item_identifier!r} has no status: line to correct"
+
+    def suggest_correction(self) -> str:
+        return "give the item a status: line in plan.yaml"

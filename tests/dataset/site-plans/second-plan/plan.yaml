@@ -1,7 +1,7 @@
 schema_version: 1
 id: second-plan
 title: Second Plan
-description: A plan with no pull requests yet.
+description: A plan with no pull requests of its own, whose one item depends on an item of the first plan.
 default_repository: owner/repo
 waves:
 - id: wave-1
@@ -16,3 +16,5 @@ items:
   branch: unstarted-item
   track: track-1
   status: not started
+  depends_on:
+  - first-plan/open-item

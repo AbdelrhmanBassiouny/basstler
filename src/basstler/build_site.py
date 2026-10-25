@@ -37,12 +37,14 @@ import yaml
 
 from basstler.build_dashboard import (
     DashboardRenderer,
+    DependencyResolver,
     Plan,
+    PlanDirectory,
     PlanValidationError,
+    PlanValidator,
     PullRequestRecord,
     PullRequestsByRepository,
     RenderedDashboard,
-    validate_plan,
 )
 from basstler.build_hub import HubPage, RepositorySummary, SiteSummary
 from basstler.build_index import IndexPage, PlanSummary, ProgressCard
@@ -371,6 +373,15 @@ class RepositorySite(SiteSection[RepositorySummary]):
     That repository's ``plans`` directory, holding one subdirectory per plan.
     """
 
+    plan_directory: PlanDirectory = field(init=False)
+    """
+    The same plans, as the ``<plan-id>/<item-id>`` entries of any one of them resolve
+    against.
+    """
+
+    def __post_init__(self) -> None:
+        self.plan_directory = PlanDirectory(self.plans_directory)
+
     @property
     def index_url(self) -> str:
         """
@@ -407,14 +418,13 @@ class RepositorySite(SiteSection[RepositorySummary]):
             str(self.repository), self.index_url, summaries
         )
 
-    @staticmethod
-    def is_publishable(source: PlanSource) -> bool:
+    def is_publishable(self, source: PlanSource) -> bool:
         """
         :param source: The plan to check.
         :return: Whether its manifest passes validation, logging why if it does not.
         """
         try:
-            validate_plan(source.manifest)
+            PlanValidator(source.manifest, self.plan_directory).validate()
         except PlanValidationError as error:
             logger.warning(f"{source.directory_name} is not published: {error}")
             return False
@@ -428,13 +438,16 @@ class RepositorySite(SiteSection[RepositorySummary]):
         :return: Its dashboard and its index entry.
         """
         plan = Plan.from_mapping(source.manifest)
+        dependencies = DependencyResolver(plan, self.plan_directory)
         renderer = DashboardRenderer(
             plan=plan,
             roadmap_text=source.roadmap_text,
-            pull_requests_by_repository=self.pull_requests_of(plan),
+            pull_requests_by_repository=self.pull_requests_of(dependencies),
             tracking_url=self.tracking_url_of(plan),
             hub_url=self.hub_url,
             index_url=self.index_url,
+            plan_directory=self.plan_directory,
+            locate_plan_page=self.plan_url,
         )
         dashboard = renderer.render()
         summary = PlanSummary(
@@ -449,19 +462,23 @@ class RepositorySite(SiteSection[RepositorySummary]):
         )
         return PublishedPlan(dashboard=dashboard, summary=summary)
 
-    def pull_requests_of(self, plan: Plan) -> PullRequestsByRepository:
+    def pull_requests_of(
+        self, dependencies: DependencyResolver
+    ) -> PullRequestsByRepository:
         """
-        :param plan: The plan whose items to look up.
-        :return: The live state of every pull request its items name, in the shape the
-            dashboard renders from; a number the repository does not have is left out.
+        :param dependencies: A plan's items, plus the items of other plans it depends
+            on.
+        :return: The live state of every pull request those items name, in the shape
+            the dashboard renders from; a number the repository does not have is left
+            out.
         """
         pull_requests: PullRequestsByRepository = {}
-        for item in plan.items:
-            if item.pull_request_number is None:
+        for dependency in dependencies.resolved_dependencies:
+            if dependency.item.pull_request_number is None:
                 continue
             reference = PullRequestReference(
-                Repository.parse(item.repository or plan.default_repository),
-                item.pull_request_number,
+                Repository.parse(dependency.repository),
+                dependency.item.pull_request_number,
             )
             record = self.pull_request_source.pull_request(reference)
             if record is not None:
