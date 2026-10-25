@@ -25,14 +25,14 @@ items:
   track: pass
   blockers: []
   depends_on: []
-  notes: 'Every skill that can affect a plan writes the manifest at each transition and republishes
-    the dashboard once per turn; adds item_bootstrap''s update, check, resolve, block and
-    unblock, and fixes the manifest writer''s multi-line-value corruption. Draft #48 (from
-    CRAM #151); 25 Oct review addressed in b8705cf. Open: whether dashboard token economy
-    (skip an unchanged republish, a small artifact read) is a follow-up item or joins this
-    PR. Absorbs CRAM #160''s indent fix.
-
-    '
+  notes: >
+    Every skill that can affect a plan writes the manifest at each transition and republishes the
+    dashboard once per turn, citing manifest-staleness.md by a relative link; adds item_bootstrap's
+    update, check, resolve, block and unblock, and fixes the manifest writer's multi-line-value
+    corruption. Draft #48 (from CRAM #151), CI green on f67909e; 25 Oct reviews addressed through
+    3d9609f. Token economy split out as dashboard-token-economy. Open: whether the six older
+    ${..._DOCUMENT} skill references become links here or in a follow-up. Absorbs CRAM #160's indent
+    fix.
 - id: promotion-summaries-and-table
   title: Promote with a written summary, and send no notification
   branch: null
