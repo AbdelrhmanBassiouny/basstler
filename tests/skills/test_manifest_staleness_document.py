@@ -21,7 +21,7 @@ import pytest
 
 from basstler.locations import PluginLocation
 
-from ..constants.paths import RepositoryLocation, SkillDirectory
+from ..constants.paths import RepositoryLocation, SkillDirectory, SkillFile
 
 # %% shell constants
 
@@ -112,7 +112,7 @@ def skills_writing_plan_data() -> list[Path]:
     return sorted(
         instructions
         for instructions in (RepositoryLocation.PLUGIN / SkillDirectory.DIRECTORY).glob(
-            "*/SKILL.md"
+            f"*/{SkillFile.INSTRUCTIONS}"
         )
         if any(script in instructions.read_text() for script in PlanWritingScript)
     )
@@ -124,10 +124,9 @@ def skills_writing_plan_data() -> list[Path]:
 def test_the_rule_lives_where_the_shell_configuration_says_it_does():
     document = Path(ShellConstant.STALENESS_DOCUMENT.value_in_configuration())
 
-    assert document == (
-        RepositoryLocation.PLUGIN
-        / SkillDirectory.PLAN_DASHBOARD
-        / "manifest-staleness.md"
+    assert (
+        document
+        == RepositoryLocation.PLUGIN / SkillDirectory.MANIFEST_STALENESS_DOCUMENT
     )
     assert document.is_file()
 
@@ -153,7 +152,9 @@ def test_creating_a_plan_republishes_the_index_the_new_plan_belongs_in():
     The index lists every plan, so adding one is the single change that makes the index
     itself wrong - the one case where publishing only the plan's own page is not enough.
     """
-    instructions = RepositoryLocation.PLUGIN / SkillDirectory.PLAN_CREATE / "SKILL.md"
+    instructions = (
+        RepositoryLocation.PLUGIN / SkillDirectory.PLAN_CREATE / SkillFile.INSTRUCTIONS
+    )
 
     assert DashboardUrlKey.MASTER_INDEX in instructions.read_text()
 

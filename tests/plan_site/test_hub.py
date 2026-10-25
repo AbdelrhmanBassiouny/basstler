@@ -10,7 +10,7 @@ from pathlib import Path
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.hub import NotesBranch, PlanHub
-from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import PlanDocument
 from basstler.repository import Repository
 from basstler.setup.steps import PersonalNotesSetting
 

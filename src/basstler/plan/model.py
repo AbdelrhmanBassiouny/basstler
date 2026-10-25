@@ -18,6 +18,8 @@ from typing import Any
 
 import yaml
 
+from basstler.locations import ProjectLocation
+
 
 class ItemStatus(StrEnum):
     """
@@ -85,6 +87,31 @@ class ItemStatus(StrEnum):
 
 
 # %% the vocabulary a plan manifest is written in
+
+
+class PlanDocument(StrEnum):
+    """
+    The two files a plan is kept in, beside each other on the personal-notes branch.
+    """
+
+    MANIFEST = "plan.yaml"
+    """
+    The structured manifest, whose schema ``plan-schema.md`` documents.
+    """
+
+    ROADMAP = "roadmap.md"
+    """
+    The narrative companion, a fixed sibling filename rather than a configurable one.
+    """
+
+    def path_within_notes_branch(self, plan_identifier: str) -> str:
+        """
+        Where this document lives for one plan.
+
+        :param plan_identifier: The plan's id.
+        :return: The path, relative to the personal-notes branch's root.
+        """
+        return str(ProjectLocation.PLANS / plan_identifier / self.value)
 
 
 class ItemLayout(StrEnum):

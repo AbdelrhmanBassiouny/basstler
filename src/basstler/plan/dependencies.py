@@ -15,7 +15,7 @@ import yaml
 from basstler.class_property import classproperty
 from basstler.dashboard.cards import DependencyChip
 from basstler.dashboard.plan import Item, Plan
-from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import PlanDocument
 from basstler.pull_request_state import LiveState, PullRequestsByRepository
 
 

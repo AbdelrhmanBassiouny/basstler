@@ -24,7 +24,7 @@ import basstler.dashboard.refresh_support
 import basstler.plan.sync_manifest_status
 import basstler.standard_streams
 from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
-from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import PlanDocument
 
 from ..constants.environment import FileMode, ScrubbedEnvironmentPrefix
 from ..constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory

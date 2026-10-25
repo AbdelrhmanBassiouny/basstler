@@ -1,6 +1,6 @@
 ---
 name: plan-item-mode
-description: Change how /plan-item-kickoff and /plan-item-resolve start work on a tracked item - implementing on their own (auto), stopping for plan approval first (plan), or asking each time (ask) - by pinning the choice in the personal-notes branch so it holds for every future session. Invoke as "/plan-item-mode <auto|plan|ask> [kickoff|resolve|both]". Use whenever the user states a standing preference about being asked, such as "stop asking me, just implement", "always show me a plan first", "go back to asking each time", or "make auto the default from now on".
+description: Pin whether kickoff and resolve implement directly (auto), present a plan first (plan), or ask each time (ask). Invoke as "/plan-item-mode <auto|plan|ask> [kickoff|resolve|both]". Use when the user states a standing preference about being asked.
 allowed-tools: Bash, Read
 ---
 

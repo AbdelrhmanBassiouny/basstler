@@ -1,6 +1,6 @@
 ---
 name: plan-item-resolve
-description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, the plan's standing rules, the real state of its branch/PR - conflicts, CI, review comments, and any unresolved review threads on its upstream pull request - and any relevant discussion on its plan's tracking issue), then resolve whatever is stalling it in whichever execution mode is in force - presenting a plan for approval, carrying it out directly on the item's existing branch, or asking which. Invoke as "/plan-item-resolve <plan-id> <item-id>", or as "/plan-item-resolve <pull-request-number>" to resolve the item that pull request's branch is tracked by - or, when no plan tracks it, the pull request on its own. Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
+description: Resolve what stalls an underway plan item - conflicts, CI, review threads, tracking-issue discussion - on its existing branch, per the execution mode. Invoke as "/plan-item-resolve <plan-id> <item-id>" or "/plan-item-resolve <pull-request-number>". Use from a dashboard's Resolve/Resume/Reconsider link or when asked to resolve, unblock or resume an item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__update_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -94,32 +94,9 @@ itself.
 
 ## 3. Draft the plan
 
-### Record what you found, before proposing anything
-
-Everything gathered above is exactly what the item's own `blockers` and `notes`
-should already have said and did not — that is why this skill was needed. Write
-it down now rather than after the resolution, following
-`${MANIFEST_STALENESS_DOCUMENT}`:
-
-```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" update \
-    --plan <plan-id> --item <item-id> \
-    [--status <status>] [--blockers <file> ...] \
-    [--notes <file> | --append-notes <file>]
-```
-
-Set `status` when what you found contradicts it — `blocked` when something outside
-the item has to move first, `deferred` when it was parked deliberately. Record the
-real blocker in `blockers`: the failing check by name, the unanswered review
-thread, the dependency that regressed. Leave `notes` for a conclusion that changes
-what the item *means*, not a summary of this run — and add to an existing note with
-`--append-notes` rather than rewriting it.
-
-Then refresh the dashboard: `/plan-dashboard <plan-id>`. An item that has been stalled for days
-while the manifest calls it healthy is the failure this step exists to end, and it
-is not fixed by resolving the item — only by recording what was true before the
-resolution starts.
+First record what you found, per `${MANIFEST_STALENESS_DOCUMENT}`: the real blocker in
+`blockers`, and `status` when it is wrong (`blocked`, `deferred`). `notes` change only when
+what the item means changes.
 
 Apply `${PLAN_ITEM_GATHERING_DOCUMENT}`'s last section first: anything you
 are about to raise as an open question is very often already answered by the

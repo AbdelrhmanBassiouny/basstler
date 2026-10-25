@@ -33,7 +33,7 @@ from basstler.maintenance.github import (
     PullRequestListState,
 )
 from basstler.plan_site.hub import PlanHub
-from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus
 from basstler.repository import PullRequestReference, Repository
 

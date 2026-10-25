@@ -4,6 +4,7 @@ Paths more than one suite reads: the repository, the dataset, skills and notes.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from pathlib import Path
 
 from basstler.locations import PackageLocation, PathEnumeration, ProjectLocation
@@ -224,12 +225,29 @@ class SkillDirectory(PathEnumeration):
     The dashboard skill's shell entry point.
     """
 
+    MANIFEST_STALENESS_DOCUMENT = PLAN_DASHBOARD / "manifest-staleness.md"
+    """
+    The rule every skill that writes plan data cites: when to write the manifest and
+    republish the dashboard.
+    """
+
     @classmethod
     def skills(cls) -> tuple[SkillDirectory, ...]:
         """
         :return: Every member that is a skill's own directory.
         """
         return tuple(member for member in cls if member.parent == cls.DIRECTORY.value)
+
+
+class SkillFile(StrEnum):
+    """
+    The files every skill directory carries.
+    """
+
+    INSTRUCTIONS = "SKILL.md"
+    """
+    The instructions Claude Code loads the skill from.
+    """
 
 
 class PersonalNotesPath(PathEnumeration):

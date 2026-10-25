@@ -22,7 +22,7 @@ from basstler.exceptions import (
 from basstler.plan.model import ItemStatus, ManifestKey
 from basstler.plan.validation import PlanValidator
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
-from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import PlanDocument
 from basstler.plan.sync_manifest_status import (
     ManifestText,
     StatusCorrection,
