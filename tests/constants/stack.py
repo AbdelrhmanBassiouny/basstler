@@ -128,6 +128,12 @@ class StackBranch(StrEnum):
     contributor's fork, so the fork remote has no copy of it.
     """
 
+    LONG_LIVED_BASE = "a-long-lived-base"
+    """
+    A fork branch other than the upstream base that a pull request is based on, while no
+    open pull request has it as its head.
+    """
+
 
 class StackLabel(StrEnum):
     """
