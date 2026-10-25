@@ -1,0 +1,166 @@
+"""
+Tests that the manifest-staleness rule reaches every skill it binds.
+
+The rule lives in one document, referenced by each skill rather than restated in it, so
+what needs guarding is the reference: a skill that writes plan data without citing the
+rule is exactly the drift the document exists to end.
+
+Which skills are bound is *derived* from what they do - a skill that runs a plan-writing
+script is bound by that fact - rather than listed here, so a skill added later is
+covered without this file being edited.
+"""
+
+from __future__ import annotations
+
+import re
+import subprocess
+from enum import StrEnum
+from pathlib import Path
+
+import pytest
+
+from basstler.locations import PluginLocation
+
+from ..constants.paths import RepositoryLocation, SkillDirectory
+
+# %% shell constants
+
+
+class ShellConstant(StrEnum):
+    """
+    The constants of the plugin's shell configuration the rule is reached through.
+    """
+
+    STALENESS_DOCUMENT = "MANIFEST_STALENESS_DOCUMENT"
+    """
+    The constant a bound skill cites the rule through.
+    """
+
+    BLOCKER_OWNER = "MAINTENANCE_BLOCKER_OWNER"
+    """
+    Who stack maintenance writes its blockers under, which the writer and the clearer of
+    one have to agree on exactly.
+    """
+
+    def value_in_configuration(self) -> str:
+        """
+        :return: This constant's value, as sourcing the plugin's shell configuration sets
+            it.
+        """
+        configuration = (
+            RepositoryLocation.HOOKS
+            / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
+        )
+        result = subprocess.run(
+            ["bash", "-c", f'source "{configuration}"; printf "%s" "${{{self}}}"'],
+            capture_output=True,
+            text=True,
+            check=True,
+        )
+        return result.stdout
+
+
+class PlanWritingScript(StrEnum):
+    """
+    The constants naming a script that writes plan data, so a skill invoking one is
+    writing plan state and is bound by the rule.
+    """
+
+    ITEM_BOOTSTRAP = "PLAN_ITEM_BOOTSTRAP_MODULE"
+    """
+    The module that records, updates, blocks and unblocks items.
+    """
+
+    SAVE_PLAN = "SAVE_PLAN_SCRIPT"
+    """
+    The hook that saves an edited manifest.
+    """
+
+    WRITE_PERSONAL_NOTES_FILE = "WRITE_PERSONAL_NOTES_FILE_SCRIPT"
+    """
+    How the dashboard refresh pushes its own manifest corrections, which is a plan-data
+    write like any other.
+    """
+
+
+class DashboardUrlKey(StrEnum):
+    """
+    The names the dashboard URL cache keeps pages under.
+    """
+
+    MASTER_INDEX = "_index"
+    """
+    The master index's own page.
+    """
+
+
+# %% reading the documents
+
+
+def staleness_document() -> str:
+    """
+    :return: The rule document itself, found where the shell configuration says it is.
+    """
+    return Path(ShellConstant.STALENESS_DOCUMENT.value_in_configuration()).read_text()
+
+
+def skills_writing_plan_data() -> list[Path]:
+    """
+    :return: Every skill's instructions that run a script which writes plan data, in a
+        stable order.
+    """
+    return sorted(
+        instructions
+        for instructions in (RepositoryLocation.PLUGIN / SkillDirectory.DIRECTORY).glob(
+            "*/SKILL.md"
+        )
+        if any(script in instructions.read_text() for script in PlanWritingScript)
+    )
+
+
+# %% the rule's reach
+
+
+def test_the_rule_lives_where_the_shell_configuration_says_it_does():
+    document = Path(ShellConstant.STALENESS_DOCUMENT.value_in_configuration())
+
+    assert document == (
+        RepositoryLocation.PLUGIN
+        / SkillDirectory.PLAN_DASHBOARD
+        / "manifest-staleness.md"
+    )
+    assert document.is_file()
+
+
+@pytest.mark.parametrize(
+    "skill", skills_writing_plan_data(), ids=lambda skill: skill.parent.name
+)
+def test_a_skill_that_writes_plan_data_cites_the_staleness_rule(skill: Path):
+    assert ShellConstant.STALENESS_DOCUMENT in skill.read_text()
+
+
+def test_the_rule_names_the_blocker_owner_through_its_constant():
+    """
+    A blocker written under one name and cleared under another would accumulate forever,
+    so the document cites the one constant rather than spelling the name out.
+    """
+    assert ShellConstant.BLOCKER_OWNER.value_in_configuration() != ""
+    assert ShellConstant.BLOCKER_OWNER in staleness_document()
+
+
+def test_creating_a_plan_republishes_the_index_the_new_plan_belongs_in():
+    """
+    The index lists every plan, so adding one is the single change that makes the index
+    itself wrong - the one case where publishing only the plan's own page is not enough.
+    """
+    instructions = RepositoryLocation.PLUGIN / SkillDirectory.PLAN_CREATE / "SKILL.md"
+
+    assert DashboardUrlKey.MASTER_INDEX in instructions.read_text()
+
+
+def test_the_rule_names_no_plan_of_its_own():
+    document = staleness_document()
+    placeholders = set(re.findall(r"<([a-z-]+)>", document))
+
+    assert "plan-id" in placeholders
+    assert not re.search(r"plans/(?!<)[a-z][a-z0-9-]*/", document)

@@ -17,8 +17,8 @@ anything below is unclear about a field's meaning, rather than guessing.
 
 **Everything deterministic — schema validation, live-state classification,
 drift detection, HTML rendering — lives in the committed `basstler` package
-(`basstler/build_dashboard.py`, `basstler/build_index.py`,
-`basstler/render_common.py`), not in this document.** This file's job is only
+(`src/basstler/dashboard/plan_page.py`, `plan/validation.py`,
+`pull_request_state.py`, `dashboard/index_page.py`, `render_common.py`), not in this document.** This file's job is only
 the parts a module can't do: resolving what to fetch, calling the GitHub API,
 and calling the `Artifact` tool. If you find yourself re-deriving rendering or
 validation logic in prose instead of just running the module, stop — that
@@ -34,14 +34,15 @@ corrected automatically, in the manifest itself, every run — see step 2;
 everything else stays a flag for a human to interpret, since GitHub's state
 alone can't tell you *why* an item is blocked, deferred, or still open.
 
-## 0. Check the setup is in place, and offer it if not
+## 0. Check the setup is in place, and run it if not
 
 Every step below reads the personal-notes branch and runs scripts that need
-the dependencies `${BASSTLER_PYPROJECT_FILE}` declares — neither of which a user who
+the `basstler` package and its dependencies — neither of which a user who
 hasn't done the one-time setup has. Follow
-`.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1: run
-the check, and if it reports anything missing, offer `/setup-personal-notes`
-rather than failing later on a missing branch or an `ImportError`.
+`skills/setup-personal-notes/prerequisite-check.md` before step 1: run
+the check, and if it reports anything missing, run `/setup-personal-notes`
+without asking first, rather than failing later on a missing branch or an
+`ImportError`.
 
 ## 1. Resolve mode and fetch the plan data
 
@@ -54,12 +55,12 @@ remote/branch precedence (`git config claude.personalNotesRemote` → env var
 into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines every other script/hook path
 this document references below (`BUILD_INDEX_MODULE`,
 `REFRESH_DASHBOARD_SCRIPT`, `WRITE_PERSONAL_NOTES_FILE_SCRIPT`,
-`BASSTLER_PYPROJECT_FILE`, ...) — read that file if you need the
+`BASSTLER_PYTHON`, ...) — read that file if you need the
 precise logic or the full list of what it defines. Every bash block in this
 document assumes it's already been sourced once per session:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 ```
 
@@ -77,6 +78,27 @@ git cat-file -e "FETCH_HEAD:.claude/personal/plans/<plan-id>/plan.yaml" || {
 git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/plan.yaml" > /tmp/plan.yaml
 git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/roadmap.md" > /tmp/roadmap.md  # roadmap.md is always the fixed filename, never configurable
 ```
+
+Also extract every plan's manifest, into one directory — a `depends_on` entry
+may name an item in another plan (`<plan-id>/<item-id>`, see `plan-schema.md`),
+and that plan's own manifest is the only thing that can resolve it. This is one
+extraction whether the manifest uses the form or not, so do it every run
+rather than reading the manifest first to find out:
+
+```bash
+mkdir -p /tmp/plans
+git archive FETCH_HEAD "${PLANS_DIR}" \
+  | tar -x --strip-components=3 -C /tmp/plans --wildcards '*/plan.yaml'
+```
+
+Manifests only, and no roadmaps: the tooling opens a plan's manifest only when
+a `depends_on` entry names that plan, and never reads another plan's roadmap at
+all. Do not read any of these files yourself — the point of a per-plan size
+budget is lost the moment one plan's dashboard run pulls another plan's
+contents into the session.
+
+A chip naming another plan's item links to it only on the plan site, where
+every plan's page has a known address; on an Artifact it is plain text.
 
 **Master-index mode:** enumerate every plan instead of one:
 
@@ -106,7 +128,9 @@ when the fallback applies.
 
 Follow `pr-data-fetching.md`'s procedure (next to this file) to assemble
 `/tmp/pr_data.json` for every pull request referenced by any item in this
-plan.
+plan, plus any pull request a cross-plan `depends_on` entry names — the
+dashboard shows that foreign item's live state too, against its own plan's
+repository.
 
 Everything from here on is deterministic - **run `refresh_dashboard.sh`**
 rather than reproducing its steps by hand:
@@ -118,22 +142,25 @@ bash "${REFRESH_DASHBOARD_SCRIPT}" \
   --roadmap /tmp/roadmap.md \
   --pr-data /tmp/pr_data.json \
   --output /tmp/dashboard.html \
+  --plans-dir /tmp/plans \
   --tracking-url "<html_url from step 1, if any>"   # omit if the plan has no tracking_issue
 ```
 
-It runs `sync_manifest_status.py` first - `status` is a manually-maintained
+It runs `plan/sync_manifest_status.py` first - `status` is a manually-maintained
 field for everything except one direction: once GitHub confirms a PR is
 merged, the item is done, and that's not a judgment call - unlike every
 other kind of drift (a bad PR number, "done" while still open, closed
 unmerged against an active status), there's no ambiguity to leave for a
 human. If that finds anything to correct, it pushes the patched
 `plan.yaml` back to the personal-notes branch resolved in step 1 (via
-`.claude/hooks/write-personal-notes-file.sh`) *before* rendering, so the
+`hooks/write-personal-notes-file.sh`) *before* rendering, so the
 dashboard reflects corrected data instead of reporting the same "merged but
 not marked done" drift forever; if nothing needed correcting, nothing is
-pushed. It then runs `build_dashboard.py`, which validates the manifest
+pushed. It then runs `dashboard/plan_page.py`, which validates the manifest
 (schema version, unique ids, track/wave/depends_on references — the exact
-checks `plan-create` must also satisfy), classifies every item's live state
+checks `plan-create` must also satisfy, including a `depends_on` entry naming
+another plan, which is resolved against `--plans-dir` and refused if that
+plan or item isn't there), classifies every item's live state
 (`merged` | `open_draft` | `open_ready` | `closed_unmerged` | `not_found`),
 computes drift, builds the "ready to start"/"blocker may be cleared" lists
 (a blocked item whose dependency becomes ready always lands in "blocker may
@@ -174,11 +201,12 @@ If `refresh_dashboard.sh` exits non-zero, the manifest failed validation —
 its stderr says exactly what's wrong (which field, which value). Report
 that to the user instead of trying to patch around it yourself; a broken
 manifest is something they need to know about, not paper over. Requires
-PyYAML, Jinja2, and the `markdown` package —
-`pip install "./${BASSTLER_PACKAGE_DIRECTORY}"` if any are missing.
+the package's environment, which every session start creates and installs
+the package's dependencies into — `hooks/session-start.sh` again if
+its `dependencies:` line reported a failure.
 
-On success it prints one merged JSON summary on stdout: `sync_manifest_status.py`'s
-own `{"corrected": [...]}` plus `build_dashboard.py`'s status counts, drift
+On success it prints one merged JSON summary on stdout: `plan/sync_manifest_status.py`'s
+own `{"corrected": [...]}` plus `dashboard/plan_page.py`'s status counts, drift
 count, and drifted/ready/recheck item titles - keep it, you need it for
 step 4's report without re-parsing the HTML you just wrote or re-deriving
 what got auto-corrected. In master-index mode, run `refresh_dashboard.sh`
@@ -186,12 +214,12 @@ for every plan before building that plan's index entry.
 
 **Master-index mode** instead assembles one summary object per plan (`id`,
 `title`, `description`, `done`/`total` counts from each plan's own
-`build_dashboard.py` run or a quick count over its `items[]`, and
+`dashboard/plan_page.py` run or a quick count over its `items[]`, and
 `dashboard_url` from the URL cache — `null` if never published) into a JSON
 list, then:
 
 ```bash
-python3 -m "${BUILD_INDEX_MODULE}" \
+"${BASSTLER_PYTHON}" -m "${BUILD_INDEX_MODULE}" \
   --plans /tmp/plans.json \
   --output /tmp/index.html
 ```
@@ -231,7 +259,7 @@ title. Then:
 
 ```bash
 git show "FETCH_HEAD:${DASHBOARD_URL_CACHE_PATH}" > /tmp/dashboard-urls.yaml
-python3 -m "${RECORD_DASHBOARD_URL_MODULE}" \
+"${BASSTLER_PYTHON}" -m "${RECORD_DASHBOARD_URL_MODULE}" \
   --key <plan-id or _index> \
   --expected-title "<the plan's own title: from plan.yaml, or the index page's title>" \
   --listing /tmp/artifact_listing.json \
@@ -262,7 +290,7 @@ or working tree.
 ## 4. Report back
 
 Summarize for the user from the JSON summaries step 2 printed: item counts by
-status, every item `sync_manifest_status.py` auto-corrected to done (by
+status, every item `plan/sync_manifest_status.py` auto-corrected to done (by
 name, since that's a manifest edit the user didn't ask for line by line),
 every remaining drift flag by name, and every item now ready to review by
 name — this is the actionable output, don't bury it under a wall of
@@ -284,10 +312,27 @@ a recorded field stale, before the work that follows. When something asks you
 to run `/plan-dashboard`, that is this rule finishing — a published dashboard older
 than the manifest behind it is the staleness the whole system exists to catch.
 
+## The plan site
+
+The same pages are also built as one static site that belongs to no account:
+the hub at its root, one card per repository; `<owner>/<repo>/` that
+repository's plans; `<owner>/<repo>/<plan>/` a plan's dashboard, each linking
+back up. The hub file, `${PLAN_HUB_PATH}` on every registered repository's
+notes branch, names the site's address, the registry repository and every
+repository listed; the session-start summary's `plan site` line prints where
+this session's work sits on it. To build the site by hand:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${BUILD_SITE_MODULE}" --registry <owner/repo> --output /tmp/site
+```
+
+Never publish a hub page as an Artifact: an Artifact belongs to the account
+that published it, which is exactly what the site exists to avoid.
+
 ## Refreshing after a manifest edit
 
 This skill is the second half of the refresh loop
-`.claude/hooks/save-plan.sh` starts: that script pushes an edited
+`hooks/save-plan.sh` starts: that script pushes an edited
 `plan.yaml`/`roadmap.md` and regenerates the branch reverse index, but it
 cannot call the `Artifact` tool itself (only a live Claude session can) — it
 prints a reminder to run `/plan-dashboard <plan-id>` afterward, which is

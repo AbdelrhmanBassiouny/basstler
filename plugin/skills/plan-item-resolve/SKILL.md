@@ -1,6 +1,6 @@
 ---
 name: plan-item-resolve
-description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, roadmap.md history, the real state of its branch/PR - conflicts, CI, review comments, and any unresolved review threads on its upstream pull request - and any relevant discussion on its plan's tracking issue), then resolve whatever is stalling it in whichever execution mode is in force - presenting a plan for approval, carrying it out directly on the item's existing branch, or asking which. Invoke as "/plan-item-resolve <plan-id> <item-id>". Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
+description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, the plan's standing rules, the real state of its branch/PR - conflicts, CI, review comments, and any unresolved review threads on its upstream pull request - and any relevant discussion on its plan's tracking issue), then resolve whatever is stalling it in whichever execution mode is in force - presenting a plan for approval, carrying it out directly on the item's existing branch, or asking which. Invoke as "/plan-item-resolve <plan-id> <item-id>", or as "/plan-item-resolve <pull-request-number>" to resolve the item that pull request's branch is tracked by - or, when no plan tracks it, the pull request on its own. Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__update_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -10,9 +10,11 @@ Generic, plan-agnostic — nothing here may hardcode a specific plan id,
 item, or branch. Unlike `plan-item-kickoff` (for an item that hasn't
 started), this skill is for an item that already has real state - a
 branch, a PR, prior review, a recorded blocker - and needs that state
-understood before deciding what to do next.
+understood before deciding what to do next. A pull request no plan tracks is
+resolved the same way; see *Untracked pull requests* below for what changes.
 
-**Step 1 is research only — it creates nothing and writes no code.**
+**Step 1 is research only — apart from the stack pass it starts with, it creates
+nothing and writes no code.**
 Step 2 resolves the item's execution mode, and that mode decides what
 happens next: `plan` presents the plan and stops until the user approves it,
 `auto` carries it out on the item's existing branch without asking, and
@@ -28,7 +30,7 @@ resume any other session.
 
 Follow `${PLAN_ITEM_GATHERING_DOCUMENT}` end to end — the setup check, the
 item's resolution off the personal-notes branch, the tracking-issue
-subscription, its recorded state, the full roadmap read, the dependency
+subscription, its recorded state, the plan's standing rules, the dependency
 chain, and the standing conventions. `plan-item-kickoff` runs the same
 procedure, which is why it lives there rather than in either skill.
 
@@ -44,27 +46,19 @@ already exists**, which is where the cause of a stall almost always is:
   exists to surface. A failing check or a requested-changes review is
   usually the actual blocker; state exactly which one and why, don't just
   say "CI is failing."
-- If the fork PR carries the `in_review_label` from `basstler/stack.toml`
-  (`in-review` by default, the recorded signal for "promoted upstream, under
-  review"), the branch also has a pull request on the upstream, whose review
-  threads none of the calls above can see — a fork PR can look entirely clean
-  while the item is in fact stalled on an upstream request for changes. Invoke
-  `/upstream-reviews` for the item's `branch` and read every unresolved thread
-  it reports. Invoke it even without the label when `notes`/`status` say the
-  item is under upstream review; skip it otherwise, since a branch never
-  promoted has no upstream PR to read. If the dispatch or the run fails, don't
-  let that fail the skill: mention it when presenting the plan (step 5) and
-  continue — upstream state is valuable context, not a precondition.
-- If the fork PR carries the `in_review_label` from `.claude/stack/stack.toml`
-  (`in-review` by default, the recorded signal for "promoted upstream, under
-  review"), the branch also has a pull request on the upstream, whose review
-  threads none of the calls above can see — a fork PR can look entirely clean
-  while the item is in fact stalled on an upstream request for changes. Invoke
-  `/upstream-reviews` for the item's `branch` and read every unresolved thread
-  it reports. Invoke it even without the label when `notes`/`status` say the
-  item is under upstream review; skip it otherwise, since a branch never
-  promoted has no upstream PR to read. If the dispatch or the run fails, don't
-  let that fail the skill: mention it when drafting the plan (step 3) and
+- If the item has a `branch`, invoke `/upstream-reviews` for it and read every
+  unresolved thread it reports — always, whatever state the fork PR is in. The
+  branch may also have a pull request on the upstream, whose review threads
+  none of the calls above can see, and a fork PR can look entirely clean while
+  the item is in fact stalled on an upstream request for changes. Nothing this
+  session can read tells it whether that upstream pull request exists — its
+  GitHub scope is the fork alone, and the label recording the promotion can be
+  missing while the upstream pull request exists, so its absence is no evidence.
+  `/upstream-reviews`
+  settles it where the read is permitted, and reports a branch with no upstream
+  pull request as a clean answer, so a pre-check would buy nothing and skip the
+  case this bullet exists to catch. If the dispatch or the run fails, don't let
+  that fail the skill: mention it when drafting the plan (step 3) and
   continue — upstream state is valuable context, not a precondition.
 - If the item has no PR yet (e.g. blocked before ever starting): there is
   no PR-side state to check — rely on `blockers`/`notes` and the tracking
@@ -78,11 +72,11 @@ already exists**, which is where the cause of a stall almost always is:
   (`mcp__github__pull_request_read` for the diff/description,
   `mcp__github__get_file_contents` or a local `git fetch` + `git show` for
   the real file contents) before proposing anything — the plan must resolve
-  the real, current state, not a guessed one. For sibling items in the same
-  track that already landed, read their merged diffs the same way
-  `plan-item-kickoff` does, when the resolution involves matching an
-  established pattern (e.g. a review comment asking this item to follow what
-  a later sibling already settled on).
+  the real, current state, not a guessed one. When the resolution involves
+  matching an established pattern (e.g. a review comment asking this item to
+  follow what a later pull request already settled on), read the merged pull
+  requests that last changed the same files, the way `plan-item-kickoff`
+  does.
 
 ## 2. Resolve how this item gets resolved
 
@@ -108,8 +102,8 @@ it down now rather than after the resolution, following
 `${MANIFEST_STALENESS_DOCUMENT}`:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" update \
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" update \
     --plan <plan-id> --item <item-id> \
     [--status <status>] [--blockers <file> ...] \
     [--notes <file> | --append-notes <file>]
@@ -154,8 +148,8 @@ explicitly, never silently paper over:
 - Any conflict between the fork PR's state and the upstream review: a fork
   PR that is green and out of draft while its upstream pull request has
   unresolved threads is exactly the stall this skill exists to surface.
-- Whether upstream review state was read at all, when the item looked
-  promoted but `/upstream-reviews` could not be run.
+- Whether upstream review state was read at all, when the item has a branch
+  but `/upstream-reviews` could not be run.
 - Anything genuinely unresolved after the check above — say so rather
   than filling the gap with an assumption.
 
@@ -177,15 +171,37 @@ own git identity, no assistant author or co-author trailer.
 bar for stopping to ask anyway. Two things are this skill's own, because the
 item is already underway rather than being started:
 
-- **The record is an update, not a first draft.** Append what the resolution
-  turned out to be to `roadmap.md` — especially a blocker whose recorded
-  cause turned out to be wrong — and refresh the PR-progress note and the
-  pull request description rather than writing them from scratch. Update the
-  item's `blockers`, `notes` and `status` where the resolution changed what
-  the item means, then republish the dashboard with `/plan-dashboard`.
+- **The record is an update, not a first draft.** Rewrite the item's
+  `blockers`, `notes` and `status` to say what is true now - replacing a
+  blocker whose recorded cause turned out to be wrong rather than adding to
+  it - and refresh the PR-progress note and the pull request description the
+  same way. What the resolution was, and why, belongs in the pull request,
+  not in `roadmap.md`; add a roadmap entry only for a rule every later item
+  must follow. Then republish the dashboard with `/plan-dashboard`.
 - **The pull request goes back to draft after the push**, per the user's own
   convention, unless they marked it ready themselves — in which case the
   item was finished and this skill should not have been resolving it.
 
+Once the fix is pushed, carry it into the pull requests stacked on this item's
+branch, which a resolve otherwise leaves holding the state it replaced — follow
+[`propagating-a-fix.md`](./propagating-a-fix.md).
+
 Finish by reporting what was wrong, what was changed, and what was decided —
 in `auto` mode this report is the user's first look at the resolution.
+
+## Untracked pull requests
+
+When invoked with a pull request number whose branch no plan tracks, resolve
+the pull request itself. Every step above runs, with these differences:
+
+- **Step 1** skips the plan-reading parts `${PLAN_ITEM_GATHERING_DOCUMENT}`
+  names, and the tracking-issue bullet above. Everything about the pull
+  request's live state - checks, review threads, comments, `/upstream-reviews`,
+  the diff - is read exactly as for a tracked item, and the branch's
+  PR-progress note on the personal-notes branch, if it has one, stands in for
+  the item's `notes`.
+- **Step 3** also asks whether the pull request belongs in a plan: run
+  `${SCOPE_DECISION_DOCUMENT}` against the existing plans. If one fits, say
+  which and why, and offer `/add-plan-item` rather than adding it unasked.
+- **Step 4**'s record is the PR-progress note and the pull request
+  description; there is no `plan.yaml` entry or dashboard to update.
