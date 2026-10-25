@@ -1,9 +1,10 @@
 schema_version: 1
 id: stack-maintenance
 title: 'The maintenance pass: running a stack of pull requests'
-description: 'What keeps a stack of pull requests moving without a person driving each step: a deterministic
-  executor that fast-forwards, restacks, promotes and reports, and the manifest kept current at every
-  transition. The integration branch was retired with the carryover (basstler#19, #28, #29).'
+description: 'What keeps a stack of pull requests moving without a person driving each step:
+  a deterministic executor that fast-forwards, restacks, promotes and reports, and the manifest
+  kept current at every transition. The integration branch was retired with the carryover
+  (basstler#19, #28, #29).'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 40
 waves:
@@ -24,13 +25,14 @@ items:
   track: pass
   blockers: []
   depends_on: []
-  notes: >
-    Every skill that can affect a plan writes the manifest and republishes the dashboard first, at
-    every point that makes a recorded field stale; adds item_bootstrap's update, check, resolve, block
-    and unblock, and fixes the manifest writer's multi-line-value corruption. Draft #48, carried from
-    CRAM #151; main merged in (5940e8f), porting the work onto basstler.plan's subpackage and main's
-    standing-rule record. Absorbs plan-tracking-skills' plan-item-bootstrap-yaml-indent (CRAM #160),
-    now covered by main's indent reading plus this branch's indentless-manifest tests.
+  notes: 'Every skill that can affect a plan writes the manifest at each transition and republishes
+    the dashboard once per turn; adds item_bootstrap''s update, check, resolve, block and
+    unblock, and fixes the manifest writer''s multi-line-value corruption. Draft #48 (from
+    CRAM #151); 25 Oct review addressed in b8705cf. Open: whether dashboard token economy
+    (skip an unchanged republish, a small artifact read) is a follow-up item or joins this
+    PR. Absorbs CRAM #160''s indent fix.
+
+    '
 - id: promotion-summaries-and-table
   title: Promote with a written summary, and send no notification
   branch: null
@@ -38,10 +40,10 @@ items:
   status: not_started
   track: pass
   depends_on: []
-  notes: 'The script builds the compare-and-create link; the upstream pull request opens with a title
-    and a point-based summary linking back to the fork pull request; nothing sends a notification. The
-    session table of links moved to finish-summary-markdown. Not started here: CRAM #162''s bastler/-era
-    branch is retired in #50, whose last commit is the reference.'
+  notes: 'The script builds the compare-and-create link; the upstream pull request opens with
+    a title and a point-based summary linking back to the fork pull request; nothing sends
+    a notification. The session table of links moved to finish-summary-markdown. Not started
+    here: CRAM #162''s bastler/-era branch is retired in #50, whose last commit is the reference.'
 - id: stack-state-from-github
   title: Derive in-review and CI from GitHub instead of hand-kept labels
   branch: null
@@ -49,11 +51,12 @@ items:
   status: not_started
   track: pass
   depends_on: []
-  notes: 'Raised in review on basstler#15. The board export records each fork pull request''s open upstream
-    pull request and its head''s check verdict (RollupState via CheckStatus.over), replacing the never-filled
-    ci field; in-review is derived from the upstream pull request and the pass keeps the in-review label
-    in sync; status shows CI and promotion withholds failing branches. Based on main: #15, which split
-    stack_model.py out of stack.py, has merged. Three #15 threads point here.'
+  notes: 'Raised in review on basstler#15. The board export records each fork pull request''s
+    open upstream pull request and its head''s check verdict (RollupState via CheckStatus.over),
+    replacing the never-filled ci field; in-review is derived from the upstream pull request
+    and the pass keeps the in-review label in sync; status shows CI and promotion withholds
+    failing branches. Based on main: #15, which split stack_model.py out of stack.py, has
+    merged. Three #15 threads point here.'
 - id: pass-commit-graph
   title: Write a commit-graph at the start of a pass, measured against a profiled baseline
   branch: null
@@ -61,10 +64,11 @@ items:
   status: not_started
   track: pass
   depends_on: []
-  notes: A CRAM pass (133 PRs) took about 6 min; stack check spent 8.3 s on 133 merge-base --is-ancestor
-    calls (about 60 ms each) in a shallow clone with no commit-graph. Run git commit-graph write --reachable
-    at pass start. First profile a full run-report with GIT_TRACE2 and put the before/after numbers in
-    the PR; the baseline is what the later performance items measure against.
+  notes: A CRAM pass (133 PRs) took about 6 min; stack check spent 8.3 s on 133 merge-base
+    --is-ancestor calls (about 60 ms each) in a shallow clone with no commit-graph. Run git
+    commit-graph write --reachable at pass start. First profile a full run-report with GIT_TRACE2
+    and put the before/after numbers in the PR; the baseline is what the later performance
+    items measure against.
 - id: landed-predicate-once
   title: Compute the landed predicate once per run and hand it to every phase
   branch: null
@@ -73,8 +77,8 @@ items:
   track: pass
   depends_on: []
   notes: Board, reparents, fast-forward, restack, promote and landed each rebuild the ancestry-against-upstream-base
-    predicate (CurrentCheckout.merged_predicate, src/basstler/stack/checkout.py). Compute it once per
-    run and pass it to every phase. Measure with GIT_TRACE2 per the roadmap rule.
+    predicate (CurrentCheckout.merged_predicate, src/basstler/stack/checkout.py). Compute
+    it once per run and pass it to every phase. Measure with GIT_TRACE2 per the roadmap rule.
 - id: skip-unmoved-branches
   title: Skip a branch before any merge work when nothing it depends on moved
   branch: null
@@ -83,10 +87,10 @@ items:
   track: pass
   depends_on:
   - landed-predicate-once
-  notes: 'Of 129 restacked branches in the CRAM pass, 82 were up to date and 24 withheld: about 80 % no-op
-    work. Prefer a stateless test: parent tip already an ancestor of head means up to date; withheld state
-    already lives in the labels. A stored fingerprint only if truly needed, under the roadmap''s storage
-    rule.'
+  notes: 'Of 129 restacked branches in the CRAM pass, 82 were up to date and 24 withheld:
+    about 80 % no-op work. Prefer a stateless test: parent tip already an ancestor of head
+    means up to date; withheld state already lives in the labels. A stored fingerprint only
+    if truly needed, under the roadmap''s storage rule.'
 - id: parallel-merge-tree-probes
   title: Run the read-only merge-tree probes in parallel, keeping pushes serial
   branch: null
@@ -95,30 +99,17 @@ items:
   track: pass
   depends_on:
   - skip-unmoved-branches
-  notes: stack check ran 133 sequential merge-tree probes (5.2 s in the CRAM pass). Run the read-only
-    probes in parallel; every push and label write stays serial. Probes only the branches skip-unmoved-branches
-    leaves. Measure with GIT_TRACE2 per the roadmap rule.
-- id: finish-summary-markdown
-  title: run-report prints the finish summary as markdown, with titles on board entries
-  branch: claude/gallant-sagan-s2nwxi
-  pull_request_number: 68
-  status: done
-  track: pass
-  depends_on: []
-  notes: 'The 138 KB report JSON had to be sliced by hand, and titles cost a 25 KB list_pull_requests.
-    Board entries carry title; run-report prints, in the skill''s order: pending upstream links incl.
-    earlier runs'' (promotion-link-sent, not in-review) with titles; reported branches with comment links;
-    stuck reparents; landed but open; restacked/pushed; withheld (one line); skipped with reasons. Long
-    prefilled bodies get a title-only fallback link. JSON stays for tooling.'
-  session: https://claude.ai/code/session_01DUFP6K7toteAZTzLdMMy9o
+  notes: stack check ran 133 sequential merge-tree probes (5.2 s in the CRAM pass). Run the
+    read-only probes in parallel; every push and label write stays serial. Probes only the
+    branches skip-unmoved-branches leaves. Measure with GIT_TRACE2 per the roadmap rule.
 - id: maintenance-skill-steps-only
   title: Cut the stacked-pr-maintenance skill to its steps and move the rationale to the docs
   branch: null
   pull_request_number: null
   status: not_started
   track: pass
-  depends_on:
-  - finish-summary-markdown
-  notes: plugin/skills/stacked-pr-maintenance/SKILL.md is 17 KB and read every pass. Keep only the steps;
-    the finish step becomes 'relay run-report's summary'. Rationale moves to docs/stack/. team-basstler's
-    lean-kickoff caps skill document sizes; this file should fall under that cap.
+  depends_on: []
+  notes: plugin/skills/stacked-pr-maintenance/SKILL.md is 17 KB and read every pass. Keep
+    only the steps; the finish step becomes 'relay run-report's summary'. Rationale moves
+    to docs/stack/. team-basstler's lean-kickoff caps skill document sizes; this file should
+    fall under that cap.
