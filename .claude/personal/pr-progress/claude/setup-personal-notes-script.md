@@ -4,10 +4,9 @@ Port the session-free personal-notes setup onto main's src layout as
 Labels: main's `GitHubLabel` set as is (owner's call, 2026-10-25).
 
 ## Done
-- Merged main, taking main's tree (the flat-layout port is dropped).
+- Merged main (main's tree), ported the command, report model and label API.
+- 16 tests; full suite green (1278). PR #45 description and release:minor set.
 
 ## Next
-- Move check-setup.sh's report model from the test into `basstler.setup`.
-- Add labels/login reads and label creation to `GitHubRepository`.
-- Port the command with tests; rewrite SKILL.md; update PR #45's description.
-- Label creation against a real token is still unverified (stubbed only).
+- Label creation against a real token is still unverified (in-memory only).
+- Leave draft until told otherwise.
