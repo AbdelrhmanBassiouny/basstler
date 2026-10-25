@@ -13,20 +13,20 @@ import pytest
 import yaml
 
 from basstler.build_dashboard import (
+    InvalidSchemaVersion,
     ItemStatus,
     MissingPlanDirectory,
     PlanValidationError,
+    Plan,
+    PlanValidator,
     PullRequestRecord,
-    InvalidSchemaVersion,
     PullRequestState,
-    validate_plan,
 )
 from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_model import ManifestKey
 from basstler.sync_manifest_status import (
     MissingStatusLineError,
-    apply_status_corrections,
-    find_items_to_correct,
+    StatusCorrection,
     main,
 )
 
@@ -42,7 +42,7 @@ from .fixture_plans import (
 def plan(**overrides: Any) -> dict[str, Any]:
     """
     Build one raw, plan.yaml-shaped ``dict`` for a test - the same shape
-    ``yaml.safe_load`` would produce, since ``find_items_to_correct``
+    ``yaml.safe_load`` would produce, since :meth:`StatusCorrection.items_to_correct`
     operates directly on that raw structure, never on a parsed :class:`Plan`.
     """
     data = {
@@ -79,8 +79,8 @@ def item(
 
     ``status`` is a plain ``str``, not :class:`ItemStatus`: this mirrors exactly what
     ``yaml.safe_load`` hands back before any parsing into typed dataclasses happens,
-    since ``find_items_to_correct`` and ``apply_status_corrections`` both work directly
-    on that raw structure.
+    since :meth:`StatusCorrection.items_to_correct` and
+    :meth:`StatusCorrection.apply_to` both work directly on that raw structure.
     """
     entry = {
         ManifestKey.IDENTIFIER.key: identifier,
@@ -97,7 +97,7 @@ def item(
     return entry
 
 
-# %% find_items_to_correct
+# %% finding items to correct
 
 
 def test_finds_an_in_progress_item_whose_pull_request_is_merged():
@@ -109,7 +109,9 @@ def test_finds_an_in_progress_item_whose_pull_request_is_merged():
         }
     }
     items = [item("a", "in_progress", pull_request_number=1)]
-    corrections = find_items_to_correct(plan(items=items), pull_requests_by_repository)
+    corrections = StatusCorrection.items_to_correct(
+        plan(items=items), pull_requests_by_repository
+    )
     assert [entry[ManifestKey.IDENTIFIER.key] for entry in corrections] == ["a"]
 
 
@@ -122,7 +124,12 @@ def test_ignores_an_item_already_marked_done():
         }
     }
     items = [item("a", "done", pull_request_number=1)]
-    assert find_items_to_correct(plan(items=items), pull_requests_by_repository) == []
+    assert (
+        StatusCorrection.items_to_correct(
+            plan(items=items), pull_requests_by_repository
+        )
+        == []
+    )
 
 
 def test_ignores_an_item_whose_pull_request_is_still_open():
@@ -130,12 +137,17 @@ def test_ignores_an_item_whose_pull_request_is_still_open():
         "owner/repo": {"1": PullRequestRecord(state=PullRequestState.OPEN, draft=False)}
     }
     items = [item("a", "in_progress", pull_request_number=1)]
-    assert find_items_to_correct(plan(items=items), pull_requests_by_repository) == []
+    assert (
+        StatusCorrection.items_to_correct(
+            plan(items=items), pull_requests_by_repository
+        )
+        == []
+    )
 
 
 def test_ignores_an_item_with_no_pull_request_yet():
     items = [item("a", "not_started")]
-    assert find_items_to_correct(plan(items=items), {}) == []
+    assert StatusCorrection.items_to_correct(plan(items=items), {}) == []
 
 
 def test_merged_via_out_of_band_label_is_also_corrected():
@@ -145,7 +157,9 @@ def test_merged_via_out_of_band_label_is_also_corrected():
         }
     }
     items = [item("a", "blocked", pull_request_number=1)]
-    corrections = find_items_to_correct(plan(items=items), pull_requests_by_repository)
+    corrections = StatusCorrection.items_to_correct(
+        plan(items=items), pull_requests_by_repository
+    )
     assert [entry[ManifestKey.IDENTIFIER.key] for entry in corrections] == ["a"]
 
 
@@ -160,14 +174,16 @@ def test_uses_the_item_repository_override_over_the_plan_default():
     items = [
         item("a", "in_progress", pull_request_number=1, repository="owner/other-repo")
     ]
-    corrections = find_items_to_correct(plan(items=items), pull_requests_by_repository)
+    corrections = StatusCorrection.items_to_correct(
+        plan(items=items), pull_requests_by_repository
+    )
     assert [entry[ManifestKey.IDENTIFIER.key] for entry in corrections] == ["a"]
 
 
-# %% apply_status_corrections - real manifest text
+# %% applying corrections - real manifest text
 
 # A real plan.yaml's raw text (two items, one due for correction) - loaded
-# once and shared read-only by every test below, since apply_status_corrections
+# once and shared read-only by every test below, since StatusCorrection.apply_to
 # patches text in place and each test asserts against its own fresh copy of
 # the return value rather than mutating this constant.
 MANIFEST_TEXT = (DatasetLocation.DIRECTORY / "manifest.yaml").read_text()
@@ -175,7 +191,7 @@ MANIFEST_TEXT = (DatasetLocation.DIRECTORY / "manifest.yaml").read_text()
 
 def test_patches_only_the_targeted_items_status_line():
     data = yaml.safe_load(MANIFEST_TEXT)
-    patched_text, corrections = apply_status_corrections(
+    patched_text, corrections = StatusCorrection.apply_to(
         MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
     )
     assert "    status: done" in patched_text
@@ -186,7 +202,7 @@ def test_patches_only_the_targeted_items_status_line():
 
 def test_patching_leaves_every_other_line_byte_for_byte_identical():
     data = yaml.safe_load(MANIFEST_TEXT)
-    patched_text, _ = apply_status_corrections(
+    patched_text, _ = StatusCorrection.apply_to(
         MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
     )
     original_lines = MANIFEST_TEXT.split("\n")
@@ -201,7 +217,48 @@ def test_patching_leaves_every_other_line_byte_for_byte_identical():
 
 def test_patched_text_still_parses_and_validates():
     data = yaml.safe_load(MANIFEST_TEXT)
-    patched_text, _ = apply_status_corrections(
+    original = Plan.from_mapping(data)
+    patched_text, _ = StatusCorrection.apply_to(
+        MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
+    )
+    reparsed = yaml.safe_load(patched_text)
+    PlanValidator(reparsed).validate()  # must not raise
+    patched = Plan.from_mapping(reparsed)
+    assert patched.items[0].status is ItemStatus.DONE
+    assert patched.items[0].notes == original.items[0].notes
+
+
+def test_patches_a_status_line_spelled_with_spaces():
+    text = (
+        DatasetLocation.DIRECTORY / "manifest-with-spaced-statuses.yaml"
+    ).read_text()
+    data = yaml.safe_load(text)
+    patched_text, corrections = StatusCorrection.apply_to(
+        text, [data[ManifestKey.ITEMS.key][0]]
+    )
+    patched = Plan.from_mapping(yaml.safe_load(patched_text))
+    assert patched.items[0].status is ItemStatus.DONE
+    assert [c.previous_status for c in corrections] == [ItemStatus.IN_PROGRESS]
+
+
+def test_patching_leaves_every_other_line_byte_for_byte_identical():
+    data = yaml.safe_load(MANIFEST_TEXT)
+    patched_text, _ = StatusCorrection.apply_to(
+        MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
+    )
+    original_lines = MANIFEST_TEXT.split("\n")
+    patched_lines = patched_text.split("\n")
+    changed_line_pairs = [
+        (before, after)
+        for before, after in zip(original_lines, patched_lines)
+        if before != after
+    ]
+    assert changed_line_pairs == [("    status: in_progress", "    status: done")]
+
+
+def test_patched_text_still_parses_and_validates():
+    data = yaml.safe_load(MANIFEST_TEXT)
+    patched_text, _ = StatusCorrection.apply_to(
         MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
     )
     reparsed = yaml.safe_load(patched_text)
@@ -220,13 +277,13 @@ def test_patches_a_status_line_spelled_with_spaces():
         DatasetLocation.DIRECTORY / "manifest-with-spaced-statuses.yaml"
     ).read_text()
     data = yaml.safe_load(text)
-    patched_text, corrections = apply_status_corrections(text, [data["items"][0]])
+    patched_text, corrections = StatusCorrection.apply_to(text, [data["items"][0]])
     assert yaml.safe_load(patched_text)["items"][0]["status"] == ItemStatus.DONE.value
     assert [c.previous_status for c in corrections] == [ItemStatus.IN_PROGRESS]
 
 
 def test_no_items_to_correct_returns_original_text_unchanged():
-    patched_text, corrections = apply_status_corrections(MANIFEST_TEXT, [])
+    patched_text, corrections = StatusCorrection.apply_to(MANIFEST_TEXT, [])
     assert patched_text == MANIFEST_TEXT
     assert corrections == []
 
@@ -234,7 +291,7 @@ def test_no_items_to_correct_returns_original_text_unchanged():
 def test_raises_if_an_item_has_no_status_line():
     text = "- id: a\n  title: A\n  branch: a\n"
     with pytest.raises(MissingStatusLineError, match="no status: line"):
-        apply_status_corrections(
+        StatusCorrection.apply_to(
             text,
             [{ManifestKey.IDENTIFIER.key: "a", ManifestKey.BRANCH.key: "a"}],
         )
@@ -264,7 +321,7 @@ def test_main_rejects_an_invalid_manifest_instead_of_crashing(
     exit_code = main()
     assert exit_code == 1
     with pytest.raises(PlanValidationError) as expected_error:
-        validate_plan(None)
+        PlanValidator(None).validate()
     assert capsys.readouterr().err == (
         f"plan.yaml failed validation: {expected_error.value}\n"
     )
@@ -429,7 +486,7 @@ def test_main_rejects_a_cross_plan_reference_without_the_plans_directory(
     exit_code = _run_main(plan_path, pull_request_data_path, monkeypatch)
     assert exit_code == 1
     with pytest.raises(PlanValidationError) as expected_error:
-        validate_plan(yaml.safe_load(plan_path.read_text()))
+        PlanValidator(yaml.safe_load(plan_path.read_text())).validate()
     assert [type(problem) for problem in expected_error.value.problems] == [
         MissingPlanDirectory
     ]

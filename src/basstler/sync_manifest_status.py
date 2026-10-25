@@ -59,12 +59,11 @@ import yaml
 from basstler.build_dashboard import (
     ItemStatus,
     LiveState,
-    PlanDirectory,
+    PlanCommandArguments,
     PlanValidationError,
-    classify_live_state,
-    load_pull_requests_by_repository,
-    validate_plan,
+    PlanValidator,
 )
+from basstler.plan_model import ManifestKey
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -124,88 +123,90 @@ class StatusCorrection:
         """
         return {"id": self.item_identifier, "previous_status": self.previous_status}
 
+    @classmethod
+    def items_to_correct(
+        cls,
+        plan: dict[str, Any],
+        pull_requests_by_repository: dict[str, dict[str, Any]],
+    ) -> list[dict[str, Any]]:
+        """Find every item whose pull request is merged on GitHub but whose manifest
+        ``status`` isn't already ``done``.
 
-def find_items_to_correct(
-    plan: dict[str, Any],
-    pull_requests_by_repository: dict[str, dict[str, Any]],
-) -> list[dict[str, Any]]:
-    """Find every item whose pull request is merged on GitHub but whose manifest
-    ``status`` isn't already ``done``.
-
-    :param plan: The raw, freshly-``yaml.safe_load``-ed plan.yaml content.
-    :param pull_requests_by_repository: Live pull request state for every repository
-        referenced by the plan's items.
-    :return: The raw item mappings that need correcting, in manifest order.
-    """
-    default_repository = plan["default_repository"]
-    return [
-        item
-        for item in plan.get("items", [])
-        if item.get("status") != ItemStatus.DONE.value
-        and classify_live_state(
-            item.get("pull_request_number"),
-            item.get("repository") or default_repository,
-            pull_requests_by_repository,
-        )
-        is LiveState.MERGED
-    ]
-
-
-def apply_status_corrections(
-    plan_text: str, items_to_correct: list[dict[str, Any]]
-) -> tuple[str, list[StatusCorrection]]:
-    """
-    Patch ``plan_text``'s ``status:`` line for each item in ``items_to_correct`` to
-    ``done``, leaving every other line untouched.
-
-    :param plan_text: The plan.yaml file's raw text.
-    :param items_to_correct: Raw item mappings (as found by
-        :func:`find_items_to_correct`) whose status line should become
-        ``done``.
-    :raises ValueError: If an item's ``status:`` line can't be found in its
-        block - the manifest and the parsed data have gone out of sync.
-    :return: The patched text, and the correction actually applied to each
-        item, in the same order as ``items_to_correct``.
-    """
-    identifiers_to_correct = {
-        item.get("id") or item.get("branch") for item in items_to_correct
-    }
-    lines = plan_text.split("\n")
-    item_starts = [
-        index
-        for index, line in enumerate(lines)
-        if ManifestLinePattern.ITEM_START.match(line)
-    ]
-    item_starts.append(len(lines))
-
-    corrections: list[StatusCorrection] = []
-    for start, end in zip(item_starts, item_starts[1:]):
-        item_identifier = lines[start].strip().removeprefix("- id:").strip()
-        if item_identifier not in identifiers_to_correct:
-            continue
-        status_line_index = next(
-            (
-                offset
-                for offset, line in enumerate(lines[start:end])
-                if ManifestLinePattern.STATUS_LINE.match(line)
-            ),
-            None,
-        )
-        if status_line_index is None:
-            raise MissingStatusLineError(
-                f"item {item_identifier!r} has no status: line to correct"
+        :param plan: The raw, freshly-``yaml.safe_load``-ed plan.yaml content.
+        :param pull_requests_by_repository: Live pull request state for every repository
+            referenced by the plan's items.
+        :return: The raw item mappings that need correcting, in manifest order.
+        """
+        default_repository = plan[ManifestKey.DEFAULT_REPOSITORY.key]
+        return [
+            item
+            for item in plan.get(ManifestKey.ITEMS.key, [])
+            if item.get(ManifestKey.STATUS.key) != ItemStatus.DONE.value
+            and LiveState.classify(
+                item.get(ManifestKey.PULL_REQUEST_NUMBER.key),
+                item.get(ManifestKey.REPOSITORY.key) or default_repository,
+                pull_requests_by_repository,
             )
-        line_index = start + status_line_index
-        match = ManifestLinePattern.STATUS_LINE.match(lines[line_index])
-        corrections.append(
-            StatusCorrection(
-                item_identifier=item_identifier,
-                previous_status=ItemStatus(match.group(2)),
-            )
-        )
-        lines[line_index] = f"{match.group(1)}{ItemStatus.DONE.value}"
+            is LiveState.MERGED
+        ]
 
-    return "\n".join(lines), corrections
+    @classmethod
+    def apply_to(
+        cls, plan_text: str, items_to_correct: list[dict[str, Any]]
+    ) -> tuple[str, list[StatusCorrection]]:
+        """
+        Patch ``plan_text``'s ``status:`` line for each item in ``items_to_correct`` to
+        ``done``, leaving every other line untouched.
+
+        :param plan_text: The plan.yaml file's raw text.
+        :param items_to_correct: Raw item mappings (as found by
+            :meth:`StatusCorrection.items_to_correct`) whose status line should become
+            ``done``.
+        :raises ValueError: If an item's ``status:`` line can't be found in its
+            block - the manifest and the parsed data have gone out of sync.
+        :return: The patched text, and the correction actually applied to each
+            item, in the same order as ``items_to_correct``.
+        """
+        identifiers_to_correct = {
+            item.get(ManifestKey.IDENTIFIER.key) or item.get(ManifestKey.BRANCH.key)
+            for item in items_to_correct
+        }
+        lines = plan_text.split("\n")
+        item_starts = [
+            index
+            for index, line in enumerate(lines)
+            if ManifestLinePattern.ITEM_START.match(line)
+        ]
+        item_starts.append(len(lines))
+
+        corrections: list[StatusCorrection] = []
+        for start, end in zip(item_starts, item_starts[1:]):
+            item_identifier = lines[start].strip().removeprefix("- id:").strip()
+            if item_identifier not in identifiers_to_correct:
+                continue
+            status_line_index = next(
+                (
+                    offset
+                    for offset, line in enumerate(lines[start:end])
+                    if ManifestLinePattern.STATUS_LINE.match(line)
+                ),
+                None,
+            )
+            if status_line_index is None:
+                raise MissingStatusLineError(
+                    f"item {item_identifier!r} has no status: line to correct"
+                )
+            line_index = start + status_line_index
+            match = ManifestLinePattern.STATUS_LINE.match(lines[line_index])
+            corrections.append(
+                cls(
+                    item_identifier=item_identifier,
+                    previous_status=ItemStatus(match.group(2)),
+                )
+            )
+            lines[line_index] = f"{match.group(1)}{ItemStatus.DONE.value}"
+
+        return "\n".join(lines), corrections
 
 
 def main() -> int:
@@ -217,49 +218,32 @@ def main() -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--plan", required=True, help="Path to plan.yaml")
-    parser.add_argument(
-        "--pr-data",
-        required=True,
-        help='Path to a JSON file: {"owner/repo": {"pr_number": {...}}}',
-    )
+    PlanCommandArguments.add_to(parser)
     parser.add_argument(
         "--output",
         default=None,
         help="Path to write the corrected plan.yaml to - defaults to --plan (in place)",
     )
-    parser.add_argument(
-        "--plans-dir",
-        default=None,
-        help=(
-            "Path to the directory holding every plan (<plan-id>/plan.yaml), "
-            "required only by a manifest whose depends_on names another plan"
-        ),
-    )
     arguments = parser.parse_args()
+    plan_arguments = PlanCommandArguments.from_namespace(arguments)
 
-    plan_path = Path(arguments.plan)
-    plan_text = plan_path.read_text()
+    plan_text = plan_arguments.plan_path.read_text()
     plan = yaml.safe_load(plan_text)
-    plan_directory = (
-        PlanDirectory(Path(arguments.plans_dir)) if arguments.plans_dir else None
-    )
-
     try:
-        validate_plan(plan, plan_directory)
+        PlanValidator(plan, plan_arguments.plan_directory).validate()
     except PlanValidationError as error:
         logger.error(f"plan.yaml failed validation: {error}")
         return 1
+    pull_requests_by_repository = plan_arguments.read_pull_requests_by_repository()
 
-    raw_pull_request_data = json.loads(Path(arguments.pr_data).read_text())
-    pull_requests_by_repository = load_pull_requests_by_repository(
-        raw_pull_request_data
+    items_to_correct = StatusCorrection.items_to_correct(
+        plan, pull_requests_by_repository
     )
+    corrected_text, corrections = StatusCorrection.apply_to(plan_text, items_to_correct)
 
-    items_to_correct = find_items_to_correct(plan, pull_requests_by_repository)
-    corrected_text, corrections = apply_status_corrections(plan_text, items_to_correct)
-
-    output_path = Path(arguments.output) if arguments.output else plan_path
+    output_path = (
+        Path(arguments.output) if arguments.output else plan_arguments.plan_path
+    )
     output_path.write_text(corrected_text)
 
     logger.info(json.dumps({"corrected": [c.to_json_dict() for c in corrections]}))

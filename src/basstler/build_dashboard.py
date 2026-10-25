@@ -34,7 +34,7 @@ report back without re-parsing the HTML it just wrote.
 
 Requires PyYAML (manifest parsing), Jinja2 (page rendering, via
 render_common.create_template_environment), and the ``markdown`` package
-(roadmap.md -> HTML).
+(roadmap.md -> HTML), plus rustworkx for the depends_on graph.
 """
 
 from __future__ import annotations
@@ -47,13 +47,16 @@ from collections import Counter
 from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum, StrEnum, auto
+from enum import StrEnum
+from functools import cached_property
 from pathlib import Path
 from typing import Any
 
+import rustworkx
 import yaml
 
 from basstler.class_property import classproperty
+from basstler.exceptions import DataclassException
 from basstler.github_labels import GitHubLabel
 from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_model import ItemStatus, ManifestKey
@@ -105,6 +108,36 @@ class LiveState(StrEnum):
                 return "Closed (unmerged)"
             case LiveState.NOT_FOUND:
                 return "Not found on GitHub"
+
+    @classmethod
+    def classify(
+        cls,
+        pull_request_number: int | None,
+        repository: str,
+        pull_requests_by_repository: PullRequestsByRepository,
+    ) -> LiveState:
+        """Classify one item's live GitHub state from its pull request number and repository.
+
+        :param pull_request_number: The item's tracked pull request number, or ``None`` if
+            it has no pull request yet.
+        :param repository: The ``"owner/repo"`` to look the pull request up under.
+        :param pull_requests_by_repository: Live pull request state for every repository
+            referenced by the plan's items.
+        :return: The classified state.
+        """
+        if pull_request_number is None:
+            return LiveState.NO_PULL_REQUEST
+        repository_pull_requests = pull_requests_by_repository.get(repository, {})
+        pull_request = repository_pull_requests.get(str(pull_request_number))
+        if pull_request is None:
+            return LiveState.NOT_FOUND
+        if pull_request.was_merged:
+            return LiveState.MERGED
+        if pull_request.state is PullRequestState.CLOSED:
+            return LiveState.CLOSED_UNMERGED
+        if pull_request.draft:
+            return LiveState.OPEN_DRAFT
+        return LiveState.OPEN_READY
 
 
 class PullRequestState(StrEnum):
@@ -172,27 +205,17 @@ class DependencyReference:
 
 
 @dataclass
-class ValidationProblem(ABC):
+class ValidationProblem(DataclassException):
     """A single problem found while validating a plan.yaml - see plan-schema.md.
 
     One dataclass subclass per validation rule, each carrying the specific
-    fields that rule cares about rather than a pre-formatted string - so a
-    caller that wants to react to (say) only duplicate-id problems can
-    ``isinstance()``-check for :class:`DuplicateItemId` instead of comparing
-    against a generic ``kind`` tag. Not an :class:`Exception` subclass:
-    these are collected as data by :func:`validate_plan` and never
-    individually raised - only the aggregate :class:`PlanValidationError`
-    ever is.
+    fields that rule cares about, so a caller can react to one kind of
+    problem with ``isinstance()``. :class:`PlanValidator` collects them and
+    raises them together as one :class:`PlanValidationError`.
     """
 
-    @abstractmethod
-    def error_message(self) -> str:
-        """The human-readable description of this problem, shown to the user."""
-
     def suggest_correction(self) -> str:
-        """
-        Default implementation for suggesting a correction for manifest validation problems.
-        """
+        """No validation rule suggests a correction of its own."""
         return ""
 
 
@@ -205,7 +228,6 @@ class InvalidManifestRoot(ValidationProblem):
     """Whatever the manifest actually parsed to."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"plan.yaml must parse to a mapping, got {type(self.actual_value).__name__}: {self.actual_value!r}"
 
 
@@ -223,7 +245,6 @@ class InvalidSchemaVersion(ValidationProblem):
         return 1
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return (
             f"schema_version must be {self.supported_version}, "
             f"got {self.actual_value!r}"
@@ -238,7 +259,6 @@ class DuplicateItemId(ValidationProblem):
     """Every identifier that occurred more than once."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"duplicate item id(s): {sorted(self.duplicate_identifiers)}"
 
 
@@ -253,7 +273,6 @@ class UnknownTrack(ValidationProblem):
     """Whatever ``track`` actually held."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} has unknown track {self.track!r}"
 
 
@@ -268,7 +287,6 @@ class UnknownStatus(ValidationProblem):
     """Whatever ``status`` actually held."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} has unknown status {self.status!r}"
 
 
@@ -288,7 +306,6 @@ class InvalidDependsOn(ValidationProblem):
     """The type ``depends_on`` actually held, instead of ``list``."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} depends_on must be a list, got {self.actual_type.__name__}"
 
 
@@ -308,7 +325,6 @@ class InvalidBlockers(ValidationProblem):
     """The type ``blockers`` actually held, instead of ``list``."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} blockers must be a list, got {self.actual_type.__name__}"
 
 
@@ -323,7 +339,6 @@ class UnknownDependency(ValidationProblem):
     """The unresolvable id named in ``depends_on``."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} depends_on unknown id {self.dependency_identifier!r}"
 
 
@@ -338,7 +353,6 @@ class UnknownDependencyPlan(ValidationProblem):
     """The whole reference, as the manifest wrote it."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} depends_on {self.dependency_identifier!r}, whose plan is not in the plans directory"
 
 
@@ -357,7 +371,6 @@ class SelfPlanReference(ValidationProblem):
     """The whole reference, as the manifest wrote it."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} depends_on {self.dependency_identifier!r}, which is this plan - name it by its bare id"
 
 
@@ -372,7 +385,6 @@ class MalformedDependencyReference(ValidationProblem):
     """The entry, as the manifest wrote it."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} depends_on malformed reference {self.dependency_identifier!r}"
 
 
@@ -392,7 +404,6 @@ class MissingPlanDirectory(ValidationProblem):
     """The reference that could not be resolved."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"item {self.item_identifier!r} depends_on {self.dependency_identifier!r} in another plan, but no plans directory was given to resolve it against"
 
 
@@ -407,7 +418,6 @@ class UnknownWave(ValidationProblem):
     """Whatever ``wave`` actually held."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"track {self.track_identifier!r} has unknown wave {self.wave!r}"
 
 
@@ -423,134 +433,32 @@ class DependencyCycle(ValidationProblem):
     at the end to show where it closes."""
 
     def error_message(self) -> str:
-        """See :meth:`ValidationProblem.describe`."""
         return f"depends_on cycle: {' -> '.join(self.cycle_identifiers)}"
 
 
-class PlanValidationError(Exception):
+@dataclass
+class PlanValidationError(DataclassException):
     """Raised when a plan.yaml fails schema validation - see plan-schema.md."""
 
-    def __init__(self, problems: list[ValidationProblem]) -> None:
-        self.problems = problems
-        """Every problem found - collected rather than stopping at the first
-        one, the same way a linter reports every violation in one pass
-        instead of one-error-at-a-time: a broken manifest is itself
-        something the user needs the full picture of, not a single
-        symptom they have to rediscover the rest of by trial and error."""
-        super().__init__("; ".join(problem.error_message() for problem in problems))
+    problems: list[ValidationProblem]
+    """Every problem found, so a broken manifest is reported in one pass
+    rather than one problem at a time."""
 
+    def error_message(self) -> str:
+        return "; ".join(problem.error_message() for problem in self.problems)
 
-def _dependency_problem(
-    item_identifier: str,
-    dependency_identifier: Any,
-    plan_id: Any,
-    item_identifiers: set[str],
-    plan_directory: PlanDirectory | None,
-) -> ValidationProblem | None:
-    """Check one ``depends_on`` entry, in the plan being validated.
-
-    :param item_identifier: The depending item's effective id.
-    :param dependency_identifier: The entry, exactly as the manifest wrote it.
-    :param plan_id: The validated plan's own id.
-    :param item_identifiers: Every effective id in the validated plan.
-    :param plan_directory: The plans a cross-plan reference resolves against.
-    :return: The problem the entry carries, or ``None`` if it resolves.
-    """
-    if not isinstance(dependency_identifier, str):
-        return UnknownDependency(item_identifier, dependency_identifier)
-    reference = DependencyReference.from_text(dependency_identifier)
-    if not reference.is_well_formed:
-        return MalformedDependencyReference(item_identifier, dependency_identifier)
-    if not reference.names_another_plan:
-        if reference.item_identifier in item_identifiers:
-            return None
-        return UnknownDependency(item_identifier, dependency_identifier)
-    if reference.plan_id == plan_id:
-        return SelfPlanReference(item_identifier, dependency_identifier)
-    if plan_directory is None:
-        return MissingPlanDirectory(item_identifier, dependency_identifier)
-    if plan_directory.plan(reference.plan_id) is None:
-        return UnknownDependencyPlan(item_identifier, dependency_identifier)
-    if not isinstance(plan_directory.resolve(reference), ResolvedDependency):
-        return UnknownDependency(item_identifier, dependency_identifier)
-    return None
-
-
-class VisitState(Enum):
-    """Where a depth-first walk has got to with one node."""
-
-    UNVISITED = auto()
-    """Not reached yet."""
-
-    IN_PROGRESS = auto()
-    """On the current path - reaching it again closes a cycle."""
-
-    DONE = auto()
-    """Fully explored, and on no cycle."""
-
-
-@dataclass
-class CycleSearch:
-    """One depth-first search of a dependency graph for a cycle."""
-
-    edges_by_node: dict[str, list[str]]
-    """Each node's own outgoing edges. An edge naming a node the graph
-    doesn't hold is a separate, already-reported problem and is not
-    followed."""
-
-    state_by_node: dict[str, VisitState] = field(init=False)
-    """How far the walk has got with each node."""
-
-    path: list[str] = field(default_factory=list)
-    """The nodes on the walk's current path, in order."""
-
-    def __post_init__(self) -> None:
-        self.state_by_node = {node: VisitState.UNVISITED for node in self.edges_by_node}
-
-    def find(self) -> list[str] | None:
-        """Walk the whole graph.
-
-        :return: One cycle's nodes in order, with the first repeated at the
-            end, or ``None`` if the graph is acyclic.
-        """
-        for node in self.edges_by_node:
-            if self.state_by_node[node] is not VisitState.UNVISITED:
-                continue
-            cycle = self._visit(node)
-            if cycle is not None:
-                return cycle
-        return None
-
-    def _visit(self, node: str) -> list[str] | None:
-        """Walk one node and everything it reaches.
-
-        :param node: The node to walk from.
-        :return: One cycle through it, or ``None`` if it is on none.
-        """
-        self.state_by_node[node] = VisitState.IN_PROGRESS
-        self.path.append(node)
-        for target in self.edges_by_node.get(node, []):
-            if target not in self.state_by_node:
-                continue
-            if self.state_by_node[target] is VisitState.IN_PROGRESS:
-                return [*self.path[self.path.index(target) :], target]
-            if self.state_by_node[target] is VisitState.UNVISITED:
-                cycle = self._visit(target)
-                if cycle is not None:
-                    return cycle
-        self.path.pop()
-        self.state_by_node[node] = VisitState.DONE
-        return None
+    def suggest_correction(self) -> str:
+        return ""
 
 
 @dataclass
 class DependencyGraph:
     """The ``depends_on`` graph reachable from one plan's own items.
 
-    Each node is keyed the way a manifest names it: a bare id for an item of
-    that plan, ``<plan-id>/<item-id>`` for an item of another plan. Only what
-    the plan can reach is walked, so a cycle wholly inside some other plan is
-    that plan's own to report.
+    Each node holds its key, written the way a manifest names it: a bare id
+    for an item of that plan, ``<plan-id>/<item-id>`` for an item of another
+    plan. Only what the plan can reach is walked, so a cycle wholly inside
+    some other plan is that plan's own to report.
     """
 
     plan_id: Any
@@ -559,8 +467,15 @@ class DependencyGraph:
     plan_directory: PlanDirectory | None = None
     """The plans a cross-plan reference resolves against."""
 
-    edges_by_node: dict[str, list[str]] = field(default_factory=dict)
-    """Each node reached so far, and its own outgoing edges."""
+    graph: rustworkx.PyDiGraph = field(default_factory=rustworkx.PyDiGraph)
+    """Every node reached so far, with an edge from each node to every entry
+    it depends on."""
+
+    node_indices_by_key: dict[str, int] = field(default_factory=dict)
+    """Each node's index in :attr:`graph`, by its key."""
+
+    walked_keys: set[str] = field(default_factory=set)
+    """The keys of the nodes whose own edges are already recorded."""
 
     @classmethod
     def reachable_from(
@@ -586,10 +501,17 @@ class DependencyGraph:
     def find_cycle(self) -> list[str] | None:
         """Find one cycle in this graph, if any exists.
 
-        :return: The cycle's nodes in order, with the first repeated at the
-            end, or ``None`` if the graph is acyclic.
+        :return: The cycle's node keys in order, starting from its earliest
+            reached node and repeating it at the end, or ``None`` if the
+            graph is acyclic.
         """
-        return CycleSearch(edges_by_node=self.edges_by_node).find()
+        found = next(iter(rustworkx.simple_cycles(self.graph)), None)
+        if found is None:
+            return None
+        cycle = list(found)
+        start = cycle.index(min(cycle))
+        node_indices = [*cycle[start:], *cycle[:start], cycle[start]]
+        return [self.graph[node_index] for node_index in node_indices]
 
     def add_node(
         self,
@@ -604,13 +526,25 @@ class DependencyGraph:
             or ``None`` for the validated plan itself.
         :param references: That node's own parsed ``depends_on``.
         """
-        if node_key in self.edges_by_node:
+        if node_key in self.walked_keys:
             return
-        self.edges_by_node[node_key] = [
-            self.key_of(reference, holding_plan_id) for reference in references
-        ]
+        self.walked_keys.add(node_key)
+        node_index = self.index_of(node_key)
+        for reference in references:
+            target_index = self.index_of(self.key_of(reference, holding_plan_id))
+            self.graph.add_edge(node_index, target_index, None)
         for reference in references:
             self._add_node_in_another_plan(reference, holding_plan_id)
+
+    def index_of(self, node_key: str) -> int:
+        """The index of one node in :attr:`graph`, adding the node when it is
+        reached for the first time.
+
+        :param node_key: The node's key.
+        """
+        if node_key not in self.node_indices_by_key:
+            self.node_indices_by_key[node_key] = self.graph.add_node(node_key)
+        return self.node_indices_by_key[node_key]
 
     def key_of(
         self, reference: DependencyReference, holding_plan_id: str | None
@@ -677,63 +611,105 @@ class DependencyGraph:
         return target_plan_id
 
 
-def validate_plan(
-    plan: dict[str, Any], plan_directory: PlanDirectory | None = None
-) -> None:
-    """Check the same schema rules plan-create is required to produce
-    manifests that pass.
+@dataclass
+class PlanValidator:
+    """Checks one freshly loaded plan.yaml against the schema rules plan-create
+    is required to produce manifests that pass.
 
-    :param plan: The raw, freshly-``yaml.safe_load``-ed plan.yaml content.
-        Deliberately a loosely-typed dict rather than the strongly-typed
-        :class:`Plan` dataclass: this function must tolerate partially
-        malformed input well enough to collect every problem in it, which
-        a dataclass constructor (failing outright on the first missing or
-        wrong-typed field) cannot do.
-    :param plan_directory: The other plans a ``depends_on`` entry may name,
-        or ``None`` when only this plan's own items are available - in which
-        case a cross-plan entry is a problem rather than a free pass.
-    :raises PlanValidationError: If any rule is violated, carrying every
-        problem found.
+    It reads the loaded content rather than a :class:`Plan`, so partially
+    malformed input still yields every problem it carries.
     """
-    if not isinstance(plan, dict):
-        raise PlanValidationError([InvalidManifestRoot(plan)])
 
-    problems: list[ValidationProblem] = []
+    manifest: Any
+    """The plan.yaml content, as ``yaml.safe_load`` returned it."""
 
-    if (
-        plan.get(ManifestKey.SCHEMA_VERSION.key)
-        != InvalidSchemaVersion.supported_version
-    ):
-        problems.append(InvalidSchemaVersion(plan.get(ManifestKey.SCHEMA_VERSION.key)))
+    plan_directory: PlanDirectory | None = None
+    """The other plans a ``depends_on`` entry may name, or ``None`` when only
+    this plan's own items are available - in which case a cross-plan entry is
+    a problem rather than a free pass."""
 
-    item_identifiers = [
-        item.get(ManifestKey.IDENTIFIER.key) or item.get(ManifestKey.BRANCH.key)
-        for item in plan.get(ManifestKey.ITEMS.key, [])
-    ]
-    if len(item_identifiers) != len(set(item_identifiers)):
-        seen: set[str] = set()
-        duplicate_identifiers = {
-            identifier
-            for identifier in item_identifiers
-            if identifier in seen or seen.add(identifier)
+    def validate(self) -> None:
+        """Check every rule.
+
+        :raises PlanValidationError: If any rule is violated, carrying every
+            problem found.
+        """
+        if not isinstance(self.manifest, dict):
+            raise PlanValidationError([InvalidManifestRoot(self.manifest)])
+        problems = [
+            *self.schema_version_problems(),
+            *self.duplicate_identifier_problems(),
+            *(problem for item in self.items for problem in self.item_problems(item)),
+            *self.cycle_problems(),
+            *self.wave_problems(),
+        ]
+        if problems:
+            raise PlanValidationError(problems)
+
+    @property
+    def plan_id(self) -> Any:
+        """The validated plan's own id."""
+        return self.manifest.get(ManifestKey.IDENTIFIER.key)
+
+    @property
+    def items(self) -> list[dict[str, Any]]:
+        """The manifest's items, as loaded."""
+        return self.manifest.get(ManifestKey.ITEMS.key, [])
+
+    @cached_property
+    def item_identifiers(self) -> list[str]:
+        """Every item's effective id, in manifest order, duplicates included."""
+        return [self.identifier_of(item) for item in self.items]
+
+    @cached_property
+    def track_identifiers(self) -> set[str]:
+        """Every declared track's id."""
+        return {
+            track[ManifestKey.IDENTIFIER.key]
+            for track in self.manifest.get(ManifestKey.TRACKS.key, [])
         }
-        problems.append(DuplicateItemId(sorted(duplicate_identifiers)))
 
-    track_identifiers = {
-        track[ManifestKey.IDENTIFIER.key]
-        for track in plan.get(ManifestKey.TRACKS.key, [])
-    }
-    wave_identifiers = {
-        wave[ManifestKey.IDENTIFIER.key] for wave in plan.get(ManifestKey.WAVES.key, [])
-    }
-    item_identifier_set = set(item_identifiers)
-    references_by_identifier: dict[str, list[DependencyReference]] = {}
+    @cached_property
+    def wave_identifiers(self) -> set[str]:
+        """Every declared wave's id."""
+        return {
+            wave[ManifestKey.IDENTIFIER.key]
+            for wave in self.manifest.get(ManifestKey.WAVES.key, [])
+        }
 
-    for item in plan.get(ManifestKey.ITEMS.key, []):
-        item_identifier = item.get(ManifestKey.IDENTIFIER.key) or item.get(
-            ManifestKey.BRANCH.key
+    def identifier_of(self, item: dict[str, Any]) -> str:
+        """One item's effective id: its ``id``, else its ``branch``.
+
+        :param item: The item, as loaded.
+        """
+        return item.get(ManifestKey.IDENTIFIER.key) or item.get(ManifestKey.BRANCH.key)
+
+    def schema_version_problems(self) -> list[ValidationProblem]:
+        """The problem with the manifest's ``schema_version``, if any."""
+        schema_version = self.manifest.get(ManifestKey.SCHEMA_VERSION.key)
+        if schema_version == InvalidSchemaVersion.supported_version:
+            return []
+        return [InvalidSchemaVersion(schema_version)]
+
+    def duplicate_identifier_problems(self) -> list[ValidationProblem]:
+        """The problem of two items sharing an effective id, if any."""
+        duplicate_identifiers = sorted(
+            identifier
+            for identifier, count in Counter(self.item_identifiers).items()
+            if count > 1
         )
-        if item.get(ManifestKey.TRACK.key) not in track_identifiers:
+        if not duplicate_identifiers:
+            return []
+        return [DuplicateItemId(duplicate_identifiers)]
+
+    def item_problems(self, item: dict[str, Any]) -> list[ValidationProblem]:
+        """Every problem one item carries.
+
+        :param item: The item, as loaded.
+        """
+        item_identifier = self.identifier_of(item)
+        problems: list[ValidationProblem] = []
+        if item.get(ManifestKey.TRACK.key) not in self.track_identifiers:
             problems.append(
                 UnknownTrack(item_identifier, item.get(ManifestKey.TRACK.key))
             )
@@ -745,43 +721,73 @@ def validate_plan(
         if depends_on is not None and not isinstance(depends_on, list):
             problems.append(InvalidDependsOn(item_identifier, type(depends_on)))
         else:
-            references_by_identifier[item_identifier] = [
-                DependencyReference.from_text(entry)
+            problems.extend(
+                problem
                 for entry in depends_on or []
-                if isinstance(entry, str)
-            ]
-            for dependency_identifier in depends_on or []:
-                problem = _dependency_problem(
-                    item_identifier,
-                    dependency_identifier,
-                    plan.get(ManifestKey.IDENTIFIER.key),
-                    item_identifier_set,
-                    plan_directory,
-                )
-                if problem is not None:
-                    problems.append(problem)
-
+                if (problem := self.dependency_problem(item_identifier, entry))
+                is not None
+            )
         blockers = item.get(ManifestKey.BLOCKERS.key)
         if blockers is not None and not isinstance(blockers, list):
             problems.append(InvalidBlockers(item_identifier, type(blockers)))
+        return problems
 
-    graph = DependencyGraph.reachable_from(
-        plan.get(ManifestKey.IDENTIFIER.key), references_by_identifier, plan_directory
-    )
-    cycle = graph.find_cycle()
-    if cycle is not None:
-        problems.append(DependencyCycle(cycle))
+    def dependency_problem(
+        self, item_identifier: str, entry: Any
+    ) -> ValidationProblem | None:
+        """Check one ``depends_on`` entry.
 
-    for track in plan.get(ManifestKey.TRACKS.key, []):
-        if track.get(ManifestKey.WAVE.key) not in wave_identifiers:
-            problems.append(
-                UnknownWave(
-                    track[ManifestKey.IDENTIFIER.key], track.get(ManifestKey.WAVE.key)
-                )
+        :param item_identifier: The depending item's effective id.
+        :param entry: The entry, exactly as the manifest wrote it.
+        :return: The problem the entry carries, or ``None`` if it resolves.
+        """
+        if not isinstance(entry, str):
+            return UnknownDependency(item_identifier, entry)
+        reference = DependencyReference.from_text(entry)
+        if not reference.is_well_formed:
+            return MalformedDependencyReference(item_identifier, entry)
+        if not reference.names_another_plan:
+            if reference.item_identifier in self.item_identifiers:
+                return None
+            return UnknownDependency(item_identifier, entry)
+        if reference.plan_id == self.plan_id:
+            return SelfPlanReference(item_identifier, entry)
+        if self.plan_directory is None:
+            return MissingPlanDirectory(item_identifier, entry)
+        if self.plan_directory.plan(reference.plan_id) is None:
+            return UnknownDependencyPlan(item_identifier, entry)
+        if not isinstance(self.plan_directory.resolve(reference), ResolvedDependency):
+            return UnknownDependency(item_identifier, entry)
+        return None
+
+    def cycle_problems(self) -> list[ValidationProblem]:
+        """The problem of a ``depends_on`` chain looping back on itself, if
+        one reachable from this plan's items does."""
+        references_by_identifier = {
+            self.identifier_of(item): [
+                DependencyReference.from_text(entry)
+                for entry in item.get(ManifestKey.DEPENDS_ON.key) or []
+                if isinstance(entry, str)
+            ]
+            for item in self.items
+            if isinstance(item.get(ManifestKey.DEPENDS_ON.key) or [], list)
+        }
+        cycle = DependencyGraph.reachable_from(
+            self.plan_id, references_by_identifier, self.plan_directory
+        ).find_cycle()
+        if cycle is None:
+            return []
+        return [DependencyCycle(cycle)]
+
+    def wave_problems(self) -> list[ValidationProblem]:
+        """Every track whose ``wave`` names no declared wave."""
+        return [
+            UnknownWave(
+                track[ManifestKey.IDENTIFIER.key], track.get(ManifestKey.WAVE.key)
             )
-
-    if problems:
-        raise PlanValidationError(problems)
+            for track in self.manifest.get(ManifestKey.TRACKS.key, [])
+            if track.get(ManifestKey.WAVE.key) not in self.wave_identifiers
+        ]
 
 
 class MissingMergeTimestampError(ValueError):
@@ -883,6 +889,35 @@ class PullRequestRecord:
             self.merged_at is not None or GitHubLabel.MERGED in self.identified_labels
         )
 
+    @classmethod
+    def parse_by_repository(
+        cls,
+        raw_pull_request_data: dict[str, Any],
+    ) -> PullRequestsByRepository:
+        """Parse ``pr_data.json``'s raw JSON into :class:`PullRequestRecord`\\ s.
+
+        :param raw_pull_request_data: The parsed JSON, keyed by ``"owner/repo"``
+            then by pull request number as a string - see the module docstring for the
+            exact shape.
+        :raises MalformedPullRequestDataError: If any entry can't be parsed into
+            a :class:`PullRequestRecord`.
+        :return: The same structure, with each leaf mapping parsed into a
+            :class:`PullRequestRecord`.
+        """
+        pull_requests_by_repository: PullRequestsByRepository = {}
+        for repository, pull_requests in raw_pull_request_data.items():
+            pull_requests_by_repository[repository] = {}
+            for pull_request_number, record in pull_requests.items():
+                try:
+                    pull_requests_by_repository[repository][pull_request_number] = (
+                        PullRequestRecord.from_mapping(record)
+                    )
+                except (KeyError, ValueError) as error:
+                    raise MalformedPullRequestDataError(
+                        f"{repository}#{pull_request_number}: {error}"
+                    ) from error
+        return pull_requests_by_repository
+
 
 class MalformedPullRequestDataError(ValueError):
     """Raised when one entry of ``pr_data.json`` cannot be parsed into a
@@ -891,39 +926,6 @@ class MalformedPullRequestDataError(ValueError):
 
 
 PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
-
-
-def classify_live_state(
-    pull_request_number: int | None,
-    repository: str,
-    pull_requests_by_repository: PullRequestsByRepository,
-) -> LiveState:
-    """Classify one item's live GitHub state from its pull request number and repository.
-
-    Standalone so callers other than :class:`DashboardRenderer` (notably
-    ``sync_manifest_status.py``, which needs the same classification to
-    decide what to auto-correct) don't have to duplicate this logic.
-
-    :param pull_request_number: The item's tracked pull request number, or ``None`` if
-        it has no pull request yet.
-    :param repository: The ``"owner/repo"`` to look the pull request up under.
-    :param pull_requests_by_repository: Live pull request state for every repository
-        referenced by the plan's items.
-    :return: The classified state.
-    """
-    if pull_request_number is None:
-        return LiveState.NO_PULL_REQUEST
-    repository_pull_requests = pull_requests_by_repository.get(repository, {})
-    pull_request = repository_pull_requests.get(str(pull_request_number))
-    if pull_request is None:
-        return LiveState.NOT_FOUND
-    if pull_request.was_merged:
-        return LiveState.MERGED
-    if pull_request.state is PullRequestState.CLOSED:
-        return LiveState.CLOSED_UNMERGED
-    if pull_request.draft:
-        return LiveState.OPEN_DRAFT
-    return LiveState.OPEN_READY
 
 
 @dataclass
@@ -943,7 +945,7 @@ class Wave:
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Wave:
         """Build a wave from one entry of plan.yaml's ``waves[]`` - only
-        called after :func:`validate_plan` has already confirmed the data
+        called after :meth:`PlanValidator.validate` has already confirmed the data
         is well-formed."""
         return cls(
             id=data[ManifestKey.IDENTIFIER.key],
@@ -972,7 +974,7 @@ class Track:
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Track:
         """Build a track from one entry of plan.yaml's ``tracks[]`` - only
-        called after :func:`validate_plan` has already confirmed the data
+        called after :meth:`PlanValidator.validate` has already confirmed the data
         is well-formed."""
         return cls(
             id=data[ManifestKey.IDENTIFIER.key],
@@ -985,29 +987,15 @@ class Track:
 @dataclass
 class DependencyChip:
     """One ready-to-render ``needs`` chip on an item's card - see
-    :attr:`Item.dependency_chips`. Precomputed so the template never has to
-    resolve a ``depends_on`` entry or fall back to the raw entry itself."""
+    :attr:`Item.dependency_chips`."""
 
-    identifier: str
-    """The chip's display text: the reference as the manifest wrote it - a
-    bare id for an item of this plan, ``<plan-id>/<item-id>`` for one in
-    another plan, or the raw entry if it doesn't resolve at all."""
+    dependency: Dependency
+    """The dependency the chip stands for."""
 
     tooltip: str
     """The chip's hover title: the dependency's title, plus the plan holding
     it and its live state when that plan isn't this one, or the raw entry if
     it doesn't resolve at all."""
-
-    is_ready: bool
-    """Whether the dependency is actually safe to build on right now
-    (:meth:`Item.is_ready_to_unblock_dependents`) - ``False`` for an
-    unresolved entry, since an item nothing can resolve can never be
-    considered ready. Drives the chip's ``chip-unmet`` styling, the
-    dashboard's one visual cue that an item is blocked on this dependency."""
-
-    is_in_another_plan: bool = False
-    """Whether the dependency's card is on another plan's dashboard rather than
-    this one."""
 
     card_url: str | None = None
     """Where the dependency's own card is shown: an anchor on this page for an
@@ -1020,16 +1008,12 @@ class DependencyChip:
         return " · "
 
     @classmethod
-    def unresolved(cls, dependency_identifier: str) -> DependencyChip:
+    def unresolved(cls, dependency: UnresolvedDependency) -> DependencyChip:
         """Build the chip for a ``depends_on`` entry nothing resolves.
 
-        :param dependency_identifier: The entry, as the manifest wrote it.
+        :param dependency: The dependency this chip stands for.
         """
-        return cls(
-            identifier=dependency_identifier,
-            tooltip=dependency_identifier,
-            is_ready=False,
-        )
+        return cls(dependency=dependency, tooltip=dependency.reference.text)
 
     @classmethod
     def of_dependency(
@@ -1045,9 +1029,8 @@ class DependencyChip:
         """
         if not dependency.is_in_another_plan:
             return cls(
-                identifier=dependency.item.identifier,
+                dependency=dependency,
                 tooltip=dependency.item.title,
-                is_ready=dependency.item.is_ready_to_unblock_dependents(),
                 card_url=f"#{dependency.item.anchor}",
             )
         card_url = (
@@ -1056,7 +1039,7 @@ class DependencyChip:
             else None
         )
         return cls(
-            identifier=dependency.reference.text,
+            dependency=dependency,
             tooltip=cls.tooltip_separator.join(
                 [
                     dependency.item.title,
@@ -1064,8 +1047,6 @@ class DependencyChip:
                     dependency.item.live_state.display_label,
                 ]
             ),
-            is_ready=dependency.item.is_ready_to_unblock_dependents(),
-            is_in_another_plan=True,
             card_url=card_url,
         )
 
@@ -1277,7 +1258,7 @@ class Item:
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Item:
         """Build an item from one entry of plan.yaml's ``items[]`` - only
-        called after :func:`validate_plan` has already confirmed the data
+        called after :meth:`PlanValidator.validate` has already confirmed the data
         is well-formed."""
         notes = data.get(ManifestKey.NOTES.key)
         return cls(
@@ -1349,6 +1330,11 @@ class Plan:
     tracking_issue: int | None = None
     """The coordination-mailbox issue or pull request number for structural changes, if any."""
 
+    @cached_property
+    def items_by_identifier(self) -> dict[str, Item]:
+        """Each of :attr:`items`, by its effective id."""
+        return {item.identifier: item for item in self.items}
+
     @property
     def repository_url(self) -> str:
         """:attr:`default_repository`'s GitHub URL, ready for the masthead link."""
@@ -1357,7 +1343,7 @@ class Plan:
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Plan:
         """Build a plan from a freshly-loaded plan.yaml - only called after
-        :func:`validate_plan` has already confirmed the data is well-formed."""
+        :meth:`PlanValidator.validate` has already confirmed the data is well-formed."""
         return cls(
             id=data[ManifestKey.IDENTIFIER.key],
             title=data[ManifestKey.TITLE.key],
@@ -1482,7 +1468,7 @@ class ResolvedDependency(Dependency):
         self, pull_requests_by_repository: PullRequestsByRepository
     ) -> None:
         """See :meth:`Dependency.classify_live_state`."""
-        self.item.live_state = classify_live_state(
+        self.item.live_state = LiveState.classify(
             self.item.pull_request_number,
             self.repository,
             pull_requests_by_repository,
@@ -1496,7 +1482,7 @@ class UnresolvedDependency(Dependency):
 
     Never ready, in either sense: an entry nobody can resolve used to be
     skipped and so counted as satisfied, which handed a mistyped dependency's
-    dependent a "Start now" button. :func:`validate_plan` rejects such an
+    dependent a "Start now" button. :meth:`PlanValidator.validate` rejects such an
     entry outright, so one only reaches a reader that renders without
     validating first.
     """
@@ -1524,7 +1510,7 @@ class UnresolvedDependency(Dependency):
     def chip(self, locate_plan_page: Callable[[str], str] | None) -> DependencyChip:
         """See :meth:`Dependency.chip` - the entry's own text, marked unmet and
         linking nowhere."""
-        return DependencyChip.unresolved(self.reference.text)
+        return DependencyChip.unresolved(self)
 
     def classify_live_state(
         self, pull_requests_by_repository: PullRequestsByRepository
@@ -1579,10 +1565,103 @@ class PlanDirectory:
         plan = self.plan(reference.plan_id)
         if plan is None:
             return UnresolvedDependency(reference=reference)
-        for item in plan.items:
-            if item.identifier == reference.item_identifier:
-                return ResolvedDependency(reference=reference, item=item, plan=plan)
-        return UnresolvedDependency(reference=reference)
+        item = plan.items_by_identifier.get(reference.item_identifier)
+        if item is None:
+            return UnresolvedDependency(reference=reference)
+        return ResolvedDependency(reference=reference, item=item, plan=plan)
+
+
+class PlanCommandOption(StrEnum):
+    """The options every command reading one plan and its live pull request
+    state takes."""
+
+    PLAN = "--plan"
+    """The plan's own plan.yaml."""
+
+    PULL_REQUEST_DATA = "--pr-data"
+    """The JSON file holding live pull request state - see the module
+    docstring for its shape."""
+
+    PLANS_DIRECTORY = "--plans-dir"
+    """The directory holding every plan as ``<plan-id>/plan.yaml``, required
+    only by a manifest whose ``depends_on`` names another plan."""
+
+
+@dataclass
+class PlanCommandArguments:
+    """The arguments every command reading one plan and its live pull request
+    state takes, once parsed."""
+
+    plan_path: Path
+    """The plan's own plan.yaml."""
+
+    pull_request_data_path: Path
+    """The JSON file holding live pull request state."""
+
+    plan_directory: PlanDirectory | None
+    """The plans a ``<plan-id>/<item-id>`` entry resolves against, or
+    ``None`` when none was given."""
+
+    @classmethod
+    def add_to(cls, parser: argparse.ArgumentParser) -> None:
+        """Declare these arguments on one command's parser.
+
+        :param parser: The command's parser.
+        """
+        parser.add_argument(
+            PlanCommandOption.PLAN,
+            dest="plan_path",
+            type=Path,
+            required=True,
+            help="Path to plan.yaml",
+        )
+        parser.add_argument(
+            PlanCommandOption.PULL_REQUEST_DATA,
+            dest="pull_request_data_path",
+            type=Path,
+            required=True,
+            help='Path to a JSON file: {"owner/repo": {"pr_number": {...}}}',
+        )
+        parser.add_argument(
+            PlanCommandOption.PLANS_DIRECTORY,
+            dest="plans_directory",
+            type=Path,
+            default=None,
+            help=(
+                "Path to the directory holding every plan (<plan-id>/plan.yaml), "
+                "required only by a manifest whose depends_on names another plan"
+            ),
+        )
+
+    @classmethod
+    def from_namespace(cls, arguments: argparse.Namespace) -> PlanCommandArguments:
+        """Read these arguments back from a parsed command line.
+
+        :param arguments: The command line, parsed by a parser
+            :meth:`add_to` declared them on.
+        """
+        return cls(
+            plan_path=arguments.plan_path,
+            pull_request_data_path=arguments.pull_request_data_path,
+            plan_directory=(
+                PlanDirectory(arguments.plans_directory)
+                if arguments.plans_directory
+                else None
+            ),
+        )
+
+    def read_manifest(self) -> Any:
+        """The plan.yaml content, as ``yaml.safe_load`` returns it."""
+        return yaml.safe_load(self.plan_path.read_text())
+
+    def read_pull_requests_by_repository(self) -> PullRequestsByRepository:
+        """The live pull request state, parsed.
+
+        :raises MalformedPullRequestDataError: If any entry can't be parsed.
+        """
+        return PullRequestRecord.parse_by_repository(
+            json.loads(self.pull_request_data_path.read_text())
+        )
 
 
 @dataclass
@@ -1996,7 +2075,7 @@ class DashboardRenderer(TemplatePage):
 
     def _live_state_of(self, item: Item) -> LiveState:
         """Classify one item's live GitHub state from :attr:`pull_requests_by_repository`."""
-        return classify_live_state(
+        return LiveState.classify(
             item.pull_request_number,
             item.repository or self.plan.default_repository,
             self.pull_requests_by_repository,
@@ -2206,47 +2285,14 @@ class DashboardRenderer(TemplatePage):
         return stacked_items
 
 
-def load_pull_requests_by_repository(
-    raw_pull_request_data: dict[str, Any],
-) -> PullRequestsByRepository:
-    """Parse ``pr_data.json``'s raw JSON into :class:`PullRequestRecord`\\ s.
-
-    :param raw_pull_request_data: The parsed JSON, keyed by ``"owner/repo"``
-        then by pull request number as a string - see the module docstring for the
-        exact shape.
-    :raises MalformedPullRequestDataError: If any entry can't be parsed into
-        a :class:`PullRequestRecord`.
-    :return: The same structure, with each leaf mapping parsed into a
-        :class:`PullRequestRecord`.
-    """
-    pull_requests_by_repository: PullRequestsByRepository = {}
-    for repository, pull_requests in raw_pull_request_data.items():
-        pull_requests_by_repository[repository] = {}
-        for pull_request_number, record in pull_requests.items():
-            try:
-                pull_requests_by_repository[repository][pull_request_number] = (
-                    PullRequestRecord.from_mapping(record)
-                )
-            except (KeyError, ValueError) as error:
-                raise MalformedPullRequestDataError(
-                    f"{repository}#{pull_request_number}: {error}"
-                ) from error
-    return pull_requests_by_repository
-
-
 def main() -> int:
     """Parse arguments, validate the manifest, render the dashboard, and
     print its summary. See the module docstring for the CLI contract."""
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument("--plan", required=True, help="Path to plan.yaml")
+    PlanCommandArguments.add_to(parser)
     parser.add_argument("--roadmap", required=True, help="Path to roadmap.md")
-    parser.add_argument(
-        "--pr-data",
-        required=True,
-        help='Path to a JSON file: {"owner/repo": {"pr_number": {...}}}',
-    )
     parser.add_argument(
         "--output", required=True, help="Path to write the dashboard HTML to"
     )
@@ -2259,41 +2305,24 @@ def main() -> int:
     parser.add_argument(
         "--index-url", default=None, help="The repository's own index page URL"
     )
-    parser.add_argument(
-        "--plans-dir",
-        default=None,
-        help=(
-            "Path to the directory holding every plan (<plan-id>/plan.yaml), "
-            "required only by a manifest whose depends_on names another plan"
-        ),
-    )
     arguments = parser.parse_args()
+    plan_arguments = PlanCommandArguments.from_namespace(arguments)
 
-    raw_plan = yaml.safe_load(Path(arguments.plan).read_text())
-    roadmap_text = Path(arguments.roadmap).read_text()
-    raw_pull_request_data = json.loads(Path(arguments.pr_data).read_text())
-    plan_directory = (
-        PlanDirectory(Path(arguments.plans_dir)) if arguments.plans_dir else None
-    )
-
+    raw_plan = plan_arguments.read_manifest()
     try:
-        validate_plan(raw_plan, plan_directory)
+        PlanValidator(raw_plan, plan_arguments.plan_directory).validate()
     except PlanValidationError as error:
         logger.error(f"plan.yaml failed validation: {error}")
         return 1
 
-    plan = Plan.from_mapping(raw_plan)
-    pull_requests_by_repository = load_pull_requests_by_repository(
-        raw_pull_request_data
-    )
     renderer = DashboardRenderer(
-        plan=plan,
-        roadmap_text=roadmap_text,
-        pull_requests_by_repository=pull_requests_by_repository,
+        plan=Plan.from_mapping(raw_plan),
+        roadmap_text=Path(arguments.roadmap).read_text(),
+        pull_requests_by_repository=plan_arguments.read_pull_requests_by_repository(),
         tracking_url=arguments.tracking_url,
         hub_url=arguments.hub_url,
         index_url=arguments.index_url,
-        plan_directory=plan_directory,
+        plan_directory=plan_arguments.plan_directory,
     )
     rendered = renderer.render()
 

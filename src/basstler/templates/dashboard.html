@@ -615,9 +615,11 @@
    highlights it, and on another plan's dashboard it opens that page in a new
    tab at the card. #}
 {% macro dependency_chip(chip) %}
-{%- set chip_class = 'chip' if chip.is_ready else 'chip chip-unmet' %}
-{%- set chip_title = chip.tooltip if chip.is_ready else chip.tooltip ~ ' (not ready yet — this item is blocked on it)' %}
-{% if not chip.card_url %}<span class="{{ chip_class }}" title="{{ chip_title }}">{{ chip.identifier }}</span>{% elif chip.is_in_another_plan %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" target="_blank" rel="noopener" title="{{ chip_title }}">{{ chip.identifier }}</a>{% else %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" data-item-identifier="{{ chip.identifier }}" onclick="planDashboardHighlightItem(event, this)" title="{{ chip_title }}">{{ chip.identifier }}</a>{% endif %}
+{%- set is_ready = chip.dependency.is_ready_to_unblock_dependents() %}
+{%- set identifier = chip.dependency.reference.text %}
+{%- set chip_class = 'chip' if is_ready else 'chip chip-unmet' %}
+{%- set chip_title = chip.tooltip if is_ready else chip.tooltip ~ ' (not ready yet — this item is blocked on it)' %}
+{% if not chip.card_url %}<span class="{{ chip_class }}" title="{{ chip_title }}">{{ identifier }}</span>{% elif chip.dependency.is_in_another_plan %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" target="_blank" rel="noopener" title="{{ chip_title }}">{{ identifier }}</a>{% else %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" data-item-identifier="{{ identifier }}" onclick="planDashboardHighlightItem(event, this)" title="{{ chip_title }}">{{ identifier }}</a>{% endif %}
 {% endmacro %}
 
 {% macro action_button(item) %}

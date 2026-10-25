@@ -40,10 +40,10 @@ from basstler.build_dashboard import (
     Plan,
     PlanDirectory,
     PlanValidationError,
+    PlanValidator,
     PullRequestRecord,
     PullRequestsByRepository,
     RenderedDashboard,
-    validate_plan,
 )
 from basstler.build_hub import HubPage, RepositorySummary, SiteSummary
 from basstler.build_index import IndexPage, PlanSummary, ProgressCard
@@ -385,7 +385,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
         :return: Whether its manifest passes validation, logging why if it does not.
         """
         try:
-            validate_plan(source.manifest, self.plan_directory)
+            PlanValidator(source.manifest, self.plan_directory).validate()
         except PlanValidationError as error:
             logger.warning(f"{source.directory_name} is not published: {error}")
             return False
