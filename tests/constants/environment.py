@@ -64,6 +64,11 @@ class ConfigurationVariable(StrEnum):
     The interpreter of the package's own environment.
     """
 
+    PYTHON = "BASSTLER_PYTHON"
+    """
+    The interpreter every caller runs a module of the package with.
+    """
+
     INSTALLED_SOURCE_FILE = "BASSTLER_INSTALLED_SOURCE_FILE"
     """
     The file recording what the environment's package was installed from.
