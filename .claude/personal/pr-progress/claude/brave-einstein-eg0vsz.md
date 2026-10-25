@@ -5,7 +5,7 @@ Item: plan-dashboards / split-build-dashboard - PR #66 (draft, release:major).
 - A subpackage's command line goes in its `__main__.py` when nothing imports it, so `basstler.stack` and `basstler.maintenance` keep their names.
 
 **Done**
-- Pushed through 5867c6f, main (#63) merged in; 1252 pass; rendered dashboard byte-identical; docs, hooks and workflows repointed; PR description and plan notes and item title updated.
+- Pushed through c186a42: main (#63, #65) merged in, first review round answered and resolved; 1254 pass; rendered dashboard byte-identical; docs, hooks and workflows repointed; PR description and plan notes and item title updated.
 
 **Next**
-- Wait for CI on 5867c6f and for review. Open branches that edit the package (#46, #47) re-port onto the new paths if they land second.
+- Wait for CI on c186a42 and the next review. Open branches that edit the package (#46, #47) re-port onto the new paths if they land second.
