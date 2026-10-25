@@ -11,7 +11,12 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.exit_codes import CommandFailure
-from basstler.maintenance.git_commands import GitCommandRunner, ProposedPush
+from basstler.maintenance.fast_forward import (
+    FastForwardOutcome,
+    ForkBaseFastForward,
+    RefusedPushHandling,
+)
+from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.repository import MalformedRepositoryError, Repository
 from basstler.stack.settings import Configuration
 from basstler.stack.configuration import (
@@ -44,8 +49,8 @@ class BaseOutcome(StrEnum):
 
     DIVERGED = "diverged"
     """
-    The base carries commits the upstream does not, which a fast-forward cannot reconcile
-    and a force push must never resolve.
+    The base carries commits the upstream does not, which a fast-forward cannot
+    reconcile and a force push must never resolve.
     """
 
     LOCAL_UPDATE_REFUSED = "local-update-refused"
@@ -63,32 +68,12 @@ class BaseOutcome(StrEnum):
     The base was behind and has been brought up to the upstream's tip.
     """
 
-
-class ForkPublication(StrEnum):
-    """
-    What became of the fork's copy of the base, once this clone's was level.
-    """
-
-    ALREADY_CURRENT = "already-current"
-    """
-    The fork already carried the upstream's tip.
-    """
-
-    PUSHED = "pushed"
-    """
-    The fork was behind and the upstream's tip was pushed to it.
-    """
-
-    REFUSED = "refused"
-    """
-    The push was refused, so the next clone of the fork starts stale.
-    """
-
-    NO_FORK = "no-fork"
-    """
-    No upstream is named, so the base was caught up with the clone's own remote, which
-    the next clone already starts from.
-    """
+    @property
+    def carries_upstream_tip(self) -> bool:
+        """
+        :return: Whether the base ends the pass at the upstream's tip.
+        """
+        return self in {BaseOutcome.CURRENT, BaseOutcome.FAST_FORWARDED}
 
 
 @dataclass(frozen=True)
@@ -127,9 +112,9 @@ class DefaultBranchReport:
     The remote the fork's copy was published to.
     """
 
-    fork_publication: ForkPublication = ForkPublication.ALREADY_CURRENT
+    fork_fast_forward: FastForwardOutcome | None = None
     """
-    What became of the fork's copy.
+    What became of the fork's copy, absent when it was not attempted.
     """
 
     checked_out_branch: str = ""
@@ -181,17 +166,23 @@ class DefaultBranchReport:
         :return: What is left for the session to do, one row each.
         """
         rows = []
-        if self.fork_publication is ForkPublication.PUSHED:
-            rows.append(f"pushed it to '{self.fork_remote}', which was behind")
-        if self.fork_publication is ForkPublication.NO_FORK:
-            rows.append(
-                f"no upstream is named, so this follows '{self.fork_remote}' itself"
-            )
-        if self.fork_publication is ForkPublication.REFUSED:
-            rows.append(
-                f"pushing it to '{self.fork_remote}' was refused - the fork is still "
-                f"behind, so the next clone starts stale"
-            )
+        match self.fork_fast_forward:
+            case FastForwardOutcome.PUSHED:
+                rows.append(f"pushed it to '{self.fork_remote}', which was behind")
+            case FastForwardOutcome.PUSH_REFUSED:
+                rows.append(
+                    f"pushing it to '{self.fork_remote}' was refused - the fork is "
+                    f"still behind, so the next clone starts stale"
+                )
+            case FastForwardOutcome.REFUSED_NOT_FAST_FORWARD:
+                rows.append(
+                    f"'{self.fork_remote}' has commits {self.upstream} does not - left "
+                    f"as it is, nothing force-pushed, so the next clone starts stale"
+                )
+            case None if self.outcome.carries_upstream_tip:
+                rows.append(
+                    f"no upstream is named, so this follows '{self.fork_remote}' itself"
+                )
         if self.checked_out_branch_fast_forwarded:
             rows.append(
                 f"fast-forwarded '{self.checked_out_branch}' "
@@ -352,13 +343,6 @@ class DefaultBranchSync:
         return f"refs/remotes/{self.source.remote_name}/{self.base_branch}"
 
     @property
-    def fork_tracking_reference(self) -> str:
-        """
-        :return: The ref the fork's copy of the base is fetched into.
-        """
-        return f"refs/remotes/{self.source.fork_remote}/{self.base_branch}"
-
-    @property
     def local_reference(self) -> str:
         """
         :return: This clone's own copy of the base.
@@ -379,42 +363,18 @@ class DefaultBranchSync:
             **details,
         )
 
-    def fetch_quietly(self, location: str, destination: str) -> bool:
-        """
-        Fetch the base into a tracking ref, leaving ``FETCH_HEAD`` alone.
-
-        :param location: The remote name or URL to fetch from.
-        :param destination: The ref to fetch into.
-        :return: Whether the fetch worked.
-        """
-        return self.git.attempt(
-            "fetch",
-            "--quiet",
-            "--no-write-fetch-head",
-            location,
-            f"+refs/heads/{self.base_branch}:{destination}",
-        ).succeeded
-
-    def commit_or_none(self, reference: str) -> str | None:
-        """
-        :param reference: A ref that may not exist.
-        :return: The commit it names, or ``None`` if it does not exist.
-        """
-        resolved = self.git.attempt("rev-parse", "--verify", "--quiet", reference)
-        return resolved.output if resolved.succeeded else None
-
     def run(self) -> DefaultBranchReport:
         """
         Catch the base up, then the fork's copy of it.
 
         :return: What was done, and what is left for the session to do.
         """
-        if not self.fetch_quietly(
-            self.source.location, self.upstream_tracking_reference
-        ):
+        if not self.git.fetch_branch(
+            self.source.location, self.base_branch, self.source.remote_name
+        ).succeeded:
             return self.report(BaseOutcome.UPSTREAM_UNREACHABLE)
         upstream_tip = self.git.commit_at(self.upstream_tracking_reference)
-        local_tip = self.commit_or_none(self.local_reference)
+        local_tip = self.git.commit_or_none(self.local_reference)
 
         commits_behind = 0
         if local_tip is not None and local_tip != upstream_tip:
@@ -431,7 +391,7 @@ class DefaultBranchSync:
         return self.report(
             BaseOutcome.FAST_FORWARDED if commits_behind else BaseOutcome.CURRENT,
             commits_behind=commits_behind,
-            fork_publication=self.publish_to_fork(upstream_tip),
+            fork_fast_forward=self.publish_to_fork(),
             **self.catch_up_checked_out_branch(upstream_tip),
         )
 
@@ -440,10 +400,10 @@ class DefaultBranchSync:
         Fast-forward the checked-out branch onto the base when it has no commits of its
         own, and otherwise measure how far behind the base it is.
 
-        A branch with nothing of its own is one a session was cut onto from a stale base,
-        before this pass ran; moving it changes no work. A dirty tree that the
-        fast-forward would overwrite stops it, in which case the branch is reported behind
-        like one with work on it.
+        A branch with nothing of its own is one a session was cut onto from a stale
+        base, before this pass ran; moving it changes no work. A dirty tree that the
+        fast-forward would overwrite stops it, in which case the branch is reported
+        behind like one with work on it.
 
         :param base_tip: The commit the base now points at.
         :return: The report's checked-out-branch fields.
@@ -482,32 +442,29 @@ class DefaultBranchSync:
             "update-ref", self.local_reference, upstream_tip, local_tip or ""
         ).succeeded
 
-    def publish_to_fork(self, upstream_tip: str) -> ForkPublication:
+    def publish_to_fork(self) -> FastForwardOutcome | None:
         """
-        Bring the fork's copy of the base level too.
+        Bring the fork's copy of the base level with the upstream's tip too.
 
         Decided on the fork's own evidence rather than on the local base having moved: a
         clone whose base was already current still leaves every later clone stale if an
         earlier session's push was refused and nobody noticed.
 
-        :param upstream_tip: The commit the fork's base is to point at.
-        :return: What became of the fork's copy.
+        :return: What became of the fork's copy, ``None`` when there is no separate
+            fork.
         """
         if not self.source.publishes_to_fork:
-            return ForkPublication.NO_FORK
-        self.fetch_quietly(self.source.fork_remote, self.fork_tracking_reference)
-        if self.commit_or_none(self.fork_tracking_reference) == upstream_tip:
-            return ForkPublication.ALREADY_CURRENT
-        pushed = self.git.push(
-            ProposedPush(
-                remote=self.source.fork_remote,
-                refspec=f"{upstream_tip}:refs/heads/{self.base_branch}",
+            return None
+        return (
+            ForkBaseFastForward(
+                self.git,
+                self.source.fork_remote,
+                self.base_branch,
+                RefusedPushHandling.REPORTED,
             )
+            .onto(self.upstream_tracking_reference)
+            .outcome
         )
-        if not pushed.succeeded:
-            return ForkPublication.REFUSED
-        self.fetch_quietly(self.source.fork_remote, self.fork_tracking_reference)
-        return ForkPublication.PUSHED
 
 
 def main() -> int:

@@ -209,6 +209,31 @@ class GitCommandRunner:
         """
         self.run("fetch", "--quiet", remote, *references)
 
+    def fetch_branch(
+        self, location: str, branch: str, tracking_remote: str
+    ) -> GitCommandResult:
+        """
+        Fetch one branch into its tracking ref, leaving ``FETCH_HEAD`` alone.
+
+        :param location: The remote name or URL to fetch from.
+        :param branch: The branch to fetch.
+        :param tracking_remote: The remote whose tracking refs the branch is kept under.
+        :return: The finished fetch, whose failure is an expected outcome.
+        """
+        return self.attempt(
+            "fetch",
+            "--quiet",
+            "--no-write-fetch-head",
+            location,
+            f"+refs/heads/{branch}:refs/remotes/{tracking_remote}/{branch}",
+        )
+
+    def commit_or_none(self, reference: str) -> str | None:
+        """:param reference: A ref that may not exist.
+        :return: The commit it names, or ``None`` if it does not exist."""
+        resolved = self.attempt("rev-parse", "--verify", "--quiet", reference)
+        return resolved.output if resolved.succeeded else None
+
     def commit_at(self, reference: str) -> str:
         """:param reference: Any reference git can resolve.
         :return: The commit it names."""
