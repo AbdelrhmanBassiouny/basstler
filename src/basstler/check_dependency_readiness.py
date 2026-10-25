@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Classify one item's dependencies as ready or not-ready to build on, reusing
-build_dashboard.py's own live-state classification and readiness rule.
+Classify one item's dependencies as ready or not-ready to build on, reusing the
+dashboard's own live-state classification and readiness rule.
 
 plan-item-kickoff and plan-item-resolve both need this exact question
 answered - "is it actually safe to stack new work on top of item X's
 dependencies?" - and previously re-derived the rule
-(:meth:`build_dashboard.Item.is_ready_to_unblock_dependents`) in their own
+(:meth:`basstler.dashboard_plan.Item.is_ready_to_unblock_dependents`) in their own
 SKILL.md prose instead of calling the code that already implements and tests
 it. This script is that single call site.
 
@@ -17,7 +17,7 @@ Usage:
         --item <item-id> \\
         [--plans-dir /tmp/plans]
 
-pr_data.json shape: identical to build_dashboard.py's module docstring, and
+pr_data.json shape: see :mod:`basstler.pull_request_state`, and
 --plans-dir is the same directory build_dashboard.py takes, so a dependency
 naming <plan-id>/<item-id> resolves the way the dashboard resolves it.
 
@@ -39,16 +39,12 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from basstler.build_dashboard import (
-    Dependency,
-    DependencyResolver,
-    Plan,
-    PlanCommandArguments,
-    PlanDirectory,
-    PlanValidationError,
-    PlanValidator,
-    PullRequestsByRepository,
-)
+from basstler.dashboard_plan import Plan
+from basstler.exceptions import PlanValidationError
+from basstler.plan_command_arguments import PlanCommandArguments
+from basstler.plan_dependencies import Dependency, DependencyResolver, PlanDirectory
+from basstler.plan_validation import PlanValidator
+from basstler.pull_request_state import PullRequestsByRepository
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

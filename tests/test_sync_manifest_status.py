@@ -12,19 +12,17 @@ from typing import Any
 import pytest
 import yaml
 
-from basstler.build_dashboard import (
+from basstler.dashboard_plan import Plan
+from basstler.exceptions import (
     InvalidSchemaVersion,
-    ItemStatus,
     MissingPlanDirectory,
+    MissingStatusLineError,
     PlanValidationError,
-    Plan,
-    PlanValidator,
-    PullRequestRecord,
-    PullRequestState,
 )
+from basstler.plan_model import ItemStatus, ManifestKey
+from basstler.plan_validation import PlanValidator
+from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.plan_item_bootstrap import PlanDocument
-from basstler.plan_model import ManifestKey
-from basstler.exceptions import MissingStatusLineError
 from basstler.sync_manifest_status import (
     ManifestText,
     StatusCorrection,

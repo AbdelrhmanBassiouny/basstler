@@ -1,6 +1,6 @@
 """
 Tests for check_dependency_readiness.py: classifying one item's dependencies as ready or
-not-ready to build on, via build_dashboard.py's own live-state rule.
+not-ready to build on, via the dashboard's own live-state rule.
 """
 
 import json
@@ -10,27 +10,18 @@ from typing import Any
 import pytest
 import yaml
 
-from basstler.build_dashboard import (
-    InvalidSchemaVersion,
-    Item,
-    ItemStatus,
-    LiveState,
-    Plan,
-    PlanDirectory,
-    PlanValidationError,
-    PlanValidator,
-    PullRequestRecord,
-    PullRequestState,
-    Track,
-    Wave,
-)
+from basstler.dashboard_plan import Item, Plan, Track, Wave
+from basstler.exceptions import InvalidSchemaVersion, PlanValidationError
+from basstler.plan_dependencies import PlanDirectory
+from basstler.plan_model import ItemStatus, ManifestKey
+from basstler.plan_validation import PlanValidator
+from basstler.pull_request_state import LiveState, PullRequestRecord, PullRequestState
 from basstler.check_dependency_readiness import (
     DependencyReadiness,
     ReadinessField,
     UnknownItemError,
     main,
 )
-from basstler.plan_model import ManifestKey
 
 from .constants.paths import DatasetLocation
 from .fixture_plans import (

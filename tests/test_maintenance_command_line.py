@@ -17,7 +17,7 @@ from basstler.maintenance_commands import (
     MaintenanceCommand,
     RestackCommand,
 )
-from basstler.build_dashboard import PullRequestState
+from basstler.pull_request_state import PullRequestState
 from basstler.maintenance_github import ForkPullRequests, PullRequestListState
 from basstler.maintenance_restack_steps import RestackStep
 

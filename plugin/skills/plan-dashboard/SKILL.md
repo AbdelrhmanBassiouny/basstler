@@ -17,8 +17,8 @@ anything below is unclear about a field's meaning, rather than guessing.
 
 **Everything deterministic — schema validation, live-state classification,
 drift detection, HTML rendering — lives in the committed `basstler` package
-(`src/basstler/build_dashboard.py`, `build_index.py`,
-`render_common.py`), not in this document.** This file's job is only
+(`src/basstler/build_dashboard.py`, `plan_validation.py`,
+`pull_request_state.py`, `build_index.py`, `render_common.py`), not in this document.** This file's job is only
 the parts a module can't do: resolving what to fetch, calling the GitHub API,
 and calling the `Artifact` tool. If you find yourself re-deriving rendering or
 validation logic in prose instead of just running the module, stop — that

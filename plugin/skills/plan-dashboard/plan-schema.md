@@ -82,9 +82,9 @@ items:                         # the actual trackable units of work - flat,
     blockers: ["freeform reasons", ...]   # optional, defaults to []
 ```
 
-Validation is not documentation-only: `build_dashboard.py` enforces this
+Validation is not documentation-only: `plan_validation.py` enforces this
 schema on every `/plan-dashboard` run, and `/plan-create` drafts against the
-same checks. If this document and that script ever disagree, the script is
+same checks. If this document and that module ever disagree, the module is
 the authority.
 
 ### Why `status` is deliberately thin

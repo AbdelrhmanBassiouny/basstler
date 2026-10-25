@@ -224,7 +224,7 @@ A fresh fork starts with GitHub's own default labels and none of the ones this
 tooling uses. That matters in two different ways, and only the first is
 cosmetic:
 
-- `merged` is *read* by `build_dashboard.py`, which treats it as proof a pull
+- `merged` is *read* by `pull_request_state.py`, which treats it as proof a pull
   request landed even when GitHub's merge API never recorded it. Without the
   label, such an item reads as closed-unmerged on every dashboard.
 - `bug` and `in-review` are *applied* by the conventions in

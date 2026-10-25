@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from basstler.build_dashboard import PullRequestState
+from basstler.pull_request_state import PullRequestState
 from basstler.environment import GitHubCredentialVariable
 from basstler.exceptions import DataclassException
 from basstler.maintenance_board import (

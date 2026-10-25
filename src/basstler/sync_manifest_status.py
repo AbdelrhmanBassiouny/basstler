@@ -36,7 +36,7 @@ tried and rejected: even a library that claims to preserve formatting
 spellings on every write, turning a one-line status fix into an unreadable,
 unrelated diff across the whole file.
 
-pr_data.json shape: identical to build_dashboard.py's module docstring.
+pr_data.json shape: see :mod:`basstler.pull_request_state`.
 
 Prints a one-line JSON summary to stdout:
     {"corrected": [{"id": "<item id>", "previous_status": "<status>"}, ...]}
@@ -56,15 +56,11 @@ from typing import Any
 
 import yaml
 
-from basstler.build_dashboard import (
-    ItemStatus,
-    LiveState,
-    PlanCommandArguments,
-    PlanValidationError,
-    PlanValidator,
-)
-from basstler.exceptions import MissingStatusLineError
-from basstler.plan_model import ManifestKey
+from basstler.exceptions import MissingStatusLineError, PlanValidationError
+from basstler.plan_command_arguments import PlanCommandArguments
+from basstler.plan_model import ItemStatus, ManifestKey
+from basstler.plan_validation import PlanValidator
+from basstler.pull_request_state import LiveState
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)

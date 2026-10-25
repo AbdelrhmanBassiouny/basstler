@@ -13,13 +13,9 @@ from typing import Any
 
 import pytest
 
-from basstler.build_dashboard import (
-    DependencyReference,
-    DependencyResolver,
-    Plan,
-    PullRequestRecord,
-    PullRequestState,
-)
+from basstler.dashboard_plan import Plan
+from basstler.plan_dependencies import DependencyReference, DependencyResolver
+from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.build_site import (
     GitHubPullRequestSource,
     HubSite,

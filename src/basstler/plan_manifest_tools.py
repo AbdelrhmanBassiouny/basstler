@@ -27,7 +27,8 @@ from typing import Any
 
 import yaml
 
-from basstler.build_dashboard import PlanValidationError, PlanValidator
+from basstler.exceptions import PlanValidationError
+from basstler.plan_validation import PlanValidator
 from basstler import plan_model
 from basstler.exit_codes import ExitCode
 from basstler.standard_streams import StandardStreamHandler
