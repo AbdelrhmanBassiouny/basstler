@@ -2,14 +2,14 @@
 
 These are personal workflow preferences, not project conventions. They live on
 the personal-notes branch only and are pulled into every session by
-`.claude/hooks/session-start.sh`; they are never merged into the default
+`hooks/session-start.sh`; they are never merged into the default
 branch.
 
 Everything below is a starting point, offered by `/setup-personal-notes` — it
 is yours now. Edit, delete, or replace any of it: ask Claude to "edit my
 personal notes" in any session, or change `CLAUDE.local.md` between the
 `BEGIN-PERSONAL-NOTES`/`END-PERSONAL-NOTES` markers and run
-`.claude/hooks/save-personal-notes.sh`.
+`hooks/save-personal-notes.sh`.
 
 ## Pull requests
 
@@ -56,7 +56,7 @@ personal notes" in any session, or change `CLAUDE.local.md` between the
   real work on the PR.
 - Keep it current: update it whenever the plan changes, whenever you update
   your task list, and before ending any turn that changed either. Run
-  `.claude/hooks/save-pr-progress.sh` whenever you update it.
+  `hooks/save-pr-progress.sh` whenever you update it.
 - Never write this plan into any file tracked on the PR branch itself. It
   must live only in the PR-progress section, which is stored on the
   personal-notes branch and is never merged.
@@ -74,9 +74,9 @@ personal notes" in any session, or change `CLAUDE.local.md` between the
     though it only lives in this conversation, not a file.
   - **An existing plan covers/extends it** (check auto-discovery on the current
     branch, or ask): edit `plan.yaml` directly and run
-    `.claude/hooks/save-plan.sh` + `/plan-dashboard <plan-id>`, after asking
+    `hooks/save-plan.sh` + `/plan-dashboard <plan-id>`, after asking
     what the change should be rather than deciding unilaterally — see
-    `.claude/skills/plan-dashboard/plan-schema.md`'s "Proposing structural
+    `skills/plan-dashboard/plan-schema.md`'s "Proposing structural
     changes" section.
 - This is the moment that decides whether the plan gets captured durably or
   evaporates once the session ends — do not let it pass by default.

@@ -7,7 +7,12 @@ set -euo pipefail
 #
 # Usage (from anywhere - always inspects this repo specifically, see
 # resolve-personal-notes-config.sh):
-#   ./.claude/hooks/check-setup.sh
+#   "${BASSTLER_PLUGIN_ROOT}"/hooks/check-setup.sh [--require-upstream]
+#
+# --require-upstream makes a project naming no upstream a needs-setup row
+# rather than info. Only /upstream-reviews and /stacked-pr-maintenance need
+# one, so they pass it; any other caller would otherwise fail every project
+# that simply has no upstream.
 #
 # Read-only: it fetches (into FETCH_HEAD) and reads git config, but never
 # writes config, branches, files, or remotes. Running it can't change the
@@ -29,21 +34,93 @@ set -euo pipefail
 # script must not gain a dependency just to describe whether dependencies are
 # installed.
 #
-# The one thing it deliberately does not check is anything requiring GitHub: the
-# API access /plan-dashboard needs for live pull request state, and the labels it
-# reads. Not because they are out of reach - ./setup-personal-notes.sh checks the
-# labels - but because this script runs on the hot path of every plan-* skill (see
-# ../skills/setup-personal-notes/prerequisite-check.md), where a network round trip
-# would tax every invocation to answer a question only setup asks.
+# The one thing it deliberately does not check is GitHub API access, which
+# /plan-dashboard needs for live pull request state: that is reachable only
+# through a session's MCP tools, not from a shell. The same goes for the pull
+# request labels the dashboard reads. skills/setup-personal-notes
+# covers both as their own steps.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
 EXIT_CODE=0
 
+REQUIRE_UPSTREAM=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --require-upstream) REQUIRE_UPSTREAM=true; shift ;;
+    *) echo "Unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+# names_upstream: succeeds when the stack.toml text on stdin names an
+# upstream_repository.
+names_upstream() {
+  grep -Eq '^[[:space:]]*upstream_repository[[:space:]]*='
+}
+
+# report_upstream: prints the stack_upstream row, given whether the
+# personal-notes branch could be read at all. Run while FETCH_HEAD still
+# points at that branch.
+UPSTREAM_NAMED=false
+
+report_upstream() {
+  local notes_branch_read="$1"
+  local configure_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} configure-upstream --repository <owner>/<name>"
+  if [ -f "${PROJECT_ROOT}/${PROJECT_STACK_CONFIGURATION_PATH}" ] \
+      && names_upstream < "${PROJECT_ROOT}/${PROJECT_STACK_CONFIGURATION_PATH}"; then
+    UPSTREAM_NAMED=true
+    report stack_upstream ok "named in the project's committed ${PROJECT_STACK_CONFIGURATION_PATH}"
+  elif [ "${notes_branch_read}" = true ] \
+      && git show "FETCH_HEAD:${PERSONAL_STACK_CONFIGURATION_PATH}" 2>/dev/null | names_upstream; then
+    UPSTREAM_NAMED=true
+    report stack_upstream ok "named in ${PERSONAL_STACK_CONFIGURATION_PATH} on '${NOTES_BRANCH}'"
+  elif [ "${REQUIRE_UPSTREAM}" = true ]; then
+    report stack_upstream needs-setup \
+      "no upstream named, which /upstream-reviews and /stacked-pr-maintenance need - run: ${configure_command}"
+  else
+    report stack_upstream info \
+      "no upstream named - only /upstream-reviews and /stacked-pr-maintenance need one, set with: ${configure_command}"
+  fi
+}
+
 # report: prints one TSV row, and remembers that the overall run failed if the
 # status is needs-setup, so the exit code never has to be tracked by hand at
 # each call site.
+# report_upstream_reviews_action: prints the upstream_reviews_action row,
+# checked only once an upstream is named, since only /upstream-reviews runs the
+# Action. Not
+# installed is info, since the skill reads the upstream another way; installed
+# at another branch or tag than the session's package is needs-setup, since the
+# run and the session replaying it must run the same package.
+report_upstream_reviews_action() {
+  if [ "${UPSTREAM_NAMED}" != true ]; then
+    report upstream_reviews_action info "not checked - no upstream named for it to read"
+    return 0
+  fi
+  local branch_or_tag
+  branch_or_tag="$(basstler_branch_or_tag)"
+  local install_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --branch-or-tag ${branch_or_tag}"
+  local state
+  if ! state="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+      --remote "${NOTES_REMOTE}" status --branch-or-tag "${branch_or_tag}" 2>/dev/null)"; then
+    report upstream_reviews_action info \
+      "could not read the ${UPSTREAM_REVIEWS_ACTION_BRANCH} branch on '${NOTES_REMOTE}' - to install it, run: ${install_command}"
+    return 0
+  fi
+  case "${state}" in
+    current*)
+      report upstream_reviews_action ok \
+        "'${NOTES_REMOTE}' runs basstler ${branch_or_tag}'s Action on ${UPSTREAM_REVIEWS_ACTION_BRANCH}" ;;
+    stale*)
+      report upstream_reviews_action needs-setup \
+        "'${NOTES_REMOTE}' runs the Action at ${state#stale }, not ${branch_or_tag} - run: ${install_command}" ;;
+    *)
+      report upstream_reviews_action info \
+        "not installed on '${NOTES_REMOTE}' - /upstream-reviews reads the upstream from the session instead; to read it in the fork's Actions, run: ${install_command}" ;;
+  esac
+}
+
 report() {
   local check="$1" status="$2" detail="$3"
   [ "${status}" != "needs-setup" ] || EXIT_CODE=1
@@ -80,31 +157,30 @@ git_identity_precedence_note() {
 
 # %% the tooling itself
 
-# Everything below assumes this checkout actually carries the agent tooling.
-# A fork that predates it would otherwise fail later, one confusing missing
-# file at a time, instead of here with a single clear answer.
+# Everything below assumes the plugin is whole. One that is not would otherwise
+# fail later, one confusing missing file at a time, instead of here with a
+# single clear answer.
 MISSING_TOOLING=""
 for tooling_path in \
-    "${BASSTLER_PACKAGE_DIRECTORY}/__init__.py" \
+    "${PLUGIN_MANIFEST}" \
     "${REFRESH_DASHBOARD_SCRIPT}" \
-    "${BASSTLER_PYPROJECT_FILE}" \
     "${PLAN_SCHEMA_DOCUMENT}"; do
   [ -f "${tooling_path}" ] || MISSING_TOOLING="${MISSING_TOOLING} ${tooling_path}"
 done
 if [ -n "${MISSING_TOOLING}" ]; then
   report tooling_files needs-setup \
-    "this checkout is missing:${MISSING_TOOLING} - merge the plan-dashboard tooling into your fork's default branch first"
+    "the basstler plugin at ${PLUGIN_ROOT} is missing:${MISSING_TOOLING} - reinstall the plugin"
 else
-  report tooling_files ok "the basstler package, its metadata, the refresh entry point and the schema reference are all present"
+  report tooling_files ok "the plugin's manifest, the refresh entry point and the schema reference are all present"
 fi
 
 # %% session-start wiring
 
-if grep -q 'session-start.sh' "${PROJECT_ROOT}/.claude/settings.json" 2>/dev/null; then
-  report session_start_hook ok "registered in .claude/settings.json"
+if grep -q 'session-start.sh' "${HOOKS_DIR}/hooks.json" 2>/dev/null; then
+  report session_start_hook ok "registered in the plugin's hooks/hooks.json"
 else
   report session_start_hook needs-setup \
-    ".claude/settings.json does not register .claude/hooks/session-start.sh - CLAUDE.local.md will never be populated"
+    "${HOOKS_DIR}/hooks.json does not register session-start.sh - CLAUDE.local.md will never be populated"
 fi
 
 if git check-ignore --quiet CLAUDE.local.md 2>/dev/null; then
@@ -137,6 +213,9 @@ if fetch_personal_notes_branch; then
       "'${NOTES_BRANCH}' exists but has no '${NOTES_PATH}' - session-start.sh will write no notes"
   fi
 
+  report_upstream true
+  report_upstream_reviews_action
+
   # %% who commits here would be authored as
 
   # Reported in terms of the identity a commit would really carry (see
@@ -167,31 +246,32 @@ else
   report notes_branch needs-setup \
     "no '${NOTES_BRANCH}' branch on any of: ${ATTEMPTED_NOTES_REMOTES} - run ./create-personal-notes-branch.sh (after pointing the remote at your own fork if it isn't already)"
   report notes_file needs-setup "not checked - the branch that would hold it doesn't exist yet"
+  report_upstream false
+  report_upstream_reviews_action
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 
 # %% plan-dashboard dependencies
 
 # Reported rather than installed here: this script is read-only, and running
-# it must never change the answer it gives. ./session-start.sh installs them
-# (see install_dependencies in ./resolve-personal-notes-config.sh), so on a
-# clone whose notes branch resolves, this row reports what that run just did.
+# it must never change the answer it gives. ./session-start.sh creates the
+# package's environment and installs into it (see create_basstler_environment
+# in ./resolve-personal-notes-config.sh), so on a clone whose notes branch
+# resolves, this row reports what that run just did.
 #
 # The lookup itself is missing_dependencies, beside that installer, so both
-# read the same declaration the same way. What stays here is the two reasons
-# it can answer nothing, because they are this script's rows to word.
-if ! command -v python3 > /dev/null 2>&1; then
-  report dashboard_dependencies needs-setup "python3 is not on PATH, so the plan-dashboard modules cannot run at all"
-elif [ ! -f "${BASSTLER_PYPROJECT_FILE}" ]; then
-  report dashboard_dependencies needs-setup "cannot check: ${BASSTLER_PYPROJECT_FILE} is missing"
+# read the same declaration the same way, for the same interpreter. What stays
+# here is the reasons it can answer nothing, because they are this script's
+# rows to word.
+if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
+  report dashboard_dependencies needs-setup "${BASSTLER_PYTHON} is not on PATH, so the plan-dashboard modules cannot run at all"
+elif ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
+  report dashboard_dependencies needs-setup "cannot check: the basstler package's declared dependencies could not be read"
+elif [ -z "${MISSING_DEPENDENCIES}" ]; then
+  report dashboard_dependencies ok "the basstler package and every requirement it declares are installed for ${BASSTLER_PYTHON}"
 else
-  MISSING_DEPENDENCIES="$(missing_dependencies)"
-  if [ -z "${MISSING_DEPENDENCIES}" ]; then
-    report dashboard_dependencies ok "every dependency ${BASSTLER_PYPROJECT_FILE} declares is installed"
-  else
-    report dashboard_dependencies needs-setup \
-      "not installed:${MISSING_DEPENDENCIES// / } - run: pip install ${MISSING_DEPENDENCIES}"
-  fi
+  report dashboard_dependencies needs-setup \
+    "not installed for ${BASSTLER_PYTHON}:${MISSING_DEPENDENCIES// / } - a session start installs them, or run: pip --python ${BASSTLER_PYTHON} install '$(basstler_package_source)'"
 fi
 
 # %% the result of it all working

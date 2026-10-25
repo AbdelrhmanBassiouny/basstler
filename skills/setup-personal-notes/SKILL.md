@@ -1,169 +1,286 @@
 ---
 name: setup-personal-notes
-description: One-time setup for this repo's personal-notes tooling - the personal-notes branch, its remote/branch/path resolution, the plan-dashboard dependencies, the CLAUDE.local.md the SessionStart hook writes, and the pull request labels the tooling uses. Invoke as "/setup-personal-notes". Use when someone is setting up this repo for Claude Code for the first time, when personal notes/PR progress/plan dashboards aren't working, or when another skill's prerequisite check reports the setup is incomplete.
-allowed-tools: Bash, Read, AskUserQuestion, mcp__github__get_me, mcp__github__get_label
+description: One-time setup for this repo's personal-notes tooling - the personal-notes branch, its remote/branch/path resolution, the plan-dashboard dependencies, and the CLAUDE.local.md the SessionStart hook writes. Invoke as "/setup-personal-notes". Use when someone is setting up this repo for Claude Code for the first time, when personal notes/PR progress/plan dashboards aren't working, or when another skill's prerequisite check reports the setup is incomplete.
+allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__get_me, mcp__github__get_label
 ---
 
 # Set up personal notes
 
 Gets a clone from "I have a fork of this repo and nothing else" to "personal
-notes, PR progress and plan dashboards all work."
+notes, PR progress and plan dashboards all work," asking one question per
+decision that is genuinely the user's, with a default they can accept as-is.
 
-**Every mechanical step lives in
-[`setup-personal-notes.sh`](../../hooks/setup-personal-notes.sh)**, which needs no
-session at all. This skill exists for the parts a script cannot supply: the
-answers to the questions, and the one piece of the setup that no command can
-finish (step 6). So it asks, invokes the script, and reports what came back — it
-does not re-implement any step itself.
+**Fast path first.** Steps 2 to 7 are each conditional on
+[`check-setup.sh`](../../hooks/check-setup.sh) reporting that specific thing
+missing. If it reports nothing missing, go straight to step 8 — the label check
+the script can't perform — and stop there. A re-run on an already-set-up clone
+must be a near-no-op, not an interrogation.
 
-## 1. Find out what is already done
+**Never guess a value that is the user's to choose.** Where their notes live
+and what goes in them are personal; ask, with a default. Everything else
+(installing a documented dependency, running a read-only script) is mechanical
+— just do it.
+
+## 1. Find out what is actually missing
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
-bash "${CHECK_SETUP_SCRIPT}" || true
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+bash "${CHECK_SETUP_SCRIPT}" $ARGUMENTS || true
 ```
 
-Read-only. It prints one tab-separated `<check>` / `<status>` / `<detail>` row per
-check and exits non-zero if any row is `needs-setup` (`|| true` keeps that from
-ending the block early — the rows are the point, not the status).
+`$ARGUMENTS` is whatever this skill was invoked with: `--require-upstream`
+when a skill needing the stacked-PR workflow's upstream ran it, nothing
+otherwise. Pass the same to every run of the check below.
 
-Two rows feed the questions below: `notes_remote_url` (where notes would go today)
-and `notes_branch` (whether they are already there).
+The script prints one tab-separated `<check>` / `<status>` / `<detail>` row per
+check and exits non-zero if any row is `needs-setup` (`|| true` above keeps a
+non-zero exit from ending the block early — the rows are the point, not the
+status). Read its own header comment for what each check means.
 
-**If it exited 0**, the clone is already set up. Ask nothing: go straight to
-step 5 and run the script with the remote that already resolved. That re-checks
-the labels — the one thing `check-setup.sh` cannot see — and reports the rest.
+**If it exited 0:** tell the user everything it covers is already set up, list
+what was found (the remote, branch and path in play, and that dependencies and
+`CLAUDE.local.md` are in place), then go to step 8 and stop. Do not ask
+anything else. Do not re-verify by hand what the script just verified.
 
-## 2. `tooling_files` — the fork is missing the tooling itself
+**Otherwise:** work through the `needs-setup` rows in the order printed —
+they're ordered so an earlier fix can be a prerequisite of a later one — using
+the steps below. Skip the step for any check already `ok`.
 
-Not fixable from here: their default branch predates the `.claude/` tooling. Tell
-them to merge the current default branch into their fork and re-run. Stop; every
-later step depends on files this clone doesn't have.
+## 2. `tooling_files` / `session_start_hook` — the plugin is incomplete
 
-## 3. `session_start_hook` / `claude_local_md_ignored` — a broken checkout
+Not fixable from here: the basstler plugin's own files are missing. Tell them to
+reinstall the plugin (claude.ai Customize > Plugins, or `/plugin` in a local
+session) and re-run. Stop; every later step depends on those files.
 
-Both come from committed files (`.claude/settings.json`, `.gitignore`), so a
-failure means this checkout diverges from the default branch rather than anything
-personal being unconfigured. Say which one is off and what restores it
-(`git checkout <default-branch> -- .claude/settings.json` / `.gitignore`); ask
-before changing a tracked file, since the divergence may be deliberate.
+## 3. `claude_local_md_ignored` — CLAUDE.local.md could be committed
 
-## 4. The questions
+The project's `.gitignore` does not ignore `CLAUDE.local.md`, so the notes
+could end up in a commit. Offer to add `CLAUDE.local.md`,
+`.claude/settings.local.json`, `.claude/.personal-settings-sync-hash` and
+`.claude/.plan-state-sync-sha` to it; ask before changing the tracked file.
 
-**Which remote?** The decision the whole setup turns on: is the notes remote their
-own fork, or a shared upstream they cannot push to? Compare the
-`notes_remote_url` row against their GitHub login:
+## 4. `notes_branch` — where the notes should live
+
+The decision the whole setup turns on: **is the notes remote their own fork, or
+a shared upstream they can't push to?** The script can't tell (a git remote URL
+doesn't say who owns it), so establish it here.
+
+Read the `notes_remote_url` row, and get the user's GitHub login:
 
 ```
 mcp__github__get_me
 ```
 
-If the URL's owner is that login, it is already their own fork — use it as the
-answer and move on. If it isn't (the common case: `origin` is the shared
-upstream), the notes would be pushed somewhere they don't own. Ask where their
-notes should live, offering `https://github.com/<their-login>/<repo>` as the
-default, and note they may also name a remote already in the clone, or a different
-repository entirely.
+If the URL's owner is that login, the resolved remote is already their own fork
+— go straight to creating the branch. If it isn't (the common case: `origin` is
+the shared upstream), the notes would be pushed somewhere they don't own. Ask
+where their notes should live, offering `https://github.com/<their-login>/<repo>`
+as the default, and note that they may also use a remote name already in the
+clone, or a different repository entirely.
 
-The script verifies this too, and refuses outright when GitHub says the remote
-belongs to someone else. Asking first is nicer than being refused; the script's
-check is the backstop, not the interface.
-
-**Starter notes?** Only when there is no notes file yet. Offer
-[`starter-notes.md`](./starter-notes.md) — working conventions for pull requests,
-review comments and progress tracking — defaulting to yes, and make clear it is a
-starting point they own and can edit or discard. Declining leaves an empty file,
-which is a perfectly good state.
-
-**Create missing labels?** Six between the dashboard and the stacked-PR workflow
-(`basstler.repository_label.RepositoryLabel` is the list), and a fresh fork has
-none of them. Creation writes to their repository and is visible
-to everyone who can see it, so ask before passing `--create-labels`. Defaulting
-to yes is fine; doing it unasked is not.
-
-What creating them buys is mostly the description: a label that arrives any other
-way turns up unexplained to everyone who later sees it.
-
-**Which git identity?** What their commits should be authored as, recorded on the
-notes branch so every clone they work in picks it up. Read what git resolves here
-first:
+Apply the answer, if it differs from what resolved, before creating anything:
 
 ```bash
-git var GIT_AUTHOR_IDENT
+git config claude.personalNotesRemote <chosen-remote-or-url>
 ```
 
-That is what commits carry today, and in a session it is usually the agent's rather
-than theirs, which is exactly what recording one fixes. Offer it as the default when
-it looks like a person's, and otherwise ask outright. The script refuses to guess -
-what someone's commits say is theirs to decide - so a run given neither flag simply
-leaves the `git_identity` row `needs-setup`.
+**Then tell them plainly that `git config` alone is not enough for sessions
+that clone fresh every time** (Claude Code on the web, and any cloud
+environment): the clone — and this config with it — is gone next session. For
+those, the same value has to be set as a persistent environment variable at the
+environment level, which no command can do from inside the session. Give them
+the exact lines to paste, and only the ones that differ from the defaults:
 
-Only these four are worth asking. The branch and path have working defaults;
-mention that both are overridable (`claude.personalNotesBranch` /
-`claude.personalNotesPath`, same three-way precedence) and only ask if they want
-something else — for example a distinct branch name so several people sharing one
-remote don't collide.
-
-## 5. Run the setup
-
-```bash
-bash "${SETUP_PERSONAL_NOTES_SCRIPT}" --remote <chosen-remote-or-url> \
-  [--name "<their name>" --email <their email>] [--starter-notes] [--create-labels]
+```
+CLAUDE_PERSONAL_NOTES_REMOTE=<chosen-remote-or-url>
+CLAUDE_PERSONAL_NOTES_BRANCH=<branch, only if not claude/personal-notes>
+CLAUDE_PERSONAL_NOTES_PATH=<path, only if not .claude/personal/notes.md>
 ```
 
-It points the notes remote at the choice, creates the branch, seeds it if asked,
-records the identity when given one, runs `session-start.sh` so this clone picks the
-notes up - which also installs whatever `basstler/pyproject.toml` declares and the
-environment lacks - checks the labels, and finishes by printing `check-setup.sh`'s
-report. Safe to re-run: every step is skipped when already done, and it exits with
-the final check's status, so it cannot report a half-finished setup as success.
-
-Relay what it printed — especially any row still `needs-setup` — rather than what
-you expected it to print.
-
-**If it reports that it skipped the owner or label checks for lack of
-credentials**, that is the one thing this session can do that the script cannot:
-there is no `GH_TOKEN`/`GITHUB_TOKEN` and no logged-in `gh` in the shell. Do those
-two checks over MCP instead — `mcp__github__get_me` for the owner comparison above,
-and `mcp__github__get_label` per `RepositoryLabel` member against the repository
-they open pull requests against, where a `404` means missing. There is
-no create-label tool in the MCP server, so report which are missing and point them
-at `https://github.com/<owner>/<repo>/labels`, or re-run the script somewhere `gh`
-is authenticated. Missing labels block nothing else.
-
-## 6. The part no command can finish
-
-**`git config` alone is not enough for sessions that clone fresh every time**
-(Claude Code on the web, and any cloud environment): the clone — and its git config
-with it — is gone next session. For those, the same values have to be set as
-persistent environment variables at the *environment* level, which nothing inside a
-session can do. Run
-
-```bash
-python3 -m basstler.setup_steps
-```
-
-and relay its last step: it prints exactly the lines that differ from the defaults,
-already quoted where a bare value would be cut short, and where to paste them. Point
-them as well at [`personal-notes.env.example`](../../hooks/personal-notes.env.example) and
-[`configure-personal-notes.sh`](../../hooks/configure-personal-notes.sh) for the two
-shapes that wiring takes. Say so plainly rather than leaving them to discover it
+Point them at their environment's own docs for where that list lives (for
+Claude Code on the web: <https://code.claude.com/docs/en/claude-code-on-the-web>),
+and at [`personal-notes.env.example`](../../hooks/personal-notes.env.example)
+and [`configure-personal-notes.sh`](../../hooks/configure-personal-notes.sh)
+for the two shapes that wiring takes. This is the one part of the setup that
+stays the user's to finish — say so, rather than leaving them to discover it
 next session when their notes have vanished.
 
-Then tell them what they can now do, briefly: ask for notes edits in any session,
-track a PR's progress, and — if the dependencies installed — `/plan-create` and
-`/plan-dashboard`, pointing at
-[`example-walkthrough.md`](../plan-dashboard/example-walkthrough.md) for the worked
-example.
+Only the remote is worth asking about by default. The branch and path have
+working defaults; mention that both are overridable (same three-way precedence,
+via `claude.personalNotesBranch` / `claude.personalNotesPath`) and only ask if
+they want something else — for example, a distinct branch name so several
+people sharing one remote don't collide.
+
+Then create it:
+
+```bash
+"${HOOKS_DIR}/create-personal-notes-branch.sh"
+```
+
+It creates the branch with an empty notes file, on the resolved remote, in a
+scratch worktree — the current branch and working tree are untouched. It
+refuses to touch a branch that already exists anywhere it can see, so it can
+never overwrite notes that are already there.
+
+## 5. `notes_file` — the notes file, and what starts in it
+
+Offer to seed the new notes with
+[`starter-notes.md`](./starter-notes.md) — working conventions for pull
+requests, review comments and progress tracking — defaulting to yes, and making
+clear it's a starting point they own and can edit or discard. If they decline,
+an empty file is a perfectly good state; `create-personal-notes-branch.sh`
+already made one.
+
+To seed it:
+
+```bash
+"${HOOKS_DIR}/write-personal-notes-file.sh" \
+  --source "${STARTER_NOTES_FILE}" \
+  --destination "${NOTES_PATH}" \
+  --message "Initialize personal notes from the starter template"
+```
+
+That helper is idempotent — it pushes nothing if the content already matches.
+
+## 5a. `stack_upstream` — the repository the project is reviewed on
+
+Only when this row is `needs-setup`: an `info` row means nothing asked for an
+upstream, and most projects have none.
+
+The upstream is the repository the project's pull requests are reviewed on,
+which is the user's to name. Ask for it as `<owner>/<name>`, offering as the
+default the repository the clone's `upstream` remote points at, if it has
+one. Then save it to their
+personal `stack.toml`, which keeps it out of the project's tracked files:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" configure-upstream --repository <owner>/<name>
+```
+
+It keeps every other personal stack setting and replaces an upstream named
+before. A project that wants every contributor to share the answer can commit
+`upstream_repository` in `.claude/basstler/stack.toml` instead; the check
+accepts either.
+
+## 5b. `upstream_reviews_action` — the fork's own upstream-reviews Action
+
+Only once an upstream is named (the row says "not checked" otherwise). Unless
+the row is `ok`, install it without asking - it is mechanical, and touches
+nothing but a branch of its own on the user's fork:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
+```
+
+It creates a new branch named `basstler/upstream-reviews` on the user's fork,
+with no history in common with the project's branches. The branch holds only a
+README and a short workflow file that calls basstler's reusable workflow by
+reference, so it works on a fork of any repository. Run again, it updates that
+workflow to the basstler branch or tag this session's package was installed at.
+Then tell
+the user the one step left to them, which `python -m basstler.setup.steps` also
+prints: a fork starts with Actions off, so they enable them once at
+`https://github.com/<fork>/actions`. Until they do, `/upstream-reviews` reads
+the upstream from the session instead.
+
+## 6. `dashboard_dependencies` — what the dashboards need
+
+Mechanical, not a preference. Say what's missing and install it, into the
+package's own environment where it exists:
+
+```bash
+install_basstler_into_environment && echo "installed from $(basstler_package_source)"
+```
+
+Where the environment does not exist yet, step 7's session start creates it
+and installs into it; its `dependencies:` line reports the outcome.
+
+If the install fails (no network, a managed environment, a read-only
+interpreter), don't retry blindly — report the failure and the command, and
+carry on with the rest of the setup. Everything except plan dashboards works
+without these.
+
+## 7. `claude_local_md` — make this session pick it up
+
+The `SessionStart` hook writes `CLAUDE.local.md`, so it has already run for
+this session, before any of the above existed. Run it now so the notes are
+live immediately instead of next session:
+
+```bash
+"${HOOKS_DIR}/session-start.sh"
+```
+
+Its output is the same summary a real session start prints. Note for the user
+that the notes it just wrote are not yet in this conversation's context — this
+session will pick them up on its next start, while everything else is usable
+right away.
+
+## 8. The pull request labels this tooling applies
+
+`check-setup.sh` can't see this one — labels live behind the GitHub API, which
+is reachable only from a session — so it is checked here instead.
+
+A fresh fork starts with GitHub's own default labels and none of the ones this
+tooling uses. That matters in two different ways, and only the first is
+cosmetic:
+
+- `merged` is *read* by `pull_request_state.py`, which treats it as proof a pull
+  request landed even when GitHub's merge API never recorded it. Without the
+  label, such an item reads as closed-unmerged on every dashboard.
+- `bug` and `in-review` are *applied* by the conventions in
+  [`starter-notes.md`](./starter-notes.md) ("bug-fix PRs must always carry the
+  `bug` label"). Applying a label a repository doesn't have fails, so a session
+  following those notes hits an error at the worst moment — mid-way through
+  opening a pull request.
+
+Check all three against the repository the user opens pull requests against —
+their fork, normally this clone's `origin`, and the same repository step 4
+settled on if that differed:
+
+```
+mcp__github__get_label   # per label: merged, bug, in-review
+```
+
+A `404` means it's missing. If any are, say which and offer to create them —
+ask first, since this writes to their repository.
+
+There is no create-label tool in the GitHub MCP server, so create them through
+the `gh` CLI when it's available:
+
+```bash
+gh label create <name> --repo <owner>/<repo> --description "<what it means>"
+```
+
+If `gh` isn't installed, don't pretend it is: give the user the exact names and
+point them at `https://github.com/<owner>/<repo>/labels`, and say which of the
+three are missing. Missing labels don't block anything else in this setup —
+report and carry on.
+
+## 9. Confirm, by re-running the check
+
+```bash
+bash "${CHECK_SETUP_SCRIPT}" $ARGUMENTS || true
+```
+
+Report what the second run says, not what you expect it to say. If a row is
+still `needs-setup`, say which and why — a setup that half-worked and was
+reported as finished is worse than one that reported the truth.
+
+Then tell them what they can now do, briefly: ask for notes edits in any
+session, track a PR's progress, and — if the dependencies installed —
+`/plan-create` and `/plan-dashboard`, pointing at
+[`example-walkthrough.md`](../plan-dashboard/example-walkthrough.md) for the
+worked example.
 
 ## What this skill must never do
 
-- **Never invent where someone's notes live.** A wrong remote pushes personal notes
-  to a repository they didn't choose. Ask, always, unless the resolved remote is
-  already provably their own.
-- **Never claim the environment-variable half is done.** No command inside a session
-  can persist an environment variable for the next fresh clone.
-- **Never re-implement a step the script owns.** It is the single definition of what
-  setup does; a copy here is how the two drift apart.
-- **Never create labels in someone's repository unasked.** Labels are visible to
-  everyone who sees the repository; report what's missing and offer.
+- **Never invent where someone's notes live.** A wrong remote pushes personal
+  notes to a repository they didn't choose. Ask, always, unless the resolved
+  remote is already provably their own.
+- **Never claim the environment-variable half is done.** No command inside a
+  session can persist an environment variable for the next fresh clone.
+- **Never touch an existing personal-notes branch's contents.** Every write
+  here is either creating a branch that provably doesn't exist yet, or a
+  no-op-if-unchanged push of a file the user just asked for.
+- **Never create labels in someone's repository unasked.** Labels are visible
+  to everyone who sees the repository; report what's missing and offer.

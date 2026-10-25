@@ -1,6 +1,6 @@
 ---
 name: stacked-pr-maintenance
-description: Run one maintenance pass over a stacked-PR fork-staging workflow - reparent any pull request whose base has landed, restack branches whose parent moved, and promote every approved unblocked branch to the upstream review queue. Invoke as "/stacked-pr-maintenance [fork=<owner/repo>] [upstream=<owner/repo>] [--non-interactive]". Use when asked to run a stack maintenance pass, restack the stack, promote ready branches, or clean up after a branch has landed upstream, and when a scheduled routine hands this document its values.
+description: Run one maintenance pass over a stacked-PR fork-staging workflow - reparent any pull request whose base has landed, restack branches whose parent moved, and promote every approved unblocked branch to the upstream review queue. Invoke as "/stacked-pr-maintenance [fork=<owner/repo>] [upstream=<owner/repo>]". Use when asked to run a stack maintenance pass, restack the stack, promote ready branches,, or clean up after a branch has landed upstream, and as the first step of plan-item-kickoff and plan-item-resolve.
 allowed-tools: Bash, Read, Grep, AskUserQuestion, mcp__github__pull_request_read, mcp__github__list_pull_requests, mcp__github__update_pull_request, mcp__github__issue_write, mcp__github__add_issue_comment
 ---
 
@@ -31,7 +31,10 @@ exactly where it is.
 Do not use the Workflow tool - the multi-agent orchestration tool that fans work out to subagents.
 This pass is a short sequence of git and API calls; fanning it out multiplies the chance of two
 agents pushing the same branch. Use plain git plus the GitHub MCP server. Never force-push a branch
-that has an open upstream pull request unless it carries the `rebase` label.
+that has an open upstream pull request unless it carries the `rebase` label. The executor's own
+restack is the one exception: it replaces the merges earlier passes left at a branch's tip with a
+single new one, under a lease, so a branch carries one restack merge however many passes it waits
+through.
 
 HARD RULES so you never drift into review work:
 - NEVER call `subscribe_pr_activity`, and never stay subscribed - you learn CI by POLLING (step 2).
@@ -42,7 +45,7 @@ HARD RULES so you never drift into review work:
 - NEVER enter plan mode or post a "here's my plan" comment. You either perform a mechanical step from the
   steps below or you stop; you never open a discussion.
 - LABELS ARE REPLACE, NOT ADD: the GitHub label-write call takes the PR's **entire** new label set - it
-  does not add to what's already there. Never compute that set yourself; `stack.py labels` computes it
+  does not add to what's already there. Never compute that set yourself; `basstler.stack labels` computes it
   from the labels the PR carries now, and its output is the whole list you pass to the write.
 
 ## Step 0 - resolve which repositories this runs on
@@ -51,20 +54,13 @@ Nothing below names a repository or a remote. Resolve both here, once, and use w
 whole run. Do not inspect, guess at, or rename remotes yourself - a remote's name carries no meaning,
 and a wrong guess points every push at the wrong repository.
 
-**a. Make the tooling present rather than assuming it.** Every step shells out to
-`basstler/`, and a failure in a later step lands after an earlier one has already changed pull
-requests. If `ls basstler/maintenance.py` fails, `git fetch` the ref you were told to resolve
-this document from and restore it **into the working tree only**:
+**a. Source the configuration once.** The tooling is the plugin's and the package's, never the
+checkout's, so nothing has to be restored into the working tree whichever branch it has checked
+out; every command below runs the package through the interpreter the configuration names:
 
 ```bash
-git restore --source=<ref> --worktree -- basstler/
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 ```
-
-Never reach for `git checkout` with a ref and a path here. That form writes the index as well, so on
-a branch that does not carry the tooling the files end up staged - and the next commit made on that
-branch during a pass is a restack merge, which would commit the tooling into somebody's feature
-branch and from there into the upstream. `git restore --worktree` leaves them untracked, where
-nothing can pick them up.
 
 Once `basstler/` is on the default branch this is a no-op on a fresh clone. The pass itself no
 longer takes the tooling away: `restack` switches branches in a worktree of its own, so the checkout
@@ -75,31 +71,31 @@ you invoked it from keeps its branch and its files.
 1. **What you were given.** `fork=<owner/repo>` and `upstream=<owner/repo>` in this skill's arguments
    are authoritative. Pass them straight through as `--fork` / `--upstream` and never second-guess
    them.
-2. **What the checkout knows.** Run `python -m basstler.stack configuration` (adding `--fork` /
+2. **What the checkout knows.** Run `"${BASSTLER_PYTHON}" -m basstler.stack configuration` (adding `--fork` /
    `--upstream` for anything you were given). It prints one `field<TAB>value` line per setting -
    `fork_remote`, `fork_repository`, `upstream_remote`, `upstream_repository`, `upstream_base`, the
    label names - deciding which remote is which by the repository each URL names. Exit 0 means use
    it. If an `upstream_setup_command` line appears, run exactly that command and re-run
    `configuration`.
 3. **Exit status 4 - the fork could not be identified.** The checkout has no fork remote, or has more
-   than one candidate, and there is no safe guess.
-   - **If you were invoked with `--non-interactive`** (a scheduled routine always is): stop and
-     report what `git remote -v` shows. Asking would break the hard rule against opening a
-     discussion.
-   - **Otherwise**: ask the developer with `AskUserQuestion`, offering the repositories from
-     `git remote -v` as options, then persist the answer so the next run needs no question - write
-     `fork_repository = "<owner/repo>"` into `.claude/personal/stack.toml` on the personal-notes
-     branch:
+   than one candidate, and there is no safe guess. Ask the developer with `AskUserQuestion`,
+   offering the repositories from `git remote -v` as options, then persist the answer so the next
+   run needs no question - write `fork_repository = "<owner/repo>"` into
+   `.claude/personal/stack.toml` on the personal-notes branch:
 
-     ```bash
-     "${CLAUDE_PROJECT_DIR}/.claude/hooks/write-personal-notes-file.sh" \
-       --source <the file you prepared> \
-       --destination .claude/personal/stack.toml \
-       --message "record which repository is my fork"
-     ```
+   ```bash
+   "${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" \
+     --source <the file you prepared> \
+     --destination .claude/personal/stack.toml \
+     --message "record which repository is my fork"
+   ```
 
-     That branch is fetched by every run, so the answer survives the fresh clone a scheduled run
-     starts from. Re-run `configuration` and continue.
+   That branch is fetched by every run, so the answer survives a fresh clone. Re-run
+   `configuration` and continue.
+
+4. **Exit status 11 - the project names no upstream.** Ask the developer for the `<owner>/<name>`
+   the project is reviewed on, save it with `"${BASSTLER_PYTHON}" -m basstler.setup.steps
+   configure-upstream --repository <owner>/<name>`, re-run `configuration` and continue.
 
 Any other non-zero exit is a stop-and-report, not something to work around.
 
@@ -122,7 +118,7 @@ below are the mirror image: they have no MCP tool, so they do need curl.
 Export the board first - every step below derives from it, and this one is no exception:
 
 ```bash
-python -m basstler.maintenance board --write
+"${BASSTLER_PYTHON}" -m basstler.maintenance board --write
 ```
 
 Never assemble that file by hand - a fetch that drops a field produces a board that is wrong rather
@@ -131,7 +127,7 @@ than obviously incomplete.
 Then run:
 
 ```bash
-python -m basstler.stack reparents
+"${BASSTLER_PYTHON}" -m basstler.stack reparents
 ```
 
 It prints one `branch<TAB>pr<TAB>current base<TAB>target base` line per open pull request whose base
@@ -170,7 +166,7 @@ leave the rest untouched, and report it: this is a preview API, so never improvi
 The rest of the pass is one command:
 
 ```bash
-python -m basstler.maintenance run-report --json
+"${BASSTLER_PYTHON}" -m basstler.maintenance run-report --json
 ```
 
 It performs the fast-forward, the restack and the promotion, and emits the whole run as one
@@ -195,6 +191,13 @@ made. Everything else - `fast_forward`, `landed`, `restacked`, `promoted`,
 `pushed` or `up-to-date` is a branch the pass could not publish; the executor has already labelled
 and commented on it, so name it in the summary and move on.
 
+A `skipped` entry is a pull request open on the fork whose head the pass cannot maintain, so it was
+left out of the restack, the promotion and the landed list, and nothing was labelled or commented on
+it. Its `pull_request` is the board's entry for it, and its `reason` says why it was skipped:
+`head-on-another-fork` - the head lives on another contributor's fork (`head_repository` names it), which this credential cannot push to - or `head-repository-deleted` -
+the repository its head lived in is gone. Its base is still on the fork, so step 1 still reparents it
+when that base lands. List it in the summary as skipped, with its reason; it is not yours to fix.
+
 The one exception is `integration-failed`: integrating the parent failed without conflicting on
 anything, so the branch is not what needs fixing and its owner was deliberately not told. Its
 `explanation` carries what git said - an untracked file in the way, unrelated histories, a
@@ -212,8 +215,8 @@ yourself.
   compare-and-create link and stops there, and the developer clicks Create.
 - **It never debugs or fixes a red check.** Report it to the branch's owner the same way a conflict
   is reported: find the session link in the fork pull request's description, post a comment prefixed
-  `🔴 ROUTINE - NEEDS RESOLUTION:` stating the failing check and its conclusion, and label the pull
-  request `needs-resolution` via `stack.py labels` so the rest of its labels survive. That comment is
+  `🔴 MAINTENANCE - NEEDS RESOLUTION:` stating the failing check and its conclusion, and label the pull
+  request `needs-resolution` via `basstler.stack labels` so the rest of its labels survive. That comment is
   the only channel available to you: no session subscribes to a pull request's activity, so it sits
   on GitHub until the owner reads it - write it to stand alone. Never disable a check to go green.
 - **It never subscribes to learn CI.** Poll with `pull_request_read` → `get_check_runs` /
@@ -230,10 +233,9 @@ Record every branch reported on this run - the summary must list it, since a com
 guaranteed to be seen.
 
 The **top** of the finish summary must list all pending upstream create-links: any built this run,
-and any fork pull request still carrying `cram2-link-sent` but not yet `in-review` (re-listed from
+and any fork pull request still carrying `promotion-link-sent` but not yet `in-review` (re-listed from
 prior runs, its link rebuilt with `promotion-link`). This section appears at the top even when
-nothing new was built, as long as any are pending - a scheduled run is configured to email its
-summary, so the summary *is* the delivery. List each pull request's number, title, branch and
+nothing new was built, as long as any are pending. List each pull request's number, title, branch and
 one-click link.
 
 Right after the links, list every branch reported on this run: its number and branch, the
@@ -242,7 +244,7 @@ link to the comment posted. Then list every pull request whose reparent could **
 its number, the base it is stuck on, the base it should have, and which step of the native-stack
 sequence stopped you - a stack left dissolved or half-rebuilt needs attention immediately and
 nothing else surfaces it. Then summarise what landed, what was restacked, and what was promoted,
-plus anything you stopped on.
+then every `skipped` pull request with its number, branch and reason, plus anything you stopped on.
 
 ## Command reference - resuming a partial run
 
@@ -250,10 +252,10 @@ Step 2 performs all of these in order. Reach for one directly only when a run st
 when a single step has to be re-run:
 
 ```bash
-python -m basstler.maintenance board --write   # export the fork's open pull requests
-python -m basstler.maintenance fast-forward    # move the fork's base onto the upstream
-python -m basstler.maintenance restack         # integrate every moved parent, publish, report
-python -m basstler.maintenance promote         # build and record every upstream link
+"${BASSTLER_PYTHON}" -m basstler.maintenance board --write   # export the fork's open pull requests
+"${BASSTLER_PYTHON}" -m basstler.maintenance fast-forward    # move the fork's base onto the upstream
+"${BASSTLER_PYTHON}" -m basstler.maintenance restack         # integrate every moved parent, publish, report
+"${BASSTLER_PYTHON}" -m basstler.maintenance promote         # build and record every upstream link
 ```
 
 Each prints what it did and exits with the same statuses as the whole pass. Run `--help` for a
@@ -267,7 +269,7 @@ Never move commits from memory, and never judge the move yourself. The executor 
 it makes; you invoke this only for a push you are making yourself:
 
 ```bash
-python -m basstler.stack check-move \
+"${BASSTLER_PYTHON}" -m basstler.stack check-move \
   --action push --source <branch> --destination <branch> --destination-remote <fork-remote>
 ```
 

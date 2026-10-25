@@ -5,7 +5,7 @@ Claude Code already loads as project memory, and which is gitignored — from a 
 you own. Your notes (e.g. "always open my PRs as drafts") follow you across sessions and are never
 committed to a shared branch.
 
-> **Setting this up for the first time?** [`../SETUP.md`](../SETUP.md) is the whole thing in
+> **Setting this up for the first time?** [`SETUP.md`](../../docs/SETUP.md) is the whole thing in
 > three steps, including the ones only you can do — labels on your fork, Claude's access to it,
 > and the variables a fresh-clone environment needs. This page is the reference behind it.
 >
@@ -17,7 +17,7 @@ Three kinds of content, stored the same way and never merged anywhere:
 
 | Section in `CLAUDE.local.md` | Holds | Stored on the notes branch at | Saved by |
 | --- | --- | --- | --- |
-| Personal notes | Your standing preferences | `.claude/personal/cram-notes.md` | [`save-personal-notes.sh`](./save-personal-notes.sh) |
+| Personal notes | Your standing preferences | `.claude/personal/notes.md` | [`save-personal-notes.sh`](./save-personal-notes.sh) |
 | PR progress | Plan, progress and next steps for the current branch's PR | `.claude/personal/pr-progress/<branch>.md` | [`save-pr-progress.sh`](./save-pr-progress.sh) |
 | Plan | A multi-PR initiative's manifest and roadmap | `.claude/personal/plans/<plan-id>/` | [`save-plan.sh`](./save-plan.sh) |
 
@@ -36,35 +36,26 @@ Every run prints a summary of what it found and wrote, so a session never has to
 
 It is safe to re-run: on a clone that's already set up it reports what it found and asks nothing.
 You don't have to run it first either — `/plan-create`, `/plan-dashboard`, `/plan-item-kickoff`,
-`/plan-item-resolve` and `/add-plan-item` each offer it if something is missing.
+`/plan-item-resolve` and `/add-plan-item` each run it for you if something is missing, without
+stopping to ask.
 
-Or without a session at all — the same setup, non-interactively:
-
-```bash
-"$CLAUDE_PROJECT_DIR/.claude/hooks/setup-personal-notes.sh" --remote <name-or-url> \
-  [--name "Your Name" --email you@example.com] [--starter-notes] [--create-labels]
-```
-
-`--remote` is required: guessing it wrong pushes your notes to a repository you may not own. It
-verifies the remote is yours, needing either the `gh` CLI or `GH_TOKEN`/`GITHUB_TOKEN`, and reports
-rather than guesses when it has neither. `--name`/`--email` are optional and go together; without
-them no identity is recorded and the final report says so.
-
-The individual steps, if you'd rather drive them yourself:
+To do the same by hand:
 
 ```bash
-"$CLAUDE_PROJECT_DIR/.claude/hooks/create-personal-notes-branch.sh"           # create the branch
-"$CLAUDE_PROJECT_DIR/.claude/hooks/save-git-identity.sh" --name "Your Name" \
+"${BASSTLER_PLUGIN_ROOT}/hooks/create-personal-notes-branch.sh"           # create the branch
+"${BASSTLER_PLUGIN_ROOT}/hooks/save-git-identity.sh" --name "Your Name" \
   --email "you@example.com"                                                   # commit as yourself
-"$CLAUDE_PROJECT_DIR/.claude/hooks/check-setup.sh"                            # inspect, change nothing
-"$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh" && cat CLAUDE.local.md   # verify
+"${BASSTLER_PLUGIN_ROOT}/hooks/check-setup.sh"                            # inspect, change nothing
+"${BASSTLER_PLUGIN_ROOT}/hooks/session-start.sh" && cat CLAUDE.local.md   # verify
 ```
 
 `check-setup.sh` prints one row per check and exits non-zero if anything still needs doing.
 
-Every session start also installs whatever of the dependencies `basstler/pyproject.toml` declares
-is missing, for a clone whose personal-notes branch resolves — reported on its `dependencies:`
-line, never fatal, and described in `basstler/README.md`.
+Every session start also gives the `basstler` package its own environment,
+`~/.local/share/basstler/venv` (under `$BASSTLER_HOME` when set), with the package and its
+dependencies installed into it wherever any of that is missing or the plugin names a newer
+release, for a project whose personal-notes branch resolves — reported on its `dependencies:`
+line, never fatal, and described in the repository's `README.md`.
 
 Every session start prints its own summary, so none of the three things below has to be
 remembered. Its `setup:` line runs `check-setup.sh` and names any check that still needs setup;
@@ -91,7 +82,7 @@ that is the agent's own identity, so commits are attributed to it *by default* �
 forgetting. Record yours once:
 
 ```bash
-"$CLAUDE_PROJECT_DIR/.claude/hooks/save-git-identity.sh" --name "Your Name" --email "you@example.com"
+"${BASSTLER_PLUGIN_ROOT}/hooks/save-git-identity.sh" --name "Your Name" --email "you@example.com"
 ```
 
 It is stored at `.claude/personal/git-identity` on the notes branch, and every session start writes
@@ -119,8 +110,8 @@ The same branch can carry your personal `.claude/settings.local.json` — the fi
 as this project's local settings (permission rules, environment variables, anything else in its
 settings schema). Store it on the notes branch at `.claude/personal/settings.local.json` and each
 session start copies it into the project root, so permissions you'd otherwise re-grant in every
-fresh clone follow you around. It is gitignored; the committed `.claude/settings.json` stays the
-shared, team-wide one.
+fresh clone follow you around. It should be gitignored; a committed `.claude/settings.json`
+stays the shared, team-wide one.
 
 It gets no header or markers — strict JSON has nowhere to put them — so the file is copied whole.
 
@@ -131,7 +122,7 @@ Otherwise it keeps your version and says so in its summary. To push your edits u
 resume:
 
 ```bash
-"$CLAUDE_PROJECT_DIR/.claude/hooks/save-personal-settings.sh"
+"${BASSTLER_PLUGIN_ROOT}/hooks/save-personal-settings.sh"
 ```
 
 Or ask Claude — *"save my Claude settings"* — the same way as your notes.
@@ -145,7 +136,7 @@ Three independent settings, each resolved as **git config**, then **environment 
 | --- | --- | --- | --- |
 | Remote | `claude.personalNotesRemote` | `CLAUDE_PERSONAL_NOTES_REMOTE` | `origin` |
 | Branch | `claude.personalNotesBranch` | `CLAUDE_PERSONAL_NOTES_BRANCH` | `claude/personal-notes` |
-| Path | `claude.personalNotesPath` | `CLAUDE_PERSONAL_NOTES_PATH` | `.claude/personal/cram-notes.md` |
+| Path | `claude.personalNotesPath` | `CLAUDE_PERSONAL_NOTES_PATH` | `.claude/personal/notes.md` |
 
 Override only what you need:
 
@@ -167,8 +158,8 @@ Override only what you need:
     config from them, and is a no-op if none are set.
 
 For Claude Code on the web, see <https://code.claude.com/docs/en/claude-code-on-the-web> for where
-either of those lives. [`basstler/setup_steps.py`](../../basstler/setup_steps.py), run as
-`python3 -m basstler.setup_steps`, prints the exact variable lines your
+either of those lives. [`src/basstler/setup/steps.py`](../../src/basstler/setup/steps.py), run as
+`~/.local/share/basstler/venv/bin/python -m basstler.setup.steps`, prints the exact variable lines your
 clone needs — only the settings you have moved off their defaults — alongside the other two steps
 no script can perform for you.
 
@@ -197,17 +188,17 @@ the narrative that doesn't belong in structured data.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in progress` as soon as its plan is approved — via
-  [`basstler/plan_item_bootstrap.py`](../../basstler/plan_item_bootstrap.py), which you can also
-  run by hand as `python3 -m basstler.plan_item_bootstrap` — so the
+  [`src/basstler/plan/item_bootstrap.py`](../../src/basstler/plan/item_bootstrap.py), which you can also
+  run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan.item_bootstrap` — so the
   manifest never says `not started` while the work is underway.
 - Decide where a new piece of work goes → `/add-plan-item <description>`. It runs the shared scope
   check in [`scope-decision.md`](../skills/add-plan-item/scope-decision.md) — the rule all four plan
   skills defer to for "is this new work, or a change to work already in flight?"
 - Choose whether either skill implements on its own, plans first, or asks → `/plan-item-mode
   <auto|plan|ask> [kickoff|resolve|both]`, or the
-  [`basstler/plan_item_mode.py`](../../basstler/plan_item_mode.py) `resolve|set` it calls, which you
-  can also run by hand as `python3 -m basstler.plan_item_mode`. Defaults in
-  [`plan-item-modes.toml`](../../basstler/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
+  [`src/basstler/plan/item_mode.py`](../../src/basstler/plan/item_mode.py) `resolve|set` it calls, which you
+  can also run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan.item_mode`. Defaults in
+  [`plan-item-modes.toml`](../../src/basstler/plan/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
   override at `.claude/personal/plan-item-modes.toml` on the notes branch. What each mode obliges
   the skill to do, and when `auto` still stops to ask →
   [`execution-modes.md`](../skills/plan-dashboard/execution-modes.md).
@@ -222,12 +213,7 @@ the narrative that doesn't belong in structured data.
 are pulled into `CLAUDE.local.md` too, via a generated branch-to-plan index that `save-plan.sh`
 regenerates from every manifest on each save, so it can't drift.
 
-**Labels this tooling applies**, all by this repo's convention rather than by GitHub itself.
-`setup-personal-notes.sh --create-labels` creates whichever are missing, each with a description —
-which is most of what creating one ahead of time buys, since a label that arrives any other way
-turns up undescribed.
-
-Read by the plan dashboard:
+**Labels the dashboard reads**, all applied by this repo's convention rather than by GitHub itself:
 
 - `merged` — the changes landed but GitHub's merge API never recorded it (branch pushed directly,
   PR then closed by hand). Treated exactly like a real merge.
@@ -236,16 +222,6 @@ Read by the plan dashboard:
   keeps. Being a bug fix is a property of the work, not a next action of its own, so it never
   moves an item into a group or out of one.
 - `in-review` — recognized so it doesn't read as an unknown label; no script acts on it yet.
-
-Applied by the stacked-PR workflow, and configurable in `basstler/stack.toml` except the
-last:
-
-- `rebase` — restack this branch by rebasing rather than merging its parent (`rebase_label`).
-- `needs-resolution` — conflicts with its parent, and its owner needs to resolve that
-  (`needs_resolution_label`). `in-review` above is that workflow's `in_review_label` too.
-- `cram2-link-sent` — carries the link that opens its upstream pull request. A plain
-  constant (`basstler.maintenance_constants.PROMOTION_LINK_LABEL`) rather than a setting, so
-  unlike the others its name is fixed and mentions a particular upstream.
 
 Any other label is preserved but not interpreted.
 
