@@ -84,6 +84,11 @@ class PackageLocation(PathEnumeration):
     package installs.
     """
 
+    LICENSE = SOURCE_TREE / "LICENSE"
+    """
+    The licence text of a source checkout.
+    """
+
     TEMPLATES = DIRECTORY / "templates"
     """
     The page templates dashboards are rendered from.

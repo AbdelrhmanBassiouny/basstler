@@ -108,3 +108,11 @@ by `python scripts/format_docstrings.py <files>` (black, then docformatter where
 its result), also run as a pre-commit hook. To try a
 change in a real session, start Claude Code with `--plugin-dir plugin`: the plugin then
 sits in this clone, and installs the clone editable.
+
+## Licence
+
+basstler is a personal project by Abdelrhman Bassiouny (<bido.bassuny@gmail.com>), developed
+independently of any employer or institution. It is licensed under the
+[Apache License 2.0](LICENSE); see [NOTICE](NOTICE) for attribution.
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
