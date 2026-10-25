@@ -22,6 +22,7 @@ from basstler.plan_site.__main__ import (
     PlanSource,
     PullRequestSource,
     RepositorySite,
+    SiteDigest,
     SiteFile,
 )
 from basstler.github_labels import GitHubLabel
@@ -343,9 +344,12 @@ def test_build_links_the_tracking_issue_on_the_plan_page(
 # %% the whole site
 
 
-def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
-    pull_request_source: RecordedPullRequestSource, tmp_path: Path
-):
+@pytest.fixture
+def hub_site(pull_request_source: RecordedPullRequestSource, tmp_path: Path) -> HubSite:
+    """
+    A site whose hub lists the notes repository, published from the dataset's plans, and
+    a repository with no notes branch.
+    """
     remotes = tmp_path / "remotes"
     publish_notes(
         remotes,
@@ -361,14 +365,18 @@ def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
         registry=str(NOTES_REPOSITORY),
         repositories=[str(repository) for repository in listed],
     )
-    site = HubSite(
+    return HubSite(
         site_url=SiteSampleText.SITE_URL,
         pull_request_source=pull_request_source,
         hub=hub,
         remote_root=str(remotes),
     )
 
-    summary = site.build(tmp_path / "site")
+
+def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
+    hub_site: HubSite, tmp_path: Path
+):
+    summary = hub_site.build(tmp_path / "site")
 
     hub_page = (tmp_path / "site" / SiteFile.PAGE).read_text()
     assert link_to(REPOSITORY_URL) in hub_page
@@ -385,6 +393,47 @@ def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
     )
     assert summary.progress_label in hub_page
     assert (tmp_path / "site" / SiteFile.NO_JEKYLL).exists()
+
+
+def test_the_site_build_writes_its_digest(hub_site: HubSite, tmp_path: Path):
+    output = tmp_path / "site"
+    hub_site.build(output)
+    assert (output / SiteFile.DIGEST).read_text() == f"{SiteDigest(output).value}\n"
+
+
+# %% the site's digest
+
+
+def test_two_builds_of_the_same_plans_have_the_same_digest(
+    site: RepositorySite, tmp_path: Path
+):
+    site.build(tmp_path / "first")
+    site.build(tmp_path / "second")
+    assert SiteDigest(tmp_path / "first").value == SiteDigest(tmp_path / "second").value
+
+
+def test_the_digest_changes_when_a_page_changes(site: RepositorySite, tmp_path: Path):
+    site.build(tmp_path)
+    published = SiteDigest(tmp_path).value
+    index = tmp_path / str(NOTES_REPOSITORY) / SiteFile.PAGE
+    index.write_text(f"{index.read_text()}{SiteSampleText.SITE_URL}")
+    assert SiteDigest(tmp_path).value != published
+
+
+def test_the_digest_changes_when_a_page_is_removed(
+    site: RepositorySite, tmp_path: Path
+):
+    site.build(tmp_path)
+    published = SiteDigest(tmp_path).value
+    (tmp_path / str(NOTES_REPOSITORY) / SitePlan.SECOND / SiteFile.PAGE).unlink()
+    assert SiteDigest(tmp_path).value != published
+
+
+def test_the_digest_leaves_out_its_own_file(site: RepositorySite, tmp_path: Path):
+    site.build(tmp_path)
+    published = SiteDigest(tmp_path).value
+    SiteDigest(tmp_path).write()
+    assert SiteDigest(tmp_path).value == published
 
 
 # %% reading pull requests from the GitHub API

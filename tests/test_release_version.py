@@ -14,7 +14,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-import yaml
 
 from basstler.environment import GitHubActionsVariable
 from basstler.locations import PathEnumeration
@@ -34,6 +33,7 @@ from .constants.environment import SearchPathVariable
 from .constants.paths import RepositoryLocation
 from .script_runner import BashCommandRunner
 from .scratch_repository import ScratchRepository, initialize_bare_repository
+from .workflow_definition import Workflow
 
 
 class ReleaseSampleVersion(StrEnum):
@@ -96,6 +96,17 @@ class ReleaseSampleLabel(StrEnum):
     UNRELATED = "bug"
     """
     A label every repository has, which releases a patch.
+    """
+
+
+class ReleaseStepCommand(StrEnum):
+    """
+    The commands that pick out the release workflow's tag step.
+    """
+
+    PUSH = "git push"
+    """
+    Only the tag step pushes.
     """
 
 
@@ -366,12 +377,11 @@ def release_step_script() -> str:
     """
     :return: The shell the release workflow runs to tag and push a release.
     """
-    workflow = yaml.safe_load(
-        (RepositoryLocation.WORKFLOWS / "release.yml").read_text()
-    )
-    (job,) = workflow["jobs"].values()
+    (job,) = Workflow.read(RepositoryLocation.RELEASE_WORKFLOW).jobs.values()
     return next(
-        step["run"] for step in job["steps"] if "git push" in step.get("run", "")
+        step.command
+        for step in job.steps
+        if step.command and ReleaseStepCommand.PUSH in step.command
     )
 
 
