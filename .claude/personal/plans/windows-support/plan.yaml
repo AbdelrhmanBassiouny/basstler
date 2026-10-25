@@ -18,7 +18,7 @@ items:
   status: in progress
   track: fixes
   depends_on: []
-  pull_request_number: null
+  pull_request_number: 71
   session: https://claude.ai/code/session_012b9U43tySLc3HAsst8fo23
   notes: 'Every subprocess.run(["bash", ...]) in src/ (setup/personal_notes.py x2, shell_configuration.py, setup/steps.py, plan/item_mode.py, plan/item_bootstrap.py) runs a bash resolved once: CLAUDE_CODE_GIT_BASH_PATH, else the Git Bash beside the git on PATH, else shutil.which. A path under %SystemRoot%\System32 is refused with a custom error. bash-to-python/basstler-typed-invocations absorbs this resolver into ProcessRunner.'
 - id: windows-environment-interpreter
