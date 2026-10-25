@@ -7,14 +7,12 @@ personal-notes remote - no network access or real personal-notes branch involved
 
 from __future__ import annotations
 
-import subprocess
-from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 
 import pytest
 
 from basstler.locations import PluginLocation, ProjectLocation
+from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 
 from ..constants.notes import ScratchBranch
 from ..constants.paths import DatasetLocation, PersonalNotesPath
@@ -26,93 +24,6 @@ from ..scratch_repository import (
     SetupPrerequisiteFile,
     initialize_bare_repository,
 )
-
-# %% what a report is made of
-
-
-class SetupCheck(StrEnum):
-    """
-    The checks check-setup.sh reports on, in the order it prints them.
-    """
-
-    TOOLING_FILES = "tooling_files"
-    SESSION_START_HOOK = "session_start_hook"
-    CLAUDE_LOCAL_MD_IGNORED = "claude_local_md_ignored"
-    NOTES_REMOTE = "notes_remote"
-    NOTES_REMOTE_URL = "notes_remote_url"
-    NOTES_BRANCH_NAME = "notes_branch_name"
-    NOTES_PATH = "notes_path"
-    NOTES_BRANCH = "notes_branch"
-    NOTES_FILE = "notes_file"
-    STACK_UPSTREAM = "stack_upstream"
-    UPSTREAM_REVIEWS_ACTION = "upstream_reviews_action"
-    GIT_IDENTITY = "git_identity"
-    DASHBOARD_DEPENDENCIES = "dashboard_dependencies"
-    CLAUDE_LOCAL_MD = "claude_local_md"
-
-
-class CheckStatus(StrEnum):
-    """
-    The status check-setup.sh reports for a single check.
-    """
-
-    OK = "ok"
-    NEEDS_SETUP = "needs-setup"
-    INFORMATIONAL = "info"
-
-
-@dataclass
-class CheckResult:
-    """
-    What check-setup.sh reported for one check.
-    """
-
-    status: CheckStatus
-    """
-    Whether the check passed, needs setup, or is context rather than a verdict.
-    """
-
-    detail: str
-    """
-    The human-readable explanation printed alongside the status.
-    """
-
-
-@dataclass
-class SetupReport:
-    """
-    One parsed run of check-setup.sh: what it reported, and how it exited.
-    """
-
-    exit_code: int
-    """
-    The script's exit code: 0 when nothing needs setup, 1 otherwise.
-    """
-
-    results: dict[SetupCheck, CheckResult]
-    """
-    Every reported check, keyed by the check it reports on.
-    """
-
-    @classmethod
-    def from_completed_process(
-        cls, process: subprocess.CompletedProcess[str]
-    ) -> SetupReport:
-        """
-        Parse a finished check-setup.sh run.
-
-        Raises if a row names a check this test module doesn't know about, so a new
-        check has to be declared here rather than silently going unasserted.
-
-        :param process: The finished check-setup.sh subprocess.
-        :return: The parsed report.
-        """
-        results = {}
-        for line in process.stdout.splitlines():
-            check, status, detail = line.split("\t")
-            results[SetupCheck(check)] = CheckResult(CheckStatus(status), detail)
-        return cls(process.returncode, results)
-
 
 # %% the scratch layout
 

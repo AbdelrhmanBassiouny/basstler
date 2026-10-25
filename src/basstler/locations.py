@@ -191,6 +191,22 @@ class PluginLocation(PathEnumeration):
     """
 
 
+class PluginSkillLocation(PathEnumeration):
+    """
+    The files of the plugin's skills this package reads, as absolute paths.
+    """
+
+    SKILLS = PluginLocation.ROOT.value / "skills"
+    """
+    The directory holding one directory per skill.
+    """
+
+    STARTER_NOTES = SKILLS / "setup-personal-notes" / "starter-notes.md"
+    """
+    The conventions a new personal-notes file can be seeded with.
+    """
+
+
 class ProjectLocation(PathEnumeration):
     """
     The files this package reads, runs or writes in a project, relative to its root.

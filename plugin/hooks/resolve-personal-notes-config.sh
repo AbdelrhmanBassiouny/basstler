@@ -397,6 +397,9 @@ PERSONAL_PLAN_ITEM_MODES_PATH=".claude/personal/plan-item-modes.toml"
 # configure-upstream, which names a project's upstream for the stacked-PR
 # workflow, and install-upstream-reviews-action.
 SETUP_STEPS_MODULE="basstler.setup.steps"
+# basstler.setup.personal_notes: the whole personal-notes setup as one command
+# that needs no session; /setup-personal-notes asks the questions and runs it.
+SETUP_PERSONAL_NOTES_MODULE="basstler.setup.personal_notes"
 # The stack settings a project commits, and the personal-notes override
 # layered on top of them - either may name the upstream.
 PROJECT_STACK_CONFIGURATION_PATH=".claude/basstler/stack.toml"

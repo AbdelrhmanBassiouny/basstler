@@ -31,6 +31,16 @@ It creates your notes branch, records the git identity your commits are authored
 with, installs what the dashboards need, and asks only about the decisions that
 are genuinely yours. Re-running it on a set-up project changes nothing.
 
+Without a session, the same setup is one command, once the package's environment exists:
+
+```bash
+~/.local/share/basstler/venv/bin/python -m basstler.setup.personal_notes \
+  --remote <your-fork-remote-or-url> --name "Your Name" --email "you@example.com"
+```
+
+`--help` lists the rest: seeding the notes from the starter template, and creating the
+labels your fork lacks.
+
 ## 2. Do the steps no script can do
 
 ```bash
