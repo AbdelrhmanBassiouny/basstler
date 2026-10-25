@@ -23,11 +23,12 @@ items:
   notes: 'Every subprocess.run(["bash", ...]) in src/ (setup/personal_notes.py x2, shell_configuration.py, setup/steps.py, plan/item_mode.py, plan/item_bootstrap.py) runs a bash resolved once: CLAUDE_CODE_GIT_BASH_PATH, else the Git Bash beside the git on PATH, else shutil.which. A path under %SystemRoot%\System32 is refused with a custom error. bash-to-python/basstler-typed-invocations absorbs this resolver into ProcessRunner.'
 - id: windows-environment-interpreter
   title: Find the package environment's interpreter on Windows
-  branch: null
-  status: not started
+  branch: claude/blissful-goodall-l5com5
+  status: in progress
   track: fixes
   depends_on: []
-  pull_request_number: null
+  pull_request_number: 73
+  session: https://claude.ai/code/session_01AXLLt2epPWBnUpHZ3S5TLz
   notes: 'resolve-personal-notes-config.sh points BASSTLER_ENVIRONMENT_INTERPRETER at venv/bin/python; Windows has venv/Scripts/python.exe, so BASSTLER_PYTHON falls back to python3 (the report''s issue 1). Also try py -3 and python as candidates, and check uv/bin/uv vs Scripts. Confirm first with the reporter that venv\Scripts\python.exe exists.'
 - id: setup-report-strict-parsing
   title: Refuse an incomplete or failed check-setup.sh report with its stderr
