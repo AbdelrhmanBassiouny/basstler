@@ -9,10 +9,12 @@ disagree. This is the one place that does so.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from enum import StrEnum
 from pathlib import Path
 
+from basstler.bash import Bash
 from basstler.locations import PluginLocation
 
 
@@ -65,13 +67,12 @@ class ShellConfigurationFunction(StrEnum):
         :return: The completed process, with output captured as text.
         """
         return subprocess.run(
-            [
-                "bash",
+            Bash.locate(os.environ).command(
                 "-c",
                 f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && {self} "$@"',
                 PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
                 *arguments,
-            ],
+            ),
             cwd=project_root,
             capture_output=True,
             text=True,

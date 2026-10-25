@@ -5,6 +5,7 @@ through.
 
 from __future__ import annotations
 
+import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
@@ -13,6 +14,7 @@ from typing import Any
 
 import yaml
 
+from basstler.bash import Bash
 from basstler.locations import PluginLocation
 from basstler.plan.item_bootstrap.exceptions import (
     NotesBranchUnavailableError,
@@ -225,15 +227,14 @@ class PlanDocuments:
             for document, content in written.items():
                 (scratch / document.value).write_text(content)
             saved = subprocess.run(
-                [
-                    "bash",
+                Bash.locate(os.environ).command(
                     PluginLocation.PLAN_SAVING_SCRIPT,
                     self.plan_identifier,
                     "--manifest",
                     str(scratch / PlanDocument.MANIFEST.value),
                     "--roadmap",
                     str(scratch / PlanDocument.ROADMAP.value),
-                ],
+                ),
                 cwd=project_root,
                 capture_output=True,
                 text=True,

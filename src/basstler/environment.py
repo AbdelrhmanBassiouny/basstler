@@ -27,6 +27,23 @@ class EnvironmentVariable(StrEnum):
         return os.environ.get(self)
 
 
+class OperatingSystemVariable(EnvironmentVariable):
+    """
+    The variables the operating system sets for every process.
+    """
+
+    EXECUTABLE_SEARCH_PATH = "PATH"
+    """
+    The directories a program is searched for in.
+    """
+
+    WINDOWS_DIRECTORY = "SYSTEMROOT"
+    """
+    The Windows installation's own directory, set only on Windows, spelled as Windows
+    lists it in a copy of the environment.
+    """
+
+
 class GitHubCredentialVariable(EnvironmentVariable):
     """
     The variables a GitHub token is read from, in the order they are tried.

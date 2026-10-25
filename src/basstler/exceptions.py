@@ -7,12 +7,12 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from pathlib import PurePosixPath
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
-from basstler.locations import PluginLocation
+from basstler.locations import ClaudeCodeVariable, PluginLocation
 
 
 class DataclassException(Exception, ABC):
@@ -487,3 +487,32 @@ class MalformedEmailAddressError(DataclassException, ValueError):
 
     def suggest_correction(self) -> str:
         return "give the address your commits should carry, e.g. you@example.com"
+
+
+@dataclass
+class BashNotFoundError(DataclassException, FileNotFoundError):
+    """
+    Raised when no bash a script can run in is found, the Windows launcher for WSL
+    aside.
+    """
+
+    passed_over: list[Path]
+    """
+    The bash programs found in the Windows directory, which start WSL rather than the
+    bash the scripts are written for.
+    """
+
+    def error_message(self) -> str:
+        if not self.passed_over:
+            return "found no bash to run the plugin's scripts in"
+        launchers = ", ".join(str(path) for path in self.passed_over)
+        return (
+            f"found no bash to run the plugin's scripts in: {launchers} starts WSL, not "
+            f"Git Bash"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"install Git for Windows, or set {ClaudeCodeVariable.GIT_BASH_PATH} to its "
+            f"bash.exe"
+        )
