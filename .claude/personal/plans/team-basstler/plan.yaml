@@ -31,7 +31,7 @@ items:
 - id: site-action
   title: Deploy the plan site from a reusable workflow on every plan push and issue event
   branch: claude/team-basstler-github-integration-y76uoi
-  status: in_progress
+  status: done
   track: site
   session: https://claude.ai/code/session_01GJS7SMhFB2spY25FJ4Zq88
   pull_request_number: 63
