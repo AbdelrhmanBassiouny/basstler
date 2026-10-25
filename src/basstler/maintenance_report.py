@@ -13,7 +13,7 @@ from basstler.exit_codes import StackExitCode
 from basstler.maintenance_fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance_promotion import Promotion
 from basstler.maintenance_restack_steps import BranchOutcome, RestackOutcome
-from basstler.stack_model import Reparent, Stack
+from basstler.stack_model import Reparent, SkippedPullRequest, Stack
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -91,6 +91,11 @@ class MaintenanceReport:
     The branches approved and unblocked, whether or not a link was built this pass.
     """
 
+    skipped: tuple[SkippedPullRequest, ...] = ()
+    """
+    The pull requests whose head is not on the fork, which the pass left alone.
+    """
+
     @classmethod
     def of_pass(
         cls,
@@ -119,6 +124,7 @@ class MaintenanceReport:
             reparents=tuple(stack.reparents()),
             landed=tuple(branch.name for branch in stack.landed_branches()),
             promotable=tuple(branch.name for branch in stack.promotion_order()),
+            skipped=tuple(stack.skipped_pull_requests()),
         )
 
     def as_json(self) -> str:
@@ -174,6 +180,7 @@ class MaintenanceReport:
         self.print_fast_forward()
         self.print_restack()
         self.print_promotions()
+        self.print_skipped()
 
     def print_fast_forward(self) -> None:
         """
@@ -215,3 +222,14 @@ class MaintenanceReport:
                 )
         for branch in self.promotion_labels_cleared:
             logger.info(f"{branch}\tlink-label-cleared\t")
+
+    def print_skipped(self) -> None:
+        """
+        Print every pull request the pass left alone, with why and where its head lives.
+        """
+        for skipped in self.skipped:
+            pull_request = skipped.pull_request
+            logger.info(
+                f"{pull_request.head}\t#{pull_request.number}\t{skipped.reason}"
+                f"\t{pull_request.head_repository or ''}"
+            )

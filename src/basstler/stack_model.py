@@ -17,6 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.locations import PackageLocation
+from basstler.repository import Repository
 from basstler.stack_checkout import CurrentCheckout
 from basstler.stack_errors import BoardUnavailable
 from basstler.stack_settings import Configuration
@@ -71,6 +72,18 @@ class IntegrationStrategy(StrEnum):
     authorised only by the branch's own rebase label."""
 
 
+class SkipReason(StrEnum):
+    """Why a pull request open on the fork is left out of the pass that maintains it."""
+
+    HEAD_ON_ANOTHER_FORK = "head-on-another-fork"
+    """Its head branch lives on another contributor's fork, which the pass cannot push
+    to."""
+
+    HEAD_REPOSITORY_DELETED = "head-repository-deleted"
+    """The repository its head branch lived in has been deleted, so there is no branch
+    left to maintain."""
+
+
 class BoardKey(StrEnum):
     """
     The keys of ``board.json`` that are not a :class:`PullRequest` field.
@@ -98,6 +111,10 @@ class PullRequest:
     draft: bool
     """Whether the pull request is a draft (not yet approved for review)."""
 
+    head_repository: str | None
+    """The ``owner/name`` of the repository the head branch lives in, ``None`` once that
+    repository is deleted."""
+
     labels: list[str] = field(default_factory=list)
     """Labels currently on the pull request."""
 
@@ -106,6 +123,16 @@ class PullRequest:
 
     session: str | None = None
     """URL of the Claude session working this pull request, parsed from the pull request body (None if none)."""
+
+    def skip_reason(self, fork: Repository) -> SkipReason | None:
+        """:param fork: The fork the pass maintains.
+        :return: Why the pass has to leave this pull request out, ``None`` when its head
+            is a branch of *fork*."""
+        if self.head_repository is None:
+            return SkipReason.HEAD_REPOSITORY_DELETED
+        if self.head_repository != fork.full_name:
+            return SkipReason.HEAD_ON_ANOTHER_FORK
+        return None
 
     @classmethod
     def read_board(cls, path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
@@ -143,6 +170,10 @@ class Branch:
     labels: list[str]
     """Labels carried by the pull request."""
 
+    skipped_pull_request: SkippedPullRequest | None
+    """The pull request in its role as one the pass leaves out, ``None`` when the branch
+    is on the fork."""
+
     ci: str | None = None
     """Latest CI conclusion on the pull request head."""
 
@@ -160,6 +191,7 @@ class Branch:
         :param configuration: The static configuration naming the labels.
         :param is_merged: Maps a branch name to whether it has landed upstream.
         :return: The stack node the pull request describes."""
+        skip_reason = pull_request.skip_reason(configuration.fork_repository)
         return cls(
             name=pull_request.head,
             parent=pull_request.base,
@@ -175,6 +207,11 @@ class Branch:
                 else IntegrationStrategy.MERGE
             ),
             labels=pull_request.labels,
+            skipped_pull_request=(
+                None
+                if skip_reason is None
+                else SkippedPullRequest(pull_request, skip_reason)
+            ),
             ci=pull_request.ci,
             session=pull_request.session,
         )
@@ -192,6 +229,21 @@ class RestackPlanEntry:
 
     strategy: IntegrationStrategy
     """How it is brought up to date."""
+
+
+@dataclass(frozen=True)
+class SkippedPullRequest:
+    """The role of a pull request open on the fork that the pass leaves alone.
+
+    It is neither restacked, promoted nor reported as landed, and nothing is written to
+    it; only its base can still be retargeted, through :meth:`Stack.reparents`.
+    """
+
+    pull_request: PullRequest
+    """The pull request taking the role."""
+
+    reason: SkipReason
+    """Why it is left alone."""
 
 
 @dataclass(frozen=True)
@@ -261,13 +313,35 @@ class Stack:
         configuration = Configuration.load()
         pull_requests = PullRequest.read_board(board)
         CurrentCheckout.fetch(
-            configuration, [pull_request.head for pull_request in pull_requests]
+            configuration,
+            [
+                pull_request.head
+                for pull_request in pull_requests
+                if pull_request.skip_reason(configuration.fork_repository) is None
+            ],
         )
         return cls.build(
             configuration,
             pull_requests,
             CurrentCheckout.merged_predicate(configuration),
         )
+
+    def maintained_branches(self) -> list[Branch]:
+        """The branches this pass can restack, promote and write to, parent before child.
+
+        :return: Every branch whose head is on the fork.
+        """
+        return [
+            branch for branch in self.ordered() if branch.skipped_pull_request is None
+        ]
+
+    def skipped_pull_requests(self) -> list[SkippedPullRequest]:
+        """:return: Every pull request the pass leaves alone, parent before child."""
+        return [
+            branch.skipped_pull_request
+            for branch in self.ordered()
+            if branch.skipped_pull_request is not None
+        ]
 
     def needs_resolution(self, branch: Branch) -> bool:
         """:param branch: The branch to check.
@@ -321,7 +395,7 @@ class Stack:
         """
         stacked: set[str] = set()
         found = []
-        for branch in self.ordered():
+        for branch in self.maintained_branches():
             if branch.status == BranchStatus.MERGED:
                 continue
             if branch.parent != branch_name and branch.parent not in stacked:
@@ -367,7 +441,7 @@ class Stack:
         """
         return [
             branch
-            for branch in self.ordered()
+            for branch in self.maintained_branches()
             if branch.status == BranchStatus.READY
             and self.parent_landed(branch)
             and not self.needs_resolution(branch)
@@ -394,7 +468,7 @@ class Stack:
         :return: The restack plan, one entry per planned branch.
         """
         planned = (
-            self.ordered()
+            self.maintained_branches()
             if stacked_on is None
             else self.branches_stacked_on(stacked_on)
         )
@@ -445,5 +519,7 @@ class Stack:
         :return: The landed branches, parent before child.
         """
         return [
-            branch for branch in self.ordered() if branch.status == BranchStatus.MERGED
+            branch
+            for branch in self.maintained_branches()
+            if branch.status == BranchStatus.MERGED
         ]

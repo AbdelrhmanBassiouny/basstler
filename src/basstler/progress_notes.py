@@ -14,7 +14,11 @@ from pathlib import Path
 from basstler.build_dashboard import PullRequestState
 from basstler.environment import GitHubCredentialVariable
 from basstler.exceptions import DataclassException
-from basstler.maintenance_board import PullRequestRecord
+from basstler.maintenance_board import (
+    PullRequestField,
+    PullRequestHeadKey,
+    PullRequestRecord,
+)
 from basstler.maintenance_git_commands import GitCommandRunner
 from basstler.maintenance_github import GitHubRepository
 from basstler.repository import Repository
@@ -24,37 +28,6 @@ logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
-
-
-class PullRequestField(StrEnum):
-    """
-    The keys of a GitHub pull request payload this module reads.
-    """
-
-    HEAD = "head"
-    """
-    The pull request's source branch.
-    """
-
-    REFERENCE = "ref"
-    """
-    A branch's name, under :attr:`HEAD`.
-    """
-
-    HEAD_REPOSITORY = "repo"
-    """
-    The repository the source branch lives in, under :attr:`HEAD`.
-    """
-
-    FULL_NAME = "full_name"
-    """
-    A repository's ``owner/name``, under :attr:`HEAD_REPOSITORY`.
-    """
-
-    STATE = "state"
-    """
-    ``open`` or ``closed``; a merged pull request is closed.
-    """
 
 
 class ProgressNotesFile(StrEnum):
@@ -98,16 +71,16 @@ class BranchPullRequests:
         open_branches: set[str] = set()
         branches_with_pull_requests: set[str] = set()
         for pull_request in pull_requests:
-            head = pull_request[PullRequestField.HEAD]
-            head_repository = head[PullRequestField.HEAD_REPOSITORY]
+            head = pull_request[PullRequestField.HEAD.key]
+            head_repository = head[PullRequestHeadKey.HEAD_REPOSITORY]
             if (
                 head_repository is None
-                or head_repository[PullRequestField.FULL_NAME] != repository.full_name
+                or head_repository[PullRequestHeadKey.FULL_NAME] != repository.full_name
             ):
                 continue
-            branch = head[PullRequestField.REFERENCE]
+            branch = head[PullRequestHeadKey.REFERENCE]
             branches_with_pull_requests.add(branch)
-            if pull_request[PullRequestField.STATE] == PullRequestState.OPEN:
+            if pull_request[PullRequestField.STATE.key] == PullRequestState.OPEN:
                 open_branches.add(branch)
         return cls(
             open_branches=frozenset(open_branches),
