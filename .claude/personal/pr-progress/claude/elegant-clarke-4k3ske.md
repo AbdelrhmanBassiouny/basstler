@@ -1,12 +1,12 @@
 ## PR progress: skill-document-links (#74)
 
 Plan
-- Test first: no skill document cites a shell variable whose value is a .md document; every skill document's links resolve
-- Replace the 21 `${*_DOCUMENT}` references with relative links
-- Drop the five unused variables (keep PLAN_SCHEMA_DOCUMENT: check-setup.sh)
+- Replace `${*_DOCUMENT}` skill references with relative links; drop unused variables; guard with tests
 
 Done
-- Branch, draft PR #74, manifest recorded in progress
+- 21 references replaced, 5 variables (+ADD_PLAN_ITEM_DIRECTORY) dropped, tests added (233eae2)
+- PR description and manifest notes current
 
 Next
-- Write the failing tests
+- Await review/CI; 14 full-suite failures pre-exist on main in-session - check CI shows the same
+- Possible follow-up: unused SETUP_PREREQUISITE_DOCUMENT, STARTER_NOTES_FILE
