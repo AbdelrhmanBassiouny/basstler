@@ -28,14 +28,13 @@ items:
   branch: claude/setup-personal-notes-script
   pull_request_number: 45
   status: in_progress
-  session: https://claude.ai/code/session_01DbUfzLJEFqE4U3fKBFd2WA
+  session: https://claude.ai/code/session_01VN9gBEgXR8qH8LGq91HNAX
   track: install
   depends_on: []
-  notes: 'The mechanical half of /setup-personal-notes as a script, the skill only asking
-    the questions; the whole setup runs with no session. Draft #45, carried from CRAM #107
-    with its history; main is not merged in yet. Three owner threads stay open: rename the
-    promotion label (main says promotion-link-sent) and drop the unused merged and rebase
-    labels.'
+  notes: 'Ported onto main as python -m basstler.setup.personal_notes; the skill only
+    asks the questions. Main merged in (main''s tree taken). Labels settled: main''s
+    GitHubLabel set stays, merged included. Draft #45, release:minor. Label creation
+    against a real token is unverified.'
 - id: setup-stacked-prs-skill
   title: '/setup-stacked-prs: one guided command that sets up the stacked-pull-request workflow'
   branch: null
