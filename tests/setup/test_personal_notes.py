@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from basstler.exceptions import MalformedEmailAddressError
 from basstler.exit_codes import PersonalNotesSetupExitCode
 from basstler.github_labels import GitHubLabel
 from basstler.locations import PluginLocation, PluginSkillLocation, ProjectLocation
@@ -221,6 +222,26 @@ def test_refuses_an_incomplete_or_unknown_command_line(arguments: list[str]):
     with pytest.raises(SystemExit) as refusal:
         SetupRequest.from_arguments(arguments)
     assert refusal.value.code == PersonalNotesSetupExitCode.USAGE
+
+
+def test_explains_a_malformed_email_in_its_own_words(
+    capsys: pytest.CaptureFixture[str],
+):
+    malformed = "not-an-email-address"
+    with pytest.raises(SystemExit):
+        SetupRequest.from_arguments(
+            [
+                SetupOption.REMOTE,
+                "origin",
+                SetupOption.NAME,
+                SCRATCH_IDENTITY.name,
+                SetupOption.EMAIL,
+                malformed,
+            ]
+        )
+    assert (
+        MalformedEmailAddressError(malformed).error_message() in capsys.readouterr().err
+    )
 
 
 # %% a full setup

@@ -44,10 +44,20 @@ class EmailAddress:
         :return: The parsed address.
         :raises MalformedEmailAddressError: If *text* lacks a local part or a domain.
         """
-        local_part, separator, domain = text.rpartition(cls.separator)
-        if not (local_part and separator and domain):
+        if not cls.is_well_formed(text):
             raise MalformedEmailAddressError(text)
+        local_part, _, domain = text.rpartition(cls.separator)
         return cls(local_part, domain)
+
+    @classmethod
+    def is_well_formed(cls, text: str) -> bool:
+        """
+        :param text: The text to test.
+        :return: Whether *text* has a local part and a domain, so :meth:`parse` accepts
+            it.
+        """
+        local_part, separator, domain = text.rpartition(cls.separator)
+        return bool(local_part and separator and domain)
 
     def __str__(self) -> str:
         """:return: The address as it is written."""

@@ -32,3 +32,11 @@ def test_email_address_keeps_an_at_sign_quoted_in_the_local_part():
 def test_email_address_rejects_text_that_is_not_local_part_at_domain(malformed: str):
     with pytest.raises(MalformedEmailAddressError):
         EmailAddress.parse(malformed)
+
+
+@pytest.mark.parametrize(
+    "text, well_formed",
+    [(str(ADDRESS), True), ("no-separator", False), ("no-domain@", False)],
+)
+def test_email_address_tells_well_formed_text_apart(text: str, well_formed: bool):
+    assert EmailAddress.is_well_formed(text) is well_formed

@@ -27,6 +27,7 @@ from pathlib import Path
 from basstler.class_property import classproperty
 from basstler.email_address import EmailAddress
 from basstler.environment import GitHubCredentialVariable
+from basstler.exceptions import MalformedEmailAddressError
 from basstler.exit_codes import CommandFailure, PersonalNotesSetupExitCode
 from basstler.github_labels import GitHubLabel
 from basstler.locations import (
@@ -141,11 +142,7 @@ class SetupRequest:
             "a wrong guess pushes them to a repository you may not own",
         )
         parser.add_argument(SetupOption.NAME, help="the name your commits carry")
-        parser.add_argument(
-            SetupOption.EMAIL,
-            type=EmailAddress.parse,
-            help="the email your commits carry",
-        )
+        parser.add_argument(SetupOption.EMAIL, help="the email your commits carry")
         parser.add_argument(
             SetupOption.STARTER_NOTES,
             action="store_true",
@@ -163,9 +160,18 @@ class SetupRequest:
                 f"{SetupOption.NAME} and {SetupOption.EMAIL} go together: a commit "
                 f"needs both"
             )
+        if parsed.email and not EmailAddress.is_well_formed(parsed.email):
+            parser.error(
+                f"{SetupOption.EMAIL}: "
+                f"{MalformedEmailAddressError(parsed.email).error_message()}"
+            )
         return cls(
             remote=parsed.remote,
-            identity=GitIdentity(parsed.name, parsed.email) if parsed.name else None,
+            identity=(
+                GitIdentity(parsed.name, EmailAddress.parse(parsed.email))
+                if parsed.name
+                else None
+            ),
             starter_notes=parsed.starter_notes,
             create_labels=parsed.create_labels,
         )
