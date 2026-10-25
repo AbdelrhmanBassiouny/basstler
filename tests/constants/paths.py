@@ -44,6 +44,16 @@ class RepositoryLocation(PathEnumeration):
     The repository's Actions workflows.
     """
 
+    RELEASE_WORKFLOW = WORKFLOWS / "release.yml"
+    """
+    The workflow that tags a merge commit as a release.
+    """
+
+    PLAN_SITE_BUILD_WORKFLOW = WORKFLOWS / "plan-site-build.yml"
+    """
+    The reusable workflow that builds the plan site and deploys a changed one.
+    """
+
 
 class DatasetLocation(PathEnumeration):
     """
@@ -80,6 +90,12 @@ class DatasetLocation(PathEnumeration):
     """
     A recorded pull request listing, one pull request for each
     :class:`ProgressBranch` that has one.
+    """
+
+    PLANS = DIRECTORY / "plans"
+    """
+    A plans directory the cross-plan reference tests resolve against: one subdirectory
+    per fixture plan.
     """
 
     STUBS = DIRECTORY / "stubs"
@@ -202,6 +218,13 @@ class SkillDirectory(PathEnumeration):
     """
     The dashboard skill's shell entry point.
     """
+
+    @classmethod
+    def skills(cls) -> tuple[SkillDirectory, ...]:
+        """
+        :return: Every member that is a skill's own directory.
+        """
+        return tuple(member for member in cls if member.parent == cls.DIRECTORY.value)
 
 
 class PersonalNotesPath(PathEnumeration):

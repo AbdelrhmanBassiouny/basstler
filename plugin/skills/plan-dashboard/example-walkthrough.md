@@ -19,7 +19,7 @@ all:
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m basstler.build_dashboard \
+"${BASSTLER_PYTHON}" -m basstler.dashboard.plan_page \
   --plan skills/plan-dashboard/example/plan.yaml \
   --roadmap skills/plan-dashboard/example/roadmap.md \
   --pr-data skills/plan-dashboard/example/pr_data.json \

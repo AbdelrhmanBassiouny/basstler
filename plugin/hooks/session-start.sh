@@ -7,7 +7,7 @@ set -euo pipefail
 # progress, and this branch's plan item with the plan's standing rules. Also
 # syncs personal settings and git identity, keeps the package environment
 # installed, stamps the plan state SHA for plan-updates-since.sh, fast-forwards
-# the default branch to the upstream (see basstler.default_branch_sync), and
+# the default branch to the upstream (see basstler.maintenance.default_branch_sync), and
 # prints a summary of what it did. Never fails the session on a setup gap.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -41,6 +41,7 @@ SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
 # Installs the package environment only where something is missing; never
 # fatal. Runs before the plan section and the setup check, which rely on it.
 ensure_basstler_environment() {
+  record_latest_basstler_release
   if [ ! -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
     create_and_install_basstler_environment
     return
@@ -194,7 +195,7 @@ Read-only: editing it here changes nothing. To read another item, run
   "\${BASSTLER_PYTHON}" -m ${PLAN_MANIFEST_TOOLS_MODULE} item <manifest-file> --id <item-id>
 on a copy from 'git show FETCH_HEAD:${PLAN_MANIFEST_PATH}' after fetching
 '${NOTES_BRANCH}' - never read the whole manifest when one item will do.
-To change the plan, record the item with plan_item_bootstrap's 'record', or
+To change the plan, record the item with basstler.plan.item_bootstrap's 'record', or
 fetch both files fresh, edit them, and run
   "\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" ${PLAN_ID} --manifest <file> --roadmap <file>
 which drops landed items, removes a plan with none left, and refuses a plan

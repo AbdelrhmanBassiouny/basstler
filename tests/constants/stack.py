@@ -112,6 +112,28 @@ class StackBranch(StrEnum):
     A branch beside :attr:`STUCK` that nothing holds back.
     """
 
+    GRANDCHILD = "a-grandchild"
+    """
+    Stacked on the child, so it reaches the parent only through it.
+    """
+
+    OFF_THE_CHAIN = "off-the-chain"
+    """
+    Cut from the base beside the chain, so nothing stacks it on the parent.
+    """
+
+    ON_ANOTHER_FORK = "on-another-fork"
+    """
+    The head of a pull request open on the fork whose branch lives on another
+    contributor's fork, so the fork remote has no copy of it.
+    """
+
+    LONG_LIVED_BASE = "a-long-lived-base"
+    """
+    A fork branch other than the upstream base that a pull request is based on, while no
+    open pull request has it as its head.
+    """
+
 
 class StackLabel(StrEnum):
     """

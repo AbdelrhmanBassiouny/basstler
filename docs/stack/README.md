@@ -39,12 +39,12 @@ next to the workflow it describes, because it is read rather than run.
   *whichever remote is not the upstream*, matched by the repository each URL points at rather
   than by what the remote is called, so `origin` may be either one. A
   `.claude/personal/stack.toml` on the personal-notes branch layers your own overrides on top of
-  both (see `stack.py`'s `load_configuration`), including a `fork_repository` to pick between
+  both (see `Configuration.load` in `stack/settings.py`), including a `fork_repository` to pick between
   remotes when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
-  `session`) that `stack.py` reads. Written from GitHub as scratch by whatever refreshes it -
+  `session`) that `basstler.stack` reads. Written from GitHub as scratch by whatever refreshes it -
   never committed.
-- **`stack.py`** - read-only status tool (never mutates branches). Reads `board.json` + git:
+- **`basstler.stack`** - read-only status tool (never mutates branches). Reads `board.json` + git:
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack status` - the whole stack, with ahead/behind drift per parent.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack check` - would each branch integrate cleanly onto its parent
     *now* (fast, non-mutating `git merge-tree` probe)?
@@ -80,27 +80,28 @@ next to the workflow it describes, because it is read rather than run.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack landed` - one `name<TAB>pr` line per open fork PR whose branch
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.
-- **`maintenance.py`** - the executor: the half of a pass that moves commits, where `stack.py`
+- **`basstler.maintenance`** - the executor: the half of a pass that moves commits, where `basstler.stack`
   only derives and prints. `board --write`, `fast-forward`, `restack`, `promote` and
-  `run-report --json`; see [Running a maintenance pass](#running-a-maintenance-pass). It is the
+  `run-report` (the finish summary, or `--json` for tooling); see [Running a maintenance pass](#running-a-maintenance-pass). It is the
   command line onto modules named for what they do, so nothing has to be hunted for inside one
-  long file: `maintenance_constants.py` (every value edited by hand),
-  `maintenance_git_commands.py`, `maintenance_board.py`, `maintenance_github.py`,
-  `maintenance_fast_forward.py`, `maintenance_restack_steps.py` and
-  `maintenance_restack_procedure.py` (the steps, and the order that is the procedure),
-  `maintenance_promotion.py`, `maintenance_report.py` and `maintenance_commands.py`.
+  long file: `maintenance/constants.py` (every value edited by hand),
+  `maintenance/git_commands.py`, `maintenance/board.py`, `maintenance/description.py`,
+  `maintenance/github.py`,
+  `maintenance/fast_forward.py`, `maintenance/restack_steps.py` and
+  `maintenance/restack_procedure.py` (the steps, and the order that is the procedure),
+  `maintenance/promotion.py`, `maintenance/report.py`, `maintenance/finish_summary.py` and
+  `maintenance/commands.py`.
 - **`skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
-  as `/stacked-pr-maintenance` from any session and the whole of what a scheduled run executes.
-  It takes `fork=` / `upstream=` arguments, falls back to `configuration`, and asks (or, with
-  `--non-interactive`, stops) when neither answers. Its `routine-prompt.md` is the template to
-  register when you want the pass to run unattended.
+  as `/stacked-pr-maintenance` from any session, and run first by `/plan-item-kickoff` and
+  `/plan-item-resolve`. It takes `fork=` / `upstream=` arguments, falls back to
+  `configuration`, and asks when neither answers.
 
 ## The state machine (your approval gate)
 
 `draft` → **`ready`** → `in-review` → `merged`, all derived from GitHub:
 
 - `draft → ready` is **your gate**: self-review the fork PR and **un-draft it** on GitHub to
-  approve. `stack.py next` only ever promotes a `ready` (un-drafted) branch - nothing reaches
+  approve. `basstler.stack next` only ever promotes a `ready` (un-drafted) branch - nothing reaches
   the upstream without your sign-off.
 - `ready → in-review`: when you promote it, add the **`in-review`** label to the fork PR.
 - `in-review → merged`: automatic once the branch lands in `<upstream_remote>/<upstream_base>` (git ancestry).
@@ -132,8 +133,21 @@ never asks twice. Pass them explicitly to skip resolution entirely:
 /stacked-pr-maintenance fork=<owner/repo> upstream=<owner/repo>
 ```
 
-To run it unattended, register it as a scheduled Routine; the prompt to paste is in
-[`routine-prompt.md`](../skills/stacked-pr-maintenance/routine-prompt.md).
+Nothing runs it on a schedule: `/plan-item-kickoff` and `/plan-item-resolve` run it before
+they start on an item, so a stack is brought up to date when someone works on it.
+
+### One restack merge per branch
+
+A `merge`-strategy branch is restacked by merging its parent's moved tip in, so a pull request
+that waits through many passes would collect one merge per pass. Instead, each restack drops the
+merges at the branch's tip that only brought in an older state of its parent, and merges the
+parent's current tip in once - so the branch carries a single restack merge however long it
+waits. A merge is dropped only when the parent now holds every change it brought in and its
+content is exactly what merging its two sides produces: a merge carrying a conflict resolution,
+one bringing in another branch, and one with work committed on top of it are all kept. Replacing
+merges rewrites the branch, so it is pushed under a lease and never over a push the pass did not
+see; when merging onto the commit beneath them would conflict, the parent is merged onto the
+published tip as before.
 
 ## Rules of hygiene
 
@@ -142,11 +156,10 @@ To run it unattended, register it as a scheduled Routine; the prompt to paste is
 - **The branch is the durable state** - commit + push often; cloud containers are ephemeral.
 - **Restack only after the parent has landed/updated.** Restacking onto a still-conflicting,
   unmerged parent is premature - land the parent first.
-- **Refresh `board.json` before acting.** It's a snapshot; the routine brings it current with
+- **Refresh `board.json` before acting.** It's a snapshot; a pass exports a fresh one from
   GitHub.
 - **CI is the validator.** A suite the cloud container cannot run (missing system
   dependencies, hardware, services) is never run locally - poll a PR's CI with the GitHub MCP and treat its
-  red/green as the oracle (no session subscribes to a PR's activity - scheduled or interactive,
-  CI is learned by polling; see the maintenance skill's HARD RULES). A
+  red/green as the oracle (no session subscribes to a PR's activity - CI is learned by polling; see the maintenance skill's HARD RULES). A
   maintenance pass never fixes a failing check: it reports the branch to its owner and moves on.
   Never disable a leak/CI check to go green.

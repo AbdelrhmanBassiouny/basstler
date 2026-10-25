@@ -11,7 +11,7 @@ directory holding them rather than named.
 
 from __future__ import annotations
 
-import importlib.metadata
+import json
 import os
 import re
 import subprocess
@@ -31,7 +31,7 @@ from basstler.package_layout import (
 
 from .constants.environment import ConfigurationVariable, SearchPathVariable
 from .constants.paths import RepositoryLocation
-from .plugin_manifest import PluginManifest
+from .plugin_manifest import PluginManifestKey
 from .project_declaration import HatchVersionSource, ProjectDeclaration
 from .script_runner import ScriptRunner, configuration_value
 
@@ -89,7 +89,7 @@ def run_as_a_caller(*arguments: str) -> subprocess.CompletedProcess[str]:
     ).run(*arguments)
 
 
-MODULE_VARIABLE = re.compile(r'^([A-Z_]+)="(basstler\.[a-z_]+)"', re.MULTILINE)
+MODULE_VARIABLE = re.compile(r'^([A-Z_]+)="(basstler(?:\.[a-z_]+)+)"', re.MULTILINE)
 """
 One ``NAME="basstler.module"`` assignment in the shell configuration.
 """
@@ -109,11 +109,11 @@ def names_of(module: PackageModule) -> frozenset[str]:
     names are read from the configuration that assigns them instead of written out here.
 
     :param module: The module to name.
-    :return: Its import path, plus any shell variable holding that path.
+    :return: Its command path, plus any shell variable holding that path.
     """
     assignments = MODULE_VARIABLE.findall(SHELL_CONFIGURATION.read_text())
-    return frozenset({module.import_path}) | {
-        variable for variable, path in assignments if path == module.import_path
+    return frozenset({module.command_path}) | {
+        variable for variable, path in assignments if path == module.command_path
     }
 
 
@@ -139,26 +139,26 @@ def test_a_caller_imports_the_checkouts_own_source_with_no_install():
     assert Path(result.stdout.strip()) == PackageLocation.DIRECTORY / "__init__.py"
 
 
-def test_the_build_reads_its_version_from_the_plugin_manifest():
+def test_the_build_reads_its_version_from_the_release_tag():
     """
-    An installed plugin installs the package at its own version, so the two are one
-    release. The manifest has to hold the version as a literal, since Claude Code runs
-    nothing before reading it, so the build reads it from there rather than from a second
-    copy a bump could leave behind.
+    A release is only a tag on its merge commit, so the build reads the version from git
+    rather than from a file a merge would then have to commit; a source with no history
+    still builds.
     """
     version_source = HatchVersionSource.of_this_package()
 
-    assert version_source.path == RepositoryLocation.PLUGIN_MANIFEST
-    assert version_source.version() == PluginManifest.of_this_plugin().version
+    assert version_source.source == "vcs"
+    assert version_source.fallback_version is not None
 
 
-def test_the_installed_package_is_the_plugin_version():
+def test_the_plugin_manifest_names_no_version():
     """
-    The version the build read is the one the installed package reports.
+    A version in the manifest would need a commit after each merge, which a plugin synced
+    from the merge misses, and would keep marketplace installs on it until it changed.
     """
-    manifest = PluginManifest.of_this_plugin()
+    manifest = json.loads(RepositoryLocation.PLUGIN_MANIFEST.read_text())
 
-    assert importlib.metadata.version(manifest.name) == manifest.version
+    assert PluginManifestKey.VERSION not in manifest
 
 
 # %% each module stands on its own
@@ -185,13 +185,13 @@ def test_every_entry_point_answers_help_through_the_module_runner(
     module: PackageModule,
 ):
     """
-    Each entry point is reachable as ``python -m basstler.<name>``.
+    Each entry point is reachable through ``python -m`` and its command path.
 
     That form rather than a path to the file: a module run by path puts its own directory
     on ``sys.path`` instead of the repository root, so its absolute imports of its
     siblings would not resolve. Every bash caller invokes them this way.
     """
-    result = run_as_a_caller("-m", module.import_path, "--help")
+    result = run_as_a_caller("-m", module.command_path, "--help")
 
     assert result.returncode == 0, result.stderr
 
@@ -235,24 +235,26 @@ def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():
     ] == []
 
 
-RELEASE_REFERENCE = re.compile(r"(?:@|basstler_ref: )(v[0-9][^\s]*)")
+BASSTLER_REFERENCE = re.compile(
+    r"(?:basstler/\.github/workflows/upstream-reviews\.yml@|basstler_branch_or_tag: )(\S+)"
+)
 """
-A ``@<ref>`` or ``basstler_ref: <ref>`` naming a basstler release.
+The ``@<branch or tag>`` the caller uses basstler's workflow at, or the
+``basstler_branch_or_tag: <branch or tag>`` it installs the package at.
 """
 
 
-def test_the_example_caller_calls_the_plugins_own_release():
+def test_the_example_caller_uses_one_branch_or_tag_throughout():
     """
-    A project copies the example caller as it stands, so it has to call the release its
-    plugin installs - both the workflow it uses and the package that workflow installs.
+    A project copies the example caller as it stands, so the workflow it uses and the
+    package that workflow installs have to come from the same branch or tag.
     """
-    manifest = PluginManifest.of_this_plugin()
     caller = RepositoryLocation.ROOT / "docs" / "examples" / "upstream-reviews.yml"
 
-    references = RELEASE_REFERENCE.findall(caller.read_text())
+    references = BASSTLER_REFERENCE.findall(caller.read_text())
 
     assert len(references) == 2
-    assert set(references) == {manifest.release_tag}
+    assert len(set(references)) == 1
 
 
 # %% nothing is left behind

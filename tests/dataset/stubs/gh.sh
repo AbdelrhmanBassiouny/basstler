@@ -6,6 +6,8 @@ set -uo pipefail
 #   api graphql --input -              prints STUB_GH_GRAPHQL_JSON
 #   api --allow-escape-sequences <ep>  prints STUB_GH_JOB_LOG (the flag must be passed)
 #   api --paginate .../comments?...    prints STUB_GH_ISSUE_COMMENTS_JSON
+#   api --paginate --slurp <path>      prints STUB_GH_REST_JSON
+#   api repos/<path>                   prints STUB_GH_REST_JSON
 # STUB_GH_EXIT_CODE simulates a failure; STUB_GH_CALL_LOG records each request.
 
 if [ "${1:-}" = "api" ] && [ "${2:-}" = "graphql" ] && [ "${3:-}" = "--input" ]; then
@@ -37,6 +39,16 @@ fi
 
 if [ -n "${STUB_GH_CALL_LOG:-}" ]; then
   printf '%s\n' "$*" >> "${STUB_GH_CALL_LOG}"
+fi
+
+if [ "${1:-}" = "api" ] && [ "${2:-}" = "--paginate" ] && [ "${3:-}" = "--slurp" ]; then
+  printf '%s' "${STUB_GH_REST_JSON:-[]}"
+  exit 0
+fi
+
+if [ "${1:-}" = "api" ] && [ "$#" -eq 2 ] && [[ "${2:-}" == repos/* ]]; then
+  printf '%s' "${STUB_GH_REST_JSON:-{\}}"
+  exit 0
 fi
 
 if [ "${1:-}" = "api" ] && [ "${2:-}" = "--paginate" ]; then

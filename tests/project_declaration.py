@@ -10,23 +10,21 @@ than at every use site.
 from __future__ import annotations
 
 import json
-import re
 import tomllib
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.dependencies import PyprojectKey
+from basstler.setup.dependencies import PyprojectKey
 from basstler.locations import PackageLocation
-
-from .constants.paths import RepositoryLocation
 
 
 class ProjectTableKey(StrEnum):
     """
-    The ``[project]`` keys the suites read that :class:`basstler.dependencies.PyprojectKey`
-    does not name, since the package itself never reads them.
+    The ``[project]`` keys the suites read that
+    :class:`basstler.setup.dependencies.PyprojectKey` does not name, since the package
+    itself never reads them.
     """
 
     REQUIRES_PYTHON = "requires-python"
@@ -58,18 +56,17 @@ class HatchVersionKey(StrEnum):
 
     VERSION = "version"
     """
-    Where the backend is told to read the version from, and the name it requires of the
-    pattern's group that captures the version.
+    The table telling the backend where the version comes from.
     """
 
-    PATH = "path"
+    SOURCE = "source"
     """
-    The file the version is read out of, relative to the repository root.
+    The version source plugin the backend reads the version through.
     """
 
-    PATTERN = "pattern"
+    FALLBACK_VERSION = "fallback-version"
     """
-    The regular expression whose ``version`` group is the version.
+    The version a source with no git history builds as.
     """
 
     @classmethod
@@ -153,27 +150,26 @@ class HatchVersionSource:
     Where a ``pyproject.toml`` tells hatchling to read the version from.
     """
 
-    path: Path
+    source: str
     """
-    The file the version is read out of.
+    The version source plugin, e.g. ``vcs`` for the latest git tag.
     """
 
-    pattern: str
+    fallback_version: str | None
     """
-    The regular expression whose ``version`` group is the version.
+    The version a source with no git history builds as, if one is set.
     """
 
     @classmethod
-    def read(cls, path: Path, root: Path) -> HatchVersionSource:
+    def read(cls, path: Path) -> HatchVersionSource:
         """
         :param path: A ``pyproject.toml``.
-        :param root: The directory the source's path is relative to.
         :return: Its ``[tool.hatch.version]`` table.
         """
         table = HatchVersionKey.version_table(tomllib.loads(path.read_text()))
         return cls(
-            path=root / table[HatchVersionKey.PATH],
-            pattern=table[HatchVersionKey.PATTERN],
+            source=table[HatchVersionKey.SOURCE],
+            fallback_version=table.get(HatchVersionKey.FALLBACK_VERSION),
         )
 
     @classmethod
@@ -181,13 +177,4 @@ class HatchVersionSource:
         """
         :return: The package's own version source, read straight from its source.
         """
-        return cls.read(
-            PackageLocation.DEPENDENCY_DECLARATION.value, RepositoryLocation.ROOT
-        )
-
-    def version(self) -> str | None:
-        """
-        :return: The version the build reads, or ``None`` if the pattern matches nothing.
-        """
-        found = re.search(self.pattern, self.path.read_text())
-        return found.group(HatchVersionKey.VERSION) if found else None
+        return cls.read(PackageLocation.DEPENDENCY_DECLARATION.value)

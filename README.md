@@ -25,22 +25,22 @@ package at the plugin's own version, so the two are always one release.
 ## Releasing
 
 Every push to `main` that changes anything is a release, made by `release.yml`. An install
-takes the package and the reusable workflow from the tag `v<version>`, so a change merged
-without one would reach some installs and not others: a plugin's hooks would call a package
-that predates them. Every change counts, not only those to the package, since a list of
-shipped paths would go stale.
+takes the package from the latest release tag, so a change merged without one would reach
+some installs and not others: a plugin's hooks would call a package that predates them.
+Every change counts, not only those to the package, since a list of shipped paths would go
+stale.
 
-- **Patch releases need nothing from a pull request.** On merge, the workflow writes the next
-  patch version everywhere a version is written (`plugin/.claude-plugin/plugin.json`, which
-  the build reads it from, and the example caller's references to the release tag), commits
-  it, and pushes the commit and its tag together.
-- **A pull request names a minor or major release** with
-  `python -m basstler.release_version bump --part minor` (or `--part major`, or
-  `--version <x.y.z>`). The workflow then tags that version as it stands.
-
-CI's `release-version` job (`python -m basstler.release_version check`) fails a pull request
-whose manifest names anything else: it may only name the latest release's version, or that
-release's next minor or major one.
+- **A release is only a tag on the merge commit.** No file names the version - the build
+  reads it from the tag (`hatch-vcs`), and `plugin/.claude-plugin/plugin.json` names none -
+  so nothing is pushed to `main` after a merge. A plugin synced from the merge is already
+  the release; a version commit pushed seconds after the merge is what a synced plugin used
+  to miss, leaving it installing the release before.
+- **The workflow increments the latest release's patch,** or its minor or major part when a
+  pull request merged since is labelled `release:minor` or `release:major`. It then
+  publishes a GitHub release with generated notes.
+- **A session start installs the highest `v<major>.<minor>.<patch>` tag** of this
+  repository. One that starts between a merge and its tag gets the release before, until
+  its next start.
 
 ## The package's own environment
 
@@ -52,8 +52,9 @@ its own.
 
 What it installs from depends on where the plugin is:
 
-- **A plugin installed on its own** installs `basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@v<version>`,
-  the version being the plugin's own.
+- **A plugin installed on its own** installs `basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@<tag>`,
+  the tag being the latest release, read once per session start; offline, it keeps the one
+  it last read.
 - **A plugin run from a clone of this repository** installs that clone editable, so
   `import basstler` is the clone's own source.
 
@@ -87,7 +88,7 @@ Every entry point is run as a module, by the package's own interpreter:
 ```bash
 ~/.local/share/basstler/venv/bin/python -m basstler.stack configuration
 ~/.local/share/basstler/venv/bin/python -m basstler.maintenance run-report --json
-~/.local/share/basstler/venv/bin/python -m basstler.build_dashboard --help
+~/.local/share/basstler/venv/bin/python -m basstler.dashboard.plan_page --help
 ```
 
 The hooks and the skills that call them all use `"${BASSTLER_PYTHON}" -m "${SOME_MODULE}"`,
@@ -107,3 +108,11 @@ by `python scripts/format_docstrings.py <files>` (black, then docformatter where
 its result), also run as a pre-commit hook. To try a
 change in a real session, start Claude Code with `--plugin-dir plugin`: the plugin then
 sits in this clone, and installs the clone editable.
+
+## Licence
+
+basstler is a personal project by Abdelrhman Bassiouny (<bido.bassuny@gmail.com>), developed
+independently of any employer or institution. It is licensed under the
+[Apache License 2.0](LICENSE); see [NOTICE](NOTICE) for attribution.
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).

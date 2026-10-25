@@ -1,0 +1,147 @@
+"""
+Recording the upstream link on every branch ready to be promoted.
+
+The upstream pull request is not opened here - the credential has no write access there.
+What is written is the link that opens it prefilled, into the fork pull request's own
+description, plus the label that stops a later pass rebuilding it.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from basstler.github_labels import GitHubLabel
+from basstler.maintenance.board import PullRequestField
+from basstler.maintenance.description import PullRequestDescription
+from basstler.maintenance.github import ForkPullRequests, PullRequestWriter
+from basstler.stack.label_write import LabelWrite
+from basstler.stack.model import BranchStatus, Stack
+from basstler.stack.promotion_link import PromotionLink
+
+
+@dataclass(frozen=True)
+class Promotion:
+    """
+    One branch's compare-and-create link, and where it was recorded.
+    """
+
+    branch: str
+    """
+    The branch promoted.
+    """
+
+    pull_request_number: int
+    """
+    Its fork pull request.
+    """
+
+    url: str
+    """
+    The compare-and-create link opening the upstream pull request.
+    """
+
+    body_was_truncated: bool
+    """
+    Whether the prefilled description had to be shortened to fit the URL limit.
+    """
+
+
+def promote(stack: Stack, fork: ForkPullRequests) -> list[Promotion]:
+    """
+    Build and record the upstream link for every branch ready to be promoted.
+
+    The upstream pull request is not opened here - the app has no write access there, so
+    that call fails every time. What is written is the link that opens it prefilled, into
+    the fork pull request's own description, plus the label stopping a later pass
+    rebuilding it. The ``in-review`` label stays the developer's to add, since the
+    upstream pull request does not exist until they click Create.
+
+    Both the decision and the label write read the labels the branch carries *now*, not
+    the ones the board was exported with: the restack runs between those two moments and
+    withholds a branch by labelling it, so a snapshot is already out of date here.
+
+    :param stack: The derived stack.
+    :param fork: The fork to read descriptions from and write links back to.
+    :return: One entry per branch promoted, in dependency order.
+    """
+    promoted: list[Promotion] = []
+    withheld = stack.configuration.needs_resolution_label
+    for branch in stack.promotion_order():
+        number = branch.pull_request_number
+        pull_request = fork.pull_request(number)
+        labels = PullRequestField.LABELS.read(pull_request, number)
+        if GitHubLabel.PROMOTION_LINK_SENT in labels or withheld in labels:
+            continue
+        description = PullRequestDescription(
+            str(PullRequestField.BODY.read(pull_request, number) or "")
+        )
+        link = PromotionLink.build(
+            stack.configuration,
+            branch.name,
+            str(PullRequestField.TITLE.read(pull_request, number) or branch.name),
+            _prefilled_description(description, number, stack),
+        )
+        fork.set_description(
+            number,
+            description.with_promotion_link(link.url),
+        )
+        fork.replace_labels(
+            number,
+            LabelWrite.replacing(
+                labels, added=[GitHubLabel.PROMOTION_LINK_SENT]
+            ).labels,
+        )
+        promoted.append(
+            Promotion(
+                branch=branch.name,
+                pull_request_number=branch.pull_request_number,
+                url=link.url,
+                body_was_truncated=link.body_was_truncated,
+            )
+        )
+    return promoted
+
+
+def _prefilled_description(
+    description: PullRequestDescription, pull_request_number: int, stack: Stack
+) -> str:
+    """
+    Build what the upstream pull request opens with.
+
+    :param description: The fork pull request's description.
+    :param pull_request_number: The fork pull request, to link back to.
+    :param stack: The derived stack, naming the fork.
+    :return: One paragraph plus a link back to the full detail.
+    """
+    summary = description.summary
+    detail = (
+        "Full detail: "
+        f"{stack.configuration.fork_repository.pull_request_url(pull_request_number)}"
+    )
+    return f"{summary}\n\n{detail}" if summary else detail
+
+
+def clear_spent_promotion_labels(
+    stack: Stack, fork: PullRequestWriter
+) -> tuple[str, ...]:
+    """
+    Drop the link label from every branch whose link has already been acted on.
+
+    :param stack: The derived stack.
+    :param fork: The fork to write to.
+    :return: The branches whose label was cleared.
+    """
+    spent = [
+        branch
+        for branch in stack.maintained_branches()
+        if GitHubLabel.PROMOTION_LINK_SENT in branch.labels
+        and branch.status in {BranchStatus.IN_REVIEW, BranchStatus.MERGED}
+    ]
+    for branch in spent:
+        fork.replace_labels(
+            branch.pull_request_number,
+            LabelWrite.replacing(
+                branch.labels, removed=[GitHubLabel.PROMOTION_LINK_SENT]
+            ).labels,
+        )
+    return tuple(branch.name for branch in spent)

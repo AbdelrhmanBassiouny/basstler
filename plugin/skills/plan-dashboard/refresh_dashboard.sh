@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Orchestrates one plan's refresh: sync_manifest_status's auto-correction,
+# Orchestrates one plan's refresh: basstler.plan.sync_manifest_status's auto-correction,
 # pushing that correction back to the personal-notes branch if it changed
-# anything, then build_dashboard's render - the exact sequence
+# anything, then basstler.dashboard.plan_page's render - the exact sequence
 # skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
 # embedded bash snippet for a session to improvise from. Extracted so that
 # sequence is real, tested-by-construction code (it just calls the two
@@ -18,10 +18,15 @@ set -euo pipefail
 #     --roadmap <roadmap.md path> \
 #     --pr-data <pr_data.json path> \
 #     --output <dashboard.html output path> \
-#     [--tracking-url <url>] [--hub-url <url>] [--index-url <url>]
+#     [--tracking-url <url>] [--hub-url <url>] [--index-url <url>] \
+#     [--plans-dir <directory holding every plan>]
 #
-# Prints one JSON summary to stdout, merging sync_manifest_status's own
-# {"corrected": [...]} with build_dashboard's status/drift/ready summary,
+# --plans-dir is forwarded to both scripts below: each validates the manifest,
+# and a depends_on entry naming <plan-id>/<item-id> resolves against that
+# directory.
+#
+# Prints one JSON summary to stdout, merging basstler.plan.sync_manifest_status's own
+# {"corrected": [...]} with basstler.dashboard.plan_page's status/drift/ready summary,
 # so the calling skill has everything step 4's report needs from one place.
 #
 # Requires PyYAML, Jinja2, and the markdown package - see the package's own
@@ -44,6 +49,7 @@ OUTPUT_FILE=""
 TRACKING_URL=""
 HUB_URL=""
 INDEX_URL=""
+PLANS_DIRECTORY=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --plan-id)
@@ -78,6 +84,10 @@ while [ $# -gt 0 ]; do
       INDEX_URL="$2"
       shift 2
       ;;
+    --plans-dir)
+      PLANS_DIRECTORY="$2"
+      shift 2
+      ;;
     *)
       echo "Unrecognized argument: $1" >&2
       exit 1
@@ -87,13 +97,19 @@ done
 
 if [ -z "${PLAN_ID}" ] || [ -z "${PLAN_FILE}" ] || [ -z "${ROADMAP_FILE}" ] \
     || [ -z "${PULL_REQUEST_DATA_FILE}" ] || [ -z "${OUTPUT_FILE}" ]; then
-  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>] [--hub-url <url>] [--index-url <url>]" >&2
+  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>] [--hub-url <url>] [--index-url <url>] [--plans-dir <dir>]" >&2
   exit 1
+fi
+
+PLANS_DIRECTORY_ARGUMENTS=()
+if [ -n "${PLANS_DIRECTORY}" ]; then
+  PLANS_DIRECTORY_ARGUMENTS=(--plans-dir "${PLANS_DIRECTORY}")
 fi
 
 SYNC_SUMMARY="$("${BASSTLER_PYTHON}" -m "${SYNC_MANIFEST_STATUS_MODULE}" \
   --plan "${PLAN_FILE}" \
-  --pr-data "${PULL_REQUEST_DATA_FILE}")"
+  --pr-data "${PULL_REQUEST_DATA_FILE}" \
+  "${PLANS_DIRECTORY_ARGUMENTS[@]+"${PLANS_DIRECTORY_ARGUMENTS[@]}"}")"
 
 CORRECTED_COUNT="$("${BASSTLER_PYTHON}" -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" count-corrected "${SYNC_SUMMARY}")"
 
@@ -119,6 +135,9 @@ if [ -n "${HUB_URL}" ]; then
 fi
 if [ -n "${INDEX_URL}" ]; then
   BUILD_ARGUMENTS+=(--index-url "${INDEX_URL}")
+fi
+if [ -n "${PLANS_DIRECTORY}" ]; then
+  BUILD_ARGUMENTS+=(--plans-dir "${PLANS_DIRECTORY}")
 fi
 BUILD_SUMMARY="$("${BASSTLER_PYTHON}" -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
 

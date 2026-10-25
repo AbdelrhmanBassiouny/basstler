@@ -9,14 +9,20 @@ here, so the repository-root test/conftest.py - which imports the robotics stack
 job does not install - is never loaded for it.
 """
 
+import os
 from pathlib import Path
 
 import pytest
 
+# A session running the plugin exports BASSTLER_PLUGIN_ROOT as its synced copy, which
+# basstler.locations reads on import; pinned before anything imports it, so the suite
+# tests this checkout's plugin rather than whichever release that session synced.
+os.environ["BASSTLER_PLUGIN_ROOT"] = str(Path(__file__).resolve().parents[1] / "plugin")
 
 from .executable_stubs import ExecutableStubDirectory
+from .maintenance.fork import ForkCheckout
 from .scratch_repository import ScratchRepository
-from .upstream_reviews_replay import RecordedResponse, ReplayingClient
+from .upstream_reviews.replay import RecordedResponse, ReplayingClient
 
 
 @pytest.fixture
@@ -52,3 +58,14 @@ def paginated_client() -> ReplayingClient:
             RecordedResponse.PULL_REQUEST_PAGE_TWO.load(),
         ]
     )
+
+
+@pytest.fixture
+def fork_checkout(tmp_path: Path) -> ForkCheckout:
+    """
+    A real fork checkout with both remotes wired to local bare repositories.
+
+    :param tmp_path: pytest's per-test temporary directory.
+    :return: The checkout.
+    """
+    return ForkCheckout.create(tmp_path)

@@ -5,7 +5,7 @@ Tests for repository.py: reading a GitHub repository out of a reference or a rem
 import pytest
 
 from basstler.repository import MalformedRepositoryError, Repository
-from basstler.setup_steps import Host
+from basstler.setup.steps import Host
 
 REPOSITORY = Repository("an-owner", "a-repository")
 """
@@ -55,6 +55,13 @@ def test_repository_reads_the_owner_and_name_from_a_remote_url(url: str):
 def test_repository_rejects_a_remote_url_naming_no_repository(malformed: str):
     with pytest.raises(MalformedRepositoryError):
         Repository.from_remote_url(malformed)
+
+
+# %% pages
+
+
+def test_a_workflow_run_url_is_the_run_s_page_under_the_repository_s_actions():
+    assert REPOSITORY.workflow_run_url(7) == f"{REPOSITORY.url}/actions/runs/7"
 
 
 # %% REST paths

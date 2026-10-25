@@ -1,7 +1,7 @@
 """
 Every file and directory this package names, each written once.
 
-..note:: Imports nothing outside the standard library, since :mod:`basstler.dependencies`
+..note:: Imports nothing outside the standard library, since :mod:`basstler.setup.dependencies`
     reads its declaration's location from here before anything is installed.
 """
 
@@ -67,7 +67,7 @@ class PackageLocation(PathEnumeration):
     ``PYTHONPATH``. Meaningless for a package installed as a copy.
     """
 
-    STACK_CONFIGURATION = DIRECTORY / "stack.toml"
+    STACK_CONFIGURATION = DIRECTORY / "stack" / "stack.toml"
     """
     The shipped stack configuration every run starts from, before a project's and a
     user's overrides.
@@ -84,36 +84,24 @@ class PackageLocation(PathEnumeration):
     package installs.
     """
 
+    LICENSE = SOURCE_TREE / "LICENSE"
+    """
+    The licence text of a source checkout.
+    """
+
     TEMPLATES = DIRECTORY / "templates"
     """
     The page templates dashboards are rendered from.
     """
 
-    QUERIES = DIRECTORY / "queries"
+    QUERIES = DIRECTORY / "upstream_reviews" / "queries"
     """
     The GraphQL documents the upstream review reader sends.
     """
 
-    PLAN_ITEM_MODE_DEFAULTS = DIRECTORY / "plan-item-modes.toml"
+    PLAN_ITEM_MODE_DEFAULTS = DIRECTORY / "plan" / "plan-item-modes.toml"
     """
     The shipped plan-item execution modes.
-    """
-
-
-class CheckoutLocation(PathEnumeration):
-    """
-    The files of a checkout of this repository that write a release's version, relative
-    to the checkout's root.
-    """
-
-    PLUGIN_MANIFEST = Path("plugin") / ".claude-plugin" / "plugin.json"
-    """
-    The plugin's manifest, where a release's version is declared.
-    """
-
-    EXAMPLE_CALLER = Path("docs") / "examples" / "upstream-reviews.yml"
-    """
-    The caller a project copies, naming the release it calls.
     """
 
 
@@ -203,6 +191,22 @@ class PluginLocation(PathEnumeration):
     """
 
 
+class PluginSkillLocation(PathEnumeration):
+    """
+    The files of the plugin's skills this package reads, as absolute paths.
+    """
+
+    SKILLS = PluginLocation.ROOT.value / "skills"
+    """
+    The directory holding one directory per skill.
+    """
+
+    STARTER_NOTES = SKILLS / "setup-personal-notes" / "starter-notes.md"
+    """
+    The conventions a new personal-notes file can be seeded with.
+    """
+
+
 class ProjectLocation(PathEnumeration):
     """
     The files this package reads, runs or writes in a project, relative to its root.
@@ -266,4 +270,20 @@ class ClaudeCodeVariable(EnvironmentVariable):
     PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR"
     """
     The root of the project the session runs in.
+    """
+
+    REMOTE = "CLAUDE_CODE_REMOTE"
+    """
+    ``true`` in a Claude Code cloud session, whose proxy answers GitHub's REST API but
+    not its GraphQL API.
+    """
+
+    SESSION_IDENTIFIER = "CLAUDE_CODE_SESSION_ID"
+    """
+    The session's own identifier, which names its transcript file.
+    """
+
+    CONFIGURATION_DIRECTORY = "CLAUDE_CONFIG_DIR"
+    """
+    Where Claude Code keeps its state, transcripts included, when not ``~/.claude``.
     """

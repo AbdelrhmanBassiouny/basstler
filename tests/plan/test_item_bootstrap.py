@@ -1,0 +1,841 @@
+"""
+Tests for basstler.plan.item_bootstrap.py's two operations, recording an item and
+opening its work.
+
+Run against the local scratch repository fixture rather than a real remote, and against
+a recording pull request opener rather than GitHub, so nothing here needs network access
+or credentials.
+
+Every manifest line asserted on is rendered by the :class:`ManifestKey` that owns it,
+and every path by the :class:`PlanDocument` that lives at it, so a test cannot pin a
+second, independently-drifting copy of the manifest's own vocabulary.
+"""
+
+from __future__ import annotations
+
+import json
+import shutil
+import subprocess
+from dataclasses import dataclass, field
+from pathlib import Path
+
+import pytest
+import yaml
+
+import basstler.plan.item_bootstrap
+from basstler.locations import PluginLocation, ProjectLocation
+from basstler.plan.item_bootstrap import (
+    CreatedPullRequest,
+    PlanItemBootstrapExitCode,
+    ItemRecordRequest,
+    ItemStatus,
+    ManifestText,
+    PlanDocument,
+    PullRequestRequest,
+    UnknownItemError,
+    UnknownPlanError,
+    WorkOpener,
+    WorkOpenRequest,
+)
+from basstler.plan.model import KeySpecification, ManifestKey, ValueStyle
+from basstler.plan.size_limits import (
+    Measure,
+    Roadmap,
+    RoadmapEntryLocation,
+    SizeViolation,
+)
+
+from ..scratch_repository import ScratchRepository
+from ..constants.notes import ScratchBranch
+from ..constants.paths import DatasetLocation
+
+from ..script_runner import PythonModuleRunner
+
+BOOTSTRAP_MODULE = basstler.plan.item_bootstrap.__name__
+"""
+The import path the scratch layout's copy of the module under test is run by.
+
+Read off the module rather than spelled out, so a rename cannot leave the tests running
+something else - and ``-m`` rather than a file path, since a module run by path would put
+the package's own directory on ``sys.path`` in place of the project root.
+"""
+
+PLAN_IDENTIFIER = "test-plan"
+
+PLAN_MANIFEST = (DatasetLocation.DIRECTORY / "bootstrap-plan.yaml").read_text()
+"""
+The manifest every test starts from.
+"""
+
+PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "bootstrap-roadmap.md").read_text()
+"""
+The roadmap every test starts from.
+"""
+
+EXISTING_ITEM = "an-existing-item"
+"""
+The fixture item the plan already tracks, with no branch of its own yet.
+"""
+
+NEW_ITEM = "a-brand-new-item"
+"""
+An item the fixture plan does not track, for the entry-creating path.
+"""
+
+NEW_BRANCH = "claude/a-new-branch"
+"""
+The branch opening the work publishes.
+"""
+
+SESSION_URL = "https://example.invalid/session_first"
+"""
+The session recorded on an item whose work was opened.
+"""
+
+
+def manifest_line(manifest_key: ManifestKey, value: str) -> str:
+    """
+    One manifest line as the key that owns it writes it.
+
+    :param manifest_key: The key the line sets.
+    :param value: The value it carries.
+    :return: The rendered line.
+    """
+    return manifest_key.render(value)
+
+
+# %% fixtures
+
+
+@dataclass
+class RecordingPullRequestOpener:
+    """
+    Stands in for the GitHub pull request endpoint, recording what it was asked to
+    create instead of calling it.
+    """
+
+    number: int = 99
+    """
+    The pull request number handed back to the caller.
+    """
+
+    requests: list[PullRequestRequest] = field(default_factory=list)
+    """
+    Every request this opener was given, in call order.
+    """
+
+    def open_pull_request(self, request: PullRequestRequest) -> CreatedPullRequest:
+        """
+        Record *request* and hand back a pull request as GitHub would.
+
+        :param request: The pull request to create.
+        :return: The created pull request.
+        """
+        self.requests.append(request)
+        return CreatedPullRequest(
+            number=self.number,
+            html_url=f"https://example.invalid/pull/{self.number}",
+        )
+
+
+@dataclass
+class RefusingPullRequestOpener:
+    """
+    Stands in for a GitHub endpoint that refuses the creation.
+    """
+
+    def open_pull_request(self, request: PullRequestRequest) -> CreatedPullRequest:
+        """
+        Refuse the creation the way the real opener does on a non-success response.
+
+        :param request: The pull request that will not be created.
+        :raises PullRequestRefusedError: Always.
+        """
+        raise basstler.plan.item_bootstrap.PullRequestRefusedError(detail="422 refused")
+
+
+@pytest.fixture
+def bootstrap_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
+    """
+    A scratch repository carrying the hook scripts this module drives, with a plan
+    already published on its notes branch.
+
+    :param scratch_repository: The initialized scratch repository and notes remote.
+    :return: The same repository, ready to bootstrap an item in.
+    """
+    scratch_repository.install_hook_scripts(
+        PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
+    )
+    scratch_repository.install_package()
+    scratch_repository.write("README.md", "scratch repo\n")
+    scratch_repository.commit_everything("initial commit")
+    scratch_repository.publish_notes_branch(
+        {
+            PlanDocument.MANIFEST.path_within_notes_branch(PLAN_IDENTIFIER): (
+                PLAN_MANIFEST
+            ),
+            PlanDocument.ROADMAP.path_within_notes_branch(PLAN_IDENTIFIER): (
+                PLAN_ROADMAP
+            ),
+        }
+    )
+    scratch_repository.resolve_notes_remote_to()
+    scratch_repository.add_work_remote()
+    return scratch_repository
+
+
+def published_plan(repository: ScratchRepository) -> dict[PlanDocument, str]:
+    """
+    Read the plan's documents as they actually are on the notes branch, rather than what
+    a run reported.
+
+    Asks each document where it lives, so this never states a plan's layout
+    independently of the code that owns it.
+
+    :param repository: The scratch repository whose notes remote to read.
+    :return: Each document's content.
+    """
+    checkout = repository.project_root.parent / "published-plan-checkout"
+    shutil.rmtree(checkout, ignore_errors=True)
+    repository.clone_notes_branch(checkout)
+    return {
+        document: (
+            checkout / document.path_within_notes_branch(PLAN_IDENTIFIER)
+        ).read_text()
+        for document in PlanDocument
+    }
+
+
+def record_request(repository: ScratchRepository, **overrides: object):
+    """
+    Build a record request, overriding only what a test cares about.
+
+    :param repository: The scratch repository the request is recorded against.
+    :param overrides: Fields to replace on the default request.
+    :return: The request.
+    """
+    defaults = dict(
+        plan_identifier=PLAN_IDENTIFIER,
+        item_identifier=EXISTING_ITEM,
+        status=ItemStatus.IN_PROGRESS,
+    )
+    defaults.update(overrides)
+    return ItemRecordRequest(**defaults)
+
+
+def open_request(**overrides: object) -> WorkOpenRequest:
+    """
+    Build a work-open request, overriding only what a test cares about.
+
+    :param overrides: Fields to replace on the default request.
+    :return: The request.
+    """
+    defaults = dict(
+        plan_identifier=PLAN_IDENTIFIER,
+        item_identifier=EXISTING_ITEM,
+        branch=NEW_BRANCH,
+        base_branch=ScratchBranch.WORK,
+        session_url=SESSION_URL,
+        pull_request_title="An item that has not been started",
+        pull_request_body="What it does.",
+    )
+    defaults.update(overrides)
+    return WorkOpenRequest(**defaults)
+
+
+# %% recording an item
+
+
+def test_recording_an_existing_item_sets_its_status(
+    bootstrap_repository: ScratchRepository,
+):
+    result = record_request(bootstrap_repository).record(
+        project_root=bootstrap_repository.project_root
+    )
+
+    assert result.exit_code is PlanItemBootstrapExitCode.SUCCESS
+    published = published_plan(bootstrap_repository)
+    assert (
+        manifest_line(ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value)
+        in published[PlanDocument.MANIFEST]
+    )
+
+
+def test_recording_leaves_every_other_manifest_line_byte_identical(
+    bootstrap_repository: ScratchRepository,
+):
+    record_request(bootstrap_repository).record(
+        project_root=bootstrap_repository.project_root
+    )
+
+    expected = PLAN_MANIFEST.replace(
+        manifest_line(ManifestKey.STATUS, ItemStatus.NOT_STARTED.value),
+        manifest_line(ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value),
+        1,
+    )
+    assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == expected
+
+
+def test_recording_appends_the_roadmap_entry_without_rewriting_the_roadmap(
+    bootstrap_repository: ScratchRepository,
+):
+    entry = "A rule the item settled,\nwritten over two lines."
+    record_request(bootstrap_repository, roadmap_entry=entry).record(
+        project_root=bootstrap_repository.project_root
+    )
+
+    roadmap = published_plan(bootstrap_repository)[PlanDocument.ROADMAP]
+    assert roadmap == record_request(
+        bootstrap_repository, roadmap_entry=entry
+    ).roadmap_after(PLAN_ROADMAP)
+    assert Roadmap.from_text(roadmap).entries[-1] == " ".join(entry.split())
+
+
+def test_recording_without_a_roadmap_entry_leaves_the_roadmap_untouched(
+    bootstrap_repository: ScratchRepository,
+):
+    record_request(bootstrap_repository).record(
+        project_root=bootstrap_repository.project_root
+    )
+
+    assert published_plan(bootstrap_repository)[PlanDocument.ROADMAP] == PLAN_ROADMAP
+
+
+def an_entry_over_the_length_limit() -> str:
+    """
+    :return: A roadmap entry one character longer than the plan's limits allow.
+    """
+    return "x" * (Measure.ROADMAP_ENTRY_LENGTH.maximum + 1)
+
+
+def the_length_violation_of(entry: str) -> SizeViolation:
+    """
+    :param entry: An entry appended to the fixture roadmap.
+    :return: The violation the plan save names for it.
+    """
+    return SizeViolation(
+        measure=Measure.ROADMAP_ENTRY_LENGTH,
+        location=RoadmapEntryLocation(len(Roadmap.from_text(PLAN_ROADMAP).entries) + 1),
+        measured=len(entry),
+    )
+
+
+def test_a_refused_save_carries_the_reason_the_plan_save_gave(
+    bootstrap_repository: ScratchRepository,
+):
+    entry = an_entry_over_the_length_limit()
+
+    with pytest.raises(basstler.plan.item_bootstrap.PlanSaveRefusedError) as refusal:
+        record_request(bootstrap_repository, roadmap_entry=entry).record(
+            project_root=bootstrap_repository.project_root
+        )
+
+    assert str(the_length_violation_of(entry)) in refusal.value.detail
+
+
+def test_a_refused_save_leaves_the_published_plan_untouched(
+    bootstrap_repository: ScratchRepository,
+):
+    request = record_request(
+        bootstrap_repository, roadmap_entry=an_entry_over_the_length_limit()
+    )
+
+    with pytest.raises(basstler.plan.item_bootstrap.PlanSaveRefusedError):
+        request.record(project_root=bootstrap_repository.project_root)
+
+    assert published_plan(bootstrap_repository) == {
+        PlanDocument.MANIFEST: PLAN_MANIFEST,
+        PlanDocument.ROADMAP: PLAN_ROADMAP,
+    }
+
+
+def test_recording_a_new_item_appends_it_to_the_manifest(
+    bootstrap_repository: ScratchRepository,
+):
+    record_request(
+        bootstrap_repository,
+        item_identifier=NEW_ITEM,
+        title="A brand new item",
+        track="a-track",
+        status=ItemStatus.NOT_STARTED,
+    ).record(project_root=bootstrap_repository.project_root)
+
+    manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
+    assert manifest.startswith(PLAN_MANIFEST)
+    assert manifest.endswith(
+        ManifestKey.IDENTIFIER.render(NEW_ITEM, opening_the_item=True)
+        + manifest_line(ManifestKey.TITLE, "A brand new item")
+        + manifest_line(ManifestKey.BRANCH, "null")
+        + manifest_line(ManifestKey.TRACK, "a-track")
+        + manifest_line(ManifestKey.DEPENDS_ON, "[]")
+        + manifest_line(ManifestKey.STATUS, ItemStatus.NOT_STARTED.value)
+    )
+
+
+def test_recording_a_new_item_without_a_title_names_the_key_it_needs(
+    bootstrap_repository: ScratchRepository,
+):
+    with pytest.raises(basstler.plan.item_bootstrap.IncompleteNewItemError) as refusal:
+        record_request(
+            bootstrap_repository,
+            item_identifier=NEW_ITEM,
+            track="a-track",
+            status=ItemStatus.NOT_STARTED,
+        ).record(project_root=bootstrap_repository.project_root)
+
+    assert refusal.value.missing_keys == (ManifestKey.TITLE,)
+
+
+def test_recording_against_an_unknown_plan_is_refused(
+    bootstrap_repository: ScratchRepository,
+):
+    with pytest.raises(UnknownPlanError) as refusal:
+        record_request(bootstrap_repository, plan_identifier="no-such-plan").record(
+            project_root=bootstrap_repository.project_root
+        )
+
+    assert refusal.value.plan_identifier == "no-such-plan"
+
+
+# %% opening the work
+
+
+def test_opening_writes_the_branch_pull_request_and_session_onto_the_item(
+    bootstrap_repository: ScratchRepository,
+):
+    opener = RecordingPullRequestOpener(number=143)
+
+    result = WorkOpener(bootstrap_repository.project_root).open(
+        open_request(),
+        pull_request_opener=opener,
+    )
+
+    assert result.exit_code is PlanItemBootstrapExitCode.SUCCESS
+    assert result.pull_request_number == 143
+    manifest = published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
+    for written_key, value in (
+        (ManifestKey.BRANCH, NEW_BRANCH),
+        (ManifestKey.PULL_REQUEST_NUMBER, "143"),
+        (ManifestKey.SESSION, SESSION_URL),
+        (ManifestKey.STATUS, ItemStatus.IN_PROGRESS.value),
+    ):
+        assert manifest_line(written_key, value) in manifest
+
+
+def test_opening_asks_for_a_draft_pull_request_against_the_plans_repository(
+    bootstrap_repository: ScratchRepository,
+):
+    opener = RecordingPullRequestOpener()
+
+    WorkOpener(bootstrap_repository.project_root).open(
+        open_request(),
+        pull_request_opener=opener,
+    )
+
+    assert len(opener.requests) == 1
+    request = opener.requests[0]
+    assert request.draft is True
+    assert request.repository == "an-owner/a-repository"
+    assert request.head == NEW_BRANCH
+    assert request.base == ScratchBranch.WORK
+
+
+def test_opening_publishes_the_branch_to_the_repositorys_own_remote(
+    bootstrap_repository: ScratchRepository,
+):
+    WorkOpener(bootstrap_repository.project_root).open(
+        open_request(),
+        pull_request_opener=RecordingPullRequestOpener(),
+    )
+
+    published = bootstrap_repository.run_git(
+        "ls-remote",
+        "--heads",
+        str(bootstrap_repository.work_remote_path),
+        NEW_BRANCH,
+    )
+    assert NEW_BRANCH in published.stdout
+
+
+def test_opening_an_already_published_branch_is_refused(
+    bootstrap_repository: ScratchRepository,
+):
+    opener = RecordingPullRequestOpener()
+    WorkOpener(bootstrap_repository.project_root).open(
+        open_request(),
+        pull_request_opener=opener,
+    )
+
+    with pytest.raises(
+        basstler.plan.item_bootstrap.BranchAlreadyPublishedError
+    ) as refusal:
+        WorkOpener(bootstrap_repository.project_root).open(
+            open_request(),
+            pull_request_opener=opener,
+        )
+    assert refusal.value.branch == NEW_BRANCH
+    assert len(opener.requests) == 1
+
+
+def test_opening_an_unknown_item_is_refused_before_anything_is_created(
+    bootstrap_repository: ScratchRepository,
+):
+    opener = RecordingPullRequestOpener()
+
+    with pytest.raises(UnknownItemError):
+        WorkOpener(bootstrap_repository.project_root).open(
+            open_request(item_identifier="no-such-item"),
+            pull_request_opener=opener,
+        )
+
+    assert opener.requests == []
+    published = bootstrap_repository.run_git(
+        "ls-remote", "--heads", str(bootstrap_repository.work_remote_path)
+    )
+    assert NEW_BRANCH not in published.stdout
+
+
+def test_a_refused_pull_request_leaves_the_manifest_untouched(
+    bootstrap_repository: ScratchRepository,
+):
+    with pytest.raises(basstler.plan.item_bootstrap.PullRequestRefusedError):
+        WorkOpener(bootstrap_repository.project_root).open(
+            open_request(),
+            pull_request_opener=RefusingPullRequestOpener(),
+        )
+
+    assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == PLAN_MANIFEST
+
+
+def test_a_refused_pull_request_leaves_the_branch_it_already_published(
+    bootstrap_repository: ScratchRepository,
+):
+    with pytest.raises(basstler.plan.item_bootstrap.PullRequestRefusedError):
+        WorkOpener(bootstrap_repository.project_root).open(
+            open_request(),
+            pull_request_opener=RefusingPullRequestOpener(),
+        )
+
+    published = bootstrap_repository.run_git(
+        "ls-remote",
+        "--heads",
+        str(bootstrap_repository.work_remote_path),
+        NEW_BRANCH,
+    )
+    assert NEW_BRANCH in published.stdout
+
+
+def test_a_supplied_pull_request_number_is_recorded_without_creating_one(
+    bootstrap_repository: ScratchRepository,
+):
+    opener = RecordingPullRequestOpener()
+
+    result = WorkOpener(bootstrap_repository.project_root).open(
+        open_request(pull_request_number=57),
+        pull_request_opener=opener,
+    )
+
+    assert opener.requests == []
+    assert result.pull_request_number == 57
+    assert (
+        manifest_line(ManifestKey.PULL_REQUEST_NUMBER, "57")
+        in published_plan(bootstrap_repository)[PlanDocument.MANIFEST]
+    )
+
+
+def test_creating_a_pull_request_without_a_title_or_body_is_refused_before_publishing(
+    bootstrap_repository: ScratchRepository,
+):
+    with pytest.raises(basstler.plan.item_bootstrap.PullRequestDetailsMissingError):
+        WorkOpener(bootstrap_repository.project_root).open(
+            open_request(pull_request_title=None, pull_request_body=None),
+            pull_request_opener=RecordingPullRequestOpener(),
+        )
+
+    published = bootstrap_repository.run_git(
+        "ls-remote", "--heads", str(bootstrap_repository.work_remote_path)
+    )
+    assert NEW_BRANCH not in published.stdout
+
+
+def test_a_supplied_pull_request_number_adopts_the_branch_its_caller_published(
+    bootstrap_repository: ScratchRepository,
+):
+    WorkOpener(bootstrap_repository.project_root).open(
+        open_request(),
+        pull_request_opener=RecordingPullRequestOpener(number=99),
+    )
+
+    result = WorkOpener(bootstrap_repository.project_root).open(
+        open_request(pull_request_number=57),
+        pull_request_opener=RecordingPullRequestOpener(),
+    )
+
+    assert result.pull_request_number == 57
+
+
+# %% the vocabulary the manifest is written in
+
+
+def test_a_rendered_field_line_matches_how_a_real_manifest_writes_it():
+    """
+    The renderer's indentation and spacing have to match a manifest written by hand,
+    since every other test compares the two.
+    """
+    assert (
+        manifest_line(ManifestKey.STATUS, ItemStatus.NOT_STARTED.value) in PLAN_MANIFEST
+    )
+    assert manifest_line(ManifestKey.TRACK, "a-track") in PLAN_MANIFEST
+
+
+NARROWLY_INDENTED_MANIFEST = (
+    DatasetLocation.DIRECTORY / "narrowly-indented-plan.yaml"
+).read_text()
+"""
+A manifest predating this module's own formatting convention: its items list has no
+indent before the ``-`` and its fields sit two spaces in, not the four
+``ItemLayout.FIELD_INDENT`` assumes.
+
+``icra-mechanism/plan.yaml`` on the personal-notes branch is written exactly this way.
+"""
+
+
+def test_patching_a_field_matches_the_items_own_indentation_rather_than_a_fixed_one():
+    """
+    A fixed indentation nests a patched field under whichever key happens to precede it.
+
+    instead of beside it, the moment a manifest's own indentation differs from the
+    module's assumed one - which stops the result parsing as YAML at all.
+    """
+    patched = ManifestText.from_text(NARROWLY_INDENTED_MANIFEST).with_item_fields(
+        "narrow-plan",
+        "an-item",
+        {ManifestKey.STATUS: ItemStatus.IN_PROGRESS.value},
+    )
+
+    item = yaml.safe_load(patched)[ManifestKey.ITEMS.key][0]
+    assert item[ManifestKey.STATUS.key] == ItemStatus.IN_PROGRESS.value
+    assert item[ManifestKey.TITLE.key] == "An item indented two spaces, not four"
+
+
+def test_a_new_item_matches_the_existing_items_indentation_rather_than_a_fixed_one():
+    """
+    A new item rendered at a fixed indentation lands inside the previous item instead of
+    beside it whenever the manifest's own items sit flush with ``items:``, and the
+    result stops parsing as YAML at all.
+    """
+    request = ItemRecordRequest(
+        plan_identifier="narrow-plan",
+        item_identifier=NEW_ITEM,
+        status=ItemStatus.NOT_STARTED,
+        title="A brand new item",
+        track="a-track",
+    )
+    manifest = ManifestText.from_text(NARROWLY_INDENTED_MANIFEST)
+
+    extended = manifest.with_item(request.render_new_item(manifest.item_indentation()))
+
+    items = yaml.safe_load(extended)[ManifestKey.ITEMS.key]
+    assert [item[ManifestKey.IDENTIFIER.key] for item in items] == ["an-item", NEW_ITEM]
+    assert items[1][ManifestKey.TRACK.key] == "a-track"
+
+
+def test_a_key_quotes_its_own_value_when_its_style_says_to():
+    """
+    Quoting is the key's to decide, so no caller has to know that a title is prose and a
+    track is a bare identifier.
+    """
+    assert ManifestKey.TITLE.render("A brand new item").endswith(
+        ': "A brand new item"\n'
+    )
+    assert ManifestKey.TRACK.render("a-track").endswith(": a-track\n")
+    assert ManifestKey.TITLE.style is ValueStyle.DOUBLE_QUOTED
+    assert ManifestKey.TRACK.style is ValueStyle.PLAIN
+
+
+def test_every_key_is_a_specification_in_its_own_right():
+    """
+    Mixing the specification into the enum is what lets a key carry its style without a
+    lookup beside it, so the relationship is asserted rather than assumed.
+    """
+    assert issubclass(ManifestKey, KeySpecification)
+    assert all(
+        isinstance(manifest_key, KeySpecification) for manifest_key in ManifestKey
+    )
+
+
+def test_every_key_was_declared_as_specification_arguments():
+    """
+    A member declared as a built ``KeySpecification`` rather than as its argument tuple
+    is accepted silently by the enum machinery and lands the whole instance in ``key``.
+
+    This is what catches that.
+    """
+    assert all(isinstance(manifest_key.key, str) for manifest_key in ManifestKey)
+    assert all(
+        isinstance(manifest_key.style, ValueStyle) for manifest_key in ManifestKey
+    )
+
+
+def test_a_key_indexes_a_parsed_manifest_by_the_string_it_names():
+    """
+    A key reads parsed YAML through its own ``key``, which is the manifest's own
+    spelling of it.
+    """
+    item = yaml.safe_load(PLAN_MANIFEST)[ManifestKey.ITEMS.key][0]
+    assert item[ManifestKey.IDENTIFIER.key] == EXISTING_ITEM
+    assert item[ManifestKey.STATUS.key] == ItemStatus.NOT_STARTED
+
+
+def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    ``ProjectLocation.PLANS`` mirrors ``PLANS_DIR`` in the shell configuration, and
+    ``ProjectLocation.PLAN_HUB`` mirrors ``PLAN_HUB_PATH``; this is what stops the
+    mirrors drifting, since each pair is edited in different files.
+    """
+    resolved = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && '
+            'printf "%s\\n%s\\n%s\\n" "${PLANS_DIR}" "$(plan_manifest_path "$1")" '
+            '"${PLAN_HUB_PATH}"',
+            "test",
+            PLAN_IDENTIFIER,
+        ],
+        cwd=bootstrap_repository.project_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    plans_directory, manifest_path, hub_path = resolved.stdout.strip().split("\n")
+    assert plans_directory == str(ProjectLocation.PLANS)
+    assert hub_path == str(ProjectLocation.PLAN_HUB)
+    assert manifest_path == PlanDocument.MANIFEST.path_within_notes_branch(
+        PLAN_IDENTIFIER
+    )
+
+
+def test_only_the_keys_whose_values_run_over_lines_are_block_styled():
+    assert ManifestKey.block_styled() == {ManifestKey.NOTES, ManifestKey.BLOCKERS}
+
+
+# %% exit statuses
+
+
+def test_every_exit_code_names_itself_from_its_own_member():
+    for exit_code in PlanItemBootstrapExitCode:
+        assert exit_code.name_for_a_caller == exit_code.name.lower()
+
+
+def test_each_refusal_carries_its_own_exit_code():
+    codes = {
+        UnknownPlanError: PlanItemBootstrapExitCode.UNKNOWN_PLAN,
+        UnknownItemError: PlanItemBootstrapExitCode.UNKNOWN_ITEM,
+        basstler.plan.item_bootstrap.IncompleteNewItemError: PlanItemBootstrapExitCode.INCOMPLETE_NEW_ITEM,
+        basstler.plan.item_bootstrap.BranchAlreadyPublishedError: (
+            PlanItemBootstrapExitCode.BRANCH_ALREADY_PUBLISHED
+        ),
+        basstler.plan.item_bootstrap.PullRequestDetailsMissingError: (
+            PlanItemBootstrapExitCode.PULL_REQUEST_DETAILS_MISSING
+        ),
+        basstler.plan.item_bootstrap.PullRequestRefusedError: PlanItemBootstrapExitCode.PULL_REQUEST_REFUSED,
+        basstler.plan.item_bootstrap.PlanSaveRefusedError: PlanItemBootstrapExitCode.PLAN_SAVE_REFUSED,
+    }
+    assert {error: error.exit_code for error in codes} == codes
+
+
+def test_a_refusal_composes_its_message_from_its_own_fields():
+    refusal = UnknownItemError(
+        plan_identifier=PLAN_IDENTIFIER, item_identifier="no-such-item"
+    )
+    assert refusal.error_message() in str(refusal)
+    assert refusal.suggest_correction() in str(refusal)
+
+
+# %% the command line
+
+
+def run_bootstrap(
+    repository: ScratchRepository, *arguments: str
+) -> subprocess.CompletedProcess[str]:
+    """
+    Run the scratch layout's copy of this module with *arguments*.
+
+    :param repository: A fixture-built scratch repository.
+    :param arguments: CLI arguments to pass.
+    :return: The finished subprocess.
+    """
+    return PythonModuleRunner(
+        project_root=repository.project_root, module_name=BOOTSTRAP_MODULE
+    ).run(*arguments)
+
+
+def record_arguments(plan: str = PLAN_IDENTIFIER, *extra: str) -> list[str]:
+    """
+    The command line for recording the existing item.
+
+    :param plan: The plan to record against.
+    :param extra: Further arguments, appended as given.
+    :return: The arguments.
+    """
+    return [
+        "record",
+        "--plan",
+        plan,
+        "--item",
+        EXISTING_ITEM,
+        "--status",
+        ItemStatus.IN_PROGRESS.value,
+        *extra,
+    ]
+
+
+def test_the_record_subcommand_reports_status_and_exit_code_first(
+    bootstrap_repository: ScratchRepository,
+):
+
+    result = run_bootstrap(bootstrap_repository, *record_arguments())
+
+    assert result.returncode == 0, result.stderr
+    report = json.loads(result.stdout)
+    assert list(report)[:2] == ["status", "exit_code"]
+    assert report["status"] == PlanItemBootstrapExitCode.SUCCESS.name_for_a_caller
+    assert report["exit_code"] == 0
+
+
+def test_the_command_line_names_the_status_it_failed_with(
+    bootstrap_repository: ScratchRepository,
+):
+
+    result = run_bootstrap(bootstrap_repository, *record_arguments(plan="no-such-plan"))
+
+    assert result.returncode == PlanItemBootstrapExitCode.UNKNOWN_PLAN
+    assert PlanItemBootstrapExitCode.UNKNOWN_PLAN.name_for_a_caller in result.stderr
+
+
+def test_the_command_line_prints_why_the_plan_save_refused(
+    bootstrap_repository: ScratchRepository,
+):
+    entry = an_entry_over_the_length_limit()
+
+    result = run_bootstrap(
+        bootstrap_repository,
+        *record_arguments(PLAN_IDENTIFIER, "--roadmap-entry", entry),
+    )
+
+    assert result.returncode == PlanItemBootstrapExitCode.PLAN_SAVE_REFUSED
+    assert str(the_length_violation_of(entry)) in result.stderr
+
+
+def test_the_dashboard_republish_is_handed_back_rather_than_attempted(
+    bootstrap_repository: ScratchRepository,
+):
+
+    result = run_bootstrap(bootstrap_repository, *record_arguments())
+
+    report = json.loads(result.stdout)
+    assert report["dashboard_command"] == f"/plan-dashboard {PLAN_IDENTIFIER}"

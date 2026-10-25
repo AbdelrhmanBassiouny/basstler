@@ -18,6 +18,23 @@ which the user may not have set up yet. Follow
 check, and if it reports anything missing, run `/setup-personal-notes`
 without asking first, rather than failing later on a branch that isn't there.
 
+## Bring the stack up to date
+
+When the project names an upstream (`bash "${CHECK_SETUP_SCRIPT}" --require-upstream`
+exits 0), run `/stacked-pr-maintenance` before reading anything below. It reparents,
+fast-forwards the fork's base, restacks every branch whose parent moved and promotes
+approved branches, so everything gathered afterwards is the state the work continues
+from. A project that names no upstream has nothing to fast-forward from; skip this.
+
+Then read its summary for the item's branch and the branches it is stacked on (for an
+item not started yet, the branch it will be cut from):
+
+- A conflict on one of them is the first thing to resolve. Fix it on the branch it is
+  on - a parent's conflict on that parent's own pull request - then run the pass again,
+  so the fix is carried into everything stacked on it.
+- A conflict on a branch stacked on the item's branch stays with that branch's owner;
+  the pass has already labelled it and commented on its pull request.
+
 ## Resolve the item
 
 Source the shared config script — it resolves the personal-notes
@@ -43,7 +60,11 @@ Given a pull request number instead of the two ids, find the item from the
 pull request's branch: read its head branch with
 `${GITHUB_PULL_REQUEST_READ_TOOL}` (`method: "get"`), take the plan id from
 `plan_id_for_branch <branch>` (it reads the fetch above), and print the item
-with `--branch <branch>`. If no plan tracks that branch, say so and stop.
+with `--branch <branch>`. If no plan tracks that branch, the pull request is
+*untracked*: say so in one line, skip every section below that reads a plan -
+the tracking issue, the item's recorded state, the plan's standing rules and
+the dependency chain - and run the rest. A skill that cannot work without a
+plan item stops here instead.
 
 If the plan id or item id doesn't resolve, stop and list what's actually
 available — every plan id under `plans/*/plan.yaml`, or every item id in
