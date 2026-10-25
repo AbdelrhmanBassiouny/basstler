@@ -100,7 +100,7 @@ items:
   title: run-report prints the finish summary as markdown, with titles on board entries
   branch: claude/gallant-sagan-s2nwxi
   pull_request_number: 68
-  status: in progress
+  status: in_progress
   track: pass
   depends_on: []
   notes: 'The 138 KB report JSON had to be sliced by hand, and titles cost a 25 KB list_pull_requests.
