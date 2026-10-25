@@ -1,8 +1,8 @@
 Plan
-- stack-maintenance/finish-summary-markdown on #68: run-report prints the finish summary as markdown; board entries carry title and promotion link.
+- Bug fix on #69: item_bootstrap reports why save-plan refused an edit instead of a bare CalledProcessError.
 
 Done
-- FinishSummary module, board title/promotion_link, skill relays the summary; 1271 tests pass.
+- PlanSaveRefusedError carries save-plan's stderr; new exit status plan_save_refused (9); 4 tests; 1263 pass.
 
 Next
-- Await review; maintenance-skill-steps-only builds on this.
+- Await review.
