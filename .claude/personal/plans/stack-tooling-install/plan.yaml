@@ -36,3 +36,16 @@ items:
     with its history; main is not merged in yet. Three owner threads stay open: rename the
     promotion label (main says promotion-link-sent) and drop the unused merged and rebase
     labels.'
+- id: setup-stacked-prs-skill
+  title: '/setup-stacked-prs: one guided command that sets up the stacked-pull-request workflow'
+  branch: null
+  status: not started
+  track: install
+  depends_on: []
+  pull_request_number: null
+  notes: 'A guided skill over basstler.setup_steps subcommands, mirroring /setup-personal-notes:
+    the skill only asks the questions. Native or fork-overlay install; creates labels, writes
+    the personal configuration, emits the maintenance prompt. configure-upstream, its check-setup.sh
+    row and docs/SETUP.md section 3 landed in #56 - reuse them rather than rebuild. Design:
+    https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238. Build fresh
+    on main; CRAM #110 is stale.'
