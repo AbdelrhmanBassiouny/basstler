@@ -104,7 +104,7 @@ items:
   pull_request_number: 59
   track: corrections
   depends_on: []
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_01GxGmZpx98EUH77miUZF23X
   notes: 'Draft #59 (release:minor), skill docs only. Given an untracked pull request, resolve skips only
     the plan-reading steps, offers /add-plan-item when a plan fits, and records in the PR-progress note.
