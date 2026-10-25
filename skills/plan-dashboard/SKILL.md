@@ -17,8 +17,8 @@ anything below is unclear about a field's meaning, rather than guessing.
 
 **Everything deterministic — schema validation, live-state classification,
 drift detection, HTML rendering — lives in the committed `basstler` package
-(`src/basstler/build_dashboard.py`, `build_index.py`,
-`render_common.py`), not in this document.** This file's job is only
+(`src/basstler/dashboard/plan_page.py`, `plan/validation.py`,
+`pull_request_state.py`, `dashboard/index_page.py`, `render_common.py`), not in this document.** This file's job is only
 the parts a module can't do: resolving what to fetch, calling the GitHub API,
 and calling the `Artifact` tool. If you find yourself re-deriving rendering or
 validation logic in prose instead of just running the module, stop — that
@@ -79,6 +79,27 @@ git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/plan.yaml" > /tmp/plan.yam
 git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/roadmap.md" > /tmp/roadmap.md  # roadmap.md is always the fixed filename, never configurable
 ```
 
+Also extract every plan's manifest, into one directory — a `depends_on` entry
+may name an item in another plan (`<plan-id>/<item-id>`, see `plan-schema.md`),
+and that plan's own manifest is the only thing that can resolve it. This is one
+extraction whether the manifest uses the form or not, so do it every run
+rather than reading the manifest first to find out:
+
+```bash
+mkdir -p /tmp/plans
+git archive FETCH_HEAD "${PLANS_DIR}" \
+  | tar -x --strip-components=3 -C /tmp/plans --wildcards '*/plan.yaml'
+```
+
+Manifests only, and no roadmaps: the tooling opens a plan's manifest only when
+a `depends_on` entry names that plan, and never reads another plan's roadmap at
+all. Do not read any of these files yourself — the point of a per-plan size
+budget is lost the moment one plan's dashboard run pulls another plan's
+contents into the session.
+
+A chip naming another plan's item links to it only on the plan site, where
+every plan's page has a known address; on an Artifact it is plain text.
+
 **Master-index mode:** enumerate every plan instead of one:
 
 ```bash
@@ -107,7 +128,9 @@ when the fallback applies.
 
 Follow `pr-data-fetching.md`'s procedure (next to this file) to assemble
 `/tmp/pr_data.json` for every pull request referenced by any item in this
-plan.
+plan, plus any pull request a cross-plan `depends_on` entry names — the
+dashboard shows that foreign item's live state too, against its own plan's
+repository.
 
 Everything from here on is deterministic - **run `refresh_dashboard.sh`**
 rather than reproducing its steps by hand:
@@ -119,10 +142,11 @@ bash "${REFRESH_DASHBOARD_SCRIPT}" \
   --roadmap /tmp/roadmap.md \
   --pr-data /tmp/pr_data.json \
   --output /tmp/dashboard.html \
+  --plans-dir /tmp/plans \
   --tracking-url "<html_url from step 1, if any>"   # omit if the plan has no tracking_issue
 ```
 
-It runs `sync_manifest_status.py` first - `status` is a manually-maintained
+It runs `plan/sync_manifest_status.py` first - `status` is a manually-maintained
 field for everything except one direction: once GitHub confirms a PR is
 merged, the item is done, and that's not a judgment call - unlike every
 other kind of drift (a bad PR number, "done" while still open, closed
@@ -132,9 +156,11 @@ human. If that finds anything to correct, it pushes the patched
 `hooks/write-personal-notes-file.sh`) *before* rendering, so the
 dashboard reflects corrected data instead of reporting the same "merged but
 not marked done" drift forever; if nothing needed correcting, nothing is
-pushed. It then runs `build_dashboard.py`, which validates the manifest
+pushed. It then runs `dashboard/plan_page.py`, which validates the manifest
 (schema version, unique ids, track/wave/depends_on references — the exact
-checks `plan-create` must also satisfy), classifies every item's live state
+checks `plan-create` must also satisfy, including a `depends_on` entry naming
+another plan, which is resolved against `--plans-dir` and refused if that
+plan or item isn't there), classifies every item's live state
 (`merged` | `open_draft` | `open_ready` | `closed_unmerged` | `not_found`),
 computes drift, builds the "ready to start"/"blocker may be cleared" lists
 (a blocked item whose dependency becomes ready always lands in "blocker may
@@ -179,8 +205,8 @@ the package's environment, which every session start creates and installs
 the package's dependencies into — `hooks/session-start.sh` again if
 its `dependencies:` line reported a failure.
 
-On success it prints one merged JSON summary on stdout: `sync_manifest_status.py`'s
-own `{"corrected": [...]}` plus `build_dashboard.py`'s status counts, drift
+On success it prints one merged JSON summary on stdout: `plan/sync_manifest_status.py`'s
+own `{"corrected": [...]}` plus `dashboard/plan_page.py`'s status counts, drift
 count, and drifted/ready/recheck item titles - keep it, you need it for
 step 4's report without re-parsing the HTML you just wrote or re-deriving
 what got auto-corrected. In master-index mode, run `refresh_dashboard.sh`
@@ -188,7 +214,7 @@ for every plan before building that plan's index entry.
 
 **Master-index mode** instead assembles one summary object per plan (`id`,
 `title`, `description`, `done`/`total` counts from each plan's own
-`build_dashboard.py` run or a quick count over its `items[]`, and
+`dashboard/plan_page.py` run or a quick count over its `items[]`, and
 `dashboard_url` from the URL cache — `null` if never published) into a JSON
 list, then:
 
@@ -264,7 +290,7 @@ or working tree.
 ## 4. Report back
 
 Summarize for the user from the JSON summaries step 2 printed: item counts by
-status, every item `sync_manifest_status.py` auto-corrected to done (by
+status, every item `plan/sync_manifest_status.py` auto-corrected to done (by
 name, since that's a manifest edit the user didn't ask for line by line),
 every remaining drift flag by name, and every item now ready to review by
 name — this is the actionable output, don't bury it under a wall of

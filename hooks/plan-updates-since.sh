@@ -30,7 +30,7 @@ set -euo pipefail
 # that same pattern, not a new one.
 #
 # Every user-facing message string, and the comment-JSON parsing, live in
-# plan_updates_since_support rather than inline here - so this script
+# basstler.plan.updates_since_support rather than inline here - so this script
 # never carries its own copy of text the test suite also has to check
 # against, and the comment-parsing logic is real, testable Python rather
 # than an inline `python3 -c` snippet. See that module's own docstring.
@@ -65,7 +65,7 @@ github_api_token() {
 # print_issue_comments_since: prints every comment on
 # repository#issue_number created or updated at or after since_timestamp_utc
 # (an "YYYY-MM-DDTHH:MM:SSZ" string), formatted by
-# plan_updates_since_support's format_issue_comments.
+# basstler.plan.updates_since_support's format_issue_comments.
 print_issue_comments_since() {
   local repository="$1" issue_number="$2" since_timestamp_utc="$3"
   local path="repos/${repository}/issues/${issue_number}/comments?since=${since_timestamp_utc}&per_page=100"

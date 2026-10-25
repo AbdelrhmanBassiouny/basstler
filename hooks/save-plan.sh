@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Saves a plan's plan.yaml and roadmap.md to the personal-notes branch and
 # regenerates the branch index in the same commit. Landed items are pruned, an
-# emptied plan is removed, and a plan over plan_size_limits is refused.
+# emptied plan is removed, and a plan over basstler.plan.size_limits is refused.
 #
 # Usage: save-plan.sh <plan-id> --manifest <plan.yaml> --roadmap <roadmap.md>
 #    or: save-plan.sh [<plan-id>]   (reads the PLAN-MANIFEST/PLAN-ROADMAP
@@ -119,11 +119,6 @@ if [ ! -s "${MANIFEST_FILE}" ]; then
   exit 1
 fi
 
-if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate "${MANIFEST_FILE}"; then
-  echo "Nothing was saved - fix the manifest and save again." >&2
-  exit 1
-fi
-
 MANIFEST_PLAN_ID="$("${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" read-id "${MANIFEST_FILE}")"
 if [ "${MANIFEST_PLAN_ID}" != "${PLAN_ID}" ]; then
   echo "The plan manifest's 'id: ${MANIFEST_PLAN_ID}' does not match the plan" >&2
@@ -133,6 +128,13 @@ fi
 
 git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
 git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" FETCH_HEAD --quiet
+
+# Validated against the fetched notes branch, so a <plan-id>/<item-id> entry resolves.
+if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate "${MANIFEST_FILE}" \
+  --plans-dir "${SCRATCH_DIR}/${PLANS_DIR}"; then
+  echo "Nothing was saved - fix the manifest and save again." >&2
+  exit 1
+fi
 
 PLAN_DIRECTORY_PATH="$(plan_directory_path "${PLAN_ID}")"
 MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"

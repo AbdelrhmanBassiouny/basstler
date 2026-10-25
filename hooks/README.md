@@ -39,7 +39,17 @@ You don't have to run it first either — `/plan-create`, `/plan-dashboard`, `/p
 `/plan-item-resolve` and `/add-plan-item` each run it for you if something is missing, without
 stopping to ask.
 
-To do the same by hand:
+To do the same without a session, one command performs every step the skill would:
+
+```bash
+~/.local/share/basstler/venv/bin/python -m basstler.setup.personal_notes \
+  --remote <your-fork-remote-or-url> --name "Your Name" --email "you@example.com" \
+  [--starter-notes] [--create-labels]
+```
+
+It refuses a remote GitHub says someone else owns, checks the labels this tooling uses when
+`GH_TOKEN` or `GITHUB_TOKEN` is set, and ends with `check-setup.sh`'s report. The steps it runs
+are the hook scripts here, which also work one at a time:
 
 ```bash
 "${BASSTLER_PLUGIN_ROOT}/hooks/create-personal-notes-branch.sh"           # create the branch
@@ -158,8 +168,8 @@ Override only what you need:
     config from them, and is a no-op if none are set.
 
 For Claude Code on the web, see <https://code.claude.com/docs/en/claude-code-on-the-web> for where
-either of those lives. [`src/basstler/setup_steps.py`](../../src/basstler/setup_steps.py), run as
-`~/.local/share/basstler/venv/bin/python -m basstler.setup_steps`, prints the exact variable lines your
+either of those lives. [`src/basstler/setup/steps.py`](../../src/basstler/setup/steps.py), run as
+`~/.local/share/basstler/venv/bin/python -m basstler.setup.steps`, prints the exact variable lines your
 clone needs — only the settings you have moved off their defaults — alongside the other two steps
 no script can perform for you.
 
@@ -180,7 +190,7 @@ and nothing looks wrong from inside the clone, because the clone is perfectly co
 itself. By the time a rebase surfaces the drift, the work is already written against the old base.
 
 So every `session-start.sh` run brings that branch level, via
-[`src/basstler/default_branch_sync.py`](../../src/basstler/default_branch_sync.py): it fetches the
+[`src/basstler/maintenance/default_branch_sync.py`](../../src/basstler/maintenance/default_branch_sync.py): it fetches the
 upstream's base branch, fast-forwards this clone's copy of it, and pushes the result to your fork,
 whose default branch is what the *next* session gets cloned from. The summary's `default branch`
 line says what it did. A checked-out branch with no commits of its own — a session branch cut from
@@ -198,7 +208,7 @@ Only a clone with no such remote gets a `not synced` line.
 Run it by hand to catch a long-running session's clone up mid-session:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.default_branch_sync
+~/.local/share/basstler/venv/bin/python -m basstler.maintenance.default_branch_sync
 ```
 
 ## Plan dashboards (multi-PR initiatives)
@@ -217,17 +227,17 @@ the narrative that doesn't belong in structured data.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in progress` as soon as its plan is approved — via
-  [`src/basstler/plan_item_bootstrap.py`](../../src/basstler/plan_item_bootstrap.py), which you can also
-  run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan_item_bootstrap` — so the
+  [`src/basstler/plan/item_bootstrap.py`](../../src/basstler/plan/item_bootstrap.py), which you can also
+  run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan.item_bootstrap` — so the
   manifest never says `not started` while the work is underway.
 - Decide where a new piece of work goes → `/add-plan-item <description>`. It runs the shared scope
   check in [`scope-decision.md`](../skills/add-plan-item/scope-decision.md) — the rule all four plan
   skills defer to for "is this new work, or a change to work already in flight?"
 - Choose whether either skill implements on its own, plans first, or asks → `/plan-item-mode
   <auto|plan|ask> [kickoff|resolve|both]`, or the
-  [`src/basstler/plan_item_mode.py`](../../src/basstler/plan_item_mode.py) `resolve|set` it calls, which you
-  can also run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan_item_mode`. Defaults in
-  [`plan-item-modes.toml`](../../src/basstler/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
+  [`src/basstler/plan/item_mode.py`](../../src/basstler/plan/item_mode.py) `resolve|set` it calls, which you
+  can also run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan.item_mode`. Defaults in
+  [`plan-item-modes.toml`](../../src/basstler/plan/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
   override at `.claude/personal/plan-item-modes.toml` on the notes branch. What each mode obliges
   the skill to do, and when `auto` still stops to ask →
   [`execution-modes.md`](../skills/plan-dashboard/execution-modes.md).
