@@ -38,7 +38,12 @@ from basstler.plan.item_bootstrap import (
     WorkOpenRequest,
 )
 from basstler.plan.model import KeySpecification, ManifestKey, ValueStyle
-from basstler.plan.size_limits import Roadmap
+from basstler.plan.size_limits import (
+    Measure,
+    Roadmap,
+    RoadmapEntryLocation,
+    SizeViolation,
+)
 
 from ..scratch_repository import ScratchRepository
 from ..constants.notes import ScratchBranch
@@ -295,6 +300,54 @@ def test_recording_without_a_roadmap_entry_leaves_the_roadmap_untouched(
     )
 
     assert published_plan(bootstrap_repository)[PlanDocument.ROADMAP] == PLAN_ROADMAP
+
+
+def an_entry_over_the_length_limit() -> str:
+    """
+    :return: A roadmap entry one character longer than the plan's limits allow.
+    """
+    return "x" * (Measure.ROADMAP_ENTRY_LENGTH.maximum + 1)
+
+
+def the_length_violation_of(entry: str) -> SizeViolation:
+    """
+    :param entry: An entry appended to the fixture roadmap.
+    :return: The violation the plan save names for it.
+    """
+    return SizeViolation(
+        measure=Measure.ROADMAP_ENTRY_LENGTH,
+        location=RoadmapEntryLocation(len(Roadmap.from_text(PLAN_ROADMAP).entries) + 1),
+        measured=len(entry),
+    )
+
+
+def test_a_refused_save_carries_the_reason_the_plan_save_gave(
+    bootstrap_repository: ScratchRepository,
+):
+    entry = an_entry_over_the_length_limit()
+
+    with pytest.raises(basstler.plan.item_bootstrap.PlanSaveRefusedError) as refusal:
+        record_request(bootstrap_repository, roadmap_entry=entry).record(
+            project_root=bootstrap_repository.project_root
+        )
+
+    assert str(the_length_violation_of(entry)) in refusal.value.detail
+
+
+def test_a_refused_save_leaves_the_published_plan_untouched(
+    bootstrap_repository: ScratchRepository,
+):
+    request = record_request(
+        bootstrap_repository, roadmap_entry=an_entry_over_the_length_limit()
+    )
+
+    with pytest.raises(basstler.plan.item_bootstrap.PlanSaveRefusedError):
+        request.record(project_root=bootstrap_repository.project_root)
+
+    assert published_plan(bootstrap_repository) == {
+        PlanDocument.MANIFEST: PLAN_MANIFEST,
+        PlanDocument.ROADMAP: PLAN_ROADMAP,
+    }
 
 
 def test_recording_a_new_item_appends_it_to_the_manifest(
@@ -690,6 +743,7 @@ def test_each_refusal_carries_its_own_exit_code():
             PlanItemBootstrapExitCode.PULL_REQUEST_DETAILS_MISSING
         ),
         basstler.plan.item_bootstrap.PullRequestRefusedError: PlanItemBootstrapExitCode.PULL_REQUEST_REFUSED,
+        basstler.plan.item_bootstrap.PlanSaveRefusedError: PlanItemBootstrapExitCode.PLAN_SAVE_REFUSED,
     }
     assert {error: error.exit_code for error in codes} == codes
 
@@ -720,11 +774,12 @@ def run_bootstrap(
     ).run(*arguments)
 
 
-def record_arguments(plan: str = PLAN_IDENTIFIER) -> list[str]:
+def record_arguments(plan: str = PLAN_IDENTIFIER, *extra: str) -> list[str]:
     """
     The command line for recording the existing item.
 
     :param plan: The plan to record against.
+    :param extra: Further arguments, appended as given.
     :return: The arguments.
     """
     return [
@@ -735,6 +790,7 @@ def record_arguments(plan: str = PLAN_IDENTIFIER) -> list[str]:
         EXISTING_ITEM,
         "--status",
         ItemStatus.IN_PROGRESS.value,
+        *extra,
     ]
 
 
@@ -759,6 +815,20 @@ def test_the_command_line_names_the_status_it_failed_with(
 
     assert result.returncode == PlanItemBootstrapExitCode.UNKNOWN_PLAN
     assert PlanItemBootstrapExitCode.UNKNOWN_PLAN.name_for_a_caller in result.stderr
+
+
+def test_the_command_line_prints_why_the_plan_save_refused(
+    bootstrap_repository: ScratchRepository,
+):
+    entry = an_entry_over_the_length_limit()
+
+    result = run_bootstrap(
+        bootstrap_repository,
+        *record_arguments(PLAN_IDENTIFIER, "--roadmap-entry", entry),
+    )
+
+    assert result.returncode == PlanItemBootstrapExitCode.PLAN_SAVE_REFUSED
+    assert str(the_length_violation_of(entry)) in result.stderr
 
 
 def test_the_dashboard_republish_is_handed_back_rather_than_attempted(

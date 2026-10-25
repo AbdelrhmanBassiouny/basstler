@@ -197,6 +197,11 @@ class PlanItemBootstrapExitCode(ExitCode):
     GitHub rejected the creation; its own message says why.
     """
 
+    PLAN_SAVE_REFUSED = 9
+    """
+    The plan save rejected the edited manifest or roadmap; its own message says why.
+    """
+
 
 # %% failures
 
@@ -398,6 +403,32 @@ class PullRequestRefusedError(BootstrapError):
 
 
 @dataclass
+class PlanSaveRefusedError(BootstrapError):
+    """
+    Raised when the plan save rejects the edited documents, so nothing was published.
+    """
+
+    @classproperty
+    def exit_code(cls) -> PlanItemBootstrapExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PlanItemBootstrapExitCode.PLAN_SAVE_REFUSED
+
+    detail: str
+    """
+    What the plan save printed on its error stream.
+    """
+
+    def error_message(self) -> str:
+        return f"the plan save refused the edit: {self.detail}"
+
+    def suggest_correction(self) -> str:
+        return (
+            "Fix what the plan save names and run the command again; after opening, "
+            "pass --pull-request-number for the pull request it already created."
+        )
+
+
+@dataclass
 class NotesBranchUnavailableError(BootstrapError):
     """
     Raised when the personal-notes branch cannot be fetched, so there is no plan data to
@@ -582,7 +613,7 @@ class PlanDocuments:
         :param manifest_text: The full manifest to write.
         :param roadmap_text: The full roadmap to write.
         :param project_root: The repository to run the script from.
-        :raises subprocess.CalledProcessError: If the script reports an error.
+        :raises PlanSaveRefusedError: If the script refuses the documents.
         """
         with tempfile.TemporaryDirectory() as scratch_directory:
             scratch = Path(scratch_directory)
@@ -592,7 +623,7 @@ class PlanDocuments:
             }
             for document, content in written.items():
                 (scratch / document.value).write_text(content)
-            subprocess.run(
+            saved = subprocess.run(
                 [
                     "bash",
                     PluginLocation.PLAN_SAVING_SCRIPT,
@@ -605,8 +636,9 @@ class PlanDocuments:
                 cwd=project_root,
                 capture_output=True,
                 text=True,
-                check=True,
             )
+        if saved.returncode != 0:
+            raise PlanSaveRefusedError(detail=saved.stderr.strip())
 
 
 # %% patching one item's fields in the manifest text
