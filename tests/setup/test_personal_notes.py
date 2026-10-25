@@ -282,14 +282,17 @@ def test_runs_every_hook_script_in_the_bash_claude_code_is_configured_with(
         ),
     )
     setup.run()
-    expected_scripts = [
+    scripts_before_the_sync = [
         PluginLocation.SETUP_CHECK_SCRIPT,
         PluginLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT,
         PluginLocation.SESSION_START_SCRIPT,
-        PluginLocation.SETUP_CHECK_SCRIPT,
     ]
+    # session start's base-branch sync reads the stack configuration through
+    # ``bash -c``, which runs in the configured bash too
     assert call_log.read_text().splitlines() == [
-        str(setup.plugin_file(script)) for script in expected_scripts
+        *(str(setup.plugin_file(script)) for script in scripts_before_the_sync),
+        "-c",
+        str(setup.plugin_file(PluginLocation.SETUP_CHECK_SCRIPT)),
     ]
 
 

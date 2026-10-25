@@ -7,6 +7,8 @@ from __future__ import annotations
 
 import argparse
 
+import pytest
+
 from basstler.exit_codes import StackExitCode
 from basstler.stack.commit_move import RefusalReason
 from basstler.stack.model import (
@@ -19,7 +21,7 @@ from basstler.maintenance.fast_forward import (
     FastForwardOutcome,
     fast_forward,
 )
-from basstler.maintenance.git_commands import ProposedPush
+from basstler.maintenance.git_commands import GitCommandFailed, ProposedPush
 from basstler.maintenance.restack_procedure import restack
 from basstler.maintenance.restack_steps import (
     ConflictResponse,
@@ -44,7 +46,6 @@ from .recorded_fork import (
     RecordingPullRequests,
     AlreadyResolvedPass,
 )
-
 
 # %% fast-forward
 
@@ -95,6 +96,20 @@ def test_a_non_fast_forward_is_refused_and_the_fork_base_is_untouched(
 
     assert report.outcome == FastForwardOutcome.REFUSED_NOT_FAST_FORWARD
     assert fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE) == before
+
+
+def test_a_refused_push_of_the_fork_base_stops_the_pass(fork_checkout: ForkCheckout):
+    fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    fork_checkout.commit("another-file", "upstream moved\n")
+    fork_checkout.run_git("push", "--quiet", RemoteName.UPSTREAM, UPSTREAM_BASE)
+    fork_checkout.run_git(
+        "config",
+        f"remote.{RemoteName.ORIGIN}.pushurl",
+        str(fork_checkout.fork_path.parent / "nowhere.git"),
+    )
+
+    with pytest.raises(GitCommandFailed):
+        fast_forward(make_configuration(), fork_checkout.git)
 
 
 # %% restack

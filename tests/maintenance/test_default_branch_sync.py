@@ -14,13 +14,14 @@ from basstler.maintenance.default_branch_sync import (
     BaseOutcome,
     DefaultBranchReport,
     DefaultBranchSync,
-    ForkPublication,
 )
+from basstler.maintenance.fast_forward import FastForwardOutcome
 from basstler.locations import PluginLocation
 
 from ..constants.notes import ScratchBranch
 from .forked_scratch_repository import (
     DEFAULT_BRANCH,
+    FORK_REMOTE,
     SESSION_BRANCH,
     SHARED_FILE,
     UPSTREAM_REMOTE,
@@ -65,7 +66,7 @@ def test_fast_forwards_a_stale_base_and_the_fork_behind_it(
     assert report.outcome is BaseOutcome.FAST_FORWARDED
     assert report.commits_behind == 3
     assert forked.local_default_branch_tip() == upstream_tip
-    assert report.fork_publication is ForkPublication.PUSHED
+    assert report.fork_fast_forward is FastForwardOutcome.PUSHED
     assert forked.fork_default_branch_tip() == upstream_tip
 
 
@@ -115,7 +116,7 @@ def test_reports_a_base_that_already_matches(forked: ForkedScratchRepository):
     report = sync(forked)
 
     assert report.outcome is BaseOutcome.CURRENT
-    assert report.fork_publication is ForkPublication.ALREADY_CURRENT
+    assert report.fork_fast_forward is FastForwardOutcome.ALREADY_CURRENT
     assert report.follow_up_rows == ()
 
 
@@ -132,7 +133,7 @@ def test_catches_the_fork_up_even_when_this_clone_already_is(
     report = sync(forked)
 
     assert report.outcome is BaseOutcome.CURRENT
-    assert report.fork_publication is ForkPublication.PUSHED
+    assert report.fork_fast_forward is FastForwardOutcome.PUSHED
     assert forked.fork_default_branch_tip() == upstream_tip
 
 
@@ -223,7 +224,23 @@ def test_reports_a_refused_push_to_the_fork(forked: ForkedScratchRepository):
 
     assert report.outcome is BaseOutcome.FAST_FORWARDED
     assert forked.local_default_branch_tip() == upstream_tip
-    assert report.fork_publication is ForkPublication.REFUSED
+    assert report.fork_fast_forward is FastForwardOutcome.PUSH_REFUSED
+    assert forked.fork_default_branch_tip() == fork_tip
+
+
+def test_leaves_a_fork_with_commits_of_its_own_alone(
+    forked: ForkedScratchRepository,
+):
+    starting_point = forked.local_default_branch_tip()
+    fork_tip = forked.advance_local_default_branch()
+    forked.publish_default_branch_to(FORK_REMOTE)
+    forked.set_local_default_branch_to(starting_point)
+    upstream_tip = forked.advance_upstream(1)
+
+    report = sync(forked)
+
+    assert forked.local_default_branch_tip() == upstream_tip
+    assert report.fork_fast_forward is FastForwardOutcome.REFUSED_NOT_FAST_FORWARD
     assert forked.fork_default_branch_tip() == fork_tip
 
 
@@ -252,7 +269,7 @@ def test_follows_its_own_remote_when_no_upstream_is_named(
 
     assert report.outcome is BaseOutcome.FAST_FORWARDED
     assert report.upstream == forked.fork.repository.full_name
-    assert report.fork_publication is ForkPublication.NO_FORK
+    assert report.fork_fast_forward is None
     assert forked.local_default_branch_tip() == fork_tip
     assert forked.commit_at("HEAD") == fork_tip
 
