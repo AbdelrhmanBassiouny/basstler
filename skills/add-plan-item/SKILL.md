@@ -1,6 +1,6 @@
 ---
 name: add-plan-item
-description: Decide where a newly described piece of work belongs - folded into an unlanded item, as a new item in an existing plan, as a new plan of its own, or tracked nowhere - by running the mechanical scope check against live branch and pull request state, then propose the outcome via plan mode without writing any code. Invoke as "/add-plan-item <description of the work>". Use when someone describes something new to build and asks where it goes, or says "add a plan item", "should this be its own PR", or "is this new work or part of <something>".
+description: Decide where new work belongs - folded into an unlanded item, a new item, a new plan, or untracked - and propose it via plan mode without writing code. Invoke as "/add-plan-item <description of the work>". Use when asked where new work goes, to add a plan item, or whether it should be its own PR.
 allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__issue_read, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -137,9 +137,4 @@ Flag explicitly, never silently paper over:
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.
 
-## 7. Once the outcome is carried out, the manifest leads
-
-Adding an item, folding one into another and changing a plan's shape are each a
-transition, so `${MANIFEST_STALENESS_DOCUMENT}` governs when they get written:
-the manifest first and the dashboard refreshed in the same turn, not once the
-work the outcome describes is finished.
+Carrying the outcome out later follows `${MANIFEST_STALENESS_DOCUMENT}`.

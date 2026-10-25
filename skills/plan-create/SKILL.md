@@ -1,6 +1,6 @@
 ---
 name: plan-create
-description: Create (or migrate an existing bespoke roadmap doc into) a new multi-PR/multi-session plan under .claude/personal/plans/<plan-id>/plan.yaml on the personal-notes branch, cross-checked against live GitHub, then bootstrap and publish it. Invoke as "/plan-create <plan-id>". Use when the user asks to start tracking something as a plan, set up a new plan/roadmap, or migrate an existing roadmap doc into the plan-dashboard system.
+description: Create a multi-PR plan on the personal-notes branch, or migrate a roadmap doc into one, then publish its dashboard. Invoke as "/plan-create <plan-id>". Use when asked to start tracking work as a plan.
 allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -201,29 +201,15 @@ commit.
 ## 8. Publish
 
 Invoke the `plan-dashboard` skill for `<plan-id>` to publish its first
-dashboard Artifact, then invoke it again with no argument to republish the
-master index. Both, every time, without asking.
-
-The index is the one page that lists every plan, so creating a plan is
-precisely what makes it stale — the staleness `${MANIFEST_STALENESS_DOCUMENT}`
-exists to close, and a new plan missing from the index is the worst version
-of it, since nobody knows to look for what they cannot see. Elsewhere the
-index is left alone unless asked for, because republishing it says nothing
-new; here it is the only page that changed. It has its own cached URL
-(`_index`), so this updates that page rather than minting a second one.
+dashboard Artifact, then invoke it with no argument to republish the master index
+(`_index`): a new plan is the one change that makes the index stale.
 
 If this was a migration from an existing freeform doc, offer — don't do it
 unprompted — to replace that old doc with a short pointer stub at its
 original location, so anyone still reading the old path finds the new one
 immediately.
 
-## 8b. From here on, the manifest leads
-
-The plan now exists, so every later change to it is a transition rather than a
-draft. Follow `${MANIFEST_STALENESS_DOCUMENT}` for all of them: write the manifest
-and refresh the dashboard before the work that follows, not after it. That
-applies to this skill's own remaining steps too — publish before reporting back,
-so what you report is what a reader will actually see.
+Every later change to the plan follows `${MANIFEST_STALENESS_DOCUMENT}`.
 
 ## 9. Report back
 
