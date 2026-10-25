@@ -5,7 +5,7 @@ session by `session-start.sh`. Never merge this file into `main`.
 
 ## Commit identity
 
-- Commits are authored as Abdelrhman Bassiouny <abassiou@uni-bremen.de>, recorded in
+- Commits are authored as Abdelrhman Bassiouny <bido.bassuny@gmail.com>, recorded in
   `.claude/personal/git-identity` on `claude/personal-notes` and applied at session start.
   Never commit under another identity; change it only with `save-git-identity.sh`.
 
