@@ -170,12 +170,9 @@ class Branch:
     labels: list[str]
     """Labels carried by the pull request."""
 
-    head_repository: str | None
-    """The ``owner/name`` of the repository the branch lives in, ``None`` once that
-    repository is deleted."""
-
-    skip_reason: SkipReason | None
-    """Why the pass leaves this branch out, ``None`` when the branch is on the fork."""
+    skipped_pull_request: SkippedPullRequest | None
+    """The pull request in its role as one the pass leaves out, ``None`` when the branch
+    is on the fork."""
 
     ci: str | None = None
     """Latest CI conclusion on the pull request head."""
@@ -194,6 +191,7 @@ class Branch:
         :param configuration: The static configuration naming the labels.
         :param is_merged: Maps a branch name to whether it has landed upstream.
         :return: The stack node the pull request describes."""
+        skip_reason = pull_request.skip_reason(configuration.fork_repository)
         return cls(
             name=pull_request.head,
             parent=pull_request.base,
@@ -209,8 +207,11 @@ class Branch:
                 else IntegrationStrategy.MERGE
             ),
             labels=pull_request.labels,
-            head_repository=pull_request.head_repository,
-            skip_reason=pull_request.skip_reason(configuration.fork_repository),
+            skipped_pull_request=(
+                None
+                if skip_reason is None
+                else SkippedPullRequest(pull_request, skip_reason)
+            ),
             ci=pull_request.ci,
             session=pull_request.session,
         )
@@ -232,20 +233,14 @@ class RestackPlanEntry:
 
 @dataclass(frozen=True)
 class SkippedPullRequest:
-    """A pull request open on the fork that the pass leaves alone, and why.
+    """The role of a pull request open on the fork that the pass leaves alone.
 
     It is neither restacked, promoted nor reported as landed, and nothing is written to
     it; only its base can still be retargeted, through :meth:`Stack.reparents`.
     """
 
-    branch: str
-    """Its head branch."""
-
-    pull_request_number: int
-    """Its fork pull request."""
-
-    head_repository: str | None
-    """The ``owner/name`` of the repository its head lives in, ``None`` once deleted."""
+    pull_request: PullRequest
+    """The pull request taking the role."""
 
     reason: SkipReason
     """Why it is left alone."""
@@ -336,19 +331,16 @@ class Stack:
 
         :return: Every branch whose head is on the fork.
         """
-        return [branch for branch in self.ordered() if branch.skip_reason is None]
+        return [
+            branch for branch in self.ordered() if branch.skipped_pull_request is None
+        ]
 
     def skipped_pull_requests(self) -> list[SkippedPullRequest]:
         """:return: Every pull request the pass leaves alone, parent before child."""
         return [
-            SkippedPullRequest(
-                branch=branch.name,
-                pull_request_number=branch.pull_request_number,
-                head_repository=branch.head_repository,
-                reason=branch.skip_reason,
-            )
+            branch.skipped_pull_request
             for branch in self.ordered()
-            if branch.skip_reason is not None
+            if branch.skipped_pull_request is not None
         ]
 
     def needs_resolution(self, branch: Branch) -> bool:

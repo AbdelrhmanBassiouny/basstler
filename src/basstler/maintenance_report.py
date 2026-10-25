@@ -228,7 +228,8 @@ class MaintenanceReport:
         Print every pull request the pass left alone, with why and where its head lives.
         """
         for skipped in self.skipped:
+            pull_request = skipped.pull_request
             logger.info(
-                f"{skipped.branch}\t#{skipped.pull_request_number}\t{skipped.reason}"
-                f"\t{skipped.head_repository or ''}"
+                f"{pull_request.head}\t#{pull_request.number}\t{skipped.reason}"
+                f"\t{pull_request.head_repository or ''}"
             )
