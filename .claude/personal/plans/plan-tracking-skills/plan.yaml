@@ -47,9 +47,10 @@ items:
   session: https://claude.ai/code/session_01TQn8K1dWSNVqA9mSNoUtFo
   depends_on:
   - stack-maintenance/manifest-currency-first
-  notes: 'From the basstler#48 review (discussion_r4372858558). Claude Code substitutes only
-    $ARGUMENTS and ${CLAUDE_*} in a SKILL.md, so `${SCOPE_DECISION_DOCUMENT}` and five other
-    *_DOCUMENT variables (EXECUTION_MODES, PLAN_ITEM_GATHERING, PLAN_SCHEMA, DEPENDENCY_READINESS,
-    PULL_REQUEST_DATA_FETCHING; 22 references) reach the model unexpanded. Replace them with
-    relative Markdown links, as #48 did for manifest-staleness.md; drop each variable no
-    script uses (check-setup.sh uses PLAN_SCHEMA_DOCUMENT). Depends on #48: same lines.'
+  notes: >
+    From the basstler#48 review (discussion_r4372858558). Draft #74: all 21 ${*_DOCUMENT} references
+    in skill documents are now relative links; SCOPE_DECISION, EXECUTION_MODES, PLAN_ITEM_GATHERING,
+    DEPENDENCY_READINESS and PULL_REQUEST_DATA_FETCHING (and ADD_PLAN_ITEM_DIRECTORY) dropped from
+    the config; PLAN_SCHEMA_DOCUMENT kept for check-setup.sh. tests/skills/test_skill_documents.py
+    guards links, document variables and undefined variables across every skill document. Awaiting
+    review.
