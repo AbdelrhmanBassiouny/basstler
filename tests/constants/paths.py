@@ -82,6 +82,12 @@ class DatasetLocation(PathEnumeration):
     :class:`ProgressBranch` that has one.
     """
 
+    PLANS = DIRECTORY / "plans"
+    """
+    A plans directory the cross-plan reference tests resolve against: one subdirectory
+    per fixture plan.
+    """
+
     STUBS = DIRECTORY / "stubs"
     """
     Executables copied onto a scratch ``PATH`` to stand in for a real ``gh``, ``curl`` or

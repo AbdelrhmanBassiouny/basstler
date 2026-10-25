@@ -611,8 +611,15 @@
   }
 </style>
 
+{# A chip links to its dependency's card: on this page it scrolls there and
+   highlights it, and on another plan's dashboard it opens that page in a new
+   tab at the card. #}
 {% macro dependency_chip(chip) %}
-<span class="chip{{ '' if chip.is_ready else ' chip-unmet' }}" title="{{ chip.tooltip }}{{ '' if chip.is_ready else ' (not ready yet — this item is blocked on it)' }}">{{ chip.identifier }}</span>
+{%- set is_ready = chip.dependency.is_ready_to_unblock_dependents() %}
+{%- set identifier = chip.dependency.reference.text %}
+{%- set chip_class = 'chip' if is_ready else 'chip chip-unmet' %}
+{%- set chip_title = chip.tooltip if is_ready else chip.tooltip ~ ' (not ready yet — this item is blocked on it)' %}
+{% if not chip.card_url %}<span class="{{ chip_class }}" title="{{ chip_title }}">{{ identifier }}</span>{% elif chip.dependency.is_in_another_plan %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" target="_blank" rel="noopener" title="{{ chip_title }}">{{ identifier }}</a>{% else %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" data-item-identifier="{{ identifier }}" onclick="planDashboardHighlightItem(event, this)" title="{{ chip_title }}">{{ identifier }}</a>{% endif %}
 {% endmacro %}
 
 {% macro action_button(item) %}
@@ -633,7 +640,7 @@
 
 {% macro item_card(stacked) %}
 {% set item = stacked.item %}
-    <article id="item-{{ item.identifier }}" class="item {{ item.status_and_drift_css_class }}" style="{{ stacked.indent_style }}">
+    <article id="{{ item.anchor }}" class="item {{ item.status_and_drift_css_class }}" style="{{ stacked.indent_style }}">
       {% if stacked.wrap_parent %}
       <div class="wrap-arrow wrap-arrow-all">◄ continues from <span class="mono">{{ stacked.wrap_parent.identifier }}</span> <span class="wrap-parent-title">({{ stacked.wrap_parent.title }})</span></div>
       {% endif %}
@@ -777,7 +784,7 @@
             <ul>
             {% for item in items %}
               <li class="next-entry{% if item.is_bug_fix %} next-entry-bug{% endif %}">
-                <a class="next-item-link" href="#item-{{ item.identifier }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong>{% if item.is_bug_fix %} <span class="next-bug-chip">bug</span>{% endif %}<br><span class="next-reason">{{ caller(item) }}</span></a>
+                <a class="next-item-link" href="#{{ item.anchor }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong>{% if item.is_bug_fix %} <span class="next-bug-chip">bug</span>{% endif %}<br><span class="next-reason">{{ caller(item) }}</span></a>
                 {%- if show_review_link %}
                 <a class="next-review-link" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">Review ↗</a>
                 {%- endif %}
@@ -871,14 +878,16 @@
     }
   }
 
-  function planDashboardHighlightItem(event, link) {
-    var identifier = link.getAttribute("data-item-identifier");
-    var target = document.getElementById("item-" + identifier);
+  function planDashboardRevealItem(target) {
+    var page = document.getElementById("plan-dashboard-page");
     var highlightMilliseconds = 2200;
-    if (!target) {
-      return;
+    if (!target || !target.classList.contains("item")) {
+      return false;
     }
-    event.preventDefault();
+    if (target.offsetParent === null && page.classList.contains("hide-done")) {
+      document.getElementById("show-done-toggle").checked = true;
+      page.classList.remove("hide-done");
+    }
     target.scrollIntoView({behavior: "smooth", block: "center"});
     target.classList.remove("item-highlighted");
     void target.offsetWidth;
@@ -886,6 +895,18 @@
     window.setTimeout(function () {
       target.classList.remove("item-highlighted");
     }, highlightMilliseconds);
+    return true;
+  }
+
+  function planDashboardHighlightItem(event, link) {
+    var identifier = link.getAttribute("data-item-identifier");
+    if (planDashboardRevealItem(document.getElementById("item-" + identifier))) {
+      event.preventDefault();
+    }
+  }
+
+  if (window.location.hash) {
+    planDashboardRevealItem(document.getElementById(window.location.hash.slice(1)));
   }
 
   function planDashboardCloseModelPickers() {

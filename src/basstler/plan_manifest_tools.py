@@ -27,7 +27,7 @@ from typing import Any
 
 import yaml
 
-from basstler.build_dashboard import PlanValidationError, validate_plan
+from basstler.build_dashboard import PlanValidationError, PlanValidator
 from basstler import plan_model
 from basstler.exit_codes import ExitCode
 from basstler.standard_streams import StandardStreamHandler
@@ -180,7 +180,7 @@ class PlanManifest:
         :raises PlanValidationError: If it breaks any rule, carrying every problem
             found.
         """
-        validate_plan(self.content)
+        PlanValidator(self.content).validate()
 
     def string_field(self, value: object, field_name: str) -> str:
         """
