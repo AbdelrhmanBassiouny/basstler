@@ -39,7 +39,17 @@ You don't have to run it first either — `/plan-create`, `/plan-dashboard`, `/p
 `/plan-item-resolve` and `/add-plan-item` each run it for you if something is missing, without
 stopping to ask.
 
-To do the same by hand:
+To do the same without a session, one command performs every step the skill would:
+
+```bash
+~/.local/share/basstler/venv/bin/python -m basstler.setup.personal_notes \
+  --remote <your-fork-remote-or-url> --name "Your Name" --email "you@example.com" \
+  [--starter-notes] [--create-labels]
+```
+
+It refuses a remote GitHub says someone else owns, checks the labels this tooling uses when
+`GH_TOKEN` or `GITHUB_TOKEN` is set, and ends with `check-setup.sh`'s report. The steps it runs
+are the hook scripts here, which also work one at a time:
 
 ```bash
 "${BASSTLER_PLUGIN_ROOT}/hooks/create-personal-notes-branch.sh"           # create the branch
