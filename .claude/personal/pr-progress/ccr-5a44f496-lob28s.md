@@ -8,9 +8,10 @@ Plan
 - Checked-out branch with no commits of its own is fast-forwarded too; with commits, only measured.
 
 Done
-- Module, 17 tests + forked_scratch_repository.py, hook wiring, README.
-- Merged main (4837c89): moved into basstler.maintenance and tests/maintenance after the
-  subpackage reorganization; suite 1339 passed. Description and plan notes updated.
+- Module, 17 tests + forked_scratch_repository.py, hook wiring, README; main merged (4837c89).
+- Review round 1 (5ca4154): module docstring cut to one statement; sync_this_checkout became
+  DefaultBranchSync.catch_up_checkout. Both threads replied to and resolved; suite 1339 passed.
 
 Next
-- Review on #57; address comments when prompted.
+- Await the decision on unifying the fork-base fast-forward with maintenance.fast_forward
+  (PR comment 6404647312); address further comments when prompted.
