@@ -1,13 +1,12 @@
 ### Plan
-1. Merge `main` into the branch: port its 19 commits from the pre-`src/` layout onto
-   `main`'s subpackages (`basstler.plan.item_bootstrap`, `basstler.maintenance.*`,
-   `tests/plan`, `tests/maintenance`), reusing what `main` already has
-   (`basstler.exceptions.DataclassException`, `ExitCode`, `CommandFailure`, the item-indent fix).
-2. Run the full test suite and the format hook, then push.
-3. Update the PR description, `plan.yaml` notes, and the dashboard; PR stays draft.
+1. Merge `main`, porting the branch onto `basstler.plan` / `main`'s classes (done: `5940e8f`).
+2. Full suite (1451 passed) and format hook, push (done).
+3. PR description, `release:minor`, `plan.yaml` notes, dashboard (done).
 
 ### Done
-- Resolve found the stall: `mergeable_state: dirty`, no CI, no review threads.
+- Dropped the branch's git runner/exceptions/stack refactor: `main` already unified them.
+- Shared `basstler.command_line.Command` now backs `MaintenanceCommand` and the bootstrap's commands.
 
 ### Next
-- Step 1.
+- CI on `5940e8f` had not reported when this session ended.
+- The plugin's installed basstler (v2.2.0) lacks `update`/`check`/`block` until this lands and releases.
