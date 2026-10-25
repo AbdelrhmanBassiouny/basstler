@@ -1,19 +1,21 @@
 schema_version: 1
 id: plan-dashboards
 title: 'The plan dashboard: what it shows, what it gets wrong, and what it can publish'
-description: The renderer behind /plan-dashboard. Bug fixes to what it computes about an item's readiness
-  and drift, chips and toggles that keep a large plan legible, and the shared pull-request-state module
-  that lets one page carry CI, size and conflict information rather than only the manifest's own view
-  of itself.
+description: The renderer behind /plan-dashboard. Bug fixes to what it computes about an item's
+  readiness and drift, chips and toggles that keep a large plan legible, and the shared pull-request-state
+  module that lets one page carry CI, size and conflict information rather than only the manifest's
+  own view of itself.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 34
 waves:
 - id: corrections
   name: What the dashboard computes
-  description: Bugs in readiness, drift and merge-state classification, each fixed on its own root cause.
+  description: Bugs in readiness, drift and merge-state classification, each fixed on its
+    own root cause.
 - id: legibility
   name: Keeping a large plan readable
-  description: Chips, toggles and the masthead - what a plan with dozens of items needs to stay an overview.
+  description: Chips, toggles and the masthead - what a plan with dozens of items needs to
+    stay an overview.
 - id: live-state
   name: Live pull request state on the page
   description: The shared fetch/compute module, and the promotion surface it makes possible.
@@ -29,16 +31,18 @@ tracks:
   wave: live-state
 items:
 - id: deferred-dependency-drift-check
-  title: Flag an item stacked on a deferred/closed dependency instead of leaving it to a stale note
+  title: Flag an item stacked on a deferred/closed dependency instead of leaving it to a stale
+    note
   branch: claude/deferred-dependency-drift-pr-qxpfsm
   pull_request_number: 47
   status: in_progress
   session: https://claude.ai/code/session_01VBa9VPHJW4VjpWtdq1XLE2
   track: corrections
   depends_on: []
-  notes: 'Flags an in-progress item whose dependency is deferred or whose pull request closed unmerged
-    (StalledDependencyDrift, StallReason), with a reparent suggestion. Draft #47, carried from CRAM #184
-    with its history; main is not merged in yet (conflicts in build_dashboard.py and its tests).'
+  notes: 'Flags an in-progress item whose dependency is deferred or whose pull request closed
+    unmerged (StalledDependencyDrift, StallReason), with a reparent suggestion. Draft #47,
+    carried from CRAM #184 with its history; main is not merged in yet (conflicts in build_dashboard.py
+    and its tests).'
 - id: deferred-items-hidden-by-default
   title: Hide deferred items in the dashboard by default, behind their own toggle
   branch: claude/hidden-deferred-plan-items-6weef1
@@ -47,10 +51,11 @@ items:
   session: https://claude.ai/code/session_01KzZzsqTc7Ub6ceYP9wDyAN
   track: legibility
   depends_on: []
-  notes: 'Deferred items get their own sidebar checkbox, hidden by default, parallel to done; indents
-    and wrap arrows are computed per combination of hidden statuses. Draft #46, carried from CRAM #157
-    with its history, including the fix for the last upstream review thread (16d8f77b8). main is not merged
-    in yet: it reworked the same stacked-item rendering in build_dashboard.py.'
+  notes: 'Deferred items get their own sidebar checkbox, hidden by default, parallel to done;
+    indents and wrap arrows are computed per combination of hidden statuses. Draft #46, carried
+    from CRAM #157 with its history, including the fix for the last upstream review thread
+    (16d8f77b8). main is not merged in yet: it reworked the same stacked-item rendering in
+    build_dashboard.py.'
 - id: shared-pr-state-chips
   title: Shared pull_request_state module, and LOC/CI/conflict chips on dashboard items
   branch: null
@@ -58,10 +63,10 @@ items:
   status: not_started
   track: live-state
   depends_on: []
-  notes: 'One pull-request-state module (CI rollup, lines changed, mergeable probe, session link) shared
-    by stack.py and the dashboard, plus LOC/CI/conflict chips and a stack chip on dashboard items. Not
-    started here: CRAM #111''s bastler/-era branch is retired in #52, whose last commit is the reference;
-    its headless build is superseded by build_site.'
+  notes: 'One pull-request-state module (CI rollup, lines changed, mergeable probe, session
+    link) shared by stack.py and the dashboard, plus LOC/CI/conflict chips and a stack chip
+    on dashboard items. Not started here: CRAM #111''s bastler/-era branch is retired in #52,
+    whose last commit is the reference; its headless build is superseded by build_site.'
 - id: cross-plan-dependencies
   title: Let depends_on name an item in another plan, resolved live at dashboard time
   branch: claude/plan-dashboards-cross-dependencies-h3icfd
@@ -70,11 +75,11 @@ items:
   session: https://claude.ai/code/session_01KRgqsFtPWVgxkh11fGuJpt
   depends_on: []
   status: in_progress
-  notes: 'Decided 2026-09-03: depends_on admits `<plan-id>/<item-id>` (a slash cannot occur in a kebab-case
-    id, so a bare id still means this plan). Not a bug fix: release:minor. 2026-10-25: main merged in; chips
-    link to their dependency''s card (same page, or the other plan''s site page in a new tab) through
-    build_site''s plan_url, so no dashboard-URL cache; build_site resolves cross-plan entries; build_dashboard''s
-    ManifestKey is gone in favour of plan_model''s. Draft, all tests green, awaiting review.'
+  notes: 'Decided 2026-09-03: depends_on admits `<plan-id>/<item-id>` (a slash cannot occur
+    in a kebab-case id, so a bare id still means this plan). Not a bug fix: release:minor.
+    2026-10-25: second review round pushed (rustworkx graph, PlanValidator, functions onto
+    classes, shared plan-command arguments). Splitting the file is split-build-dashboard.
+    Draft, all tests green, awaiting review.'
 - id: ready-to-promote-upstream-links
   title: Ready-to-promote sidebar list with one-click upstream create-pull-request links
   branch: null
@@ -82,12 +87,13 @@ items:
   track: live-state
   depends_on:
   - shared-pr-state-chips
-  notes: 'A fifth sidebar group - "Ready to promote" - listing every item whose fork pull request is open-and-ready,
-    cleanly mergeable and based on the fork''s default branch, each with a one-click link opening the
-    upstream compare-and-create page with the title and body prefilled and the fork pull request linked
-    from it. This is the Routine''s phase-3 link building turned into a surface instead of an emailed
-    summary: the same compare URL, computed at dashboard build time, so it reaches the user with no scheduled
-    run - which is what the cutover requires of every deterministic duty.'
+  notes: 'A fifth sidebar group - "Ready to promote" - listing every item whose fork pull
+    request is open-and-ready, cleanly mergeable and based on the fork''s default branch,
+    each with a one-click link opening the upstream compare-and-create page with the title
+    and body prefilled and the fork pull request linked from it. This is the Routine''s phase-3
+    link building turned into a surface instead of an emailed summary: the same compare URL,
+    computed at dashboard build time, so it reaches the user with no scheduled run - which
+    is what the cutover requires of every deterministic duty.'
 - id: untracked-pull-requests
   title: List each repository's open pull requests that no plan item tracks
   branch: null
@@ -95,20 +101,10 @@ items:
   track: corrections
   depends_on: []
   status: not_started
-  notes: 'Added 2026-10-21: the cleanup found basstler #9, #32 and #33 open with no item. Each repository''s
-    site page lists its open pull requests whose number and branch match no item in any plan, each with
-    an add-plan-item link. Rendered by the site builder, not the Artifact page.'
-- id: resolve-untracked-pull-requests
-  title: /plan-item-resolve resolves a pull request no plan tracks
-  branch: claude/plan-item-resolve-untracked
-  pull_request_number: 59
-  track: corrections
-  depends_on: []
-  status: done
-  session: https://claude.ai/code/session_01GxGmZpx98EUH77miUZF23X
-  notes: 'Draft #59 (release:minor), skill docs only. Given an untracked pull request, resolve skips only
-    the plan-reading steps, offers /add-plan-item when a plan fits, and records in the PR-progress note.
-    Complements untracked-pull-requests, which lists such pull requests.'
+  notes: 'Added 2026-10-21: the cleanup found basstler #9, #32 and #33 open with no item.
+    Each repository''s site page lists its open pull requests whose number and branch match
+    no item in any plan, each with an add-plan-item link. Rendered by the site builder, not
+    the Artifact page.'
 - id: duplicate-plan-ids
   title: Flag a plan id used by more than one hub repository
   branch: null
@@ -116,6 +112,19 @@ items:
   track: corrections
   depends_on: []
   status: not_started
-  notes: 'Added 2026-10-21: basstler-package existed on both basstler''s and CRAM''s notes. The site build
-    warns on the hub page for every id two hub repositories share, and /plan-create refuses an id another
-    hub repository already uses.'
+  notes: 'Added 2026-10-21: basstler-package existed on both basstler''s and CRAM''s notes.
+    The site build warns on the hub page for every id two hub repositories share, and /plan-create
+    refuses an id another hub repository already uses.'
+- id: split-build-dashboard
+  title: Split build_dashboard.py and its tests into modules by concern
+  branch: null
+  pull_request_number: null
+  track: corrections
+  depends_on:
+  - cross-plan-dependencies
+  status: not_started
+  notes: 'Added 2026-10-25 from the review of #17: build_dashboard.py (2,300 lines) and test_build_dashboard.py
+    (2,600) are too big. Split into plan validation, dependencies, pull request state and
+    rendering, tests to match, and move the validation exceptions into exceptions.py. Kept
+    out of #17 so its diff stays reviewable; every other branch editing build_dashboard.py
+    re-ports onto the new modules when it lands second.'
