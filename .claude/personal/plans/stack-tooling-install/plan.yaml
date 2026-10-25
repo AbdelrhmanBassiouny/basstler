@@ -33,8 +33,8 @@ items:
   depends_on: []
   notes: 'Ported onto main as python -m basstler.setup.personal_notes; the skill only
     asks the questions. Main merged in (main''s tree taken). Labels settled: main''s
-    GitHubLabel set stays, merged included. Draft #45, release:minor. Label creation
-    against a real token is unverified.'
+    GitHubLabel set stays, merged included. Live label creation verified 2026-10-25
+    (created promotion-link-sent on this repository). Draft #45, release:minor.'
 - id: setup-stacked-prs-skill
   title: '/setup-stacked-prs: one guided command that sets up the stacked-pull-request workflow'
   branch: null
