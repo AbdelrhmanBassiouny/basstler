@@ -40,7 +40,7 @@ items:
 - id: upstream-reviews-without-project-files
   title: /upstream-reviews works for a project that commits no basstler files
   branch: claude/upstream-reviews-no-project-files-m09n3k
-  status: in progress
+  status: done
   track: cram-retirement
   depends_on: []
   pull_request_number: 56
