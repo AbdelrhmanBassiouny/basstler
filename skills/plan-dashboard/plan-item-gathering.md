@@ -6,7 +6,7 @@ decided about this item?* — so the procedure lives here once instead of
 being restated in each skill.
 
 Each skill runs everything below, then adds only what its own situation
-needs: `plan-item-kickoff` reads landed siblings for the pattern to follow;
+needs: `plan-item-kickoff` reads the merged pull requests that set the pattern to follow;
 `plan-item-resolve` reads the item's pull request state and the tracking
 issue's discussion. Neither should re-derive anything on this page.
 
@@ -17,6 +17,23 @@ which the user may not have set up yet. Follow
 `skills/setup-personal-notes/prerequisite-check.md` first: run the
 check, and if it reports anything missing, run `/setup-personal-notes`
 without asking first, rather than failing later on a branch that isn't there.
+
+## Bring the stack up to date
+
+When the project names an upstream (`bash "${CHECK_SETUP_SCRIPT}" --require-upstream`
+exits 0), run `/stacked-pr-maintenance` before reading anything below. It reparents,
+fast-forwards the fork's base, restacks every branch whose parent moved and promotes
+approved branches, so everything gathered afterwards is the state the work continues
+from. A project that names no upstream has nothing to fast-forward from; skip this.
+
+Then read its summary for the item's branch and the branches it is stacked on (for an
+item not started yet, the branch it will be cut from):
+
+- A conflict on one of them is the first thing to resolve. Fix it on the branch it is
+  on - a parent's conflict on that parent's own pull request - then run the pass again,
+  so the fix is carried into everything stacked on it.
+- A conflict on a branch stacked on the item's branch stays with that branch's owner;
+  the pass has already labelled it and commented on its pull request.
 
 ## Resolve the item
 
@@ -30,12 +47,24 @@ source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 ```
 
-Load `<plan-id>/plan.yaml` + `roadmap.md` off `FETCH_HEAD` (the same
-resolution `plan-dashboard`'s own step 1 uses — read
-`resolve-personal-notes-config.sh` if the precedence is unclear rather than
-re-deriving it). Find the item by `id`, or by `branch` if `id` is unset,
-among `items[]`. Read `${PLAN_SCHEMA_DOCUMENT}` if any field's meaning is
+Read only what this item needs. Copy `<plan-id>/plan.yaml` off `FETCH_HEAD`
+to a scratch file and print just this item with
+`"${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" item <file> --id <item-id>` (or
+`--branch <branch>`); do the same for each item it `depends_on` when the
+readiness check below leaves a question. Never read the whole manifest to
+find one item - every other item is another session's work and costs this
+one context. Read `${PLAN_SCHEMA_DOCUMENT}` only if a field's meaning is
 unclear.
+
+Given a pull request number instead of the two ids, find the item from the
+pull request's branch: read its head branch with
+`${GITHUB_PULL_REQUEST_READ_TOOL}` (`method: "get"`), take the plan id from
+`plan_id_for_branch <branch>` (it reads the fetch above), and print the item
+with `--branch <branch>`. If no plan tracks that branch, the pull request is
+*untracked*: say so in one line, skip every section below that reads a plan -
+the tracking issue, the item's recorded state, the plan's standing rules and
+the dependency chain - and run the rest. A skill that cannot work without a
+plan item stops here instead.
 
 If the plan id or item id doesn't resolve, stop and list what's actually
 available — every plan id under `plans/*/plan.yaml`, or every item id in
@@ -71,24 +100,18 @@ something to redirect to or wait on.
 actually wrong; `notes` routinely carries design calls that were settled
 long before this run.
 
-## Read the plan's roadmap in full
+## Read the plan's standing rules
 
-Read `roadmap.md` **in full** — do not stop at grepping for this item's
-id/branch/title. A roadmap routinely records decisions, conventions, and
-design rationale in sections that don't name every item individually (e.g.
-"Finalized design decisions", "Decisions locked in", a track's own design
-notes, a prior review round's resolution). Those decisions bind this item
-just as much as a direct mention would, and missing one means proposing
-something that contradicts an already-settled call, or asking the user
-something they have already answered.
+`roadmap.md` holds only the plan's standing rules - a title and at most a
+dozen short entries (see `${PLAN_SIZE_LIMITS_MODULE}`) - so read it whole;
+it is small by construction. Each rule binds this item as much as its own
+`notes` do.
 
-After the full read, also grep for the item's id/branch/title specifically,
-to catch any focused mention a full read might skim past.
-
-If `roadmap.md` is large enough that a full read is genuinely impractical,
-say so explicitly and name which sections you read in full versus grepped —
-don't silently read only part of it and present the result as if it were
-comprehensive.
+There is no older narrative to read. Landed items and session history are
+not kept in the plan: what was built is in the code, and why is on its pull
+request. If the item's `notes` leave a question the code and its pull
+request do not answer, ask the user rather than digging through the
+personal-notes branch's history.
 
 ## Check the dependency chain
 
@@ -102,8 +125,8 @@ it were ready.
 
 ## Cross-check the standing conventions
 
-Read `roadmap.md`'s standing-conventions section (however it is titled in
-this plan) and the project's own instructions (`AGENTS.md`, else `CLAUDE.md`). Whatever is proposed must
+Read the project's own instructions (`AGENTS.md`, else `CLAUDE.md`) alongside
+the roadmap's rules. Whatever is proposed must
 honor both — whatever the project's own rules are — not just what the
 item's own `notes` happen to mention.
 
@@ -111,7 +134,7 @@ item's own `notes` happen to mention.
 
 A design call, a naming convention, or a scope boundary is very often
 already decided somewhere in the material just gathered. Re-read the
-relevant part of `roadmap.md`, the item's own `notes`/`blockers`, and any
+roadmap's rules, the item's own `notes`/`blockers`, and any
 cited sibling pull request or comment thread before surfacing anything as an
 open question.
 

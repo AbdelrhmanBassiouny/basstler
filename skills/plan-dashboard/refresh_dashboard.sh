@@ -18,7 +18,7 @@ set -euo pipefail
 #     --roadmap <roadmap.md path> \
 #     --pr-data <pr_data.json path> \
 #     --output <dashboard.html output path> \
-#     [--tracking-url <url>] \
+#     [--tracking-url <url>] [--hub-url <url>] [--index-url <url>] \
 #     [--plans-dir <directory holding every plan>]
 #
 # --plans-dir is forwarded to both scripts below: each validates the manifest,
@@ -47,6 +47,8 @@ ROADMAP_FILE=""
 PULL_REQUEST_DATA_FILE=""
 OUTPUT_FILE=""
 TRACKING_URL=""
+HUB_URL=""
+INDEX_URL=""
 PLANS_DIRECTORY=""
 while [ $# -gt 0 ]; do
   case "$1" in
@@ -74,6 +76,14 @@ while [ $# -gt 0 ]; do
       TRACKING_URL="$2"
       shift 2
       ;;
+    --hub-url)
+      HUB_URL="$2"
+      shift 2
+      ;;
+    --index-url)
+      INDEX_URL="$2"
+      shift 2
+      ;;
     --plans-dir)
       PLANS_DIRECTORY="$2"
       shift 2
@@ -87,7 +97,7 @@ done
 
 if [ -z "${PLAN_ID}" ] || [ -z "${PLAN_FILE}" ] || [ -z "${ROADMAP_FILE}" ] \
     || [ -z "${PULL_REQUEST_DATA_FILE}" ] || [ -z "${OUTPUT_FILE}" ]; then
-  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>] [--plans-dir <dir>]" >&2
+  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>] [--hub-url <url>] [--index-url <url>] [--plans-dir <dir>]" >&2
   exit 1
 fi
 
@@ -119,6 +129,12 @@ BUILD_ARGUMENTS=(
 )
 if [ -n "${TRACKING_URL}" ]; then
   BUILD_ARGUMENTS+=(--tracking-url "${TRACKING_URL}")
+fi
+if [ -n "${HUB_URL}" ]; then
+  BUILD_ARGUMENTS+=(--hub-url "${HUB_URL}")
+fi
+if [ -n "${INDEX_URL}" ]; then
+  BUILD_ARGUMENTS+=(--index-url "${INDEX_URL}")
 fi
 if [ -n "${PLANS_DIRECTORY}" ]; then
   BUILD_ARGUMENTS+=(--plans-dir "${PLANS_DIRECTORY}")
