@@ -15,6 +15,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from basstler.class_property import classproperty
+from basstler.exceptions import UnresolvableReferenceError
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance_errors import ExternalCallFailed
 from basstler.stack_model import IntegrationStrategy
@@ -240,7 +241,13 @@ class GitCommandRunner:
         """:param candidate: The reference whose history is examined.
         :param reference: The reference it is compared against.
         :return: Whether every commit *candidate* holds beyond *reference* is a merge.
+        :raises UnresolvableReferenceError: If either reference names no commit here.
         """
+        for compared in (reference, candidate):
+            if not self.attempt(
+                "rev-parse", "--verify", "--quiet", f"{compared}^{{commit}}"
+            ).succeeded:
+                raise UnresolvableReferenceError(reference=compared)
         beyond = self.run(
             "rev-list", "--no-merges", "--max-count=1", f"{reference}..{candidate}"
         )

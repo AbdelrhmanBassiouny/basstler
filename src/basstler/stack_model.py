@@ -312,14 +312,13 @@ class Stack:
         """
         configuration = Configuration.load()
         pull_requests = PullRequest.read_board(board)
-        CurrentCheckout.fetch(
-            configuration,
-            [
-                pull_request.head
-                for pull_request in pull_requests
-                if pull_request.skip_reason(configuration.fork_repository) is None
-            ],
-        )
+        heads_on_fork = {
+            pull_request.head
+            for pull_request in pull_requests
+            if pull_request.skip_reason(configuration.fork_repository) is None
+        }
+        bases = {pull_request.base for pull_request in pull_requests}
+        CurrentCheckout.fetch(configuration, sorted(heads_on_fork | bases))
         return cls.build(
             configuration,
             pull_requests,

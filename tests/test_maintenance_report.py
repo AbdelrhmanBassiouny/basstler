@@ -11,6 +11,7 @@ from dataclasses import asdict
 
 import pytest
 
+from basstler.exceptions import UnresolvableReferenceError
 from basstler.exit_codes import StackExitCode
 from basstler.repository import Repository
 from basstler.stack_model import (
@@ -182,6 +183,61 @@ def test_a_pass_over_a_head_on_another_fork_finishes_rather_than_failing_on_git(
     status = RunReportCommand().run(maintenance, argparse.Namespace(json=True))
 
     assert status == StackExitCode.SUCCESS
+
+
+# %% bases no open pull request has as its head
+
+
+def test_loading_the_stack_fetches_a_base_no_open_pull_request_has_as_its_head(
+    fork_checkout: ForkCheckout, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    Observed exiting with ``git-command-failed`` against a fork whose pull request was
+    based on a long-lived branch: the restack asked git about ``origin/<base>``, which no
+    fetch had brought in.
+    """
+    published = fork_checkout.branch_from(StackBranch.LONG_LIVED_BASE, UPSTREAM_BASE)
+    fork_checkout.branch_from(StackBranch.PARENT, StackBranch.LONG_LIVED_BASE)
+    fork_checkout.run_git(
+        "update-ref",
+        "-d",
+        f"refs/remotes/{RemoteName.ORIGIN}/{StackBranch.LONG_LIVED_BASE}",
+    )
+    board = BoardExport(
+        (
+            PullRequest(
+                number=StackPullRequestNumber.PARENT,
+                head=StackBranch.PARENT,
+                base=StackBranch.LONG_LIVED_BASE,
+                draft=False,
+                head_repository=PullRequestHeadRepository.FORK.value.full_name,
+            ),
+        )
+    ).write(fork_checkout.project_root / PackageLocation.BOARD.value.name)
+    monkeypatch.setattr(Configuration, "load", make_configuration)
+    monkeypatch.chdir(fork_checkout.project_root)
+
+    Stack.load(board)
+
+    assert (
+        fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.LONG_LIVED_BASE)
+        == published
+    )
+
+
+def test_comparing_against_a_reference_git_cannot_resolve_names_that_reference(
+    fork_checkout: ForkCheckout,
+):
+    fork_checkout.branch_from(StackBranch.PARENT, UPSTREAM_BASE)
+    missing = f"{RemoteName.ORIGIN}/{StackBranch.LONG_LIVED_BASE}"
+
+    with pytest.raises(UnresolvableReferenceError) as raised:
+        fork_checkout.git.adds_only_merges(
+            f"{RemoteName.ORIGIN}/{StackBranch.PARENT}", missing
+        )
+
+    assert raised.value.reference == missing
+    assert raised.value.exit_code == StackExitCode.GIT_COMMAND_FAILED
 
 
 @pytest.mark.parametrize(
