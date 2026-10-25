@@ -18,9 +18,9 @@ import json
 import shutil
 import subprocess
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from dataclasses import field as dataclasses_field
-from enum import IntEnum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 from pathlib import Path
 
 import pytest
@@ -28,7 +28,13 @@ import pytest
 from basstler.exit_codes import StackExitCode
 from basstler.repository import Repository
 from basstler.stack_commit_move import RefusalReason
-from basstler.stack_model import IntegrationStrategy, PullRequest, Stack
+from basstler.stack_model import (
+    IntegrationStrategy,
+    PullRequest,
+    SkippedPullRequest,
+    SkipReason,
+    Stack,
+)
 from basstler.stack_settings import Configuration
 
 import basstler.maintenance
@@ -39,6 +45,7 @@ from basstler.maintenance_board import (
     BoardExport,
     MissingPullRequestFieldError,
     PullRequestField,
+    PullRequestHeadKey,
     get_session_link_in,
 )
 from basstler.maintenance_commands import (
@@ -102,6 +109,28 @@ class StackPullRequestNumber(IntEnum):
     CHILD = 41
     """
     The pull request of :attr:`StackBranch.CHILD`, based on the parent's.
+    """
+
+    ON_ANOTHER_FORK = 42
+    """
+    The pull request of :attr:`StackBranch.ON_ANOTHER_FORK`, whose head is not on the
+    fork.
+    """
+
+
+class PullRequestHeadRepository(Enum):
+    """
+    The repositories a board entry's head branch can live in.
+    """
+
+    FORK = Repository("a-fork-owner", "a-fork")
+    """
+    The fork the pass maintains, which a scratch checkout's fork remote points at.
+    """
+
+    ANOTHER_CONTRIBUTORS_FORK = Repository("another-contributor", "a-fork")
+    """
+    Another contributor's fork, which the pass cannot push to.
     """
 
 
@@ -201,7 +230,7 @@ def make_configuration() -> Configuration:
         in_review_label=StackLabel.IN_REVIEW,
         rebase_label=StackLabel.REBASE,
         needs_resolution_label=StackLabel.NEEDS_RESOLUTION,
-        fork_repository=Repository("a-fork-owner", "a-fork"),
+        fork_repository=PullRequestHeadRepository.FORK.value,
         fork_remote=RemoteName.ORIGIN,
         upstream_repository=Repository("an-upstream-owner", "a-project"),
         upstream_remote=RemoteName.UPSTREAM,
@@ -456,6 +485,7 @@ def an_api_record(
     draft: bool = False,
     labels: list[str] | None = None,
     body: str = "",
+    head_repository: Repository | None = PullRequestHeadRepository.FORK.value,
 ) -> dict:
     """
     :param number: The pull request number.
@@ -464,11 +494,19 @@ def an_api_record(
     :param draft: Whether the pull request is a draft.
     :param labels: The label names it carries.
     :param body: The description to read a session link out of.
+    :param head_repository: The repository the head lives in, ``None`` once deleted.
     :return: One pull request in the shape the REST API returns it.
     """
     return {
         PullRequestField.NUMBER.key: number,
-        PullRequestField.HEAD.key: {"ref": head},
+        PullRequestField.HEAD.key: {
+            PullRequestHeadKey.REFERENCE: head,
+            PullRequestHeadKey.HEAD_REPOSITORY: (
+                None
+                if head_repository is None
+                else {PullRequestHeadKey.FULL_NAME: head_repository.full_name}
+            ),
+        },
         PullRequestField.BASE.key: {"ref": base},
         PullRequestField.DRAFT.key: draft,
         PullRequestField.LABELS.key: [{"name": name} for name in labels or []],
@@ -555,6 +593,44 @@ def test_a_pull_request_missing_a_required_field_is_rejected_rather_than_default
         BoardExport.from_api_records([record])
 
     assert raised.value.field_name == PullRequestField.DRAFT
+    assert raised.value.pull_request_number == StackPullRequestNumber.CHILD
+
+
+@pytest.mark.parametrize(
+    "head_repository",
+    [
+        PullRequestHeadRepository.FORK.value,
+        PullRequestHeadRepository.ANOTHER_CONTRIBUTORS_FORK.value,
+    ],
+)
+def test_the_export_records_the_repository_the_head_lives_in(
+    head_repository: Repository,
+):
+    export = BoardExport.from_api_records(
+        [an_api_record(head_repository=head_repository)]
+    )
+
+    assert export.pull_requests[0].head_repository == head_repository.full_name
+
+
+def test_a_deleted_head_repository_is_exported_as_none():
+    """
+    GitHub answers a deleted head repository with ``null``, which is a fact about the
+    pull request rather than a dropped field.
+    """
+    export = BoardExport.from_api_records([an_api_record(head_repository=None)])
+
+    assert export.pull_requests[0].head_repository is None
+
+
+def test_a_head_that_does_not_say_where_it_lives_is_rejected():
+    record = an_api_record(number=StackPullRequestNumber.CHILD)
+    del record[PullRequestField.HEAD.key][PullRequestHeadKey.HEAD_REPOSITORY]
+
+    with pytest.raises(MissingPullRequestFieldError) as raised:
+        BoardExport.from_api_records([record])
+
+    assert raised.value.field_name == PullRequestField.HEAD
     assert raised.value.pull_request_number == StackPullRequestNumber.CHILD
 
 
@@ -677,6 +753,7 @@ def the_board(labels: list[str] | None = None) -> list[PullRequest]:
             head=StackBranch.PARENT,
             base=UPSTREAM_BASE,
             draft=False,
+            head_repository=PullRequestHeadRepository.FORK.value.full_name,
         ),
         PullRequest(
             number=StackPullRequestNumber.CHILD,
@@ -684,6 +761,7 @@ def the_board(labels: list[str] | None = None) -> list[PullRequest]:
             base=StackBranch.PARENT,
             draft=False,
             labels=labels or [],
+            head_repository=PullRequestHeadRepository.FORK.value.full_name,
         ),
     ]
 
@@ -948,10 +1026,18 @@ def the_deeper_board() -> list[PullRequest]:
     """
     return the_board() + [
         PullRequest(
-            number=42, head=StackBranch.GRANDCHILD, base=StackBranch.CHILD, draft=False
+            number=42,
+            head=StackBranch.GRANDCHILD,
+            base=StackBranch.CHILD,
+            draft=False,
+            head_repository=PullRequestHeadRepository.FORK.value.full_name,
         ),
         PullRequest(
-            number=43, head=StackBranch.OFF_THE_CHAIN, base=UPSTREAM_BASE, draft=False
+            number=43,
+            head=StackBranch.OFF_THE_CHAIN,
+            base=UPSTREAM_BASE,
+            draft=False,
+            head_repository=PullRequestHeadRepository.FORK.value.full_name,
         ),
     ]
 
@@ -1975,6 +2061,165 @@ def test_a_whole_pass_leaves_no_board_behind(fork_checkout: ForkCheckout):
     RunReportCommand().run(maintenance, argparse.Namespace(json=True))
 
     assert not maintenance.board.exists()
+
+
+# %% pull requests whose head is not on the fork
+
+
+def a_board_with_a_head_outside_the_fork(
+    head_repository: Repository | None,
+    base: str = StackBranch.PARENT,
+) -> list[PullRequest]:
+    """
+    :param head_repository: Where the extra pull request's head lives, ``None`` once
+        deleted.
+    :param base: The fork branch the extra pull request is based on.
+    :return: The two-branch board plus a ready pull request whose head the fork remote
+        has no copy of, read through the export as a pass reads it.
+    """
+    record = an_api_record(
+        number=StackPullRequestNumber.ON_ANOTHER_FORK,
+        head=StackBranch.ON_ANOTHER_FORK,
+        base=base,
+        head_repository=head_repository,
+    )
+    return [*the_board(), *BoardExport.from_api_records([record]).pull_requests]
+
+
+def test_loading_the_stack_still_refreshes_the_fork_s_own_branches(
+    fork_checkout: ForkCheckout, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    One fetch names every head, and git refuses the whole fetch over a single branch
+    the fork remote does not have, which would leave every other branch stale.
+    """
+    a_parent_and_child(fork_checkout)
+    stale = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.PARENT)
+    moved = fork_checkout.commit_on(
+        StackBranch.PARENT, fork_checkout.own_file(StackBranch.PARENT), "moved\n"
+    )
+    fork_checkout.run_git(
+        "update-ref", f"refs/remotes/{RemoteName.ORIGIN}/{StackBranch.PARENT}", stale
+    )
+    board = BoardExport(
+        tuple(
+            a_board_with_a_head_outside_the_fork(
+                PullRequestHeadRepository.ANOTHER_CONTRIBUTORS_FORK.value
+            )
+        )
+    ).write(fork_checkout.project_root / PackageLocation.BOARD.value.name)
+    monkeypatch.setattr(Configuration, "load", make_configuration)
+    monkeypatch.chdir(fork_checkout.project_root)
+
+    Stack.load(board)
+
+    assert (
+        fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.PARENT) == moved
+    )
+
+
+def test_a_pass_over_a_head_on_another_fork_finishes_rather_than_failing_on_git(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Observed exiting with ``git-command-failed`` against a fork carrying a pull request
+    from another contributor's fork: the restack asked git for the parents of
+    ``origin/<head>``, a reference the fork remote never has.
+    """
+    a_parent_and_child(fork_checkout)
+    maintenance = AlreadyResolvedPass.over(
+        fork_checkout,
+        a_board_with_a_head_outside_the_fork(
+            PullRequestHeadRepository.ANOTHER_CONTRIBUTORS_FORK.value
+        ),
+    )
+
+    status = RunReportCommand().run(maintenance, argparse.Namespace(json=True))
+
+    assert status == StackExitCode.SUCCESS
+
+
+@pytest.mark.parametrize(
+    "head_repository, reason",
+    [
+        (
+            PullRequestHeadRepository.ANOTHER_CONTRIBUTORS_FORK.value,
+            SkipReason.HEAD_ON_ANOTHER_FORK,
+        ),
+        (None, SkipReason.HEAD_REPOSITORY_DELETED),
+    ],
+)
+def test_a_head_outside_the_fork_is_reported_as_skipped_with_its_reason(
+    fork_checkout: ForkCheckout, head_repository: Repository | None, reason: SkipReason
+):
+    a_parent_and_child(fork_checkout)
+    board = a_board_with_a_head_outside_the_fork(head_repository)
+    maintenance = AlreadyResolvedPass.over(fork_checkout, board)
+
+    report = RunReportCommand().perform(maintenance, as_json=True)
+    document = json.loads(report.as_json())
+
+    assert document["skipped"] == [
+        asdict(
+            SkippedPullRequest(
+                branch=StackBranch.ON_ANOTHER_FORK,
+                pull_request_number=StackPullRequestNumber.ON_ANOTHER_FORK,
+                head_repository=board[-1].head_repository,
+                reason=reason,
+            )
+        )
+    ]
+    assert StackBranch.ON_ANOTHER_FORK not in {
+        entry["branch"] for entry in document["restacked"]
+    }
+
+
+@pytest.mark.parametrize(
+    "head_repository",
+    [PullRequestHeadRepository.ANOTHER_CONTRIBUTORS_FORK.value, None],
+)
+def test_a_head_outside_the_fork_is_never_promoted_labelled_or_commented_on(
+    fork_checkout: ForkCheckout, head_repository: Repository | None
+):
+    """
+    Based on the upstream base and out of draft, it would be promoted if it were on the
+    fork, so nothing but its head's repository keeps the pass from writing to it.
+    """
+    a_parent_and_child(fork_checkout)
+    maintenance = AlreadyResolvedPass.over(
+        fork_checkout,
+        a_board_with_a_head_outside_the_fork(head_repository, base=UPSTREAM_BASE),
+    )
+
+    report = RunReportCommand().perform(maintenance, as_json=True)
+
+    fork = maintenance.recorded_fork
+    written_to = {
+        write.pull_request_number
+        for write in [*fork.label_writes, *fork.comments, *fork.description_writes]
+    }
+    assert StackPullRequestNumber.ON_ANOTHER_FORK not in written_to
+    assert StackBranch.ON_ANOTHER_FORK not in report.promotable
+
+
+def test_a_head_outside_the_fork_is_summarised_as_skipped_with_its_reason(
+    fork_checkout: ForkCheckout, capsys: pytest.CaptureFixture[str]
+):
+    a_parent_and_child(fork_checkout)
+    maintenance = AlreadyResolvedPass.over(
+        fork_checkout,
+        a_board_with_a_head_outside_the_fork(
+            PullRequestHeadRepository.ANOTHER_CONTRIBUTORS_FORK.value
+        ),
+    )
+
+    RunReportCommand().perform(maintenance, as_json=False)
+
+    summary = capsys.readouterr().out.splitlines()
+    assert any(
+        StackBranch.ON_ANOTHER_FORK in line and SkipReason.HEAD_ON_ANOTHER_FORK in line
+        for line in summary
+    )
 
 
 # %% the exit status every command derives from what it left behind

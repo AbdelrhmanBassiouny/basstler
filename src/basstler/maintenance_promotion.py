@@ -158,7 +158,7 @@ def clear_spent_promotion_labels(
     """
     spent = [
         branch
-        for branch in stack.branches
+        for branch in stack.maintained_branches()
         if GitHubLabel.PROMOTION_LINK_SENT in branch.labels
         and branch.status in {BranchStatus.IN_REVIEW, BranchStatus.MERGED}
     ]

@@ -42,6 +42,8 @@ from basstler.stack_model import (
     PullRequest,
     Reparent,
     RestackPlanEntry,
+    SkippedPullRequest,
+    SkipReason,
     Stack,
 )
 from basstler.stack_promotion_link import PromotionLink, PromotionLinkParameter
@@ -229,6 +231,7 @@ def test_in_review_derived_from_label():
                 StackBranch.BASE,
                 draft=False,
                 labels=[StackLabel.IN_REVIEW],
+                head_repository=StackRepository.FORK.value.full_name,
             )
         ]
     )
@@ -237,7 +240,16 @@ def test_in_review_derived_from_label():
 
 def test_merged_derived_from_predicate_not_labels():
     stack = build(
-        [PullRequest(9, StackBranch.LANDED, StackBranch.BASE, draft=False, labels=[])],
+        [
+            PullRequest(
+                9,
+                StackBranch.LANDED,
+                StackBranch.BASE,
+                draft=False,
+                labels=[],
+                head_repository=StackRepository.FORK.value.full_name,
+            )
+        ],
         merged={StackBranch.LANDED},
     )
     assert stack.branches[0].status == BranchStatus.MERGED
@@ -252,12 +264,22 @@ def test_rebase_label_sets_strategy():
                 StackBranch.BASE,
                 draft=True,
                 labels=[StackLabel.REBASE],
+                head_repository=StackRepository.FORK.value.full_name,
             )
         ]
     )
     assert stack.branches[0].strategy == IntegrationStrategy.REBASE
     stack = build(
-        [PullRequest(1, StackBranch.FEATURE, StackBranch.BASE, draft=True, labels=[])]
+        [
+            PullRequest(
+                1,
+                StackBranch.FEATURE,
+                StackBranch.BASE,
+                draft=True,
+                labels=[],
+                head_repository=StackRepository.FORK.value.full_name,
+            )
+        ]
     )
     assert stack.branches[0].strategy == IntegrationStrategy.MERGE
 
@@ -267,8 +289,20 @@ def test_rebase_label_sets_strategy():
 
 def test_order_places_parent_before_child():
     prs = [
-        PullRequest(3, StackBranch.CHILD, StackBranch.PARENT, draft=True),
-        PullRequest(2, StackBranch.PARENT, StackBranch.BASE, draft=True),
+        PullRequest(
+            3,
+            StackBranch.CHILD,
+            StackBranch.PARENT,
+            draft=True,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
+        PullRequest(
+            2,
+            StackBranch.PARENT,
+            StackBranch.BASE,
+            draft=True,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
     ]
     names = [b.name for b in build(prs).ordered()]
     assert names.index(StackBranch.PARENT) < names.index(StackBranch.CHILD)
@@ -278,24 +312,48 @@ def test_order_places_parent_before_child():
 
 
 def test_promotes_ready_root():
-    prs = [PullRequest(11, StackBranch.FEATURE, StackBranch.BASE, draft=False)]
+    prs = [
+        PullRequest(
+            11,
+            StackBranch.FEATURE,
+            StackBranch.BASE,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        )
+    ]
     assert [branch.name for branch in build(prs).promotion_order()] == [
         StackBranch.FEATURE
     ]
 
 
 def test_nothing_promotes_when_all_draft():
-    prs = [PullRequest(5, StackBranch.WORK_IN_PROGRESS, StackBranch.BASE, draft=True)]
+    prs = [
+        PullRequest(
+            5,
+            StackBranch.WORK_IN_PROGRESS,
+            StackBranch.BASE,
+            draft=True,
+            head_repository=StackRepository.FORK.value.full_name,
+        )
+    ]
     assert build(prs).promotion_order() == []
 
 
 def test_ready_child_blocked_until_parent_lands():
     prs = [
         PullRequest(
-            1, StackBranch.PARENT, StackBranch.BASE, draft=True
+            1,
+            StackBranch.PARENT,
+            StackBranch.BASE,
+            draft=True,
+            head_repository=StackRepository.FORK.value.full_name,
         ),  # still draft, not upstream
         PullRequest(
-            2, StackBranch.CHILD, StackBranch.PARENT, draft=False
+            2,
+            StackBranch.CHILD,
+            StackBranch.PARENT,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
         ),  # approved but parent hasn't landed
     ]
     assert build(prs).promotion_order() == []
@@ -312,8 +370,15 @@ def test_child_promotable_once_parent_reaches_review():
             StackBranch.BASE,
             draft=False,
             labels=[StackLabel.IN_REVIEW],
+            head_repository=StackRepository.FORK.value.full_name,
         ),
-        PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
+        PullRequest(
+            2,
+            StackBranch.CHILD,
+            StackBranch.PARENT,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
     ]
     assert [branch.name for branch in build(prs).promotion_order()] == [
         StackBranch.CHILD
@@ -322,8 +387,20 @@ def test_child_promotable_once_parent_reaches_review():
 
 def test_child_promotable_once_parent_merged():
     prs = [
-        PullRequest(1, StackBranch.PARENT, StackBranch.BASE, draft=False),
-        PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
+        PullRequest(
+            1,
+            StackBranch.PARENT,
+            StackBranch.BASE,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
+        PullRequest(
+            2,
+            StackBranch.CHILD,
+            StackBranch.PARENT,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
     ]
     promotable = build(prs, merged={StackBranch.PARENT}).promotion_order()
     assert [branch.name for branch in promotable] == [StackBranch.CHILD]
@@ -334,11 +411,27 @@ def test_promotion_order_includes_every_ready_unblocked_branch_in_dependency_ord
     # reached review - all ready roots promote together (no cap), the blocked child does
     # not.
     prs = [
-        PullRequest(1, StackBranch.FIRST_ROOT, StackBranch.BASE, draft=False),
         PullRequest(
-            2, StackBranch.CHILD_OF_FIRST_ROOT, StackBranch.FIRST_ROOT, draft=False
+            1,
+            StackBranch.FIRST_ROOT,
+            StackBranch.BASE,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
+        PullRequest(
+            2,
+            StackBranch.CHILD_OF_FIRST_ROOT,
+            StackBranch.FIRST_ROOT,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
         ),  # its parent is only ready
-        PullRequest(3, StackBranch.SECOND_ROOT, StackBranch.BASE, draft=False),
+        PullRequest(
+            3,
+            StackBranch.SECOND_ROOT,
+            StackBranch.BASE,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
     ]
     names = [b.name for b in build(prs).promotion_order()]
     assert names == [StackBranch.FIRST_ROOT, StackBranch.SECOND_ROOT]
@@ -354,8 +447,15 @@ def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
             StackBranch.BASE,
             draft=False,
             labels=[StackLabel.NEEDS_RESOLUTION],
+            head_repository=StackRepository.FORK.value.full_name,
         ),
-        PullRequest(2, StackBranch.FINE, StackBranch.BASE, draft=False),
+        PullRequest(
+            2,
+            StackBranch.FINE,
+            StackBranch.BASE,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
     ]
     names = [b.name for b in build(prs).promotion_order()]
     assert names == [StackBranch.FINE]
@@ -371,6 +471,7 @@ def test_ci_and_session_carried_onto_branch():
                 draft=False,
                 ci=StackSampleText.CHECK_CONCLUSION,
                 session=StackSampleText.SESSION_LINK,
+                head_repository=StackRepository.FORK.value.full_name,
             )
         ]
     )
@@ -383,16 +484,27 @@ def test_ci_and_session_carried_onto_branch():
 
 def test_restack_plan_excludes_merged_only():
     prs = [
-        PullRequest(1, StackBranch.LANDED, StackBranch.BASE, draft=False),
+        PullRequest(
+            1,
+            StackBranch.LANDED,
+            StackBranch.BASE,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
         PullRequest(
             2,
             StackBranch.UNDER_REVIEW,
             StackBranch.BASE,
             draft=False,
             labels=[StackLabel.IN_REVIEW],
+            head_repository=StackRepository.FORK.value.full_name,
         ),
         PullRequest(
-            3, StackBranch.WORK_IN_PROGRESS, StackBranch.UNDER_REVIEW, draft=True
+            3,
+            StackBranch.WORK_IN_PROGRESS,
+            StackBranch.UNDER_REVIEW,
+            draft=True,
+            head_repository=StackRepository.FORK.value.full_name,
         ),
     ]
     plan = build(prs, merged={StackBranch.LANDED}).restack_plan()
@@ -412,6 +524,7 @@ def test_restack_plan_carries_parent_and_strategy():
             StackBranch.OFF_BOARD_PARENT,
             draft=True,
             labels=[StackLabel.REBASE],
+            head_repository=StackRepository.FORK.value.full_name,
         )
     ]
     plan = build(prs).restack_plan()
@@ -428,8 +541,20 @@ def test_restack_plan_reparents_child_of_merged_parent_onto_base():
     # parent merged into main -> its commits are in the base, so the child is reparented
     # onto main (the maintenance skill mirrors this by retargeting the child PR's base on GitHub).
     prs = [
-        PullRequest(1, StackBranch.PARENT, StackBranch.BASE, draft=False),
-        PullRequest(2, StackBranch.CHILD, StackBranch.PARENT, draft=False),
+        PullRequest(
+            1,
+            StackBranch.PARENT,
+            StackBranch.BASE,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
+        PullRequest(
+            2,
+            StackBranch.CHILD,
+            StackBranch.PARENT,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        ),
     ]
     plan = build(prs, merged={StackBranch.PARENT}).restack_plan()
     assert plan == [
@@ -461,6 +586,7 @@ def a_three_deep_stack(
             parent,
             draft=True,
             labels=[configuration.rebase_label] if branch in rebasing else [],
+            head_repository=StackRepository.FORK.value.full_name,
         )
 
     return build(
@@ -552,7 +678,15 @@ def test_restack_plan_reparents_child_of_a_landed_parent_with_no_open_pull_reque
     # the board only carries OPEN pull requests, so a parent whose own PR was closed is
     # absent from it entirely - yet its commits are in the upstream base, so its child
     # must still be reparented onto that base rather than left on the landed branch.
-    prs = [PullRequest(2, StackBranch.CHILD, StackBranch.LANDED_ELSEWHERE, draft=False)]
+    prs = [
+        PullRequest(
+            2,
+            StackBranch.CHILD,
+            StackBranch.LANDED_ELSEWHERE,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        )
+    ]
     plan = build(prs, merged={StackBranch.LANDED_ELSEWHERE}).restack_plan()
     assert plan == [
         RestackPlanEntry(
@@ -567,15 +701,137 @@ def test_ready_child_blocked_when_its_only_parent_is_an_unlanded_off_board_branc
     # an off-board parent is not evidence of a root branch: this one has not landed, so
     # the child is not promotable even though no PR describes the parent.
     prs = [
-        PullRequest(2, StackBranch.CHILD, StackBranch.UNLANDED_ELSEWHERE, draft=False)
+        PullRequest(
+            2,
+            StackBranch.CHILD,
+            StackBranch.UNLANDED_ELSEWHERE,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        )
     ]
     assert build(prs).promotion_order() == []
 
 
 def test_ready_child_promotable_when_its_off_board_parent_has_landed():
-    prs = [PullRequest(2, StackBranch.CHILD, StackBranch.LANDED_ELSEWHERE, draft=False)]
+    prs = [
+        PullRequest(
+            2,
+            StackBranch.CHILD,
+            StackBranch.LANDED_ELSEWHERE,
+            draft=False,
+            head_repository=StackRepository.FORK.value.full_name,
+        )
+    ]
     promotable = build(prs, merged={StackBranch.LANDED_ELSEWHERE}).promotion_order()
     assert [branch.name for branch in promotable] == [StackBranch.CHILD]
+
+
+# %% pull requests whose head is not on the fork
+
+
+def a_head_outside_the_fork(
+    head_repository: str | None, base: str = StackBranch.LANDED_ELSEWHERE
+) -> PullRequest:
+    """
+    :param head_repository: Where its head lives, ``None`` once that repository is
+        deleted.
+    :param base: The fork branch it is based on.
+    :return: A ready pull request open on the fork.
+    """
+    return PullRequest(
+        2,
+        StackBranch.CHILD,
+        base,
+        draft=False,
+        head_repository=head_repository,
+    )
+
+
+@pytest.mark.parametrize(
+    "head_repository, reason",
+    [
+        (StackRepository.FORK.value.full_name, None),
+        (
+            StackRepository.SOMEBODY_ELSES_FORK.value.full_name,
+            SkipReason.HEAD_ON_ANOTHER_FORK,
+        ),
+        (None, SkipReason.HEAD_REPOSITORY_DELETED),
+    ],
+)
+def test_a_branch_is_skipped_exactly_when_its_head_is_not_on_the_fork(
+    head_repository: str | None, reason: SkipReason | None
+):
+    stack = build([a_head_outside_the_fork(head_repository)])
+
+    assert stack.branches[0].skip_reason == reason
+
+
+@pytest.mark.parametrize(
+    "head_repository", [StackRepository.SOMEBODY_ELSES_FORK.value.full_name, None]
+)
+def test_a_head_outside_the_fork_is_neither_restacked_promoted_nor_landed(
+    head_repository: str | None,
+):
+    """
+    Its base has landed, so on the fork it would be restacked and promoted; and its own
+    head counts as landed, so it would be reported for closing.
+    """
+    stack = build(
+        [a_head_outside_the_fork(head_repository)],
+        merged={StackBranch.LANDED_ELSEWHERE, StackBranch.CHILD},
+    )
+
+    assert stack.restack_plan() == []
+    assert stack.promotion_order() == []
+    assert stack.landed_branches() == []
+
+
+@pytest.mark.parametrize(
+    "head_repository", [StackRepository.SOMEBODY_ELSES_FORK.value.full_name, None]
+)
+def test_a_head_outside_the_fork_is_still_reparented_once_its_base_has_landed(
+    head_repository: str | None,
+):
+    """
+    Its base is a fork branch, and retargeting it changes only the base.
+    """
+    stack = build(
+        [a_head_outside_the_fork(head_repository)],
+        merged={StackBranch.LANDED_ELSEWHERE},
+    )
+
+    assert stack.reparents() == [
+        Reparent(
+            branch=StackBranch.CHILD,
+            pull_request_number=2,
+            current_base=StackBranch.LANDED_ELSEWHERE,
+            target_base=StackBranch.BASE,
+        )
+    ]
+
+
+def test_only_heads_outside_the_fork_are_listed_as_skipped():
+    on_the_fork = PullRequest(
+        1,
+        StackBranch.PARENT,
+        StackBranch.BASE,
+        draft=False,
+        head_repository=StackRepository.FORK.value.full_name,
+    )
+    elsewhere = a_head_outside_the_fork(
+        StackRepository.SOMEBODY_ELSES_FORK.value.full_name, base=StackBranch.PARENT
+    )
+
+    skipped = build([on_the_fork, elsewhere]).skipped_pull_requests()
+
+    assert skipped == [
+        SkippedPullRequest(
+            branch=elsewhere.head,
+            pull_request_number=elsewhere.number,
+            head_repository=elsewhere.head_repository,
+            reason=SkipReason.HEAD_ON_ANOTHER_FORK,
+        )
+    ]
 
 
 # %% configuration layering (personal-notes overrides)
@@ -921,6 +1177,7 @@ def a_deep_stack_beside_an_independent_branch(
             draft=name not in approved,
             labels=([StackLabel.IN_REVIEW] if name in promoted else [])
             + ([StackLabel.NEEDS_RESOLUTION] if name in withheld else []),
+            head_repository=StackRepository.FORK.value.full_name,
         )
         for number, (name, parent) in enumerate([*deep, *aside], start=1)
     ]
@@ -1013,7 +1270,15 @@ def test_landing_a_root_that_no_open_pull_request_describes_still_reparents():
     child must still be moved off it.
     """
     orphaned = build(
-        [PullRequest(2, StackBranch.ENGINE_UI, StackBranch.ENGINE, draft=True)],
+        [
+            PullRequest(
+                2,
+                StackBranch.ENGINE_UI,
+                StackBranch.ENGINE,
+                draft=True,
+                head_repository=StackRepository.FORK.value.full_name,
+            )
+        ],
         merged={StackBranch.ENGINE},
     )
 
@@ -1356,7 +1621,15 @@ def test_a_child_of_a_landed_parent_with_no_open_pull_request_is_still_named():
     from it entirely - the case that orphaned a real pull request for six days.
     """
     orphaned = build(
-        [PullRequest(2, StackBranch.ENGINE_UI, StackBranch.ENGINE, draft=True)],
+        [
+            PullRequest(
+                2,
+                StackBranch.ENGINE_UI,
+                StackBranch.ENGINE,
+                draft=True,
+                head_repository=StackRepository.FORK.value.full_name,
+            )
+        ],
         merged={StackBranch.ENGINE},
     )
 

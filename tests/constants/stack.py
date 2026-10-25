@@ -122,6 +122,12 @@ class StackBranch(StrEnum):
     Cut from the base beside the chain, so nothing stacks it on the parent.
     """
 
+    ON_ANOTHER_FORK = "on-another-fork"
+    """
+    The head of a pull request open on the fork whose branch lives on another
+    contributor's fork, so the fork remote has no copy of it.
+    """
+
 
 class StackLabel(StrEnum):
     """
