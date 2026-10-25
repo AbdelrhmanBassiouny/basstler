@@ -15,7 +15,7 @@ items:
 - id: windows-bash-resolution
   title: Resolve bash to Git Bash, never WSL's System32 launcher
   branch: claude/tender-ramanujan-76hdpl
-  status: in progress
+  status: done
   track: fixes
   depends_on: []
   pull_request_number: 71
