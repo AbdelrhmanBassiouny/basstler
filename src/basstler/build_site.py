@@ -22,6 +22,7 @@ everything else is still published.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import sys
 import tempfile
 from abc import ABC, abstractmethod
@@ -80,6 +81,44 @@ class SiteFile(StrEnum):
     """
     The marker that stops GitHub Pages from running Jekyll over already-rendered HTML.
     """
+
+    DIGEST = "site-digest.txt"
+    """
+    The site's :class:`SiteDigest`, which a deploy compares with the published one.
+    """
+
+
+@dataclass(frozen=True)
+class SiteDigest:
+    """
+    A fingerprint of a built site's pages: two builds have the same digest exactly when
+    they publish the same files with the same content.
+    """
+
+    site_directory: Path
+    """
+    The root directory the site was built into.
+    """
+
+    @property
+    def value(self) -> str:
+        """
+        The fingerprint, as a hexadecimal SHA-256, leaving out :attr:`SiteFile.DIGEST`.
+        """
+        digest = hashlib.sha256()
+        for path in sorted(self.site_directory.rglob("*")):
+            relative_path = path.relative_to(self.site_directory)
+            if not path.is_file() or relative_path == Path(SiteFile.DIGEST):
+                continue
+            digest.update(relative_path.as_posix().encode())
+            digest.update(hashlib.sha256(path.read_bytes()).digest())
+        return digest.hexdigest()
+
+    def write(self) -> None:
+        """
+        Write :attr:`value` to the site's :attr:`SiteFile.DIGEST`.
+        """
+        (self.site_directory / SiteFile.DIGEST).write_text(f"{self.value}\n")
 
 
 # %% a plan as the notes branch stores it
@@ -479,7 +518,7 @@ class HubSite(SiteSection[SiteSummary]):
 
     def build(self, output: Path) -> SiteSummary:
         """
-        Render every repository, then the hub linking them.
+        Render every repository, then the hub linking them, then the site's digest.
 
         :param output: The directory to write the site into.
         :return: The site's summary, holding every repository's card in the hub file's
@@ -495,6 +534,7 @@ class HubSite(SiteSection[SiteSummary]):
         summary = SiteSummary.over_repositories(repositories)
         self.write_page(output, HubPage(summary).render())
         (output / SiteFile.NO_JEKYLL).touch()
+        SiteDigest(output).write()
         return summary
 
     def build_repository(

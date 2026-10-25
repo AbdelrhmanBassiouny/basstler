@@ -44,6 +44,16 @@ class RepositoryLocation(PathEnumeration):
     The repository's Actions workflows.
     """
 
+    RELEASE_WORKFLOW = WORKFLOWS / "release.yml"
+    """
+    The workflow that tags a merge commit as a release.
+    """
+
+    PLAN_SITE_BUILD_WORKFLOW = WORKFLOWS / "plan-site-build.yml"
+    """
+    The reusable workflow that builds the plan site and deploys a changed one.
+    """
+
 
 class DatasetLocation(PathEnumeration):
     """
