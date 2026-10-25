@@ -13,8 +13,8 @@ import pytest
 from basstler.maintenance.default_branch_sync import (
     BaseOutcome,
     DefaultBranchReport,
+    DefaultBranchSync,
     ForkPublication,
-    sync_this_checkout,
 )
 from basstler.locations import PluginLocation
 
@@ -49,7 +49,7 @@ def sync(forked: ForkedScratchRepository) -> DefaultBranchReport:
     :param forked: The clone to catch up.
     :return: What the pass reported.
     """
-    return sync_this_checkout(forked.repository.project_root)
+    return DefaultBranchSync.catch_up_checkout(forked.repository.project_root)
 
 
 # %% catching up

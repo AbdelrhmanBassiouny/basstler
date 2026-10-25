@@ -1,49 +1,6 @@
 """
-Keeping the base every session starts from level with the upstream this fork tracks.
-
-Sessions are cut from the fork's default branch. When that branch has drifted behind the
-upstream it is forked from, every session in the clone plans, reviews and implements
-against a base that is already stale - and nothing in the session says so, because the
-clone is perfectly consistent with itself. Noticing is the step that gets skipped, and by
-the time a rebase surfaces the drift the work is already written against the old base.
-
-So session start runs this, in one pass:
-
-1. resolves the upstream and its base branch through :meth:`basstler.stack.settings.Configuration.load`,
-   the same resolution the stacked-PR tooling runs on, so nothing here names a repository;
-2. fetches that branch, without touching ``FETCH_HEAD``, which the hook reads the
-   personal-notes branch through;
-3. fast-forwards this clone's copy of it;
-4. pushes the result to the fork, whose default branch is what the *next* session is cloned
-   from.
-
-5. fast-forwards the checked-out branch onto the base too, when it has no commits of its
-   own - a session branch cut from a stale base before this pass ran.
-
-Fast-forward only, in every step: a base carrying commits the upstream does not is reported
-and left as it is, and nothing is ever force-pushed. A checked-out branch with commits of
-its own is never merged or rebased, since whether to take a moved base into work in
-progress is the session's call, but how far behind it now is gets reported, so the choice
-is made rather than missed. One without any holds no work a moved base could conflict
-with, so moving it is no such call.
-
-A project that names no upstream - one that is not a fork, such as basstler itself - has no
-upstream to catch up with, but a session's clone of it still goes stale against the
-repository it was cloned from. Its own remote takes the upstream's place: the clone's base
-and the checked-out branch are caught up with that remote's base, and nothing is pushed,
-since the remote is already where the next clone comes from.
-
-Never fatal. Every refusal - no remote to catch up with, unresolvable remotes, an
-unreachable upstream, a diverged or pinned-down base, a rejected push - is reported and exits 0,
-because a session that cannot sync its base must still start.
-
-Usage::
-
-    python -m basstler.default_branch_sync
-
-Prints the outcome on its first line and zero or more indented rows naming what is left
-for the session to do; session-start.sh prints the block as its ``default branch`` line.
-Also runnable by hand, to catch a long-running session's clone up mid-session.
+Fast-forward the base branch sessions start from, and the fork's copy of it, to the
+upstream this fork tracks.
 """
 
 from __future__ import annotations
@@ -359,6 +316,26 @@ class DefaultBranchSync:
     The runner every git command against the clone goes through.
     """
 
+    @classmethod
+    def catch_up_checkout(cls, project_root: Path) -> DefaultBranchReport:
+        """
+        Resolve this checkout's upstream - or, when it names none, its own remote - and
+        catch its base up, reporting rather than raising whatever stops it.
+
+        :param project_root: The clone to catch up, which must be the current directory,
+            since the configuration resolves the project from it.
+        :return: What was done.
+        """
+        git = GitCommandRunner(project_root)
+        try:
+            try:
+                source = BaseSource.upstream_of(Configuration.load())
+            except MissingUpstreamRepositoryError:
+                source = BaseSource.own_remote_of(project_root, git)
+            return cls(source, git).run()
+        except (CommandFailure, MalformedRepositoryError) as refusal:
+            return DefaultBranchReport(BaseOutcome.NOT_SYNCED, reason=str(refusal))
+
     @property
     def base_branch(self) -> str:
         """
@@ -533,33 +510,13 @@ class DefaultBranchSync:
         return ForkPublication.PUSHED
 
 
-def sync_this_checkout(project_root: Path) -> DefaultBranchReport:
-    """
-    Resolve this checkout's upstream - or, when it names none, its own remote - and catch
-    its base up, reporting rather than raising whatever stops it.
-
-    :param project_root: The clone to catch up, which must be the current directory, since
-        the configuration resolves the project from it.
-    :return: What was done.
-    """
-    git = GitCommandRunner(project_root)
-    try:
-        try:
-            source = BaseSource.upstream_of(Configuration.load())
-        except MissingUpstreamRepositoryError:
-            source = BaseSource.own_remote_of(project_root, git)
-        return DefaultBranchSync(source, git).run()
-    except (CommandFailure, MalformedRepositoryError) as refusal:
-        return DefaultBranchReport(BaseOutcome.NOT_SYNCED, reason=str(refusal))
-
-
 def main() -> int:
     """
     Catch the current checkout's base up and print what was done.
 
     :return: The process exit code, 0 whatever the outcome.
     """
-    print(sync_this_checkout(Path.cwd()).render())
+    print(DefaultBranchSync.catch_up_checkout(Path.cwd()).render())
     return 0
 
 
