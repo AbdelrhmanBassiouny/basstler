@@ -9,10 +9,10 @@ from enum import StrEnum
 
 import pytest
 
-from basstler.build_site import SiteFile
+from basstler.plan_site.__main__ import SiteFile
 
-from .constants.paths import RepositoryLocation
-from .workflow_definition import Workflow, WorkflowTrigger
+from ..constants.paths import RepositoryLocation
+from ..workflow_definition import Workflow, WorkflowTrigger
 
 # %% reading the workflow
 

@@ -53,7 +53,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: >-
-          python -m basstler.build_site
+          python -m basstler.plan_site
           --registry "${{ inputs.registry || github.repository }}"
           --site-url "${{ steps.pages.outputs.base_url }}"
           --output _site
