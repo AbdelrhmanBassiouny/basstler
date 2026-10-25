@@ -9,10 +9,11 @@ import tempfile
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.maintenance_git_commands import GitCommandRunner, ProposedPush
-from basstler.render_common import PackageTemplate
+from basstler.render_common import create_template_environment
 from basstler.repository import Repository
 from basstler.upstream_reviews_vocabulary import (
     ActionBranch,
@@ -140,9 +141,10 @@ class RemoteBranch:
 # %% installing
 
 
-class ActionTemplate(PackageTemplate):
+class ActionTemplate(StrEnum):
     """
-    The templates the Action's files are rendered from.
+    The templates in :attr:`PackageLocation.TEMPLATES` the Action's files are rendered
+    from.
     """
 
     WORKFLOW = "upstream_reviews_action_workflow.yml"
@@ -154,6 +156,13 @@ class ActionTemplate(PackageTemplate):
     """
     What a reader browsing the fork's branches finds there.
     """
+
+    def render(self, **context: Any) -> str:
+        """
+        :param context: The values the template substitutes, by name.
+        :return: The rendered file, without its final newline.
+        """
+        return create_template_environment().get_template(self.value).render(**context)
 
 
 class InstallationState(StrEnum):

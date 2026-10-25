@@ -111,20 +111,6 @@ def create_template_environment() -> jinja2.Environment:
     return environment
 
 
-class PackageTemplate(StrEnum):
-    """
-    Templates in :attr:`PackageLocation.TEMPLATES` that render a file of their own
-    format, each member naming one template file.
-    """
-
-    def render(self, **context: Any) -> str:
-        """
-        :param context: The values the template substitutes, by name.
-        :return: The rendered file, without its final newline.
-        """
-        return create_template_environment().get_template(self.value).render(**context)
-
-
 class TemplatePage(ABC):
     """
     A page rendered from one of the package's Jinja2 templates.

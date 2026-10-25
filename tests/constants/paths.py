@@ -229,11 +229,6 @@ class PersonalNotesPath(PathEnumeration):
     reads a plan out of.
     """
 
-    SAMPLE_NOTES = ProjectLocation.PERSONAL_NOTES / "cram-notes.md"
-    """
-    A notes file a suite publishes on the notes branch before writing onto it.
-    """
-
     GIT_IDENTITY = ProjectLocation.PERSONAL_NOTES / "git-identity"
     """
     The recorded git identity a clone with none of its own is given.

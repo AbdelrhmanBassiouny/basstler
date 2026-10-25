@@ -93,28 +93,6 @@ A project that prefers a dispatch-only workflow on its default branch may still 
 the package, both from `main`; to pin a release instead, change both references to its
 tag.
 
-### The plan site
-
-The registry repository, the one whose notes hold the hub file, publishes every hub
-repository's plans to its own GitHub Pages. Its default branch carries
-`.github/workflows/plan-site.yml`, which calls basstler's reusable
-`plan-site-build.yml`; Pages deploys only from the default branch. A plan push on the
-notes branch starts that build through a trigger installed on the notes branch:
-
-```bash
-~/.local/share/basstler/venv/bin/python -m basstler.plan_site_workflows install-trigger
-```
-
-Turn Pages on once under the registry's *Settings → Pages*, with *GitHub Actions* as the
-source. The default branch's `plan-site-pull-request-trigger.yml` starts the same build
-whenever one of the registry's pull requests is opened, merged, closed, moved in or out of
-draft or relabelled, so the pull request state the pages show stays current. Nothing runs
-on a schedule: a plan push, a pull request event, a renderer change on `main` or a manual
-run of *Plan site* rebuilds the site. Every build renders every page - each plan, each
-repository's index and the hub - and deploys only when one of them differs from the
-published site, so a push that changes nothing a page shows deploys nothing. Plans on
-another hub repository's notes are refreshed by the registry's next build.
-
 ## 4. Check it worked
 
 ```bash
