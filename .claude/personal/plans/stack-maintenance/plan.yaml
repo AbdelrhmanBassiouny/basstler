@@ -113,3 +113,10 @@ items:
     only the steps; the finish step becomes 'relay run-report's summary'. Rationale moves
     to docs/stack/. team-basstler's lean-kickoff caps skill document sizes; this file should
     fall under that cap.
+
+- id: dashboard-token-economy
+  title: "Republish a dashboard only when it changed, and keep the read a republish needs small"
+  branch: null
+  track: pass
+  depends_on: []
+  status: not started
