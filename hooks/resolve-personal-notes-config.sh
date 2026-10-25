@@ -299,7 +299,7 @@ DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 
 # PLAN_HUB_PATH: the hub file - the plan site's address, the registry
 # repository holding the complete list of repositories, and that list. Every
-# registered repository's notes carry a copy (see basstler.plan_hub).
+# registered repository's notes carry a copy (see basstler.plan_site.hub).
 PLAN_HUB_PATH="${PLANS_DIR}/_hub.yaml"
 
 # *_MODULE: every Python entry point in this system - defined once, here, so
@@ -323,80 +323,80 @@ if [ -f "${PLUGIN_ROOT}/../pyproject.toml" ] && [ -d "${PLUGIN_ROOT}/../src/bass
   # resolve to.
   export PYTHONPATH="${BASSTLER_CHECKOUT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 fi
-# build_dashboard: renders one plan's dashboard HTML from its manifest
+# basstler.dashboard.plan_page: renders one plan's dashboard HTML from its manifest
 # and live GitHub data - see the module's own docstring.
-BUILD_DASHBOARD_MODULE="basstler.build_dashboard"
-# build_index: renders the master index page listing every plan.
-BUILD_INDEX_MODULE="basstler.build_index"
-# build_site: renders the plan site - the hub, every registered repository's
+BUILD_DASHBOARD_MODULE="basstler.dashboard.plan_page"
+# basstler.dashboard.index_page: renders the master index page listing every plan.
+BUILD_INDEX_MODULE="basstler.dashboard.index_page"
+# basstler.plan_site: renders the plan site - the hub, every registered repository's
 # index, and every plan's dashboard - from the repositories the hub file lists.
-BUILD_SITE_MODULE="basstler.build_site"
-# plan_hub: registers a repository in the hub file.
-PLAN_HUB_MODULE="basstler.plan_hub"
-# sync_manifest_status: auto-corrects a plan.yaml's item statuses to
+BUILD_SITE_MODULE="basstler.plan_site"
+# basstler.plan_site.hub: registers a repository in the hub file.
+PLAN_HUB_MODULE="basstler.plan_site.hub"
+# basstler.plan.sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
-SYNC_MANIFEST_STATUS_MODULE="basstler.sync_manifest_status"
-# check_dependency_readiness: classifies one item's dependencies as
+SYNC_MANIFEST_STATUS_MODULE="basstler.plan.sync_manifest_status"
+# basstler.plan.check_dependency_readiness: classifies one item's dependencies as
 # ready or not-ready to build on - see dependency-readiness.md below.
-CHECK_DEPENDENCY_READINESS_MODULE="basstler.check_dependency_readiness"
-# refresh_dashboard_support: the JSON-plumbing helpers
+CHECK_DEPENDENCY_READINESS_MODULE="basstler.plan.check_dependency_readiness"
+# basstler.dashboard.refresh_support: the JSON-plumbing helpers
 # refresh_dashboard.sh calls between its two module calls.
-REFRESH_DASHBOARD_SUPPORT_MODULE="basstler.refresh_dashboard_support"
-# record_dashboard_url: writes one key's published Artifact URL into
+REFRESH_DASHBOARD_SUPPORT_MODULE="basstler.dashboard.refresh_support"
+# basstler.dashboard.record_url: writes one key's published Artifact URL into
 # DASHBOARD_URL_CACHE_PATH, resolving that URL from the account's live
 # Artifact listing so a URL nobody published cannot be recorded.
-RECORD_DASHBOARD_URL_MODULE="basstler.record_dashboard_url"
-# plan_item_bootstrap: opens an item's branch and draft pull request and
+RECORD_DASHBOARD_URL_MODULE="basstler.dashboard.record_url"
+# basstler.plan.item_bootstrap: opens an item's branch and draft pull request and
 # records its manifest entry - invoked from plan-item-kickoff/SKILL.md and
 # add-plan-item/SKILL.md.
-PLAN_ITEM_BOOTSTRAP_MODULE="basstler.plan_item_bootstrap"
-# plan_item_mode: resolves whether a plan-item skill asks, plans, or
+PLAN_ITEM_BOOTSTRAP_MODULE="basstler.plan.item_bootstrap"
+# basstler.plan.item_mode: resolves whether a plan-item skill asks, plans, or
 # implements on its own - invoked from plan-item-mode/SKILL.md and from
 # plan-item-kickoff/plan-item-resolve via execution-modes.md.
-PLAN_ITEM_MODE_MODULE="basstler.plan_item_mode"
-# plan_manifest_tools: reads a plan id out of a manifest and regenerates
+PLAN_ITEM_MODE_MODULE="basstler.plan.item_mode"
+# basstler.plan.manifest_tools: reads a plan id out of a manifest and regenerates
 # the branch index - the manifest plumbing save-plan.sh calls.
-PLAN_MANIFEST_TOOLS_MODULE="basstler.plan_manifest_tools"
-# plan_size_limits: prunes landed items and refuses a plan or progress
+PLAN_MANIFEST_TOOLS_MODULE="basstler.plan.manifest_tools"
+# basstler.plan.size_limits: prunes landed items and refuses a plan or progress
 # notes over their limits - the gate save-plan.sh and save-pr-progress.sh run.
-PLAN_SIZE_LIMITS_MODULE="basstler.plan_size_limits"
-# progress_notes: deletes the progress notes of branches whose pull requests
+PLAN_SIZE_LIMITS_MODULE="basstler.plan.size_limits"
+# basstler.personal_notes.progress_notes: deletes the progress notes of branches whose pull requests
 # have all merged or closed, or that are gone from the remote.
-PROGRESS_NOTES_MODULE="basstler.progress_notes"
-# plan_updates_since_support: renders the plan-state delta
+PROGRESS_NOTES_MODULE="basstler.personal_notes.progress_notes"
+# basstler.plan.updates_since_support: renders the plan-state delta
 # plan-updates-since.sh reports.
-PLAN_UPDATES_SINCE_SUPPORT_MODULE="basstler.plan_updates_since_support"
+PLAN_UPDATES_SINCE_SUPPORT_MODULE="basstler.plan.updates_since_support"
 # stack: read-only stacked-PR status tool (status/check/next/restack-plan)
 # - see its own module docstring and STACK_DIRECTORY/README.md.
 STACK_MODULE="basstler.stack"
 # maintenance: the deterministic maintenance executor a stacked-PR pass
 # runs - board export, fast-forward, restack, promote, run-report.
 MAINTENANCE_MODULE="basstler.maintenance"
-# check_scope_overlap: reports which of an item's paths a given branch
+# basstler.plan.check_scope_overlap: reports which of an item's paths a given branch
 # already touches - the mechanical half of add-plan-item's scope decision.
-CHECK_SCOPE_OVERLAP_MODULE="basstler.check_scope_overlap"
-# upstream_reviews: reports the review threads a fork branch's upstream
+CHECK_SCOPE_OVERLAP_MODULE="basstler.plan.check_scope_overlap"
+# basstler.upstream_reviews: reports the review threads a fork branch's upstream
 # pull request has collected, run by /upstream-reviews in a session or the
 # upstream-reviews Action on a runner.
 UPSTREAM_REVIEWS_MODULE="basstler.upstream_reviews"
-# upstream_reviews_helper: the same read through a helper session, for a cloud
+# basstler.upstream_reviews.helper: the same read through a helper session, for a cloud
 # session that cannot attach the upstream next to its same-named fork.
-UPSTREAM_REVIEWS_HELPER_MODULE="basstler.upstream_reviews_helper"
-# upstream_reviews_action: the same read in the fork's own Actions, started by
+UPSTREAM_REVIEWS_HELPER_MODULE="basstler.upstream_reviews.helper"
+# basstler.upstream_reviews.action: the same read in the fork's own Actions, started by
 # pushing a request to UPSTREAM_REVIEWS_ACTION_BRANCH, which holds the caller
 # workflow and nothing of the project's.
-UPSTREAM_REVIEWS_ACTION_MODULE="basstler.upstream_reviews_action"
+UPSTREAM_REVIEWS_ACTION_MODULE="basstler.upstream_reviews.action"
 UPSTREAM_REVIEWS_ACTION_BRANCH="basstler/upstream-reviews"
 # dependencies: prints the package's requirements an environment does not
 # have - what missing_dependencies below calls.
-BASSTLER_DEPENDENCIES_MODULE="basstler.dependencies"
+BASSTLER_DEPENDENCIES_MODULE="basstler.setup.dependencies"
 # plan-item-modes.toml on the personal-notes branch: the per-user override
-# plan_item_mode layers on top of the package's shipped defaults.
+# basstler.plan.item_mode layers on top of the package's shipped defaults.
 PERSONAL_PLAN_ITEM_MODES_PATH=".claude/personal/plan-item-modes.toml"
-# setup_steps: prints the setup steps no script can do, and performs
+# basstler.setup.steps: prints the setup steps no script can do, and performs
 # configure-upstream, which names a project's upstream for the stacked-PR
 # workflow, and install-upstream-reviews-action.
-SETUP_STEPS_MODULE="basstler.setup_steps"
+SETUP_STEPS_MODULE="basstler.setup.steps"
 # The stack settings a project commits, and the personal-notes override
 # layered on top of them - either may name the upstream.
 PROJECT_STACK_CONFIGURATION_PATH=".claude/basstler/stack.toml"
@@ -408,8 +408,8 @@ PERSONAL_STACK_CONFIGURATION_PATH=".claude/personal/stack.toml"
 # with the skill it belongs to. Every path from here on is absolute, under
 # PLUGIN_ROOT.
 PLAN_DASHBOARD_DIRECTORY="${PLUGIN_ROOT}/skills/plan-dashboard"
-# refresh_dashboard.sh: orchestrates sync_manifest_status, the
-# conditional push of its correction, then build_dashboard - the whole
+# refresh_dashboard.sh: orchestrates basstler.plan.sync_manifest_status, the
+# conditional push of its correction, then basstler.dashboard.plan_page - the whole
 # refresh sequence /plan-dashboard runs for one plan.
 REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
 

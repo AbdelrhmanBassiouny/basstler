@@ -1,9 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# Orchestrates one plan's refresh: sync_manifest_status's auto-correction,
+# Orchestrates one plan's refresh: basstler.plan.sync_manifest_status's auto-correction,
 # pushing that correction back to the personal-notes branch if it changed
-# anything, then build_dashboard's render - the exact sequence
+# anything, then basstler.dashboard.plan_page's render - the exact sequence
 # skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
 # embedded bash snippet for a session to improvise from. Extracted so that
 # sequence is real, tested-by-construction code (it just calls the two
@@ -25,8 +25,8 @@ set -euo pipefail
 # and a depends_on entry naming <plan-id>/<item-id> resolves against that
 # directory.
 #
-# Prints one JSON summary to stdout, merging sync_manifest_status's own
-# {"corrected": [...]} with build_dashboard's status/drift/ready summary,
+# Prints one JSON summary to stdout, merging basstler.plan.sync_manifest_status's own
+# {"corrected": [...]} with basstler.dashboard.plan_page's status/drift/ready summary,
 # so the calling skill has everything step 4's report needs from one place.
 #
 # Requires PyYAML, Jinja2, and the markdown package - see the package's own

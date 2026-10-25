@@ -23,10 +23,10 @@ basstler's repository: the branch starts with no history and holds only a short
 workflow file that calls basstler's reusable workflow by reference, so a fork of
 any repository can carry it. Pushing a request to it starts a run, which reads
 the upstream over GraphQL and commits everything it read back to the branch;
-`basstler.upstream_reviews_action` fetches that and
+`basstler.upstream_reviews.action` fetches that and
 replays it through the same reader a direct read uses. It works the same from a
 cloud session, a terminal or a runner, and the fork's default branch never
-changes. Setup installs it (`setup_steps install-upstream-reviews-action`); the
+changes. Setup installs it (`basstler.setup.steps install-upstream-reviews-action`); the
 one step no script can do is switching Actions on in a fork, which GitHub starts
 with them off.
 
@@ -139,7 +139,7 @@ archiving it are part of the skill.
    ```
 
    The message carries the program the helper runs - basstler's own
-   `upstream_reviews_fetch`, code only - since a helper runs no code from
+   `basstler.upstream_reviews.helper.fetch`, code only - since a helper runs no code from
    repositories outside its session.
 2. `mcp__claude-code-remote__create_session` with `source_url`
    `https://github.com/<upstream owner/name>`, `clone_depth: 1`,
