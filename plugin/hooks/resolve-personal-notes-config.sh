@@ -444,6 +444,16 @@ SETUP_PERSONAL_NOTES_DIRECTORY="${PLUGIN_ROOT}/skills/setup-personal-notes"
 # the single source of truth for that question, so no caller re-implements
 # "is the notes branch there?" with its own git plumbing.
 CHECK_SETUP_SCRIPT="${HOOKS_DIR}/check-setup.sh"
+# CREATE_PERSONAL_NOTES_BRANCH_SCRIPT: the script that creates the notes
+# branch, named once here because a script that finds the branch missing tells
+# the user to run it.
+CREATE_PERSONAL_NOTES_BRANCH_SCRIPT="${HOOKS_DIR}/create-personal-notes-branch.sh"
+# PLAN_SIZE_CHECK_MODULE: whether a plan is already full, for `/add-plan-item`
+# and `/plan-create` to check before writing into or as it - never refuses,
+# unlike save-plan.sh's limits, since the routing decision has to happen
+# before a save is even attempted. Same defined-once reasoning as every path
+# above.
+PLAN_SIZE_CHECK_MODULE="basstler.plan_size_check"
 # prerequisite-check.md: the shared "run check-setup.sh, run
 # /setup-personal-notes if it fails" procedure that plan-create,
 # plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in

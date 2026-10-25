@@ -33,7 +33,8 @@ without asking first, rather than failing partway through drafting a plan.
 
 Source the shared config script — it resolves the personal-notes
 remote/branch precedence into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines
-`SAVE_PLAN_SCRIPT` (used in step 7):
+`SAVE_PLAN_SCRIPT` (used in step 8) and `PLAN_SIZE_CHECK_MODULE` (used in
+step 7):
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
@@ -179,7 +180,33 @@ Parse with Python's `yaml` module to check this mechanically rather than
 eyeballing it — the same tooling `save-plan.sh` and `plan-dashboard` both
 already require.
 
-## 7. Bootstrap it through the existing write path — don't invent a new one
+## 7. Check the draft isn't already full
+
+A plan this large before it has even been saved once is the same failure a
+plan can also grow into later: more items than one plan may hold. Catch it
+here, before the first save, rather than after the fact. Count the draft's
+items against the item limit, `Measure.ITEM_COUNT` in `plan_size_limits.py`:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <path/to/plan.yaml>
+```
+
+If `is_full` is `false`, continue to step 8 unchanged.
+
+If `is_full` is `true`, stop — do not call `${SAVE_PLAN_SCRIPT}` on this draft.
+A plan born at `item_limit` has no room for the next item anyone adds. Report
+`item_count` against `item_limit`, and that the source material describes more
+than one plan's worth of work. Don't re-derive a splitting
+methodology from scratch here — a plan that has previously had to split
+itself under this same limit is prior art on how to cut one under real
+constraints (by track/wave first, verified by measuring rather than assumed,
+cut on subject only when a track or wave alone is still over); look for one
+before inventing an approach. Ask, via `AskUserQuestion`, whether to re-draft
+the structure along such a seam (return to step 3 with the split in mind,
+ending in several `<plan-id>`s instead of one) or to trim the source
+material's scope so it fits in one plan.
+
+## 8. Bootstrap it through the existing write path — don't invent a new one
 
 This skill does not push directly. It uses exactly the flow
 `save-plan.sh`'s own header comment documents for a brand-new plan (there
@@ -198,7 +225,7 @@ through `CLAUDE.local.md`'s markers first), pushes both to the
 personal-notes branch, and regenerates the branch→plan-id index in the same
 commit.
 
-## 8. Publish
+## 9. Publish
 
 Invoke the `plan-dashboard` skill for `<plan-id>` to publish its first
 dashboard Artifact. Ask the user whether they also want the master index
@@ -211,7 +238,7 @@ unprompted — to replace that old doc with a short pointer stub at its
 original location, so anyone still reading the old path finds the new one
 immediately.
 
-## 9. Report back
+## 10. Report back
 
 Plan id, item/wave/track counts, the dashboard URL, the tracking issue link
 if one was created, and — explicitly, not buried — every judgment call you
