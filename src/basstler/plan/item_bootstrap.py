@@ -71,6 +71,7 @@ from typing import Any, Protocol
 import yaml
 
 from basstler.environment import GitHubCredentialVariable
+from basstler.bash import Bash
 from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, ExitCode
@@ -624,15 +625,14 @@ class PlanDocuments:
             for document, content in written.items():
                 (scratch / document.value).write_text(content)
             saved = subprocess.run(
-                [
-                    "bash",
+                Bash.locate(os.environ).command(
                     PluginLocation.PLAN_SAVING_SCRIPT,
                     self.plan_identifier,
                     "--manifest",
                     str(scratch / PlanDocument.MANIFEST.value),
                     "--roadmap",
                     str(scratch / PlanDocument.ROADMAP.value),
-                ],
+                ),
                 cwd=project_root,
                 capture_output=True,
                 text=True,

@@ -21,7 +21,12 @@ import pytest
 from basstler.exceptions import MalformedEmailAddressError
 from basstler.exit_codes import PersonalNotesSetupExitCode
 from basstler.github_labels import GitHubLabel
-from basstler.locations import PluginLocation, PluginSkillLocation, ProjectLocation
+from basstler.locations import (
+    ClaudeCodeVariable,
+    PluginLocation,
+    PluginSkillLocation,
+    ProjectLocation,
+)
 from basstler.maintenance.github import (
     AccountField,
     GitHubPath,
@@ -38,8 +43,10 @@ from basstler.setup.personal_notes import (
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 from basstler.setup.steps import PersonalNotesSetting
 
+from ..constants.environment import BashStubVariable
 from ..constants.notes import ScratchBranch
 from ..constants.paths import PersonalNotesPath
+from ..executable_stubs import ExecutableStubDirectory
 from ..scratch_repository import SCRATCH_IDENTITY, GitIdentity, ScratchRepository
 
 SCRIPTS_UNDER_TEST = (
@@ -143,17 +150,22 @@ def setup_for(
     repository: ScratchRepository,
     *arguments: str,
     github: GitHubRepository | None = None,
+    environment: Mapping[str, str] | None = None,
 ) -> PersonalNotesSetup:
     """
     :param repository: A fixture-built scratch repository.
     :param arguments: The command line after ``--remote``, which names the scratch
         notes remote.
     :param github: The GitHub access the run has, none by default.
+    :param environment: The environment the run has, the scratch layout's own by
+        default.
     :return: A setup run against the scratch layout's plugin.
     """
     return PersonalNotesSetup(
         project_root=repository.project_root,
-        environment=repository.runner_environment(),
+        environment=(
+            repository.runner_environment() if environment is None else environment
+        ),
         request=SetupRequest.from_arguments(
             [SetupOption.REMOTE, str(repository.notes_remote_path), *arguments]
         ),
@@ -252,6 +264,33 @@ def test_completes_a_full_setup(setup_repository: ScratchRepository):
 
     assert exit_code is PersonalNotesSetupExitCode.SUCCESS
     assert check_setup_report(setup_repository).exit_code == exit_code
+
+
+def test_runs_every_hook_script_in_the_bash_claude_code_is_configured_with(
+    setup_repository: ScratchRepository, tmp_path: Path
+):
+    stubs = ExecutableStubDirectory.create(tmp_path)
+    stubs.install("bash")
+    call_log = tmp_path / "bash-calls.log"
+    setup = setup_for(
+        setup_repository,
+        environment=setup_repository.runner_environment(
+            **{
+                ClaudeCodeVariable.GIT_BASH_PATH: str(stubs.path / "bash"),
+                BashStubVariable.CALL_LOG: str(call_log),
+            }
+        ),
+    )
+    setup.run()
+    expected_scripts = [
+        PluginLocation.SETUP_CHECK_SCRIPT,
+        PluginLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT,
+        PluginLocation.SESSION_START_SCRIPT,
+        PluginLocation.SETUP_CHECK_SCRIPT,
+    ]
+    assert call_log.read_text().splitlines() == [
+        str(setup.plugin_file(script)) for script in expected_scripts
+    ]
 
 
 def test_points_the_notes_remote_at_the_one_it_was_given(
