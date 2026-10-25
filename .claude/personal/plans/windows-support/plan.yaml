@@ -18,7 +18,7 @@ items:
 - id: windows-environment-interpreter
   title: Find the package environment's interpreter on Windows
   branch: claude/blissful-goodall-l5com5
-  status: in progress
+  status: done
   track: fixes
   depends_on: []
   pull_request_number: 73
