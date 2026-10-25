@@ -1,10 +1,10 @@
 schema_version: 1
 id: plan-tracking-skills
 title: 'The plan-item skills: deciding where work goes, and recording it before doing it'
-description: The skills a session uses to place a piece of work and to keep the manifest honest about
-  it - deciding whether something is new work or a change to work in flight, opening an item's branch
-  and draft pull request before implementation rather than after, and choosing whether a kickoff asks
-  for approval or proceeds.
+description: The skills a session uses to place a piece of work and to keep the manifest honest
+  about it - deciding whether something is new work or a change to work in flight, opening
+  an item's branch and draft pull request before implementation rather than after, and choosing
+  whether a kickoff asks for approval or proceeds.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 38
 waves:
@@ -23,30 +23,18 @@ items:
   track: skills
   depends_on: []
   notes: 'The third and strongest of the three fixes recorded on `session-start-plan-and-setup-guards`,
-    split out at that item''s kickoff: the only one that makes the miss impossible rather than merely
-    unlikely, where the two that shipped make it unlikely by reporting better. A `PreToolUse` hook on
-    `Edit|Write` that refuses a source edit from a branch no plan item tracks.'
+    split out at that item''s kickoff: the only one that makes the miss impossible rather
+    than merely unlikely, where the two that shipped make it unlikely by reporting better.
+    A `PreToolUse` hook on `Edit|Write` that refuses a source edit from a branch no plan item
+    tracks.'
 - id: report-document-naming
   title: One name for the report-to-document method across the .claude tooling
   branch: null
   status: not_started
   track: skills
   depends_on: []
-  notes: 'From an upstream review of cram2 #537: "i feel like you have `as_document`, `as_dict`, `as_json`,
-    `as_json_dict` etc scattered across your different PRs". Measured rather than taken on impression:
-    `as_document` returns a dict in two files, `to_json_dict` returns a dict in two more, and `as_json`
-    returns a *str* in two others - one operation under two names, plus a genuinely different one under
-    a third.'
-- id: resolve-propagates-downstream
-  title: Merge a resolved item's fix down into the pull requests stacked on it
-  branch: claude/plan-item-kickoff-resolve-ic3qnu
-  pull_request_number: 15
-  session: https://claude.ai/code/session_01CbsPWbbD7feNc5wbJhEC9K
-  track: skills
-  notes: 'Merges a resolved item''s fix down into the pull requests stacked on it. Draft #15
-    against main, labelled release:minor. Two review rounds are pushed; the second split stack.py
-    into stack_* modules and named its strings. Three threads wait on the reviewer: whether
-    prose strings become enums too, whether the dead ci field can go, and whether in-review
-    should come from the upstream pull request instead of the label.'
-  depends_on: []
-  status: in_progress
+  notes: 'From an upstream review of cram2 #537: "i feel like you have `as_document`, `as_dict`,
+    `as_json`, `as_json_dict` etc scattered across your different PRs". Measured rather than
+    taken on impression: `as_document` returns a dict in two files, `to_json_dict` returns
+    a dict in two more, and `as_json` returns a *str* in two others - one operation under
+    two names, plus a genuinely different one under a third.'
