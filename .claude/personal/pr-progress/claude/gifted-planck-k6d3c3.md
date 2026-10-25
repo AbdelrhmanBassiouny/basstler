@@ -9,4 +9,4 @@ Done
 - tests: diverged fork at session start, refused push raises in pass; suite green (1341)
 
 Next
-- watch CI on #72; address review
+- CI green on cad412e (main merged, bash -c test fix ported); waiting on review
