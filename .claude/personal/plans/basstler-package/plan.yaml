@@ -1,18 +1,18 @@
 schema_version: 1
 id: basstler-package
 title: 'The basstler package: a standalone repository, its setup, and CRAM moving onto it'
-description: 'The workflow tooling lives in this repository as one importable package beside its Claude
-  Code plugin, and CRAM uses it as a per-user plugin (CRAM #523, merged 2026-10-20). What remains is the
-  plugin working with no committed project files, the carried krrood branch, a fully scripted stacked-pull-request
-  setup, and a shared, published development tooling package. Converting the bash layer into shims is
-  the bash-to-python plan.'
+description: 'The workflow tooling lives in this repository as one importable package beside
+  its Claude Code plugin, and CRAM uses it as a per-user plugin (CRAM #523, merged 2026-10-20).
+  What remains is the plugin working with no committed project files, the carried krrood branch,
+  and a shared, published development tooling package. Converting the bash layer into shims
+  is the bash-to-python plan.'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 4
 waves:
 - id: extraction
   name: The package stands alone
-  description: The repository itself, the branches carried into it, and the setup path a newcomer reaches
-    it by.
+  description: The repository itself, the branches carried into it, and the setup path a newcomer
+    reaches it by.
 - id: shared-tooling
   name: Shared development tooling
   description: Development tooling installed from a published package instead of copied in.
@@ -23,41 +23,20 @@ tracks:
 - id: carried-across
   name: Branches carried across the extraction
   wave: extraction
-  description: Tooling branches that arrived rewritten with the repository's history and still hold unlanded
-    work. Each gets a fresh draft pull request here.
+  description: Tooling branches that arrived rewritten with the repository's history and still
+    hold unlanded work. Each gets a fresh draft pull request here.
 - id: setup
   name: Guided setup
   wave: extraction
 - id: cram-retirement
   name: The CRAM fork sheds the tooling
   wave: extraction
-  description: The fork, and upstream cram2 through it, use basstler as a plugin and carry none of its
-    code, pull requests or plans.
+  description: The fork, and upstream cram2 through it, use basstler as a plugin and carry
+    none of its code, pull requests or plans.
 - id: development-tools
   name: Development tools package
   wave: shared-tooling
 items:
-- id: upstream-reviews-without-project-files
-  title: /upstream-reviews works for a project that commits no basstler files
-  branch: claude/upstream-reviews-no-project-files-m09n3k
-  status: done
-  track: cram-retirement
-  depends_on: []
-  pull_request_number: 56
-  session: https://claude.ai/code/session_011SJzqjiUyPK1Ra6WixNNB1
-  notes: '#56 (draft, release:minor -> v0.2.0; main merged through #33). 2026-10-24 review round
-    answered (22 threads, 17 resolved); code split into flat upstream_reviews_* modules under 500 lines.
-    Waiting on 5 open threads: shared URL and commit-id types, branch wording. Preferred read: the fork''s
-    own Action on a basstler/upstream-reviews branch; fallbacks: attached upstream over REST, a Haiku helper
-    session. Overlaps #45 in setup files.'
-- id: stamps-in-git-directory
-  title: The plugin keeps its per-clone stamp files where git never tracks them
-  branch: null
-  status: not started
-  track: cram-retirement
-  depends_on: []
-  pull_request_number: null
-  notes: 'CRAM #523 dropped the .gitignore entries for .claude/.plan-state-sync-sha and .claude/.personal-settings-sync-hash, so the stop hook flags both as untracked in CRAM every session. Session-start must keep them out of the working tree and never add a tracked change to the host project. Options: write them under $(git rev-parse --git-dir)/basstler/ (preferred, no exclude bookkeeping), or add them to .git/info/exclude and verify with git check-ignore in check-setup.sh. The user has not picked yet.'
 - id: basstler-krrood-dependency
   title: Depend on krrood's light core and use its patterns
   branch: claude/magical-albattani-9fbkd5
@@ -65,24 +44,13 @@ items:
   track: carried-across
   depends_on: []
   pull_request_number: 12
-  notes: Depend on plain krrood (its light core, with a krrood[all] extra for the rest) instead of a separate
-    krrood_core package. Exceptions in exceptions.py as DataclassExceptions, board.json through krrood's
-    serializer. The branch predates that choice and needs reworking. Its TYPE_CHECKING import of ManifestKey
-    moves to basstler.plan_model once basstler#11 lands.
+  notes: Depend on plain krrood (its light core, with a krrood[all] extra for the rest) instead
+    of a separate krrood_core package. Exceptions in exceptions.py as DataclassExceptions,
+    board.json through krrood's serializer. The branch predates that choice and needs reworking.
+    Its TYPE_CHECKING import of ManifestKey moves to basstler.plan_model once basstler#11
+    lands.
   blockers:
   - Waits on krrood publishing its light core with the krrood[all] extra.
-- id: setup-stacked-prs-skill
-  title: '/setup-stacked-prs: one guided command that sets up the stacked-pull-request workflow'
-  branch: null
-  status: not started
-  track: setup
-  depends_on: []
-  pull_request_number: null
-  notes: 'A guided skill over basstler.setup_steps subcommands, mirroring /setup-personal-notes: the skill
-    only asks the questions. Native or fork-overlay install; creates labels, writes the personal configuration,
-    emits the maintenance prompt. configure-upstream, its check-setup.sh row and docs/SETUP.md section
-    3 landed in #56 - reuse them rather than rebuild. Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306548238.
-    Build fresh on main; CRAM #110 is stale.'
 - id: plugin-from-installed-package
   title: Hooks and skill documents run from the installed package's copy of the plugin
   branch: null
@@ -91,11 +59,12 @@ items:
   depends_on: []
   pull_request_number: null
   notes: 'Option (c) of https://github.com/AbdelrhmanBassiouny/basstler/pull/32#discussion_r4367494752,
-    agreed as a later item there (#32 itself merges as option (a)). Ship plugin/ inside the wheel; hooks
-    and the documents skills tell Claude to read resolve against the installed package''s copy, so the
-    synced plugin shrinks to the SessionStart hook plus thin SKILL.md stubs that stay a stable pointer.
-    Removes skew between a lagging synced plugin and a newer installed package for everything except the
-    SKILL.md text Claude Code loads itself. Starts once #32 has merged.'
+    agreed as a later item there (#32 itself merges as option (a)). Ship plugin/ inside the
+    wheel; hooks and the documents skills tell Claude to read resolve against the installed
+    package''s copy, so the synced plugin shrinks to the SessionStart hook plus thin SKILL.md
+    stubs that stay a stable pointer. Removes skew between a lagging synced plugin and a newer
+    installed package for everything except the SKILL.md text Claude Code loads itself. Starts
+    once #32 has merged.'
 - id: cram-development-tools
   title: Install the docstring formatter and a generated AGENTS.md from the shared cram-development-tools
     package
@@ -104,10 +73,11 @@ items:
   track: development-tools
   depends_on: []
   pull_request_number: null
-  notes: 'Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306714398. A PyPI
-    package with `format` (today''s scripts/format_docstrings.py) and `agents-md [--check]`, both pre-commit
-    hooks; per cram fork #517, `agents-md` rewrites only a marked block of AGENTS.md. basstler''s part:
-    pin it in .pre-commit-config.yaml, run pre-commit in CI, delete scripts/format_docstrings.py, and wrap
-    the shared rules in AGENTS.md (hand-copied in #32) in that block. Open: a more neutral package name.'
+  notes: 'Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306714398.
+    A PyPI package with `format` (today''s scripts/format_docstrings.py) and `agents-md [--check]`,
+    both pre-commit hooks; per cram fork #517, `agents-md` rewrites only a marked block of
+    AGENTS.md. basstler''s part: pin it in .pre-commit-config.yaml, run pre-commit in CI,
+    delete scripts/format_docstrings.py, and wrap the shared rules in AGENTS.md (hand-copied
+    in #32) in that block. Open: a more neutral package name.'
   blockers:
   - Waits on the package's first PyPI release, built in the repository that hosts it.
