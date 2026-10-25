@@ -166,14 +166,16 @@ leave the rest untouched, and report it: this is a preview API, so never improvi
 The rest of the pass is one command:
 
 ```bash
-"${BASSTLER_PYTHON}" -m basstler.maintenance run-report --json
+"${BASSTLER_PYTHON}" -m basstler.maintenance run-report
 ```
 
-It performs the fast-forward, the restack and the promotion, and emits the whole run as one
-document. Read that document and render it into the finish summary below. Do not re-derive any of
-it, and do not run the individual commands as well - that does the same work twice.
+It performs the fast-forward, the restack and the promotion, and prints the finish summary as
+markdown, with titles and links already filled in. Do not re-derive any of it, do not fetch the
+pull requests to look up their titles, and do not run the individual commands as well - that does
+the same work twice. `--json` prints the same run as one machine-readable document instead, for
+tooling; a session never needs it.
 
-**Act on the status, which the document leads with and the process exits with:**
+**Act on the status, which the summary leads with and the process exits with:**
 
 | status | what you do |
 |---|---|
@@ -229,22 +231,14 @@ yourself.
 
 ## Finish
 
-Record every branch reported on this run - the summary must list it, since a comment is not
-guaranteed to be seen.
+Relay `run-report`'s summary as it printed it. Add only what the session did itself, which the
+executor cannot know:
 
-The **top** of the finish summary must list all pending upstream create-links: any built this run,
-and any fork pull request still carrying `promotion-link-sent` but not yet `in-review` (re-listed from
-prior runs, its link rebuilt with `promotion-link`). This section appears at the top even when
-nothing new was built, as long as any are pending. List each pull request's number, title, branch and
-one-click link.
-
-Right after the links, list every branch reported on this run: its number and branch, the
-conflicting files or failing check, the session link addressed (or that the body had none), and a
-link to the comment posted. Then list every pull request whose reparent could **not** be completed:
-its number, the base it is stuck on, the base it should have, and which step of the native-stack
-sequence stopped you - a stack left dissolved or half-rebuilt needs attention immediately and
-nothing else surfaces it. Then summarise what landed, what was restacked, and what was promoted,
-then every `skipped` pull request with its number, branch and reason, plus anything you stopped on.
+- every pull request whose reparent in step 1 could **not** be completed: its number, the base it is
+  stuck on, the base it should have, and which step of the native-stack sequence stopped you - a
+  stack left dissolved or half-rebuilt needs attention immediately and nothing else surfaces it;
+- every failing check you reported, with the comment's link;
+- anything you stopped on.
 
 ## Command reference - resuming a partial run
 
