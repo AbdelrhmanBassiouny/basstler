@@ -38,3 +38,16 @@ items:
     taken on impression: `as_document` returns a dict in two files, `to_json_dict` returns
     a dict in two more, and `as_json` returns a *str* in two others - one operation under
     two names, plus a genuinely different one under a third.'
+- id: skill-document-links
+  title: Skills cite their shared documents with relative links, not shell variables
+  branch: null
+  status: not_started
+  track: skills
+  depends_on:
+  - stack-maintenance/manifest-currency-first
+  notes: 'From the basstler#48 review (discussion_r4372858558). Claude Code substitutes only
+    $ARGUMENTS and ${CLAUDE_*} in a SKILL.md, so `${SCOPE_DECISION_DOCUMENT}` and five other
+    *_DOCUMENT variables (EXECUTION_MODES, PLAN_ITEM_GATHERING, PLAN_SCHEMA, DEPENDENCY_READINESS,
+    PULL_REQUEST_DATA_FETCHING; 22 references) reach the model unexpanded. Replace them with
+    relative Markdown links, as #48 did for manifest-staleness.md; drop each variable no
+    script uses (check-setup.sh uses PLAN_SCHEMA_DOCUMENT). Depends on #48: same lines.'
