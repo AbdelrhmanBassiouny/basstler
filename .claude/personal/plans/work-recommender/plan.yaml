@@ -1,10 +1,10 @@
 schema_version: 1
 id: work-recommender
 title: A ranked list of what to work on next, across every plan and repository
-description: 'The hub page recommends what to do next across all plans and repositories: bug fixes first,
-  then cleanup and duplication removal, then features, with PhD work (EQL, KRROOD, robotics) kept ahead
-  of side work. basstler fixes rank high because they keep the workflow running; basstler features rank
-  by how much they help the PhD work.'
+description: 'The hub page recommends what to do next across all plans and repositories: bug
+  fixes first, then cleanup and duplication removal, then features, with PhD work (EQL, KRROOD,
+  robotics) kept ahead of side work. basstler fixes rank high because they keep the workflow
+  running; basstler features rank by how much they help the PhD work.'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 58
 waves:
@@ -23,10 +23,11 @@ items:
   track: recommender
   depends_on: []
   status: not_started
-  notes: 'Items gain kind (bug, cleanup, feature), defaulting from the bug label on the PR; plans gain
-    focus (phd for EQL, KRROOD and robotics work; tooling for basstler; side), items may override it,
-    and a tooling feature carries leverage (high or low: how much it speeds up PhD work). Validated on
-    save as enums in plan_model; the existing plans are backfilled.'
+  notes: 'Items gain kind (bug, cleanup, feature), defaulting from the bug label on the PR;
+    plans gain focus (phd for EQL, KRROOD and robotics work; tooling for basstler; side),
+    items may override it, and a tooling feature carries leverage (high or low: how much it
+    speeds up PhD work). Validated on save as enums in plan_model; the existing plans are
+    backfilled.'
 - id: priority-policy
   title: Keep the owner's priorities in one policy file on the registry's notes
   branch: null
@@ -35,10 +36,11 @@ items:
   depends_on:
   - item-kind-and-focus
   status: not_started
-  notes: 'A priorities.yaml beside _hub.yaml, parsed into dataclasses: kind order (bug, cleanup, feature),
-    focus order (phd, then tooling bugs and cleanup, then high-leverage tooling features, then the rest),
-    and a side-work cap - at most two of the top five slots go to non-PhD work, so most of each day stays
-    on the PhD. Defaults match this; the owner edits the file to retune.'
+  notes: 'A priorities.yaml beside _hub.yaml, parsed into dataclasses: kind order (bug, cleanup,
+    feature), focus order (phd, then tooling bugs and cleanup, then high-leverage tooling
+    features, then the rest), and a side-work cap - at most two of the top five slots go to
+    non-PhD work, so most of each day stays on the PhD. Defaults match this; the owner edits
+    the file to retune.'
 - id: ranked-work-list
   title: Rank every actionable item across all hub repositories
   branch: null
@@ -47,10 +49,11 @@ items:
   depends_on:
   - priority-policy
   status: not_started
-  notes: 'A recommender module loads every hub repository''s plans and live PR state and keeps what can
-    be acted on now: startable items (dependencies landed, not blocked), and open PRs with red CI, conflicts
-    or unresolved review threads. Ordered by the policy with the side-work cap applied; each entry gives
-    its reason and a kickoff or resolve link. Untracked open PRs join as ''track this'' entries.'
+  notes: 'A recommender module loads every hub repository''s plans and live PR state and keeps
+    what can be acted on now: startable items (dependencies landed, not blocked), and open
+    PRs with red CI, conflicts or unresolved review threads. Ordered by the policy with the
+    side-work cap applied; each entry gives its reason and a kickoff or resolve link. Untracked
+    open PRs join as ''track this'' entries.'
 - id: hub-recommendation-panel
   title: Show the ranked list on the hub page as a sidebar and a full tab
   branch: null
@@ -59,6 +62,7 @@ items:
   depends_on:
   - ranked-work-list
   status: not_started
-  notes: The hub page carries a 'Next up' sidebar with the top five and a 'Recommended' tab with the whole
-    ranked list, grouped by priority with the reasons. Rebuilt with the site on every plan change (workflow-cutover/plan-site-action),
-    so it is always current; no Artifact version.
+  notes: The hub page carries a 'Next up' sidebar with the top five and a 'Recommended' tab
+    with the whole ranked list, grouped by priority with the reasons. Rebuilt with the site
+    on every plan change (team-basstler's plan site), so it is always current; no Artifact
+    version.
