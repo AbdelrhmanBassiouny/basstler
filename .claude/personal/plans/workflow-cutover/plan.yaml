@@ -1,10 +1,10 @@
 schema_version: 1
 id: workflow-cutover
 title: 'Cutover: one published site, no scheduled LLM run, the old branches retired'
-description: The end state the workflow-unification work was for. Plan dashboards publish themselves from
-  a single Pages site; the scheduled LLM Routine is replaced by a plain Action for the deterministic duties
-  and on-demand sessions for the judgment ones; and the superseded tooling branch is tagged and deleted
-  once one green cycle has run on the new paths.
+description: The end state the workflow-unification work was for. Plan dashboards publish
+  themselves from a single Pages site; the scheduled LLM Routine is replaced by a plain Action
+  for the deterministic duties and on-demand sessions for the judgment ones; and the superseded
+  tooling branch is tagged and deleted once one green cycle has run on the new paths.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 42
 waves:
@@ -22,35 +22,21 @@ items:
   status: not_started
   track: cutover
   depends_on: []
-  notes: |
-    Raised by the owner on #6's dashboard.html thread (2026-10-18), offered as its own item; proposed there and awaiting confirmation. htpy (typed, dependency-free) plus dataclass section models, a StrEnum of CSS classes and a factory from Plan to page; the CSS moves to one static stylesheet. Every page already renders through TemplatePage, so only render() changes. If the owner folds it into #6 instead, drop this item.
-- id: plan-site-setup
-  title: Setup registers the repository in the hub, and sessions are told the site links
-  branch: null
-  status: not_started
-  track: cutover
-  depends_on: []
-  notes: |
-    /setup-personal-notes adds the repository to the registry's hub file and copies the file onto this repository's notes, with no question asked; a repository with no registry configured becomes its own. The session-start summary prints the site links worked out from the hub file - the hub, this repository, and this branch's plan and item.
-- id: routine-cutover
-  title: 'Retire the scheduled LLM Routine: stack maintenance runs at the start of plan-item work'
-  branch: claude/stack-maintenance-action
-  status: done
-  session: https://claude.ai/code/session_019sAtT3YPyFe7yminnDEdSG
-  track: cutover
-  pull_request_number: 16
-  blockers:
-  - Deleting the live Routine trigger on CRAM is the owner's step; after #16 merges its prompt names a removed flag (--non-interactive).
-  depends_on: []
-  notes: 'Reshaped 2026-10-24 with the owner: no Action and no schedule. plan-item-gathering.md starts kickoff and resolve with /stacked-pr-maintenance when an upstream is named (ba02b79); reparents stay with its MCP step. a7f2e00 removes the Routine from the code (routine-prompt.md, --non-interactive, RoutineText), so #16 is release:major. #15 (restack --stacked-on) complements it and will conflict at the import level.'
+  notes: 'Raised by the owner on #6''s dashboard.html thread (2026-10-18), offered as its
+    own item; proposed there and awaiting confirmation. htpy (typed, dependency-free) plus
+    dataclass section models, a StrEnum of CSS classes and a factory from Plan to page; the
+    CSS moves to one static stylesheet. Every page already renders through TemplatePage, so
+    only render() changes. If the owner folds it into #6 instead, drop this item.
+
+    '
 - id: tooling-branch-retirement
   title: Tag and delete claude/stack-workflow-tooling after one green cycle
   branch: null
   status: not_started
   track: cutover
-  depends_on:
-  - routine-cutover
-  notes: Only after one full maintenance cycle and one site-Action cycle (team-basstler/site-action) have run green on the new paths.
-    claude/stack-workflow-tooling is still on the CRAM fork (checked 2026-10-21). Tag for history first.
-    Tag pushes and branch deletes get a 403 through a session's git proxy, so those two steps run outside
-    the harness; a session can verify and prepare the commands.
+  depends_on: []
+  notes: Only after one full maintenance cycle and one site-Action cycle (team-basstler/site-action)
+    have run green on the new paths. claude/stack-workflow-tooling is still on the CRAM fork
+    (checked 2026-10-21). Tag for history first. Tag pushes and branch deletes get a 403 through
+    a session's git proxy, so those two steps run outside the harness; a session can verify
+    and prepare the commands.
