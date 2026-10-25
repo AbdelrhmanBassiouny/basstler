@@ -36,7 +36,7 @@ items:
   session: https://claude.ai/code/session_01GJS7SMhFB2spY25FJ4Zq88
   pull_request_number: 63
   depends_on: []
-  notes: '#63 open (draft). Deploys only when a rendered page changed (site digest compared with the published one). Open on the review thread: whether pull_request events should also trigger a build so live PR state stays fresh - the standing rule names only plan pushes, team issue events and manual runs. After merge: Pages source set to Actions on basstler, one manual run, install-trigger on the notes branch, hub site_url pointed at basstler''s Pages. No schedule.'
+  notes: '#63 open (draft). Builds on a plan push, a registry pull request event (pull_request_target dispatching plan-site.yml) or a manual run; deploys only when a rendered page changed (site digest). Review thread resolved. After merge: Pages source set to Actions on basstler, one manual run, install-trigger on the notes branch, hub site_url pointed at basstler''s Pages. No schedule.'
 - id: site-design
   title: An elegant, robust site - one stylesheet, light and dark, waves as columns, live chips, build health
   branch: null
