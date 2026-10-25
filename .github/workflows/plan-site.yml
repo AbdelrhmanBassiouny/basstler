@@ -1,0 +1,27 @@
+name: Plan site
+
+# Publishes this repository's plan site. The notes branch's plan-site-trigger.yml starts
+# it on every plan push; a renderer change on main and a manual run start it too.
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "src/basstler/**"
+      - ".github/workflows/plan-site-build.yml"
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: plan-site
+  cancel-in-progress: false
+
+jobs:
+  site:
+    uses: ./.github/workflows/plan-site-build.yml
+    with:
+      basstler_branch_or_tag: ${{ github.sha }}

@@ -18,11 +18,12 @@ import sys
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from .script_runner import BashScriptRunner
 from basstler.locations import PackageLocation, PluginLocation
 from basstler.maintenance_git_commands import GitCommandRunner
+from basstler.personal_notes_branch import PersonalNotesBranch, PersonalNotesLocation
 from basstler.shell_configuration import ShellConfigurationFunction
 
 from .constants.environment import (
@@ -566,6 +567,24 @@ class ScratchRepository:
             "push", "--quiet", str(self.notes_remote_path), ScratchBranch.PERSONAL_NOTES
         )
         self.run_git("checkout", "--quiet", ScratchBranch.WORK)
+
+    def personal_notes_branch(self) -> PersonalNotesBranch:
+        """
+        :return: The notes branch as this repository's own configuration resolves it.
+        """
+        return PersonalNotesBranch(
+            location=PersonalNotesLocation.resolve(self.project_root, {}),
+            git=GitCommandRunner(self.project_root),
+        )
+
+    def published_notes_file(self, path: PurePosixPath) -> str | None:
+        """
+        :param path: A file relative to the notes branch's root.
+        :return: Its content on the notes remote's branch, if it exists there.
+        """
+        checkout = self.clone_notes_branch(self.project_root.parent / "verify")
+        file = checkout / path
+        return file.read_text() if file.exists() else None
 
     def clone_notes_branch(self, destination: Path) -> Path:
         """

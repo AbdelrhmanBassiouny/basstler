@@ -1,0 +1,68 @@
+name: Plan site (build and deploy)
+
+# Builds the plan site from every repository the registry's hub file lists, and deploys
+# it to the calling repository's GitHub Pages. Pages deploys only from the calling
+# repository's default branch, so callers run there.
+
+on:
+  workflow_call:
+    inputs:
+      basstler_branch_or_tag:
+        description: "The basstler branch, tag or commit whose renderer builds the site"
+        required: true
+        type: string
+      registry:
+        description: "The owner/name repository whose notes hold the hub file; the calling repository when empty"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build the plan site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install basstler
+        run: pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_branch_or_tag }}"
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Build the site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python -m basstler.build_site
+          --registry "${{ inputs.registry || github.repository }}"
+          --site-url "${{ steps.pages.outputs.base_url }}"
+          --output _site
+
+      - name: Upload the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4

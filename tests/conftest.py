@@ -19,6 +19,7 @@ import pytest
 # tests this checkout's plugin rather than whichever release that session synced.
 os.environ["BASSTLER_PLUGIN_ROOT"] = str(Path(__file__).resolve().parents[1] / "plugin")
 
+from .constants.paths import PersonalNotesPath
 from .executable_stubs import ExecutableStubDirectory
 from .scratch_repository import ScratchRepository
 from .upstream_reviews_replay import RecordedResponse, ReplayingClient
@@ -34,6 +35,21 @@ def scratch_repository(tmp_path: Path) -> ScratchRepository:
     :return: The scratch repository.
     """
     return ScratchRepository.create(tmp_path)
+
+
+@pytest.fixture
+def notes_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
+    """
+    A scratch repository on a work branch, whose configured notes remote carries a
+    published notes branch.
+    """
+    scratch_repository.write("README.md", "scratch repo\n")
+    scratch_repository.commit_everything("initial commit")
+    scratch_repository.publish_notes_branch(
+        {PersonalNotesPath.SAMPLE_NOTES: "- a rule\n"}
+    )
+    scratch_repository.resolve_notes_remote_to()
+    return scratch_repository
 
 
 @pytest.fixture
