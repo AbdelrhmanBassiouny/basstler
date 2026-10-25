@@ -372,6 +372,9 @@ STACK_MODULE="basstler.stack"
 # maintenance: the deterministic maintenance executor a stacked-PR pass
 # runs - board export, fast-forward, restack, promote, run-report.
 MAINTENANCE_MODULE="basstler.maintenance"
+# basstler.maintenance.default_branch_sync: fast-forwards the default branch every
+# session starts from to the upstream this fork tracks - run by session-start.sh.
+DEFAULT_BRANCH_SYNC_MODULE="basstler.maintenance.default_branch_sync"
 # basstler.plan.check_scope_overlap: reports which of an item's paths a given branch
 # already touches - the mechanical half of add-plan-item's scope decision.
 CHECK_SCOPE_OVERLAP_MODULE="basstler.plan.check_scope_overlap"
