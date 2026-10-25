@@ -114,3 +114,5 @@ sits in this clone, and installs the clone editable.
 basstler is a personal project by Abdelrhman Bassiouny (<bido.bassuny@gmail.com>), developed
 independently of any employer or institution. It is licensed under the
 [Apache License 2.0](LICENSE); see [NOTICE](NOTICE) for attribution.
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
