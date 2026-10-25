@@ -191,6 +191,13 @@ made. Everything else - `fast_forward`, `landed`, `restacked`, `promoted`,
 `pushed` or `up-to-date` is a branch the pass could not publish; the executor has already labelled
 and commented on it, so name it in the summary and move on.
 
+A `skipped` entry is a pull request open on the fork whose head the pass cannot maintain, so it was
+left out of the restack, the promotion and the landed list, and nothing was labelled or commented on
+it. Its `pull_request` is the board's entry for it, and its `reason` says why it was skipped:
+`head-on-another-fork` - the head lives on another contributor's fork (`head_repository` names it), which this credential cannot push to - or `head-repository-deleted` -
+the repository its head lived in is gone. Its base is still on the fork, so step 1 still reparents it
+when that base lands. List it in the summary as skipped, with its reason; it is not yours to fix.
+
 The one exception is `integration-failed`: integrating the parent failed without conflicting on
 anything, so the branch is not what needs fixing and its owner was deliberately not told. Its
 `explanation` carries what git said - an untracked file in the way, unrelated histories, a
@@ -237,7 +244,7 @@ link to the comment posted. Then list every pull request whose reparent could **
 its number, the base it is stuck on, the base it should have, and which step of the native-stack
 sequence stopped you - a stack left dissolved or half-rebuilt needs attention immediately and
 nothing else surfaces it. Then summarise what landed, what was restacked, and what was promoted,
-plus anything you stopped on.
+then every `skipped` pull request with its number, branch and reason, plus anything you stopped on.
 
 ## Command reference - resuming a partial run
 

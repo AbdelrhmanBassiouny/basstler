@@ -21,6 +21,7 @@ os.environ["BASSTLER_PLUGIN_ROOT"] = str(Path(__file__).resolve().parents[1] / "
 
 from .constants.paths import PersonalNotesPath
 from .executable_stubs import ExecutableStubDirectory
+from .maintenance_fork import ForkCheckout
 from .scratch_repository import ScratchRepository
 from .upstream_reviews_replay import RecordedResponse, ReplayingClient
 
@@ -73,3 +74,14 @@ def paginated_client() -> ReplayingClient:
             RecordedResponse.PULL_REQUEST_PAGE_TWO.load(),
         ]
     )
+
+
+@pytest.fixture
+def fork_checkout(tmp_path: Path) -> ForkCheckout:
+    """
+    A real fork checkout with both remotes wired to local bare repositories.
+
+    :param tmp_path: pytest's per-test temporary directory.
+    :return: The checkout.
+    """
+    return ForkCheckout.create(tmp_path)
