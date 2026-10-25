@@ -1,7 +1,8 @@
 name: Plan site
 
 # Publishes this repository's plan site. The notes branch's plan-site-trigger.yml starts
-# it on every plan push; a renderer change on main and a manual run start it too.
+# it on every plan push, plan-site-pull-request-trigger.yml whenever a pull request
+# changes state; a renderer change on main and a manual run start it too.
 
 on:
   workflow_dispatch:

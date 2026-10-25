@@ -250,6 +250,14 @@ class ProjectLocation(PathEnumeration):
     The workflow on the notes branch that starts the plan site's build on a plan push.
     """
 
+    PLAN_SITE_PULL_REQUEST_TRIGGER_WORKFLOW = (
+        WORKFLOWS / "plan-site-pull-request-trigger.yml"
+    )
+    """
+    The workflow on a registry's branches that starts the plan site's build when a pull
+    request changes state.
+    """
+
     PERSONAL_STACK_CONFIGURATION = PERSONAL_NOTES / "stack.toml"
     """
     The per-user override of :attr:`PROJECT_STACK_CONFIGURATION`.

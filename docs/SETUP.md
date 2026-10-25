@@ -106,7 +106,10 @@ notes branch starts that build through a trigger installed on the notes branch:
 ```
 
 Turn Pages on once under the registry's *Settings → Pages*, with *GitHub Actions* as the
-source. Nothing runs on a schedule: a plan push, a renderer change on `main` or a manual
+source. The default branch's `plan-site-pull-request-trigger.yml` starts the same build
+whenever one of the registry's pull requests is opened, merged, closed, moved in or out of
+draft or relabelled, so the pull request state the pages show stays current. Nothing runs
+on a schedule: a plan push, a pull request event, a renderer change on `main` or a manual
 run of *Plan site* rebuilds the site. Every build renders every page - each plan, each
 repository's index and the hub - and deploys only when one of them differs from the
 published site, so a push that changes nothing a page shows deploys nothing. Plans on

@@ -109,6 +109,32 @@ def test_the_build_uploads_and_deploys_only_a_changed_site():
     assert jobs["deploy"]["if"] == f"needs.build.outputs.{output_name} == 'true'"
 
 
+# %% the pull request trigger
+
+
+def test_the_pull_request_trigger_runs_on_pull_request_events_in_the_base_s_context():
+    workflow = repository_workflow(ProjectLocation.PLAN_SITE_PULL_REQUEST_TRIGGER_WORKFLOW)
+    assert list(workflow_events(workflow)) == ["pull_request_target"]
+
+
+def test_the_pull_request_trigger_starts_the_workflow_publishing_the_site():
+    workflow = repository_workflow(ProjectLocation.PLAN_SITE_PULL_REQUEST_TRIGGER_WORKFLOW)
+    (job,) = workflow["jobs"].values()
+    (step,) = job["steps"]
+    command = shlex.split(step["run"])
+    assert command[:4] == [
+        "gh",
+        "workflow",
+        "run",
+        ProjectLocation.PLAN_SITE_WORKFLOW.name,
+    ]
+
+
+def test_the_pull_request_trigger_may_only_start_workflows():
+    workflow = repository_workflow(ProjectLocation.PLAN_SITE_PULL_REQUEST_TRIGGER_WORKFLOW)
+    assert workflow["permissions"] == {"actions": "write"}
+
+
 # %% installing
 
 
