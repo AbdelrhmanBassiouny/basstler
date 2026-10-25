@@ -10,13 +10,15 @@ from enum import StrEnum
 from pathlib import Path
 
 import pytest
+import yaml
 
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan.item_bootstrap import PlanDocument
-from basstler.plan.model import PlanManifest
+from basstler.plan.model import ManifestKey, PlanManifest
 from basstler.shell_configuration import ShellConfigurationFunction
 
 from ..constants.paths import DatasetLocation, PersonalNotesPath
+from ..fixture_plans import FixturePlanId, ForeignItemId, foreign_reference
 from ..project_declaration import ProjectDeclaration
 from ..scratch_repository import PackageSourceFile, ScratchRepository
 
@@ -176,6 +178,65 @@ def test_refuses_a_manifest_the_dashboard_would_reject(
     )
     assert not (
         verify_checkout / ProjectLocation.PLANS / DatasetPlan.IDENTIFIER
+    ).exists()
+
+
+def save_depending_on(
+    repository: ScratchRepository, dependency_text: str
+) -> subprocess.CompletedProcess[str]:
+    """
+    Publish the fixture's other plan to the notes branch, then save the dataset plan
+    with its item depending on *dependency_text*.
+
+    :param repository: A fixture-built scratch repository.
+    :param dependency_text: The one entry of the saved item's ``depends_on``.
+    :return: The finished hook.
+    """
+    other_plan_manifest = (
+        DatasetLocation.PLANS.value / FixturePlanId.OTHER / PlanDocument.MANIFEST
+    )
+    repository.update_notes_branch_file(
+        ProjectLocation.PLANS / FixturePlanId.OTHER / PlanDocument.MANIFEST,
+        other_plan_manifest.read_text(),
+    )
+    manifest = yaml.safe_load(DatasetLocation.PLAN.read_text())
+    manifest[ManifestKey.ITEMS.key][0][ManifestKey.DEPENDS_ON.key] = [dependency_text]
+    manifest_path = repository.write(PlanDocument.MANIFEST, yaml.safe_dump(manifest))
+    roadmap_path = repository.write(
+        PlanDocument.ROADMAP, DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text()
+    )
+    return run_save_plan(
+        repository,
+        DatasetPlan.IDENTIFIER,
+        SavePlanOption.MANIFEST,
+        str(manifest_path),
+        SavePlanOption.ROADMAP,
+        str(roadmap_path),
+    )
+
+
+def test_saves_a_manifest_naming_an_item_of_a_plan_on_the_notes_branch(
+    save_plan_repository: ScratchRepository,
+):
+    result = save_depending_on(
+        save_plan_repository, foreign_reference(ForeignItemId.READY)
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert saved_plan_directory(save_plan_repository, DatasetPlan.IDENTIFIER).exists()
+
+
+def test_refuses_a_manifest_naming_a_plan_the_notes_branch_lacks(
+    save_plan_repository: ScratchRepository,
+):
+    result = save_depending_on(
+        save_plan_repository,
+        foreign_reference(ForeignItemId.READY, FixturePlanId.ABSENT),
+    )
+
+    assert result.returncode == 1
+    assert not saved_plan_directory(
+        save_plan_repository, DatasetPlan.IDENTIFIER
     ).exists()
 
 
