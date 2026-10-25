@@ -40,9 +40,11 @@ items:
     two names, plus a genuinely different one under a third.'
 - id: skill-document-links
   title: Skills cite their shared documents with relative links, not shell variables
-  branch: null
-  status: not_started
+  branch: claude/elegant-clarke-4k3ske
+  status: in progress
   track: skills
+  pull_request_number: 74
+  session: https://claude.ai/code/session_01TQn8K1dWSNVqA9mSNoUtFo
   depends_on:
   - stack-maintenance/manifest-currency-first
   notes: 'From the basstler#48 review (discussion_r4372858558). Claude Code substitutes only
