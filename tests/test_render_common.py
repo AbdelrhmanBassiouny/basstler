@@ -3,7 +3,14 @@ Tests for render_common.py: the Jinja2 environment factory and markdown-to-HTML
 rendering (delegated to the `markdown` library, plus a heading-level shift on top).
 """
 
+import pytest
+
+from basstler.dashboard.plan_page import DashboardRenderer
+from basstler.plan_site.hub_page import HubPage
+from basstler.dashboard.index_page import IndexPage
+from basstler.locations import PackageLocation
 from basstler.render_common import (
+    TemplatePage,
     create_template_environment,
     render_markdown_to_html,
     sanitize_http_url,
@@ -144,3 +151,10 @@ def test_sanitize_http_url_rejects_a_data_url():
 
 def test_sanitize_http_url_passes_through_none():
     assert sanitize_http_url(None) is None
+
+
+@pytest.mark.parametrize("page", [DashboardRenderer, IndexPage, HubPage])
+def test_every_page_names_a_template_the_package_ships(
+    page: type[TemplatePage],
+) -> None:
+    assert (PackageLocation.TEMPLATES.value / page.template).is_file()

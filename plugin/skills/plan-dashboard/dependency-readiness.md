@@ -12,7 +12,7 @@ every other constant referenced by name in this system, so nothing "more
 shared" exists yet for it to point at):
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 ```
 
 For the item's `depends_on` list, follow `pr-data-fetching.md`'s procedure
@@ -20,14 +20,21 @@ For the item's `depends_on` list, follow `pr-data-fetching.md`'s procedure
 state into `/tmp/pr_data.json`. Then run:
 
 ```bash
-python3 -m "${CHECK_DEPENDENCY_READINESS_MODULE}" \
+"${BASSTLER_PYTHON}" -m "${CHECK_DEPENDENCY_READINESS_MODULE}" \
   --plan /tmp/plan.yaml \
   --pr-data /tmp/pr_data.json \
-  --item <item-id>
+  --item <item-id> \
+  [--plans-dir /tmp/plans]
 ```
 
+Pass `--plans-dir` whenever the item's `depends_on` names another plan
+(`<plan-id>/<item-id>`) - the same directory `/plan-dashboard` extracts, so
+this reports the readiness the dashboard shows. Without it such a dependency
+resolves to nothing and is reported not ready, which is the safe answer but
+not the true one.
+
 rather than re-deriving the readiness rule in either skill — it reuses
-`build_dashboard.py`'s own `Item.is_ready_to_unblock_dependents()`, so
+`dashboard/plan.py`'s own `Item.is_ready_to_unblock_dependents()`, so
 neither skill can ever silently disagree with the dashboard about what
 counts as ready. It prints one JSON list, one entry per `depends_on` entry,
 in order: `[{"identifier": ..., "title": ..., "live_state": ...,

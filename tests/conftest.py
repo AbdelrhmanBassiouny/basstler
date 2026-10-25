@@ -1,48 +1,28 @@
 """
 Fixtures shared by every suite in this directory.
 
-basstler is a plain top-level directory on the repository root, importable with no
-install. Because test and this directory are packages, pytest puts the directory above
-the outermost of them - the repository root - on sys.path before it imports this file,
-so the import works from any working directory.
+basstler is imported from its editable install, which is this clone's own source under
+basstler/src, as CI installs it and as a session start installs it into basstler/.venv.
 
 This suite runs in the lightweight test_basstler CI job with --confcutdir pointed
 here, so the repository-root test/conftest.py - which imports the robotics stack that
 job does not install - is never loaded for it.
 """
 
-import urllib.request
+import os
 from pathlib import Path
 
 import pytest
 
-from basstler.locations import PackageLocation
+# A session running the plugin exports BASSTLER_PLUGIN_ROOT as its synced copy, which
+# basstler.locations reads on import; pinned before anything imports it, so the suite
+# tests this checkout's plugin rather than whichever release that session synced.
+os.environ["BASSTLER_PLUGIN_ROOT"] = str(Path(__file__).resolve().parents[1] / "plugin")
 
 from .executable_stubs import ExecutableStubDirectory
-from .github_api_replay import ReplayingGitHubApi
+from .maintenance.fork import ForkCheckout
 from .scratch_repository import ScratchRepository
-from .upstream_reviews_replay import RecordedResponse, ReplayingClient
-
-
-@pytest.fixture(autouse=True)
-def board_snapshot_set_aside() -> None:
-    """
-    Hide any board snapshot this checkout happens to be carrying, for every test.
-
-    ``board.json`` lives beside ``stack.py`` rather than in the scratch repository a test
-    runs in, so a developer who has run a maintenance pass has one - and the tests that
-    assert on a *missing* board would fail for a reason that has nothing to do with them.
-    Setting it aside makes the suite independent of whether a pass has been run here, and
-    restores it afterwards so running the tests never costs somebody their snapshot.
-    """
-    board = PackageLocation.BOARD.value
-    if not board.exists():
-        yield
-        return
-    set_aside = board.with_suffix(".json.set-aside-for-tests")
-    board.rename(set_aside)
-    yield
-    set_aside.rename(board)
+from .upstream_reviews.replay import RecordedResponse, ReplayingClient
 
 
 @pytest.fixture
@@ -81,14 +61,11 @@ def paginated_client() -> ReplayingClient:
 
 
 @pytest.fixture
-def github_api(monkeypatch: pytest.MonkeyPatch) -> ReplayingGitHubApi:
+def fork_checkout(tmp_path: Path) -> ForkCheckout:
     """
-    GitHub's REST API, answered in-process for the duration of one test.
+    A real fork checkout with both remotes wired to local bare repositories.
 
-    :param monkeypatch: pytest's patcher, which restores the real ``urlopen``
-        afterwards.
-    :return: The stand-in, carrying no labels yet.
+    :param tmp_path: pytest's per-test temporary directory.
+    :return: The checkout.
     """
-    replaying = ReplayingGitHubApi()
-    monkeypatch.setattr(urllib.request, "urlopen", replaying)
-    return replaying
+    return ForkCheckout.create(tmp_path)

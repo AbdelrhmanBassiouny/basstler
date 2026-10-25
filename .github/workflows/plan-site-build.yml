@@ -1,0 +1,91 @@
+name: Plan site (build and deploy)
+
+# Builds the plan site from every repository the registry's hub file lists, and deploys
+# it to the calling repository's GitHub Pages when its pages differ from the published
+# ones. Pages deploys only from the calling repository's default branch, so callers run
+# there.
+
+on:
+  workflow_call:
+    inputs:
+      basstler_branch_or_tag:
+        description: "The basstler branch, tag or commit whose renderer builds the site"
+        required: true
+        type: string
+      registry:
+        description: "The owner/name repository whose notes hold the hub file; the calling repository when empty"
+        required: false
+        type: string
+        default: ""
+
+# One build runs at a time and is never cancelled; of the builds started meanwhile, only
+# the newest waits, so a burst of starts ends in one build of the latest state.
+concurrency:
+  group: plan-site-build
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    name: Build the plan site
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      site_changed: ${{ steps.compare.outputs.site_changed }}
+    steps:
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install basstler
+        run: pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_branch_or_tag }}"
+
+      - name: Configure Pages
+        id: pages
+        uses: actions/configure-pages@v5
+
+      - name: Build the site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python -m basstler.plan_site
+          --registry "${{ inputs.registry || github.repository }}"
+          --site-url "${{ steps.pages.outputs.base_url }}"
+          --output _site
+
+      # The run number in the query keeps Pages' cache from answering with an older digest.
+      - name: Compare with the published site
+        id: compare
+        run: |
+          if curl --fail --silent --location --output published-digest.txt \
+              "${{ steps.pages.outputs.base_url }}/site-digest.txt?run=${{ github.run_id }}-${{ github.run_attempt }}" \
+              && cmp --silent published-digest.txt _site/site-digest.txt; then
+            echo "site_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "site_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Upload the site
+        if: steps.compare.outputs.site_changed == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: build
+    if: needs.build.outputs.site_changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
