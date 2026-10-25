@@ -193,7 +193,7 @@ Read-only: editing it here changes nothing. To read another item, run
   "\${BASSTLER_PYTHON}" -m ${PLAN_MANIFEST_TOOLS_MODULE} item <manifest-file> --id <item-id>
 on a copy from 'git show FETCH_HEAD:${PLAN_MANIFEST_PATH}' after fetching
 '${NOTES_BRANCH}' - never read the whole manifest when one item will do.
-To change the plan, record the item with plan_item_bootstrap's 'record', or
+To change the plan, record the item with basstler.plan.item_bootstrap's 'record', or
 fetch both files fresh, edit them, and run
   "\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" ${PLAN_ID} --manifest <file> --roadmap <file>
 which drops landed items, removes a plan with none left, and refuses a plan

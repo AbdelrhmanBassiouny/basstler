@@ -34,7 +34,7 @@ resolves to nothing and is reported not ready, which is the safe answer but
 not the true one.
 
 rather than re-deriving the readiness rule in either skill — it reuses
-`build_dashboard.py`'s own `Item.is_ready_to_unblock_dependents()`, so
+`dashboard/plan.py`'s own `Item.is_ready_to_unblock_dependents()`, so
 neither skill can ever silently disagree with the dashboard about what
 counts as ready. It prints one JSON list, one entry per `depends_on` entry,
 in order: `[{"identifier": ..., "title": ..., "live_state": ...,

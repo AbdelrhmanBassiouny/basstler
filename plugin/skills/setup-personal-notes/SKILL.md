@@ -178,7 +178,7 @@ README and a short workflow file that calls basstler's reusable workflow by
 reference, so it works on a fork of any repository. Run again, it updates that
 workflow to the basstler branch or tag this session's package was installed at.
 Then tell
-the user the one step left to them, which `python -m basstler.setup_steps` also
+the user the one step left to them, which `python -m basstler.setup.steps` also
 prints: a fork starts with Actions off, so they enable them once at
 `https://github.com/<fork>/actions`. Until they do, `/upstream-reviews` reads
 the upstream from the session instead.
@@ -224,7 +224,7 @@ A fresh fork starts with GitHub's own default labels and none of the ones this
 tooling uses. That matters in two different ways, and only the first is
 cosmetic:
 
-- `merged` is *read* by `build_dashboard.py`, which treats it as proof a pull
+- `merged` is *read* by `pull_request_state.py`, which treats it as proof a pull
   request landed even when GitHub's merge API never recorded it. Without the
   label, such an item reads as closed-unmerged on every dashboard.
 - `bug` and `in-review` are *applied* by the conventions in

@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+"""
+Deterministic executor for the stacked-PR maintenance pass.
+
+``basstler.stack`` derives what a pass should do and prints it; nothing in it moves a commit.
+Every fetch, merge, rebase and push in the workflow was therefore performed by a session
+following prose, and ``board.json`` was hand-assembled from whatever the caller happened
+to fetch - the same class of hand-assembled input that let a dropped ``merged_at`` field
+read as a legitimate value.
+
+This module is the command line onto the modules that perform those steps::
+
+    python -m basstler.maintenance board --write     # export the fork's open pull requests
+    python -m basstler.maintenance fast-forward      # move the fork's base onto the upstream
+    python -m basstler.maintenance restack           # integrate every moved parent, report every conflict
+    python -m basstler.maintenance restack --stacked-on <branch>  # carry one branch into what is stacked on it
+    python -m basstler.maintenance promote           # record the upstream link on every ready branch
+    python -m basstler.maintenance run-report --json # the whole pass as one document
+
+It executes an already-derived plan: structure still comes from ``basstler.stack`` and from
+GitHub's own stack object. Retargeting a pull request's **base branch** is the one write
+GitHub refuses to the credential this runs on - probed directly, alongside the label,
+comment and description writes it does allow - so that step alone is reported for the
+caller to perform through the GitHub MCP server.
+
+The exit status is the result. ``run-report --json`` is the machine-readable form
+``/stacked-pr-maintenance`` reads.
+"""
+
+from __future__ import annotations
+
+import argparse
+import sys
+from pathlib import Path
+
+from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
+from basstler.maintenance.commands import MaintenanceCommand, MaintenancePass
+from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.stack.settings import Configuration
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
+
+
+def _argument_parser() -> argparse.ArgumentParser:
+    """:return: The parser, built from the commands rather than from a list of them."""
+    parser = argparse.ArgumentParser(
+        prog="basstler.maintenance",
+        description="Stacked-PR maintenance: perform the pass, report what happened.",
+    )
+    subparsers = parser.add_subparsers(dest="command", required=True)
+    for command in MaintenanceCommand.every_command():
+        command.declare_arguments(
+            subparsers.add_parser(command.invoked_as, help=command.description)
+        )
+    return parser
+
+
+def main() -> ExitCode:
+    """
+    Run the command line and say, in words, what its status means.
+
+    The status itself can only be a number, so the name accompanies it on stderr for
+    anything other than a clean run - success stays silent, since announcing it would
+    make every run noisy.
+
+    :return: The process exit code.
+    """
+    status = _dispatch()
+    if status is not StackExitCode.SUCCESS:
+        logger.error(
+            f"basstler.maintenance: {status.name_for_a_caller} ({int(status)})"
+        )
+    return status
+
+
+def _dispatch() -> ExitCode:
+    """
+    Run the requested command, mapping every refusal to its own status.
+
+    :return: The process exit code.
+    """
+    arguments = _argument_parser().parse_args()
+    requested = next(
+        entry
+        for entry in MaintenanceCommand.every_command()
+        if entry.invoked_as == arguments.command
+    )
+    try:
+        maintenance = MaintenancePass(
+            configuration=Configuration.load(),
+            git=GitCommandRunner(working_directory=Path.cwd()),
+        )
+        return requested.run(maintenance, arguments)
+    except CommandFailure as error:
+        logger.error(f"{error}")
+        return error.exit_code
+
+
+if __name__ == "__main__":
+    sys.exit(main())

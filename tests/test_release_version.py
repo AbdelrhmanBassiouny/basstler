@@ -17,7 +17,7 @@ import pytest
 
 from basstler.environment import GitHubActionsVariable
 from basstler.locations import PathEnumeration
-from basstler.maintenance_git_commands import GitCommandRunner
+from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.release_version import (
     MalformedVersion,
     MergedPullRequest,

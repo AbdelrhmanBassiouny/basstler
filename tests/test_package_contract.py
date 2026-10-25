@@ -89,7 +89,7 @@ def run_as_a_caller(*arguments: str) -> subprocess.CompletedProcess[str]:
     ).run(*arguments)
 
 
-MODULE_VARIABLE = re.compile(r'^([A-Z_]+)="(basstler\.[a-z_]+)"', re.MULTILINE)
+MODULE_VARIABLE = re.compile(r'^([A-Z_]+)="(basstler(?:\.[a-z_]+)+)"', re.MULTILINE)
 """
 One ``NAME="basstler.module"`` assignment in the shell configuration.
 """
@@ -109,11 +109,11 @@ def names_of(module: PackageModule) -> frozenset[str]:
     names are read from the configuration that assigns them instead of written out here.
 
     :param module: The module to name.
-    :return: Its import path, plus any shell variable holding that path.
+    :return: Its command path, plus any shell variable holding that path.
     """
     assignments = MODULE_VARIABLE.findall(SHELL_CONFIGURATION.read_text())
-    return frozenset({module.import_path}) | {
-        variable for variable, path in assignments if path == module.import_path
+    return frozenset({module.command_path}) | {
+        variable for variable, path in assignments if path == module.command_path
     }
 
 
@@ -185,13 +185,13 @@ def test_every_entry_point_answers_help_through_the_module_runner(
     module: PackageModule,
 ):
     """
-    Each entry point is reachable as ``python -m basstler.<name>``.
+    Each entry point is reachable through ``python -m`` and its command path.
 
     That form rather than a path to the file: a module run by path puts its own directory
     on ``sys.path`` instead of the repository root, so its absolute imports of its
     siblings would not resolve. Every bash caller invokes them this way.
     """
-    result = run_as_a_caller("-m", module.import_path, "--help")
+    result = run_as_a_caller("-m", module.command_path, "--help")
 
     assert result.returncode == 0, result.stderr
 

@@ -88,7 +88,7 @@ Every entry point is run as a module, by the package's own interpreter:
 ```bash
 ~/.local/share/basstler/venv/bin/python -m basstler.stack configuration
 ~/.local/share/basstler/venv/bin/python -m basstler.maintenance run-report --json
-~/.local/share/basstler/venv/bin/python -m basstler.build_dashboard --help
+~/.local/share/basstler/venv/bin/python -m basstler.dashboard.plan_page --help
 ```
 
 The hooks and the skills that call them all use `"${BASSTLER_PYTHON}" -m "${SOME_MODULE}"`,

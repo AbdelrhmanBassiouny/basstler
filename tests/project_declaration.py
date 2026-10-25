@@ -16,15 +16,15 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.dependencies import PyprojectKey
+from basstler.setup.dependencies import PyprojectKey
 from basstler.locations import PackageLocation
 
 
 class ProjectTableKey(StrEnum):
     """
     The ``[project]`` keys the suites read that
-    :class:`basstler.dependencies.PyprojectKey` does not name, since the package itself
-    never reads them.
+    :class:`basstler.setup.dependencies.PyprojectKey` does not name, since the package
+    itself never reads them.
     """
 
     REQUIRES_PYTHON = "requires-python"

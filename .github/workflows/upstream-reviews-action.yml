@@ -35,7 +35,7 @@ jobs:
       - name: Read the upstream pull request
         env:
           GH_TOKEN: ${{ github.token }}
-        run: python -m basstler.upstream_reviews_action run
+        run: python -m basstler.upstream_reviews.action run
 
       - name: Commit the result
         run: |

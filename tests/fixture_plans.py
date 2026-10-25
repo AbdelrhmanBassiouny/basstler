@@ -15,9 +15,9 @@ from typing import Any
 
 import yaml
 
-from basstler.build_dashboard import DependencyReference
-from basstler.plan_item_bootstrap import PlanDocument
-from basstler.plan_model import ManifestKey
+from basstler.plan.dependencies import DependencyReference
+from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import ManifestKey
 
 from .constants.paths import DatasetLocation
 

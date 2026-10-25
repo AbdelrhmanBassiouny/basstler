@@ -1,8 +1,8 @@
 # Fetching live pull request data into pr_data.json
 
 The canonical procedure for gathering the `pr_data.json` shape
-`build_dashboard.py`, `sync_manifest_status.py`, and
-`check_dependency_readiness.py` all consume - referenced by
+`dashboard/plan_page.py`, `plan/sync_manifest_status.py`, and
+`plan/check_dependency_readiness.py` all consume - referenced by
 `plan-dashboard/SKILL.md` step 2 and `dependency-readiness.md` instead of
 each restating it. See any of those three scripts' own `--help` / module
 docstring for the exact JSON shape expected.
@@ -55,7 +55,7 @@ response as-is is what the rejection above catches.
 `labels` carries two things this codebase reads. A pull request merged
 out-of-band never gets `merged_at` set, and this repo's convention is to add
 a `"merged"` label by hand in that case - see `github_labels.py`'s
-`GitHubLabel` and `build_dashboard.py`'s `was_merged`. That label is a fallback for a real merge
+`GitHubLabel` and `pull_request_state.py`'s `was_merged`. That label is a fallback for a real merge
 GitHub never recorded, not a substitute for `merged_at` - only pull requests
 that happen to carry it survive a fetch that dropped the timestamp. A
 `"bug"` label separately marks the item as a bug fix wherever it already

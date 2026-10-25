@@ -3,7 +3,7 @@ set -euo pipefail
 
 # Saves a plan's plan.yaml and roadmap.md to the personal-notes branch and
 # regenerates the branch index in the same commit. Landed items are pruned, an
-# emptied plan is removed, and a plan over plan_size_limits is refused.
+# emptied plan is removed, and a plan over basstler.plan.size_limits is refused.
 #
 # Usage: save-plan.sh <plan-id> --manifest <plan.yaml> --roadmap <roadmap.md>
 #    or: save-plan.sh [<plan-id>]   (reads the PLAN-MANIFEST/PLAN-ROADMAP
