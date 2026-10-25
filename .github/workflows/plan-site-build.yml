@@ -1,8 +1,9 @@
 name: Plan site (build and deploy)
 
 # Builds the plan site from every repository the registry's hub file lists, and deploys
-# it to the calling repository's GitHub Pages. Pages deploys only from the calling
-# repository's default branch, so callers run there.
+# it to the calling repository's GitHub Pages when its pages differ from the published
+# ones. Pages deploys only from the calling repository's default branch, so callers run
+# there.
 
 on:
   workflow_call:
@@ -27,6 +28,8 @@ jobs:
     name: Build the plan site
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    outputs:
+      site_changed: ${{ steps.compare.outputs.site_changed }}
     steps:
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -49,7 +52,20 @@ jobs:
           --site-url "${{ steps.pages.outputs.base_url }}"
           --output _site
 
+      # The run number in the query keeps Pages' cache from answering with an older digest.
+      - name: Compare with the published site
+        id: compare
+        run: |
+          if curl --fail --silent --location --output published-digest.txt \
+              "${{ steps.pages.outputs.base_url }}/site-digest.txt?run=${{ github.run_id }}-${{ github.run_attempt }}" \
+              && cmp --silent published-digest.txt _site/site-digest.txt; then
+            echo "site_changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "site_changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Upload the site
+        if: steps.compare.outputs.site_changed == 'true'
         uses: actions/upload-pages-artifact@v3
         with:
           path: _site
@@ -57,6 +73,7 @@ jobs:
   deploy:
     name: Deploy to GitHub Pages
     needs: build
+    if: needs.build.outputs.site_changed == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     environment:

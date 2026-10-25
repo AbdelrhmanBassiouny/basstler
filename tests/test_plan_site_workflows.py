@@ -11,6 +11,7 @@ from typing import Any
 
 import yaml
 
+from basstler.build_site import SiteFile
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.personal_notes_branch import NotesWriteOutcome
 from basstler.plan_site_workflows import PlanSiteTrigger
@@ -34,6 +35,20 @@ def repository_workflow(path: ProjectLocation) -> dict[Any, Any]:
     :return: The parsed workflow.
     """
     return yaml.safe_load((PackageLocation.SOURCE_TREE / path).read_text())
+
+
+def step_using(job: dict[str, Any], action: str) -> dict[str, Any]:
+    """
+    :param job: A parsed workflow job.
+    :param action: The action a step of the job uses, without its version.
+    :return: That step.
+    """
+    (step,) = (
+        step
+        for step in job["steps"]
+        if step.get("uses", "").partition("@")[0] == action
+    )
+    return step
 
 
 # %% the trigger
@@ -73,6 +88,25 @@ def test_the_site_workflow_runs_the_reusable_build():
 def test_the_build_is_a_reusable_workflow():
     workflow = repository_workflow(ProjectLocation.PLAN_SITE_BUILD_WORKFLOW)
     assert "workflow_call" in workflow_events(workflow)
+
+
+def test_the_build_compares_the_built_site_s_digest_with_the_published_one():
+    build = repository_workflow(ProjectLocation.PLAN_SITE_BUILD_WORKFLOW)["jobs"][
+        "build"
+    ]
+    (site_changed,) = build["outputs"].values()
+    step_identifier = site_changed.split(".")[1]
+    (compare,) = (step for step in build["steps"] if step.get("id") == step_identifier)
+    assert SiteFile.DIGEST in compare["run"]
+
+
+def test_the_build_uploads_and_deploys_only_a_changed_site():
+    jobs = repository_workflow(ProjectLocation.PLAN_SITE_BUILD_WORKFLOW)["jobs"]
+    ((output_name, site_changed),) = jobs["build"]["outputs"].items()
+    changed = site_changed.removeprefix("${{").removesuffix("}}").strip()
+    upload = step_using(jobs["build"], "actions/upload-pages-artifact")
+    assert upload["if"] == f"{changed} == 'true'"
+    assert jobs["deploy"]["if"] == f"needs.build.outputs.{output_name} == 'true'"
 
 
 # %% installing

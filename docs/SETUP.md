@@ -107,8 +107,10 @@ notes branch starts that build through a trigger installed on the notes branch:
 
 Turn Pages on once under the registry's *Settings → Pages*, with *GitHub Actions* as the
 source. Nothing runs on a schedule: a plan push, a renderer change on `main` or a manual
-run of *Plan site* rebuilds the site. Plans on another hub repository's notes are
-refreshed by the registry's next build.
+run of *Plan site* rebuilds the site. Every build renders every page - each plan, each
+repository's index and the hub - and deploys only when one of them differs from the
+published site, so a push that changes nothing a page shows deploys nothing. Plans on
+another hub repository's notes are refreshed by the registry's next build.
 
 ## 4. Check it worked
 
