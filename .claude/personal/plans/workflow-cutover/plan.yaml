@@ -35,7 +35,7 @@ items:
 - id: routine-cutover
   title: 'Retire the scheduled LLM Routine: stack maintenance runs at the start of plan-item work'
   branch: claude/stack-maintenance-action
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_019sAtT3YPyFe7yminnDEdSG
   track: cutover
   pull_request_number: 16
