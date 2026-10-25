@@ -1,16 +1,17 @@
 schema_version: 1
 id: stack-tooling-install
 title: Stack tooling on main, and the skills that install it anywhere
-description: 'Getting the stacked-pull-request workflow''s machinery out of a personal tooling branch
-  and onto main as reviewed code, with guided setup for a repository that takes it natively and for a
-  fork that has to overlay it. Portability is the rule throughout: no repository names outside configuration
-  defaults.'
+description: 'Getting the stacked-pull-request workflow''s machinery out of a personal tooling
+  branch and onto main as reviewed code, with guided setup for a repository that takes it
+  natively and for a fork that has to overlay it. Portability is the rule throughout: no repository
+  names outside configuration defaults.'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 41
 waves:
 - id: install
   name: Setup, scripted
-  description: Each setup skill keeps only the questions; everything mechanical becomes a script.
+  description: Each setup skill keeps only the questions; everything mechanical becomes a
+    script.
 - id: base-correctness
   name: What a branch is cut from
   description: Bugs in which refs the tooling fetches and which branch new work is based on.
@@ -30,20 +31,8 @@ items:
   session: https://claude.ai/code/session_01DbUfzLJEFqE4U3fKBFd2WA
   track: install
   depends_on: []
-  notes: 'The mechanical half of /setup-personal-notes as a script, the skill only asking the questions;
-    the whole setup runs with no session. Draft #45, carried from CRAM #107 with its history; main is
-    not merged in yet. Three owner threads stay open: rename the promotion label (main says promotion-link-sent)
-    and drop the unused merged and rebase labels.'
-- id: unfetched-parent-branches
-  title: Fetch every parent branch the pass decides about, and refuse to decide from a missing ref
-  branch: claude/modest-franklin-am8ivt
-  pull_request_number: 64
-  status: in_progress
-  session: https://claude.ai/code/session_019KWVkGLe21Y7WvquDE9mfH
-  track: base-correctness
-  depends_on: []
-  notes: 'Stack.load fetched only the board''s heads, so a base no open pull request has as its head
-    was never fetched and adds_only_merges failed on git 128 (seen on CRAM #429). Draft #64 off main
-    fetches every board entry''s base and raises UnresolvableReferenceError on a missing ref. It takes
-    over this half of #44 (pre-package-move, main not merged in), which keeps only the Stack.effective_parent
-    reparenting change.'
+  notes: 'The mechanical half of /setup-personal-notes as a script, the skill only asking
+    the questions; the whole setup runs with no session. Draft #45, carried from CRAM #107
+    with its history; main is not merged in yet. Three owner threads stay open: rename the
+    promotion label (main says promotion-link-sent) and drop the unused merged and rebase
+    labels.'
