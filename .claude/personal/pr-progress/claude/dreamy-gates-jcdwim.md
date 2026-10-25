@@ -3,7 +3,8 @@ Plan
 
 Done
 - LICENSE, NOTICE, README licence section, .mailmap, pyproject/plugin.json metadata
-- Saved commit identity switched to gmail
+- LICENSE digest test; draft PR #65 labelled release:minor
 
 Next
-- Draft PR #65 open, awaiting review; replace krrood copies with the krrood import later (separate PR)
+- Await owner on open threads: keep .mailmap? add CONTRIBUTING.md?
+- Later, separate PR: replace krrood copies with the krrood import
