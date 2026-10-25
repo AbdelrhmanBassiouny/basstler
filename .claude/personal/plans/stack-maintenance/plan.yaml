@@ -1,9 +1,10 @@
 schema_version: 1
 id: stack-maintenance
 title: 'The maintenance pass: running a stack of pull requests'
-description: 'What keeps a stack of pull requests moving without a person driving each step: a deterministic
-  executor that fast-forwards, restacks, promotes and reports, and the manifest kept current at every
-  transition. The integration branch was retired with the carryover (basstler#19, #28, #29).'
+description: 'What keeps a stack of pull requests moving without a person driving each step:
+  a deterministic executor that fast-forwards, restacks, promotes and reports, and the manifest
+  kept current at every transition. The integration branch was retired with the carryover
+  (basstler#19, #28, #29).'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 40
 waves:
@@ -24,11 +25,12 @@ items:
   track: pass
   blockers: []
   depends_on: []
-  notes: 'Every skill that can affect a plan writes the manifest and republishes the dashboard first,
-    at every point that makes a recorded field stale; also fixes the manifest writer''s corruption bugs
-    and carries plan-tracking-skills'' indent fix. Draft #48, carried from CRAM #151 with its history;
-    main is not merged in yet (conflicts listed on the pull request). Absorbs plan-tracking-skills'' plan-item-bootstrap-yaml-indent
-    (CRAM #160): when #48 lands, check that the item indent is read off the manifest.'
+  notes: 'Every skill that can affect a plan writes the manifest and republishes the dashboard
+    first, at every point that makes a recorded field stale; also fixes the manifest writer''s
+    corruption bugs and carries plan-tracking-skills'' indent fix. Draft #48, carried from
+    CRAM #151 with its history; main is not merged in yet (conflicts listed on the pull request).
+    Absorbs plan-tracking-skills'' plan-item-bootstrap-yaml-indent (CRAM #160): when #48 lands,
+    check that the item indent is read off the manifest.'
 - id: promotion-summaries-and-table
   title: Promote with a written summary, and report the links as a table rather than a notification
   branch: null
@@ -36,18 +38,10 @@ items:
   status: not_started
   track: pass
   depends_on: []
-  notes: 'The script builds the compare-and-create link; the upstream pull request opens with a title
-    and a point-based summary linking back to the fork pull request; nothing sends a notification; every
-    promoted branch is reported as a table in the session. Not started here: CRAM #162''s bastler/-era
-    branch is retired in #50, whose last commit is the reference.'
-- id: one-restack-merge-per-branch
-  title: Keep one restack merge per branch instead of one per pass
-  branch: claude/trusting-clarke-32il0l
-  pull_request_number: 9
-  status: done
-  track: pass
-  depends_on: []
-  notes: 'Draft #9, open on basstler but tracked by no plan until the 2026-10-21 cleanup.'
+  notes: 'The script builds the compare-and-create link; the upstream pull request opens with
+    a title and a point-based summary linking back to the fork pull request; nothing sends
+    a notification; every promoted branch is reported as a table in the session. Not started
+    here: CRAM #162''s bastler/-era branch is retired in #50, whose last commit is the reference.'
 - id: stack-state-from-github
   title: Derive in-review and CI from GitHub instead of hand-kept labels
   branch: null
@@ -55,8 +49,9 @@ items:
   status: not_started
   track: pass
   depends_on: []
-  notes: 'Raised in review on basstler#15. The board export records each fork pull request''s open
-    upstream pull request and its head''s check verdict (RollupState via CheckStatus.over), replacing the
-    never-filled ci field; in-review is derived from the upstream pull request and the pass keeps the
-    in-review label in sync; status shows CI and promotion withholds failing branches. Stacks on
-    claude/plan-item-kickoff-resolve-ic3qnu (#15), which introduces stack_model.py.'
+  notes: 'Raised in review on basstler#15. The board export records each fork pull request''s
+    open upstream pull request and its head''s check verdict (RollupState via CheckStatus.over),
+    replacing the never-filled ci field; in-review is derived from the upstream pull request
+    and the pass keeps the in-review label in sync; status shows CI and promotion withholds
+    failing branches. Based on main: #15, which split stack_model.py out of stack.py, has
+    merged. Three #15 threads point here.'
