@@ -67,19 +67,6 @@ items:
     link) shared by stack.py and the dashboard, plus LOC/CI/conflict chips and a stack chip
     on dashboard items. Not started here: CRAM #111''s bastler/-era branch is retired in #52,
     whose last commit is the reference; its headless build is superseded by build_site.'
-- id: cross-plan-dependencies
-  title: Let depends_on name an item in another plan, resolved live at dashboard time
-  branch: claude/plan-dashboards-cross-dependencies-h3icfd
-  pull_request_number: 17
-  track: corrections
-  session: https://claude.ai/code/session_01KRgqsFtPWVgxkh11fGuJpt
-  depends_on: []
-  status: in_progress
-  notes: 'Decided 2026-09-03: depends_on admits `<plan-id>/<item-id>` (a slash cannot occur
-    in a kebab-case id, so a bare id still means this plan). Not a bug fix: release:minor.
-    2026-10-25: second review round pushed (rustworkx graph, PlanValidator, functions onto
-    classes, shared plan-command arguments). Splitting the file is split-build-dashboard.
-    Draft, all tests green, awaiting review.'
 - id: ready-to-promote-upstream-links
   title: Ready-to-promote sidebar list with one-click upstream create-pull-request links
   branch: null
@@ -120,8 +107,7 @@ items:
   branch: null
   pull_request_number: null
   track: corrections
-  depends_on:
-  - cross-plan-dependencies
+  depends_on: []
   status: not_started
   notes: 'Added 2026-10-25 from the review of #17: build_dashboard.py (2,300 lines) and test_build_dashboard.py
     (2,600) are too big. Split into plan validation, dependencies, pull request state and
