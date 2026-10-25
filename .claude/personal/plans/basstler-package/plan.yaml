@@ -57,10 +57,7 @@ items:
   track: cram-retirement
   depends_on: []
   pull_request_number: null
-  notes: 'CRAM #523 drops the .gitignore entries for .claude/.plan-state-sync-sha and .claude/.personal-settings-sync-hash,
-    so they show as untracked in a plugin clone. Proposed: write them under $(git rev-parse --git-dir)/basstler/,
-    which git never tracks; alternative: session-start.sh adds them to .git/info/exclude and check-setup.sh
-    verifies with git check-ignore. The user has not picked yet.'
+  notes: 'CRAM #523 dropped the .gitignore entries for .claude/.plan-state-sync-sha and .claude/.personal-settings-sync-hash, so the stop hook flags both as untracked in CRAM every session. Session-start must keep them out of the working tree and never add a tracked change to the host project. Options: write them under $(git rev-parse --git-dir)/basstler/ (preferred, no exclude bookkeeping), or add them to .git/info/exclude and verify with git check-ignore in check-setup.sh. The user has not picked yet.'
 - id: basstler-krrood-dependency
   title: Depend on krrood's light core and use its patterns
   branch: claude/magical-albattani-9fbkd5
