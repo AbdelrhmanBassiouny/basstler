@@ -137,4 +137,4 @@ Flag explicitly, never silently paper over:
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.
 
-Carrying the outcome out later follows `${MANIFEST_STALENESS_DOCUMENT}`.
+Carrying the outcome out later follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).

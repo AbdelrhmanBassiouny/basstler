@@ -183,7 +183,7 @@ rather than pretending it ran. Do not skip it: a published dashboard that is
 older than the manifest behind it is the exact staleness this step exists to
 close.
 
-Every later transition follows `${MANIFEST_STALENESS_DOCUMENT}`.
+Every later transition follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
 
 In `plan` mode the skill ends here. Whether to implement the approved plan
 in this session or a fresh one is the user's call, made after they see it.

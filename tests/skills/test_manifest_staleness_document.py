@@ -31,11 +31,6 @@ class ShellConstant(StrEnum):
     The constants of the plugin's shell configuration the rule is reached through.
     """
 
-    STALENESS_DOCUMENT = "MANIFEST_STALENESS_DOCUMENT"
-    """
-    The constant a bound skill cites the rule through.
-    """
-
     BLOCKER_OWNER = "MAINTENANCE_BLOCKER_OWNER"
     """
     Who stack maintenance writes its blockers under, which the writer and the clearer of
@@ -99,9 +94,22 @@ class DashboardUrlKey(StrEnum):
 
 def staleness_document() -> str:
     """
-    :return: The rule document itself, found where the shell configuration says it is.
+    :return: The rule document itself.
     """
-    return Path(ShellConstant.STALENESS_DOCUMENT.value_in_configuration()).read_text()
+    return (
+        RepositoryLocation.PLUGIN / SkillDirectory.MANIFEST_STALENESS_DOCUMENT
+    ).read_text()
+
+
+def linked_documents(skill: Path) -> set[Path]:
+    """
+    :return: Every file the skill's instructions link to with a relative Markdown link,
+        resolved against the skill's own directory.
+    """
+    return {
+        (skill.parent / target).resolve()
+        for target in re.findall(r"\]\(([^)#\s]+)\)", skill.read_text())
+    }
 
 
 def skills_writing_plan_data() -> list[Path]:
@@ -121,21 +129,13 @@ def skills_writing_plan_data() -> list[Path]:
 # %% the rule's reach
 
 
-def test_the_rule_lives_where_the_shell_configuration_says_it_does():
-    document = Path(ShellConstant.STALENESS_DOCUMENT.value_in_configuration())
-
-    assert (
-        document
-        == RepositoryLocation.PLUGIN / SkillDirectory.MANIFEST_STALENESS_DOCUMENT
-    )
-    assert document.is_file()
-
-
 @pytest.mark.parametrize(
     "skill", skills_writing_plan_data(), ids=lambda skill: skill.parent.name
 )
 def test_a_skill_that_writes_plan_data_cites_the_staleness_rule(skill: Path):
-    assert ShellConstant.STALENESS_DOCUMENT in skill.read_text()
+    document = RepositoryLocation.PLUGIN / SkillDirectory.MANIFEST_STALENESS_DOCUMENT
+
+    assert document.resolve() in linked_documents(skill)
 
 
 def test_the_rule_names_the_blocker_owner_through_its_constant():
