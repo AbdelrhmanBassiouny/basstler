@@ -1,7 +1,6 @@
 Plan
-- team-basstler/site-action (#63): only the reusable plan-site-build.yml, the site digest and build queueing
+- team-basstler/site-action (#63): merged
 Done
-- Build workflow, SiteDigest, deploy only a changed site, concurrency queue, parsed workflow model in tests (1246 pass); review threads resolved
+- #63 merged 2026-10-25: reusable plan-site-build.yml, site digest, build queueing
 Next
-- Owner reviews the narrowing and edce235, then merges #63
-- Then team-basstler/site-for-every-repository: <user>/plans, setup, skill-time build starts, live draft re-check on the page
+- team-basstler/site-for-every-repository is ready to start (new session)
