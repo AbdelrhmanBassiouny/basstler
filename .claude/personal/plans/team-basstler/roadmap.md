@@ -6,3 +6,4 @@
 - An item is ready to start only when every dependency is merged or is an open pull request marked ready for review; a draft dependency blocks it.
 - A solo setup keeps working unchanged: every team setting defaults to the personal notes.
 - Site work lands as shared rendering in basstler.build_site; no further work on the Artifact-only dashboard.
+- The plan site builds in a repository the user owns, never on a project repository; setup automates every step it can and asks for the rest interactively, one short copyable line each.

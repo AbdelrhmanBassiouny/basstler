@@ -51,7 +51,7 @@ items:
   track: site
   depends_on:
   - site-action
-  notes: 'Every plan save starts the registry''s Plan site build with the user''s own credentials (connector or gh): no token, no cross-repository trigger. Setup alone does the rest: hub registration and session site links (absorbed workflow-cutover/plan-site-setup), the notes trigger, site caller and pull request trigger, plus printing the one Pages step. Builds on #45''s setup script and #48''s after-save order. Open: on a fork registry, files on the default branch break the upstream fast-forward (#57) - an orphan site branch allowed in the Pages policy, or a registry the user owns.'
+  notes: 'The site builds in a repository the user owns (default <user>/plans; one per user, no branch alternative): setup creates it, commits the workflows to its main, registers each project in its hub. Every plan save starts its build with the user''s own credentials (connector or gh), so every project is fresh. Steps setup cannot do (Pages source on) are asked in the interactive setup as one short line each, with a copyable link or command, then re-checked. Tested against recorded GitHub responses. Absorbed workflow-cutover/plan-site-setup; builds on #45''s setup script and #48''s after-save order.'
 - id: artifact-path-retirement
   title: Point every plan skill at the site instead of republishing a dashboard Artifact
   branch: null
