@@ -1,12 +1,11 @@
 Item: plan-dashboards / split-build-dashboard - PR #66 (draft).
 
 **Plan**
-- Move build_dashboard.py verbatim into pull_request_state, dashboard_plan, plan_dependencies, plan_validation, plan_command_arguments, dashboard_cards; renderer + main stay.
-- Validation exceptions -> basstler/exceptions.py (item notes; departs from *_errors.py precedent).
-- Split test_build_dashboard.py to match; callers import from owning module.
+- Verbatim move of build_dashboard.py into pull_request_state, dashboard_plan, plan_dependencies, plan_validation, plan_command_arguments, dashboard_cards; renderer + main stay.
+- Validation exceptions in basstler/exceptions.py (item notes; departs from *_errors.py precedent).
 
 **Done**
-- Branch, draft PR, manifest in progress.
+- Source + test split pushed (e6f9835); 1243 pass; rendered dashboard byte-identical; docs repointed.
 
 **Next**
-- Source split, then tests, then docs that name build_dashboard.py's classes.
+- Watch CI on #66; answer review. #46/#47 re-port onto the new modules if they land second.
