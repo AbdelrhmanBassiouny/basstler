@@ -8,4 +8,5 @@
 
 ### Next
 - Answer on the open token thread: follow-up item or fold into this PR.
-- CI on `b8705cf` had not reported when this session ended.
+- CI on `f67909e` had not reported when this session ended.
+- `f67909e` fixes a false `plan_not_written` whenever the plan carries a done item.
