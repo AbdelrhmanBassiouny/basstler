@@ -119,11 +119,13 @@ items:
   track: team-store
   depends_on:
   - team-notes-store
-  notes: The owner creates the repository in cram2 (name to confirm), enables Pages from Actions
-    and Issues, installs the Claude GitHub App. Setup writes the hub (registry and notes_branch
-    = the default branch), the site caller, the labels, and docs/team.md; a member runs setup
-    with the team repository and gets their notes branch. Members are collaborators on the
-    owner's CRAM fork for code, so the stack tooling is unchanged.
+  notes: Owner creates the repository in cram2 (name to confirm), enables Pages from Actions
+    and Issues, installs the Claude GitHub App. Setup writes the hub (registry, notes_branch
+    = default branch), site caller, labels and docs/team.md; a member runs setup with the
+    team repository to get their notes branch. Members collaborate on the owner's CRAM fork,
+    so stack tooling is unchanged. Conflict - basstler.setup.personal_notes refuses a notes
+    remote the token's login does not own, so a member is refused on the org repository;
+    allow the configured plan store, e.g. by checking push access.
 - id: migrate-domain-models
   title: Move the domain-models plan from the CRAM fork's notes to the team repository
   branch: null
