@@ -125,3 +125,16 @@ items:
     session requires stays a few lines. Touches basstler.dashboard and the plan-dashboard skill.
   depends_on: []
   status: not started
+- id: shared-fork-base-fast-forward
+  title: Fast-forward the fork's base through one implementation, shared with session start
+  branch: null
+  pull_request_number: null
+  status: not started
+  track: pass
+  depends_on:
+  - session-notes-infrastructure/fresh-base-at-session-start
+  notes: 'From the basstler#57 review (issuecomment-6404647312). maintenance.fast_forward and
+    DefaultBranchSync.publish_to_fork both fetch the fork''s base, compare it with the upstream
+    tip, push and re-fetch. One class in basstler.maintenance serves both, parameterised by
+    fetch (session start must not write FETCH_HEAD) and by a refused push: raised in the pass,
+    reported at session start. Based on main once #57 lands.'
