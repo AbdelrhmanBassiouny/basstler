@@ -51,7 +51,7 @@ items:
   track: site
   depends_on:
   - site-action
-  notes: 'Setup creates <user>/plans (one per user; no branch alternative), commits its caller of plan-site-build.yml to main, registers each project in its hub. Skills start its build, with the user''s own credentials (connector or gh), at every step that changes a plan or a pull request''s state and at session start; an unchanged site deploys nothing. Steps setup cannot do (Pages source on) are asked interactively, one short copyable line each, then re-checked. Tested against recorded GitHub responses. Absorbed workflow-cutover/plan-site-setup; builds on #45''s setup script and #48''s after-save order.'
+  notes: 'Setup creates <user>/plans (one per user), commits its caller of plan-site-build.yml, registers each project in its hub; steps it cannot do (Pages on) are asked as one copyable line, then re-checked. Skills start the build with the user''s credentials at every plan or PR state change and at session start. Between builds: an item waiting only on a draft dependency keeps its Start link (kickoff checks live), and the page re-checks blocking PRs'' draft state from the browser via GitHub''s public API. Tested on recorded responses. Absorbed plan-site-setup; builds on #45, #48.'
 - id: artifact-path-retirement
   title: Point every plan skill at the site instead of republishing a dashboard Artifact
   branch: null
