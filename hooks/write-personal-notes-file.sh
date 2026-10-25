@@ -7,12 +7,12 @@ set -euo pipefail
 # plan's manifest/roadmap/branch-index trio) is exactly this shape: copy one
 # already-prepared local file to one destination path, commit, push, done.
 # Extracted so callers with that shape - currently
-# .claude/skills/plan-dashboard/refresh_dashboard.sh's manifest-correction
+# skills/plan-dashboard/refresh_dashboard.sh's manifest-correction
 # push, and /plan-dashboard's own dashboard-URL-cache update - don't each
 # re-embed the worktree dance as a bash snippet of their own.
 #
 # Usage:
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/write-personal-notes-file.sh" \
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" \
 #     --source <local-file> \
 #     --destination <repo-relative-path> \
 #     --message <commit-message>

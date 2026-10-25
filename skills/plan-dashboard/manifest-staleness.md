@@ -25,17 +25,17 @@ moment. It is the same argument, applied to every other transition.
 ## Run this rather than editing by hand
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 
-# Set any recorded field. No roadmap section required.
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" update \
+# Set any recorded field.
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" update \
     --plan <plan-id> --item <item-id> \
     [--status <status>] [--branch <branch>] [--pull-request-number <number>] \
     [--session <url>] [--notes <file> | --append-notes <file>] \
     [--blockers <file> ...]
 
 # Ask what local git contradicts, before or after a transition.
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" check --plan <plan-id> --item <item-id>
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" check --plan <plan-id> --item <item-id>
 ```
 
 `update` writes prose from files because a note is routinely longer than a shell
@@ -55,9 +55,10 @@ continuously wrapped prose is one paragraph however many lines it occupies. The 
 prints `note_paragraphs`, the count the manifest will actually show; if you meant five
 and it says one, that is this mistake and not a defect to go hunting for.
 
-Use `record` instead when the transition also deserves a roadmap section — a
-decision, a reversal, a conclusion that changes what the item means. `update` is
-for the state; `record` is for the story.
+Use `record` with `--roadmap-entry` instead when the transition also settles a
+standing rule every later item of the plan must follow. A conclusion that changes
+only what this item means goes in its `notes`, and the reasoning behind it on its
+pull request.
 
 ## What `check` does and does not cover
 
@@ -93,17 +94,17 @@ the item. Such automation holds a branch rather than an item id, so these operat
 are keyed on the branch and resolve the rest themselves:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 
 # Which plan and items does this branch belong to?
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" resolve --branch <branch>
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" resolve --branch <branch>
 
 # Block every item on it, under the automation's own name.
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" block --branch <branch> \
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" block --branch <branch> \
     --owner "${MAINTENANCE_BLOCKER_OWNER}" --reason <file>
 
 # Withdraw that blocker once the branch is clean again.
-python3 -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" unblock --branch <branch> \
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" unblock --branch <branch> \
     --owner "${MAINTENANCE_BLOCKER_OWNER}"
 ```
 
@@ -120,7 +121,7 @@ reported rather than written: which status those imply is a reading rather than 
 mechanical fact, and a landed branch is corrected to `done` by the dashboard refresh
 on its own.
 
-All three need nothing beyond the standard library and the notes branch, so they run
+All three need nothing beyond the basstler package and the notes branch, so they run
 the same from a session or from a plain Action.
 
 ## In auto mode
