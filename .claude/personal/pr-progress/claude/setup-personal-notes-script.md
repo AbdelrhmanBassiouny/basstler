@@ -1,14 +1,13 @@
-Moved from the CRAM fork's notes on 2026-10-19. CRAM #107 is closed; this branch continues here as draft #45, main not yet merged in.
+## Plan
+Port the session-free personal-notes setup onto main's src layout as
+`python -m basstler.setup.personal_notes`; SKILL.md keeps only the questions.
+Labels: main's `GitHubLabel` set as is (owner's call, 2026-10-25).
+
+## Done
+- Merged main, taking main's tree (the flat-layout port is dropped).
 
 ## Next
-- Do not fix semantic_digital_twin or coraplex here — separate root causes,
-  other packages; AGENTS.md routes ORM issues via
-  `scripts/regenerate_all_orm.py`/the developer.
-- Still unverified: label **creation** against a real token. This
-  environment's is a fine-grained installation token, so `POST .../labels`
-  is exercised only through the stub. Flagged in the PR body.
-- Leave as draft until told otherwise.
-
-## Plan
-Extract the mechanical half of `/setup-personal-notes` into a script that
-needs no session, and shrink SKILL.md to what a script cannot supply.
+- Move check-setup.sh's report model from the test into `basstler.setup`.
+- Add labels/login reads and label creation to `GitHubRepository`.
+- Port the command with tests; rewrite SKILL.md; update PR #45's description.
+- Label creation against a real token is still unverified (stubbed only).
