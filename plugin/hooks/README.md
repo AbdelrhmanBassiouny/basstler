@@ -227,7 +227,7 @@ the narrative that doesn't belong in structured data.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in progress` as soon as its plan is approved — via
-  [`src/basstler/plan/item_bootstrap.py`](../../src/basstler/plan/item_bootstrap.py), which you can also
+  [`src/basstler/plan/item_bootstrap/__main__.py`](../../src/basstler/plan/item_bootstrap/__main__.py), which you can also
   run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan.item_bootstrap` — so the
   manifest never says `not started` while the work is underway.
 - Decide where a new piece of work goes → `/add-plan-item <description>`. It runs the shared scope

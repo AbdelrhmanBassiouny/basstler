@@ -1,6 +1,6 @@
 ---
 name: upstream-reviews
-description: Report the CI checks and review threads a fork branch's upstream pull request has collected, including which checks failed, the log behind each failure, and which threads are still unresolved - read by the fork's own Action on a branch of its own, or, where that cannot run, by attaching the upstream to the session or through a short-lived helper session - so the project's own branches carry nothing of basstler's. Invoke as "/upstream-reviews [<pull-request-number>|<branch>]". Use when the user asks what the upstream reviewers said, how a promoted branch's CI is doing upstream, why an upstream check failed, whether it has outstanding review comments, or to check upstream state before resolving or resuming work on a branch.
+description: Report a fork branch's upstream pull request: its CI checks, failure logs and unresolved review threads. Invoke as "/upstream-reviews [<pull-request-number>|<branch>]". Use when asked what upstream reviewers or CI said about a promoted branch.
 allowed-tools: Bash, Read, Skill, mcp__claude-code-remote__add_repo, mcp__claude-code-remote__create_session, mcp__claude-code-remote__get_session, mcp__claude-code-remote__list_events, mcp__claude-code-remote__archive_session
 ---
 

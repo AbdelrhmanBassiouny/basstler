@@ -31,6 +31,12 @@ class ShellConfigurationFunction(StrEnum):
     carry the branch.
     """
 
+    PLAN_ID_FOR_BRANCH = "plan_id_for_branch"
+    """
+    Prints the plan the fetched branch index says tracks the branch it is given, and
+    nothing when no plan does.
+    """
+
     BASSTLER_PACKAGE_SOURCE = "basstler_package_source"
     """
     Prints what the package is installed from: the checkout the plugin sits in, else its
@@ -49,18 +55,23 @@ class ShellConfigurationFunction(StrEnum):
     checkout, which :attr:`BASSTLER_PACKAGE_SOURCE` then installs.
     """
 
-    def run(self, project_root: Path | None = None) -> subprocess.CompletedProcess[str]:
+    def run(
+        self, project_root: Path | None = None, *arguments: str
+    ) -> subprocess.CompletedProcess[str]:
         """
         Source the shell configuration and call this function.
 
         :param project_root: The repository to run within; the current directory if not
             given.
+        :param arguments: The arguments to call the function with.
         :return: The completed process, with output captured as text.
         """
         return subprocess.run(
             Bash.locate(os.environ).command(
                 "-c",
-                f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && {self}',
+                f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && {self} "$@"',
+                PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
+                *arguments,
             ),
             cwd=project_root,
             capture_output=True,

@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
 from basstler.plan.size_limits import (
     DocumentLocation,

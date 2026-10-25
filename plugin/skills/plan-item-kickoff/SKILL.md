@@ -1,6 +1,6 @@
 ---
 name: plan-item-kickoff
-description: Gather everything available about one tracked plan item (its plan.yaml entry, the plan's standing rules, its dependency chain's live GitHub state, and the patterns set by the merged pull requests that last changed the files it will touch), then start it in whichever execution mode is in force - presenting a plan for approval, implementing it directly, or asking which - opening the item's branch and draft pull request and recording its manifest state before implementation begins. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use when starting work on a specific item from a plan-dashboard's "Start now" link, or when the user asks to "start", "kick off", or "plan out" a specific tracked item.
+description: Start one tracked plan item: gather its context, open its branch and draft PR, record it, then plan or implement per the execution mode. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use from a dashboard's "Start now" link or when asked to start or kick off an item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__create_pull_request, mcp__github__update_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -182,6 +182,8 @@ can call the `Artifact` tool — the script's report hands the command back
 rather than pretending it ran. Do not skip it: a published dashboard that is
 older than the manifest behind it is the exact staleness this step exists to
 close.
+
+Every later transition follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
 
 In `plan` mode the skill ends here. Whether to implement the approved plan
 in this session or a fresh one is the user's call, made after they see it.

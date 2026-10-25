@@ -51,7 +51,7 @@ from basstler.maintenance.github import (
     GitHubRequestFailed,
 )
 from basstler.plan_site.hub import NotesBranch, PlanHub
-from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus
 from basstler.repository import GitHubAddress, PullRequestReference, Repository
 from basstler.standard_streams import StandardStreamHandler

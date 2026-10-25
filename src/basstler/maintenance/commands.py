@@ -9,13 +9,13 @@ told it exists.
 from __future__ import annotations
 
 import argparse
-import functools
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
 
 from basstler.exit_codes import StackExitCode
 from basstler.class_property import classproperty
+from basstler.command_line import Command
 from basstler.locations import PackageLocation
 from basstler.maintenance.board import BoardExport
 from basstler.maintenance.fast_forward import fast_forward
@@ -70,54 +70,10 @@ class MaintenancePass:
 
 
 @dataclass(frozen=True)
-class MaintenanceCommand(ABC):
+class MaintenanceCommand(Command):
     """
     One command this executor answers.
-
-    The name and the description belong to the class rather than to an instance - the
-    parser reads them to build the command line before anything is constructed - so they
-    are abstract :class:`class_property.classproperty` members. A subclass supplying
-    neither stays abstract, and :meth:`every_command` builds every subclass, so a
-    command that cannot say what it is called is refused as this module is imported.
     """
-
-    @classmethod
-    @functools.cache
-    def every_command(cls) -> tuple[MaintenanceCommand, ...]:
-        """
-        Every command this executor answers, found from the subclasses themselves so a
-        command cannot exist without being reachable, in the order they are defined.
-
-        Built once, when this module is imported, and the same commands answered every
-        time after.
-
-        :return: One instance of every direct subclass of :class:`MaintenanceCommand`.
-        """
-        return tuple(subclass() for subclass in MaintenanceCommand.__subclasses__())
-
-    @classproperty
-    @abstractmethod
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-
-    @classproperty
-    @abstractmethod
-    def description(cls) -> str:
-        """
-        What it does, as ``--help`` puts it.
-        """
-
-    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """
-        Declare this command's own flags.
-
-        Concrete rather than abstract: most commands take none, and requiring an empty
-        override of every one of them would say nothing.
-
-        :param parser: The subparser to declare them on.
-        """
 
     @abstractmethod
     def run(

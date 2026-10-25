@@ -1,6 +1,6 @@
 ---
 name: plan-item-resolve
-description: Gather everything available about one already-underway tracked plan item (its plan.yaml entry, the plan's standing rules, the real state of its branch/PR - conflicts, CI, review comments, and any unresolved review threads on its upstream pull request - and any relevant discussion on its plan's tracking issue), then resolve whatever is stalling it in whichever execution mode is in force - presenting a plan for approval, carrying it out directly on the item's existing branch, or asking which. Invoke as "/plan-item-resolve <plan-id> <item-id>", or as "/plan-item-resolve <pull-request-number>" to resolve the item that pull request's branch is tracked by - or, when no plan tracks it, the pull request on its own. Use when resolving a blocked, in-progress, or deferred item from a plan-dashboard's "Resolve"/"Resume"/"Reconsider" link, or when the user asks to "resolve", "unblock", "resume", or "reconsider" a specific tracked item.
+description: Resolve what stalls an underway plan item - conflicts, CI, review threads, tracking-issue discussion - on its existing branch, per the execution mode. Invoke as "/plan-item-resolve <plan-id> <item-id>" or "/plan-item-resolve <pull-request-number>". Use from a dashboard's Resolve/Resume/Reconsider link or when asked to resolve, unblock or resume an item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__update_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
 ---
 
@@ -93,6 +93,10 @@ Pass `--requested <mode>` when the user named a mode in the invocation
 itself.
 
 ## 3. Draft the plan
+
+First record what you found, per [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md): the real blocker in
+`blockers`, and `status` when it is wrong (`blocked`, `deferred`). `notes` change only when
+what the item means changes.
 
 Apply `${PLAN_ITEM_GATHERING_DOCUMENT}`'s last section first: anything you
 are about to raise as an open question is very often already answered by the

@@ -9,12 +9,16 @@ The dependency runs one way only.
 from __future__ import annotations
 
 import re
+import sys
+import textwrap
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
 import yaml
+
+from basstler.locations import ProjectLocation
 
 
 class ItemStatus(StrEnum):
@@ -85,6 +89,31 @@ class ItemStatus(StrEnum):
 # %% the vocabulary a plan manifest is written in
 
 
+class PlanDocument(StrEnum):
+    """
+    The two files a plan is kept in, beside each other on the personal-notes branch.
+    """
+
+    MANIFEST = "plan.yaml"
+    """
+    The structured manifest, whose schema ``plan-schema.md`` documents.
+    """
+
+    ROADMAP = "roadmap.md"
+    """
+    The narrative companion, a fixed sibling filename rather than a configurable one.
+    """
+
+    def path_within_notes_branch(self, plan_identifier: str) -> str:
+        """
+        Where this document lives for one plan.
+
+        :param plan_identifier: The plan's id.
+        :return: The path, relative to the personal-notes branch's root.
+        """
+        return str(ProjectLocation.PLANS / plan_identifier / self.value)
+
+
 class ItemLayout(StrEnum):
     """
     The whitespace and markers an item block in ``plan.yaml`` is laid out with.
@@ -98,6 +127,12 @@ class ItemLayout(StrEnum):
     MARKER = " " * 2 + "- "
     """
     What opens an item block, the list marker its first field sits behind.
+    """
+
+    NESTING_STEP = " " * 2
+    """
+    One level of YAML indentation, which separates a key from the lines its own value
+    occupies beneath it.
     """
 
 
@@ -117,6 +152,74 @@ class ItemIndentation:
     """
     The whitespace an item's own fields are indented by.
     """
+
+    @property
+    def nested(self) -> str:
+        """
+        What a line of a value written beneath its own key begins with - a sequence
+        entry's dash, or a folded scalar's body.
+        """
+        return self.field_indent + ItemLayout.NESTING_STEP
+
+
+@dataclass(frozen=True)
+class Prose:
+    """
+    Text as its author wrote it, about to be written as the body of a folded scalar.
+
+    A blank line separates paragraphs; a single newline is a hard-wrapped line within
+    one, which is how a person writes the file a value comes from.
+    """
+
+    text: str
+    """
+    The text, as its author wrote it.
+    """
+
+    line_width: int = 100
+    """
+    The column a wrapped body line is kept under.
+    """
+
+    @property
+    def paragraphs(self) -> list[str]:
+        """
+        The paragraphs the text breaks into, stripped.
+
+        A hyphen immediately before a wrapped line break closes up rather than becoming
+        a space, since that is where its author wrapped a word they wrote whole -
+        ``blank-\\nline`` is *blank-line*. A suspended hyphen typed on one line keeps its
+        space.
+        """
+        return [
+            re.sub(r"-\n", "-", paragraph.strip())
+            for paragraph in re.split(r"\n\s*\n", self.text.strip())
+        ]
+
+    def folded(self, indent: str) -> str:
+        """
+        Wrap the text as the body of a folded scalar, breaking only between words.
+
+        A folded scalar reads a line break back as a space, so a break inside a word
+        would return a different string than it was given; a word wider than the column
+        overflows it instead.
+
+        :param indent: The indentation every body line carries.
+        :return: The body's lines, its paragraphs separated by blank lines,
+            newline-terminated.
+        """
+        wrapped = [
+            textwrap.fill(
+                paragraph,
+                width=self.line_width,
+                initial_indent=indent,
+                subsequent_indent=indent,
+                break_long_words=False,
+                break_on_hyphens=False,
+            )
+            for paragraph in self.paragraphs
+        ]
+        return "\n\n".join(wrapped) + "\n"
 
 
 class ValueStyle(StrEnum):
@@ -139,11 +242,27 @@ class ValueStyle(StrEnum):
 
     BLOCK = "block"
     """
-    A value written across the lines beneath the key - a folded scalar or a sequence.
+    A folded scalar, written across the lines beneath the key.
 
     Anything inserted after such a key would be swallowed by its value, so a new key
     goes before the first block-styled one in an item rather than at the end.
     """
+
+    SEQUENCE = "sequence"
+    """
+    A list, one entry per dash beneath the key.
+
+    Spans the lines beneath the key exactly as :attr:`BLOCK` does. A list with no
+    entries is written inline as ``[]``, since a key with nothing beneath it parses as
+    null rather than as an empty list.
+    """
+
+    @property
+    def spans_lines_beneath(self) -> bool:
+        """
+        Whether this style's value continues below the key's own line.
+        """
+        return self in {ValueStyle.BLOCK, ValueStyle.SEQUENCE}
 
 
 @dataclass(frozen=True)
@@ -220,7 +339,7 @@ class ManifestKey(KeySpecification, Enum):
     The parallel line of work the item belongs to.
     """
 
-    DEPENDS_ON = ("depends_on",)
+    DEPENDS_ON = ("depends_on", ValueStyle.SEQUENCE)
     """
     The items this one stacks on, by id.
     """
@@ -240,7 +359,7 @@ class ManifestKey(KeySpecification, Enum):
     Freeform detail, routinely folded over many lines.
     """
 
-    BLOCKERS = ("blockers", ValueStyle.BLOCK)
+    BLOCKERS = ("blockers", ValueStyle.SEQUENCE)
     """
     Why the item is stuck, written as a sequence.
     """
@@ -287,24 +406,84 @@ class ManifestKey(KeySpecification, Enum):
 
     def render(
         self,
-        value: str,
+        value: Any,
         opening_the_item: bool = False,
         indentation: ItemIndentation = ItemIndentation(),
     ) -> str:
         """
-        The manifest line setting this key to *value*, newline included.
+        The manifest text setting this key to *value*, newline-terminated.
 
-        Quoting comes from the key's own style rather than from the caller.
+        How the value is written comes from the key's own style rather than from the
+        caller, so a style that spans the lines beneath the key returns those lines too.
+        Every value reads back as exactly what it was given.
 
-        :param value: The value to write.
+        :param value: The value to write: a sequence of strings for a sequence-styled
+            key, otherwise a scalar in the type it is to be read back as.
         :param opening_the_item: Whether this is the item block's first line, which
             carries the list marker instead of the key indent.
         :param indentation: How the manifest being edited indents its items.
-        :return: The rendered line.
+        :return: The rendered text.
         """
         prefix = indentation.marker if opening_the_item else indentation.field_indent
-        written = f'"{value}"' if self.style is ValueStyle.DOUBLE_QUOTED else value
-        return f"{prefix}{self.key}: {written}\n"
+        if self.style is ValueStyle.SEQUENCE:
+            if not value:
+                return f"{prefix}{self.key}: []\n"
+            entries = "".join(
+                self.render_sequence_entry(str(entry), indentation) for entry in value
+            )
+            return f"{prefix}{self.key}:\n{entries}"
+        if self.style is ValueStyle.BLOCK:
+            return (
+                f"{prefix}{self.key}: >\n{Prose(str(value)).folded(indentation.nested)}"
+            )
+        return f"{prefix}{self.render_scalar(value)}\n"
+
+    def render_scalar(self, value: Any) -> str:
+        """
+        One ``key: value`` line, quoted however YAML needs it to read back as *value*.
+
+        A double-quoted key asks for that style outright; every other key leaves the
+        quoting to the dumper, which knows that a space before ``#`` opens a comment and
+        a trailing colon opens a mapping.
+
+        :param value: The value to write.
+        :return: The line, without its indentation or its newline.
+        """
+        written = str(value) if isinstance(value, str) else value
+        if self.style is ValueStyle.DOUBLE_QUOTED:
+            quoted = yaml.safe_dump(
+                str(written), default_style='"', width=sys.maxsize, allow_unicode=True
+            )
+            return f"{self.key}: {quoted.rstrip()}"
+        return yaml.safe_dump(
+            {self.key: written},
+            default_flow_style=False,
+            width=sys.maxsize,
+            allow_unicode=True,
+            sort_keys=False,
+        ).rstrip("\n")
+
+    @staticmethod
+    def render_sequence_entry(entry: str, indentation: ItemIndentation) -> str:
+        """
+        One entry of a sequence-styled value, newline-terminated.
+
+        An entry that fits on its own line is written as a quoted scalar and a longer
+        one as a folded block stripping its trailing newline (``>-``), so it parses back
+        as exactly the string it was given.
+
+        :param entry: The entry's text.
+        :param indentation: How the manifest the entry is written into indents its
+            items.
+        :return: The entry's lines.
+        """
+        prose = Prose(entry)
+        quoted = f'{indentation.nested}- "{entry}"'
+        fits_one_line = "\n" not in entry and len(quoted) <= prose.line_width
+        if fits_one_line and '"' not in entry and "\\" not in entry:
+            return f"{quoted}\n"
+        body = prose.folded(indentation.nested + ItemLayout.NESTING_STEP)
+        return f"{indentation.nested}- >-\n{body}"
 
     @property
     def pattern(self) -> re.Pattern[str]:
@@ -318,7 +497,7 @@ class ManifestKey(KeySpecification, Enum):
         """
         Whether this key's value runs over the lines beneath it.
         """
-        return self.style is ValueStyle.BLOCK
+        return self.style.spans_lines_beneath
 
     @classmethod
     def block_styled(cls) -> frozenset[ManifestKey]:

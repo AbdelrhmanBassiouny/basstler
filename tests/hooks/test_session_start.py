@@ -25,7 +25,7 @@ import pytest
 from basstler.locations import BasstlerVariable, PluginLocation, ProjectLocation
 from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
-from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
 
 from ..constants.environment import (

@@ -14,7 +14,7 @@ import basstler.plan.manifest_tools
 
 from basstler.exceptions import PlanValidationError
 from basstler.plan.validation import PlanValidator
-from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import PlanDocument
 from basstler.plan.model import (
     ItemNotTrackedError,
     ItemStatus,

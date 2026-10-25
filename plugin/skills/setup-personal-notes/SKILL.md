@@ -1,6 +1,6 @@
 ---
 name: setup-personal-notes
-description: One-time setup for this repo's personal-notes tooling - the personal-notes branch, its remote/branch/path resolution, the plan-dashboard dependencies, and the CLAUDE.local.md the SessionStart hook writes. Invoke as "/setup-personal-notes". Use when someone is setting up this repo for Claude Code for the first time, when personal notes/PR progress/plan dashboards aren't working, or when another skill's prerequisite check reports the setup is incomplete.
+description: One-time setup of the personal-notes branch, its configuration and the plan-dashboard dependencies. Invoke as "/setup-personal-notes". Use on first setup, or when personal notes, PR progress or dashboards are not working.
 allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__get_me, mcp__github__get_label
 ---
 

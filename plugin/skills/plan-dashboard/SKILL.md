@@ -1,6 +1,6 @@
 ---
 name: plan-dashboard
-description: Publish a live status dashboard Artifact for a multi-PR/multi-session initiative tracked under .claude/personal/plans/<plan-id>/plan.yaml on the personal-notes branch, cross-checked against live GitHub PR/CI/review state. Invoke as "/plan-dashboard <plan-id>" for one plan, or "/plan-dashboard" with no argument to publish the master index of every plan. Use when the user asks to see, refresh, or generate a plan dashboard, or asks "what's the status of <plan>".
+description: Publish a plan's status dashboard Artifact from its plan.yaml and live GitHub state, or the index of every plan when given no argument. Invoke as "/plan-dashboard [<plan-id>]". Use when asked to see or refresh a plan's status.
 allowed-tools: Bash, Read, Write, Artifact, AskUserQuestion, Skill
 ---
 
@@ -299,7 +299,12 @@ name — this is the actionable output, don't bury it under a wall of
 If you're in single-plan mode and the master index already exists (its URL
 is in the cache), mention that it wasn't refreshed automatically and the
 user can run `/plan-dashboard` with no argument to update it too — don't do
-it unprompted, since that republishes a second, separate page.
+it unprompted, since that republishes a second, separate page. `plan-create` asks
+for both, since a new plan changes the index.
+
+## When to refresh
+
+[`manifest-staleness.md`](manifest-staleness.md) says when: once per turn, after its last manifest write.
 
 ## The plan site
 

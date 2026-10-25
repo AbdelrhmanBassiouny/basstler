@@ -13,7 +13,7 @@ import pytest
 import yaml
 
 from basstler.locations import PluginLocation, ProjectLocation
-from basstler.plan.item_bootstrap import PlanDocument
+from basstler.plan.model import PlanDocument
 from basstler.plan.model import ManifestKey, PlanManifest
 from basstler.shell_configuration import ShellConfigurationFunction
 
