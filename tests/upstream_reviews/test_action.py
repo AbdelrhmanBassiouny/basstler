@@ -17,9 +17,11 @@ from typing import Any
 
 import pytest
 
+import basstler.upstream_reviews.action.__main__
 from basstler.locations import PackageLocation
 from basstler.repository import Repository
 from basstler.upstream_reviews.action.__main__ import (
+    ActionCommand,
     ActionExitCode,
     main,
 )
@@ -270,7 +272,8 @@ def test_the_reusable_workflow_runs_this_module_and_commits_its_result():
         PackageLocation.SOURCE_TREE / BasstlerSource.REUSABLE_WORKFLOW
     ).read_text()
 
-    assert "python -m basstler.upstream_reviews.action run" in reusable
+    command_path = basstler.upstream_reviews.action.__main__.__package__
+    assert f"python -m {command_path} {ActionCommand.RUN}" in reusable
     assert f"git add {ActionFile.RESULT}" in reusable
     assert "workflow_call" in reusable
 

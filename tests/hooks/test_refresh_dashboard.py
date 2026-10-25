@@ -15,10 +15,13 @@ import shutil
 import subprocess
 from enum import StrEnum
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
+import basstler.dashboard.plan_page
 import basstler.dashboard.refresh_support
+import basstler.plan.sync_manifest_status
 import basstler.standard_streams
 from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 from basstler.plan.item_bootstrap import PlanDocument
@@ -29,18 +32,26 @@ from ..scratch_repository import PackageSourceFile, install_hook_scripts_into
 from ..script_runner import BashScriptRunner
 
 
+def path_within_package(module: ModuleType) -> Path:
+    """
+    :param module: A module of this package.
+    :return: Its file, relative to the package directory.
+    """
+    return Path(module.__file__).relative_to(PackageLocation.DIRECTORY.value)
+
+
 class StubbedScript(StrEnum):
     """
     The package modules refresh_dashboard.sh calls out to, each stood in for by a stub
     that records how it was called.
     """
 
-    SYNC_MANIFEST_STATUS = "plan/sync_manifest_status.py"
+    SYNC_MANIFEST_STATUS = str(path_within_package(basstler.plan.sync_manifest_status))
     """
     Reads the manifest and corrects statuses that drifted.
     """
 
-    BUILD_DASHBOARD = "dashboard/plan_page.py"
+    BUILD_DASHBOARD = str(path_within_package(basstler.dashboard.plan_page))
     """
     Renders the page.
     """
@@ -100,8 +111,7 @@ def scratch_project_root(tmp_path: Path) -> Path:
     # are the standard library only, in a scratch package the script's
     # `python3 -m basstler.<module>` calls resolve against.
     copies = {
-        Path(module.__file__): package_directory
-        / Path(module.__file__).relative_to(PackageLocation.DIRECTORY.value)
+        Path(module.__file__): package_directory / path_within_package(module)
         for module in (basstler.dashboard.refresh_support, basstler.standard_streams)
     } | {
         DatasetLocation.STUBS
@@ -111,11 +121,12 @@ def scratch_project_root(tmp_path: Path) -> Path:
         / "build_dashboard_stub.py": package_directory
         / StubbedScript.BUILD_DASHBOARD,
     }
+    initializer = "__init__.py"
     for source, destination in copies.items():
         destination.parent.mkdir(parents=True, exist_ok=True)
-        (destination.parent / "__init__.py").touch()
+        (destination.parent / initializer).touch()
         shutil.copy(source, destination)
-    (package_directory / "__init__.py").touch()
+    (package_directory / initializer).touch()
     shutil.copy(
         DatasetLocation.STUBS / "write_personal_notes_file_stub.sh",
         hooks_directory / PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT.name,
