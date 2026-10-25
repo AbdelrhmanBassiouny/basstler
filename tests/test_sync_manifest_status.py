@@ -14,7 +14,6 @@ import yaml
 
 from basstler.build_dashboard import (
     ItemStatus,
-    ManifestKey,
     MissingPlanDirectory,
     PlanValidationError,
     PullRequestRecord,
@@ -23,6 +22,7 @@ from basstler.build_dashboard import (
     validate_plan,
 )
 from basstler.plan_item_bootstrap import PlanDocument
+from basstler.plan_model import ManifestKey
 from basstler.sync_manifest_status import (
     MissingStatusLineError,
     apply_status_corrections,
@@ -46,22 +46,22 @@ def plan(**overrides: Any) -> dict[str, Any]:
     operates directly on that raw structure, never on a parsed :class:`Plan`.
     """
     data = {
-        ManifestKey.SCHEMA_VERSION.value: InvalidSchemaVersion.supported_version,
-        ManifestKey.ID.value: PLAN_UNDER_TEST_ID,
-        ManifestKey.TITLE.value: "Test Plan",
-        ManifestKey.DESCRIPTION.value: "A plan.",
-        ManifestKey.DEFAULT_REPOSITORY.value: "owner/repo",
-        ManifestKey.WAVES.value: [
-            {ManifestKey.ID.value: "wave-1", ManifestKey.NAME.value: "Wave 1"}
+        ManifestKey.SCHEMA_VERSION.key: InvalidSchemaVersion.supported_version,
+        ManifestKey.IDENTIFIER.key: PLAN_UNDER_TEST_ID,
+        ManifestKey.TITLE.key: "Test Plan",
+        ManifestKey.DESCRIPTION.key: "A plan.",
+        ManifestKey.DEFAULT_REPOSITORY.key: "owner/repo",
+        ManifestKey.WAVES.key: [
+            {ManifestKey.IDENTIFIER.key: "wave-1", ManifestKey.NAME.key: "Wave 1"}
         ],
-        ManifestKey.TRACKS.value: [
+        ManifestKey.TRACKS.key: [
             {
-                ManifestKey.ID.value: "track-1",
-                ManifestKey.NAME.value: "Track 1",
-                ManifestKey.WAVE.value: "wave-1",
+                ManifestKey.IDENTIFIER.key: "track-1",
+                ManifestKey.NAME.key: "Track 1",
+                ManifestKey.WAVE.key: "wave-1",
             }
         ],
-        ManifestKey.ITEMS.value: [],
+        ManifestKey.ITEMS.key: [],
     }
     data.update(overrides)
     return data
@@ -83,17 +83,17 @@ def item(
     on that raw structure.
     """
     entry = {
-        ManifestKey.ID.value: identifier,
-        ManifestKey.TITLE.value: identifier,
-        ManifestKey.BRANCH.value: identifier,
-        ManifestKey.TRACK.value: "track-1",
-        ManifestKey.STATUS.value: status,
-        ManifestKey.PULL_REQUEST_NUMBER.value: pull_request_number,
+        ManifestKey.IDENTIFIER.key: identifier,
+        ManifestKey.TITLE.key: identifier,
+        ManifestKey.BRANCH.key: identifier,
+        ManifestKey.TRACK.key: "track-1",
+        ManifestKey.STATUS.key: status,
+        ManifestKey.PULL_REQUEST_NUMBER.key: pull_request_number,
     }
     if repository is not None:
-        entry[ManifestKey.REPOSITORY.value] = repository
+        entry[ManifestKey.REPOSITORY.key] = repository
     if depends_on is not None:
-        entry[ManifestKey.DEPENDS_ON.value] = depends_on
+        entry[ManifestKey.DEPENDS_ON.key] = depends_on
     return entry
 
 
@@ -110,7 +110,7 @@ def test_finds_an_in_progress_item_whose_pull_request_is_merged():
     }
     items = [item("a", "in_progress", pull_request_number=1)]
     corrections = find_items_to_correct(plan(items=items), pull_requests_by_repository)
-    assert [entry[ManifestKey.ID] for entry in corrections] == ["a"]
+    assert [entry[ManifestKey.IDENTIFIER.key] for entry in corrections] == ["a"]
 
 
 def test_ignores_an_item_already_marked_done():
@@ -146,7 +146,7 @@ def test_merged_via_out_of_band_label_is_also_corrected():
     }
     items = [item("a", "blocked", pull_request_number=1)]
     corrections = find_items_to_correct(plan(items=items), pull_requests_by_repository)
-    assert [entry[ManifestKey.ID] for entry in corrections] == ["a"]
+    assert [entry[ManifestKey.IDENTIFIER.key] for entry in corrections] == ["a"]
 
 
 def test_uses_the_item_repository_override_over_the_plan_default():
@@ -161,7 +161,7 @@ def test_uses_the_item_repository_override_over_the_plan_default():
         item("a", "in_progress", pull_request_number=1, repository="owner/other-repo")
     ]
     corrections = find_items_to_correct(plan(items=items), pull_requests_by_repository)
-    assert [entry[ManifestKey.ID] for entry in corrections] == ["a"]
+    assert [entry[ManifestKey.IDENTIFIER.key] for entry in corrections] == ["a"]
 
 
 # %% apply_status_corrections - real manifest text
@@ -176,7 +176,7 @@ MANIFEST_TEXT = (DatasetLocation.DIRECTORY / "manifest.yaml").read_text()
 def test_patches_only_the_targeted_items_status_line():
     data = yaml.safe_load(MANIFEST_TEXT)
     patched_text, corrections = apply_status_corrections(
-        MANIFEST_TEXT, [data[ManifestKey.ITEMS][0]]
+        MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
     )
     assert "    status: done" in patched_text
     assert "    status: not_started" in patched_text  # item b untouched
@@ -187,7 +187,7 @@ def test_patches_only_the_targeted_items_status_line():
 def test_patching_leaves_every_other_line_byte_for_byte_identical():
     data = yaml.safe_load(MANIFEST_TEXT)
     patched_text, _ = apply_status_corrections(
-        MANIFEST_TEXT, [data[ManifestKey.ITEMS][0]]
+        MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
     )
     original_lines = MANIFEST_TEXT.split("\n")
     patched_lines = patched_text.split("\n")
@@ -202,13 +202,16 @@ def test_patching_leaves_every_other_line_byte_for_byte_identical():
 def test_patched_text_still_parses_and_validates():
     data = yaml.safe_load(MANIFEST_TEXT)
     patched_text, _ = apply_status_corrections(
-        MANIFEST_TEXT, [data[ManifestKey.ITEMS][0]]
+        MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
     )
     reparsed = yaml.safe_load(patched_text)
-    assert reparsed[ManifestKey.ITEMS][0][ManifestKey.STATUS] == ItemStatus.DONE.value
     assert (
-        reparsed[ManifestKey.ITEMS][0][ManifestKey.NOTES]
-        == data[ManifestKey.ITEMS][0][ManifestKey.NOTES]
+        reparsed[ManifestKey.ITEMS.key][0][ManifestKey.STATUS.key]
+        == ItemStatus.DONE.value
+    )
+    assert (
+        reparsed[ManifestKey.ITEMS.key][0][ManifestKey.NOTES.key]
+        == data[ManifestKey.ITEMS.key][0][ManifestKey.NOTES.key]
     )
 
 
@@ -233,7 +236,7 @@ def test_raises_if_an_item_has_no_status_line():
     with pytest.raises(MissingStatusLineError, match="no status: line"):
         apply_status_corrections(
             text,
-            [{ManifestKey.ID.value: "a", ManifestKey.BRANCH.value: "a"}],
+            [{ManifestKey.IDENTIFIER.key: "a", ManifestKey.BRANCH.key: "a"}],
         )
 
 

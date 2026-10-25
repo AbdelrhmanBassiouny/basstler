@@ -15,8 +15,9 @@ from typing import Any
 
 import yaml
 
-from basstler.build_dashboard import DependencyReference, ManifestKey
+from basstler.build_dashboard import DependencyReference
 from basstler.plan_item_bootstrap import PlanDocument
+from basstler.plan_model import ManifestKey
 
 from .constants.paths import DatasetLocation
 
@@ -107,8 +108,8 @@ def fixture_item(plan_id: str, item_identifier: str) -> dict[str, Any]:
     :param plan_id: The plan holding it.
     :param item_identifier: That item's own id.
     """
-    for entry in fixture_manifest(plan_id)[ManifestKey.ITEMS]:
-        if entry[ManifestKey.ID] == item_identifier:
+    for entry in fixture_manifest(plan_id)[ManifestKey.ITEMS.key]:
+        if entry[ManifestKey.IDENTIFIER.key] == item_identifier:
             return entry
     raise KeyError(f"no item {item_identifier!r} in fixture plan {plan_id!r}")
 
@@ -119,7 +120,7 @@ def fixture_repository(plan_id: str) -> str:
 
     :param plan_id: The plan's id.
     """
-    return fixture_manifest(plan_id)[ManifestKey.DEFAULT_REPOSITORY]
+    return fixture_manifest(plan_id)[ManifestKey.DEFAULT_REPOSITORY.key]
 
 
 def fixture_pull_request_number(plan_id: str, item_identifier: str) -> str:
@@ -129,4 +130,6 @@ def fixture_pull_request_number(plan_id: str, item_identifier: str) -> str:
     :param plan_id: The plan holding it.
     :param item_identifier: That item's own id.
     """
-    return str(fixture_item(plan_id, item_identifier)[ManifestKey.PULL_REQUEST_NUMBER])
+    return str(
+        fixture_item(plan_id, item_identifier)[ManifestKey.PULL_REQUEST_NUMBER.key]
+    )

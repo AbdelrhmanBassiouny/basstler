@@ -26,7 +26,6 @@ from basstler.build_dashboard import (
     ItemStatus,
     LiveState,
     MalformedDependencyReference,
-    ManifestKey,
     MalformedPullRequestDataError,
     MissingMergeTimestampError,
     MissingPlanDirectory,
@@ -56,6 +55,7 @@ from basstler.build_dashboard import (
 from basstler.github_labels import GitHubLabel
 from basstler.locations import PackageLocation
 from basstler.plan_item_bootstrap import PlanDocument
+from basstler.plan_model import ManifestKey
 
 from .constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
 from .constants.stack import StackLabel
@@ -85,22 +85,22 @@ def minimal_plan(**overrides: Any) -> dict[str, Any]:
     :param overrides: Top-level keys to replace in the returned mapping.
     """
     plan = {
-        ManifestKey.SCHEMA_VERSION.value: InvalidSchemaVersion.supported_version,
-        ManifestKey.ID.value: PLAN_UNDER_TEST_ID,
-        ManifestKey.TITLE.value: "Test Plan",
-        ManifestKey.DESCRIPTION.value: "A plan.",
-        ManifestKey.DEFAULT_REPOSITORY.value: "owner/repo",
-        ManifestKey.WAVES.value: [
-            {ManifestKey.ID.value: "wave-1", ManifestKey.NAME.value: "Wave 1"}
+        ManifestKey.SCHEMA_VERSION.key: InvalidSchemaVersion.supported_version,
+        ManifestKey.IDENTIFIER.key: PLAN_UNDER_TEST_ID,
+        ManifestKey.TITLE.key: "Test Plan",
+        ManifestKey.DESCRIPTION.key: "A plan.",
+        ManifestKey.DEFAULT_REPOSITORY.key: "owner/repo",
+        ManifestKey.WAVES.key: [
+            {ManifestKey.IDENTIFIER.key: "wave-1", ManifestKey.NAME.key: "Wave 1"}
         ],
-        ManifestKey.TRACKS.value: [
+        ManifestKey.TRACKS.key: [
             {
-                ManifestKey.ID.value: "track-1",
-                ManifestKey.NAME.value: "Track 1",
-                ManifestKey.WAVE.value: "wave-1",
+                ManifestKey.IDENTIFIER.key: "track-1",
+                ManifestKey.NAME.key: "Track 1",
+                ManifestKey.WAVE.key: "wave-1",
             }
         ],
-        ManifestKey.ITEMS.value: [manifest_item("a", title="Item A")],
+        ManifestKey.ITEMS.key: [manifest_item("a", title="Item A")],
     }
     plan.update(overrides)
     return plan
@@ -118,13 +118,20 @@ def manifest_item(identifier: str, **overrides: Any) -> dict[str, Any]:
         entirely.
     """
     entry = {
-        ManifestKey.ID.value: identifier,
-        ManifestKey.TITLE.value: identifier.upper(),
-        ManifestKey.BRANCH.value: identifier,
-        ManifestKey.TRACK.value: "track-1",
-        ManifestKey.STATUS.value: ItemStatus.NOT_STARTED.value,
+        ManifestKey.IDENTIFIER.key: identifier,
+        ManifestKey.TITLE.key: identifier.upper(),
+        ManifestKey.BRANCH.key: identifier,
+        ManifestKey.TRACK.key: "track-1",
+        ManifestKey.STATUS.key: ItemStatus.NOT_STARTED.value,
     }
-    entry.update({ManifestKey(key).value: value for key, value in overrides.items()})
+    entry.update(
+        {
+            next(
+                manifest_key for manifest_key in ManifestKey if manifest_key.key == key
+            ).key: value
+            for key, value in overrides.items()
+        }
+    )
     return {key: value for key, value in entry.items() if value is not None}
 
 
@@ -165,9 +172,9 @@ def test_validate_plan_rejects_unknown_track():
 def test_validate_plan_rejects_unknown_wave():
     tracks = [
         {
-            ManifestKey.ID.value: "track-1",
-            ManifestKey.NAME.value: "Track 1",
-            ManifestKey.WAVE.value: "no-such-wave",
+            ManifestKey.IDENTIFIER.key: "track-1",
+            ManifestKey.NAME.key: "Track 1",
+            ManifestKey.WAVE.key: "no-such-wave",
         }
     ]
     with pytest.raises(PlanValidationError) as error:
@@ -508,9 +515,9 @@ def test_plan_from_mapping_reads_optional_wave_description():
         minimal_plan(
             waves=[
                 {
-                    ManifestKey.ID.value: "wave-1",
-                    ManifestKey.NAME.value: "Wave 1",
-                    ManifestKey.DESCRIPTION.value: "why",
+                    ManifestKey.IDENTIFIER.key: "wave-1",
+                    ManifestKey.NAME.key: "Wave 1",
+                    ManifestKey.DESCRIPTION.key: "why",
                 }
             ]
         )
@@ -528,8 +535,8 @@ def test_plan_from_mapping_ignores_an_unexpected_wave_key_instead_of_crashing():
         minimal_plan(
             waves=[
                 {
-                    ManifestKey.ID.value: "wave-1",
-                    ManifestKey.NAME.value: "Wave 1",
+                    ManifestKey.IDENTIFIER.key: "wave-1",
+                    ManifestKey.NAME.key: "Wave 1",
                     "future_field": "unused",
                 }
             ]
@@ -543,9 +550,9 @@ def test_plan_from_mapping_ignores_an_unexpected_track_key_instead_of_crashing()
         minimal_plan(
             tracks=[
                 {
-                    ManifestKey.ID.value: "track-1",
-                    ManifestKey.NAME.value: "Track 1",
-                    ManifestKey.WAVE.value: "wave-1",
+                    ManifestKey.IDENTIFIER.key: "track-1",
+                    ManifestKey.NAME.key: "Track 1",
+                    ManifestKey.WAVE.key: "wave-1",
                     "future_field": "unused",
                 }
             ]
@@ -2164,7 +2171,7 @@ def test_dependency_reference_is_malformed_with_a_second_separator():
     # it means nothing, so it is refused rather than read as part of an id.
     reference = DependencyReference.from_text(
         DependencyReference.separator.join(
-            [FixturePlanId.OTHER, ManifestKey.WAVE, ForeignItemId.READY]
+            [FixturePlanId.OTHER, ManifestKey.WAVE.key, ForeignItemId.READY]
         )
     )
     assert reference.is_well_formed is False
@@ -2188,8 +2195,8 @@ def test_plan_directory_reads_one_plans_manifest_by_id():
     directory = PlanDirectory(DatasetLocation.PLANS)
     plan = directory.plan(FixturePlanId.OTHER)
     manifest = fixture_manifest(FixturePlanId.OTHER)
-    assert plan.title == manifest[ManifestKey.TITLE]
-    assert plan.default_repository == manifest[ManifestKey.DEFAULT_REPOSITORY]
+    assert plan.title == manifest[ManifestKey.TITLE.key]
+    assert plan.default_repository == manifest[ManifestKey.DEFAULT_REPOSITORY.key]
 
 
 def test_plan_directory_reads_no_manifest_nothing_has_named():
@@ -2294,7 +2301,7 @@ def test_validate_plan_rejects_a_reference_to_the_plans_own_id():
 
 def test_validate_plan_rejects_a_malformed_reference():
     malformed = DependencyReference.separator.join(
-        [FixturePlanId.OTHER, ManifestKey.WAVE, ForeignItemId.READY]
+        [FixturePlanId.OTHER, ManifestKey.WAVE.key, ForeignItemId.READY]
     )
     with pytest.raises(PlanValidationError) as error:
         validate_plan(

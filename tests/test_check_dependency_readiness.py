@@ -14,7 +14,6 @@ from basstler.build_dashboard import (
     Item,
     ItemStatus,
     LiveState,
-    ManifestKey,
     Plan,
     PlanDirectory,
     PlanValidationError,
@@ -32,6 +31,7 @@ from basstler.check_dependency_readiness import (
     dependency_readiness,
     main,
 )
+from basstler.plan_model import ManifestKey
 
 from .constants.paths import DatasetLocation
 from .fixture_plans import (
@@ -184,22 +184,22 @@ def test_multiple_dependencies_reported_in_order():
 
 def _minimal_plan_mapping():
     return {
-        ManifestKey.SCHEMA_VERSION.value: InvalidSchemaVersion.supported_version,
-        ManifestKey.ID.value: PLAN_UNDER_TEST_ID,
-        ManifestKey.TITLE.value: "Test Plan",
-        ManifestKey.DESCRIPTION.value: "A plan.",
-        ManifestKey.DEFAULT_REPOSITORY.value: "owner/repo",
-        ManifestKey.WAVES.value: [
-            {ManifestKey.ID.value: "wave-1", ManifestKey.NAME.value: "Wave 1"}
+        ManifestKey.SCHEMA_VERSION.key: InvalidSchemaVersion.supported_version,
+        ManifestKey.IDENTIFIER.key: PLAN_UNDER_TEST_ID,
+        ManifestKey.TITLE.key: "Test Plan",
+        ManifestKey.DESCRIPTION.key: "A plan.",
+        ManifestKey.DEFAULT_REPOSITORY.key: "owner/repo",
+        ManifestKey.WAVES.key: [
+            {ManifestKey.IDENTIFIER.key: "wave-1", ManifestKey.NAME.key: "Wave 1"}
         ],
-        ManifestKey.TRACKS.value: [
+        ManifestKey.TRACKS.key: [
             {
-                ManifestKey.ID.value: "track-1",
-                ManifestKey.NAME.value: "Track 1",
-                ManifestKey.WAVE.value: "wave-1",
+                ManifestKey.IDENTIFIER.key: "track-1",
+                ManifestKey.NAME.key: "Track 1",
+                ManifestKey.WAVE.key: "wave-1",
             }
         ],
-        ManifestKey.ITEMS.value: [
+        ManifestKey.ITEMS.key: [
             _manifest_item("a", "Item A", ItemStatus.DONE),
             _manifest_item("b", "Item B", ItemStatus.NOT_STARTED, depends_on=["a"]),
         ],
@@ -221,14 +221,14 @@ def _manifest_item(
     :param depends_on: Its ``depends_on``, left out when omitted.
     """
     entry = {
-        ManifestKey.ID.value: identifier,
-        ManifestKey.TITLE.value: title,
-        ManifestKey.BRANCH.value: identifier,
-        ManifestKey.TRACK.value: "track-1",
-        ManifestKey.STATUS.value: status.value,
+        ManifestKey.IDENTIFIER.key: identifier,
+        ManifestKey.TITLE.key: title,
+        ManifestKey.BRANCH.key: identifier,
+        ManifestKey.TRACK.key: "track-1",
+        ManifestKey.STATUS.key: status.value,
     }
     if depends_on is not None:
-        entry[ManifestKey.DEPENDS_ON.value] = depends_on
+        entry[ManifestKey.DEPENDS_ON.key] = depends_on
     return entry
 
 
@@ -340,7 +340,7 @@ def test_foreign_dependency_is_read_against_its_own_plans_repository():
         DependencyReadiness(
             identifier=reference,
             title=fixture_item(FixturePlanId.OTHER, ForeignItemId.READY)[
-                ManifestKey.TITLE
+                ManifestKey.TITLE.key
             ],
             live_state=LiveState.OPEN_READY,
             is_ready=True,
@@ -364,7 +364,7 @@ def test_main_resolves_a_cross_plan_dependency_against_the_plans_directory(
 ):
     reference = foreign_reference(ForeignItemId.DONE)
     plan_mapping = _minimal_plan_mapping()
-    plan_mapping[ManifestKey.ITEMS][1][ManifestKey.DEPENDS_ON.value] = [reference]
+    plan_mapping[ManifestKey.ITEMS.key][1][ManifestKey.DEPENDS_ON.key] = [reference]
     plan_path = tmp_path / "plan.yaml"
     plan_path.write_text(yaml.dump(plan_mapping))
     pull_request_data_path = tmp_path / "pr_data.json"

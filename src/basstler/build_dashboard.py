@@ -57,7 +57,7 @@ import yaml
 from basstler.class_property import classproperty
 from basstler.github_labels import GitHubLabel
 from basstler.plan_item_bootstrap import PlanDocument
-from basstler.plan_model import ItemStatus
+from basstler.plan_model import ItemStatus, ManifestKey
 from basstler.maintenance_board import PullRequestField
 from basstler.maintenance_board import PullRequestRecord as PullRequestAPIRecord
 from basstler.render_common import (
@@ -113,35 +113,6 @@ class PullRequestState(StrEnum):
 
     OPEN = "open"
     CLOSED = "closed"
-
-
-class ManifestKey(StrEnum):
-    """Every key a plan.yaml carries.
-
-    The manifest's vocabulary written once, so a reader and a test spell a
-    key the same way and renaming one renames both.
-    """
-
-    SCHEMA_VERSION = "schema_version"
-    ID = "id"
-    TITLE = "title"
-    DESCRIPTION = "description"
-    DEFAULT_REPOSITORY = "default_repository"
-    TRACKING_ISSUE = "tracking_issue"
-    WAVES = "waves"
-    TRACKS = "tracks"
-    ITEMS = "items"
-    NAME = "name"
-    WAVE = "wave"
-    TRACK = "track"
-    BRANCH = "branch"
-    STATUS = "status"
-    PULL_REQUEST_NUMBER = "pull_request_number"
-    REPOSITORY = "repository"
-    SESSION = "session"
-    NOTES = "notes"
-    DEPENDS_ON = "depends_on"
-    BLOCKERS = "blockers"
 
 
 @dataclass(frozen=True)
@@ -730,12 +701,15 @@ def validate_plan(
 
     problems: list[ValidationProblem] = []
 
-    if plan.get(ManifestKey.SCHEMA_VERSION) != InvalidSchemaVersion.supported_version:
-        problems.append(InvalidSchemaVersion(plan.get(ManifestKey.SCHEMA_VERSION)))
+    if (
+        plan.get(ManifestKey.SCHEMA_VERSION.key)
+        != InvalidSchemaVersion.supported_version
+    ):
+        problems.append(InvalidSchemaVersion(plan.get(ManifestKey.SCHEMA_VERSION.key)))
 
     item_identifiers = [
-        item.get(ManifestKey.ID) or item.get(ManifestKey.BRANCH)
-        for item in plan.get(ManifestKey.ITEMS, [])
+        item.get(ManifestKey.IDENTIFIER.key) or item.get(ManifestKey.BRANCH.key)
+        for item in plan.get(ManifestKey.ITEMS.key, [])
     ]
     if len(item_identifiers) != len(set(item_identifiers)):
         seen: set[str] = set()
@@ -747,23 +721,28 @@ def validate_plan(
         problems.append(DuplicateItemId(sorted(duplicate_identifiers)))
 
     track_identifiers = {
-        track[ManifestKey.ID] for track in plan.get(ManifestKey.TRACKS, [])
+        track[ManifestKey.IDENTIFIER.key]
+        for track in plan.get(ManifestKey.TRACKS.key, [])
     }
     wave_identifiers = {
-        wave[ManifestKey.ID] for wave in plan.get(ManifestKey.WAVES, [])
+        wave[ManifestKey.IDENTIFIER.key] for wave in plan.get(ManifestKey.WAVES.key, [])
     }
     item_identifier_set = set(item_identifiers)
     references_by_identifier: dict[str, list[DependencyReference]] = {}
 
-    for item in plan.get(ManifestKey.ITEMS, []):
-        item_identifier = item.get(ManifestKey.ID) or item.get(ManifestKey.BRANCH)
-        if item.get(ManifestKey.TRACK) not in track_identifiers:
-            problems.append(UnknownTrack(item_identifier, item.get(ManifestKey.TRACK)))
-        if item.get(ManifestKey.STATUS) not in ItemStatus.accepted_spellings():
+    for item in plan.get(ManifestKey.ITEMS.key, []):
+        item_identifier = item.get(ManifestKey.IDENTIFIER.key) or item.get(
+            ManifestKey.BRANCH.key
+        )
+        if item.get(ManifestKey.TRACK.key) not in track_identifiers:
             problems.append(
-                UnknownStatus(item_identifier, item.get(ManifestKey.STATUS))
+                UnknownTrack(item_identifier, item.get(ManifestKey.TRACK.key))
             )
-        depends_on = item.get(ManifestKey.DEPENDS_ON)
+        if item.get(ManifestKey.STATUS.key) not in ItemStatus.accepted_spellings():
+            problems.append(
+                UnknownStatus(item_identifier, item.get(ManifestKey.STATUS.key))
+            )
+        depends_on = item.get(ManifestKey.DEPENDS_ON.key)
         if depends_on is not None and not isinstance(depends_on, list):
             problems.append(InvalidDependsOn(item_identifier, type(depends_on)))
         else:
@@ -776,28 +755,30 @@ def validate_plan(
                 problem = _dependency_problem(
                     item_identifier,
                     dependency_identifier,
-                    plan.get(ManifestKey.ID),
+                    plan.get(ManifestKey.IDENTIFIER.key),
                     item_identifier_set,
                     plan_directory,
                 )
                 if problem is not None:
                     problems.append(problem)
 
-        blockers = item.get(ManifestKey.BLOCKERS)
+        blockers = item.get(ManifestKey.BLOCKERS.key)
         if blockers is not None and not isinstance(blockers, list):
             problems.append(InvalidBlockers(item_identifier, type(blockers)))
 
     graph = DependencyGraph.reachable_from(
-        plan.get(ManifestKey.ID), references_by_identifier, plan_directory
+        plan.get(ManifestKey.IDENTIFIER.key), references_by_identifier, plan_directory
     )
     cycle = graph.find_cycle()
     if cycle is not None:
         problems.append(DependencyCycle(cycle))
 
-    for track in plan.get(ManifestKey.TRACKS, []):
-        if track.get(ManifestKey.WAVE) not in wave_identifiers:
+    for track in plan.get(ManifestKey.TRACKS.key, []):
+        if track.get(ManifestKey.WAVE.key) not in wave_identifiers:
             problems.append(
-                UnknownWave(track[ManifestKey.ID], track.get(ManifestKey.WAVE))
+                UnknownWave(
+                    track[ManifestKey.IDENTIFIER.key], track.get(ManifestKey.WAVE.key)
+                )
             )
 
     if problems:
@@ -966,9 +947,9 @@ class Wave:
         called after :func:`validate_plan` has already confirmed the data
         is well-formed."""
         return cls(
-            id=data[ManifestKey.ID],
-            name=data[ManifestKey.NAME],
-            description=data.get(ManifestKey.DESCRIPTION),
+            id=data[ManifestKey.IDENTIFIER.key],
+            name=data[ManifestKey.NAME.key],
+            description=data.get(ManifestKey.DESCRIPTION.key),
         )
 
 
@@ -995,10 +976,10 @@ class Track:
         called after :func:`validate_plan` has already confirmed the data
         is well-formed."""
         return cls(
-            id=data[ManifestKey.ID],
-            name=data[ManifestKey.NAME],
-            wave=data[ManifestKey.WAVE],
-            description=data.get(ManifestKey.DESCRIPTION),
+            id=data[ManifestKey.IDENTIFIER.key],
+            name=data[ManifestKey.NAME.key],
+            wave=data[ManifestKey.WAVE.key],
+            description=data.get(ManifestKey.DESCRIPTION.key),
         )
 
 
@@ -1299,19 +1280,19 @@ class Item:
         """Build an item from one entry of plan.yaml's ``items[]`` - only
         called after :func:`validate_plan` has already confirmed the data
         is well-formed."""
-        notes = data.get(ManifestKey.NOTES)
+        notes = data.get(ManifestKey.NOTES.key)
         return cls(
-            title=data[ManifestKey.TITLE],
-            branch=data[ManifestKey.BRANCH],
-            track=data[ManifestKey.TRACK],
-            status=ItemStatus(data[ManifestKey.STATUS]),
-            id=data.get(ManifestKey.ID),
-            pull_request_number=data.get(ManifestKey.PULL_REQUEST_NUMBER),
-            repository=data.get(ManifestKey.REPOSITORY),
-            session=sanitize_http_url(data.get(ManifestKey.SESSION)),
+            title=data[ManifestKey.TITLE.key],
+            branch=data[ManifestKey.BRANCH.key],
+            track=data[ManifestKey.TRACK.key],
+            status=ItemStatus(data[ManifestKey.STATUS.key]),
+            id=data.get(ManifestKey.IDENTIFIER.key),
+            pull_request_number=data.get(ManifestKey.PULL_REQUEST_NUMBER.key),
+            repository=data.get(ManifestKey.REPOSITORY.key),
+            session=sanitize_http_url(data.get(ManifestKey.SESSION.key)),
             notes=notes.strip() if notes else None,
-            depends_on=list(data.get(ManifestKey.DEPENDS_ON) or []),
-            blockers=list(data.get(ManifestKey.BLOCKERS) or []),
+            depends_on=list(data.get(ManifestKey.DEPENDS_ON.key) or []),
+            blockers=list(data.get(ManifestKey.BLOCKERS.key) or []),
         )
 
     def is_effectively_done(self) -> bool:
@@ -1379,16 +1360,21 @@ class Plan:
         """Build a plan from a freshly-loaded plan.yaml - only called after
         :func:`validate_plan` has already confirmed the data is well-formed."""
         return cls(
-            id=data[ManifestKey.ID],
-            title=data[ManifestKey.TITLE],
-            description=data[ManifestKey.DESCRIPTION],
-            default_repository=data[ManifestKey.DEFAULT_REPOSITORY],
-            waves=[Wave.from_mapping(wave) for wave in data.get(ManifestKey.WAVES, [])],
-            tracks=[
-                Track.from_mapping(track) for track in data.get(ManifestKey.TRACKS, [])
+            id=data[ManifestKey.IDENTIFIER.key],
+            title=data[ManifestKey.TITLE.key],
+            description=data[ManifestKey.DESCRIPTION.key],
+            default_repository=data[ManifestKey.DEFAULT_REPOSITORY.key],
+            waves=[
+                Wave.from_mapping(wave) for wave in data.get(ManifestKey.WAVES.key, [])
             ],
-            items=[Item.from_mapping(item) for item in data.get(ManifestKey.ITEMS, [])],
-            tracking_issue=data.get(ManifestKey.TRACKING_ISSUE),
+            tracks=[
+                Track.from_mapping(track)
+                for track in data.get(ManifestKey.TRACKS.key, [])
+            ],
+            items=[
+                Item.from_mapping(item) for item in data.get(ManifestKey.ITEMS.key, [])
+            ],
+            tracking_issue=data.get(ManifestKey.TRACKING_ISSUE.key),
         )
 
 
