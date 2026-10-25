@@ -127,11 +127,12 @@ items:
   status: not started
 - id: shared-fork-base-fast-forward
   title: Fast-forward the fork's base through one implementation, shared with session start
-  branch: null
-  pull_request_number: null
-  status: not started
+  branch: claude/gifted-planck-k6d3c3
+  pull_request_number: 72
+  status: in progress
   track: pass
   depends_on: []
+  session: https://claude.ai/code/session_01DWEyg9F33n9vwvdb2deBcY
   notes: 'From the basstler#57 review (issuecomment-6404647312). maintenance.fast_forward and
     DefaultBranchSync.publish_to_fork both fetch the fork''s base, compare it with the upstream
     tip, push and re-fetch. One class in basstler.maintenance serves both, parameterised by
