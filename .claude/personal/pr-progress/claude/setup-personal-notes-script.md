@@ -4,8 +4,8 @@ Port the session-free personal-notes setup onto main's src layout as
 Labels: main's `GitHubLabel` set as is (owner's call, 2026-10-25).
 
 ## Done
-- Ported command, report model, label API; 1283 tests green.
-- Checklist title counts GitHubLabel; live label creation verified.
+- Ported command, report model, label API; live label creation verified.
+- Review round 1 (paths, keys, email, exit codes) addressed in 86091fe; 1291 tests green.
 
 ## Next
 - Leave draft until told otherwise.
