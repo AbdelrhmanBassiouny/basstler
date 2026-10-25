@@ -24,8 +24,9 @@ from basstler.build_dashboard import (
 )
 from basstler.plan_item_bootstrap import PlanDocument
 from basstler.plan_model import ManifestKey
+from basstler.exceptions import MissingStatusLineError
 from basstler.sync_manifest_status import (
-    MissingStatusLineError,
+    ManifestText,
     StatusCorrection,
     main,
 )
@@ -80,7 +81,7 @@ def item(
     ``status`` is a plain ``str``, not :class:`ItemStatus`: this mirrors exactly what
     ``yaml.safe_load`` hands back before any parsing into typed dataclasses happens,
     since :meth:`StatusCorrection.items_to_correct` and
-    :meth:`StatusCorrection.apply_to` both work directly on that raw structure.
+    :meth:`ManifestText.correct_statuses` both work directly on that raw structure.
     """
     entry = {
         ManifestKey.IDENTIFIER.key: identifier,
@@ -183,17 +184,16 @@ def test_uses_the_item_repository_override_over_the_plan_default():
 # %% applying corrections - real manifest text
 
 # A real plan.yaml's raw text (two items, one due for correction) - loaded
-# once and shared read-only by every test below, since StatusCorrection.apply_to
-# patches text in place and each test asserts against its own fresh copy of
-# the return value rather than mutating this constant.
+# once and shared read-only by every test below, since each test patches its own
+# ManifestText parsed from it.
 MANIFEST_TEXT = (DatasetLocation.DIRECTORY / "manifest.yaml").read_text()
 
 
 def test_patches_only_the_targeted_items_status_line():
     data = yaml.safe_load(MANIFEST_TEXT)
-    patched_text, corrections = StatusCorrection.apply_to(
-        MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
-    )
+    manifest_text = ManifestText.parse(MANIFEST_TEXT)
+    corrections = manifest_text.correct_statuses([data[ManifestKey.ITEMS.key][0]])
+    patched_text = manifest_text.text
     assert "    status: done" in patched_text
     assert "    status: not_started" in patched_text  # item b untouched
     assert [c.item_identifier for c in corrections] == ["a"]
@@ -202,9 +202,9 @@ def test_patches_only_the_targeted_items_status_line():
 
 def test_patching_leaves_every_other_line_byte_for_byte_identical():
     data = yaml.safe_load(MANIFEST_TEXT)
-    patched_text, _ = StatusCorrection.apply_to(
-        MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
-    )
+    manifest_text = ManifestText.parse(MANIFEST_TEXT)
+    manifest_text.correct_statuses([data[ManifestKey.ITEMS.key][0]])
+    patched_text = manifest_text.text
     original_lines = MANIFEST_TEXT.split("\n")
     patched_lines = patched_text.split("\n")
     changed_line_pairs = [
@@ -218,9 +218,9 @@ def test_patching_leaves_every_other_line_byte_for_byte_identical():
 def test_patched_text_still_parses_and_validates():
     data = yaml.safe_load(MANIFEST_TEXT)
     original = Plan.from_mapping(data)
-    patched_text, _ = StatusCorrection.apply_to(
-        MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
-    )
+    manifest_text = ManifestText.parse(MANIFEST_TEXT)
+    manifest_text.correct_statuses([data[ManifestKey.ITEMS.key][0]])
+    patched_text = manifest_text.text
     reparsed = yaml.safe_load(patched_text)
     PlanValidator(reparsed).validate()  # must not raise
     patched = Plan.from_mapping(reparsed)
@@ -233,67 +233,27 @@ def test_patches_a_status_line_spelled_with_spaces():
         DatasetLocation.DIRECTORY / "manifest-with-spaced-statuses.yaml"
     ).read_text()
     data = yaml.safe_load(text)
-    patched_text, corrections = StatusCorrection.apply_to(
-        text, [data[ManifestKey.ITEMS.key][0]]
-    )
+    manifest_text = ManifestText.parse(text)
+    corrections = manifest_text.correct_statuses([data[ManifestKey.ITEMS.key][0]])
+    patched_text = manifest_text.text
     patched = Plan.from_mapping(yaml.safe_load(patched_text))
     assert patched.items[0].status is ItemStatus.DONE
     assert [c.previous_status for c in corrections] == [ItemStatus.IN_PROGRESS]
 
 
-def test_patching_leaves_every_other_line_byte_for_byte_identical():
-    data = yaml.safe_load(MANIFEST_TEXT)
-    patched_text, _ = StatusCorrection.apply_to(
-        MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
-    )
-    original_lines = MANIFEST_TEXT.split("\n")
-    patched_lines = patched_text.split("\n")
-    changed_line_pairs = [
-        (before, after)
-        for before, after in zip(original_lines, patched_lines)
-        if before != after
-    ]
-    assert changed_line_pairs == [("    status: in_progress", "    status: done")]
-
-
-def test_patched_text_still_parses_and_validates():
-    data = yaml.safe_load(MANIFEST_TEXT)
-    patched_text, _ = StatusCorrection.apply_to(
-        MANIFEST_TEXT, [data[ManifestKey.ITEMS.key][0]]
-    )
-    reparsed = yaml.safe_load(patched_text)
-    assert (
-        reparsed[ManifestKey.ITEMS.key][0][ManifestKey.STATUS.key]
-        == ItemStatus.DONE.value
-    )
-    assert (
-        reparsed[ManifestKey.ITEMS.key][0][ManifestKey.NOTES.key]
-        == data[ManifestKey.ITEMS.key][0][ManifestKey.NOTES.key]
-    )
-
-
-def test_patches_a_status_line_spelled_with_spaces():
-    text = (
-        DatasetLocation.DIRECTORY / "manifest-with-spaced-statuses.yaml"
-    ).read_text()
-    data = yaml.safe_load(text)
-    patched_text, corrections = StatusCorrection.apply_to(text, [data["items"][0]])
-    assert yaml.safe_load(patched_text)["items"][0]["status"] == ItemStatus.DONE.value
-    assert [c.previous_status for c in corrections] == [ItemStatus.IN_PROGRESS]
-
-
 def test_no_items_to_correct_returns_original_text_unchanged():
-    patched_text, corrections = StatusCorrection.apply_to(MANIFEST_TEXT, [])
+    manifest_text = ManifestText.parse(MANIFEST_TEXT)
+    corrections = manifest_text.correct_statuses([])
+    patched_text = manifest_text.text
     assert patched_text == MANIFEST_TEXT
     assert corrections == []
 
 
 def test_raises_if_an_item_has_no_status_line():
     text = "- id: a\n  title: A\n  branch: a\n"
-    with pytest.raises(MissingStatusLineError, match="no status: line"):
-        StatusCorrection.apply_to(
-            text,
-            [{ManifestKey.IDENTIFIER.key: "a", ManifestKey.BRANCH.key: "a"}],
+    with pytest.raises(MissingStatusLineError):
+        ManifestText.parse(text).correct_statuses(
+            [{ManifestKey.IDENTIFIER.key: "a", ManifestKey.BRANCH.key: "a"}]
         )
 
 

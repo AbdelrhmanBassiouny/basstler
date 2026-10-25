@@ -63,6 +63,7 @@ from basstler.build_dashboard import (
     PlanValidationError,
     PlanValidator,
 )
+from basstler.exceptions import MissingStatusLineError
 from basstler.plan_model import ManifestKey
 from basstler.standard_streams import StandardStreamHandler
 
@@ -93,12 +94,6 @@ class ManifestLinePattern(Enum):
         :return: This pattern's match at the line's start, if any.
         """
         return self.value.match(line)
-
-
-class MissingStatusLineError(ValueError):
-    """Raised when an item slated for correction has no ``status:`` line in
-    its manifest block - the manifest text and the parsed data have gone out
-    of sync."""
 
 
 @dataclass
@@ -150,63 +145,116 @@ class StatusCorrection:
             is LiveState.MERGED
         ]
 
-    @classmethod
-    def apply_to(
-        cls, plan_text: str, items_to_correct: list[dict[str, Any]]
-    ) -> tuple[str, list[StatusCorrection]]:
-        """
-        Patch ``plan_text``'s ``status:`` line for each item in ``items_to_correct`` to
-        ``done``, leaving every other line untouched.
 
-        :param plan_text: The plan.yaml file's raw text.
-        :param items_to_correct: Raw item mappings (as found by
-            :meth:`StatusCorrection.items_to_correct`) whose status line should become
-            ``done``.
-        :raises ValueError: If an item's ``status:`` line can't be found in its
-            block - the manifest and the parsed data have gone out of sync.
-        :return: The patched text, and the correction actually applied to each
-            item, in the same order as ``items_to_correct``.
+@dataclass
+class ItemBlock:
+    """
+    One item's lines in a raw plan.yaml, from its ``- id:`` line up to the next item's.
+    """
+
+    lines: list[str]
+    """
+    The block's lines, which :meth:`correct_status` edits in place.
+    """
+
+    @property
+    def item_identifier(self) -> str:
+        """
+        The id written on the block's first line.
+        """
+        return self.lines[0].strip().removeprefix("- id:").strip()
+
+    def correct_status(self) -> StatusCorrection:
+        """
+        Set this block's ``status:`` line to ``done``.
+
+        :raises MissingStatusLineError: If the block has no ``status:`` line.
+        :return: The correction made.
+        """
+        status_line_index = next(
+            (
+                index
+                for index, line in enumerate(self.lines)
+                if ManifestLinePattern.STATUS_LINE.match(line)
+            ),
+            None,
+        )
+        if status_line_index is None:
+            raise MissingStatusLineError(self.item_identifier)
+        match = ManifestLinePattern.STATUS_LINE.match(self.lines[status_line_index])
+        self.lines[status_line_index] = f"{match.group(1)}{ItemStatus.DONE.value}"
+        return StatusCorrection(self.item_identifier, ItemStatus(match.group(2)))
+
+
+@dataclass
+class ManifestText:
+    """
+    A raw plan.yaml's text, split into the lines before its first item and one block per
+    item.
+    """
+
+    preamble: list[str]
+    """
+    The lines before the first item block.
+    """
+
+    item_blocks: list[ItemBlock]
+    """
+    Every item block, in manifest order.
+    """
+
+    @classmethod
+    def parse(cls, text: str) -> ManifestText:
+        """
+        :param text: The plan.yaml file's raw text.
+        :return: The text split into its preamble and item blocks.
+        """
+        lines = text.split("\n")
+        boundaries = [
+            index
+            for index, line in enumerate(lines)
+            if ManifestLinePattern.ITEM_START.match(line)
+        ] + [len(lines)]
+        return cls(
+            preamble=lines[: boundaries[0]],
+            item_blocks=[
+                ItemBlock(lines[start:end])
+                for start, end in zip(boundaries, boundaries[1:])
+            ],
+        )
+
+    @property
+    def text(self) -> str:
+        """
+        The plan.yaml text as it now stands, every unedited line byte-for-byte as
+        parsed.
+        """
+        return "\n".join(
+            self.preamble + [line for block in self.item_blocks for line in block.lines]
+        )
+
+    def correct_statuses(
+        self, items_to_correct: list[dict[str, Any]]
+    ) -> list[StatusCorrection]:
+        """
+        Set the ``status:`` line of each item in ``items_to_correct`` to ``done``,
+        leaving every other line untouched.
+
+        :param items_to_correct: Raw item mappings, as found by
+            :meth:`StatusCorrection.items_to_correct`.
+        :raises MissingStatusLineError: If one of those items' block has no ``status:``
+            line.
+        :return: The correction made to each item, in manifest order.
         """
         identifiers_to_correct = {
             item.get(ManifestKey.IDENTIFIER.key) or item.get(ManifestKey.BRANCH.key)
             for item in items_to_correct
         }
-        lines = plan_text.split("\n")
-        item_starts = [
-            index
-            for index, line in enumerate(lines)
-            if ManifestLinePattern.ITEM_START.match(line)
+        return [
+            block.correct_status()
+            for block in self.item_blocks
+            if block.item_identifier in identifiers_to_correct
         ]
-        item_starts.append(len(lines))
-
-        corrections: list[StatusCorrection] = []
-        for start, end in zip(item_starts, item_starts[1:]):
-            item_identifier = lines[start].strip().removeprefix("- id:").strip()
-            if item_identifier not in identifiers_to_correct:
-                continue
-            status_line_index = next(
-                (
-                    offset
-                    for offset, line in enumerate(lines[start:end])
-                    if ManifestLinePattern.STATUS_LINE.match(line)
-                ),
-                None,
-            )
-            if status_line_index is None:
-                raise MissingStatusLineError(
-                    f"item {item_identifier!r} has no status: line to correct"
-                )
-            line_index = start + status_line_index
-            match = ManifestLinePattern.STATUS_LINE.match(lines[line_index])
-            corrections.append(
-                cls(
-                    item_identifier=item_identifier,
-                    previous_status=ItemStatus(match.group(2)),
-                )
-            )
-            lines[line_index] = f"{match.group(1)}{ItemStatus.DONE.value}"
-
-        return "\n".join(lines), corrections
 
 
 def main() -> int:
@@ -227,8 +275,8 @@ def main() -> int:
     arguments = parser.parse_args()
     plan_arguments = PlanCommandArguments.from_namespace(arguments)
 
-    plan_text = plan_arguments.plan_path.read_text()
-    plan = yaml.safe_load(plan_text)
+    manifest_text = ManifestText.parse(plan_arguments.plan_path.read_text())
+    plan = yaml.safe_load(manifest_text.text)
     try:
         PlanValidator(plan, plan_arguments.plan_directory).validate()
     except PlanValidationError as error:
@@ -239,12 +287,12 @@ def main() -> int:
     items_to_correct = StatusCorrection.items_to_correct(
         plan, pull_requests_by_repository
     )
-    corrected_text, corrections = StatusCorrection.apply_to(plan_text, items_to_correct)
+    corrections = manifest_text.correct_statuses(items_to_correct)
 
     output_path = (
         Path(arguments.output) if arguments.output else plan_arguments.plan_path
     )
-    output_path.write_text(corrected_text)
+    output_path.write_text(manifest_text.text)
 
     logger.info(json.dumps({"corrected": [c.to_json_dict() for c in corrections]}))
     return 0
