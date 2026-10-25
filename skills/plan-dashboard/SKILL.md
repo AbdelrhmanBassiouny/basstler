@@ -79,6 +79,27 @@ git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/plan.yaml" > /tmp/plan.yam
 git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/roadmap.md" > /tmp/roadmap.md  # roadmap.md is always the fixed filename, never configurable
 ```
 
+Also extract every plan's manifest, into one directory — a `depends_on` entry
+may name an item in another plan (`<plan-id>/<item-id>`, see `plan-schema.md`),
+and that plan's own manifest is the only thing that can resolve it. This is one
+extraction whether the manifest uses the form or not, so do it every run
+rather than reading the manifest first to find out:
+
+```bash
+mkdir -p /tmp/plans
+git archive FETCH_HEAD "${PLANS_DIR}" \
+  | tar -x --strip-components=3 -C /tmp/plans --wildcards '*/plan.yaml'
+```
+
+Manifests only, and no roadmaps: the tooling opens a plan's manifest only when
+a `depends_on` entry names that plan, and never reads another plan's roadmap at
+all. Do not read any of these files yourself — the point of a per-plan size
+budget is lost the moment one plan's dashboard run pulls another plan's
+contents into the session.
+
+A chip naming another plan's item links to it only on the plan site, where
+every plan's page has a known address; on an Artifact it is plain text.
+
 **Master-index mode:** enumerate every plan instead of one:
 
 ```bash
@@ -107,7 +128,9 @@ when the fallback applies.
 
 Follow `pr-data-fetching.md`'s procedure (next to this file) to assemble
 `/tmp/pr_data.json` for every pull request referenced by any item in this
-plan.
+plan, plus any pull request a cross-plan `depends_on` entry names — the
+dashboard shows that foreign item's live state too, against its own plan's
+repository.
 
 Everything from here on is deterministic - **run `refresh_dashboard.sh`**
 rather than reproducing its steps by hand:
@@ -119,6 +142,7 @@ bash "${REFRESH_DASHBOARD_SCRIPT}" \
   --roadmap /tmp/roadmap.md \
   --pr-data /tmp/pr_data.json \
   --output /tmp/dashboard.html \
+  --plans-dir /tmp/plans \
   --tracking-url "<html_url from step 1, if any>"   # omit if the plan has no tracking_issue
 ```
 
@@ -134,7 +158,9 @@ dashboard reflects corrected data instead of reporting the same "merged but
 not marked done" drift forever; if nothing needed correcting, nothing is
 pushed. It then runs `build_dashboard.py`, which validates the manifest
 (schema version, unique ids, track/wave/depends_on references — the exact
-checks `plan-create` must also satisfy), classifies every item's live state
+checks `plan-create` must also satisfy, including a `depends_on` entry naming
+another plan, which is resolved against `--plans-dir` and refused if that
+plan or item isn't there), classifies every item's live state
 (`merged` | `open_draft` | `open_ready` | `closed_unmerged` | `not_found`),
 computes drift, builds the "ready to start"/"blocker may be cleared" lists
 (a blocked item whose dependency becomes ready always lands in "blocker may
