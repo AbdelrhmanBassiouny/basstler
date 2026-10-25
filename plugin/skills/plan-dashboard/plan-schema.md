@@ -118,8 +118,10 @@ A precondition that lives in another plan used to have nowhere to go but a
 freeform `blockers` sentence, which nothing resolves, re-checks or renders. A
 reference is checked and shown like any other dependency: `/plan-dashboard`
 resolves it against the referenced plan's own manifest, renders it as a chip
-linking to that plan's dashboard, and reads the foreign item's live pull
-request state from its own plan's `default_repository`.
+that opens that item's card on its plan's page of the plan site in a new tab,
+and reads the foreign item's live pull request state from its own plan's
+`default_repository`. A chip naming an item of this plan scrolls to that item's
+card on the same page.
 
 Four rules, each rejected outright rather than passed over:
 

@@ -29,7 +29,8 @@ class SitePlan(StrEnum):
 
     SECOND = "second-plan"
     """
-    A plan with no pull requests yet.
+    A plan with no pull requests of its own, whose one item depends on an item of
+    :attr:`FIRST`.
     """
 
     @property

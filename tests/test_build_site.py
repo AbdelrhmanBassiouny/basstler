@@ -13,7 +13,13 @@ from typing import Any
 
 import pytest
 
-from basstler.build_dashboard import Plan, PullRequestRecord, PullRequestState
+from basstler.build_dashboard import (
+    DependencyReference,
+    DependencyResolver,
+    Plan,
+    PullRequestRecord,
+    PullRequestState,
+)
 from basstler.build_site import (
     GitHubPullRequestSource,
     HubSite,
@@ -298,18 +304,36 @@ def test_build_looks_up_every_referenced_pull_request_in_its_own_repository(
         MERGED_PULL_REQUEST,
         OPEN_PULL_REQUEST,
         ELSEWHERE_PULL_REQUEST,
+        OPEN_PULL_REQUEST,
     ]
 
 
 def test_pull_requests_of_leaves_out_a_number_the_repository_does_not_have(
     site: RepositorySite, pull_request_source: RecordedPullRequestSource
 ):
-    assert site.pull_requests_of(FIRST_PLAN) == {
+    assert site.pull_requests_of(DependencyResolver(FIRST_PLAN)) == {
         str(PLAN_REPOSITORY): {
             str(reference.number): pull_request_source.records[reference]
             for reference in (MERGED_PULL_REQUEST, OPEN_PULL_REQUEST)
         }
     }
+
+
+def test_a_plan_page_links_a_dependency_in_another_plan_to_its_card_there(
+    site: RepositorySite, tmp_path: Path
+):
+    site.build(tmp_path)
+    second_plan = Plan.from_mapping(
+        PlanSource.from_directory(SitePlan.SECOND.directory).manifest
+    )
+    reference = DependencyReference.from_text(second_plan.items[0].depends_on[0])
+    dependency = next(
+        item
+        for item in FIRST_PLAN.items
+        if item.identifier == reference.item_identifier
+    )
+    card_url = f"{site.plan_url(reference.plan_id)}#{dependency.anchor}"
+    assert link_to(card_url) in page_of(tmp_path, SitePlan.SECOND)
 
 
 def test_build_links_the_tracking_issue_on_the_plan_page(

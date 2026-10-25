@@ -34,12 +34,7 @@ class FixturePlanId(StrEnum):
 
     OTHER = "other-plan"
     """
-    A published plan, the one most references point into.
-    """
-
-    UNPUBLISHED = "unpublished-plan"
-    """
-    A plan the dashboard-URL cache names no URL for.
+    The plan every reference into another plan points at.
     """
 
     ABSENT = "ghost-plan"
@@ -77,11 +72,6 @@ class ForeignItemId(StrEnum):
     DEPENDING_BACK = "foreign-depending-back"
     """
     In :attr:`FixturePlanId.OTHER`, depending on :data:`PLAN_UNDER_TEST_ID`.
-    """
-
-    UNPUBLISHED = "unpublished-item"
-    """
-    The only item of :attr:`FixturePlanId.UNPUBLISHED`.
     """
 
     ABSENT = "ghost-item"

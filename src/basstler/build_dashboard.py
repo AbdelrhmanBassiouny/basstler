@@ -45,6 +45,7 @@ import json
 import sys
 from abc import ABC, abstractmethod
 from collections import Counter
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum, StrEnum, auto
@@ -1024,10 +1025,14 @@ class DependencyChip:
     considered ready. Drives the chip's ``chip-unmet`` styling, the
     dashboard's one visual cue that an item is blocked on this dependency."""
 
-    dashboard_url: str | None = None
-    """The published dashboard of the plan holding this dependency, when it
-    isn't this plan and the URL cache names one - the chip is a link to it
-    rather than plain text."""
+    is_in_another_plan: bool = False
+    """Whether the dependency's card is on another plan's dashboard rather than
+    this one."""
+
+    card_url: str | None = None
+    """Where the dependency's own card is shown: an anchor on this page for an
+    item of this plan, or that card on its own plan's dashboard - ``None`` when
+    the entry resolves to nothing, or that dashboard has no known address."""
 
     @classproperty
     def tooltip_separator(cls) -> str:
@@ -1048,20 +1053,28 @@ class DependencyChip:
 
     @classmethod
     def of_dependency(
-        cls, dependency: ResolvedDependency, dashboard_url: str | None
+        cls,
+        dependency: ResolvedDependency,
+        locate_plan_page: Callable[[str], str] | None,
     ) -> DependencyChip:
         """Build the chip for a resolved dependency.
 
         :param dependency: The dependency this chip stands for.
-        :param dashboard_url: Where that dependency's plan is published, if
-            it is another plan and the URL cache names one.
+        :param locate_plan_page: Where another plan's dashboard is published,
+            given its id, or ``None`` when plan pages have no known address.
         """
         if not dependency.is_in_another_plan:
             return cls(
                 identifier=dependency.item.identifier,
                 tooltip=dependency.item.title,
                 is_ready=dependency.item.is_ready_to_unblock_dependents(),
+                card_url=f"#{dependency.item.anchor}",
             )
+        card_url = (
+            f"{locate_plan_page(dependency.plan.id)}#{dependency.item.anchor}"
+            if locate_plan_page is not None
+            else None
+        )
         return cls(
             identifier=dependency.reference.text,
             tooltip=cls.tooltip_separator.join(
@@ -1072,7 +1085,8 @@ class DependencyChip:
                 ]
             ),
             is_ready=dependency.item.is_ready_to_unblock_dependents(),
-            dashboard_url=dashboard_url,
+            is_in_another_plan=True,
+            card_url=card_url,
         )
 
 
@@ -1268,6 +1282,12 @@ class Item:
         return self.id or self.branch
 
     @property
+    def anchor(self) -> str:
+        """The ``id`` of this item's card on its plan's dashboard, which a link
+        names after ``#`` to reach that card."""
+        return f"item-{self.identifier}"
+
+    @property
     def status_and_drift_css_class(self) -> str:
         """The item card's dynamic CSS class suffix: ``status-<member name>``,
         plus ``has-drift`` once :attr:`drift_description` is set."""
@@ -1415,11 +1435,11 @@ class Dependency(ABC):
         behind this dependency."""
 
     @abstractmethod
-    def chip(self, plan_directory: PlanDirectory | None) -> DependencyChip:
+    def chip(self, locate_plan_page: Callable[[str], str] | None) -> DependencyChip:
         """Render this dependency as a ``needs`` chip on its dependent's card.
 
-        :param plan_directory: The plans loaded for this render, holding the
-            dashboard URL a cross-plan chip links to.
+        :param locate_plan_page: Where another plan's dashboard is published,
+            given its id, or ``None`` when plan pages have no known address.
         """
 
     @abstractmethod
@@ -1470,15 +1490,8 @@ class ResolvedDependency(Dependency):
         referenced item's own answer."""
         return self.item.is_ready_for_dependent_review()
 
-    def chip(self, plan_directory: PlanDirectory | None) -> DependencyChip:
-        """See :meth:`Dependency.chip` - linked to the other plan's dashboard
-        when this dependency is foreign and that plan has one published."""
-        dashboard_url = (
-            plan_directory.dashboard_url(self.plan.id)
-            if self.is_in_another_plan and plan_directory is not None
-            else None
-        )
-        return DependencyChip.of_dependency(self, dashboard_url)
+    def chip(self, locate_plan_page: Callable[[str], str] | None) -> DependencyChip:
+        return DependencyChip.of_dependency(self, locate_plan_page)
 
     def classify_live_state(
         self, pull_requests_by_repository: PullRequestsByRepository
@@ -1523,8 +1536,9 @@ class UnresolvedDependency(Dependency):
         ``False``."""
         return False
 
-    def chip(self, plan_directory: PlanDirectory | None) -> DependencyChip:
-        """See :meth:`Dependency.chip` - the entry's own text, marked unmet."""
+    def chip(self, locate_plan_page: Callable[[str], str] | None) -> DependencyChip:
+        """See :meth:`Dependency.chip` - the entry's own text, marked unmet and
+        linking nowhere."""
         return DependencyChip.unresolved(self.reference.text)
 
     def classify_live_state(
@@ -1548,39 +1562,9 @@ class PlanDirectory:
     directory: Path
     """Where the plans live, one subdirectory per plan, named by its id."""
 
-    dashboard_urls_by_plan_id: dict[str, str] = field(default_factory=dict)
-    """Each plan's published dashboard URL, for the plans the cache names."""
-
     plans_by_id: dict[str, Plan] = field(default_factory=dict)
     """The manifests read so far, keyed by plan id - filled in on demand by
     :meth:`plan`, so a plan appears here only once something named it."""
-
-    @classproperty
-    def dashboard_url_cache_path(cls) -> str:
-        """Where the dashboard-URL cache sits inside a plans directory."""
-        return "_generated/dashboard-urls.yaml"
-
-    @classmethod
-    def at(cls, directory: Path) -> PlanDirectory:
-        """Open one plans directory, reading its dashboard-URL cache.
-
-        :param directory: The directory holding one subdirectory per plan.
-        :return: The open directory - a missing URL cache is an ordinary
-            state, since a plan's first publish happens before one exists.
-        """
-        cache_path = directory / cls.dashboard_url_cache_path
-        cached_urls = (
-            yaml.safe_load(cache_path.read_text()) if cache_path.is_file() else None
-        )
-        dashboard_urls_by_plan_id: dict[str, str] = {}
-        for plan_id, url in (cached_urls or {}).items():
-            sanitized_url = sanitize_http_url(url)
-            if sanitized_url is not None:
-                dashboard_urls_by_plan_id[plan_id] = sanitized_url
-        return cls(
-            directory=directory,
-            dashboard_urls_by_plan_id=dashboard_urls_by_plan_id,
-        )
 
     def plan(self, plan_id: str | None) -> Plan | None:
         """Look one plan up by id, reading its manifest the first time.
@@ -1614,14 +1598,6 @@ class PlanDirectory:
             if item.identifier == reference.item_identifier:
                 return ResolvedDependency(reference=reference, item=item, plan=plan)
         return UnresolvedDependency(reference=reference)
-
-    def dashboard_url(self, plan_id: str) -> str | None:
-        """Where one plan's dashboard is published.
-
-        :param plan_id: The plan's own ``id``.
-        :return: Its URL, or ``None`` if the cache doesn't name one.
-        """
-        return self.dashboard_urls_by_plan_id.get(plan_id)
 
 
 @dataclass
@@ -1676,6 +1652,16 @@ class DependencyResolver:
             resolved = self.plan_directory.resolve(reference)
         self.dependencies_by_reference[dependency_identifier] = resolved
         return resolved
+
+    @property
+    def resolved_dependencies(self) -> list[ResolvedDependency]:
+        """Every item an entry here names: each of this plan's own items, plus
+        every item of another plan that some entry names."""
+        return [
+            dependency
+            for dependency in self.dependencies_by_reference.values()
+            if isinstance(dependency, ResolvedDependency)
+        ]
 
     def dependencies_of(self, item: Item) -> list[Dependency]:
         """Resolve one item's whole ``depends_on``.
@@ -1867,6 +1853,10 @@ class DashboardRenderer(TemplatePage):
     """The other plans this plan's ``depends_on`` entries may name, if any
     were loaded."""
 
+    locate_plan_page: Callable[[str], str] | None = None
+    """Where another plan's dashboard is published, given its id, or ``None``
+    when plan pages have no known address."""
+
     items_by_identifier: dict[str, Item] = field(init=False)
     """Every item of this plan, keyed by :attr:`Item.identifier`."""
 
@@ -2015,7 +2005,7 @@ class DashboardRenderer(TemplatePage):
         """Build one ready-to-render :class:`DependencyChip` per entry in
         :attr:`Item.depends_on`."""
         return [
-            dependency.chip(self.plan_directory)
+            dependency.chip(self.locate_plan_page)
             for dependency in self.dependencies.dependencies_of(item)
         ]
 
@@ -2298,7 +2288,7 @@ def main() -> int:
     roadmap_text = Path(arguments.roadmap).read_text()
     raw_pull_request_data = json.loads(Path(arguments.pr_data).read_text())
     plan_directory = (
-        PlanDirectory.at(Path(arguments.plans_dir)) if arguments.plans_dir else None
+        PlanDirectory(Path(arguments.plans_dir)) if arguments.plans_dir else None
     )
 
     try:

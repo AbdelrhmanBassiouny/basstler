@@ -193,7 +193,7 @@ def main() -> int:
     arguments = parser.parse_args()
 
     plan_directory = (
-        PlanDirectory.at(Path(arguments.plans_dir)) if arguments.plans_dir else None
+        PlanDirectory(Path(arguments.plans_dir)) if arguments.plans_dir else None
     )
     raw_plan = yaml.safe_load(Path(arguments.plan).read_text())
     try:

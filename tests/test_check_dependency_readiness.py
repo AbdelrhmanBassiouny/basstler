@@ -334,7 +334,7 @@ def test_foreign_dependency_is_read_against_its_own_plans_repository():
                 ): PullRequestRecord(state=PullRequestState.OPEN, draft=False)
             }
         },
-        PlanDirectory.at(DatasetLocation.PLANS),
+        PlanDirectory(DatasetLocation.PLANS),
     )
     assert results == [
         DependencyReadiness(

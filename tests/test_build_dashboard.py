@@ -5,6 +5,7 @@ and rendering.
 
 import json
 import sys
+from collections.abc import Callable
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -620,6 +621,7 @@ def make_renderer(
     items: list[Item],
     pull_requests_by_repository: PullRequestsByRepository | None = None,
     plan_directory: PlanDirectory | None = None,
+    locate_plan_page: Callable[[str], str] | None = None,
 ) -> DashboardRenderer:
     """
     Build one :class:`DashboardRenderer` over a fixed, otherwise-empty test
@@ -630,6 +632,8 @@ def make_renderer(
     :param pull_requests_by_repository: Live pull request state, or ``{}`` if omitted.
     :param plan_directory: The plans a cross-plan reference resolves against, or
         ``None`` for a plan whose dependencies are all its own.
+    :param locate_plan_page: Where another plan's dashboard is published, or ``None``
+        when plan pages have no known address.
     """
     plan = Plan(
         id=PLAN_UNDER_TEST_ID,
@@ -646,6 +650,7 @@ def make_renderer(
         pull_requests_by_repository=pull_requests_by_repository or {},
         tracking_url=None,
         plan_directory=plan_directory,
+        locate_plan_page=locate_plan_page,
     )
 
 
@@ -2180,7 +2185,7 @@ def test_dependency_reference_is_malformed_with_an_empty_half(text: str):
 
 
 def test_plan_directory_reads_one_plans_manifest_by_id():
-    directory = PlanDirectory.at(DatasetLocation.PLANS)
+    directory = PlanDirectory(DatasetLocation.PLANS)
     plan = directory.plan(FixturePlanId.OTHER)
     manifest = fixture_manifest(FixturePlanId.OTHER)
     assert plan.title == manifest[ManifestKey.TITLE]
@@ -2191,41 +2196,13 @@ def test_plan_directory_reads_no_manifest_nothing_has_named():
     # One plan's dashboard pulling in every other plan's contents is what the
     # per-plan size budget exists to prevent, so a plan nothing references is
     # never opened.
-    directory = PlanDirectory.at(DatasetLocation.PLANS)
+    directory = PlanDirectory(DatasetLocation.PLANS)
     directory.plan(FixturePlanId.OTHER)
     assert set(directory.plans_by_id) == {FixturePlanId.OTHER}
 
 
-def test_plan_directory_reads_the_dashboard_url_cache():
-    directory = PlanDirectory.at(DatasetLocation.PLANS)
-    cached = yaml.safe_load(
-        (DatasetLocation.PLANS / PlanDirectory.dashboard_url_cache_path).read_text()
-    )
-    assert directory.dashboard_url(FixturePlanId.OTHER) == cached[FixturePlanId.OTHER]
-
-
-def test_plan_directory_has_no_url_for_a_plan_the_cache_does_not_name():
-    directory = PlanDirectory.at(DatasetLocation.PLANS)
-    assert directory.dashboard_url(FixturePlanId.UNPUBLISHED) is None
-
-
-def test_plan_directory_without_a_url_cache_reads_its_manifests_anyway(tmp_path: Path):
-    # A plan's first-ever publish happens before any cache exists, so a
-    # missing cache is an ordinary state rather than an error.
-    manifest_path = tmp_path / FixturePlanId.OTHER / PlanDocument.MANIFEST
-    manifest_path.parent.mkdir()
-    manifest_path.write_text(
-        (
-            DatasetLocation.PLANS / FixturePlanId.OTHER / PlanDocument.MANIFEST
-        ).read_text()
-    )
-    directory = PlanDirectory.at(tmp_path)
-    assert directory.plan(FixturePlanId.OTHER) is not None
-    assert directory.dashboard_url(FixturePlanId.OTHER) is None
-
-
 def test_plan_directory_resolves_an_item_by_reference():
-    directory = PlanDirectory.at(DatasetLocation.PLANS)
+    directory = PlanDirectory(DatasetLocation.PLANS)
     resolved = directory.resolve(
         DependencyReference.from_text(foreign_reference(ForeignItemId.READY))
     )
@@ -2242,7 +2219,7 @@ def test_plan_directory_resolves_an_item_by_reference():
     ],
 )
 def test_plan_directory_does_not_resolve_an_unknown_reference(text: str):
-    directory = PlanDirectory.at(DatasetLocation.PLANS)
+    directory = PlanDirectory(DatasetLocation.PLANS)
     resolved = directory.resolve(DependencyReference.from_text(text))
     assert resolved == UnresolvedDependency(
         reference=DependencyReference.from_text(text)
@@ -2268,7 +2245,7 @@ def plan_depending_on(dependency_text: str) -> dict[str, Any]:
 def test_validate_plan_accepts_a_reference_into_another_plan():
     validate_plan(
         plan_depending_on(foreign_reference(ForeignItemId.READY)),
-        PlanDirectory.at(DatasetLocation.PLANS),
+        PlanDirectory(DatasetLocation.PLANS),
     )
 
 
@@ -2278,7 +2255,7 @@ def test_validate_plan_rejects_an_unknown_plan():
             plan_depending_on(
                 foreign_reference(ForeignItemId.READY, FixturePlanId.ABSENT)
             ),
-            PlanDirectory.at(DatasetLocation.PLANS),
+            PlanDirectory(DatasetLocation.PLANS),
         )
     assert error.value.problems == [
         UnknownDependencyPlan(
@@ -2291,7 +2268,7 @@ def test_validate_plan_rejects_an_unknown_item_in_a_known_plan():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(
             plan_depending_on(foreign_reference(ForeignItemId.ABSENT)),
-            PlanDirectory.at(DatasetLocation.PLANS),
+            PlanDirectory(DatasetLocation.PLANS),
         )
     assert error.value.problems == [
         UnknownDependency("a", foreign_reference(ForeignItemId.ABSENT))
@@ -2311,7 +2288,7 @@ def test_validate_plan_rejects_a_reference_to_the_plans_own_id():
         ]
     )
     with pytest.raises(PlanValidationError) as error:
-        validate_plan(plan, PlanDirectory.at(DatasetLocation.PLANS))
+        validate_plan(plan, PlanDirectory(DatasetLocation.PLANS))
     assert error.value.problems == [SelfPlanReference("b", own_reference)]
 
 
@@ -2322,7 +2299,7 @@ def test_validate_plan_rejects_a_malformed_reference():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(
             plan_depending_on(malformed),
-            PlanDirectory.at(DatasetLocation.PLANS),
+            PlanDirectory(DatasetLocation.PLANS),
         )
     assert error.value.problems == [MalformedDependencyReference("a", malformed)]
 
@@ -2343,7 +2320,7 @@ def test_validate_plan_rejects_a_cycle_that_runs_through_another_plan():
     with pytest.raises(PlanValidationError) as error:
         validate_plan(
             plan_depending_on(reference),
-            PlanDirectory.at(DatasetLocation.PLANS),
+            PlanDirectory(DatasetLocation.PLANS),
         )
     assert error.value.problems == [DependencyCycle(["a", reference, "a"])]
 
@@ -2370,6 +2347,7 @@ Live state for the fixture plan's own pull requests, keyed by that plan's
 def make_renderer_over_plan_directory(
     items: list[Item],
     pull_requests_by_repository: PullRequestsByRepository | None = None,
+    locate_plan_page: Callable[[str], str] | None = None,
 ) -> DashboardRenderer:
     """
     Build a renderer whose cross-plan references resolve against the fixture plans
@@ -2377,11 +2355,14 @@ def make_renderer_over_plan_directory(
 
     :param items: The rendered plan's items.
     :param pull_requests_by_repository: Live pull request state, or ``{}`` if omitted.
+    :param locate_plan_page: Where another plan's dashboard is published, or ``None``
+        when plan pages have no known address.
     """
     return make_renderer(
         items,
         pull_requests_by_repository,
-        plan_directory=PlanDirectory.at(DatasetLocation.PLANS),
+        plan_directory=PlanDirectory(DatasetLocation.PLANS),
+        locate_plan_page=locate_plan_page,
     )
 
 
@@ -2549,8 +2530,31 @@ def test_chip_tooltip_carries_the_foreign_items_title_plan_and_live_state():
     assert LiveState.OPEN_DRAFT.display_label in chip.tooltip
 
 
-def test_chip_links_to_the_foreign_plans_dashboard_when_the_cache_has_one():
-    directory = PlanDirectory.at(DatasetLocation.PLANS)
+def site_plan_url(plan_id: str) -> str:
+    """
+    Where a test's site publishes one plan's dashboard.
+
+    :param plan_id: The plan's own id.
+    """
+    return f"https://plans.example/owner/repo/{plan_id}/"
+
+
+def test_chip_links_to_the_foreign_items_card_on_its_plans_page():
+    reference = foreign_reference(ForeignItemId.DONE)
+    renderer = make_renderer_over_plan_directory(
+        [item("a", ItemStatus.NOT_STARTED, depends_on=[reference])],
+        locate_plan_page=site_plan_url,
+    )
+    renderer.render()
+    chip = renderer.items_by_identifier["a"].dependency_chips[0]
+    foreign = renderer.dependencies.resolve(reference)
+    assert (
+        chip.card_url == f"{site_plan_url(FixturePlanId.OTHER)}#{foreign.item.anchor}"
+    )
+    assert chip.is_in_another_plan is True
+
+
+def test_chip_has_no_link_to_a_foreign_item_when_plan_pages_have_no_address():
     renderer = make_renderer_over_plan_directory(
         [
             item(
@@ -2561,29 +2565,10 @@ def test_chip_links_to_the_foreign_plans_dashboard_when_the_cache_has_one():
         ]
     )
     renderer.render()
-    chip = renderer.items_by_identifier["a"].dependency_chips[0]
-    assert chip.dashboard_url == directory.dashboard_url(FixturePlanId.OTHER)
+    assert renderer.items_by_identifier["a"].dependency_chips[0].card_url is None
 
 
-def test_chip_has_no_dashboard_link_when_the_cache_names_no_url():
-    renderer = make_renderer_over_plan_directory(
-        [
-            item(
-                "a",
-                ItemStatus.NOT_STARTED,
-                depends_on=[
-                    foreign_reference(
-                        ForeignItemId.UNPUBLISHED, FixturePlanId.UNPUBLISHED
-                    )
-                ],
-            )
-        ]
-    )
-    renderer.render()
-    assert renderer.items_by_identifier["a"].dependency_chips[0].dashboard_url is None
-
-
-def test_chip_for_a_same_plan_dependency_has_no_dashboard_link():
+def test_chip_for_a_same_plan_dependency_links_to_its_card_on_this_page():
     renderer = make_renderer_over_plan_directory(
         [
             item("a", ItemStatus.DONE),
@@ -2591,12 +2576,30 @@ def test_chip_for_a_same_plan_dependency_has_no_dashboard_link():
         ]
     )
     renderer.render()
-    assert renderer.items_by_identifier["b"].dependency_chips[0].dashboard_url is None
+    chip = renderer.items_by_identifier["b"].dependency_chips[0]
+    assert chip.card_url == f"#{renderer.items_by_identifier['a'].anchor}"
+    assert chip.is_in_another_plan is False
 
 
-def test_render_links_a_foreign_dependency_chip_to_its_plans_dashboard():
-    directory = PlanDirectory.at(DatasetLocation.PLANS)
-    reference = foreign_reference(ForeignItemId.DONE)
+def test_chip_for_an_unresolved_dependency_has_no_link():
+    renderer = make_renderer(
+        [item("a", ItemStatus.NOT_STARTED, depends_on=["missing"])]
+    )
+    renderer.render()
+    assert renderer.items_by_identifier["a"].dependency_chips[0].card_url is None
+
+
+def renderer_with_cards(
+    items: list[Item], locate_plan_page: Callable[[str], str] | None = None
+) -> DashboardRenderer:
+    """
+    Build a renderer over the fixture plans directory whose plan has the one track
+    :func:`item` places every item on, so each item renders as a card.
+
+    :param items: The rendered plan's items.
+    :param locate_plan_page: Where another plan's dashboard is published, or ``None``
+        when plan pages have no known address.
+    """
     plan = Plan(
         id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
@@ -2604,15 +2607,45 @@ def test_render_links_a_foreign_dependency_chip_to_its_plans_dashboard():
         default_repository="owner/repo",
         waves=[Wave(id="wave-1", name="Wave One")],
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
-        items=[item("a", ItemStatus.NOT_STARTED, depends_on=[reference])],
+        items=items,
     )
-    renderer = DashboardRenderer(
+    return DashboardRenderer(
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={},
         tracking_url=None,
-        plan_directory=directory,
+        plan_directory=PlanDirectory(DatasetLocation.PLANS),
+        locate_plan_page=locate_plan_page,
+    )
+
+
+def test_render_gives_each_item_card_its_anchor():
+    renderer = renderer_with_cards([item("a", ItemStatus.NOT_STARTED)])
+    output = renderer.render().html
+    assert f'id="{renderer.items_by_identifier["a"].anchor}"' in output
+
+
+def test_render_opens_a_foreign_dependency_chip_in_a_new_tab():
+    reference = foreign_reference(ForeignItemId.DONE)
+    renderer = renderer_with_cards(
+        [item("a", ItemStatus.NOT_STARTED, depends_on=[reference])],
+        locate_plan_page=site_plan_url,
     )
     output = renderer.render().html
-    assert f'href="{directory.dashboard_url(FixturePlanId.OTHER)}"' in output
-    assert f">{reference}</a>" in output
+    chip = renderer.items_by_identifier["a"].dependency_chips[0]
+    assert f'href="{chip.card_url}" target="_blank"' in output
+
+
+def test_render_highlights_a_same_plan_dependency_chips_card_on_click():
+    renderer = renderer_with_cards(
+        [
+            item("a", ItemStatus.DONE),
+            item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+        ]
+    )
+    output = renderer.render().html
+    chip = renderer.items_by_identifier["b"].dependency_chips[0]
+    assert (
+        f'href="{chip.card_url}" data-item-identifier="{chip.identifier}" '
+        'onclick="planDashboardHighlightItem(event, this)"' in output
+    )

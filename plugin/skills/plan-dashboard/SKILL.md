@@ -88,8 +88,7 @@ rather than reading the manifest first to find out:
 ```bash
 mkdir -p /tmp/plans
 git archive FETCH_HEAD "${PLANS_DIR}" \
-  | tar -x --strip-components=3 -C /tmp/plans --wildcards \
-      '*/plan.yaml' '*/dashboard-urls.yaml'
+  | tar -x --strip-components=3 -C /tmp/plans --wildcards '*/plan.yaml'
 ```
 
 Manifests only, and no roadmaps: the tooling opens a plan's manifest only when
@@ -98,10 +97,8 @@ all. Do not read any of these files yourself — the point of a per-plan size
 budget is lost the moment one plan's dashboard run pulls another plan's
 contents into the session.
 
-The second pattern brings the dashboard-URL cache along at
-`/tmp/plans/_generated/dashboard-urls.yaml`, which is where a cross-plan chip's
-link to the other plan's dashboard comes from — and where step 3 reads the URL
-to publish under.
+A chip naming another plan's item links to it only on the plan site, where
+every plan's page has a known address; on an Artifact it is plain text.
 
 **Master-index mode:** enumerate every plan instead of one:
 
@@ -111,9 +108,8 @@ git ls-tree -r --name-only FETCH_HEAD | grep -E '^\.claude/personal/plans/[^/]+/
 
 Load each one the same way as above, into its own scratch path.
 
-The generated URL cache (used in step 3, absent on a plan's first-ever
-publish — not an error) comes with the extraction above, and can also be read
-on its own:
+Also read the generated URL cache, if present (used in step 3, absent on a
+plan's first-ever publish — not an error):
 
 ```bash
 git show "FETCH_HEAD:${DASHBOARD_URL_CACHE_PATH}" 2>/dev/null
