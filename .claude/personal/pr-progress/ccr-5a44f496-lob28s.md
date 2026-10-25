@@ -13,5 +13,5 @@ Done
   DefaultBranchSync.catch_up_checkout. Both threads replied to and resolved; suite 1339 passed.
 
 Next
-- Await the decision on unifying the fork-base fast-forward with maintenance.fast_forward
-  (PR comment 6404647312); address further comments when prompted.
+- Review on #57; address comments when prompted. Unifying with maintenance.fast_forward is
+  stack-maintenance item shared-fork-base-fast-forward, after #57 lands.
