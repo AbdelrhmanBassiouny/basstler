@@ -19,6 +19,7 @@ from basstler.class_property import classproperty
 from basstler.locations import PackageLocation
 from basstler.maintenance.board import BoardExport
 from basstler.maintenance.fast_forward import fast_forward
+from basstler.maintenance.finish_summary import FinishSummary
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.github import GitHubRepository
 from basstler.maintenance.promotion import clear_spent_promotion_labels, promote
@@ -317,7 +318,7 @@ class RunReportCommand(MaintenanceCommand):
         parser.add_argument(
             "--json",
             action="store_true",
-            help="emit the machine-readable document rather than a summary",
+            help="emit the machine-readable document rather than the finish summary",
         )
 
     def run(
@@ -340,8 +341,8 @@ class RunReportCommand(MaintenanceCommand):
         the next begins by exporting a fresh one.
 
         :param maintenance: What this run has resolved.
-        :param as_json: Whether to print the machine-readable document rather than a
-            summary.
+        :param as_json: Whether to print the machine-readable document rather than the
+            finish summary.
         :return: What the pass did.
         """
         stack = maintenance.stack()
@@ -358,7 +359,7 @@ class RunReportCommand(MaintenanceCommand):
         if as_json:
             logger.info(report.as_json())
             return report
-        report.print_summary()
+        logger.info(FinishSummary(report, stack).as_markdown())
         return report
 
 

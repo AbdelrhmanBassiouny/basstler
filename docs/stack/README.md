@@ -82,13 +82,14 @@ next to the workflow it describes, because it is read rather than run.
     upstream base is what actually closes them.
 - **`basstler.maintenance`** - the executor: the half of a pass that moves commits, where `basstler.stack`
   only derives and prints. `board --write`, `fast-forward`, `restack`, `promote` and
-  `run-report --json`; see [Running a maintenance pass](#running-a-maintenance-pass). It is the
+  `run-report` (the finish summary, or `--json` for tooling); see [Running a maintenance pass](#running-a-maintenance-pass). It is the
   command line onto modules named for what they do, so nothing has to be hunted for inside one
   long file: `maintenance/constants.py` (every value edited by hand),
   `maintenance/git_commands.py`, `maintenance/board.py`, `maintenance/github.py`,
   `maintenance/fast_forward.py`, `maintenance/restack_steps.py` and
   `maintenance/restack_procedure.py` (the steps, and the order that is the procedure),
-  `maintenance/promotion.py`, `maintenance/report.py` and `maintenance/commands.py`.
+  `maintenance/promotion.py`, `maintenance/report.py`, `maintenance/finish_summary.py` and
+  `maintenance/commands.py`.
 - **`skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
   as `/stacked-pr-maintenance` from any session, and run first by `/plan-item-kickoff` and
   `/plan-item-resolve`. It takes `fork=` / `upstream=` arguments, falls back to

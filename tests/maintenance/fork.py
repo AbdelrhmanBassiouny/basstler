@@ -406,6 +406,7 @@ def an_api_record(
     labels: list[str] | None = None,
     body: str = "",
     head_repository: Repository | None = PullRequestHeadRepository.FORK.value,
+    title: str | None = None,
 ) -> dict:
     """
     :param number: The pull request number.
@@ -415,6 +416,7 @@ def an_api_record(
     :param labels: The label names it carries.
     :param body: The description to read a session link out of.
     :param head_repository: The repository the head lives in, ``None`` once deleted.
+    :param title: The pull request's title.
     :return: One pull request in the shape the REST API returns it.
     """
     return {
@@ -431,6 +433,7 @@ def an_api_record(
         PullRequestField.DRAFT.key: draft,
         PullRequestField.LABELS.key: [{"name": name} for name in labels or []],
         PullRequestField.BODY.key: body,
+        PullRequestField.TITLE.key: title,
     }
 
 
@@ -445,6 +448,38 @@ def a_parent_and_child(fork_checkout: ForkCheckout) -> None:
     """
     fork_checkout.branch_from(StackBranch.PARENT, UPSTREAM_BASE)
     fork_checkout.branch_from(StackBranch.CHILD, StackBranch.PARENT)
+
+
+def a_board_entry(
+    number: int,
+    head: str,
+    base: str,
+    labels: list[str] | None = None,
+    title: str | None = None,
+    session: str | None = None,
+    promotion_link: str | None = None,
+) -> PullRequest:
+    """
+    :param number: The pull request number.
+    :param head: The head branch, on the fork.
+    :param base: The base branch.
+    :param labels: The labels it carries.
+    :param title: Its title.
+    :param session: The session its description names.
+    :param promotion_link: The upstream create-link its description records.
+    :return: One ready board entry whose head is on the fork.
+    """
+    return PullRequest(
+        number=number,
+        head=head,
+        base=base,
+        draft=False,
+        head_repository=PullRequestHeadRepository.FORK.value.full_name,
+        labels=labels or [],
+        session=session,
+        title=title,
+        promotion_link=promotion_link,
+    )
 
 
 def the_board(labels: list[str] | None = None) -> list[PullRequest]:

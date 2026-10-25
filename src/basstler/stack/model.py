@@ -124,6 +124,13 @@ class PullRequest:
     session: str | None = None
     """URL of the Claude session working this pull request, parsed from the pull request body (None if none)."""
 
+    title: str | None = None
+    """The pull request's title, ``None`` when the export did not carry one."""
+
+    promotion_link: str | None = None
+    """The upstream create-link a pass recorded in the pull request body, ``None`` until
+    one is."""
+
     def skip_reason(self, fork: Repository) -> SkipReason | None:
         """:param fork: The fork the pass maintains.
         :return: Why the pass has to leave this pull request out, ``None`` when its head
@@ -180,6 +187,12 @@ class Branch:
     session: str | None = None
     """URL of the Claude session working this pull request, if any."""
 
+    title: str | None = None
+    """The pull request's title, if known."""
+
+    promotion_link: str | None = None
+    """The upstream create-link recorded on the pull request, if any."""
+
     @classmethod
     def from_pull_request(
         cls,
@@ -214,6 +227,8 @@ class Branch:
             ),
             ci=pull_request.ci,
             session=pull_request.session,
+            title=pull_request.title,
+            promotion_link=pull_request.promotion_link,
         )
 
 

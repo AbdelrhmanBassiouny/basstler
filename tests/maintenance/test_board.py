@@ -19,9 +19,11 @@ from basstler.maintenance.board import (
     MissingPullRequestFieldError,
     PullRequestField,
     PullRequestHeadKey,
+    get_promotion_link_in,
     get_session_link_in,
 )
 from basstler.maintenance.git_commands import GitCommandFailed
+from basstler.maintenance.promotion import description_with_promotion_link
 
 from ..constants.stack import StackBranch, StackLabel
 
@@ -30,6 +32,7 @@ from .fork import (
     PullRequestHeadRepository,
     A_SESSION_LINK,
     ForkCheckout,
+    PromotionSampleText,
     an_api_record,
 )
 
@@ -196,3 +199,28 @@ def test_a_session_link_is_read_out_of_the_description():
 
 def test_a_description_naming_no_session_yields_none():
     assert get_session_link_in("Some prose with no link.") is None
+
+
+def test_the_export_reads_the_title_and_the_recorded_promotion_link():
+    body = description_with_promotion_link(
+        PromotionSampleText.PROSE, PromotionSampleText.FIRST_LINK
+    )
+    export = BoardExport.from_api_records(
+        [an_api_record(body=body, title=PromotionSampleText.TITLE)]
+    )
+
+    exported = export.pull_requests[0]
+    assert exported.title == PromotionSampleText.TITLE
+    assert exported.promotion_link == PromotionSampleText.FIRST_LINK
+
+
+def test_the_promotion_link_read_back_is_the_one_written():
+    body = description_with_promotion_link(
+        PromotionSampleText.PROSE, PromotionSampleText.FIRST_LINK
+    )
+
+    assert get_promotion_link_in(body) == PromotionSampleText.FIRST_LINK
+
+
+def test_a_description_with_no_promotion_section_yields_no_link():
+    assert get_promotion_link_in(PromotionSampleText.PROSE) is None
