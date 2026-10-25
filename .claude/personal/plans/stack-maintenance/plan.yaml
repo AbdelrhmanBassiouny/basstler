@@ -115,15 +115,17 @@ items:
 
 - id: dashboard-token-economy
   title: "Republish a dashboard only when it changed, and keep the read a republish needs small"
-  branch: null
+  branch: claude/stoic-fermat-eywarj
   track: pass
+  pull_request_number: 75
+  session: https://claude.ai/code/session_01J5swRVjzWWyUX1wfo9Wvs1
   notes: >
     From the PR #48 review (discussion_r4372701136). The refresh records a digest of the rendered
     page in the URL cache and reports unchanged, so the session skips the Artifact call. The
     dashboard is published as a small page plus a data file, so the read an update from another
     session requires stays a few lines. Touches basstler.dashboard and the plan-dashboard skill.
   depends_on: []
-  status: not started
+  status: in progress
 - id: shared-fork-base-fast-forward
   title: Fast-forward the fork's base through one implementation, shared with session start
   branch: claude/gifted-planck-k6d3c3
