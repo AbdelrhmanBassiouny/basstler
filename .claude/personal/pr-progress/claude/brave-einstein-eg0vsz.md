@@ -1,11 +1,11 @@
-Item: plan-dashboards / split-build-dashboard - PR #66 (draft).
+Item: plan-dashboards / split-build-dashboard - PR #66 (draft, release:major).
 
 **Plan**
-- Verbatim move of build_dashboard.py into pull_request_state, dashboard_plan, plan_dependencies, plan_validation, plan_command_arguments, dashboard_cards; renderer + main stay.
-- Validation exceptions in basstler/exceptions.py (item notes; departs from *_errors.py precedent).
+- Split build_dashboard.py by concern (e6f9835), then group the whole package and its tests into topic subpackages (ca1f488), as the user asked.
+- A subpackage's command line goes in its `__main__.py` when nothing imports it, so `basstler.stack` and `basstler.maintenance` keep their names.
 
 **Done**
-- Source + test split pushed (e6f9835); 1243 pass; rendered dashboard byte-identical; docs repointed.
+- Both commits pushed; 1243 pass; rendered dashboard byte-identical; docs, hooks and workflows repointed; PR description and plan notes updated.
 
 **Next**
-- Watch CI on #66; answer review. #46/#47 re-port onto the new modules if they land second.
+- Wait for CI on ca1f488 and for review. Open branches that edit the package (#46, #47) re-port onto the new paths if they land second.
