@@ -617,7 +617,6 @@ BASSTLER_HOME="${BASSTLER_HOME:-${XDG_DATA_HOME:-${HOME}/.local/share}/basstler}
 # BASSTLER_ENVIRONMENT_DIRECTORY: the package's own virtual environment, which
 # session-start.sh creates where it is missing and installs the package into.
 BASSTLER_ENVIRONMENT_DIRECTORY="${BASSTLER_HOME}/venv"
-BASSTLER_ENVIRONMENT_INTERPRETER="${BASSTLER_ENVIRONMENT_DIRECTORY}/bin/python"
 # BASSTLER_INSTALLED_SOURCE_FILE: what the environment's package was last
 # installed from, so a plugin update - which names a new source - reinstalls it.
 BASSTLER_INSTALLED_SOURCE_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-source"
@@ -692,11 +691,16 @@ basstler_branch_or_tag() {
   fi
 }
 
-# resolve_basstler_python: sets BASSTLER_PYTHON, the interpreter every caller
-# runs a module of the package with - the package's environment once it
-# exists, python3 until then. Run on sourcing, and again by session-start.sh
-# once it has created the environment.
+# resolve_basstler_python: sets BASSTLER_ENVIRONMENT_INTERPRETER, the package
+# environment's interpreter - Scripts/python.exe where the environment has one,
+# as on Windows, else bin/python - and BASSTLER_PYTHON, the interpreter every
+# caller runs a module of the package with: the environment's once it exists,
+# python3 until then. Run on sourcing, and again by session-start.sh once it
+# has created the environment.
 resolve_basstler_python() {
+  BASSTLER_ENVIRONMENT_INTERPRETER="${BASSTLER_ENVIRONMENT_DIRECTORY}/Scripts/python.exe"
+  [ -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ] \
+    || BASSTLER_ENVIRONMENT_INTERPRETER="${BASSTLER_ENVIRONMENT_DIRECTORY}/bin/python"
   if [ -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
     BASSTLER_PYTHON="${BASSTLER_ENVIRONMENT_INTERPRETER}"
   else

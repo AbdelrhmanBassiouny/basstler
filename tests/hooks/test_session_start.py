@@ -44,6 +44,7 @@ from ..scratch_repository import (
     SCRATCH_IDENTITY,
     PackageSourceFile,
     ScratchRepository,
+    write_interpreter_wrapper,
 )
 from ..script_runner import configuration_value
 from .session_start_summary import (
@@ -87,6 +88,28 @@ class StubVariable(StrEnum):
     UV_PYTHON = "STUB_UV_PYTHON"
     """
     The interpreter an environment the ``uv`` stub creates runs.
+    """
+
+    UV_ENVIRONMENT_INTERPRETER = "STUB_UV_ENVIRONMENT_INTERPRETER"
+    """
+    Where, inside an environment the ``uv`` stub creates, it writes the interpreter.
+    """
+
+
+class EnvironmentInterpreterLayout(StrEnum):
+    """
+    Where a virtual environment keeps its interpreter, relative to the environment, on
+    each platform that lays it out differently.
+    """
+
+    POSIX = "bin/python"
+    """
+    Every platform but Windows.
+    """
+
+    WINDOWS = "Scripts/python.exe"
+    """
+    Windows.
     """
 
 
@@ -1289,6 +1312,40 @@ def test_reports_uv_it_could_not_install_and_finishes_the_run(
     ).exists()
 
 
+def test_installs_into_the_interpreter_a_windows_environment_was_created_with(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    An environment created with the Windows layout has the package installed into its
+    own interpreter, not into one where every other platform keeps it.
+    """
+    without_an_environment(session_start_repository)
+    stub_bin.install(PackageManager.UV)
+    environment_log = tmp_path / "uv-calls"
+
+    result = publish_and_run(
+        session_start_repository,
+        environment={
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of_inherited_path(),
+            StubVariable.UV_CALL_LOG: str(environment_log),
+            StubVariable.UV_PYTHON: sys.executable,
+            StubVariable.UV_ENVIRONMENT_INTERPRETER: EnvironmentInterpreterLayout.WINDOWS,
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    windows_interpreter = (
+        Path(environment_directory(session_start_repository))
+        / EnvironmentInterpreterLayout.WINDOWS
+    )
+    assert environment_log.read_text().splitlines()[-1] == (
+        f"{PackageManager.PIP} install --python {windows_interpreter} --editable "
+        f"{package_source(session_start_repository)}"
+    )
+
+
 def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
     session_start_repository: ScratchRepository,
     stub_bin: ExecutableStubDirectory,
@@ -1320,6 +1377,27 @@ def test_reports_an_environment_it_could_not_create_and_finishes_the_run(
     assert (
         session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
     ).exists()
+
+
+# %% finding the environment's interpreter
+
+
+def test_runs_the_package_with_the_interpreter_of_a_windows_environment(
+    session_start_repository: ScratchRepository,
+):
+    """
+    An environment laid out as Windows lays it out is found, rather than passed over for
+    ``python3``.
+    """
+    without_an_environment(session_start_repository)
+    windows_interpreter = write_interpreter_wrapper(
+        Path(environment_directory(session_start_repository))
+        / EnvironmentInterpreterLayout.WINDOWS
+    )
+
+    assert session_start_repository.configuration_value(
+        ConfigurationVariable.PYTHON
+    ) == str(windows_interpreter)
 
 
 # %% the plan site line
