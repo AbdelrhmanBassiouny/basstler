@@ -34,8 +34,9 @@ items:
   status: in_progress
   track: site
   session: https://claude.ai/code/session_01FHZAMKQYxtjmwGzuCnKksR
+  pull_request_number: 63
   depends_on: []
-  notes: 'Moved from workflow-cutover/plan-site-action. A reusable build-site.yml in basstler builds with basstler.build_site and deploys with actions/deploy-pages to the calling repository Pages. Callers live in the registry repository: on its notes branch (push runs the workflow file of the pushed branch) and on its default branch (issues, workflow_dispatch). No schedule; one concurrency group. Pages can only deploy to the repository running the workflow, so the personal site moves from stack-board to basstler''s own Pages.'
+  notes: '#63 open (draft). After merge: Pages source set to Actions on basstler, one manual run, install-trigger on the notes branch, hub site_url pointed at basstler''s Pages (deploy-pages only deploys to the repository running it, so the personal site leaves stack-board). Callers: the registry''s default branch runs plan-site.yml; its notes branch dispatches it on a plan push. No schedule.'
 - id: site-design
   title: An elegant, robust site - one stylesheet, light and dark, waves as columns, live chips, build health
   branch: null
