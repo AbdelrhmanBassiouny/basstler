@@ -1,13 +1,12 @@
 PR: https://github.com/AbdelrhmanBassiouny/basstler/pull/72 (stack-maintenance / shared-fork-base-fast-forward)
 
 Plan
-- ForkBaseFastForward in maintenance/fast_forward.py: fetch fork base (--no-write-fetch-head), compare, refuse non-ff, push, re-fetch
-- RefusedPushHandling param: pass raises, session start reports
-- DefaultBranchSync uses it; ForkPublication replaced by FastForwardOutcome | None (+PUSH_REFUSED)
-- commit_or_none / branch fetch move onto GitCommandRunner
+- ForkBaseFastForward shared by the pass (RAISED) and session start (REPORTED)
 
 Done
-- bootstrap commit, draft PR, manifest in progress
+- ForkBaseFastForward + RefusedPushHandling in maintenance/fast_forward.py; PUSH_REFUSED outcome
+- GitCommandRunner.fetch_branch / commit_or_none; ForkPublication removed
+- tests: diverged fork at session start, refused push raises in pass; suite green (1341)
 
 Next
-- failing tests first (diverged fork at session start), then implement
+- watch CI on #72; address review
