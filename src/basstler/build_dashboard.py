@@ -17,9 +17,8 @@ Usage:
         [--tracking-url "https://github.com/<owner>/<repo>/issues/<n>"] \\
         [--plans-dir /tmp/plans]
 
---plans-dir is the directory holding every plan as <plan-id>/plan.yaml, plus
-the dashboard-URL cache at _generated/dashboard-urls.yaml. A depends_on entry
-of the form <plan-id>/<item-id> resolves against it, so a manifest carrying
+--plans-dir is the directory holding every plan as <plan-id>/plan.yaml. A
+depends_on entry of the form <plan-id>/<item-id> resolves against it, so a manifest carrying
 one is rejected without it rather than passing unchecked.
 
 pr_data.json shape: {"<owner>/<repo>": {"<pr_number>": {"state": "open"|
