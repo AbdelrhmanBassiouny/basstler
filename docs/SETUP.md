@@ -34,7 +34,7 @@ are genuinely yours. Re-running it on a set-up project changes nothing.
 ## 2. Do the steps no script can do
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.setup_steps
+~/.local/share/basstler/venv/bin/python -m basstler.setup.steps
 ```
 
 The session start created that environment; see the repository's [`README.md`](../README.md).
@@ -56,7 +56,7 @@ on to `.claude/personal/stack.toml` on your personal-notes branch, so the projec
 nothing of basstler's:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.setup_steps configure-upstream --repository <owner>/<name>
+~/.local/share/basstler/venv/bin/python -m basstler.setup.steps configure-upstream --repository <owner>/<name>
 ```
 
 A project that wants every contributor to share the answer commits
@@ -69,7 +69,7 @@ fork's default branch carries a basstler file. `/setup-personal-notes` installs 
 an upstream is named; to do it yourself, or to bring it to a new release:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.setup_steps install-upstream-reviews-action --branch-or-tag <a basstler release tag, or main>
+~/.local/share/basstler/venv/bin/python -m basstler.setup.steps install-upstream-reviews-action --branch-or-tag <a basstler release tag, or main>
 ```
 
 That writes `basstler/upstream-reviews` on your fork: a workflow calling basstler's

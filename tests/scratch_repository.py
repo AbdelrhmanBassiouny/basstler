@@ -22,7 +22,7 @@ from pathlib import Path
 
 from .script_runner import BashScriptRunner
 from basstler.locations import PackageLocation, PluginLocation
-from basstler.maintenance_git_commands import GitCommandRunner
+from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.shell_configuration import ShellConfigurationFunction
 
 from .constants.environment import (
@@ -360,7 +360,7 @@ class ScratchRepository:
         beside the shell file the personal-notes override is fetched through.
 
         :param content: The configuration to write.
-        :return: The path :meth:`basstler.stack_settings.Configuration.load` should be pointed at.
+        :return: The path :meth:`basstler.stack.settings.Configuration.load` should be pointed at.
         """
         self.install_hook_scripts(
             PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name

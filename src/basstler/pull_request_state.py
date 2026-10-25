@@ -17,8 +17,8 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.github_labels import GitHubLabel
-from basstler.maintenance_board import PullRequestField
-from basstler.maintenance_board import PullRequestRecord as PullRequestAPIRecord
+from basstler.maintenance.board import PullRequestField
+from basstler.maintenance.board import PullRequestRecord as PullRequestAPIRecord
 
 
 # %% classified state
@@ -137,8 +137,9 @@ class PullRequestRecord:
 
     labels: list[str] = field(default_factory=list)
     """
-    The pull request's raw GitHub labels, exactly as GitHub reports them. Kept as
-    ``list[str]`` rather than ``list[GitHubLabel]``: a real pull request can carry
+    The pull request's raw GitHub labels, exactly as GitHub reports them.
+
+    Kept as ``list[str]`` rather than ``list[GitHubLabel]``: a real pull request can carry
     labels this codebase has no reason to know about (other.
 
     automation's own labels, GitHub's defaults), so this field must tolerate

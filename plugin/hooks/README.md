@@ -158,8 +158,8 @@ Override only what you need:
     config from them, and is a no-op if none are set.
 
 For Claude Code on the web, see <https://code.claude.com/docs/en/claude-code-on-the-web> for where
-either of those lives. [`src/basstler/setup_steps.py`](../../src/basstler/setup_steps.py), run as
-`~/.local/share/basstler/venv/bin/python -m basstler.setup_steps`, prints the exact variable lines your
+either of those lives. [`src/basstler/setup/steps.py`](../../src/basstler/setup/steps.py), run as
+`~/.local/share/basstler/venv/bin/python -m basstler.setup.steps`, prints the exact variable lines your
 clone needs — only the settings you have moved off their defaults — alongside the other two steps
 no script can perform for you.
 
@@ -188,17 +188,17 @@ the narrative that doesn't belong in structured data.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in progress` as soon as its plan is approved — via
-  [`src/basstler/plan_item_bootstrap.py`](../../src/basstler/plan_item_bootstrap.py), which you can also
-  run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan_item_bootstrap` — so the
+  [`src/basstler/plan/item_bootstrap.py`](../../src/basstler/plan/item_bootstrap.py), which you can also
+  run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan.item_bootstrap` — so the
   manifest never says `not started` while the work is underway.
 - Decide where a new piece of work goes → `/add-plan-item <description>`. It runs the shared scope
   check in [`scope-decision.md`](../skills/add-plan-item/scope-decision.md) — the rule all four plan
   skills defer to for "is this new work, or a change to work already in flight?"
 - Choose whether either skill implements on its own, plans first, or asks → `/plan-item-mode
   <auto|plan|ask> [kickoff|resolve|both]`, or the
-  [`src/basstler/plan_item_mode.py`](../../src/basstler/plan_item_mode.py) `resolve|set` it calls, which you
-  can also run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan_item_mode`. Defaults in
-  [`plan-item-modes.toml`](../../src/basstler/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
+  [`src/basstler/plan/item_mode.py`](../../src/basstler/plan/item_mode.py) `resolve|set` it calls, which you
+  can also run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan.item_mode`. Defaults in
+  [`plan-item-modes.toml`](../../src/basstler/plan/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
   override at `.claude/personal/plan-item-modes.toml` on the notes branch. What each mode obliges
   the skill to do, and when `auto` still stops to ask →
   [`execution-modes.md`](../skills/plan-dashboard/execution-modes.md).

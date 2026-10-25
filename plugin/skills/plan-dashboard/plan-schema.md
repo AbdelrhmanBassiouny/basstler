@@ -26,7 +26,7 @@ rules at [`example/roadmap.md`](./example/roadmap.md).
 .claude/personal/plans/
   _generated/
     branch-index.tsv          (generated - do not hand-edit, see below)
-  _hub.yaml                   (the plan site's hub file - see basstler.plan_hub)
+  _hub.yaml                   (the plan site's hub file - see basstler.plan_site.hub)
   <plan-id>/
     plan.yaml
     roadmap.md
@@ -82,7 +82,7 @@ items:                         # the actual trackable units of work - flat,
     blockers: ["freeform reasons", ...]   # optional, defaults to []
 ```
 
-Validation is not documentation-only: `plan_validation.py` enforces this
+Validation is not documentation-only: `plan/validation.py` enforces this
 schema on every `/plan-dashboard` run, and `/plan-create` drafts against the
 same checks. If this document and that module ever disagree, the module is
 the authority.
@@ -103,7 +103,7 @@ interpret it — GitHub's state alone can't say whether a still-open PR means
 usually means the manifest was mistyped, not that GitHub is wrong. But
 "GitHub confirms this PR is merged" has exactly one correct manifest state:
 `done`. There's nothing to interpret, so `/plan-dashboard` doesn't just flag
-it — `sync_manifest_status.py` corrects `status` to `done` for exactly that
+it — `plan/sync_manifest_status.py` corrects `status` to `done` for exactly that
 case, in `plan.yaml` itself, every run, before rendering. Every other kind
 of drift is still left as a flag for a human.
 
@@ -186,7 +186,7 @@ itself.
 
 Every session that loads a plan pays for every line of it, so the plan holds
 only what a future session needs to act. `save-plan.sh` enforces this with
-the limits `src/basstler/plan_size_limits.py` names (`Measure`):
+the limits `src/basstler/plan/size_limits.py` names (`Measure`):
 
 - **Landed items are dropped on save**, along with every `depends_on` edge to
   them: the work is in the code and its history in git. A plan left with no
@@ -204,7 +204,7 @@ the limits `src/basstler/plan_size_limits.py` names (`Measure`):
 
 A save over a limit is refused with every violation named. Read one item
 rather than the manifest with
-`"${BASSTLER_PYTHON}" -m basstler.plan_manifest_tools item <file> --id <item-id>`.
+`"${BASSTLER_PYTHON}" -m basstler.plan.manifest_tools item <file> --id <item-id>`.
 
 ## Editing an existing plan
 

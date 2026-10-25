@@ -1,7 +1,7 @@
 """
 Every file and directory this package names, each written once.
 
-..note:: Imports nothing outside the standard library, since :mod:`basstler.dependencies`
+..note:: Imports nothing outside the standard library, since :mod:`basstler.setup.dependencies`
     reads its declaration's location from here before anything is installed.
 """
 
@@ -67,7 +67,7 @@ class PackageLocation(PathEnumeration):
     ``PYTHONPATH``. Meaningless for a package installed as a copy.
     """
 
-    STACK_CONFIGURATION = DIRECTORY / "stack.toml"
+    STACK_CONFIGURATION = DIRECTORY / "stack" / "stack.toml"
     """
     The shipped stack configuration every run starts from, before a project's and a
     user's overrides.
@@ -89,12 +89,12 @@ class PackageLocation(PathEnumeration):
     The page templates dashboards are rendered from.
     """
 
-    QUERIES = DIRECTORY / "queries"
+    QUERIES = DIRECTORY / "upstream_reviews" / "queries"
     """
     The GraphQL documents the upstream review reader sends.
     """
 
-    PLAN_ITEM_MODE_DEFAULTS = DIRECTORY / "plan-item-modes.toml"
+    PLAN_ITEM_MODE_DEFAULTS = DIRECTORY / "plan" / "plan-item-modes.toml"
     """
     The shipped plan-item execution modes.
     """

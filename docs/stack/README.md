@@ -39,12 +39,12 @@ next to the workflow it describes, because it is read rather than run.
   *whichever remote is not the upstream*, matched by the repository each URL points at rather
   than by what the remote is called, so `origin` may be either one. A
   `.claude/personal/stack.toml` on the personal-notes branch layers your own overrides on top of
-  both (see `Configuration.load` in `stack_settings.py`), including a `fork_repository` to pick between
+  both (see `Configuration.load` in `stack/settings.py`), including a `fork_repository` to pick between
   remotes when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
-  `session`) that `stack.py` reads. Written from GitHub as scratch by whatever refreshes it -
+  `session`) that `basstler.stack` reads. Written from GitHub as scratch by whatever refreshes it -
   never committed.
-- **`stack.py`** - read-only status tool (never mutates branches). Reads `board.json` + git:
+- **`basstler.stack`** - read-only status tool (never mutates branches). Reads `board.json` + git:
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack status` - the whole stack, with ahead/behind drift per parent.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack check` - would each branch integrate cleanly onto its parent
     *now* (fast, non-mutating `git merge-tree` probe)?
@@ -80,15 +80,15 @@ next to the workflow it describes, because it is read rather than run.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack landed` - one `name<TAB>pr` line per open fork PR whose branch
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.
-- **`maintenance.py`** - the executor: the half of a pass that moves commits, where `stack.py`
+- **`basstler.maintenance`** - the executor: the half of a pass that moves commits, where `basstler.stack`
   only derives and prints. `board --write`, `fast-forward`, `restack`, `promote` and
   `run-report --json`; see [Running a maintenance pass](#running-a-maintenance-pass). It is the
   command line onto modules named for what they do, so nothing has to be hunted for inside one
-  long file: `maintenance_constants.py` (every value edited by hand),
-  `maintenance_git_commands.py`, `maintenance_board.py`, `maintenance_github.py`,
-  `maintenance_fast_forward.py`, `maintenance_restack_steps.py` and
-  `maintenance_restack_procedure.py` (the steps, and the order that is the procedure),
-  `maintenance_promotion.py`, `maintenance_report.py` and `maintenance_commands.py`.
+  long file: `maintenance/constants.py` (every value edited by hand),
+  `maintenance/git_commands.py`, `maintenance/board.py`, `maintenance/github.py`,
+  `maintenance/fast_forward.py`, `maintenance/restack_steps.py` and
+  `maintenance/restack_procedure.py` (the steps, and the order that is the procedure),
+  `maintenance/promotion.py`, `maintenance/report.py` and `maintenance/commands.py`.
 - **`skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
   as `/stacked-pr-maintenance` from any session, and run first by `/plan-item-kickoff` and
   `/plan-item-resolve`. It takes `fork=` / `upstream=` arguments, falls back to
@@ -99,7 +99,7 @@ next to the workflow it describes, because it is read rather than run.
 `draft` → **`ready`** → `in-review` → `merged`, all derived from GitHub:
 
 - `draft → ready` is **your gate**: self-review the fork PR and **un-draft it** on GitHub to
-  approve. `stack.py next` only ever promotes a `ready` (un-drafted) branch - nothing reaches
+  approve. `basstler.stack next` only ever promotes a `ready` (un-drafted) branch - nothing reaches
   the upstream without your sign-off.
 - `ready → in-review`: when you promote it, add the **`in-review`** label to the fork PR.
 - `in-review → merged`: automatic once the branch lands in `<upstream_remote>/<upstream_base>` (git ancestry).

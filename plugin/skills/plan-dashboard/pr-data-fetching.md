@@ -1,8 +1,8 @@
 # Fetching live pull request data into pr_data.json
 
 The canonical procedure for gathering the `pr_data.json` shape
-`build_dashboard.py`, `sync_manifest_status.py`, and
-`check_dependency_readiness.py` all consume - referenced by
+`dashboard/plan_page.py`, `plan/sync_manifest_status.py`, and
+`plan/check_dependency_readiness.py` all consume - referenced by
 `plan-dashboard/SKILL.md` step 2 and `dependency-readiness.md` instead of
 each restating it. See any of those three scripts' own `--help` / module
 docstring for the exact JSON shape expected.

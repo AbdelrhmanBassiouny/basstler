@@ -17,8 +17,8 @@ anything below is unclear about a field's meaning, rather than guessing.
 
 **Everything deterministic — schema validation, live-state classification,
 drift detection, HTML rendering — lives in the committed `basstler` package
-(`src/basstler/build_dashboard.py`, `plan_validation.py`,
-`pull_request_state.py`, `build_index.py`, `render_common.py`), not in this document.** This file's job is only
+(`src/basstler/dashboard/plan_page.py`, `plan/validation.py`,
+`pull_request_state.py`, `dashboard/index_page.py`, `render_common.py`), not in this document.** This file's job is only
 the parts a module can't do: resolving what to fetch, calling the GitHub API,
 and calling the `Artifact` tool. If you find yourself re-deriving rendering or
 validation logic in prose instead of just running the module, stop — that
@@ -146,7 +146,7 @@ bash "${REFRESH_DASHBOARD_SCRIPT}" \
   --tracking-url "<html_url from step 1, if any>"   # omit if the plan has no tracking_issue
 ```
 
-It runs `sync_manifest_status.py` first - `status` is a manually-maintained
+It runs `plan/sync_manifest_status.py` first - `status` is a manually-maintained
 field for everything except one direction: once GitHub confirms a PR is
 merged, the item is done, and that's not a judgment call - unlike every
 other kind of drift (a bad PR number, "done" while still open, closed
@@ -156,7 +156,7 @@ human. If that finds anything to correct, it pushes the patched
 `hooks/write-personal-notes-file.sh`) *before* rendering, so the
 dashboard reflects corrected data instead of reporting the same "merged but
 not marked done" drift forever; if nothing needed correcting, nothing is
-pushed. It then runs `build_dashboard.py`, which validates the manifest
+pushed. It then runs `dashboard/plan_page.py`, which validates the manifest
 (schema version, unique ids, track/wave/depends_on references — the exact
 checks `plan-create` must also satisfy, including a `depends_on` entry naming
 another plan, which is resolved against `--plans-dir` and refused if that
@@ -205,8 +205,8 @@ the package's environment, which every session start creates and installs
 the package's dependencies into — `hooks/session-start.sh` again if
 its `dependencies:` line reported a failure.
 
-On success it prints one merged JSON summary on stdout: `sync_manifest_status.py`'s
-own `{"corrected": [...]}` plus `build_dashboard.py`'s status counts, drift
+On success it prints one merged JSON summary on stdout: `plan/sync_manifest_status.py`'s
+own `{"corrected": [...]}` plus `dashboard/plan_page.py`'s status counts, drift
 count, and drifted/ready/recheck item titles - keep it, you need it for
 step 4's report without re-parsing the HTML you just wrote or re-deriving
 what got auto-corrected. In master-index mode, run `refresh_dashboard.sh`
@@ -214,7 +214,7 @@ for every plan before building that plan's index entry.
 
 **Master-index mode** instead assembles one summary object per plan (`id`,
 `title`, `description`, `done`/`total` counts from each plan's own
-`build_dashboard.py` run or a quick count over its `items[]`, and
+`dashboard/plan_page.py` run or a quick count over its `items[]`, and
 `dashboard_url` from the URL cache — `null` if never published) into a JSON
 list, then:
 
@@ -290,7 +290,7 @@ or working tree.
 ## 4. Report back
 
 Summarize for the user from the JSON summaries step 2 printed: item counts by
-status, every item `sync_manifest_status.py` auto-corrected to done (by
+status, every item `plan/sync_manifest_status.py` auto-corrected to done (by
 name, since that's a manifest edit the user didn't ask for line by line),
 every remaining drift flag by name, and every item now ready to review by
 name — this is the actionable output, don't bury it under a wall of

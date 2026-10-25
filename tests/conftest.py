@@ -20,9 +20,9 @@ import pytest
 os.environ["BASSTLER_PLUGIN_ROOT"] = str(Path(__file__).resolve().parents[1] / "plugin")
 
 from .executable_stubs import ExecutableStubDirectory
-from .maintenance_fork import ForkCheckout
+from .maintenance.fork import ForkCheckout
 from .scratch_repository import ScratchRepository
-from .upstream_reviews_replay import RecordedResponse, ReplayingClient
+from .upstream_reviews.replay import RecordedResponse, ReplayingClient
 
 
 @pytest.fixture

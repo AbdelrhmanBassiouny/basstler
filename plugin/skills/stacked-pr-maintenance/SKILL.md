@@ -45,7 +45,7 @@ HARD RULES so you never drift into review work:
 - NEVER enter plan mode or post a "here's my plan" comment. You either perform a mechanical step from the
   steps below or you stop; you never open a discussion.
 - LABELS ARE REPLACE, NOT ADD: the GitHub label-write call takes the PR's **entire** new label set - it
-  does not add to what's already there. Never compute that set yourself; `stack.py labels` computes it
+  does not add to what's already there. Never compute that set yourself; `basstler.stack labels` computes it
   from the labels the PR carries now, and its output is the whole list you pass to the write.
 
 ## Step 0 - resolve which repositories this runs on
@@ -94,7 +94,7 @@ you invoked it from keeps its branch and its files.
    `configuration` and continue.
 
 4. **Exit status 11 - the project names no upstream.** Ask the developer for the `<owner>/<name>`
-   the project is reviewed on, save it with `"${BASSTLER_PYTHON}" -m basstler.setup_steps
+   the project is reviewed on, save it with `"${BASSTLER_PYTHON}" -m basstler.setup.steps
    configure-upstream --repository <owner>/<name>`, re-run `configuration` and continue.
 
 Any other non-zero exit is a stop-and-report, not something to work around.
@@ -216,7 +216,7 @@ yourself.
 - **It never debugs or fixes a red check.** Report it to the branch's owner the same way a conflict
   is reported: find the session link in the fork pull request's description, post a comment prefixed
   `🔴 MAINTENANCE - NEEDS RESOLUTION:` stating the failing check and its conclusion, and label the pull
-  request `needs-resolution` via `stack.py labels` so the rest of its labels survive. That comment is
+  request `needs-resolution` via `basstler.stack labels` so the rest of its labels survive. That comment is
   the only channel available to you: no session subscribes to a pull request's activity, so it sits
   on GitHub until the owner reads it - write it to stand alone. Never disable a check to go green.
 - **It never subscribes to learn CI.** Poll with `pull_request_read` → `get_check_runs` /

@@ -1,4 +1,4 @@
-# Written by basstler's /setup-personal-notes (python -m basstler.setup_steps
+# Written by basstler's /setup-personal-notes (python -m basstler.setup.steps
 # install-upstream-reviews-action); re-run that to update it rather than editing it here.
 name: Upstream reviews
 
