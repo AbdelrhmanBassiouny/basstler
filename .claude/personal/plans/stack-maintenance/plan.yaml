@@ -29,10 +29,9 @@ items:
     Every skill that can affect a plan writes the manifest at each transition and republishes the
     dashboard once per turn, citing manifest-staleness.md by a relative link; adds item_bootstrap's
     update, check, resolve, block and unblock, and fixes the manifest writer's multi-line-value
-    corruption. Draft #48 (from CRAM #151), CI green on f67909e; 25 Oct reviews addressed through
-    3d9609f. Token economy split out as dashboard-token-economy. Open: whether the six older
-    ${..._DOCUMENT} skill references become links here or in a follow-up. Absorbs CRAM #160's indent
-    fix.
+    corruption. Draft #48 (from CRAM #151); every 25 Oct review thread addressed through 3d9609f.
+    Follow-ups: dashboard-token-economy, and plan-tracking-skills/skill-document-links for the older
+    ${..._DOCUMENT} references. Absorbs CRAM #160's indent fix.
 - id: promotion-summaries-and-table
   title: Promote with a written summary, and send no notification
   branch: null
