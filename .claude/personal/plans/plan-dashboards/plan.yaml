@@ -104,11 +104,12 @@ items:
     refuses an id another hub repository already uses.'
 - id: split-build-dashboard
   title: Split build_dashboard.py and its tests into modules by concern
-  branch: null
-  pull_request_number: null
+  branch: claude/brave-einstein-eg0vsz
+  pull_request_number: 66
   track: corrections
   depends_on: []
-  status: not_started
+  status: in progress
+  session: https://claude.ai/code/session_018iudUBraUAiX5vMijyCNYM
   notes: 'Added 2026-10-25 from the review of #17: build_dashboard.py (2,300 lines) and test_build_dashboard.py
     (2,600) are too big. Split into plan validation, dependencies, pull request state and
     rendering, tests to match, and move the validation exceptions into exceptions.py. Kept
