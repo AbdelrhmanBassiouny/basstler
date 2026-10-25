@@ -1,7 +1,7 @@
 Plan
-- team-basstler/site-action (#63): reusable plan-site-build.yml, plan-site.yml caller, notes-branch and pull request triggers
+- team-basstler/site-action (#63): only the reusable plan-site-build.yml and the site digest
 Done
-- Workflows, triggers, site digest + conditional deploy, tests (1215 pass); review thread answered and resolved
+- Build workflow, SiteDigest + deploy only a changed site, tests (1249 pass); registry parts removed
 Next
-- Owner merges #63, sets basstler Pages source to Actions, runs Plan site once
-- Then install-trigger on the notes branch and point the hub site_url at basstler Pages
+- Owner reviews and merges #63
+- Then team-basstler/site-for-every-repository: <user>/plans, setup, skill-time build starts
