@@ -11,12 +11,13 @@ name = "basstler"
 description = "Workflow tooling: stacked-pull-request maintenance, plan dashboards, personal-notes hooks and upstream review reading."
 readme = "README.md"
 requires-python = ">=3.12"
-license = "LGPL-3.0-only"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [
-    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
+    {name = "Abdelrhman Bassiouny", email = "bido.bassuny@gmail.com"}
 ]
 maintainers = [
-    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
+    {name = "Abdelrhman Bassiouny", email = "bido.bassuny@gmail.com"}
 ]
 keywords = ["stacked-pull-requests", "developer-tooling", "github", "workflow", "agents"]
 classifiers = [
