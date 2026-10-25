@@ -44,6 +44,14 @@ items:
   track: site
   depends_on: []
   notes: 'One static stylesheet with design tokens, light and dark, phone width; plan page as wave columns of item cards with status, pull request, CI and assignee chips and dependency hints; hub and repository pages as cards with progress. A health banner names every plan or repository the build skipped, and the build fails when the registry cannot be read. A CI test builds the site from the test dataset. Stays on the current templates; the htpy rewrite (workflow-cutover/site-pages-in-python) is not needed for this.'
+- id: site-for-every-repository
+  title: Setup publishes the plan site for any repository and user; every plan save starts its build
+  branch: null
+  status: not_started
+  track: site
+  depends_on:
+  - site-action
+  notes: 'Every plan save starts the registry''s Plan site build with the user''s own credentials (connector or gh): no token, no cross-repository trigger. Setup alone does the rest: hub registration and session site links (absorbed workflow-cutover/plan-site-setup), the notes trigger, site caller and pull request trigger, plus printing the one Pages step. Builds on #45''s setup script and #48''s after-save order. Open: on a fork registry, files on the default branch break the upstream fast-forward (#57) - an orphan site branch allowed in the Pages policy, or a registry the user owns.'
 - id: artifact-path-retirement
   title: Point every plan skill at the site instead of republishing a dashboard Artifact
   branch: null
@@ -51,6 +59,7 @@ items:
   track: site
   depends_on:
   - site-action
+  - site-for-every-repository
   notes: 'Moved from workflow-cutover. First half now: every republish-/plan-dashboard instruction in the skills and the personal notes becomes printing the site link, and save-plan.sh prints the page URL. Second half once the site has run one green cycle: delete every page each repository''s _generated/dashboard-urls.yaml lists (the Artifact tool''s delete), then remove that cache, record_dashboard_url.py, plan-dashboard step 3 and index mode.'
 - id: concurrent-safe-save
   title: A plan save applies item-level edits onto the latest manifest and retries a rejected push
