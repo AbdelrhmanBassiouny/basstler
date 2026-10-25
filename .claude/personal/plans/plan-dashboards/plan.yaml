@@ -67,14 +67,14 @@ items:
   branch: claude/plan-dashboards-cross-dependencies-h3icfd
   pull_request_number: 17
   track: corrections
-  session: https://claude.ai/code/session_01U2r4CGpBKiD551i2FE5NXW
+  session: https://claude.ai/code/session_01KRgqsFtPWVgxkh11fGuJpt
   depends_on: []
   status: in_progress
   notes: 'Decided 2026-09-03: depends_on admits `<plan-id>/<item-id>` (a slash cannot occur in a kebab-case
-    id, so a bare id still means this plan); plan-schema.md documents it. Not a bug fix, so no `bug` label.
-    build_dashboard.ManifestKey duplicates plan_model.ManifestKey from #11, so #17 deletes it and imports
-    plan_model''s. The masthead Refresh button CRAM #206 merged in was removed from #17 on 2026-10-21,
-    since the site rebuilds on every plan change.'
+    id, so a bare id still means this plan). Not a bug fix: release:minor. 2026-10-25: main merged in; chips
+    link to their dependency''s card (same page, or the other plan''s site page in a new tab) through
+    build_site''s plan_url, so no dashboard-URL cache; build_site resolves cross-plan entries; build_dashboard''s
+    ManifestKey is gone in favour of plan_model''s. Draft, all tests green, awaiting review.'
 - id: ready-to-promote-upstream-links
   title: Ready-to-promote sidebar list with one-click upstream create-pull-request links
   branch: null
