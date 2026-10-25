@@ -18,6 +18,12 @@ on:
         type: string
         default: ""
 
+# One build runs at a time and is never cancelled; of the builds started meanwhile, only
+# the newest waits, so a burst of starts ends in one build of the latest state.
+concurrency:
+  group: plan-site-build
+  cancel-in-progress: false
+
 permissions:
   contents: read
   pages: write

@@ -230,16 +230,6 @@ class ProjectLocation(PathEnumeration):
     Mirrors ``PLAN_HUB_PATH`` in ``resolve-personal-notes-config.sh``.
     """
 
-    WORKFLOWS = Path(".github") / "workflows"
-    """
-    Where GitHub Actions reads a branch's workflows from.
-    """
-
-    PLAN_SITE_BUILD_WORKFLOW = WORKFLOWS / "plan-site-build.yml"
-    """
-    The reusable workflow that builds the plan site and deploys it to Pages.
-    """
-
     PERSONAL_STACK_CONFIGURATION = PERSONAL_NOTES / "stack.toml"
     """
     The per-user override of :attr:`PROJECT_STACK_CONFIGURATION`.

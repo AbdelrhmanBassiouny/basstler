@@ -5,67 +5,70 @@ deploys it to the calling repository's Pages when a rendered page changed.
 
 from __future__ import annotations
 
-from typing import Any
+from enum import StrEnum
 
 import pytest
-import yaml
 
 from basstler.build_site import SiteFile
-from basstler.locations import PackageLocation, ProjectLocation
+
+from .constants.paths import RepositoryLocation
+from .workflow_definition import Workflow, WorkflowTrigger
 
 # %% reading the workflow
 
 
+class PlanSiteBuildJob(StrEnum):
+    """
+    The build workflow's jobs.
+    """
+
+    BUILD = "build"
+    DEPLOY = "deploy"
+
+
+class PagesAction(StrEnum):
+    """
+    The Pages actions the build workflow uses.
+    """
+
+    UPLOAD = "actions/upload-pages-artifact"
+
+
 @pytest.fixture
-def build_workflow() -> dict[Any, Any]:
+def build_workflow() -> Workflow:
     """
     The parsed reusable build workflow.
     """
-    return yaml.safe_load(
-        (
-            PackageLocation.SOURCE_TREE / ProjectLocation.PLAN_SITE_BUILD_WORKFLOW
-        ).read_text()
-    )
-
-
-def step_using(job: dict[str, Any], action: str) -> dict[str, Any]:
-    """
-    :param job: A parsed workflow job.
-    :param action: The action a step of the job uses, without its version.
-    :return: That step.
-    """
-    (step,) = (
-        step
-        for step in job["steps"]
-        if step.get("uses", "").partition("@")[0] == action
-    )
-    return step
+    return Workflow.read(RepositoryLocation.PLAN_SITE_BUILD_WORKFLOW)
 
 
 # %% the build
 
 
-def test_the_build_is_a_reusable_workflow(build_workflow: dict[Any, Any]):
-    # YAML 1.1 reads the ``on`` key as ``True``.
-    assert "workflow_call" in build_workflow[True]
+def test_the_build_is_a_reusable_workflow(build_workflow: Workflow):
+    assert WorkflowTrigger.WORKFLOW_CALL in build_workflow.triggers
 
 
 def test_the_build_compares_the_built_site_s_digest_with_the_published_one(
-    build_workflow: dict[Any, Any],
+    build_workflow: Workflow,
 ):
-    build = build_workflow["jobs"]["build"]
-    (site_changed,) = build["outputs"].values()
-    step_identifier = site_changed.split(".")[1]
-    (compare,) = (step for step in build["steps"] if step.get("id") == step_identifier)
-    assert SiteFile.DIGEST in compare["run"]
+    build = build_workflow.jobs[PlanSiteBuildJob.BUILD]
+    (site_changed,) = build.outputs.values()
+    compare = build.step_identified_as(site_changed.step_identifier)
+    assert SiteFile.DIGEST in compare.command
 
 
-def test_the_build_uploads_and_deploys_only_a_changed_site(
-    build_workflow: dict[Any, Any],
+def test_the_build_uploads_and_deploys_only_a_changed_site(build_workflow: Workflow):
+    build = build_workflow.jobs[PlanSiteBuildJob.BUILD]
+    ((output_name, site_changed),) = build.outputs.items()
+    assert build.step_using(PagesAction.UPLOAD).condition == site_changed.true_condition
+    assert (
+        build_workflow.jobs[PlanSiteBuildJob.DEPLOY].condition
+        == build.output(output_name).true_condition
+    )
+
+
+def test_a_build_waits_for_the_running_one_instead_of_cancelling_it(
+    build_workflow: Workflow,
 ):
-    jobs = build_workflow["jobs"]
-    ((output_name, site_changed),) = jobs["build"]["outputs"].items()
-    changed = site_changed.removeprefix("${{").removesuffix("}}").strip()
-    upload = step_using(jobs["build"], "actions/upload-pages-artifact")
-    assert upload["if"] == f"{changed} == 'true'"
-    assert jobs["deploy"]["if"] == f"needs.build.outputs.{output_name} == 'true'"
+    assert build_workflow.concurrency.cancel_in_progress is False
