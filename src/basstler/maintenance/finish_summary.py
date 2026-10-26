@@ -73,7 +73,9 @@ class FinishSummaryHeading(StrEnum):
     The branches whose link label was dropped because the link was acted on.
     """
 
-    REVIEW_MIRROR = "In-review labels and upstream links updated"
+    UPSTREAM_PULL_REQUEST_SYNCHRONIZATION = (
+        "In-review labels and upstream links updated"
+    )
     """
     The pull requests whose in-review label or upstream link was written to match the
     upstream.
@@ -137,7 +139,7 @@ class FinishSummary:
             FinishSummaryHeading.LINK_LABELS_CLEARED: self.code_list(
                 self.report.promotion_labels_cleared
             ),
-            FinishSummaryHeading.REVIEW_MIRROR: self.review_mirror_changes(),
+            FinishSummaryHeading.UPSTREAM_PULL_REQUEST_SYNCHRONIZATION: self.upstream_pull_request_synchronization_changes(),
             FinishSummaryHeading.SKIPPED: self.skipped(),
         }
         lines = [f"**Maintenance pass:** {self.report.exit_code.name_for_a_caller}"]
@@ -301,13 +303,13 @@ class FinishSummary:
             for branch in self.stack.withheld_by_failing_checks()
         ]
 
-    def review_mirror_changes(self) -> list[str]:
+    def upstream_pull_request_synchronization_changes(self) -> list[str]:
         """
         :return: One entry per in-review label or upstream link written.
         """
         return [
             f"{self.branch_line(self.branches_by_name[change.branch])}: {change.action}"
-            for change in self.report.review_mirror_changes
+            for change in self.report.upstream_pull_request_synchronization_changes
         ]
 
     def branch_list(self, outcome: RestackOutcome) -> list[str]:

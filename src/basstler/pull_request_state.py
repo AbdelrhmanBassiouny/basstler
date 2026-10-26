@@ -183,18 +183,23 @@ class PullRequestRecord:
 
         :raises MissingMergeTimestampError: If a closed entry omits ``merged_at``.
         """
-        state = PullRequestState(data["state"])
-        if state is PullRequestState.CLOSED and "merged_at" not in data:
+        state = PullRequestState(data[PullRequestField.STATE.key])
+        if (
+            state is PullRequestState.CLOSED
+            and PullRequestField.MERGED_AT.key not in data
+        ):
             raise MissingMergeTimestampError(
                 "a closed pull request entry must carry merged_at (null included)"
             )
-        merged_at = data.get("merged_at")
+        merged_at = data.get(PullRequestField.MERGED_AT.key)
         return cls(
             state=state,
-            draft=data.get("draft", False),
+            draft=data.get(PullRequestField.DRAFT.key, False),
             merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
-            labels=list(data.get("labels") or []),
-            upstream_link=PullRequestDescription(data.get("body") or "").upstream_link,
+            labels=list(data.get(PullRequestField.LABELS.key) or []),
+            upstream_link=PullRequestDescription(
+                data.get(PullRequestField.BODY.key) or ""
+            ).upstream_link,
         )
 
     @classmethod

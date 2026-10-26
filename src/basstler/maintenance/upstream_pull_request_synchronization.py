@@ -18,7 +18,7 @@ from basstler.stack.label_write import LabelWrite
 from basstler.stack.model import Branch, BranchStatus, Stack
 
 
-class ReviewMirrorAction(StrEnum):
+class UpstreamPullRequestSynchronizationAction(StrEnum):
     """
     What was written to a fork pull request to bring its record of the upstream review
     in step.
@@ -49,7 +49,7 @@ class ReviewMirrorAction(StrEnum):
 
 
 @dataclass(frozen=True)
-class ReviewMirrorChange:
+class UpstreamPullRequestSynchronizationChange:
     """
     One write bringing a fork pull request's record of its upstream review in step.
     """
@@ -64,14 +64,14 @@ class ReviewMirrorChange:
     Its fork pull request.
     """
 
-    action: ReviewMirrorAction
+    action: UpstreamPullRequestSynchronizationAction
     """
     What was written.
     """
 
 
 @dataclass(frozen=True)
-class UpstreamReviewMirror:
+class UpstreamPullRequestSynchronization:
     """
     The in-review label and the upstream pull request link on each fork pull request,
     kept in step with the open upstream pull request opened from its branch.
@@ -87,7 +87,7 @@ class UpstreamReviewMirror:
     The fork to read pull requests from and write them back to.
     """
 
-    def synchronize(self) -> list[ReviewMirrorChange]:
+    def synchronize(self) -> list[UpstreamPullRequestSynchronizationChange]:
         """
         Bring the label and the link of every branch not yet landed in step with its
         upstream pull request.
@@ -97,7 +97,7 @@ class UpstreamReviewMirror:
 
         :return: One entry per write, in dependency order.
         """
-        changes: list[ReviewMirrorChange] = []
+        changes: list[UpstreamPullRequestSynchronizationChange] = []
         for branch in self.stack.maintained_branches():
             if branch.status is BranchStatus.MERGED:
                 continue
@@ -146,7 +146,7 @@ class UpstreamReviewMirror:
 
     def write(
         self, branch: Branch, link: UpstreamPullRequestLink | None
-    ) -> list[ReviewMirrorChange]:
+    ) -> list[UpstreamPullRequestSynchronizationChange]:
         """
         Write the label and the link that disagree with what *branch*'s pull request
         carries now.
@@ -169,11 +169,14 @@ class UpstreamReviewMirror:
             )
             if action is not None
         ]
-        return [ReviewMirrorChange(branch.name, number, action) for action in actions]
+        return [
+            UpstreamPullRequestSynchronizationChange(branch.name, number, action)
+            for action in actions
+        ]
 
     def write_label(
         self, number: int, labels: list[str], link: UpstreamPullRequestLink | None
-    ) -> ReviewMirrorAction | None:
+    ) -> UpstreamPullRequestSynchronizationAction | None:
         """
         :param number: The fork pull request to write.
         :param labels: The labels it carries now.
@@ -185,10 +188,10 @@ class UpstreamReviewMirror:
         label = self.stack.configuration.in_review_label
         if link is None:
             write = LabelWrite.replacing(labels, removed=[label])
-            action = ReviewMirrorAction.LABEL_REMOVED
+            action = UpstreamPullRequestSynchronizationAction.LABEL_REMOVED
         else:
             write = LabelWrite.replacing(labels, added=[label])
-            action = ReviewMirrorAction.LABEL_ADDED
+            action = UpstreamPullRequestSynchronizationAction.LABEL_ADDED
         self.fork.replace_labels(number, write.labels)
         return action
 
@@ -197,7 +200,7 @@ class UpstreamReviewMirror:
         number: int,
         description: PullRequestDescription,
         link: UpstreamPullRequestLink | None,
-    ) -> ReviewMirrorAction | None:
+    ) -> UpstreamPullRequestSynchronizationAction | None:
         """
         :param number: The fork pull request to write.
         :param description: The description it carries now.
@@ -208,5 +211,5 @@ class UpstreamReviewMirror:
             return None
         self.fork.set_description(number, description.with_upstream_link(link))
         if link is None:
-            return ReviewMirrorAction.LINK_REMOVED
-        return ReviewMirrorAction.LINK_WRITTEN
+            return UpstreamPullRequestSynchronizationAction.LINK_REMOVED
+        return UpstreamPullRequestSynchronizationAction.LINK_WRITTEN

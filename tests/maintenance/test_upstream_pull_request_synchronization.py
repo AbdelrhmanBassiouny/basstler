@@ -11,10 +11,10 @@ from basstler.maintenance.description import (
     PullRequestDescription,
     UpstreamPullRequestLink,
 )
-from basstler.maintenance.upstream_review_mirror import (
-    ReviewMirrorAction,
-    ReviewMirrorChange,
-    UpstreamReviewMirror,
+from basstler.maintenance.upstream_pull_request_synchronization import (
+    UpstreamPullRequestSynchronizationAction,
+    UpstreamPullRequestSynchronizationChange,
+    UpstreamPullRequestSynchronization,
 )
 from basstler.stack.model import PullRequest
 
@@ -93,13 +93,15 @@ def test_a_branch_under_upstream_review_gains_the_label(fork_checkout: ForkCheck
         upstream_link=the_upstream_link().url,
     )
 
-    changes = UpstreamReviewMirror(a_stack(fork_checkout, board), fork).synchronize()
+    changes = UpstreamPullRequestSynchronization(
+        a_stack(fork_checkout, board), fork
+    ).synchronize()
 
     assert changes == [
-        ReviewMirrorChange(
+        UpstreamPullRequestSynchronizationChange(
             StackBranch.PARENT,
             StackPullRequestNumber.PARENT,
-            ReviewMirrorAction.LABEL_ADDED,
+            UpstreamPullRequestSynchronizationAction.LABEL_ADDED,
         )
     ]
     assert fork.label_writes == [
@@ -116,13 +118,15 @@ def test_a_branch_whose_upstream_pull_request_closed_loses_the_label(
     )
     board = a_board_whose_parent(None, labels=[StackLabel.IN_REVIEW])
 
-    changes = UpstreamReviewMirror(a_stack(fork_checkout, board), fork).synchronize()
+    changes = UpstreamPullRequestSynchronization(
+        a_stack(fork_checkout, board), fork
+    ).synchronize()
 
     assert changes == [
-        ReviewMirrorChange(
+        UpstreamPullRequestSynchronizationChange(
             StackBranch.PARENT,
             StackPullRequestNumber.PARENT,
-            ReviewMirrorAction.LABEL_REMOVED,
+            UpstreamPullRequestSynchronizationAction.LABEL_REMOVED,
         )
     ]
     assert fork.label_writes == [RecordedLabelWrite(StackPullRequestNumber.PARENT, ())]
@@ -137,7 +141,9 @@ def test_a_branch_already_in_step_is_not_written(fork_checkout: ForkCheckout):
         upstream_link=the_upstream_link().url,
     )
 
-    changes = UpstreamReviewMirror(a_stack(fork_checkout, board), fork).synchronize()
+    changes = UpstreamPullRequestSynchronization(
+        a_stack(fork_checkout, board), fork
+    ).synchronize()
 
     assert changes == []
     assert fork.label_writes == []
@@ -158,7 +164,9 @@ def test_the_label_write_keeps_the_labels_the_pull_request_carries_now(
     )
     board = a_board_whose_parent(StackPullRequestNumber.UPSTREAM, labels=[])
 
-    UpstreamReviewMirror(a_stack(fork_checkout, board), fork).synchronize()
+    UpstreamPullRequestSynchronization(
+        a_stack(fork_checkout, board), fork
+    ).synchronize()
 
     assert fork.label_writes == [
         RecordedLabelWrite(
@@ -178,7 +186,9 @@ def test_a_pull_request_another_writer_already_put_in_step_is_not_written_again(
     )
     board = a_board_whose_parent(StackPullRequestNumber.UPSTREAM, labels=[])
 
-    changes = UpstreamReviewMirror(a_stack(fork_checkout, board), fork).synchronize()
+    changes = UpstreamPullRequestSynchronization(
+        a_stack(fork_checkout, board), fork
+    ).synchronize()
 
     assert changes == []
     assert fork.label_writes == []
@@ -200,13 +210,15 @@ def test_a_branch_under_upstream_review_gets_its_upstream_pull_request_linked(
         StackPullRequestNumber.UPSTREAM, labels=[StackLabel.IN_REVIEW]
     )
 
-    changes = UpstreamReviewMirror(a_stack(fork_checkout, board), fork).synchronize()
+    changes = UpstreamPullRequestSynchronization(
+        a_stack(fork_checkout, board), fork
+    ).synchronize()
 
     assert changes == [
-        ReviewMirrorChange(
+        UpstreamPullRequestSynchronizationChange(
             StackBranch.PARENT,
             StackPullRequestNumber.PARENT,
-            ReviewMirrorAction.LINK_WRITTEN,
+            UpstreamPullRequestSynchronizationAction.LINK_WRITTEN,
         )
     ]
     assert fork.description_writes == [
@@ -223,13 +235,15 @@ def test_a_branch_whose_upstream_pull_request_closed_loses_its_link(
     )
     board = a_board_whose_parent(None, labels=[], upstream_link=the_upstream_link().url)
 
-    changes = UpstreamReviewMirror(a_stack(fork_checkout, board), fork).synchronize()
+    changes = UpstreamPullRequestSynchronization(
+        a_stack(fork_checkout, board), fork
+    ).synchronize()
 
     assert changes == [
-        ReviewMirrorChange(
+        UpstreamPullRequestSynchronizationChange(
             StackBranch.PARENT,
             StackPullRequestNumber.PARENT,
-            ReviewMirrorAction.LINK_REMOVED,
+            UpstreamPullRequestSynchronizationAction.LINK_REMOVED,
         )
     ]
     assert fork.description_writes == [

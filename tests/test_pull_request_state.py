@@ -15,6 +15,7 @@ from basstler.pull_request_state import (
     PullRequestState,
 )
 from basstler.github_labels import GitHubLabel
+from basstler.maintenance.board import PullRequestField
 from basstler.maintenance.description import (
     PullRequestDescription,
     UpstreamPullRequestLink,
@@ -81,13 +82,23 @@ def test_from_mapping_reads_the_upstream_pull_request_its_description_links():
     link = UpstreamPullRequestLink(Repository("an-upstream-owner", "a-project"), 7)
     body = PullRequestDescription("Prose.").with_upstream_link(link)
 
-    record = PullRequestRecord.from_mapping({"state": "open", "body": body})
+    record = PullRequestRecord.from_mapping(
+        {
+            PullRequestField.STATE.key: PullRequestState.OPEN,
+            PullRequestField.BODY.key: body,
+        }
+    )
 
     assert record.upstream_link == link.url
 
 
 def test_from_mapping_links_no_upstream_pull_request_without_a_description():
-    assert PullRequestRecord.from_mapping({"state": "open"}).upstream_link is None
+    assert (
+        PullRequestRecord.from_mapping(
+            {PullRequestField.STATE.key: PullRequestState.OPEN}
+        ).upstream_link
+        is None
+    )
 
 
 # %% PullRequestRecord.from_mapping - merge signal

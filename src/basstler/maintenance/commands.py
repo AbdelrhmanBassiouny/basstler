@@ -29,7 +29,9 @@ from basstler.maintenance.promotion import (
 )
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
-from basstler.maintenance.upstream_review_mirror import UpstreamReviewMirror
+from basstler.maintenance.upstream_pull_request_synchronization import (
+    UpstreamPullRequestSynchronization,
+)
 from basstler.stack.model import Stack
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
@@ -280,8 +282,8 @@ class PromoteCommand(MaintenanceCommand):
                 promote(stack, fork, PromotionSummaries.read_from(arguments.summaries))
             ),
             promotion_labels_cleared=tuple(clear_spent_promotion_labels(stack, fork)),
-            review_mirror_changes=tuple(
-                UpstreamReviewMirror(stack, fork).synchronize()
+            upstream_pull_request_synchronization_changes=tuple(
+                UpstreamPullRequestSynchronization(stack, fork).synchronize()
             ),
         )
         report.print_summary()
@@ -362,7 +364,7 @@ class RunReportCommand(MaintenanceCommand):
             restack(stack, maintenance.git, fork),
             promote(stack, fork, summaries),
             clear_spent_promotion_labels(stack, fork),
-            UpstreamReviewMirror(stack, fork).synchronize(),
+            UpstreamPullRequestSynchronization(stack, fork).synchronize(),
         )
         maintenance.board.unlink(missing_ok=True)
         if as_json:
