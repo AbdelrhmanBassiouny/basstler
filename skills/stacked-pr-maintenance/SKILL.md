@@ -13,7 +13,8 @@ is the slow review queue. GitHub is the source of truth:
 - a fork pull request stays a **draft until its author has reviewed it themselves**, so taking it out
   of draft is the author's sign-off and the only signal that it may be promoted - that is all "the
   draft flag is the ready gate" means, and nothing else grants approval;
-- the **in-review label** means the branch has been promoted to the upstream;
+- a branch is **in review** while an upstream pull request opened from it is open; the pass keeps the
+  `in-review` label in step with that, adding and removing it;
 - a branch that is an **ancestor of the upstream base** has landed.
 
 **Your job, and only this**: reparent any pull request whose base has landed, close what has
@@ -124,6 +125,11 @@ Export the board first - every step below derives from it, and this one is no ex
 Never assemble that file by hand - a fetch that drops a field produces a board that is wrong rather
 than obviously incomplete.
 
+The export also reads the upstream's open pull requests, which is what makes a branch `in-review`.
+In a Claude Code cloud session that read is refused (403) until the upstream is attached to the
+session, so attach it first with `add_repo` (read access). A refused read stops the export; never
+work around it by labelling branches yourself.
+
 Then run:
 
 ```bash
@@ -189,7 +195,7 @@ A non-zero run also prints its status in words, so you never have to look a numb
 **Then read what it left you.** `reparents` is the only entry that asks anything of you: a base
 change is the one write this credential is refused, so step 1 of the next pass is where it gets
 made. Everything else - `fast_forward`, `landed`, `restacked`, `promoted`,
-`promotion_labels_cleared` - is what happened, for the summary. A `restacked` entry other than
+`promotion_labels_cleared`, `review_labels` - is what happened, for the summary. A `restacked` entry other than
 `pushed` or `up-to-date` is a branch the pass could not publish; the executor has already labelled
 and commented on it, so name it in the summary and move on.
 
@@ -227,7 +233,8 @@ yourself.
   investigate, plan and reply - which is exactly how a maintenance run turns into review work.
 - **It never blocks on CI.** Poll the checks of the branches pushed at the start of each pass and
   react then; do not sit idle waiting on a long run.
-- **It never adds `in-review`.** That is the developer's, once they have clicked Create.
+- **It never writes `in-review` itself.** The executor keeps that label in step with the upstream;
+  a board export that cannot read the upstream stops rather than guessing.
 
 ## Finish
 
