@@ -3,7 +3,7 @@ A pull request's live GitHub state, as ``pr_data.json`` records it, and the stat
 item is classified into from it.
 
 pr_data.json shape: {"<owner>/<repo>": {"<pr_number>": {"state": "open"| "closed",
-"draft": bool, "merged_at": str|null, "labels": [str, ...]}}} - one entry per pull
+"draft": bool, "merged_at": str|null, "labels": [str, ...], "body": str|null}}} - one entry per pull
 request number referenced by any item. A closed entry must carry merged_at explicitly,
 null included; omitting it is rejected rather than read as unmerged. See pr-data-
 fetching.md for how a session should gather it.
@@ -19,6 +19,7 @@ from typing import Any
 from basstler.github_labels import GitHubLabel
 from basstler.maintenance.board import PullRequestField
 from basstler.maintenance.board import PullRequestRecord as PullRequestAPIRecord
+from basstler.maintenance.description import PullRequestDescription
 
 
 # %% classified state
@@ -152,6 +153,12 @@ class PullRequestRecord:
     what actually happened - see :meth:`was_merged`.
     """
 
+    upstream_link: str | None = None
+    """
+    The URL of the upstream pull request a maintenance pass linked in the pull request's
+    description, ``None`` while none is linked.
+    """
+
     @property
     def identified_labels(self) -> frozenset[GitHubLabel]:
         """The subset of :attr:`labels` that match a known
@@ -187,6 +194,7 @@ class PullRequestRecord:
             draft=data.get("draft", False),
             merged_at=datetime.fromisoformat(merged_at) if merged_at else None,
             labels=list(data.get("labels") or []),
+            upstream_link=PullRequestDescription(data.get("body") or "").upstream_link,
         )
 
     @classmethod
@@ -206,6 +214,7 @@ class PullRequestRecord:
                     PullRequestField.DRAFT,
                     PullRequestField.MERGED_AT,
                     PullRequestField.LABELS,
+                    PullRequestField.BODY,
                 )
             }
         )

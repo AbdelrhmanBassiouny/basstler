@@ -20,7 +20,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 |---|---|---|
 | dependency **tree** (parent) | each fork PR's **base branch** (`base = parent`) | retargeting the PR base on GitHub - from a session, only via the GitHub MCP `update_pull_request` tool (see the maintenance skill) |
 | `draft` ↔ `ready` | the fork PR's **draft toggle** | un-drafting when you approve it |
-| `in-review` | an **open upstream PR** whose head is the fork branch | opening the upstream PR - a maintenance pass mirrors it in the **`in-review`** label, adding and removing it |
+| `in-review` | an **open upstream PR** whose head is the fork branch | opening the upstream PR - a maintenance pass mirrors it in the **`in-review`** label and an upstream link in the fork PR's description, adding and removing both |
 | `merged` | branch is an ancestor of `<upstream_remote>/<upstream_base>` | nothing - GitHub marks the PR merged itself once its head is contained in its base |
 | `merge` vs `rebase` | the **`rebase`** label; default `merge` | labelling on GitHub |
 | upstream create-link built | the **`promotion-link-sent`** marker | nothing - a maintenance pass sets it when it puts a create-link in the PR description, and clears it once the upstream PR is open |
@@ -115,7 +115,7 @@ next to the workflow it describes, because it is read rather than run.
 2. **Self-review the bottom fork PR.** If good, **un-draft it** on GitHub. ← the gate.
 3. `~/.local/share/basstler/venv/bin/python -m basstler.stack next` → it names every approved, unblocked branch whose
    checks have not failed. Open its upstream PR; the next maintenance pass labels the fork PR
-   **`in-review`**.
+   **`in-review`** and links the upstream PR in its description.
 4. When the upstream merges it: nothing to edit - it becomes `merged` automatically. Run a maintenance
    pass to cascade the new base up the stack; `status`/`check` confirm it's clean again.
 

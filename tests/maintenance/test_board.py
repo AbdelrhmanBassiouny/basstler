@@ -27,7 +27,10 @@ from basstler.upstream_reviews.vocabulary import RollupState
 from basstler.maintenance.commands import BoardCommand, MaintenancePass
 from basstler.maintenance.git_commands import GitCommandFailed
 from basstler.maintenance.github import GitHubRequestFailed, PullRequestReader
-from basstler.maintenance.description import PullRequestDescription
+from basstler.maintenance.description import (
+    PullRequestDescription,
+    UpstreamPullRequestLink,
+)
 
 from ..constants.stack import StackBranch, StackLabel
 
@@ -125,7 +128,7 @@ def test_the_written_board_parses_back_into_the_records_it_was_built_from(
             ),
         ]
     )
-    destination = tmp_path / "board.json"
+    destination = tmp_path / PackageLocation.BOARD.name
 
     export.write(destination)
 
@@ -206,6 +209,17 @@ def test_the_export_reads_the_title_and_the_recorded_promotion_link():
     exported = export.pull_requests[0]
     assert exported.title == PromotionSampleText.TITLE
     assert exported.promotion_link == PromotionSampleText.FIRST_LINK
+
+
+def test_the_export_reads_the_linked_upstream_pull_request():
+    link = UpstreamPullRequestLink(
+        make_configuration().upstream_repository, StackPullRequestNumber.UPSTREAM
+    )
+    body = PullRequestDescription(PromotionSampleText.PROSE).with_upstream_link(link)
+
+    export = an_export([an_api_record(body=body)])
+
+    assert export.pull_requests[0].upstream_link == link.url
 
 
 # %% what the export reads beside the fork

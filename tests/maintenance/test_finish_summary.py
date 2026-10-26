@@ -15,7 +15,10 @@ from basstler.maintenance.finish_summary import FinishSummary, FinishSummaryHead
 from basstler.maintenance.promotion import Promotion
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
-from basstler.maintenance.review_label import ReviewLabelAction, ReviewLabelChange
+from basstler.maintenance.upstream_review_mirror import (
+    ReviewMirrorAction,
+    ReviewMirrorChange,
+)
 from basstler.stack.model import (
     IntegrationStrategy,
     PullRequest,
@@ -223,29 +226,29 @@ def test_a_reported_branch_names_its_files_the_session_addressed_and_the_comment
     assert entry.endswith(f"[comment]({comment})")
 
 
-def test_each_review_label_change_names_its_pull_request_and_what_was_done():
+def test_each_review_mirror_change_names_its_pull_request_and_what_was_done():
     report = MaintenanceReport(
-        review_labels=(
-            ReviewLabelChange(
+        review_mirror_changes=(
+            ReviewMirrorChange(
                 StackBranch.PARENT,
                 StackPullRequestNumber.PARENT,
-                ReviewLabelAction.ADDED,
+                ReviewMirrorAction.LABEL_ADDED,
             ),
-            ReviewLabelChange(
+            ReviewMirrorChange(
                 StackBranch.CHILD,
                 StackPullRequestNumber.CHILD,
-                ReviewLabelAction.REMOVED,
+                ReviewMirrorAction.LABEL_REMOVED,
             ),
         )
     )
     summary = FinishSummary(report, a_titled_stack())
 
-    section = section_of(summary.as_markdown(), FinishSummaryHeading.REVIEW_LABELS)
+    section = section_of(summary.as_markdown(), FinishSummaryHeading.REVIEW_MIRROR)
 
     parent, child = summary.stack.branches
     assert section == [
-        f"{summary.branch_line(parent)}: {ReviewLabelAction.ADDED}",
-        f"{summary.branch_line(child)}: {ReviewLabelAction.REMOVED}",
+        f"{summary.branch_line(parent)}: {ReviewMirrorAction.LABEL_ADDED}",
+        f"{summary.branch_line(child)}: {ReviewMirrorAction.LABEL_REMOVED}",
     ]
 
 

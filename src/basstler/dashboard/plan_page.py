@@ -295,10 +295,10 @@ class DashboardRenderer(TemplatePage):
     def _classify_items(self) -> None:
         """
         Fill in every item's :attr:`Item.live_state`, :attr:`Item.drift_description`,
-        :attr:`Item.pull_request_url`, :attr:`Item.is_bug_fix`,
-        :attr:`Item.needs_review`, :attr:`Item.dependency_chips`, and
-        :attr:`Item.action` from live pull request data and the plan's other items, in
-        place.
+        :attr:`Item.pull_request_url`, :attr:`Item.upstream_pull_request_url`,
+        :attr:`Item.is_bug_fix`, :attr:`Item.needs_review`,
+        :attr:`Item.dependency_chips`, and :attr:`Item.action` from live pull request
+        data and the plan's other items, in place.
 
         Runs in two passes: :attr:`Item.live_state` must be filled in for
         every item before :meth:`_action_for` can check whether *another*
@@ -309,6 +309,7 @@ class DashboardRenderer(TemplatePage):
             item.live_state = self._live_state_of(item)
             item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
+            item.upstream_pull_request_url = self._upstream_pull_request_url_of(item)
             item.is_bug_fix = self._is_bug_fix(item)
             item.needs_review = (
                 item.live_state is LiveState.OPEN_DRAFT
@@ -406,6 +407,14 @@ class DashboardRenderer(TemplatePage):
         repository = item.repository or self.plan.default_repository
         repository_pull_requests = self.pull_requests_by_repository.get(repository, {})
         return repository_pull_requests.get(str(item.pull_request_number))
+
+    def _upstream_pull_request_url_of(self, item: Item) -> str | None:
+        """
+        The upstream pull request one item's pull request links, or ``None`` if it links
+        none.
+        """
+        pull_request = self._pull_request_record_of(item)
+        return None if pull_request is None else pull_request.upstream_link
 
     def _is_bug_fix(self, item: Item) -> bool:
         """

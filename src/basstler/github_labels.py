@@ -50,7 +50,8 @@ class GitHubLabel(StrEnum):
 
     IN_REVIEW = ("in-review", "Under review")
     """
-    Recognized so it does not read as an unknown label; no script acts on it yet.
+    Kept in step by a maintenance pass with the open upstream pull request opened from the
+    branch.
     """
 
     BUG = ("bug", "A bug fix")

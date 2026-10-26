@@ -13,7 +13,7 @@ from basstler.exit_codes import StackExitCode
 from basstler.maintenance.fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance.promotion import Promotion
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
-from basstler.maintenance.review_label import ReviewLabelChange
+from basstler.maintenance.upstream_review_mirror import ReviewMirrorChange
 from basstler.stack.model import Reparent, SkippedPullRequest, Stack
 from basstler.standard_streams import StandardStreamHandler
 
@@ -77,9 +77,10 @@ class MaintenanceReport:
     The branches whose spent link label was removed this pass.
     """
 
-    review_labels: tuple[ReviewLabelChange, ...] = ()
+    review_mirror_changes: tuple[ReviewMirrorChange, ...] = ()
     """
-    The pull requests whose in-review label was added or removed this pass.
+    The writes bringing each pull request's in-review label and upstream link in step
+    this pass.
     """
 
     reparents: tuple[Reparent, ...] = ()
@@ -110,7 +111,7 @@ class MaintenanceReport:
         restacked: Sequence[BranchOutcome],
         promoted: Sequence[Promotion] = (),
         promotion_labels_cleared: Sequence[str] = (),
-        review_labels: Sequence[ReviewLabelChange] = (),
+        review_mirror_changes: Sequence[ReviewMirrorChange] = (),
     ) -> MaintenanceReport:
         """
         Assemble one pass's outcomes and its leftovers into a single report.
@@ -121,8 +122,8 @@ class MaintenanceReport:
         :param promoted: The branches whose upstream link was built this pass.
         :param promotion_labels_cleared: The branches whose spent link label was
             removed.
-        :param review_labels: The pull requests whose in-review label was added or
-            removed.
+        :param review_mirror_changes: The writes bringing each pull request's in-review
+            label and upstream link in step.
         :return: The report.
         """
         return cls(
@@ -130,7 +131,7 @@ class MaintenanceReport:
             restacked=tuple(restacked),
             promoted=tuple(promoted),
             promotion_labels_cleared=tuple(promotion_labels_cleared),
-            review_labels=tuple(review_labels),
+            review_mirror_changes=tuple(review_mirror_changes),
             reparents=tuple(stack.reparents()),
             landed=tuple(branch.name for branch in stack.landed_branches()),
             promotable=tuple(branch.name for branch in stack.promotion_order()),
@@ -190,7 +191,7 @@ class MaintenanceReport:
         self.print_fast_forward()
         self.print_restack()
         self.print_promotions()
-        self.print_review_labels()
+        self.print_review_mirror_changes()
         self.print_skipped()
 
     def print_fast_forward(self) -> None:
@@ -234,14 +235,13 @@ class MaintenanceReport:
         for branch in self.promotion_labels_cleared:
             logger.info(f"{branch}\tlink-label-cleared\t")
 
-    def print_review_labels(self) -> None:
+    def print_review_mirror_changes(self) -> None:
         """
-        Print every in-review label added or removed this pass.
+        Print every in-review label and upstream link written this pass.
         """
-        for change in self.review_labels:
+        for change in self.review_mirror_changes:
             logger.info(
-                f"{change.branch}\t#{change.pull_request_number}\t"
-                f"review-label-{change.action}"
+                f"{change.branch}\t#{change.pull_request_number}\t{change.action}"
             )
 
     def print_skipped(self) -> None:

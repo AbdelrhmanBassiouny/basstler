@@ -260,7 +260,8 @@ regenerates from every manifest on each save, so it can't drift.
   whichever action group it already belongs to, and is what the sidebar's "Bug fixes only" filter
   keeps. Being a bug fix is a property of the work, not a next action of its own, so it never
   moves an item into a group or out of one.
-- `in-review` — the fork PR has an open upstream PR; a maintenance pass adds and removes it.
+- `in-review` — the fork PR has an open upstream PR; a maintenance pass adds and removes it,
+  together with the link to that upstream PR in the fork PR's description.
 
 Any other label is preserved but not interpreted.
 

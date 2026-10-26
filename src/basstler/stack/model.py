@@ -139,6 +139,10 @@ class PullRequest:
     """The upstream create-link a pass recorded in the pull request body, ``None`` until
     one is."""
 
+    upstream_link: str | None = None
+    """The URL of the upstream pull request a pass linked in the pull request body,
+    ``None`` while none is linked."""
+
     def skip_reason(self, fork: Repository) -> SkipReason | None:
         """:param fork: The fork the pass maintains.
         :return: Why the pass has to leave this pull request out, ``None`` when its head
@@ -213,6 +217,9 @@ class Branch:
     promotion_link: str | None = None
     """The upstream create-link recorded on the pull request, if any."""
 
+    upstream_link: str | None = None
+    """The URL of the upstream pull request linked on the pull request, if any."""
+
     @property
     def checks_failed(self) -> bool:
         """:return: Whether the checks on the pull request head have failed."""
@@ -255,6 +262,7 @@ class Branch:
             session=pull_request.session,
             title=pull_request.title,
             promotion_link=pull_request.promotion_link,
+            upstream_link=pull_request.upstream_link,
         )
 
 

@@ -323,7 +323,7 @@ class CommitChecks(ABC):
 
 
 @dataclass(frozen=True)
-class UpstreamReviews:
+class UpstreamPullRequests:
     """
     The open upstream pull requests opened from the fork's branches.
     """
@@ -349,7 +349,7 @@ class UpstreamReviews:
     @classmethod
     def from_api_records(
         cls, records: Iterable[PullRequestRecord], fork: Repository
-    ) -> UpstreamReviews:
+    ) -> UpstreamPullRequests:
         """
         :param records: The upstream's open pull requests.
         :param fork: The fork whose branches to look for.
@@ -383,21 +383,21 @@ class BoardExport:
     def from_api_records(
         cls,
         records: Iterable[PullRequestRecord],
-        upstream_reviews: UpstreamReviews,
+        upstream_pull_requests: UpstreamPullRequests,
         checks: CommitChecks,
     ) -> BoardExport:
         """
         Build the export from what the REST API returned.
 
         :param records: The fork's open pull requests.
-        :param upstream_reviews: The upstream pull requests open for the fork's branches.
+        :param upstream_pull_requests: The upstream pull requests open for the fork's branches.
         :param checks: Where the verdict over each head's checks is read from.
         :return: The export.
         :raises MissingPullRequestFieldError: If any record omits a required field.
         """
         return cls(
             tuple(
-                cls._pull_request(record, upstream_reviews, checks)
+                cls._pull_request(record, upstream_pull_requests, checks)
                 for record in records
             )
         )
@@ -405,14 +405,14 @@ class BoardExport:
     @staticmethod
     def _pull_request(
         record: PullRequestRecord,
-        upstream_reviews: UpstreamReviews,
+        upstream_pull_requests: UpstreamPullRequests,
         checks: CommitChecks,
     ) -> PullRequest:
         """
         Read one fetched pull request into a board entry.
 
         :param record: The fetched pull request.
-        :param upstream_reviews: The upstream pull requests open for the fork's branches.
+        :param upstream_pull_requests: The upstream pull requests open for the fork's branches.
         :param checks: Where the verdict over its head's checks is read from.
         :return: The board entry.
         :raises MissingPullRequestFieldError: If a required field is absent.
@@ -430,10 +430,11 @@ class BoardExport:
             head_repository=head.repository,
             labels=PullRequestField.LABELS.read(record, number),
             check_state=checks.check_state(head.commit),
-            upstream_pull_request=upstream_reviews.pull_request_for(head),
+            upstream_pull_request=upstream_pull_requests.pull_request_for(head),
             session=description.session_link,
             title=PullRequestField.TITLE.read(record, number),
             promotion_link=description.promotion_link,
+            upstream_link=description.upstream_link,
         )
 
     def as_json(self) -> str:

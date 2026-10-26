@@ -17,7 +17,7 @@ from basstler.exit_codes import StackExitCode
 from basstler.class_property import classproperty
 from basstler.command_line import Command
 from basstler.locations import PackageLocation
-from basstler.maintenance.board import BoardExport, UpstreamReviews
+from basstler.maintenance.board import BoardExport, UpstreamPullRequests
 from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
 from basstler.maintenance.git_commands import GitCommandRunner
@@ -29,7 +29,7 @@ from basstler.maintenance.promotion import (
 )
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
-from basstler.maintenance.review_label import synchronize_review_labels
+from basstler.maintenance.upstream_review_mirror import UpstreamReviewMirror
 from basstler.stack.model import Stack
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
@@ -138,7 +138,7 @@ class BoardCommand(MaintenanceCommand):
         fork = maintenance.fork()
         export = BoardExport.from_api_records(
             fork.open_pull_requests(),
-            UpstreamReviews.from_api_records(
+            UpstreamPullRequests.from_api_records(
                 maintenance.upstream().open_pull_requests(),
                 maintenance.configuration.fork_repository,
             ),
@@ -280,7 +280,9 @@ class PromoteCommand(MaintenanceCommand):
                 promote(stack, fork, PromotionSummaries.read_from(arguments.summaries))
             ),
             promotion_labels_cleared=tuple(clear_spent_promotion_labels(stack, fork)),
-            review_labels=tuple(synchronize_review_labels(stack, fork)),
+            review_mirror_changes=tuple(
+                UpstreamReviewMirror(stack, fork).synchronize()
+            ),
         )
         report.print_summary()
         return report.exit_code
@@ -360,7 +362,7 @@ class RunReportCommand(MaintenanceCommand):
             restack(stack, maintenance.git, fork),
             promote(stack, fork, summaries),
             clear_spent_promotion_labels(stack, fork),
-            synchronize_review_labels(stack, fork),
+            UpstreamReviewMirror(stack, fork).synchronize(),
         )
         maintenance.board.unlink(missing_ok=True)
         if as_json:

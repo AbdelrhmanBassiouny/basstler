@@ -32,7 +32,7 @@ from basstler.maintenance.board import (
     PullRequestField,
     PullRequestHeadKey,
     PullRequestRecord,
-    UpstreamReviews,
+    UpstreamPullRequests,
 )
 from basstler.maintenance.git_commands import (
     BranchAncestry,
@@ -455,7 +455,7 @@ def an_export(
     """
     return BoardExport.from_api_records(
         records,
-        UpstreamReviews.from_api_records(
+        UpstreamPullRequests.from_api_records(
             upstream_records, PullRequestHeadRepository.FORK.value
         ),
         checks or ChecksReportedOn(),
