@@ -424,15 +424,6 @@ REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
 # tooling that enforces it, so every clone has it with no setup - unlike the
 # plan *data* it describes, which lives only on the personal-notes branch.
 PLAN_SCHEMA_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/plan-schema.md"
-# dependency-readiness.md: the shared bulk-fetch-and-check procedure
-# plan-item-kickoff and plan-item-resolve both reference instead of each
-# restating it.
-DEPENDENCY_READINESS_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/dependency-readiness.md"
-# pr-data-fetching.md: the shared "how to bulk-fetch pull request state
-# into pr_data.json" procedure - referenced by dependency-readiness.md and
-# every plan-*/SKILL.md that assembles pr_data.json, instead of each
-# restating the GitHub API calls involved.
-PULL_REQUEST_DATA_FETCHING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetching.md"
 # MAINTENANCE_BLOCKER_OWNER: the name stack maintenance writes its own
 # blockers under, so it replaces and clears its own entries and never one a
 # person wrote. Named here once, since the writer and the clearer have to
@@ -465,17 +456,6 @@ SETUP_PREREQUISITE_DOCUMENT="${SETUP_PERSONAL_NOTES_DIRECTORY}/prerequisite-chec
 # conventions instead of an empty file.
 STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 
-# ADD_PLAN_ITEM_DIRECTORY / SCOPE_DECISION_DOCUMENT: what the add-plan-item
-# skill keeps outside the package - the skill someone runs when describing new
-# work (/add-plan-item) and the shared scope rule all four plan skills defer to
-# instead of each restating it. Its Python moved into the package above, as
-# CHECK_SCOPE_OVERLAP_MODULE.
-ADD_PLAN_ITEM_DIRECTORY="${PLUGIN_ROOT}/skills/add-plan-item"
-# scope-decision.md: the shared "is this new work, or a change to work already
-# in flight?" rule that plan-create, plan-item-kickoff, plan-item-resolve and
-# add-plan-item each reference in a line rather than each spelling it out.
-SCOPE_DECISION_DOCUMENT="${ADD_PLAN_ITEM_DIRECTORY}/scope-decision.md"
-
 # SAVE_PLAN_SCRIPT: same reasoning as the block above, extended to
 # save-plan.sh - unlike the other hook scripts in this directory (which are
 # always run directly by a human, once, per hooks/README.md's own setup
@@ -483,20 +463,6 @@ SCOPE_DECISION_DOCUMENT="${ADD_PLAN_ITEM_DIRECTORY}/scope-decision.md"
 # bootstrap step, i.e. a real caller this codebase controls - the same
 # duplication risk, just for a hook script instead of a plan-dashboard one.
 SAVE_PLAN_SCRIPT="${HOOKS_DIR}/save-plan.sh"
-
-# EXECUTION_MODES_DOCUMENT: the shared "which mode is in force, what it
-# obliges, and when auto mode still asks" procedure that plan-item-kickoff and
-# plan-item-resolve both reference instead of each restating it - same
-# reasoning as DEPENDENCY_READINESS_DOCUMENT above.
-EXECUTION_MODES_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/execution-modes.md"
-
-# PLAN_ITEM_GATHERING_DOCUMENT: the shared "what is already known and already
-# decided about this item?" procedure - the setup check, resolving the item off
-# the notes branch, the tracking-issue subscription, the full roadmap read, the
-# dependency chain and the standing conventions. plan-item-kickoff and
-# plan-item-resolve both run it in full and then add only what their own
-# situation needs, instead of each carrying its own copy.
-PLAN_ITEM_GATHERING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/plan-item-gathering.md"
 
 # GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
 # MCP tools every pr_data.json-gathering procedure in this system calls
@@ -617,7 +583,6 @@ BASSTLER_HOME="${BASSTLER_HOME:-${XDG_DATA_HOME:-${HOME}/.local/share}/basstler}
 # BASSTLER_ENVIRONMENT_DIRECTORY: the package's own virtual environment, which
 # session-start.sh creates where it is missing and installs the package into.
 BASSTLER_ENVIRONMENT_DIRECTORY="${BASSTLER_HOME}/venv"
-BASSTLER_ENVIRONMENT_INTERPRETER="${BASSTLER_ENVIRONMENT_DIRECTORY}/bin/python"
 # BASSTLER_INSTALLED_SOURCE_FILE: what the environment's package was last
 # installed from, so a plugin update - which names a new source - reinstalls it.
 BASSTLER_INSTALLED_SOURCE_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-source"
@@ -692,11 +657,16 @@ basstler_branch_or_tag() {
   fi
 }
 
-# resolve_basstler_python: sets BASSTLER_PYTHON, the interpreter every caller
-# runs a module of the package with - the package's environment once it
-# exists, python3 until then. Run on sourcing, and again by session-start.sh
-# once it has created the environment.
+# resolve_basstler_python: sets BASSTLER_ENVIRONMENT_INTERPRETER, the package
+# environment's interpreter - Scripts/python.exe where the environment has one,
+# as on Windows, else bin/python - and BASSTLER_PYTHON, the interpreter every
+# caller runs a module of the package with: the environment's once it exists,
+# python3 until then. Run on sourcing, and again by session-start.sh once it
+# has created the environment.
 resolve_basstler_python() {
+  BASSTLER_ENVIRONMENT_INTERPRETER="${BASSTLER_ENVIRONMENT_DIRECTORY}/Scripts/python.exe"
+  [ -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ] \
+    || BASSTLER_ENVIRONMENT_INTERPRETER="${BASSTLER_ENVIRONMENT_DIRECTORY}/bin/python"
   if [ -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
     BASSTLER_PYTHON="${BASSTLER_ENVIRONMENT_INTERPRETER}"
   else

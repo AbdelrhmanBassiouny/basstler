@@ -50,17 +50,17 @@ git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
 
 Read **every** plan's `plan.yaml` under `${PLANS_DIR}` off `FETCH_HEAD`, not
 just the one the user has in mind — the right home is often a plan they weren't
-thinking of. `${PLAN_SCHEMA_DOCUMENT}` is the field reference.
+thinking of. [`plan-schema.md`](../plan-dashboard/plan-schema.md) is the field reference.
 
 Then fetch live pull request state once, in bulk, per
-`${PULL_REQUEST_DATA_FETCHING_DOCUMENT}`.
+[`pr-data-fetching.md`](../plan-dashboard/pr-data-fetching.md).
 
 Candidates are every unlanded item and every open pull request's branch, plus
 every plan whose own `description` covers the kind of work being described.
 
 ## 3. Run the scope check
 
-The rule is in `${SCOPE_DECISION_DOCUMENT}` — read it rather than re-deriving
+The rule is in [`scope-decision.md`](scope-decision.md) — read it rather than re-deriving
 it here. Gather its evidence in one call:
 
 ```bash
@@ -72,7 +72,7 @@ it here. Gather its evidence in one call:
 
 Non-empty `paths_absent_from_base` means an unlanded branch introduces those
 files, and whichever one does is a candidate owner. Non-empty `shared_paths`
-names it. Apply the trigger-to-look test from `${SCOPE_DECISION_DOCUMENT}` to
+names it. Apply the trigger-to-look test from [`scope-decision.md`](scope-decision.md) to
 decide what that means; do not treat the output as the verdict by itself.
 
 ## 4. Scan for duplicate intent

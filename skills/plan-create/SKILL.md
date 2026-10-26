@@ -95,7 +95,7 @@ not after.
 
 Ask this of every item before adding it, and prefer the change: an item that
 only modifies what an unlanded item introduces is that item's work, not a
-separate one. Follow `${SCOPE_DECISION_DOCUMENT}` — it holds the check and how
+separate one. Follow [`scope-decision.md`](../add-plan-item/scope-decision.md) — it holds the check and how
 to read it.
 
 For a single piece of work rather than a whole plan, `/add-plan-item` runs that
