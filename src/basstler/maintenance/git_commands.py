@@ -17,6 +17,7 @@ from pathlib import Path
 from basstler.class_property import classproperty
 from basstler.exceptions import UnresolvableReferenceError
 from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.maintenance.constants import CommitTrailer
 from basstler.maintenance.exceptions import ExternalCallFailed
 from basstler.stack.model import IntegrationStrategy
 from basstler.stack.settings import Configuration
@@ -262,19 +263,24 @@ class GitCommandRunner:
         merge = self.attempt("merge-tree", "--write-tree", first, second)
         return merge.output.splitlines()[0] if merge.succeeded else None
 
-    def adds_only_merges(self, candidate: str, reference: str) -> bool:
+    def adds_only_merges(self, candidate: str, *references: str) -> bool:
         """:param candidate: The reference whose history is examined.
-        :param reference: The reference it is compared against.
-        :return: Whether every commit *candidate* holds beyond *reference* is a merge.
-        :raises UnresolvableReferenceError: If either reference names no commit here.
+        :param references: The references it is compared against.
+        :return: Whether every commit *candidate* holds beyond all of *references* is a
+            merge.
+        :raises UnresolvableReferenceError: If any reference names no commit here.
         """
-        for compared in (reference, candidate):
+        for compared in (*references, candidate):
             if not self.attempt(
                 "rev-parse", "--verify", "--quiet", f"{compared}^{{commit}}"
             ).succeeded:
                 raise UnresolvableReferenceError(reference=compared)
         beyond = self.run(
-            "rev-list", "--no-merges", "--max-count=1", f"{reference}..{candidate}"
+            "rev-list",
+            "--no-merges",
+            "--max-count=1",
+            candidate,
+            *(f"^{reference}" for reference in references),
         )
         return not beyond
 
@@ -291,11 +297,24 @@ class GitCommandRunner:
         """:return: The branch whose content a push would move."""
         return self.run("branch", "--show-current")
 
-    def merge(self, reference: str) -> GitCommandResult:
+    def merge(self, reference: str, message: str) -> GitCommandResult:
         """:param reference: The reference to merge in.
+        :param message: The merge commit's message.
         :return: The finished merge, whose failure is a conflict only when it left
             unmerged paths behind."""
-        return self.attempt("merge", "--no-edit", reference)
+        return self.attempt("merge", "--no-edit", "--message", message, reference)
+
+    def trailer_value(self, commit: str, trailer: CommitTrailer) -> str:
+        """:param commit: Any reference git can resolve to a commit.
+        :param trailer: The trailer key read.
+        :return: The value the commit's message gives that trailer, empty when it has
+            none."""
+        return self.run(
+            "log",
+            "--max-count=1",
+            f"--format=%(trailers:key={trailer},valueonly)",
+            commit,
+        )
 
     def rebase(self, reference: str) -> GitCommandResult:
         """:param reference: The reference to rebase onto.

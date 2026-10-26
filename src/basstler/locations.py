@@ -105,6 +105,72 @@ class PackageLocation(PathEnumeration):
     """
 
 
+class DashboardTemplate(PathEnumeration):
+    """
+    The templates a plan's dashboard is rendered from.
+    """
+
+    SELF_CONTAINED_PAGE = PackageLocation.TEMPLATES.value / "dashboard.html"
+    """
+    The whole dashboard as one page, with its style, content and script inline.
+    """
+
+    ARTIFACT_PAGE = PackageLocation.TEMPLATES.value / "dashboard_artifact.html"
+    """
+    The short page published as the dashboard Artifact, which loads the other parts.
+    """
+
+    STYLE = PackageLocation.TEMPLATES.value / "dashboard_style.css"
+    """
+    The dashboard's style sheet.
+    """
+
+    SCRIPT = PackageLocation.TEMPLATES.value / "dashboard_script.js"
+    """
+    The dashboard's behaviour: copying commands, choosing a model, revealing an item.
+    """
+
+    CONTENT = PackageLocation.TEMPLATES.value / "dashboard_content.html"
+    """
+    The dashboard's body: the plan, its items and the next-step sidebar.
+    """
+
+
+class DashboardArtifactFile(PathEnumeration):
+    """
+    The files a plan's dashboard Artifact is published as, by their published path.
+    """
+
+    PAGE = Path("dashboard.html")
+    """
+    The Artifact's page.
+    """
+
+    STYLE = Path("dashboard.css")
+    """
+    The style sheet the page links.
+    """
+
+    SCRIPT = Path("dashboard.js")
+    """
+    The script the page loads.
+    """
+
+    CONTENT = Path("dashboard-content.html")
+    """
+    The body the page fetches and shows.
+    """
+
+    @property
+    def template(self) -> DashboardTemplate:
+        """
+        The template this file is rendered from.
+        """
+        if self is DashboardArtifactFile.PAGE:
+            return DashboardTemplate.ARTIFACT_PAGE
+        return DashboardTemplate[self._name_]
+
+
 class BasstlerVariable(EnvironmentVariable):
     """
     The environment variables this package's own shell configuration sets.
@@ -118,22 +184,10 @@ class BasstlerVariable(EnvironmentVariable):
 
 class PluginLocation(PathEnumeration):
     """
-    The plugin's files this package runs, as absolute paths.
-
-    The plugin is found through :attr:`BasstlerVariable.PLUGIN_ROOT`, which sourcing the
-    plugin's shell configuration exports, else as the ``plugin`` directory of the source
-    checkout the package is imported from.
+    The plugin's files this package runs, relative to the plugin's root.
     """
 
-    ROOT = Path(
-        BasstlerVariable.PLUGIN_ROOT.read()
-        or PackageLocation.SOURCE_TREE.value / "plugin"
-    )
-    """
-    The plugin's root directory, holding its manifest, hooks and skills.
-    """
-
-    HOOKS = ROOT / "hooks"
+    HOOKS = Path("hooks")
     """
     The shell entry points that read and write personal-notes data.
     """
@@ -190,13 +244,21 @@ class PluginLocation(PathEnumeration):
     Saves the user's personal settings to the personal-notes branch.
     """
 
+    @property
+    def path_under_exported_root(self) -> str:
+        """
+        This file as bash spells it under :attr:`BasstlerVariable.PLUGIN_ROOT`, for a
+        message that names it without knowing the root.
+        """
+        return f"${BasstlerVariable.PLUGIN_ROOT}/{self}"
+
 
 class PluginSkillLocation(PathEnumeration):
     """
-    The files of the plugin's skills this package reads, as absolute paths.
+    The files of the plugin's skills this package reads, relative to the plugin's root.
     """
 
-    SKILLS = PluginLocation.ROOT.value / "skills"
+    SKILLS = Path("skills")
     """
     The directory holding one directory per skill.
     """
