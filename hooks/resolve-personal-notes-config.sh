@@ -10,7 +10,7 @@
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "${HOOKS_DIR}/.." && pwd)"
 # Exported so a module of the package run from here finds the plugin's scripts
-# too (see basstler.locations.PluginLocation).
+# too (see basstler.plugin_root.PluginRoot).
 export BASSTLER_PLUGIN_ROOT="${PLUGIN_ROOT}"
 
 # PROJECT_ROOT: the project the session works in - CLAUDE_PROJECT_DIR, which
@@ -424,15 +424,6 @@ REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
 # tooling that enforces it, so every clone has it with no setup - unlike the
 # plan *data* it describes, which lives only on the personal-notes branch.
 PLAN_SCHEMA_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/plan-schema.md"
-# dependency-readiness.md: the shared bulk-fetch-and-check procedure
-# plan-item-kickoff and plan-item-resolve both reference instead of each
-# restating it.
-DEPENDENCY_READINESS_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/dependency-readiness.md"
-# pr-data-fetching.md: the shared "how to bulk-fetch pull request state
-# into pr_data.json" procedure - referenced by dependency-readiness.md and
-# every plan-*/SKILL.md that assembles pr_data.json, instead of each
-# restating the GitHub API calls involved.
-PULL_REQUEST_DATA_FETCHING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/pr-data-fetching.md"
 # MAINTENANCE_BLOCKER_OWNER: the name stack maintenance writes its own
 # blockers under, so it replaces and clears its own entries and never one a
 # person wrote. Named here once, since the writer and the clearer have to
@@ -465,17 +456,6 @@ SETUP_PREREQUISITE_DOCUMENT="${SETUP_PERSONAL_NOTES_DIRECTORY}/prerequisite-chec
 # conventions instead of an empty file.
 STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 
-# ADD_PLAN_ITEM_DIRECTORY / SCOPE_DECISION_DOCUMENT: what the add-plan-item
-# skill keeps outside the package - the skill someone runs when describing new
-# work (/add-plan-item) and the shared scope rule all four plan skills defer to
-# instead of each restating it. Its Python moved into the package above, as
-# CHECK_SCOPE_OVERLAP_MODULE.
-ADD_PLAN_ITEM_DIRECTORY="${PLUGIN_ROOT}/skills/add-plan-item"
-# scope-decision.md: the shared "is this new work, or a change to work already
-# in flight?" rule that plan-create, plan-item-kickoff, plan-item-resolve and
-# add-plan-item each reference in a line rather than each spelling it out.
-SCOPE_DECISION_DOCUMENT="${ADD_PLAN_ITEM_DIRECTORY}/scope-decision.md"
-
 # SAVE_PLAN_SCRIPT: same reasoning as the block above, extended to
 # save-plan.sh - unlike the other hook scripts in this directory (which are
 # always run directly by a human, once, per hooks/README.md's own setup
@@ -483,20 +463,6 @@ SCOPE_DECISION_DOCUMENT="${ADD_PLAN_ITEM_DIRECTORY}/scope-decision.md"
 # bootstrap step, i.e. a real caller this codebase controls - the same
 # duplication risk, just for a hook script instead of a plan-dashboard one.
 SAVE_PLAN_SCRIPT="${HOOKS_DIR}/save-plan.sh"
-
-# EXECUTION_MODES_DOCUMENT: the shared "which mode is in force, what it
-# obliges, and when auto mode still asks" procedure that plan-item-kickoff and
-# plan-item-resolve both reference instead of each restating it - same
-# reasoning as DEPENDENCY_READINESS_DOCUMENT above.
-EXECUTION_MODES_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/execution-modes.md"
-
-# PLAN_ITEM_GATHERING_DOCUMENT: the shared "what is already known and already
-# decided about this item?" procedure - the setup check, resolving the item off
-# the notes branch, the tracking-issue subscription, the full roadmap read, the
-# dependency chain and the standing conventions. plan-item-kickoff and
-# plan-item-resolve both run it in full and then add only what their own
-# situation needs, instead of each carrying its own copy.
-PLAN_ITEM_GATHERING_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/plan-item-gathering.md"
 
 # GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two
 # MCP tools every pr_data.json-gathering procedure in this system calls

@@ -108,11 +108,12 @@ git ls-tree -r --name-only FETCH_HEAD | grep -E '^\.claude/personal/plans/[^/]+/
 
 Load each one the same way as above, into its own scratch path.
 
-Also read the generated URL cache, if present (used in step 3, absent on a
-plan's first-ever publish — not an error):
+Copy the generated URL cache to a file without reading it; the refresh reports the
+URL it holds. It is absent before a first publish, which is not an error:
 
 ```bash
-git show "FETCH_HEAD:${DASHBOARD_URL_CACHE_PATH}" 2>/dev/null
+git show "FETCH_HEAD:${DASHBOARD_URL_CACHE_PATH}" > /tmp/dashboard-urls.yaml 2>/dev/null \
+  || : > /tmp/dashboard-urls.yaml
 ```
 
 If a plan has a `tracking_issue`, resolve its `html_url` (via
@@ -141,7 +142,8 @@ bash "${REFRESH_DASHBOARD_SCRIPT}" \
   --plan /tmp/plan.yaml \
   --roadmap /tmp/roadmap.md \
   --pr-data /tmp/pr_data.json \
-  --output /tmp/dashboard.html \
+  --artifact-directory /tmp/dashboard \
+  --url-cache /tmp/dashboard-urls.yaml \
   --plans-dir /tmp/plans \
   --tracking-url "<html_url from step 1, if any>"   # omit if the plan has no tracking_issue
 ```
@@ -207,15 +209,17 @@ its `dependencies:` line reported a failure.
 
 On success it prints one merged JSON summary on stdout: `plan/sync_manifest_status.py`'s
 own `{"corrected": [...]}` plus `dashboard/plan_page.py`'s status counts, drift
-count, and drifted/ready/recheck item titles - keep it, you need it for
-step 4's report without re-parsing the HTML you just wrote or re-deriving
-what got auto-corrected. In master-index mode, run `refresh_dashboard.sh`
+count, drifted/ready/recheck item titles and `content_digest`, plus `url` (the
+Artifact to update, `null` before a first publish) and `unchanged` - keep it, you
+need it for steps 3 and 4 without re-parsing the HTML you just wrote or re-deriving
+what got auto-corrected. When `unchanged` is `true`, the published dashboard is
+already exactly this render: skip step 3. In master-index mode, run `refresh_dashboard.sh`
 for every plan before building that plan's index entry.
 
 **Master-index mode** instead assembles one summary object per plan (`id`,
 `title`, `description`, `done`/`total` counts from each plan's own
 `dashboard/plan_page.py` run or a quick count over its `items[]`, and
-`dashboard_url` from the URL cache — `null` if never published) into a JSON
+`dashboard_url`, the `url` of that plan's refresh summary) into a JSON
 list, then:
 
 ```bash
@@ -230,10 +234,18 @@ list, then:
 publishing for the first time and want to sanity-check the visual design —
 skip this on a routine re-publish of an already-designed dashboard.
 
-Look up this plan's (or, in index mode, the index's own — use the fixed key
-`_index`) existing URL from the cache you read in step 1.
-Call `Artifact` with that as `url:` if found (updates the existing page in
-place); omit `url` if this is a first-ever publish (mints a new one).
+The URL to update is the refresh summary's `url`; in index mode, the `_index` line
+of `/tmp/dashboard-urls.yaml` (`grep '^_index:'`). Pass it as `url:` when there is
+one (updates the page in place); omit `url` on a first-ever publish (mints a new one).
+
+A plan's dashboard is a short page plus files, so the read an update needs stays a
+few lines. Publish `/tmp/dashboard/dashboard.html` as `file_path` with
+`files: {"dashboard.css": "/tmp/dashboard/dashboard.css", "dashboard.js":
+"/tmp/dashboard/dashboard.js", "dashboard-content.html":
+"/tmp/dashboard/dashboard-content.html"}`. If this session has not published that
+URL yet, first `read` it (returns only the short page) and list its files
+(`action: "list"`, `scope: "files"`), since a publish replacing files you have not
+seen is refused. The index is one page, `/tmp/index.html`.
 
 **Never skip the `url:` when the cache has one.** Publishing without it mints
 a second artifact for the same plan, and the duplicate cannot be deleted from
@@ -258,17 +270,17 @@ date each row already carries, and is what separates two artifacts sharing a
 title. Then:
 
 ```bash
-git show "FETCH_HEAD:${DASHBOARD_URL_CACHE_PATH}" > /tmp/dashboard-urls.yaml
 "${BASSTLER_PYTHON}" -m "${RECORD_DASHBOARD_URL_MODULE}" \
   --key <plan-id or _index> \
   --expected-title "<the plan's own title: from plan.yaml, or the index page's title>" \
   --listing /tmp/artifact_listing.json \
   --cache /tmp/dashboard-urls.yaml \
-  --output /tmp/updated-dashboard-urls.yaml
+  --output /tmp/updated-dashboard-urls.yaml \
+  [--content-digest <the refresh summary's content_digest>]  # a plan's dashboard only
 ```
 
-It finds the artifact by title and records *that* URL, so no UUID ever passes
-through you. When several artifacts share the title — a duplicate already
+It finds the artifact by title and records *that* URL, with the digest the next
+refresh compares against, so no UUID ever passes through you. When several artifacts share the title — a duplicate already
 exists — it takes the most recently updated one, which is the page that was
 just published; `--url` overrides that and must name one of them. It exits
 non-zero only when the title matches no artifact at all, meaning nothing was
