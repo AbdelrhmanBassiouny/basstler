@@ -155,7 +155,7 @@ def conflict_report(
         else "\n\nThis pull request's description names no session to address."
     )
     return (
-        f"{MaintenanceText.CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
+        f"{MaintenanceText.NEEDS_RESOLUTION_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
         f"conflicts, so this branch was left untouched and skipped.\n\n"
         f"Conflicting files:\n{files}\n\n"
         f"Please resolve and push. This branch is labelled "

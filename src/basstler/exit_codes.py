@@ -106,9 +106,10 @@ class StackExitCode(ExitCode):
 
     BRANCH_NEEDS_ATTENTION = 10
     """
-    The pass itself ran, but left at least one branch unpublished for somebody to act on
-    - a conflict, a withheld branch, or a push the fork rejected. Distinct from a move
-    check refusal, which is a fault in the move rather than in the branch.
+    The pass itself ran, but left at least one branch for somebody to act on - a
+    conflict, a withheld branch, a push the fork rejected, or failing checks on a tip a
+    pass pushed. Distinct from a move check refusal, which is a fault in the move rather
+    than in the branch.
     """
 
     UPSTREAM_UNCONFIGURED = 11

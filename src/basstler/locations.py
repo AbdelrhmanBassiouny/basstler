@@ -78,6 +78,11 @@ class PackageLocation(PathEnumeration):
     The exported snapshot of the fork's open pull requests - scratch state, never committed.
     """
 
+    MAINTENANCE_REPORT = DIRECTORY / "maintenance-report.json"
+    """
+    Everything the last maintenance pass did, in full - scratch state, never committed.
+    """
+
     DEPENDENCY_DECLARATION = SOURCE_TREE / "pyproject.toml"
     """
     The package metadata of a source checkout, whose ``[project] dependencies`` this

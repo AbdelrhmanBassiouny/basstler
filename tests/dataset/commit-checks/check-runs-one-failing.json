@@ -1,0 +1,8 @@
+{
+  "total_count": 3,
+  "check_runs": [
+    {"name": "pytest", "status": "completed", "conclusion": "failure"},
+    {"name": "lint", "status": "completed", "conclusion": "success"},
+    {"name": "docs", "status": "in_progress", "conclusion": null}
+  ]
+}

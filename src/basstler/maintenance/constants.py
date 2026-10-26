@@ -60,10 +60,10 @@ class MaintenanceText(StrEnum):
     Text a maintenance pass writes onto GitHub, and later finds again by.
     """
 
-    CONFLICT_COMMENT_PREFIX = "🔴 MAINTENANCE - NEEDS RESOLUTION:"
+    NEEDS_RESOLUTION_COMMENT_PREFIX = "🔴 MAINTENANCE - NEEDS RESOLUTION:"
     """
-    Opens the comment a conflict is reported in, so the branch's owner can find every one
-    of them at a glance.
+    Opens the comment a conflict or a failing check is reported in, so the branch's owner
+    can find every one of them at a glance.
     """
 
     PROMOTION_HEADING = "## Promote"

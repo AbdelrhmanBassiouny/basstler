@@ -17,6 +17,7 @@ from basstler.stack.model import (
 
 from basstler.locations import PackageLocation
 from basstler.maintenance.board import PullRequestField
+from basstler.maintenance.check_results import CommitChecks
 from basstler.maintenance.commands import (
     MaintenanceCommand,
     MaintenancePass,
@@ -122,6 +123,16 @@ class RecordingPullRequests(ForkPullRequests):
     *now* rather than what the board snapshot opened the pass with.
     """
 
+    checks: dict[str, CommitChecks] = dataclasses_field(default_factory=dict)
+    """
+    What checks to report per commit, none for a commit not named.
+    """
+
+    earlier_comments: dict[int, list[str]] = dataclasses_field(default_factory=dict)
+    """
+    The comments a pull request carried before the pass, per pull request number.
+    """
+
     label_writes: list[RecordedLabelWrite] = dataclasses_field(default_factory=list)
     """
     Every label set written, in order.
@@ -162,6 +173,27 @@ class RecordingPullRequests(ForkPullRequests):
             ),
             PullRequestField.LABELS.key: list(self.labels.get(number, [])),
         }
+
+    def commit_checks(self, commit: str) -> CommitChecks:
+        """
+        :param commit: The commit whose checks to read.
+        :return: The checks this stand-in was given for it, none when it was given none.
+        """
+        return self.checks.get(commit, CommitChecks(commit))
+
+    def comment_bodies(self, number: int) -> list[str]:
+        """
+        :param number: The pull request whose comments to read.
+        :return: The comments it carried before the pass, then those the pass posted.
+        """
+        return [
+            *self.earlier_comments.get(number, []),
+            *(
+                comment.body
+                for comment in self.comments
+                if comment.pull_request_number == number
+            ),
+        ]
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
         """
@@ -280,12 +312,22 @@ class AlreadyResolvedPass(MaintenancePass):
             configuration=make_configuration(),
             git=checkout.git,
             board=checkout.project_root / PackageLocation.BOARD.value.name,
+            full_report=(
+                checkout.project_root / PackageLocation.MAINTENANCE_REPORT.value.name
+            ),
             resolved_stack=a_stack(checkout, pull_requests),
         )
 
     def stack(self) -> Stack:
         """
         :return: The stack derived from the scratch checkout.
+        """
+        return self.resolved_stack
+
+    def fresh_stack(self) -> Stack:
+        """
+        :return: The stack derived from the scratch checkout, which stands for a board
+            exported just now.
         """
         return self.resolved_stack
 

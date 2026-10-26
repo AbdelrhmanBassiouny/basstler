@@ -1,5 +1,10 @@
 """
 The finish summary a whole pass prints: what it left for its developer, in markdown.
+
+Its size is bounded whatever the size of the stack: every section lists at most a fixed
+number of entries and every conflict a fixed number of files, and the rest is counted. The
+whole report is written to a file beside it, and every conflict and failing check is
+already in a comment on its pull request.
 """
 
 from __future__ import annotations
@@ -8,12 +13,14 @@ import functools
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from basstler.github_labels import GitHubLabel
+from basstler.maintenance.check_results import CheckState
+from basstler.maintenance.constants import MaintenanceText
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.stack.model import Branch, BranchStatus, Stack
-from basstler.stack.promotion_link import PromotionLink
 
 # %% vocabulary
 
@@ -23,7 +30,10 @@ class FinishSummaryHeading(StrEnum):
     The sections of the finish summary, in the order it prints them.
     """
 
-    PENDING_LINKS = "Upstream pull requests waiting to be created"
+    PENDING_LINKS = (
+        f"Upstream pull requests waiting to be created - the link is under "
+        f"{MaintenanceText.PROMOTION_HEADING} in each description"
+    )
     """
     Every create-link not yet acted on, built this pass or an earlier one.
     """
@@ -31,6 +41,11 @@ class FinishSummaryHeading(StrEnum):
     REPORTED = "Reported to their owners"
     """
     The branches whose owner was told, in a comment, that their branch needs them.
+    """
+
+    FAILING_CHECKS = "Failing checks"
+    """
+    The branches whose checks fail on the tip an earlier pass pushed.
     """
 
     REPARENTS = "Reparents still to make"
@@ -50,7 +65,7 @@ class FinishSummaryHeading(StrEnum):
 
     RESTACKED = "Restacked"
     """
-    The branches published, and how many were already up to date.
+    How many branches were published, and how many were already up to date.
     """
 
     UNPUBLISHED = "Left unpublished"
@@ -74,6 +89,47 @@ class FinishSummaryHeading(StrEnum):
     """
 
 
+class PassCount(StrEnum):
+    """
+    What the line under the status counts, each worded as it follows its number.
+    """
+
+    PUSHED = "pushed"
+    """
+    Branches the restack published.
+    """
+
+    UP_TO_DATE = "up to date"
+    """
+    Branches that already held their parent's tip.
+    """
+
+    LEFT_FOR_SOMEBODY = "left for somebody"
+    """
+    Branches the pass could not publish.
+    """
+
+    LINKS_RECORDED = "upstream links recorded"
+    """
+    Branches whose upstream link was recorded this pass.
+    """
+
+    FAILING_CHECKS = "failing checks"
+    """
+    Branches whose checks fail on the tip a pass pushed.
+    """
+
+    CHECKS_RUNNING = "checks still running"
+    """
+    Branches whose checks on the tip a pass pushed have not finished.
+    """
+
+    REPARENTS_LEFT = "reparents left"
+    """
+    Pull requests whose base still has to be retargeted.
+    """
+
+
 # %% the summary
 
 
@@ -91,6 +147,21 @@ class FinishSummary:
     stack: Stack
     """
     The stack the pass ran over, read for each pull request's number, title and session.
+    """
+
+    full_report: Path | None = None
+    """
+    The file holding the whole report, named under the summary when there is one.
+    """
+
+    entries_per_section: int = 5
+    """
+    How many entries a section lists before counting the rest.
+    """
+
+    paths_per_branch: int = 2
+    """
+    How many conflicting files an entry names before counting the rest.
     """
 
     @staticmethod
@@ -114,24 +185,60 @@ class FinishSummary:
             of :class:`FinishSummaryHeading`.
         """
         sections = {
-            FinishSummaryHeading.PENDING_LINKS: self.pending_links(),
-            FinishSummaryHeading.REPORTED: self.reported(),
-            FinishSummaryHeading.REPARENTS: self.reparents(),
+            FinishSummaryHeading.PENDING_LINKS: self.capped(self.pending_links()),
+            FinishSummaryHeading.REPORTED: self.capped(self.reported()),
+            FinishSummaryHeading.FAILING_CHECKS: self.capped(self.failing_checks()),
+            FinishSummaryHeading.REPARENTS: self.capped(self.reparents()),
             FinishSummaryHeading.FORK_BASE: self.fork_base(),
-            FinishSummaryHeading.LANDED: self.landed(),
+            FinishSummaryHeading.LANDED: self.capped(self.landed()),
             FinishSummaryHeading.RESTACKED: self.restacked(),
-            FinishSummaryHeading.UNPUBLISHED: self.unpublished(),
+            FinishSummaryHeading.UNPUBLISHED: self.capped(self.unpublished()),
             FinishSummaryHeading.WITHHELD: self.branch_list(RestackOutcome.WITHHELD),
             FinishSummaryHeading.LINK_LABELS_CLEARED: self.code_list(
                 self.report.promotion_labels_cleared
             ),
-            FinishSummaryHeading.SKIPPED: self.skipped(),
+            FinishSummaryHeading.SKIPPED: self.capped(self.skipped()),
         }
-        lines = [f"**Maintenance pass:** {self.report.exit_code.name_for_a_caller}"]
+        lines = [
+            f"**Maintenance pass:** {self.report.exit_code.name_for_a_caller}",
+            self.counts(),
+        ]
         for heading, entries in sections.items():
             if entries:
                 lines += ["", self.heading_line(heading), "", *entries]
+        if self.full_report is not None:
+            lines += ["", f"Full report: `{self.full_report}`"]
         return "\n".join(lines)
+
+    def counts(self) -> str:
+        """
+        :return: How many branches each part of the pass touched, naming only the parts
+            that touched any.
+        """
+        report = self.report
+        outcomes = [outcome.outcome for outcome in report.restacked]
+        check_states = [branch_checks.state for branch_checks in report.checks]
+        counted = {
+            PassCount.PUSHED: outcomes.count(RestackOutcome.PUSHED),
+            PassCount.UP_TO_DATE: outcomes.count(RestackOutcome.UP_TO_DATE),
+            PassCount.LEFT_FOR_SOMEBODY: len(report.branches_left_unpublished),
+            PassCount.LINKS_RECORDED: len(report.promoted),
+            PassCount.FAILING_CHECKS: check_states.count(CheckState.FAILING),
+            PassCount.CHECKS_RUNNING: check_states.count(CheckState.PENDING),
+            PassCount.REPARENTS_LEFT: len(report.reparents),
+        }
+        named = [f"{count} {what}" for what, count in counted.items() if count]
+        return ", ".join(named) or "nothing to do"
+
+    def capped(self, entries: list[str]) -> list[str]:
+        """
+        :param entries: A section's entries.
+        :return: The first :attr:`entries_per_section` of them, and a count of the rest.
+        """
+        hidden = len(entries) - self.entries_per_section
+        if hidden <= 0:
+            return entries
+        return [*entries[: self.entries_per_section], f"- and {hidden} more"]
 
     def pull_request_link(self, number: int) -> str:
         """
@@ -151,43 +258,23 @@ class FinishSummary:
             f"{branch.title or branch.name} - `{branch.name}`"
         )
 
-    def title_only_link(self, branch: Branch) -> str:
-        """
-        :param branch: A branch to promote.
-        :return: The create-link prefilling only its title.
-        """
-        return PromotionLink.build(
-            self.stack.configuration, branch.name, branch.title or branch.name, ""
-        ).url
-
     def pending_links(self) -> list[str]:
         """
         :return: One entry per create-link built this pass, then one per link an
             earlier pass built that is not yet acted on.
         """
-        entries = []
-        for promotion in self.report.promoted:
-            branch = self.branches_by_name[promotion.branch]
-            entry = (
-                f"{self.branch_line(branch)} - "
-                f"[create upstream pull request]({promotion.url})"
-            )
-            if promotion.body_was_truncated:
-                entry += f" ([title only]({self.title_only_link(branch)}))"
-            entries.append(entry)
-        promoted = {promotion.branch for promotion in self.report.promoted}
-        for branch in self.stack.maintained_branches():
-            if (
-                branch.name in promoted
-                or GitHubLabel.PROMOTION_LINK_SENT not in branch.labels
-                or branch.status in {BranchStatus.IN_REVIEW, BranchStatus.MERGED}
-            ):
-                continue
-            url = branch.promotion_link or self.title_only_link(branch)
-            entries.append(
-                f"{self.branch_line(branch)} - [create upstream pull request]({url})"
-            )
-        return entries
+        promoted = [promotion.branch for promotion in self.report.promoted]
+        earlier = [
+            branch.name
+            for branch in self.stack.maintained_branches()
+            if branch.name not in promoted
+            and GitHubLabel.PROMOTION_LINK_SENT in branch.labels
+            and branch.status not in {BranchStatus.IN_REVIEW, BranchStatus.MERGED}
+        ]
+        return [
+            self.branch_line(self.branches_by_name[name])
+            for name in [*promoted, *earlier]
+        ]
 
     def reported(self) -> list[str]:
         """
@@ -202,6 +289,27 @@ class FinishSummary:
             entries.append(
                 f"{self.branch_line(branch)}: {self.outcome_detail(outcome)} - "
                 f"addressed {addressed} - [comment]({outcome.reported_at})"
+            )
+        return entries
+
+    def failing_checks(self) -> list[str]:
+        """
+        :return: One entry per branch whose checks fail, naming them and the comment
+            posted this pass, if one was.
+        """
+        entries = []
+        for branch_checks in self.report.failing_checks:
+            names = ", ".join(
+                f"`{name}`" for name in branch_checks.checks.failing_check_names
+            )
+            reported = (
+                f"[comment]({branch_checks.reported_at})"
+                if branch_checks.reported_at
+                else "reported by an earlier pass"
+            )
+            entries.append(
+                f"{self.branch_line(self.branches_by_name[branch_checks.branch])}: "
+                f"{names} - {reported}"
             )
         return entries
 
@@ -235,19 +343,15 @@ class FinishSummary:
 
     def restacked(self) -> list[str]:
         """
-        :return: One entry per branch published, then how many were already up to date.
+        :return: How many branches were published and how many were already up to
+            date, empty when the restack touched none.
         """
-        entries = [
-            f"{self.branch_line(self.branches_by_name[outcome.branch])}: pushed "
-            f"`{outcome.pushed_commit}`"
-            for outcome in self.report.restacked
-            if outcome.outcome is RestackOutcome.PUSHED
-        ]
-        up_to_date = sum(
-            outcome.outcome is RestackOutcome.UP_TO_DATE
-            for outcome in self.report.restacked
-        )
-        return entries + ([f"{up_to_date} already up to date"] if up_to_date else [])
+        outcomes = [outcome.outcome for outcome in self.report.restacked]
+        pushed = outcomes.count(RestackOutcome.PUSHED)
+        up_to_date = outcomes.count(RestackOutcome.UP_TO_DATE)
+        if not pushed and not up_to_date:
+            return []
+        return [f"{pushed} pushed, {up_to_date} already up to date"]
 
     def unpublished(self) -> list[str]:
         """
@@ -262,16 +366,16 @@ class FinishSummary:
             and outcome.outcome is not RestackOutcome.WITHHELD
         ]
 
-    @staticmethod
-    def outcome_detail(outcome: BranchOutcome) -> str:
+    def outcome_detail(self, outcome: BranchOutcome) -> str:
         """
         :param outcome: What became of a branch the pass could not publish.
         :return: The files, refusals or explanation its owner, or the pass, acts on.
         """
         if outcome.conflicting_paths:
-            return "conflicts in " + ", ".join(
-                f"`{path}`" for path in outcome.conflicting_paths
-            )
+            paths = outcome.conflicting_paths
+            named = ", ".join(f"`{path}`" for path in paths[: self.paths_per_branch])
+            hidden = len(paths) - self.paths_per_branch
+            return f"conflicts in {named}" + (f" and {hidden} more" if hidden > 0 else "")
         if outcome.refusals:
             return ", ".join(outcome.refusals)
         if outcome.outcome is RestackOutcome.INTEGRATION_FAILED:
@@ -291,13 +395,17 @@ class FinishSummary:
             ]
         )
 
-    @staticmethod
-    def code_list(names: Sequence[str]) -> list[str]:
+    def code_list(self, names: Sequence[str]) -> list[str]:
         """
         :param names: Branch names.
-        :return: All of them on one line, empty when there are none.
+        :return: The first :attr:`entries_per_section` of them on one line with a count
+            of the rest, empty when there are none.
         """
-        return [", ".join(f"`{name}`" for name in names)] if names else []
+        if not names:
+            return []
+        line = ", ".join(f"`{name}`" for name in names[: self.entries_per_section])
+        hidden = len(names) - self.entries_per_section
+        return [line + (f" and {hidden} more" if hidden > 0 else "")]
 
     def skipped(self) -> list[str]:
         """

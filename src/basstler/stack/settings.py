@@ -341,6 +341,13 @@ class Configuration:
             upstream_setup_command=resolution.upstream_setup_command,
         )
 
+    @property
+    def upstream_base_reference(self) -> str:
+        """
+        The upstream's base branch, as the checkout's tracking reference names it.
+        """
+        return f"{self.upstream_remote}/{self.upstream_base}"
+
     def reference_on_fork(self, name: str) -> str:
         """:param name: A branch or parent name.
         :return: Its reference on the fork remote."""

@@ -9,8 +9,10 @@ told it exists.
 from __future__ import annotations
 
 import argparse
+import json
 from abc import abstractmethod
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from basstler.exit_codes import StackExitCode
@@ -27,9 +29,12 @@ from basstler.maintenance.promotion import (
     clear_spent_promotion_labels,
     promote,
 )
+from basstler.maintenance.promotion_context import PromotionContextReader
+from basstler.maintenance.pushed_branch_checks import PushedBranchChecks
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
-from basstler.stack.model import Stack
+from basstler.maintenance.restack_steps import RestackOutcome
+from basstler.stack.model import BranchStatus, Stack
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
 
@@ -64,6 +69,11 @@ class MaintenancePass:
     The exported board this run writes, derives its stack from and discards at its end.
     """
 
+    full_report: Path = PackageLocation.MAINTENANCE_REPORT.value
+    """
+    Where a whole pass writes everything it did.
+    """
+
     def fork(self) -> GitHubRepository:
         """:return: The fork, as this run's credential can read and write it."""
         return GitHubRepository.from_environment(self.configuration.fork_repository)
@@ -71,6 +81,33 @@ class MaintenancePass:
     def stack(self) -> Stack:
         """:return: The derived stack, read from the exported board."""
         return Stack.load(self.board)
+
+    def export_board(self) -> BoardExport:
+        """:return: The fork's open pull requests, now also written as the board."""
+        export = BoardExport.from_api_records(self.fork().open_pull_requests())
+        export.write(self.board)
+        return export
+
+    def fresh_stack(self) -> Stack:
+        """:return: The stack derived from a board exported just now."""
+        self.export_board()
+        return self.stack()
+
+
+class PreparationKey(StrEnum):
+    """
+    The keys of the document :class:`PrepareCommand` prints.
+    """
+
+    REPARENTS = "reparents"
+    """
+    The pull requests whose base the session retargets before the pass.
+    """
+
+    TO_SUMMARIZE = "to_summarize"
+    """
+    The context of every branch whose upstream summary the session writes.
+    """
 
 
 @dataclass(frozen=True)
@@ -132,6 +169,48 @@ class BoardCommand(MaintenanceCommand):
             return StackExitCode.SUCCESS
         written_to = export.write(maintenance.board)
         logger.info(f"{len(export.pull_requests)} open pull request(s) -> {written_to}")
+        return StackExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class PrepareCommand(MaintenanceCommand):
+    """
+    Exports the board and lists everything a session does before the pass: the bases
+    to retarget and the upstream summaries to write.
+    """
+
+    @classproperty
+    def invoked_as(cls) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "prepare"
+
+    @classproperty
+    def description(cls) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return (
+            "export the board, then list the reparents to make and what each "
+            "upstream summary to write is written from"
+        )
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> StackExitCode:
+        """:param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        stack = maintenance.fresh_stack()
+        contexts = PromotionContextReader(
+            stack, maintenance.git, maintenance.fork()
+        ).read()
+        document = {
+            PreparationKey.REPARENTS: [asdict(entry) for entry in stack.reparents()],
+            PreparationKey.TO_SUMMARIZE: [asdict(context) for context in contexts],
+        }
+        logger.info(json.dumps(document, indent=1, ensure_ascii=False))
         return StackExitCode.SUCCESS
 
 
@@ -268,6 +347,46 @@ class PromoteCommand(MaintenanceCommand):
 
 
 @dataclass(frozen=True)
+class ChecksCommand(MaintenanceCommand):
+    """
+    Reads the checks on every branch whose tip a pass pushed.
+    """
+
+    @classproperty
+    def invoked_as(cls) -> str:
+        """
+        The name it is invoked by on the command line.
+        """
+        return "checks"
+
+    @classproperty
+    def description(cls) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return "report the checks on every branch whose tip a pass pushed"
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> StackExitCode:
+        """:param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        stack = maintenance.stack()
+        report = MaintenanceReport(
+            checks=tuple(
+                PushedBranchChecks(stack, maintenance.git, maintenance.fork()).read(
+                    branch
+                    for branch in stack.maintained_branches()
+                    if branch.status is not BranchStatus.MERGED
+                )
+            )
+        )
+        report.print_summary()
+        return report.exit_code
+
+
+@dataclass(frozen=True)
 class RunReportCommand(MaintenanceCommand):
     """
     Performs the whole pass and reports it as one document.
@@ -318,12 +437,15 @@ class RunReportCommand(MaintenanceCommand):
         summaries: PromotionSummaries,
     ) -> MaintenanceReport:
         """
-        Perform every step of the pass, print it, then discard the board it derived
-        from.
+        Export the board, perform every step of the pass, write the whole report and
+        print its summary, then discard the board.
 
         The board is a snapshot of one moment's open pull requests, and a stale one read
-        by a later run is worse than none at all - so a whole pass ends without one, and
-        the next begins by exporting a fresh one.
+        by a later run is worse than none at all - so a whole pass begins by exporting
+        one and ends without it.
+
+        The checks read are those on the branches the restack left where an earlier pass
+        put them; what this pass pushed is still being checked, and is read by the next.
 
         :param maintenance: What this run has resolved.
         :param as_json: Whether to print the machine-readable document rather than the
@@ -332,21 +454,39 @@ class RunReportCommand(MaintenanceCommand):
             it.
         :return: What the pass did.
         """
-        stack = maintenance.stack()
+        stack = maintenance.fresh_stack()
         fork = maintenance.fork()
         fast_forward_report = fast_forward(stack.configuration, maintenance.git)
+        restacked = restack(stack, maintenance.git, fork)
+        left_in_place = {
+            outcome.branch
+            for outcome in restacked
+            if outcome.outcome is RestackOutcome.UP_TO_DATE
+        }
+        pushed_branch_checks = PushedBranchChecks(stack, maintenance.git, fork)
+        checks = pushed_branch_checks.report_failures(
+            pushed_branch_checks.read(
+                branch
+                for branch in stack.maintained_branches()
+                if branch.name in left_in_place
+            )
+        )
         report = MaintenanceReport.of_pass(
             stack,
             fast_forward_report,
-            restack(stack, maintenance.git, fork),
+            restacked,
             promote(stack, fork, summaries),
             clear_spent_promotion_labels(stack, fork),
+            checks,
         )
         maintenance.board.unlink(missing_ok=True)
+        maintenance.full_report.write_text(report.as_json() + "\n")
         if as_json:
             logger.info(report.as_json())
             return report
-        logger.info(FinishSummary(report, stack).as_markdown())
+        logger.info(
+            FinishSummary(report, stack, maintenance.full_report).as_markdown()
+        )
         return report
 
 
