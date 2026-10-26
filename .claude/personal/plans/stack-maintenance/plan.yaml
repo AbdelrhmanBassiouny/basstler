@@ -49,7 +49,7 @@ items:
   title: Compute the landed predicate once per run and hand it to every phase
   branch: claude/festive-noether-q4z6bq
   pull_request_number: 79
-  status: in progress
+  status: done
   track: pass
   session: https://claude.ai/code/session_01JfLqvSwMnA91Y4dugq9L3d
   depends_on: []
