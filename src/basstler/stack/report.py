@@ -54,6 +54,11 @@ class StatusColumn(StrEnum):
     Its :class:`BranchStatus`.
     """
 
+    CHECKS = ("checks", 9)
+    """
+    The verdict over the checks on its head, blank while nothing has reported.
+    """
+
     PULL_REQUEST = ("pull request", 13)
     """
     Its fork pull request's number.
@@ -127,7 +132,7 @@ class StackReport:
 
     def print_status(self) -> None:
         """
-        Print the whole stack: parent, state, and drift versus the upstream.
+        Print the whole stack: parent, state, checks, and drift versus the upstream.
         """
         configuration = self.stack.configuration
         upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
@@ -145,6 +150,7 @@ class StackReport:
                 StatusColumn.line(
                     branch.name,
                     branch.status,
+                    branch.check_state or "",
                     f"#{branch.pull_request_number}",
                     f"+{ahead}/-{behind_parent} "
                     f"({branch.strategy} onto {branch.parent})",
@@ -197,6 +203,7 @@ class StackReport:
         if promotable:
             self._print_promotable(promotable)
             self._print_withheld(withheld)
+            self._print_withheld_by_checks()
             return
         waiting_on_a_parent = [
             branch
@@ -216,6 +223,7 @@ class StackReport:
                 f"{', '.join(branch.name for branch in waiting_on_a_parent)}"
             )
         self._print_withheld(withheld)
+        self._print_withheld_by_checks()
         if drafts:
             logger.info(
                 "  The gate: self-review a fork pull request, then un-draft it. "
@@ -246,6 +254,18 @@ class StackReport:
         logger.info(
             f"  Withheld ({self.stack.configuration.needs_resolution_label}): "
             f"{', '.join(branch.name for branch in withheld)}"
+        )
+
+    def _print_withheld_by_checks(self) -> None:
+        """
+        Print the approved branches withheld for their failed checks, with the verdict.
+        """
+        withheld = self.stack.withheld_by_failing_checks()
+        if not withheld:
+            return
+        logger.info(
+            "  Withheld for failing checks: "
+            + ", ".join(f"{branch.name} ({branch.check_state})" for branch in withheld)
         )
 
     def print_next_porcelain(self) -> None:

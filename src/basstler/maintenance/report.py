@@ -13,6 +13,7 @@ from basstler.exit_codes import StackExitCode
 from basstler.maintenance.fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance.promotion import Promotion
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
+from basstler.maintenance.review_label import ReviewLabelChange
 from basstler.stack.model import Reparent, SkippedPullRequest, Stack
 from basstler.standard_streams import StandardStreamHandler
 
@@ -76,6 +77,11 @@ class MaintenanceReport:
     The branches whose spent link label was removed this pass.
     """
 
+    review_labels: tuple[ReviewLabelChange, ...] = ()
+    """
+    The pull requests whose in-review label was added or removed this pass.
+    """
+
     reparents: tuple[Reparent, ...] = ()
     """
     The children whose base has landed, for the caller to retarget.
@@ -104,6 +110,7 @@ class MaintenanceReport:
         restacked: Sequence[BranchOutcome],
         promoted: Sequence[Promotion] = (),
         promotion_labels_cleared: Sequence[str] = (),
+        review_labels: Sequence[ReviewLabelChange] = (),
     ) -> MaintenanceReport:
         """
         Assemble one pass's outcomes and its leftovers into a single report.
@@ -114,6 +121,8 @@ class MaintenanceReport:
         :param promoted: The branches whose upstream link was built this pass.
         :param promotion_labels_cleared: The branches whose spent link label was
             removed.
+        :param review_labels: The pull requests whose in-review label was added or
+            removed.
         :return: The report.
         """
         return cls(
@@ -121,6 +130,7 @@ class MaintenanceReport:
             restacked=tuple(restacked),
             promoted=tuple(promoted),
             promotion_labels_cleared=tuple(promotion_labels_cleared),
+            review_labels=tuple(review_labels),
             reparents=tuple(stack.reparents()),
             landed=tuple(branch.name for branch in stack.landed_branches()),
             promotable=tuple(branch.name for branch in stack.promotion_order()),
@@ -180,6 +190,7 @@ class MaintenanceReport:
         self.print_fast_forward()
         self.print_restack()
         self.print_promotions()
+        self.print_review_labels()
         self.print_skipped()
 
     def print_fast_forward(self) -> None:
@@ -222,6 +233,16 @@ class MaintenanceReport:
                 )
         for branch in self.promotion_labels_cleared:
             logger.info(f"{branch}\tlink-label-cleared\t")
+
+    def print_review_labels(self) -> None:
+        """
+        Print every in-review label added or removed this pass.
+        """
+        for change in self.review_labels:
+            logger.info(
+                f"{change.branch}\t#{change.pull_request_number}\t"
+                f"review-label-{change.action}"
+            )
 
     def print_skipped(self) -> None:
         """

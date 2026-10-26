@@ -14,10 +14,12 @@ from basstler.exit_codes import StackExitCode
 from basstler.stack.configuration import StackSetting
 from basstler.stack.__main__ import Command, CommandOption
 from basstler.stack.promotion_link import PromotionLink
-from basstler.stack.report import StatusColumn
+from basstler.stack.model import PullRequest
+from basstler.stack.report import StackReport, StatusColumn
 from basstler.stack.settings import PrintedConfiguration
 
 from basstler.locations import ProjectLocation
+from basstler.upstream_reviews.vocabulary import RollupState
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName, StackBranch, StackLabel
@@ -27,6 +29,7 @@ from ..script_runner import PythonModuleRunner
 from .dataset import (
     StackRepository,
     StackSampleText,
+    build,
     make_configuration,
 )
 
@@ -244,3 +247,43 @@ def test_status_rows_start_each_cell_where_its_heading_starts():
     assert [heading.index(column) for column in columns] == [
         row.index(str(position)) for position in range(len(columns))
     ]
+
+
+def a_ready_branch_whose_checks_failed() -> PullRequest:
+    """
+    :return: An approved branch on the base whose checks failed.
+    """
+    return PullRequest(
+        1,
+        StackBranch.FEATURE,
+        StackBranch.BASE,
+        draft=False,
+        check_state=RollupState.FAILURE,
+        head_repository=StackRepository.FORK.value.full_name,
+    )
+
+
+def test_the_status_table_shows_the_verdict_over_each_branch_s_checks(
+    capsys: pytest.CaptureFixture[str],
+):
+    StackReport(build([a_ready_branch_whose_checks_failed()])).print_status()
+
+    heading = StatusColumn.line(*StatusColumn)
+    row = next(
+        line
+        for line in capsys.readouterr().out.splitlines()
+        if line.startswith(StackBranch.FEATURE)
+    )
+    assert row[heading.index(StatusColumn.CHECKS) :].split()[0] == RollupState.FAILURE
+
+
+# %% the next branches to promote
+
+
+def test_a_branch_withheld_for_its_checks_is_named_with_their_verdict(
+    capsys: pytest.CaptureFixture[str],
+):
+    StackReport(build([a_ready_branch_whose_checks_failed()])).print_next()
+
+    printed = capsys.readouterr().out
+    assert f"{StackBranch.FEATURE} ({RollupState.FAILURE})" in printed

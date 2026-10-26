@@ -63,9 +63,19 @@ class FinishSummaryHeading(StrEnum):
     The branches still conflicted from an earlier pass, left untouched.
     """
 
+    FAILING_CHECKS = "Withheld for failing checks"
+    """
+    The approved branches promotion would take but for their failed checks.
+    """
+
     LINK_LABELS_CLEARED = "Spent link labels removed"
     """
     The branches whose link label was dropped because the link was acted on.
+    """
+
+    REVIEW_LABELS = "In-review labels updated"
+    """
+    The pull requests whose in-review label was added or removed to match the upstream.
     """
 
     SKIPPED = "Skipped"
@@ -122,9 +132,11 @@ class FinishSummary:
             FinishSummaryHeading.RESTACKED: self.restacked(),
             FinishSummaryHeading.UNPUBLISHED: self.unpublished(),
             FinishSummaryHeading.WITHHELD: self.branch_list(RestackOutcome.WITHHELD),
+            FinishSummaryHeading.FAILING_CHECKS: self.failing_checks(),
             FinishSummaryHeading.LINK_LABELS_CLEARED: self.code_list(
                 self.report.promotion_labels_cleared
             ),
+            FinishSummaryHeading.REVIEW_LABELS: self.review_labels(),
             FinishSummaryHeading.SKIPPED: self.skipped(),
         }
         lines = [f"**Maintenance pass:** {self.report.exit_code.name_for_a_caller}"]
@@ -277,6 +289,25 @@ class FinishSummary:
         if outcome.outcome is RestackOutcome.INTEGRATION_FAILED:
             return f"the pass's own environment, not the branch: {outcome.explanation}"
         return outcome.explanation or ""
+
+    def failing_checks(self) -> list[str]:
+        """
+        :return: One entry per approved branch withheld for its failed checks, with the
+            verdict over them.
+        """
+        return [
+            f"{self.branch_line(branch)}: {branch.check_state}"
+            for branch in self.stack.withheld_by_failing_checks()
+        ]
+
+    def review_labels(self) -> list[str]:
+        """
+        :return: One entry per pull request whose in-review label was added or removed.
+        """
+        return [
+            f"{self.branch_line(self.branches_by_name[change.branch])}: {change.action}"
+            for change in self.report.review_labels
+        ]
 
     def branch_list(self, outcome: RestackOutcome) -> list[str]:
         """

@@ -137,6 +137,7 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
         GitHubLabel.PROMOTION_LINK_SENT,
         make_configuration().in_review_label,
     ]
+    board[0].upstream_pull_request = StackPullRequestNumber.UPSTREAM
     fork = RecordingPullRequests()
 
     cleared = clear_spent_promotion_labels(a_stack(fork_checkout, board), fork)

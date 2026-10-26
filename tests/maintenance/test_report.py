@@ -52,6 +52,7 @@ from .fork import (
     ForkCheckout,
     a_stack,
     an_api_record,
+    an_export,
     a_parent_and_child,
     the_board,
 )
@@ -129,7 +130,7 @@ def a_board_with_a_head_outside_the_fork(
         base=base,
         head_repository=head_repository,
     )
-    return [*the_board(), *BoardExport.from_api_records([record]).pull_requests]
+    return [*the_board(), *an_export([record]).pull_requests]
 
 
 def test_loading_the_stack_still_refreshes_the_fork_s_own_branches(
