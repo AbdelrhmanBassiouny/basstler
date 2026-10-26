@@ -4,19 +4,28 @@ Tests for promoting approved, unblocked branches to the upstream review queue.
 
 from __future__ import annotations
 
+import argparse
+
 import pytest
 
 import basstler.maintenance.__main__
 import basstler.maintenance.restack_procedure
 from basstler.github_labels import GitHubLabel
+from basstler.maintenance.commands import RunReportCommand
 from basstler.maintenance.constants import MaintenanceText
+from basstler.maintenance.description import PullRequestDescription
 from basstler.maintenance.promotion import (
+    PromotionSummaries,
+    PromotionSummary,
     clear_spent_promotion_labels,
     promote,
 )
 from basstler.maintenance.restack_procedure import restack
+from basstler.stack.promotion_link import PromotionLinkParameter
 
+from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch, StackLabel
+from ..stack.dataset import prefilled
 
 from .fork import (
     StackPullRequestNumber,
@@ -28,6 +37,7 @@ from .fork import (
     the_board,
 )
 from .recorded_fork import (
+    AlreadyResolvedPass,
     RecordedLabelWrite,
     RecordingPullRequests,
 )
@@ -49,7 +59,7 @@ def test_the_promotion_link_goes_into_the_description_and_the_branch_is_labelled
         titles={StackPullRequestNumber.PARENT: PromotionSampleText.TITLE},
     )
 
-    promoted = promote(a_stack(fork_checkout, the_board()), fork)
+    promoted = promote(a_stack(fork_checkout, the_board()), fork, PromotionSummaries())
 
     assert [entry.branch for entry in promoted] == [StackBranch.PARENT]
     written = fork.description_writes[0]
@@ -72,7 +82,7 @@ def test_a_branch_already_carrying_the_link_label_is_not_promoted_again(
         labels={StackPullRequestNumber.PARENT: [GitHubLabel.PROMOTION_LINK_SENT]}
     )
 
-    promoted = promote(a_stack(fork_checkout, the_board()), fork)
+    promoted = promote(a_stack(fork_checkout, the_board()), fork, PromotionSummaries())
 
     assert promoted == []
     assert fork.description_writes == []
@@ -95,7 +105,7 @@ def test_a_branch_labelled_needs_resolution_during_this_pass_is_not_promoted(
         }
     )
 
-    promoted = promote(a_stack(fork_checkout, the_board()), fork)
+    promoted = promote(a_stack(fork_checkout, the_board()), fork, PromotionSummaries())
 
     assert promoted == []
     assert fork.description_writes == []
@@ -114,7 +124,7 @@ def test_the_promotion_label_write_keeps_a_label_added_since_the_board_was_taken
         labels={StackPullRequestNumber.PARENT: [StackLabel.SOMEBODY_ELSES]}
     )
 
-    promote(a_stack(fork_checkout, the_board()), fork)
+    promote(a_stack(fork_checkout, the_board()), fork, PromotionSummaries())
 
     assert fork.label_writes == [
         RecordedLabelWrite(
@@ -147,6 +157,126 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
             StackPullRequestNumber.PARENT, (make_configuration().in_review_label,)
         )
     ]
+
+
+# %% what the upstream pull request opens with
+
+
+def link_back_to(pull_request_number: int) -> str:
+    """
+    :param pull_request_number: A fork pull request.
+    :return: The line every prefilled description ends with.
+    """
+    fork_url = make_configuration().fork_repository.pull_request_url(
+        pull_request_number
+    )
+    return f"{MaintenanceText.FULL_DETAIL} {fork_url}"
+
+
+def a_parent_with_a_description() -> RecordingPullRequests:
+    """
+    :return: A fork whose parent pull request has a title and a two-paragraph
+        description.
+    """
+    return RecordingPullRequests(
+        descriptions={
+            StackPullRequestNumber.PARENT: (
+                f"{PromotionSampleText.SUMMARY}\n\n{PromotionSampleText.DETAIL}\n"
+            )
+        },
+        titles={StackPullRequestNumber.PARENT: PromotionSampleText.TITLE},
+    )
+
+
+def test_the_upstream_pull_request_opens_with_the_written_points_and_the_link_back(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    summaries = PromotionSummaries.read_from(DatasetLocation.PROMOTION_SUMMARIES.value)
+    summary = summaries.for_pull_request(StackPullRequestNumber.PARENT)
+
+    promoted = promote(
+        a_stack(fork_checkout, the_board()), a_parent_with_a_description(), summaries
+    )
+
+    assert prefilled(promoted[0].url, PromotionLinkParameter.BODY).splitlines() == [
+        *(f"- {point}" for point in summary.points),
+        "",
+        link_back_to(StackPullRequestNumber.PARENT),
+    ]
+
+
+def test_a_written_title_replaces_the_fork_title_upstream(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    summaries = PromotionSummaries.read_from(DatasetLocation.PROMOTION_SUMMARIES.value)
+
+    promoted = promote(
+        a_stack(fork_checkout, the_board()), a_parent_with_a_description(), summaries
+    )
+
+    assert (
+        prefilled(promoted[0].url, PromotionLinkParameter.TITLE)
+        == summaries.for_pull_request(StackPullRequestNumber.PARENT).title
+    )
+
+
+def test_a_branch_nobody_wrote_for_opens_with_only_its_title_and_the_link_back(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The fork description was written for the fork's reviewer, so none of it is carried
+    upstream in place of a summary nobody wrote.
+    """
+    a_parent_and_child(fork_checkout)
+
+    promoted = promote(
+        a_stack(fork_checkout, the_board()),
+        a_parent_with_a_description(),
+        PromotionSummaries(),
+    )
+
+    assert prefilled(promoted[0].url, PromotionLinkParameter.BODY) == link_back_to(
+        StackPullRequestNumber.PARENT
+    )
+    assert (
+        prefilled(promoted[0].url, PromotionLinkParameter.TITLE)
+        == PromotionSampleText.TITLE
+    )
+
+
+def test_an_empty_entry_reads_as_no_summary():
+    summaries = PromotionSummaries.read_from(DatasetLocation.PROMOTION_SUMMARIES.value)
+
+    assert (
+        summaries.for_pull_request(StackPullRequestNumber.CHILD) == PromotionSummary()
+    )
+
+
+def test_no_summaries_document_reads_as_none_written():
+    assert PromotionSummaries.read_from(None) == PromotionSummaries()
+
+
+def test_a_whole_pass_promotes_with_the_summaries_it_was_given(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    maintenance = AlreadyResolvedPass.over(fork_checkout, the_board())
+    summaries_document = DatasetLocation.PROMOTION_SUMMARIES.value
+
+    RunReportCommand().run(
+        maintenance, argparse.Namespace(json=True, summaries=summaries_document)
+    )
+
+    written = maintenance.recorded_fork.description_writes[0]
+    recorded_link = PullRequestDescription(written.body).promotion_link
+    assert (
+        prefilled(recorded_link, PromotionLinkParameter.TITLE)
+        == PromotionSummaries.read_from(summaries_document)
+        .for_pull_request(written.pull_request_number)
+        .title
+    )
 
 
 def test_a_branch_no_step_concludes_is_an_error_rather_than_a_silent_pass(

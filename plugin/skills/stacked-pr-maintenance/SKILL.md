@@ -63,8 +63,19 @@ fast-forward the landed base to get around a 422.
 
 ## Step 2 - run the pass
 
+First, for every branch `"${BASSTLER_PYTHON}" -m basstler.stack next --porcelain` names, read
+its diff against its parent and write what its upstream pull request opens with, as a JSON
+document in your scratchpad keyed by fork pull request number:
+
+```json
+{"<number>": {"title": "<title in the upstream's own convention>", "points": ["<point>", "..."]}}
+```
+
+Points are short sentences for an upstream reviewer who has not seen the fork pull request. Both
+fields are optional; a branch you write nothing for opens with its fork title and a link back.
+
 ```bash
-"${BASSTLER_PYTHON}" -m basstler.maintenance run-report
+"${BASSTLER_PYTHON}" -m basstler.maintenance run-report --summaries <the document>
 ```
 
 Do not re-derive its output, look up titles, or run the individual commands as well.

@@ -40,16 +40,6 @@ class PullRequestDescription:
         words = recorded.split()
         return words[0] if heading and words else None
 
-    @property
-    def summary(self) -> str:
-        """
-        The first paragraph ahead of the promotion section, which prefills the upstream
-        pull request; empty when there is none.
-        """
-        before, _, _ = self.text.partition(MaintenanceText.PROMOTION_HEADING)
-        paragraphs = [block.strip() for block in before.split("\n\n") if block.strip()]
-        return paragraphs[0] if paragraphs else ""
-
     def with_promotion_link(self, url: str) -> str:
         """
         :param url: The link to record.

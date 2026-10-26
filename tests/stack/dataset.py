@@ -7,12 +7,15 @@ from __future__ import annotations
 
 from collections.abc import Container
 from enum import Enum, StrEnum
+from urllib.parse import parse_qs as parse_query_string
+from urllib.parse import urlsplit as split_url
 
 from basstler.repository import Repository
 from basstler.stack.model import (
     PullRequest,
     Stack,
 )
+from basstler.stack.promotion_link import PromotionLinkParameter
 from basstler.stack.settings import Configuration
 
 from ..constants.stack import RemoteName, StackBranch, StackLabel
@@ -151,6 +154,18 @@ def build(
     :return: The stack those entries describe.
     """
     return Stack.build(make_configuration(), pull_requests, lambda name: name in merged)
+
+
+# %% reading a compare-and-create link
+
+
+def prefilled(url: str, parameter: PromotionLinkParameter) -> str:
+    """
+    :param url: A compare-and-create link.
+    :param parameter: The prefill to read out of it.
+    :return: That prefill, decoded.
+    """
+    return parse_query_string(split_url(url).query)[parameter][0]
 
 
 # %% a whole stack through its lifecycle

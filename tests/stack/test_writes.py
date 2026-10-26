@@ -6,7 +6,6 @@ move has to pass, and promotion links.
 from __future__ import annotations
 
 from collections.abc import Container
-from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -29,6 +28,7 @@ from .dataset import (
     StackRepository,
     StackSampleText,
     make_configuration,
+    prefilled,
     a_deep_stack_beside_an_independent_branch,
 )
 
@@ -241,15 +241,6 @@ def a_promotion_link(
     return PromotionLink.build(make_configuration(), StackBranch.ENGINE, title, body)
 
 
-def prefilled(link: PromotionLink, parameter: PromotionLinkParameter) -> str:
-    """
-    :param link: The link to read.
-    :param parameter: The prefill to read out of it.
-    :return: That prefill, decoded.
-    """
-    return parse_qs(urlsplit(link.url).query)[parameter][0]
-
-
 def test_the_link_compares_the_upstream_base_against_the_fork_branch():
     assert a_promotion_link().url.startswith(
         f"{StackRepository.UPSTREAM.value.url}/compare/{StackBranch.BASE}..."
@@ -268,10 +259,10 @@ def test_the_title_and_body_are_encoded_rather_than_pasted_in_raw():
         body=StackSampleText.BODY_WITH_FRAGMENT,
     )
 
-    assert prefilled(link, PromotionLinkParameter.TITLE) == (
+    assert prefilled(link.url, PromotionLinkParameter.TITLE) == (
         StackSampleText.TITLE_WITH_SEPARATORS
     )
-    assert prefilled(link, PromotionLinkParameter.BODY) == (
+    assert prefilled(link.url, PromotionLinkParameter.BODY) == (
         StackSampleText.BODY_WITH_FRAGMENT
     )
 
@@ -280,7 +271,9 @@ def test_a_body_within_the_limit_is_left_whole():
     link = a_promotion_link(body=StackSampleText.SHORT_BODY)
 
     assert not link.body_was_truncated
-    assert prefilled(link, PromotionLinkParameter.BODY) == StackSampleText.SHORT_BODY
+    assert (
+        prefilled(link.url, PromotionLinkParameter.BODY) == StackSampleText.SHORT_BODY
+    )
 
 
 def test_an_oversized_body_is_truncated_rather_than_silently_dropped():
