@@ -42,7 +42,8 @@ items:
   notes: 'Raised in review on basstler#15. The board export records each fork pull request''s
     open upstream pull request and its head''s check verdict (RollupState via CheckStatus.over),
     replacing the never-filled ci field; in-review is derived from the upstream pull request
-    and the pass keeps the in-review label in sync; status shows CI and promotion withholds
+    and the pass mirrors it as the in-review label and an upstream link in the description
+    (shown on the dashboard card); status shows CI and promotion withholds
     failing branches. Based on main: #15, which split stack_model.py out of stack.py, has
     merged. Three #15 threads point here.'
 - id: skip-unmoved-branches
