@@ -44,10 +44,10 @@ others, so nothing "more shared" exists yet for it to point at):
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+fetch_personal_notes_branch
 ```
 
-Read only what this item needs. Copy `<plan-id>/plan.yaml` off `FETCH_HEAD`
+Read only what this item needs. Copy `<plan-id>/plan.yaml` off `"${PERSONAL_NOTES_REFERENCE}"`
 to a scratch file and print just this item with
 `"${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" item <file> --id <item-id>` (or
 `--branch <branch>`); do the same for each item it `depends_on` when the

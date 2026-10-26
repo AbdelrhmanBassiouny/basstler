@@ -37,11 +37,11 @@ remote/branch precedence into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+fetch_personal_notes_branch
 ```
 
 Then check whether `${PLANS_DIR}/<plan-id>/plan.yaml` already
-exists on `FETCH_HEAD` (`PLANS_DIR` is defined by the config script sourced
+exists on `"${PERSONAL_NOTES_REFERENCE}"` (`PLANS_DIR` is defined by the config script sourced
 above).
 If it does, stop and tell the user — point them at editing the existing
 plan (`plan-dashboard`'s doc, or just ask a session to edit it) instead of

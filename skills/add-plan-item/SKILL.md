@@ -45,10 +45,10 @@ branch by default.
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+fetch_personal_notes_branch
 ```
 
-Read **every** plan's `plan.yaml` under `${PLANS_DIR}` off `FETCH_HEAD`, not
+Read **every** plan's `plan.yaml` under `${PLANS_DIR}` off `"${PERSONAL_NOTES_REFERENCE}"`, not
 just the one the user has in mind — the right home is often a plan they weren't
 thinking of. [`plan-schema.md`](../plan-dashboard/plan-schema.md) is the field reference.
 
