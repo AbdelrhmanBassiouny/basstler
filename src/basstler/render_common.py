@@ -132,8 +132,18 @@ class TemplatePage(ABC):
         :param context: The values the template substitutes, by name.
         :return: The page's rendered HTML.
         """
+        return self.render_named_template(self.template, **context)
+
+    @staticmethod
+    def render_named_template(template_name: str, **context: Any) -> str:
+        """
+        :param template_name: The file name of a template in
+            :attr:`PackageLocation.TEMPLATES`.
+        :param context: The values the template substitutes, by name.
+        :return: The rendered template.
+        """
         environment = create_template_environment()
-        return environment.get_template(self.template).render(**context)
+        return environment.get_template(template_name).render(**context)
 
 
 def render_markdown_to_html(markdown_text: str) -> str:

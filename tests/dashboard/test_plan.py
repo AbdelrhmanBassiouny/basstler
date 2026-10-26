@@ -10,7 +10,7 @@ from basstler.plan.model import ItemStatus, ManifestKey
 from basstler.pull_request_state import (
     LiveState,
 )
-from basstler.locations import PackageLocation
+from basstler.locations import DashboardTemplate
 
 from ..manifest_builders import manifest_item, minimal_plan
 
@@ -48,8 +48,8 @@ def test_the_dashboard_styles_every_status_css_class(status):
     stylesheet has to know that name.
     """
     item = Item(title="A", branch="a", track="track-1", status=status)
-    template = (PackageLocation.TEMPLATES / "dashboard.html").read_text()
-    assert f".item.{item.status_and_drift_css_class} " in template
+    stylesheet = DashboardTemplate.STYLE.read_text()
+    assert f".item.{item.status_and_drift_css_class} " in stylesheet
 
 
 def test_is_ready_to_unblock_dependents_true_when_done():

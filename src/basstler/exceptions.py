@@ -12,7 +12,7 @@ from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
-from basstler.locations import ClaudeCodeVariable, PluginLocation
+from basstler.locations import BasstlerVariable, ClaudeCodeVariable, PluginLocation
 
 
 class DataclassException(Exception, ABC):
@@ -80,7 +80,7 @@ class NotesBranchMissingError(DataclassException, RuntimeError):
         )
 
     def suggest_correction(self) -> str:
-        return f"run {PluginLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first"
+        return f"run {PluginLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT.path_under_exported_root} first"
 
 
 @dataclass
@@ -515,4 +515,43 @@ class BashNotFoundError(DataclassException, FileNotFoundError):
         return (
             f"install Git for Windows, or set {ClaudeCodeVariable.GIT_BASH_PATH} to its "
             f"bash.exe"
+        )
+
+
+@dataclass
+class PluginRootUnsetError(DataclassException, LookupError):
+    """
+    Raised when no plugin root is exported, so no plugin script can be found.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{BasstlerVariable.PLUGIN_ROOT} is not set, so the plugin cannot be found"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"source {PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT} from the "
+            f"plugin's root first, or export {BasstlerVariable.PLUGIN_ROOT} as that root"
+        )
+
+
+@dataclass
+class PluginRootNotADirectoryError(DataclassException, NotADirectoryError):
+    """
+    Raised when the exported plugin root is not a directory.
+    """
+
+    root: Path
+    """
+    The plugin root exported.
+    """
+
+    def error_message(self) -> str:
+        return f"{BasstlerVariable.PLUGIN_ROOT} names {self.root}, which is not a directory"
+
+    def suggest_correction(self) -> str:
+        return (
+            f"export {BasstlerVariable.PLUGIN_ROOT} as the directory holding the "
+            f"plugin's {PluginLocation.HOOKS} directory"
         )
