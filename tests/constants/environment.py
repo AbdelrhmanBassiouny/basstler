@@ -74,6 +74,16 @@ class ConfigurationVariable(StrEnum):
     The file recording what the environment's package was installed from.
     """
 
+    INSTALL_LOCK = "BASSTLER_INSTALL_LOCK"
+    """
+    The directory held while the package's environment is installed into.
+    """
+
+    INSTALL_WAIT_SECONDS = "BASSTLER_INSTALL_WAIT_SECONDS"
+    """
+    How long a caller waits for an install another process holds the lock for.
+    """
+
     PYTHON_REQUIREMENT = "BASSTLER_PYTHON_REQUIREMENT"
     """
     The interpreters the package supports.

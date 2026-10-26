@@ -709,6 +709,136 @@ missing_dependencies() {
   echo ${missing}
 }
 
+# BASSTLER_INSTALL_LOCK: a directory held while the package's environment is
+# created or installed into, holding the holder's process id, so a caller that
+# finds the package missing waits for an install already running - typically a
+# session start's - rather than racing it.
+BASSTLER_INSTALL_LOCK="${BASSTLER_HOME}/install.lock"
+# BASSTLER_INSTALL_WAIT_SECONDS: how long to wait for an install another live
+# process holds the lock for, before giving up on it.
+BASSTLER_INSTALL_WAIT_SECONDS="${BASSTLER_INSTALL_WAIT_SECONDS:-600}"
+
+# acquire_basstler_install_lock: takes BASSTLER_INSTALL_LOCK, waiting while a
+# live process holds it and taking it over from one that died holding it.
+# Returns 1 when it is still held after BASSTLER_INSTALL_WAIT_SECONDS.
+acquire_basstler_install_lock() {
+  mkdir -p "${BASSTLER_HOME}"
+  local waited=0 holder
+  until mkdir "${BASSTLER_INSTALL_LOCK}" 2>/dev/null; do
+    holder="$(cat "${BASSTLER_INSTALL_LOCK}/pid" 2>/dev/null || true)"
+    if [ -n "${holder}" ] && ! kill -0 "${holder}" 2>/dev/null; then
+      rm -rf "${BASSTLER_INSTALL_LOCK}"
+      continue
+    fi
+    [ "${waited}" -lt "${BASSTLER_INSTALL_WAIT_SECONDS}" ] || return 1
+    sleep 1
+    waited=$((waited + 1))
+  done
+  printf '%s\n' "$$" > "${BASSTLER_INSTALL_LOCK}/pid"
+}
+
+# release_basstler_install_lock: gives BASSTLER_INSTALL_LOCK back.
+release_basstler_install_lock() {
+  rm -rf "${BASSTLER_INSTALL_LOCK}"
+}
+
+# ensure_basstler_package: creates the package's environment where it is
+# missing and installs the package where it is missing or out of date, holding
+# BASSTLER_INSTALL_LOCK throughout. Sets BASSTLER_PACKAGE_STATE to one of
+#   current             - nothing was missing
+#   created             - the environment was created and the package installed
+#   installed           - BASSTLER_PACKAGE_REQUIREMENTS were installed
+#   unchecked           - what the package requires could not be read
+#   locked              - another process held the lock past the wait
+#   environment-failed  - no environment could be created
+#   install-failed      - installing BASSTLER_PACKAGE_REQUIREMENTS failed
+# and returns 1 for the last four, when the package cannot be run.
+ensure_basstler_package() {
+  BASSTLER_PACKAGE_REQUIREMENTS=""
+  if ! acquire_basstler_install_lock; then
+    BASSTLER_PACKAGE_STATE=locked
+    return 1
+  fi
+  resolve_basstler_python
+  local status=0
+  install_basstler_package_where_needed || status=$?
+  release_basstler_install_lock
+  return "${status}"
+}
+
+# install_basstler_package_where_needed: ensure_basstler_package's work, run
+# while it holds the lock.
+install_basstler_package_where_needed() {
+  if [ ! -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
+    BASSTLER_PACKAGE_REQUIREMENTS="$(basstler_package_source)"
+    if ! create_basstler_environment; then
+      BASSTLER_PACKAGE_STATE=environment-failed
+      return 1
+    fi
+    resolve_basstler_python
+    install_basstler_package_or_fail created
+    return
+  fi
+  if ! installed_package_is_current; then
+    BASSTLER_PACKAGE_REQUIREMENTS="$(basstler_package_source)"
+    install_basstler_package_or_fail installed
+    return
+  fi
+  if ! BASSTLER_PACKAGE_REQUIREMENTS="$(missing_dependencies)"; then
+    BASSTLER_PACKAGE_STATE=unchecked
+    return 1
+  fi
+  if [ -z "${BASSTLER_PACKAGE_REQUIREMENTS}" ]; then
+    BASSTLER_PACKAGE_STATE=current
+    return 0
+  fi
+  install_basstler_package_or_fail installed
+}
+
+# install_basstler_package_or_fail: installs the package into its environment,
+# setting BASSTLER_PACKAGE_STATE to $1 when that works and to install-failed
+# when it does not.
+install_basstler_package_or_fail() {
+  local state_when_installed="$1"
+  if ! install_basstler_into_environment; then
+    BASSTLER_PACKAGE_STATE=install-failed
+    return 1
+  fi
+  BASSTLER_PACKAGE_STATE="${state_when_installed}"
+}
+
+# basstler_package_failure_line: prints, on one line, why the package cannot be
+# run after ensure_basstler_package failed, and what to do about it.
+basstler_package_failure_line() {
+  case "${BASSTLER_PACKAGE_STATE}" in
+    locked)
+      printf 'basstler is still being installed by another process after %ss; wait for it, or remove %s if no install is running\n' \
+        "${BASSTLER_INSTALL_WAIT_SECONDS}" "${BASSTLER_INSTALL_LOCK}" ;;
+    environment-failed)
+      printf 'could not create basstler'"'"'s environment at %s: %s\n' \
+        "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+        "$(printf '%s' "${BASSTLER_ENVIRONMENT_OUTPUT}" | tail -1)" ;;
+    install-failed)
+      printf 'could not install %s: %s - run: %s\n' "${BASSTLER_PACKAGE_REQUIREMENTS}" \
+        "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
+        "${BASSTLER_INSTALL_COMMAND[*]}" ;;
+    *)
+      printf 'could not read what the basstler package requires for %s - run: pip --python %s install '"'"'%s'"'"'\n' \
+        "${BASSTLER_PYTHON}" "${BASSTLER_PYTHON}" "$(basstler_package_source)" ;;
+  esac
+}
+
+# ready_basstler_python: returns at once when the package is installed and
+# current; otherwise completes or waits on its install, and exits the calling
+# script with basstler_package_failure_line on stderr when it still cannot run.
+ready_basstler_python() {
+  installed_package_is_current && return 0
+  if ! ensure_basstler_package; then
+    basstler_package_failure_line >&2
+    exit 1
+  fi
+}
+
 # require_basstler_python: exits the calling script, saying what to run, unless
 # BASSTLER_PYTHON exists and has every requirement of the package. A session
 # start installs them; a checkout where that never ran reaches this message

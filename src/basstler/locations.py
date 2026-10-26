@@ -213,6 +213,12 @@ class PluginLocation(PathEnumeration):
     The helper that creates the personal-notes branch where it does not exist yet.
     """
 
+    ENTRY_POINT_SCRIPT = HOOKS / "basstler.sh"
+    """
+    Runs one module of the package once the package is ready to run, saying in one
+    line why when it cannot be.
+    """
+
     SESSION_START_SCRIPT = HOOKS / "session-start.sh"
     """
     The session-start hook: sets up the package's environment and loads the personal

@@ -40,62 +40,36 @@ SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
 
 # Installs the package environment only where something is missing; never
 # fatal. Runs before the plan section and the setup check, which rely on it.
+# Holds the install lock, so a skill started while this runs waits for it.
 ensure_basstler_environment() {
   record_latest_basstler_release
-  if [ ! -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
-    create_and_install_basstler_environment
-    return
-  fi
-  if ! installed_package_is_current; then
-    install_basstler_and_report "$(basstler_package_source)"
-    return
-  fi
-  local missing
-  if ! missing="$(missing_dependencies)"; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)"
-    return
-  fi
-  if [ -z "${missing}" ]; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed \
-      "${BASSTLER_ENVIRONMENT_DIRECTORY}")"
-    return
-  fi
-  install_basstler_and_report "${missing}"
-}
-
-# Installs the package into its existing environment; $1 names the requirements.
-install_basstler_and_report() {
-  local requirements="$1"
-  if ! install_basstler_into_environment; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed "${requirements}" \
-      "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
-      "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
-      "${BASSTLER_INSTALL_COMMAND[*]}")"
-    return
-  fi
-  SUMMARY_DEPENDENCIES="$(dependencies_line_installed "${requirements}" \
-    "${BASSTLER_ENVIRONMENT_DIRECTORY}")"
-}
-
-# Creates the environment, installs the package, and points BASSTLER_PYTHON at it.
-create_and_install_basstler_environment() {
-  if ! create_basstler_environment; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_environment_not_created \
-      "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
-      "$(printf '%s' "${BASSTLER_ENVIRONMENT_OUTPUT}" | tail -1)" \
-      "${BASSTLER_PYTHON_REQUIREMENT}")"
-    return
-  fi
-  resolve_basstler_python
-  if ! install_basstler_into_environment; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
-      "$(basstler_package_source)" "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
-      "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
-      "${BASSTLER_INSTALL_COMMAND[*]}")"
-    return
-  fi
-  SUMMARY_DEPENDENCIES="$(dependencies_line_environment_created \
-    "${BASSTLER_ENVIRONMENT_DIRECTORY}" "$(basstler_package_source)")"
+  ensure_basstler_package || true
+  case "${BASSTLER_PACKAGE_STATE}" in
+    current)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed \
+        "${BASSTLER_ENVIRONMENT_DIRECTORY}")" ;;
+    created)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_environment_created \
+        "${BASSTLER_ENVIRONMENT_DIRECTORY}" "${BASSTLER_PACKAGE_REQUIREMENTS}")" ;;
+    installed)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_installed \
+        "${BASSTLER_PACKAGE_REQUIREMENTS}" "${BASSTLER_ENVIRONMENT_DIRECTORY}")" ;;
+    environment-failed)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_environment_not_created \
+        "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+        "$(printf '%s' "${BASSTLER_ENVIRONMENT_OUTPUT}" | tail -1)" \
+        "${BASSTLER_PYTHON_REQUIREMENT}")" ;;
+    install-failed)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
+        "${BASSTLER_PACKAGE_REQUIREMENTS}" "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+        "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
+        "${BASSTLER_INSTALL_COMMAND[*]}")" ;;
+    locked)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_install_running \
+        "${BASSTLER_INSTALL_LOCK}")" ;;
+    *)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)" ;;
+  esac
 }
 
 ensure_basstler_environment
