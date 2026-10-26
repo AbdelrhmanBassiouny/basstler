@@ -18,10 +18,11 @@ tracks:
 items:
 - id: promotion-summaries-and-table
   title: Promote with a written summary, and send no notification
-  branch: null
-  pull_request_number: null
+  branch: claude/confident-johnson-vd0gld
+  pull_request_number: 78
   status: in progress
   track: pass
+  session: https://claude.ai/code/session_019kfZx96oM3oTs6tFA2DXRQ
   depends_on: []
   notes: 'The script builds the compare-and-create link; the upstream pull request opens with
     a title and a point-based summary linking back to the fork pull request; nothing sends
