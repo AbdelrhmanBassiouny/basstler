@@ -20,10 +20,13 @@ from types import ModuleType
 import pytest
 
 import basstler.class_property
+import basstler.dashboard.exceptions
 import basstler.dashboard.plan_page
 import basstler.dashboard.publication
 import basstler.dashboard.refresh_support
 import basstler.environment
+import basstler.exceptions
+import basstler.exit_codes
 import basstler.locations
 import basstler.plan.sync_manifest_status
 import basstler.standard_streams
@@ -125,6 +128,9 @@ def scratch_project_root(tmp_path: Path) -> Path:
         for module in (
             basstler.dashboard.refresh_support,
             basstler.dashboard.publication,
+            basstler.dashboard.exceptions,
+            basstler.exceptions,
+            basstler.exit_codes,
             basstler.class_property,
             basstler.environment,
             basstler.locations,

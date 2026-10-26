@@ -1,46 +1,6 @@
 #!/usr/bin/env python3
 """
-Render a single plan's dashboard HTML from its manifest + live GitHub data.
-
-Generic, plan-agnostic: every plan-specific value (title, items, tracking
-link, ...) comes from the inputs below, never hardcoded here. This is the
-deterministic half of /plan-dashboard - the skill (SKILL.md) is responsible
-for gathering the inputs (git show on the personal-notes branch, GitHub API
-calls) and for the one step this script cannot do itself: calling the
-Artifact tool to publish the HTML this script produces.
-
-Usage:
-    python3 dashboard/plan_page.py \\
-        --plan /tmp/plan.yaml \\
-        --roadmap /tmp/roadmap.md \\
-        --pr-data /tmp/pr_data.json \\
-        (--output /tmp/dashboard.html | --artifact-directory /tmp/dashboard) \\
-        [--tracking-url "https://github.com/<owner>/<repo>/issues/<n>"] \\
-        [--plans-dir /tmp/plans]
-
---plans-dir is the directory holding every plan as <plan-id>/plan.yaml. A
-depends_on entry of the form <plan-id>/<item-id> resolves against it, so a manifest carrying
-one is rejected without it rather than passing unchecked.
-
-pr_data.json shape: {"<owner>/<repo>": {"<pr_number>": {"state": "open"|
-"closed", "draft": bool, "merged_at": str|null, "labels": [str, ...]}}} -
-one entry per pull request number referenced by any item. A closed entry
-must carry merged_at explicitly, null included; omitting it is rejected
-rather than read as unmerged. See pr-data-fetching.md (next to this script)
-for how a session should gather it.
-
---output writes the dashboard as one self-contained page. --artifact-directory
-writes the files its Artifact is published as (see
-basstler.locations.DashboardArtifactFile) instead.
-
-Prints a one-line JSON summary to stdout (status counts, drift count,
-ready-to-start/blocker-maybe-cleared item titles, and with --artifact-directory the
-content_digest of the files written) so the calling skill can report back without
-re-parsing the HTML it just wrote.
-
-Requires PyYAML (manifest parsing), Jinja2 (page rendering, via
-render_common.create_template_environment), and the ``markdown`` package
-(roadmap.md -> HTML), plus rustworkx for the depends_on graph.
+Render one plan's dashboard from its manifest, roadmap and pull-request state.
 """
 
 from __future__ import annotations
@@ -664,8 +624,6 @@ class DashboardRenderer(TemplatePage):
 def main() -> int:
     """
     Parse arguments, validate the manifest, render the dashboard, and print its summary.
-
-    See the module docstring for the CLI contract.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter

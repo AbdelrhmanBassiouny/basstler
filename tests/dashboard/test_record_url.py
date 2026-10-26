@@ -21,7 +21,7 @@ from basstler.dashboard.record_url import (
     MalformedArtifactUrlError,
     UnlistedArtifactUrlError,
     append_position,
-    apply_content_digest_record,
+    PatchedCache,
     apply_url_record,
     find_cache_entry_line,
     load_artifact_listing,
@@ -285,7 +285,11 @@ def test_a_digest_is_recorded_in_a_cache_that_has_none() -> None:
     """
     The first digest adds the section, leaving every URL as it was.
     """
-    patched = apply_content_digest_record(CACHE_TEXT, "beta-plan", FRESH_DIGEST)
+    patched = (
+        PatchedCache(text=CACHE_TEXT, previous_url=None)
+        .with_content_digest("beta-plan", FRESH_DIGEST)
+        .text
+    )
     assert DashboardUrlCache.from_yaml(patched) == DashboardUrlCache(
         urls=DashboardUrlCache.from_yaml(CACHE_TEXT).urls,
         content_digests={"beta-plan": FRESH_DIGEST},
@@ -296,8 +300,10 @@ def test_a_new_digest_replaces_the_recorded_one_in_place() -> None:
     """
     Only the addressed key's digest line changes.
     """
-    patched = apply_content_digest_record(
-        DIGESTED_CACHE_TEXT, "alpha-plan", FRESH_DIGEST
+    patched = (
+        PatchedCache(text=DIGESTED_CACHE_TEXT, previous_url=None)
+        .with_content_digest("alpha-plan", FRESH_DIGEST)
+        .text
     )
     changed_lines = set(DIGESTED_CACHE_TEXT.split("\n")) ^ set(patched.split("\n"))
     assert changed_lines == {
@@ -310,8 +316,10 @@ def test_a_digest_for_another_key_joins_the_section() -> None:
     """
     A second dashboard's digest sits beside the first, under the same section.
     """
-    patched = apply_content_digest_record(
-        DIGESTED_CACHE_TEXT, "beta-plan", FRESH_DIGEST
+    patched = (
+        PatchedCache(text=DIGESTED_CACHE_TEXT, previous_url=None)
+        .with_content_digest("beta-plan", FRESH_DIGEST)
+        .text
     )
     assert DashboardUrlCache.from_yaml(patched).content_digests == {
         "alpha-plan": ALPHA_DIGEST,
@@ -323,8 +331,10 @@ def test_recording_the_same_digest_leaves_the_text_unchanged() -> None:
     """
     A republish of identical content moves nothing, so nothing is pushed for it.
     """
-    patched = apply_content_digest_record(
-        DIGESTED_CACHE_TEXT, "alpha-plan", ALPHA_DIGEST
+    patched = (
+        PatchedCache(text=DIGESTED_CACHE_TEXT, previous_url=None)
+        .with_content_digest("alpha-plan", ALPHA_DIGEST)
+        .text
     )
     assert patched == DIGESTED_CACHE_TEXT
 
@@ -334,7 +344,11 @@ def test_recording_no_digest_removes_the_recorded_one() -> None:
     A page published without a digest no longer claims the old one, so the next refresh
     cannot report it unchanged.
     """
-    patched = apply_content_digest_record(DIGESTED_CACHE_TEXT, "alpha-plan", None)
+    patched = (
+        PatchedCache(text=DIGESTED_CACHE_TEXT, previous_url=None)
+        .with_content_digest("alpha-plan", None)
+        .text
+    )
     assert "alpha-plan" not in DashboardUrlCache.from_yaml(patched).content_digests
 
 
@@ -342,7 +356,12 @@ def test_recording_no_digest_in_a_cache_that_has_none_changes_nothing() -> None:
     """
     The index, which carries no digest, leaves the cache text alone.
     """
-    assert apply_content_digest_record(CACHE_TEXT, "_index", None) == CACHE_TEXT
+    assert (
+        PatchedCache(text=CACHE_TEXT, previous_url=None)
+        .with_content_digest("_index", None)
+        .text
+        == CACHE_TEXT
+    )
 
 
 # %% the command line

@@ -8,17 +8,17 @@ import sys
 
 import pytest
 
+from basstler.dashboard.exceptions import SummaryKeyCollisionError
 from basstler.dashboard.publication import (
+    DashboardBuildSummary,
     DashboardUrlCache,
     PublicationCheck,
     PublicationField,
 )
 from basstler.dashboard.refresh_support import (
-    SummaryKeyCollisionError,
-    check_publication,
+    RefreshSummary,
     count_corrected,
     main,
-    merge_summaries,
 )
 
 from ..constants.paths import DatasetLocation
@@ -36,13 +36,13 @@ def test_count_corrected_zero_when_nothing_corrected():
     assert count_corrected(summary) == 0
 
 
-# %% merge_summaries
+# %% merging the step summaries
 
 
 def test_merge_summaries_combines_both_objects():
     sync_summary = json.dumps({"corrected": [{"id": "a"}]})
     build_summary = json.dumps({"status_counts": {"done": 1}, "drift_count": 0})
-    merged = merge_summaries(sync_summary, build_summary)
+    merged = RefreshSummary.from_step_summaries(sync_summary, build_summary).entries
     assert merged == {
         "corrected": [{"id": "a"}],
         "status_counts": {"done": 1},
@@ -54,7 +54,7 @@ def test_merge_summaries_raises_on_a_shared_key_instead_of_silently_dropping_one
     sync_summary = json.dumps({"corrected": [{"id": "a"}], "drift_count": 1})
     build_summary = json.dumps({"drift_count": 0})
     with pytest.raises(SummaryKeyCollisionError, match="drift_count"):
-        merge_summaries(sync_summary, build_summary)
+        RefreshSummary.from_step_summaries(sync_summary, build_summary)
 
 
 # %% main - subcommand dispatch
@@ -95,11 +95,11 @@ def test_main_dispatches_merge_summaries(monkeypatch, capsys):
 
 
 def test_merge_summaries_combines_any_number_of_objects():
-    merged = merge_summaries(
+    merged = RefreshSummary.from_step_summaries(
         json.dumps({"corrected": []}),
         json.dumps({"drift_count": 0}),
         json.dumps({PublicationField.UNCHANGED: True}),
-    )
+    ).entries
     assert merged == {
         "corrected": [],
         "drift_count": 0,
@@ -107,7 +107,7 @@ def test_merge_summaries_combines_any_number_of_objects():
     }
 
 
-# %% check_publication
+# %% the publication check
 
 
 DIGESTED_CACHE_TEXT = (
@@ -125,18 +125,10 @@ def build_summary_with_digest(content_digest: str) -> str:
     )
 
 
-def test_check_publication_reads_the_digest_from_the_build_summary():
-    cache = DashboardUrlCache.from_yaml(DIGESTED_CACHE_TEXT)
-    recorded_digest = cache.content_digests["alpha-plan"]
-    assert check_publication(
-        build_summary_with_digest(recorded_digest), "alpha-plan", DIGESTED_CACHE_TEXT
-    ) == cache.check("alpha-plan", recorded_digest)
-
-
-def test_check_publication_without_a_cache_has_nowhere_to_publish_to():
-    assert check_publication(
-        build_summary_with_digest("a" * 64), "alpha-plan", ""
-    ) == PublicationCheck(url=None, unchanged=False)
+def test_a_build_summary_reads_its_content_digest():
+    assert DashboardBuildSummary.from_json(
+        build_summary_with_digest("a" * 64)
+    ) == DashboardBuildSummary(content_digest="a" * 64)
 
 
 def test_main_dispatches_check_publication(monkeypatch, capsys, tmp_path):

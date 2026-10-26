@@ -6,6 +6,7 @@ publishing at all.
 from __future__ import annotations
 
 import hashlib
+import json
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
@@ -72,6 +73,26 @@ class DashboardArtifact:
         """
         for file, content in self.files.items():
             (directory / file).write_text(content)
+
+
+@dataclass(frozen=True)
+class DashboardBuildSummary:
+    """
+    The part of a dashboard build's printed summary that decides its publication.
+    """
+
+    content_digest: str
+    """
+    The :attr:`DashboardArtifact.content_digest` of the files the build wrote.
+    """
+
+    @classmethod
+    def from_json(cls, text: str) -> DashboardBuildSummary:
+        """
+        :param text: The build's printed JSON summary.
+        :return: The summary it holds.
+        """
+        return cls(content_digest=json.loads(text)[PublicationField.CONTENT_DIGEST])
 
 
 # %% the url cache
