@@ -9,8 +9,8 @@ the reasoning behind them, for whoever changes the skill or the executor. The wo
 - A fork pull request's base branch is its parent in the stack.
 - A fork pull request stays a draft until its author has reviewed it; taking it out of draft is the
   only signal that it may be promoted. Nothing else grants approval.
-- The `in-review` label means the branch was promoted. Only the developer adds it, once they have
-  clicked Create on the upstream link.
+- The `in-review` label means the branch is under upstream review. A session never writes it
+  itself.
 - A branch that is an ancestor of the upstream base has landed.
 
 ## Why the pass never touches code or reviews
@@ -24,8 +24,9 @@ the per-event handler that makes a session investigate, plan and reply - which i
 run turns into review work. So CI is learned by polling, and a review event that reaches the pass
 ends its turn.
 
-The Workflow tool fans work out to subagents; for a short sequence of git and API calls that only
-multiplies the chance of two agents pushing the same branch.
+Claude Code's Workflow tool - not a GitHub Actions workflow - fans work out to subagents; for a
+short sequence of git and API calls that only multiplies the chance of two agents pushing the same
+branch. Nothing in a pass needs it: the executor fast-forwards and merges with plain git.
 
 ## Why reparenting comes first
 
@@ -36,13 +37,14 @@ it is what lets the fast-forward finish it.
 `reparents` decides by git ancestry, so it also covers a base whose own pull request was *closed*
 rather than merged - one absent from the board entirely.
 
-### The 403: base changes go through the MCP server
+### Base changes stay with the session
 
-A raw `PATCH /repos/{owner}/{repo}/pulls/{number}` with curl and `GH_TOKEN` is refused with
-`403 - Changing a pull request's base branch is not permitted for this session type`, however the
-body is formed. The block is on that credential, not on the operation, so retrying or reshaping the
-request cannot get past it; the MCP `update_pull_request` tool can. It is also why the executor
-never makes a base change itself and leaves `reparents` to the next pass's step 1.
+The executor never changes a base itself and leaves `reparents` to step 1. That followed from a
+session's `GH_TOKEN` being refused a base change with a 403. On 2026-10-26 the same
+`PATCH /repos/{owner}/{repo}/pulls/{number}` with `{"base": ...}` and
+`Content-Type: application/json` succeeded both ways, so the refusal no longer holds and moving
+the reparent into the executor is open work. Until it lands, the session makes the change with the
+MCP `update_pull_request` tool.
 
 ### The 422: native stacks
 
