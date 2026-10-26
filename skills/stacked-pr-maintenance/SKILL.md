@@ -25,14 +25,18 @@ Reparent pull requests whose base has landed, run the pass, report. Why each rul
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+require_basstler_python
 "${BASSTLER_PYTHON}" -m basstler.stack configuration [--fork <owner/repo>] [--upstream <owner/repo>]
 ```
 
 Pass `fork=` / `upstream=` arguments straight through. Never inspect or guess at remotes yourself.
+`require_basstler_python` waits for a session start still installing the package, and stops with
+what to run if it is not installed; report that and stop. `configuration` adds a missing upstream
+remote itself.
 
 | exit | what you do |
 |---|---|
-| 0 | use it; if it printed `upstream_setup_command`, run that and re-run |
+| 0 | use it; if it still printed `upstream_setup_command`, adding the remote failed: run that and re-run |
 | 4 | ask which repository is the fork (options from `git remote -v`), write `fork_repository = "<owner/repo>"` to a file and save it with `"${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" --source <file> --destination .claude/personal/stack.toml --message "record which repository is my fork"`, re-run |
 | 11 | ask for the upstream, save it with `"${BASSTLER_PYTHON}" -m basstler.setup.steps configure-upstream --repository <owner/repo>`, re-run |
 | other | stop and report |
@@ -63,9 +67,10 @@ fast-forward the landed base to get around a 422.
 
 ## Step 2 - run the pass
 
-First, for every branch `"${BASSTLER_PYTHON}" -m basstler.stack next --porcelain` names, read
-its diff against its parent and write what its upstream pull request opens with, as a JSON
-document in your scratchpad keyed by fork pull request number:
+First run `"${BASSTLER_PYTHON}" -m basstler.stack next --context`. It prints, per branch ready to be
+promoted, its `diff --stat` against its base, its commit subjects and its fork pull request's
+description. Write each summary from that alone - do not read the diffs - as a JSON document in
+your scratchpad keyed by fork pull request number:
 
 ```json
 {"<number>": {"title": "<title in the upstream's own convention>", "points": ["<point>", "..."]}}
@@ -78,7 +83,8 @@ fields are optional; a branch you write nothing for opens with its fork title an
 "${BASSTLER_PYTHON}" -m basstler.maintenance run-report --summaries <the document>
 ```
 
-Do not re-derive its output, look up titles, or run the individual commands as well.
+Do not re-derive its output, look up titles, or run the individual commands as well. It opens with
+the status and a `Sections:` line counting each section; read on only as far as you need.
 
 | status | what you do |
 |---|---|
@@ -96,8 +102,14 @@ Do not re-derive its output, look up titles, or run the individual commands as w
 
 ## Step 3 - check CI on what was pushed
 
-Poll `pull_request_read` → `get_check_runs` / `get_status` for each branch the pass pushed; read only
-the conclusion and do not wait on a long run. For a failing check, never debug it or disable it:
+Run once, naming each branch the `Restacked` section lists as pushed:
+
+```bash
+"${BASSTLER_PYTHON}" -m basstler.maintenance ci-status --branch <branch> [--branch <branch> ...]
+```
+
+It prints `branch<TAB>state<TAB>failing checks` per branch. Report `pending` and `no-checks` as
+pending; do not poll again or wait. For a `failure`, never debug the check or disable it:
 
 - comment on the fork pull request, prefixed `🔴 MAINTENANCE - NEEDS RESOLUTION:`, naming the check
   and its conclusion, written to stand alone;

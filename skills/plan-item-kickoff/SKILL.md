@@ -119,6 +119,7 @@ git commit --allow-empty -m "Bootstrap <item-id>"
 git push -u origin <branch>
 # then create the draft pull request with your GitHub tool, and:
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+require_basstler_python
 "${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" open \
     --plan <plan-id> --item <item-id> \
     --branch <branch> --base <base-branch> \
