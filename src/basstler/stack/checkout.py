@@ -67,6 +67,27 @@ class GitArgument(StrEnum):
     Makes :attr:`MERGE_BASE` answer whether the first commit is contained in the second.
     """
 
+    FOR_EACH_REFERENCE = "for-each-ref"
+    """
+    Lists the references under a prefix.
+    """
+
+    MERGED = "--merged"
+    """
+    Makes :attr:`FOR_EACH_REFERENCE` list only the references contained in the commit
+    given with it.
+    """
+
+    REFERENCE_NAME_FORMAT = "--format=%(refname)"
+    """
+    Makes :attr:`FOR_EACH_REFERENCE` print each reference's full name, one per line.
+    """
+
+    REMOTE_REFERENCES = "refs/remotes"
+    """
+    The prefix every remote-tracking reference's full name starts with.
+    """
+
     MERGE_TREE = "merge-tree"
     """
     Merges two commits without touching the work tree.
@@ -215,19 +236,22 @@ class CurrentCheckout:
         """
         :param configuration: The static configuration.
         :return: A predicate testing whether a fork branch is an ancestor of the upstream
-            base.
+            base, as both stood when the predicate was built.
         """
-        upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
-
-        def is_merged(name: str) -> bool:
-            return cls.succeeds(
-                GitArgument.MERGE_BASE,
-                GitArgument.IS_ANCESTOR,
-                configuration.reference_on_fork(name),
-                upstream,
-            )
-
-        return is_merged
+        fork_references = (
+            f"{GitArgument.REMOTE_REFERENCES}/{configuration.fork_remote}/"
+        )
+        landed = frozenset(
+            reference.removeprefix(fork_references)
+            for reference in cls.output(
+                GitArgument.FOR_EACH_REFERENCE,
+                f"{GitArgument.MERGED}={configuration.upstream_remote}/"
+                f"{configuration.upstream_base}",
+                GitArgument.REFERENCE_NAME_FORMAT,
+                fork_references,
+            ).splitlines()
+        )
+        return landed.__contains__
 
     @classmethod
     def ancestry_predicate(

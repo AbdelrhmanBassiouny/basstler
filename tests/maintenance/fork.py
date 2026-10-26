@@ -36,7 +36,6 @@ from ..scratch_repository import initialize_bare_repository
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName, StackBranch, StackLabel
 
-
 # %% shared maintenance inputs
 
 
@@ -322,9 +321,10 @@ class ForkCheckout:
         """
         :param branch: The branch whose own file is wanted.
         :return: The file :meth:`branch_from` writes to give that branch a commit of its
-            own, which is also what a test rewrites to move it.
+            own, which is also what a test rewrites to move it. It sits at the top of
+            the checkout whatever slashes the branch name has.
         """
-        return f"{branch}-file"
+        return f"{branch.replace('/', '-')}-file"
 
     def commit_on(self, branch: str, name: str, content: str) -> str:
         """
