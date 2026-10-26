@@ -142,8 +142,10 @@ A `merge`-strategy branch is restacked by merging its parent's moved tip in, so 
 that waits through many passes would collect one merge per pass. Instead, each restack drops the
 merges it made earlier at the branch's tip that only brought in what the branch is about to hold
 anyway, and merges the parent's current tip in once - so the branch carries a single restack merge
-however long it waits. A restack marks its merges with a `Restacked-parent:` trailer, and only
-merges carrying it are ever dropped: a merge somebody made by hand is kept. A marked merge is
+however long it waits. A restack marks its merges with a `Restacked-parent:` trailer naming the
+parent and a `Restacked-parent-commit:` trailer naming the parent commit it merged in, and only
+merges carrying both, with that commit being the one actually merged in, are ever dropped: a merge
+somebody made by hand is kept, even one reusing an earlier restack merge's message. A marked merge is
 dropped only when the parent and the branch's own commits together hold every change it brought
 in - which still holds after the branch is reparented onto a base that lacks its former parent's
 commits - and its content is exactly what merging its two sides produces: a merge carrying a

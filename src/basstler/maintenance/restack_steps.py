@@ -325,10 +325,13 @@ class BranchUnderRestack:
     @property
     def merge_message(self) -> str:
         """:return: The message of the merge integrating the parent, marked as the
-        restack's own by :attr:`CommitTrailer.RESTACKED_PARENT`."""
+        restack's own by :attr:`CommitTrailer.RESTACKED_PARENT` and
+        :attr:`CommitTrailer.RESTACKED_PARENT_COMMIT`."""
         return (
             f"Merge {self.parent_reference} into {self.branch.name}\n\n"
-            f"{CommitTrailer.RESTACKED_PARENT}: {self.parent_reference}"
+            f"{CommitTrailer.RESTACKED_PARENT}: {self.parent_reference}\n"
+            f"{CommitTrailer.RESTACKED_PARENT_COMMIT}: "
+            f"{self.git.commit_at(self.parent_reference)}"
         )
 
     def concluded(self, outcome: RestackOutcome, **detail: Any) -> BranchOutcome:
@@ -358,7 +361,9 @@ class SupersededMerges:
     the parent and the branch's own line beneath it together hold every change it brought
     in, and its content is exactly what merging its two parents produces - so it carries
     no work of its own, and merging the parent's current tip into the commit beneath it
-    reproduces everything it held. A merge a person made is never superseded.
+    reproduces everything it held. A restack's merge carries both
+    :class:`CommitTrailer` trailers, the commit one naming the parent commit it merged in;
+    a merge a person made, even one reusing a restack's message, is never superseded.
     """
 
     git: GitCommandRunner
@@ -390,7 +395,11 @@ class SupersededMerges:
         match self.git.parents_of(commit):
             case (own_line, merged_in):
                 return (
-                    self.git.carries_trailer(commit, CommitTrailer.RESTACKED_PARENT)
+                    self.git.trailer_value(commit, CommitTrailer.RESTACKED_PARENT) != ""
+                    and self.git.trailer_value(
+                        commit, CommitTrailer.RESTACKED_PARENT_COMMIT
+                    )
+                    == merged_in
                     and not self.git.contains(own_line, self.parent_reference)
                     and self.git.adds_only_merges(
                         merged_in, self.parent_reference, own_line

@@ -304,17 +304,16 @@ class GitCommandRunner:
             unmerged paths behind."""
         return self.attempt("merge", "--no-edit", "--message", message, reference)
 
-    def carries_trailer(self, commit: str, trailer: CommitTrailer) -> bool:
+    def trailer_value(self, commit: str, trailer: CommitTrailer) -> str:
         """:param commit: Any reference git can resolve to a commit.
-        :param trailer: The trailer key looked for.
-        :return: Whether the commit's message carries that trailer."""
-        return bool(
-            self.run(
-                "log",
-                "--max-count=1",
-                f"--format=%(trailers:key={trailer},valueonly)",
-                commit,
-            )
+        :param trailer: The trailer key read.
+        :return: The value the commit's message gives that trailer, empty when it has
+            none."""
+        return self.run(
+            "log",
+            "--max-count=1",
+            f"--format=%(trailers:key={trailer},valueonly)",
+            commit,
         )
 
     def rebase(self, reference: str) -> GitCommandResult:

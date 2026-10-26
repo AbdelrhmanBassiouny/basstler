@@ -271,6 +271,46 @@ def test_a_merge_of_the_parent_made_by_hand_is_kept(fork_checkout: ForkCheckout)
     )
 
 
+def test_a_hand_made_merge_reusing_a_restack_message_is_kept(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on(StackBranch.PARENT, "a-parent-file", "the parent moved\n")
+    restack_once(fork_checkout)
+    restack_message = fork_checkout.run_git(
+        "log",
+        "--max-count=1",
+        "--format=%B",
+        f"{RemoteName.ORIGIN}/{StackBranch.CHILD}",
+    )
+    fork_checkout.commit_on(StackBranch.PARENT, "a-parent-file", "moved again\n")
+    fork_checkout.run_git(
+        "checkout",
+        "--quiet",
+        "-B",
+        StackBranch.CHILD,
+        f"{RemoteName.ORIGIN}/{StackBranch.CHILD}",
+    )
+    fork_checkout.run_git(
+        "merge", "--quiet", "--message", restack_message, StackBranch.PARENT
+    )
+    fork_checkout.run_git(
+        "push", "--quiet", RemoteName.ORIGIN, f"{StackBranch.CHILD}:{StackBranch.CHILD}"
+    )
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
+    hand_made_merge = fork_checkout.published_commit(
+        RemoteName.ORIGIN, StackBranch.CHILD
+    )
+    fork_checkout.commit_on(StackBranch.PARENT, "a-parent-file", "and again\n")
+
+    child = restack_once(fork_checkout)[StackBranch.CHILD]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(
+        hand_made_merge, f"{RemoteName.ORIGIN}/{StackBranch.CHILD}"
+    )
+
+
 def test_replacing_a_merge_never_overwrites_a_push_the_pass_did_not_see(
     fork_checkout: ForkCheckout,
 ):

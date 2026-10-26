@@ -86,6 +86,12 @@ class CommitTrailer(StrEnum):
     than one a person made.
     """
 
+    RESTACKED_PARENT_COMMIT = "Restacked-parent-commit"
+    """
+    The commit of the parent a restack merged in, which a restack's own merge records as
+    its second parent.
+    """
+
 
 class MergeableState(StrEnum):
     """
