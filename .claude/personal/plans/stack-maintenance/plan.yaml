@@ -24,10 +24,12 @@ items:
   track: pass
   session: https://claude.ai/code/session_019kfZx96oM3oTs6tFA2DXRQ
   depends_on: []
-  notes: 'The script builds the compare-and-create link; the upstream pull request opens with
-    a title and a point-based summary linking back to the fork pull request; nothing sends
-    a notification. The session table of links moved to finish-summary-markdown. Not started
-    here: CRAM #162''s bastler/-era branch is retired in #50, whose last commit is the reference.'
+  notes: >
+    Draft #78 on main: run-report/promote take --summaries (points and optional title per fork pull
+    request); the upstream pull request opens with the bullets and a link back, or the link back
+    alone. The first-paragraph derivation is removed. Link building and the session table were
+    already on main (finish-summary-markdown); nothing sends a notification. Rebuilt from #50's
+    reference commit, without its PromotionOutcome or GitHubLinks.
 - id: stack-state-from-github
   title: Derive in-review and CI from GitHub instead of hand-kept labels
   branch: claude/cool-bardeen-3jxrd1
