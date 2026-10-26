@@ -27,7 +27,6 @@ from basstler.maintenance.github import ForkPullRequests, PullRequestWriter
 from basstler.stack.label_write import LabelWrite
 from basstler.stack.model import BranchStatus, Stack
 from basstler.stack.promotion_link import PromotionLink
-from basstler.stack.settings import Configuration
 
 # %% the summaries a caller writes
 
@@ -79,12 +78,19 @@ class PromotionSummary:
             title=data.get(PromotionSummaryField.TITLE),
         )
 
-    @property
-    def bullet_list(self) -> str:
+    def upstream_description(self, fork_pull_request_url: str) -> str:
         """
-        The points as a markdown bullet list, empty when there are none.
+        Build what the upstream pull request's description opens with.
+
+        :param fork_pull_request_url: The fork pull request this summary was written for.
+        :return: The points as a markdown bullet list where there are any, then the link
+            back to the fork pull request.
         """
-        return "\n".join(f"- {point}" for point in self.points)
+        link_back = f"{MaintenanceText.FULL_DETAIL} {fork_pull_request_url}"
+        if not self.points:
+            return link_back
+        bullet_list = "\n".join(f"- {point}" for point in self.points)
+        return f"{bullet_list}\n\n{link_back}"
 
 
 @dataclass(frozen=True)
@@ -197,7 +203,9 @@ def promote(
             branch.name,
             summary.title
             or str(PullRequestField.TITLE.read(pull_request, number) or branch.name),
-            _prefilled_description(summary, number, stack.configuration),
+            summary.upstream_description(
+                stack.configuration.fork_repository.pull_request_url(number)
+            ),
         )
         fork.set_description(
             number,
@@ -218,25 +226,6 @@ def promote(
             )
         )
     return promoted
-
-
-def _prefilled_description(
-    summary: PromotionSummary, pull_request_number: int, configuration: Configuration
-) -> str:
-    """
-    Build what the upstream pull request's description opens with.
-
-    :param summary: What was written for the upstream reviewer, if anything.
-    :param pull_request_number: The fork pull request, to link back to.
-    :param configuration: The resolved configuration, naming the fork.
-    :return: The points where there are any, then the link back to the fork pull request.
-    """
-    detail = (
-        f"{MaintenanceText.FULL_DETAIL} "
-        f"{configuration.fork_repository.pull_request_url(pull_request_number)}"
-    )
-    points = summary.bullet_list
-    return f"{points}\n\n{detail}" if points else detail
 
 
 def clear_spent_promotion_labels(

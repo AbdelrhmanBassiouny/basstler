@@ -5,7 +5,6 @@ Tests for promoting approved, unblocked branches to the upstream review queue.
 from __future__ import annotations
 
 import argparse
-from urllib.parse import parse_qs, urlsplit
 
 import pytest
 
@@ -26,6 +25,7 @@ from basstler.stack.promotion_link import PromotionLinkParameter
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch, StackLabel
+from ..stack.dataset import prefilled
 
 from .fork import (
     StackPullRequestNumber,
@@ -160,15 +160,6 @@ def test_a_promoted_branch_that_reached_review_has_its_link_label_removed(
 
 
 # %% what the upstream pull request opens with
-
-
-def prefilled(url: str, parameter: PromotionLinkParameter) -> str:
-    """
-    :param url: A compare-and-create link.
-    :param parameter: The prefill to read.
-    :return: The decoded value the upstream pull request form opens with.
-    """
-    return parse_qs(urlsplit(url).query)[parameter][0]
 
 
 def link_back_to(pull_request_number: int) -> str:
