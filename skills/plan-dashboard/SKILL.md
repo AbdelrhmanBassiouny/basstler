@@ -44,6 +44,16 @@ the check, and if it reports anything missing, run `/setup-personal-notes`
 without asking first, rather than failing later on a missing branch or an
 `ImportError`.
 
+## Where the files go
+
+Every file this skill writes goes under `<scratchpad>`: this session's
+scratchpad directory, which its system prompt names, or - in a session without
+one - a directory under the working directory that git ignores. Never `/tmp`:
+the `Artifact` tool refuses to publish a file from outside the working
+directory and the scratchpad, so a dashboard rendered there has to be copied
+before it can be published. Create the directory first (`mkdir -p
+<scratchpad>/dashboard`).
+
 ## 1. Resolve mode and fetch the plan data
 
 Determine mode from the invocation argument: a `<plan-id>` argument means
@@ -76,8 +86,8 @@ git cat-file -e "${PERSONAL_NOTES_REFERENCE}:.claude/personal/plans/<plan-id>/pl
   git ls-tree -r --name-only "${PERSONAL_NOTES_REFERENCE}" | grep -E '^\.claude/personal/plans/[^/]+/plan\.yaml$'
   exit 1
 }
-git show "${PERSONAL_NOTES_REFERENCE}:.claude/personal/plans/<plan-id>/plan.yaml" > /tmp/plan.yaml
-git show "${PERSONAL_NOTES_REFERENCE}:.claude/personal/plans/<plan-id>/roadmap.md" > /tmp/roadmap.md  # roadmap.md is always the fixed filename, never configurable
+git show "${PERSONAL_NOTES_REFERENCE}:.claude/personal/plans/<plan-id>/plan.yaml" > <scratchpad>/plan.yaml
+git show "${PERSONAL_NOTES_REFERENCE}:.claude/personal/plans/<plan-id>/roadmap.md" > <scratchpad>/roadmap.md  # roadmap.md is always the fixed filename, never configurable
 ```
 
 Also extract every plan's manifest, into one directory — a `depends_on` entry
@@ -87,9 +97,9 @@ extraction whether the manifest uses the form or not, so do it every run
 rather than reading the manifest first to find out:
 
 ```bash
-mkdir -p /tmp/plans
+mkdir -p <scratchpad>/plans
 git archive "${PERSONAL_NOTES_REFERENCE}" "${PLANS_DIR}" \
-  | tar -x --strip-components=3 -C /tmp/plans --wildcards '*/plan.yaml'
+  | tar -x --strip-components=3 -C <scratchpad>/plans --wildcards '*/plan.yaml'
 ```
 
 Manifests only, and no roadmaps: the tooling opens a plan's manifest only when
@@ -113,8 +123,8 @@ Copy the generated URL cache to a file without reading it; the refresh reports t
 URL it holds. It is absent before a first publish, which is not an error:
 
 ```bash
-git show "${PERSONAL_NOTES_REFERENCE}:${DASHBOARD_URL_CACHE_PATH}" > /tmp/dashboard-urls.yaml 2>/dev/null \
-  || : > /tmp/dashboard-urls.yaml
+git show "${PERSONAL_NOTES_REFERENCE}:${DASHBOARD_URL_CACHE_PATH}" > <scratchpad>/dashboard-urls.yaml 2>/dev/null \
+  || : > <scratchpad>/dashboard-urls.yaml
 ```
 
 If a plan has a `tracking_issue`, resolve its `html_url` (via
@@ -129,7 +139,7 @@ when the fallback applies.
 ## 2. Cross-check every item's PR against live GitHub state, sync, then run the script
 
 Follow `pr-data-fetching.md`'s procedure (next to this file) to assemble
-`/tmp/pr_data.json` for every pull request referenced by any item in this
+`<scratchpad>/pr_data.json` for every pull request referenced by any item in this
 plan, plus any pull request a cross-plan `depends_on` entry names — the
 dashboard shows that foreign item's live state too, against its own plan's
 repository.
@@ -140,12 +150,12 @@ rather than reproducing its steps by hand:
 ```bash
 bash "${REFRESH_DASHBOARD_SCRIPT}" \
   --plan-id <plan-id> \
-  --plan /tmp/plan.yaml \
-  --roadmap /tmp/roadmap.md \
-  --pr-data /tmp/pr_data.json \
-  --artifact-directory /tmp/dashboard \
-  --url-cache /tmp/dashboard-urls.yaml \
-  --plans-dir /tmp/plans \
+  --plan <scratchpad>/plan.yaml \
+  --roadmap <scratchpad>/roadmap.md \
+  --pr-data <scratchpad>/pr_data.json \
+  --artifact-directory <scratchpad>/dashboard \
+  --url-cache <scratchpad>/dashboard-urls.yaml \
+  --plans-dir <scratchpad>/plans \
   --tracking-url "<html_url from step 1, if any>"   # omit if the plan has no tracking_issue
 ```
 
@@ -225,8 +235,8 @@ list, then:
 
 ```bash
 "${BASSTLER_PYTHON}" -m "${BUILD_INDEX_MODULE}" \
-  --plans /tmp/plans.json \
-  --output /tmp/index.html
+  --plans <scratchpad>/plans.json \
+  --output <scratchpad>/index.html
 ```
 
 ## 3. Publish, and keep the URL cache in sync
@@ -236,17 +246,25 @@ publishing for the first time and want to sanity-check the visual design —
 skip this on a routine re-publish of an already-designed dashboard.
 
 The URL to update is the refresh summary's `url`; in index mode, the `_index` line
-of `/tmp/dashboard-urls.yaml` (`grep '^_index:'`). Pass it as `url:` when there is
+of `<scratchpad>/dashboard-urls.yaml` (`grep '^_index:'`). Pass it as `url:` when there is
 one (updates the page in place); omit `url` on a first-ever publish (mints a new one).
 
 A plan's dashboard is a short page plus files, so the read an update needs stays a
-few lines. Publish `/tmp/dashboard/dashboard.html` as `file_path` with
-`files: {"dashboard.css": "/tmp/dashboard/dashboard.css", "dashboard.js":
-"/tmp/dashboard/dashboard.js", "dashboard-content.html":
-"/tmp/dashboard/dashboard-content.html"}`. If this session has not published that
+few lines. Publish `<scratchpad>/dashboard/dashboard.html` as `file_path` with
+`files: {"dashboard.css": "<scratchpad>/dashboard/dashboard.css", "dashboard.js":
+"<scratchpad>/dashboard/dashboard.js", "dashboard-content.html":
+"<scratchpad>/dashboard/dashboard-content.html"}`. If this session has not published that
 URL yet, first `read` it (returns only the short page) and list its files
 (`action: "list"`, `scope: "files"`), since a publish replacing files you have not
-seen is refused. The index is one page, `/tmp/index.html`.
+seen is refused. The index is one page, `<scratchpad>/index.html`.
+
+`dashboard-content.html` is a fragment the page fetches into itself, not a page
+of its own, so it has no `<!doctype html>`; the `Artifact` tool's warning about
+that is expected and needs no investigation.
+
+The first update of a dashboard published before it was split into files - a
+single page with no files - reads that whole page once (well over a thousand
+lines). Every update after it reads only the short page.
 
 **Never skip the `url:` when the cache has one.** Publishing without it mints
 a second artifact for the same plan, and the duplicate cannot be deleted from
@@ -274,9 +292,9 @@ title. Then:
 "${BASSTLER_PYTHON}" -m "${RECORD_DASHBOARD_URL_MODULE}" \
   --key <plan-id or _index> \
   --expected-title "<the plan's own title: from plan.yaml, or the index page's title>" \
-  --listing /tmp/artifact_listing.json \
-  --cache /tmp/dashboard-urls.yaml \
-  --output /tmp/updated-dashboard-urls.yaml \
+  --listing <scratchpad>/artifact_listing.json \
+  --cache <scratchpad>/dashboard-urls.yaml \
+  --output <scratchpad>/updated-dashboard-urls.yaml \
   [--content-digest <the refresh summary's content_digest>]  # a plan's dashboard only
 ```
 
@@ -292,7 +310,7 @@ Push the result back only when it says `"changed": true`, with the same helper
 
 ```bash
 bash "${WRITE_PERSONAL_NOTES_FILE_SCRIPT}" \
-  --source /tmp/updated-dashboard-urls.yaml \
+  --source <scratchpad>/updated-dashboard-urls.yaml \
   --destination "${DASHBOARD_URL_CACHE_PATH}" \
   --message "Record dashboard URL for <plan-id or _index>"
 ```
@@ -330,7 +348,7 @@ repository listed; the session-start summary's `plan site` line prints where
 this session's work sits on it. To build the site by hand:
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${BUILD_SITE_MODULE}" --registry <owner/repo> --output /tmp/site
+"${BASSTLER_PYTHON}" -m "${BUILD_SITE_MODULE}" --registry <owner/repo> --output <scratchpad>/site
 ```
 
 Never publish a hub page as an Artifact: an Artifact belongs to the account
