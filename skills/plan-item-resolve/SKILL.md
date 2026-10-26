@@ -151,8 +151,9 @@ item is already underway rather than being started:
 - **The record is an update, not a first draft.** Rewrite the item's
   `blockers`, `notes` and `status` to say what is true now - replacing a
   blocker whose recorded cause turned out to be wrong rather than adding to
-  it - and refresh the PR-progress note and the pull request description the
-  same way. What the resolution was, and why, belongs in the pull request,
+  it - and refresh the PR-progress note (`save-pr-progress.sh --branch <the
+  item's branch> --source <file>`, as kickoff writes it) and the pull request
+  description the same way. What the resolution was, and why, belongs in the pull request,
   not in `roadmap.md`; add a roadmap entry only for a rule every later item
   must follow. Then republish the dashboard with `/plan-dashboard`.
 - **The pull request goes back to draft after the push**, per the user's own

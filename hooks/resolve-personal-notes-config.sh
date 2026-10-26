@@ -163,8 +163,8 @@ default_branch_name() {
 }
 
 # pr_progress_path: prints the deterministic per-branch PR-progress file path
-# (.claude/personal/pr-progress/<branch>.md) for whichever branch is currently
-# checked out, and returns 0. Returns 1 (prints nothing) if there's no
+# (.claude/personal/pr-progress/<branch>.md) for the branch $1, or for whichever
+# branch is currently checked out when $1 is not given, and returns 0. Returns 1 (prints nothing) if there's no
 # sensible "current PR" to track progress for: detached HEAD, the repo's
 # default branch (see default_branch_name above), or the personal-notes
 # branch itself. The directory is a fixed convention, independent of
@@ -177,8 +177,8 @@ default_branch_name() {
 # path is computed, so it can never drift between reading and writing it.
 PR_PROGRESS_DIRECTORY=".claude/personal/pr-progress"
 pr_progress_path() {
-  local branch
-  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  local branch="${1:-}"
+  [ -n "${branch}" ] || branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
   case "${branch}" in
     HEAD|"$(default_branch_name)"|"${NOTES_BRANCH}"|"") return 1 ;;
   esac
