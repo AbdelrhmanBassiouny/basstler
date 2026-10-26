@@ -296,4 +296,4 @@ class NotesBranchUnavailableError(BootstrapError):
         return f"could not fetch the personal-notes branch: {self.detail}"
 
     def suggest_correction(self) -> str:
-        return f"Run {PluginLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT} first."
+        return f"Run {PluginLocation.PERSONAL_NOTES_BRANCH_CREATION_SCRIPT.path_under_exported_root} first."

@@ -84,7 +84,8 @@ labels the pull request carries now.
 
 A branch with an open upstream pull request is never force-pushed unless it carries `rebase`. The
 executor's restack is the one exception: it replaces the merges earlier passes left at a branch's
-tip with a single new one, under a lease - see
+tip - only those carrying its `Restacked-parent:` and `Restacked-parent-commit:` trailers, never a
+merge made by hand - with a single new one, under a lease - see
 [One restack merge per branch](README.md#one-restack-merge-per-branch).
 
 ## Reporting a red check

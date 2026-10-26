@@ -32,7 +32,7 @@ from basstler.plan.model import (
     ValueStyle,
 )
 
-from ...constants.paths import DatasetLocation
+from ...constants.paths import DatasetLocation, RepositoryLocation
 from ...scratch_repository import ScratchRepository
 from .bootstrap_scenario import (
     EXISTING_ITEM,
@@ -167,7 +167,7 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
         [
             "bash",
             "-c",
-            f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && '
+            f'source "{RepositoryLocation.PLUGIN / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && '
             'printf "%s\\n%s\\n%s\\n" "${PLANS_DIR}" "$(plan_manifest_path "$1")" '
             '"${PLAN_HUB_PATH}"',
             "test",

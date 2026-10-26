@@ -134,6 +134,11 @@ class StackBranch(StrEnum):
     open pull request has it as its head.
     """
 
+    NAMESPACED = "a-namespace/a-branch"
+    """
+    A branch whose name has a slash in it, as session branches do.
+    """
+
 
 class StackLabel(StrEnum):
     """

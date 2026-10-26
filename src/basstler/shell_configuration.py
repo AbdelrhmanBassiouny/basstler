@@ -16,6 +16,7 @@ from pathlib import Path
 
 from basstler.bash import Bash
 from basstler.locations import PluginLocation
+from basstler.plugin_root import PluginRoot
 
 
 class ShellConfigurationFunction(StrEnum):
@@ -66,10 +67,13 @@ class ShellConfigurationFunction(StrEnum):
         :param arguments: The arguments to call the function with.
         :return: The completed process, with output captured as text.
         """
+        configuration = PluginRoot.locate(os.environ).path_of(
+            PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT
+        )
         return subprocess.run(
             Bash.locate(os.environ).command(
                 "-c",
-                f'source "{PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && {self} "$@"',
+                f'source "{configuration}" && {self} "$@"',
                 PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
                 *arguments,
             ),

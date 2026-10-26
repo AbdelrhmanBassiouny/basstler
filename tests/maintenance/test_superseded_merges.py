@@ -17,10 +17,13 @@ from basstler.maintenance.restack_steps import (
     RestackOutcome,
 )
 
+from ..constants.stack import RemoteName, StackBranch
 from .fork import (
     UPSTREAM_BASE,
+    StackPullRequestNumber,
     make_configuration,
     ForkCheckout,
+    a_board_entry,
     a_stack,
     a_parent_and_child,
     the_board,
@@ -185,6 +188,127 @@ def test_a_replacement_that_conflicts_falls_back_to_merging_onto_the_tip(
     assert fork_checkout.git.contains(first_merge, "origin/a-child")
     assert fork.label_writes == []
     assert fork.comments == []
+
+
+def test_a_conflicting_replacement_falls_back_to_the_next_shallower_one(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Merging onto the branch's own commit conflicts, as in
+    :func:`test_a_replacement_that_conflicts_falls_back_to_merging_onto_the_tip`, but
+    merging onto the first of the two superseded merges does not.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on(StackBranch.PARENT, "a-shared-file", "the same change\n")
+    fork_checkout.commit_on(StackBranch.CHILD, "a-shared-file", "the same change\n")
+    restack_once(fork_checkout)
+    first_merge = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
+    fork_checkout.commit_on(
+        StackBranch.PARENT, "a-shared-file", "the parent changed it\n"
+    )
+    restack_once(fork_checkout)
+    second_merge = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.CHILD)
+    fork_checkout.commit_on(StackBranch.PARENT, "a-parent-file", "the parent moved\n")
+
+    child = restack_once(fork_checkout)[StackBranch.CHILD]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(
+        first_merge, f"{RemoteName.ORIGIN}/{StackBranch.CHILD}"
+    )
+    assert not fork_checkout.git.contains(
+        second_merge, f"{RemoteName.ORIGIN}/{StackBranch.CHILD}"
+    )
+
+
+def test_a_reparented_branch_replaces_its_merge_of_the_former_parent(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The child was cut from the parent, so once the parent's pull request is gone and the
+    child is based on the base instead, its merge of the parent brought in nothing that
+    the base and the child's own line do not already hold.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "the base moved\n")
+    restack_once(fork_checkout)
+    merge_of_the_former_parent = fork_checkout.published_commit(
+        RemoteName.ORIGIN, StackBranch.CHILD
+    )
+    fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "the base moved again\n")
+    reparented = [
+        a_board_entry(StackPullRequestNumber.CHILD, StackBranch.CHILD, UPSTREAM_BASE)
+    ]
+
+    child = restack_once(fork_checkout, reparented)[StackBranch.CHILD]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert merges_between(fork_checkout, UPSTREAM_BASE, StackBranch.CHILD) == 1
+    assert not fork_checkout.git.contains(
+        merge_of_the_former_parent, f"{RemoteName.ORIGIN}/{StackBranch.CHILD}"
+    )
+
+
+def test_a_merge_of_the_parent_made_by_hand_is_kept(fork_checkout: ForkCheckout):
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on(StackBranch.PARENT, "a-parent-file", "the parent moved\n")
+    fork_checkout.run_git("checkout", "--quiet", StackBranch.CHILD)
+    fork_checkout.run_git("merge", "--quiet", "--no-edit", StackBranch.PARENT)
+    fork_checkout.run_git(
+        "push", "--quiet", RemoteName.ORIGIN, f"{StackBranch.CHILD}:{StackBranch.CHILD}"
+    )
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
+    hand_made_merge = fork_checkout.published_commit(
+        RemoteName.ORIGIN, StackBranch.CHILD
+    )
+    fork_checkout.commit_on(StackBranch.PARENT, "a-parent-file", "moved again\n")
+
+    child = restack_once(fork_checkout)[StackBranch.CHILD]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(
+        hand_made_merge, f"{RemoteName.ORIGIN}/{StackBranch.CHILD}"
+    )
+
+
+def test_a_hand_made_merge_reusing_a_restack_message_is_kept(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    fork_checkout.commit_on(StackBranch.PARENT, "a-parent-file", "the parent moved\n")
+    restack_once(fork_checkout)
+    restack_message = fork_checkout.run_git(
+        "log",
+        "--max-count=1",
+        "--format=%B",
+        f"{RemoteName.ORIGIN}/{StackBranch.CHILD}",
+    )
+    fork_checkout.commit_on(StackBranch.PARENT, "a-parent-file", "moved again\n")
+    fork_checkout.run_git(
+        "checkout",
+        "--quiet",
+        "-B",
+        StackBranch.CHILD,
+        f"{RemoteName.ORIGIN}/{StackBranch.CHILD}",
+    )
+    fork_checkout.run_git(
+        "merge", "--quiet", "--message", restack_message, StackBranch.PARENT
+    )
+    fork_checkout.run_git(
+        "push", "--quiet", RemoteName.ORIGIN, f"{StackBranch.CHILD}:{StackBranch.CHILD}"
+    )
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
+    hand_made_merge = fork_checkout.published_commit(
+        RemoteName.ORIGIN, StackBranch.CHILD
+    )
+    fork_checkout.commit_on(StackBranch.PARENT, "a-parent-file", "and again\n")
+
+    child = restack_once(fork_checkout)[StackBranch.CHILD]
+
+    assert child.outcome == RestackOutcome.PUSHED
+    assert fork_checkout.git.contains(
+        hand_made_merge, f"{RemoteName.ORIGIN}/{StackBranch.CHILD}"
+    )
 
 
 def test_replacing_a_merge_never_overwrites_a_push_the_pass_did_not_see(
