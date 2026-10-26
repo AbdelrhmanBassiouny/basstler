@@ -1,9 +1,9 @@
 Plan:
-- PluginLocation/PluginSkillLocation members relative to the plugin root; PluginRoot dataclass (from_environment raises PluginRootUnsetError / PluginRootNotADirectoryError; locate)
-- Resolve at use, never at import (CI imports the package with no root)
-- Migrate the 6 call sites; error suggestions name $BASSTLER_PLUGIN_ROOT/hooks/...
+- Plugin root resolved at use via PluginRoot.locate, never at import; PluginLocation members relative
+- Second half: skills export the root themselves if CLAUDE_ENV_FILE cannot carry it (pending reporter)
 Done:
-- Branch, draft PR #76, manifest in progress
+- PluginRoot + PluginRootUnsetError/PluginRootNotADirectoryError, all call sites migrated, tests; pushed
+- Suite: only the 14 env failures main also has
 Next:
-- Failing tests in tests/test_locations.py, then implementation
-- Open: why CLAUDE_ENV_FILE export missed the reporter's session (ask user)
+- Get the reporter's answer on why CLAUDE_ENV_FILE's export missed the session; then fix skills or close the gap
+- Mark PR #76 ready once that half is settled
