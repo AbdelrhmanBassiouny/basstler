@@ -112,6 +112,26 @@ class GitArgument(StrEnum):
     Makes :attr:`BRANCH` print the checked-out branch.
     """
 
+    FOR_EACH_REFERENCE = "for-each-ref"
+    """
+    Lists references, optionally only those a commit contains.
+    """
+
+    MERGED = "--merged"
+    """
+    Makes :attr:`FOR_EACH_REFERENCE` list only the references the given commit contains.
+    """
+
+    REFERENCE_NAME_FORMAT = "--format=%(refname)"
+    """
+    Makes :attr:`FOR_EACH_REFERENCE` print each reference's full name and nothing else.
+    """
+
+    REMOTE_REFERENCES = "refs/remotes"
+    """
+    The namespace holding every remote's tracking references.
+    """
+
 
 class MergeTreeStatus(IntEnum):
     """
@@ -211,25 +231,6 @@ class CurrentCheckout:
         )
 
     @classmethod
-    def merged_predicate(cls, configuration: Configuration) -> Callable[[str], bool]:
-        """
-        :param configuration: The static configuration.
-        :return: A predicate testing whether a fork branch is an ancestor of the upstream
-            base.
-        """
-        upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
-
-        def is_merged(name: str) -> bool:
-            return cls.succeeds(
-                GitArgument.MERGE_BASE,
-                GitArgument.IS_ANCESTOR,
-                configuration.reference_on_fork(name),
-                upstream,
-            )
-
-        return is_merged
-
-    @classmethod
     def ancestry_predicate(
         cls, configuration: Configuration
     ) -> Callable[[str, str], bool]:
@@ -247,3 +248,48 @@ class CurrentCheckout:
             )
 
         return is_ancestor
+
+
+# %% which fork branches have landed upstream
+
+
+@dataclass(frozen=True)
+class LandedBranches:
+    """
+    The fork branches the upstream base contained when this snapshot was taken.
+    """
+
+    configuration: Configuration
+    """
+    The resolved configuration naming the fork remote and the upstream base.
+    """
+
+    landed_references: frozenset[str]
+    """
+    The full names of the fork's tracking references the upstream base contained.
+    """
+
+    @classmethod
+    def from_checkout(cls, configuration: Configuration) -> LandedBranches:
+        """
+        :param configuration: The resolved configuration naming the fork remote and the
+            upstream base.
+        :return: The fork branches the current checkout's upstream base contains now.
+        """
+        listed = CurrentCheckout.output(
+            GitArgument.FOR_EACH_REFERENCE,
+            f"{GitArgument.MERGED}={configuration.upstream_remote}/{configuration.upstream_base}",
+            GitArgument.REFERENCE_NAME_FORMAT,
+            f"{GitArgument.REMOTE_REFERENCES}/{configuration.fork_remote}/",
+        )
+        return cls(configuration, frozenset(listed.splitlines()))
+
+    def contains(self, name: str) -> bool:
+        """
+        :param name: A fork branch name.
+        :return: Whether the upstream base contained the fork's copy of it.
+        """
+        return (
+            f"{GitArgument.REMOTE_REFERENCES}/{self.configuration.reference_on_fork(name)}"
+            in self.landed_references
+        )
