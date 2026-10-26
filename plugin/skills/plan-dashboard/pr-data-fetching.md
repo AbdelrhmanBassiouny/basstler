@@ -61,3 +61,6 @@ that happen to carry it survive a fetch that dropped the timestamp. A
 `"bug"` label separately marks the item as a bug fix wherever it already
 appears in the sidebar, and is what its "Bug fixes only" filter keeps - see
 `Item.is_bug_fix`.
+
+`body` is optional. When present, the link a maintenance pass wrote under the description's
+`## Upstream pull request` heading is shown on the item's card as an `upstream ↗` link.

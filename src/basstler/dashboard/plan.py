@@ -165,6 +165,12 @@ class Item:
     """This item's pull request URL on GitHub, filled in by
     :meth:`DashboardRenderer.render` - ``None`` if it has no pull request yet."""
 
+    upstream_pull_request_url: str | None = field(default=None, init=False)
+    """
+    The upstream pull request opened from this item's branch, as its pull request's
+    description links it, filled in by :meth:`DashboardRenderer.render`.
+    """
+
     dependency_chips: list[DependencyChip] = field(default_factory=list, init=False)
     """
     Ready-to-render chips for :attr:`depends_on`, filled in by

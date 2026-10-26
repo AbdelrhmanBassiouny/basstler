@@ -10,15 +10,15 @@
 #
 #   * the dependency TREE  = each fork PR's BASE branch (base = parent). Set it on GitHub.
 #   * draft <-> ready      = the fork PR's draft toggle. Un-draft to approve for review.
-#   * in-review            = the `in_review_label` on the fork PR (set at promote time; the
-#                            upstream itself is not readable from the cloud, so the label
-#                            carries that fact).
+#   * in-review            = an open upstream PR opened from the branch (read by the board
+#                            export); a pass mirrors it as the `in_review_label` and a link
+#                            in the fork PR's description.
 #   * merged               = branch is an ancestor of `<upstream_remote>/<upstream_base>` (pure git).
 #   * needs-resolution     = the `needs_resolution_label` on the fork PR (set by a maintenance pass when it
 #                            delegates a restack conflict to the branch's owning session; withholds
 #                            the branch from promotion until cleared).
 
-in_review_label = "in-review"  # fork-PR label marking "promoted upstream, under review"
+in_review_label = "in-review"  # fork-PR label a pass sets while an upstream PR is open
 rebase_label = "rebase"        # fork-PR label opting a branch into rebase instead of the default merge
 needs_resolution_label = "needs-resolution"  # set by a maintenance pass on a delegated restack conflict
 # fork_repository: deliberately unset - the fork is derived from `fork_remote`'s URL, so this file

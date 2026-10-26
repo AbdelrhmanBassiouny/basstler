@@ -78,41 +78,6 @@ class DatasetLocation(PathEnumeration):
     promotion heading, followed by a sentence and a code fence.
     """
 
-    COMMIT_CHECKS = DIRECTORY / "commit-checks"
-    """
-    Check-run and commit-status responses of the API for one commit, one file each.
-    """
-
-    CHECK_RUNS_IN_PROGRESS = COMMIT_CHECKS / "check-runs-in-progress.json"
-    """
-    One check run still running and one that passed.
-    """
-
-    CHECK_RUNS_FAILING = COMMIT_CHECKS / "check-runs-failing.json"
-    """
-    One check run that failed, one still queued and one skipped.
-    """
-
-    CHECK_RUNS_PASSING = COMMIT_CHECKS / "check-runs-passing.json"
-    """
-    Every check run completed, one passed and one neutral.
-    """
-
-    CHECK_RUNS_NONE = COMMIT_CHECKS / "check-runs-none.json"
-    """
-    No check run at all, as right after a push.
-    """
-
-    STATUS_FAILING = COMMIT_CHECKS / "status-failing.json"
-    """
-    One commit status that errored and one that passed.
-    """
-
-    STATUS_NONE = COMMIT_CHECKS / "status-none.json"
-    """
-    No commit status at all, which the API still reports as pending.
-    """
-
     PLAN_WITH_LANDED_ITEMS = DIRECTORY / "plan-with-landed-items.yaml"
     """
     A plan with a tracking issue and three items: one landed, one in progress that

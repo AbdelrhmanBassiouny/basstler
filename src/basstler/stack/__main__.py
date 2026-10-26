@@ -6,7 +6,7 @@ GitHub is the single source of truth. The stack is **not** declared in a ledger:
 
   * dependency tree = each fork pull request's **base branch** (base = parent);
   * ``draft`` <-> ``ready`` = the fork pull request's draft flag;
-  * ``in-review`` = the ``in_review_label`` on the fork pull request (the upstream is not readable from the cloud);
+  * ``in-review`` = an upstream pull request opened from the branch is open, recorded on the board by the export;
   * ``merged`` = the branch is an ancestor of ``<upstream_remote>/<upstream_base>``.
 
 ``stack.toml`` carries the shipped defaults (label names, the base branch); the project's committed

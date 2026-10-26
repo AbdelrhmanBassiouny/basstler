@@ -9,8 +9,13 @@ the reasoning behind them, for whoever changes the skill or the executor. The wo
 - A fork pull request's base branch is its parent in the stack.
 - A fork pull request stays a draft until its author has reviewed it; taking it out of draft is the
   only signal that it may be promoted. Nothing else grants approval.
-- The `in-review` label means the branch is under upstream review. A session never writes it
-  itself.
+- A branch is under upstream review while an upstream pull request opened from it is open. The
+  board export reads that from the upstream, and the pass mirrors it in the `in-review` label
+  and a link to the upstream pull request in the fork pull request's description, adding and
+  removing both; a session never writes either itself. An upstream the export cannot
+  read stops the pass rather than being guessed from the label.
+- A branch whose checks failed is not promoted; the export records the verdict over each head's
+  checks.
 - A branch that is an ancestor of the upstream base has landed.
 
 ## Why the pass never touches code or reviews

@@ -52,6 +52,9 @@
             {% else %}
             <span class="muted">no pull request yet</span>
             {% endif %}
+            {% if item.upstream_pull_request_url %}
+            <a class="upstream-link" href="{{ item.upstream_pull_request_url }}" target="_blank" rel="noopener">upstream ↗</a>
+            {% endif %}
             {% if item.session %}
             <a class="session-link" href="{{ item.session }}" target="_blank" rel="noopener">session ↗</a>
             {% endif %}

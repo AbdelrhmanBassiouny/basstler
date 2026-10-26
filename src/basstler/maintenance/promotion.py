@@ -204,8 +204,8 @@ def promote(
     The upstream pull request is not opened here - the app has no write access there, so
     that call fails every time. What is written is the link that opens it prefilled, into
     the fork pull request's own description, plus the label stopping a later pass
-    rebuilding it. The ``in-review`` label stays the developer's to add, since the
-    upstream pull request does not exist until they click Create.
+    rebuilding it. The upstream pull request does not exist until the developer clicks
+    Create.
 
     A branch whose link an earlier pass already sent is left alone unless *summaries*
     has an entry for it; with one, its link is built and recorded again.

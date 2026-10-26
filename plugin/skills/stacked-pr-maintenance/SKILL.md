@@ -48,6 +48,10 @@ remote itself.
 "${BASSTLER_PYTHON}" -m basstler.stack reparents
 ```
 
+The export reads the upstream's open pull requests too. In a Claude Code cloud session that read is
+refused (403) until the upstream is attached with `add_repo` (read access); attach it first, and
+never label branches yourself to get past a refusal.
+
 For each `branch<TAB>pr<TAB>current base<TAB>target base` line, set the pull request's base with the
 MCP `update_pull_request` tool.
 
@@ -108,8 +112,9 @@ Run once, naming each branch the `Restacked` section lists as pushed:
 "${BASSTLER_PYTHON}" -m basstler.maintenance ci-status --branch <branch> [--branch <branch> ...]
 ```
 
-It prints `branch<TAB>state<TAB>failing checks` per branch. Report `pending` and `no-checks` as
-pending; do not poll again or wait. For a `failure`, never debug the check or disable it:
+It prints `branch<TAB>state<TAB>failing checks` per branch. Report `pending`, `expected` and
+`no-checks` as pending; do not poll again or wait. For a `failure` or `error`, never debug the check
+or disable it:
 
 - comment on the fork pull request, prefixed `🔴 MAINTENANCE - NEEDS RESOLUTION:`, naming the check
   and its conclusion, written to stand alone;

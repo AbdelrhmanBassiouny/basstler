@@ -33,6 +33,38 @@ class GitHubClient(StrEnum):
     """
 
 
+class DescriptionPattern(Enum):
+    """
+    What the tooling looks for in a pull request description.
+    """
+
+    SESSION_LINK = re.compile(r"https://claude\.ai/code/session_[A-Za-z0-9_-]+")
+    """
+    The session link a pull request description carries, which is the only channel for
+    telling a branch's owner that their branch needs them.
+    """
+
+    HEADING = re.compile(r"^#{1,6} ", re.MULTILINE)
+    """
+    The start of a Markdown heading line, which ends the section before it.
+    """
+
+    LINK_TARGET = re.compile(r"(?<=\]\()[^)\s]+(?=\))")
+    """
+    The URL a Markdown hyperlink points at.
+    """
+
+    def first_in(self, text: str | None) -> str | None:
+        """
+        :param text: The text to search, which may be absent.
+        :return: The first match, or ``None`` if the text holds none.
+        """
+        if not text:
+            return None
+        found = self.value.search(text)
+        return found.group(0) if found else None
+
+
 class MaintenanceText(StrEnum):
     """
     Text a maintenance pass writes onto GitHub, and later finds again by.
@@ -51,41 +83,17 @@ class MaintenanceText(StrEnum):
     description is still there a week later.
     """
 
+    UPSTREAM_PULL_REQUEST_HEADING = "## Upstream pull request"
+    """
+    Heading the link to the open upstream pull request opened from the branch is written
+    under, in the fork pull request's own description.
+    """
+
     FULL_DETAIL = "Full detail:"
     """
     Opens the line an upstream pull request's description ends with, linking back to the
     fork pull request it was promoted from.
     """
-
-
-class DescriptionPattern(Enum):
-    """
-    What the tooling looks for in a pull request description.
-    """
-
-    SESSION_LINK = re.compile(r"https://claude\.ai/code/session_[A-Za-z0-9_-]+")
-    """
-    The session link a pull request description carries, which is the only channel for
-    telling a branch's owner that their branch needs them.
-    """
-
-    PROMOTION_HEADING = re.compile(
-        rf"^{re.escape(MaintenanceText.PROMOTION_HEADING)}[ \t]*$", re.MULTILINE
-    )
-    """
-    The promotion heading as a line of its own, so a heading of the description's own
-    that merely starts with the same words is not taken for it.
-    """
-
-    def first_in(self, text: str | None) -> str | None:
-        """
-        :param text: The text to search, which may be absent.
-        :return: The first match, or ``None`` if the text holds none.
-        """
-        if not text:
-            return None
-        found = self.value.search(text)
-        return found.group(0) if found else None
 
 
 class CommitTrailer(StrEnum):
