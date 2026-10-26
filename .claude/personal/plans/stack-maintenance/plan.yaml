@@ -56,10 +56,11 @@ items:
     items measure against.
 - id: landed-predicate-once
   title: Compute the landed predicate once per run and hand it to every phase
-  branch: null
-  pull_request_number: null
-  status: not_started
+  branch: claude/festive-noether-q4z6bq
+  pull_request_number: 79
+  status: in progress
   track: pass
+  session: https://claude.ai/code/session_01JfLqvSwMnA91Y4dugq9L3d
   depends_on: []
   notes: Board, reparents, fast-forward, restack, promote and landed each rebuild the ancestry-against-upstream-base
     predicate (CurrentCheckout.merged_predicate, src/basstler/stack/checkout.py). Compute
