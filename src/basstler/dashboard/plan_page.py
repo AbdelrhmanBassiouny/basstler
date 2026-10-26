@@ -1,41 +1,6 @@
 #!/usr/bin/env python3
 """
-Render a single plan's dashboard HTML from its manifest + live GitHub data.
-
-Generic, plan-agnostic: every plan-specific value (title, items, tracking
-link, ...) comes from the inputs below, never hardcoded here. This is the
-deterministic half of /plan-dashboard - the skill (SKILL.md) is responsible
-for gathering the inputs (git show on the personal-notes branch, GitHub API
-calls) and for the one step this script cannot do itself: calling the
-Artifact tool to publish the HTML this script produces.
-
-Usage:
-    python3 dashboard/plan_page.py \\
-        --plan /tmp/plan.yaml \\
-        --roadmap /tmp/roadmap.md \\
-        --pr-data /tmp/pr_data.json \\
-        --output /tmp/dashboard.html \\
-        [--tracking-url "https://github.com/<owner>/<repo>/issues/<n>"] \\
-        [--plans-dir /tmp/plans]
-
---plans-dir is the directory holding every plan as <plan-id>/plan.yaml. A
-depends_on entry of the form <plan-id>/<item-id> resolves against it, so a manifest carrying
-one is rejected without it rather than passing unchecked.
-
-pr_data.json shape: {"<owner>/<repo>": {"<pr_number>": {"state": "open"|
-"closed", "draft": bool, "merged_at": str|null, "labels": [str, ...]}}} -
-one entry per pull request number referenced by any item. A closed entry
-must carry merged_at explicitly, null included; omitting it is rejected
-rather than read as unmerged. See pr-data-fetching.md (next to this script)
-for how a session should gather it.
-
-Prints a one-line JSON summary to stdout (status counts, drift count,
-ready-to-start/blocker-maybe-cleared item titles) so the calling skill can
-report back without re-parsing the HTML it just wrote.
-
-Requires PyYAML (manifest parsing), Jinja2 (page rendering, via
-render_common.create_template_environment), and the ``markdown`` package
-(roadmap.md -> HTML), plus rustworkx for the depends_on graph.
+Render one plan's dashboard from its manifest, roadmap and pull-request state.
 """
 
 from __future__ import annotations
@@ -61,8 +26,10 @@ from basstler.dashboard.cards import (
     WaveSection,
 )
 from basstler.dashboard.plan import Item, Plan, Track
+from basstler.dashboard.publication import DashboardArtifact, PublicationField
 from basstler.exceptions import PlanValidationError
 from basstler.github_labels import GitHubLabel
+from basstler.locations import DashboardArtifactFile, DashboardTemplate
 from basstler.plan.command_arguments import PlanCommandArguments
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
@@ -165,7 +132,12 @@ class RenderedDashboard:
 
     html: str
     """
-    The dashboard page's rendered HTML.
+    The dashboard as one self-contained page.
+    """
+
+    artifact: DashboardArtifact
+    """
+    The same dashboard as the files its Artifact is published as.
     """
 
     summary: DashboardSummary
@@ -252,7 +224,7 @@ class DashboardRenderer(TemplatePage):
 
     @classproperty
     def template(cls) -> str:
-        return "dashboard.html"
+        return DashboardTemplate.SELF_CONTAINED_PAGE.name
 
     def __post_init__(self) -> None:
         self.items_by_identifier = {item.identifier: item for item in self.plan.items}
@@ -274,7 +246,13 @@ class DashboardRenderer(TemplatePage):
             drift_items + ready_to_start + blocker_maybe_cleared + ready_to_review
         )
 
-        html = self.render_template(
+        context = dict(
+            style_template=DashboardTemplate.STYLE.name,
+            content_template=DashboardTemplate.CONTENT.name,
+            script_template=DashboardTemplate.SCRIPT.name,
+            style_file=str(DashboardArtifactFile.STYLE),
+            content_file=str(DashboardArtifactFile.CONTENT),
+            script_file=str(DashboardArtifactFile.SCRIPT),
             title=self.plan.title,
             description=self.plan.description,
             repository=self.plan.default_repository,
@@ -294,6 +272,13 @@ class DashboardRenderer(TemplatePage):
             waves=self._build_wave_sections(),
             available_models=list(ModelOption),
         )
+        html = self.render_template(**context)
+        artifact = DashboardArtifact(
+            files={
+                file: self.render_named_template(file.template.name, **context)
+                for file in DashboardArtifactFile
+            }
+        )
 
         summary = DashboardSummary(
             status_counts=self._status_counts(),
@@ -305,7 +290,7 @@ class DashboardRenderer(TemplatePage):
                 Counter(item.live_state for item in self.plan.items)
             ),
         )
-        return RenderedDashboard(html=html, summary=summary)
+        return RenderedDashboard(html=html, artifact=artifact, summary=summary)
 
     def _classify_items(self) -> None:
         """
@@ -639,16 +624,20 @@ class DashboardRenderer(TemplatePage):
 def main() -> int:
     """
     Parse arguments, validate the manifest, render the dashboard, and print its summary.
-
-    See the module docstring for the CLI contract.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     PlanCommandArguments.add_to(parser)
     parser.add_argument("--roadmap", required=True, help="Path to roadmap.md")
-    parser.add_argument(
-        "--output", required=True, help="Path to write the dashboard HTML to"
+    output = parser.add_mutually_exclusive_group(required=True)
+    output.add_argument(
+        "--output", help="Path to write the dashboard as one self-contained page to"
+    )
+    output.add_argument(
+        "--artifact-directory",
+        help="Existing directory to write the files the dashboard Artifact is "
+        "published as to",
     )
     parser.add_argument(
         "--tracking-url",
@@ -680,8 +669,13 @@ def main() -> int:
     )
     rendered = renderer.render()
 
-    Path(arguments.output).write_text(rendered.html)
-    logger.info(json.dumps(rendered.summary.to_json_dict()))
+    summary = rendered.summary.to_json_dict()
+    if arguments.output is not None:
+        Path(arguments.output).write_text(rendered.html)
+    else:
+        rendered.artifact.write_to(Path(arguments.artifact_directory))
+        summary[PublicationField.CONTENT_DIGEST] = rendered.artifact.content_digest
+    logger.info(json.dumps(summary))
     return 0
 
 

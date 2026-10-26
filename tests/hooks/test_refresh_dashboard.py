@@ -19,10 +19,18 @@ from types import ModuleType
 
 import pytest
 
+import basstler.class_property
+import basstler.dashboard.exceptions
 import basstler.dashboard.plan_page
+import basstler.dashboard.publication
 import basstler.dashboard.refresh_support
+import basstler.environment
+import basstler.exceptions
+import basstler.exit_codes
+import basstler.locations
 import basstler.plan.sync_manifest_status
 import basstler.standard_streams
+from basstler.dashboard.publication import PublicationCheck, PublicationField
 from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 from basstler.plan.model import PlanDocument
 
@@ -74,6 +82,11 @@ class RefreshDashboardOption(StrEnum):
     The directory holding every plan, forwarded to both scripts it calls.
     """
 
+    URL_CACHE = "--url-cache"
+    """
+    The dashboard-URL cache the render is checked against.
+    """
+
 
 @pytest.fixture
 def scratch_project_root(tmp_path: Path) -> Path:
@@ -107,12 +120,22 @@ def scratch_project_root(tmp_path: Path) -> Path:
         plugin_root, PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
     )
 
-    # The real support module and the logging it prints through, whose own dependencies
-    # are the standard library only, in a scratch package the script's
+    # The real support module and the modules it imports, whose own dependencies are
+    # the standard library and PyYAML only, in a scratch package the script's
     # `python3 -m basstler.<module>` calls resolve against.
     copies = {
         Path(module.__file__): package_directory / path_within_package(module)
-        for module in (basstler.dashboard.refresh_support, basstler.standard_streams)
+        for module in (
+            basstler.dashboard.refresh_support,
+            basstler.dashboard.publication,
+            basstler.dashboard.exceptions,
+            basstler.exceptions,
+            basstler.exit_codes,
+            basstler.class_property,
+            basstler.environment,
+            basstler.locations,
+            basstler.standard_streams,
+        )
     } | {
         DatasetLocation.STUBS
         / "sync_manifest_status_stub.py": package_directory
@@ -190,7 +213,7 @@ def run_refresh_dashboard(
     pull_request_data_path.write_text(
         json.dumps([{"id": identifier} for identifier in corrected_ids])
     )
-    output_path = scratch_project_root / "dashboard.html"
+    artifact_directory = scratch_project_root / "dashboard"
 
     return subprocess.run(
         [
@@ -204,8 +227,8 @@ def run_refresh_dashboard(
             str(scratch_project_root / PlanDocument.ROADMAP),
             "--pr-data",
             str(pull_request_data_path),
-            "--output",
-            str(output_path),
+            "--artifact-directory",
+            str(artifact_directory),
             *extra_arguments,
         ],
         cwd=scratch_project_root,
@@ -317,7 +340,47 @@ def test_prints_the_merged_sync_and_build_summary(scratch_project_root: Path):
     )
     assert result.returncode == 0, result.stderr
     merged = json.loads(result.stdout)
-    assert merged == {"corrected": [{"id": "a"}], "drift_count": 0}
+    assert merged == {
+        "corrected": [{"id": "a"}],
+        "drift_count": 0,
+        PublicationField.CONTENT_DIGEST: merged[PublicationField.CONTENT_DIGEST],
+        **PublicationCheck(url=None, unchanged=False).to_json(),
+    }
+
+
+# %% the publication check
+
+
+def test_the_artifact_directory_is_created(scratch_project_root: Path):
+    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
+    run_refresh_dashboard(scratch_project_root, corrected_ids=[], extra_arguments=[])
+    assert (scratch_project_root / "dashboard").is_dir()
+
+
+def test_a_render_already_published_is_reported_unchanged(scratch_project_root: Path):
+    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
+    first = json.loads(
+        run_refresh_dashboard(
+            scratch_project_root, corrected_ids=[], extra_arguments=[]
+        ).stdout
+    )
+    url = "https://claude.ai/code/artifact/11111111-1111-4111-8111-111111111111"
+    cache_path = scratch_project_root / "dashboard-urls.yaml"
+    cache_path.write_text(
+        f"test-plan: {url}\n_content_digests:\n"
+        f"  test-plan: {first[PublicationField.CONTENT_DIGEST]}\n"
+    )
+    second = run_refresh_dashboard(
+        scratch_project_root,
+        corrected_ids=[],
+        extra_arguments=[RefreshDashboardOption.URL_CACHE, str(cache_path)],
+    )
+    assert second.returncode == 0, second.stderr
+    merged = json.loads(second.stdout)
+    assert {
+        PublicationField.URL: merged[PublicationField.URL],
+        PublicationField.UNCHANGED: merged[PublicationField.UNCHANGED],
+    } == PublicationCheck(url=url, unchanged=True).to_json()
 
 
 # %% --plans-dir passthrough

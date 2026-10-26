@@ -8,12 +8,20 @@ import sys
 
 import pytest
 
+from basstler.dashboard.exceptions import SummaryKeyCollisionError
+from basstler.dashboard.publication import (
+    DashboardBuildSummary,
+    DashboardUrlCache,
+    PublicationCheck,
+    PublicationField,
+)
 from basstler.dashboard.refresh_support import (
-    SummaryKeyCollisionError,
+    RefreshSummary,
     count_corrected,
     main,
-    merge_summaries,
 )
+
+from ..constants.paths import DatasetLocation
 
 # %% count_corrected
 
@@ -28,13 +36,13 @@ def test_count_corrected_zero_when_nothing_corrected():
     assert count_corrected(summary) == 0
 
 
-# %% merge_summaries
+# %% merging the step summaries
 
 
 def test_merge_summaries_combines_both_objects():
     sync_summary = json.dumps({"corrected": [{"id": "a"}]})
     build_summary = json.dumps({"status_counts": {"done": 1}, "drift_count": 0})
-    merged = merge_summaries(sync_summary, build_summary)
+    merged = RefreshSummary.from_step_summaries(sync_summary, build_summary).entries
     assert merged == {
         "corrected": [{"id": "a"}],
         "status_counts": {"done": 1},
@@ -46,7 +54,7 @@ def test_merge_summaries_raises_on_a_shared_key_instead_of_silently_dropping_one
     sync_summary = json.dumps({"corrected": [{"id": "a"}], "drift_count": 1})
     build_summary = json.dumps({"drift_count": 0})
     with pytest.raises(SummaryKeyCollisionError, match="drift_count"):
-        merge_summaries(sync_summary, build_summary)
+        RefreshSummary.from_step_summaries(sync_summary, build_summary)
 
 
 # %% main - subcommand dispatch
@@ -84,3 +92,86 @@ def test_main_dispatches_merge_summaries(monkeypatch, capsys):
         "corrected": [{"id": "a"}],
         "drift_count": 0,
     }
+
+
+def test_merge_summaries_combines_any_number_of_objects():
+    merged = RefreshSummary.from_step_summaries(
+        json.dumps({"corrected": []}),
+        json.dumps({"drift_count": 0}),
+        json.dumps({PublicationField.UNCHANGED: True}),
+    ).entries
+    assert merged == {
+        "corrected": [],
+        "drift_count": 0,
+        PublicationField.UNCHANGED: True,
+    }
+
+
+# %% the publication check
+
+
+DIGESTED_CACHE_TEXT = (
+    DatasetLocation.DIRECTORY / "dashboard-urls-with-content-digests.yaml"
+).read_text()
+
+
+def build_summary_with_digest(content_digest: str) -> str:
+    """
+    :param content_digest: The digest the build reports for the files it wrote.
+    :return: A build summary carrying it.
+    """
+    return json.dumps(
+        {"drift_count": 0, PublicationField.CONTENT_DIGEST: content_digest}
+    )
+
+
+def test_a_build_summary_reads_its_content_digest():
+    assert DashboardBuildSummary.from_json(
+        build_summary_with_digest("a" * 64)
+    ) == DashboardBuildSummary(content_digest="a" * 64)
+
+
+def test_main_dispatches_check_publication(monkeypatch, capsys, tmp_path):
+    cache_path = tmp_path / "dashboard-urls.yaml"
+    cache_path.write_text(DIGESTED_CACHE_TEXT)
+    cache = DashboardUrlCache.from_yaml(DIGESTED_CACHE_TEXT)
+    recorded_digest = cache.content_digests["alpha-plan"]
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "dashboard/refresh_support.py",
+            "check-publication",
+            "--key",
+            "alpha-plan",
+            "--build-summary",
+            build_summary_with_digest(recorded_digest),
+            "--cache",
+            str(cache_path),
+        ],
+    )
+    assert main() == 0
+    assert (
+        json.loads(capsys.readouterr().out)
+        == cache.check("alpha-plan", recorded_digest).to_json()
+    )
+
+
+def test_main_checks_publication_without_a_cache(monkeypatch, capsys):
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "dashboard/refresh_support.py",
+            "check-publication",
+            "--key",
+            "alpha-plan",
+            "--build-summary",
+            build_summary_with_digest("a" * 64),
+        ],
+    )
+    assert main() == 0
+    assert (
+        json.loads(capsys.readouterr().out)
+        == PublicationCheck(url=None, unchanged=False).to_json()
+    )

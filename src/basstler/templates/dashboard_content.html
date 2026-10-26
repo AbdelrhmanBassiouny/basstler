@@ -1,0 +1,208 @@
+{# A chip links to its dependency's card: on this page it scrolls there and
+   highlights it, and on another plan's dashboard it opens that page in a new
+   tab at the card. #}
+{% macro dependency_chip(chip) %}
+{%- set is_ready = chip.dependency.is_ready_to_unblock_dependents() %}
+{%- set identifier = chip.dependency.reference.text %}
+{%- set chip_class = 'chip' if is_ready else 'chip chip-unmet' %}
+{%- set chip_title = chip.tooltip if is_ready else chip.tooltip ~ ' (not ready yet — this item is blocked on it)' %}
+{% if not chip.card_url %}<span class="{{ chip_class }}" title="{{ chip_title }}">{{ identifier }}</span>{% elif chip.dependency.is_in_another_plan %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" target="_blank" rel="noopener" title="{{ chip_title }}">{{ identifier }}</a>{% else %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" data-item-identifier="{{ identifier }}" onclick="planDashboardHighlightItem(event, this)" title="{{ chip_title }}">{{ identifier }}</a>{% endif %}
+{% endmacro %}
+
+{% macro action_button(item) %}
+{% if item.action %}
+<span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for {{ item.action.label }}">
+    <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">{{ available_models[0].label }} ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      {% for model in available_models %}
+      <li role="option" data-value="{{ model.value }}" onclick="planDashboardSelectModel(event, this)"{% if loop.first %} class="model-picker-option-selected"{% endif %}>{{ model.label }}</li>
+      {% endfor %}
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="{{ item.action.command }}" onclick="planDashboardCopyActionCommand(this)">▸ {{ item.action.label }}</button>
+</span>
+{% endif %}
+{% endmacro %}
+
+{% macro item_card(stacked) %}
+{% set item = stacked.item %}
+    <article id="{{ item.anchor }}" class="item {{ item.status_and_drift_css_class }}" style="{{ stacked.indent_style }}">
+      {% if stacked.wrap_parent %}
+      <div class="wrap-arrow wrap-arrow-all">◄ continues from <span class="mono">{{ stacked.wrap_parent.identifier }}</span> <span class="wrap-parent-title">({{ stacked.wrap_parent.title }})</span></div>
+      {% endif %}
+      {% if stacked.wrap_parent_with_done_hidden %}
+      <div class="wrap-arrow wrap-arrow-hidden-done">◄ continues from <span class="mono">{{ stacked.wrap_parent_with_done_hidden.identifier }}</span> <span class="wrap-parent-title">({{ stacked.wrap_parent_with_done_hidden.title }})</span></div>
+      {% endif %}
+      <div class="item-row">
+        <div class="item-spine"></div>
+        <div class="item-body">
+          <div class="item-head">
+            <h4 class="item-title">{{ item.title }}</h4>
+            <div class="item-badges">
+              <span class="badge status-badge status-{{ item.status.name | lower }}">{{ item.status.value | capitalize }}</span>
+              <span class="badge live-badge live-{{ item.live_state.value }}">{{ item.live_state.display_label }}</span>
+            </div>
+          </div>
+          <div class="item-meta">
+            <span class="mono id">{{ item.identifier }}</span>
+            <span class="mono branch">{{ item.branch }}</span>
+            {% if item.pull_request_url %}
+            <a class="pr-link" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">#{{ item.pull_request_number }}</a>
+            {% else %}
+            <span class="muted">no pull request yet</span>
+            {% endif %}
+            {% if item.session %}
+            <a class="session-link" href="{{ item.session }}" target="_blank" rel="noopener">session ↗</a>
+            {% endif %}
+            {% if item.needs_review %}
+            <a class="review-button" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">↗ Review</a>
+            {% endif %}
+            {{ action_button(item) }}
+          </div>
+          {% if item.drift_description %}
+          <div class="drift">⚠ {{ item.drift_description }}</div>
+          {% endif %}
+          {% if item.notes %}
+          <details class="notes-details">
+            <summary>Notes</summary>
+            <div class="notes">{{ item.notes }}</div>
+          </details>
+          {% endif %}
+          {% if item.dependency_chips %}
+          <div class="deps">
+            <span class="deps-label">needs</span>
+            {% for chip in item.dependency_chips %}
+            {{ dependency_chip(chip) }}
+            {% endfor %}
+          </div>
+          {% endif %}
+          {% if item.blockers %}
+          <div class="blockers">
+            {% for blocker in item.blockers %}
+            <div class="blocker">▸ {{ blocker }}</div>
+            {% endfor %}
+          </div>
+          {% endif %}
+        </div>
+      </div>
+    </article>
+{% endmacro %}
+
+<div class="page hide-done" id="plan-dashboard-page">
+  <header class="masthead">
+    {% if hub_url or index_url %}<p class="crumbs">{% if hub_url %}<a href="{{ hub_url }}" target="_blank" rel="noopener">All repositories</a> › {% endif %}{% if index_url %}<a href="{{ index_url }}" target="_blank" rel="noopener">{{ repository }}</a>{% else %}{{ repository }}{% endif %} › {{ title }}</p>{% endif %}
+    <p class="eyebrow">Plan Dashboard</p>
+    <h1>{{ title }}</h1>
+    <p class="description">{{ description }}</p>
+    <p class="repo-line">
+      {{ total_items }} tracked items · <a href="{{ repository_url }}" target="_blank" rel="noopener">{{ repository }}</a>
+      {% if tracking_url %}<a class="tracking-link" href="{{ tracking_url }}" target="_blank" rel="noopener">Propose a structural change →</a>{% endif %}
+    </p>
+    <details class="roadmap-details">
+      <summary>Background &amp; history (roadmap.md)</summary>
+      <div class="roadmap-body">{{ roadmap_html | safe }}</div>
+    </details>
+  </header>
+
+  <div class="layout">
+    <main>
+      {% for wave_section in waves %}
+      <section class="wave" id="wave-{{ wave_section.wave.id }}">
+        <div class="wave-eyebrow">{{ wave_section.wave.name }}</div>
+        {% if wave_section.wave.description %}
+        <p class="wave-description">{{ wave_section.wave.description }}</p>
+        {% endif %}
+        {% for track_section in wave_section.tracks %}
+        <section class="track">
+          <h3 class="track-title">{{ track_section.track.name }}</h3>
+          {% if track_section.stacked_items %}
+          <div class="item-list">
+            {% for stacked in track_section.stacked_items %}
+            {{ item_card(stacked) }}
+            {% endfor %}
+          </div>
+          {% else %}
+          <p class="track-empty">{{ track_section.empty_state_message }}</p>
+          {% endif %}
+        </section>
+        {% endfor %}
+      </section>
+      {% endfor %}
+    </main>
+
+    <aside class="sidebar">
+      <div class="sidebar-card">
+        <h3>Status</h3>
+        <div class="summary-strip">
+          {% for status in item_statuses %}
+          <div class="stat"><span class="stat-num">{{ status_counts[status] }}</span><span class="stat-label">{{ status.value | capitalize }}</span></div>
+          {% endfor %}
+        </div>
+        <label class="done-toggle">
+          <input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)">
+          Show done / merged items
+        </label>
+        {% if drift_items %}
+        <div class="alert-banner drift-banner">
+          <strong>{{ drift_items | length }} drift flag(s)</strong>
+          <ul>
+          {% for item in drift_items %}
+            <li>{{ item.title }} — {{ item.drift_description }}</li>
+          {% endfor %}
+          </ul>
+        </div>
+        {% else %}
+        <div class="alert-banner clean-banner">No drift — every item's manual status agrees with live GitHub state.</div>
+        {% endif %}
+      </div>
+{#
+  One action group of the "What to do next" sidebar: its heading, and one
+  entry per item. The caller supplies each entry's reason line as the call
+  block's body, so a group whose reason is per-item (manifest drift) and one
+  whose reason is fixed for the whole group share this markup instead of
+  repeating it. Renders nothing at all for an empty group.
+#}
+{% macro next_step_group(group_class, heading, items, show_review_link=false) %}
+{%- if items %}
+{%- set bug_fixes = items | selectattr("is_bug_fix") | list %}
+          <div class="next-group {{ group_class }}{% if bug_fixes %} next-group-has-bugs{% endif %}">
+            <h4>{{ heading }} <span class="next-count-all">({{ items | length }})</span><span class="next-count-bug">({{ bug_fixes | length }})</span></h4>
+            <ul>
+            {% for item in items %}
+              <li class="next-entry{% if item.is_bug_fix %} next-entry-bug{% endif %}">
+                <a class="next-item-link" href="#{{ item.anchor }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)"><strong>{{ item.title }}</strong>{% if item.is_bug_fix %} <span class="next-bug-chip">bug</span>{% endif %}<br><span class="next-reason">{{ caller(item) }}</span></a>
+                {%- if show_review_link %}
+                <a class="next-review-link" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">Review ↗</a>
+                {%- endif %}
+              </li>
+            {% endfor %}
+            </ul>
+          </div>
+{% endif %}
+{%- endmacro %}
+      <div class="sidebar-card" id="next-steps-card">
+        <h3>What to do next</h3>
+        {% if has_bug_fix_next_steps %}
+        <label class="bug-filter-toggle">
+          <input type="checkbox" id="bug-fixes-only-toggle" onchange="document.getElementById('next-steps-card').classList.toggle('bug-fixes-only', this.checked)">
+          Bug fixes only
+        </label>
+        {% endif %}
+        {% if drift_items or ready_to_review or ready_to_start or blocker_maybe_cleared %}
+          {% call(item) next_step_group("next-drift", "Fix the manifest", drift_items) %}{{ item.drift_description }}{% endcall %}
+          {% call(item) next_step_group("next-ready", "Ready to start", ready_to_start) %}every dependency is at least ready for review — nothing structurally blocking it{% endcall %}
+          {% call(item) next_step_group("next-recheck", "Blocker may be cleared", blocker_maybe_cleared) %}at least one dependency is now ready for review — worth resolving the blocker{% endcall %}
+          {% call(item) next_step_group("next-review", "Ready to review", ready_to_review, show_review_link=true) %}open draft pull request, ready for your review{% endcall %}
+        {% else %}
+        <p class="next-empty">Nothing actionable right now — every item is either in progress, fully blocked, or done.</p>
+        {% endif %}
+      </div>
+    </aside>
+  </div>
+
+  <footer class="page-footer">
+    Generated by <code>/plan-dashboard</code> from <code>plan.yaml</code>, cross-checked live against GitHub.
+    Manual status only ever reflects the plan's own assessment — draft/ready/merged/closed always comes from GitHub directly, so it can never go stale here.
+  </footer>
+</div>
