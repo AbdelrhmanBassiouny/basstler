@@ -137,7 +137,9 @@ class LargeBoard:
         :param index: The branch's position on the board.
         :return: A pull request title as long as they usually are.
         """
-        return f"Add the {index:03d}th capability to the planner, with its tests and docs"
+        return (
+            f"Add the {index:03d}th capability to the planner, with its tests and docs"
+        )
 
     def board(self) -> list[PullRequest]:
         """
@@ -168,9 +170,11 @@ class LargeBoard:
                 check_state=(
                     RollupState.FAILURE
                     if linked_end <= index < failing_end
-                    else RollupState.PENDING
-                    if failing_end <= index < failing_end + self.pushed
-                    else RollupState.SUCCESS
+                    else (
+                        RollupState.PENDING
+                        if failing_end <= index < failing_end + self.pushed
+                        else RollupState.SUCCESS
+                    )
                 ),
             )
             for index in range(self.pull_requests)
@@ -209,7 +213,9 @@ class LargeBoard:
         return tuple(outcomes)
 
     @staticmethod
-    def outcome(branch: str, outcome: RestackOutcome, **detail: object) -> BranchOutcome:
+    def outcome(
+        branch: str, outcome: RestackOutcome, **detail: object
+    ) -> BranchOutcome:
         """
         :param branch: The branch it is about.
         :param outcome: What became of it.

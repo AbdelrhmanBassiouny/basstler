@@ -18,7 +18,7 @@ from pathlib import Path
 from basstler.exit_codes import StackExitCode
 from basstler.class_property import classproperty
 from basstler.command_line import Command
-from basstler.locations import PackageLocation
+from basstler.locations import PackageLocation, ScratchLocation
 from basstler.maintenance.board import BoardExport, UpstreamPullRequests
 from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
@@ -71,7 +71,7 @@ class MaintenancePass:
     The exported board this run writes, derives its stack from and discards at its end.
     """
 
-    full_report: Path = PackageLocation.MAINTENANCE_REPORT.value
+    full_report: Path = ScratchLocation.MAINTENANCE_REPORT.value
     """
     Where a whole pass writes everything it did.
     """
@@ -227,7 +227,7 @@ class PrepareCommand(MaintenanceCommand):
             PreparationKey.REPARENTS: [asdict(entry) for entry in stack.reparents()],
             PreparationKey.TO_SUMMARIZE: [asdict(context) for context in contexts],
         }
-        logger.info(json.dumps(document, indent=1, ensure_ascii=False))
+        logger.info(json.dumps(document, ensure_ascii=False))
         return StackExitCode.SUCCESS
 
 
@@ -385,7 +385,9 @@ class ChecksCommand(MaintenanceCommand):
         """
         What it does, as ``--help`` puts it.
         """
-        return "report how many open branches' checks pass, run or fail, naming the rest"
+        return (
+            "report how many open branches' checks pass, run or fail, naming the rest"
+        )
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
@@ -483,9 +485,7 @@ class RunReportCommand(MaintenanceCommand):
         if as_json:
             logger.info(report.as_json())
             return report
-        logger.info(
-            FinishSummary(report, stack, maintenance.full_report).as_markdown()
-        )
+        logger.info(FinishSummary(report, stack, maintenance.full_report).as_markdown())
         return report
 
 

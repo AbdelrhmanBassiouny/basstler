@@ -3,8 +3,8 @@ What a session writes each upstream summary from, read for it in one go.
 
 A summary is a reading of the change, but not of every line of it: the fork pull
 request's own title and description, its commit subjects and which files it changes by
-how much are what an upstream reviewer's first paragraph is written from. Each is capped,
-so the context for a branch stays the same size however large its diff is.
+how much are what an upstream reviewer's first paragraph is written from. Each is
+capped, so the context for a branch stays the same size however large its diff is.
 """
 
 from __future__ import annotations
@@ -205,7 +205,9 @@ class PromotionContextReader:
         :return: The context of every branch awaiting its upstream link, in dependency
             order.
         """
-        return [self.context_of(branch) for branch in self.stack.awaiting_promotion_link()]
+        return [
+            self.context_of(branch) for branch in self.stack.awaiting_promotion_link()
+        ]
 
     def compared_with(self, branch: Branch) -> str:
         """

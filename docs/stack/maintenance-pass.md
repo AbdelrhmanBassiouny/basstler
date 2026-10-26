@@ -44,7 +44,7 @@ rather than merged - one absent from the board entirely.
 
 ### Base changes stay with the session
 
-The executor never changes a base itself and leaves `reparents` to step 1. That followed from a
+The executor never changes a base itself and leaves `reparents` to the session, after `prepare`. That followed from a
 session's `GH_TOKEN` being refused a base change with a 403. On 2026-10-26 the same
 `PATCH /repos/{owner}/{repo}/pulls/{number}` with `{"base": ...}` and
 `Content-Type: application/json` succeeded both ways, so the refusal no longer holds and moving
@@ -67,18 +67,45 @@ still targets a branch about to disappear, and when that base is a stack's trunk
 the stack's recorded `base.sha` from its real head. The API is a preview, so the pass never
 improvises around an answer it does not recognise.
 
-## Why the pass trusts the executor's output
+## Why a pass costs the session so little
 
-`run-report` already fills titles and links into the summary. Re-deriving them, or running the
-individual commands as well, does the same work twice and can disagree with what actually ran.
-`--json` exists for tooling; a session never needs it.
+A session pays for every tool call and every byte a command prints, and the stack grows without
+bound. So the pass is shaped around what needs judgement - writing an upstream summary - and
+everything else is an executor command with a bounded output:
+
+- **`basstler.sh`** runs every module. A skill that started before the session start's install
+  finished waits for it (the install holds a lock with its process id), one whose install died is
+  completed, and one that still cannot run gets one line saying what to do - never a traceback that
+  sends the session reading hook scripts.
+- **`prepare`** exports the board and prints, as one JSON document, the reparents and what each
+  summary is written from: the fork pull request's title and a capped description, its commit
+  subjects and its largest changed files. That is what an upstream reviewer's first paragraph needs;
+  a raw diff is tens of kilobytes per branch and adds nothing a summary should say. A branch is
+  listed only until its link is recorded - the `promotion-link-sent` label already marks that, so
+  nothing has to remember summaries between passes, and an unchanged branch is never summarized
+  twice.
+- **`run-report`** exports its own board, so a reparent made after `prepare` is already in it, and
+  prints a summary-first report: the status, one line of counts, then each section capped at a few
+  entries and every conflict at a couple of files, the rest counted. The full report goes to a file
+  beside the board, every conflict is already in its comment, and every create-link is already in
+  its pull request's description, so the summary repeats none of them. Tests hold the summary under
+  7 KiB for boards of 150 to 600 pull requests.
+- **CI** is read when the board is exported: each pull request's head, at the start of the pass.
+  Right after a push every check is still queued, so polling then learns nothing; by the next pass
+  they have finished. The pass therefore never waits on CI - what it pushes is reported by the next
+  one - and a branch whose checks failed is withheld from promotion. `checks` prints the same
+  verdicts on their own.
+
+Re-deriving the summary, re-reading the full report, or running the individual commands as well
+does the same work twice and can disagree with what actually ran. `--json` exists for tooling; a
+session never needs it.
 
 `integration-failed` means integrating the parent failed without conflicting on anything - an
 untracked file in the way, unrelated histories, a reference that does not resolve. The branch is not
 what needs fixing, so its owner is deliberately not told and it is never labelled.
 
 A `skipped` pull request has a head the credential cannot push to (`head-on-another-fork`) or one
-whose repository is gone (`head-repository-deleted`). Its base is still on the fork, so step 1 still
+whose repository is gone (`head-repository-deleted`). Its base is still on the fork, so the session still
 reparents it when that base lands.
 
 ## Labels replace
@@ -95,7 +122,7 @@ tip - only those carrying its `Restacked-parent:` and `Restacked-parent-commit:`
 merge made by hand - with a single new one, under a lease - see
 [One restack merge per branch](README.md#one-restack-merge-per-branch).
 
-## Reporting a red check
+## Reporting a conflict
 
 No session subscribes to a pull request's activity, so the `🔴 MAINTENANCE - NEEDS RESOLUTION:`
 comment sits on GitHub until the owner reads it; it has to stand alone. The `needs-resolution` label

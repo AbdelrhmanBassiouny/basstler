@@ -80,7 +80,9 @@ class CheckOverview:
         for state in states:
             if state is RollupState.SUCCESS or not counted[state]:
                 continue
-            lines.append(f"{state or CheckOverviewText.NOT_REPORTED}: {self.named(state)}")
+            lines.append(
+                f"{state or CheckOverviewText.NOT_REPORTED}: {self.named(state)}"
+            )
         return lines
 
     def named(self, state: RollupState | None) -> str:

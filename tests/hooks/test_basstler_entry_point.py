@@ -1,5 +1,6 @@
 """
 Tests for basstler.sh, the entry point every skill runs a module of the package through:
+
 it runs the module once the package is ready, waits on or completes an install that is
 not finished, and says in one line why when the package still cannot run.
 """
@@ -24,7 +25,6 @@ MODULE_WITH_HELP = "maintenance"
 """
 A module of the package whose ``--help`` succeeds without a board or a credential.
 """
-
 
 # %% the scratch layout
 
@@ -66,7 +66,9 @@ def installed_source_file(repository: ScratchRepository) -> Path:
     :param repository: The fixture-built scratch repository.
     :return: The file recording what the environment's package was installed from.
     """
-    return Path(repository.configuration_value(ConfigurationVariable.INSTALLED_SOURCE_FILE))
+    return Path(
+        repository.configuration_value(ConfigurationVariable.INSTALLED_SOURCE_FILE)
+    )
 
 
 def install_lock(repository: ScratchRepository) -> Path:
@@ -139,7 +141,9 @@ def test_an_install_that_never_finished_is_completed_before_the_module_runs(
         MODULE_WITH_HELP,
         "--help",
         **{
-            SearchPathVariable.EXECUTABLE_SEARCH_PATH: pip_only_path(stub_bin, tmp_path),
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: pip_only_path(
+                stub_bin, tmp_path
+            ),
             StubVariable.PIP_CALL_LOG: str(call_log),
         },
     )
@@ -177,7 +181,9 @@ def test_an_install_still_running_is_waited_for_rather_than_repeated(
         MODULE_WITH_HELP,
         "--help",
         **{
-            SearchPathVariable.EXECUTABLE_SEARCH_PATH: pip_only_path(stub_bin, tmp_path),
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: pip_only_path(
+                stub_bin, tmp_path
+            ),
             StubVariable.PIP_CALL_LOG: str(call_log),
         },
     )
@@ -202,7 +208,9 @@ def test_a_failed_install_is_one_line_naming_what_to_run(
         MODULE_WITH_HELP,
         "--help",
         **{
-            SearchPathVariable.EXECUTABLE_SEARCH_PATH: pip_only_path(stub_bin, tmp_path),
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: pip_only_path(
+                stub_bin, tmp_path
+            ),
             StubVariable.PIP_STATUS: "1",
         },
     )

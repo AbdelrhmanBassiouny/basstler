@@ -89,8 +89,8 @@ def test_a_branch_whose_link_a_pass_recorded_is_not_described_again(
     fork_checkout: ForkCheckout,
 ):
     """
-    The link label is what makes a branch's summary written once: a later pass finds
-    it and leaves the branch out.
+    The link label is what makes a branch's summary written once: a later pass finds it
+    and leaves the branch out.
     """
     a_parent_and_child(fork_checkout)
     board = the_board()
@@ -110,7 +110,10 @@ def test_a_large_change_is_described_within_its_budget(fork_checkout: ForkChecko
         fork_checkout.run_git("add", ".")
         fork_checkout.run_git("commit", "--quiet", "-m", f"change number {commit}")
     fork_checkout.run_git(
-        "push", "--quiet", RemoteName.ORIGIN, f"{StackBranch.PARENT}:{StackBranch.PARENT}"
+        "push",
+        "--quiet",
+        RemoteName.ORIGIN,
+        f"{StackBranch.PARENT}:{StackBranch.PARENT}",
     )
     fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
     fork = RecordingPullRequests(
@@ -179,7 +182,9 @@ def test_a_summary_written_for_every_listed_pull_request_is_what_each_opens_with
     report = RunReportCommand().perform(maintenance, as_json=True, summaries=summaries)
 
     configuration = maintenance.configuration
-    assert {promotion.pull_request_number: promotion.url for promotion in report.promoted} == {
+    assert {
+        promotion.pull_request_number: promotion.url for promotion in report.promoted
+    } == {
         number: PromotionLink.build(
             configuration,
             next(

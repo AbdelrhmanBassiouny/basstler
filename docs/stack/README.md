@@ -42,7 +42,7 @@ next to the workflow it describes, because it is read rather than run.
   `.claude/personal/stack.toml` on the personal-notes branch layers your own overrides on top of
   both (see `Configuration.load` in `stack/settings.py`), including a `fork_repository` to pick between
   remotes when more than one could be the fork.
-- **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
+- **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `check_state`,
   `session`) that `basstler.stack` reads. Written from GitHub as scratch by whatever refreshes it -
   never committed.
 - **`basstler.stack`** - read-only status tool (never mutates branches). Reads `board.json` + git:
@@ -82,16 +82,20 @@ next to the workflow it describes, because it is read rather than run.
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.
 - **`basstler.maintenance`** - the executor: the half of a pass that moves commits, where `basstler.stack`
-  only derives and prints. `board --write`, `fast-forward`, `restack`, `promote` and
-  `run-report` (the finish summary, or `--json` for tooling); see [Running a maintenance pass](#running-a-maintenance-pass). It is the
+  only derives and prints. `board --write`, `prepare` (the reparents and what each upstream
+  summary is written from, as JSON), `fast-forward`, `restack`, `promote`, `checks` (the verdict
+  over every open branch's checks) and `run-report` (the whole pass, ending in a size-bounded
+  finish summary with the full report in a file, or `--json` for tooling); see [Running a maintenance pass](#running-a-maintenance-pass). It is the
   command line onto modules named for what they do, so nothing has to be hunted for inside one
   long file: `maintenance/constants.py` (every value edited by hand),
   `maintenance/git_commands.py`, `maintenance/board.py`, `maintenance/description.py`,
   `maintenance/github.py`,
   `maintenance/fast_forward.py`, `maintenance/restack_steps.py` and
   `maintenance/restack_procedure.py` (the steps, and the order that is the procedure),
-  `maintenance/promotion.py`, `maintenance/report.py`, `maintenance/finish_summary.py` and
-  `maintenance/commands.py`.
+  `maintenance/promotion.py`, `maintenance/promotion_context.py`,
+  `maintenance/check_overview.py`, `maintenance/report.py`, `maintenance/finish_summary.py` and
+  `maintenance/commands.py`. A skill runs it through `plugin/hooks/basstler.sh`, which waits on
+  or completes the package install first.
 - **`skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
   as `/stacked-pr-maintenance` from any session, and run first by `/plan-item-kickoff` and
   `/plan-item-resolve`. It takes `fork=` / `upstream=` arguments, falls back to

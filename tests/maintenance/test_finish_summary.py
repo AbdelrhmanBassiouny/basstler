@@ -433,9 +433,7 @@ def test_the_status_is_followed_by_what_the_pass_counted():
     summary = FinishSummary(report, a_titled_stack())
 
     assert summary.as_markdown().splitlines()[1] == summary.counts()
-    assert summary.counts() == (
-        f"1 {PassCount.PUSHED}, 1 {PassCount.LINKS_RECORDED}"
-    )
+    assert summary.counts() == (f"1 {PassCount.PUSHED}, 1 {PassCount.LINKS_RECORDED}")
 
 
 def test_the_summary_names_the_file_holding_the_whole_report(tmp_path: Path):

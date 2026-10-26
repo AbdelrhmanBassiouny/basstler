@@ -78,11 +78,6 @@ class PackageLocation(PathEnumeration):
     The exported snapshot of the fork's open pull requests - scratch state, never committed.
     """
 
-    MAINTENANCE_REPORT = DIRECTORY / "maintenance-report.json"
-    """
-    Everything the last maintenance pass did, in full - scratch state, never committed.
-    """
-
     DEPENDENCY_DECLARATION = SOURCE_TREE / "pyproject.toml"
     """
     The package metadata of a source checkout, whose ``[project] dependencies`` this
@@ -277,6 +272,18 @@ class PluginSkillLocation(PathEnumeration):
     STARTER_NOTES = SKILLS / "setup-personal-notes" / "starter-notes.md"
     """
     The conventions a new personal-notes file can be seeded with.
+    """
+
+
+class ScratchLocation(PathEnumeration):
+    """
+    The files a maintenance pass writes beside the package for whoever reads them after
+    it - scratch state, never shipped and never committed.
+    """
+
+    MAINTENANCE_REPORT = PackageLocation.DIRECTORY.value / "maintenance-report.json"
+    """
+    Everything the last maintenance pass did, in full.
     """
 
 

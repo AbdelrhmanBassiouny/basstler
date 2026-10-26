@@ -372,7 +372,9 @@ class FinishSummary:
             paths = outcome.conflicting_paths
             named = ", ".join(f"`{path}`" for path in paths[: self.paths_per_branch])
             hidden = len(paths) - self.paths_per_branch
-            return f"conflicts in {named}" + (f" and {hidden} more" if hidden > 0 else "")
+            return f"conflicts in {named}" + (
+                f" and {hidden} more" if hidden > 0 else ""
+            )
         if outcome.refusals:
             return ", ".join(outcome.refusals)
         if outcome.outcome is RestackOutcome.INTEGRATION_FAILED:
