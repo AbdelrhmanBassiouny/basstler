@@ -20,7 +20,7 @@ items:
   title: Write the manifest and republish the dashboard before anything else, at every transition
   branch: claude/plan-manifest-update-priority-ex2zst
   pull_request_number: 48
-  status: in_progress
+  status: done
   session: https://claude.ai/code/session_01VWwD8nsdKr9wHaRgN1J2du
   track: pass
   blockers: []
@@ -131,7 +131,7 @@ items:
   title: Fast-forward the fork's base through one implementation, shared with session start
   branch: claude/gifted-planck-k6d3c3
   pull_request_number: 72
-  status: in progress
+  status: done
   track: pass
   depends_on: []
   session: https://claude.ai/code/session_01DWEyg9F33n9vwvdb2deBcY
