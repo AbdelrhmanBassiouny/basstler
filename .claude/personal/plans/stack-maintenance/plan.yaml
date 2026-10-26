@@ -43,18 +43,19 @@ items:
     failing branches. Based on main: #15, which split stack_model.py out of stack.py, has
     merged. Three #15 threads point here.'
 - id: pass-commit-graph
-  title: Write a commit-graph at the start of a pass, measured against a profiled baseline
+  title: Answer every landed-branch question with one git call, measured against a profiled baseline
   branch: claude/sleepy-heisenberg-ntd4to
   pull_request_number: 80
   status: in progress
   track: pass
   session: https://claude.ai/code/session_016wYuairtTmRVxjVWrHRHbx
   depends_on: []
-  notes: A CRAM pass (133 PRs) took about 6 min; stack check spent 8.3 s on 133 merge-base
-    --is-ancestor calls (about 60 ms each) in a shallow clone with no commit-graph. Run git
-    commit-graph write --reachable at pass start. First profile a full run-report with GIT_TRACE2
-    and put the before/after numbers in the PR; the baseline is what the later performance
-    items measure against.
+  notes: A CRAM pass (133 PRs) spent 8.3 s on 133 merge-base --is-ancestor calls in a shallow
+    clone. Rescoped from writing a commit-graph, which git ignores in a shallow clone (verified
+    on git 2.43). Instead, one for-each-ref --merged call answers every fork branch and is re-run
+    only when a ref moved. Touches CurrentCheckout.merged_predicate, as landed-predicate-once
+    does; that item decides where the predicate is built, this one how it answers. GIT_TRACE2
+    before/after numbers go in the PR.
 - id: landed-predicate-once
   title: Compute the landed predicate once per run and hand it to every phase
   branch: claude/festive-noether-q4z6bq
