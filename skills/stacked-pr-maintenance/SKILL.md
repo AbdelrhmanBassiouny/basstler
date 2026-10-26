@@ -163,10 +163,23 @@ leave the rest untouched, and report it: this is a preview API, so never improvi
 
 ## Step 2 - run the pass
 
+First write what each upstream pull request opens with - the one part of a promotion only you
+can supply, since it is a reading of the diff. For every branch
+`"${BASSTLER_PYTHON}" -m basstler.stack next --porcelain` names, read its diff against its parent
+and write a JSON document keyed by the fork pull request's number:
+
+```json
+{"<number>": {"title": "<title in the upstream's own convention>", "points": ["<point>", "..."]}}
+```
+
+Points are short sentences for the upstream reviewer, who has not seen the fork pull request.
+Both fields are optional; a branch you write nothing for opens with its fork title and a link
+back. Keep the document in your scratchpad - nothing reads it after this pass.
+
 The rest of the pass is one command:
 
 ```bash
-"${BASSTLER_PYTHON}" -m basstler.maintenance run-report
+"${BASSTLER_PYTHON}" -m basstler.maintenance run-report --summaries <the document>
 ```
 
 It performs the fast-forward, the restack and the promotion, and prints the finish summary as
