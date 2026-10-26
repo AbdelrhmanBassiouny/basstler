@@ -249,17 +249,10 @@ class BaseSource:
         """
         :param configuration: The resolved stacked-PR configuration.
         :return: The upstream it names, published to the fork after.
-
-        A clone that has added the upstream remote fetches it by name; one that has not
-        fetches it by URL, which saves adding a remote nothing else here would use.
         """
         return cls(
             base_branch=configuration.upstream_base,
-            location=(
-                configuration.upstream_remote
-                if configuration.upstream_setup_command is None
-                else configuration.upstream_repository.clone_url
-            ),
+            location=configuration.upstream_location,
             remote_name=configuration.upstream_remote,
             name=configuration.upstream_repository.full_name,
             fork_remote=configuration.fork_remote,

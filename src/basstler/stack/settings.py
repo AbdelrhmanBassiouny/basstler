@@ -118,23 +118,25 @@ class RemoteResolution:
 
     preferred_upstream_name: str
     """
-    What to call the upstream remote when one has to be added.
+    What the upstream's tracking references are kept under when no remote points at it.
     """
 
     @property
     def upstream_name(self) -> str:
-        """:return: The upstream remote's name, or the name it will get when added."""
+        """
+        :return: The upstream remote's name, or :attr:`preferred_upstream_name` when the
+            checkout has no remote for it.
+        """
         return self.upstream.name if self.upstream else self.preferred_upstream_name
 
     @property
-    def upstream_setup_command(self) -> str | None:
-        """:return: The command adding the missing upstream remote, or ``None`` if present."""
-        if self.upstream:
-            return None
+    def upstream_location(self) -> str:
+        """
+        :return: What the upstream is fetched from: its remote's name, or its URL when
+            the checkout has no remote for it.
+        """
         return (
-            f"{GitArgument.GIT} {GitArgument.REMOTE} {GitArgument.ADD} "
-            f"{self.preferred_upstream_name} "
-            f"{self.upstream_repository.clone_url}"
+            self.upstream.name if self.upstream else self.upstream_repository.clone_url
         )
 
     @classmethod
@@ -285,7 +287,8 @@ class Configuration:
 
     upstream_remote: str
     """
-    Git remote for the upstream review repository.
+    The name the upstream's tracking references are kept under, ``refs/remotes/<it>/``,
+    whether or not a remote of that name exists.
     """
 
     upstream_base: str
@@ -293,9 +296,10 @@ class Configuration:
     The upstream base branch every stack ultimately targets.
     """
 
-    upstream_setup_command: str | None
+    upstream_location: str
     """
-    The command adding the upstream remote, or ``None`` once this checkout has one.
+    What the upstream is fetched from: its remote's name, or its URL when the checkout
+    has no remote for it.
     """
 
     @classmethod
@@ -338,7 +342,7 @@ class Configuration:
             upstream_repository=upstream_repository,
             upstream_remote=resolution.upstream_name,
             upstream_base=values[StackSetting.UPSTREAM_BASE],
-            upstream_setup_command=resolution.upstream_setup_command,
+            upstream_location=resolution.upstream_location,
         )
 
     def reference_on_fork(self, name: str) -> str:
@@ -352,8 +356,7 @@ class Configuration:
 
         Keys are this class's own field names, so a caller reading one by name cannot be
         reading a name this module never prints. A setting with no value is omitted
-        rather than printed empty, which is what keeps ``upstream_setup_command``
-        readable as "run this".
+        rather than printed empty.
         """
         for name, value in vars(self).items():
             if value is None:

@@ -87,11 +87,6 @@ class GitArgument(StrEnum):
     Makes :attr:`CAT_FILE` answer only whether the object exists.
     """
 
-    ADD = "add"
-    """
-    The :attr:`REMOTE` subcommand adding a remote.
-    """
-
     FETCH_HEAD = "FETCH_HEAD"
     """
     The reference to whatever the last fetch brought in.
@@ -222,9 +217,11 @@ class CurrentCheckout:
         """
         cls.output(
             GitArgument.FETCH,
-            configuration.upstream_remote,
-            configuration.upstream_base,
             GitArgument.QUIET,
+            configuration.upstream_location,
+            f"+refs/heads/{configuration.upstream_base}:"
+            f"{GitArgument.REMOTE_REFERENCES}/{configuration.upstream_remote}/"
+            f"{configuration.upstream_base}",
         )
         cls.output(
             GitArgument.FETCH, configuration.fork_remote, GitArgument.QUIET, *branches
