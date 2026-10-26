@@ -66,7 +66,11 @@ ensure_basstler_environment() {
 # Installs the package into its existing environment; $1 names the requirements.
 install_basstler_and_report() {
   local requirements="$1"
-  if ! install_basstler_into_environment; then
+  mark_basstler_install_started
+  local installed=true
+  install_basstler_into_environment || installed=false
+  mark_basstler_install_finished
+  if [ "${installed}" = false ]; then
     SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed "${requirements}" \
       "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
       "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
@@ -79,6 +83,12 @@ install_basstler_and_report() {
 
 # Creates the environment, installs the package, and points BASSTLER_PYTHON at it.
 create_and_install_basstler_environment() {
+  mark_basstler_install_started
+  create_and_install_basstler_environment_while_marked
+  mark_basstler_install_finished
+}
+
+create_and_install_basstler_environment_while_marked() {
   if ! create_basstler_environment; then
     SUMMARY_DEPENDENCIES="$(dependencies_line_environment_not_created \
       "${BASSTLER_ENVIRONMENT_DIRECTORY}" \

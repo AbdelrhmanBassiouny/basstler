@@ -583,6 +583,10 @@ BASSTLER_HOME="${BASSTLER_HOME:-${XDG_DATA_HOME:-${HOME}/.local/share}/basstler}
 # BASSTLER_ENVIRONMENT_DIRECTORY: the package's own virtual environment, which
 # session-start.sh creates where it is missing and installs the package into.
 BASSTLER_ENVIRONMENT_DIRECTORY="${BASSTLER_HOME}/venv"
+# BASSTLER_INSTALL_MARKER: holds the process id of a session start while it
+# creates the environment or installs into it, so a check run meanwhile can tell
+# "being installed" from "missing" - see basstler_install_in_progress.
+BASSTLER_INSTALL_MARKER="${BASSTLER_HOME}/install-in-progress"
 # BASSTLER_INSTALLED_SOURCE_FILE: what the environment's package was last
 # installed from, so a plugin update - which names a new source - reinstalls it.
 BASSTLER_INSTALLED_SOURCE_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-source"
@@ -655,6 +659,38 @@ basstler_branch_or_tag() {
   else
     printf 'main\n'
   fi
+}
+
+# mark_basstler_install_started / mark_basstler_install_finished: hold and
+# release BASSTLER_INSTALL_MARKER around an install by this process.
+mark_basstler_install_started() {
+  mkdir -p "${BASSTLER_HOME}"
+  printf '%s\n' "$$" > "${BASSTLER_INSTALL_MARKER}"
+}
+
+mark_basstler_install_finished() {
+  rm -f "${BASSTLER_INSTALL_MARKER}"
+}
+
+# basstler_install_in_progress: succeeds while a running process holds
+# BASSTLER_INSTALL_MARKER. A marker whose process has ended - a session start
+# that was killed - is not an install in progress.
+basstler_install_in_progress() {
+  [ -f "${BASSTLER_INSTALL_MARKER}" ] || return 1
+  kill -0 "$(cat "${BASSTLER_INSTALL_MARKER}")" 2>/dev/null
+}
+
+# wait_for_basstler_install: waits up to $1 seconds (300 by default) for an
+# install in progress to finish, then resolves BASSTLER_PYTHON again, since the
+# install may have created the environment. Fails if it is still running then.
+wait_for_basstler_install() {
+  local remaining="${1:-300}"
+  while basstler_install_in_progress; do
+    [ "${remaining}" -gt 0 ] || return 1
+    sleep 1
+    remaining=$((remaining - 1))
+  done
+  resolve_basstler_python
 }
 
 # resolve_basstler_python: sets BASSTLER_ENVIRONMENT_INTERPRETER, the package
