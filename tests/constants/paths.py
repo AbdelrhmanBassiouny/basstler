@@ -72,6 +72,13 @@ class DatasetLocation(PathEnumeration):
     number alone.
     """
 
+    ACTION_RESULT_WITHOUT_REQUEST_IDENTIFIER = (
+        DIRECTORY / "action-result-without-request-identifier.json"
+    )
+    """
+    A result an Action release from before results named their request committed.
+    """
+
     PROMOTION_SUMMARIES = DIRECTORY / "promotion-summaries.json"
     """
     What a session writes for the upstream pull requests of the two-branch stack: points

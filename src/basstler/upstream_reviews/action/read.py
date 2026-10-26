@@ -20,6 +20,7 @@ from basstler.upstream_reviews.vocabulary import (
     ActionFile,
 )
 from basstler.upstream_reviews.action.recording import (
+    ActionJSONKey,
     ActionResult,
 )
 from basstler.upstream_reviews.clients import (
@@ -205,13 +206,19 @@ class ActionRead:
             time.sleep(self.poll_interval)
 
     def collect(self) -> ActionResult | None:
-        """:return: The result on the branch, when it answers this request."""
+        """
+        :return: The result on the branch, when it answers this request; ``None`` for a
+            result answering another request, including one from a release whose results
+            named no request at all.
+        """
         tip = self.branch.fetch()
         text = self.branch.read(tip, ActionFile.RESULT) if tip else None
         if text is None:
             return None
-        result = ActionResult.from_json(json.loads(text))
-        return result if result.request_identifier == self.request.identifier else None
+        data = json.loads(text)
+        if data.get(ActionJSONKey.REQUEST_IDENTIFIER) != self.request.identifier:
+            return None
+        return ActionResult.from_json(data)
 
     def check_run(self, commit: str, elapsed: int) -> None:
         """
