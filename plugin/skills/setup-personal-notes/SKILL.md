@@ -175,7 +175,8 @@ It creates a new branch named `basstler/upstream-reviews` on the user's fork,
 with no history in common with the project's branches. The branch holds only a
 README and a short workflow file that calls basstler's reusable workflow by
 reference, so it works on a fork of any repository. Run again, it updates that
-workflow to the basstler branch or tag this session's package was installed at.
+workflow to the basstler branch or tag this session's package was installed at,
+which every session start also does once the branch exists.
 Then tell
 the user the one step left to them, which `python -m basstler.setup.steps` also
 prints: a fork starts with Actions off, so they enable them once at
