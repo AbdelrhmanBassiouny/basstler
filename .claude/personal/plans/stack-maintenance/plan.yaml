@@ -52,12 +52,11 @@ items:
   track: pass
   session: https://claude.ai/code/session_016wYuairtTmRVxjVWrHRHbx
   depends_on: []
-  notes: A CRAM pass (133 PRs) spent 8.3 s on 133 merge-base --is-ancestor calls in a shallow
-    clone. Rescoped from writing a commit-graph, which git ignores in a shallow clone (verified
-    on git 2.43). Instead, one for-each-ref --merged call answers every fork branch and is re-run
-    only when a ref moved. Touches CurrentCheckout.merged_predicate, as landed-predicate-once
-    does; that item decides where the predicate is built, this one how it answers. GIT_TRACE2
-    before/after numbers go in the PR.
+  notes: Rescoped from writing a commit-graph, which git ignores in a shallow clone (verified
+    on git 2.43). LandedBranches answers every landed question from one for-each-ref --merged
+    snapshot taken at Stack.load; synthetic profile in the PR shows 266 merge-base calls become
+    1. landed-predicate-once should build on LandedBranches rather than the removed
+    CurrentCheckout.merged_predicate. Not yet confirmed on a real CRAM run-report.
 - id: landed-predicate-once
   title: Compute the landed predicate once per run and hand it to every phase
   branch: claude/festive-noether-q4z6bq
