@@ -45,10 +45,11 @@ items:
     here: CRAM #162''s bastler/-era branch is retired in #50, whose last commit is the reference.'
 - id: stack-state-from-github
   title: Derive in-review and CI from GitHub instead of hand-kept labels
-  branch: null
-  pull_request_number: null
-  status: not_started
+  branch: claude/cool-bardeen-3jxrd1
+  pull_request_number: 77
+  status: in progress
   track: pass
+  session: https://claude.ai/code/session_01HPKG9jXWywpmwgnLgMsUyo
   depends_on: []
   notes: 'Raised in review on basstler#15. The board export records each fork pull request''s
     open upstream pull request and its head''s check verdict (RollupState via CheckStatus.over),
