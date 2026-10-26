@@ -11,3 +11,4 @@
 - A repair rule needs its own evidence, not a shape match. A blind regular expression fixing five broken words happened to be right; run over the whole plan it turned up seven more, one of which it would have corrupted.
 - A performance change is measured, not assumed: profile a full run-report with GIT_TRACE2 before and after, and put the numbers in the pull request.
 - State a change introduces never grows with time. Prefer state derived from git or GitHub, or kept on the pull request (labels). If a file is unavoidable: one file, rewritten in full each pass, holding open pull requests only, bounded by plan_size_limits. Never append to notes.md or PR-progress notes. Deleting it only makes the next pass slower.
+- A shallow clone has no commit-graph: git ignores one there, and the CRAM pass runs in one. Cut the number of git calls instead of relying on a graph to speed each one up.
