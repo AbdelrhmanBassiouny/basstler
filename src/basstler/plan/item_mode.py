@@ -25,8 +25,8 @@ depart from the setting without changing it. What each mode obliges a skill to d
 force.
 
 Usage:
-    python3 -m basstler.plan.item_mode resolve --skill <kickoff|resolve> [--requested <mode>]
-    python3 -m basstler.plan.item_mode set --skill <kickoff|resolve> [--skill ...] --mode <mode>
+    "${BASSTLER_PYTHON}" -m basstler.plan.item_mode resolve --skill <kickoff|resolve> [--requested <mode>]
+    "${BASSTLER_PYTHON}" -m basstler.plan.item_mode set --skill <kickoff|resolve> [--skill ...] --mode <mode>
 
 Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller acting on
 the document never has to decode an integer back into a meaning.

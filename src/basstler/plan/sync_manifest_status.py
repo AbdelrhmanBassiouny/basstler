@@ -17,7 +17,7 @@ script is that edit, meant to run automatically as part of every
 thin" section for the full design reasoning.
 
 Usage:
-    python3 plan/sync_manifest_status.py \\
+    "${BASSTLER_PYTHON}" -m basstler.plan.sync_manifest_status \\
         --plan /tmp/plan.yaml \\
         --pr-data /tmp/pr_data.json \\
         [--output /tmp/plan.yaml] \\

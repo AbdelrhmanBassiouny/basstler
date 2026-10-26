@@ -16,8 +16,8 @@ to find out.
 ## Carrying it
 
 ```bash
-python3 -m basstler.maintenance board --write
-python3 -m basstler.maintenance restack --stacked-on <this item's branch>
+"${BASSTLER_PYTHON}" -m basstler.maintenance board --write
+"${BASSTLER_PYTHON}" -m basstler.maintenance restack --stacked-on <this item's branch>
 ```
 
 The second command plans only the branches stacked on the named one — directly

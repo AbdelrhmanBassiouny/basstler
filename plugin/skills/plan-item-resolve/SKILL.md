@@ -1,7 +1,7 @@
 ---
 name: plan-item-resolve
 description: Resolve what stalls an underway plan item - conflicts, CI, review threads, tracking-issue discussion - on its existing branch, per the execution mode. Invoke as "/plan-item-resolve <plan-id> <item-id>" or "/plan-item-resolve <pull-request-number>". Use from a dashboard's Resolve/Resume/Reconsider link or when asked to resolve, unblock or resume an item.
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__update_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
+allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__update_pull_request, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
 # Plan Item Resolve
@@ -29,8 +29,8 @@ resume any other session.
 ## 1. Gather the item's context
 
 Follow [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md) end to end — the setup check, the
-item's resolution off the personal-notes branch, the tracking-issue
-subscription, its recorded state, the plan's standing rules, the dependency
+item's resolution off the personal-notes branch, the tracking issue's
+comments, its recorded state, the plan's standing rules, the dependency
 chain, and the standing conventions. `plan-item-kickoff` runs the same
 procedure, which is why it lives there rather than in either skill.
 
@@ -155,9 +155,17 @@ item is already underway rather than being started:
   same way. What the resolution was, and why, belongs in the pull request,
   not in `roadmap.md`; add a roadmap entry only for a rule every later item
   must follow. Then republish the dashboard with `/plan-dashboard`.
-- **The pull request goes back to draft after the push**, per the user's own
-  convention, unless they marked it ready themselves — in which case the
-  item was finished and this skill should not have been resolving it.
+- **Whether the pull request goes back to draft after the push** depends on
+  why it is out of draft, which its state tells apart:
+  - **Promoted** — an upstream pull request opened from its branch is still
+    open: the one `/upstream-reviews` reported in step 1, which a maintenance
+    pass also links under `## Upstream pull request` in its description.
+    Leave it ready: that review is still going, so the item is not finished,
+    and this resolve's pushes reach it through the fork branch.
+  - **Ready, and not promoted** — nothing recorded says who marked it ready.
+    Leave it as it is and ask the user whether the item is finished before
+    pushing anything; never flip it back on a guess.
+  - **Draft** — keep it a draft, per the user's own convention.
 
 Once the fix is pushed, carry it into the pull requests stacked on this item's
 branch, which a resolve otherwise leaves holding the state it replaced — follow

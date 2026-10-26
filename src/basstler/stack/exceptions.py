@@ -102,7 +102,7 @@ class BoardUnavailable(StackError, RuntimeError):
         return f"{self.board.name} not found"
 
     def suggest_correction(self) -> str:
-        return "Export it with `python -m basstler.maintenance board --write`."
+        return 'Export it with `"${BASSTLER_PYTHON}" -m basstler.maintenance board --write`.'
 
 
 # %% label writes

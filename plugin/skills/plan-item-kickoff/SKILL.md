@@ -1,7 +1,7 @@
 ---
 name: plan-item-kickoff
 description: Start one tracked plan item: gather its context, open its branch and draft PR, record it, then plan or implement per the execution mode. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use from a dashboard's "Start now" link or when asked to start or kick off an item.
-allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__create_pull_request, mcp__github__update_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
+allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__create_pull_request, mcp__github__update_pull_request, mcp__claude-code-remote__subscribe_pr_activity, mcp__github__issue_read
 ---
 
 # Plan Item Kickoff
@@ -26,8 +26,8 @@ the item stops reading as `not started` the moment it isn't.
 ## 1. Gather the item's context
 
 Follow [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md) end to end — the setup check, the
-item's resolution off the personal-notes branch, the tracking-issue
-subscription, its recorded state, the plan's standing rules, the dependency
+item's resolution off the personal-notes branch, the tracking issue's
+comments, its recorded state, the plan's standing rules, the dependency
 chain, and the standing conventions. `plan-item-resolve` runs the same
 procedure, which is why it lives there rather than in either skill.
 
