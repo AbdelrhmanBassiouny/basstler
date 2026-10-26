@@ -19,7 +19,7 @@ from typing import Any
 
 from basstler.locations import PackageLocation
 from basstler.repository import Repository
-from basstler.stack.checkout import CurrentCheckout
+from basstler.stack.checkout import CurrentCheckout, LandedBranches
 from basstler.stack.exceptions import BoardUnavailable
 from basstler.stack.settings import Configuration
 from basstler.upstream_reviews.vocabulary import RollupState
@@ -363,7 +363,7 @@ class Stack:
         return cls.build(
             configuration,
             pull_requests,
-            CurrentCheckout.merged_predicate(configuration),
+            LandedBranches.from_checkout(configuration).contains,
         )
 
     def maintained_branches(self) -> list[Branch]:

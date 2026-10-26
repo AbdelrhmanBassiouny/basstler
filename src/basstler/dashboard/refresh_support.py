@@ -1,13 +1,6 @@
 #!/usr/bin/env python3
 """
-Small JSON-plumbing helpers refresh_dashboard.sh needs between its two script
-calls (plan/sync_manifest_status.py, then dashboard/plan_page.py) - extracted so that
-plumbing is real, tested code instead of inline ``python3 -c`` snippets
-embedded in the shell script.
-
-Usage:
-    python3 dashboard/refresh_support.py count-corrected '<sync summary JSON>'
-    python3 dashboard/refresh_support.py merge-summaries '<sync summary JSON>' '<build summary JSON>'
+The steps of a dashboard refresh that pass JSON between its scripts.
 """
 
 from __future__ import annotations
@@ -15,7 +8,12 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
+
+from basstler.dashboard.exceptions import SummaryKeyCollisionError
+from basstler.dashboard.publication import DashboardBuildSummary, DashboardUrlCache
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -23,11 +21,7 @@ logger = StandardStreamHandler.logger_for(__name__)
 This module's logger, which is also what its command prints through.
 """
 
-
-class SummaryKeyCollisionError(ValueError):
-    """Raised when plan/sync_manifest_status.py's and dashboard/plan_page.py's printed
-    summaries share a key - merge_summaries can no longer assume a plain
-    dict merge is safe once that holds."""
+# %% the step summaries
 
 
 def count_corrected(sync_summary_json: str) -> int:
@@ -41,31 +35,39 @@ def count_corrected(sync_summary_json: str) -> int:
     return len(json.loads(sync_summary_json)["corrected"])
 
 
-def merge_summaries(sync_summary_json: str, build_summary_json: str) -> dict[str, Any]:
+@dataclass(frozen=True)
+class RefreshSummary:
     """
-    Merge ``plan/sync_manifest_status.py``'s and ``dashboard/plan_page.py``'s printed
-    JSON summaries into the one object the calling skill reports from.
+    The one JSON summary a refresh reports, merged from each of its steps' summaries.
+    """
 
-    :param sync_summary_json:``plan/sync_manifest_status.py``'s printed JSON summary.
-    :param build_summary_json:``dashboard/plan_page.py``'s printed JSON summary.
-    :raises SummaryKeyCollisionError: If the two summaries share a key.
-    :return: The two summaries merged into one dict.
+    entries: dict[str, Any]
     """
-    sync_summary = json.loads(sync_summary_json)
-    build_summary = json.loads(build_summary_json)
-    shared_keys = sync_summary.keys() & build_summary.keys()
-    if shared_keys:
-        raise SummaryKeyCollisionError(
-            f"sync and build summaries share key(s): {', '.join(sorted(shared_keys))}"
-        )
-    return {**sync_summary, **build_summary}
+    Every step's summary entries, by key.
+    """
+
+    @classmethod
+    def from_step_summaries(cls, *summaries_json: str) -> RefreshSummary:
+        """
+        :param summaries_json: Each step's printed JSON summary.
+        :raises SummaryKeyCollisionError: If two summaries share a key.
+        :return: The summaries merged into one.
+        """
+        entries: dict[str, Any] = {}
+        for summary in map(json.loads, summaries_json):
+            shared_keys = entries.keys() & summary.keys()
+            if shared_keys:
+                raise SummaryKeyCollisionError(shared_keys=sorted(shared_keys))
+            entries |= summary
+        return cls(entries=entries)
+
+
+# %% the command
 
 
 def main() -> int:
     """
     Parse arguments, dispatch to the requested subcommand, and print its result.
-
-    See the module docstring for the CLI contract.
     """
     parser = argparse.ArgumentParser(description=__doc__)
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -73,22 +75,30 @@ def main() -> int:
     count_corrected_parser = subparsers.add_parser("count-corrected")
     count_corrected_parser.add_argument("sync_summary_json")
 
+    check_publication_parser = subparsers.add_parser("check-publication")
+    check_publication_parser.add_argument("--key", required=True)
+    check_publication_parser.add_argument("--build-summary", required=True)
+    check_publication_parser.add_argument("--cache", default=None)
+
     merge_summaries_parser = subparsers.add_parser("merge-summaries")
-    merge_summaries_parser.add_argument("sync_summary_json")
-    merge_summaries_parser.add_argument("build_summary_json")
+    merge_summaries_parser.add_argument("summaries_json", nargs="+")
 
     arguments = parser.parse_args()
 
     if arguments.command == "count-corrected":
         logger.info(count_corrected(arguments.sync_summary_json))
-    else:
-        logger.info(
-            json.dumps(
-                merge_summaries(
-                    arguments.sync_summary_json, arguments.build_summary_json
-                )
-            )
+    elif arguments.command == "check-publication":
+        cache_text = (
+            "" if arguments.cache is None else Path(arguments.cache).read_text()
         )
+        build = DashboardBuildSummary.from_json(arguments.build_summary)
+        publication = DashboardUrlCache.from_yaml(cache_text).check(
+            arguments.key, build.content_digest
+        )
+        logger.info(json.dumps(publication.to_json()))
+    else:
+        summary = RefreshSummary.from_step_summaries(*arguments.summaries_json)
+        logger.info(json.dumps(summary.entries))
     return 0
 
 

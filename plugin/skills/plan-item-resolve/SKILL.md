@@ -18,7 +18,7 @@ nothing and writes no code.**
 Step 2 resolves the item's execution mode, and that mode decides what
 happens next: `plan` presents the plan and stops until the user approves it,
 `auto` carries it out on the item's existing branch without asking, and
-`ask` puts the choice to the user. `${EXECUTION_MODES_DOCUMENT}` states what
+`ask` puts the choice to the user. [`execution-modes.md`](../plan-dashboard/execution-modes.md) states what
 each mode means and what it still obliges.
 
 This skill never creates a branch or a pull request — the item already has
@@ -28,7 +28,7 @@ resume any other session.
 
 ## 1. Gather the item's context
 
-Follow `${PLAN_ITEM_GATHERING_DOCUMENT}` end to end — the setup check, the
+Follow [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md) end to end — the setup check, the
 item's resolution off the personal-notes branch, the tracking-issue
 subscription, its recorded state, the plan's standing rules, the dependency
 chain, and the standing conventions. `plan-item-kickoff` runs the same
@@ -80,7 +80,7 @@ already exists**, which is where the cause of a stall almost always is:
 
 ## 2. Resolve how this item gets resolved
 
-Follow `${EXECUTION_MODES_DOCUMENT}`: run its `resolve --skill resolve`
+Follow [`execution-modes.md`](../plan-dashboard/execution-modes.md): run its `resolve --skill resolve`
 call, and if the answer is `ask`, put its question — with a recommendation
 drawn from what step 1 just turned up, and the reasons behind it.
 
@@ -98,13 +98,13 @@ First record what you found, per [`manifest-staleness.md`](../plan-dashboard/man
 `blockers`, and `status` when it is wrong (`blocked`, `deferred`). `notes` change only when
 what the item means changes.
 
-Apply `${PLAN_ITEM_GATHERING_DOCUMENT}`'s last section first: anything you
+Apply [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md)'s last section first: anything you
 are about to raise as an open question is very often already answered by the
 material step 1 gathered — here including the pull request's own review
 threads and the tracking issue's discussion.
 
 Also ask whether the item should still exist separately: follow
-`${SCOPE_DECISION_DOCUMENT}`. If nothing substantial would remain once the
+[`scope-decision.md`](../add-plan-item/scope-decision.md). If nothing substantial would remain once the
 overlapping edits are removed, folding it into that item is often the
 resolution — an item stuck behind its own parent is sometimes stuck because it
 was never really a separate item. The same goes when two items turn out to have
@@ -144,7 +144,7 @@ Work the plan on the item's existing branch, honoring the standing
 conventions step 1 cross-checked: tests first per TDD, commits in the user's
 own git identity, no assistant author or co-author trailer.
 
-`${EXECUTION_MODES_DOCUMENT}` states what stays owed while doing it, and the
+[`execution-modes.md`](../plan-dashboard/execution-modes.md) states what stays owed while doing it, and the
 bar for stopping to ask anyway. Two things are this skill's own, because the
 item is already underway rather than being started:
 
@@ -171,14 +171,14 @@ in `auto` mode this report is the user's first look at the resolution.
 When invoked with a pull request number whose branch no plan tracks, resolve
 the pull request itself. Every step above runs, with these differences:
 
-- **Step 1** skips the plan-reading parts `${PLAN_ITEM_GATHERING_DOCUMENT}`
+- **Step 1** skips the plan-reading parts [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md)
   names, and the tracking-issue bullet above. Everything about the pull
   request's live state - checks, review threads, comments, `/upstream-reviews`,
   the diff - is read exactly as for a tracked item, and the branch's
   PR-progress note on the personal-notes branch, if it has one, stands in for
   the item's `notes`.
 - **Step 3** also asks whether the pull request belongs in a plan: run
-  `${SCOPE_DECISION_DOCUMENT}` against the existing plans. If one fits, say
+  [`scope-decision.md`](../add-plan-item/scope-decision.md) against the existing plans. If one fits, say
   which and why, and offer `/add-plan-item` rather than adding it unasked.
 - **Step 4**'s record is the PR-progress note and the pull request
   description; there is no `plan.yaml` entry or dashboard to update.

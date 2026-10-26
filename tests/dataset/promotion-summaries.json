@@ -1,0 +1,10 @@
+{
+  "40": {
+    "title": "stack: restack a branch onto its moved parent",
+    "points": [
+      "Merges the moved parent into the branch and pushes the result.",
+      "Reports a conflict to the branch's owner instead of resolving it."
+    ]
+  },
+  "41": {}
+}

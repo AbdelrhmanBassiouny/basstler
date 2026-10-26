@@ -37,6 +37,7 @@ from basstler.locations import (
     PluginSkillLocation,
 )
 from basstler.maintenance.github import GitHubRepository
+from basstler.plugin_root import PluginRoot
 from basstler.setup.exceptions import ForeignNotesRemoteError, HookScriptFailedError
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 from basstler.setup.steps import PersonalNotesSetting, resolve_repository
@@ -209,7 +210,7 @@ class PersonalNotesSetup:
     labels unchecked rather than stopping the run.
     """
 
-    plugin_root: Path = PluginLocation.ROOT.value
+    plugin_root: PluginRoot
     """
     The plugin whose hook scripts the steps run.
     """
@@ -240,7 +241,9 @@ class PersonalNotesSetup:
             if repository is None or token is None
             else GitHubRepository(repository, token)
         )
-        return cls(project_root, environment, request, github)
+        return cls(
+            project_root, environment, request, github, PluginRoot.locate(environment)
+        )
 
     def run(self) -> PersonalNotesSetupExitCode:
         """
@@ -335,7 +338,7 @@ class PersonalNotesSetup:
         self.run_hook_script(
             PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT,
             "--source",
-            str(self.plugin_file(PluginSkillLocation.STARTER_NOTES)),
+            str(self.plugin_root.path_of(PluginSkillLocation.STARTER_NOTES)),
             "--destination",
             PersonalNotesSetting.PATH.resolve(self.project_root, self.environment),
             "--message",
@@ -390,7 +393,7 @@ class PersonalNotesSetup:
         """
         return subprocess.run(
             Bash.locate(self.environment).command(
-                self.plugin_file(PluginLocation.SETUP_CHECK_SCRIPT)
+                self.plugin_root.path_of(PluginLocation.SETUP_CHECK_SCRIPT)
             ),
             cwd=self.project_root,
             env=dict(self.environment),
@@ -406,7 +409,7 @@ class PersonalNotesSetup:
         :param arguments: Its arguments.
         :raises HookScriptFailedError: If it exits with a failure.
         """
-        path = self.plugin_file(script)
+        path = self.plugin_root.path_of(script)
         completed = subprocess.run(
             Bash.locate(self.environment).command(path, *arguments),
             cwd=self.project_root,
@@ -414,13 +417,6 @@ class PersonalNotesSetup:
         )
         if completed.returncode != 0:
             raise HookScriptFailedError(path, completed.returncode)
-
-    def plugin_file(self, location: PluginLocation | PluginSkillLocation) -> Path:
-        """
-        :param location: A file of the plugin.
-        :return: That file in :attr:`plugin_root`.
-        """
-        return self.plugin_root / location.value.relative_to(PluginLocation.ROOT.value)
 
 
 # %% command line

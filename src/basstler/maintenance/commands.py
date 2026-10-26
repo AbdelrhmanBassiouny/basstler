@@ -22,7 +22,11 @@ from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.github import GitHubRepository, PullRequestReader
-from basstler.maintenance.promotion import clear_spent_promotion_labels, promote
+from basstler.maintenance.promotion import (
+    PromotionSummaries,
+    clear_spent_promotion_labels,
+    promote,
+)
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
 from basstler.maintenance.review_label import synchronize_review_labels
@@ -251,6 +255,18 @@ class PromoteCommand(MaintenanceCommand):
         """
         return "record the upstream link on every promotable branch"
 
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--summaries`` on."""
+        parser.add_argument(
+            "--summaries",
+            type=Path,
+            help=(
+                "a JSON document keyed by fork pull request number, each entry giving "
+                "the 'points' and optionally the 'title' its upstream pull request "
+                "opens with"
+            ),
+        )
+
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
     ) -> StackExitCode:
@@ -260,7 +276,9 @@ class PromoteCommand(MaintenanceCommand):
         stack = maintenance.stack()
         fork = maintenance.fork()
         report = MaintenanceReport(
-            promoted=tuple(promote(stack, fork)),
+            promoted=tuple(
+                promote(stack, fork, PromotionSummaries.read_from(arguments.summaries))
+            ),
             promotion_labels_cleared=tuple(clear_spent_promotion_labels(stack, fork)),
             review_labels=tuple(synchronize_review_labels(stack, fork)),
         )
@@ -289,7 +307,9 @@ class RunReportCommand(MaintenanceCommand):
         return "perform the whole pass and report it"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """:param parser: The subparser to declare ``--json`` on."""
+        """:param parser: The subparser to declare ``--json`` and the promotion's own
+        arguments on."""
+        PromoteCommand().declare_arguments(parser)
         parser.add_argument(
             "--json",
             action="store_true",
@@ -304,9 +324,18 @@ class RunReportCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code.
         """
-        return self.perform(maintenance, as_json=arguments.json).exit_code
+        return self.perform(
+            maintenance,
+            as_json=arguments.json,
+            summaries=PromotionSummaries.read_from(arguments.summaries),
+        ).exit_code
 
-    def perform(self, maintenance: MaintenancePass, as_json: bool) -> MaintenanceReport:
+    def perform(
+        self,
+        maintenance: MaintenancePass,
+        as_json: bool,
+        summaries: PromotionSummaries,
+    ) -> MaintenanceReport:
         """
         Perform every step of the pass, print it, then discard the board it derived
         from.
@@ -318,6 +347,8 @@ class RunReportCommand(MaintenanceCommand):
         :param maintenance: What this run has resolved.
         :param as_json: Whether to print the machine-readable document rather than the
             finish summary.
+        :param summaries: What each upstream pull request opens with, where anybody wrote
+            it.
         :return: What the pass did.
         """
         stack = maintenance.stack()
@@ -327,7 +358,7 @@ class RunReportCommand(MaintenanceCommand):
             stack,
             fast_forward_report,
             restack(stack, maintenance.git, fork),
-            promote(stack, fork),
+            promote(stack, fork, summaries),
             clear_spent_promotion_labels(stack, fork),
             synchronize_review_labels(stack, fork),
         )

@@ -29,7 +29,9 @@ from basstler.pull_request_state import (
     PullRequestsByRepository,
     PullRequestState,
 )
+from basstler.dashboard.publication import DashboardArtifact, PublicationField
 from basstler.github_labels import GitHubLabel
+from basstler.locations import DashboardArtifactFile
 
 from ..constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
 from ..constants.stack import StackLabel
@@ -1531,6 +1533,88 @@ def test_main_rejects_an_invalid_manifest_instead_of_crashing(
     assert capsys.readouterr().err == (
         f"plan.yaml failed validation: {expected_error.value}\n"
     )
+
+
+def test_main_writes_the_artifact_files_and_prints_their_digest(
+    tmp_path, monkeypatch, capsys
+):
+    plan_path, roadmap_path, pull_request_data_path, _ = _write_minimal_plan_files(
+        tmp_path
+    )
+    artifact_directory = tmp_path / "artifact"
+    artifact_directory.mkdir()
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "dashboard/plan_page.py",
+            "--plan",
+            str(plan_path),
+            "--roadmap",
+            str(roadmap_path),
+            "--pr-data",
+            str(pull_request_data_path),
+            "--artifact-directory",
+            str(artifact_directory),
+        ],
+    )
+    assert main() == 0
+    written = DashboardArtifact(
+        files={
+            file: (artifact_directory / file).read_text()
+            for file in DashboardArtifactFile
+        }
+    )
+    summary = json.loads(capsys.readouterr().out)
+    assert summary[PublicationField.CONTENT_DIGEST] == written.content_digest
+
+
+# %% the artifact files
+
+
+@pytest.mark.parametrize(
+    "file",
+    [
+        DashboardArtifactFile.STYLE,
+        DashboardArtifactFile.CONTENT,
+        DashboardArtifactFile.SCRIPT,
+    ],
+)
+def test_the_self_contained_page_is_made_of_the_artifact_parts(
+    file: DashboardArtifactFile,
+):
+    rendered = _render_example_plan()
+    assert rendered.artifact.files[file] in rendered.html
+
+
+@pytest.mark.parametrize(
+    "file",
+    [
+        DashboardArtifactFile.STYLE,
+        DashboardArtifactFile.CONTENT,
+        DashboardArtifactFile.SCRIPT,
+    ],
+)
+def test_the_artifact_page_loads_every_other_file(file: DashboardArtifactFile):
+    page = _render_example_plan().artifact.files[DashboardArtifactFile.PAGE]
+    assert f'"{file}"' in page
+
+
+def test_the_artifact_page_carries_the_plan_title():
+    rendered = _render_example_plan()
+    page = rendered.artifact.files[DashboardArtifactFile.PAGE]
+    title = yaml.safe_load((EXAMPLE_DIRECTORY / "plan.yaml").read_text())["title"]
+    assert page.startswith(f"<title>{title}</title>")
+
+
+def test_the_artifact_page_is_a_small_fraction_of_the_dashboard():
+    """
+    The page is what another session reads before updating the Artifact, so it stays
+    short whatever the plan holds.
+    """
+    rendered = _render_example_plan()
+    page = rendered.artifact.files[DashboardArtifactFile.PAGE]
+    assert len(page) * 10 < len(rendered.html)
 
 
 # %% example-walkthrough.md's committed sample plan

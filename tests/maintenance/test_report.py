@@ -35,6 +35,7 @@ from basstler.maintenance.fast_forward import (
     FastForwardReport,
     fast_forward,
 )
+from basstler.maintenance.promotion import PromotionSummaries
 from basstler.maintenance.report import MaintenanceReport, MaintenanceReportKey
 from basstler.maintenance.restack_procedure import restack
 from basstler.maintenance.restack_steps import (
@@ -105,7 +106,7 @@ def test_a_whole_pass_leaves_no_board_behind(fork_checkout: ForkCheckout):
     maintenance = AlreadyResolvedPass.over(fork_checkout, the_board())
     maintenance.board.write_text("{}")
 
-    RunReportCommand().run(maintenance, argparse.Namespace(json=True))
+    RunReportCommand().run(maintenance, argparse.Namespace(json=True, summaries=None))
 
     assert not maintenance.board.exists()
 
@@ -181,7 +182,9 @@ def test_a_pass_over_a_head_on_another_fork_finishes_rather_than_failing_on_git(
         ),
     )
 
-    status = RunReportCommand().run(maintenance, argparse.Namespace(json=True))
+    status = RunReportCommand().run(
+        maintenance, argparse.Namespace(json=True, summaries=None)
+    )
 
     assert status == StackExitCode.SUCCESS
 
@@ -258,7 +261,9 @@ def test_a_head_outside_the_fork_is_reported_as_skipped_with_its_reason(
     board = a_board_with_a_head_outside_the_fork(head_repository)
     maintenance = AlreadyResolvedPass.over(fork_checkout, board)
 
-    report = RunReportCommand().perform(maintenance, as_json=True)
+    report = RunReportCommand().perform(
+        maintenance, as_json=True, summaries=PromotionSummaries()
+    )
     document = json.loads(report.as_json())
 
     assert document["skipped"] == [asdict(SkippedPullRequest(board[-1], reason))]
@@ -284,7 +289,9 @@ def test_a_head_outside_the_fork_is_never_promoted_labelled_or_commented_on(
         a_board_with_a_head_outside_the_fork(head_repository, base=UPSTREAM_BASE),
     )
 
-    report = RunReportCommand().perform(maintenance, as_json=True)
+    report = RunReportCommand().perform(
+        maintenance, as_json=True, summaries=PromotionSummaries()
+    )
 
     fork = maintenance.recorded_fork
     written_to = {
@@ -306,7 +313,9 @@ def test_a_head_outside_the_fork_is_summarised_as_skipped_with_its_reason(
         ),
     )
 
-    RunReportCommand().perform(maintenance, as_json=False)
+    RunReportCommand().perform(
+        maintenance, as_json=False, summaries=PromotionSummaries()
+    )
 
     summary = capsys.readouterr().out.splitlines()
     assert any(

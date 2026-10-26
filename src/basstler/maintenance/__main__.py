@@ -16,6 +16,7 @@ This module is the command line onto the modules that perform those steps::
     python -m basstler.maintenance restack --stacked-on <branch>  # carry one branch into what is stacked on it
     python -m basstler.maintenance promote           # record the upstream link on every ready branch
     python -m basstler.maintenance run-report        # the whole pass, as its finish summary
+    python -m basstler.maintenance run-report --summaries <file>  # with what each upstream pull request opens with
     python -m basstler.maintenance run-report --json # the whole pass as one document
 
 It executes an already-derived plan: structure still comes from ``basstler.stack`` and from

@@ -95,7 +95,8 @@ next to the workflow it describes, because it is read rather than run.
 - **`skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
   as `/stacked-pr-maintenance` from any session, and run first by `/plan-item-kickoff` and
   `/plan-item-resolve`. It takes `fork=` / `upstream=` arguments, falls back to
-  `configuration`, and asks when neither answers.
+  `configuration`, and asks when neither answers. It carries only the steps; why each rule
+  holds is in [maintenance-pass.md](maintenance-pass.md).
 
 ## The state machine (your approval gate)
 
@@ -143,14 +144,20 @@ they start on an item, so a stack is brought up to date when someone works on it
 
 A `merge`-strategy branch is restacked by merging its parent's moved tip in, so a pull request
 that waits through many passes would collect one merge per pass. Instead, each restack drops the
-merges at the branch's tip that only brought in an older state of its parent, and merges the
-parent's current tip in once - so the branch carries a single restack merge however long it
-waits. A merge is dropped only when the parent now holds every change it brought in and its
-content is exactly what merging its two sides produces: a merge carrying a conflict resolution,
-one bringing in another branch, and one with work committed on top of it are all kept. Replacing
-merges rewrites the branch, so it is pushed under a lease and never over a push the pass did not
-see; when merging onto the commit beneath them would conflict, the parent is merged onto the
-published tip as before.
+merges it made earlier at the branch's tip that only brought in what the branch is about to hold
+anyway, and merges the parent's current tip in once - so the branch carries a single restack merge
+however long it waits. A restack marks its merges with a `Restacked-parent:` trailer naming the
+parent and a `Restacked-parent-commit:` trailer naming the parent commit it merged in, and only
+merges carrying both, with that commit being the one actually merged in, are ever dropped: a merge
+somebody made by hand is kept, even one reusing an earlier restack merge's message. A marked merge is
+dropped only when the parent and the branch's own commits together hold every change it brought
+in - which still holds after the branch is reparented onto a base that lacks its former parent's
+commits - and its content is exactly what merging its two sides produces: a merge carrying a
+conflict resolution, one bringing in another branch, and one with work committed on top of it are
+all kept. Replacing merges rewrites the branch, so it is pushed under a lease and never over a push
+the pass did not see. The replacing merge goes onto the deepest commit beneath the dropped merges
+it merges cleanly onto, trying shallower ones in turn; when none merges cleanly, the parent is
+merged onto the published tip as before.
 
 ## Rules of hygiene
 
@@ -163,6 +170,6 @@ published tip as before.
   GitHub.
 - **CI is the validator.** A suite the cloud container cannot run (missing system
   dependencies, hardware, services) is never run locally - poll a PR's CI with the GitHub MCP and treat its
-  red/green as the oracle (no session subscribes to a PR's activity - CI is learned by polling; see the maintenance skill's HARD RULES). A
+  red/green as the oracle (no session subscribes to a PR's activity - CI is learned by polling; see [maintenance-pass.md](maintenance-pass.md)). A
   maintenance pass never fixes a failing check: it reports the branch to its owner and moves on.
   Never disable a leak/CI check to go green.

@@ -1,34 +1,7 @@
 #!/usr/bin/env python3
 """
-Record a plan dashboard's published Artifact URL into the dashboard-URL cache.
-
-The caller names the cache key and the title the dashboard is published under; the URL
-is looked up in the account's Artifact listing and that URL is written, so no URL the
-listing does not contain can be recorded. When several artifacts share the title, the
-most recently updated one wins; ``--url`` overrides that choice and must name one of
-them.
-
-Usage:
-    python3 dashboard/record_url.py \\
-        --key <plan-id|_index> \\
-        --expected-title "<the plan's title, or the index's own title>" \\
-        --listing /tmp/artifact_listing.json \\
-        --cache /tmp/dashboard-urls.yaml \\
-        --output /tmp/updated-dashboard-urls.yaml \\
-        [--url <one of the same-titled candidates>]
-
-artifact_listing.json shape - one object per artifact the account owns, transcribed
-from the Artifact tool's ``action: "list"`` output:
-    [{"title": "...", "url": "...", "updated": "YYYY-MM-DD"}, ...]
-
-The cache is patched a line at a time rather than round-tripped through a YAML dump, so
-the header comment, key order and spacing survive and the diff shows only the entry that
-moved.
-
-Prints a one-line JSON summary to stdout:
-    {"key": ..., "url": ..., "previous_url": ..., "changed": true|false}
-``changed`` is false when the cache already named that artifact, in which case there is
-nothing to push.
+Record a plan dashboard's published Artifact URL and content digest in the dashboard-URL
+cache.
 """
 
 from __future__ import annotations
@@ -42,6 +15,7 @@ from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
 from typing import Any
+from basstler.dashboard.publication import DashboardUrlCache
 from basstler.exceptions import DataclassException
 from basstler.standard_streams import StandardStreamHandler
 
@@ -291,6 +265,39 @@ class PatchedCache:
     What the key held before, or ``None`` if it had no entry.
     """
 
+    def with_content_digest(self, key: str, content_digest: str | None) -> PatchedCache:
+        """
+        Write ``content_digest`` as ``key``'s entry in the cache's digest section, in
+        place when the key has one, or remove that entry when ``content_digest`` is
+        ``None``.
+
+        :param key: The cache key to write.
+        :param content_digest: The digest of what was published at the key's URL, or
+            ``None`` when it is unknown.
+        :return: This patch with the digest written too.
+        """
+        lines = self.text.split("\n")
+        header = f"{DashboardUrlCache.content_digest_section}:"
+        entry = f"  {key}: {content_digest}"
+        if header not in lines:
+            if content_digest is None:
+                return self
+            position = append_position(lines)
+            lines[position:position] = [header, entry]
+            return PatchedCache(text="\n".join(lines), previous_url=self.previous_url)
+
+        section_start = lines.index(header) + 1
+        section_end = section_start
+        while section_end < len(lines) and lines[section_end].startswith(" "):
+            section_end += 1
+        existing = find_cache_entry_line(lines[section_start:section_end], f"  {key}")
+        if existing is not None:
+            index = section_start + existing.index
+            lines[index : index + 1] = [] if content_digest is None else [entry]
+        elif content_digest is not None:
+            lines.insert(section_end, entry)
+        return PatchedCache(text="\n".join(lines), previous_url=self.previous_url)
+
 
 def find_cache_entry_line(lines: list[str], key: str) -> CacheEntryLine | None:
     """
@@ -368,12 +375,10 @@ class UrlRecord:
     What the key held beforehand, or ``None`` if it had no entry.
     """
 
-    @property
-    def changed(self) -> bool:
-        """
-        Whether the cache moved, and so needs pushing back.
-        """
-        return self.previous_url != self.url
+    changed: bool
+    """
+    Whether the cache moved, and so needs pushing back.
+    """
 
     def to_json_dict(self) -> dict[str, Any]:
         """
@@ -390,8 +395,6 @@ class UrlRecord:
 def main() -> int:
     """
     Parse arguments, resolve the URL, patch the cache, and print the summary.
-
-    See the module docstring for the CLI contract.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -418,6 +421,11 @@ def main() -> int:
         default=None,
         help="Override which same-titled artifact to keep, instead of the freshest",
     )
+    parser.add_argument(
+        "--content-digest",
+        default=None,
+        help="The content_digest of the files just published, from the refresh summary",
+    )
     arguments = parser.parse_args()
 
     listing = load_artifact_listing(json.loads(Path(arguments.listing).read_text()))
@@ -427,10 +435,18 @@ def main() -> int:
         logger.error(f"refusing to record a dashboard URL: {error}")
         return 1
 
-    patched = apply_url_record(Path(arguments.cache).read_text(), arguments.key, url)
+    cache_text = Path(arguments.cache).read_text()
+    patched = apply_url_record(cache_text, arguments.key, url).with_content_digest(
+        arguments.key, arguments.content_digest
+    )
     Path(arguments.output).write_text(patched.text)
 
-    record = UrlRecord(key=arguments.key, url=url, previous_url=patched.previous_url)
+    record = UrlRecord(
+        key=arguments.key,
+        url=url,
+        previous_url=patched.previous_url,
+        changed=patched.text != cache_text,
+    )
     logger.info(json.dumps(record.to_json_dict()))
     return 0
 

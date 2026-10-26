@@ -55,19 +55,3 @@ def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
     assert PromotionSampleText.SECOND_LINK in second
     assert PromotionSampleText.FIRST_LINK not in second
     assert second.startswith(PromotionSampleText.PROSE)
-
-
-def test_the_summary_is_the_first_paragraph_ahead_of_the_promotion_section():
-    written = PullRequestDescription(
-        f"{PromotionSampleText.SUMMARY}\n\n{PromotionSampleText.DETAIL}\n"
-    ).with_promotion_link(PromotionSampleText.FIRST_LINK)
-
-    assert PullRequestDescription(written).summary == PromotionSampleText.SUMMARY
-
-
-def test_a_description_holding_only_the_promotion_section_has_no_summary():
-    written = PullRequestDescription("").with_promotion_link(
-        PromotionSampleText.FIRST_LINK
-    )
-
-    assert PullRequestDescription(written).summary == ""

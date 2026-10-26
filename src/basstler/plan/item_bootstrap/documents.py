@@ -28,6 +28,7 @@ from basstler.plan.model import (
     PlanDocument,
     PlanManifest,
 )
+from basstler.plugin_root import PluginRoot
 from basstler.shell_configuration import ShellConfigurationFunction
 
 # %% the plan on the personal-notes branch
@@ -228,7 +229,9 @@ class PlanDocuments:
                 (scratch / document.value).write_text(content)
             saved = subprocess.run(
                 Bash.locate(os.environ).command(
-                    PluginLocation.PLAN_SAVING_SCRIPT,
+                    PluginRoot.locate(os.environ).path_of(
+                        PluginLocation.PLAN_SAVING_SCRIPT
+                    ),
                     self.plan_identifier,
                     "--manifest",
                     str(scratch / PlanDocument.MANIFEST.value),
