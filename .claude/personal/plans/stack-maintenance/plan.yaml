@@ -44,10 +44,11 @@ items:
     merged. Three #15 threads point here.'
 - id: pass-commit-graph
   title: Write a commit-graph at the start of a pass, measured against a profiled baseline
-  branch: null
-  pull_request_number: null
-  status: not_started
+  branch: claude/sleepy-heisenberg-ntd4to
+  pull_request_number: 80
+  status: in progress
   track: pass
+  session: https://claude.ai/code/session_016wYuairtTmRVxjVWrHRHbx
   depends_on: []
   notes: A CRAM pass (133 PRs) took about 6 min; stack check spent 8.3 s on 133 merge-base
     --is-ancestor calls (about 60 ms each) in a shallow clone with no commit-graph. Run git
