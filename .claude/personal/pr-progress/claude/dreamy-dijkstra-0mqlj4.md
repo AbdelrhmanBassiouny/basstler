@@ -6,4 +6,5 @@ Plan:
 Done:
 - All three, with failing-first tests; docs and skill updated; draft PR opened
 Next:
+- Review thread on CommitTrailer (trailer reliability): answered, open; awaiting your call on binding the merged SHA into the trailer
 - Wait for review/CI prompts from the user
