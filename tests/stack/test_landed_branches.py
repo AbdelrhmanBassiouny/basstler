@@ -12,7 +12,6 @@ from basstler.stack.checkout import LandedBranches
 from ..constants.stack import RemoteName, StackBranch
 from ..maintenance.fork import UPSTREAM_BASE, ForkCheckout, make_configuration
 
-
 # %% a parent branch on the fork, and whether the upstream has it
 
 
@@ -76,3 +75,15 @@ def test_an_answer_is_what_the_refs_said_when_the_snapshot_was_taken(
     land_upstream(fork_with_a_branch, StackBranch.PARENT)
 
     assert not landed.contains(StackBranch.PARENT)
+
+
+def test_a_branch_named_with_a_slash_has_landed(
+    fork_checkout: ForkCheckout, monkeypatch: pytest.MonkeyPatch
+):
+    fork_checkout.branch_from(StackBranch.NAMESPACED, UPSTREAM_BASE)
+    monkeypatch.chdir(fork_checkout.project_root)
+    land_upstream(fork_checkout, StackBranch.NAMESPACED)
+
+    assert LandedBranches.from_checkout(make_configuration()).contains(
+        StackBranch.NAMESPACED
+    )
