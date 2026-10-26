@@ -53,7 +53,7 @@ to a scratch file and print just this item with
 `--branch <branch>`); do the same for each item it `depends_on` when the
 readiness check below leaves a question. Never read the whole manifest to
 find one item - every other item is another session's work and costs this
-one context. Read `${PLAN_SCHEMA_DOCUMENT}` only if a field's meaning is
+one context. Read [`plan-schema.md`](plan-schema.md) only if a field's meaning is
 unclear.
 
 Given a pull request number instead of the two ids, find the item from the
@@ -115,7 +115,7 @@ personal-notes branch's history.
 
 ## Check the dependency chain
 
-For the item's `depends_on`, follow `${DEPENDENCY_READINESS_DOCUMENT}`'s
+For the item's `depends_on`, follow [`dependency-readiness.md`](dependency-readiness.md)'s
 bulk-fetch-and-check procedure, for `--item <item-id>`.
 
 A dependency the script reports not ready for is a real and common cause of
