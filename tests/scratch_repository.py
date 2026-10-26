@@ -400,6 +400,19 @@ class ScratchRepository:
         :param overrides: Variables the run sets.
         :return: What it printed.
         """
+        result = self.run_with_configuration(command, **overrides)
+        result.check_returncode()
+        return result.stdout
+
+    def run_with_configuration(
+        self, command: str, **overrides: str
+    ) -> subprocess.CompletedProcess[str]:
+        """
+        :param command: A shell command run once the scratch plugin's configuration is
+            sourced in the project, such as a call to one of its functions.
+        :param overrides: Variables the run sets.
+        :return: The finished run, whatever its exit status.
+        """
         self.install_hook_scripts(
             PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name
         )
@@ -413,9 +426,8 @@ class ScratchRepository:
             cwd=self.project_root,
             capture_output=True,
             text=True,
-            check=True,
             env=self.runner_environment(**overrides),
-        ).stdout
+        )
 
     def install_package_environment(self) -> Path:
         """

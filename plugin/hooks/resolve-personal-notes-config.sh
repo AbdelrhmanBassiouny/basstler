@@ -586,6 +586,15 @@ BASSTLER_ENVIRONMENT_DIRECTORY="${BASSTLER_HOME}/venv"
 # BASSTLER_INSTALLED_SOURCE_FILE: what the environment's package was last
 # installed from, so a plugin update - which names a new source - reinstalls it.
 BASSTLER_INSTALLED_SOURCE_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-source"
+# BASSTLER_INSTALL_LOCK: a directory session-start.sh holds while it creates
+# the environment or installs into it, so a caller of the package started
+# meanwhile waits for the install instead of importing a half-installed
+# package. BASSTLER_INSTALL_LOCK_HOLDER names the process holding it; a lock
+# whose holder has exited is stale and taken over.
+BASSTLER_INSTALL_LOCK="${BASSTLER_HOME}/install.lock"
+BASSTLER_INSTALL_LOCK_HOLDER="${BASSTLER_INSTALL_LOCK}/holder"
+# BASSTLER_INSTALL_WAIT_SECONDS: how long a caller waits for the lock.
+BASSTLER_INSTALL_WAIT_SECONDS="${BASSTLER_INSTALL_WAIT_SECONDS:-600}"
 # BASSTLER_PYTHON_REQUIREMENT: the interpreters the package supports - the
 # requires-python of the package's pyproject.toml, which a test holds this
 # equal to.
@@ -709,11 +718,62 @@ missing_dependencies() {
   echo ${missing}
 }
 
+# basstler_install_is_running: whether a live process holds
+# BASSTLER_INSTALL_LOCK. A lock whose holder is not yet recorded counts as
+# held, since its holder records itself right after taking it.
+basstler_install_is_running() {
+  [ -d "${BASSTLER_INSTALL_LOCK}" ] || return 1
+  local holder
+  holder="$(cat "${BASSTLER_INSTALL_LOCK_HOLDER}" 2>/dev/null)"
+  [ -n "${holder}" ] || return 0
+  kill -0 "${holder}" 2>/dev/null
+}
+
+# wait_for_basstler_install: returns once no install is running, or 1 after
+# BASSTLER_INSTALL_WAIT_SECONDS with one still running.
+wait_for_basstler_install() {
+  local waited=0
+  while basstler_install_is_running; do
+    [ "${waited}" -lt "${BASSTLER_INSTALL_WAIT_SECONDS}" ] || return 1
+    sleep 1
+    waited=$((waited + 1))
+  done
+}
+
+# acquire_basstler_install_lock: takes BASSTLER_INSTALL_LOCK for this process,
+# waiting as wait_for_basstler_install does for a running install, and taking
+# over a stale lock. Returns 1 when the wait runs out.
+acquire_basstler_install_lock() {
+  mkdir -p "${BASSTLER_HOME}"
+  until mkdir "${BASSTLER_INSTALL_LOCK}" 2>/dev/null; do
+    if ! basstler_install_is_running; then
+      rm -rf "${BASSTLER_INSTALL_LOCK}"
+      continue
+    fi
+    wait_for_basstler_install || return 1
+  done
+  printf '%s\n' "$$" > "${BASSTLER_INSTALL_LOCK_HOLDER}"
+}
+
+# release_basstler_install_lock: gives BASSTLER_INSTALL_LOCK up.
+release_basstler_install_lock() {
+  rm -rf "${BASSTLER_INSTALL_LOCK}"
+}
+
 # require_basstler_python: exits the calling script, saying what to run, unless
-# BASSTLER_PYTHON exists and has every requirement of the package. A session
-# start installs them; a checkout where that never ran reaches this message
-# instead of a traceback.
+# BASSTLER_PYTHON exists and has every requirement of the package, once any
+# install in progress has finished. A session start installs them; a checkout
+# where that never ran reaches this message instead of a traceback.
 require_basstler_python() {
+  if basstler_install_is_running; then
+    if ! wait_for_basstler_install; then
+      echo "The basstler package is still being installed: ${BASSTLER_INSTALL_LOCK} has been held for over ${BASSTLER_INSTALL_WAIT_SECONDS}s." >&2
+      echo "Wait for the session start to finish and run this again." >&2
+      exit 1
+    fi
+    # The install may have just created the environment.
+    resolve_basstler_python
+  fi
   if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
     echo "${BASSTLER_PYTHON} is required to run the basstler package." >&2
     exit 1

@@ -457,7 +457,7 @@ def a_board_entry(
     labels: list[str] | None = None,
     title: str | None = None,
     session: str | None = None,
-    promotion_link: str | None = None,
+    description: str | None = None,
 ) -> PullRequest:
     """
     :param number: The pull request number.
@@ -466,7 +466,7 @@ def a_board_entry(
     :param labels: The labels it carries.
     :param title: Its title.
     :param session: The session its description names.
-    :param promotion_link: The upstream create-link its description records.
+    :param description: Its description, without the promotion section.
     :return: One ready board entry whose head is on the fork.
     """
     return PullRequest(
@@ -478,7 +478,7 @@ def a_board_entry(
         labels=labels or [],
         session=session,
         title=title,
-        promotion_link=promotion_link,
+        description=description,
     )
 
 

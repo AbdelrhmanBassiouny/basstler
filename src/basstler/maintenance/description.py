@@ -14,8 +14,8 @@ from basstler.maintenance.constants import DescriptionPattern, MaintenanceText
 @dataclass(frozen=True)
 class PullRequestDescription:
     """
-    A pull request's description, with the session link and the promotion section a pass
-    reads and records in it.
+    A pull request's description, with the session link a pass reads out of it and the
+    promotion section it records in it.
     """
 
     text: str
@@ -31,14 +31,14 @@ class PullRequestDescription:
         return DescriptionPattern.SESSION_LINK.first_in(self.text)
 
     @property
-    def promotion_link(self) -> str | None:
+    def prose(self) -> str:
         """
-        The upstream create-link a pass recorded under the promotion heading, or
-        ``None`` when the description has no such section.
+        The description as its author wrote it, without the promotion section a pass
+        recorded.
         """
-        _, heading, recorded = self.text.partition(MaintenanceText.PROMOTION_HEADING)
-        words = recorded.split()
-        return words[0] if heading and words else None
+        heading = DescriptionPattern.PROMOTION_HEADING.value.search(self.text)
+        before = self.text if heading is None else self.text[: heading.start()]
+        return before.rstrip()
 
     def with_promotion_link(self, url: str) -> str:
         """
@@ -46,5 +46,4 @@ class PullRequestDescription:
         :return: The description with *url* as its promotion section, replacing any
             section already there.
         """
-        before, _, _ = self.text.partition(MaintenanceText.PROMOTION_HEADING)
-        return f"{before.rstrip()}\n\n{MaintenanceText.PROMOTION_HEADING}\n\n{url}\n"
+        return f"{self.prose}\n\n{MaintenanceText.PROMOTION_HEADING}\n\n{url}\n"

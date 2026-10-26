@@ -25,8 +25,9 @@ from basstler.maintenance.constants import MaintenanceText
 from basstler.maintenance.description import PullRequestDescription
 from basstler.maintenance.github import ForkPullRequests, PullRequestWriter
 from basstler.stack.label_write import LabelWrite
-from basstler.stack.model import BranchStatus, Stack
+from basstler.stack.model import Branch, BranchStatus, Stack
 from basstler.stack.promotion_link import PromotionLink
+from basstler.stack.settings import Configuration
 
 # %% the summaries a caller writes
 
@@ -92,6 +93,28 @@ class PromotionSummary:
         bullet_list = "\n".join(f"- {point}" for point in self.points)
         return f"{bullet_list}\n\n{link_back}"
 
+    def link_for(
+        self, configuration: Configuration, branch: Branch, fork_title: str | None
+    ) -> PromotionLink:
+        """
+        Build the link opening *branch*'s upstream pull request with this summary.
+
+        :param configuration: The resolved configuration naming both repositories.
+        :param branch: The branch to promote.
+        :param fork_title: Its fork pull request's title, ``None`` when it has none.
+        :return: The link, titled by this summary, else the fork title, else the branch.
+        """
+        return PromotionLink.build(
+            configuration,
+            branch.name,
+            self.title or fork_title or branch.name,
+            self.upstream_description(
+                configuration.fork_repository.pull_request_url(
+                    branch.pull_request_number
+                )
+            ),
+        )
+
 
 @dataclass(frozen=True)
 class PromotionSummaries:
@@ -126,6 +149,13 @@ class PromotionSummaries:
                 for number, entry in data.items()
             }
         )
+
+    def written_for(self, number: int) -> bool:
+        """
+        :param number: A fork pull request.
+        :return: Whether the document has an entry for it.
+        """
+        return number in self.by_pull_request_number
 
     def for_pull_request(self, number: int) -> PromotionSummary:
         """
@@ -177,6 +207,9 @@ def promote(
     rebuilding it. The ``in-review`` label stays the developer's to add, since the
     upstream pull request does not exist until they click Create.
 
+    A branch whose link an earlier pass already sent is left alone unless *summaries*
+    has an entry for it; with one, its link is built and recorded again.
+
     Both the decision and the label write read the labels the branch carries *now*, not
     the ones the board was exported with: the restack runs between those two moments and
     withholds a branch by labelling it, so a snapshot is already out of date here.
@@ -192,20 +225,19 @@ def promote(
         number = branch.pull_request_number
         pull_request = fork.pull_request(number)
         labels = PullRequestField.LABELS.read(pull_request, number)
-        if GitHubLabel.PROMOTION_LINK_SENT in labels or withheld in labels:
+        if withheld in labels:
+            continue
+        if GitHubLabel.PROMOTION_LINK_SENT in labels and not summaries.written_for(
+            number
+        ):
             continue
         description = PullRequestDescription(
             str(PullRequestField.BODY.read(pull_request, number) or "")
         )
-        summary = summaries.for_pull_request(number)
-        link = PromotionLink.build(
+        link = summaries.for_pull_request(number).link_for(
             stack.configuration,
-            branch.name,
-            summary.title
-            or str(PullRequestField.TITLE.read(pull_request, number) or branch.name),
-            summary.upstream_description(
-                stack.configuration.fork_repository.pull_request_url(number)
-            ),
+            branch,
+            PullRequestField.TITLE.read(pull_request, number),
         )
         fork.set_description(
             number,

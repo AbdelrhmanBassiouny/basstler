@@ -20,8 +20,8 @@ from basstler.maintenance.board import (
     PullRequestField,
     PullRequestHeadKey,
 )
-from basstler.maintenance.git_commands import GitCommandFailed
 from basstler.maintenance.description import PullRequestDescription
+from basstler.maintenance.git_commands import GitCommandFailed
 
 from ..constants.stack import StackBranch, StackLabel
 
@@ -189,14 +189,20 @@ def test_the_board_snapshot_is_never_committable():
     assert ignored.returncode == 0
 
 
-def test_the_export_reads_the_title_and_the_recorded_promotion_link():
-    body = PullRequestDescription(PromotionSampleText.PROSE).with_promotion_link(
-        PromotionSampleText.FIRST_LINK
-    )
+def test_the_export_reads_the_title():
     export = BoardExport.from_api_records(
-        [an_api_record(body=body, title=PromotionSampleText.TITLE)]
+        [an_api_record(title=PromotionSampleText.TITLE)]
     )
 
     exported = export.pull_requests[0]
     assert exported.title == PromotionSampleText.TITLE
-    assert exported.promotion_link == PromotionSampleText.FIRST_LINK
+
+
+def test_the_export_carries_the_description_without_its_promotion_section():
+    body = PullRequestDescription(PromotionSampleText.PROSE).with_promotion_link(
+        PromotionSampleText.FIRST_LINK
+    )
+
+    export = BoardExport.from_api_records([an_api_record(body=body)])
+
+    assert export.pull_requests[0].description == PromotionSampleText.PROSE

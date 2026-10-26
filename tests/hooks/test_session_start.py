@@ -75,6 +75,16 @@ class StubVariable(StrEnum):
     The script a ``uv`` installed by the ``pip`` stub runs.
     """
 
+    PIP_WATCHED_PATH = "STUB_PIP_WATCHED_PATH"
+    """
+    A path the ``pip`` stub looks for while it installs.
+    """
+
+    PIP_WATCH_LOG = "STUB_PIP_WATCH_LOG"
+    """
+    The file the ``pip`` stub records whether it found the watched path in.
+    """
+
     UV_CALL_LOG = "STUB_UV_CALL_LOG"
     """
     The file the ``uv`` stub appends each invocation to.
@@ -93,6 +103,17 @@ class StubVariable(StrEnum):
     UV_ENVIRONMENT_INTERPRETER = "STUB_UV_ENVIRONMENT_INTERPRETER"
     """
     Where, inside an environment the ``uv`` stub creates, it writes the interpreter.
+    """
+
+
+class StubWatchResult(StrEnum):
+    """
+    What the ``pip`` stub records about the path it watches.
+    """
+
+    FOUND = "found"
+    """
+    The path existed while the stub installed.
     """
 
 
@@ -718,6 +739,38 @@ def test_installs_the_package_with_pip_when_a_requirement_is_missing(
     assert call_log.read_text().splitlines() == [
         pip_installer_call(session_start_repository)
     ]
+
+
+def test_the_install_lock_is_held_while_installing_and_released_after(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    A skill run while the session start installs waits on the lock, so the lock has to
+    be there for the whole install and gone once it is over.
+    """
+    require_the_uninstallable(session_start_repository)
+    stub_bin.install(PackageManager.PIP)
+    lock = session_start_repository.configuration_value(
+        ConfigurationVariable.INSTALL_LOCK
+    )
+    watch_log = tmp_path / "pip-watch"
+
+    result = publish_and_run(
+        session_start_repository,
+        environment={
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+            StubVariable.PIP_WATCHED_PATH: lock,
+            StubVariable.PIP_WATCH_LOG: str(watch_log),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert watch_log.read_text().splitlines() == [StubWatchResult.FOUND]
+    assert not Path(lock).exists()
 
 
 def test_installs_the_package_with_uv_where_there_is_one(

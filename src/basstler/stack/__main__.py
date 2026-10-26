@@ -20,6 +20,7 @@ Commands (run from the repo root; ``--help`` on any of them for its flags)::
     python -m basstler.stack check          # would each branch merge cleanly onto its parent now?
     python -m basstler.stack next           # which branches to submit upstream next
     python -m basstler.stack next --porcelain    # machine-readable: one 'name<TAB>pull request' line per branch
+    python -m basstler.stack next --context      # per branch: diff --stat against its base, commit subjects, description
     python -m basstler.stack restack-plan   # bottom-up restack plan as JSON
     python -m basstler.stack configuration  # every resolved setting, including the remotes
     python -m basstler.stack labels         # the complete label set a write must send
@@ -88,7 +89,8 @@ class Command(StrEnum):
     """Answer whether a proposed commit move may be made, and refuse it if not."""
 
     CONFIGURATION = "configuration"
-    """Print the resolved configuration, one ``field<TAB>value`` line per setting."""
+    """Add the upstream remote if the checkout lacks one, then print the resolved
+    configuration, one ``field<TAB>value`` line per setting."""
 
     LABELS = "labels"
     """Compute the complete label set a write must send, from the labels carried now."""
@@ -117,6 +119,9 @@ class CommandOption(StrEnum):
 
     PORCELAIN = "--porcelain"
     """Print only what a script reads, for :attr:`Command.NEXT`."""
+
+    CONTEXT = "--context"
+    """Print what each upstream summary is written from, for :attr:`Command.NEXT`."""
 
     FORK = "--fork"
     """The fork, as ``owner/name``, when the caller already knows it."""
@@ -169,7 +174,7 @@ class StackCommandLine:
             prog="basstler.stack",
             description="Stacked pull request helper: read state, compute the writes.",
         )
-        parser.set_defaults(porcelain=False)
+        parser.set_defaults(porcelain=False, context=False)
         commands = parser.add_subparsers(dest="command", required=True)
 
         commands.add_parser(
@@ -181,10 +186,19 @@ class StackCommandLine:
         promote = commands.add_parser(
             Command.NEXT, help="which branches to submit upstream next"
         )
-        promote.add_argument(
+        next_format = promote.add_mutually_exclusive_group()
+        next_format.add_argument(
             CommandOption.PORCELAIN,
             action="store_true",
             help="print only 'name<TAB>pull request' per branch to promote",
+        )
+        next_format.add_argument(
+            CommandOption.CONTEXT,
+            action="store_true",
+            help=(
+                "print per branch to promote the files it changes against its base, "
+                "its commit subjects and its fork pull request's description"
+            ),
         )
         commands.add_parser(
             Command.RESTACK_PLAN, help="the bottom-up restack plan as JSON"
@@ -308,7 +322,7 @@ class StackCommandLine:
             Configuration.load(
                 fork_repository=arguments.fork,
                 upstream_repository=arguments.upstream,
-            ).print_settings()
+            ).with_upstream_remote_added().print_settings()
             return StackExitCode.SUCCESS
         PromotionLink.build(
             Configuration.load(), arguments.branch, arguments.title, arguments.body
@@ -342,7 +356,11 @@ class StackCommandLine:
             Command.NEXT: (
                 report.print_next_porcelain
                 if arguments.porcelain
-                else report.print_next
+                else (
+                    report.print_next_context
+                    if arguments.context
+                    else report.print_next
+                )
             ),
             Command.RESTACK_PLAN: report.print_restack_plan,
             Command.REPARENTS: report.print_reparents,

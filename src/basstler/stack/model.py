@@ -127,9 +127,9 @@ class PullRequest:
     title: str | None = None
     """The pull request's title, ``None`` when the export did not carry one."""
 
-    promotion_link: str | None = None
-    """The upstream create-link a pass recorded in the pull request body, ``None`` until
-    one is."""
+    description: str | None = None
+    """The pull request's description without the promotion section a pass recorded,
+    ``None`` when the export did not carry one."""
 
     def skip_reason(self, fork: Repository) -> SkipReason | None:
         """:param fork: The fork the pass maintains.
@@ -190,8 +190,8 @@ class Branch:
     title: str | None = None
     """The pull request's title, if known."""
 
-    promotion_link: str | None = None
-    """The upstream create-link recorded on the pull request, if any."""
+    description: str | None = None
+    """The pull request's description without its promotion section, if known."""
 
     @classmethod
     def from_pull_request(
@@ -228,7 +228,7 @@ class Branch:
             ci=pull_request.ci,
             session=pull_request.session,
             title=pull_request.title,
-            promotion_link=pull_request.promotion_link,
+            description=pull_request.description,
         )
 
 
@@ -444,6 +444,16 @@ class Stack:
             BranchStatus.MERGED,
         }
 
+    def integration_parent(self, branch: Branch) -> str:
+        """
+        :param branch: A branch of the stack.
+        :return: What it is brought up to date with: its parent, or the upstream base
+            once that parent has landed.
+        """
+        if self.has_landed_upstream(branch.parent):
+            return self.configuration.upstream_base
+        return branch.parent
+
     def promotion_order(self) -> list[Branch]:
         """The branches to submit to the upstream next, in dependency order.
 
@@ -489,11 +499,7 @@ class Stack:
         return [
             RestackPlanEntry(
                 branch=branch.name,
-                parent=(
-                    self.configuration.upstream_base
-                    if self.has_landed_upstream(branch.parent)
-                    else branch.parent
-                ),
+                parent=self.integration_parent(branch),
                 strategy=branch.strategy,
             )
             for branch in planned

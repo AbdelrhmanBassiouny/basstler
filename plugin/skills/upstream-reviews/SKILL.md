@@ -65,6 +65,7 @@ Resolve them rather than assuming:
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+require_basstler_python
 "${BASSTLER_PYTHON}" -m "${STACK_MODULE}" configuration
 ```
 

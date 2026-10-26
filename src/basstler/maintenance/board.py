@@ -294,7 +294,7 @@ class BoardExport:
             ci=record.get("ci"),
             session=description.session_link,
             title=PullRequestField.TITLE.read(record, number),
-            promotion_link=description.promotion_link,
+            description=description.prose,
         )
 
     @staticmethod

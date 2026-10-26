@@ -117,6 +117,23 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
 
 
 @dataclass(frozen=True)
+class CommitChecksReader(ABC):
+    """
+    Reading the checks reported on a commit.
+    """
+
+    @abstractmethod
+    def check_runs(self, reference: str) -> Mapping[str, Any]:
+        """:param reference: A branch or commit.
+        :return: The check-run listing of the commit it names."""
+
+    @abstractmethod
+    def commit_status(self, reference: str) -> Mapping[str, Any]:
+        """:param reference: A branch or commit.
+        :return: The combined commit status of the commit it names."""
+
+
+@dataclass(frozen=True)
 class RepositoryLabels(ABC):
     """
     The labels a repository carries, and adding one it lacks.
@@ -138,6 +155,20 @@ class CredentialHolder(ABC):
     """
 
     @abstractmethod
+    def check_runs(self, reference: str) -> Mapping[str, Any]:
+        query = urllib.parse.urlencode({ListingParameter.PAGE_SIZE: self.page_size})
+        return self._call(
+            "GET",
+            f"{RepositoryPath.COMMITS}/{urllib.parse.quote(reference, safe='')}"
+            f"/check-runs?{query}",
+        )
+
+    def commit_status(self, reference: str) -> Mapping[str, Any]:
+        return self._call(
+            "GET",
+            f"{RepositoryPath.COMMITS}/{urllib.parse.quote(reference, safe='')}/status",
+        )
+
     def authenticated_login(self) -> str:
         """:return: The login of the account the credential belongs to."""
 
@@ -166,6 +197,11 @@ class RepositoryPath(PathEnumeration):
     LABELS = Path("/labels")
     """
     The labels defined on the repository.
+    """
+
+    COMMITS = Path("/commits")
+    """
+    The repository's commits, each with the checks reported on it.
     """
 
 
@@ -293,7 +329,9 @@ class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
 
 
 @dataclass(frozen=True)
-class GitHubRepository(ForkPullRequests, RepositoryLabels, CredentialHolder):
+class GitHubRepository(
+    ForkPullRequests, RepositoryLabels, CredentialHolder, CommitChecksReader
+):
     """
     Every pull-request and label call this tooling makes, against one repository.
 

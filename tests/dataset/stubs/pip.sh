@@ -16,6 +16,8 @@ set -uo pipefail
 #   STUB_PIP_STATUS      - exit status to report, default 0; anything else
 #                          installs nothing
 #   STUB_PIP_INSTALLED_UV - the script an installed uv runs
+#   STUB_PIP_WATCHED_PATH - a path to look for while installing the package
+#   STUB_PIP_WATCH_LOG    - file "found" or "missing" is appended to, for it
 #
 # Exits 64 on an unrecognized invocation for the same reason gh.sh does: a
 # changed call must fail a test rather than pass by accident.
@@ -43,6 +45,14 @@ if [ "${1:-}" != "--python" ] || [ -z "${2:-}" ] || [ "${3:-}" != "install" ] \
     || [ "${4:-}" != "--editable" ] || [ -z "${5:-}" ]; then
   echo "pip stub: unrecognized invocation: $*" >&2
   exit 64
+fi
+
+if [ -n "${STUB_PIP_WATCH_LOG:-}" ]; then
+  if [ -e "${STUB_PIP_WATCHED_PATH:-}" ]; then
+    echo found >> "${STUB_PIP_WATCH_LOG}"
+  else
+    echo missing >> "${STUB_PIP_WATCH_LOG}"
+  fi
 fi
 
 if [ "${STATUS}" = "0" ]; then

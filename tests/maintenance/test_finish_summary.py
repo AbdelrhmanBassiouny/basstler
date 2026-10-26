@@ -9,10 +9,16 @@ import argparse
 import pytest
 
 from basstler.github_labels import GitHubLabel
+from basstler.maintenance.board import BoardExport
 from basstler.maintenance.commands import RunReportCommand
+from basstler.maintenance.exceptions import MarkdownLinkTargetError
 from basstler.maintenance.fast_forward import FastForwardOutcome, FastForwardReport
-from basstler.maintenance.finish_summary import FinishSummary, FinishSummaryHeading
-from basstler.maintenance.promotion import Promotion
+from basstler.maintenance.finish_summary import (
+    FinishSummary,
+    FinishSummaryHeading,
+    MarkdownLink,
+)
+from basstler.maintenance.promotion import Promotion, PromotionSummary
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.stack.model import (
@@ -25,6 +31,7 @@ from basstler.stack.model import (
 )
 from basstler.stack.promotion_link import PromotionLink
 
+from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch, StackLabel
 
 from .fork import (
@@ -36,6 +43,7 @@ from .fork import (
     StackPullRequestNumber,
     a_board_entry,
     a_parent_and_child,
+    an_api_record,
     make_configuration,
     the_board,
 )
@@ -66,7 +74,6 @@ def a_titled_stack(child_labels: list[str] | None = None) -> Stack:
                 StackBranch.PARENT,
                 labels=child_labels or [],
                 session=A_SESSION_LINK,
-                promotion_link=PromotionSampleText.FIRST_LINK,
             ),
         ],
         lambda branch: False,
@@ -145,7 +152,36 @@ def test_a_link_sent_by_an_earlier_pass_and_not_yet_acted_on_is_listed_again():
     (entry,) = section_of(summary.as_markdown(), FinishSummaryHeading.PENDING_LINKS)
 
     assert f"`{StackBranch.CHILD}`" in entry
-    assert entry.endswith(f"({PromotionSampleText.FIRST_LINK})")
+
+
+def test_a_link_sent_by_an_earlier_pass_is_built_from_the_branch_not_its_description():
+    """
+    A description is free text: a heading of its own that starts like the promotion
+    heading, a sentence or a code fence after it must never become a link target.
+    """
+    export = BoardExport.from_api_records(
+        [
+            an_api_record(
+                number=StackPullRequestNumber.CHILD,
+                head=StackBranch.CHILD,
+                labels=[GitHubLabel.PROMOTION_LINK_SENT],
+                body=DatasetLocation.DESCRIPTION_WITH_PROMOTION_PROSE.read_text(),
+                title=PromotionSampleText.TITLE,
+            )
+        ]
+    )
+    stack = Stack.build(
+        make_configuration(), list(export.pull_requests), lambda branch: False
+    )
+
+    (entry,) = section_of(
+        FinishSummary(MaintenanceReport(), stack).as_markdown(),
+        FinishSummaryHeading.PENDING_LINKS,
+    )
+
+    (branch,) = stack.branches
+    expected = PromotionSummary().link_for(stack.configuration, branch, branch.title)
+    assert entry.endswith(f"[create upstream pull request]({expected.url})")
 
 
 def test_a_link_sent_earlier_that_is_now_in_review_is_not_pending():
@@ -188,6 +224,23 @@ def test_the_pending_links_come_before_everything_else():
     assert headings[0] == FinishSummary.heading_line(FinishSummaryHeading.PENDING_LINKS)
 
 
+# %% markdown links
+
+
+def test_a_link_target_that_is_neither_a_url_nor_an_anchor_is_refused():
+    with pytest.raises(MarkdownLinkTargetError):
+        MarkdownLink(
+            "create upstream pull request", f"``{PromotionSampleText.FIRST_LINK}"
+        )
+
+
+@pytest.mark.parametrize(
+    "target", [PromotionSampleText.FIRST_LINK, "#reported-to-their-owners"]
+)
+def test_a_url_or_an_anchor_is_a_link_target(target: str):
+    assert str(MarkdownLink("label", target)) == f"[label]({target})"
+
+
 # %% what the pass reported, withheld and skipped
 
 
@@ -212,6 +265,52 @@ def test_a_reported_branch_names_its_files_the_session_addressed_and_the_comment
     assert "`a.py`, `b.py`" in entry
     assert A_SESSION_LINK in entry
     assert entry.endswith(f"[comment]({comment})")
+
+
+def test_a_conflict_in_many_files_names_only_the_first_few():
+    """
+    The comment the branch's owner reads lists every file; the summary only has to say
+    there are more.
+    """
+    limit = FinishSummary.listed_path_limit
+    paths = tuple(f"file-{index}.py" for index in range(limit + 3))
+    report = MaintenanceReport(
+        restacked=(
+            an_outcome(
+                StackBranch.CHILD,
+                RestackOutcome.CONFLICT,
+                conflicting_paths=paths,
+                reported_at=f"{PromotionSampleText.COMMENT_LINK_PREFIX}1",
+            ),
+        )
+    )
+
+    (entry,) = section_of(
+        FinishSummary(report, a_titled_stack()).as_markdown(),
+        FinishSummaryHeading.REPORTED,
+    )
+
+    named = ", ".join(f"`{path}`" for path in paths[:limit])
+    assert f"conflicts in {named} and 3 more - " in entry
+    assert paths[limit] not in entry
+
+
+def test_a_long_withheld_list_names_only_the_first_few():
+    limit = FinishSummary.listed_branch_limit
+    branches = [f"branch-{index}" for index in range(limit + 2)]
+    report = MaintenanceReport(
+        restacked=tuple(
+            an_outcome(branch, RestackOutcome.WITHHELD) for branch in branches
+        )
+    )
+
+    section = section_of(
+        FinishSummary(report, a_titled_stack()).as_markdown(),
+        FinishSummaryHeading.WITHHELD,
+    )
+
+    named = ", ".join(f"`{branch}`" for branch in branches[:limit])
+    assert section == [f"{named} and 2 more"]
 
 
 def test_every_withheld_branch_shares_one_line():
@@ -308,6 +407,27 @@ def test_a_refused_fast_forward_is_explained():
 
     assert FastForwardOutcome.REFUSED_NOT_FAST_FORWARD in section[0]
     assert section[1] == explanation
+
+
+def test_the_status_is_followed_by_every_section_and_its_count():
+    """
+    A reader who only needs the outcome can stop after the first lines.
+    """
+    report = MaintenanceReport(
+        restacked=(
+            an_outcome(StackBranch.PARENT, RestackOutcome.UP_TO_DATE),
+            an_outcome(StackBranch.CHILD, RestackOutcome.PUSHED, pushed_commit="abc"),
+        ),
+        promoted=(a_promotion(),),
+    )
+
+    lines = FinishSummary(report, a_titled_stack()).as_markdown().splitlines()
+
+    assert lines[0].endswith(report.exit_code.name_for_a_caller)
+    assert lines[2] == (
+        f"**Sections:** {FinishSummaryHeading.PENDING_LINKS} (1); "
+        f"{FinishSummaryHeading.RESTACKED} (2)"
+    )
 
 
 def test_a_pass_that_did_nothing_still_says_its_status():

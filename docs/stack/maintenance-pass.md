@@ -21,7 +21,7 @@ where it is. Review threads are the owner's work for the same reason.
 
 A pull request activity subscription delivers review comments and threads, not just CI, and turns on
 the per-event handler that makes a session investigate, plan and reply - which is how a maintenance
-run turns into review work. So CI is learned by polling, and a review event that reaches the pass
+run turns into review work. So CI is read once, with `ci-status`, and a review event that reaches the pass
 ends its turn.
 
 Claude Code's Workflow tool - not a GitHub Actions workflow - fans work out to subagents; for a

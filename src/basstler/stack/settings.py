@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import tomllib
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from enum import StrEnum
 from pathlib import Path
 
@@ -340,6 +340,39 @@ class Configuration:
             upstream_base=values[StackSetting.UPSTREAM_BASE],
             upstream_setup_command=resolution.upstream_setup_command,
         )
+
+    def with_upstream_remote_added(self) -> Configuration:
+        """
+        Add the upstream remote this checkout lacks.
+
+        :return: This configuration, without its :attr:`upstream_setup_command` once the
+            remote was added; unchanged when there was nothing to add or git refused.
+        """
+        if self.upstream_setup_command is None:
+            return self
+        if not CurrentCheckout.succeeds(
+            GitArgument.REMOTE,
+            GitArgument.ADD,
+            self.upstream_remote,
+            self.upstream_repository.clone_url,
+        ):
+            return self
+        return replace(self, upstream_setup_command=None)
+
+    @property
+    def upstream_base_reference(self) -> str:
+        """
+        The upstream base, as this checkout's reference to it on the upstream remote.
+        """
+        return f"{self.upstream_remote}/{self.upstream_base}"
+
+    def reference_to(self, name: str) -> str:
+        """:param name: A branch of the fork, or the upstream base.
+        :return: The reference to it: :attr:`upstream_base_reference` for the upstream
+            base, else its reference on the fork remote."""
+        if name == self.upstream_base:
+            return self.upstream_base_reference
+        return self.reference_on_fork(name)
 
     def reference_on_fork(self, name: str) -> str:
         """:param name: A branch or parent name.

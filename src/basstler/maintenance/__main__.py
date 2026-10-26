@@ -18,6 +18,7 @@ This module is the command line onto the modules that perform those steps::
     python -m basstler.maintenance run-report        # the whole pass, as its finish summary
     python -m basstler.maintenance run-report --summaries <file>  # with what each upstream pull request opens with
     python -m basstler.maintenance run-report --json # the whole pass as one document
+    python -m basstler.maintenance ci-status --branch <branch>  # where the checks on a pushed branch stand
 
 It executes an already-derived plan: structure still comes from ``basstler.stack`` and from
 GitHub's own stack object. Retargeting a pull request's **base branch** is the one write
