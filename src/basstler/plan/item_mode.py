@@ -72,6 +72,7 @@ from basstler.locations import (
     PluginLocation,
     ProjectLocation,
 )
+from basstler.plugin_root import PluginRoot
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.standard_streams import StandardStreamHandler
 
@@ -721,7 +722,9 @@ def write_mode(
         scratch_file.write_text(render_settings(modes))
         written = subprocess.run(
             Bash.locate(os.environ).command(
-                PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT,
+                PluginRoot.locate(os.environ).path_of(
+                    PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT
+                ),
                 "--source",
                 str(scratch_file),
                 "--destination",

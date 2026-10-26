@@ -33,6 +33,7 @@ from basstler.maintenance.github import (
     GitHubRepository,
     LabelField,
 )
+from basstler.plugin_root import PluginRoot
 from basstler.repository import Repository
 from basstler.setup.exceptions import ForeignNotesRemoteError
 from basstler.setup.personal_notes import (
@@ -45,7 +46,7 @@ from basstler.setup.steps import PersonalNotesSetting
 
 from ..constants.environment import BashStubVariable
 from ..constants.notes import ScratchBranch
-from ..constants.paths import PersonalNotesPath
+from ..constants.paths import PersonalNotesPath, RepositoryLocation
 from ..executable_stubs import ExecutableStubDirectory
 from ..scratch_repository import SCRATCH_IDENTITY, GitIdentity, ScratchRepository
 
@@ -128,12 +129,16 @@ def setup_repository(scratch_repository: ScratchRepository) -> ScratchRepository
     scratch_repository.install_package()
     scratch_repository.install_package_environment()
     scratch_repository.write_setup_prerequisites()
-    starter_notes = (
-        scratch_repository.plugin_root
-        / PluginSkillLocation.STARTER_NOTES.value.relative_to(PluginLocation.ROOT.value)
+    starter_notes = PluginRoot(scratch_repository.plugin_root).path_of(
+        PluginSkillLocation.STARTER_NOTES
     )
     starter_notes.parent.mkdir(parents=True, exist_ok=True)
-    shutil.copy(PluginSkillLocation.STARTER_NOTES, starter_notes)
+    shutil.copy(
+        PluginRoot(RepositoryLocation.PLUGIN.value).path_of(
+            PluginSkillLocation.STARTER_NOTES
+        ),
+        starter_notes,
+    )
     scratch_repository.commit_everything("initial commit")
     return scratch_repository
 
@@ -170,7 +175,7 @@ def setup_for(
             [SetupOption.REMOTE, str(repository.notes_remote_path), *arguments]
         ),
         github=github,
-        plugin_root=repository.plugin_root,
+        plugin_root=PluginRoot(repository.plugin_root),
     )
 
 
@@ -207,6 +212,7 @@ def labels_setup(*arguments: str, github: GitHubRepository) -> PersonalNotesSetu
             [SetupOption.REMOTE, CREDENTIAL_OWNER.full_name, *arguments]
         ),
         github=github,
+        plugin_root=PluginRoot(RepositoryLocation.PLUGIN.value),
     )
 
 
@@ -290,9 +296,9 @@ def test_runs_every_hook_script_in_the_bash_claude_code_is_configured_with(
     # session start's base-branch sync reads the stack configuration through
     # ``bash -c``, which runs in the configured bash too
     assert call_log.read_text().splitlines() == [
-        *(str(setup.plugin_file(script)) for script in scripts_before_the_sync),
+        *(str(setup.plugin_root.path_of(script)) for script in scripts_before_the_sync),
         "-c",
-        str(setup.plugin_file(PluginLocation.SETUP_CHECK_SCRIPT)),
+        str(setup.plugin_root.path_of(PluginLocation.SETUP_CHECK_SCRIPT)),
     ]
 
 
@@ -328,7 +334,9 @@ def test_seeds_a_new_notes_file_from_the_starter_notes_when_asked(
     checkout = setup_repository.clone_notes_branch(tmp_path / "notes")
     assert (
         checkout / ProjectLocation.PERSONAL_NOTES_DOCUMENT
-    ).read_text() == PluginSkillLocation.STARTER_NOTES.read_text()
+    ).read_text() == PluginRoot(RepositoryLocation.PLUGIN.value).path_of(
+        PluginSkillLocation.STARTER_NOTES
+    ).read_text()
 
 
 def test_never_seeds_over_notes_that_already_exist(

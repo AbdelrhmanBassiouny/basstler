@@ -45,6 +45,7 @@ from basstler.class_property import classproperty
 from basstler.github_labels import GitHubLabel
 from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocation
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
+from basstler.plugin_root import PluginRoot
 from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.stack.configuration import StackSetting
@@ -676,7 +677,9 @@ class PersonalUpstream:
             scratch_file.write_text(self.written_over(self.existing(project_root)))
             written = subprocess.run(
                 Bash.locate(os.environ).command(
-                    PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT,
+                    PluginRoot.locate(os.environ).path_of(
+                        PluginLocation.PERSONAL_NOTES_WRITER_SCRIPT
+                    ),
                     "--source",
                     str(scratch_file),
                     "--destination",

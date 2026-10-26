@@ -118,22 +118,10 @@ class BasstlerVariable(EnvironmentVariable):
 
 class PluginLocation(PathEnumeration):
     """
-    The plugin's files this package runs, as absolute paths.
-
-    The plugin is found through :attr:`BasstlerVariable.PLUGIN_ROOT`, which sourcing the
-    plugin's shell configuration exports, else as the ``plugin`` directory of the source
-    checkout the package is imported from.
+    The plugin's files this package runs, relative to the plugin's root.
     """
 
-    ROOT = Path(
-        BasstlerVariable.PLUGIN_ROOT.read()
-        or PackageLocation.SOURCE_TREE.value / "plugin"
-    )
-    """
-    The plugin's root directory, holding its manifest, hooks and skills.
-    """
-
-    HOOKS = ROOT / "hooks"
+    HOOKS = Path("hooks")
     """
     The shell entry points that read and write personal-notes data.
     """
@@ -190,13 +178,21 @@ class PluginLocation(PathEnumeration):
     Saves the user's personal settings to the personal-notes branch.
     """
 
+    @property
+    def path_under_exported_root(self) -> str:
+        """
+        This file as bash spells it under :attr:`BasstlerVariable.PLUGIN_ROOT`, for a
+        message that names it without knowing the root.
+        """
+        return f"${BasstlerVariable.PLUGIN_ROOT}/{self}"
+
 
 class PluginSkillLocation(PathEnumeration):
     """
-    The files of the plugin's skills this package reads, as absolute paths.
+    The files of the plugin's skills this package reads, relative to the plugin's root.
     """
 
-    SKILLS = PluginLocation.ROOT.value / "skills"
+    SKILLS = Path("skills")
     """
     The directory holding one directory per skill.
     """
