@@ -94,7 +94,8 @@ next to the workflow it describes, because it is read rather than run.
 - **`skills/stacked-pr-maintenance/SKILL.md`** - the maintenance instructions, invocable
   as `/stacked-pr-maintenance` from any session, and run first by `/plan-item-kickoff` and
   `/plan-item-resolve`. It takes `fork=` / `upstream=` arguments, falls back to
-  `configuration`, and asks when neither answers.
+  `configuration`, and asks when neither answers. It carries only the steps; why each rule
+  holds is in [maintenance-pass.md](maintenance-pass.md).
 
 ## The state machine (your approval gate)
 
@@ -160,6 +161,6 @@ published tip as before.
   GitHub.
 - **CI is the validator.** A suite the cloud container cannot run (missing system
   dependencies, hardware, services) is never run locally - poll a PR's CI with the GitHub MCP and treat its
-  red/green as the oracle (no session subscribes to a PR's activity - CI is learned by polling; see the maintenance skill's HARD RULES). A
+  red/green as the oracle (no session subscribes to a PR's activity - CI is learned by polling; see [maintenance-pass.md](maintenance-pass.md)). A
   maintenance pass never fixes a failing check: it reports the branch to its owner and moves on.
   Never disable a leak/CI check to go green.
