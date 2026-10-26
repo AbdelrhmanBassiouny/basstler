@@ -87,11 +87,6 @@ class GitArgument(StrEnum):
     Makes :attr:`CAT_FILE` answer only whether the object exists.
     """
 
-    FETCH_HEAD = "FETCH_HEAD"
-    """
-    The reference to whatever the last fetch brought in.
-    """
-
     SHOW = "show"
     """
     Prints an object's content.

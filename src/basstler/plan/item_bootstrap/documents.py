@@ -29,7 +29,10 @@ from basstler.plan.model import (
     PlanManifest,
 )
 from basstler.plugin_root import PluginRoot
-from basstler.shell_configuration import ShellConfigurationFunction
+from basstler.shell_configuration import (
+    FetchedBranchReference,
+    ShellConfigurationFunction,
+)
 
 # %% the plan on the personal-notes branch
 
@@ -64,7 +67,8 @@ class ProjectCheckout:
 
     def fetch_notes_branch(self) -> None:
         """
-        Fetch the personal-notes branch, leaving ``FETCH_HEAD`` pointing at it.
+        Fetch the personal-notes branch into
+        :attr:`FetchedBranchReference.PERSONAL_NOTES`.
 
         Calls the shell configuration's own fetch function, so this and the hook scripts
         never disagree about which branch a plan is on.
@@ -144,7 +148,10 @@ class PlanDocuments:
             path = document.path_within_notes_branch(plan_identifier)
             try:
                 contents[document] = (
-                    checkout.run_git("show", f"FETCH_HEAD:{path}") + "\n"
+                    checkout.run_git(
+                        "show", FetchedBranchReference.PERSONAL_NOTES.file_at(path)
+                    )
+                    + "\n"
                 )
             except subprocess.CalledProcessError as error:
                 raise UnknownPlanError(

@@ -108,11 +108,8 @@ fi
 "${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" check-progress "${CONTENT_FILE}" || exit 1
 
 git branch -D __save-pr-progress-tmp > /dev/null 2>&1 || true
-# FETCH_HEAD: see the note on FETCH_HEAD vs. "<remote>/<branch>" refs in
-# save-personal-notes.sh - a URL-form remote has no tracking ref, and
-# FETCH_HEAD is shared across worktrees so this scratch worktree sees the
-# fetch above correctly regardless.
-git worktree add -b __save-pr-progress-tmp "${SCRATCH_DIR}" FETCH_HEAD --quiet
+# PERSONAL_NOTES_REFERENCE: see the note in save-personal-notes.sh.
+git worktree add -b __save-pr-progress-tmp "${SCRATCH_DIR}" "${PERSONAL_NOTES_REFERENCE}" --quiet
 
 mkdir -p "${SCRATCH_DIR}/$(dirname "${PROGRESS_PATH}")"
 cp "${CONTENT_FILE}" "${SCRATCH_DIR}/${PROGRESS_PATH}"

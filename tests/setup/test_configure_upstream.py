@@ -22,7 +22,8 @@ from basstler.locations import PluginLocation, ProjectLocation
 from basstler.setup.steps import SetupCommand, SetupCommandOption
 from basstler.stack.configuration import StackSetting
 
-from ..scratch_repository import ScratchRepository
+from ..constants.paths import PersonalNotesPath
+from ..scratch_repository import SCRATCH_IDENTITY, ScratchRepository
 from ..script_runner import PythonModuleRunner
 
 SETUP_STEPS_MODULE = basstler.setup.steps.__name__
@@ -71,6 +72,12 @@ The check-setup.sh row this step answers.
 ACTION_CHECK = "upstream_reviews_action"
 """
 The check-setup.sh row install-upstream-reviews-action answers.
+"""
+
+GIT_IDENTITY_CHECK = "git_identity"
+"""
+The check-setup.sh row reading the identity the notes branch records, checked after
+:data:`ACTION_CHECK` has fetched the Action's branch.
 """
 
 REQUIRE_UPSTREAM = "--require-upstream"
@@ -310,3 +317,17 @@ def test_an_action_at_another_release_needs_setup(
 
     assert status == "needs-setup"
     assert "v0.0.1" in detail
+
+
+def test_the_recorded_identity_is_read_after_the_action_check_fetched_its_branch(
+    upstream_repository: ScratchRepository,
+):
+    upstream_repository.update_notes_branch_file(
+        PersonalNotesPath.GIT_IDENTITY, SCRATCH_IDENTITY.as_git_config_file()
+    )
+    configure_upstream(upstream_repository, UpstreamSample.UPSTREAM)
+    install_action(upstream_repository, "v0.0.1")
+
+    status, _ = upstream_row(upstream_repository, row=GIT_IDENTITY_CHECK)
+
+    assert status == "ok"

@@ -47,7 +47,10 @@ from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocati
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
 from basstler.plugin_root import PluginRoot
 from basstler.repository import Repository
-from basstler.shell_configuration import ShellConfigurationFunction
+from basstler.shell_configuration import (
+    FetchedBranchReference,
+    ShellConfigurationFunction,
+)
 from basstler.stack.configuration import StackSetting
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.action.branch import (
@@ -657,7 +660,9 @@ class PersonalUpstream:
             [
                 "git",
                 "show",
-                f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}",
+                FetchedBranchReference.PERSONAL_NOTES.file_at(
+                    ProjectLocation.PERSONAL_STACK_CONFIGURATION
+                ),
             ],
             cwd=project_root,
             capture_output=True,
