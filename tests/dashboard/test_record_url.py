@@ -21,6 +21,7 @@ from basstler.dashboard.record_url import (
     MalformedArtifactUrlError,
     UnlistedArtifactUrlError,
     append_position,
+    apply_content_digest_record,
     apply_url_record,
     find_cache_entry_line,
     load_artifact_listing,
@@ -29,9 +30,14 @@ from basstler.dashboard.record_url import (
     resolve_artifact_url,
 )
 
+from basstler.dashboard.publication import DashboardUrlCache
+
 from ..constants.paths import DatasetLocation
 
 CACHE_TEXT = (DatasetLocation.DIRECTORY / "dashboard-urls.yaml").read_text()
+DIGESTED_CACHE_TEXT = (
+    DatasetLocation.DIRECTORY / "dashboard-urls-with-content-digests.yaml"
+).read_text()
 LISTING = load_artifact_listing(
     json.loads((DatasetLocation.DIRECTORY / "artifact-listing.json").read_text())
 )
@@ -44,6 +50,10 @@ OLDER_TWIN_URL = "https://claude.ai/code/artifact/55555555-5555-4555-8555-555555
 NEWER_TWIN_URL = "https://claude.ai/code/artifact/66666666-6666-4666-8666-666666666666"
 FIRST_TIED_URL = "https://claude.ai/code/artifact/77777777-7777-4777-8777-777777777777"
 SECOND_TIED_URL = "https://claude.ai/code/artifact/88888888-8888-4888-8888-888888888888"
+ALPHA_DIGEST = DashboardUrlCache.from_yaml(DIGESTED_CACHE_TEXT).content_digests[
+    "alpha-plan"
+]
+FRESH_DIGEST = "a" * 64
 
 
 # %% resolving a url from the listing
@@ -268,6 +278,73 @@ def test_append_position_skips_trailing_blank_lines() -> None:
     assert append_position(["a: 1", ""]) == 1
 
 
+# %% recording the content digest
+
+
+def test_a_digest_is_recorded_in_a_cache_that_has_none() -> None:
+    """
+    The first digest adds the section, leaving every URL as it was.
+    """
+    patched = apply_content_digest_record(CACHE_TEXT, "beta-plan", FRESH_DIGEST)
+    assert DashboardUrlCache.from_yaml(patched) == DashboardUrlCache(
+        urls=DashboardUrlCache.from_yaml(CACHE_TEXT).urls,
+        content_digests={"beta-plan": FRESH_DIGEST},
+    )
+
+
+def test_a_new_digest_replaces_the_recorded_one_in_place() -> None:
+    """
+    Only the addressed key's digest line changes.
+    """
+    patched = apply_content_digest_record(
+        DIGESTED_CACHE_TEXT, "alpha-plan", FRESH_DIGEST
+    )
+    changed_lines = set(DIGESTED_CACHE_TEXT.split("\n")) ^ set(patched.split("\n"))
+    assert changed_lines == {
+        f"  alpha-plan: {ALPHA_DIGEST}",
+        f"  alpha-plan: {FRESH_DIGEST}",
+    }
+
+
+def test_a_digest_for_another_key_joins_the_section() -> None:
+    """
+    A second dashboard's digest sits beside the first, under the same section.
+    """
+    patched = apply_content_digest_record(
+        DIGESTED_CACHE_TEXT, "beta-plan", FRESH_DIGEST
+    )
+    assert DashboardUrlCache.from_yaml(patched).content_digests == {
+        "alpha-plan": ALPHA_DIGEST,
+        "beta-plan": FRESH_DIGEST,
+    }
+
+
+def test_recording_the_same_digest_leaves_the_text_unchanged() -> None:
+    """
+    A republish of identical content moves nothing, so nothing is pushed for it.
+    """
+    patched = apply_content_digest_record(
+        DIGESTED_CACHE_TEXT, "alpha-plan", ALPHA_DIGEST
+    )
+    assert patched == DIGESTED_CACHE_TEXT
+
+
+def test_recording_no_digest_removes_the_recorded_one() -> None:
+    """
+    A page published without a digest no longer claims the old one, so the next refresh
+    cannot report it unchanged.
+    """
+    patched = apply_content_digest_record(DIGESTED_CACHE_TEXT, "alpha-plan", None)
+    assert "alpha-plan" not in DashboardUrlCache.from_yaml(patched).content_digests
+
+
+def test_recording_no_digest_in_a_cache_that_has_none_changes_nothing() -> None:
+    """
+    The index, which carries no digest, leaves the cache text alone.
+    """
+    assert apply_content_digest_record(CACHE_TEXT, "_index", None) == CACHE_TEXT
+
+
 # %% the command line
 
 
@@ -392,3 +469,41 @@ def test_command_line_refuses_a_fabricated_url(
     assert exit_code == 1
     assert not output_path.exists()
     assert "is not among the artifacts titled" in capsys.readouterr().err
+
+
+def test_command_line_records_the_content_digest_and_reports_the_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """
+    A republish at an unchanged URL still moves the cache when its digest is new.
+    """
+    cache_path, listing_path, output_path = _write_inputs(tmp_path)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "dashboard/record_url.py",
+            "--key",
+            "alpha-plan",
+            "--expected-title",
+            "Alpha plan title",
+            "--content-digest",
+            FRESH_DIGEST,
+            "--listing",
+            str(listing_path),
+            "--cache",
+            str(cache_path),
+            "--output",
+            str(output_path),
+        ],
+    )
+
+    exit_code = main()
+
+    assert exit_code == 0
+    assert json.loads(capsys.readouterr().out)["changed"] is True
+    assert (
+        DashboardUrlCache.from_yaml(output_path.read_text())
+        .check("alpha-plan", FRESH_DIGEST)
+        .unchanged
+    )
