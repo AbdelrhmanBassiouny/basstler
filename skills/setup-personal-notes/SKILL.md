@@ -177,7 +177,7 @@ README and a short workflow file that calls basstler's reusable workflow by
 reference, so it works on a fork of any repository. Run again, it updates that
 workflow to the basstler branch or tag this session's package was installed at.
 Then tell
-the user the one step left to them, which `python -m basstler.setup.steps` also
+the user the one step left to them, which `"${BASSTLER_PYTHON}" -m basstler.setup.steps` also
 prints: a fork starts with Actions off, so they enable them once at
 `https://github.com/<fork>/actions`. Until they do, `/upstream-reviews` reads
 the upstream from the session instead.

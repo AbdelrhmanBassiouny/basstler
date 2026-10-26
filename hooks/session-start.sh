@@ -173,7 +173,8 @@ else
     if [ -n "${TRACKING_ISSUE}" ]; then
       TRACKING_ISSUE_NOTE="Structural changes (a wave, a deferral, a split, a reprioritization) are
 the user's call: ask first, then edit the manifest and comment on tracking
-issue #${TRACKING_ISSUE}. While working an item of this plan, subscribe to that issue."
+issue #${TRACKING_ISSUE}. While working an item of this plan, read that issue's
+comments before each push - an issue cannot be subscribed to."
     else
       TRACKING_ISSUE_NOTE="This plan has no tracking_issue set, so there is no coordination
 mailbox for structural changes yet - edit the manifest directly as usual."
