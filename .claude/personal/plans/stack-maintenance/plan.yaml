@@ -94,10 +94,11 @@ items:
     branches skip-unmoved-branches leaves. Measure with GIT_TRACE2 per the roadmap rule.
 - id: maintenance-skill-steps-only
   title: Cut the stacked-pr-maintenance skill to its steps and move the rationale to the docs
-  branch: null
-  pull_request_number: null
-  status: not_started
+  branch: claude/compassionate-faraday-un2z43
+  pull_request_number: 81
+  status: in progress
   track: pass
+  session: https://claude.ai/code/session_0199xBq1qkAfTycP8ScsWPGx
   depends_on: []
   notes: plugin/skills/stacked-pr-maintenance/SKILL.md is 17 KB and read every pass. Keep
     only the steps; the finish step becomes 'relay run-report's summary'. Rationale moves
