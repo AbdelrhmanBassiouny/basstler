@@ -5,7 +5,7 @@ Plan:
 - check_state: RollupState on the board from fork head checks; promotion withholds failure/error.
 
 Done:
-- Implemented and pushed (430ffde): board/UpstreamReviews/CommitChecks, GitHubRepository.check_state, review_label.py, status/next/summary output, skill + docs. 24 new tests; full suite = main's 14 env failures only.
+- Implemented (430ffde); main merged in (af8360f), skill conflict resolved onto main's rewrite + docs/stack/maintenance-pass.md: board/UpstreamReviews/CommitChecks, GitHubRepository.check_state, review_label.py, status/next/summary output, skill + docs. 24 new tests; full suite = main's 14 env failures only.
 
 Next:
 - Owner review. Open question: a cloud pass now needs the upstream attached (add_repo) or the export stops (403) - by design per #15 thread.
