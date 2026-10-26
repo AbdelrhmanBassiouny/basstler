@@ -24,12 +24,13 @@ items:
   track: pass
   session: https://claude.ai/code/session_019kfZx96oM3oTs6tFA2DXRQ
   depends_on: []
-  notes: >
-    Draft #78 on main: run-report/promote take --summaries (points and optional title per fork pull
-    request); the upstream pull request opens with the bullets and a link back, or the link back
-    alone. The first-paragraph derivation is removed. Link building and the session table were
-    already on main (finish-summary-markdown); nothing sends a notification. Rebuilt from #50's
-    reference commit, without its PromotionOutcome or GitHubLinks.
+  notes: 'Draft #78 on main: run-report/promote take --summaries (points and optional title
+    per fork pull request); the upstream pull request opens with the bullets and a link back,
+    or the link back alone. The first-paragraph derivation is removed. Link building and the
+    session table were already on main (finish-summary-markdown); nothing sends a notification.
+    Rebuilt from #50''s reference commit, without its PromotionOutcome or GitHubLinks.
+
+    '
 - id: stack-state-from-github
   title: Derive in-review and CI from GitHub instead of hand-kept labels
   branch: claude/cool-bardeen-3jxrd1
@@ -44,19 +45,6 @@ items:
     and the pass keeps the in-review label in sync; status shows CI and promotion withholds
     failing branches. Based on main: #15, which split stack_model.py out of stack.py, has
     merged. Three #15 threads point here.'
-- id: pass-commit-graph
-  title: Answer every landed-branch question with one git call, measured against a profiled baseline
-  branch: claude/sleepy-heisenberg-ntd4to
-  pull_request_number: 80
-  status: done
-  track: pass
-  session: https://claude.ai/code/session_016wYuairtTmRVxjVWrHRHbx
-  depends_on: []
-  notes: Rescoped from writing a commit-graph, which git ignores in a shallow clone (verified
-    on git 2.43). LandedBranches answers every landed question from one for-each-ref --merged
-    snapshot taken at Stack.load; synthetic profile in the PR shows 266 merge-base calls become
-    1. landed-predicate-once should build on LandedBranches rather than the removed
-    CurrentCheckout.merged_predicate. Not yet confirmed on a real CRAM run-report.
 - id: landed-predicate-once
   title: Compute the landed predicate once per run and hand it to every phase
   branch: claude/festive-noether-q4z6bq
@@ -66,8 +54,8 @@ items:
   session: https://claude.ai/code/session_01JfLqvSwMnA91Y4dugq9L3d
   depends_on: []
   notes: Done on main by 0e9744a (LandedBranches, one for-each-ref --merged per run). PR 79
-    now only adds a slash-named-branch test to tests/stack/test_landed_branches.py; close it if
-    that case is not wanted.
+    now only adds a slash-named-branch test to tests/stack/test_landed_branches.py; close
+    it if that case is not wanted.
 - id: skip-unmoved-branches
   title: Skip a branch before any merge work when nothing it depends on moved
   branch: null
@@ -99,22 +87,40 @@ items:
   track: pass
   session: https://claude.ai/code/session_0199xBq1qkAfTycP8ScsWPGx
   depends_on: []
-  notes: plugin/skills/stacked-pr-maintenance/SKILL.md is 17 KB and read every pass. Keep
-    only the steps; the finish step becomes 'relay run-report's summary'. Rationale moves
-    to docs/stack/. team-basstler's lean-kickoff caps skill document sizes; this file should
-    fall under that cap.
-- id: dashboard-token-economy
-  title: Republish a dashboard only when it changed, and keep the read a republish needs small
-  branch: claude/stoic-fermat-eywarj
-  track: pass
-  pull_request_number: 75
-  session: https://claude.ai/code/session_01J5swRVjzWWyUX1wfo9Wvs1
-  notes: 'From the PR #48 review (discussion_r4372701136). The refresh records a digest of
-    the rendered page in the URL cache and reports unchanged, so the session skips the Artifact
-    call. The dashboard is published as a small page plus a data file, so the read an update
-    from another session requires stays a few lines. Touches basstler.dashboard and the plan-dashboard
-    skill.
+  notes: 'Draft #81. SKILL.md cut from 16.6 KB to 5.8 KB, steps only; the rationale is in
+    docs/stack/maintenance-pass.md. Review round 1 answered; its two follow-ups are executor-reparents
+    and executor-ci-report. #77 and #78 edit the same skill, so whichever lands last carries
+    the others'' edits into the shorter file.
 
     '
+- id: executor-reparents
+  title: Have run-report change the base of a pull request whose base has landed
+  branch: null
+  pull_request_number: null
+  status: not_started
+  track: pass
   depends_on: []
-  status: done
+  notes: 'From basstler#81 review (discussion_r4376633783). The 403 that kept base changes
+    out of the executor no longer holds - a REST base PATCH with a session''s GH_TOKEN (Content-Type
+    application/json) succeeded on 2026-10-26. run-report performs reparents through PullRequestWriter
+    instead of listing them, and the skill''s step 1 goes away. Probe whether the native-stack
+    endpoints (the 422 unstack/restack sequence) are reachable the same way; if so move that
+    in too, otherwise report those for the session.
+
+    '
+- id: executor-ci-report
+  title: Have run-report comment on and label a branch whose checks failed
+  branch: null
+  pull_request_number: null
+  status: not_started
+  track: pass
+  depends_on:
+  - stack-state-from-github
+  notes: 'From basstler#81 review (discussion_r4376683912). Builds on #77''s check_state on
+    the board. For a check already failed on the board, post the MAINTENANCE - NEEDS RESOLUTION
+    comment and add needs-resolution the way restack conflicts already are (restack_steps.py).
+    The board is read before the pass pushes, so for each head the pass pushed, run-report
+    lists it in the summary as checks to watch and the session polls those and reports a failure;
+    the skill''s step 3 shrinks to that.
+
+    '
