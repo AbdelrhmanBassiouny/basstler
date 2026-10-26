@@ -1,12 +1,11 @@
 PR #81 - stack-maintenance / maintenance-skill-steps-only (auto mode, base main).
 
 Plan:
-- Cut plugin/skills/stacked-pr-maintenance/SKILL.md to its steps; finish = relay run-report's summary.
-- Move the why (403/422 refusals, no-subscribe, labels-replace, native stacks) to docs/stack/maintenance-pass.md, linked from docs/stack/README.md.
-- Keep tests/maintenance/test_skill.py green.
+- SKILL.md steps only; rationale in docs/stack/maintenance-pass.md.
 
 Done:
-- Branch, draft PR #81, manifest recorded.
+- SKILL.md 16.6 KB -> 5.8 KB; maintenance-pass.md written, linked from README (a2f90f1).
+- Tests: 14 failures are environmental, same on unchanged tree.
 
 Next:
-- Rewrite SKILL.md and write the docs page.
+- Await CI and review. Whichever of #78/#81 lands second carries #78's --summaries paragraph into step 2.
