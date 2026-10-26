@@ -73,6 +73,12 @@ class MaintenanceText(StrEnum):
     description is still there a week later.
     """
 
+    FULL_DETAIL = "Full detail:"
+    """
+    Opens the line an upstream pull request's description ends with, linking back to the
+    fork pull request it was promoted from.
+    """
+
 
 class MergeableState(StrEnum):
     """

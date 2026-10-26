@@ -66,6 +66,12 @@ class DatasetLocation(PathEnumeration):
     The dataset directory itself.
     """
 
+    PROMOTION_SUMMARIES = DIRECTORY / "promotion-summaries.json"
+    """
+    What a session writes for the upstream pull requests of the two-branch stack: points
+    and a title for the parent, nothing for the child.
+    """
+
     PLAN_WITH_LANDED_ITEMS = DIRECTORY / "plan-with-landed-items.yaml"
     """
     A plan with a tracking issue and three items: one landed, one in progress that
