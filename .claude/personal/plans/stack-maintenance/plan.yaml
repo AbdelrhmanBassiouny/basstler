@@ -16,27 +16,11 @@ tracks:
   name: Maintenance pass
   wave: pass
 items:
-- id: manifest-currency-first
-  title: Write the manifest and republish the dashboard before anything else, at every transition
-  branch: claude/plan-manifest-update-priority-ex2zst
-  pull_request_number: 48
-  status: done
-  session: https://claude.ai/code/session_01VWwD8nsdKr9wHaRgN1J2du
-  track: pass
-  blockers: []
-  depends_on: []
-  notes: >
-    Every skill that can affect a plan writes the manifest at each transition and republishes the
-    dashboard once per turn, citing manifest-staleness.md by a relative link; adds item_bootstrap's
-    update, check, resolve, block and unblock, and fixes the manifest writer's multi-line-value
-    corruption. Draft #48 (from CRAM #151); every 25 Oct review thread addressed through 3d9609f.
-    Follow-ups: dashboard-token-economy, and plan-tracking-skills/skill-document-links for the older
-    ${..._DOCUMENT} references. Absorbs CRAM #160's indent fix.
 - id: promotion-summaries-and-table
   title: Promote with a written summary, and send no notification
   branch: null
   pull_request_number: null
-  status: not_started
+  status: in progress
   track: pass
   depends_on: []
   notes: 'The script builds the compare-and-create link; the upstream pull request opens with
@@ -113,30 +97,18 @@ items:
     only the steps; the finish step becomes 'relay run-report's summary'. Rationale moves
     to docs/stack/. team-basstler's lean-kickoff caps skill document sizes; this file should
     fall under that cap.
-
 - id: dashboard-token-economy
-  title: "Republish a dashboard only when it changed, and keep the read a republish needs small"
+  title: Republish a dashboard only when it changed, and keep the read a republish needs small
   branch: claude/stoic-fermat-eywarj
   track: pass
   pull_request_number: 75
   session: https://claude.ai/code/session_01J5swRVjzWWyUX1wfo9Wvs1
-  notes: >
-    From the PR #48 review (discussion_r4372701136). The refresh records a digest of the rendered
-    page in the URL cache and reports unchanged, so the session skips the Artifact call. The
-    dashboard is published as a small page plus a data file, so the read an update from another
-    session requires stays a few lines. Touches basstler.dashboard and the plan-dashboard skill.
+  notes: 'From the PR #48 review (discussion_r4372701136). The refresh records a digest of
+    the rendered page in the URL cache and reports unchanged, so the session skips the Artifact
+    call. The dashboard is published as a small page plus a data file, so the read an update
+    from another session requires stays a few lines. Touches basstler.dashboard and the plan-dashboard
+    skill.
+
+    '
   depends_on: []
   status: in progress
-- id: shared-fork-base-fast-forward
-  title: Fast-forward the fork's base through one implementation, shared with session start
-  branch: claude/gifted-planck-k6d3c3
-  pull_request_number: 72
-  status: done
-  track: pass
-  depends_on: []
-  session: https://claude.ai/code/session_01DWEyg9F33n9vwvdb2deBcY
-  notes: 'From the basstler#57 review (issuecomment-6404647312). maintenance.fast_forward and
-    DefaultBranchSync.publish_to_fork both fetch the fork''s base, compare it with the upstream
-    tip, push and re-fetch. One class in basstler.maintenance serves both, parameterised by
-    fetch (session start must not write FETCH_HEAD) and by a refused push: raised in the pass,
-    reported at session start. #57 has merged; based on main.'
