@@ -165,9 +165,11 @@ the only record it will ever have:
 - **The PR-progress note** — the plan, what is done, and what is next, as
   three short lists kept current as the work goes; replace finished steps
   rather than accumulating them, since `save-pr-progress.sh` refuses notes
-  over their limit. Write it between `CLAUDE.local.md`'s
-  `BEGIN-PR-PROGRESS`/`END-PR-PROGRESS` markers and run
-  `hooks/save-pr-progress.sh` to push it. Do this as soon as the
+  over their limit. Write it to a scratch file and run
+  `"${BASSTLER_PLUGIN_ROOT}/hooks/save-pr-progress.sh" --branch <the item's branch> --source <file>`
+  to push it - always naming the branch, since the item's branch is often not
+  the one checked out in the project root (a worktree, or a session's own
+  branch). Do this as soon as the
   branch exists, not at the end: a note written afterwards is a summary, and
   the point of it is that another session can pick the work up mid-flight.
 

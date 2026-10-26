@@ -77,15 +77,19 @@ def save_progress(
     )
 
 
-def saved_progress(repository: ScratchRepository) -> str:
+def saved_progress(
+    repository: ScratchRepository, branch: str = ScratchBranch.WORK
+) -> str:
     """
-    :return: The work branch's progress notes as the notes branch now holds them.
+    :param repository: A fixture-built scratch repository.
+    :param branch: The branch whose progress notes to read.
+    :return: That branch's progress notes as the notes branch now holds them.
     """
     checkout = repository.clone_notes_branch(repository.project_root.parent / "verify")
     return (
         checkout
         / PersonalNotesPath.PULL_REQUEST_PROGRESS
-        / f"{ScratchBranch.WORK}{ProgressNotesFile.SUFFIX}"
+        / f"{branch}{ProgressNotesFile.SUFFIX}"
     ).read_text()
 
 
@@ -108,6 +112,66 @@ def test_progress_over_the_limit_is_refused_and_not_pushed(
         progress_repository.project_root.parent / "verify"
     )
     assert not (checkout / PersonalNotesPath.PULL_REQUEST_PROGRESS).exists()
+
+
+# %% another branch than the one checked out
+
+
+def test_a_named_branch_s_progress_is_saved_under_that_branch(
+    progress_repository: ScratchRepository, tmp_path
+):
+    """
+    A session working an item from a worktree keeps its own branch checked out in the
+    project root, so the item's progress is saved under the branch it names.
+    """
+    progress = "- Next: resolve the review.\n"
+    source = tmp_path / "item-progress.md"
+    source.write_text(progress)
+
+    result = progress_repository.run_hook_script(
+        HookFile.SAVE_PULL_REQUEST_PROGRESS,
+        "--branch",
+        ProgressBranch.OPEN,
+        "--source",
+        str(source),
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert saved_progress(progress_repository, ProgressBranch.OPEN) == progress
+
+
+def test_a_named_branch_takes_the_progress_section_without_a_source(
+    progress_repository: ScratchRepository,
+):
+    progress = "- Next: write the tests.\n"
+    progress_repository.write(
+        PersonalNotesPath.LOCAL_INSTRUCTIONS,
+        ClaudeLocalSection.PULL_REQUEST_PROGRESS.around(progress),
+    )
+
+    result = progress_repository.run_hook_script(
+        HookFile.SAVE_PULL_REQUEST_PROGRESS, "--branch", ProgressBranch.OPEN
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert saved_progress(progress_repository, ProgressBranch.OPEN) == progress
+
+
+def test_the_personal_notes_branch_is_refused_as_a_named_branch(
+    progress_repository: ScratchRepository, tmp_path
+):
+    source = tmp_path / "item-progress.md"
+    source.write_text("- Next: nothing.\n")
+
+    result = progress_repository.run_hook_script(
+        HookFile.SAVE_PULL_REQUEST_PROGRESS,
+        "--branch",
+        ScratchBranch.PERSONAL_NOTES,
+        "--source",
+        str(source),
+    )
+
+    assert result.returncode == 1
 
 
 # %% pruning finished branches' notes
