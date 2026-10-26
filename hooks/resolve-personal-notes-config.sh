@@ -10,7 +10,7 @@
 HOOKS_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PLUGIN_ROOT="$(cd "${HOOKS_DIR}/.." && pwd)"
 # Exported so a module of the package run from here finds the plugin's scripts
-# too (see basstler.locations.PluginLocation).
+# too (see basstler.plugin_root.PluginRoot).
 export BASSTLER_PLUGIN_ROOT="${PLUGIN_ROOT}"
 
 # PROJECT_ROOT: the project the session works in - CLAUDE_PROJECT_DIR, which
