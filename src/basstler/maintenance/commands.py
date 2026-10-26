@@ -17,11 +17,11 @@ from basstler.exit_codes import StackExitCode
 from basstler.class_property import classproperty
 from basstler.command_line import Command
 from basstler.locations import PackageLocation
-from basstler.maintenance.board import BoardExport
+from basstler.maintenance.board import BoardExport, UpstreamPullRequests
 from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
 from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.maintenance.github import GitHubRepository
+from basstler.maintenance.github import GitHubRepository, PullRequestReader
 from basstler.maintenance.promotion import (
     PromotionSummaries,
     clear_spent_promotion_labels,
@@ -29,6 +29,9 @@ from basstler.maintenance.promotion import (
 )
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
+from basstler.maintenance.upstream_pull_request_synchronization import (
+    UpstreamPullRequestSynchronization,
+)
 from basstler.stack.model import Stack
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
@@ -68,6 +71,10 @@ class MaintenancePass:
         """:return: The fork, as this run's credential can read and write it."""
         return GitHubRepository.from_environment(self.configuration.fork_repository)
 
+    def upstream(self) -> PullRequestReader:
+        """:return: The upstream, as this run's credential can read it."""
+        return GitHubRepository.from_environment(self.configuration.upstream_repository)
+
     def stack(self) -> Stack:
         """:return: The derived stack, read from the exported board."""
         return Stack.load(self.board)
@@ -95,7 +102,8 @@ class MaintenanceCommand(Command):
 @dataclass(frozen=True)
 class BoardCommand(MaintenanceCommand):
     """
-    Fetches the fork's open pull requests and exports them as the board.
+    Fetches the fork's open pull requests and exports them as the board, each with the
+    upstream pull request reviewing it and the verdict over its head's checks.
     """
 
     @classproperty
@@ -110,7 +118,10 @@ class BoardCommand(MaintenanceCommand):
         """
         What it does, as ``--help`` puts it.
         """
-        return "export the fork's open pull requests"
+        return (
+            "export the fork's open pull requests, with their upstream review and "
+            "checks"
+        )
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare ``--write`` on."""
@@ -126,7 +137,15 @@ class BoardCommand(MaintenanceCommand):
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
-        export = BoardExport.from_api_records(maintenance.fork().open_pull_requests())
+        fork = maintenance.fork()
+        export = BoardExport.from_api_records(
+            fork.open_pull_requests(),
+            UpstreamPullRequests.from_api_records(
+                maintenance.upstream().open_pull_requests(),
+                maintenance.configuration.fork_repository,
+            ),
+            fork,
+        )
         if not arguments.write:
             logger.info(export.as_json())
             return StackExitCode.SUCCESS
@@ -220,7 +239,8 @@ class RestackCommand(MaintenanceCommand):
 @dataclass(frozen=True)
 class PromoteCommand(MaintenanceCommand):
     """
-    Records the upstream link on every branch ready to be promoted.
+    Records the upstream link on every branch ready to be promoted, and keeps every
+    in-review label in step with the upstream.
     """
 
     @classproperty
@@ -262,6 +282,9 @@ class PromoteCommand(MaintenanceCommand):
                 promote(stack, fork, PromotionSummaries.read_from(arguments.summaries))
             ),
             promotion_labels_cleared=tuple(clear_spent_promotion_labels(stack, fork)),
+            upstream_pull_request_synchronization_changes=tuple(
+                UpstreamPullRequestSynchronization(stack, fork).synchronize()
+            ),
         )
         report.print_summary()
         return report.exit_code
@@ -341,6 +364,7 @@ class RunReportCommand(MaintenanceCommand):
             restack(stack, maintenance.git, fork),
             promote(stack, fork, summaries),
             clear_spent_promotion_labels(stack, fork),
+            UpstreamPullRequestSynchronization(stack, fork).synchronize(),
         )
         maintenance.board.unlink(missing_ok=True)
         if as_json:

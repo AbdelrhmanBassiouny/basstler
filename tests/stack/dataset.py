@@ -6,7 +6,7 @@ their cases from.
 from __future__ import annotations
 
 from collections.abc import Container
-from enum import Enum, StrEnum
+from enum import Enum, IntEnum, StrEnum
 from urllib.parse import parse_qs as parse_query_string
 from urllib.parse import urlsplit as split_url
 
@@ -60,14 +60,20 @@ class StackRepository(Enum):
     """
 
 
+class UpstreamPullRequestNumber(IntEnum):
+    """
+    The upstream pull requests the stack suites open from a fork branch.
+    """
+
+    OPEN = 101
+    """
+    An upstream pull request still open for review.
+    """
+
+
 class StackSampleText(StrEnum):
     """
     The text the stack suites feed in where only its shape matters.
-    """
-
-    CHECK_CONCLUSION = "failure"
-    """
-    A pull request's CI conclusion, carried through untouched.
     """
 
     SESSION_LINK = "https://claude.ai/code/session_x"
@@ -182,7 +188,7 @@ def a_deep_stack_beside_an_independent_branch(
     branch.
 
     :param approved: Branches the developer has un-drafted.
-    :param promoted: Branches carrying the in-review label.
+    :param promoted: Branches with an open upstream pull request.
     :param withheld: Branches delegated for conflict resolution.
     :param landed: Branches that are ancestors of the upstream base.
     :return: The stack as the tooling derives it.
@@ -199,8 +205,10 @@ def a_deep_stack_beside_an_independent_branch(
             name,
             parent,
             draft=name not in approved,
-            labels=([StackLabel.IN_REVIEW] if name in promoted else [])
-            + ([StackLabel.NEEDS_RESOLUTION] if name in withheld else []),
+            labels=[StackLabel.NEEDS_RESOLUTION] if name in withheld else [],
+            upstream_pull_request=(
+                UpstreamPullRequestNumber.OPEN if name in promoted else None
+            ),
             head_repository=StackRepository.FORK.value.full_name,
         )
         for number, (name, parent) in enumerate([*deep, *aside], start=1)

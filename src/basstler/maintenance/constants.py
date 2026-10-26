@@ -44,6 +44,16 @@ class DescriptionPattern(Enum):
     telling a branch's owner that their branch needs them.
     """
 
+    HEADING = re.compile(r"^#{1,6} ", re.MULTILINE)
+    """
+    The start of a Markdown heading line, which ends the section before it.
+    """
+
+    LINK_TARGET = re.compile(r"(?<=\]\()[^)\s]+(?=\))")
+    """
+    The URL a Markdown hyperlink points at.
+    """
+
     def first_in(self, text: str | None) -> str | None:
         """
         :param text: The text to search, which may be absent.
@@ -71,6 +81,12 @@ class MaintenanceText(StrEnum):
     Heading the compare-and-create link is written under, in the fork pull request's own
     description - the summary that carried it is delivered once and then gone, and the
     description is still there a week later.
+    """
+
+    UPSTREAM_PULL_REQUEST_HEADING = "## Upstream pull request"
+    """
+    Heading the link to the open upstream pull request opened from the branch is written
+    under, in the fork pull request's own description.
     """
 
     FULL_DETAIL = "Full detail:"

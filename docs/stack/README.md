@@ -20,10 +20,11 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 |---|---|---|
 | dependency **tree** (parent) | each fork PR's **base branch** (`base = parent`) | retargeting the PR base on GitHub - from a session, only via the GitHub MCP `update_pull_request` tool (see the maintenance skill) |
 | `draft` ↔ `ready` | the fork PR's **draft toggle** | un-drafting when you approve it |
-| `in-review` | the **`in-review` label** on the fork PR | labelling at promote time (the upstream isn't readable from the cloud) |
+| `in-review` | an **open upstream PR** whose head is the fork branch | opening the upstream PR - a maintenance pass mirrors it in the **`in-review`** label and an upstream link in the fork PR's description, adding and removing both |
 | `merged` | branch is an ancestor of `<upstream_remote>/<upstream_base>` | nothing - GitHub marks the PR merged itself once its head is contained in its base |
 | `merge` vs `rebase` | the **`rebase`** label; default `merge` | labelling on GitHub |
-| upstream create-link built | the **`promotion-link-sent`** marker | nothing - a maintenance pass sets it when it puts a create-link in the PR description, and clears it once you promote (add `in-review`) |
+| upstream create-link built | the **`promotion-link-sent`** marker | nothing - a maintenance pass sets it when it puts a create-link in the PR description, and clears it once the upstream PR is open |
+| CI | the **checks** on the fork PR's head | nothing - `status` shows their verdict, and a branch whose checks failed is not promoted |
 | conflict/CI-red reported | the **`needs-resolution`** label | nothing - a maintenance pass sets it when it reports a restack conflict to the branch's owning session, and clears it once the branch stops conflicting |
 
 ## Files
@@ -104,15 +105,17 @@ next to the workflow it describes, because it is read rather than run.
 - `draft → ready` is **your gate**: self-review the fork PR and **un-draft it** on GitHub to
   approve. `basstler.stack next` only ever promotes a `ready` (un-drafted) branch - nothing reaches
   the upstream without your sign-off.
-- `ready → in-review`: when you promote it, add the **`in-review`** label to the fork PR.
+- `ready → in-review`: when you open its upstream PR. The next maintenance pass adds the
+  **`in-review`** label to the fork PR, and removes it if the upstream PR is closed unmerged.
 - `in-review → merged`: automatic once the branch lands in `<upstream_remote>/<upstream_base>` (git ancestry).
 
 ## The loop you run
 
 1. Code at full speed on top of your stack tip; open each PR with **`base` = its parent branch**.
 2. **Self-review the bottom fork PR.** If good, **un-draft it** on GitHub. ← the gate.
-3. `~/.local/share/basstler/venv/bin/python -m basstler.stack next` → it names every approved, unblocked branch. Open its
-   upstream PR and add the **`in-review`** label to the fork PR.
+3. `~/.local/share/basstler/venv/bin/python -m basstler.stack next` → it names every approved, unblocked branch whose
+   checks have not failed. Open its upstream PR; the next maintenance pass labels the fork PR
+   **`in-review`** and links the upstream PR in its description.
 4. When the upstream merges it: nothing to edit - it becomes `merged` automatically. Run a maintenance
    pass to cascade the new base up the stack; `status`/`check` confirm it's clean again.
 

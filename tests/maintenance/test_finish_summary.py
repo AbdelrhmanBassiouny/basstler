@@ -15,6 +15,10 @@ from basstler.maintenance.finish_summary import FinishSummary, FinishSummaryHead
 from basstler.maintenance.promotion import Promotion
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
+from basstler.maintenance.upstream_pull_request_synchronization import (
+    UpstreamPullRequestSynchronizationAction,
+    UpstreamPullRequestSynchronizationChange,
+)
 from basstler.stack.model import (
     IntegrationStrategy,
     PullRequest,
@@ -24,8 +28,9 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.promotion_link import PromotionLink
+from basstler.upstream_reviews.vocabulary import RollupState
 
-from ..constants.stack import StackBranch, StackLabel
+from ..constants.stack import StackBranch
 
 from .fork import (
     A_SESSION_LINK,
@@ -45,9 +50,14 @@ from .recorded_fork import AlreadyResolvedPass
 # %% the stack a summary is written about
 
 
-def a_titled_stack(child_labels: list[str] | None = None) -> Stack:
+def a_titled_stack(
+    child_labels: list[str] | None = None,
+    child_upstream_pull_request: int | None = None,
+) -> Stack:
     """
     :param child_labels: The labels the child's pull request carries.
+    :param child_upstream_pull_request: The open upstream pull request opened from the
+        child.
     :return: The two-branch stack, with a title on the parent and a session link on the
         child, and nothing landed.
     """
@@ -67,6 +77,7 @@ def a_titled_stack(child_labels: list[str] | None = None) -> Stack:
                 labels=child_labels or [],
                 session=A_SESSION_LINK,
                 promotion_link=PromotionSampleText.FIRST_LINK,
+                upstream_pull_request=child_upstream_pull_request,
             ),
         ],
         lambda branch: False,
@@ -150,7 +161,8 @@ def test_a_link_sent_by_an_earlier_pass_and_not_yet_acted_on_is_listed_again():
 
 def test_a_link_sent_earlier_that_is_now_in_review_is_not_pending():
     stack = a_titled_stack(
-        child_labels=[GitHubLabel.PROMOTION_LINK_SENT, StackLabel.IN_REVIEW]
+        child_labels=[GitHubLabel.PROMOTION_LINK_SENT],
+        child_upstream_pull_request=StackPullRequestNumber.UPSTREAM,
     )
     summary = FinishSummary(MaintenanceReport(), stack)
 
@@ -212,6 +224,57 @@ def test_a_reported_branch_names_its_files_the_session_addressed_and_the_comment
     assert "`a.py`, `b.py`" in entry
     assert A_SESSION_LINK in entry
     assert entry.endswith(f"[comment]({comment})")
+
+
+def test_each_upstream_pull_request_synchronization_change_names_its_pull_request_and_what_was_done():
+    report = MaintenanceReport(
+        upstream_pull_request_synchronization_changes=(
+            UpstreamPullRequestSynchronizationChange(
+                StackBranch.PARENT,
+                StackPullRequestNumber.PARENT,
+                UpstreamPullRequestSynchronizationAction.LABEL_ADDED,
+            ),
+            UpstreamPullRequestSynchronizationChange(
+                StackBranch.CHILD,
+                StackPullRequestNumber.CHILD,
+                UpstreamPullRequestSynchronizationAction.LABEL_REMOVED,
+            ),
+        )
+    )
+    summary = FinishSummary(report, a_titled_stack())
+
+    section = section_of(
+        summary.as_markdown(),
+        FinishSummaryHeading.UPSTREAM_PULL_REQUEST_SYNCHRONIZATION,
+    )
+
+    parent, child = summary.stack.branches
+    assert section == [
+        f"{summary.branch_line(parent)}: {UpstreamPullRequestSynchronizationAction.LABEL_ADDED}",
+        f"{summary.branch_line(child)}: {UpstreamPullRequestSynchronizationAction.LABEL_REMOVED}",
+    ]
+
+
+def test_a_branch_whose_checks_failed_is_listed_as_withheld_from_promotion():
+    stack = Stack.build(
+        make_configuration(),
+        [
+            a_board_entry(
+                StackPullRequestNumber.PARENT,
+                StackBranch.PARENT,
+                UPSTREAM_BASE,
+                check_state=RollupState.FAILURE,
+            )
+        ],
+        lambda branch: False,
+    )
+    summary = FinishSummary(MaintenanceReport(), stack)
+
+    section = section_of(summary.as_markdown(), FinishSummaryHeading.FAILING_CHECKS)
+
+    assert section == [
+        f"{summary.branch_line(stack.branches[0])}: {RollupState.FAILURE}"
+    ]
 
 
 def test_every_withheld_branch_shares_one_line():

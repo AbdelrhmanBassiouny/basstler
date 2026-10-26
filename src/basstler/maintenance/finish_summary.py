@@ -63,9 +63,22 @@ class FinishSummaryHeading(StrEnum):
     The branches still conflicted from an earlier pass, left untouched.
     """
 
+    FAILING_CHECKS = "Withheld for failing checks"
+    """
+    The approved branches promotion would take but for their failed checks.
+    """
+
     LINK_LABELS_CLEARED = "Spent link labels removed"
     """
     The branches whose link label was dropped because the link was acted on.
+    """
+
+    UPSTREAM_PULL_REQUEST_SYNCHRONIZATION = (
+        "In-review labels and upstream links updated"
+    )
+    """
+    The pull requests whose in-review label or upstream link was written to match the
+    upstream.
     """
 
     SKIPPED = "Skipped"
@@ -122,9 +135,11 @@ class FinishSummary:
             FinishSummaryHeading.RESTACKED: self.restacked(),
             FinishSummaryHeading.UNPUBLISHED: self.unpublished(),
             FinishSummaryHeading.WITHHELD: self.branch_list(RestackOutcome.WITHHELD),
+            FinishSummaryHeading.FAILING_CHECKS: self.failing_checks(),
             FinishSummaryHeading.LINK_LABELS_CLEARED: self.code_list(
                 self.report.promotion_labels_cleared
             ),
+            FinishSummaryHeading.UPSTREAM_PULL_REQUEST_SYNCHRONIZATION: self.upstream_pull_request_synchronization_changes(),
             FinishSummaryHeading.SKIPPED: self.skipped(),
         }
         lines = [f"**Maintenance pass:** {self.report.exit_code.name_for_a_caller}"]
@@ -277,6 +292,25 @@ class FinishSummary:
         if outcome.outcome is RestackOutcome.INTEGRATION_FAILED:
             return f"the pass's own environment, not the branch: {outcome.explanation}"
         return outcome.explanation or ""
+
+    def failing_checks(self) -> list[str]:
+        """
+        :return: One entry per approved branch withheld for its failed checks, with the
+            verdict over them.
+        """
+        return [
+            f"{self.branch_line(branch)}: {branch.check_state}"
+            for branch in self.stack.withheld_by_failing_checks()
+        ]
+
+    def upstream_pull_request_synchronization_changes(self) -> list[str]:
+        """
+        :return: One entry per in-review label or upstream link written.
+        """
+        return [
+            f"{self.branch_line(self.branches_by_name[change.branch])}: {change.action}"
+            for change in self.report.upstream_pull_request_synchronization_changes
+        ]
 
     def branch_list(self, outcome: RestackOutcome) -> list[str]:
         """

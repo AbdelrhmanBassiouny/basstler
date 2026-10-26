@@ -325,6 +325,11 @@ class RollupState(StrEnum):
     At least one required commit status has not been reported yet.
     """
 
+    @property
+    def failed(self) -> bool:
+        """:return: Whether at least one check failed or reported an error."""
+        return self in {RollupState.FAILURE, RollupState.ERROR}
+
     @classmethod
     def over(cls, outcomes: list[CheckOutcome]) -> RollupState:
         """

@@ -3,8 +3,8 @@ The stack itself: the fork's pull requests, the branches they describe, and what
 stack derives from them.
 
 The dependency tree is each fork pull request's base branch (base = parent). A branch is
-``draft`` or ``ready`` by its pull request's draft flag, ``in-review`` by the
-``in_review_label`` on it, and ``merged`` once git finds it contained in
+``draft`` or ``ready`` by its pull request's draft flag, ``in-review`` while an upstream
+pull request opened from it is open, and ``merged`` once git finds it contained in
 ``<upstream_remote>/<upstream_base>``.
 """
 
@@ -12,15 +12,17 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
+from typing import Any
 
 from basstler.locations import PackageLocation
 from basstler.repository import Repository
 from basstler.stack.checkout import CurrentCheckout, LandedBranches
 from basstler.stack.exceptions import BoardUnavailable
 from basstler.stack.settings import Configuration
+from basstler.upstream_reviews.vocabulary import RollupState
 
 # %% domain model
 
@@ -44,13 +46,14 @@ class BranchStatus(StrEnum):
     def derive(cls, draft: bool, merged: bool, in_review: bool) -> BranchStatus:
         """Map a pull request's raw facts to a lifecycle status.
 
-        Precedence: a merged branch is ``merged``; an ``in-review``-labelled branch is
+        Precedence: a merged branch is ``merged``; a branch under upstream review is
         ``in-review``; an un-drafted branch is ``ready`` (self-approved for promotion);
         otherwise ``draft``.
 
         :param draft: Whether the pull request is still a draft.
         :param merged: Whether the branch has landed upstream (git ancestry).
-        :param in_review: Whether the pull request carries the in-review label.
+        :param in_review: Whether an upstream pull request opened from the branch is
+            open.
         :return: The derived status.
         """
         if merged:
@@ -118,8 +121,13 @@ class PullRequest:
     labels: list[str] = field(default_factory=list)
     """Labels currently on the pull request."""
 
-    ci: str | None = None
-    """Latest CI conclusion on the pull request head: ``success`` / ``failure`` / ``pending`` / None."""
+    check_state: RollupState | None = None
+    """The verdict over every check and commit status reported on the pull request's
+    head, ``None`` while nothing has reported."""
+
+    upstream_pull_request: int | None = None
+    """The number of the open upstream pull request opened from the head branch, ``None``
+    while none is open."""
 
     session: str | None = None
     """URL of the Claude session working this pull request, parsed from the pull request body (None if none)."""
@@ -130,6 +138,10 @@ class PullRequest:
     promotion_link: str | None = None
     """The upstream create-link a pass recorded in the pull request body, ``None`` until
     one is."""
+
+    upstream_link: str | None = None
+    """The URL of the upstream pull request a pass linked in the pull request body,
+    ``None`` while none is linked."""
 
     def skip_reason(self, fork: Repository) -> SkipReason | None:
         """:param fork: The fork the pass maintains.
@@ -152,7 +164,16 @@ class PullRequest:
         if not path.exists():
             raise BoardUnavailable(path)
         board = json.loads(path.read_text())
-        return [cls(**pull_request) for pull_request in board[BoardKey.PULL_REQUESTS]]
+        return [cls.from_board_entry(entry) for entry in board[BoardKey.PULL_REQUESTS]]
+
+    @classmethod
+    def from_board_entry(cls, entry: dict[str, Any]) -> PullRequest:
+        """:param entry: One pull request as ``board.json`` holds it.
+        :return: The pull request, its check state read back as its verdict."""
+        pull_request = cls(**entry)
+        if pull_request.check_state is None:
+            return pull_request
+        return replace(pull_request, check_state=RollupState(pull_request.check_state))
 
 
 @dataclass
@@ -181,8 +202,11 @@ class Branch:
     """The pull request in its role as one the pass leaves out, ``None`` when the branch
     is on the fork."""
 
-    ci: str | None = None
-    """Latest CI conclusion on the pull request head."""
+    check_state: RollupState | None = None
+    """The verdict over the checks reported on the pull request head."""
+
+    upstream_pull_request: int | None = None
+    """The open upstream pull request opened from this branch, if any."""
 
     session: str | None = None
     """URL of the Claude session working this pull request, if any."""
@@ -192,6 +216,14 @@ class Branch:
 
     promotion_link: str | None = None
     """The upstream create-link recorded on the pull request, if any."""
+
+    upstream_link: str | None = None
+    """The URL of the upstream pull request linked on the pull request, if any."""
+
+    @property
+    def checks_failed(self) -> bool:
+        """:return: Whether the checks on the pull request head have failed."""
+        return self.check_state is not None and self.check_state.failed
 
     @classmethod
     def from_pull_request(
@@ -212,7 +244,7 @@ class Branch:
             status=BranchStatus.derive(
                 pull_request.draft,
                 is_merged(pull_request.head),
-                configuration.in_review_label in pull_request.labels,
+                pull_request.upstream_pull_request is not None,
             ),
             strategy=(
                 IntegrationStrategy.REBASE
@@ -225,10 +257,12 @@ class Branch:
                 if skip_reason is None
                 else SkippedPullRequest(pull_request, skip_reason)
             ),
-            ci=pull_request.ci,
+            check_state=pull_request.check_state,
+            upstream_pull_request=pull_request.upstream_pull_request,
             session=pull_request.session,
             title=pull_request.title,
             promotion_link=pull_request.promotion_link,
+            upstream_link=pull_request.upstream_link,
         )
 
 
@@ -422,9 +456,9 @@ class Stack:
         """Whether a branch's parent has reached the upstream (merged or in-review), so it
         can promote.
 
-        A parent no open pull request describes cannot carry an in-review label, so git
-        ancestry is the only evidence available for it - and absence from the board is not
-        itself evidence of a root branch.
+        A parent no open fork pull request describes is not on the board, so git ancestry
+        is the only evidence available for it - and absence from the board is not itself
+        evidence of a root branch.
 
         :param branch: The branch to check.
         :return: Whether the branch's parent has landed.
@@ -447,9 +481,10 @@ class Stack:
     def promotion_order(self) -> list[Branch]:
         """The branches to submit to the upstream next, in dependency order.
 
-        A branch is a candidate when it is approved (``ready``), its parent has landed, and
-        it has not been withheld pending conflict resolution. Every such branch promotes
-        together - there is no admission cap or per-stack slot limit.
+        A branch is a candidate when it is approved (``ready``), its parent has landed, it
+        has not been withheld pending conflict resolution, and its checks have not failed.
+        Every such branch promotes together - there is no admission cap or per-stack slot
+        limit.
 
         :return: The promotable branches, in dependency order.
         """
@@ -459,6 +494,20 @@ class Stack:
             if branch.status == BranchStatus.READY
             and self.parent_landed(branch)
             and not self.needs_resolution(branch)
+            and not branch.checks_failed
+        ]
+
+    def withheld_by_failing_checks(self) -> list[Branch]:
+        """
+        :return: Every approved branch whose parent has landed but whose checks failed,
+            in dependency order.
+        """
+        return [
+            branch
+            for branch in self.maintained_branches()
+            if branch.status == BranchStatus.READY
+            and self.parent_landed(branch)
+            and branch.checks_failed
         ]
 
     def restack_plan(self, stacked_on: str | None = None) -> list[RestackPlanEntry]:

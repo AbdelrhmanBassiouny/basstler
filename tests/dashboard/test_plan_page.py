@@ -31,6 +31,8 @@ from basstler.pull_request_state import (
 )
 from basstler.dashboard.publication import DashboardArtifact, PublicationField
 from basstler.github_labels import GitHubLabel
+from basstler.maintenance.description import UpstreamPullRequestLink
+from basstler.repository import Repository
 from basstler.locations import DashboardArtifactFile
 
 from ..constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
@@ -964,6 +966,52 @@ def test_render_shows_placeholder_for_a_track_with_no_items():
     )
     output = renderer.render().html
     assert "Nothing here yet." in output
+
+
+def a_renderer_carding_one_item(record: PullRequestRecord) -> DashboardRenderer:
+    """
+    :param record: The live state of the item's pull request.
+    :return: A renderer over a plan whose one item is shown as a card in its track.
+    """
+    plan = Plan(
+        id=PLAN_UNDER_TEST_ID,
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[item("a", ItemStatus.IN_PROGRESS, pull_request_number=1)],
+    )
+    return DashboardRenderer(
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository={"owner/repo": {"1": record}},
+        tracking_url=None,
+    )
+
+
+def test_render_links_the_upstream_pull_request_on_the_item_card():
+    link = UpstreamPullRequestLink(Repository("an-upstream-owner", "a-project"), 7)
+    renderer = a_renderer_carding_one_item(
+        PullRequestRecord(
+            state=PullRequestState.OPEN, draft=True, upstream_link=link.url
+        )
+    )
+
+    output = renderer.render().html
+
+    assert renderer.plan.items[0].upstream_pull_request_url == link.url
+    assert f'<a class="upstream-link" href="{link.url}"' in output
+
+
+def test_render_leaves_an_item_without_an_upstream_pull_request_unlinked():
+    renderer = a_renderer_carding_one_item(
+        PullRequestRecord(state=PullRequestState.OPEN, draft=True)
+    )
+
+    output = renderer.render().html
+
+    assert 'class="upstream-link"' not in output
 
 
 def test_render_shows_pull_request_link_when_item_has_one():

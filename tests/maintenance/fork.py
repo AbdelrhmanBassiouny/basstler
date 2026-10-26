@@ -11,6 +11,8 @@ import shutil
 import subprocess
 from dataclasses import dataclass
 from enum import Enum, IntEnum, StrEnum
+from collections.abc import Iterable, Mapping
+from dataclasses import field as dataclasses_field
 from pathlib import Path
 
 from basstler.repository import Repository
@@ -19,13 +21,18 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.settings import Configuration
+from basstler.upstream_reviews.vocabulary import RollupState
 
 import basstler.maintenance.__main__
 import basstler.maintenance.restack_procedure
 from basstler.locations import ProjectLocation
 from basstler.maintenance.board import (
+    BoardExport,
+    CommitChecks,
     PullRequestField,
     PullRequestHeadKey,
+    PullRequestRecord,
+    UpstreamPullRequests,
 )
 from basstler.maintenance.git_commands import (
     BranchAncestry,
@@ -61,6 +68,11 @@ class StackPullRequestNumber(IntEnum):
     """
     The pull request of :attr:`StackBranch.ON_ANOTHER_FORK`, whose head is not on the
     fork.
+    """
+
+    UPSTREAM = 140
+    """
+    The upstream pull request opened from :attr:`StackBranch.PARENT`.
     """
 
 
@@ -398,6 +410,58 @@ def a_stack(checkout: ForkCheckout, pull_requests: list[PullRequest]):
 # %% the board export
 
 
+class HeadCommit(StrEnum):
+    """
+    The commits a fetched pull request's head can point at.
+    """
+
+    CHECKED = "c0ffee0000000000000000000000000000000000"
+    """
+    A head commit the checks under test reported on.
+    """
+
+    UNCHECKED = "dec0de0000000000000000000000000000000000"
+    """
+    A head commit nothing has reported on.
+    """
+
+
+@dataclass(frozen=True)
+class ChecksReportedOn(CommitChecks):
+    """
+    Answers each commit's check verdict from a fixed table rather than from GitHub.
+    """
+
+    state_by_commit: Mapping[str, RollupState] = dataclasses_field(default_factory=dict)
+    """
+    The verdict over each commit's checks; a commit absent here has no checks.
+    """
+
+    def check_state(self, commit: str) -> RollupState | None:
+        return self.state_by_commit.get(commit)
+
+
+def an_export(
+    records: Iterable[PullRequestRecord],
+    upstream_records: Iterable[PullRequestRecord] = (),
+    checks: CommitChecks | None = None,
+) -> BoardExport:
+    """
+    :param records: The fork's open pull requests, as the REST API returns them.
+    :param upstream_records: The upstream's open pull requests.
+    :param checks: The verdict over each head commit's checks, ``None`` for no checks
+        on any commit.
+    :return: The board the export builds from them.
+    """
+    return BoardExport.from_api_records(
+        records,
+        UpstreamPullRequests.from_api_records(
+            upstream_records, PullRequestHeadRepository.FORK.value
+        ),
+        checks or ChecksReportedOn(),
+    )
+
+
 def an_api_record(
     number: int = 7,
     head: str = "a-branch",
@@ -407,6 +471,7 @@ def an_api_record(
     body: str = "",
     head_repository: Repository | None = PullRequestHeadRepository.FORK.value,
     title: str | None = None,
+    head_commit: str = HeadCommit.UNCHECKED,
 ) -> dict:
     """
     :param number: The pull request number.
@@ -417,6 +482,7 @@ def an_api_record(
     :param body: The description to read a session link out of.
     :param head_repository: The repository the head lives in, ``None`` once deleted.
     :param title: The pull request's title.
+    :param head_commit: The commit the head points at.
     :return: One pull request in the shape the REST API returns it.
     """
     return {
@@ -428,6 +494,7 @@ def an_api_record(
                 if head_repository is None
                 else {PullRequestHeadKey.FULL_NAME: head_repository.full_name}
             ),
+            PullRequestHeadKey.COMMIT: head_commit,
         },
         PullRequestField.BASE.key: {"ref": base},
         PullRequestField.DRAFT.key: draft,
@@ -458,6 +525,8 @@ def a_board_entry(
     title: str | None = None,
     session: str | None = None,
     promotion_link: str | None = None,
+    upstream_pull_request: int | None = None,
+    check_state: RollupState | None = None,
 ) -> PullRequest:
     """
     :param number: The pull request number.
@@ -467,6 +536,8 @@ def a_board_entry(
     :param title: Its title.
     :param session: The session its description names.
     :param promotion_link: The upstream create-link its description records.
+    :param upstream_pull_request: The open upstream pull request opened from it.
+    :param check_state: The verdict over its head's checks.
     :return: One ready board entry whose head is on the fork.
     """
     return PullRequest(
@@ -479,6 +550,8 @@ def a_board_entry(
         session=session,
         title=title,
         promotion_link=promotion_link,
+        upstream_pull_request=upstream_pull_request,
+        check_state=check_state,
     )
 
 
