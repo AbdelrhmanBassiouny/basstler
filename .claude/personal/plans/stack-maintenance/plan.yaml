@@ -48,7 +48,7 @@ items:
   title: Answer every landed-branch question with one git call, measured against a profiled baseline
   branch: claude/sleepy-heisenberg-ntd4to
   pull_request_number: 80
-  status: in progress
+  status: done
   track: pass
   session: https://claude.ai/code/session_016wYuairtTmRVxjVWrHRHbx
   depends_on: []
@@ -117,4 +117,4 @@ items:
 
     '
   depends_on: []
-  status: in progress
+  status: done
