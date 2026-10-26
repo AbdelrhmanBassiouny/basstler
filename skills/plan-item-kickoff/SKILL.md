@@ -15,7 +15,7 @@ nothing and writes no code.**
 Step 2 resolves the item's execution mode, and that mode decides what
 happens next: `plan` presents the plan and stops until the user approves it,
 `auto` records the plan and implements it without asking, and `ask` puts the
-choice to the user. `${EXECUTION_MODES_DOCUMENT}` states what each mode
+choice to the user. [`execution-modes.md`](../plan-dashboard/execution-modes.md) states what each mode
 means and what it still obliges; this file only says where in the sequence
 each one applies.
 
@@ -25,7 +25,7 @@ the item stops reading as `not started` the moment it isn't.
 
 ## 1. Gather the item's context
 
-Follow `${PLAN_ITEM_GATHERING_DOCUMENT}` end to end — the setup check, the
+Follow [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md) end to end — the setup check, the
 item's resolution off the personal-notes branch, the tracking-issue
 subscription, its recorded state, the plan's standing rules, the dependency
 chain, and the standing conventions. `plan-item-resolve` runs the same
@@ -52,7 +52,7 @@ learned from what already landed**:
 
 ## 2. Resolve how this item gets started
 
-Follow `${EXECUTION_MODES_DOCUMENT}`: run its `resolve --skill kickoff`
+Follow [`execution-modes.md`](../plan-dashboard/execution-modes.md): run its `resolve --skill kickoff`
 call, and if the answer is `ask`, put its question — with a recommendation
 drawn from what step 1 just turned up, and the reasons behind it.
 
@@ -68,12 +68,12 @@ how well-specified the item looks.
 
 ## 3. Draft the plan
 
-Apply `${PLAN_ITEM_GATHERING_DOCUMENT}`'s last section first: anything you
+Apply [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md)'s last section first: anything you
 are about to raise as an open question is very often already answered by the
 material step 1 gathered.
 
 Then check the item is still the right unit of work, now that you know which
-files it will touch: follow `${SCOPE_DECISION_DOCUMENT}`. If nothing
+files it will touch: follow [`scope-decision.md`](../add-plan-item/scope-decision.md). If nothing
 substantial would remain once the overlapping edits are removed, propose
 folding rather than opening a branch that will have to be folded later.
 Otherwise carry on, but say which files overlap so the two branches do not
@@ -194,7 +194,7 @@ Work the plan step 3 settled, honoring the standing conventions step 1
 cross-checked: tests first per TDD, commits in the user's own git identity,
 no assistant author or co-author trailer.
 
-`${EXECUTION_MODES_DOCUMENT}` states what stays owed while doing it — the
+[`execution-modes.md`](../plan-dashboard/execution-modes.md) states what stays owed while doing it — the
 pull request stays a draft, its description and the PR-progress note keep
 matching what the work actually does, and decisions get recorded as they are
 made rather than reconstructed at review time. It also states the bar for
