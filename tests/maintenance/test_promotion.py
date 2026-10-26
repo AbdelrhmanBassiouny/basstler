@@ -13,6 +13,7 @@ import basstler.maintenance.restack_procedure
 from basstler.github_labels import GitHubLabel
 from basstler.maintenance.commands import RunReportCommand
 from basstler.maintenance.constants import MaintenanceText
+from basstler.maintenance.description import PullRequestDescription
 from basstler.maintenance.promotion import (
     PromotionSummaries,
     PromotionSummary,
@@ -85,28 +86,6 @@ def test_a_branch_already_carrying_the_link_label_is_not_promoted_again(
 
     assert promoted == []
     assert fork.description_writes == []
-
-
-def test_a_summary_written_for_a_branch_whose_link_was_already_sent_rebuilds_it(
-    fork_checkout: ForkCheckout,
-):
-    """
-    The session writes a summary for every branch ready to be promoted, including one an
-    earlier pass already sent a link for, and that summary is what the link opens with.
-    """
-    a_parent_and_child(fork_checkout)
-    summaries = PromotionSummaries.read_from(DatasetLocation.PROMOTION_SUMMARIES.value)
-    fork = RecordingPullRequests(
-        labels={StackPullRequestNumber.PARENT: [GitHubLabel.PROMOTION_LINK_SENT]}
-    )
-
-    (promoted,) = promote(a_stack(fork_checkout, the_board()), fork, summaries)
-
-    assert (
-        prefilled(promoted.url, PromotionLinkParameter.TITLE)
-        == summaries.for_pull_request(StackPullRequestNumber.PARENT).title
-    )
-    assert promoted.url in fork.description_writes[0].body
 
 
 def test_a_branch_labelled_needs_resolution_during_this_pass_is_not_promoted(
@@ -292,7 +271,9 @@ def test_a_whole_pass_promotes_with_the_summaries_it_was_given(
     )
 
     written = maintenance.recorded_fork.description_writes[0]
-    recorded_link = written.body.splitlines()[-1]
+    recorded_link = PullRequestDescription(written.body).section(
+        MaintenanceText.PROMOTION_HEADING
+    )
     assert (
         prefilled(recorded_link, PromotionLinkParameter.TITLE)
         == PromotionSummaries.read_from(summaries_document)

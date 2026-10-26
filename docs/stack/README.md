@@ -53,9 +53,6 @@ next to the workflow it describes, because it is read rather than run.
     parent landed, not withheld. **This is your "what goes upstream next" answer.**
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack next --porcelain` - machine-readable `next`: one
     `name<TAB>pr` line per branch to promote (or nothing).
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack next --context` - per branch to promote, its
-    `diff --stat` against its base, its commit subjects and its fork PR description: what an
-    upstream summary is written from.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack restack-plan` - the bottom-up restack plan as JSON (one
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
     pick up a moved parent via a conflict-free `merge`).

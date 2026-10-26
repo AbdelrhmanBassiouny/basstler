@@ -10,10 +10,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from urllib.parse import urlsplit
 
-from basstler.class_property import classproperty
 from basstler.github_labels import GitHubLabel
 from basstler.maintenance.exceptions import MarkdownLinkTargetError
-from basstler.maintenance.promotion import PromotionSummary
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.render_common import AllowedUrlScheme
@@ -92,7 +90,7 @@ class FinishSummaryHeading(StrEnum):
     """
 
 
-# %% markdown
+# %% links
 
 
 @dataclass(frozen=True)
@@ -129,46 +127,6 @@ class MarkdownLink:
         return f"[{self.label}]({self.target})"
 
 
-@dataclass(frozen=True)
-class SummarySection:
-    """
-    One section of the finish summary, and how many things it is about.
-    """
-
-    heading: FinishSummaryHeading
-    """
-    What the section is.
-    """
-
-    lines: list[str]
-    """
-    Its lines below the heading, empty when it has nothing to say.
-    """
-
-    item_count: int
-    """
-    How many branches or pull requests it is about, which a capped list prints fewer of.
-    """
-
-    @classmethod
-    def of_entries(
-        cls, heading: FinishSummaryHeading, lines: list[str]
-    ) -> SummarySection:
-        """
-        :param heading: What the section is.
-        :param lines: One line per item.
-        :return: The section, counting one item per line.
-        """
-        return cls(heading, lines, len(lines))
-
-    @property
-    def overview_entry(self) -> str:
-        """
-        The section's heading and count, as the overview line lists it.
-        """
-        return f"{self.heading} ({self.item_count})"
-
-
 # %% the summary
 
 
@@ -188,21 +146,6 @@ class FinishSummary:
     The stack the pass ran over, read for each pull request's number, title and session.
     """
 
-    @classproperty
-    def listed_path_limit(cls) -> int:
-        """
-        How many conflicting files one entry names before counting the rest, which its
-        comment lists in full.
-        """
-        return 5
-
-    @classproperty
-    def listed_branch_limit(cls) -> int:
-        """
-        How many branches a one-line list names before counting the rest.
-        """
-        return 10
-
     @staticmethod
     def heading_line(heading: str) -> str:
         """
@@ -211,17 +154,6 @@ class FinishSummary:
         """
         return f"### {heading}"
 
-    @staticmethod
-    def abbreviated(items: Sequence[str], limit: int) -> str:
-        """
-        :param items: Things to list on one line.
-        :param limit: How many of them to name.
-        :return: The first *limit* of them, then how many more there are.
-        """
-        named = ", ".join(items[:limit])
-        remaining = len(items) - limit
-        return f"{named} and {remaining} more" if remaining > 0 else named
-
     @functools.cached_property
     def branches_by_name(self) -> dict[str, Branch]:
         """
@@ -229,65 +161,31 @@ class FinishSummary:
         """
         return {branch.name: branch for branch in self.stack.branches}
 
-    def sections(self) -> list[SummarySection]:
-        """
-        :return: Every section that has something in it, in the order of
-            :class:`FinishSummaryHeading`.
-        """
-        restacked = self.restacked()
-        withheld = self.branches_with(RestackOutcome.WITHHELD)
-        cleared = self.report.promotion_labels_cleared
-        sections = [
-            SummarySection.of_entries(
-                FinishSummaryHeading.PENDING_LINKS, self.pending_links()
-            ),
-            SummarySection.of_entries(FinishSummaryHeading.REPORTED, self.reported()),
-            SummarySection.of_entries(FinishSummaryHeading.REPARENTS, self.reparents()),
-            SummarySection(FinishSummaryHeading.FORK_BASE, self.fork_base(), 1),
-            SummarySection.of_entries(FinishSummaryHeading.LANDED, self.landed()),
-            SummarySection(
-                FinishSummaryHeading.RESTACKED,
-                restacked,
-                sum(
-                    outcome.outcome
-                    in {RestackOutcome.PUSHED, RestackOutcome.UP_TO_DATE}
-                    for outcome in self.report.restacked
-                ),
-            ),
-            SummarySection.of_entries(
-                FinishSummaryHeading.UNPUBLISHED, self.unpublished()
-            ),
-            SummarySection(
-                FinishSummaryHeading.WITHHELD, self.code_list(withheld), len(withheld)
-            ),
-            SummarySection.of_entries(
-                FinishSummaryHeading.FAILING_CHECKS, self.failing_checks()
-            ),
-            SummarySection(
-                FinishSummaryHeading.LINK_LABELS_CLEARED,
-                self.code_list(cleared),
-                len(cleared),
-            ),
-            SummarySection.of_entries(
-                FinishSummaryHeading.UPSTREAM_PULL_REQUEST_SYNCHRONIZATION,
-                self.upstream_pull_request_synchronization_changes(),
-            ),
-            SummarySection.of_entries(FinishSummaryHeading.SKIPPED, self.skipped()),
-        ]
-        return [section for section in sections if section.lines]
-
     def as_markdown(self) -> str:
         """
-        :return: The status, then one line naming every section with something in it
-            and how many items each holds, then those sections.
+        :return: The status, then every section that has something in it, in the order
+            of :class:`FinishSummaryHeading`.
         """
-        sections = self.sections()
+        sections = {
+            FinishSummaryHeading.PENDING_LINKS: self.pending_links(),
+            FinishSummaryHeading.REPORTED: self.reported(),
+            FinishSummaryHeading.REPARENTS: self.reparents(),
+            FinishSummaryHeading.FORK_BASE: self.fork_base(),
+            FinishSummaryHeading.LANDED: self.landed(),
+            FinishSummaryHeading.RESTACKED: self.restacked(),
+            FinishSummaryHeading.UNPUBLISHED: self.unpublished(),
+            FinishSummaryHeading.WITHHELD: self.branch_list(RestackOutcome.WITHHELD),
+            FinishSummaryHeading.FAILING_CHECKS: self.failing_checks(),
+            FinishSummaryHeading.LINK_LABELS_CLEARED: self.code_list(
+                self.report.promotion_labels_cleared
+            ),
+            FinishSummaryHeading.UPSTREAM_PULL_REQUEST_SYNCHRONIZATION: self.upstream_pull_request_synchronization_changes(),
+            FinishSummaryHeading.SKIPPED: self.skipped(),
+        }
         lines = [f"**Maintenance pass:** {self.report.exit_code.name_for_a_caller}"]
-        if sections:
-            overview = "; ".join(section.overview_entry for section in sections)
-            lines += ["", f"**Sections:** {overview}"]
-        for section in sections:
-            lines += ["", self.heading_line(section.heading), "", *section.lines]
+        for heading, entries in sections.items():
+            if entries:
+                lines += ["", self.heading_line(heading), "", *entries]
         return "\n".join(lines)
 
     def pull_request_link(self, number: int) -> str:
@@ -320,13 +218,14 @@ class FinishSummary:
     def pending_links(self) -> list[str]:
         """
         :return: One entry per create-link built this pass, then one per link an
-            earlier pass built that is not yet acted on, built again from its branch
-            with no summary.
+            earlier pass built that is not yet acted on, without the link: it is in the
+            pull request's description.
         """
         entries = []
         for promotion in self.report.promoted:
             branch = self.branches_by_name[promotion.branch]
-            entry = f"{self.branch_line(branch)} - {self.create_link(promotion.url)}"
+            create = MarkdownLink("create upstream pull request", promotion.url)
+            entry = f"{self.branch_line(branch)} - {create}"
             if promotion.body_was_truncated:
                 title_only = MarkdownLink("title only", self.title_only_link(branch))
                 entry += f" ({title_only})"
@@ -339,19 +238,8 @@ class FinishSummary:
                 or branch.status in {BranchStatus.IN_REVIEW, BranchStatus.MERGED}
             ):
                 continue
-            link = PromotionSummary().link_for(
-                self.stack.configuration, branch, branch.title
-            )
-            entries.append(f"{self.branch_line(branch)} - {self.create_link(link.url)}")
+            entries.append(self.branch_line(branch))
         return entries
-
-    @staticmethod
-    def create_link(url: str) -> MarkdownLink:
-        """
-        :param url: A compare-and-create URL.
-        :return: The link opening the upstream pull request it prefills.
-        """
-        return MarkdownLink("create upstream pull request", url)
 
     def reported(self) -> list[str]:
         """
@@ -365,8 +253,7 @@ class FinishSummary:
             addressed = branch.session or "the description names no session"
             entries.append(
                 f"{self.branch_line(branch)}: {self.outcome_detail(outcome)} - "
-                f"addressed {addressed} - "
-                f"{MarkdownLink('comment', outcome.reported_at)}"
+                f"addressed {addressed} - {MarkdownLink('comment', outcome.reported_at)}"
             )
         return entries
 
@@ -427,16 +314,15 @@ class FinishSummary:
             and outcome.outcome is not RestackOutcome.WITHHELD
         ]
 
-    def outcome_detail(self, outcome: BranchOutcome) -> str:
+    @staticmethod
+    def outcome_detail(outcome: BranchOutcome) -> str:
         """
         :param outcome: What became of a branch the pass could not publish.
-        :return: The files, refusals or explanation its owner, or the pass, acts on;
-            only the first :attr:`listed_path_limit` conflicting files.
+        :return: The files, refusals or explanation its owner, or the pass, acts on.
         """
         if outcome.conflicting_paths:
-            return "conflicts in " + self.abbreviated(
-                [f"`{path}`" for path in outcome.conflicting_paths],
-                self.listed_path_limit,
+            return "conflicts in " + ", ".join(
+                f"`{path}`" for path in outcome.conflicting_paths
             )
         if outcome.refusals:
             return ", ".join(outcome.refusals)
@@ -463,26 +349,26 @@ class FinishSummary:
             for change in self.report.upstream_pull_request_synchronization_changes
         ]
 
-    def branches_with(self, outcome: RestackOutcome) -> list[str]:
+    def branch_list(self, outcome: RestackOutcome) -> list[str]:
         """
         :param outcome: The outcome to collect.
-        :return: Every branch that had it.
+        :return: Every branch that had it, on one line.
         """
-        return [
-            entry.branch for entry in self.report.restacked if entry.outcome is outcome
-        ]
+        return self.code_list(
+            [
+                entry.branch
+                for entry in self.report.restacked
+                if entry.outcome is outcome
+            ]
+        )
 
-    def code_list(self, names: Sequence[str]) -> list[str]:
+    @staticmethod
+    def code_list(names: Sequence[str]) -> list[str]:
         """
         :param names: Branch names.
-        :return: The first :attr:`listed_branch_limit` of them on one line, empty when
-            there are none.
+        :return: All of them on one line, empty when there are none.
         """
-        if not names:
-            return []
-        return [
-            self.abbreviated([f"`{name}`" for name in names], self.listed_branch_limit)
-        ]
+        return [", ".join(f"`{name}`" for name in names)] if names else []
 
     def skipped(self) -> list[str]:
         """

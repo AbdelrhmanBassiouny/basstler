@@ -84,21 +84,6 @@ class ConfigurationVariable(StrEnum):
     The supported interpreters looked for by name, separated by spaces.
     """
 
-    INSTALL_LOCK = "BASSTLER_INSTALL_LOCK"
-    """
-    The directory a session start holds while it installs the package.
-    """
-
-    INSTALL_LOCK_HOLDER = "BASSTLER_INSTALL_LOCK_HOLDER"
-    """
-    The file inside the install lock naming the process holding it.
-    """
-
-    INSTALL_WAIT_SECONDS = "BASSTLER_INSTALL_WAIT_SECONDS"
-    """
-    How long a caller of the package waits for an install in progress.
-    """
-
     HOME = "BASSTLER_HOME"
     """
     Where the package's environment and its installed ``uv`` live.

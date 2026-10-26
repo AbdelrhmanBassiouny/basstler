@@ -17,7 +17,7 @@ from basstler.maintenance.finish_summary import (
     FinishSummaryHeading,
     MarkdownLink,
 )
-from basstler.maintenance.promotion import Promotion, PromotionSummary
+from basstler.maintenance.promotion import Promotion
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.maintenance.upstream_pull_request_synchronization import (
@@ -165,10 +165,11 @@ def test_a_link_sent_by_an_earlier_pass_and_not_yet_acted_on_is_listed_again():
     assert f"`{StackBranch.CHILD}`" in entry
 
 
-def test_a_link_sent_by_an_earlier_pass_is_built_from_the_branch_not_its_description():
+def test_a_link_sent_by_an_earlier_pass_is_listed_without_reading_its_description():
     """
     A description is free text: a heading of its own that starts like the promotion
-    heading, a sentence or a code fence after it must never become a link target.
+    heading, a sentence or a code fence after it must never become a link target, and a
+    link built again without its summary would differ from the one recorded.
     """
     export = an_export(
         [
@@ -185,14 +186,12 @@ def test_a_link_sent_by_an_earlier_pass_is_built_from_the_branch_not_its_descrip
         make_configuration(), list(export.pull_requests), lambda branch: False
     )
 
-    (entry,) = section_of(
-        FinishSummary(MaintenanceReport(), stack).as_markdown(),
-        FinishSummaryHeading.PENDING_LINKS,
-    )
+    summary = FinishSummary(MaintenanceReport(), stack)
+
+    (entry,) = section_of(summary.as_markdown(), FinishSummaryHeading.PENDING_LINKS)
 
     (branch,) = stack.branches
-    expected = PromotionSummary().link_for(stack.configuration, branch, branch.title)
-    assert entry.endswith(f"[create upstream pull request]({expected.url})")
+    assert entry == summary.branch_line(branch)
 
 
 def test_a_link_sent_earlier_that_is_now_in_review_is_not_pending():
@@ -277,52 +276,6 @@ def test_a_reported_branch_names_its_files_the_session_addressed_and_the_comment
     assert "`a.py`, `b.py`" in entry
     assert A_SESSION_LINK in entry
     assert entry.endswith(f"[comment]({comment})")
-
-
-def test_a_conflict_in_many_files_names_only_the_first_few():
-    """
-    The comment the branch's owner reads lists every file; the summary only has to say
-    there are more.
-    """
-    limit = FinishSummary.listed_path_limit
-    paths = tuple(f"file-{index}.py" for index in range(limit + 3))
-    report = MaintenanceReport(
-        restacked=(
-            an_outcome(
-                StackBranch.CHILD,
-                RestackOutcome.CONFLICT,
-                conflicting_paths=paths,
-                reported_at=f"{PromotionSampleText.COMMENT_LINK_PREFIX}1",
-            ),
-        )
-    )
-
-    (entry,) = section_of(
-        FinishSummary(report, a_titled_stack()).as_markdown(),
-        FinishSummaryHeading.REPORTED,
-    )
-
-    named = ", ".join(f"`{path}`" for path in paths[:limit])
-    assert f"conflicts in {named} and 3 more - " in entry
-    assert paths[limit] not in entry
-
-
-def test_a_long_withheld_list_names_only_the_first_few():
-    limit = FinishSummary.listed_branch_limit
-    branches = [f"branch-{index}" for index in range(limit + 2)]
-    report = MaintenanceReport(
-        restacked=tuple(
-            an_outcome(branch, RestackOutcome.WITHHELD) for branch in branches
-        )
-    )
-
-    section = section_of(
-        FinishSummary(report, a_titled_stack()).as_markdown(),
-        FinishSummaryHeading.WITHHELD,
-    )
-
-    named = ", ".join(f"`{branch}`" for branch in branches[:limit])
-    assert section == [f"{named} and 2 more"]
 
 
 def test_each_upstream_pull_request_synchronization_change_names_its_pull_request_and_what_was_done():
@@ -470,27 +423,6 @@ def test_a_refused_fast_forward_is_explained():
 
     assert FastForwardOutcome.REFUSED_NOT_FAST_FORWARD in section[0]
     assert section[1] == explanation
-
-
-def test_the_status_is_followed_by_every_section_and_its_count():
-    """
-    A reader who only needs the outcome can stop after the first lines.
-    """
-    report = MaintenanceReport(
-        restacked=(
-            an_outcome(StackBranch.PARENT, RestackOutcome.UP_TO_DATE),
-            an_outcome(StackBranch.CHILD, RestackOutcome.PUSHED, pushed_commit="abc"),
-        ),
-        promoted=(a_promotion(),),
-    )
-
-    lines = FinishSummary(report, a_titled_stack()).as_markdown().splitlines()
-
-    assert lines[0].endswith(report.exit_code.name_for_a_caller)
-    assert lines[2] == (
-        f"**Sections:** {FinishSummaryHeading.PENDING_LINKS} (1); "
-        f"{FinishSummaryHeading.RESTACKED} (2)"
-    )
 
 
 def test_a_pass_that_did_nothing_still_says_its_status():

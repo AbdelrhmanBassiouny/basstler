@@ -127,31 +127,6 @@ class GitArgument(StrEnum):
     Makes :attr:`FOR_EACH_REFERENCE` print each reference's full name and nothing else.
     """
 
-    DIFF = "diff"
-    """
-    Compares two commits.
-    """
-
-    STATISTICS = "--stat"
-    """
-    Makes :attr:`DIFF` print one line per changed file and a total, not the changes.
-    """
-
-    LOG = "log"
-    """
-    Lists commits.
-    """
-
-    NO_MERGES = "--no-merges"
-    """
-    Leaves merge commits out of :attr:`LOG`.
-    """
-
-    SUBJECT_FORMAT = "--format=%s"
-    """
-    Makes :attr:`LOG` print each commit's subject and nothing else.
-    """
-
     REMOTE_REFERENCES = "refs/remotes"
     """
     The namespace holding every remote's tracking references.

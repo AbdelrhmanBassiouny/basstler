@@ -38,21 +38,10 @@ WROTE_ANYTHING=0
 SUMMARY_NOTES="not found"
 SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
 
-# Installs the package environment only where something is missing, holding
-# the install lock throughout so a caller of the package waits for it; never
+# Installs the package environment only where something is missing; never
 # fatal. Runs before the plan section and the setup check, which rely on it.
 ensure_basstler_environment() {
   record_latest_basstler_release
-  if ! acquire_basstler_install_lock; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)"
-    return
-  fi
-  install_missing_basstler_requirements
-  release_basstler_install_lock
-}
-
-# Creates the environment or installs into it, wherever something is missing.
-install_missing_basstler_requirements() {
   if [ ! -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
     create_and_install_basstler_environment
     return

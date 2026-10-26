@@ -18,7 +18,6 @@ from basstler.class_property import classproperty
 from basstler.command_line import Command
 from basstler.locations import PackageLocation
 from basstler.maintenance.board import BoardExport, UpstreamPullRequests
-from basstler.maintenance.ci_status import BranchChecks
 from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
 from basstler.maintenance.git_commands import GitCommandRunner
@@ -373,47 +372,6 @@ class RunReportCommand(MaintenanceCommand):
             return report
         logger.info(FinishSummary(report, stack).as_markdown())
         return report
-
-
-@dataclass(frozen=True)
-class CiStatusCommand(MaintenanceCommand):
-    """
-    Prints where the checks on each named branch stand, one line per branch.
-    """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "ci-status"
-
-    @classproperty
-    def description(cls) -> str:
-        """
-        What it does, as ``--help`` puts it.
-        """
-        return "print 'branch<TAB>state<TAB>failing checks' per branch"
-
-    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """:param parser: The subparser to declare ``--branch`` on."""
-        parser.add_argument(
-            "--branch",
-            action="append",
-            required=True,
-            help="a fork branch to report; repeat per branch",
-        )
-
-    def run(
-        self, maintenance: MaintenancePass, arguments: argparse.Namespace
-    ) -> StackExitCode:
-        """:param maintenance: What this run has resolved.
-        :param arguments: The parsed command line.
-        :return: The process exit code."""
-        fork = maintenance.fork()
-        for branch in arguments.branch:
-            logger.info(BranchChecks.read(fork, branch).line)
-        return StackExitCode.SUCCESS
 
 
 # Built now rather than on first use, so a command that cannot say what it is called is

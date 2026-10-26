@@ -124,19 +124,6 @@ class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
 
 
 @dataclass(frozen=True)
-class CheckStatusReader(ABC):
-    """
-    Reading every check reported on a commit.
-    """
-
-    @abstractmethod
-    def check_status(self, reference: str) -> CheckStatus | None:
-        """:param reference: A branch or commit.
-        :return: Every check reported on the commit it names, with the verdict over
-            them, ``None`` when nothing has reported."""
-
-
-@dataclass(frozen=True)
 class RepositoryLabels(ABC):
     """
     The labels a repository carries, and adding one it lacks.
@@ -335,11 +322,7 @@ class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
 
 @dataclass(frozen=True)
 class GitHubRepository(
-    ForkPullRequests,
-    CommitChecks,
-    CheckStatusReader,
-    RepositoryLabels,
-    CredentialHolder,
+    ForkPullRequests, CommitChecks, RepositoryLabels, CredentialHolder
 ):
     """
     Every pull-request and label call this tooling makes, against one repository.
@@ -417,11 +400,6 @@ class GitHubRepository(
         )
 
     def check_state(self, commit: str) -> RollupState | None:
-        checks = self.check_status(commit)
-        return None if checks is None else checks.state
-
-    def check_status(self, reference: str) -> CheckStatus | None:
-        commit = urllib.parse.quote(reference, safe="")
         runs = [
             run.result
             for page in self._every_page_of_entries(
@@ -437,7 +415,8 @@ class GitHubRepository(
             )
             for status in RestCombinedStatusPage.from_json(page).statuses
         ]
-        return CheckStatus.over(runs + statuses)
+        checks = CheckStatus.over(runs + statuses)
+        return None if checks is None else checks.state
 
     @staticmethod
     def _commit_report(commit: str, report: CommitReport) -> str:

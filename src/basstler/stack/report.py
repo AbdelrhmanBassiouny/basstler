@@ -276,37 +276,6 @@ class StackReport:
         for branch in self.stack.promotion_order():
             logger.info(f"{branch.name}\t{branch.pull_request_number}")
 
-    def print_next_context(self) -> None:
-        """
-        Print, per branch ready to be promoted, what its upstream summary is written
-        from: the files it changes against the base it is promoted onto, its commit
-        subjects and its fork pull request's description.
-        """
-        configuration = self.stack.configuration
-        for branch in self.stack.promotion_order():
-            base = self.stack.integration_parent(branch)
-            base_reference = configuration.reference_to(base)
-            reference = configuration.reference_on_fork(branch.name)
-            subjects = CurrentCheckout.output(
-                GitArgument.LOG,
-                GitArgument.NO_MERGES,
-                GitArgument.SUBJECT_FORMAT,
-                f"{base_reference}..{reference}",
-            ).splitlines()
-            logger.info(
-                f"### #{branch.pull_request_number} {branch.name} - "
-                f"{branch.title or branch.name}\n\n"
-                f"Against `{base}`:\n\n"
-                + CurrentCheckout.output(
-                    GitArgument.DIFF,
-                    GitArgument.STATISTICS,
-                    f"{base_reference}...{reference}",
-                )
-                + "\n\nCommits:\n\n"
-                + "\n".join(f"- {subject}" for subject in subjects)
-                + f"\n\nDescription:\n\n{branch.description or ''}\n"
-            )
-
     def print_restack_plan(self) -> None:
         """
         Print the bottom-up restack plan as JSON, one object per not-yet-landed branch.
