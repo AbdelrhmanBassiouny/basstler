@@ -45,25 +45,13 @@ items:
     and the pass keeps the in-review label in sync; status shows CI and promotion withholds
     failing branches. Based on main: #15, which split stack_model.py out of stack.py, has
     merged. Three #15 threads point here.'
-- id: landed-predicate-once
-  title: Compute the landed predicate once per run and hand it to every phase
-  branch: claude/festive-noether-q4z6bq
-  pull_request_number: 79
-  status: done
-  track: pass
-  session: https://claude.ai/code/session_01JfLqvSwMnA91Y4dugq9L3d
-  depends_on: []
-  notes: Done on main by 0e9744a (LandedBranches, one for-each-ref --merged per run). PR 79
-    now only adds a slash-named-branch test to tests/stack/test_landed_branches.py; close
-    it if that case is not wanted.
 - id: skip-unmoved-branches
   title: Skip a branch before any merge work when nothing it depends on moved
   branch: null
   pull_request_number: null
   status: not_started
   track: pass
-  depends_on:
-  - landed-predicate-once
+  depends_on: []
   notes: 'Of 129 restacked branches in the CRAM pass, 82 were up to date and 24 withheld:
     about 80 % no-op work. Prefer a stateless test: parent tip already an ancestor of head
     means up to date; withheld state already lives in the labels. A stored fingerprint only
