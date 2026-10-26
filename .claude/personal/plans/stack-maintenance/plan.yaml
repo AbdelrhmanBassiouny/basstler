@@ -20,7 +20,7 @@ items:
   title: Promote with a written summary, and send no notification
   branch: claude/confident-johnson-vd0gld
   pull_request_number: 78
-  status: in progress
+  status: done
   track: pass
   session: https://claude.ai/code/session_019kfZx96oM3oTs6tFA2DXRQ
   depends_on: []
@@ -72,7 +72,7 @@ items:
   title: Cut the stacked-pr-maintenance skill to its steps and move the rationale to the docs
   branch: claude/compassionate-faraday-un2z43
   pull_request_number: 81
-  status: in progress
+  status: done
   track: pass
   session: https://claude.ai/code/session_0199xBq1qkAfTycP8ScsWPGx
   depends_on: []
