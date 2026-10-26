@@ -140,14 +140,18 @@ they start on an item, so a stack is brought up to date when someone works on it
 
 A `merge`-strategy branch is restacked by merging its parent's moved tip in, so a pull request
 that waits through many passes would collect one merge per pass. Instead, each restack drops the
-merges at the branch's tip that only brought in an older state of its parent, and merges the
-parent's current tip in once - so the branch carries a single restack merge however long it
-waits. A merge is dropped only when the parent now holds every change it brought in and its
-content is exactly what merging its two sides produces: a merge carrying a conflict resolution,
-one bringing in another branch, and one with work committed on top of it are all kept. Replacing
-merges rewrites the branch, so it is pushed under a lease and never over a push the pass did not
-see; when merging onto the commit beneath them would conflict, the parent is merged onto the
-published tip as before.
+merges it made earlier at the branch's tip that only brought in what the branch is about to hold
+anyway, and merges the parent's current tip in once - so the branch carries a single restack merge
+however long it waits. A restack marks its merges with a `Restacked-parent:` trailer, and only
+merges carrying it are ever dropped: a merge somebody made by hand is kept. A marked merge is
+dropped only when the parent and the branch's own commits together hold every change it brought
+in - which still holds after the branch is reparented onto a base that lacks its former parent's
+commits - and its content is exactly what merging its two sides produces: a merge carrying a
+conflict resolution, one bringing in another branch, and one with work committed on top of it are
+all kept. Replacing merges rewrites the branch, so it is pushed under a lease and never over a push
+the pass did not see. The replacing merge goes onto the deepest commit beneath the dropped merges
+it merges cleanly onto, trying shallower ones in turn; when none merges cleanly, the parent is
+merged onto the published tip as before.
 
 ## Rules of hygiene
 

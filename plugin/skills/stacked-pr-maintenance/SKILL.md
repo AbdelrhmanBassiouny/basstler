@@ -32,8 +32,8 @@ Do not use the Workflow tool - the multi-agent orchestration tool that fans work
 This pass is a short sequence of git and API calls; fanning it out multiplies the chance of two
 agents pushing the same branch. Use plain git plus the GitHub MCP server. Never force-push a branch
 that has an open upstream pull request unless it carries the `rebase` label. The executor's own
-restack is the one exception: it replaces the merges earlier passes left at a branch's tip with a
-single new one, under a lease, so a branch carries one restack merge however many passes it waits
+restack is the one exception: it replaces the merges earlier passes left at a branch's tip - only
+those carrying its `Restacked-parent:` trailer, never a merge made by hand - with a single new one, under a lease, so a branch carries one restack merge however many passes it waits
 through.
 
 HARD RULES so you never drift into review work:
