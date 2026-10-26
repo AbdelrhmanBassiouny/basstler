@@ -15,10 +15,11 @@ Reparent pull requests whose base has landed, run the pass, report. Why each rul
 - Do not review, answer, resolve or act on review comments. If a review or comment event reaches you,
   end the turn. The one exception is a check status you are polling.
 - Never call `subscribe_pr_activity`; poll checks instead. Never enter plan mode or post a plan.
-- Do not use the Workflow tool; plain git and the GitHub MCP server only.
+- Do not fan the pass out with Claude Code's Workflow tool (subagents). The executor already does
+  the fast-forward and the merges with plain git; you need only it and the GitHub MCP server.
 - Never force-push a branch with an open upstream pull request unless it carries the `rebase` label.
 - A label write replaces the whole set: pass exactly what `basstler.stack labels` prints.
-- Never open the upstream pull request and never add `in-review`.
+- Never open the upstream pull request and never write `in-review` yourself.
 
 ## Step 0 - resolve the repositories
 
@@ -44,7 +45,7 @@ Pass `fork=` / `upstream=` arguments straight through. Never inspect or guess at
 ```
 
 For each `branch<TAB>pr<TAB>current base<TAB>target base` line, set the pull request's base with the
-MCP `update_pull_request` tool - never with curl, which is refused with a 403.
+MCP `update_pull_request` tool.
 
 If that fails with `422 ... part of a stack`, the pull request is in a native GitHub stack. Call the
 stacks endpoints with curl, `GH_TOKEN` and the header `X-GitHub-Api-Version: 2026-03-10`:
