@@ -487,6 +487,37 @@ def test_a_collision_with_the_fix_is_handed_back_rather_than_reported_to_its_own
     assert fork.comments == []
 
 
+def test_a_branch_above_a_collision_is_reported_blocked_rather_than_up_to_date(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The grandchild still holds the child's old tip, but not the parent's fix the child
+    could not take, so calling it up to date would hide that it lacks the fix.
+    """
+    a_stack_three_deep(fork_checkout)
+    fork_checkout.commit_on(StackBranch.PARENT, FixtureFile.CONTESTED, "the fix\n")
+    fork_checkout.commit_on(
+        StackBranch.CHILD, FixtureFile.CONTESTED, "the child's version\n"
+    )
+    fork_checkout.run_git("checkout", "--quiet", StackBranch.GRANDCHILD)
+    fork_checkout.run_git("merge", "--quiet", "--no-edit", StackBranch.CHILD)
+    fork_checkout.run_git("push", "--quiet", "origin", StackBranch.GRANDCHILD)
+    before = fork_checkout.published_commit("origin", StackBranch.GRANDCHILD)
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_deeper_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        stacked_on=StackBranch.PARENT,
+    )
+
+    grandchild = outcomes[1]
+    assert grandchild.branch == StackBranch.GRANDCHILD
+    assert grandchild.outcome == RestackOutcome.BLOCKED_BY_ANCESTOR
+    assert grandchild.blocking_ancestor == StackBranch.CHILD
+    assert fork_checkout.published_commit("origin", StackBranch.GRANDCHILD) == before
+
+
 def test_naming_a_subtree_leaves_its_collisions_to_the_caller():
     assert type(ConflictResponse.chosen_for(StackBranch.PARENT)) is LeaveItToTheCaller
 

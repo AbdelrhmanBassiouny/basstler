@@ -92,7 +92,8 @@ Do not re-derive its output, look up titles, or run the individual commands as w
 | `branch-needs-attention` | relay every branch it names |
 
 - `reparents` left in the report are made by step 1 of the next pass.
-- A `restacked` entry other than `pushed` or `up-to-date` is already labelled and commented; name it.
+- A `restacked` entry other than `pushed`, `up-to-date` or `blocked-by-ancestor` is already labelled and commented; name it.
+- `blocked-by-ancestor` names the branch below it that was left unpublished; it clears once that branch does.
 - A `skipped` entry is not yours to fix; list it with its `reason`.
 - `integration-failed` is the pass's own environment, not the branch owner's: report it as yours and
   never label the branch for it.
