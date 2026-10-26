@@ -19,7 +19,6 @@ from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
-from basstler.locations import PackageLocation
 from basstler.maintenance.description import PullRequestDescription
 from basstler.repository import Repository
 from basstler.stack.model import BoardKey, PullRequest
@@ -444,12 +443,13 @@ class BoardExport:
             indent=2,
         )
 
-    def write(self, path: Path = PackageLocation.BOARD.value) -> Path:
+    def write(self, path: Path) -> Path:
         """
         Write the export where the derived stack is read from.
 
         :param path: Where to write it.
         :return: The path written to.
         """
+        path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(self.as_json() + "\n")
         return path

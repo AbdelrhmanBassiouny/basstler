@@ -30,7 +30,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 ## Files
 
 Every module named below lives in the `basstler` package, `src/basstler/`, and runs
-from the package's own environment; `stack.toml` and `board.json` sit beside them. This document stays here,
+from the package's own environment; `stack.toml` sits beside them. This document stays here,
 next to the workflow it describes, because it is read rather than run.
 
 - **`stack.toml`** - the shipped defaults: label names and the upstream base branch. It names
@@ -43,8 +43,10 @@ next to the workflow it describes, because it is read rather than run.
   both (see `Configuration.load` in `stack/settings.py`), including a `fork_repository` to pick between
   remotes when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `ci`,
-  `session`) that `basstler.stack` reads. Written from GitHub as scratch by whatever refreshes it -
-  never committed.
+  `session`) that `basstler.stack` reads. Written from GitHub as scratch by whatever refreshes it,
+  to `basstler/board.json` under the repository's common git directory
+  (`git rev-parse --git-common-dir`): one file every worktree of the repository shares, which no
+  checkout can commit and no install of the package holds.
 - **`basstler.stack`** - read-only status tool (never mutates branches). Reads `board.json` + git:
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack status` - the whole stack, with ahead/behind drift per parent.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack check` - would each branch integrate cleanly onto its parent

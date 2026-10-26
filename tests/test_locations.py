@@ -88,7 +88,7 @@ def test_the_package_directory_is_where_the_package_is_imported_from():
 
 @pytest.mark.parametrize(
     "location",
-    [location for location in PackageLocation if location is not PackageLocation.BOARD],
+    list(PackageLocation),
     ids=lambda member: member._name_,
 )
 def test_every_shipped_location_exists(location: PackageLocation):

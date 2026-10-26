@@ -86,9 +86,7 @@ def install_package_into(checkout_root: Path) -> None:
     shutil.copytree(
         RepositoryLocation.ROOT / PackageSourceFile.SOURCE,
         checkout_root / PackageSourceFile.SOURCE,
-        ignore=shutil.ignore_patterns(
-            "__pycache__", "*.egg-info", f"{PackageLocation.BOARD.value.name}*"
-        ),
+        ignore=shutil.ignore_patterns("__pycache__", "*.egg-info"),
         dirs_exist_ok=True,
     )
 

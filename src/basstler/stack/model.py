@@ -17,7 +17,6 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.locations import PackageLocation
 from basstler.repository import Repository
 from basstler.stack.checkout import CurrentCheckout, LandedBranches
 from basstler.stack.exceptions import BoardUnavailable
@@ -154,7 +153,7 @@ class PullRequest:
         return None
 
     @classmethod
-    def read_board(cls, path: Path = PackageLocation.BOARD.value) -> list[PullRequest]:
+    def read_board(cls, path: Path) -> list[PullRequest]:
         """Parse ``board.json`` into the list of fork pull requests.
 
         :param path: The board export file.
@@ -355,7 +354,7 @@ class Stack:
         )
 
     @classmethod
-    def load(cls, board: Path = PackageLocation.BOARD.value) -> Stack:
+    def load(cls, board: Path) -> Stack:
         """:param board: The exported board to derive the stack from.
         :return: The full live stack: configuration + board export + git merged-detection.
         """

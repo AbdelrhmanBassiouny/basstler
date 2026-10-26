@@ -73,11 +73,6 @@ class PackageLocation(PathEnumeration):
     user's overrides.
     """
 
-    BOARD = DIRECTORY / "board.json"
-    """
-    The exported snapshot of the fork's open pull requests - scratch state, never committed.
-    """
-
     DEPENDENCY_DECLARATION = SOURCE_TREE / "pyproject.toml"
     """
     The package metadata of a source checkout, whose ``[project] dependencies`` this
@@ -102,6 +97,23 @@ class PackageLocation(PathEnumeration):
     PLAN_ITEM_MODE_DEFAULTS = DIRECTORY / "plan" / "plan-item-modes.toml"
     """
     The shipped plan-item execution modes.
+    """
+
+
+class RepositoryStateLocation(PathEnumeration):
+    """
+    Scratch state kept per repository, relative to its common git directory, which every
+    worktree of the repository shares and no checkout or install of the package holds.
+    """
+
+    DIRECTORY = Path("basstler")
+    """
+    Everything this package keeps there.
+    """
+
+    BOARD = DIRECTORY / "board.json"
+    """
+    The exported snapshot of the fork's open pull requests.
     """
 
 

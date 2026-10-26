@@ -40,8 +40,11 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
+from basstler.locations import RepositoryStateLocation
+from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.repository import Repository
 from basstler.stack.commit_move import (
     CommitMoveAction,
@@ -283,7 +286,13 @@ class StackCommandLine:
             if not command.needs_a_board:
                 return StackCommandLine._run_without_a_board(command, arguments)
             return StackCommandLine._run_against_the_board(
-                command, arguments, Stack.load()
+                command,
+                arguments,
+                Stack.load(
+                    GitCommandRunner(Path.cwd()).repository_state_path(
+                        RepositoryStateLocation.BOARD
+                    )
+                ),
             )
         except CommandFailure as error:
             logger.error(f"{error}")
