@@ -3,7 +3,8 @@ set -euo pipefail
 
 # Orchestrates one plan's refresh: basstler.plan.sync_manifest_status's auto-correction,
 # pushing that correction back to the personal-notes branch if it changed
-# anything, then basstler.dashboard.plan_page's render - the exact sequence
+# anything, then basstler.dashboard.plan_page's render, then the check of that render
+# against what was last published - the exact sequence
 # skills/plan-dashboard/SKILL.md step 2 previously spelled out as an
 # embedded bash snippet for a session to improvise from. Extracted so that
 # sequence is real, tested-by-construction code (it just calls the two
@@ -17,7 +18,8 @@ set -euo pipefail
 #     --plan <plan.yaml path> \
 #     --roadmap <roadmap.md path> \
 #     --pr-data <pr_data.json path> \
-#     --output <dashboard.html output path> \
+#     --artifact-directory <directory to write the dashboard Artifact's files to> \
+#     [--url-cache <dashboard-urls.yaml path>] \
 #     [--tracking-url <url>] [--hub-url <url>] [--index-url <url>] \
 #     [--plans-dir <directory holding every plan>]
 #
@@ -26,8 +28,11 @@ set -euo pipefail
 # directory.
 #
 # Prints one JSON summary to stdout, merging basstler.plan.sync_manifest_status's own
-# {"corrected": [...]} with basstler.dashboard.plan_page's status/drift/ready summary,
-# so the calling skill has everything step 4's report needs from one place.
+# {"corrected": [...]} with basstler.dashboard.plan_page's status/drift/ready summary
+# and the publication check: "url", the Artifact to update (null before the first
+# publish, or without --url-cache), and "unchanged", true when the files written are
+# exactly what was last published there - so the calling skill has everything it
+# needs from one place.
 #
 # Requires PyYAML, Jinja2, and the markdown package - see the package's own
 # pyproject.toml, which declares them next to the modules that need them.
@@ -45,7 +50,8 @@ PLAN_ID=""
 PLAN_FILE=""
 ROADMAP_FILE=""
 PULL_REQUEST_DATA_FILE=""
-OUTPUT_FILE=""
+ARTIFACT_DIRECTORY=""
+URL_CACHE_FILE=""
 TRACKING_URL=""
 HUB_URL=""
 INDEX_URL=""
@@ -68,8 +74,12 @@ while [ $# -gt 0 ]; do
       PULL_REQUEST_DATA_FILE="$2"
       shift 2
       ;;
-    --output)
-      OUTPUT_FILE="$2"
+    --artifact-directory)
+      ARTIFACT_DIRECTORY="$2"
+      shift 2
+      ;;
+    --url-cache)
+      URL_CACHE_FILE="$2"
       shift 2
       ;;
     --tracking-url)
@@ -96,8 +106,8 @@ while [ $# -gt 0 ]; do
 done
 
 if [ -z "${PLAN_ID}" ] || [ -z "${PLAN_FILE}" ] || [ -z "${ROADMAP_FILE}" ] \
-    || [ -z "${PULL_REQUEST_DATA_FILE}" ] || [ -z "${OUTPUT_FILE}" ]; then
-  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --output <dashboard.html> [--tracking-url <url>] [--hub-url <url>] [--index-url <url>] [--plans-dir <dir>]" >&2
+    || [ -z "${PULL_REQUEST_DATA_FILE}" ] || [ -z "${ARTIFACT_DIRECTORY}" ]; then
+  echo "Usage: ${BASH_SOURCE[0]} --plan-id <id> --plan <plan.yaml> --roadmap <roadmap.md> --pr-data <pr_data.json> --artifact-directory <dir> [--url-cache <dashboard-urls.yaml>] [--tracking-url <url>] [--hub-url <url>] [--index-url <url>] [--plans-dir <dir>]" >&2
   exit 1
 fi
 
@@ -125,7 +135,7 @@ BUILD_ARGUMENTS=(
   --plan "${PLAN_FILE}"
   --roadmap "${ROADMAP_FILE}"
   --pr-data "${PULL_REQUEST_DATA_FILE}"
-  --output "${OUTPUT_FILE}"
+  --artifact-directory "${ARTIFACT_DIRECTORY}"
 )
 if [ -n "${TRACKING_URL}" ]; then
   BUILD_ARGUMENTS+=(--tracking-url "${TRACKING_URL}")
@@ -139,6 +149,15 @@ fi
 if [ -n "${PLANS_DIRECTORY}" ]; then
   BUILD_ARGUMENTS+=(--plans-dir "${PLANS_DIRECTORY}")
 fi
+mkdir -p "${ARTIFACT_DIRECTORY}"
 BUILD_SUMMARY="$("${BASSTLER_PYTHON}" -m "${BUILD_DASHBOARD_MODULE}" "${BUILD_ARGUMENTS[@]}")"
 
-"${BASSTLER_PYTHON}" -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" merge-summaries "${SYNC_SUMMARY}" "${BUILD_SUMMARY}"
+PUBLICATION_ARGUMENTS=(--key "${PLAN_ID}" --build-summary "${BUILD_SUMMARY}")
+if [ -n "${URL_CACHE_FILE}" ]; then
+  PUBLICATION_ARGUMENTS+=(--cache "${URL_CACHE_FILE}")
+fi
+PUBLICATION_SUMMARY="$("${BASSTLER_PYTHON}" -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" \
+  check-publication "${PUBLICATION_ARGUMENTS[@]}")"
+
+"${BASSTLER_PYTHON}" -m "${REFRESH_DASHBOARD_SUPPORT_MODULE}" merge-summaries \
+  "${SYNC_SUMMARY}" "${BUILD_SUMMARY}" "${PUBLICATION_SUMMARY}"
