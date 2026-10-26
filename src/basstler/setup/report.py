@@ -107,6 +107,12 @@ class CheckStatus(StrEnum):
     Something still has to be set up.
     """
 
+    IN_PROGRESS = "in-progress"
+    """
+    Another process is setting it up right now, so it is waited for rather than set up
+    again.
+    """
+
     INFORMATIONAL = "info"
     """
     Context rather than a verdict.
