@@ -15,6 +15,7 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.maintenance.constants import (
+    CommitTrailer,
     MergeableState,
     MaintenanceText,
 )
@@ -321,6 +322,18 @@ class BranchUnderRestack:
         """:return: The fork's copy of the parent being integrated."""
         return self.configuration.reference_on_fork(self.parent)
 
+    @property
+    def merge_message(self) -> str:
+        """:return: The message of the merge integrating the parent, marked as the
+        restack's own by :attr:`CommitTrailer.RESTACKED_PARENT` and
+        :attr:`CommitTrailer.RESTACKED_PARENT_COMMIT`."""
+        return (
+            f"Merge {self.parent_reference} into {self.branch.name}\n\n"
+            f"{CommitTrailer.RESTACKED_PARENT}: {self.parent_reference}\n"
+            f"{CommitTrailer.RESTACKED_PARENT_COMMIT}: "
+            f"{self.git.commit_at(self.parent_reference)}"
+        )
+
     def concluded(self, outcome: RestackOutcome, **detail: Any) -> BranchOutcome:
         """
         Finish this branch with an outcome its owner can act on.
@@ -340,13 +353,17 @@ class BranchUnderRestack:
 @dataclass(frozen=True)
 class SupersededMerges:
     """
-    The merges at a branch's tip that only brought in an earlier state of its parent.
+    The merges at a branch's tip that a restack made and that only brought in what the
+    branch is about to hold anyway.
 
     Every restack merges the parent's moved tip in, so a branch waiting through many
-    passes would collect one merge per pass. A merge is superseded when the parent now
-    holds every change it brought in, and its content is exactly what merging its two
-    parents produces - so it carries no work of its own, and merging the parent's current
-    tip into the commit beneath it reproduces everything it held.
+    passes would collect one merge per pass. A merge is superseded when a restack made it,
+    the parent and the branch's own line beneath it together hold every change it brought
+    in, and its content is exactly what merging its two parents produces - so it carries
+    no work of its own, and merging the parent's current tip into the commit beneath it
+    reproduces everything it held. A restack's merge carries both
+    :class:`CommitTrailer` trailers, the commit one naming the parent commit it merged in;
+    a merge a person made, even one reusing a restack's message, is never superseded.
     """
 
     git: GitCommandRunner
@@ -359,25 +376,34 @@ class SupersededMerges:
     The fork's copy of the parent about to be integrated.
     """
 
-    def commit_beneath(self, tip: str) -> str:
+    def replacement_start_points(self, tip: str) -> list[str]:
         """
         :param tip: The branch's published tip.
-        :return: The first commit along the branch's own line that is not a superseded
-            merge, which is *tip* itself when it is not one.
+        :return: The commit beneath each superseded merge at *tip*, deepest first, so a
+            merge onto the first replaces them all; empty when *tip* is not one.
         """
+        start_points = []
         commit = tip
         while self.is_superseded(commit):
             commit = self.git.parents_of(commit)[0]
-        return commit
+            start_points.append(commit)
+        return start_points[::-1]
 
     def is_superseded(self, commit: str) -> bool:
         """:param commit: A commit on the branch's own line.
-        :return: Whether it is a merge the parent's current tip supersedes."""
+        :return: Whether it is a restack's merge the parent's current tip supersedes."""
         match self.git.parents_of(commit):
             case (own_line, merged_in):
                 return (
-                    not self.git.contains(own_line, self.parent_reference)
-                    and self.git.adds_only_merges(merged_in, self.parent_reference)
+                    self.git.trailer_value(commit, CommitTrailer.RESTACKED_PARENT) != ""
+                    and self.git.trailer_value(
+                        commit, CommitTrailer.RESTACKED_PARENT_COMMIT
+                    )
+                    == merged_in
+                    and not self.git.contains(own_line, self.parent_reference)
+                    and self.git.adds_only_merges(
+                        merged_in, self.parent_reference, own_line
+                    )
                     and self.git.automatic_merge_tree(own_line, merged_in)
                     == self.git.tree_of(commit)
                 )
@@ -465,10 +491,11 @@ class IntegrateParent(RestackStep):
 
     A conflict is never resolved here - that is a change to somebody else's branch.
 
-    A merge is made onto the commit beneath the branch's :class:`SupersededMerges`, so
-    the branch carries one merge of its parent however many passes it waits through.
-    When that merge fails, the parent is merged onto the published tip instead, so
-    replacing earlier merges never turns a clean restack into a reported conflict.
+    A merge is made onto the deepest commit beneath the branch's
+    :class:`SupersededMerges` it succeeds on, so the branch carries as few merges of its
+    parent as merge cleanly however many passes it waits through. When every such merge
+    fails, the parent is merged onto the published tip instead, so replacing earlier
+    merges never turns a clean restack into a reported conflict.
 
     Unmerged paths are what make a failed integration a conflict, not its exit status:
     a merge also refuses when an untracked file is in the way, when the histories are
@@ -498,21 +525,18 @@ class IntegrateParent(RestackStep):
     def _integrate(cls, restacking: BranchUnderRestack) -> GitCommandResult:
         """
         :param restacking: The branch being restacked.
-        :return: The integration that stands - the merge replacing the superseded merges
-            when there are any and it succeeded, otherwise the one onto the published tip.
+        :return: The integration that stands - the deepest merge replacing superseded
+            merges that succeeded, otherwise the one onto the published tip.
         """
         tip = restacking.branch_reference
         if restacking.strategy is IntegrationStrategy.REBASE:
             return cls._integrate_onto(restacking, tip)
-        beneath = SupersededMerges(
-            restacking.git, restacking.parent_reference
-        ).commit_beneath(tip)
-        if beneath == tip:
-            return cls._integrate_onto(restacking, tip)
-        replacing = cls._integrate_onto(restacking, beneath)
-        if replacing.succeeded:
-            return replacing
-        restacking.git.abandon(restacking.strategy)
+        superseded = SupersededMerges(restacking.git, restacking.parent_reference)
+        for start_point in superseded.replacement_start_points(tip):
+            replacing = cls._integrate_onto(restacking, start_point)
+            if replacing.succeeded:
+                return replacing
+            restacking.git.abandon(restacking.strategy)
         return cls._integrate_onto(restacking, tip)
 
     @staticmethod
@@ -528,7 +552,7 @@ class IntegrateParent(RestackStep):
         git.checkout(restacking.branch.name, start_point)
         if restacking.strategy is IntegrationStrategy.REBASE:
             return git.rebase(restacking.parent_reference)
-        return git.merge(restacking.parent_reference)
+        return git.merge(restacking.parent_reference, restacking.merge_message)
 
 
 @dataclass(frozen=True)
