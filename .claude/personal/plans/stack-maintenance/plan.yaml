@@ -65,9 +65,9 @@ items:
   track: pass
   session: https://claude.ai/code/session_01JfLqvSwMnA91Y4dugq9L3d
   depends_on: []
-  notes: Board, reparents, fast-forward, restack, promote and landed each rebuild the ancestry-against-upstream-base
-    predicate (CurrentCheckout.merged_predicate, src/basstler/stack/checkout.py). Compute
-    it once per run and pass it to every phase. Measure with GIT_TRACE2 per the roadmap rule.
+  notes: Done on main by 0e9744a (LandedBranches, one for-each-ref --merged per run). PR 79
+    now only adds a slash-named-branch test to tests/stack/test_landed_branches.py; close it if
+    that case is not wanted.
 - id: skip-unmoved-branches
   title: Skip a branch before any merge work when nothing it depends on moved
   branch: null
