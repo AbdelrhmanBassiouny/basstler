@@ -35,7 +35,6 @@ naming both in one run is one commit on the notes branch instead of two:
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-require_basstler_python
 "${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" set \
     --skill kickoff --skill resolve --mode <mode>
 ```
