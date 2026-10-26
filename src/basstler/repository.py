@@ -66,10 +66,19 @@ class Repository:
         :return: The parsed repository.
         :raises MalformedRepositoryError: If *text* is not ``owner/name``.
         """
-        owner, separator, name = text.partition("/")
-        if not (owner and separator and name):
+        if not cls.is_full_name(text):
             raise MalformedRepositoryError(text)
+        owner, _, name = text.partition("/")
         return cls(owner, name)
+
+    @staticmethod
+    def is_full_name(text: str) -> bool:
+        """
+        :param text: A value that may name a repository.
+        :return: Whether *text* is an ``owner/name`` repository reference.
+        """
+        owner, separator, name = text.partition("/")
+        return bool(owner and separator and name)
 
     @staticmethod
     def _remote_url_segments(url: str) -> list[str]:
