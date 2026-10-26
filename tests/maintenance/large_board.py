@@ -14,10 +14,8 @@ from dataclasses import dataclass, replace
 from enum import IntEnum
 
 from basstler.github_labels import GitHubLabel
-from basstler.maintenance.check_results import CheckResult, CheckState, CommitChecks
 from basstler.maintenance.fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance.promotion import Promotion
-from basstler.maintenance.pushed_branch_checks import BranchChecks
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.stack.model import (
@@ -29,6 +27,7 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.promotion_link import PromotionLink
+from basstler.upstream_reviews.vocabulary import RollupState
 
 from .fork import (
     A_SESSION_LINK,
@@ -104,7 +103,7 @@ class LargeBoard:
 
     failing_checks: int = 9
     """
-    How many branches an earlier pass pushed now fail their checks.
+    How many approved branches, each based on the upstream base, fail their checks.
     """
 
     def doubled(self) -> LargeBoard:
@@ -144,26 +143,47 @@ class LargeBoard:
         """
         :return: A chain of open pull requests, each based on the one before, the
             first on the upstream base; the first :attr:`pending_links` past the
-            promoted ones carry the link label.
+            promoted ones carry the link label, the next :attr:`failing_checks` are
+            based on the upstream base with failed checks, and the next
+            :attr:`pushed` have checks still running.
         """
-        linked = range(self.promoted, self.promoted + self.pending_links)
+        linked_end = self.promoted + self.pending_links
+        failing_end = linked_end + self.failing_checks
         return [
             a_board_entry(
                 index,
                 self.branch_name(index),
-                UPSTREAM_BASE if index == 0 else self.branch_name(index - 1),
-                labels=[GitHubLabel.PROMOTION_LINK_SENT] if index in linked else [],
+                (
+                    UPSTREAM_BASE
+                    if index == 0 or linked_end <= index < failing_end
+                    else self.branch_name(index - 1)
+                ),
+                labels=(
+                    [GitHubLabel.PROMOTION_LINK_SENT]
+                    if self.promoted <= index < linked_end
+                    else []
+                ),
                 title=self.title(index),
                 session=A_SESSION_LINK,
+                check_state=(
+                    RollupState.FAILURE
+                    if linked_end <= index < failing_end
+                    else RollupState.PENDING
+                    if failing_end <= index < failing_end + self.pushed
+                    else RollupState.SUCCESS
+                ),
             )
             for index in range(self.pull_requests)
         ]
 
     def stack(self) -> Stack:
         """
-        :return: The stack derived from :meth:`board`, with nothing landed.
+        :return: The stack derived from :meth:`board`, with only the upstream base
+            landed.
         """
-        return Stack.build(make_configuration(), self.board(), lambda branch: False)
+        return Stack.build(
+            make_configuration(), self.board(), lambda branch: branch == UPSTREAM_BASE
+        )
 
     def restacked(self) -> tuple[BranchOutcome, ...]:
         """
@@ -237,31 +257,6 @@ class LargeBoard:
             for index in range(self.promoted)
         )
 
-    def checks(self) -> tuple[BranchChecks, ...]:
-        """
-        :return: The checks on the up-to-date branches, the first
-            :attr:`failing_checks` of them failing.
-        """
-        first_up_to_date = len(self.conflicting_files) + self.withheld + self.pushed
-        return tuple(
-            BranchChecks(
-                self.branch_name(index),
-                index,
-                CommitChecks(
-                    f"{index:040d}",
-                    (
-                        CheckResult(
-                            "pytest on Python 3.13",
-                            CheckState.FAILING
-                            if index < first_up_to_date + self.failing_checks
-                            else CheckState.PASSING,
-                        ),
-                    ),
-                ),
-            )
-            for index in range(first_up_to_date, self.pull_requests)
-        )
-
     def report(self, stack: Stack) -> MaintenanceReport:
         """
         :param stack: The stack the pass ran over.
@@ -299,5 +294,4 @@ class LargeBoard:
                 )
                 for index in range(self.skipped)
             ),
-            checks=self.checks(),
         )

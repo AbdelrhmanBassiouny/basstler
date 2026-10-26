@@ -7,6 +7,41 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from basstler.maintenance.constants import DescriptionPattern, MaintenanceText
+from basstler.repository import Repository
+
+# %% the upstream pull request a description links to
+
+
+@dataclass(frozen=True)
+class UpstreamPullRequestLink:
+    """
+    A hyperlink to one upstream pull request.
+    """
+
+    repository: Repository
+    """
+    The upstream repository the pull request is open on.
+    """
+
+    number: int
+    """
+    The upstream pull request's number.
+    """
+
+    @property
+    def url(self) -> str:
+        """
+        The upstream pull request's page on GitHub.
+        """
+        return self.repository.pull_request_url(self.number)
+
+    @property
+    def markdown(self) -> str:
+        """
+        The Markdown hyperlink to it, titled with its ``owner/repo#number`` reference.
+        """
+        return f"[{self.repository.full_name}#{self.number}]({self.url})"
+
 
 # %% the description
 
@@ -36,9 +71,8 @@ class PullRequestDescription:
         The upstream create-link a pass recorded under the promotion heading, or
         ``None`` when the description has no such section.
         """
-        _, heading, recorded = self.text.partition(MaintenanceText.PROMOTION_HEADING)
-        words = recorded.split()
-        return words[0] if heading and words else None
+        words = (self.section(MaintenanceText.PROMOTION_HEADING) or "").split()
+        return words[0] if words else None
 
     def with_promotion_link(self, url: str) -> str:
         """
@@ -46,5 +80,61 @@ class PullRequestDescription:
         :return: The description with *url* as its promotion section, replacing any
             section already there.
         """
-        before, _, _ = self.text.partition(MaintenanceText.PROMOTION_HEADING)
-        return f"{before.rstrip()}\n\n{MaintenanceText.PROMOTION_HEADING}\n\n{url}\n"
+        return self.with_section(MaintenanceText.PROMOTION_HEADING, url)
+
+    @property
+    def upstream_link(self) -> str | None:
+        """
+        The URL of the upstream pull request a pass linked under the upstream pull
+        request heading, or ``None`` when the description has no such section.
+        """
+        return DescriptionPattern.LINK_TARGET.first_in(
+            self.section(MaintenanceText.UPSTREAM_PULL_REQUEST_HEADING)
+        )
+
+    def with_upstream_link(self, link: UpstreamPullRequestLink | None) -> str:
+        """
+        :param link: The upstream pull request to link, ``None`` when there is none.
+        :return: The description with *link* as its upstream pull request section,
+            replacing any section already there, or without that section when *link*
+            is ``None``.
+        """
+        return self.with_section(
+            MaintenanceText.UPSTREAM_PULL_REQUEST_HEADING,
+            None if link is None else link.markdown,
+        )
+
+    def section(self, heading: MaintenanceText) -> str | None:
+        """
+        :param heading: The heading the section opens with.
+        :return: The text between *heading* and the next heading, ``None`` when the
+            description has no such heading.
+        """
+        _, content, _ = self._partition(heading)
+        return content
+
+    def with_section(self, heading: MaintenanceText, content: str | None) -> str:
+        """
+        :param heading: The heading the section opens with.
+        :param content: What the section holds, ``None`` to drop the section.
+        :return: The description with that section written last, replacing any section
+            under *heading* already there.
+        """
+        before, _, after = self._partition(heading)
+        kept = "\n\n".join(part for part in (before.rstrip(), after.strip()) if part)
+        if content is None:
+            return f"{kept}\n"
+        return f"{kept}\n\n{heading}\n\n{content}\n"
+
+    def _partition(self, heading: MaintenanceText) -> tuple[str, str | None, str]:
+        """
+        :param heading: The heading the section opens with.
+        :return: The text before the section, the section's content (``None`` when the
+            description has no such heading), and the text after it.
+        """
+        before, found, rest = self.text.partition(heading)
+        if not found:
+            return self.text, None, ""
+        following = DescriptionPattern.HEADING.value.search(rest)
+        end = len(rest) if following is None else following.start()
+        return before, rest[:end].strip(), rest[end:]

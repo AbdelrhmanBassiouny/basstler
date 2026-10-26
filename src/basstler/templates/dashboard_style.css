@@ -472,7 +472,7 @@ h1 {
 }
 .item-meta .id { color: var(--text); }
 .item-meta .branch::before { content: "⎇ "; }
-.pr-link, .session-link { font-weight: 600; }
+.pr-link, .session-link, .upstream-link { font-weight: 600; }
 .muted { color: var(--text-muted); font-style: italic; }
 .action-group { margin-left: auto; display: flex; align-items: center; gap: 0.35rem; }
 /* A hand-built dropdown, not a native <select> - a published Artifact page

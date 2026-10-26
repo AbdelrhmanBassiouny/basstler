@@ -11,10 +11,11 @@ from enum import StrEnum
 
 from basstler.exit_codes import StackExitCode
 from basstler.maintenance.fast_forward import FastForwardOutcome, FastForwardReport
-from basstler.maintenance.check_results import CheckState
 from basstler.maintenance.promotion import Promotion
-from basstler.maintenance.pushed_branch_checks import BranchChecks
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
+from basstler.maintenance.upstream_pull_request_synchronization import (
+    UpstreamPullRequestSynchronizationChange,
+)
 from basstler.stack.model import Reparent, SkippedPullRequest, Stack
 from basstler.standard_streams import StandardStreamHandler
 
@@ -78,6 +79,14 @@ class MaintenanceReport:
     The branches whose spent link label was removed this pass.
     """
 
+    upstream_pull_request_synchronization_changes: tuple[
+        UpstreamPullRequestSynchronizationChange, ...
+    ] = ()
+    """
+    The writes bringing each pull request's in-review label and upstream link in step
+    this pass.
+    """
+
     reparents: tuple[Reparent, ...] = ()
     """
     The children whose base has landed, for the caller to retarget.
@@ -98,11 +107,6 @@ class MaintenanceReport:
     The pull requests whose head is not on the fork, which the pass left alone.
     """
 
-    checks: tuple[BranchChecks, ...] = ()
-    """
-    The checks on every branch an earlier pass pushed and this one left where it was.
-    """
-
     @classmethod
     def of_pass(
         cls,
@@ -111,7 +115,9 @@ class MaintenanceReport:
         restacked: Sequence[BranchOutcome],
         promoted: Sequence[Promotion] = (),
         promotion_labels_cleared: Sequence[str] = (),
-        checks: Sequence[BranchChecks] = (),
+        upstream_pull_request_synchronization_changes: Sequence[
+            UpstreamPullRequestSynchronizationChange
+        ] = (),
     ) -> MaintenanceReport:
         """
         Assemble one pass's outcomes and its leftovers into a single report.
@@ -122,7 +128,8 @@ class MaintenanceReport:
         :param promoted: The branches whose upstream link was built this pass.
         :param promotion_labels_cleared: The branches whose spent link label was
             removed.
-        :param checks: The checks read on the branches earlier passes pushed.
+        :param upstream_pull_request_synchronization_changes: The writes bringing each pull request's in-review
+            label and upstream link in step.
         :return: The report.
         """
         return cls(
@@ -130,11 +137,13 @@ class MaintenanceReport:
             restacked=tuple(restacked),
             promoted=tuple(promoted),
             promotion_labels_cleared=tuple(promotion_labels_cleared),
+            upstream_pull_request_synchronization_changes=tuple(
+                upstream_pull_request_synchronization_changes
+            ),
             reparents=tuple(stack.reparents()),
             landed=tuple(branch.name for branch in stack.landed_branches()),
             promotable=tuple(branch.name for branch in stack.promotion_order()),
             skipped=tuple(stack.skipped_pull_requests()),
-            checks=tuple(checks),
         )
 
     def as_json(self) -> str:
@@ -159,15 +168,6 @@ class MaintenanceReport:
         )
 
     @property
-    def failing_checks(self) -> tuple[BranchChecks, ...]:
-        """:return: Every branch whose checks fail on the tip a pass pushed."""
-        return tuple(
-            branch_checks
-            for branch_checks in self.checks
-            if branch_checks.state is CheckState.FAILING
-        )
-
-    @property
     def fast_forward_was_refused(self) -> bool:
         """:return: Whether the fork's base was left behind the upstream."""
         return (
@@ -188,7 +188,7 @@ class MaintenanceReport:
         unpublished = self.branches_left_unpublished
         if any(outcome.outcome is RestackOutcome.REFUSED for outcome in unpublished):
             return StackExitCode.MOVE_REFUSED
-        if unpublished or self.failing_checks:
+        if unpublished:
             return StackExitCode.BRANCH_NEEDS_ATTENTION
         return StackExitCode.SUCCESS
 
@@ -199,8 +199,8 @@ class MaintenanceReport:
         self.print_fast_forward()
         self.print_restack()
         self.print_promotions()
+        self.print_upstream_pull_request_synchronization_changes()
         self.print_skipped()
-        self.print_checks()
 
     def print_fast_forward(self) -> None:
         """
@@ -243,6 +243,15 @@ class MaintenanceReport:
         for branch in self.promotion_labels_cleared:
             logger.info(f"{branch}\tlink-label-cleared\t")
 
+    def print_upstream_pull_request_synchronization_changes(self) -> None:
+        """
+        Print every in-review label and upstream link written this pass.
+        """
+        for change in self.upstream_pull_request_synchronization_changes:
+            logger.info(
+                f"{change.branch}\t#{change.pull_request_number}\t{change.action}"
+            )
+
     def print_skipped(self) -> None:
         """
         Print every pull request the pass left alone, with why and where its head lives.
@@ -252,16 +261,4 @@ class MaintenanceReport:
             logger.info(
                 f"{pull_request.head}\t#{pull_request.number}\t{skipped.reason}"
                 f"\t{pull_request.head_repository or ''}"
-            )
-
-    def print_checks(self) -> None:
-        """
-        Print the verdict on every branch whose checks were read, with the checks that
-        fail.
-        """
-        for branch_checks in self.checks:
-            logger.info(
-                f"{branch_checks.branch}\t#{branch_checks.pull_request_number}"
-                f"\t{branch_checks.state}"
-                f"\t{','.join(branch_checks.checks.failing_check_names)}"
             )

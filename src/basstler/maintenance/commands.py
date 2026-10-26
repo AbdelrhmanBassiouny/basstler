@@ -19,22 +19,24 @@ from basstler.exit_codes import StackExitCode
 from basstler.class_property import classproperty
 from basstler.command_line import Command
 from basstler.locations import PackageLocation
-from basstler.maintenance.board import BoardExport
+from basstler.maintenance.board import BoardExport, UpstreamPullRequests
 from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
 from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.maintenance.github import GitHubRepository
+from basstler.maintenance.github import GitHubRepository, PullRequestReader
 from basstler.maintenance.promotion import (
     PromotionSummaries,
     clear_spent_promotion_labels,
     promote,
 )
 from basstler.maintenance.promotion_context import PromotionContextReader
-from basstler.maintenance.pushed_branch_checks import PushedBranchChecks
+from basstler.maintenance.check_overview import CheckOverview
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
-from basstler.maintenance.restack_steps import RestackOutcome
-from basstler.stack.model import BranchStatus, Stack
+from basstler.maintenance.upstream_pull_request_synchronization import (
+    UpstreamPullRequestSynchronization,
+)
+from basstler.stack.model import Stack
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
 
@@ -78,19 +80,30 @@ class MaintenancePass:
         """:return: The fork, as this run's credential can read and write it."""
         return GitHubRepository.from_environment(self.configuration.fork_repository)
 
+    def upstream(self) -> PullRequestReader:
+        """:return: The upstream, as this run's credential can read it."""
+        return GitHubRepository.from_environment(self.configuration.upstream_repository)
+
     def stack(self) -> Stack:
         """:return: The derived stack, read from the exported board."""
         return Stack.load(self.board)
 
     def export_board(self) -> BoardExport:
-        """:return: The fork's open pull requests, now also written as the board."""
-        export = BoardExport.from_api_records(self.fork().open_pull_requests())
-        export.write(self.board)
-        return export
+        """:return: The fork's open pull requests, each with the upstream pull request
+        reviewing it and the verdict over its head's checks."""
+        fork = self.fork()
+        return BoardExport.from_api_records(
+            fork.open_pull_requests(),
+            UpstreamPullRequests.from_api_records(
+                self.upstream().open_pull_requests(),
+                self.configuration.fork_repository,
+            ),
+            fork,
+        )
 
     def fresh_stack(self) -> Stack:
-        """:return: The stack derived from a board exported just now."""
-        self.export_board()
+        """:return: The stack derived from a board exported and written just now."""
+        self.export_board().write(self.board)
         return self.stack()
 
 
@@ -132,7 +145,8 @@ class MaintenanceCommand(Command):
 @dataclass(frozen=True)
 class BoardCommand(MaintenanceCommand):
     """
-    Fetches the fork's open pull requests and exports them as the board.
+    Fetches the fork's open pull requests and exports them as the board, each with the
+    upstream pull request reviewing it and the verdict over its head's checks.
     """
 
     @classproperty
@@ -147,7 +161,10 @@ class BoardCommand(MaintenanceCommand):
         """
         What it does, as ``--help`` puts it.
         """
-        return "export the fork's open pull requests"
+        return (
+            "export the fork's open pull requests, with their upstream review and "
+            "checks"
+        )
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         """:param parser: The subparser to declare ``--write`` on."""
@@ -163,7 +180,7 @@ class BoardCommand(MaintenanceCommand):
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
-        export = BoardExport.from_api_records(maintenance.fork().open_pull_requests())
+        export = maintenance.export_board()
         if not arguments.write:
             logger.info(export.as_json())
             return StackExitCode.SUCCESS
@@ -299,7 +316,8 @@ class RestackCommand(MaintenanceCommand):
 @dataclass(frozen=True)
 class PromoteCommand(MaintenanceCommand):
     """
-    Records the upstream link on every branch ready to be promoted.
+    Records the upstream link on every branch ready to be promoted, and keeps every
+    in-review label in step with the upstream.
     """
 
     @classproperty
@@ -341,6 +359,9 @@ class PromoteCommand(MaintenanceCommand):
                 promote(stack, fork, PromotionSummaries.read_from(arguments.summaries))
             ),
             promotion_labels_cleared=tuple(clear_spent_promotion_labels(stack, fork)),
+            upstream_pull_request_synchronization_changes=tuple(
+                UpstreamPullRequestSynchronization(stack, fork).synchronize()
+            ),
         )
         report.print_summary()
         return report.exit_code
@@ -349,7 +370,7 @@ class PromoteCommand(MaintenanceCommand):
 @dataclass(frozen=True)
 class ChecksCommand(MaintenanceCommand):
     """
-    Reads the checks on every branch whose tip a pass pushed.
+    Exports the board and reports the verdict over every open branch's checks.
     """
 
     @classproperty
@@ -364,7 +385,7 @@ class ChecksCommand(MaintenanceCommand):
         """
         What it does, as ``--help`` puts it.
         """
-        return "report the checks on every branch whose tip a pass pushed"
+        return "report how many open branches' checks pass, run or fail, naming the rest"
 
     def run(
         self, maintenance: MaintenancePass, arguments: argparse.Namespace
@@ -372,18 +393,9 @@ class ChecksCommand(MaintenanceCommand):
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
-        stack = maintenance.stack()
-        report = MaintenanceReport(
-            checks=tuple(
-                PushedBranchChecks(stack, maintenance.git, maintenance.fork()).read(
-                    branch
-                    for branch in stack.maintained_branches()
-                    if branch.status is not BranchStatus.MERGED
-                )
-            )
-        )
-        report.print_summary()
-        return report.exit_code
+        logger.info("\n".join(CheckOverview(maintenance.fresh_stack()).as_lines()))
+        maintenance.board.unlink(missing_ok=True)
+        return StackExitCode.SUCCESS
 
 
 @dataclass(frozen=True)
@@ -444,8 +456,9 @@ class RunReportCommand(MaintenanceCommand):
         by a later run is worse than none at all - so a whole pass begins by exporting
         one and ends without it.
 
-        The checks read are those on the branches the restack left where an earlier pass
-        put them; what this pass pushed is still being checked, and is read by the next.
+        The checks on the board are those on each branch's tip as the pass found it, so
+        what an earlier pass pushed has finished being checked by now; what this pass
+        pushes is read by the next.
 
         :param maintenance: What this run has resolved.
         :param as_json: Whether to print the machine-readable document rather than the
@@ -457,27 +470,13 @@ class RunReportCommand(MaintenanceCommand):
         stack = maintenance.fresh_stack()
         fork = maintenance.fork()
         fast_forward_report = fast_forward(stack.configuration, maintenance.git)
-        restacked = restack(stack, maintenance.git, fork)
-        left_in_place = {
-            outcome.branch
-            for outcome in restacked
-            if outcome.outcome is RestackOutcome.UP_TO_DATE
-        }
-        pushed_branch_checks = PushedBranchChecks(stack, maintenance.git, fork)
-        checks = pushed_branch_checks.report_failures(
-            pushed_branch_checks.read(
-                branch
-                for branch in stack.maintained_branches()
-                if branch.name in left_in_place
-            )
-        )
         report = MaintenanceReport.of_pass(
             stack,
             fast_forward_report,
-            restacked,
+            restack(stack, maintenance.git, fork),
             promote(stack, fork, summaries),
             clear_spent_promotion_labels(stack, fork),
-            checks,
+            UpstreamPullRequestSynchronization(stack, fork).synchronize(),
         )
         maintenance.board.unlink(missing_ok=True)
         maintenance.full_report.write_text(report.as_json() + "\n")

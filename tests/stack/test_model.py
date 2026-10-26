@@ -10,18 +10,26 @@ from __future__ import annotations
 
 from collections.abc import Container
 
+import json
+from dataclasses import asdict
+from pathlib import Path
+
+from basstler.locations import PackageLocation
 from basstler.stack.model import (
+    BoardKey,
     BranchStatus,
     IntegrationStrategy,
     PullRequest,
     RestackPlanEntry,
 )
+from basstler.upstream_reviews.vocabulary import RollupState
 
 from ..constants.stack import StackBranch, StackLabel
 
 from .dataset import (
     StackRepository,
     StackSampleText,
+    UpstreamPullRequestNumber,
     make_configuration,
     build,
 )
@@ -37,7 +45,7 @@ def test_merged_wins_over_everything():
     )
 
 
-def test_in_review_label_beats_draft_flag():
+def test_in_review_beats_draft_flag():
     assert (
         BranchStatus.derive(draft=True, merged=False, in_review=True)
         == BranchStatus.IN_REVIEW
@@ -61,7 +69,23 @@ def test_drafted_is_draft():
 # %% status from the export
 
 
-def test_in_review_derived_from_label():
+def test_in_review_derived_from_the_open_upstream_pull_request():
+    stack = build(
+        [
+            PullRequest(
+                3,
+                StackBranch.FEATURE,
+                StackBranch.BASE,
+                draft=False,
+                head_repository=StackRepository.FORK.value.full_name,
+                upstream_pull_request=UpstreamPullRequestNumber.OPEN,
+            )
+        ]
+    )
+    assert stack.branches[0].status == BranchStatus.IN_REVIEW
+
+
+def test_a_stale_in_review_label_without_an_upstream_pull_request_is_not_in_review():
     stack = build(
         [
             PullRequest(
@@ -74,7 +98,7 @@ def test_in_review_derived_from_label():
             )
         ]
     )
-    assert stack.branches[0].status == BranchStatus.IN_REVIEW
+    assert stack.branches[0].status == BranchStatus.READY
 
 
 def test_merged_derived_from_predicate_not_labels():
@@ -208,8 +232,8 @@ def test_child_promotable_once_parent_reaches_review():
             StackBranch.PARENT,
             StackBranch.BASE,
             draft=False,
-            labels=[StackLabel.IN_REVIEW],
             head_repository=StackRepository.FORK.value.full_name,
+            upstream_pull_request=UpstreamPullRequestNumber.OPEN,
         ),
         PullRequest(
             2,
@@ -300,7 +324,7 @@ def test_promotion_order_withholds_a_branch_delegated_for_conflict_resolution():
     assert names == [StackBranch.FINE]
 
 
-def test_ci_and_session_carried_onto_branch():
+def test_check_state_and_session_carried_onto_branch():
     stack = build(
         [
             PullRequest(
@@ -308,14 +332,83 @@ def test_ci_and_session_carried_onto_branch():
                 StackBranch.FEATURE,
                 StackBranch.BASE,
                 draft=False,
-                ci=StackSampleText.CHECK_CONCLUSION,
+                check_state=RollupState.FAILURE,
                 session=StackSampleText.SESSION_LINK,
                 head_repository=StackRepository.FORK.value.full_name,
             )
         ]
     )
-    assert stack.branches[0].ci == StackSampleText.CHECK_CONCLUSION
+    assert stack.branches[0].check_state is RollupState.FAILURE
     assert stack.branches[0].session == StackSampleText.SESSION_LINK
+
+
+def a_ready_branch_whose_checks_reached(check_state: RollupState | None) -> PullRequest:
+    """
+    :param check_state: The verdict over the branch's checks.
+    :return: An approved branch on the base, otherwise promotable.
+    """
+    return PullRequest(
+        1,
+        StackBranch.FEATURE,
+        StackBranch.BASE,
+        draft=False,
+        check_state=check_state,
+        head_repository=StackRepository.FORK.value.full_name,
+    )
+
+
+def test_failing_checks_withhold_a_branch_from_promotion():
+    stack = build(
+        [
+            a_ready_branch_whose_checks_reached(state)
+            for state in (RollupState.FAILURE, RollupState.ERROR)
+        ]
+    )
+    assert stack.promotion_order() == []
+
+
+def test_checks_that_have_not_failed_leave_a_branch_promotable():
+    for state in (None, RollupState.SUCCESS, RollupState.PENDING, RollupState.EXPECTED):
+        stack = build([a_ready_branch_whose_checks_reached(state)])
+        assert [branch.name for branch in stack.promotion_order()] == [
+            StackBranch.FEATURE
+        ], state
+
+
+def test_only_branches_promotion_would_otherwise_take_count_as_held_by_their_checks():
+    stack = build(
+        [
+            a_ready_branch_whose_checks_reached(RollupState.FAILURE),
+            PullRequest(
+                2,
+                StackBranch.CHILD,
+                StackBranch.FEATURE,
+                draft=False,
+                check_state=RollupState.FAILURE,
+                head_repository=StackRepository.FORK.value.full_name,
+            ),
+            PullRequest(
+                3,
+                StackBranch.PARSER,
+                StackBranch.BASE,
+                draft=True,
+                check_state=RollupState.FAILURE,
+                head_repository=StackRepository.FORK.value.full_name,
+            ),
+        ]
+    )
+
+    assert [branch.name for branch in stack.withheld_by_failing_checks()] == [
+        StackBranch.FEATURE
+    ]
+
+
+def test_the_board_reads_the_check_state_back_as_its_verdict(tmp_path: Path):
+    written = a_ready_branch_whose_checks_reached(RollupState.PENDING)
+    board = tmp_path / PackageLocation.BOARD.name
+    board.write_text(json.dumps({BoardKey.PULL_REQUESTS: [asdict(written)]}))
+
+    assert PullRequest.read_board(board) == [written]
 
 
 # %% restack plan
@@ -335,8 +428,8 @@ def test_restack_plan_excludes_merged_only():
             StackBranch.UNDER_REVIEW,
             StackBranch.BASE,
             draft=False,
-            labels=[StackLabel.IN_REVIEW],
             head_repository=StackRepository.FORK.value.full_name,
+            upstream_pull_request=UpstreamPullRequestNumber.OPEN,
         ),
         PullRequest(
             3,

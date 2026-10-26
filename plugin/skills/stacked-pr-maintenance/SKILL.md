@@ -44,6 +44,10 @@ Pass `fork=` / `upstream=` arguments straight through. Never inspect or guess at
 "${BASSTLER_PYTHON}" -m basstler.stack reparents
 ```
 
+The export reads the upstream's open pull requests too. In a Claude Code cloud session that read is
+refused (403) until the upstream is attached with `add_repo` (read access); attach it first, and
+never label branches yourself to get past a refusal.
+
 For each `branch<TAB>pr<TAB>current base<TAB>target base` line, set the pull request's base with the
 MCP `update_pull_request` tool.
 

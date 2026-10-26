@@ -16,11 +16,12 @@ from enum import StrEnum
 from pathlib import Path
 
 from basstler.github_labels import GitHubLabel
-from basstler.maintenance.check_results import CheckState
+from basstler.maintenance.check_overview import CheckOverview
 from basstler.maintenance.constants import MaintenanceText
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.stack.model import Branch, BranchStatus, Stack
+from basstler.upstream_reviews.vocabulary import RollupState
 
 # %% vocabulary
 
@@ -41,11 +42,6 @@ class FinishSummaryHeading(StrEnum):
     REPORTED = "Reported to their owners"
     """
     The branches whose owner was told, in a comment, that their branch needs them.
-    """
-
-    FAILING_CHECKS = "Failing checks"
-    """
-    The branches whose checks fail on the tip an earlier pass pushed.
     """
 
     REPARENTS = "Reparents still to make"
@@ -78,9 +74,22 @@ class FinishSummaryHeading(StrEnum):
     The branches still conflicted from an earlier pass, left untouched.
     """
 
+    FAILING_CHECKS = "Withheld for failing checks"
+    """
+    The approved branches promotion would take but for their failed checks.
+    """
+
     LINK_LABELS_CLEARED = "Spent link labels removed"
     """
     The branches whose link label was dropped because the link was acted on.
+    """
+
+    UPSTREAM_PULL_REQUEST_SYNCHRONIZATION = (
+        "In-review labels and upstream links updated"
+    )
+    """
+    The pull requests whose in-review label or upstream link was written to match the
+    upstream.
     """
 
     SKIPPED = "Skipped"
@@ -116,12 +125,12 @@ class PassCount(StrEnum):
 
     FAILING_CHECKS = "failing checks"
     """
-    Branches whose checks fail on the tip a pass pushed.
+    Open branches whose checks failed.
     """
 
     CHECKS_RUNNING = "checks still running"
     """
-    Branches whose checks on the tip a pass pushed have not finished.
+    Open branches whose checks have not finished.
     """
 
     REPARENTS_LEFT = "reparents left"
@@ -187,15 +196,18 @@ class FinishSummary:
         sections = {
             FinishSummaryHeading.PENDING_LINKS: self.capped(self.pending_links()),
             FinishSummaryHeading.REPORTED: self.capped(self.reported()),
-            FinishSummaryHeading.FAILING_CHECKS: self.capped(self.failing_checks()),
             FinishSummaryHeading.REPARENTS: self.capped(self.reparents()),
             FinishSummaryHeading.FORK_BASE: self.fork_base(),
             FinishSummaryHeading.LANDED: self.capped(self.landed()),
             FinishSummaryHeading.RESTACKED: self.restacked(),
             FinishSummaryHeading.UNPUBLISHED: self.capped(self.unpublished()),
             FinishSummaryHeading.WITHHELD: self.branch_list(RestackOutcome.WITHHELD),
+            FinishSummaryHeading.FAILING_CHECKS: self.capped(self.failing_checks()),
             FinishSummaryHeading.LINK_LABELS_CLEARED: self.code_list(
                 self.report.promotion_labels_cleared
+            ),
+            FinishSummaryHeading.UPSTREAM_PULL_REQUEST_SYNCHRONIZATION: self.capped(
+                self.upstream_pull_request_synchronization_changes()
             ),
             FinishSummaryHeading.SKIPPED: self.capped(self.skipped()),
         }
@@ -217,14 +229,20 @@ class FinishSummary:
         """
         report = self.report
         outcomes = [outcome.outcome for outcome in report.restacked]
-        check_states = [branch_checks.state for branch_checks in report.checks]
+        checks = CheckOverview(self.stack)
         counted = {
             PassCount.PUSHED: outcomes.count(RestackOutcome.PUSHED),
             PassCount.UP_TO_DATE: outcomes.count(RestackOutcome.UP_TO_DATE),
             PassCount.LEFT_FOR_SOMEBODY: len(report.branches_left_unpublished),
             PassCount.LINKS_RECORDED: len(report.promoted),
-            PassCount.FAILING_CHECKS: check_states.count(CheckState.FAILING),
-            PassCount.CHECKS_RUNNING: check_states.count(CheckState.PENDING),
+            PassCount.FAILING_CHECKS: len(
+                checks.branches_in(RollupState.FAILURE)
+                + checks.branches_in(RollupState.ERROR)
+            ),
+            PassCount.CHECKS_RUNNING: len(
+                checks.branches_in(RollupState.PENDING)
+                + checks.branches_in(RollupState.EXPECTED)
+            ),
             PassCount.REPARENTS_LEFT: len(report.reparents),
         }
         named = [f"{count} {what}" for what, count in counted.items() if count]
@@ -289,27 +307,6 @@ class FinishSummary:
             entries.append(
                 f"{self.branch_line(branch)}: {self.outcome_detail(outcome)} - "
                 f"addressed {addressed} - [comment]({outcome.reported_at})"
-            )
-        return entries
-
-    def failing_checks(self) -> list[str]:
-        """
-        :return: One entry per branch whose checks fail, naming them and the comment
-            posted this pass, if one was.
-        """
-        entries = []
-        for branch_checks in self.report.failing_checks:
-            names = ", ".join(
-                f"`{name}`" for name in branch_checks.checks.failing_check_names
-            )
-            reported = (
-                f"[comment]({branch_checks.reported_at})"
-                if branch_checks.reported_at
-                else "reported by an earlier pass"
-            )
-            entries.append(
-                f"{self.branch_line(self.branches_by_name[branch_checks.branch])}: "
-                f"{names} - {reported}"
             )
         return entries
 
@@ -381,6 +378,25 @@ class FinishSummary:
         if outcome.outcome is RestackOutcome.INTEGRATION_FAILED:
             return f"the pass's own environment, not the branch: {outcome.explanation}"
         return outcome.explanation or ""
+
+    def failing_checks(self) -> list[str]:
+        """
+        :return: One entry per approved branch withheld for its failed checks, with the
+            verdict over them.
+        """
+        return [
+            f"{self.branch_line(branch)}: {branch.check_state}"
+            for branch in self.stack.withheld_by_failing_checks()
+        ]
+
+    def upstream_pull_request_synchronization_changes(self) -> list[str]:
+        """
+        :return: One entry per in-review label or upstream link written.
+        """
+        return [
+            f"{self.branch_line(self.branches_by_name[change.branch])}: {change.action}"
+            for change in self.report.upstream_pull_request_synchronization_changes
+        ]
 
     def branch_list(self, outcome: RestackOutcome) -> list[str]:
         """

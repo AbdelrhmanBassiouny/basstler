@@ -44,6 +44,16 @@ class DescriptionPattern(Enum):
     telling a branch's owner that their branch needs them.
     """
 
+    HEADING = re.compile(r"^#{1,6} ", re.MULTILINE)
+    """
+    The start of a Markdown heading line, which ends the section before it.
+    """
+
+    LINK_TARGET = re.compile(r"(?<=\]\()[^)\s]+(?=\))")
+    """
+    The URL a Markdown hyperlink points at.
+    """
+
     def first_in(self, text: str | None) -> str | None:
         """
         :param text: The text to search, which may be absent.
@@ -60,10 +70,10 @@ class MaintenanceText(StrEnum):
     Text a maintenance pass writes onto GitHub, and later finds again by.
     """
 
-    NEEDS_RESOLUTION_COMMENT_PREFIX = "🔴 MAINTENANCE - NEEDS RESOLUTION:"
+    CONFLICT_COMMENT_PREFIX = "🔴 MAINTENANCE - NEEDS RESOLUTION:"
     """
-    Opens the comment a conflict or a failing check is reported in, so the branch's owner
-    can find every one of them at a glance.
+    Opens the comment a conflict is reported in, so the branch's owner can find every one
+    of them at a glance.
     """
 
     PROMOTION_HEADING = "## Promote"
@@ -71,6 +81,12 @@ class MaintenanceText(StrEnum):
     Heading the compare-and-create link is written under, in the fork pull request's own
     description - the summary that carried it is delivered once and then gone, and the
     description is still there a week later.
+    """
+
+    UPSTREAM_PULL_REQUEST_HEADING = "## Upstream pull request"
+    """
+    Heading the link to the open upstream pull request opened from the branch is written
+    under, in the fork pull request's own description.
     """
 
     FULL_DETAIL = "Full detail:"

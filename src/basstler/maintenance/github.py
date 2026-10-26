@@ -26,11 +26,17 @@ from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.github_labels import GitHubLabel
 from basstler.locations import PathEnumeration
-from basstler.maintenance.board import PullRequestRecord
-from basstler.maintenance.check_results import CheckField, CommitChecks
+from basstler.maintenance.board import CommitChecks, PullRequestRecord
 from basstler.environment import GitHubCredentialVariable
 from basstler.maintenance.exceptions import ExternalCallFailed
 from basstler.repository import GitHubAddress, Repository
+from basstler.upstream_reviews.pull_request_models import CheckStatus
+from basstler.upstream_reviews.rest_models import (
+    RestCheckRunPage,
+    RestCombinedStatusPage,
+    RestJSONKey,
+)
+from basstler.upstream_reviews.vocabulary import RollupState
 
 
 @dataclass
@@ -107,37 +113,7 @@ class PullRequestWriter(ABC):
 
 
 @dataclass(frozen=True)
-class CommitCheckReader(ABC):
-    """
-    Reading the checks GitHub ran on a commit.
-    """
-
-    @abstractmethod
-    def commit_checks(self, commit: str) -> CommitChecks:
-        """:param commit: The commit whose checks to read.
-        :return: Every check run and commit status reported on it."""
-
-
-@dataclass(frozen=True)
-class PullRequestCommentReader(ABC):
-    """
-    Reading what has already been said on a pull request.
-    """
-
-    @abstractmethod
-    def comment_bodies(self, number: int) -> list[str]:
-        """:param number: The pull request whose comments to read.
-        :return: The text of every comment on it, oldest first."""
-
-
-@dataclass(frozen=True)
-class ForkPullRequests(
-    PullRequestReader,
-    PullRequestWriter,
-    CommitCheckReader,
-    PullRequestCommentReader,
-    ABC,
-):
+class ForkPullRequests(PullRequestReader, PullRequestWriter, ABC):
     """
     Everything a pass does to the fork's pull requests.
 
@@ -201,51 +177,23 @@ class RepositoryPath(PathEnumeration):
 
     COMMITS = Path("/commits")
     """
-    The repository's commits, below which each one's checks are listed.
-    """
-
-    ISSUES = Path("/issues")
-    """
-    The repository's issues and pull requests, below which each one's comments are
-    listed.
+    The repository's commits.
     """
 
 
-class CommitPath(PathEnumeration):
+class CommitReport(StrEnum):
     """
-    The API paths below one commit.
-    """
-
-    CHECK_RUNS = Path("/check-runs")
-    """
-    The check runs reported on the commit.
+    The listings reported against one commit, below :attr:`RepositoryPath.COMMITS`.
     """
 
-    STATUS = Path("/status")
+    CHECK_RUNS = "check-runs"
     """
-    The combined status of every commit status reported on it.
-    """
-
-
-class IssuePath(PathEnumeration):
-    """
-    The API paths below one issue or pull request.
+    The check runs reported against it.
     """
 
-    COMMENTS = Path("/comments")
+    STATUS = "status"
     """
-    The comments on it.
-    """
-
-
-class CommentField(StrEnum):
-    """
-    The fields of a comment the API answers with.
-    """
-
-    BODY = "body"
-    """
-    The comment's text.
+    The commit statuses posted against it.
     """
 
 
@@ -373,7 +321,9 @@ class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
 
 
 @dataclass(frozen=True)
-class GitHubRepository(ForkPullRequests, RepositoryLabels, CredentialHolder):
+class GitHubRepository(
+    ForkPullRequests, CommitChecks, RepositoryLabels, CredentialHolder
+):
     """
     Every pull-request and label call this tooling makes, against one repository.
 
@@ -433,13 +383,13 @@ class GitHubRepository(ForkPullRequests, RepositoryLabels, CredentialHolder):
         :return: Them, oldest page first.
         """
         return self._every_page(
-            str(RepositoryPath.PULL_REQUESTS), {ListingParameter.STATE: state.query}
+            RepositoryPath.PULL_REQUESTS, {ListingParameter.STATE: state.query}
         )
 
     def labels(self) -> set[str]:
         return {
             label[LabelField.NAME]
-            for label in self._every_page(str(RepositoryPath.LABELS), {})
+            for label in self._every_page(RepositoryPath.LABELS, {})
         }
 
     def create_label(self, label: GitHubLabel) -> None:
@@ -449,70 +399,88 @@ class GitHubRepository(ForkPullRequests, RepositoryLabels, CredentialHolder):
             {LabelField.NAME: label, LabelField.DESCRIPTION: label.purpose},
         )
 
+    def check_state(self, commit: str) -> RollupState | None:
+        runs = [
+            run.result
+            for page in self._every_page_of_entries(
+                self._commit_report(commit, CommitReport.CHECK_RUNS),
+                RestJSONKey.CHECK_RUNS,
+            )
+            for run in RestCheckRunPage.from_json(page).check_runs
+        ]
+        statuses = [
+            status.result
+            for page in self._every_page_of_entries(
+                self._commit_report(commit, CommitReport.STATUS), RestJSONKey.STATUSES
+            )
+            for status in RestCombinedStatusPage.from_json(page).statuses
+        ]
+        checks = CheckStatus.over(runs + statuses)
+        return None if checks is None else checks.state
+
+    @staticmethod
+    def _commit_report(commit: str, report: CommitReport) -> str:
+        """:param commit: The commit reported against.
+        :param report: Which of its listings to read.
+        :return: The listing's path below the repository."""
+        return f"{RepositoryPath.COMMITS}/{commit}/{report}"
+
     def authenticated_login(self) -> str:
         account = self._request("GET", str(GitHubPath.AUTHENTICATED_USER))
         return str(account[AccountField.LOGIN])
 
     def _every_page(
-        self,
-        path: str,
-        filters: Mapping[ListingParameter, str],
-        entries_key: str | None = None,
+        self, path: RepositoryPath, filters: Mapping[ListingParameter, str]
     ) -> list[Any]:
         """
         Read a listing below the repository to its end.
 
         :param path: The listing's path below the repository.
         :param filters: The query parameters narrowing the listing.
-        :param entries_key: The key a page holds its entries under, ``None`` for a
-            listing whose page is the list itself.
         :return: Every entry, first page first.
         """
-        collected: list[Any] = []
-        page = 1
+        return [
+            entry
+            for page in self._every_page_of_entries(str(path), None, filters)
+            for entry in page
+        ]
+
+    def _every_page_of_entries(
+        self,
+        path: str,
+        entries_key: str | None,
+        filters: Mapping[ListingParameter, str] | None = None,
+    ) -> list[Any]:
+        """
+        Read a paged listing below the repository to its end.
+
+        :param path: The listing's path below the repository.
+        :param entries_key: The key a page holds its entries under, ``None`` when a page
+            is the list of entries itself.
+        :param filters: The query parameters narrowing the listing.
+        :return: Every page, first page first.
+        """
+        pages: list[Any] = []
+        page_number = 1
         while True:
             query = urllib.parse.urlencode(
                 {
-                    **filters,
+                    **(filters or {}),
                     ListingParameter.PAGE_SIZE: self.page_size,
-                    ListingParameter.PAGE: page,
+                    ListingParameter.PAGE: page_number,
                 }
             )
-            page_payload = self._call("GET", f"{path}?{query}")
-            fetched = page_payload if entries_key is None else page_payload[entries_key]
-            collected.extend(fetched)
-            if len(fetched) < self.page_size:
-                return collected
-            page += 1
+            page = self._call("GET", f"{path}?{query}")
+            pages.append(page)
+            entries = page if entries_key is None else page[entries_key]
+            if len(entries) < self.page_size:
+                return pages
+            page_number += 1
 
     def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
         :return: That pull request."""
         return self._call("GET", f"{RepositoryPath.PULL_REQUESTS}/{number}")
-
-    def commit_checks(self, commit: str) -> CommitChecks:
-        """:param commit: The commit whose checks to read.
-        :return: Every check run and commit status reported on it."""
-        below_commit = f"{RepositoryPath.COMMITS}/{commit}"
-        return CommitChecks.from_json(
-            commit,
-            self._every_page(
-                f"{below_commit}{CommitPath.CHECK_RUNS}",
-                {},
-                entries_key=CheckField.CHECK_RUNS,
-            ),
-            self._call("GET", f"{below_commit}{CommitPath.STATUS}"),
-        )
-
-    def comment_bodies(self, number: int) -> list[str]:
-        """:param number: The pull request whose comments to read.
-        :return: The text of every comment on it, oldest first."""
-        return [
-            str(comment[CommentField.BODY] or "")
-            for comment in self._every_page(
-                f"{RepositoryPath.ISSUES}/{number}{IssuePath.COMMENTS}", {}
-            )
-        ]
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
         """
