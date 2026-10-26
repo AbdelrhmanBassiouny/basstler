@@ -77,8 +77,8 @@ items:
   depends_on: []
   notes: 'Draft #81. SKILL.md cut from 16.6 KB to 5.8 KB, steps only; the rationale is in
     docs/stack/maintenance-pass.md. Review round 1 answered; its two follow-ups are executor-reparents
-    and executor-ci-report. #77 and #78 edit the same skill, so whichever lands last carries
-    the others'' edits into the shorter file.
+    and withhold-on-github-state. #77 and #78 edit the same skill, so whichever lands last
+    carries the others'' edits into the shorter file.
 
     '
 - id: executor-reparents
@@ -96,19 +96,19 @@ items:
     in too, otherwise report those for the session.
 
     '
-- id: executor-ci-report
-  title: Have run-report comment on and label a branch whose checks failed
+- id: withhold-on-github-state
+  title: Withhold a branch on GitHub's own conflict and check state, and drop needs-resolution
   branch: null
   pull_request_number: null
   status: not_started
   track: pass
   depends_on:
   - stack-state-from-github
-  notes: 'From basstler#81 review (discussion_r4376683912). Builds on #77''s check_state on
-    the board. For a check already failed on the board, post the MAINTENANCE - NEEDS RESOLUTION
-    comment and add needs-resolution the way restack conflicts already are (restack_steps.py).
-    The board is read before the pass pushes, so for each head the pass pushed, run-report
-    lists it in the summary as checks to watch and the session polls those and reports a failure;
-    the skill''s step 3 shrinks to that.
+  notes: 'From basstler#81 review (discussion_r4376683912). The board records each pull request''s
+    mergeable state beside #77''s check_state; promotion withholds a branch that is conflicted,
+    not yet computed, or has failed checks, and the summary lists them. Remove the needs-resolution
+    label, its comments and the needs_resolution_label setting (release:major unless kept
+    ignored for a release). The skill''s step 3 goes; a failure on a pushed commit is caught
+    by the next pass''s board before promotion.
 
     '
