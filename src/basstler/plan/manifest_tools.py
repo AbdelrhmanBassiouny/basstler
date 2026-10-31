@@ -13,6 +13,8 @@ Usage:
         --scratch-dir <dir> --plans-dir <relative-dir> \\
         --manifest-filename <name> --output <relative-path>
     python3 plan/manifest_tools.py item <manifest-file> (--id <item-id> | --branch <branch>)
+    python3 plan/manifest_tools.py merge --read <plan-dir> --session <plan-dir> \\
+        --latest <plan-dir> --output <plan-dir>
 """
 
 from __future__ import annotations
@@ -29,9 +31,10 @@ import yaml
 
 from basstler.exceptions import PlanValidationError
 from basstler.plan.dependencies import PlanDirectory
+from basstler.plan.merge import PlanMerge, PlanVersion
 from basstler.plan.validation import PlanValidator
 from basstler.plan import model
-from basstler.exit_codes import ExitCode
+from basstler.exit_codes import CommandFailure, ManifestToolsExitCode
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -65,6 +68,11 @@ class ManifestToolsCommand(StrEnum):
     Print the plan's header and one item's entry.
     """
 
+    MERGE = "merge"
+    """
+    Merge a session's edit of a plan onto the plan as it stands now.
+    """
+
 
 class ManifestToolsOption(StrEnum):
     """
@@ -89,7 +97,22 @@ class ManifestToolsOption(StrEnum):
 
     OUTPUT = "--output"
     """
-    Where the regenerated index is written.
+    Where the subcommand writes what it produces.
+    """
+
+    READ = "--read"
+    """
+    The plan directory as the session read it.
+    """
+
+    SESSION = "--session"
+    """
+    The plan directory as the session wrote it.
+    """
+
+    LATEST = "--latest"
+    """
+    The plan directory as it stands on the notes branch now.
     """
 
     ITEM_IDENTIFIER = "--id"
@@ -100,22 +123,6 @@ class ManifestToolsOption(StrEnum):
     BRANCH = "--branch"
     """
     The branch whose item to print.
-    """
-
-
-class ManifestToolsExitCode(ExitCode):
-    """
-    How the command ended, as its caller reads it.
-    """
-
-    SUCCESS = 0
-    """
-    The subcommand did what it was asked.
-    """
-
-    INVALID_MANIFEST = 1
-    """
-    The manifest breaks a rule the dashboard validates; the problems are on stderr.
     """
 
 
@@ -334,6 +341,18 @@ class ManifestToolsCommandLine:
             ManifestToolsOption.ITEM_IDENTIFIER, dest="item_identifier"
         )
         item_selector.add_argument(ManifestToolsOption.BRANCH)
+
+        merge_parser = subcommands.add_parser(
+            ManifestToolsCommand.MERGE,
+            help="Merge a session's edit of a plan onto the plan as it stands now",
+        )
+        for option in (
+            ManifestToolsOption.READ,
+            ManifestToolsOption.SESSION,
+            ManifestToolsOption.LATEST,
+            ManifestToolsOption.OUTPUT,
+        ):
+            merge_parser.add_argument(option, required=True, type=Path)
         return parser
 
     @classmethod
@@ -367,6 +386,17 @@ class ManifestToolsCommandLine:
                 else manifest.item_named(arguments.item_identifier)
             )
             logger.info(manifest.item_summary(item).rstrip("\n"))
+        elif arguments.subcommand == ManifestToolsCommand.MERGE:
+            merge = PlanMerge(
+                read=PlanVersion.from_directory(arguments.read),
+                session=PlanVersion.from_directory(arguments.session),
+                latest=PlanVersion.from_directory(arguments.latest),
+            )
+            try:
+                merge.merged().write(arguments.output)
+            except CommandFailure as error:
+                logger.error(str(error))
+                return error.exit_code
         return ManifestToolsExitCode.SUCCESS
 
 
