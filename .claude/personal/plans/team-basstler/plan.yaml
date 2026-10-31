@@ -55,7 +55,6 @@ items:
   track: site
   depends_on:
   - stack-tooling-install/setup-personal-notes-script
-  - stack-maintenance/manifest-currency-first
   notes: 'Setup creates <user>/plans (one per user), commits its caller of plan-site-build.yml,
     registers each project in its hub; steps it cannot do (Pages on) are asked as one copyable
     line, then re-checked. Skills start the build with the user''s credentials at every plan
@@ -81,8 +80,7 @@ items:
   branch: null
   status: not_started
   track: core
-  depends_on:
-  - stack-maintenance/manifest-currency-first
+  depends_on: []
   notes: 'Today save-plan.sh writes the whole file and pushes once, so two writers lose an
     update or fail. On top of #48''s manifest writer corruption fixes: fetch, apply the session''s
     item changes onto the fresh manifest, refuse when the same item changed since the session
