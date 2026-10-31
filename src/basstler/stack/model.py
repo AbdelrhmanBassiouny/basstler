@@ -17,6 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.github_labels import GitHubLabel
 from basstler.repository import Repository
 from basstler.stack.checkout import CurrentCheckout, LandedBranches
 from basstler.stack.exceptions import BoardUnavailable
@@ -120,9 +121,9 @@ class PullRequest:
     labels: list[str] = field(default_factory=list)
     """Labels currently on the pull request."""
 
-    check_state: RollupState | None = None
+    check_state: RollupState = RollupState.NOT_REPORTED
     """The verdict over every check and commit status reported on the pull request's
-    head, ``None`` while nothing has reported."""
+    head."""
 
     upstream_pull_request: int | None = None
     """The number of the open upstream pull request opened from the head branch, ``None``
@@ -170,8 +171,6 @@ class PullRequest:
         """:param entry: One pull request as ``board.json`` holds it.
         :return: The pull request, its check state read back as its verdict."""
         pull_request = cls(**entry)
-        if pull_request.check_state is None:
-            return pull_request
         return replace(pull_request, check_state=RollupState(pull_request.check_state))
 
 
@@ -201,7 +200,7 @@ class Branch:
     """The pull request in its role as one the pass leaves out, ``None`` when the branch
     is on the fork."""
 
-    check_state: RollupState | None = None
+    check_state: RollupState = RollupState.NOT_REPORTED
     """The verdict over the checks reported on the pull request head."""
 
     upstream_pull_request: int | None = None
@@ -222,7 +221,7 @@ class Branch:
     @property
     def checks_failed(self) -> bool:
         """:return: Whether the checks on the pull request head have failed."""
-        return self.check_state is not None and self.check_state.failed
+        return self.check_state.failed
 
     @classmethod
     def from_pull_request(
@@ -517,6 +516,17 @@ class Stack:
             if branch.status == BranchStatus.READY
             and self.parent_landed(branch)
             and branch.checks_failed
+        ]
+
+    def awaiting_promotion_link(self) -> list[Branch]:
+        """
+        :return: The branches of :meth:`promotion_order` whose upstream link no pass has
+            recorded yet, in dependency order.
+        """
+        return [
+            branch
+            for branch in self.promotion_order()
+            if GitHubLabel.PROMOTION_LINK_SENT not in branch.labels
         ]
 
     def restack_plan(self, stacked_on: str | None = None) -> list[RestackPlanEntry]:

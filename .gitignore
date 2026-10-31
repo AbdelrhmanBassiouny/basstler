@@ -9,3 +9,7 @@ CLAUDE.local.md
 .claude/settings.local.json
 .claude/.personal-settings-sync-hash
 .claude/.plan-state-sync-sha
+
+# Everything the last maintenance pass did, written by `python3 -m basstler.maintenance
+# run-report` beside the board. Scratch state, never committed.
+src/basstler/maintenance-report.json

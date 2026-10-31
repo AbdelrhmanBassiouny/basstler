@@ -294,7 +294,8 @@ class CheckOutcome(StrEnum):
 
 class RollupState(StrEnum):
     """
-    The verdict GitHub itself computes over all of a pull request's checks.
+    The verdict GitHub itself computes over all of a pull request's checks, or that
+    nothing has reported one yet.
 
     Members are named as GitHub spells them, so a payload's value is looked up by
     name, and each member's value is how the verdict reads in the report.
@@ -325,6 +326,11 @@ class RollupState(StrEnum):
     At least one required commit status has not been reported yet.
     """
 
+    NOT_REPORTED = "not reported"
+    """
+    No check run or commit status has been reported at all.
+    """
+
     @property
     def failed(self) -> bool:
         """:return: Whether at least one check failed or reported an error."""
@@ -345,7 +351,7 @@ class RollupState(StrEnum):
     @classmethod
     def severity_order(cls) -> list[RollupState]:
         """
-        :return: Every verdict, worst first.
+        :return: Every verdict a reported check can give, worst first.
         """
         return [cls.FAILURE, cls.ERROR, cls.PENDING, cls.EXPECTED, cls.SUCCESS]
 

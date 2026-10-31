@@ -65,10 +65,6 @@ class RecordCommand(BootstrapCommand):
     """
 
     @classproperty
-    def invoked_as(cls) -> str:
-        return "record"
-
-    @classproperty
     def description(cls) -> str:
         return "Write an item's manifest entry and its roadmap entry, if any"
 
@@ -96,10 +92,6 @@ class OpenCommand(BootstrapCommand):
     """
     Creates the item's branch and draft pull request, and records them.
     """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        return "open"
 
     @classproperty
     def description(cls) -> str:
@@ -151,10 +143,6 @@ class UpdateCommand(BootstrapCommand):
     """
     Sets an item's recorded fields, reading prose from files.
     """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        return "update"
 
     @classproperty
     def description(cls) -> str:
@@ -217,10 +205,6 @@ class CheckCommand(BootstrapCommand):
     """
 
     @classproperty
-    def invoked_as(cls) -> str:
-        return "check"
-
-    @classproperty
     def description(cls) -> str:
         return "Report which recorded fields local git contradicts"
 
@@ -244,10 +228,6 @@ class ResolveCommand(BootstrapCommand):
     """
 
     @classproperty
-    def invoked_as(cls) -> str:
-        return "resolve"
-
-    @classproperty
     def description(cls) -> str:
         return "Name the plan and items a branch belongs to"
 
@@ -263,10 +243,6 @@ class BlockCommand(BootstrapCommand):
     """
     Records an owner's blocker on every item a branch carries.
     """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        return "block"
 
     @classproperty
     def description(cls) -> str:
@@ -295,10 +271,6 @@ class UnblockCommand(BootstrapCommand):
     """
     Withdraws an owner's blocker from every item a branch carries.
     """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        return "unblock"
 
     @classproperty
     def description(cls) -> str:
