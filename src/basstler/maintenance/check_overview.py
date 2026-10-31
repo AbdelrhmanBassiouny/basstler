@@ -6,24 +6,9 @@ stack.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
 
 from basstler.stack.model import Branch, BranchStatus, Stack
 from basstler.upstream_reviews.vocabulary import RollupState
-
-# %% vocabulary
-
-
-class CheckOverviewText(StrEnum):
-    """
-    The words the overview prints beside the verdicts GitHub names.
-    """
-
-    NOT_REPORTED = "not reported"
-    """
-    Stands for a branch whose head nothing has reported checks on.
-    """
-
 
 # %% the overview
 
@@ -55,9 +40,9 @@ class CheckOverview:
             if branch.status is not BranchStatus.MERGED
         ]
 
-    def branches_in(self, state: RollupState | None) -> list[Branch]:
+    def branches_in(self, state: RollupState) -> list[Branch]:
         """
-        :param state: A verdict, ``None`` for nothing reported.
+        :param state: A verdict.
         :return: The open branches whose checks have that verdict.
         """
         return [
@@ -69,25 +54,20 @@ class CheckOverview:
         :return: One line counting every verdict, then one line per verdict other than
             success naming its branches.
         """
-        states: list[RollupState | None] = [*RollupState, None]
-        counted = {state: len(self.branches_in(state)) for state in states}
+        counted = {state: len(self.branches_in(state)) for state in RollupState}
         counts = ", ".join(
-            f"{count} {state or CheckOverviewText.NOT_REPORTED}"
-            for state, count in counted.items()
-            if count
+            f"{count} {state}" for state, count in counted.items() if count
         )
         lines = [f"checks on {len(self.open_branches())} open branches: {counts}"]
-        for state in states:
+        for state in RollupState:
             if state is RollupState.SUCCESS or not counted[state]:
                 continue
-            lines.append(
-                f"{state or CheckOverviewText.NOT_REPORTED}: {self.named(state)}"
-            )
+            lines.append(f"{state}: {self.named(state)}")
         return lines
 
-    def named(self, state: RollupState | None) -> str:
+    def named(self, state: RollupState) -> str:
         """
-        :param state: A verdict, ``None`` for nothing reported.
+        :param state: A verdict.
         :return: The first :attr:`entries_per_state` branches with it, by pull request
             and name, and a count of the rest.
         """

@@ -8,7 +8,7 @@ import argparse
 
 import pytest
 
-from basstler.maintenance.check_overview import CheckOverview, CheckOverviewText
+from basstler.maintenance.check_overview import CheckOverview
 from basstler.maintenance.commands import ChecksCommand
 from basstler.upstream_reviews.vocabulary import RollupState
 
@@ -88,6 +88,6 @@ def test_the_command_names_a_branch_nothing_has_reported_checks_on(
 
     printed = capsys.readouterr().out.splitlines()
     assert printed[-1] == (
-        f"{CheckOverviewText.NOT_REPORTED}: "
+        f"{RollupState.NOT_REPORTED}: "
         f"#{StackPullRequestNumber.CHILD} `{StackBranch.CHILD}`"
     )

@@ -150,7 +150,7 @@ class StackReport:
                 StatusColumn.line(
                     branch.name,
                     branch.status,
-                    branch.check_state or "",
+                    branch.check_state,
                     f"#{branch.pull_request_number}",
                     f"+{ahead}/-{behind_parent} "
                     f"({branch.strategy} onto {branch.parent})",

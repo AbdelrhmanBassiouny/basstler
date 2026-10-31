@@ -437,8 +437,8 @@ class ChecksReportedOn(CommitChecks):
     The verdict over each commit's checks; a commit absent here has no checks.
     """
 
-    def check_state(self, commit: str) -> RollupState | None:
-        return self.state_by_commit.get(commit)
+    def check_state(self, commit: str) -> RollupState:
+        return self.state_by_commit.get(commit, RollupState.NOT_REPORTED)
 
 
 def an_export(
@@ -526,7 +526,7 @@ def a_board_entry(
     session: str | None = None,
     description: str | None = None,
     upstream_pull_request: int | None = None,
-    check_state: RollupState | None = None,
+    check_state: RollupState = RollupState.NOT_REPORTED,
 ) -> PullRequest:
     """
     :param number: The pull request number.
