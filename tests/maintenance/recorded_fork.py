@@ -289,6 +289,13 @@ class AlreadyResolvedPass(MaintenancePass):
         """
         return self.resolved_stack
 
+    def fresh_stack(self) -> Stack:
+        """
+        :return: The stack derived from the scratch checkout, which stands for a board
+            exported just now.
+        """
+        return self.resolved_stack
+
     def fork(self) -> RecordingPullRequests:
         """
         :return: The stand-in that records writes instead of making them.

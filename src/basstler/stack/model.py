@@ -17,6 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.github_labels import GitHubLabel
 from basstler.repository import Repository
 from basstler.stack.checkout import CurrentCheckout, LandedBranches
 from basstler.stack.exceptions import BoardUnavailable
@@ -517,6 +518,17 @@ class Stack:
             if branch.status == BranchStatus.READY
             and self.parent_landed(branch)
             and branch.checks_failed
+        ]
+
+    def awaiting_promotion_link(self) -> list[Branch]:
+        """
+        :return: The branches of :meth:`promotion_order` whose upstream link no pass has
+            recorded yet, in dependency order.
+        """
+        return [
+            branch
+            for branch in self.promotion_order()
+            if GitHubLabel.PROMOTION_LINK_SENT not in branch.labels
         ]
 
     def restack_plan(self, stacked_on: str | None = None) -> list[RestackPlanEntry]:
