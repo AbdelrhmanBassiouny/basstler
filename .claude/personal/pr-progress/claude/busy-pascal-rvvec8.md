@@ -1,10 +1,12 @@
 Plan
-- PR #84 (draft, bug): structured create-links, whole-line headings, MarkdownLink, board description; lands before #83.
-- Follow-up PR after #84 and #83: Branch holds a PullRequest instead of duplicating its fields (review thread on stack/model.py, left open).
+- PR #96 (draft, release:minor): board export reads the upstream's open PRs through the fork's upstream-reviews Action in cloud sessions; --upstream-read, exit 12.
+- #83 carries the add_repo access:"push" wording; whichever of #83/#96 lands second merges export_board and the skill paragraph.
+- Follow-up after #83: Branch holds a PullRequest instead of copying its fields (review thread on #84).
 
 Done
-- Merged main (23 commits); dropped with_upstream_remote_added, superseded by main's upstream_location (#89). Full suite 1708 passed; pushed 6d4d77e.
-- Replied on the review thread; description and title updated.
+- #96 opened from main; full suite 1719 passed.
+- #83: merged main (incl. #84), fixed attach wording; 1733 passed; pushed 908721a.
 
 Next
-- Wait for CI and review on #84.
+- Adding mcp__claude-code-remote__add_repo to the skills' allowed-tools was blocked by auto mode; the user decides.
+- Wait for CI and review on #96 and #83.
