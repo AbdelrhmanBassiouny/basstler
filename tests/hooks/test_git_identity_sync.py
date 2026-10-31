@@ -17,6 +17,7 @@ import subprocess
 import pytest
 
 from basstler.locations import PluginLocation, ProjectLocation
+from basstler.shell_configuration import ShellConfigurationFunction
 
 from ..constants.notes import ScratchBranch
 from ..constants.paths import PersonalNotesPath
@@ -306,9 +307,9 @@ def test_reads_the_recorded_identity_after_another_fetch_moved_fetch_head(
     )
 
     recorded = git_identity_repository.configuration_output(
-        "fetch_personal_notes_branch"
+        f"{ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH}"
         f' && git fetch --quiet "${{NOTES_REMOTE}}" {ScratchBranch.WORK}'
-        " && recorded_git_identity"
+        f" && {ShellConfigurationFunction.RECORDED_GIT_IDENTITY}"
     )
 
     assert recorded == f"{RECORDED_IDENTITY.name}\t{RECORDED_IDENTITY.email}\n"

@@ -54,6 +54,12 @@ class ShellConfigurationFunction(StrEnum):
     carry the branch.
     """
 
+    RECORDED_GIT_IDENTITY = "recorded_git_identity"
+    """
+    Prints the commit identity the personal-notes branch records, as its name and email
+    separated by a tab.
+    """
+
     PLAN_ID_FOR_BRANCH = "plan_id_for_branch"
     """
     Prints the plan the fetched branch index says tracks the branch it is given, and

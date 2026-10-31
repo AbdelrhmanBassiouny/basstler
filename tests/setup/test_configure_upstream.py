@@ -19,6 +19,7 @@ import pytest
 
 import basstler.setup.steps
 from basstler.locations import PluginLocation, ProjectLocation
+from basstler.setup.report import CheckResult, CheckStatus, SetupCheck, SetupReport
 from basstler.setup.steps import SetupCommand, SetupCommandOption
 from basstler.stack.configuration import StackSetting
 
@@ -63,22 +64,6 @@ class UpstreamSample(StrEnum):
     A personal setting the step has no business touching.
     """
 
-
-UPSTREAM_CHECK = "stack_upstream"
-"""
-The check-setup.sh row this step answers.
-"""
-
-ACTION_CHECK = "upstream_reviews_action"
-"""
-The check-setup.sh row install-upstream-reviews-action answers.
-"""
-
-GIT_IDENTITY_CHECK = "git_identity"
-"""
-The check-setup.sh row reading the identity the notes branch records, checked after
-:data:`ACTION_CHECK` has fetched the Action's branch.
-"""
 
 REQUIRE_UPSTREAM = "--require-upstream"
 """
@@ -142,24 +127,22 @@ def published_stack_settings(
 
 
 def upstream_row(
-    repository: ScratchRepository, *arguments: str, row: str = UPSTREAM_CHECK
-) -> tuple[str, str]:
+    repository: ScratchRepository,
+    *arguments: str,
+    row: SetupCheck = SetupCheck.STACK_UPSTREAM,
+) -> CheckResult:
     """
     Run check-setup.sh and pick out one row.
 
     :param repository: A fixture-built scratch repository.
     :param arguments: Arguments to pass the check.
     :param row: The row to pick out, the upstream's by default.
-    :return: The row's status and detail.
+    :return: What the check reported for that row.
     """
     finished = repository.run_hook_script(
         PluginLocation.SETUP_CHECK_SCRIPT.value.name, *arguments
     )
-    for line in finished.stdout.splitlines():
-        check, status, detail = line.split("\t")
-        if check == row:
-            return status, detail
-    raise AssertionError(f"no {row} row in:\n{finished.stdout}")
+    return SetupReport.from_completed_process(finished).results[row]
 
 
 # %% the step
@@ -212,18 +195,18 @@ def test_an_unnamed_upstream_is_context_for_a_check_that_does_not_need_one(
     """
     Most projects have no upstream, so its absence never fails a session's setup check.
     """
-    status, _ = upstream_row(upstream_repository)
+    result = upstream_row(upstream_repository)
 
-    assert status == "info"
+    assert result.status == CheckStatus.INFORMATIONAL
 
 
 def test_an_unnamed_upstream_needs_setup_for_a_check_that_needs_one(
     upstream_repository: ScratchRepository,
 ):
-    status, detail = upstream_row(upstream_repository, REQUIRE_UPSTREAM)
+    result = upstream_row(upstream_repository, REQUIRE_UPSTREAM)
 
-    assert status == "needs-setup"
-    assert SetupCommand.CONFIGURE_UPSTREAM in detail
+    assert result.status == CheckStatus.NEEDS_SETUP
+    assert SetupCommand.CONFIGURE_UPSTREAM in result.detail
 
 
 def test_an_upstream_the_step_saved_passes_the_check(
@@ -231,10 +214,10 @@ def test_an_upstream_the_step_saved_passes_the_check(
 ):
     configure_upstream(upstream_repository, UpstreamSample.UPSTREAM)
 
-    status, detail = upstream_row(upstream_repository, REQUIRE_UPSTREAM)
+    result = upstream_row(upstream_repository, REQUIRE_UPSTREAM)
 
-    assert status == "ok"
-    assert str(ProjectLocation.PERSONAL_STACK_CONFIGURATION) in detail
+    assert result.status == CheckStatus.OK
+    assert str(ProjectLocation.PERSONAL_STACK_CONFIGURATION) in result.detail
 
 
 def test_an_upstream_the_project_commits_passes_the_check(
@@ -245,10 +228,10 @@ def test_an_upstream_the_project_commits_passes_the_check(
         f'{StackSetting.UPSTREAM_REPOSITORY} = "{UpstreamSample.UPSTREAM}"\n',
     )
 
-    status, detail = upstream_row(upstream_repository, REQUIRE_UPSTREAM)
+    result = upstream_row(upstream_repository, REQUIRE_UPSTREAM)
 
-    assert status == "ok"
-    assert str(ProjectLocation.PROJECT_STACK_CONFIGURATION) in detail
+    assert result.status == CheckStatus.OK
+    assert str(ProjectLocation.PROJECT_STACK_CONFIGURATION) in result.detail
 
 
 # %% the Action
@@ -279,9 +262,9 @@ def plugin_release(detail: str) -> str:
 def test_the_action_is_not_checked_without_an_upstream(
     upstream_repository: ScratchRepository,
 ):
-    status, _ = upstream_row(upstream_repository, row=ACTION_CHECK)
+    result = upstream_row(upstream_repository, row=SetupCheck.UPSTREAM_REVIEWS_ACTION)
 
-    assert status == "info"
+    assert result.status == CheckStatus.INFORMATIONAL
 
 
 def test_an_action_not_installed_is_context_naming_the_step(
@@ -289,22 +272,26 @@ def test_an_action_not_installed_is_context_naming_the_step(
 ):
     configure_upstream(upstream_repository, UpstreamSample.UPSTREAM)
 
-    status, detail = upstream_row(upstream_repository, row=ACTION_CHECK)
+    result = upstream_row(upstream_repository, row=SetupCheck.UPSTREAM_REVIEWS_ACTION)
 
-    assert status == "info"
-    assert SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION in detail
+    assert result.status == CheckStatus.INFORMATIONAL
+    assert SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION in result.detail
 
 
 def test_an_action_the_step_installed_passes_the_check(
     upstream_repository: ScratchRepository,
 ):
     configure_upstream(upstream_repository, UpstreamSample.UPSTREAM)
-    _, detail = upstream_row(upstream_repository, row=ACTION_CHECK)
-    install_action(upstream_repository, plugin_release(detail))
+    uninstalled = upstream_row(
+        upstream_repository, row=SetupCheck.UPSTREAM_REVIEWS_ACTION
+    )
+    install_action(upstream_repository, plugin_release(uninstalled.detail))
 
-    status, _ = upstream_row(upstream_repository, REQUIRE_UPSTREAM, row=ACTION_CHECK)
+    result = upstream_row(
+        upstream_repository, REQUIRE_UPSTREAM, row=SetupCheck.UPSTREAM_REVIEWS_ACTION
+    )
 
-    assert status == "ok"
+    assert result.status == CheckStatus.OK
 
 
 def test_an_action_at_another_release_needs_setup(
@@ -313,10 +300,10 @@ def test_an_action_at_another_release_needs_setup(
     configure_upstream(upstream_repository, UpstreamSample.UPSTREAM)
     install_action(upstream_repository, "v0.0.1")
 
-    status, detail = upstream_row(upstream_repository, row=ACTION_CHECK)
+    result = upstream_row(upstream_repository, row=SetupCheck.UPSTREAM_REVIEWS_ACTION)
 
-    assert status == "needs-setup"
-    assert "v0.0.1" in detail
+    assert result.status == CheckStatus.NEEDS_SETUP
+    assert "v0.0.1" in result.detail
 
 
 def test_the_recorded_identity_is_read_after_the_action_check_fetched_its_branch(
@@ -328,6 +315,6 @@ def test_the_recorded_identity_is_read_after_the_action_check_fetched_its_branch
     configure_upstream(upstream_repository, UpstreamSample.UPSTREAM)
     install_action(upstream_repository, "v0.0.1")
 
-    status, _ = upstream_row(upstream_repository, row=GIT_IDENTITY_CHECK)
+    result = upstream_row(upstream_repository, row=SetupCheck.GIT_IDENTITY)
 
-    assert status == "ok"
+    assert result.status == CheckStatus.OK
