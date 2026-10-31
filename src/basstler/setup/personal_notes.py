@@ -9,7 +9,7 @@ with check-setup.sh's own final status, so a setup that only half worked never r
 success.
 
 Usage:
-    python3 -m basstler.setup.personal_notes --remote <name-or-url> \\
+    "${BASSTLER_PYTHON}" -m basstler.setup.personal_notes --remote <name-or-url> \\
         [--name "Your Name" --email you@example.com] [--starter-notes] [--create-labels]
 """
 

@@ -20,9 +20,9 @@ script can do once the user has asked for it - everything but switching a fork's
 Actions on, which is printed here.
 
 Usage:
-    python3 -m basstler.setup.steps
-    python3 -m basstler.setup.steps configure-upstream --repository <owner>/<name>
-    python3 -m basstler.setup.steps install-upstream-reviews-action --branch-or-tag <branch or tag>
+    "${BASSTLER_PYTHON}" -m basstler.setup.steps
+    "${BASSTLER_PYTHON}" -m basstler.setup.steps configure-upstream --repository <owner>/<name>
+    "${BASSTLER_PYTHON}" -m basstler.setup.steps install-upstream-reviews-action --branch-or-tag <branch or tag>
 """
 
 from __future__ import annotations

@@ -1,7 +1,7 @@
 ---
 name: add-plan-item
 description: Decide where new work belongs - folded into an unlanded item, a new item, a new plan, or untracked - and propose it via plan mode without writing code. Invoke as "/add-plan-item <description of the work>". Use when asked where new work goes, to add a plan item, or whether it should be its own PR.
-allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__issue_read, mcp__Claude_Code_Remote__subscribe_pr_activity
+allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__issue_read, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
 # Add Plan Item
