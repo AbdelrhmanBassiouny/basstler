@@ -29,7 +29,6 @@ from .recorded_fork import (
     run_maintenance,
 )
 
-
 # %% the command line a caller acts on the exit status of
 
 
@@ -62,34 +61,19 @@ def test_a_command_names_itself_without_being_instantiated():
     assert isinstance(BoardCommand.description, str)
 
 
-def test_a_command_that_omits_its_name_cannot_be_built():
+def test_a_command_that_omits_its_description_cannot_be_built():
     """
-    A command stays abstract until it says what it is called, and every_command builds
-    every subclass - so one that never says cannot reach the parser at all.
+    A command stays abstract until it says what it does, and every_command builds every
+    subclass - so one that never says cannot reach the parser at all.
     """
 
     @dataclass(frozen=True)
-    class CommandWithoutAName(MaintenanceCommand):
-        @classproperty
-        def description(cls) -> str:
-            return "a command that forgot what it is called"
-
+    class CommandWithoutADescription(MaintenanceCommand):
         def run(self, maintenance, arguments):
             return StackExitCode.SUCCESS
 
-    with pytest.raises(TypeError, match="invoked_as"):
-        CommandWithoutAName()
-
-
-def test_a_command_answers_with_its_own_name_rather_than_the_one_on_its_base():
-    """
-    An abstract class property answers with itself rather than calling its accessor,
-    which is what leaves a subclass supplying nothing abstract instead of silently
-    answering ``None``.
-    """
-    assert isinstance(MaintenanceCommand.invoked_as, classproperty)
-    assert MaintenanceCommand.invoked_as.__isabstractmethod__
-    assert BoardCommand.invoked_as == "board"
+    with pytest.raises(TypeError, match="description"):
+        CommandWithoutADescription()
 
 
 def test_a_fork_client_that_cannot_make_one_of_the_writes_cannot_be_built():

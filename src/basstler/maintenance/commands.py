@@ -152,13 +152,6 @@ class BoardCommand(MaintenanceCommand):
     """
 
     @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "board"
-
-    @classproperty
     def description(cls) -> str:
         """
         What it does, as ``--help`` puts it.
@@ -199,13 +192,6 @@ class PrepareCommand(MaintenanceCommand):
     """
 
     @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "prepare"
-
-    @classproperty
     def description(cls) -> str:
         """
         What it does, as ``--help`` puts it.
@@ -240,13 +226,6 @@ class FastForwardCommand(MaintenanceCommand):
     """
 
     @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "fast-forward"
-
-    @classproperty
     def description(cls) -> str:
         """
         What it does, as ``--help`` puts it.
@@ -271,13 +250,6 @@ class RestackCommand(MaintenanceCommand):
     """
     Integrates every moved parent and publishes what merged cleanly.
     """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "restack"
 
     @classproperty
     def description(cls) -> str:
@@ -321,13 +293,6 @@ class PromoteCommand(MaintenanceCommand):
     Records the upstream link on every branch ready to be promoted, and keeps every
     in-review label in step with the upstream.
     """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "promote"
 
     @classproperty
     def description(cls) -> str:
@@ -376,13 +341,6 @@ class ChecksCommand(MaintenanceCommand):
     """
 
     @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "checks"
-
-    @classproperty
     def description(cls) -> str:
         """
         What it does, as ``--help`` puts it.
@@ -407,13 +365,6 @@ class RunReportCommand(MaintenanceCommand):
     """
     Performs the whole pass and reports it as one document.
     """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "run-report"
 
     @classproperty
     def description(cls) -> str:
