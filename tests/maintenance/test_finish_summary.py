@@ -57,7 +57,6 @@ from .fork import (
 from .large_board import LargeBoard, OutputBudget
 from .recorded_fork import AlreadyResolvedPass
 
-
 # %% the stack a summary is written about
 
 
@@ -423,6 +422,27 @@ def test_a_refused_fast_forward_is_explained():
 
     assert FastForwardOutcome.REFUSED_NOT_FAST_FORWARD in section[0]
     assert section[1] == explanation
+
+
+def test_a_branch_whose_integration_failed_is_listed_with_why():
+    explanation = "fatal: refusing to merge unrelated histories"
+    report = MaintenanceReport(
+        restacked=(
+            an_outcome(
+                StackBranch.CHILD,
+                RestackOutcome.INTEGRATION_FAILED,
+                explanation=explanation,
+            ),
+        )
+    )
+
+    (entry,) = section_of(
+        FinishSummary(report, a_titled_stack()).as_markdown(),
+        FinishSummaryHeading.UNPUBLISHED,
+    )
+
+    assert RestackOutcome.INTEGRATION_FAILED in entry
+    assert explanation in entry
 
 
 def test_a_pass_that_did_nothing_still_says_its_status():
