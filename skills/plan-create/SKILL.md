@@ -1,7 +1,7 @@
 ---
 name: plan-create
 description: Create a multi-PR plan on the personal-notes branch, or migrate a roadmap doc into one, then publish its dashboard. Invoke as "/plan-create <plan-id>". Use when asked to start tracking work as a plan.
-allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
+allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
 # Plan Create
@@ -136,9 +136,9 @@ single session will obviously own it end to end). If yes:
    explaining its purpose (not a work item — here's how proposals/replies
    work; see `plan-schema.md`'s "Proposing structural changes" section for
    the convention to describe).
-2. Subscribe to it (the same PR-activity subscription tool also works on a
-   plain issue number — confirmed empirically, not assumed; there is no
-   separate issue-subscription tool).
+2. Do not subscribe to it: `mcp__claude-code-remote__subscribe_pr_activity`
+   takes pull requests only. Sessions read its comments instead, as
+   `plan-item-gathering.md` describes.
 3. Record its number as `tracking_issue` in the manifest you're about to
    write in step 6.
 
@@ -147,7 +147,8 @@ repo — check by trying, don't assume): cut a branch off `main` named
 `plan-tracking-<plan-id>`, make a single **empty commit**
 (`git commit --allow-empty` — the branch carries no file changes, ever),
 open it as a **draft** PR (base `main`, same title, a body noting *why* it's
-a PR and not an issue), subscribe to that instead, and still record its
+a PR and not an issue), subscribe to that with
+`mcp__claude-code-remote__subscribe_pr_activity`, and still record its
 number as `tracking_issue` — the field names the mailbox's role, not the
 literal GitHub object type, since which one applies is a per-repo fact
 that can change if Issues get enabled later. Whoever later builds a link
