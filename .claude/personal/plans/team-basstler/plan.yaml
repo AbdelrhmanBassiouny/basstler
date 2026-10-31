@@ -87,9 +87,11 @@ items:
     read it, push, and on a rejected push repeat a bounded number of times.'
 - id: lean-kickoff
   title: A kickoff loads one compact item brief instead of about 55 KB of skill documents
-  branch: null
-  status: not_started
+  branch: ccr-1516c899-kd5dl7
+  status: in progress
   track: core
+  pull_request_number: 97
+  session: https://claude.ai/code/session_01JxHGiQFQvVfUEyavALErF5
   depends_on: []
   notes: Kickoff now reads kickoff, gathering, execution modes, readiness, the maintenance
     skill and the plan schema (about 15k tokens before code). One python -m command prints
