@@ -17,6 +17,7 @@ from pathlib import Path
 from basstler.class_property import classproperty
 from basstler.exceptions import UnresolvableReferenceError
 from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.constants import CommitTrailer
 from basstler.maintenance.exceptions import ExternalCallFailed
 from basstler.stack.model import IntegrationStrategy
@@ -200,6 +201,17 @@ class GitCommandRunner:
         return (
             self.attempt(*arguments, environment=environment).raise_if_failed().output
         )
+
+    def repository_state_path(self, location: RepositoryStateLocation) -> Path:
+        """
+        :param location: Scratch state kept per repository.
+        :return: Where it lives for this checkout's repository, the same from every
+            worktree of it.
+        """
+        common_directory = self.run(
+            "rev-parse", "--path-format=absolute", "--git-common-dir"
+        )
+        return Path(common_directory) / location
 
     def fetch(self, remote: str, *references: str) -> None:
         """

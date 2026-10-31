@@ -36,6 +36,7 @@ import sys
 from pathlib import Path
 
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
+from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.commands import MaintenanceCommand, MaintenancePass
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.stack.settings import Configuration
@@ -92,9 +93,11 @@ def _dispatch() -> ExitCode:
         if entry.invoked_as == arguments.command
     )
     try:
+        git = GitCommandRunner(working_directory=Path.cwd())
         maintenance = MaintenancePass(
             configuration=Configuration.load(),
-            git=GitCommandRunner(working_directory=Path.cwd()),
+            git=git,
+            board=git.repository_state_path(RepositoryStateLocation.BOARD),
         )
         return requested.run(maintenance, arguments)
     except CommandFailure as error:

@@ -16,7 +16,6 @@ from pathlib import Path
 from basstler.exit_codes import StackExitCode
 from basstler.class_property import classproperty
 from basstler.command_line import Command
-from basstler.locations import PackageLocation
 from basstler.maintenance.board import BoardExport, UpstreamPullRequests
 from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
@@ -62,7 +61,7 @@ class MaintenancePass:
     The runner every git command goes through.
     """
 
-    board: Path = PackageLocation.BOARD.value
+    board: Path
     """
     The exported board this run writes, derives its stack from and discards at its end.
     """
