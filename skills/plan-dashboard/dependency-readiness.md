@@ -17,14 +17,15 @@ source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 
 For the item's `depends_on` list, follow `pr-data-fetching.md`'s procedure
 (next to this file) to bulk-fetch every referenced pull request's live
-state into `/tmp/pr_data.json`. Then run:
+state into `<scratchpad>/pr_data.json` (`<scratchpad>` as
+[`SKILL.md`](SKILL.md) defines it). Then run:
 
 ```bash
 "${BASSTLER_PYTHON}" -m "${CHECK_DEPENDENCY_READINESS_MODULE}" \
-  --plan /tmp/plan.yaml \
-  --pr-data /tmp/pr_data.json \
+  --plan <scratchpad>/plan.yaml \
+  --pr-data <scratchpad>/pr_data.json \
   --item <item-id> \
-  [--plans-dir /tmp/plans]
+  [--plans-dir <scratchpad>/plans]
 ```
 
 Pass `--plans-dir` whenever the item's `depends_on` names another plan

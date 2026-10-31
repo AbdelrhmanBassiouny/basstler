@@ -245,12 +245,12 @@ check. `/plan-create` creates the tracking issue (titled
 `[plan-tracking] <plan-id>`) when bootstrapping a new plan and records its
 number as `tracking_issue` in `plan.yaml`.
 
-**Real-time awareness for sessions actively working an item.** A session
-working an item in a plan that has a `tracking_issue` should subscribe to that
-issue — not just the session making a structural change. Since every structural change is posted there, subscribing
-turns the tracking issue into a broadcast channel: a change lands in every
-actively subscribed session's conversation as it happens, not only picked up
-by `session-start.sh`'s auto-discovery on that session's *next* fresh start.
+**Staying aware while working an item.** A session working an item in a plan
+that has a `tracking_issue` reads that issue's comments when it starts and
+again before each push - not just the session making a structural change -
+since every structural change is posted there. No tool delivers an issue's
+comments as they arrive: the pull-request activity subscription refuses an
+issue. Only a tracking pull request (the fallback below) can be subscribed to.
 `session-start.sh`'s written header reminds a session of this when it
 auto-discovers the plan.
 

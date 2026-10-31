@@ -43,6 +43,11 @@ what was found (the remote, branch and path in play, and that dependencies and
 stop. Do not ask
 anything else. Do not re-verify by hand what the script just verified.
 
+**An `in-progress` row** means a session start is installing that part right
+now. Never install it yourself, and never run a `pip` command for it: wait with
+`wait_for_basstler_install` (defined by the script sourced above), then run the
+check again.
+
 **Otherwise:** work through the `needs-setup` rows in the order printed —
 they're ordered so an earlier fix can be a prerequisite of a later one — using
 the steps below. Skip the step for any check already `ok`.
@@ -110,9 +115,14 @@ ask only if they want something else.
 ## 5. Run the setup
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${SETUP_PERSONAL_NOTES_MODULE}" --remote <remote> \
+wait_for_basstler_install && "${BASSTLER_PYTHON}" -m "${SETUP_PERSONAL_NOTES_MODULE}" --remote <remote> \
   [--name "<name>" --email "<email>"] [--starter-notes]
 ```
+
+`wait_for_basstler_install` returns at once unless a session start is still
+installing the package this command runs, and waits for it otherwise; if it
+fails, the install is still running after five minutes, so report that and
+stop.
 
 It refuses a remote GitHub says someone else owns (exit 3) before writing
 anything. It records the remote in git config, creates the notes branch if
@@ -175,9 +185,10 @@ It creates a new branch named `basstler/upstream-reviews` on the user's fork,
 with no history in common with the project's branches. The branch holds only a
 README and a short workflow file that calls basstler's reusable workflow by
 reference, so it works on a fork of any repository. Run again, it updates that
-workflow to the basstler branch or tag this session's package was installed at.
+workflow to the basstler branch or tag this session's package was installed at,
+which every session start also does once the branch exists.
 Then tell
-the user the one step left to them, which `python -m basstler.setup.steps` also
+the user the one step left to them, which `"${BASSTLER_PYTHON}" -m basstler.setup.steps` also
 prints: a fork starts with Actions off, so they enable them once at
 `https://github.com/<fork>/actions`. Until they do, `/upstream-reviews` reads
 the upstream from the session instead.
