@@ -105,6 +105,11 @@ class ConfigurationVariable(StrEnum):
     interpreter.
     """
 
+    INSTALL_MARKER = "BASSTLER_INSTALL_MARKER"
+    """
+    The file a session start holds its process id in while it installs the package.
+    """
+
 
 class SearchPathVariable(EnvironmentVariable):
     """

@@ -75,6 +75,16 @@ class StubVariable(StrEnum):
     The script a ``uv`` installed by the ``pip`` stub runs.
     """
 
+    PIP_WATCHED_FILE = "STUB_PIP_WATCHED_FILE"
+    """
+    A file the ``pip`` stub copies, as it is while the stub runs.
+    """
+
+    PIP_WATCHED_FILE_COPY = "STUB_PIP_WATCHED_FILE_COPY"
+    """
+    Where the ``pip`` stub copies :attr:`PIP_WATCHED_FILE` to.
+    """
+
     UV_CALL_LOG = "STUB_UV_CALL_LOG"
     """
     The file the ``uv`` stub appends each invocation to.
@@ -718,6 +728,40 @@ def test_installs_the_package_with_pip_when_a_requirement_is_missing(
     assert call_log.read_text().splitlines() == [
         pip_installer_call(session_start_repository)
     ]
+
+
+def test_marks_the_install_in_progress_only_while_it_runs(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    A setup check run during the install reads the marker to say "wait" rather than
+    "missing", so it is there while the installer runs and gone once it returns.
+    """
+    require_the_uninstallable(session_start_repository)
+    stub_bin.install(PackageManager.PIP)
+    marker = Path(
+        session_start_repository.configuration_value(
+            ConfigurationVariable.INSTALL_MARKER
+        )
+    )
+    marker_during_install = tmp_path / "marker-during-install"
+
+    result = publish_and_run(
+        session_start_repository,
+        environment={
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+            StubVariable.PIP_WATCHED_FILE: str(marker),
+            StubVariable.PIP_WATCHED_FILE_COPY: str(marker_during_install),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert marker_during_install.read_text().strip().isdigit()
+    assert not marker.exists()
 
 
 def test_installs_the_package_with_uv_where_there_is_one(
