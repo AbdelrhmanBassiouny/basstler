@@ -213,7 +213,7 @@ class RecordedCommitChecks(PathEnumeration):
     recorded.
     """
 
-    DIRECTORY = DatasetLocation.DIRECTORY.value / "commit-checks"
+    DIRECTORY = DatasetLocation.DIRECTORY / "commit-checks"
     """
     The directory holding them.
     """

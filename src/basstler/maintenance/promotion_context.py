@@ -4,7 +4,7 @@ What a session writes each upstream summary from, read for it in one go.
 A summary is a reading of the change, but not of every line of it: the fork pull
 request's own title and description, its commit subjects and which files it changes by
 how much are what an upstream reviewer's first paragraph is written from. Each is
-capped, so the context for a branch stays the same size however large its diff is.
+capped, so the context for a branch stays the same size however large its change is.
 """
 
 from __future__ import annotations
@@ -18,7 +18,7 @@ from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.github import PullRequestReader
 from basstler.stack.model import Branch, Stack
 
-# %% what the diff changes
+# %% how much a branch changes
 
 
 @dataclass(frozen=True)
@@ -65,7 +65,7 @@ class FileChange:
 
 
 @dataclass(frozen=True)
-class DiffSize:
+class ChangeSize:
     """
     How much a branch changes, with only its largest files named.
     """
@@ -91,7 +91,7 @@ class DiffSize:
     """
 
     @classmethod
-    def of(cls, changes: Sequence[FileChange], file_limit: int) -> DiffSize:
+    def of(cls, changes: Sequence[FileChange], file_limit: int) -> ChangeSize:
         """
         :param changes: Every file the branch changes.
         :param file_limit: How many of the largest to name.
@@ -151,7 +151,7 @@ class PromotionContext:
     How many more commits there are than :attr:`commit_subjects` lists.
     """
 
-    diff: DiffSize
+    change_size: ChangeSize
     """
     How much the branch changes.
     """
@@ -231,7 +231,7 @@ class PromotionContextReader:
         subjects = self.git.run(
             "log", "--no-merges", "--reverse", "--format=%s", f"{compared_with}..{tip}"
         ).splitlines()
-        numstat = self.git.run("diff", "--numstat", f"{compared_with}...{tip}")
+        changes_per_file = self.git.run("diff", "--numstat", f"{compared_with}...{tip}")
         return PromotionContext(
             pull_request_number=number,
             branch=branch.name,
@@ -242,8 +242,11 @@ class PromotionContextReader:
             ),
             commit_subjects=tuple(subjects[: self.commit_limit]),
             commits_not_listed=max(len(subjects) - self.commit_limit, 0),
-            diff=DiffSize.of(
-                [FileChange.from_numstat_line(line) for line in numstat.splitlines()],
+            change_size=ChangeSize.of(
+                [
+                    FileChange.from_numstat_line(line)
+                    for line in changes_per_file.splitlines()
+                ],
                 self.file_limit,
             ),
         )

@@ -8,6 +8,7 @@ from __future__ import annotations
 import argparse
 import json
 from dataclasses import asdict
+from enum import StrEnum
 
 import pytest
 
@@ -19,7 +20,7 @@ from basstler.maintenance.commands import (
 )
 from basstler.maintenance.promotion import PromotionSummaries, PromotionSummary
 from basstler.maintenance.promotion_context import (
-    DiffSize,
+    ChangeSize,
     FileChange,
     PromotionContextReader,
 )
@@ -37,6 +38,28 @@ from .fork import (
 )
 from .large_board import OutputBudget
 from .recorded_fork import AlreadyResolvedPass, RecordingPullRequests
+
+# %% vocabulary
+
+
+class PromotionContextKey(StrEnum):
+    """
+    The keys of one :attr:`PreparationKey.TO_SUMMARIZE` entry the tests read back from
+    the prepared document.
+    """
+
+    PULL_REQUEST_NUMBER = "pull_request_number"
+    """
+    The fork pull request the entry's summary is keyed by.
+    """
+
+    BRANCH = "branch"
+    """
+    The branch to be promoted.
+    """
+
+
+# %% building a reader
 
 
 def a_context_reader(
@@ -76,7 +99,7 @@ def test_a_branch_awaiting_its_link_is_described_from_its_pull_request_and_commi
     assert context.description == PromotionSampleText.SUMMARY
     assert context.commit_subjects == tuple(subjects)
     assert context.compared_with == reader.stack.configuration.upstream_base_reference
-    assert context.diff == DiffSize.of(
+    assert context.change_size == ChangeSize.of(
         [
             FileChange(ForkCheckout.own_file(StackBranch.PARENT), 1, 0),
             FileChange("a-second-file", 1, 0),
@@ -126,7 +149,7 @@ def test_a_large_change_is_described_within_its_budget(fork_checkout: ForkChecko
     (context,) = reader.read()
 
     assert len(json.dumps(asdict(context)).encode()) <= OutputBudget.PROMOTION_CONTEXT
-    assert len(context.diff.largest_files) == reader.file_limit
+    assert len(context.change_size.largest_files) == reader.file_limit
     assert context.commits_not_listed == commits + 1 - reader.commit_limit
     assert context.description.endswith(reader.truncation_marker)
 
@@ -159,7 +182,7 @@ def test_prepare_lists_the_reparents_and_every_summary_to_write(
         asdict(reparent) for reparent in stack.reparents()
     ]
     assert [
-        context["pull_request_number"]
+        context[PromotionContextKey.PULL_REQUEST_NUMBER]
         for context in document[PreparationKey.TO_SUMMARIZE]
     ] == [branch.pull_request_number for branch in stack.awaiting_promotion_link()]
 
@@ -171,9 +194,9 @@ def test_a_summary_written_for_every_listed_pull_request_is_what_each_opens_with
     maintenance, document = a_prepared_pass(fork_checkout, capsys)
     summaries = PromotionSummaries(
         {
-            context["pull_request_number"]: PromotionSummary(
+            context[PromotionContextKey.PULL_REQUEST_NUMBER]: PromotionSummary(
                 points=(PromotionSampleText.SUMMARY,),
-                title=f"{PromotionSampleText.TITLE} {context['pull_request_number']}",
+                title=f"{PromotionSampleText.TITLE} {context[PromotionContextKey.PULL_REQUEST_NUMBER]}",
             )
             for context in document[PreparationKey.TO_SUMMARIZE]
         }
@@ -188,9 +211,9 @@ def test_a_summary_written_for_every_listed_pull_request_is_what_each_opens_with
         number: PromotionLink.build(
             configuration,
             next(
-                context["branch"]
+                context[PromotionContextKey.BRANCH]
                 for context in document[PreparationKey.TO_SUMMARIZE]
-                if context["pull_request_number"] == number
+                if context[PromotionContextKey.PULL_REQUEST_NUMBER] == number
             ),
             summary.title,
             summary.upstream_description(
