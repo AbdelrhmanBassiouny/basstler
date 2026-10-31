@@ -109,8 +109,6 @@ The first line is the status:
 | `not-fast-forward` | relay it; the fork's base is behind the upstream |
 | `move-refused` | relay it and stop |
 
-A branch left `integration-failed` failed in the pass's own environment, not its owner's: say so.
-
 ## Finish
 
 Relay the summary as printed, then add only what this session did: every reparent step 2 could not
