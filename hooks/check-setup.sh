@@ -14,7 +14,7 @@ set -euo pipefail
 # one, so they pass it; any other caller would otherwise fail every project
 # that simply has no upstream.
 #
-# Read-only: it fetches (into FETCH_HEAD) and reads git config, but never
+# Read-only: it fetches (into PERSONAL_NOTES_REFERENCE) and reads git config, but never
 # writes config, branches, files, or remotes. Running it can't change the
 # answer it gives.
 #
@@ -23,8 +23,10 @@ set -euo pipefail
 # earlier one being satisfied). Three statuses:
 #   ok           - nothing to do
 #   needs-setup  - something is missing; <detail> says what
+#   in-progress  - another process is setting it up right now; wait for it
+#                  rather than doing it again
 #   info         - context for whoever is reading, never a pass/fail
-# Exit code is 0 when no row is needs-setup, 1 otherwise - so a caller can
+# Exit code is 0 when no row is needs-setup or in-progress, 1 otherwise - so a caller can
 # take the fast path ("everything is already fine") on the exit code alone,
 # without parsing anything.
 #
@@ -60,8 +62,7 @@ names_upstream() {
 }
 
 # report_upstream: prints the stack_upstream row, given whether the
-# personal-notes branch could be read at all. Run while FETCH_HEAD still
-# points at that branch.
+# personal-notes branch could be read at all.
 UPSTREAM_NAMED=false
 
 report_upstream() {
@@ -72,7 +73,7 @@ report_upstream() {
     UPSTREAM_NAMED=true
     report stack_upstream ok "named in the project's committed ${PROJECT_STACK_CONFIGURATION_PATH}"
   elif [ "${notes_branch_read}" = true ] \
-      && git show "FETCH_HEAD:${PERSONAL_STACK_CONFIGURATION_PATH}" 2>/dev/null | names_upstream; then
+      && git show "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_STACK_CONFIGURATION_PATH}" 2>/dev/null | names_upstream; then
     UPSTREAM_NAMED=true
     report stack_upstream ok "named in ${PERSONAL_STACK_CONFIGURATION_PATH} on '${NOTES_BRANCH}'"
   elif [ "${REQUIRE_UPSTREAM}" = true ]; then
@@ -85,7 +86,7 @@ report_upstream() {
 }
 
 # report: prints one TSV row, and remembers that the overall run failed if the
-# status is needs-setup, so the exit code never has to be tracked by hand at
+# status is needs-setup or in-progress, so the exit code never has to be tracked by hand at
 # each call site.
 # report_upstream_reviews_action: prints the upstream_reviews_action row,
 # checked only once an upstream is named, since only /upstream-reviews runs the
@@ -123,7 +124,9 @@ report_upstream_reviews_action() {
 
 report() {
   local check="$1" status="$2" detail="$3"
-  [ "${status}" != "needs-setup" ] || EXIT_CODE=1
+  case "${status}" in
+    needs-setup|in-progress) EXIT_CODE=1 ;;
+  esac
   printf '%s\t%s\t%s\n' "${check}" "${status}" "${detail}"
 }
 
@@ -206,7 +209,7 @@ report notes_path info "${NOTES_PATH} (from $(resolution_source claude.personalN
 if fetch_personal_notes_branch; then
   report notes_branch ok "'${NOTES_BRANCH}' found on '${ACTIVE_NOTES_REMOTE}'"
 
-  if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
+  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" 2>/dev/null; then
     report notes_file ok "'${NOTES_PATH}' exists on '${NOTES_BRANCH}'"
   else
     report notes_file needs-setup \
@@ -263,7 +266,10 @@ fi
 # read the same declaration the same way, for the same interpreter. What stays
 # here is the reasons it can answer nothing, because they are this script's
 # rows to word.
-if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
+if basstler_install_in_progress; then
+  report dashboard_dependencies in-progress \
+    "process $(cat "${BASSTLER_INSTALL_MARKER}") is installing them for ${BASSTLER_PYTHON} now - do not install them yourself; run: wait_for_basstler_install, then this check again"
+elif ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
   report dashboard_dependencies needs-setup "${BASSTLER_PYTHON} is not on PATH, so the plan-dashboard modules cannot run at all"
 elif ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
   report dashboard_dependencies needs-setup "cannot check: the basstler package's declared dependencies could not be read"

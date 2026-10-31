@@ -127,7 +127,7 @@ if [ "${MANIFEST_PLAN_ID}" != "${PLAN_ID}" ]; then
 fi
 
 git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
-git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" FETCH_HEAD --quiet
+git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" "${PERSONAL_NOTES_REFERENCE}" --quiet
 
 # Validated against the fetched notes branch, so a <plan-id>/<item-id> entry resolves.
 if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate "${MANIFEST_FILE}" \
