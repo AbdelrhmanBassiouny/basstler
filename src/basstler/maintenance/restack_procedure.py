@@ -22,6 +22,7 @@ from basstler.maintenance.restack_steps import (
     IntegrateParent,
     PublishBranch,
     RefuseAnUnsafeMove,
+    RestackOutcome,
     RestackStep,
     SkipBranchAlreadyCurrent,
     WithholdBranchStillConflicting,
@@ -196,6 +197,10 @@ def restack(
     """
     Put every branch whose parent moved through :func:`restack_steps`, bottom up.
 
+    A branch above one whose outcome :attr:`RestackOutcome.blocks_branches_above` is not
+    attempted: its parent does not hold what the pass meant it to, so it is reported
+    blocked by that branch.
+
     The steps run in a :class:`RestackWorktree` rather than in the invoking checkout,
     which lends its branch through a :class:`DetachedCheckout` and gets it back with its
     own files still in place. The worktree goes first so it is gone before the branch is
@@ -221,27 +226,44 @@ def restack(
             is_ancestor=BranchAncestry(stack.configuration, switching).is_ancestor,
         )
         by_name = {branch.name: branch for branch in stack.branches}
-        return [
-            _restack_branch(
-                BranchUnderRestack(
-                    branch=by_name[entry.branch],
-                    parent=entry.parent,
-                    strategy=entry.strategy,
-                    stack=stack,
-                    git=switching,
-                    fork=fork,
-                    checks=checks,
-                    conflict_response=conflict_response,
-                )
+        blocking_ancestors: dict[str, str] = {}
+        outcomes = []
+        for entry in stack.restack_plan(stacked_on):
+            restacking = BranchUnderRestack(
+                branch=by_name[entry.branch],
+                parent=entry.parent,
+                strategy=entry.strategy,
+                stack=stack,
+                git=switching,
+                fork=fork,
+                checks=checks,
+                conflict_response=conflict_response,
             )
-            for entry in stack.restack_plan(stacked_on)
-        ]
+            outcome = _restack_branch(restacking, blocking_ancestors.get(entry.parent))
+            if outcome.outcome.blocks_branches_above:
+                blocking_ancestors[entry.branch] = (
+                    outcome.blocking_ancestor or entry.branch
+                )
+            outcomes.append(outcome)
+        return outcomes
 
 
-def _restack_branch(restacking: BranchUnderRestack) -> BranchOutcome:
+def _restack_branch(
+    restacking: BranchUnderRestack, blocking_ancestor: str | None
+) -> BranchOutcome:
     """:param restacking: The branch to restack.
-    :return: The outcome of the first step that concluded it.
+    :param blocking_ancestor: The branch below it this pass left without its parent's
+        tip, if any.
+    :return: A blocked outcome naming that branch when there is one, otherwise the
+        outcome of the first step that concluded it.
     :raises RestackConcludedNothingError: If no step did."""
+    if blocking_ancestor is not None:
+        return restacking.concluded(
+            RestackOutcome.BLOCKED_BY_ANCESTOR,
+            blocking_ancestor=blocking_ancestor,
+            explanation=f"not attempted: `{blocking_ancestor}` below it was left "
+            "unpublished this pass",
+        )
     for step in restack_steps():
         outcome = step.attempt(restacking)
         if outcome is not None:

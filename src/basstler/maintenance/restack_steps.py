@@ -82,6 +82,28 @@ class RestackOutcome(StrEnum):
     untouched rather than re-reported.
     """
 
+    BLOCKED_BY_ANCESTOR = "blocked-by-ancestor"
+    """
+    A branch below it was left unpublished this pass, so its parent's tip is not what
+    the pass meant it to hold; it was not attempted, and nothing was published.
+    """
+
+    @property
+    def blocks_branches_above(self) -> bool:
+        """
+        :return: Whether the branch was left without its parent's tip because of
+            something about the branch itself, so the branches stacked on it cannot take
+            what the pass meant them to. An :attr:`INTEGRATION_FAILED` is the pass's own
+            environment, which the branches above report for themselves.
+        """
+        return self in {
+            RestackOutcome.CONFLICT,
+            RestackOutcome.REFUSED,
+            RestackOutcome.PUSH_REJECTED,
+            RestackOutcome.WITHHELD,
+            RestackOutcome.BLOCKED_BY_ANCESTOR,
+        }
+
 
 @dataclass(frozen=True)
 class BranchOutcome:
@@ -134,6 +156,12 @@ class BranchOutcome:
     """
     URL of the comment telling this branch's owner about it, absent unless one was
     posted.
+    """
+
+    blocking_ancestor: str | None = None
+    """
+    The branch below this one that was left unpublished, absent unless the outcome is
+    :attr:`RestackOutcome.BLOCKED_BY_ANCESTOR`.
     """
 
 
