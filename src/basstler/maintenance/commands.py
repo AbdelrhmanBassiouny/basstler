@@ -28,12 +28,20 @@ from basstler.maintenance.promotion import (
 )
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
+from basstler.maintenance.upstream_action import (
+    OpenPullRequestsAnswer,
+    OpenPullRequestsRequest,
+    UpstreamReadRoute,
+)
 from basstler.maintenance.upstream_pull_request_synchronization import (
     UpstreamPullRequestSynchronization,
 )
 from basstler.stack.model import Stack
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
+from basstler.upstream_reviews.action.branch import RemoteBranch
+from basstler.upstream_reviews.action.read import ActionRead
+from basstler.upstream_reviews.clients import GitHubCommandLineClient
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -66,6 +74,16 @@ class MaintenancePass:
     The exported board this run writes, derives its stack from and discards at its end.
     """
 
+    upstream_read: UpstreamReadRoute = UpstreamReadRoute.DIRECT
+    """
+    How this run reads the upstream's open pull requests.
+    """
+
+    action_timeout: float = 480
+    """
+    How many seconds a read through the fork's Action waits for its run.
+    """
+
     def fork(self) -> GitHubRepository:
         """:return: The fork, as this run's credential can read and write it."""
         return GitHubRepository.from_environment(self.configuration.fork_repository)
@@ -73,6 +91,25 @@ class MaintenancePass:
     def upstream(self) -> PullRequestReader:
         """:return: The upstream, as this run's credential can read it."""
         return GitHubRepository.from_environment(self.configuration.upstream_repository)
+
+    def upstream_pull_requests(self) -> UpstreamPullRequests:
+        """
+        :return: The upstream's open pull requests opened from the fork's branches, read
+            the way :attr:`upstream_read` names.
+        :raises ActionUnavailable: If that is the fork's Action and it cannot answer.
+        """
+        fork = self.configuration.fork_repository
+        if self.upstream_read is UpstreamReadRoute.DIRECT:
+            return UpstreamPullRequests.from_api_records(
+                self.upstream().open_pull_requests(), fork
+            )
+        read = ActionRead(
+            RemoteBranch(self.git, self.configuration.fork_remote),
+            OpenPullRequestsRequest.fresh(self.configuration.upstream_repository, fork),
+            GitHubCommandLineClient(),
+            answer_type=OpenPullRequestsAnswer,
+        )
+        return read.wait(self.action_timeout, read.send()).upstream_pull_requests
 
     def stack(self) -> Stack:
         """:return: The derived stack, read from the exported board."""
@@ -137,13 +174,9 @@ class BoardCommand(MaintenanceCommand):
         :param arguments: The parsed command line.
         :return: The process exit code."""
         fork = maintenance.fork()
+        upstream_pull_requests = maintenance.upstream_pull_requests()
         export = BoardExport.from_api_records(
-            fork.open_pull_requests(),
-            UpstreamPullRequests.from_api_records(
-                maintenance.upstream().open_pull_requests(),
-                maintenance.configuration.fork_repository,
-            ),
-            fork,
+            fork.open_pull_requests(), upstream_pull_requests, fork
         )
         if not arguments.write:
             logger.info(export.as_json())
