@@ -10,6 +10,8 @@ from basstler.maintenance.description import (
     UpstreamPullRequestLink,
 )
 
+from ..constants.paths import DatasetLocation
+
 from .fork import (
     A_SESSION_LINK,
     PromotionSampleText,
@@ -31,20 +33,6 @@ def test_a_description_naming_no_session_yields_none():
 
 
 # %% the promotion section
-
-
-def test_the_promotion_link_read_back_is_the_one_written():
-    written = PullRequestDescription(PromotionSampleText.PROSE).with_promotion_link(
-        PromotionSampleText.FIRST_LINK
-    )
-
-    assert (
-        PullRequestDescription(written).promotion_link == PromotionSampleText.FIRST_LINK
-    )
-
-
-def test_a_description_with_no_promotion_section_yields_no_link():
-    assert PullRequestDescription(PromotionSampleText.PROSE).promotion_link is None
 
 
 def test_a_second_promotion_replaces_the_link_rather_than_appending_another():
@@ -118,5 +106,17 @@ def test_the_upstream_section_and_the_promotion_section_keep_each_other():
         )
     )
 
-    assert promoted_again.promotion_link == PromotionSampleText.SECOND_LINK
+    assert promoted_again.section(MaintenanceText.PROMOTION_HEADING) == (
+        PromotionSampleText.SECOND_LINK
+    )
     assert promoted_again.upstream_link == an_upstream_link().url
+
+
+def test_a_heading_of_the_description_s_own_that_starts_like_the_promotion_heading_is_kept():
+    prose = DatasetLocation.DESCRIPTION_WITH_PROMOTION_PROSE.read_text()
+
+    written = PullRequestDescription(prose).with_promotion_link(
+        PromotionSampleText.FIRST_LINK
+    )
+
+    assert written.startswith(prose.rstrip())

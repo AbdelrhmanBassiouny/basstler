@@ -432,7 +432,7 @@ class BoardExport:
             upstream_pull_request=upstream_pull_requests.pull_request_for(head),
             session=description.session_link,
             title=PullRequestField.TITLE.read(record, number),
-            promotion_link=description.promotion_link,
+            description=description.prose,
             upstream_link=description.upstream_link,
         )
 

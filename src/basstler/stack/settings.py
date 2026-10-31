@@ -348,6 +348,21 @@ class Configuration:
             upstream_location=resolution.upstream_location,
         )
 
+    @property
+    def upstream_base_reference(self) -> str:
+        """
+        The upstream base, as this checkout's reference to it on the upstream remote.
+        """
+        return f"{self.upstream_remote}/{self.upstream_base}"
+
+    def reference_to(self, name: str) -> str:
+        """:param name: A branch of the fork, or the upstream base.
+        :return: The reference to it: :attr:`upstream_base_reference` for the upstream
+            base, else its reference on the fork remote."""
+        if name == self.upstream_base:
+            return self.upstream_base_reference
+        return self.reference_on_fork(name)
+
     def reference_on_fork(self, name: str) -> str:
         """:param name: A branch or parent name.
         :return: Its reference on the fork remote."""

@@ -208,15 +208,25 @@ def test_every_worktree_of_a_repository_shares_one_board_outside_its_work_trees(
     assert from_the_worktree == from_the_checkout
 
 
-def test_the_export_reads_the_title_and_the_recorded_promotion_link():
-    body = PullRequestDescription(PromotionSampleText.PROSE).with_promotion_link(
+def test_the_export_reads_the_title():
+    export = an_export([an_api_record(title=PromotionSampleText.TITLE)])
+
+    assert export.pull_requests[0].title == PromotionSampleText.TITLE
+
+
+def test_the_export_carries_the_description_without_the_sections_a_pass_writes():
+    promoted = PullRequestDescription(PromotionSampleText.PROSE).with_promotion_link(
         PromotionSampleText.FIRST_LINK
     )
-    export = an_export([an_api_record(body=body, title=PromotionSampleText.TITLE)])
+    body = PullRequestDescription(promoted).with_upstream_link(
+        UpstreamPullRequestLink(
+            make_configuration().upstream_repository, StackPullRequestNumber.UPSTREAM
+        )
+    )
 
-    exported = export.pull_requests[0]
-    assert exported.title == PromotionSampleText.TITLE
-    assert exported.promotion_link == PromotionSampleText.FIRST_LINK
+    export = an_export([an_api_record(body=body)])
+
+    assert export.pull_requests[0].description == PromotionSampleText.PROSE
 
 
 def test_the_export_reads_the_linked_upstream_pull_request():

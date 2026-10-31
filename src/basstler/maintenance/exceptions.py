@@ -1,5 +1,6 @@
 """
-The failure both of the executor's outside dependencies report the same way.
+The failures the maintenance executor reports: the one both of its outside dependencies
+report the same way, and the ones it refuses its own output with.
 
 git and the GitHub API are the two things a pass depends on and neither of which it
 controls. What a caller needs when either refuses is identical, so it is stated once
@@ -9,6 +10,8 @@ here and the two concrete failures differ only in how they name the call.
 from __future__ import annotations
 
 from dataclasses import dataclass
+
+from basstler.exceptions import DataclassException
 
 
 @dataclass
@@ -39,3 +42,30 @@ class ExternalCallFailed(RuntimeError):
     def __str__(self) -> str:
         """:return: The call, its status, and the reason given."""
         return f"{self.call} failed with {self.status}: {self.detail}"
+
+
+@dataclass
+class MarkdownLinkTargetError(DataclassException, ValueError):
+    """
+    Raised when a markdown link would point at something that is neither a web URL nor
+    an anchor on the same page.
+    """
+
+    label: str
+    """
+    The text the link was to show.
+    """
+
+    target: str
+    """
+    What it was to point at.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"the link '{self.label}' would point at {self.target!r}, which is neither "
+            f"a web URL nor an anchor"
+        )
+
+    def suggest_correction(self) -> str:
+        return "Build the target from structured data rather than from free text."

@@ -134,9 +134,9 @@ class PullRequest:
     title: str | None = None
     """The pull request's title, ``None`` when the export did not carry one."""
 
-    promotion_link: str | None = None
-    """The upstream create-link a pass recorded in the pull request body, ``None`` until
-    one is."""
+    description: str | None = None
+    """The pull request's description without the sections a pass writes,
+    ``None`` when the export did not carry one."""
 
     upstream_link: str | None = None
     """The URL of the upstream pull request a pass linked in the pull request body,
@@ -213,8 +213,8 @@ class Branch:
     title: str | None = None
     """The pull request's title, if known."""
 
-    promotion_link: str | None = None
-    """The upstream create-link recorded on the pull request, if any."""
+    description: str | None = None
+    """The pull request's description without the sections a pass writes, if known."""
 
     upstream_link: str | None = None
     """The URL of the upstream pull request linked on the pull request, if any."""
@@ -260,7 +260,7 @@ class Branch:
             upstream_pull_request=pull_request.upstream_pull_request,
             session=pull_request.session,
             title=pull_request.title,
-            promotion_link=pull_request.promotion_link,
+            description=pull_request.description,
             upstream_link=pull_request.upstream_link,
         )
 
@@ -477,6 +477,16 @@ class Stack:
             BranchStatus.MERGED,
         }
 
+    def integration_parent(self, branch: Branch) -> str:
+        """
+        :param branch: A branch of the stack.
+        :return: What it is brought up to date with: its parent, or the upstream base
+            once that parent has landed.
+        """
+        if self.has_landed_upstream(branch.parent):
+            return self.configuration.upstream_base
+        return branch.parent
+
     def promotion_order(self) -> list[Branch]:
         """The branches to submit to the upstream next, in dependency order.
 
@@ -537,11 +547,7 @@ class Stack:
         return [
             RestackPlanEntry(
                 branch=branch.name,
-                parent=(
-                    self.configuration.upstream_base
-                    if self.has_landed_upstream(branch.parent)
-                    else branch.parent
-                ),
+                parent=self.integration_parent(branch),
                 strategy=branch.strategy,
             )
             for branch in planned

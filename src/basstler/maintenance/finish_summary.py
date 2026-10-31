@@ -8,10 +8,13 @@ import functools
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
+from urllib.parse import urlsplit
 
 from basstler.github_labels import GitHubLabel
+from basstler.maintenance.exceptions import MarkdownLinkTargetError
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
+from basstler.render_common import AllowedUrlScheme
 from basstler.stack.model import Branch, BranchStatus, Stack
 from basstler.stack.promotion_link import PromotionLink
 
@@ -87,6 +90,43 @@ class FinishSummaryHeading(StrEnum):
     """
 
 
+# %% links
+
+
+@dataclass(frozen=True)
+class MarkdownLink:
+    """
+    A markdown link whose target is a web URL or an anchor on the same page.
+    """
+
+    label: str
+    """
+    The text the link shows.
+    """
+
+    target: str
+    """
+    What the link points at.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        :raises MarkdownLinkTargetError: If the target is neither a web URL nor an
+            anchor, or holds whitespace, which ends a markdown link target early.
+        """
+        if any(character.isspace() for character in self.target):
+            raise MarkdownLinkTargetError(self.label, self.target)
+        if self.target.startswith("#") and len(self.target) > 1:
+            return
+        parts = urlsplit(self.target)
+        if parts.scheme not in set(AllowedUrlScheme) or not parts.netloc:
+            raise MarkdownLinkTargetError(self.label, self.target)
+
+    def __str__(self) -> str:
+        """:return: The link, as markdown."""
+        return f"[{self.label}]({self.target})"
+
+
 # %% the summary
 
 
@@ -154,7 +194,7 @@ class FinishSummary:
         :return: A markdown link to it, labelled by its number.
         """
         url = self.stack.configuration.fork_repository.pull_request_url(number)
-        return f"[#{number}]({url})"
+        return str(MarkdownLink(f"#{number}", url))
 
     def branch_line(self, branch: Branch) -> str:
         """
@@ -178,17 +218,17 @@ class FinishSummary:
     def pending_links(self) -> list[str]:
         """
         :return: One entry per create-link built this pass, then one per link an
-            earlier pass built that is not yet acted on.
+            earlier pass built that is not yet acted on, without the link: it is in the
+            pull request's description.
         """
         entries = []
         for promotion in self.report.promoted:
             branch = self.branches_by_name[promotion.branch]
-            entry = (
-                f"{self.branch_line(branch)} - "
-                f"[create upstream pull request]({promotion.url})"
-            )
+            create = MarkdownLink("create upstream pull request", promotion.url)
+            entry = f"{self.branch_line(branch)} - {create}"
             if promotion.body_was_truncated:
-                entry += f" ([title only]({self.title_only_link(branch)}))"
+                title_only = MarkdownLink("title only", self.title_only_link(branch))
+                entry += f" ({title_only})"
             entries.append(entry)
         promoted = {promotion.branch for promotion in self.report.promoted}
         for branch in self.stack.maintained_branches():
@@ -198,10 +238,7 @@ class FinishSummary:
                 or branch.status in {BranchStatus.IN_REVIEW, BranchStatus.MERGED}
             ):
                 continue
-            url = branch.promotion_link or self.title_only_link(branch)
-            entries.append(
-                f"{self.branch_line(branch)} - [create upstream pull request]({url})"
-            )
+            entries.append(self.branch_line(branch))
         return entries
 
     def reported(self) -> list[str]:
@@ -216,7 +253,7 @@ class FinishSummary:
             addressed = branch.session or "the description names no session"
             entries.append(
                 f"{self.branch_line(branch)}: {self.outcome_detail(outcome)} - "
-                f"addressed {addressed} - [comment]({outcome.reported_at})"
+                f"addressed {addressed} - {MarkdownLink('comment', outcome.reported_at)}"
             )
         return entries
 

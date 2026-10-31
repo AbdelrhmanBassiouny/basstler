@@ -85,6 +85,12 @@ class DatasetLocation(PathEnumeration):
     and a title for the parent, nothing for the child.
     """
 
+    DESCRIPTION_WITH_PROMOTION_PROSE = DIRECTORY / "description-with-promotion-prose.md"
+    """
+    A fork pull request description whose own prose has a heading starting like the
+    promotion heading, followed by a sentence and a code fence.
+    """
+
     PLAN_WITH_LANDED_ITEMS = DIRECTORY / "plan-with-landed-items.yaml"
     """
     A plan with a tracking issue and three items: one landed, one in progress that
