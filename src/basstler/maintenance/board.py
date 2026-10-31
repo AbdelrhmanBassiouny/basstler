@@ -315,10 +315,9 @@ class CommitChecks(ABC):
     """
 
     @abstractmethod
-    def check_state(self, commit: str) -> RollupState | None:
+    def check_state(self, commit: str) -> RollupState:
         """:param commit: The commit the checks ran on.
-        :return: The verdict over every check run and commit status reported on it,
-            ``None`` while nothing has reported."""
+        :return: The verdict over every check run and commit status reported on it."""
 
 
 @dataclass(frozen=True)

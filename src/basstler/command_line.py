@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import argparse
 import functools
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TypeVar
@@ -33,9 +34,10 @@ class Command(ABC):
 
     The name and the description belong to the class rather than to an instance - the
     parser reads them to build the command line before anything is constructed - so they
-    are abstract :class:`basstler.class_property.classproperty` members. A subclass
-    supplying neither stays abstract, and :meth:`every_command` builds every subclass, so
-    a command that cannot say what it is called is refused as its tool is imported.
+    are :class:`basstler.class_property.classproperty` members. The name follows from the
+    class name; the description is abstract, and :meth:`every_command` builds every
+    subclass, so a command that cannot say what it does is refused as its tool is
+    imported.
     """
 
     @classmethod
@@ -53,11 +55,13 @@ class Command(ABC):
         return tuple(subclass() for subclass in cls.__subclasses__())
 
     @classproperty
-    @abstractmethod
     def invoked_as(cls) -> str:
         """
-        The name it is invoked by on the command line.
+        The name it is invoked by on the command line: its class name in lower case,
+        words joined by hyphens, without a trailing ``Command``.
         """
+        words = cls.__name__.removesuffix(Command.__name__)
+        return re.sub(r"(?<!^)(?=[A-Z])", "-", words).lower()
 
     @classproperty
     @abstractmethod

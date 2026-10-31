@@ -399,7 +399,7 @@ class GitHubRepository(
             {LabelField.NAME: label, LabelField.DESCRIPTION: label.purpose},
         )
 
-    def check_state(self, commit: str) -> RollupState | None:
+    def check_state(self, commit: str) -> RollupState:
         runs = [
             run.result
             for page in self._every_page_of_entries(
@@ -416,7 +416,7 @@ class GitHubRepository(
             for status in RestCombinedStatusPage.from_json(page).statuses
         ]
         checks = CheckStatus.over(runs + statuses)
-        return None if checks is None else checks.state
+        return RollupState.NOT_REPORTED if checks is None else checks.state
 
     @staticmethod
     def _commit_report(commit: str, report: CommitReport) -> str:

@@ -268,7 +268,7 @@ fi
 # rows to word.
 if basstler_install_in_progress; then
   report dashboard_dependencies in-progress \
-    "a session start (process $(cat "${BASSTLER_INSTALL_MARKER}")) is installing them for ${BASSTLER_PYTHON} now - do not install them yourself; run: wait_for_basstler_install, then this check again"
+    "process $(cat "${BASSTLER_INSTALL_MARKER}") is installing them for ${BASSTLER_PYTHON} now - do not install them yourself; run: wait_for_basstler_install, then this check again"
 elif ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
   report dashboard_dependencies needs-setup "${BASSTLER_PYTHON} is not on PATH, so the plan-dashboard modules cannot run at all"
 elif ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then

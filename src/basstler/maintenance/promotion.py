@@ -188,7 +188,7 @@ def promote(
     """
     promoted: list[Promotion] = []
     withheld = stack.configuration.needs_resolution_label
-    for branch in stack.promotion_order():
+    for branch in stack.awaiting_promotion_link():
         number = branch.pull_request_number
         pull_request = fork.pull_request(number)
         labels = PullRequestField.LABELS.read(pull_request, number)
