@@ -44,9 +44,21 @@ Pass `fork=` / `upstream=` arguments straight through. Never inspect or guess at
 "${BASSTLER_PYTHON}" -m basstler.stack reparents
 ```
 
-The export reads the upstream's open pull requests too. In a Claude Code cloud session that read is
-refused (403) until the upstream is attached with `add_repo` (read access); attach it first, and
-never label branches yourself to get past a refusal.
+The export reads the upstream's open pull requests too. In a Claude Code cloud session it reads them
+through the fork's upstream-reviews Action (up to a minute), so nothing needs attaching. If `board`
+exits `12` (`upstream-unreadable`), stderr says why:
+
+- *no `basstler/upstream-reviews` branch*: install it with
+  `"${BASSTLER_PYTHON}" -m basstler.setup.steps install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"`
+  and re-run;
+- *no run started*: Actions are off on the fork. Give the user the link stderr names, then read
+  directly instead: attach the upstream with `add_repo`, `access: "push"` (the only level whose API
+  calls reach a repository; nothing is pushed to the upstream), and re-run with
+  `--upstream-read direct` before `board`. If the attach is refused or blocked, stop and report
+  both remedies.
+
+Never run the rest of the pass without the upstream's pull requests, and never label branches
+yourself to get past a refusal.
 
 For each `branch<TAB>pr<TAB>current base<TAB>target base` line, set the pull request's base with the
 MCP `update_pull_request` tool.
