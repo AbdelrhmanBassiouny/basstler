@@ -68,6 +68,11 @@ class SummaryLine(StrEnum):
     What became of the default branch every session starts from.
     """
 
+    UPSTREAM_REVIEWS_ACTION = "reviews Action"
+    """
+    What became of the fork's upstream-reviews Action branch.
+    """
+
     PLAN_STATE_SHA = "plan state SHA"
     """
     The personal-notes commit this clone read plan state at.
@@ -190,6 +195,31 @@ class SummaryMessage(StrEnum):
     DEPENDENCIES_INSTALL_FAILED = "dependencies_line_install_failed"
     """
     The install did not work, and the run carried on regardless.
+    """
+
+    ACTION_NOT_READ = "upstream_reviews_action_line_not_read"
+    """
+    The fork's branches could not be read, so whether it has the Action is unknown.
+    """
+
+    ACTION_NOT_INSTALLED = "upstream_reviews_action_line_not_installed"
+    """
+    The fork has no upstream-reviews Action branch, which only setup installs.
+    """
+
+    ACTION_CURRENT = "upstream_reviews_action_line_current"
+    """
+    The Action already runs the release this session runs.
+    """
+
+    ACTION_UPDATED = "upstream_reviews_action_line_updated"
+    """
+    The Action ran another release, and was just brought to this session's.
+    """
+
+    ACTION_UPDATE_FAILED = "upstream_reviews_action_line_update_failed"
+    """
+    The Action runs another release, and bringing it to this session's failed.
     """
 
 

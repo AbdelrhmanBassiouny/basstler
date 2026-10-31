@@ -211,6 +211,14 @@ Run it by hand to catch a long-running session's clone up mid-session:
 ~/.local/share/basstler/venv/bin/python -m basstler.maintenance.default_branch_sync
 ```
 
+### The fork's upstream-reviews Action
+
+A fork that has the `basstler/upstream-reviews` branch (installed by `/setup-personal-notes`) runs
+the Action at one basstler release, which has to be the release the session replaying its result
+runs. Every session start therefore brings an Action at another release to this session's, pushing
+only to that branch; the summary's `reviews Action` line says what it did. A fork without the
+branch is left without it.
+
 ## Plan dashboards (multi-PR initiatives)
 
 When one PR's progress note isn't enough — a stacked refactor, a multi-wave programme, anything

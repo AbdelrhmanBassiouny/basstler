@@ -7,7 +7,8 @@ set -euo pipefail
 # progress, and this branch's plan item with the plan's standing rules. Also
 # syncs personal settings and git identity, keeps the package environment
 # installed, stamps the plan state SHA for plan-updates-since.sh, fast-forwards
-# the default branch to the upstream (see basstler.maintenance.default_branch_sync), and
+# the default branch to the upstream (see basstler.maintenance.default_branch_sync),
+# brings the fork's upstream-reviews Action to this session's release, and
 # prints a summary of what it did. Never fails the session on a setup gap.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -288,6 +289,34 @@ if DEFAULT_BRANCH_REPORT="$("${BASSTLER_PYTHON}" -m "${DEFAULT_BRANCH_SYNC_MODUL
   SUMMARY_DEFAULT_BRANCH="${DEFAULT_BRANCH_REPORT}"
 fi
 
+# The fork's upstream-reviews Action, kept at the release this session runs:
+# the run and the session replaying it must run the same package, so every
+# release would otherwise leave it stale. Only a branch already there is
+# touched - installing one is setup's decision. Never fatal.
+SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_not_read "${NOTES_REMOTE}")"
+SESSION_RELEASE="$(basstler_branch_or_tag)"
+if ACTION_STATE="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+    --remote "${NOTES_REMOTE}" status --branch-or-tag "${SESSION_RELEASE}" 2>/dev/null)"; then
+  case "${ACTION_STATE}" in
+    missing*)
+      SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_not_installed)" ;;
+    current*)
+      SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_current \
+        "${SESSION_RELEASE}")" ;;
+    stale*)
+      if "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+          --remote "${NOTES_REMOTE}" install --branch-or-tag "${SESSION_RELEASE}" \
+          > /dev/null 2>&1; then
+        SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_updated \
+          "${ACTION_STATE#stale }" "${SESSION_RELEASE}")"
+      else
+        SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_update_failed \
+          "${ACTION_STATE#stale }" "${SESSION_RELEASE}" \
+          "${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --branch-or-tag ${SESSION_RELEASE}")"
+      fi ;;
+  esac
+fi
+
 # Setup verdict from check-setup.sh, run last so it sees what this run wrote.
 SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
 if [ -f "${CHECK_SETUP_SCRIPT}" ]; then
@@ -312,6 +341,7 @@ session-start.sh summary:
   default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   dependencies:    ${SUMMARY_DEPENDENCIES}
+  reviews Action:  ${SUMMARY_UPSTREAM_REVIEWS_ACTION}
   setup:           ${SUMMARY_SETUP}
   plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY
