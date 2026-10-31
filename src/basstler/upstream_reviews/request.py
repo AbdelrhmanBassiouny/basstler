@@ -16,6 +16,10 @@ from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.repository import Repository
+from basstler.upstream_reviews.action.exchange import (
+    ActionRequest,
+    ActionRequestKind,
+)
 from basstler.upstream_reviews.clients import JobLogReader
 from basstler.upstream_reviews.exceptions import (
     NoRecordedReadRequest,
@@ -50,14 +54,9 @@ class HelperJSONKey(StrEnum):
 
 
 @dataclass(frozen=True)
-class UpstreamReadRequest(JSONModel):
+class UpstreamReadRequest(ActionRequest):
     """
     One read of an upstream pull request: what to read, and how much of it.
-    """
-
-    identifier: str
-    """
-    A random token telling this request's output apart from any other's.
     """
 
     upstream: Repository
@@ -84,6 +83,13 @@ class UpstreamReadRequest(JSONModel):
     """
     Whether to read the log behind each check that did not pass.
     """
+
+    @classproperty
+    def kind(cls) -> ActionRequestKind:
+        """
+        The read it asks for, which the run dispatches on.
+        """
+        return ActionRequestKind.PULL_REQUEST_REPORT
 
     @classproperty
     def location(cls) -> Path:
