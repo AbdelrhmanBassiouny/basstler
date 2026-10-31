@@ -18,7 +18,10 @@ from pathlib import Path
 
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.repository import Repository
-from basstler.shell_configuration import ShellConfigurationFunction
+from basstler.shell_configuration import (
+    FetchedBranchReference,
+    ShellConfigurationFunction,
+)
 from basstler.stack.checkout import CurrentCheckout, GitArgument
 from basstler.stack.configuration import (
     CommittedStackConfiguration,
@@ -85,8 +88,8 @@ class LayeredStackSettings:
         """
         if ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH.run().returncode != 0:
             return {}
-        fetched_file = (
-            f"{GitArgument.FETCH_HEAD}:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}"
+        fetched_file = FetchedBranchReference.PERSONAL_NOTES.file_at(
+            ProjectLocation.PERSONAL_STACK_CONFIGURATION
         )
         if not CurrentCheckout.succeeds(
             GitArgument.CAT_FILE, GitArgument.EXISTS, fetched_file

@@ -68,6 +68,7 @@ class RemoteBranch:
         self.git.fetch(
             self.remote,
             "--no-tags",
+            "--no-write-fetch-head",
             f"+refs/heads/{ActionBranch.NAME}:{ActionBranch.LOCAL_REFERENCE}",
         )
         return self.git.commit_at(ActionBranch.LOCAL_REFERENCE)

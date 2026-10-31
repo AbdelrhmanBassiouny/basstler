@@ -28,6 +28,7 @@ from basstler.package_layout import (
     command_line_entry_points,
     package_modules,
 )
+from basstler.shell_configuration import FetchedBranchReference
 
 from .constants.environment import ConfigurationVariable, SearchPathVariable
 from .constants.paths import RepositoryLocation
@@ -302,6 +303,16 @@ def test_the_shell_asks_for_the_interpreters_the_package_supports():
     assert (
         configuration_value(ConfigurationVariable.PYTHON_REQUIREMENT)
         == ProjectDeclaration.of_this_package().requires_python
+    )
+
+
+def test_the_shell_fetches_the_notes_branch_where_the_package_reads_it():
+    """
+    The package reads the personal-notes branch at the ref the shell's fetch keeps it at.
+    """
+    assert (
+        configuration_value(ConfigurationVariable.PERSONAL_NOTES_REFERENCE)
+        == FetchedBranchReference.PERSONAL_NOTES
     )
 
 

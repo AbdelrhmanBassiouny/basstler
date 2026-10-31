@@ -14,7 +14,7 @@ set -euo pipefail
 # one, so they pass it; any other caller would otherwise fail every project
 # that simply has no upstream.
 #
-# Read-only: it fetches (into FETCH_HEAD) and reads git config, but never
+# Read-only: it fetches (into PERSONAL_NOTES_REFERENCE) and reads git config, but never
 # writes config, branches, files, or remotes. Running it can't change the
 # answer it gives.
 #
@@ -62,8 +62,7 @@ names_upstream() {
 }
 
 # report_upstream: prints the stack_upstream row, given whether the
-# personal-notes branch could be read at all. Run while FETCH_HEAD still
-# points at that branch.
+# personal-notes branch could be read at all.
 UPSTREAM_NAMED=false
 
 report_upstream() {
@@ -74,7 +73,7 @@ report_upstream() {
     UPSTREAM_NAMED=true
     report stack_upstream ok "named in the project's committed ${PROJECT_STACK_CONFIGURATION_PATH}"
   elif [ "${notes_branch_read}" = true ] \
-      && git show "FETCH_HEAD:${PERSONAL_STACK_CONFIGURATION_PATH}" 2>/dev/null | names_upstream; then
+      && git show "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_STACK_CONFIGURATION_PATH}" 2>/dev/null | names_upstream; then
     UPSTREAM_NAMED=true
     report stack_upstream ok "named in ${PERSONAL_STACK_CONFIGURATION_PATH} on '${NOTES_BRANCH}'"
   elif [ "${REQUIRE_UPSTREAM}" = true ]; then
@@ -210,7 +209,7 @@ report notes_path info "${NOTES_PATH} (from $(resolution_source claude.personalN
 if fetch_personal_notes_branch; then
   report notes_branch ok "'${NOTES_BRANCH}' found on '${ACTIVE_NOTES_REMOTE}'"
 
-  if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
+  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" 2>/dev/null; then
     report notes_file ok "'${NOTES_PATH}' exists on '${NOTES_BRANCH}'"
   else
     report notes_file needs-setup \

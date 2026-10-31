@@ -17,6 +17,7 @@ from basstler.maintenance.default_branch_sync import (
 )
 from basstler.maintenance.fast_forward import FastForwardOutcome
 from basstler.locations import PluginLocation
+from basstler.shell_configuration import FetchedBranchReference
 
 from ..constants.notes import ScratchBranch
 from .forked_scratch_repository import (
@@ -169,19 +170,20 @@ def test_reaches_the_upstream_through_its_remote_when_the_clone_has_one(
     assert forked.commit_at(f"{UPSTREAM_REMOTE}/{DEFAULT_BRANCH}") == upstream_tip
 
 
-def test_leaves_fetch_head_where_the_personal_notes_fetch_put_it(
+def test_leaves_the_personal_notes_reference_where_the_notes_fetch_put_it(
     forked: ForkedScratchRepository,
 ):
     """
-    session-start.sh reads the personal-notes branch through ``FETCH_HEAD``, so a fetch
-    of the upstream must not take it over.
+    session-start.sh reads the personal-notes branch through
+    :attr:`FetchedBranchReference.PERSONAL_NOTES`, so a fetch of the upstream must not
+    take it over.
     """
     forked.advance_upstream(1)
 
     report = sync(forked)
 
     assert report.outcome is BaseOutcome.FAST_FORWARDED
-    assert forked.commit_at("FETCH_HEAD") == forked.commit_at(
+    assert forked.commit_at(FetchedBranchReference.PERSONAL_NOTES) == forked.commit_at(
         f"refs/heads/{ScratchBranch.PERSONAL_NOTES}"
     )
 

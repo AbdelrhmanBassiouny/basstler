@@ -61,22 +61,23 @@ document assumes it's already been sourced once per session:
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+fetch_personal_notes_branch
 ```
 
-Work off `FETCH_HEAD`, not `<remote>/<branch>` — a URL-form remote creates
-no tracking ref (same reasoning as every hook script here).
+Work off `"${PERSONAL_NOTES_REFERENCE}"`, where that fetch keeps the branch — never
+`FETCH_HEAD`, which any other fetch overwrites, or `<remote>/<branch>`, which a
+URL-form remote never creates.
 
 **Single-plan mode:**
 
 ```bash
-git cat-file -e "FETCH_HEAD:.claude/personal/plans/<plan-id>/plan.yaml" || {
+git cat-file -e "${PERSONAL_NOTES_REFERENCE}:.claude/personal/plans/<plan-id>/plan.yaml" || {
   echo "No such plan. Available plans:"
-  git ls-tree -r --name-only FETCH_HEAD | grep -E '^\.claude/personal/plans/[^/]+/plan\.yaml$'
+  git ls-tree -r --name-only "${PERSONAL_NOTES_REFERENCE}" | grep -E '^\.claude/personal/plans/[^/]+/plan\.yaml$'
   exit 1
 }
-git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/plan.yaml" > /tmp/plan.yaml
-git show "FETCH_HEAD:.claude/personal/plans/<plan-id>/roadmap.md" > /tmp/roadmap.md  # roadmap.md is always the fixed filename, never configurable
+git show "${PERSONAL_NOTES_REFERENCE}:.claude/personal/plans/<plan-id>/plan.yaml" > /tmp/plan.yaml
+git show "${PERSONAL_NOTES_REFERENCE}:.claude/personal/plans/<plan-id>/roadmap.md" > /tmp/roadmap.md  # roadmap.md is always the fixed filename, never configurable
 ```
 
 Also extract every plan's manifest, into one directory — a `depends_on` entry
@@ -87,7 +88,7 @@ rather than reading the manifest first to find out:
 
 ```bash
 mkdir -p /tmp/plans
-git archive FETCH_HEAD "${PLANS_DIR}" \
+git archive "${PERSONAL_NOTES_REFERENCE}" "${PLANS_DIR}" \
   | tar -x --strip-components=3 -C /tmp/plans --wildcards '*/plan.yaml'
 ```
 
@@ -103,7 +104,7 @@ every plan's page has a known address; on an Artifact it is plain text.
 **Master-index mode:** enumerate every plan instead of one:
 
 ```bash
-git ls-tree -r --name-only FETCH_HEAD | grep -E '^\.claude/personal/plans/[^/]+/plan\.yaml$'
+git ls-tree -r --name-only "${PERSONAL_NOTES_REFERENCE}" | grep -E '^\.claude/personal/plans/[^/]+/plan\.yaml$'
 ```
 
 Load each one the same way as above, into its own scratch path.
@@ -112,7 +113,7 @@ Copy the generated URL cache to a file without reading it; the refresh reports t
 URL it holds. It is absent before a first publish, which is not an error:
 
 ```bash
-git show "FETCH_HEAD:${DASHBOARD_URL_CACHE_PATH}" > /tmp/dashboard-urls.yaml 2>/dev/null \
+git show "${PERSONAL_NOTES_REFERENCE}:${DASHBOARD_URL_CACHE_PATH}" > /tmp/dashboard-urls.yaml 2>/dev/null \
   || : > /tmp/dashboard-urls.yaml
 ```
 

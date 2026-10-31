@@ -278,7 +278,7 @@ Any other label is preserved but not interpreted.
 - Does nothing until you create the notes branch: `git fetch` finds nothing, so `CLAUDE.local.md` is
   never written.
 - Never merges and never checks anything out — the hook and `plan-updates-since.sh` only read the
-  branch off `FETCH_HEAD`.
+  branch off `refs/basstler/personal-notes`, the ref every fetch of it is kept at.
 - Catching the default branch up is fast-forward only, in every step: a default branch carrying
   commits the upstream does not is reported and left alone, and nothing is ever force-pushed. Your
   checked-out branch is never merged or rebased for you: it is fast-forwarded only when it has no
