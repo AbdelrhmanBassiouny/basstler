@@ -16,15 +16,17 @@ to find out.
 ## Carrying it
 
 ```bash
-python3 -m basstler.maintenance board --write
-python3 -m basstler.maintenance restack --stacked-on <this item's branch>
+"${BASSTLER_PYTHON}" -m basstler.maintenance board --write
+"${BASSTLER_PYTHON}" -m basstler.maintenance restack --stacked-on <this item's branch>
 ```
 
 The second command plans only the branches stacked on the named one — directly
 or through the branches between them — and puts each through the same steps a
 whole-board pass uses, parent before child. It prints one line per branch:
 `pushed` (it took the fix and was published), `up-to-date` (it already had it),
-or `conflict`, plus the paths that collided.
+`conflict`, plus the paths that collided, or `blocked-by-ancestor` (a branch
+below it did not take the fix, so it was not attempted; resolve that branch and
+run the command again).
 
 Unlike a whole-board pass, a conflict here writes nothing to the descendant's
 pull request: no label, no comment. The judgement is yours, because the fix

@@ -12,11 +12,32 @@ from __future__ import annotations
 import os
 import subprocess
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 
 from basstler.bash import Bash
 from basstler.locations import PluginLocation
 from basstler.plugin_root import PluginRoot
+
+
+class FetchedBranchReference(StrEnum):
+    """
+    Where the shell configuration keeps a branch it fetched, so a later fetch of
+    anything else never moves it the way it moves ``FETCH_HEAD``.
+    """
+
+    PERSONAL_NOTES = "refs/basstler/personal-notes"
+    """
+    The personal-notes branch, as
+    :attr:`ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH` last fetched it; the
+    shell configuration's ``PERSONAL_NOTES_REFERENCE``.
+    """
+
+    def file_at(self, path: str | PurePosixPath) -> str:
+        """
+        :param path: A file's path relative to the branch's root.
+        :return: The git object name of that file on the fetched branch.
+        """
+        return f"{self}:{path}"
 
 
 class ShellConfigurationFunction(StrEnum):
@@ -26,10 +47,17 @@ class ShellConfigurationFunction(StrEnum):
 
     FETCH_PERSONAL_NOTES_BRANCH = "fetch_personal_notes_branch"
     """
-    Fetches the personal-notes branch, leaving ``FETCH_HEAD`` pointing at it.
+    Fetches the personal-notes branch into
+    :attr:`FetchedBranchReference.PERSONAL_NOTES`.
 
     Falls back to the current branch's upstream remote when the configured one does not
     carry the branch.
+    """
+
+    RECORDED_GIT_IDENTITY = "recorded_git_identity"
+    """
+    Prints the commit identity the personal-notes branch records, as its name and email
+    separated by a tab.
     """
 
     PLAN_ID_FOR_BRANCH = "plan_id_for_branch"

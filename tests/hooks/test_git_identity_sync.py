@@ -17,6 +17,7 @@ import subprocess
 import pytest
 
 from basstler.locations import PluginLocation, ProjectLocation
+from basstler.shell_configuration import ShellConfigurationFunction
 
 from ..constants.notes import ScratchBranch
 from ..constants.paths import PersonalNotesPath
@@ -287,3 +288,28 @@ def test_refuses_to_record_an_identity_with_no_email(
 
     assert result.returncode == 1
     assert "--email" in result.stderr
+
+
+# %% reading the identity after another fetch
+
+
+def test_reads_the_recorded_identity_after_another_fetch_moved_fetch_head(
+    git_identity_repository: ScratchRepository,
+):
+    publish_notes_branch(
+        git_identity_repository, RECORDED_IDENTITY.as_git_config_file()
+    )
+    git_identity_repository.run_git(
+        "push",
+        "--quiet",
+        str(git_identity_repository.notes_remote_path),
+        ScratchBranch.WORK,
+    )
+
+    recorded = git_identity_repository.configuration_output(
+        f"{ShellConfigurationFunction.FETCH_PERSONAL_NOTES_BRANCH}"
+        f' && git fetch --quiet "${{NOTES_REMOTE}}" {ScratchBranch.WORK}'
+        f" && {ShellConfigurationFunction.RECORDED_GIT_IDENTITY}"
+    )
+
+    assert recorded == f"{RECORDED_IDENTITY.name}\t{RECORDED_IDENTITY.email}\n"

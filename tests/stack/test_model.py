@@ -14,7 +14,7 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
-from basstler.locations import PackageLocation
+from basstler.locations import RepositoryStateLocation
 from basstler.stack.model import (
     BoardKey,
     BranchStatus,
@@ -405,7 +405,7 @@ def test_only_branches_promotion_would_otherwise_take_count_as_held_by_their_che
 
 def test_the_board_reads_the_check_state_back_as_its_verdict(tmp_path: Path):
     written = a_ready_branch_whose_checks_reached(RollupState.PENDING)
-    board = tmp_path / PackageLocation.BOARD.name
+    board = tmp_path / RepositoryStateLocation.BOARD.name
     board.write_text(json.dumps({BoardKey.PULL_REQUESTS: [asdict(written)]}))
 
     assert PullRequest.read_board(board) == [written]

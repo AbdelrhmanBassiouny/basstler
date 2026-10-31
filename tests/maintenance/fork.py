@@ -194,7 +194,7 @@ def make_configuration() -> Configuration:
         upstream_repository=Repository("an-upstream-owner", "a-project"),
         upstream_remote=RemoteName.UPSTREAM,
         upstream_base=UPSTREAM_BASE,
-        upstream_setup_command=None,
+        upstream_location=RemoteName.UPSTREAM,
     )
 
 

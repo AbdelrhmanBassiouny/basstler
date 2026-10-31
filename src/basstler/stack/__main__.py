@@ -40,8 +40,11 @@ from __future__ import annotations
 import argparse
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
+from basstler.locations import RepositoryStateLocation
+from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.repository import Repository
 from basstler.stack.commit_move import (
     CommitMoveAction,
@@ -88,8 +91,7 @@ class Command(StrEnum):
     """Answer whether a proposed commit move may be made, and refuse it if not."""
 
     CONFIGURATION = "configuration"
-    """Add the upstream remote if the checkout lacks one, then print the resolved
-    configuration, one ``field<TAB>value`` line per setting."""
+    """Print the resolved configuration, one ``field<TAB>value`` line per setting."""
 
     LABELS = "labels"
     """Compute the complete label set a write must send, from the labels carried now."""
@@ -284,7 +286,13 @@ class StackCommandLine:
             if not command.needs_a_board:
                 return StackCommandLine._run_without_a_board(command, arguments)
             return StackCommandLine._run_against_the_board(
-                command, arguments, Stack.load()
+                command,
+                arguments,
+                Stack.load(
+                    GitCommandRunner(Path.cwd()).repository_state_path(
+                        RepositoryStateLocation.BOARD
+                    )
+                ),
             )
         except CommandFailure as error:
             logger.error(f"{error}")
@@ -309,7 +317,7 @@ class StackCommandLine:
             Configuration.load(
                 fork_repository=arguments.fork,
                 upstream_repository=arguments.upstream,
-            ).with_upstream_remote_added().print_settings()
+            ).print_settings()
             return StackExitCode.SUCCESS
         PromotionLink.build(
             Configuration.load(), arguments.branch, arguments.title, arguments.body

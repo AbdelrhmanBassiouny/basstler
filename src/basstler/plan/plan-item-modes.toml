@@ -15,7 +15,7 @@
 # question anyway. Asking first therefore buys a round trip on exactly the
 # items the gathered material already settles. Pin "ask" to be asked every
 # time:
-#   python3 -m basstler.plan.item_mode set --skill kickoff --mode ask
+#   "${BASSTLER_PYTHON}" -m basstler.plan.item_mode set --skill kickoff --mode ask
 
 kickoff_mode = "auto"
 resolve_mode = "auto"

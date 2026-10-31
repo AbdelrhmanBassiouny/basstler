@@ -16,12 +16,18 @@ set -uo pipefail
 #   STUB_PIP_STATUS      - exit status to report, default 0; anything else
 #                          installs nothing
 #   STUB_PIP_INSTALLED_UV - the script an installed uv runs
+#   STUB_PIP_WATCHED_FILE - a file whose content, as it is while the stub
+#                          runs, is copied to STUB_PIP_WATCHED_FILE_COPY
 #
 # Exits 64 on an unrecognized invocation for the same reason gh.sh does: a
 # changed call must fail a test rather than pass by accident.
 
 if [ -n "${STUB_PIP_CALL_LOG:-}" ]; then
   printf '%s\n' "$*" >> "${STUB_PIP_CALL_LOG}"
+fi
+
+if [ -n "${STUB_PIP_WATCHED_FILE:-}" ]; then
+  cat "${STUB_PIP_WATCHED_FILE}" > "${STUB_PIP_WATCHED_FILE_COPY}" 2>/dev/null
 fi
 
 STATUS="${STUB_PIP_STATUS:-0}"

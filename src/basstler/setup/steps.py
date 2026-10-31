@@ -20,9 +20,9 @@ script can do once the user has asked for it - everything but switching a fork's
 Actions on, which is printed here.
 
 Usage:
-    python3 -m basstler.setup.steps
-    python3 -m basstler.setup.steps configure-upstream --repository <owner>/<name>
-    python3 -m basstler.setup.steps install-upstream-reviews-action --branch-or-tag <branch or tag>
+    "${BASSTLER_PYTHON}" -m basstler.setup.steps
+    "${BASSTLER_PYTHON}" -m basstler.setup.steps configure-upstream --repository <owner>/<name>
+    "${BASSTLER_PYTHON}" -m basstler.setup.steps install-upstream-reviews-action --branch-or-tag <branch or tag>
 """
 
 from __future__ import annotations
@@ -47,7 +47,10 @@ from basstler.locations import ClaudeCodeVariable, PluginLocation, ProjectLocati
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
 from basstler.plugin_root import PluginRoot
 from basstler.repository import Repository
-from basstler.shell_configuration import ShellConfigurationFunction
+from basstler.shell_configuration import (
+    FetchedBranchReference,
+    ShellConfigurationFunction,
+)
 from basstler.stack.configuration import StackSetting
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.action.branch import (
@@ -657,7 +660,9 @@ class PersonalUpstream:
             [
                 "git",
                 "show",
-                f"FETCH_HEAD:{ProjectLocation.PERSONAL_STACK_CONFIGURATION}",
+                FetchedBranchReference.PERSONAL_NOTES.file_at(
+                    ProjectLocation.PERSONAL_STACK_CONFIGURATION
+                ),
             ],
             cwd=project_root,
             capture_output=True,

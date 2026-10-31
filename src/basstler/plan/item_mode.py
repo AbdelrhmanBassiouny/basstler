@@ -25,8 +25,8 @@ depart from the setting without changing it. What each mode obliges a skill to d
 force.
 
 Usage:
-    python3 -m basstler.plan.item_mode resolve --skill <kickoff|resolve> [--requested <mode>]
-    python3 -m basstler.plan.item_mode set --skill <kickoff|resolve> [--skill ...] --mode <mode>
+    "${BASSTLER_PYTHON}" -m basstler.plan.item_mode resolve --skill <kickoff|resolve> [--requested <mode>]
+    "${BASSTLER_PYTHON}" -m basstler.plan.item_mode set --skill <kickoff|resolve> [--skill ...] --mode <mode>
 
 Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller acting on
 the document never has to decode an integer back into a meaning.
@@ -73,7 +73,10 @@ from basstler.locations import (
     ProjectLocation,
 )
 from basstler.plugin_root import PluginRoot
-from basstler.shell_configuration import ShellConfigurationFunction
+from basstler.shell_configuration import (
+    FetchedBranchReference,
+    ShellConfigurationFunction,
+)
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -411,7 +414,13 @@ def personal_settings(project_root: Path) -> dict[str, Any]:
     if not fetch_notes_branch(project_root):
         return {}
     shown = subprocess.run(
-        ["git", "show", f"FETCH_HEAD:{ProjectLocation.PERSONAL_PLAN_ITEM_MODES}"],
+        [
+            "git",
+            "show",
+            FetchedBranchReference.PERSONAL_NOTES.file_at(
+                ProjectLocation.PERSONAL_PLAN_ITEM_MODES
+            ),
+        ],
         cwd=project_root,
         capture_output=True,
         text=True,
@@ -428,7 +437,7 @@ def personal_settings(project_root: Path) -> dict[str, Any]:
 
 def fetch_notes_branch(project_root: Path) -> bool:
     """
-    Fetch the personal-notes branch, leaving ``FETCH_HEAD`` pointing at it.
+    Fetch the personal-notes branch into :attr:`FetchedBranchReference.PERSONAL_NOTES`.
 
     Sources the shell configuration and calls its own fetch function rather than
     re-deriving the remote and branch precedence, so this and the hook scripts can never

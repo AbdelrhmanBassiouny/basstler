@@ -25,6 +25,7 @@ import pytest
 from basstler.locations import BasstlerVariable, PluginLocation, ProjectLocation
 from basstler.repository import Repository
 from basstler.shell_configuration import ShellConfigurationFunction
+from basstler.upstream_reviews.action.branch import InstallationState
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
 
@@ -73,6 +74,16 @@ class StubVariable(StrEnum):
     PIP_INSTALLED_UV = "STUB_PIP_INSTALLED_UV"
     """
     The script a ``uv`` installed by the ``pip`` stub runs.
+    """
+
+    PIP_WATCHED_FILE = "STUB_PIP_WATCHED_FILE"
+    """
+    A file the ``pip`` stub copies, as it is while the stub runs.
+    """
+
+    PIP_WATCHED_FILE_COPY = "STUB_PIP_WATCHED_FILE_COPY"
+    """
+    Where the ``pip`` stub copies :attr:`PIP_WATCHED_FILE` to.
     """
 
     UV_CALL_LOG = "STUB_UV_CALL_LOG"
@@ -718,6 +729,40 @@ def test_installs_the_package_with_pip_when_a_requirement_is_missing(
     assert call_log.read_text().splitlines() == [
         pip_installer_call(session_start_repository)
     ]
+
+
+def test_marks_the_install_in_progress_only_while_it_runs(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    A setup check run during the install reads the marker to say "wait" rather than
+    "missing", so it is there while the installer runs and gone once it returns.
+    """
+    require_the_uninstallable(session_start_repository)
+    stub_bin.install(PackageManager.PIP)
+    marker = Path(
+        session_start_repository.configuration_value(
+            ConfigurationVariable.INSTALL_MARKER
+        )
+    )
+    marker_during_install = tmp_path / "marker-during-install"
+
+    result = publish_and_run(
+        session_start_repository,
+        environment={
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+            StubVariable.PIP_WATCHED_FILE: str(marker),
+            StubVariable.PIP_WATCHED_FILE_COPY: str(marker_during_install),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert marker_during_install.read_text().strip().isdigit()
+    assert not marker.exists()
 
 
 def test_installs_the_package_with_uv_where_there_is_one(
@@ -1438,6 +1483,79 @@ def test_links_a_tracked_branch_to_its_plan_on_the_site(
     site_line = summary_value(result.stdout, SummaryLine.PLAN_SITE)
     assert site_line.startswith(SITE_URL)
     assert site_line.endswith(f"/{PLAN_IDENTIFIER}/")
+
+
+# %% the upstream-reviews Action line
+
+
+def run_action_module(repository: ScratchRepository, *arguments: str) -> str:
+    """
+    Run the upstream-reviews Action module against the scratch notes remote, the fork.
+
+    :param repository: A fixture-built scratch repository.
+    :param arguments: The command and its arguments.
+    :return: What it printed.
+    """
+    return repository.configuration_output(
+        '"${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" '
+        '--remote "${NOTES_REMOTE}" ' + " ".join(arguments)
+    ).strip()
+
+
+def session_release(repository: ScratchRepository) -> str:
+    """
+    :param repository: A fixture-built scratch repository.
+    :return: The basstler branch or tag the session's package is installed at.
+    """
+    return repository.configuration_output(
+        ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG
+    ).strip()
+
+
+def test_brings_an_action_at_another_release_to_the_session_s_release(
+    session_start_repository: ScratchRepository,
+):
+    """
+    Every release would otherwise leave the fork's Action stale until somebody ran the
+    setup step again.
+    """
+    run_action_module(session_start_repository, "install", "--branch-or-tag", "v0.0.1")
+    release = session_release(session_start_repository)
+
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        run_action_module(
+            session_start_repository, "status", "--branch-or-tag", release
+        )
+        == f"{InstallationState.CURRENT} {release}"
+    )
+    assert summary_value(
+        result.stdout, SummaryLine.UPSTREAM_REVIEWS_ACTION
+    ) == summary_message(SummaryMessage.ACTION_UPDATED, "v0.0.1", release)
+
+
+def test_installs_no_action_on_a_fork_that_has_none(
+    session_start_repository: ScratchRepository,
+):
+    """
+    Installing the Action is setup's decision; a session start only keeps one current.
+    """
+    release = session_release(session_start_repository)
+
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        run_action_module(
+            session_start_repository, "status", "--branch-or-tag", release
+        )
+        == InstallationState.MISSING
+    )
+    assert summary_value(
+        result.stdout, SummaryLine.UPSTREAM_REVIEWS_ACTION
+    ) == summary_message(SummaryMessage.ACTION_NOT_INSTALLED)
 
 
 # %% every message renders

@@ -15,7 +15,7 @@ from basstler.stack.model import (
     Stack,
 )
 
-from basstler.locations import PackageLocation
+from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.board import PullRequestField
 from basstler.maintenance.commands import (
     MaintenanceCommand,
@@ -279,7 +279,7 @@ class AlreadyResolvedPass(MaintenancePass):
         return cls(
             configuration=make_configuration(),
             git=checkout.git,
-            board=checkout.project_root / PackageLocation.BOARD.value.name,
+            board=checkout.project_root / RepositoryStateLocation.BOARD.name,
             resolved_stack=a_stack(checkout, pull_requests),
         )
 

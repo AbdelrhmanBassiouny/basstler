@@ -29,11 +29,10 @@ source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 ```
 
 Pass `fork=` / `upstream=` arguments straight through. Never inspect or guess at remotes yourself.
-`configuration` adds a missing upstream remote itself.
 
 | exit | what you do |
 |---|---|
-| 0 | use it; if it still printed `upstream_setup_command`, adding the remote failed: run that and re-run |
+| 0 | use it - the pass reaches the upstream through `upstream_location`, a remote's name or a URL, so never add a remote for it |
 | 4 | ask which repository is the fork (options from `git remote -v`), write `fork_repository = "<owner/repo>"` to a file and save it with `"${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" --source <file> --destination .claude/personal/stack.toml --message "record which repository is my fork"`, re-run |
 | 11 | ask for the upstream, save it with `"${BASSTLER_PYTHON}" -m basstler.setup.steps configure-upstream --repository <owner/repo>`, re-run |
 | other | stop and report |
@@ -93,7 +92,8 @@ Do not re-derive its output, look up titles, or run the individual commands as w
 | `branch-needs-attention` | relay every branch it names |
 
 - `reparents` left in the report are made by step 1 of the next pass.
-- A `restacked` entry other than `pushed` or `up-to-date` is already labelled and commented; name it.
+- A `restacked` entry other than `pushed`, `up-to-date` or `blocked-by-ancestor` is already labelled and commented; name it.
+- `blocked-by-ancestor` names the branch below it that was left unpublished; it clears once that branch does.
 - A `skipped` entry is not yours to fix; list it with its `reason`.
 - `integration-failed` is the pass's own environment, not the branch owner's: report it as yours and
   never label the branch for it.

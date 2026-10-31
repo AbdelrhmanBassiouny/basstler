@@ -199,26 +199,6 @@ def test_a_named_fork_and_upstream_are_used_where_inference_would_have_refused(
     )
 
 
-def test_a_checkout_with_no_upstream_remote_gets_one_added(
-    offline_checkout: ScratchRepository,
-):
-    """
-    A fresh clone has only its fork as a remote; the configuration adds the upstream's
-    rather than handing the caller a command to run.
-    """
-    offline_checkout.add_remote(RemoteName.MINE, StackRepository.FORK.value.clone_url)
-
-    result = run_stack(offline_checkout, Command.CONFIGURATION)
-
-    assert result.returncode == StackExitCode.SUCCESS
-    printed = PrintedConfiguration.read(result.stdout)
-    assert StackSetting.UPSTREAM_SETUP_COMMAND not in printed
-    added = offline_checkout.run_git(
-        "remote", "get-url", printed[StackSetting.UPSTREAM_REMOTE]
-    )
-    assert added.stdout.strip() == StackRepository.UPSTREAM.value.clone_url
-
-
 def test_a_fork_that_is_not_owner_and_name_is_a_usage_error(
     offline_checkout: ScratchRepository,
 ):

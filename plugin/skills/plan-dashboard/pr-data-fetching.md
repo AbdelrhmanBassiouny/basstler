@@ -4,8 +4,26 @@ The canonical procedure for gathering the `pr_data.json` shape
 `dashboard/plan_page.py`, `plan/sync_manifest_status.py`, and
 `plan/check_dependency_readiness.py` all consume - referenced by
 `plan-dashboard/SKILL.md` step 2 and `dependency-readiness.md` instead of
-each restating it. See any of those three scripts' own `--help` / module
-docstring for the exact JSON shape expected.
+each restating it.
+
+## Shape
+
+The top level is keyed by repository as `"<owner>/<repo>"`, and each repository by
+pull request number as a string - never by number alone, even for a plan tracking a
+single repository:
+
+```json
+{
+  "example-org/notification-service": {
+    "101": {"state": "closed", "draft": false, "merged_at": "2026-01-10T12:00:00+00:00", "labels": [], "body": null},
+    "102": {"state": "open", "draft": true, "merged_at": null, "labels": ["bug"], "body": null}
+  }
+}
+```
+
+A file of another shape - `{"488": {...}}` with the repository level left out - is
+refused with `MalformedPullRequestDataError`. [`example/pr_data.json`](example/pr_data.json)
+is a complete file.
 
 Source the shared config script first if you haven't already this session -
 it defines the tool-name constants referenced below:
