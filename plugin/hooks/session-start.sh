@@ -7,7 +7,8 @@ set -euo pipefail
 # progress, and this branch's plan item with the plan's standing rules. Also
 # syncs personal settings and git identity, keeps the package environment
 # installed, stamps the plan state SHA for plan-updates-since.sh, fast-forwards
-# the default branch to the upstream (see basstler.maintenance.default_branch_sync), and
+# the default branch to the upstream (see basstler.maintenance.default_branch_sync),
+# brings the fork's upstream-reviews Action to this session's release, and
 # prints a summary of what it did. Never fails the session on a setup gap.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -21,9 +22,7 @@ fi
 
 fetch_personal_notes_branch || exit 0
 
-# Reads below use FETCH_HEAD, which also works for a URL-form remote.
-
-# The summary reports the stamp rather than FETCH_HEAD: later steps fetch too.
+# Reads below use PERSONAL_NOTES_REFERENCE, which later fetches leave alone.
 record_plan_state_sync_stamp
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -74,7 +73,7 @@ ensure_basstler_environment() {
 
 ensure_basstler_environment
 
-if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
+if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" 2>/dev/null; then
   cat <<HEADER >> "${OUTPUT_FILE}"
 <!--
 Personal notes, synced from '${NOTES_BRANCH}' (${NOTES_PATH}) on remote
@@ -88,7 +87,7 @@ ever saved.
 -->
 <!-- BEGIN-PERSONAL-NOTES -->
 HEADER
-  git show "FETCH_HEAD:${NOTES_PATH}" >> "${OUTPUT_FILE}"
+  git show "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" >> "${OUTPUT_FILE}"
   echo "<!-- END-PERSONAL-NOTES -->" >> "${OUTPUT_FILE}"
   WROTE_ANYTHING=1
   SUMMARY_NOTES="loaded from '${NOTES_BRANCH}' (${NOTES_PATH}) on '${ACTIVE_NOTES_REMOTE}'"
@@ -108,8 +107,8 @@ ${PLAN_SIZE_LIMITS_MODULE}. Edit between the markers, then run
 -->
 <!-- BEGIN-PR-PROGRESS -->
 PROGRESS_HEADER
-  if git cat-file -e "FETCH_HEAD:${PROGRESS_PATH}" 2>/dev/null; then
-    git show "FETCH_HEAD:${PROGRESS_PATH}" >> "${OUTPUT_FILE}"
+  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PROGRESS_PATH}" 2>/dev/null; then
+    git show "${PERSONAL_NOTES_REFERENCE}:${PROGRESS_PATH}" >> "${OUTPUT_FILE}"
     SUMMARY_PROGRESS="loaded for branch '${CURRENT_BRANCH}' (${PROGRESS_PATH})"
   else
     cat <<'SCAFFOLD' >> "${OUTPUT_FILE}"
@@ -138,23 +137,24 @@ else
   PLAN_ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
   # Replaced below unless the indexed manifest is missing.
   SUMMARY_PLAN="$(plan_line_manifest_missing "${PLAN_ID}" "${PLAN_MANIFEST_PATH}" "${NOTES_BRANCH}")"
-  if git cat-file -e "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
+  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
     [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
     # `|| true`: a plan without tracking_issue must not kill the hook.
-    TRACKING_ISSUE="$(git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null \
+    TRACKING_ISSUE="$(git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}" 2>/dev/null \
       | grep -oE '^tracking_issue:[[:space:]]*[0-9]+' | head -1 \
       | grep -oE '[0-9]+$' || true)"
     if [ -n "${TRACKING_ISSUE}" ]; then
       TRACKING_ISSUE_NOTE="Structural changes (a wave, a deferral, a split, a reprioritization) are
 the user's call: ask first, then edit the manifest and comment on tracking
-issue #${TRACKING_ISSUE}. While working an item of this plan, subscribe to that issue."
+issue #${TRACKING_ISSUE}. While working an item of this plan, read that issue's
+comments before each push - an issue cannot be subscribed to."
     else
       TRACKING_ISSUE_NOTE="This plan has no tracking_issue set, so there is no coordination
 mailbox for structural changes yet - edit the manifest directly as usual."
     fi
     # Load only this branch's item; the rest costs context every turn.
     MANIFEST_COPY="$(mktemp)"
-    git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" > "${MANIFEST_COPY}"
+    git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}" > "${MANIFEST_COPY}"
     if ! PLAN_ITEM="$("${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" item \
         "${MANIFEST_COPY}" --branch "${CURRENT_BRANCH}" 2>&1)"; then
       PLAN_ITEM="(could not read this branch's item: ${PLAN_ITEM})"
@@ -167,7 +167,7 @@ This branch's item in plan '${PLAN_ID}', read from '${NOTES_BRANCH}'
 session-start.sh, followed by the plan's standing rules (${PLAN_ROADMAP_PATH}).
 Read-only: editing it here changes nothing. To read another item, run
   "\${BASSTLER_PYTHON}" -m ${PLAN_MANIFEST_TOOLS_MODULE} item <manifest-file> --id <item-id>
-on a copy from 'git show FETCH_HEAD:${PLAN_MANIFEST_PATH}' after fetching
+on a copy from 'git show ${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}' after fetching
 '${NOTES_BRANCH}' - never read the whole manifest when one item will do.
 To change the plan, record the item with basstler.plan.item_bootstrap's 'record', or
 fetch both files fresh, edit them, and run
@@ -182,9 +182,9 @@ ${TRACKING_ISSUE_NOTE}
 ${PLAN_ITEM}
 <!-- END-PLAN-ITEM -->
 PLAN_HEADER
-    if git cat-file -e "FETCH_HEAD:${PLAN_ROADMAP_PATH}" 2>/dev/null; then
+    if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_ROADMAP_PATH}" 2>/dev/null; then
       printf '\n' >> "${OUTPUT_FILE}"
-      git show "FETCH_HEAD:${PLAN_ROADMAP_PATH}" >> "${OUTPUT_FILE}"
+      git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_ROADMAP_PATH}" >> "${OUTPUT_FILE}"
     fi
     WROTE_ANYTHING=1
     SUMMARY_PLAN="$(plan_line_tracked "${PLAN_ID}" "${TRACKING_ISSUE:-none}")"
@@ -231,12 +231,12 @@ fi
 
 # Personal settings, copied to .claude/settings.local.json unless edited locally.
 SUMMARY_SETTINGS="none on '${NOTES_BRANCH}' (${PERSONAL_SETTINGS_PATH})"
-if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
+if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
   if personal_settings_are_locally_modified; then
     SUMMARY_SETTINGS="kept local edits to ${LOCAL_SETTINGS_RELATIVE_PATH} - run save-personal-settings.sh to push them"
   else
     mkdir -p "$(dirname "${LOCAL_SETTINGS_JSON}")"
-    git show "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" > "${LOCAL_SETTINGS_JSON}"
+    git show "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_SETTINGS_PATH}" > "${LOCAL_SETTINGS_JSON}"
     record_personal_settings_sync
     SUMMARY_SETTINGS="synced to ${LOCAL_SETTINGS_RELATIVE_PATH}"
   fi
@@ -249,6 +249,34 @@ SUMMARY_DEFAULT_BRANCH="$(default_branch_line_not_synced "${DEFAULT_BRANCH_SYNC_
 if DEFAULT_BRANCH_REPORT="$("${BASSTLER_PYTHON}" -m "${DEFAULT_BRANCH_SYNC_MODULE}" \
     2>/dev/null)"; then
   SUMMARY_DEFAULT_BRANCH="${DEFAULT_BRANCH_REPORT}"
+fi
+
+# The fork's upstream-reviews Action, kept at the release this session runs:
+# the run and the session replaying it must run the same package, so every
+# release would otherwise leave it stale. Only a branch already there is
+# touched - installing one is setup's decision. Never fatal.
+SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_not_read "${NOTES_REMOTE}")"
+SESSION_RELEASE="$(basstler_branch_or_tag)"
+if ACTION_STATE="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+    --remote "${NOTES_REMOTE}" status --branch-or-tag "${SESSION_RELEASE}" 2>/dev/null)"; then
+  case "${ACTION_STATE}" in
+    missing*)
+      SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_not_installed)" ;;
+    current*)
+      SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_current \
+        "${SESSION_RELEASE}")" ;;
+    stale*)
+      if "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+          --remote "${NOTES_REMOTE}" install --branch-or-tag "${SESSION_RELEASE}" \
+          > /dev/null 2>&1; then
+        SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_updated \
+          "${ACTION_STATE#stale }" "${SESSION_RELEASE}")"
+      else
+        SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_update_failed \
+          "${ACTION_STATE#stale }" "${SESSION_RELEASE}" \
+          "${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --branch-or-tag ${SESSION_RELEASE}")"
+      fi ;;
+  esac
 fi
 
 # Setup verdict from check-setup.sh, run last so it sees what this run wrote.
@@ -275,6 +303,7 @@ session-start.sh summary:
   default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   dependencies:    ${SUMMARY_DEPENDENCIES}
+  reviews Action:  ${SUMMARY_UPSTREAM_REVIEWS_ACTION}
   setup:           ${SUMMARY_SETUP}
   plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY

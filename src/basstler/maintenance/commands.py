@@ -18,7 +18,7 @@ from pathlib import Path
 from basstler.exit_codes import StackExitCode
 from basstler.class_property import classproperty
 from basstler.command_line import Command
-from basstler.locations import PackageLocation, ScratchLocation
+from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.board import BoardExport, UpstreamPullRequests
 from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
@@ -66,15 +66,17 @@ class MaintenancePass:
     The runner every git command goes through.
     """
 
-    board: Path = PackageLocation.BOARD.value
+    board: Path
     """
     The exported board this run writes, derives its stack from and discards at its end.
     """
 
-    full_report: Path = ScratchLocation.MAINTENANCE_REPORT.value
-    """
-    Where a whole pass writes everything it did.
-    """
+    @property
+    def full_report(self) -> Path:
+        """
+        Where a whole pass writes everything it did, beside :attr:`board`.
+        """
+        return self.board.with_name(RepositoryStateLocation.MAINTENANCE_REPORT.name)
 
     def fork(self) -> GitHubRepository:
         """:return: The fork, as this run's credential can read and write it."""

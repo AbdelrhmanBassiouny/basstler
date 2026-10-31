@@ -3,6 +3,7 @@ Tests for :mod:`basstler.pull_request_state`: reading ``pr_data.json`` and class
 pull request's live state.
 """
 
+import json
 from datetime import datetime
 
 import pytest
@@ -22,6 +23,7 @@ from basstler.maintenance.description import (
 )
 from basstler.repository import Repository
 
+from .constants.paths import DatasetLocation
 from .constants.stack import StackLabel
 
 
@@ -180,3 +182,17 @@ def test_pull_request_data_parsing_reports_repository_and_number_for_a_closed_en
         PullRequestRecord.parse_by_repository(
             {"owner/repo": {"103": {"state": "closed", "draft": False}}}
         )
+
+
+def test_pull_request_data_parsing_rejects_data_without_its_repository_level():
+    with pytest.raises(MalformedPullRequestDataError):
+        PullRequestRecord.parse_by_repository(
+            json.loads(
+                DatasetLocation.PULL_REQUEST_DATA_KEYED_BY_NUMBER.value.read_text()
+            )
+        )
+
+
+def test_pull_request_data_parsing_rejects_an_entry_that_is_not_a_mapping():
+    with pytest.raises(MalformedPullRequestDataError, match="owner/repo#1"):
+        PullRequestRecord.parse_by_repository({"owner/repo": {"1": "open"}})

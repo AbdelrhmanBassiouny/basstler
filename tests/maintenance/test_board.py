@@ -6,7 +6,6 @@ except for the one git call.
 from __future__ import annotations
 
 import argparse
-import subprocess
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
 from http import HTTPStatus
@@ -17,7 +16,7 @@ import pytest
 from basstler.repository import Repository
 from basstler.stack.model import PullRequest
 
-from basstler.locations import PackageLocation
+from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.board import (
     MissingPullRequestFieldError,
     PullRequestField,
@@ -25,7 +24,7 @@ from basstler.maintenance.board import (
 )
 from basstler.upstream_reviews.vocabulary import RollupState
 from basstler.maintenance.commands import BoardCommand, MaintenancePass
-from basstler.maintenance.git_commands import GitCommandFailed
+from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
 from basstler.maintenance.github import GitHubRequestFailed, PullRequestReader
 from basstler.maintenance.description import (
     PullRequestDescription,
@@ -128,7 +127,7 @@ def test_the_written_board_parses_back_into_the_records_it_was_built_from(
             ),
         ]
     )
-    destination = tmp_path / PackageLocation.BOARD.name
+    destination = tmp_path / RepositoryStateLocation.BOARD.name
 
     export.write(destination)
 
@@ -186,29 +185,48 @@ def test_a_head_that_does_not_say_where_it_lives_is_rejected():
     assert raised.value.pull_request_number == StackPullRequestNumber.CHILD
 
 
-def test_the_board_snapshot_is_never_committable():
+def test_every_worktree_of_a_repository_shares_one_board_outside_its_work_trees(
+    fork_checkout: ForkCheckout, tmp_path: Path
+):
     """
-    ``board --write`` writes into the working tree, so nothing but ``.gitignore`` stands
-    between a pass and a committed snapshot of a stack that has since moved.
+    ``board --write`` from one worktree and ``check-move`` from another read one file,
+    which no checkout can commit and no install of the package holds.
     """
-    ignored = subprocess.run(
-        ["git", "check-ignore", "--quiet", str(PackageLocation.BOARD)],
-        cwd=PackageLocation.DIRECTORY.value,
-        capture_output=True,
+    worktree = tmp_path / "another-worktree"
+    fork_checkout.git.run("worktree", "add", "--quiet", "--detach", str(worktree))
+
+    from_the_checkout = fork_checkout.git.repository_state_path(
+        RepositoryStateLocation.BOARD
+    )
+    from_the_worktree = GitCommandRunner(worktree).repository_state_path(
+        RepositoryStateLocation.BOARD
     )
 
-    assert ignored.returncode == 0
+    assert from_the_checkout == fork_checkout.project_root / ".git" / (
+        RepositoryStateLocation.BOARD
+    )
+    assert from_the_worktree == from_the_checkout
 
 
-def test_the_export_reads_the_title_and_the_recorded_promotion_link():
-    body = PullRequestDescription(PromotionSampleText.PROSE).with_promotion_link(
+def test_the_export_reads_the_title():
+    export = an_export([an_api_record(title=PromotionSampleText.TITLE)])
+
+    assert export.pull_requests[0].title == PromotionSampleText.TITLE
+
+
+def test_the_export_carries_the_description_without_the_sections_a_pass_writes():
+    promoted = PullRequestDescription(PromotionSampleText.PROSE).with_promotion_link(
         PromotionSampleText.FIRST_LINK
     )
-    export = an_export([an_api_record(body=body, title=PromotionSampleText.TITLE)])
+    body = PullRequestDescription(promoted).with_upstream_link(
+        UpstreamPullRequestLink(
+            make_configuration().upstream_repository, StackPullRequestNumber.UPSTREAM
+        )
+    )
 
-    exported = export.pull_requests[0]
-    assert exported.title == PromotionSampleText.TITLE
-    assert exported.promotion_link == PromotionSampleText.FIRST_LINK
+    export = an_export([an_api_record(body=body)])
+
+    assert export.pull_requests[0].description == PromotionSampleText.PROSE
 
 
 def test_the_export_reads_the_linked_upstream_pull_request():
@@ -381,7 +399,7 @@ def a_pass_over(
     return PassOverListedRepositories(
         configuration=make_configuration(),
         git=fork_checkout.git,
-        board=fork_checkout.project_root / PackageLocation.BOARD.value.name,
+        board=fork_checkout.project_root / RepositoryStateLocation.BOARD.name,
         listed_fork=ListedRepository(
             {HeadCommit.CHECKED: RollupState.FAILURE},
             records=(

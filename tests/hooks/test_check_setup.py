@@ -7,6 +7,8 @@ personal-notes remote - no network access or real personal-notes branch involved
 
 from __future__ import annotations
 
+import os
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -15,6 +17,7 @@ from basstler.locations import PluginLocation, ProjectLocation
 from basstler.exit_codes import SetupCheckExitCode
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 
+from ..constants.environment import ConfigurationVariable
 from ..constants.notes import ScratchBranch
 from ..constants.paths import DatasetLocation, PersonalNotesPath
 from ..project_declaration import ProjectDeclaration
@@ -339,6 +342,70 @@ def test_reports_a_declaration_it_cannot_read_rather_than_nothing_missing(
         report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
         == CheckStatus.NEEDS_SETUP
     )
+
+
+def mark_an_install_in_progress(repository: ScratchRepository, process_id: int) -> None:
+    """
+    Leave the marker a session start writes while it installs the package.
+
+    :param repository: A fixture-built scratch repository.
+    :param process_id: The process the marker names as the installer.
+    """
+    marker = Path(repository.configuration_value(ConfigurationVariable.INSTALL_MARKER))
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text(f"{process_id}\n")
+
+
+def test_reports_dependencies_a_session_start_is_installing_as_in_progress(
+    check_setup_repository: ScratchRepository,
+):
+    mark_an_install_in_progress(check_setup_repository, os.getpid())
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+    assert (
+        report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
+        == CheckStatus.IN_PROGRESS
+    )
+
+
+def test_a_marker_left_by_an_install_that_ended_is_not_in_progress(
+    check_setup_repository: ScratchRepository,
+):
+    finished = subprocess.Popen(["true"])
+    finished.wait()
+    mark_an_install_in_progress(check_setup_repository, finished.pid)
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status == CheckStatus.OK
+
+
+def test_waiting_for_an_install_still_running_gives_up_after_its_timeout(
+    check_setup_repository: ScratchRepository,
+):
+    mark_an_install_in_progress(check_setup_repository, os.getpid())
+
+    status = check_setup_repository.configuration_output(
+        "wait_for_basstler_install 0; printf '%s' \"$?\""
+    )
+
+    assert status == "1"
+
+
+def test_waiting_for_an_install_that_ended_returns_at_once(
+    check_setup_repository: ScratchRepository,
+):
+    finished = subprocess.Popen(["true"])
+    finished.wait()
+    mark_an_install_in_progress(check_setup_repository, finished.pid)
+
+    status = check_setup_repository.configuration_output(
+        "wait_for_basstler_install 0; printf '%s' \"$?\""
+    )
+
+    assert status == "0"
 
 
 # %% the outcome of it all working

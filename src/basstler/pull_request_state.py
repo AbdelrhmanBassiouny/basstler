@@ -20,6 +20,7 @@ from basstler.github_labels import GitHubLabel
 from basstler.maintenance.board import PullRequestField
 from basstler.maintenance.board import PullRequestRecord as PullRequestAPIRecord
 from basstler.maintenance.description import PullRequestDescription
+from basstler.repository import Repository
 
 
 # %% classified state
@@ -245,15 +246,29 @@ class PullRequestRecord:
         :param raw_pull_request_data: The parsed JSON, keyed by ``"owner/repo"``
             then by pull request number as a string - see the module docstring for the
             exact shape.
-        :raises MalformedPullRequestDataError: If any entry can't be parsed into
-            a :class:`PullRequestRecord`.
+        :raises MalformedPullRequestDataError: If the data is not keyed by repository
+            then by number, or any entry can't be parsed into a
+            :class:`PullRequestRecord`.
         :return: The same structure, with each leaf mapping parsed into a
             :class:`PullRequestRecord`.
         """
         pull_requests_by_repository: PullRequestsByRepository = {}
         for repository, pull_requests in raw_pull_request_data.items():
+            if not Repository.is_full_name(repository) or not isinstance(
+                pull_requests, dict
+            ):
+                raise MalformedPullRequestDataError(
+                    f"top-level key {repository!r} does not map an 'owner/repo' to its "
+                    'pull requests: pr_data.json is {"<owner>/<repo>": '
+                    '{"<pr_number>": {...}}}'
+                )
             pull_requests_by_repository[repository] = {}
             for pull_request_number, record in pull_requests.items():
+                if not isinstance(record, dict):
+                    raise MalformedPullRequestDataError(
+                        f"{repository}#{pull_request_number}: expected the pull "
+                        f"request's fields, got {record!r}"
+                    )
                 try:
                     pull_requests_by_repository[repository][pull_request_number] = (
                         PullRequestRecord.from_mapping(record)

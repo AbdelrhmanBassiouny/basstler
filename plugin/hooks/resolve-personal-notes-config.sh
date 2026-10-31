@@ -96,6 +96,20 @@ current_branch_upstream_remote() {
   printf '%s\n' "${upstream%%/*}"
 }
 
+# PERSONAL_NOTES_REFERENCE: where the fetched branch is kept, and the one place
+# every reader of the notes branch reads from. Never FETCH_HEAD, which every
+# other fetch - by this script, a module, or a concurrent session start -
+# overwrites, and never "<remote>/<branch>", which a URL-form remote does not
+# create. Equal to basstler.shell_configuration.FetchedBranchReference.
+PERSONAL_NOTES_REFERENCE="refs/basstler/personal-notes"
+
+# fetch_personal_notes_branch_from: fetches NOTES_BRANCH from the remote $1 into
+# PERSONAL_NOTES_REFERENCE, leaving FETCH_HEAD to whoever else fetches.
+fetch_personal_notes_branch_from() {
+  git fetch --quiet --no-write-fetch-head "$1" \
+    "+refs/heads/${NOTES_BRANCH}:${PERSONAL_NOTES_REFERENCE}" 2>/dev/null
+}
+
 # fetch_personal_notes_branch: fetches NOTES_BRANCH from NOTES_REMOTE. If that
 # fails (remote unreachable, or the branch just isn't there), falls back once
 # to the current branch's own upstream remote (current_branch_upstream_remote
@@ -105,9 +119,8 @@ current_branch_upstream_remote() {
 # requiring NOTES_REMOTE to be configured explicitly for it.
 #
 # On success: sets ACTIVE_NOTES_REMOTE to whichever remote actually served
-# the branch (NOTES_REMOTE or the upstream fallback), leaves the fetched
-# commit in FETCH_HEAD (see the note on FETCH_HEAD vs. "<remote>/<branch>"
-# refs in session-start.sh), and returns 0.
+# the branch (NOTES_REMOTE or the upstream fallback), keeps the fetched commit
+# at PERSONAL_NOTES_REFERENCE, and returns 0.
 # On failure: sets ATTEMPTED_NOTES_REMOTES to a human-readable, comma
 # separated list of every remote that was tried (for callers that want to
 # report it), and returns 1.
@@ -119,7 +132,7 @@ current_branch_upstream_remote() {
 # NOTES_REMOTE, so a save always lands on the same remote the notes came from.
 fetch_personal_notes_branch() {
   ATTEMPTED_NOTES_REMOTES="${NOTES_REMOTE}"
-  if git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet 2>/dev/null; then
+  if fetch_personal_notes_branch_from "${NOTES_REMOTE}"; then
     ACTIVE_NOTES_REMOTE="${NOTES_REMOTE}"
     return 0
   fi
@@ -128,7 +141,7 @@ fetch_personal_notes_branch() {
   upstream_remote="$(current_branch_upstream_remote)"
   if [ -n "${upstream_remote}" ] && [ "${upstream_remote}" != "${NOTES_REMOTE}" ]; then
     ATTEMPTED_NOTES_REMOTES="${ATTEMPTED_NOTES_REMOTES}, ${upstream_remote}"
-    if git fetch "${upstream_remote}" "${NOTES_BRANCH}" --quiet 2>/dev/null; then
+    if fetch_personal_notes_branch_from "${upstream_remote}"; then
       ACTIVE_NOTES_REMOTE="${upstream_remote}"
       return 0
     fi
@@ -163,8 +176,8 @@ default_branch_name() {
 }
 
 # pr_progress_path: prints the deterministic per-branch PR-progress file path
-# (.claude/personal/pr-progress/<branch>.md) for whichever branch is currently
-# checked out, and returns 0. Returns 1 (prints nothing) if there's no
+# (.claude/personal/pr-progress/<branch>.md) for the branch $1, or for whichever
+# branch is currently checked out when $1 is not given, and returns 0. Returns 1 (prints nothing) if there's no
 # sensible "current PR" to track progress for: detached HEAD, the repo's
 # default branch (see default_branch_name above), or the personal-notes
 # branch itself. The directory is a fixed convention, independent of
@@ -177,8 +190,8 @@ default_branch_name() {
 # path is computed, so it can never drift between reading and writing it.
 PR_PROGRESS_DIRECTORY=".claude/personal/pr-progress"
 pr_progress_path() {
-  local branch
-  branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
+  local branch="${1:-}"
+  [ -n "${branch}" ] || branch="$(git rev-parse --abbrev-ref HEAD 2>/dev/null)"
   case "${branch}" in
     HEAD|"$(default_branch_name)"|"${NOTES_BRANCH}"|"") return 1 ;;
   esac
@@ -236,21 +249,21 @@ repository_local_git_identity() {
 # recorded_git_identity_exists / recorded_git_identity: whether the notes branch
 # carries a git identity at all, and what it records. Caller must have already
 # fetched NOTES_BRANCH successfully (see fetch_personal_notes_branch) - these
-# read FETCH_HEAD directly rather than fetching again themselves.
+# read PERSONAL_NOTES_REFERENCE rather than fetching again themselves.
 #
 # Two functions rather than one for the same reason as plan_branch_index_exists
 # above: "nothing is recorded yet" and "what is recorded cannot be used" are
 # different answers needing different advice, and a single failing lookup
 # collapses them into one.
 recorded_git_identity_exists() {
-  git cat-file -e "FETCH_HEAD:${PERSONAL_GIT_IDENTITY_PATH}" 2>/dev/null
+  git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_GIT_IDENTITY_PATH}" 2>/dev/null
 }
 
 recorded_git_identity() {
   recorded_git_identity_exists || return 1
   local identity_file name email
   identity_file="$(mktemp)"
-  git show "FETCH_HEAD:${PERSONAL_GIT_IDENTITY_PATH}" > "${identity_file}"
+  git show "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_GIT_IDENTITY_PATH}" > "${identity_file}"
   name="$(git config --file "${identity_file}" --get user.name || true)"
   email="$(git config --file "${identity_file}" --get user.email || true)"
   rm -f "${identity_file}"
@@ -478,10 +491,10 @@ GITHUB_LIST_PULL_REQUESTS_TOOL="mcp__github__list_pull_requests"
 GITHUB_PULL_REQUEST_READ_TOOL="mcp__github__pull_request_read"
 
 # plan_id_for_branch: prints the plan id that tracks the given branch, per
-# PLAN_BRANCH_INDEX_PATH on FETCH_HEAD, and returns 0. Returns 1 (prints
+# PLAN_BRANCH_INDEX_PATH on PERSONAL_NOTES_REFERENCE, and returns 0. Returns 1 (prints
 # nothing) if the index doesn't exist yet, or the branch isn't in it. Caller
 # must have already fetched NOTES_BRANCH successfully (see
-# fetch_personal_notes_branch) - this reads FETCH_HEAD directly rather than
+# fetch_personal_notes_branch) - this reads PERSONAL_NOTES_REFERENCE rather than
 # fetching again itself, so session-start.sh and save-plan.sh each fetch
 # exactly once per run.
 #
@@ -498,8 +511,8 @@ GITHUB_PULL_REQUEST_READ_TOOL="mcp__github__pull_request_read"
 # branch belongs to a plan).
 plan_id_for_branch() {
   local branch="$1"
-  git cat-file -e "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null || return 1
-  git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
+  git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null || return 1
+  git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
     | awk -F'\t' -v branch="${branch}" '$1 == branch { print $2; exit }'
 }
 
@@ -509,7 +522,7 @@ plan_id_for_branch() {
 item_id_for_branch() {
   local plan_id="$1"
   local branch="$2"
-  git show "FETCH_HEAD:$(plan_manifest_path "${plan_id}")" 2>/dev/null \
+  git show "${PERSONAL_NOTES_REFERENCE}:$(plan_manifest_path "${plan_id}")" 2>/dev/null \
     | awk -v branch="${branch}" '
         $1 == "-" && $2 == "id:" { item = $3 }
         $1 == "branch:" && $2 == branch { print item; exit }'
@@ -518,8 +531,8 @@ item_id_for_branch() {
 # recorded_site_url: the plan site's address from the fetched hub file. Fails
 # when the notes branch has no hub file; prints nothing when it names no site.
 recorded_site_url() {
-  git cat-file -e "FETCH_HEAD:${PLAN_HUB_PATH}" 2>/dev/null || return 1
-  git show "FETCH_HEAD:${PLAN_HUB_PATH}" \
+  git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_HUB_PATH}" 2>/dev/null || return 1
+  git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_HUB_PATH}" \
     | awk '$1 == "site_url:" && $2 != "null" { print $2; exit }'
 }
 
@@ -555,7 +568,7 @@ branch_can_hold_plan_item() {
 }
 
 # plan_branch_index_exists / tracked_plan_count: whether any plan is tracked on
-# the notes branch at all, and how many distinct ones there are. Same FETCH_HEAD
+# the notes branch at all, and how many distinct ones there are. Same fetched-branch
 # precondition as plan_id_for_branch above.
 #
 # These exist so a caller can tell apart the two situations plan_id_for_branch
@@ -564,12 +577,12 @@ branch_can_hold_plan_item() {
 # and only these two functions know which is which, since the index path is
 # theirs alone to read.
 plan_branch_index_exists() {
-  git cat-file -e "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null
+  git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null
 }
 
 tracked_plan_count() {
   plan_branch_index_exists || { printf '0\n'; return 0; }
-  git show "FETCH_HEAD:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
+  git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_BRANCH_INDEX_PATH}" 2>/dev/null \
     | awk -F'\t' 'NF >= 2 { seen[$2] = 1 } END { print length(seen) }'
 }
 
@@ -583,6 +596,15 @@ BASSTLER_HOME="${BASSTLER_HOME:-${XDG_DATA_HOME:-${HOME}/.local/share}/basstler}
 # BASSTLER_ENVIRONMENT_DIRECTORY: the package's own virtual environment, which
 # session-start.sh creates where it is missing and installs the package into.
 BASSTLER_ENVIRONMENT_DIRECTORY="${BASSTLER_HOME}/venv"
+# BASSTLER_INSTALL_LOCK: a directory held while the package's environment is
+# created or installed into, holding the holder's process id, so a caller that
+# finds the package missing waits for an install already running - typically a
+# session start's - rather than racing it.
+BASSTLER_INSTALL_LOCK="${BASSTLER_HOME}/install.lock"
+# BASSTLER_INSTALL_MARKER: the process id of whoever holds BASSTLER_INSTALL_LOCK,
+# so a check run meanwhile can tell "being installed" from "missing" - see
+# basstler_install_in_progress.
+BASSTLER_INSTALL_MARKER="${BASSTLER_INSTALL_LOCK}/pid"
 # BASSTLER_INSTALLED_SOURCE_FILE: what the environment's package was last
 # installed from, so a plugin update - which names a new source - reinstalls it.
 BASSTLER_INSTALLED_SOURCE_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-source"
@@ -657,6 +679,27 @@ basstler_branch_or_tag() {
   fi
 }
 
+# basstler_install_in_progress: succeeds while a running process holds
+# BASSTLER_INSTALL_MARKER. A marker whose process has ended - a session start
+# that was killed - is not an install in progress.
+basstler_install_in_progress() {
+  [ -f "${BASSTLER_INSTALL_MARKER}" ] || return 1
+  kill -0 "$(cat "${BASSTLER_INSTALL_MARKER}")" 2>/dev/null
+}
+
+# wait_for_basstler_install: waits up to $1 seconds (300 by default) for an
+# install in progress to finish, then resolves BASSTLER_PYTHON again, since the
+# install may have created the environment. Fails if it is still running then.
+wait_for_basstler_install() {
+  local remaining="${1:-300}"
+  while basstler_install_in_progress; do
+    [ "${remaining}" -gt 0 ] || return 1
+    sleep 1
+    remaining=$((remaining - 1))
+  done
+  resolve_basstler_python
+}
+
 # resolve_basstler_python: sets BASSTLER_ENVIRONMENT_INTERPRETER, the package
 # environment's interpreter - Scripts/python.exe where the environment has one,
 # as on Windows, else bin/python - and BASSTLER_PYTHON, the interpreter every
@@ -709,11 +752,6 @@ missing_dependencies() {
   echo ${missing}
 }
 
-# BASSTLER_INSTALL_LOCK: a directory held while the package's environment is
-# created or installed into, holding the holder's process id, so a caller that
-# finds the package missing waits for an install already running - typically a
-# session start's - rather than racing it.
-BASSTLER_INSTALL_LOCK="${BASSTLER_HOME}/install.lock"
 # BASSTLER_INSTALL_WAIT_SECONDS: how long to wait for an install another live
 # process holds the lock for, before giving up on it.
 BASSTLER_INSTALL_WAIT_SECONDS="${BASSTLER_INSTALL_WAIT_SECONDS:-600}"
@@ -725,7 +763,7 @@ acquire_basstler_install_lock() {
   mkdir -p "${BASSTLER_HOME}"
   local waited=0 holder
   until mkdir "${BASSTLER_INSTALL_LOCK}" 2>/dev/null; do
-    holder="$(cat "${BASSTLER_INSTALL_LOCK}/pid" 2>/dev/null || true)"
+    holder="$(cat "${BASSTLER_INSTALL_MARKER}" 2>/dev/null || true)"
     if [ -n "${holder}" ] && ! kill -0 "${holder}" 2>/dev/null; then
       rm -rf "${BASSTLER_INSTALL_LOCK}"
       continue
@@ -734,7 +772,7 @@ acquire_basstler_install_lock() {
     sleep 1
     waited=$((waited + 1))
   done
-  printf '%s\n' "$$" > "${BASSTLER_INSTALL_LOCK}/pid"
+  printf '%s\n' "$$" > "${BASSTLER_INSTALL_MARKER}"
 }
 
 # release_basstler_install_lock: gives BASSTLER_INSTALL_LOCK back.
@@ -947,7 +985,7 @@ install_basstler_into_environment() {
 }
 
 # PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
-# SHA that was FETCH_HEAD the last time this clone read plan state (either
+# SHA that was PERSONAL_NOTES_REFERENCE the last time this clone read plan state (either
 # session-start.sh's own auto-discovery, or ./plan-updates-since.sh). This is
 # the "last-seen SHA" the recheck-deltas convention in the personal notes is built
 # around: a session that wants to know what changed since it last looked
@@ -955,14 +993,14 @@ install_basstler_into_environment() {
 # ./plan-updates-since.sh, which is also what advances it.
 PLAN_STATE_SYNC_STAMP="${PROJECT_ROOT}/.claude/.plan-state-sync-sha"
 
-# record_plan_state_sync_stamp: stamps FETCH_HEAD as the notes-branch commit
+# record_plan_state_sync_stamp: stamps PERSONAL_NOTES_REFERENCE as the notes-branch commit
 # this clone has now read plan state at. Caller must have already fetched
 # NOTES_BRANCH successfully (see fetch_personal_notes_branch) - reads
-# FETCH_HEAD directly rather than fetching again itself, same reasoning as
+# PERSONAL_NOTES_REFERENCE rather than fetching again itself, same reasoning as
 # plan_id_for_branch above.
 record_plan_state_sync_stamp() {
   mkdir -p "$(dirname "${PLAN_STATE_SYNC_STAMP}")"
-  git rev-parse FETCH_HEAD > "${PLAN_STATE_SYNC_STAMP}"
+  git rev-parse "${PERSONAL_NOTES_REFERENCE}" > "${PLAN_STATE_SYNC_STAMP}"
 }
 
 # last_recorded_plan_state_sha: prints the SHA record_plan_state_sync_stamp

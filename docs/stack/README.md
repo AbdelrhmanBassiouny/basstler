@@ -30,7 +30,7 @@ You never hand-edit a ledger. The stack is read from **GitHub itself** plus git:
 ## Files
 
 Every module named below lives in the `basstler` package, `src/basstler/`, and runs
-from the package's own environment; `stack.toml` and `board.json` sit beside them. This document stays here,
+from the package's own environment; `stack.toml` sits beside them. This document stays here,
 next to the workflow it describes, because it is read rather than run.
 
 - **`stack.toml`** - the shipped defaults: label names and the upstream base branch. It names
@@ -43,8 +43,11 @@ next to the workflow it describes, because it is read rather than run.
   both (see `Configuration.load` in `stack/settings.py`), including a `fork_repository` to pick between
   remotes when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `check_state`,
-  `session`) that `basstler.stack` reads. Written from GitHub as scratch by whatever refreshes it -
-  never committed.
+  `session`) that `basstler.stack` reads. Written from GitHub as scratch by whatever refreshes it,
+  to `basstler/board.json` under the repository's common git directory
+  (`git rev-parse --git-common-dir`): one file every worktree of the repository shares, which no
+  checkout can commit and no install of the package holds. The maintenance pass's full report sits
+  beside it as `basstler/maintenance-report.json`.
 - **`basstler.stack`** - read-only status tool (never mutates branches). Reads `board.json` + git:
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack status` - the whole stack, with ahead/behind drift per parent.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack check` - would each branch integrate cleanly onto its parent
@@ -58,8 +61,10 @@ next to the workflow it describes, because it is read rather than run.
     pick up a moved parent via a conflict-free `merge`).
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack configuration` - every resolved setting as `key<TAB>value`
     lines, keyed by `Configuration`'s own field names: the labels, the upstream base, which
-    remote is the fork and which is the upstream, plus the exact `git remote add` command when
-    no upstream remote exists yet. Answerable from git alone, so it runs before `board.json`
+    remote is the fork and which is the upstream, and `upstream_location`, what the upstream is
+    fetched from: its remote's name, or its URL when the clone has no remote for it. Either way
+    its base is kept at `refs/remotes/<upstream_remote>/<upstream_base>`, so no step needs a
+    remote added. Answerable from git alone, so it runs before `board.json`
     exists. It takes `--fork`/`--upstream` for a caller that already knows the answer, and exits
     `4` rather than guessing when nothing does. This is the one surface shell tooling reads
     configuration through - parsing `stack.toml` directly would miss the personal override.

@@ -384,7 +384,7 @@ class ActionBranch(StrEnum):
         How a reader is told to install the branch or bring it up to date.
         """
         return (
-            "python -m basstler.setup.steps install-upstream-reviews-action "
+            '"${BASSTLER_PYTHON}" -m basstler.setup.steps install-upstream-reviews-action '
             "--branch-or-tag <the basstler release the session runs> "
             "(/setup-personal-notes runs it)"
         )

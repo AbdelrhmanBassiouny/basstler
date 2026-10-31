@@ -14,7 +14,7 @@ points ask this question before anything is installed, and a question with parsi
 is real, testable code wherever it is written.
 
 Usage:
-    python3 -m basstler.setup.dependencies [--declaration <pyproject.toml>]
+    "${BASSTLER_PYTHON}" -m basstler.setup.dependencies [--declaration <pyproject.toml>]
 
 Prints one requirement specifier per missing requirement, and nothing at all when the
 environment already has them all.

@@ -166,3 +166,33 @@ def test_every_shell_variable_a_skill_document_cites_is_configured(
     cited = cited_shell_variables(document)
 
     assert cited - shell_configuration.variables.keys() == set()
+
+
+# %% the interpreter a module is run with
+
+BARE_INTERPRETER_RUN = re.compile(r"(?<![\w/$\"{}-])python3? -m basstler\b")
+"""
+A module of the package run with whatever ``python``/``python3`` the path finds, which
+in a session is not the package's own environment.
+"""
+
+
+@pytest.mark.parametrize("document", skill_documents(), ids=document_identifier)
+def test_no_skill_document_runs_the_package_with_a_bare_interpreter(document: Path):
+    assert BARE_INTERPRETER_RUN.findall(document.read_text()) == []
+
+
+# %% where a skill writes its files
+
+SYSTEM_TEMPORARY_PATH = re.compile(r"(?<![\w.~-])/tmp/")
+"""
+A path under the system's temporary directory, which the ``Artifact`` tool refuses to
+publish from.
+"""
+
+
+@pytest.mark.parametrize("document", skill_documents(), ids=document_identifier)
+def test_no_skill_document_writes_under_the_system_temporary_directory(
+    document: Path,
+):
+    assert SYSTEM_TEMPORARY_PATH.findall(document.read_text()) == []

@@ -208,7 +208,11 @@ def fast_forward(
     :return: What was done.
     :raises GitCommandFailed: If the fork rejects the push.
     """
-    git.fetch(configuration.upstream_remote, configuration.upstream_base)
+    git.fetch_branch(
+        configuration.upstream_location,
+        configuration.upstream_base,
+        configuration.upstream_remote,
+    ).raise_if_failed()
     return ForkBaseFastForward(
         git,
         configuration.fork_remote,

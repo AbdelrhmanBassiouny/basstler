@@ -63,7 +63,7 @@ from basstler.upstream_reviews.vocabulary import (
     BasstlerSource,
 )
 
-from ..constants.paths import RepositoryLocation
+from ..constants.paths import DatasetLocation, RepositoryLocation
 from .test_command_line import (
     RECORDED_PULL_REQUEST_NUMBER,
     UPSTREAM,
@@ -417,6 +417,19 @@ def test_a_result_answering_another_request_is_not_collected(fork):
 
     assert f"{FORK.url}/actions" in str(raised.value)
     assert "disabled" in str(raised.value)
+
+
+def test_a_result_from_a_release_that_named_no_request_is_not_collected(fork):
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    fork.branch.write(
+        {
+            ActionFile.RESULT: DatasetLocation.ACTION_RESULT_WITHOUT_REQUEST_IDENTIFIER.value.read_text()
+        },
+        "Answer",
+    )
+
+    with pytest.raises(ActionResultMissing):
+        ActionRead(fork.branch, request()).wait(timeout=0)
 
 
 @dataclass

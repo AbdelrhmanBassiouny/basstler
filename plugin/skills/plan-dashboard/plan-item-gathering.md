@@ -44,10 +44,10 @@ others, so nothing "more shared" exists yet for it to point at):
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+fetch_personal_notes_branch
 ```
 
-Read only what this item needs. Copy `<plan-id>/plan.yaml` off `FETCH_HEAD`
+Read only what this item needs. Copy `<plan-id>/plan.yaml` off `"${PERSONAL_NOTES_REFERENCE}"`
 to a scratch file and print just this item with
 `"${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" item <file> --id <item-id>` (or
 `--branch <branch>`); do the same for each item it `depends_on` when the
@@ -70,24 +70,22 @@ If the plan id or item id doesn't resolve, stop and list what's actually
 available — every plan id under `plans/*/plan.yaml`, or every item id in
 the named plan — rather than guessing which one was meant.
 
-## Subscribe to the plan's tracking issue
+## Read the plan's tracking issue
 
-If the plan has a `tracking_issue`, subscribe to it now via
-`mcp__Claude_Code_Remote__subscribe_pr_activity` (it takes a plain issue
-number the same way it takes a PR number).
+If the plan has a `tracking_issue`, read its comments now with
+`mcp__github__issue_read` (`method: "get_comments"`), and again before each
+push: a structural change another session made to the plan is posted there.
 
-Do it here, before gathering anything else. Either skill may go on to push
-real work without a fresh session ever starting, and the subscription
-`session-start.sh` sets up for an already-checked-out item branch never
-fires in that case — so subscribing at the start is what actually covers a
-run that turns into an uninterrupted working session.
+Nothing delivers an issue's comments as they arrive.
+`mcp__claude-code-remote__subscribe_pr_activity` takes pull requests only and
+answers an issue number with `Could not subscribe to this PR.`, so never call
+it for an issue. Only where the `tracking_issue` is a draft pull request (the
+fallback for a repository with Issues disabled, see `plan-schema.md`)
+subscribe to it with that tool instead.
 
-Skip this entirely if the plan has no `tracking_issue`. The call is
-idempotent, so it's safe even if something already subscribed this session.
-If it errors, don't let that fail the skill: mention it in passing when
-presenting the plan and continue — subscribing is a convenience for staying
-aware of concurrent structural changes, not a precondition for anything
-here.
+Skip this entirely if the plan has no `tracking_issue`. If a read errors,
+don't let that fail the skill: mention it in passing when presenting the plan
+and continue.
 
 ## Read the item's recorded state
 

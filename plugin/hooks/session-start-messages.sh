@@ -200,3 +200,43 @@ dependencies_line_environment_not_created() {
     "${environment_directory}" "${reason}" "${python_requirement}" \
     "${environment_directory}"
 }
+
+# %% the upstream-reviews Action line
+
+# upstream_reviews_action_line_not_read: the fork's branches could not be read,
+# so whether it has the Action is unknown.
+upstream_reviews_action_line_not_read() {
+  local remote="$1"
+  printf "not checked - could not read the fork's branches on '%s'" "${remote}"
+}
+
+# upstream_reviews_action_line_not_installed: the fork has no Action branch.
+# Installing one is setup's decision, so a session start never does.
+upstream_reviews_action_line_not_installed() {
+  printf 'not installed on the fork - /setup-personal-notes installs it once an upstream is named'
+}
+
+# upstream_reviews_action_line_current: the Action already runs this release.
+upstream_reviews_action_line_current() {
+  local release="$1"
+  printf 'runs %s, the release this session runs' "${release}"
+}
+
+# upstream_reviews_action_line_updated: the Action ran another release, and
+# now runs this session's.
+upstream_reviews_action_line_updated() {
+  local previous_release="$1"
+  local release="$2"
+  printf 'brought from %s to %s, the release this session runs' \
+    "${previous_release}" "${release}"
+}
+
+# upstream_reviews_action_line_update_failed: the Action runs another release,
+# and bringing it to this session's failed; the run carries on.
+upstream_reviews_action_line_update_failed() {
+  local previous_release="$1"
+  local release="$2"
+  local install_command="$3"
+  printf 'runs %s, not %s, and could not be updated - run: %s' \
+    "${previous_release}" "${release}" "${install_command}"
+}

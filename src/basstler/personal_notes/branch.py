@@ -18,6 +18,7 @@ from types import TracebackType
 from basstler.exceptions import NotesBranchMissingError, UnsafeNotesPathError
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.setup.steps import PersonalNotesSetting
+from basstler.shell_configuration import FetchedBranchReference
 
 # %% where the notes live
 
@@ -94,7 +95,8 @@ class PersonalNotesBranch:
 
     def fetch(self) -> str:
         """
-        Fetch the branch into ``FETCH_HEAD`` from the first remote that has it.
+        Fetch the branch into :attr:`FetchedBranchReference.PERSONAL_NOTES` from the
+        first remote that has it.
 
         :return: That remote.
         :raises NotesBranchMissingError: If no candidate remote has the branch.
@@ -102,7 +104,12 @@ class PersonalNotesBranch:
         remotes = self.candidate_remotes()
         for remote in remotes:
             if self.git.attempt(
-                "fetch", "--quiet", remote, self.location.branch
+                "fetch",
+                "--quiet",
+                "--no-write-fetch-head",
+                remote,
+                f"+refs/heads/{self.location.branch}:"
+                f"{FetchedBranchReference.PERSONAL_NOTES}",
             ).succeeded:
                 return remote
         raise NotesBranchMissingError(self.location.branch, tuple(remotes))
@@ -130,7 +137,8 @@ class NotesWriteOutcome(StrEnum):
 @dataclass
 class ScratchWorktree:
     """
-    A detached worktree of ``FETCH_HEAD`` in a temporary directory, removed on exit.
+    A detached worktree of :attr:`FetchedBranchReference.PERSONAL_NOTES` in a temporary
+    directory, removed on exit.
     """
 
     git: GitCommandRunner
@@ -149,7 +157,12 @@ class ScratchWorktree:
         """
         self.directory = Path(tempfile.mkdtemp())
         self.git.run(
-            "worktree", "add", "--detach", "--quiet", str(self.directory), "FETCH_HEAD"
+            "worktree",
+            "add",
+            "--detach",
+            "--quiet",
+            str(self.directory),
+            FetchedBranchReference.PERSONAL_NOTES,
         )
         return GitCommandRunner(self.directory)
 

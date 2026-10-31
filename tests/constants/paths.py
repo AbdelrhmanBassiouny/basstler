@@ -66,10 +66,29 @@ class DatasetLocation(PathEnumeration):
     The dataset directory itself.
     """
 
+    PULL_REQUEST_DATA_KEYED_BY_NUMBER = DIRECTORY / "pr-data-keyed-by-number.json"
+    """
+    A ``pr_data.json`` missing its repository level: one pull request keyed by its
+    number alone.
+    """
+
+    ACTION_RESULT_WITHOUT_REQUEST_IDENTIFIER = (
+        DIRECTORY / "action-result-without-request-identifier.json"
+    )
+    """
+    A result an Action release from before results named their request committed.
+    """
+
     PROMOTION_SUMMARIES = DIRECTORY / "promotion-summaries.json"
     """
     What a session writes for the upstream pull requests of the two-branch stack: points
     and a title for the parent, nothing for the child.
+    """
+
+    DESCRIPTION_WITH_PROMOTION_PROSE = DIRECTORY / "description-with-promotion-prose.md"
+    """
+    A fork pull request description whose own prose has a heading starting like the
+    promotion heading, followed by a sentence and a code fence.
     """
 
     PLAN_WITH_LANDED_ITEMS = DIRECTORY / "plan-with-landed-items.yaml"

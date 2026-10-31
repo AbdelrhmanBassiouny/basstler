@@ -14,12 +14,15 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from basstler.github_labels import GitHubLabel
 from basstler.maintenance.check_overview import CheckOverview
 from basstler.maintenance.constants import MaintenanceText
+from basstler.maintenance.exceptions import MarkdownLinkTargetError
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
+from basstler.render_common import AllowedUrlScheme
 from basstler.stack.model import Branch, BranchStatus, Stack
 from basstler.upstream_reviews.vocabulary import RollupState
 
@@ -137,6 +140,43 @@ class PassCount(StrEnum):
     """
     Pull requests whose base still has to be retargeted.
     """
+
+
+# %% links
+
+
+@dataclass(frozen=True)
+class MarkdownLink:
+    """
+    A markdown link whose target is a web URL or an anchor on the same page.
+    """
+
+    label: str
+    """
+    The text the link shows.
+    """
+
+    target: str
+    """
+    What the link points at.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        :raises MarkdownLinkTargetError: If the target is neither a web URL nor an
+            anchor, or holds whitespace, which ends a markdown link target early.
+        """
+        if any(character.isspace() for character in self.target):
+            raise MarkdownLinkTargetError(self.label, self.target)
+        if self.target.startswith("#") and len(self.target) > 1:
+            return
+        parts = urlsplit(self.target)
+        if parts.scheme not in set(AllowedUrlScheme) or not parts.netloc:
+            raise MarkdownLinkTargetError(self.label, self.target)
+
+    def __str__(self) -> str:
+        """:return: The link, as markdown."""
+        return f"[{self.label}]({self.target})"
 
 
 # %% the summary
@@ -264,7 +304,7 @@ class FinishSummary:
         :return: A markdown link to it, labelled by its number.
         """
         url = self.stack.configuration.fork_repository.pull_request_url(number)
-        return f"[#{number}]({url})"
+        return str(MarkdownLink(f"#{number}", url))
 
     def branch_line(self, branch: Branch) -> str:
         """
@@ -279,7 +319,8 @@ class FinishSummary:
     def pending_links(self) -> list[str]:
         """
         :return: One entry per create-link built this pass, then one per link an
-            earlier pass built that is not yet acted on.
+            earlier pass built that is not yet acted on, without the link itself: each
+            pull request's description carries its own.
         """
         promoted = [promotion.branch for promotion in self.report.promoted]
         earlier = [
@@ -306,7 +347,7 @@ class FinishSummary:
             addressed = branch.session or "the description names no session"
             entries.append(
                 f"{self.branch_line(branch)}: {self.outcome_detail(outcome)} - "
-                f"addressed {addressed} - [comment]({outcome.reported_at})"
+                f"addressed {addressed} - {MarkdownLink('comment', outcome.reported_at)}"
             )
         return entries
 

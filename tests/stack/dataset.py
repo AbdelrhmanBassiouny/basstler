@@ -137,7 +137,7 @@ class StackSampleText(StrEnum):
     """
 
 
-def make_configuration(upstream_setup_command: str | None = None) -> Configuration:
+def make_configuration() -> Configuration:
     return Configuration(
         in_review_label=StackLabel.IN_REVIEW,
         rebase_label=StackLabel.REBASE,
@@ -147,7 +147,7 @@ def make_configuration(upstream_setup_command: str | None = None) -> Configurati
         upstream_repository=StackRepository.UPSTREAM.value,
         upstream_remote=RemoteName.UPSTREAM,
         upstream_base=StackBranch.BASE,
-        upstream_setup_command=upstream_setup_command,
+        upstream_location=RemoteName.UPSTREAM,
     )
 
 

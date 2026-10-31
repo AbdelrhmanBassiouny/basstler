@@ -23,7 +23,7 @@ from basstler.stack.model import (
 )
 from basstler.stack.settings import Configuration
 
-from basstler.locations import PackageLocation
+from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.board import BoardExport
 from basstler.maintenance.commands import (
     BoardCommand,
@@ -155,7 +155,7 @@ def test_loading_the_stack_still_refreshes_the_fork_s_own_branches(
                 PullRequestHeadRepository.ANOTHER_CONTRIBUTORS_FORK.value
             )
         )
-    ).write(fork_checkout.project_root / PackageLocation.BOARD.value.name)
+    ).write(fork_checkout.project_root / RepositoryStateLocation.BOARD.name)
     monkeypatch.setattr(Configuration, "load", make_configuration)
     monkeypatch.chdir(fork_checkout.project_root)
 
@@ -217,7 +217,7 @@ def test_loading_the_stack_fetches_a_base_no_open_pull_request_has_as_its_head(
                 head_repository=PullRequestHeadRepository.FORK.value.full_name,
             ),
         )
-    ).write(fork_checkout.project_root / PackageLocation.BOARD.value.name)
+    ).write(fork_checkout.project_root / RepositoryStateLocation.BOARD.name)
     monkeypatch.setattr(Configuration, "load", make_configuration)
     monkeypatch.chdir(fork_checkout.project_root)
 

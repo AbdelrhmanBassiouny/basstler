@@ -194,7 +194,7 @@ def make_configuration() -> Configuration:
         upstream_repository=Repository("an-upstream-owner", "a-project"),
         upstream_remote=RemoteName.UPSTREAM,
         upstream_base=UPSTREAM_BASE,
-        upstream_setup_command=None,
+        upstream_location=RemoteName.UPSTREAM,
     )
 
 
@@ -524,7 +524,7 @@ def a_board_entry(
     labels: list[str] | None = None,
     title: str | None = None,
     session: str | None = None,
-    promotion_link: str | None = None,
+    description: str | None = None,
     upstream_pull_request: int | None = None,
     check_state: RollupState | None = None,
 ) -> PullRequest:
@@ -535,7 +535,7 @@ def a_board_entry(
     :param labels: The labels it carries.
     :param title: Its title.
     :param session: The session its description names.
-    :param promotion_link: The upstream create-link its description records.
+    :param description: Its description, without the sections a pass writes.
     :param upstream_pull_request: The open upstream pull request opened from it.
     :param check_state: The verdict over its head's checks.
     :return: One ready board entry whose head is on the fork.
@@ -549,7 +549,7 @@ def a_board_entry(
         labels=labels or [],
         session=session,
         title=title,
-        promotion_link=promotion_link,
+        description=description,
         upstream_pull_request=upstream_pull_request,
         check_state=check_state,
     )

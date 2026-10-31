@@ -4,6 +4,7 @@ A fork pull request's description: what a pass reads out of it and writes into i
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 
 from basstler.maintenance.constants import DescriptionPattern, MaintenanceText
@@ -49,8 +50,8 @@ class UpstreamPullRequestLink:
 @dataclass(frozen=True)
 class PullRequestDescription:
     """
-    A pull request's description, with the session link and the promotion section a pass
-    reads and records in it.
+    A pull request's description, with the session link a pass reads out of it and the
+    promotion section it records in it.
     """
 
     text: str
@@ -66,13 +67,18 @@ class PullRequestDescription:
         return DescriptionPattern.SESSION_LINK.first_in(self.text)
 
     @property
-    def promotion_link(self) -> str | None:
+    def prose(self) -> str:
         """
-        The upstream create-link a pass recorded under the promotion heading, or
-        ``None`` when the description has no such section.
+        The description as its author wrote it, without the sections a pass writes.
         """
-        words = (self.section(MaintenanceText.PROMOTION_HEADING) or "").split()
-        return words[0] if words else None
+        sections = (
+            MaintenanceText.PROMOTION_HEADING,
+            MaintenanceText.UPSTREAM_PULL_REQUEST_HEADING,
+        )
+        prose = self.text
+        for heading in sections:
+            prose = PullRequestDescription(prose).with_section(heading, None)
+        return prose.strip()
 
     def with_promotion_link(self, url: str) -> str:
         """
@@ -128,13 +134,17 @@ class PullRequestDescription:
 
     def _partition(self, heading: MaintenanceText) -> tuple[str, str | None, str]:
         """
-        :param heading: The heading the section opens with.
+        :param heading: The heading the section opens with, matched only as a whole
+            line.
         :return: The text before the section, the section's content (``None`` when the
             description has no such heading), and the text after it.
         """
-        before, found, rest = self.text.partition(heading)
-        if not found:
+        found = re.search(
+            rf"^{re.escape(heading)}[ \t]*$", self.text, flags=re.MULTILINE
+        )
+        if found is None:
             return self.text, None, ""
+        before, rest = self.text[: found.start()], self.text[found.end() :]
         following = DescriptionPattern.HEADING.value.search(rest)
         end = len(rest) if following is None else following.start()
         return before, rest[:end].strip(), rest[end:]

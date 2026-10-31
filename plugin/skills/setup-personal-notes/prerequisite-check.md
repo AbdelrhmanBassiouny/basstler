@@ -27,6 +27,11 @@ into a `needs-setup` row; every other skill runs it bare.
 **Exit code 0 — set up.** Say nothing about setup at all; carry straight on
 with the skill. A user who is already set up must never hear about it.
 
+**Non-zero, and every row that is not `ok` or `info` is `in-progress`** — a
+session start is installing it right now. Run `wait_for_basstler_install`, then
+the check again, and go on from what that second run says; never install it
+yourself.
+
 **Non-zero — something is missing.** Do not start the skill's real work, and do
 not attempt the individual fixes inline: `/setup-personal-notes` exists to do
 exactly that, and duplicating a piece of it here is how the two drift apart.

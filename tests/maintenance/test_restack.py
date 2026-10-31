@@ -6,6 +6,7 @@ or one subtree, against a real scratch fork.
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 
 import pytest
 
@@ -60,6 +61,30 @@ def test_the_fork_base_is_fast_forwarded_to_the_upstream(fork_checkout: ForkChec
     fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
 
     report = fast_forward(make_configuration(), fork_checkout.git)
+
+    assert report.outcome == FastForwardOutcome.PUSHED
+    assert fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE) == advanced
+
+
+def test_the_fork_base_is_fast_forwarded_from_an_upstream_with_no_remote(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A cloud session may not add the upstream as a remote, so a pass reaches it by URL.
+    """
+    fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    advanced = fork_checkout.commit("another-file", "upstream moved\n")
+    fork_checkout.run_git("push", "--quiet", RemoteName.UPSTREAM, UPSTREAM_BASE)
+    fork_checkout.run_git(
+        "push", "--quiet", "--force", RemoteName.ORIGIN, f"HEAD~1:{UPSTREAM_BASE}"
+    )
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
+    configuration = replace(
+        make_configuration(), upstream_location=fork_checkout.upstream_path.as_uri()
+    )
+
+    report = fast_forward(configuration, fork_checkout.git)
 
     assert report.outcome == FastForwardOutcome.PUSHED
     assert fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE) == advanced
@@ -485,6 +510,37 @@ def test_a_collision_with_the_fix_is_handed_back_rather_than_reported_to_its_own
     assert collision.reported_at is None
     assert fork.label_writes == []
     assert fork.comments == []
+
+
+def test_a_branch_above_a_collision_is_reported_blocked_rather_than_up_to_date(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The grandchild still holds the child's old tip, but not the parent's fix the child
+    could not take, so calling it up to date would hide that it lacks the fix.
+    """
+    a_stack_three_deep(fork_checkout)
+    fork_checkout.commit_on(StackBranch.PARENT, FixtureFile.CONTESTED, "the fix\n")
+    fork_checkout.commit_on(
+        StackBranch.CHILD, FixtureFile.CONTESTED, "the child's version\n"
+    )
+    fork_checkout.run_git("checkout", "--quiet", StackBranch.GRANDCHILD)
+    fork_checkout.run_git("merge", "--quiet", "--no-edit", StackBranch.CHILD)
+    fork_checkout.run_git("push", "--quiet", "origin", StackBranch.GRANDCHILD)
+    before = fork_checkout.published_commit("origin", StackBranch.GRANDCHILD)
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_deeper_board()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+        stacked_on=StackBranch.PARENT,
+    )
+
+    grandchild = outcomes[1]
+    assert grandchild.branch == StackBranch.GRANDCHILD
+    assert grandchild.outcome == RestackOutcome.BLOCKED_BY_ANCESTOR
+    assert grandchild.blocking_ancestor == StackBranch.CHILD
+    assert fork_checkout.published_commit("origin", StackBranch.GRANDCHILD) == before
 
 
 def test_naming_a_subtree_leaves_its_collisions_to_the_caller():

@@ -12,10 +12,12 @@ import pytest
 
 from basstler.github_labels import GitHubLabel
 from basstler.maintenance.commands import RunReportCommand
+from basstler.maintenance.exceptions import MarkdownLinkTargetError
 from basstler.maintenance.fast_forward import FastForwardOutcome, FastForwardReport
 from basstler.maintenance.finish_summary import (
     FinishSummary,
     FinishSummaryHeading,
+    MarkdownLink,
     PassCount,
 )
 from basstler.maintenance.promotion import Promotion, PromotionSummaries
@@ -35,6 +37,7 @@ from basstler.stack.model import (
 )
 from basstler.upstream_reviews.vocabulary import RollupState
 
+from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch
 
 from .fork import (
@@ -46,6 +49,8 @@ from .fork import (
     StackPullRequestNumber,
     a_board_entry,
     a_parent_and_child,
+    an_api_record,
+    an_export,
     make_configuration,
     the_board,
 )
@@ -82,7 +87,6 @@ def a_titled_stack(
                 StackBranch.PARENT,
                 labels=child_labels or [],
                 session=A_SESSION_LINK,
-                promotion_link=PromotionSampleText.FIRST_LINK,
                 upstream_pull_request=child_upstream_pull_request,
             ),
         ],
@@ -177,6 +181,35 @@ def test_no_create_link_is_printed_since_each_description_carries_its_own():
     assert PromotionSampleText.FIRST_LINK not in markdown
 
 
+def test_a_link_sent_by_an_earlier_pass_is_listed_without_reading_its_description():
+    """
+    A description is free text: a heading of its own that starts like the promotion
+    heading, a sentence or a code fence after it must never become a link target, and a
+    link built again without its summary would differ from the one recorded.
+    """
+    export = an_export(
+        [
+            an_api_record(
+                number=StackPullRequestNumber.CHILD,
+                head=StackBranch.CHILD,
+                labels=[GitHubLabel.PROMOTION_LINK_SENT],
+                body=DatasetLocation.DESCRIPTION_WITH_PROMOTION_PROSE.read_text(),
+                title=PromotionSampleText.TITLE,
+            )
+        ]
+    )
+    stack = Stack.build(
+        make_configuration(), list(export.pull_requests), lambda branch: False
+    )
+
+    summary = FinishSummary(MaintenanceReport(), stack)
+
+    (entry,) = section_of(summary.as_markdown(), FinishSummaryHeading.PENDING_LINKS)
+
+    (branch,) = stack.branches
+    assert entry == summary.branch_line(branch)
+
+
 def test_a_link_sent_earlier_that_is_now_in_review_is_not_pending():
     stack = a_titled_stack(
         child_labels=[GitHubLabel.PROMOTION_LINK_SENT],
@@ -202,6 +235,23 @@ def test_the_pending_links_come_before_everything_else():
         if line.startswith(FinishSummary.heading_line(""))
     ]
     assert headings[0] == FinishSummary.heading_line(FinishSummaryHeading.PENDING_LINKS)
+
+
+# %% markdown links
+
+
+def test_a_link_target_that_is_neither_a_url_nor_an_anchor_is_refused():
+    with pytest.raises(MarkdownLinkTargetError):
+        MarkdownLink(
+            "create upstream pull request", f"``{PromotionSampleText.FIRST_LINK}"
+        )
+
+
+@pytest.mark.parametrize(
+    "target", [PromotionSampleText.FIRST_LINK, "#reported-to-their-owners"]
+)
+def test_a_url_or_an_anchor_is_a_link_target(target: str):
+    assert str(MarkdownLink("label", target)) == f"[label]({target})"
 
 
 # %% what the pass reported, withheld and skipped

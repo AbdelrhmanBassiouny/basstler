@@ -271,7 +271,9 @@ def test_a_whole_pass_promotes_with_the_summaries_it_was_given(
     )
 
     written = maintenance.recorded_fork.description_writes[0]
-    recorded_link = PullRequestDescription(written.body).promotion_link
+    recorded_link = PullRequestDescription(written.body).section(
+        MaintenanceText.PROMOTION_HEADING
+    )
     assert (
         prefilled(recorded_link, PromotionLinkParameter.TITLE)
         == PromotionSummaries.read_from(summaries_document)
