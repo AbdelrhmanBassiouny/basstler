@@ -77,9 +77,11 @@ items:
 - id: concurrent-safe-save
   title: A plan save applies item-level edits onto the latest manifest and retries a rejected
     push
-  branch: null
-  status: not_started
+  branch: claude/plan-item-kickoff-concurrent-safe-x35oyo
+  status: in progress
   track: core
+  pull_request_number: 98
+  session: https://claude.ai/code/session_01JxHGiMy8LGpNvoVNMUwzvU
   depends_on: []
   notes: 'Today save-plan.sh writes the whole file and pushes once, so two writers lose an
     update or fail. On top of #48''s manifest writer corruption fixes: fetch, apply the session''s
