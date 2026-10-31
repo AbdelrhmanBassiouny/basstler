@@ -53,8 +53,13 @@ branch about to get its upstream link, each with its fork title, description, co
 largest changed files). A branch is listed once in its life: after this pass records its link, it
 is never listed again.
 
-The export reads the upstream's open pull requests. In a Claude Code cloud session that is refused
-(403) until the upstream is attached with `add_repo` (read access); attach it and re-run.
+The export reads the upstream's open pull requests through GitHub's API. In a Claude Code cloud
+session that read is refused (403) until the upstream is attached: call `add_repo` with its owner
+and name and `access: "push"`, the only level that lets the session's API calls reach a repository.
+The pass only reads the upstream and never pushes to it; skip the clone the result suggests, and
+re-run. If the attach is refused or blocked, stop and tell the user the pass needs the upstream's
+open pull requests and approving the attach unblocks it. Never run the rest of the pass without
+them: which branches are under upstream review decides how each one is restacked.
 
 ### Reparents (only if any)
 
