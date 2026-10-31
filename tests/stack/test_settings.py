@@ -50,15 +50,6 @@ def a_setting_line(setting: StackSetting, value: object) -> str:
     return f'{setting} = "{value}"\n'
 
 
-def a_remote_addition_command(name: str, repository: Repository) -> str:
-    """
-    :param name: What the remote is to be called.
-    :param repository: The repository it is to point at.
-    :return: The command adding that remote.
-    """
-    return f"git remote add {name} {repository.clone_url}"
-
-
 def _committed_configuration_path(scratch_repository: ScratchRepository) -> Path:
     """
     Write and commit the repo-default ``stack.toml`` into a scratch repository, beside
@@ -225,18 +216,16 @@ def test_the_fork_resolves_from_a_checkout_that_has_only_the_fork():
     assert resolution.upstream is None
 
 
-def test_a_checkout_without_an_upstream_remote_is_told_how_to_add_one():
+def test_a_checkout_without_an_upstream_remote_fetches_the_upstream_by_url():
     resolution = resolve(
         {RemoteName.ORIGIN: StackRepository.SAME_NAMED_FORK.value.clone_url}
     )
 
-    assert resolution.upstream_setup_command == a_remote_addition_command(
-        RemoteName.PREFERRED_UPSTREAM, StackRepository.UPSTREAM.value
-    )
+    assert resolution.upstream_location == StackRepository.UPSTREAM.value.clone_url
     assert resolution.upstream_name == RemoteName.PREFERRED_UPSTREAM
 
 
-def test_nothing_to_add_when_the_upstream_remote_is_already_there():
+def test_a_checkout_with_an_upstream_remote_fetches_the_upstream_through_it():
     resolution = resolve(
         {
             RemoteName.ORIGIN: StackRepository.SAME_NAMED_FORK.value.clone_url,
@@ -244,7 +233,7 @@ def test_nothing_to_add_when_the_upstream_remote_is_already_there():
         }
     )
 
-    assert resolution.upstream_setup_command is None
+    assert resolution.upstream_location == RemoteName.UPSTREAM
     assert resolution.upstream_name == RemoteName.UPSTREAM
 
 
@@ -317,30 +306,8 @@ def test_every_setting_is_printed_under_its_own_field_name(capsys):
         StackSetting.UPSTREAM_REPOSITORY: StackRepository.UPSTREAM.value.full_name,
         StackSetting.UPSTREAM_REMOTE: RemoteName.UPSTREAM,
         StackSetting.UPSTREAM_BASE: StackBranch.BASE,
+        StackSetting.UPSTREAM_LOCATION: RemoteName.UPSTREAM,
     }
-
-
-def test_a_checkout_missing_its_upstream_remote_is_printed_the_command_that_adds_it(
-    capsys,
-):
-    setup_command = a_remote_addition_command(
-        RemoteName.UPSTREAM, StackRepository.UPSTREAM.value
-    )
-    make_configuration(upstream_setup_command=setup_command).print_settings()
-
-    printed = PrintedConfiguration.read(capsys.readouterr().out)
-
-    assert printed[StackSetting.UPSTREAM_SETUP_COMMAND] == setup_command
-
-
-def test_nothing_is_printed_for_a_setup_command_that_is_not_needed(capsys):
-    """
-    An empty value would read as a command to run, so the line is absent rather than
-    blank.
-    """
-    make_configuration().print_settings()
-
-    assert StackSetting.UPSTREAM_SETUP_COMMAND not in capsys.readouterr().out
 
 
 # %% configuration named rather than inferred
@@ -413,6 +380,7 @@ def test_a_named_upstream_replaces_the_committed_default(
     )
 
     assert configuration.upstream_repository == StackRepository.DIFFERENT_UPSTREAM.value
-    assert configuration.upstream_setup_command == a_remote_addition_command(
-        RemoteName.UPSTREAM, StackRepository.DIFFERENT_UPSTREAM.value
+    assert (
+        configuration.upstream_location
+        == StackRepository.DIFFERENT_UPSTREAM.value.clone_url
     )

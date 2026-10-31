@@ -60,8 +60,10 @@ next to the workflow it describes, because it is read rather than run.
     pick up a moved parent via a conflict-free `merge`).
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack configuration` - every resolved setting as `key<TAB>value`
     lines, keyed by `Configuration`'s own field names: the labels, the upstream base, which
-    remote is the fork and which is the upstream, plus the exact `git remote add` command when
-    no upstream remote exists yet. Answerable from git alone, so it runs before `board.json`
+    remote is the fork and which is the upstream, and `upstream_location`, what the upstream is
+    fetched from: its remote's name, or its URL when the clone has no remote for it. Either way
+    its base is kept at `refs/remotes/<upstream_remote>/<upstream_base>`, so no step needs a
+    remote added. Answerable from git alone, so it runs before `board.json`
     exists. It takes `--fork`/`--upstream` for a caller that already knows the answer, and exits
     `4` rather than guessing when nothing does. This is the one surface shell tooling reads
     configuration through - parsing `stack.toml` directly would miss the personal override.

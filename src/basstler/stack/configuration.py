@@ -60,7 +60,8 @@ class StackSetting(StrEnum):
 
     UPSTREAM_REMOTE = "upstream_remote"
     """
-    The name to give the upstream remote when one has to be added.
+    The name the upstream's tracking references are kept under when no remote points at
+    it.
     """
 
     UPSTREAM_BASE = "upstream_base"
@@ -68,10 +69,10 @@ class StackSetting(StrEnum):
     The upstream branch every stack ultimately targets.
     """
 
-    UPSTREAM_SETUP_COMMAND = "upstream_setup_command"
+    UPSTREAM_LOCATION = "upstream_location"
     """
-    The command adding a missing upstream remote. Resolved from the checkout rather than
-    read from a ``stack.toml``, and printed only when the remote is missing.
+    What the upstream is fetched from: its remote's name, or its URL when the checkout
+    has none. Resolved from the checkout rather than read from a ``stack.toml``.
     """
 
 

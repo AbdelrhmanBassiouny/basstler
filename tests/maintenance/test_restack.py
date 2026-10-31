@@ -6,6 +6,7 @@ or one subtree, against a real scratch fork.
 from __future__ import annotations
 
 import argparse
+from dataclasses import replace
 
 import pytest
 
@@ -60,6 +61,30 @@ def test_the_fork_base_is_fast_forwarded_to_the_upstream(fork_checkout: ForkChec
     fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
 
     report = fast_forward(make_configuration(), fork_checkout.git)
+
+    assert report.outcome == FastForwardOutcome.PUSHED
+    assert fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE) == advanced
+
+
+def test_the_fork_base_is_fast_forwarded_from_an_upstream_with_no_remote(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A cloud session may not add the upstream as a remote, so a pass reaches it by URL.
+    """
+    fork_checkout.run_git("checkout", "--quiet", UPSTREAM_BASE)
+    advanced = fork_checkout.commit("another-file", "upstream moved\n")
+    fork_checkout.run_git("push", "--quiet", RemoteName.UPSTREAM, UPSTREAM_BASE)
+    fork_checkout.run_git(
+        "push", "--quiet", "--force", RemoteName.ORIGIN, f"HEAD~1:{UPSTREAM_BASE}"
+    )
+    fork_checkout.run_git("fetch", "--quiet", RemoteName.ORIGIN)
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
+    configuration = replace(
+        make_configuration(), upstream_location=fork_checkout.upstream_path.as_uri()
+    )
+
+    report = fast_forward(configuration, fork_checkout.git)
 
     assert report.outcome == FastForwardOutcome.PUSHED
     assert fork_checkout.published_commit(RemoteName.ORIGIN, UPSTREAM_BASE) == advanced
