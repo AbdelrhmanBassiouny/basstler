@@ -224,11 +224,8 @@ survives; it refuses (exit 3) when someone else changed the same part, and
 retries a push the branch rejected. A retry only re-merges edits to *different*
 parts; when the refusal names a part, read the branch's current value and redo that edit
 against it, then save again. Without `--read-at`, your files overwrite
-whatever changed before the save first fetches. This
-pushes data only — it does not publish the dashboard Artifact itself (that
-requires a live Claude session, since only a session can call the
-`Artifact` tool). `save-plan.sh` prints a reminder to run
-`/plan-dashboard <plan-id>` afterward to actually republish it.
+whatever changed before the save first fetches. The push
+rebuilds the plan's page on the plan site, and `save-plan.sh` prints its address.
 
 ## Proposing structural changes (broadcast via a tracking issue)
 
@@ -277,9 +274,8 @@ If a plan has no `tracking_issue` set, there's no mailbox yet — structural
 edits go straight to `plan.yaml` as before (single-session plans, or ones
 predating this convention, don't need one).
 
-## Generating a dashboard
+## Checking a plan
 
-See [`plan-dashboard/SKILL.md`](./SKILL.md). Invoke it as
-`/plan-dashboard <plan-id>` for one plan's dashboard, or `/plan-dashboard`
-with no argument for the master index listing every plan found on the
-personal-notes branch.
+Every plan's page is on the plan site. See [`plan-dashboard/SKILL.md`](./SKILL.md):
+`/plan-dashboard <plan-id>` cross-checks one plan against live GitHub state and
+links its page.
