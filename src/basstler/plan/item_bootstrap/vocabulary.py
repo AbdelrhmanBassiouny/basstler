@@ -15,6 +15,32 @@ from basstler.plan.model import (
 # %% shared vocabulary
 
 
+class PlanSavingOption(StrEnum):
+    """
+    The options ``save-plan.sh`` takes beside the plan id.
+    """
+
+    MANIFEST = "--manifest"
+    """
+    The plan.yaml to save.
+    """
+
+    ROADMAP = "--roadmap"
+    """
+    The roadmap.md to save beside it.
+    """
+
+    READ_AT = "--read-at"
+    """
+    The personal-notes commit the session read the plan at.
+    """
+
+    ATTEMPTS = "--attempts"
+    """
+    How many pushes a save makes before it gives up.
+    """
+
+
 class ManifestLinePattern(Enum):
     """
     What the item-block patching looks for in a raw ``plan.yaml`` line.

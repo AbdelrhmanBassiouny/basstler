@@ -208,14 +208,23 @@ rather than the manifest with
 
 ## Editing an existing plan
 
-Fetch the personal-notes branch, copy `plans/<plan-id>/plan.yaml` and
+Fetch the personal-notes branch, note the commit you read
+(`git rev-parse "${PERSONAL_NOTES_REFERENCE}"`), copy `plans/<plan-id>/plan.yaml` and
 `roadmap.md` to scratch files, edit them, then run
 
 ```bash
-"${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id> --manifest <file> --roadmap <file>
+"${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id> --manifest <file> --roadmap <file> \
+  --read-at <commit>
 ```
 
-to push both files and regenerate the reverse index in one commit. This
+to push both files and regenerate the reverse index in one commit. The save
+applies each top-level field, item and roadmap you changed since `<commit>`
+onto the branch as it is now, so another session's edit to a different item
+survives; it refuses (exit 3) when someone else changed the same part, and
+retries a push the branch rejected. A retry only re-merges edits to *different*
+parts; when the refusal names a part, read the branch's current value and redo that edit
+against it, then save again. Without `--read-at`, your files overwrite
+whatever changed before the save first fetches. This
 pushes data only — it does not publish the dashboard Artifact itself (that
 requires a live Claude session, since only a session can call the
 `Artifact` tool). `save-plan.sh` prints a reminder to run

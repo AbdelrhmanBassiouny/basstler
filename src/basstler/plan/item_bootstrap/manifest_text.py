@@ -82,16 +82,60 @@ class ManifestText:
         :raises UnknownItemError: If no block starts with that id.
         :return: The block's half-open line range.
         """
+        block = self.item_block_named(item_identifier)
+        if block is None:
+            raise UnknownItemError(
+                plan_identifier=plan_identifier, item_identifier=item_identifier
+            )
+        return block
+
+    def item_block_named(self, item_identifier: str) -> tuple[int, int] | None:
+        """
+        :param item_identifier: The item's id.
+        :return: The half-open line range of the block that starts with that id, or
+            ``None`` when no block does.
+        """
         opener = f"- {ManifestKey.IDENTIFIER.key}:"
-        for start, end in self.item_block_bounds():
-            if (
-                self.lines[start].strip().removeprefix(opener).strip()
+        return next(
+            (
+                (start, end)
+                for start, end in self.item_block_bounds()
+                if self.lines[start].strip().removeprefix(opener).strip()
                 == item_identifier
-            ):
-                return start, end
-        raise UnknownItemError(
-            plan_identifier=plan_identifier, item_identifier=item_identifier
+            ),
+            None,
         )
+
+    def top_level_section(self, key: str) -> tuple[int, int] | None:
+        """
+        :param key: A top-level manifest key.
+        :return: The half-open line range from the key's line up to the next top-level
+            key, or ``None`` when the manifest does not set the key.
+        """
+        starts = [
+            index
+            for index, line in enumerate(self.lines)
+            if ManifestLinePattern.TOP_LEVEL_KEY.matches(line)
+        ]
+        return next(
+            (
+                (start, end)
+                for start, end in zip(starts, starts[1:] + [len(self.lines)])
+                if self.lines[start].split(":", 1)[0] == key
+            ),
+            None,
+        )
+
+    def with_lines_replaced(
+        self, bounds: tuple[int, int], replacement: list[str]
+    ) -> str:
+        """
+        :param bounds: The half-open line range to replace.
+        :param replacement: The lines to put in its place; empty removes the range.
+        :return: The patched manifest text.
+        """
+        start, end = bounds
+        return "\n".join(self.lines[:start] + replacement + self.lines[end:])
 
     def item_indentation(self, block: tuple[int, int] | None = None) -> ItemIndentation:
         """

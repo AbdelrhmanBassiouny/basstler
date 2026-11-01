@@ -66,6 +66,38 @@ class DatasetLocation(PathEnumeration):
     The dataset directory itself.
     """
 
+    BOOTSTRAP_PLAN = DIRECTORY / "bootstrap-plan.yaml"
+    """
+    The item-bootstrap fixture plan: two items, a folded note, blank lines between
+    items.
+    """
+
+    BOOTSTRAP_ROADMAP = DIRECTORY / "bootstrap-roadmap.md"
+    """
+    The item-bootstrap fixture plan's roadmap.
+    """
+
+    MERGE_NEW_ITEM = DIRECTORY / "merge-new-item.yaml"
+    """
+    One item block, indented like :attr:`BOOTSTRAP_PLAN`'s items, that one writer adds.
+    """
+
+    ROADMAP_WITH_SESSION_RULE = DIRECTORY / "bootstrap-roadmap-session-rule.md"
+    """
+    :attr:`BOOTSTRAP_ROADMAP` with a rule the saving session added.
+    """
+
+    ROADMAP_WITH_CONCURRENT_RULE = DIRECTORY / "bootstrap-roadmap-concurrent-rule.md"
+    """
+    :attr:`BOOTSTRAP_ROADMAP` with a different rule another writer added meanwhile.
+    """
+
+    CONCURRENT_WRITER_HOOK = DIRECTORY / "concurrent-writer-pre-push.sh"
+    """
+    A pre-push hook that pushes another writer's commit to the notes branch ahead of
+    the push it runs for.
+    """
+
     PULL_REQUEST_DATA_KEYED_BY_NUMBER = DIRECTORY / "pr-data-keyed-by-number.json"
     """
     A ``pr_data.json`` missing its repository level: one pull request keyed by its
@@ -77,6 +109,29 @@ class DatasetLocation(PathEnumeration):
     )
     """
     A result an Action release from before results named their request committed.
+    """
+
+    PLAN_SITE_RUNS_SUCCEEDED = DIRECTORY / "plan-site-runs-succeeded.json"
+    """
+    A site repository's run listing whose latest plan-site run succeeded.
+    """
+
+    PLAN_SITE_DISPATCH_RUNS_SUCCEEDED = (
+        DIRECTORY / "plan-site-dispatch-runs-succeeded.json"
+    )
+    """
+    A notes repository's run listing whose latest dispatch run succeeded.
+    """
+
+    PLAN_SITE_DISPATCH_RUNS_FAILED = DIRECTORY / "plan-site-dispatch-runs-failed.json"
+    """
+    A notes repository's run listing whose latest dispatch run failed after an earlier
+    one succeeded.
+    """
+
+    WORKFLOW_RUNS_NONE = DIRECTORY / "workflow-runs-none.json"
+    """
+    A run listing with no runs at all.
     """
 
     PROMOTION_SUMMARIES = DIRECTORY / "promotion-summaries.json"

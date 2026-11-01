@@ -13,7 +13,8 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 
-from basstler.plan.model import PlanItem, PlanManifest
+from basstler.plan.dependencies import DependencyReference
+from basstler.plan.model import PlanDocument, PlanItem, PlanManifest
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -594,6 +595,7 @@ class PlanFiles:
         manifest = original.without_landed_items()
         if not manifest.items:
             shutil.rmtree(destination.manifest.parent, ignore_errors=True)
+            self.release_dependents(original, destination)
             return StagedPlan.REMOVED
         stored = (
             PlanManifest.from_file(destination.manifest)
@@ -612,7 +614,33 @@ class PlanFiles:
         else:
             shutil.copyfile(self.manifest, destination.manifest)
         shutil.copyfile(self.roadmap, destination.roadmap)
+        self.release_dependents(original, destination)
         return StagedPlan.SAVED
+
+    def release_dependents(self, plan: PlanManifest, destination: PlanFiles) -> None:
+        """
+        Stop every other plan beside *destination* depending on an item of *plan* that
+        has landed, since a landed item is removed from its plan and the entry would
+        no longer resolve.
+
+        :param plan: The plan being saved, with its landed items still in it.
+        :param destination: Where the plan is saved; its directory's siblings hold the
+            other plans.
+        """
+        landed_references = {
+            DependencyReference(
+                item_identifier=identifier, plan_id=plan.identifier
+            ).text
+            for identifier in plan.landed_identifiers
+        }
+        plans_directory = destination.manifest.parent.parent
+        for manifest_path in sorted(plans_directory.glob(f"*/{PlanDocument.MANIFEST}")):
+            if manifest_path == destination.manifest:
+                continue
+            dependent = PlanManifest.from_file(manifest_path)
+            released = dependent.without_dependencies(landed_references)
+            if released != dependent:
+                released.write(manifest_path)
 
 
 # %% command line
