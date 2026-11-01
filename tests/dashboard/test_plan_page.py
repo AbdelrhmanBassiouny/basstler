@@ -47,7 +47,6 @@ from ..fixture_plans import (
 )
 from ..manifest_builders import minimal_plan
 
-
 EXAMPLE_DIRECTORY = (
     RepositoryLocation.PLUGIN / SkillDirectory.PLAN_DASHBOARD / "example"
 )
@@ -2043,3 +2042,29 @@ def test_render_highlights_a_same_plan_dependency_chips_card_on_click():
         f'href="{chip.card_url}" data-item-identifier="{chip.dependency.reference.text}" '
         'onclick="planDashboardHighlightItem(event, this)"' in output
     )
+
+
+def test_item_without_a_branch_renders_no_branch_label():
+    plan = Plan(
+        id=PLAN_UNDER_TEST_ID,
+        title="Test Plan",
+        description="desc",
+        default_repository="owner/repo",
+        waves=[Wave(id="wave-1", name="Wave One")],
+        tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
+        items=[
+            Item(
+                title="A",
+                branch=None,
+                track="track-1",
+                status=ItemStatus.NOT_STARTED,
+                id="a",
+            )
+        ],
+    )
+    renderer = DashboardRenderer(
+        plan=plan, roadmap_text="", pull_requests_by_repository={}, tracking_url=None
+    )
+    output = renderer.render().html
+    assert 'class="mono id"' in output
+    assert 'class="mono branch"' not in output
