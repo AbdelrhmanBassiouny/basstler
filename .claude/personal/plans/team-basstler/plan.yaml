@@ -80,11 +80,15 @@ items:
   session: https://claude.ai/code/session_018wfiv5SwdeaJM95D338HhC
   depends_on:
   - site-for-every-repository
-  notes: 'Moved from workflow-cutover. First half now: every republish-/plan-dashboard instruction in
-    the skills and the personal notes becomes printing the site link, and save-plan.sh prints the page
-    URL. Second half once the site has run one green cycle: delete every page each repository''s _generated/dashboard-urls.yaml
-    lists (the Artifact tool''s delete), then remove that cache, record_dashboard_url.py, plan-dashboard
-    step 3 and index mode.'
+  notes: >
+    Both halves are in #115: the site ran its first green cycle on 2026-11-01. Skills, save-plan.sh,
+    session start and the personal notes link the plan site through plan_site_page_url (SiteAddress
+    in plan_site/hub.py). /plan-dashboard keeps only the cross-check, the merged-to-done correction
+    and the report. The URL cache, record_url, the publication check and the index page are removed.
+
+    After merge, with the owner's confirmation: delete the Artifacts dashboard-urls.yaml lists, then
+    remove that file from the notes branch. A follow-up makes plan_page summary-only, without the
+    Artifact files.
 - id: concurrent-safe-save
   title: A plan save applies item-level edits onto the latest manifest and retries a rejected push
   branch: claude/plan-item-kickoff-concurrent-safe-x35oyo
