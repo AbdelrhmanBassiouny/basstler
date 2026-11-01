@@ -5,6 +5,7 @@ branch.
 
 from __future__ import annotations
 
+import sys
 from pathlib import Path
 
 import pytest
@@ -12,12 +13,14 @@ import pytest
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.exceptions import RegistryUnreadableError
-from basstler.plan_site.hub import NotesBranch, PlanHub
+from basstler.dashboard.plan import Item
+from basstler.plan_site.hub import HubCommand, NotesBranch, PlanHub, SiteAddress, main
 from basstler.plan.model import PlanDocument
 from basstler.repository import Repository
 from basstler.setup.steps import PersonalNotesSetting
 
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
+from ..fixture_plans import ForeignItemId
 
 REGISTRY = SiteRepository.NOTES.value
 """
@@ -146,3 +149,118 @@ def test_a_repository_that_cannot_be_fetched_reads_as_none(tmp_path: Path):
     )
 
     assert notes is None
+
+
+# %% the address of every page on the site
+
+SITE = SiteAddress(SiteSampleText.SITE_URL.value)
+"""
+The site under test's address.
+"""
+
+
+def test_every_page_address_joins_the_site_address_whether_or_not_it_ends_in_a_slash():
+    without_slash = SiteAddress(SiteSampleText.SITE_URL.rstrip("/"))
+
+    assert without_slash.plan_url(REGISTRY, SitePlan.FIRST) == SITE.plan_url(
+        REGISTRY, SitePlan.FIRST
+    )
+    assert SITE.plan_url(REGISTRY, SitePlan.FIRST) == (
+        f"{SiteSampleText.SITE_URL}{REGISTRY}/{SitePlan.FIRST}/"
+    )
+
+
+def test_a_plan_page_sits_under_its_repository_page():
+    assert SITE.plan_url(REGISTRY, SitePlan.FIRST) == (
+        f"{SITE.repository_url(REGISTRY)}{SitePlan.FIRST}/"
+    )
+
+
+def test_an_item_address_names_its_card_on_the_plan_page():
+    assert SITE.item_url(REGISTRY, SitePlan.FIRST, ForeignItemId.READY) == (
+        f"{SITE.plan_url(REGISTRY, SitePlan.FIRST)}#{Item.anchor_of(ForeignItemId.READY)}"
+    )
+
+
+def write_hub(directory: Path, site_url: str | None) -> Path:
+    """
+    :param directory: Where to write the hub file.
+    :param site_url: The site address it names.
+    :return: The written hub file.
+    """
+    path = directory / ProjectLocation.PLAN_HUB.name
+    path.write_text(PlanHub(registry=str(REGISTRY), site_url=site_url).to_text())
+    return path
+
+
+def run_page_url(
+    monkeypatch: pytest.MonkeyPatch, hub_path: Path, *arguments: str
+) -> int:
+    """
+    Run the hub command's page address subcommand in process.
+
+    :param hub_path: The hub file it reads.
+    :param arguments: The page's arguments after the hub file and repository.
+    :return: The command's exit status.
+    """
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "hub",
+            HubCommand.PAGE_URL,
+            f"--hub={hub_path}",
+            f"--repository={REGISTRY}",
+            *arguments,
+        ],
+    )
+    return main()
+
+
+def test_the_page_url_command_prints_a_plan_page_address(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+):
+    hub_path = write_hub(tmp_path, SiteSampleText.SITE_URL.value)
+
+    status = run_page_url(monkeypatch, hub_path, f"--plan={SitePlan.FIRST}")
+
+    assert status == 0
+    assert capsys.readouterr().out.strip() == SITE.plan_url(REGISTRY, SitePlan.FIRST)
+
+
+def test_the_page_url_command_prints_an_item_address(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+):
+    hub_path = write_hub(tmp_path, SiteSampleText.SITE_URL.value)
+
+    run_page_url(
+        monkeypatch,
+        hub_path,
+        f"--plan={SitePlan.FIRST}",
+        f"--item={ForeignItemId.READY}",
+    )
+
+    assert capsys.readouterr().out.strip() == SITE.item_url(
+        REGISTRY, SitePlan.FIRST, ForeignItemId.READY
+    )
+
+
+def test_the_page_url_command_prints_the_repository_page_without_a_plan(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+):
+    hub_path = write_hub(tmp_path, SiteSampleText.SITE_URL.value)
+
+    run_page_url(monkeypatch, hub_path)
+
+    assert capsys.readouterr().out.strip() == SITE.repository_url(REGISTRY)
+
+
+def test_the_page_url_command_fails_when_the_hub_names_no_site(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture
+):
+    hub_path = write_hub(tmp_path, None)
+
+    status = run_page_url(monkeypatch, hub_path, f"--plan={SitePlan.FIRST}")
+
+    assert status != 0
+    assert capsys.readouterr().out == ""

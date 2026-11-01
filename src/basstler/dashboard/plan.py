@@ -239,7 +239,15 @@ class Item:
         The ``id`` of this item's card on its plan's dashboard, which a link names after
         ``#`` to reach that card.
         """
-        return f"item-{self.identifier}"
+        return self.anchor_of(self.identifier)
+
+    @staticmethod
+    def anchor_of(identifier: str) -> str:
+        """
+        :param identifier: An item's :attr:`identifier`.
+        :return: The :attr:`anchor` of that item's card.
+        """
+        return f"item-{identifier}"
 
     @property
     def status_and_drift_css_class(self) -> str:

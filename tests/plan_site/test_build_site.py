@@ -38,7 +38,7 @@ from basstler.maintenance.github import (
     PullRequestListState,
     RepositoryPath,
 )
-from basstler.plan_site.hub import PlanHub
+from basstler.plan_site.hub import PlanHub, SiteAddress
 from basstler.plan_site.hub_page import SiteStylesheet, SkippedPage
 from basstler.plan_site.plan_page import ChipTone
 from basstler.plan.validation import PlanValidator
@@ -133,7 +133,7 @@ def site(pull_request_source: RecordedPullRequestSource) -> RepositorySite:
     A site over the dataset's plans directory.
     """
     return RepositorySite(
-        site_url=SiteSampleText.SITE_URL,
+        address=SiteAddress(SiteSampleText.SITE_URL),
         pull_request_source=pull_request_source,
         repository=NOTES_REPOSITORY,
         plans_directory=DatasetLocation.SITE_PLANS.value,
@@ -233,17 +233,6 @@ def test_every_page_links_back_up_to_the_hub_and_its_index(
     assert link_to(SiteSampleText.SITE_URL) in page_of(tmp_path)
     assert link_to(SiteSampleText.SITE_URL) in dashboard
     assert link_to(REPOSITORY_URL) in dashboard
-
-
-def test_plan_url_joins_the_site_address_whether_or_not_it_ends_in_a_slash(
-    pull_request_source: RecordedPullRequestSource,
-):
-    with_slash, without_slash = (
-        RepositorySite(site_url, pull_request_source, NOTES_REPOSITORY, Path())
-        for site_url in (SiteSampleText.SITE_URL, SiteSampleText.SITE_URL.rstrip("/"))
-    )
-    assert with_slash.plan_url(SitePlan.FIRST) == without_slash.plan_url(SitePlan.FIRST)
-    assert with_slash.plan_url(SitePlan.FIRST) == f"{REPOSITORY_URL}{SitePlan.FIRST}/"
 
 
 def test_build_counts_done_items_from_the_manifest(
@@ -359,7 +348,7 @@ def test_a_plan_page_shows_the_ci_and_assignees_of_an_open_pull_request(
         assignees=[SiteSampleText.ASSIGNEE.value],
     )
     site = RepositorySite(
-        site_url=SiteSampleText.SITE_URL,
+        address=SiteAddress(SiteSampleText.SITE_URL),
         pull_request_source=RecordedPullRequestSource(
             records={OPEN_PULL_REQUEST: open_pull_request}
         ),
@@ -405,7 +394,7 @@ def hub_site(pull_request_source: RecordedPullRequestSource, tmp_path: Path) -> 
         repositories=[str(repository) for repository in listed],
     )
     return HubSite(
-        site_url=SiteSampleText.SITE_URL,
+        address=SiteAddress(SiteSampleText.SITE_URL),
         pull_request_source=pull_request_source,
         hub=hub,
         remote_root=str(remotes),

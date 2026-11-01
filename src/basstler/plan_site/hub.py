@@ -10,10 +10,15 @@ own place in it without reading another repository, under any account.
 Usage:
     python3 -m basstler.plan_site.hub register --hub <hub.yaml> --repository <owner/repo> \\
         [--registry <owner/repo>] [--site-url <url>] --output <out>
+    python3 -m basstler.plan_site.hub page-url --hub <hub.yaml> --repository <owner/repo> \\
+        [--plan <plan-id> [--item <item-id>]]
 
-Adds a repository to the hub file, creating the file (with this repository as its own
-registry, unless one is named) when absent. Prints ``{"changed": true|false}``; push the
-output only when it changed.
+``register`` adds a repository to the hub file, creating the file (with this repository
+as its own registry, unless one is named) when absent. It prints
+``{"changed": true|false}``; push the output only when it changed.
+
+``page-url`` prints the address of a repository's page on the site, of one of its plans,
+or of one item's card on that plan's page. It fails when the hub file names no site.
 """
 
 from __future__ import annotations
@@ -30,6 +35,7 @@ from typing import Any
 import yaml
 
 from basstler.class_property import classproperty
+from basstler.dashboard.plan import Item
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.exceptions import RegistryUnreadableError
@@ -41,6 +47,22 @@ logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
+
+
+class HubCommand(StrEnum):
+    """
+    The subcommands the hub command runs.
+    """
+
+    REGISTER = "register"
+    """
+    List a repository in the hub file.
+    """
+
+    PAGE_URL = "page-url"
+    """
+    Print the address of a page on the site.
+    """
 
 
 class HubFileKey(StrEnum):
@@ -67,6 +89,57 @@ class HubFileKey(StrEnum):
     """
     Every repository the site publishes.
     """
+
+
+@dataclass(frozen=True)
+class SiteAddress:
+    """
+    The address a plan site is served from, and the address of every page on it.
+    """
+
+    site_url: str
+    """
+    The address the whole site is served from, with or without a trailing slash.
+    """
+
+    @property
+    def hub_url(self) -> str:
+        """
+        The hub's address, which every page links back up to.
+        """
+        return f"{self.site_url.rstrip('/')}/"
+
+    def repository_url(self, repository: Repository | str) -> str:
+        """
+        :param repository: The repository, as ``owner/repo``.
+        :return: The address of that repository's index of plans.
+        """
+        return f"{self.hub_url}{repository}/"
+
+    def plan_url(self, repository: Repository | str, plan_identifier: str) -> str:
+        """
+        :param repository: The repository whose notes hold the plan.
+        :param plan_identifier: The plan's directory name.
+        :return: The address the plan's page is served from.
+        """
+        return f"{self.repository_url(repository)}{plan_identifier}/"
+
+    def item_url(
+        self,
+        repository: Repository | str,
+        plan_identifier: str,
+        item_identifier: str,
+    ) -> str:
+        """
+        :param repository: The repository whose notes hold the plan.
+        :param plan_identifier: The plan's directory name.
+        :param item_identifier: The item's identifier.
+        :return: The address of the item's card on its plan's page.
+        """
+        return (
+            f"{self.plan_url(repository, plan_identifier)}"
+            f"#{Item.anchor_of(item_identifier)}"
+        )
 
 
 @dataclass
@@ -253,20 +326,58 @@ class NotesBranch:
 
 def main() -> int:
     """
-    Parse arguments and register a repository. See the module docstring.
+    Parse arguments and run the subcommand. See the module docstring.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
     subcommands = parser.add_subparsers(dest="command", required=True)
-    register_parser = subcommands.add_parser("register")
+    register_parser = subcommands.add_parser(HubCommand.REGISTER)
     register_parser.add_argument("--hub", required=True, type=Path)
     register_parser.add_argument("--repository", required=True)
     register_parser.add_argument("--registry", default=None)
     register_parser.add_argument("--site-url", default=None)
     register_parser.add_argument("--output", required=True, type=Path)
+    page_url_parser = subcommands.add_parser(HubCommand.PAGE_URL)
+    page_url_parser.add_argument("--hub", required=True, type=Path)
+    page_url_parser.add_argument("--repository", required=True)
+    page_url_parser.add_argument("--plan", default=None)
+    page_url_parser.add_argument("--item", default=None)
     arguments = parser.parse_args()
 
+    if arguments.command == HubCommand.PAGE_URL:
+        return print_page_url(arguments)
+    return register_repository(arguments)
+
+
+def print_page_url(arguments: argparse.Namespace) -> int:
+    """
+    Print the address of the page ``page-url`` names.
+
+    :param arguments: The parsed ``page-url`` arguments.
+    :return: The exit status: 1 when the hub file names no site.
+    """
+    hub = PlanHub.load(arguments.hub)
+    if hub is None or not hub.site_url:
+        logger.error(f"{arguments.hub} names no plan site.")
+        return 1
+    site = SiteAddress(hub.site_url)
+    if arguments.plan is None:
+        logger.info(site.repository_url(arguments.repository))
+    elif arguments.item is None:
+        logger.info(site.plan_url(arguments.repository, arguments.plan))
+    else:
+        logger.info(site.item_url(arguments.repository, arguments.plan, arguments.item))
+    return 0
+
+
+def register_repository(arguments: argparse.Namespace) -> int:
+    """
+    List ``register``'s repository in the hub file and write the result.
+
+    :param arguments: The parsed ``register`` arguments.
+    :return: The exit status.
+    """
     hub = PlanHub.load(arguments.hub)
     created = hub is None
     if created:

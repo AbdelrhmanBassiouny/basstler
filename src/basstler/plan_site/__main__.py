@@ -49,7 +49,7 @@ from basstler.plan_site.hub_page import (
 from basstler.plan_site.plan_page import SitePlanPage
 from basstler.dashboard.index_page import PlanSummary, ProgressCard
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
-from basstler.plan_site.hub import NotesBranch, PlanHub
+from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus
 from basstler.repository import GitHubAddress, Repository
@@ -200,7 +200,7 @@ class SiteSection[SectionCard: ProgressCard](ABC):
     stands for it on the page above: a repository's on the hub, or the whole site's.
     """
 
-    site_url: str
+    address: SiteAddress
     """
     The address the whole site is served from, which every link is built on.
     """
@@ -211,18 +211,11 @@ class SiteSection[SectionCard: ProgressCard](ABC):
     """
 
     @property
-    def hub_url(self) -> str:
-        """
-        The hub's address, which every page links back up to.
-        """
-        return f"{self.site_url.rstrip('/')}/"
-
-    @property
     def stylesheet_url(self) -> str:
         """
         The address of the site's one stylesheet, which every page links.
         """
-        return f"{self.hub_url}{SiteFile.STYLESHEET}"
+        return f"{self.address.hub_url}{SiteFile.STYLESHEET}"
 
     @abstractmethod
     def build(self, output: Path) -> SectionCard:
@@ -268,19 +261,12 @@ class RepositorySite(SiteSection[RepositorySummary]):
     def __post_init__(self) -> None:
         self.plan_directory = PlanDirectory(self.plans_directory)
 
-    @property
-    def index_url(self) -> str:
-        """
-        The address this repository's index is served from.
-        """
-        return f"{self.hub_url}{self.repository}/"
-
     def plan_url(self, directory_name: str) -> str:
         """
         :param directory_name: The plan's directory name.
         :return: The address its page is served from.
         """
-        return f"{self.index_url}{directory_name}/"
+        return self.address.plan_url(self.repository, directory_name)
 
     def build(self, output: Path) -> RepositorySummary:
         """
@@ -305,11 +291,13 @@ class RepositorySite(SiteSection[RepositorySummary]):
             self.write_page(repository_directory / directory_name, plan.dashboard.html)
         repository = RepositorySummary.over_plans(
             str(self.repository),
-            self.index_url,
+            self.address.repository_url(self.repository),
             [plan.summary for plan in published.values()],
             list(skipped.values()),
         )
-        index = RepositoryIndexPage(repository, self.hub_url, self.stylesheet_url)
+        index = RepositoryIndexPage(
+            repository, self.address.hub_url, self.stylesheet_url
+        )
         self.write_page(repository_directory, index.render())
         return repository
 
@@ -346,8 +334,8 @@ class RepositorySite(SiteSection[RepositorySummary]):
                 dependencies
             ),
             tracking_url=self.tracking_url_of(plan),
-            hub_url=self.hub_url,
-            index_url=self.index_url,
+            hub_url=self.address.hub_url,
+            index_url=self.address.repository_url(self.repository),
             plan_directory=self.plan_directory,
             locate_plan_page=self.plan_url,
         )
@@ -433,7 +421,7 @@ class HubSite(SiteSection[SiteSummary]):
                 str(repository), f"cannot fetch {self.hub.notes_branch}"
             )
         site = RepositorySite(
-            site_url=self.site_url,
+            address=self.address,
             pull_request_source=self.pull_request_source,
             repository=repository,
             plans_directory=notes.check_out_plans(),
@@ -475,7 +463,7 @@ def main() -> int:
         logger.error("The hub file names no site_url; pass --site-url.")
         return 1
     site = HubSite(
-        site_url=site_url,
+        address=SiteAddress(site_url),
         pull_request_source=GitHubPullRequestSource.from_environment(),
         hub=hub,
         remote_root=arguments.remote_root,
