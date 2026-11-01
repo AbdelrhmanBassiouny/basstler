@@ -1,7 +1,0 @@
-{
-  "total_count": 2,
-  "workflow_runs": [
-    {"id": 4004, "name": "Plan site dispatch", "path": ".github/workflows/plan-site-dispatch.yml", "status": "completed", "conclusion": "failure"},
-    {"id": 4003, "name": "Plan site dispatch", "path": ".github/workflows/plan-site-dispatch.yml", "status": "completed", "conclusion": "success"}
-  ]
-}

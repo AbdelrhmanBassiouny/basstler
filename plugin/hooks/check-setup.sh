@@ -122,18 +122,6 @@ report_upstream_reviews_action() {
   esac
 }
 
-# report_plan_site: whether the notes branch starts the plan site's build. Only the
-# dispatch workflow is visible from here; the publication command re-checks the rest.
-report_plan_site() {
-  local publish_command="${BASSTLER_PYTHON} -m ${PLAN_SITE_PUBLICATION_MODULE}"
-  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_SITE_DISPATCH_WORKFLOW_PATH}" 2>/dev/null; then
-    report plan_site ok "'${NOTES_BRANCH}' starts the plan site's build on every push"
-  else
-    report plan_site info \
-      "'${NOTES_BRANCH}' does not start a plan site build - to publish this repository's plans, run: ${publish_command}"
-  fi
-}
-
 report() {
   local check="$1" status="$2" detail="$3"
   case "${status}" in
@@ -230,7 +218,6 @@ if fetch_personal_notes_branch; then
 
   report_upstream true
   report_upstream_reviews_action
-  report_plan_site
 
   # %% who commits here would be authored as
 
@@ -264,7 +251,6 @@ else
   report notes_file needs-setup "not checked - the branch that would hold it doesn't exist yet"
   report_upstream false
   report_upstream_reviews_action
-  report plan_site info "not checked - the branch that would start the build doesn't exist yet"
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 

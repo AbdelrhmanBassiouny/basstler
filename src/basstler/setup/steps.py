@@ -53,8 +53,10 @@ from basstler.shell_configuration import (
 )
 from basstler.stack.configuration import StackSetting
 from basstler.standard_streams import StandardStreamHandler
-from basstler.maintenance.remote_branch import RemoteBranch
-from basstler.upstream_reviews.action.branch import ActionInstallation
+from basstler.upstream_reviews.action.branch import (
+    ActionInstallation,
+    RemoteBranch,
+)
 from basstler.upstream_reviews.vocabulary import (
     ActionBranch,
 )
@@ -791,7 +793,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if arguments.command == SetupCommand.INSTALL_UPSTREAM_REVIEWS_ACTION:
         remote = PersonalNotesSetting.REMOTE.resolve(project_root, os.environ)
-        branch = RemoteBranch(GitCommandRunner(project_root), remote, ActionBranch.NAME)
+        branch = RemoteBranch(GitCommandRunner(project_root), remote)
         try:
             changed = ActionInstallation(arguments.branch_or_tag).install(branch)
         except GitCommandFailed as failure:

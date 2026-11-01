@@ -314,10 +314,6 @@ DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 # repository holding the complete list of repositories, and that list. Every
 # registered repository's notes carry a copy (see basstler.plan_site.hub).
 PLAN_HUB_PATH="${PLANS_DIR}/_hub.yaml"
-# PLAN_SITE_DISPATCH_WORKFLOW_PATH: the notes branch's workflow that starts the plan
-# site's build on every push (see basstler.plan_site.publication). Mirrors
-# WorkflowLocation.PLAN_SITE_DISPATCH in basstler.locations.
-PLAN_SITE_DISPATCH_WORKFLOW_PATH=".github/workflows/plan-site-dispatch.yml"
 
 # *_MODULE: every Python entry point in this system - defined once, here, so
 # refresh_dashboard.sh, every SKILL.md and every workflow source this file and
@@ -350,9 +346,6 @@ BUILD_INDEX_MODULE="basstler.dashboard.index_page"
 BUILD_SITE_MODULE="basstler.plan_site"
 # basstler.plan_site.hub: registers a repository in the hub file.
 PLAN_HUB_MODULE="basstler.plan_site.hub"
-# basstler.plan_site.publication: publishes this repository's plans on the user's plan
-# site, and starts the site's build on every push to the notes branch.
-PLAN_SITE_PUBLICATION_MODULE="basstler.plan_site.publication"
 # basstler.plan.sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
 SYNC_MANIFEST_STATUS_MODULE="basstler.plan.sync_manifest_status"

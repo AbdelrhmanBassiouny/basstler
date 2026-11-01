@@ -44,8 +44,7 @@ from basstler.maintenance.upstream_pull_request_synchronization import (
 from basstler.stack.model import Stack
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
-from basstler.maintenance.remote_branch import RemoteBranch
-from basstler.upstream_reviews.vocabulary import ActionBranch
+from basstler.upstream_reviews.action.branch import RemoteBranch
 from basstler.upstream_reviews.action.read import ActionRead
 from basstler.upstream_reviews.clients import GitHubCommandLineClient
 
@@ -117,7 +116,7 @@ class MaintenancePass:
                 self.upstream().open_pull_requests(), fork
             )
         read = ActionRead(
-            RemoteBranch(self.git, self.configuration.fork_remote, ActionBranch.NAME),
+            RemoteBranch(self.git, self.configuration.fork_remote),
             OpenPullRequestsRequest.fresh(self.configuration.upstream_repository, fork),
             GitHubCommandLineClient(),
             answer_type=OpenPullRequestsAnswer,

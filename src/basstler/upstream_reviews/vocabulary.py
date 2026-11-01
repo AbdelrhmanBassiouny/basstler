@@ -263,15 +263,6 @@ class CheckOutcome(StrEnum):
     GitHub marked the check run stale after it went too long without finishing.
     """
 
-    @classmethod
-    def from_conclusion(cls, conclusion: str | None) -> CheckOutcome:
-        """
-        :param conclusion: A check run's or workflow run's conclusion as GitHub spells
-            it, ``None`` while it runs.
-        :return: The outcome it reads as.
-        """
-        return cls[conclusion.upper()] if conclusion else cls.PENDING
-
     STARTUP_FAILURE = "startup failure"
     """
     The check run failed before it could start.
@@ -388,6 +379,11 @@ class ActionBranch(StrEnum):
     stack maintenance owns.
     """
 
+    LOCAL_REFERENCE = "refs/basstler/upstream-reviews"
+    """
+    Where a fetch of it is kept, so it never moves ``FETCH_HEAD`` under anyone else.
+    """
+
     @classproperty
     def install_command(cls) -> str:
         """
@@ -423,7 +419,3 @@ class BasstlerSource(StrEnum):
 
     REPOSITORY = "AbdelrhmanBassiouny/basstler"
     REUSABLE_WORKFLOW = ".github/workflows/upstream-reviews-action.yml"
-    LATEST_RELEASE = "main"
-    """
-    The branch every release is tagged on, so it always holds the latest one.
-    """

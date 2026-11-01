@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import os
 import subprocess
-import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,8 +17,7 @@ from pathlib import Path
 from basstler.class_property import classproperty
 from basstler.exceptions import UnresolvableReferenceError
 from basstler.exit_codes import CommandFailure, StackExitCode
-from basstler.environment import GitVariable
-from basstler.locations import CommitScratchFile, RepositoryStateLocation
+from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.constants import CommitTrailer
 from basstler.maintenance.exceptions import ExternalCallFailed
 from basstler.stack.model import IntegrationStrategy
@@ -253,48 +251,6 @@ class GitCommandRunner:
         """:param reference: Any reference git can resolve.
         :return: The commit it names."""
         return self.run("rev-parse", reference)
-
-    def file_at(self, commit: str, path: str | Path) -> str | None:
-        """
-        :param commit: The commit to read from.
-        :param path: The file's path from the commit's root.
-        :return: Its text without the final newline, or ``None`` when the commit has
-            no such file.
-        """
-        shown = self.attempt("show", f"{commit}:{Path(path).as_posix()}")
-        return shown.output if shown.succeeded else None
-
-    def commit_files(
-        self, parent: str | None, files: Mapping[str, str], message: str
-    ) -> str:
-        """
-        Commit files on top of a commit without touching the working tree or the index,
-        keeping every file of the parent not given.
-
-        :param parent: The commit to build on, ``None`` for a commit with no parent.
-        :param files: What to write, by path, each without its final newline.
-        :param message: The commit message.
-        :return: The new commit.
-        """
-        with tempfile.TemporaryDirectory() as scratch:
-            index = {
-                GitVariable.INDEX_FILE: str(Path(scratch) / CommitScratchFile.INDEX)
-            }
-            self.run("read-tree", parent or "--empty", environment=index)
-            blob_file = Path(scratch) / CommitScratchFile.BLOB
-            for path, text in files.items():
-                blob_file.write_text(text + "\n")
-                blob = self.run("hash-object", "-w", str(blob_file))
-                self.run(
-                    "update-index",
-                    "--add",
-                    "--cacheinfo",
-                    f"100644,{blob},{path}",
-                    environment=index,
-                )
-            tree = self.run("write-tree", environment=index)
-        parents = ["-p", parent] if parent else []
-        return self.run("commit-tree", tree, *parents, "-m", message)
 
     def parents_of(self, commit: str) -> tuple[str, ...]:
         """:param commit: Any reference git can resolve to a commit.

@@ -111,29 +111,6 @@ class DatasetLocation(PathEnumeration):
     A result an Action release from before results named their request committed.
     """
 
-    PLAN_SITE_RUNS_SUCCEEDED = DIRECTORY / "plan-site-runs-succeeded.json"
-    """
-    A site repository's run listing whose latest plan-site run succeeded.
-    """
-
-    PLAN_SITE_DISPATCH_RUNS_SUCCEEDED = (
-        DIRECTORY / "plan-site-dispatch-runs-succeeded.json"
-    )
-    """
-    A notes repository's run listing whose latest dispatch run succeeded.
-    """
-
-    PLAN_SITE_DISPATCH_RUNS_FAILED = DIRECTORY / "plan-site-dispatch-runs-failed.json"
-    """
-    A notes repository's run listing whose latest dispatch run failed after an earlier
-    one succeeded.
-    """
-
-    WORKFLOW_RUNS_NONE = DIRECTORY / "workflow-runs-none.json"
-    """
-    A run listing with no runs at all.
-    """
-
     PROMOTION_SUMMARIES = DIRECTORY / "promotion-summaries.json"
     """
     What a session writes for the upstream pull requests of the two-branch stack: points
