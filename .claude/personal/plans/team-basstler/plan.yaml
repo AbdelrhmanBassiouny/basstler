@@ -195,3 +195,10 @@ items:
     it says so and suggests reviewing those draft pull requests instead, ranked by how many items each
     would unblock. Claims by assigning the issue and re-reading it, backing off if someone else holds
     it;'
+
+- id: plan-model-typed-accessors
+  title: "PlanManifest and PlanItem expose every manifest field as a typed read-only accessor; consumers stop indexing raw dicts"
+  branch: null
+  track: core
+  depends_on: []
+  status: in progress
