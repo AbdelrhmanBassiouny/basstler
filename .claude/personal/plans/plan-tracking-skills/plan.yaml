@@ -1,10 +1,10 @@
 schema_version: 1
 id: plan-tracking-skills
 title: 'The plan-item skills: deciding where work goes, and recording it before doing it'
-description: The skills a session uses to place a piece of work and to keep the manifest honest
-  about it - deciding whether something is new work or a change to work in flight, opening
-  an item's branch and draft pull request before implementation rather than after, and choosing
-  whether a kickoff asks for approval or proceeds.
+description: The skills a session uses to place a piece of work and to keep the manifest honest about
+  it - deciding whether something is new work or a change to work in flight, opening an item's branch
+  and draft pull request before implementation rather than after, and choosing whether a kickoff asks
+  for approval or proceeds.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 38
 waves:
@@ -23,21 +23,20 @@ items:
   track: skills
   depends_on: []
   notes: 'The third and strongest of the three fixes recorded on `session-start-plan-and-setup-guards`,
-    split out at that item''s kickoff: the only one that makes the miss impossible rather
-    than merely unlikely, where the two that shipped make it unlikely by reporting better.
-    A `PreToolUse` hook on `Edit|Write` that refuses a source edit from a branch no plan item
-    tracks.'
+    split out at that item''s kickoff: the only one that makes the miss impossible rather than merely
+    unlikely, where the two that shipped make it unlikely by reporting better. A `PreToolUse` hook on
+    `Edit|Write` that refuses a source edit from a branch no plan item tracks.'
 - id: report-document-naming
   title: One name for the report-to-document method across the .claude tooling
   branch: null
   status: not_started
   track: skills
   depends_on: []
-  notes: 'From an upstream review of cram2 #537: "i feel like you have `as_document`, `as_dict`,
-    `as_json`, `as_json_dict` etc scattered across your different PRs". Measured rather than
-    taken on impression: `as_document` returns a dict in two files, `to_json_dict` returns
-    a dict in two more, and `as_json` returns a *str* in two others - one operation under
-    two names, plus a genuinely different one under a third.'
+  notes: 'From an upstream review of cram2 #537: "i feel like you have `as_document`, `as_dict`, `as_json`,
+    `as_json_dict` etc scattered across your different PRs". Measured rather than taken on impression:
+    `as_document` returns a dict in two files, `to_json_dict` returns a dict in two more, and `as_json`
+    returns a *str* in two others - one operation under two names, plus a genuinely different one under
+    a third.'
 - id: skill-document-links
   title: Skills cite their shared documents with relative links, not shell variables
   branch: claude/elegant-clarke-4k3ske
@@ -45,12 +44,11 @@ items:
   track: skills
   pull_request_number: 74
   session: https://claude.ai/code/session_01TQn8K1dWSNVqA9mSNoUtFo
-  depends_on:
-  - stack-maintenance/manifest-currency-first
-  notes: >
-    From the basstler#48 review (discussion_r4372858558). Draft #74: all 21 ${*_DOCUMENT} references
-    in skill documents are now relative links; SCOPE_DECISION, EXECUTION_MODES, PLAN_ITEM_GATHERING,
-    DEPENDENCY_READINESS and PULL_REQUEST_DATA_FETCHING (and ADD_PLAN_ITEM_DIRECTORY) dropped from
-    the config; PLAN_SCHEMA_DOCUMENT kept for check-setup.sh. tests/skills/test_skill_documents.py
-    guards links, document variables and undefined variables across every skill document. Awaiting
-    review.
+  depends_on: []
+  notes: 'From the basstler#48 review (discussion_r4372858558). Draft #74: all 21 ${*_DOCUMENT} references
+    in skill documents are now relative links; SCOPE_DECISION, EXECUTION_MODES, PLAN_ITEM_GATHERING, DEPENDENCY_READINESS
+    and PULL_REQUEST_DATA_FETCHING (and ADD_PLAN_ITEM_DIRECTORY) dropped from the config; PLAN_SCHEMA_DOCUMENT
+    kept for check-setup.sh. tests/skills/test_skill_documents.py guards links, document variables and
+    undefined variables across every skill document. Awaiting review.
+
+    '
