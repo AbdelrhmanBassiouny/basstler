@@ -201,12 +201,9 @@ fi
 # This session's page on the plan site, from the hub file.
 SUMMARY_HUB="$(hub_line_not_registered "${NOTES_BRANCH}")"
 if SITE_URL="$(recorded_site_url)"; then
-  HUB_POSITION="${SITE_URL:+${SITE_URL%/}/}$(repository_name)/"
-  if [ -n "${PLAN_ID}" ]; then
-    HUB_POSITION="${HUB_POSITION}${PLAN_ID}/"
-    ITEM_ID="$(item_id_for_branch "${PLAN_ID}" "${CURRENT_BRANCH}")"
-    [ -n "${ITEM_ID}" ] && HUB_POSITION="${HUB_POSITION}#item-${ITEM_ID}"
-  fi
+  ITEM_ID=""
+  [ -n "${PLAN_ID}" ] && ITEM_ID="$(item_id_for_branch "${PLAN_ID}" "${CURRENT_BRANCH}")"
+  HUB_POSITION="$(plan_site_page_url "${PLAN_ID}" "${ITEM_ID}")" || HUB_POSITION="${SITE_URL}"
   SUMMARY_HUB="$(hub_line_registered "${SITE_URL}" "${HUB_POSITION}")"
 fi
 
