@@ -13,6 +13,27 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    name: ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Dependency groups need pip 25.1 or later.
+      - name: Install the development tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install --group dev
+
+      - name: Check the code rules
+        run: ruff check .
+
   test:
     name: pytest on Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
@@ -32,7 +53,9 @@ jobs:
       # The hook tests run python3 from the path, so the package is installed into the
       # interpreter setup-python put there.
       - name: Install basstler and the test runner
-        run: pip install --editable . pytest pytest-xdist
+        run: |
+          python -m pip install --upgrade pip
+          pip install --editable . --group dev
 
       - name: Run the tests
         run: pytest tests -n auto

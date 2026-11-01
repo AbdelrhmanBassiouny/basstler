@@ -12,7 +12,7 @@
 ## Testing
 
 ### Writing Tests
-- Write tests with pytest: plain test functions or classes, pytest fixtures, `pytest.raises` and plain `assert`; never `unittest.TestCase` or its assertion methods
+- Write tests with pytest: plain test functions or classes, pytest fixtures, `pytest.raises` and plain `assert`
 - Reuse the existing fixtures in `conftest.py`
 - Work test-driven: prove a bug with a meaningful, failing test before fixing it. Every new feature and fix is covered by tests
 - When fixing a failing test, never modify the test itself
@@ -34,12 +34,12 @@
 - Run tests with pytest
 
 ## Code Style
-- Always use dataclasses
+- `ruff check .` passes on every change. The rules it enforces are configured in `pyproject.toml` and not repeated here; never silence a finding with `noqa` or a new ignore without asking
+- Use dataclasses: pydantic dataclasses for data parsed from outside the program (an API response, a configuration file, a command's input), plain dataclasses everywhere else
 - Divide every file, source and test, into sections with `# %% <short description>` headers (e.g. `# %% same-noun disambiguation`), never decorative box-drawing dividers
 - A group of primitives that travels together, or a return type that keeps being repeated, becomes a dataclass
 - Never duplicate code. Never put methods in a catch-all module such as `utils.py`; move them onto the class that owns the behaviour
 - Access attributes with `.`, never with `getattr`, and never wrap attribute access in try-except
-- Never use mutable objects as default arguments
 - Never reimplement what the codebase or an existing dependency already provides. When searching for it, never cut off the output of grep or other searches; narrow the search instead
 
 ### Naming
@@ -57,11 +57,6 @@
 - Never take an identifier the language or something in scope already binds: `Enum` reserves `name`, a parameter `field` shadows `dataclasses.field`, a field shadows a method of the same name. These fail at runtime or silently, not at import
 - A rename is finished only when every reader of the old name, docstrings and comments included, uses the new one and the tests pass. A mechanical rename across a file is exactly where a method and a field converge on one name
 - When no honest specific name exists, suspect the code, not your vocabulary: a thing that can only be described vaguely usually has no single subject (a container for whatever its caller passed, a function doing two jobs). Remove it instead of hunting for a better word
-
-## Imports
-- Imports are absolute. Exception: a test imports another test module (a shared mimic or fixture from the test datasets) relatively
-- Imports go at the top of the module; fix an import cycle by restructuring the modules, never with a local import
-- Guard type-only imports with `TYPE_CHECKING`
 
 ## Design Principles
 - Use strictly object-oriented design and always apply the SOLID principles:
@@ -84,39 +79,35 @@
 
 ### Errors
 - Never use try-except; a program in an illegal state raises an appropriate exception
-- Create meaningful custom exceptions as dataclasses
+- Define a few exception types, one per kind of failure (a git command that fails, a GitHub request that is refused, a configuration that does not parse), each a dataclass carrying what the reader needs to fix it. Never a new class for every place that raises
 - Put each exception in the `exceptions.py` closest to the code that raises it:
   - An exception raised only within one subpackage goes in that subpackage's `exceptions.py`; create the file if the subpackage has none
   - An exception raised across several subpackages goes in the `exceptions.py` of their nearest common package
-- Never use `assert` outside tests: Python drops it when run with `-O`, so the check silently disappears. Raise a custom exception instead
 - Custom exceptions subclass `basstler.exceptions.DataclassException`, implementing its `error_message` and `suggest_correction`
 
 ### Constants and Class-Level Values
-- Never use global variables, module-level constants or `ClassVar`. Instead:
-  - A fixed set of related values is a module-level enum
-  - A default a caller may want to change is a parameter of the method that uses it if only that method does, otherwise a dataclass field with that default. For example, a `Heater` takes `target_temperature: float = 20.0` as a field instead of declaring `DEFAULT_TARGET_TEMPERATURE: ClassVar[float] = 20.0`
-  - A constant that belongs to a class is a `classproperty`
-  - `ClassVar` is allowed only for state that explicitly has to be shared and mutable across every instance of a class. This almost never applies
-- Use `basstler.class_property.classproperty`
+- A true constant - a value no caller would change, such as a limit an external API sets - is a plain module-level `UPPER_CASE` constant
+- A fixed set of related values is a module-level enum
+- A default a caller may want to change is a parameter of the method that uses it if only that method does, otherwise a dataclass field with that default. For example, a `Heater` takes `target_temperature: float = 20.0` as a field instead of declaring `DEFAULT_TARGET_TEMPERATURE = 20.0`
+- A value each subclass declares for itself is a `basstler.class_property.classproperty`
+- Never keep mutable state at module level. `ClassVar` is allowed only for state that explicitly has to be shared and mutable across every instance of a class. This almost never applies
 
 ### Structured Data
 - Structured data is the default over bare strings, hardcoded values and meaningless numbers: reach for the structured form first and justify the literal, never the other way round
 - A string that names a fixed thing - a payload key, a state, a label, a filename, an environment variable, a command flag, a status - is a `StrEnum` member. A value spelled in two places has no single source to rename, and nothing fails when the two drift apart
 - When the values are more than text - paths, numbers - give the enum values of that type, mixing the type in (`IntEnum`, `StrEnum`)
-- A magic number becomes an enum member, a field default or a `classproperty`; a bare literal that carries meaning is unreadable where it is used and unsearchable everywhere else
-- Data whose shape someone else controls - an API response, a configuration file - is mirrored in dataclasses and parsed by a `from_json` classmethod, so the field names and the access path into the payload are written once
+- A magic number becomes an enum member, a field default or a named constant; a bare literal that carries meaning is unreadable where it is used and unsearchable everywhere else
+- Data whose shape someone else controls - an API response, a configuration file - is parsed into pydantic dataclasses at the boundary, so it is validated once and the field names and the access path into the payload are written once
 - A tuple whose positions carry meaning becomes a dataclass, or an enum when the positions are a fixed set of alternatives rather than fields
 - A long literal document - a query, a template, a schema - lives in a file of its own type and is read in, never embedded as a string
 - A path enum subclasses `basstler.locations.PathEnumeration`, so every path derived from a member is a plain `Path`; its members' `name` is the path's last component, so read the member name as `_name_`
 
 ## Type Hints
-- Every parameter and return value has an accurate type hint, `Any` and `-> None` included
-- Use builtin generics and `X | None` (`list[int]`, `Pose | None`), never `typing.List`, `Dict`, `Optional` or `Union`; import every other typing construct from `typing`; `typing_extensions` is not a dependency of the package
-- Use `from __future__ import annotations` instead of wrapping types in strings
+- Type hints are accurate: `Any` where the value genuinely is anything, never as a shortcut
 - When each class in a family declares the type it handles, carry that type as a bound generic parameter, not a `ClassVar`, so it is part of the signature and cannot disagree with a separate attribute: bind it in each member (`class MemberOfFamily(Family[ConcreteType])`)
 
 ## Documentation
-- Every class and method has meaningful, non-trivial documentation in reStructuredText. Every field has its own docstring directly below it, not a description in the class docstring
+- Write a docstring, in reStructuredText, where it says something the name and signature do not: a class's responsibility, a method's contract, a field's unit or meaning. Leave it out where it would only restate the name. A field's docstring goes directly below the field, not in the class docstring
 - An override that keeps its base contract has no docstring and inherits the base one. One that changes the contract documents only the difference and references the overridden method with `:meth:`
 - A docstring states what the code does and its contract, short and to the point. It never contains:
   - how the code does it
