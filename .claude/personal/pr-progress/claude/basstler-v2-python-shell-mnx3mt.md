@@ -1,7 +1,6 @@
 ## Plan
-- Failing test: session-start exports BASSTLER_PYTHON beside BASSTLER_PLUGIN_ROOT
-- BasstlerVariable.PYTHON in locations; export in session-start.sh after ensure_basstler_environment
+- BasstlerVariable.PYTHON; session-start.sh exports it after the install
 ## Done
-- Branch and draft PR #101
+- Failing test, fix, pushed; hooks suite shows only the 15 failures main already has
 ## Next
-- Test, fix, run hooks tests
+- Review on draft PR #101
