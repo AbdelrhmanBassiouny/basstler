@@ -8,6 +8,7 @@
 - When you are unsure why something was done or why a specific number was chosen, ask; never invent a reason and write it down as a comment
 - When a method is never used outside of tests, ask whether it can be removed
 - Before adding a new dependency, ask
+- When the permission system or its classifier denies a tool call, never work around the denial and never drop the step silently: ask the user to accept it, naming the exact action and why it is needed, and run it only once they agree
 
 ## Testing
 
