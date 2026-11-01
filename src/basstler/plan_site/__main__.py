@@ -33,13 +33,21 @@ from typing import Any
 
 import yaml
 
-from basstler.dashboard.plan_page import DashboardRenderer, RenderedDashboard
+from basstler.dashboard.plan_page import RenderedDashboard
 from basstler.dashboard.plan import Plan
 from basstler.exceptions import PlanValidationError
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.validation import PlanValidator
-from basstler.plan_site.hub_page import HubPage, RepositorySummary, SiteSummary
-from basstler.dashboard.index_page import IndexPage, PlanSummary, ProgressCard
+from basstler.plan_site.hub_page import (
+    HubPage,
+    RepositoryIndexPage,
+    RepositorySummary,
+    SiteStylesheet,
+    SiteSummary,
+    SkippedPage,
+)
+from basstler.plan_site.plan_page import SitePlanPage
+from basstler.dashboard.index_page import PlanSummary, ProgressCard
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
 from basstler.plan_site.hub import NotesBranch, PlanHub
 from basstler.plan.model import PlanDocument
@@ -71,6 +79,11 @@ class SiteFile(StrEnum):
     DIGEST = "site-digest.txt"
     """
     The site's :class:`SiteDigest`, which a deploy compares with the published one.
+    """
+
+    STYLESHEET = "site.css"
+    """
+    The one stylesheet every page links, at the site's root.
     """
 
 
@@ -204,6 +217,13 @@ class SiteSection[SectionCard: ProgressCard](ABC):
         """
         return f"{self.site_url.rstrip('/')}/"
 
+    @property
+    def stylesheet_url(self) -> str:
+        """
+        The address of the site's one stylesheet, which every page links.
+        """
+        return f"{self.hub_url}{SiteFile.STYLESHEET}"
+
     @abstractmethod
     def build(self, output: Path) -> SectionCard:
         """
@@ -267,34 +287,47 @@ class RepositorySite(SiteSection[RepositorySummary]):
         Render this repository's index and plans into the site.
 
         :param output: The site's root directory.
-        :return: The repository's card on the hub.
+        :return: The repository's card on the hub, naming every plan left out.
         """
+        sources = PlanSource.every_plan_in(self.plans_directory)
+        skipped = {
+            source.directory_name: page
+            for source in sources
+            if (page := self.skipped_page_of(source)) is not None
+        }
         published = {
             source.directory_name: self.publish(source)
-            for source in PlanSource.every_plan_in(self.plans_directory)
-            if self.is_publishable(source)
+            for source in sources
+            if source.directory_name not in skipped
         }
         repository_directory = output / str(self.repository)
         for directory_name, plan in published.items():
             self.write_page(repository_directory / directory_name, plan.dashboard.html)
-        summaries = [plan.summary for plan in published.values()]
-        index = IndexPage(summaries, str(self.repository), self.hub_url)
-        self.write_page(repository_directory, index.render())
-        return RepositorySummary.over_plans(
-            str(self.repository), self.index_url, summaries
+        repository = RepositorySummary.over_plans(
+            str(self.repository),
+            self.index_url,
+            [plan.summary for plan in published.values()],
+            list(skipped.values()),
         )
+        index = RepositoryIndexPage(repository, self.hub_url, self.stylesheet_url)
+        self.write_page(repository_directory, index.render())
+        return repository
 
-    def is_publishable(self, source: PlanSource) -> bool:
+    def skipped_page_of(self, source: PlanSource) -> SkippedPage | None:
         """
         :param source: The plan to check.
-        :return: Whether its manifest passes validation, logging why if it does not.
+        :return: Why it is left out of the site, logging it, or ``None`` when its
+            manifest passes validation.
         """
-        try:
-            PlanValidator(source.manifest, self.plan_directory).validate()
-        except PlanValidationError as error:
-            logger.warning(f"{source.directory_name} is not published: {error}")
-            return False
-        return True
+        problems = PlanValidator(source.manifest, self.plan_directory).problems
+        if not problems:
+            return None
+        page = SkippedPage(
+            site_path=f"{self.repository}/{source.directory_name}",
+            reason=PlanValidationError(problems).error_message(),
+        )
+        logger.warning(f"{page.site_path} is not published: {page.reason}")
+        return page
 
     def publish(self, source: PlanSource) -> PublishedPlan:
         """
@@ -305,7 +338,8 @@ class RepositorySite(SiteSection[RepositorySummary]):
         """
         plan = Plan.from_mapping(source.manifest)
         dependencies = DependencyResolver(plan, self.plan_directory)
-        renderer = DashboardRenderer(
+        renderer = SitePlanPage(
+            stylesheet_url=self.stylesheet_url,
             plan=plan,
             roadmap_text=source.roadmap_text,
             pull_requests_by_repository=self.pull_request_source.pull_requests_of(
@@ -361,7 +395,8 @@ class HubSite(SiteSection[SiteSummary]):
 
     def build(self, output: Path) -> SiteSummary:
         """
-        Render every repository, then the hub linking them, then the site's digest.
+        Render every repository, then the hub linking them and the stylesheet every page
+        links, then the site's digest.
 
         :param output: The directory to write the site into.
         :return: The site's summary, holding every repository's card in the hub file's
@@ -375,7 +410,8 @@ class HubSite(SiteSection[SiteSummary]):
                 for position, repository in enumerate(self.hub.repositories)
             ]
         summary = SiteSummary.over_repositories(repositories)
-        self.write_page(output, HubPage(summary).render())
+        self.write_page(output, HubPage(summary, self.stylesheet_url).render())
+        (output / SiteFile.STYLESHEET).write_text(SiteStylesheet().render())
         (output / SiteFile.NO_JEKYLL).touch()
         SiteDigest(output).write()
         return summary

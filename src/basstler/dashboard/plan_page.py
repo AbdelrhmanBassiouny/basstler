@@ -226,6 +226,14 @@ class DashboardRenderer(TemplatePage):
     def template(cls) -> str:
         return DashboardTemplate.SELF_CONTAINED_PAGE.name
 
+    @property
+    def page_context(self) -> dict[str, Any]:
+        """
+        The values only this kind of page renders, beside every dashboard's own; none
+        for the dashboard itself.
+        """
+        return {}
+
     def __post_init__(self) -> None:
         self.items_by_identifier = {item.identifier: item for item in self.plan.items}
         self.dependencies = DependencyResolver(
@@ -271,6 +279,7 @@ class DashboardRenderer(TemplatePage):
             roadmap_html=render_markdown_to_html(self.roadmap_text),
             waves=self._build_wave_sections(),
             available_models=list(ModelOption),
+            **self.page_context,
         )
         html = self.render_template(**context)
         artifact = DashboardArtifact(
@@ -295,10 +304,11 @@ class DashboardRenderer(TemplatePage):
     def _classify_items(self) -> None:
         """
         Fill in every item's :attr:`Item.live_state`, :attr:`Item.drift_description`,
-        :attr:`Item.pull_request_url`, :attr:`Item.upstream_pull_request_url`,
-        :attr:`Item.is_bug_fix`, :attr:`Item.needs_review`,
-        :attr:`Item.dependency_chips`, and :attr:`Item.action` from live pull request
-        data and the plan's other items, in place.
+        :attr:`Item.pull_request_url`, :attr:`Item.pull_request_record`,
+        :attr:`Item.upstream_pull_request_url`, :attr:`Item.is_bug_fix`,
+        :attr:`Item.needs_review`, :attr:`Item.dependency_chips`, and
+        :attr:`Item.action` from live pull request data and the plan's other items, in
+        place.
 
         Runs in two passes: :attr:`Item.live_state` must be filled in for
         every item before :meth:`_action_for` can check whether *another*
@@ -309,6 +319,7 @@ class DashboardRenderer(TemplatePage):
             item.live_state = self._live_state_of(item)
             item.drift_description = self._drift_description_of(item)
             item.pull_request_url = self._pull_request_url_of(item)
+            item.pull_request_record = self._pull_request_record_of(item)
             item.upstream_pull_request_url = self._upstream_pull_request_url_of(item)
             item.is_bug_fix = self._is_bug_fix(item)
             item.needs_review = (

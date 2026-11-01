@@ -1,0 +1,22 @@
+{% extends "site_layout.html" %}
+{% from "site_parts.html" import health_banner, progress_card %}
+{% block title %}{{ repository.name }} plans{% endblock %}
+{% block content %}
+  <header class="masthead">
+    <p class="crumbs"><a href="{{ hub_url }}">All repositories</a> › {{ repository.name }}</p>
+    <p class="eyebrow">{{ repository.name }}</p>
+    <h1>Plans</h1>
+    <p class="lede">Initiatives spanning several pull requests and sessions, each with its own page.</p>
+    <p class="meta-line mono">{{ repository.progress_label }}{% if repository.review_label %} · {{ repository.review_label }}{% endif %}</p>
+  </header>
+
+  {{ health_banner(repository.skipped_pages) }}
+
+  <div class="card-list">
+  {% for plan in repository.plans %}
+    {{ progress_card(plan, plan.title, url=plan.dashboard_url, description=plan.description) }}
+  {% else %}
+    <p class="empty">No plans published for this repository.</p>
+  {% endfor %}
+  </div>
+{% endblock %}

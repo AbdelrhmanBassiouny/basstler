@@ -32,6 +32,7 @@ import yaml
 from basstler.class_property import classproperty
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.plan_site.exceptions import RegistryUnreadableError
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.standard_streams import StandardStreamHandler
@@ -149,15 +150,17 @@ class PlanHub:
         :param remote_root: Where repositories are fetched from, as
             :meth:`Repository.clone_url_under` takes it.
         :return: The hub file, or ``None`` when the registry has none.
+        :raises RegistryUnreadableError: If the registry's notes branch cannot be
+            fetched.
         """
+        notes_branch = PersonalNotesSetting.BRANCH.default
         with tempfile.TemporaryDirectory() as scratch:
             notes = NotesBranch.fetch(
-                registry,
-                PersonalNotesSetting.BRANCH.default,
-                remote_root,
-                Path(scratch),
+                registry, notes_branch, remote_root, Path(scratch)
             )
-            text = None if notes is None else notes.read(ProjectLocation.PLAN_HUB)
+            if notes is None:
+                raise RegistryUnreadableError(registry, notes_branch)
+            text = notes.read(ProjectLocation.PLAN_HUB)
         return cls.from_text(text)
 
     def to_text(self) -> str:

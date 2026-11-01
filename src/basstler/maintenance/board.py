@@ -58,6 +58,17 @@ class PullRequestHeadKey(StrEnum):
     """
 
 
+class AccountField(StrEnum):
+    """
+    The fields of an account the API describes.
+    """
+
+    LOGIN = "login"
+    """
+    The account's login.
+    """
+
+
 class PullRequestFieldShape(StrEnum):
     """
     How one pull-request field's value has to be read.
@@ -79,6 +90,11 @@ class PullRequestFieldShape(StrEnum):
     LABEL_NAMES = "label-names"
     """
     A list of labels, each given either plainly or as an object carrying a ``name``.
+    """
+
+    ACCOUNT_LOGINS = "account-logins"
+    """
+    A list of accounts, each an object carrying a ``login``.
     """
 
 
@@ -176,6 +192,12 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
     """
     Its page on GitHub, which the issues API answers under the same key.
     """
+    ASSIGNEES = PullRequestFieldSpecification(
+        key="assignees", shape=PullRequestFieldShape.ACCOUNT_LOGINS
+    )
+    """
+    The logins of the accounts it is assigned to.
+    """
 
     def read(self, record: PullRequestRecord, number: int | None = None) -> Any:
         """
@@ -200,6 +222,8 @@ class PullRequestField(PullRequestFieldSpecification, Enum):
                     label if isinstance(label, str) else str(label["name"])
                     for label in value
                 ]
+            case PullRequestFieldShape.ACCOUNT_LOGINS:
+                return [str(account[AccountField.LOGIN]) for account in value]
             case _:
                 return value
 
@@ -277,6 +301,18 @@ class PullRequestHead:
     """
     The commit the head branch points at.
     """
+
+    @staticmethod
+    def commit_in(record: PullRequestRecord) -> str | None:
+        """
+        :param record: The fetched pull request.
+        :return: The commit its head points at, or ``None`` when the record carries no
+            head object naming one.
+        """
+        head = record.get(PullRequestField.HEAD.key)
+        if not isinstance(head, Mapping):
+            return None
+        return head.get(PullRequestHeadKey.COMMIT)
 
     @classmethod
     def from_record(cls, record: PullRequestRecord, number: int) -> PullRequestHead:

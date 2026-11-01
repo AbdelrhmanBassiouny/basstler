@@ -7,8 +7,11 @@ from __future__ import annotations
 
 from pathlib import Path
 
+import pytest
+
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.plan_site.exceptions import RegistryUnreadableError
 from basstler.plan_site.hub import NotesBranch, PlanHub
 from basstler.plan.model import PlanDocument
 from basstler.repository import Repository
@@ -105,6 +108,12 @@ def test_a_registry_without_a_hub_file_reads_as_none(tmp_path: Path):
     publish_notes(tmp_path, REGISTRY, {})
 
     assert PlanHub.from_registry(REGISTRY, str(tmp_path)) is None
+
+
+def test_a_registry_whose_notes_cannot_be_fetched_is_refused(tmp_path: Path):
+    with pytest.raises(RegistryUnreadableError) as refused:
+        PlanHub.from_registry(SiteRepository.MISSING.value, str(tmp_path))
+    assert refused.value.registry == SiteRepository.MISSING.value
 
 
 # %% a listed repository's notes

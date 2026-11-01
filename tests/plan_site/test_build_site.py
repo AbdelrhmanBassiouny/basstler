@@ -5,6 +5,7 @@ each plan's dashboard.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from http import HTTPStatus
@@ -14,6 +15,7 @@ from typing import Any
 import pytest
 
 from basstler.dashboard.plan import Plan
+from basstler.exceptions import PlanValidationError
 from basstler.plan.dependencies import DependencyReference, DependencyResolver
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.plan_site.__main__ import (
@@ -24,19 +26,29 @@ from basstler.plan_site.__main__ import (
     SiteFile,
 )
 from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import PullRequestField
+from basstler.maintenance.board import (
+    AccountField,
+    PullRequestField,
+    PullRequestHeadKey,
+)
 from basstler.maintenance.github import (
+    CommitReport,
     GitHubRepository,
     GitHubRequestFailed,
     PullRequestListState,
+    RepositoryPath,
 )
 from basstler.plan_site.hub import PlanHub
+from basstler.plan_site.hub_page import SiteStylesheet, SkippedPage
+from basstler.plan_site.plan_page import ChipTone
+from basstler.plan.validation import PlanValidator
 from basstler.pull_request_source import GitHubPullRequestSource
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus
 from basstler.repository import PullRequestReference, Repository
+from basstler.upstream_reviews.vocabulary import RollupState
 
-from ..constants.paths import DatasetLocation
+from ..constants.paths import DatasetLocation, RecordedCommitChecks
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
 from ..recorded_pull_requests import RecordedPullRequestSource
 from .test_hub import publish_notes
@@ -183,6 +195,26 @@ def test_build_leaves_out_a_plan_whose_manifest_fails_validation(
     assert [summary.id for summary in repository.plans] == list(PUBLISHED_PLANS)
 
 
+def test_build_reports_a_plan_whose_manifest_fails_validation(
+    site: RepositorySite, tmp_path: Path
+):
+    broken = PlanSource.from_directory(SitePlan.BROKEN.directory)
+    problems = PlanValidator(broken.manifest, site.plan_directory).problems
+    repository = site.build(tmp_path)
+    assert repository.skipped_plans == [
+        SkippedPage(
+            site_path=f"{NOTES_REPOSITORY}/{SitePlan.BROKEN}",
+            reason=PlanValidationError(problems).error_message(),
+        )
+    ]
+
+
+def test_the_index_names_every_plan_it_left_out(site: RepositorySite, tmp_path: Path):
+    repository = site.build(tmp_path)
+    (skipped,) = repository.skipped_plans
+    assert skipped.site_path in page_of(tmp_path)
+
+
 def test_build_links_each_plan_to_its_page_on_the_site(
     site: RepositorySite, tmp_path: Path
 ):
@@ -304,6 +336,42 @@ def test_a_plan_page_links_a_dependency_in_another_plan_to_its_card_there(
     assert link_to(card_url) in page_of(tmp_path, SitePlan.SECOND)
 
 
+def test_a_plan_page_lays_out_a_column_per_wave(site: RepositorySite, tmp_path: Path):
+    site.build(tmp_path)
+    page = page_of(tmp_path, SitePlan.FIRST)
+    for wave in FIRST_PLAN.waves:
+        assert f'id="wave-{wave.id}"' in page
+
+
+def test_every_page_links_the_site_stylesheet(site: RepositorySite, tmp_path: Path):
+    site.build(tmp_path)
+    for plan in (None, *PUBLISHED_PLANS):
+        assert link_to(site.stylesheet_url) in page_of(tmp_path, plan)
+
+
+def test_a_plan_page_shows_the_ci_and_assignees_of_an_open_pull_request(
+    tmp_path: Path,
+):
+    check_state = RollupState.FAILURE
+    open_pull_request = PullRequestRecord(
+        state=PullRequestState.OPEN,
+        check_state=check_state,
+        assignees=[SiteSampleText.ASSIGNEE.value],
+    )
+    site = RepositorySite(
+        site_url=SiteSampleText.SITE_URL,
+        pull_request_source=RecordedPullRequestSource(
+            records={OPEN_PULL_REQUEST: open_pull_request}
+        ),
+        repository=NOTES_REPOSITORY,
+        plans_directory=DatasetLocation.SITE_PLANS.value,
+    )
+    site.build(tmp_path)
+    page = page_of(tmp_path, SitePlan.FIRST)
+    assert f'class="chip {ChipTone.of_check_state(check_state)}"' in page
+    assert f"@{SiteSampleText.ASSIGNEE}" in page
+
+
 def test_build_links_the_tracking_issue_on_the_plan_page(
     site: RepositorySite, tmp_path: Path
 ):
@@ -364,6 +432,35 @@ def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
     )
     assert summary.progress_label in hub_page
     assert (tmp_path / "site" / SiteFile.NO_JEKYLL).exists()
+
+
+def test_the_site_reports_every_plan_and_repository_it_left_out(
+    hub_site: HubSite, tmp_path: Path
+):
+    summary = hub_site.build(tmp_path / "site")
+    readable, unreadable = summary.repositories
+    assert summary.skipped_pages == [
+        *readable.skipped_plans,
+        SkippedPage(site_path=unreadable.name, reason=unreadable.error),
+    ]
+
+
+def test_the_hub_names_every_plan_and_repository_it_left_out(
+    hub_site: HubSite, tmp_path: Path
+):
+    summary = hub_site.build(tmp_path / "site")
+    hub_page = (tmp_path / "site" / SiteFile.PAGE).read_text()
+    for skipped in summary.skipped_pages:
+        assert skipped.site_path in hub_page
+
+
+def test_the_site_build_writes_the_stylesheet_its_pages_link(
+    hub_site: HubSite, tmp_path: Path
+):
+    output = tmp_path / "site"
+    hub_site.build(output)
+    assert (output / SiteFile.STYLESHEET).read_text() == SiteStylesheet().render()
+    assert link_to(hub_site.stylesheet_url) in (output / SiteFile.PAGE).read_text()
 
 
 def test_the_site_build_writes_its_digest(hub_site: HubSite, tmp_path: Path):
@@ -460,6 +557,39 @@ def test_from_api_reads_a_merge():
     assert record.merged_at.isoformat() == merged_at
 
 
+def test_from_api_reads_the_head_commit():
+    commit = SiteSampleText.HEAD_COMMIT.value
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            OPEN_PULL_REQUEST,
+            {PullRequestField.HEAD: {PullRequestHeadKey.COMMIT: commit}},
+        )
+    )
+    assert record.head_commit == commit
+
+
+def test_from_api_without_a_head_reads_no_head_commit():
+    assert (
+        PullRequestRecord.from_api(api_pull_request(OPEN_PULL_REQUEST)).head_commit
+        is None
+    )
+
+
+def test_from_api_reads_the_assignee_logins():
+    logins = [SiteSampleText.ASSIGNEE.value]
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            OPEN_PULL_REQUEST,
+            {
+                PullRequestField.ASSIGNEES: [
+                    {AccountField.LOGIN: login} for login in logins
+                ]
+            },
+        )
+    )
+    assert record.assignees == logins
+
+
 @dataclass(frozen=True)
 class RecordedRepository(GitHubRepository):
     """
@@ -538,6 +668,59 @@ def test_github_source_answers_none_for_a_pull_request_that_does_not_exist():
         token=SiteSampleText.TOKEN, responses={listing_path(): []}
     )
     assert source.pull_request(ELSEWHERE_PULL_REQUEST) is None
+
+
+def commit_report_path(report: CommitReport) -> str:
+    """
+    :param report: Which listing reported against :attr:`SiteSampleText.HEAD_COMMIT`
+        to read.
+    :return: The path its first page is read from.
+    """
+    return (
+        f"{RepositoryPath.COMMITS}/{SiteSampleText.HEAD_COMMIT}/{report}"
+        f"?per_page={GitHubRepository.page_size}&page=1"
+    )
+
+
+def api_pull_request_at_head(state: PullRequestState) -> dict[str, Any]:
+    """
+    :param state: Whether the pull request is open or closed.
+    :return: The open pull request of the first plan, in that state, with its head at
+        :attr:`SiteSampleText.HEAD_COMMIT`.
+    """
+    return api_pull_request(
+        OPEN_PULL_REQUEST,
+        {
+            PullRequestField.STATE: state.value,
+            PullRequestField.HEAD: {
+                PullRequestHeadKey.COMMIT: SiteSampleText.HEAD_COMMIT.value
+            },
+        },
+    )
+
+
+def test_github_source_reads_the_checks_of_an_open_pull_request():
+    source = RecordedGitHubPullRequestSource(
+        token=SiteSampleText.TOKEN,
+        responses={
+            listing_path(): [api_pull_request_at_head(PullRequestState.OPEN)],
+            commit_report_path(CommitReport.CHECK_RUNS): json.loads(
+                RecordedCommitChecks.ONE_CHECK_RUN_FAILING.value.read_text()
+            ),
+            commit_report_path(CommitReport.STATUS): json.loads(
+                RecordedCommitChecks.NO_STATUSES.value.read_text()
+            ),
+        },
+    )
+    assert source.pull_request(OPEN_PULL_REQUEST).check_state is RollupState.FAILURE
+
+
+def test_github_source_leaves_the_checks_of_a_closed_pull_request_unread():
+    source = RecordedGitHubPullRequestSource(
+        token=SiteSampleText.TOKEN,
+        responses={listing_path(): [api_pull_request_at_head(PullRequestState.CLOSED)]},
+    )
+    assert source.pull_request(OPEN_PULL_REQUEST).check_state is None
 
 
 def test_github_source_reads_an_issue_url():

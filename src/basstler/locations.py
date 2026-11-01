@@ -170,6 +170,42 @@ class DashboardTemplate(PathEnumeration):
     """
 
 
+class SiteTemplate(PathEnumeration):
+    """
+    The templates the plan site's pages and stylesheet are rendered from.
+    """
+
+    STYLESHEET = PackageLocation.TEMPLATES.value / "site.css"
+    """
+    The one stylesheet every page of the site links.
+    """
+
+    LAYOUT = PackageLocation.TEMPLATES.value / "site_layout.html"
+    """
+    The document every page of the site fills in.
+    """
+
+    PARTS = PackageLocation.TEMPLATES.value / "site_parts.html"
+    """
+    The markup the site's pages share: progress cards and the health banner.
+    """
+
+    HUB = PackageLocation.TEMPLATES.value / "hub.html"
+    """
+    The hub: a card per repository.
+    """
+
+    REPOSITORY_INDEX = PackageLocation.TEMPLATES.value / "site_index.html"
+    """
+    One repository's index: a card per plan.
+    """
+
+    PLAN = PackageLocation.TEMPLATES.value / "site_plan.html"
+    """
+    One plan's page: a column per wave, a card per item.
+    """
+
+
 class DashboardArtifactFile(PathEnumeration):
     """
     The files a plan's dashboard Artifact is published as, by their published path.

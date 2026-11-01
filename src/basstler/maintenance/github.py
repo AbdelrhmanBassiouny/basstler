@@ -26,7 +26,11 @@ from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.github_labels import GitHubLabel
 from basstler.locations import PathEnumeration
-from basstler.maintenance.board import CommitChecks, PullRequestRecord
+from basstler.maintenance.board import (
+    AccountField,
+    CommitChecks,
+    PullRequestRecord,
+)
 from basstler.environment import GitHubCredentialVariable
 from basstler.maintenance.exceptions import ExternalCallFailed
 from basstler.repository import GitHubAddress, Repository
@@ -231,17 +235,6 @@ class LabelField(StrEnum):
     DESCRIPTION = "description"
     """
     What the label means.
-    """
-
-
-class AccountField(StrEnum):
-    """
-    The fields of an account the API describes.
-    """
-
-    LOGIN = "login"
-    """
-    The account's login.
     """
 
 

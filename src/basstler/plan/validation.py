@@ -243,17 +243,24 @@ class PlanValidator:
         :raises PlanValidationError: If any rule is violated, carrying every problem
             found.
         """
+        problems = self.problems
+        if problems:
+            raise PlanValidationError(problems)
+
+    @property
+    def problems(self) -> list[ValidationProblem]:
+        """
+        Every rule the manifest violates, empty when it passes validation.
+        """
         if not isinstance(self.manifest, dict):
-            raise PlanValidationError([InvalidManifestRoot(self.manifest)])
-        problems = [
+            return [InvalidManifestRoot(self.manifest)]
+        return [
             *self.schema_version_problems(),
             *self.duplicate_identifier_problems(),
             *(problem for item in self.items for problem in self.item_problems(item)),
             *self.cycle_problems(),
             *self.wave_problems(),
         ]
-        if problems:
-            raise PlanValidationError(problems)
 
     @property
     def plan_id(self) -> Any:
