@@ -38,11 +38,12 @@ tracks:
 items:
 - id: code-rules-light
   title: Lighter code rules, enforced by ruff and pydantic dataclasses
-  branch: null
-  pull_request_number: null
+  branch: claude/tender-fermat-wh5gsi
+  pull_request_number: 104
   track: foundation
+  session: https://claude.ai/code/session_018wfiv8brzdj7psZCmLEaFt
   depends_on: []
-  status: not started
+  status: in progress
   notes: 'Approved 2026-11-01: pydantic dataclasses at the external-data boundary; ruff as a dev dependency enforcing
     the mechanical rules (their prose leaves AGENTS.md); docstrings only where they add meaning; plain constants
     for true constants; a few exception types per kind of failure. No open questions: implement directly.'
