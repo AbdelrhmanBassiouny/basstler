@@ -1,18 +1,17 @@
 schema_version: 1
 id: basstler-package
 title: 'The basstler package: a standalone repository, its setup, and CRAM moving onto it'
-description: 'The workflow tooling lives in this repository as one importable package beside
-  its Claude Code plugin, and CRAM uses it as a per-user plugin (CRAM #523, merged 2026-10-20).
-  What remains is the plugin working with no committed project files, the carried krrood branch,
-  and a shared, published development tooling package. Converting the bash layer into shims
-  is the bash-to-python plan.'
+description: 'The workflow tooling lives in this repository as one importable package beside its Claude
+  Code plugin, and CRAM uses it as a per-user plugin (CRAM #523, merged 2026-10-20). What remains is the
+  plugin working with no committed project files, the carried krrood branch, and a shared, published development
+  tooling package. Converting the bash layer into shims is the bash-to-python plan.'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 4
 waves:
 - id: extraction
   name: The package stands alone
-  description: The repository itself, the branches carried into it, and the setup path a newcomer
-    reaches it by.
+  description: The repository itself, the branches carried into it, and the setup path a newcomer reaches
+    it by.
 - id: shared-tooling
   name: Shared development tooling
   description: Development tooling installed from a published package instead of copied in.
@@ -23,16 +22,16 @@ tracks:
 - id: carried-across
   name: Branches carried across the extraction
   wave: extraction
-  description: Tooling branches that arrived rewritten with the repository's history and still
-    hold unlanded work. Each gets a fresh draft pull request here.
+  description: Tooling branches that arrived rewritten with the repository's history and still hold unlanded
+    work. Each gets a fresh draft pull request here.
 - id: setup
   name: Guided setup
   wave: extraction
 - id: cram-retirement
   name: The CRAM fork sheds the tooling
   wave: extraction
-  description: The fork, and upstream cram2 through it, use basstler as a plugin and carry
-    none of its code, pull requests or plans.
+  description: The fork, and upstream cram2 through it, use basstler as a plugin and carry none of its
+    code, pull requests or plans.
 - id: development-tools
   name: Development tools package
   wave: shared-tooling
@@ -44,27 +43,24 @@ items:
   track: carried-across
   depends_on: []
   pull_request_number: 12
-  notes: Depend on plain krrood (its light core, with a krrood[all] extra for the rest) instead
-    of a separate krrood_core package. Exceptions in exceptions.py as DataclassExceptions,
-    board.json through krrood's serializer. The branch predates that choice and needs reworking.
-    Its TYPE_CHECKING import of ManifestKey moves to basstler.plan_model once basstler#11
-    lands.
+  notes: Depend on plain krrood (its light core, with a krrood[all] extra for the rest) instead of a separate
+    krrood_core package. Exceptions in exceptions.py as DataclassExceptions, board.json through krrood's
+    serializer. The branch predates that choice and needs reworking. Its TYPE_CHECKING import of ManifestKey
+    moves to basstler.plan_model once basstler#11 lands.
   blockers:
   - Waits on krrood publishing its light core with the krrood[all] extra.
 - id: plugin-from-installed-package
   title: Hooks and skill documents run from the installed package's copy of the plugin
   branch: null
-  status: not started
+  status: deferred
   track: extraction
   depends_on: []
   pull_request_number: null
-  notes: 'Option (c) of https://github.com/AbdelrhmanBassiouny/basstler/pull/32#discussion_r4367494752,
-    agreed as a later item there (#32 itself merges as option (a)). Ship plugin/ inside the
-    wheel; hooks and the documents skills tell Claude to read resolve against the installed
-    package''s copy, so the synced plugin shrinks to the SessionStart hook plus thin SKILL.md
-    stubs that stay a stable pointer. Removes skew between a lagging synced plugin and a newer
-    installed package for everything except the SKILL.md text Claude Code loads itself. Starts
-    once #32 has merged.'
+  notes: 'Superseded by basstler-v3 cli-launcher (the plugin runs the installed release) and short-skills.
+    Was: Option (c) of https://github.com/AbdelrhmanBassiouny/basstler/pull/32#discussion_r4367494752,
+    agreed as a later item there (#32 itself merges as option (a)). Ship plugin/ inside the wheel; hooks
+    and the documents skills tell Claude to read resolve against the installed package''s copy, so the
+    synced plugin shrinks to the SessionStart hook plus thin SKILL.md stubs that stay a stable pointer.'
 - id: cram-development-tools
   title: Install the docstring formatter and a generated AGENTS.md from the shared cram-development-tools
     package
@@ -73,11 +69,11 @@ items:
   track: development-tools
   depends_on: []
   pull_request_number: null
-  notes: 'Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306714398.
-    A PyPI package with `format` (today''s scripts/format_docstrings.py) and `agents-md [--check]`,
-    both pre-commit hooks; per cram fork #517, `agents-md` rewrites only a marked block of
-    AGENTS.md. basstler''s part: pin it in .pre-commit-config.yaml, run pre-commit in CI,
-    delete scripts/format_docstrings.py, and wrap the shared rules in AGENTS.md (hand-copied
-    in #32) in that block. Open: a more neutral package name.'
+  notes: 'Follow basstler-v3 code-rules-light''s formatter choice (ruff) first. Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306714398.
+    A PyPI package with `format` (today''s scripts/format_docstrings.py) and `agents-md [--check]`, both
+    pre-commit hooks; per cram fork #517, `agents-md` rewrites only a marked block of AGENTS.md. basstler''s
+    part: pin it in .pre-commit-config.yaml, run pre-commit in CI, delete scripts/format_docstrings.py,
+    and wrap the shared rules in AGENTS.md (hand-copied in #32) in that block. Open: a more neutral package
+    name.'
   blockers:
   - Waits on the package's first PyPI release, built in the repository that hosts it.
