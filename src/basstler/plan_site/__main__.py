@@ -40,6 +40,8 @@ from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.validation import PlanValidator
 from basstler.plan_site.hub_page import (
     HubPage,
+    PlanSummary,
+    ProgressCard,
     RepositoryIndexPage,
     RepositorySummary,
     SiteStylesheet,
@@ -47,7 +49,6 @@ from basstler.plan_site.hub_page import (
     SkippedPage,
 )
 from basstler.plan_site.plan_page import SitePlanPage
-from basstler.dashboard.index_page import PlanSummary, ProgressCard
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan.model import PlanDocument

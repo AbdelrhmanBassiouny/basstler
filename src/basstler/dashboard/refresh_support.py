@@ -9,11 +9,9 @@ import argparse
 import json
 import sys
 from dataclasses import dataclass
-from pathlib import Path
 from typing import Any
 
 from basstler.dashboard.exceptions import SummaryKeyCollisionError
-from basstler.dashboard.publication import DashboardBuildSummary, DashboardUrlCache
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -75,11 +73,6 @@ def main() -> int:
     count_corrected_parser = subparsers.add_parser("count-corrected")
     count_corrected_parser.add_argument("sync_summary_json")
 
-    check_publication_parser = subparsers.add_parser("check-publication")
-    check_publication_parser.add_argument("--key", required=True)
-    check_publication_parser.add_argument("--build-summary", required=True)
-    check_publication_parser.add_argument("--cache", default=None)
-
     merge_summaries_parser = subparsers.add_parser("merge-summaries")
     merge_summaries_parser.add_argument("summaries_json", nargs="+")
 
@@ -87,15 +80,6 @@ def main() -> int:
 
     if arguments.command == "count-corrected":
         logger.info(count_corrected(arguments.sync_summary_json))
-    elif arguments.command == "check-publication":
-        cache_text = (
-            "" if arguments.cache is None else Path(arguments.cache).read_text()
-        )
-        build = DashboardBuildSummary.from_json(arguments.build_summary)
-        publication = DashboardUrlCache.from_yaml(cache_text).check(
-            arguments.key, build.content_digest
-        )
-        logger.info(json.dumps(publication.to_json()))
     else:
         summary = RefreshSummary.from_step_summaries(*arguments.summaries_json)
         logger.info(json.dumps(summary.entries))

@@ -9,7 +9,6 @@ import pytest
 
 from basstler.dashboard.plan_page import DashboardRenderer
 from basstler.plan_site.hub_page import HubPage
-from basstler.dashboard.index_page import IndexPage
 from basstler.locations import PackageLocation
 from basstler.render_common import (
     TemplatePage,
@@ -24,7 +23,6 @@ from basstler.render_common import (
 def test_template_environment_finds_the_committed_templates():
     environment = create_template_environment()
     assert environment.get_template("dashboard.html")
-    assert environment.get_template("index.html")
 
 
 def test_template_environment_autoescapes_html():
@@ -155,7 +153,7 @@ def test_sanitize_http_url_passes_through_none():
     assert sanitize_http_url(None) is None
 
 
-@pytest.mark.parametrize("page", [DashboardRenderer, IndexPage, HubPage])
+@pytest.mark.parametrize("page", [DashboardRenderer, HubPage])
 def test_every_page_names_a_template_the_package_ships(
     page: type[TemplatePage],
 ) -> None:

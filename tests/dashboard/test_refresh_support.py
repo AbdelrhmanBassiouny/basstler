@@ -11,19 +11,12 @@ import sys
 import pytest
 
 from basstler.dashboard.exceptions import SummaryKeyCollisionError
-from basstler.dashboard.publication import (
-    DashboardBuildSummary,
-    DashboardUrlCache,
-    PublicationCheck,
-    PublicationField,
-)
 from basstler.dashboard.refresh_support import (
     RefreshSummary,
     count_corrected,
     main,
 )
 
-from ..constants.paths import DatasetLocation
 
 # %% count_corrected
 
@@ -100,80 +93,10 @@ def test_merge_summaries_combines_any_number_of_objects():
     merged = RefreshSummary.from_step_summaries(
         json.dumps({"corrected": []}),
         json.dumps({"drift_count": 0}),
-        json.dumps({PublicationField.UNCHANGED: True}),
+        json.dumps({"ready_count": 1}),
     ).entries
     assert merged == {
         "corrected": [],
         "drift_count": 0,
-        PublicationField.UNCHANGED: True,
+        "ready_count": 1,
     }
-
-
-# %% the publication check
-
-
-DIGESTED_CACHE_TEXT = (
-    DatasetLocation.DIRECTORY / "dashboard-urls-with-content-digests.yaml"
-).read_text()
-
-
-def build_summary_with_digest(content_digest: str) -> str:
-    """
-    :param content_digest: The digest the build reports for the files it wrote.
-    :return: A build summary carrying it.
-    """
-    return json.dumps(
-        {"drift_count": 0, PublicationField.CONTENT_DIGEST: content_digest}
-    )
-
-
-def test_a_build_summary_reads_its_content_digest():
-    assert DashboardBuildSummary.from_json(
-        build_summary_with_digest("a" * 64)
-    ) == DashboardBuildSummary(content_digest="a" * 64)
-
-
-def test_main_dispatches_check_publication(monkeypatch, capsys, tmp_path):
-    cache_path = tmp_path / "dashboard-urls.yaml"
-    cache_path.write_text(DIGESTED_CACHE_TEXT)
-    cache = DashboardUrlCache.from_yaml(DIGESTED_CACHE_TEXT)
-    recorded_digest = cache.content_digests["alpha-plan"]
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "dashboard/refresh_support.py",
-            "check-publication",
-            "--key",
-            "alpha-plan",
-            "--build-summary",
-            build_summary_with_digest(recorded_digest),
-            "--cache",
-            str(cache_path),
-        ],
-    )
-    assert main() == 0
-    assert (
-        json.loads(capsys.readouterr().out)
-        == cache.check("alpha-plan", recorded_digest).to_json()
-    )
-
-
-def test_main_checks_publication_without_a_cache(monkeypatch, capsys):
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "dashboard/refresh_support.py",
-            "check-publication",
-            "--key",
-            "alpha-plan",
-            "--build-summary",
-            build_summary_with_digest("a" * 64),
-        ],
-    )
-    assert main() == 0
-    assert (
-        json.loads(capsys.readouterr().out)
-        == PublicationCheck(url=None, unchanged=False).to_json()
-    )

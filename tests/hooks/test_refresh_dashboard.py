@@ -32,7 +32,6 @@ import basstler.exit_codes
 import basstler.locations
 import basstler.plan.sync_manifest_status
 import basstler.standard_streams
-from basstler.dashboard.publication import PublicationCheck, PublicationField
 from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 from basstler.plan.model import PlanDocument
 
@@ -82,11 +81,6 @@ class RefreshDashboardOption(StrEnum):
     PLANS_DIRECTORY = "--plans-dir"
     """
     The directory holding every plan, forwarded to both scripts it calls.
-    """
-
-    URL_CACHE = "--url-cache"
-    """
-    The dashboard-URL cache the render is checked against.
     """
 
 
@@ -343,44 +337,16 @@ def test_prints_the_merged_sync_and_build_summary(scratch_project_root: Path):
     assert merged == {
         "corrected": [{"id": "a"}],
         "drift_count": 0,
-        PublicationField.CONTENT_DIGEST: merged[PublicationField.CONTENT_DIGEST],
-        **PublicationCheck(url=None, unchanged=False).to_json(),
     }
 
 
-# %% the publication check
+# %% the artifact directory
 
 
 def test_the_artifact_directory_is_created(scratch_project_root: Path):
     (scratch_project_root / PlanDocument.ROADMAP).write_text("")
     run_refresh_dashboard(scratch_project_root, corrected_ids=[], extra_arguments=[])
     assert (scratch_project_root / "dashboard").is_dir()
-
-
-def test_a_render_already_published_is_reported_unchanged(scratch_project_root: Path):
-    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
-    first = json.loads(
-        run_refresh_dashboard(
-            scratch_project_root, corrected_ids=[], extra_arguments=[]
-        ).stdout
-    )
-    url = "https://claude.ai/code/artifact/11111111-1111-4111-8111-111111111111"
-    cache_path = scratch_project_root / "dashboard-urls.yaml"
-    cache_path.write_text(
-        f"test-plan: {url}\n_content_digests:\n"
-        f"  test-plan: {first[PublicationField.CONTENT_DIGEST]}\n"
-    )
-    second = run_refresh_dashboard(
-        scratch_project_root,
-        corrected_ids=[],
-        extra_arguments=[RefreshDashboardOption.URL_CACHE, str(cache_path)],
-    )
-    assert second.returncode == 0, second.stderr
-    merged = json.loads(second.stdout)
-    assert {
-        PublicationField.URL: merged[PublicationField.URL],
-        PublicationField.UNCHANGED: merged[PublicationField.UNCHANGED],
-    } == PublicationCheck(url=url, unchanged=True).to_json()
 
 
 # %% --plans-dir passthrough

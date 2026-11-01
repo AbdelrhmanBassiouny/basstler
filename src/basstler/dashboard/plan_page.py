@@ -26,7 +26,7 @@ from basstler.dashboard.cards import (
     WaveSection,
 )
 from basstler.dashboard.plan import Item, Plan, Track
-from basstler.dashboard.publication import DashboardArtifact, PublicationField
+from basstler.dashboard.publication import DashboardArtifact
 from basstler.exceptions import PlanValidationError
 from basstler.github_labels import GitHubLabel
 from basstler.locations import DashboardArtifactFile, DashboardTemplate
@@ -695,7 +695,6 @@ def main() -> int:
         Path(arguments.output).write_text(rendered.html)
     else:
         rendered.artifact.write_to(Path(arguments.artifact_directory))
-        summary[PublicationField.CONTENT_DIGEST] = rendered.artifact.content_digest
     logger.info(json.dumps(summary))
     return 0
 

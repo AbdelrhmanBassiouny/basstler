@@ -31,7 +31,6 @@ from basstler.pull_request_state import (
     PullRequestsByRepository,
     PullRequestState,
 )
-from basstler.dashboard.publication import DashboardArtifact, PublicationField
 from basstler.github_labels import GitHubLabel
 from basstler.maintenance.description import UpstreamPullRequestLink
 from basstler.repository import Repository
@@ -1584,9 +1583,7 @@ def test_main_rejects_an_invalid_manifest_instead_of_crashing(
     )
 
 
-def test_main_writes_the_artifact_files_and_prints_their_digest(
-    tmp_path, monkeypatch, capsys
-):
+def test_main_writes_every_artifact_file(tmp_path, monkeypatch, capsys):
     plan_path, roadmap_path, pull_request_data_path, _ = _write_minimal_plan_files(
         tmp_path
     )
@@ -1608,14 +1605,9 @@ def test_main_writes_the_artifact_files_and_prints_their_digest(
         ],
     )
     assert main() == 0
-    written = DashboardArtifact(
-        files={
-            file: (artifact_directory / file).read_text()
-            for file in DashboardArtifactFile
-        }
+    assert sorted(artifact_directory.iterdir()) == sorted(
+        artifact_directory / file for file in DashboardArtifactFile
     )
-    summary = json.loads(capsys.readouterr().out)
-    assert summary[PublicationField.CONTENT_DIGEST] == written.content_digest
 
 
 # %% the artifact files

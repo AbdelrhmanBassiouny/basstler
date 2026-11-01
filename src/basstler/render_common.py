@@ -1,10 +1,6 @@
 """
-Shared rendering helpers for the plan-dashboard scripts.
-
-No plan-specific content belongs here - this module only knows how to (a)
-build the Jinja2 environment every page template renders through and (b)
-turn generic markdown into HTML. dashboard/plan_page.py and dashboard/index_page.py both
-import it rather than duplicating the logic.
+Shared rendering helpers for every page the package renders: the Jinja2 environment the
+page templates render through, and generic markdown turned into HTML.
 """
 
 from __future__ import annotations

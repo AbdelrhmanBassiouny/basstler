@@ -5,12 +5,164 @@ the record of what a build left out.
 
 from __future__ import annotations
 
+import dataclasses
+from abc import ABC, abstractmethod
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 
-from basstler.dashboard.index_page import PlanSummary, ProgressCard
 from basstler.class_property import classproperty
 from basstler.locations import SiteTemplate
 from basstler.render_common import TemplatePage
+
+
+# %% the cards a page lists
+
+
+@dataclass(kw_only=True)
+class ProgressCard(ABC):
+    """
+    One card on a site page: a heading, a progress label and a bar showing how many
+    items are done.
+
+    The plan cards on a repository's index and the repository cards on the hub are drawn
+    by the same markup, so what the bar and the card's class are worked out from is
+    shared here.
+    """
+
+    done: int
+    """
+    How many items are done.
+    """
+
+    total: int
+    """
+    How many items there are.
+    """
+
+    open_pull_requests: int = 0
+    """
+    How many of the items' pull requests are open.
+    """
+
+    reviewed_pull_requests: int = 0
+    """
+    How many of those open pull requests are out of draft: their author has reviewed
+    them and marked them ready for review.
+    """
+
+    @staticmethod
+    def counts_over(cards: Sequence[ProgressCard]) -> dict[str, int]:
+        """
+        :param cards: The cards a larger card stands for.
+        :return: Every count a card carries, summed over *cards*, by field name - ready
+            to pass to the larger card's constructor.
+        """
+        return {
+            count.name: sum(getattr(card, count.name) for card in cards)
+            for count in dataclasses.fields(ProgressCard)
+        }
+
+    @classproperty
+    def card_css_class(cls) -> str:
+        """
+        The CSS class every card carries.
+        """
+        return "plan-card"
+
+    @classproperty
+    def complete_css_class(cls) -> str:
+        """
+        The CSS class a card adds once every item is done.
+        """
+        return "complete"
+
+    @property
+    @abstractmethod
+    def progress_label(self) -> str:
+        """
+        The human-readable progress shown on the card.
+        """
+
+    @property
+    def is_complete(self) -> bool:
+        """
+        Whether every item is done.
+        """
+        return self.total > 0 and self.done == self.total
+
+    @property
+    def completion_percentage(self) -> float:
+        """
+        The share of items done, from 0 to 100.
+        """
+        return (self.done / self.total * 100) if self.total else 0.0
+
+    @property
+    def completion_percentage_label(self) -> str:
+        """
+        :attr:`completion_percentage`, formatted to one decimal place with a
+        trailing ``%`` - ready to drop straight into the progress bar's
+        ``width`` style without the template doing any formatting itself.
+        """
+        return f"{self.completion_percentage:.1f}%"
+
+    @property
+    def review_label(self) -> str | None:
+        """
+        How many open pull requests are out of draft, or ``None`` when none are open.
+        """
+        if not self.open_pull_requests:
+            return None
+        return (
+            f"{self.reviewed_pull_requests} / {self.open_pull_requests} open pull "
+            f"requests reviewed"
+        )
+
+    @property
+    def css_class(self) -> str:
+        """
+        The card's CSS class list: :attr:`card_css_class`, plus
+        :attr:`complete_css_class` once every item is done.
+        """
+        if self.is_complete:
+            return f"{self.card_css_class} {self.complete_css_class}"
+        return self.card_css_class
+
+
+@dataclass(kw_only=True)
+class PlanSummary(ProgressCard):
+    """
+    One plan's card on its repository's index.
+    """
+
+    id: str
+    """The plan's stable identifier: a short kebab-case slug (e.g.
+    ``rdr-refactor``), not a UUID - it is chosen by whoever bootstraps the
+    plan, doubles as its directory name, and is what a person types as the
+    ``<plan-id>`` argument to ``/plan-dashboard``/``/plan-create``, so it
+    needs to stay human-readable and human-typable."""
+
+    title: str
+    """
+    The plan's display title.
+    """
+
+    description: str
+    """
+    A one-line description shown under the title.
+    """
+
+    dashboard_url: str | None = None
+    """
+    The address of the plan's page on the site, or ``None`` when it has none.
+    """
+
+    @property
+    def progress_label(self) -> str:
+        return f"{self.done} / {self.total} done" if self.total else "no items yet"
+
+
+# %% the pages
 
 
 @dataclass(frozen=True)

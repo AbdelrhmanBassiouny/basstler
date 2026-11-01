@@ -303,13 +303,6 @@ plan_roadmap_path() {
 # full plan-dashboard schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
-# DASHBOARD_URL_CACHE_PATH: the generated cache mapping each plan id (plus
-# "_index" for the master index) to the Artifact URL its dashboard is
-# published at, so /plan-dashboard updates that page instead of minting a
-# second one. Named here rather than typed into plan-dashboard/SKILL.md,
-# same defined-once reasoning as PLAN_BRANCH_INDEX_PATH above.
-DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
-
 # PLAN_HUB_PATH: the hub file - the plan site's address, the registry
 # repository holding the complete list of repositories, and that list. Every
 # registered repository's notes carry a copy (see basstler.plan_site.hub).
@@ -343,12 +336,11 @@ fi
 # basstler.dashboard.plan_page: renders one plan's dashboard HTML from its manifest
 # and live GitHub data - see the module's own docstring.
 BUILD_DASHBOARD_MODULE="basstler.dashboard.plan_page"
-# basstler.dashboard.index_page: renders the master index page listing every plan.
-BUILD_INDEX_MODULE="basstler.dashboard.index_page"
 # basstler.plan_site: renders the plan site - the hub, every registered repository's
 # index, and every plan's dashboard - from the repositories the hub file lists.
 BUILD_SITE_MODULE="basstler.plan_site"
-# basstler.plan_site.hub: registers a repository in the hub file.
+# basstler.plan_site.hub: registers a repository in the hub file, and prints the
+# address of a page on the plan site.
 PLAN_HUB_MODULE="basstler.plan_site.hub"
 # basstler.plan_site.publication: publishes this repository's plans on the user's plan
 # site, and starts the site's build on every push to the notes branch.
@@ -362,10 +354,6 @@ ITEM_BRIEF_MODULE="basstler.plan.item_brief"
 # basstler.dashboard.refresh_support: the JSON-plumbing helpers
 # refresh_dashboard.sh calls between its two module calls.
 REFRESH_DASHBOARD_SUPPORT_MODULE="basstler.dashboard.refresh_support"
-# basstler.dashboard.record_url: writes one key's published Artifact URL into
-# DASHBOARD_URL_CACHE_PATH, resolving that URL from the account's live
-# Artifact listing so a URL nobody published cannot be recorded.
-RECORD_DASHBOARD_URL_MODULE="basstler.dashboard.record_url"
 # basstler.plan.item_bootstrap: opens an item's branch and draft pull request and
 # records its manifest entry - invoked from plan-item-kickoff/SKILL.md and
 # add-plan-item/SKILL.md.
