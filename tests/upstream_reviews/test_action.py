@@ -27,10 +27,10 @@ from basstler.upstream_reviews.action.__main__ import (
     main,
 )
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.action.branch import (
     ActionInstallation,
     InstallationState,
-    RemoteBranch,
 )
 from basstler.upstream_reviews.action.read import (
     ActionRead,
@@ -309,7 +309,7 @@ class Fork:
     @property
     def branch(self) -> RemoteBranch:
         """:return: The Action branch on the fork."""
-        return RemoteBranch(GitCommandRunner(self.clone), "origin")
+        return RemoteBranch(GitCommandRunner(self.clone), "origin", ActionBranch.NAME)
 
     def files(self) -> dict[str, str]:
         """:return: Every file on the remote's Action branch, by path, without its
@@ -541,7 +541,7 @@ def test_a_result_is_collected_even_if_its_run_failed_afterwards(fork):
 
 
 def test_the_fork_is_named_by_its_remote(fork):
-    assert fork.branch.fork == FORK
+    assert fork.branch.repository == FORK
 
 
 def test_read_prints_the_report_from_the_committed_result(fork, monkeypatch, capsys):

@@ -379,11 +379,6 @@ class ActionBranch(StrEnum):
     stack maintenance owns.
     """
 
-    LOCAL_REFERENCE = "refs/basstler/upstream-reviews"
-    """
-    Where a fetch of it is kept, so it never moves ``FETCH_HEAD`` under anyone else.
-    """
-
     @classproperty
     def install_command(cls) -> str:
         """

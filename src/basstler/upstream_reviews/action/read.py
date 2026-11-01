@@ -12,9 +12,7 @@ from enum import StrEnum
 from typing import Any, Generic
 
 from basstler.repository import Repository
-from basstler.upstream_reviews.action.branch import (
-    RemoteBranch,
-)
+from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.vocabulary import (
     ActionBranch,
     ActionFile,
@@ -207,7 +205,7 @@ class ActionRead(Generic[AnswerType]):
                 self.check_run(commit, int(elapsed))
             if elapsed >= timeout:
                 raise ActionResultMissing(
-                    self.request.identifier, self.branch.fork, int(timeout)
+                    self.request.identifier, self.branch.repository, int(timeout)
                 )
             time.sleep(self.poll_interval)
 
@@ -236,7 +234,7 @@ class ActionRead(Generic[AnswerType]):
         :raises ActionRunFailed: If its run failed - but only once a last look finds
             no result, since a run may fail after committing one.
         """
-        fork = self.branch.fork
+        fork = self.branch.repository
         if self.runs is None or fork is None:
             return
         try:
