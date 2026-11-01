@@ -1,10 +1,9 @@
 schema_version: 1
 id: stack-maintenance
 title: 'The maintenance pass: running a stack of pull requests'
-description: 'What keeps a stack of pull requests moving without a person driving each step:
-  a deterministic executor that fast-forwards, restacks, promotes and reports, and the manifest
-  kept current at every transition. The integration branch was retired with the carryover
-  (basstler#19, #28, #29).'
+description: 'What keeps a stack of pull requests moving without a person driving each step: a deterministic
+  executor that fast-forwards, restacks, promotes and reports, and the manifest kept current at every
+  transition. The integration branch was retired with the carryover (basstler#19, #28, #29).'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 40
 waves:
@@ -23,11 +22,10 @@ items:
   status: deferred
   track: pass
   depends_on: []
-  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). Of 129 restacked branches
-    in the CRAM pass, 82 were up to date and 24 withheld: about 80 % no-op work. Prefer a
-    stateless test: parent tip already an ancestor of head means up to date; withheld state
-    already lives in the labels. A stored fingerprint only if truly needed, under the roadmap''s
-    storage rule.'
+  notes: 'Superseded by basstler-v3 maintenance-action, which restacks only stacks whose base moved. Was:
+    Of 129 restacked branches in the CRAM pass, 82 were up to date and 24 withheld: about 80 % no-op work.
+    Prefer a stateless test: parent tip already an ancestor of head means up to date; withheld state already
+    lives in the labels. A stored fingerprint only if truly needed, under the roadmap''s storage rule.'
 - id: parallel-merge-tree-probes
   title: Run the read-only merge-tree probes in parallel, keeping pushes serial
   branch: null
@@ -36,10 +34,10 @@ items:
   track: pass
   depends_on:
   - skip-unmoved-branches
-  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). stack check ran 133 sequential
-    merge-tree probes (5.2 s in the CRAM pass). Run the read-only probes in parallel; every
-    push and label write stays serial. Probes only the branches skip-unmoved-branches leaves.
-    Measure with GIT_TRACE2 per the roadmap rule.'
+  notes: 'Superseded by basstler-v3 stack-engine (rebase --update-refs, no merge-tree probe pass). Was:
+    stack check ran 133 sequential merge-tree probes (5.2 s in the CRAM pass). Run the read-only probes
+    in parallel; every push and label write stays serial. Probes only the branches skip-unmoved-branches
+    leaves. Measure with GIT_TRACE2 per the roadmap rule.'
 - id: executor-reparents
   title: Have run-report change the base of a pull request whose base has landed
   branch: null
@@ -47,14 +45,12 @@ items:
   status: deferred
   track: pass
   depends_on: []
-  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). From basstler#81 review (discussion_r4376633783).
-    The 403 that kept base changes out of the executor no longer holds - a REST base PATCH
-    with a session''s GH_TOKEN (Content-Type application/json) succeeded on 2026-10-26. run-report
-    performs reparents through PullRequestWriter instead of listing them, and the skill''s
-    step 1 goes away. Probe whether the native-stack endpoints (the 422 unstack/restack sequence)
-    are reachable the same way; if so move that in too, otherwise report those for the session.
-
-    '
+  notes: 'Superseded by basstler-v3 maintenance-action, which retargets PRs whose base landed. Was: From
+    basstler#81 review (discussion_r4376633783). The 403 that kept base changes out of the executor no
+    longer holds - a REST base PATCH with a session''s GH_TOKEN (Content-Type application/json) succeeded
+    on 2026-10-26. run-report performs reparents through PullRequestWriter instead of listing them, and
+    the skill''s step 1 goes away. Probe whether the native-stack endpoints (the 422 unstack/restack sequence)
+    are reachable the same way; if so move that in too, otherwise report those for the session. '
 - id: withhold-on-github-state
   title: Withhold a branch on GitHub's own conflict and check state, and drop needs-resolution
   branch: null
@@ -62,11 +58,9 @@ items:
   status: deferred
   track: pass
   depends_on: []
-  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). From basstler#81 review (discussion_r4376683912).
-    The board records each pull request''s mergeable state beside #77''s check_state; promotion
-    withholds a branch that is conflicted, not yet computed, or has failed checks, and the
-    summary lists them. Remove the needs-resolution label, its comments and the needs_resolution_label
-    setting (release:major unless kept ignored for a release). The skill''s step 3 goes; a
-    failure on a pushed commit is caught by the next pass''s board before promotion.
-
-    '
+  notes: 'Folded into basstler-v3 upstream-promotion, whose notes now carry it. Was: From basstler#81
+    review (discussion_r4376683912). The board records each pull request''s mergeable state beside #77''s
+    check_state; promotion withholds a branch that is conflicted, not yet computed, or has failed checks,
+    and the summary lists them. Remove the needs-resolution label, its comments and the needs_resolution_label
+    setting (release:major unless kept ignored for a release). The skill''s step 3 goes; a failure on
+    a pushed commit is caught by the next pass''s board before promotion. '

@@ -1,5 +1,6 @@
 # stack-maintenance — standing rules
 
+- After basstler-v3 (#99) lands, build every item here on v3, not v2: plans are tracking issues (not plan.yaml), pages render on the Pages plan site (not the Artifact dashboard), code runs through the basstler CLI (not bash hooks or python -m modules), and v3's roadmap rules apply. Read any v2 piece a rule names as its v3 replacement; rewrite an item's notes before starting it.
 - Compute a write from what the pull request carries now, not from the snapshot the pass opened with.
 - A command's exit status must agree with its own report. A restack that hit a conflict exited 0, as did a run whose fast-forward was refused - and a caller acting on the status alone is precisely what the no-LLM endgame is. Every command derives its status from one mapping over the report.
 - A test that reads ambient state cannot assert about the state it is reading. Met twice in one pull request: a local board file the pass writes, and a token a session environment exports.
@@ -9,6 +10,5 @@
 - A test that pins a contract must read the artifact the contract is about. One did not, for four review rounds, and the tell was available the whole time: it imported nothing that produced a document. Related: a reviewer returning to the same line is evidence the answer has not landed, not that the question has been asked already.
 - A label that makes later passes skip a branch removes the only thing that would have retried it. The conflict label was invented so a pass reports a conflict once rather than every run, and it clears only when GitHub stops reporting one - which only a resolution produces. So a branch it marks is never re-attempted by the mechanism that marked it.
 - A repair rule needs its own evidence, not a shape match. A blind regular expression fixing five broken words happened to be right; run over the whole plan it turned up seven more, one of which it would have corrupted.
-- A performance change is measured, not assumed: profile a full run-report with GIT_TRACE2 before and after, and put the numbers in the pull request.
+- A performance change is measured, not assumed: profile a full run-report with GIT_TRACE2 before and after, and put the numbers in the pull request. A shallow clone has no commit-graph: git ignores one there, and the CRAM pass runs in one. Cut the number of git calls instead of relying on a graph to speed each one up.
 - State a change introduces never grows with time. Prefer state derived from git or GitHub, or kept on the pull request (labels). If a file is unavoidable: one file, rewritten in full each pass, holding open pull requests only, bounded by plan_size_limits. Never append to notes.md or PR-progress notes. Deleting it only makes the next pass slower.
-- A shallow clone has no commit-graph: git ignores one there, and the CRAM pass runs in one. Cut the number of git calls instead of relying on a graph to speed each one up.
