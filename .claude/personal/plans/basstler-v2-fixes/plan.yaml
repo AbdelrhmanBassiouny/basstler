@@ -66,11 +66,12 @@ items:
       it is reported as a warning instead.
   - id: dashboard-optional-branch
     title: "The dashboard accepts an item with no branch key"
-    branch: null
-    pull_request_number: null
+    branch: claude/magical-franklin-4x2epk
+    pull_request_number: 107
     track: fixes
+    session: https://claude.ai/code/session_018wfiv7F2LCEAFYDkz9idEV
     depends_on: []
-    status: not started
+    status: in progress
     notes: >
       plan.Item.from_mapping reads branch with data[...] and raises KeyError, though the
       schema and save-plan treat branch as optional.
