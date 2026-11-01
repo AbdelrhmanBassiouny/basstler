@@ -195,7 +195,7 @@ class UserStep(StrEnum):
 @dataclass(frozen=True)
 class PendingStep:
     """
-    One step left to the user, with the line that takes it.
+    One step left to the user, with the command line and the browser steps that take it.
     """
 
     step: UserStep
@@ -208,15 +208,24 @@ class PendingStep:
     The one copyable line that takes it.
     """
 
+    browser_steps: tuple[str, ...]
+    """
+    The same step taken on github.com, one click or entry each, in order.
+    """
+
     def render(self) -> str:
         """:return: The step as it is printed."""
-        return f"- {self.step}:\n    {self.line}"
+        numbered = "\n".join(
+            f"    {number}. {text}"
+            for number, text in enumerate(self.browser_steps, start=1)
+        )
+        return f"- {self.step}:\n    {self.line}\n  Or in the browser:\n{numbered}"
 
 
 @dataclass(frozen=True)
 class UserSteps:
     """
-    The copyable line for each step left to the user.
+    The command line and the browser steps for each step left to the user.
     """
 
     notes_repository: Repository
@@ -244,24 +253,51 @@ class UserSteps:
     def pending(self, step: UserStep) -> PendingStep:
         """
         :param step: The step.
-        :return: The step with its line.
+        :return: The step with its line and its browser steps.
         """
-        lines = {
-            UserStep.CREATE_SITE_REPOSITORY: (
-                f"gh repo create {self.site.repository.full_name} --public"
+        site = self.site.repository
+        notes = self.notes_repository
+        steps = {
+            UserStep.CREATE_SITE_REPOSITORY: PendingStep(
+                step,
+                f"gh repo create {site.full_name} --public",
+                (
+                    f"Open {GitHubAddress.WEB}/new.",
+                    f"Set the owner to {site.owner} and the repository name to "
+                    f"{site.name}.",
+                    "Choose Public, then click Create repository.",
+                ),
             ),
-            UserStep.TURN_ON_PAGES: (
-                f"gh api -X POST {self.site.repository.api_path}/pages "
-                "-f build_type=workflow"
+            UserStep.TURN_ON_PAGES: PendingStep(
+                step,
+                f"gh api -X POST {site.api_path}/pages -f build_type=workflow",
+                (
+                    f"Open {site.url}/settings/pages.",
+                    "Under Build and deployment, set Source to GitHub Actions.",
+                ),
             ),
-            UserStep.STORE_TOKEN: (
-                f"create a fine-grained token at {self.token_page} with Actions: write "
-                f"on {self.site.repository.full_name} and Contents: read on "
+            UserStep.STORE_TOKEN: PendingStep(
+                step,
+                f"create a fine-grained token at {self.token_page} with Actions: "
+                f"write on {site.full_name} and Contents: read on "
                 f"{', '.join(self.registered)}, then: gh secret set "
-                f"{PlanSiteSecret.TOKEN} --repo {self.notes_repository.full_name}"
+                f"{PlanSiteSecret.TOKEN} --repo {notes.full_name}",
+                (
+                    f"Open {self.token_page}.",
+                    f"Name the token and set Resource owner to {site.owner}.",
+                    "Under Repository access, choose Only select repositories and "
+                    f"select {site.full_name}, {', '.join(self.registered)}.",
+                    "Under Permissions, open Repository permissions and set Actions "
+                    "to Read and write and Contents to Read-only.",
+                    "Click Generate token and copy the token now; GitHub shows it "
+                    "once.",
+                    f"Open {notes.url}/settings/secrets/actions/new.",
+                    f"Set the name to {PlanSiteSecret.TOKEN}, paste the token as "
+                    "the secret, then click Add secret.",
+                ),
             ),
         }
-        return PendingStep(step, lines[step])
+        return steps[step]
 
 
 # %% publishing
