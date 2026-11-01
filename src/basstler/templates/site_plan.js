@@ -1,4 +1,4 @@
-function planDashboardCopyActionCommand(button) {
+function planPageCopyActionCommand(button) {
   var baseCommand = button.getAttribute("data-action-command");
   var modelPicker = button.previousElementSibling;
   var model = modelPicker && modelPicker.classList.contains("model-picker")
@@ -55,8 +55,8 @@ function planDashboardCopyActionCommand(button) {
   }
 }
 
-function planDashboardRevealItem(target) {
-  var page = document.getElementById("plan-dashboard-page");
+function planPageRevealItem(target) {
+  var page = document.getElementById("plan-page");
   var highlightMilliseconds = 2200;
   if (!target || !target.classList.contains("item")) {
     return false;
@@ -75,30 +75,30 @@ function planDashboardRevealItem(target) {
   return true;
 }
 
-function planDashboardHighlightItem(event, link) {
+function planPageHighlightItem(event, link) {
   var identifier = link.getAttribute("data-item-identifier");
-  if (planDashboardRevealItem(document.getElementById("item-" + identifier))) {
+  if (planPageRevealItem(document.getElementById("item-" + identifier))) {
     event.preventDefault();
   }
 }
 
-function planDashboardRevealLocationHash() {
+function planPageRevealLocationHash() {
   if (window.location.hash) {
-    planDashboardRevealItem(document.getElementById(window.location.hash.slice(1)));
+    planPageRevealItem(document.getElementById(window.location.hash.slice(1)));
   }
 }
 
-function planDashboardCloseModelPickers() {
+function planPageCloseModelPickers() {
   document.querySelectorAll(".model-picker.model-picker-open").forEach(function (picker) {
     picker.classList.remove("model-picker-open");
   });
 }
 
-function planDashboardToggleModelPicker(event, toggleButton) {
+function planPageToggleModelPicker(event, toggleButton) {
   event.stopPropagation();
   var picker = toggleButton.closest(".model-picker");
   var wasOpen = picker.classList.contains("model-picker-open");
-  planDashboardCloseModelPickers();
+  planPageCloseModelPickers();
   if (wasOpen) {
     return;
   }
@@ -109,7 +109,7 @@ function planDashboardToggleModelPicker(event, toggleButton) {
   picker.classList.add("model-picker-open");
 }
 
-function planDashboardSelectModel(event, optionElement) {
+function planPageSelectModel(event, optionElement) {
   event.stopPropagation();
   var picker = optionElement.closest(".model-picker");
   var toggleButton = picker.querySelector(".model-picker-toggle");
@@ -119,12 +119,12 @@ function planDashboardSelectModel(event, optionElement) {
     selected.classList.remove("model-picker-option-selected");
   });
   optionElement.classList.add("model-picker-option-selected");
-  planDashboardCloseModelPickers();
+  planPageCloseModelPickers();
 }
 
-document.addEventListener("click", planDashboardCloseModelPickers);
+document.addEventListener("click", planPageCloseModelPickers);
 document.addEventListener("keydown", function (event) {
   if (event.key === "Escape") {
-    planDashboardCloseModelPickers();
+    planPageCloseModelPickers();
   }
 });

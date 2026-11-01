@@ -1,13 +1,13 @@
 ---
 name: setup-personal-notes
-description: One-time setup of the personal-notes branch, its configuration and the plan-dashboard dependencies. Invoke as "/setup-personal-notes". Use on first setup, or when personal notes, PR progress or dashboards are not working.
+description: One-time setup of the personal-notes branch, its configuration and the package's dependencies. Invoke as "/setup-personal-notes". Use on first setup, or when personal notes, PR progress or plans are not working.
 allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__get_me, mcp__github__get_label
 ---
 
 # Set up personal notes
 
 Gets a clone from "I have a fork of this repo and nothing else" to "personal
-notes, PR progress and plan dashboards all work," asking one question per
+notes, PR progress and plans all work," asking one question per
 decision that is genuinely the user's, with a default they can accept as-is.
 
 **Fast path first.** Every step below is conditional on
@@ -74,7 +74,7 @@ could end up in a commit. Offer to add `CLAUDE.local.md`,
 ## 4. Ask what only the user can answer
 
 Steps 4 and 5 cover the `notes_branch`, `notes_file`, `git_identity`,
-`dashboard_dependencies` and `claude_local_md` rows, and the pull request
+`package_dependencies` and `claude_local_md` rows, and the pull request
 labels `check-setup.sh` cannot see. Everything mechanical about them is one
 command that needs no session. This step only collects its arguments; ask
 each question only when its row is `needs-setup`.
@@ -235,8 +235,8 @@ reported as finished is worse than one that reported the truth.
 
 Then tell them what they can now do, briefly: ask for notes edits in any
 session, track a PR's progress, and — if the dependencies installed —
-`/plan-create` and `/plan-dashboard`, pointing at
-[`example-walkthrough.md`](../plan-dashboard/example-walkthrough.md) for the
+`/plan-create` and `/plan-sync`, pointing at
+[`example-walkthrough.md`](../plan-create/example-walkthrough.md) for the
 worked example.
 
 ## What this skill must never do

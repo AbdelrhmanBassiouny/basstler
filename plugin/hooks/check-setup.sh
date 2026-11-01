@@ -2,7 +2,7 @@
 set -euo pipefail
 
 # Reports whether this clone has everything the .claude/ agent tooling needs -
-# personal notes, PR progress, plan dashboards - so a session (or a person) can
+# personal notes, PR progress, plans - so a session (or a person) can
 # tell in one call what is already set up and what still needs doing.
 #
 # Usage (from anywhere - always inspects this repo specifically, see
@@ -37,9 +37,9 @@ set -euo pipefail
 # installed.
 #
 # The one thing it deliberately does not check is GitHub API access, which
-# /plan-dashboard needs for live pull request state: that is reachable only
+# /plan-sync needs for live pull request state: that is reachable only
 # through a session's MCP tools, not from a shell. The same goes for the pull
-# request labels the dashboard reads. skills/setup-personal-notes
+# request labels the plan site reads. skills/setup-personal-notes
 # covers both as their own steps.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -178,7 +178,7 @@ git_identity_precedence_note() {
 MISSING_TOOLING=""
 for tooling_path in \
     "${PLUGIN_MANIFEST}" \
-    "${REFRESH_DASHBOARD_SCRIPT}" \
+    "${SYNC_PLAN_SCRIPT}" \
     "${PLAN_SCHEMA_DOCUMENT}"; do
   [ -f "${tooling_path}" ] || MISSING_TOOLING="${MISSING_TOOLING} ${tooling_path}"
 done
@@ -186,7 +186,7 @@ if [ -n "${MISSING_TOOLING}" ]; then
   report tooling_files needs-setup \
     "the basstler plugin at ${PLUGIN_ROOT} is missing:${MISSING_TOOLING} - reinstall the plugin"
 else
-  report tooling_files ok "the plugin's manifest, the refresh entry point and the schema reference are all present"
+  report tooling_files ok "the plugin's manifest, the sync entry point and the schema reference are all present"
 fi
 
 # %% session-start wiring
@@ -268,7 +268,7 @@ else
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 
-# %% plan-dashboard dependencies
+# %% the package dependencies
 
 # Reported rather than installed here: this script is read-only, and running
 # it must never change the answer it gives. ./session-start.sh creates the
@@ -281,16 +281,16 @@ fi
 # here is the reasons it can answer nothing, because they are this script's
 # rows to word.
 if basstler_install_in_progress; then
-  report dashboard_dependencies in-progress \
+  report package_dependencies in-progress \
     "process $(cat "${BASSTLER_INSTALL_MARKER}") is installing them for ${BASSTLER_PYTHON} now - do not install them yourself; run: wait_for_basstler_install, then this check again"
 elif ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
-  report dashboard_dependencies needs-setup "${BASSTLER_PYTHON} is not on PATH, so the plan-dashboard modules cannot run at all"
+  report package_dependencies needs-setup "${BASSTLER_PYTHON} is not on PATH, so the basstler modules cannot run at all"
 elif ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
-  report dashboard_dependencies needs-setup "cannot check: the basstler package's declared dependencies could not be read"
+  report package_dependencies needs-setup "cannot check: the basstler package's declared dependencies could not be read"
 elif [ -z "${MISSING_DEPENDENCIES}" ]; then
-  report dashboard_dependencies ok "the basstler package and every requirement it declares are installed for ${BASSTLER_PYTHON}"
+  report package_dependencies ok "the basstler package and every requirement it declares are installed for ${BASSTLER_PYTHON}"
 else
-  report dashboard_dependencies needs-setup \
+  report package_dependencies needs-setup \
     "not installed for ${BASSTLER_PYTHON}:${MISSING_DEPENDENCIES// / } - a session start installs them, or run: pip --python ${BASSTLER_PYTHON} install '$(basstler_package_source)'"
 fi
 

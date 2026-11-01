@@ -86,7 +86,7 @@ class PackageLocation(PathEnumeration):
 
     TEMPLATES = DIRECTORY / "templates"
     """
-    The page templates dashboards are rendered from.
+    The templates the plan site's pages are rendered from.
     """
 
     QUERIES = DIRECTORY / "upstream_reviews" / "queries"
@@ -139,37 +139,6 @@ class CommitScratchFile(PathEnumeration):
     """
 
 
-class DashboardTemplate(PathEnumeration):
-    """
-    The templates a plan's dashboard is rendered from.
-    """
-
-    SELF_CONTAINED_PAGE = PackageLocation.TEMPLATES.value / "dashboard.html"
-    """
-    The whole dashboard as one page, with its style, content and script inline.
-    """
-
-    ARTIFACT_PAGE = PackageLocation.TEMPLATES.value / "dashboard_artifact.html"
-    """
-    The short page published as the dashboard Artifact, which loads the other parts.
-    """
-
-    STYLE = PackageLocation.TEMPLATES.value / "dashboard_style.css"
-    """
-    The dashboard's style sheet.
-    """
-
-    SCRIPT = PackageLocation.TEMPLATES.value / "dashboard_script.js"
-    """
-    The dashboard's behaviour: copying commands, choosing a model, revealing an item.
-    """
-
-    CONTENT = PackageLocation.TEMPLATES.value / "dashboard_content.html"
-    """
-    The dashboard's body: the plan, its items and the next-step sidebar.
-    """
-
-
 class SiteTemplate(PathEnumeration):
     """
     The templates the plan site's pages and stylesheet are rendered from.
@@ -187,7 +156,8 @@ class SiteTemplate(PathEnumeration):
 
     PARTS = PackageLocation.TEMPLATES.value / "site_parts.html"
     """
-    The markup the site's pages share: progress cards and the health banner.
+    The markup the site's pages share: progress cards, the health banner, dependency
+    chips and action buttons.
     """
 
     HUB = PackageLocation.TEMPLATES.value / "hub.html"
@@ -205,40 +175,10 @@ class SiteTemplate(PathEnumeration):
     One plan's page: a column per wave, a card per item.
     """
 
-
-class DashboardArtifactFile(PathEnumeration):
+    PLAN_SCRIPT = PackageLocation.TEMPLATES.value / "site_plan.js"
     """
-    The files a plan's dashboard Artifact is published as, by their published path.
+    A plan page's behaviour: copying commands, choosing a model, revealing an item.
     """
-
-    PAGE = Path("dashboard.html")
-    """
-    The Artifact's page.
-    """
-
-    STYLE = Path("dashboard.css")
-    """
-    The style sheet the page links.
-    """
-
-    SCRIPT = Path("dashboard.js")
-    """
-    The script the page loads.
-    """
-
-    CONTENT = Path("dashboard-content.html")
-    """
-    The body the page fetches and shows.
-    """
-
-    @property
-    def template(self) -> DashboardTemplate:
-        """
-        The template this file is rendered from.
-        """
-        if self is DashboardArtifactFile.PAGE:
-            return DashboardTemplate.ARTIFACT_PAGE
-        return DashboardTemplate[self._name_]
 
 
 class BasstlerVariable(EnvironmentVariable):

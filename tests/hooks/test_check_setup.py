@@ -332,7 +332,7 @@ def test_reports_a_claude_local_md_that_is_not_gitignored(
     )
 
 
-# %% plan-dashboard dependencies
+# %% package dependencies
 
 
 def test_reports_declared_dependencies_that_are_not_installed(
@@ -346,10 +346,10 @@ def test_reports_declared_dependencies_that_are_not_installed(
     ).dependencies
 
     report = run_check_setup(check_setup_repository)
-    detail = report.results[SetupCheck.DASHBOARD_DEPENDENCIES].detail
+    detail = report.results[SetupCheck.PACKAGE_DEPENDENCIES].detail
     assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert (
-        report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
+        report.results[SetupCheck.PACKAGE_DEPENDENCIES].status
         == CheckStatus.NEEDS_SETUP
     )
     assert uninstalled in detail
@@ -371,7 +371,7 @@ def test_reports_a_declaration_it_cannot_read_rather_than_nothing_missing(
 
     assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert (
-        report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
+        report.results[SetupCheck.PACKAGE_DEPENDENCIES].status
         == CheckStatus.NEEDS_SETUP
     )
 
@@ -397,7 +397,7 @@ def test_reports_dependencies_a_session_start_is_installing_as_in_progress(
 
     assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert (
-        report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status
+        report.results[SetupCheck.PACKAGE_DEPENDENCIES].status
         == CheckStatus.IN_PROGRESS
     )
 
@@ -411,7 +411,7 @@ def test_a_marker_left_by_an_install_that_ended_is_not_in_progress(
 
     report = run_check_setup(check_setup_repository)
 
-    assert report.results[SetupCheck.DASHBOARD_DEPENDENCIES].status == CheckStatus.OK
+    assert report.results[SetupCheck.PACKAGE_DEPENDENCIES].status == CheckStatus.OK
 
 
 def test_waiting_for_an_install_still_running_gives_up_after_its_timeout(

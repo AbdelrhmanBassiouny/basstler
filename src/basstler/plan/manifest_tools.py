@@ -55,7 +55,7 @@ class ManifestToolsCommand(StrEnum):
 
     VALIDATE = "validate"
     """
-    Check a manifest against the rules a dashboard is built under.
+    Check a manifest against the rules a plan page is built under.
     """
 
     REGENERATE_BRANCH_INDEX = "regenerate-branch-index"
@@ -184,8 +184,8 @@ class PlanManifest:
 
     def validate(self, plan_directory: PlanDirectory | None = None) -> None:
         """
-        Check the manifest against the same rules a dashboard is built under, so nothing
-        is saved that no dashboard could then be built from.
+        Check the manifest against the same rules a plan page is built under, so nothing
+        is saved that no page could then be built from.
 
         :param plan_directory: The plans a ``<plan-id>/<item-id>`` entry resolves
             against; without one, such an entry is refused.
@@ -300,7 +300,7 @@ class ManifestToolsCommandLine:
 
         validate_parser = subcommands.add_parser(
             ManifestToolsCommand.VALIDATE,
-            help="Check a manifest against the rules a dashboard is built under",
+            help="Check a manifest against the rules a plan page is built under",
         )
         validate_parser.add_argument("manifest_path", type=Path)
         validate_parser.add_argument(

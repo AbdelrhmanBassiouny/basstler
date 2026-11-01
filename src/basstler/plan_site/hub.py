@@ -35,7 +35,7 @@ from typing import Any
 import yaml
 
 from basstler.class_property import classproperty
-from basstler.dashboard.plan import Item
+from basstler.plan_site.plan import Item
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.exceptions import RegistryUnreadableError

@@ -5,15 +5,14 @@ pull request is merged.
 
 This is the one direction plan.yaml's manually-maintained ``status`` field
 can be corrected without human judgment. Every other kind of drift
-dashboard/plan_page.py's drift banner can report - a pull request number that doesn't
+a plan's page on the plan site can report - a pull request number that doesn't
 resolve, an item marked done while its pull request is still open, a closed-but-
 unmerged pull request against an active status - means something happened that only a
 person can interpret (abandoned? reverted? mistyped?), and stays a drift
 flag for a human to read, exactly as before. "merged on GitHub" has no such
 ambiguity, so leaving it as a standing drift flag would just mean the same
 fact gets reported forever until someone manually edits the manifest - this
-script is that edit, meant to run automatically as part of every
-/plan-dashboard refresh. See plan-schema.md's "Why status is deliberately
+script is that edit, which /plan-sync runs. See plan-schema.md's "Why status is deliberately
 thin" section for the full design reasoning.
 
 Usage:
@@ -24,8 +23,7 @@ Usage:
         [--plans-dir /tmp/plans]
 
 This validates the manifest before correcting anything, so --plans-dir is
-needed by a manifest whose depends_on names another plan - the same directory
-dashboard/plan_page.py takes.
+needed by a manifest whose depends_on names another plan.
 
 Rewrites --plan in place, or writes to --output if given. Patches only the
 exact ``status: <value>`` line of each corrected item - every other line is

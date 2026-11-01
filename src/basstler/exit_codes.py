@@ -193,7 +193,7 @@ class ManifestToolsExitCode(ExitCode):
 
     INVALID_MANIFEST = 1
     """
-    The manifest breaks a rule the dashboard validates; the problems are on stderr.
+    The manifest breaks a rule the plan site validates; the problems are on stderr.
     """
 
     CHANGED_SINCE_READ = 3

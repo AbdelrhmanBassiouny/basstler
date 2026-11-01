@@ -1,5 +1,5 @@
 """
-Tests for :mod:`basstler.dashboard.plan`: reading a plan's waves, tracks and items, and
+Tests for :mod:`basstler.plan_site.plan`: reading a plan's waves, tracks and items, and
 what an item answers about itself.
 """
 
@@ -7,12 +7,12 @@ from __future__ import annotations
 
 import pytest
 
-from basstler.dashboard.plan import Item, Plan
+from basstler.plan_site.plan import Item, Plan
 from basstler.plan.model import ItemStatus, ManifestKey
 from basstler.pull_request_state import (
     LiveState,
 )
-from basstler.locations import DashboardTemplate
+from basstler.locations import SiteTemplate
 
 from ..manifest_builders import manifest_item, minimal_plan
 
@@ -49,13 +49,13 @@ def test_status_and_drift_css_class_with_drift():
 
 
 @pytest.mark.parametrize("status", list(ItemStatus))
-def test_the_dashboard_styles_every_status_css_class(status):
+def test_the_site_styles_every_status_css_class(status):
     """
     A status value holds spaces, so the class is built from the member's name, and the
     stylesheet has to know that name.
     """
     item = Item(title="A", branch="a", track="track-1", status=status)
-    stylesheet = DashboardTemplate.STYLE.read_text()
+    stylesheet = SiteTemplate.STYLESHEET.read_text()
     assert f".item.{item.status_and_drift_css_class} " in stylesheet
 
 
@@ -229,3 +229,50 @@ def test_item_from_mapping_defaults_every_optional_field_when_omitted():
     assert item_instance.notes is None
     assert item_instance.depends_on == []
     assert item_instance.blockers == []
+
+
+# %% progress stages
+
+
+def test_an_item_with_a_pull_request_is_started_whatever_its_status():
+    item = Item(title="A", branch="a", track="track-1", status=ItemStatus.NOT_STARTED)
+    item.live_state = LiveState.OPEN_DRAFT
+    assert item.is_started
+
+
+@pytest.mark.parametrize(
+    "status", [ItemStatus.IN_PROGRESS, ItemStatus.BLOCKED, ItemStatus.DONE]
+)
+def test_an_item_under_way_is_started_without_a_pull_request(status: ItemStatus):
+    assert Item(title="A", branch="a", track="track-1", status=status).is_started
+
+
+@pytest.mark.parametrize("status", [ItemStatus.NOT_STARTED, ItemStatus.DEFERRED])
+def test_an_item_not_under_way_without_a_pull_request_is_not_started(
+    status: ItemStatus,
+):
+    assert not Item(title="A", branch="a", track="track-1", status=status).is_started
+
+
+@pytest.mark.parametrize("live_state", [LiveState.OPEN_READY, LiveState.MERGED])
+def test_an_item_whose_pull_request_left_draft_is_reviewed(live_state: LiveState):
+    item = Item(title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS)
+    item.live_state = live_state
+    assert item.is_reviewed
+
+
+@pytest.mark.parametrize(
+    "live_state",
+    [
+        LiveState.NO_PULL_REQUEST,
+        LiveState.OPEN_DRAFT,
+        LiveState.CLOSED_UNMERGED,
+        LiveState.NOT_FOUND,
+    ],
+)
+def test_an_item_whose_pull_request_never_left_draft_is_not_reviewed(
+    live_state: LiveState,
+):
+    item = Item(title="A", branch="a", track="track-1", status=ItemStatus.IN_PROGRESS)
+    item.live_state = live_state
+    assert not item.is_reviewed

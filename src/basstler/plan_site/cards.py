@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 from basstler.class_property import classproperty
 
 if TYPE_CHECKING:
-    from basstler.dashboard.plan import Item, Track, Wave
+    from basstler.plan_site.plan import Item, Track, Wave
     from basstler.plan.dependencies import (
         Dependency,
         ResolvedDependency,
@@ -40,8 +40,8 @@ class DependencyChip:
 
     card_url: str | None = None
     """Where the dependency's own card is shown: an anchor on this page for an
-    item of this plan, or that card on its own plan's dashboard - ``None`` when
-    the entry resolves to nothing, or that dashboard has no known address."""
+    item of this plan, or that card on its own plan's page - ``None`` when
+    the entry resolves to nothing, or that page has no known address."""
 
     @classproperty
     def tooltip_separator(cls) -> str:
@@ -65,7 +65,7 @@ class DependencyChip:
         """Build the chip for a resolved dependency.
 
         :param dependency: The dependency this chip stands for.
-        :param locate_plan_page: Where another plan's dashboard is published,
+        :param locate_plan_page: Where another plan's page is published,
             given its id, or ``None`` when plan pages have no known address.
         """
         if not dependency.is_in_another_plan:
@@ -97,7 +97,7 @@ class DependencyChip:
 
 @dataclass(frozen=True)
 class ItemAction(ABC):
-    """One not-done item's actionable dashboard button - see
+    """One not-done item's actionable button - see
     :attr:`Item.action`. The label matches what the status actually calls
     for (starting fresh work reads differently from resolving a blocker),
     but every non-``done`` status gets one: there's always something
@@ -156,10 +156,10 @@ class ResolveAction(ItemAction):
 
 
 class ModelOption(StrEnum):
-    """One choice in a dashboard action button's model dropdown, in the order the
+    """One choice in a action button's model dropdown, in the order the
     dropdown lists them.
 
-    Every model is offered dashboard-wide - not plan-specific, so declared once
+    Every model is offered on every page - not plan-specific, so declared once
     here rather than threaded through :class:`Plan`. A member is its own model
     id, the one to prepend as ``/model <value>`` before the copied command, or
     ``""`` to copy the command alone and inherit whatever model the
@@ -207,7 +207,7 @@ class StackedItem:
 
     Carries two independent indent computations - as normally shown, and as
     shown once done items are hidden - so the page can switch between them
-    client-side (see ``hide-done`` in dashboard.html) without a re-render:
+    client-side (see ``hide-done`` in site_plan.html) without a re-render:
     a done dependency, once hidden, no longer visually justifies indenting
     its dependents, so they dedent as if they had no dependency on it at
     all rather than merely one level shallower."""
@@ -217,7 +217,7 @@ class StackedItem:
 
     indent_level: int
     """How deeply nested this item is under its same-track dependency chain,
-    capped at :attr:`DashboardRenderer.maximum_dependency_stack_level`."""
+    capped at :attr:`PlanPage.maximum_dependency_stack_level`."""
 
     wrap_parent: Item | None
     """The item this one visually continues from, if the chain wrapped back

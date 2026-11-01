@@ -1,6 +1,6 @@
-# A worked example: idea to dashboard
+# A worked example: idea to plan page
 
-A short, concrete walkthrough of the plan-dashboard system end to end, using
+A short, concrete walkthrough of the plan system end to end, using
 a small **fictional** example plan — no real branches, PRs, or GitHub calls
 involved.
 
@@ -14,21 +14,7 @@ configures, for when you want the details.
 
 The example data referenced below is committed alongside this file, under
 [`example/`](./example/) — real `plan.yaml`, `roadmap.md`, and `pr_data.json`
-files, not just prose. You can render them yourself with no GitHub access at
-all:
-
-```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m basstler.dashboard.plan_page \
-  --plan skills/plan-dashboard/example/plan.yaml \
-  --roadmap skills/plan-dashboard/example/roadmap.md \
-  --pr-data skills/plan-dashboard/example/pr_data.json \
-  --output <scratchpad>/example-dashboard.html
-```
-
-`<scratchpad>` is the directory [`SKILL.md`](SKILL.md) writes into.
-`BASSTLER_PYTHON` is the package's own environment, which every session start creates
-with the package and its dependencies installed; see `basstler/README.md`.
+files, not just prose.
 
 ## 1. Start with the idea, in plan mode
 
@@ -47,8 +33,8 @@ approve.
 
 A single Claude Code plan-mode plan is ephemeral — it lives in this one
 conversation. Once it's clear the work spans more than one PR or session (as
-this one does: backoff, circuit breaker, dead-letter queue, and a metrics
-dashboard are each their own branch), turn it into a **persistent plan**:
+this one does: backoff, circuit breaker, dead-letter queue, and retry
+metrics are each their own branch), turn it into a **persistent plan**:
 
 > **You:** `/plan-create notification-retry-overhaul`
 
@@ -60,7 +46,7 @@ this need multiple tracks? waves?), drafts a schema-conformant
 one — optionally creates a **tracking issue** as a shared mailbox for later
 structural changes (skipped in this example, since it's small enough for one
 session to own end to end). Finally it pushes both files to the
-`claude/personal-notes` branch and publishes the first dashboard.
+`claude/personal-notes` branch; that push builds the plan's page on the plan site.
 
 ## 3. The resulting plan.yaml and roadmap.md
 
@@ -121,29 +107,24 @@ as a title and a short list of entries:
 History and finished work are kept in neither file; they live in git and on
 the pull requests.
 Neither file ever stores live GitHub state (open/draft/merged/CI) — that's
-always fetched fresh, every run, in the next step.
+always fetched fresh, every time the plan site is built.
 
-## 4. Check the plan and open its page
+## 4. Open the plan's page
 
-> **You:** `/plan-dashboard notification-retry-overhaul`
+Every push to the notes branch rebuilds the plan site, so the plan's page is
+already there — `plan_site_page_url notification-retry-overhaul` prints its
+address. The build cross-checks every item's PR against live GitHub state:
 
-The [`plan-dashboard`](./SKILL.md) skill cross-checks every item's PR against
-live GitHub state, auto-corrects the one kind of drift that's unambiguous (a
-merged PR whose item is still marked anything but `done`), and links the
-plan's page on the plan site, which every push to the notes branch rebuilds:
-
-![Dashboard overview — status counts, drift flag, and a "what to do next" sidebar covering ready-to-start, blocker-may-be-cleared, and ready-to-review items](./example/screenshots/dashboard-overview.png)
+![The plan page — status counts, the next steps, and a column per wave with a card per item](./example/screenshots/plan-page-overview.png)
 
 A few things worth noticing in this one small example:
 
-- **Status counts and a drift flag**, top right — `retry-fallback-queue` is
-  marked `done` in the manifest, but its pull request (`#103`) is still
-  open. That's the one thing a manifest can get wrong that GitHub itself
-  can settle: the sidebar's "Fix the manifest" entry names exactly which
-  item and why.
-- **"Ready to start"** — `retry-metrics-dashboard` hasn't started yet, but
-  its one dependency (`retry-backoff-strategy`) is done, so it's safe to
-  build on.
+- **Status counts and a drift flag** — `retry-fallback-queue` is marked `done`
+  in the manifest, but its pull request (`#103`) is still open. That's the one
+  thing a manifest can get wrong that GitHub itself can settle: the "Fix the
+  manifest" list names exactly which item and why.
+- **"Ready to start"** — `retry-metrics` hasn't started yet, but its one
+  dependency (`retry-backoff-strategy`) is done, so it's safe to build on.
 - **"Blocker may be cleared"** — `retry-load-testing` is blocked (on load-test
   cluster capacity, per its own `blockers` note), but its dependency is now
   ready too, so it's worth a look.
@@ -154,37 +135,33 @@ A few things worth noticing in this one small example:
   dependent out of this list while it has no pull request at all — once one
   exists, whether it is a draft, ready, or already landed, the branch stacked
   on top is worth reviewing.
-- **Done items are hidden by default** — the sidebar's "Show done / merged
-  items" checkbox reveals `retry-backoff-strategy` and `retry-fallback-queue`
-  when you want them back.
-- **A `bug` chip** — `retry-fallback-queue`'s pull request carries the `bug`
-  label, so its sidebar entry is marked as a bug fix. The chip appears
-  wherever the item already sits; being a bug fix is a property of the work,
-  not a next action, so it never moves an item between groups.
+- **Done items are hidden by default** — the "Show done items" checkbox
+  reveals `retry-backoff-strategy` and `retry-fallback-queue` when you want
+  them back.
 
-When you only care about the bug fixes, the "Bug fixes only" checkbox hides
-every other entry — and any group left with nothing in it:
+The other drift with no judgment call in it — a merged pull request whose item
+is still marked anything but `done` — is corrected in the manifest itself:
 
-![The "What to do next" card with "Bug fixes only" ticked, leaving one entry](./example/screenshots/dashboard-bug-filter.png)
+> **You:** `/plan-sync notification-retry-overhaul`
 
-The checkbox only appears when at least one entry is a bug fix, and each
-group's count switches to the number it is actually showing.
+The [`plan-sync`](../plan-sync/SKILL.md) skill marks every such item `done` and
+pushes the correction, which rebuilds the page.
 
 ## 5. Kick off, resolve, or review a specific item
 
 Every not-done item's card has an action button, worded to match its status,
 plus a model dropdown next to it:
 
-![A blocked item's "Resolve" button with its model dropdown open, and the next card's "Start now" button](./example/screenshots/dashboard-action-buttons.png)
+![An item's "Resume" button with its model dropdown open](./example/screenshots/plan-page-action-buttons.png)
 
-Clicking a button **copies the command** to your clipboard (a published page
+Clicking a button **copies the command** to your clipboard (a web page
 can't start a session itself) — paste it into a fresh session to run it. If
 you pick a model from the dropdown first, a `/model MODEL_ID` line is
 prepended so the pasted session starts on that model.
 
-- **Kick off a not-started item** — `retry-metrics-dashboard`'s "Start now"
+- **Kick off a not-started item** — `retry-metrics`'s "Start now"
   button copies `/plan-item-kickoff notification-retry-overhaul
-  retry-metrics-dashboard`. The [`plan-item-kickoff`](../plan-item-kickoff/SKILL.md)
+  retry-metrics`. The [`plan-item-kickoff`](../plan-item-kickoff/SKILL.md)
   skill gathers the item's context (manifest entry, roadmap history, its
   dependency's live state, patterns from the merged pull requests that last
   changed the files it will touch) and
@@ -198,9 +175,8 @@ prepended so the pasted session starts on that model.
   blockers, then proposes a plan to resolve whatever's actually stalling it
   — same plan-mode-only contract, no code changes.
 - **Review a stalled draft PR** — `retry-circuit-breaker` and
-  `retry-config-flag` both have open, still-draft pull requests, so each
-  gets a "Review" button instead. Unlike the other two, this one isn't a
-  skill invocation — it's a plain link straight to the PR on GitHub.
+  `retry-config-flag` both have open, still-draft pull requests. Their pull
+  request chips link straight to the PRs on GitHub.
 
 ## Where to go from here
 
@@ -208,8 +184,8 @@ prepended so the pasted session starts on that model.
   `/setup-personal-notes` configures, and how to change any of it.
 - [`plan-schema.md`](./plan-schema.md) — the full `plan.yaml` schema
   reference.
-- [`plan-dashboard/SKILL.md`](./SKILL.md),
-  [`plan-create/SKILL.md`](../plan-create/SKILL.md),
+- [`plan-create/SKILL.md`](./SKILL.md),
+  [`plan-sync/SKILL.md`](../plan-sync/SKILL.md),
   [`plan-item-kickoff/SKILL.md`](../plan-item-kickoff/SKILL.md),
   [`plan-item-resolve/SKILL.md`](../plan-item-resolve/SKILL.md) — the exact
   mechanics behind each step above.

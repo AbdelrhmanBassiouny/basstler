@@ -74,7 +74,7 @@ class PlanWritingScript(StrEnum):
 
     WRITE_PERSONAL_NOTES_FILE = "WRITE_PERSONAL_NOTES_FILE_SCRIPT"
     """
-    How the dashboard refresh pushes its own manifest corrections, which is a plan-data
+    How /plan-sync pushes its own manifest corrections, which is a plan-data
     write like any other.
     """
 

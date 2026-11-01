@@ -9,6 +9,7 @@ import dataclasses
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from enum import StrEnum
 
 from basstler.class_property import classproperty
 from basstler.locations import SiteTemplate
@@ -18,11 +19,64 @@ from basstler.render_common import TemplatePage
 # %% the cards a page lists
 
 
+class ProgressStage(StrEnum):
+    """
+    The stages a card measures its items' progress by, earliest first; each value is
+    the word a card shows and the CSS class its bar segment carries.
+    """
+
+    STARTED = "started"
+    """
+    Work on the item has begun.
+    """
+
+    REVIEWED = "reviewed"
+    """
+    The item's pull request is past its author's review.
+    """
+
+    DONE = "done"
+    """
+    The item is done.
+    """
+
+
+@dataclass(frozen=True)
+class StageShare:
+    """
+    The share of a card's items that reached one :class:`ProgressStage`.
+    """
+
+    stage: ProgressStage
+    """
+    The stage measured.
+    """
+
+    percentage: float
+    """
+    The share of items that reached :attr:`stage`, from 0 to 100.
+    """
+
+    @property
+    def label(self) -> str:
+        """
+        The share as text, such as ``40% started``.
+        """
+        return f"{self.percentage:.0f}% {self.stage}"
+
+    @property
+    def width(self) -> str:
+        """
+        The share as the CSS width of its bar segment.
+        """
+        return f"{self.percentage:.1f}%"
+
+
 @dataclass(kw_only=True)
 class ProgressCard(ABC):
     """
     One card on a site page: a heading, a progress label and a bar showing how many
-    items are done.
+    items are started, reviewed and done.
 
     The plan cards on a repository's index and the repository cards on the hub are drawn
     by the same markup, so what the bar and the card's class are worked out from is
@@ -39,15 +93,15 @@ class ProgressCard(ABC):
     How many items there are.
     """
 
-    open_pull_requests: int = 0
+    started: int = 0
     """
-    How many of the items' pull requests are open.
+    How many items have begun: see :attr:`Item.is_started`.
     """
 
-    reviewed_pull_requests: int = 0
+    reviewed: int = 0
     """
-    How many of those open pull requests are out of draft: their author has reviewed
-    them and marked them ready for review.
+    How many items' pull requests are past their author's review: see
+    :attr:`Item.is_reviewed`.
     """
 
     @staticmethod
@@ -90,32 +144,41 @@ class ProgressCard(ABC):
         """
         return self.total > 0 and self.done == self.total
 
-    @property
-    def completion_percentage(self) -> float:
+    def percentage_of(self, count: int) -> float:
         """
-        The share of items done, from 0 to 100.
+        :param count: How many of the card's items to express as a share.
+        :return: *count*'s share of :attr:`total`, from 0 to 100.
         """
-        return (self.done / self.total * 100) if self.total else 0.0
+        return (count / self.total * 100) if self.total else 0.0
 
     @property
-    def completion_percentage_label(self) -> str:
+    def stage_shares(self) -> list[StageShare]:
         """
-        :attr:`completion_percentage`, formatted to one decimal place with a
-        trailing ``%`` - ready to drop straight into the progress bar's
-        ``width`` style without the template doing any formatting itself.
+        The share of items that reached each :class:`ProgressStage`, earliest stage
+        first.
         """
-        return f"{self.completion_percentage:.1f}%"
+        counts = {
+            ProgressStage.STARTED: self.started,
+            ProgressStage.REVIEWED: self.reviewed,
+            ProgressStage.DONE: self.done,
+        }
+        return [
+            StageShare(stage=stage, percentage=self.percentage_of(counts[stage]))
+            for stage in ProgressStage
+        ]
 
     @property
-    def review_label(self) -> str | None:
+    def stage_shares_label(self) -> str | None:
         """
-        How many open pull requests are out of draft, or ``None`` when none are open.
+        The started and reviewed :attr:`stage_shares` as text, or ``None`` when there are
+        no items; the done share is left to :attr:`progress_label`.
         """
-        if not self.open_pull_requests:
+        if not self.total:
             return None
-        return (
-            f"{self.reviewed_pull_requests} / {self.open_pull_requests} open pull "
-            f"requests reviewed"
+        return " · ".join(
+            share.label
+            for share in self.stage_shares
+            if share.stage is not ProgressStage.DONE
         )
 
     @property
@@ -139,7 +202,7 @@ class PlanSummary(ProgressCard):
     """The plan's stable identifier: a short kebab-case slug (e.g.
     ``rdr-refactor``), not a UUID - it is chosen by whoever bootstraps the
     plan, doubles as its directory name, and is what a person types as the
-    ``<plan-id>`` argument to ``/plan-dashboard``/``/plan-create``, so it
+    ``<plan-id>`` argument to ``/plan-create``, so it
     needs to stay human-readable and human-typable."""
 
     title: str
@@ -152,7 +215,7 @@ class PlanSummary(ProgressCard):
     A one-line description shown under the title.
     """
 
-    dashboard_url: str | None = None
+    page_url: str | None = None
     """
     The address of the plan's page on the site, or ``None`` when it has none.
     """
@@ -227,8 +290,7 @@ class RepositorySummary(ProgressCard):
         :param index_url: The repository's own index page.
         :param plans: The repository's published plans.
         :param skipped_plans: The repository's plans the build left out.
-        :return: The repository's card, counting every published plan's items and pull
-            requests.
+        :return: The repository's card, counting every published plan's items.
         """
         return cls(
             name=name,
@@ -280,8 +342,7 @@ class SiteSummary(ProgressCard):
     def over_repositories(cls, repositories: list[RepositorySummary]) -> SiteSummary:
         """
         :param repositories: Every repository on the site.
-        :return: The site's summary, counting every repository's items and pull
-            requests.
+        :return: The site's summary, counting every repository's items.
         """
         return cls(repositories=repositories, **cls.counts_over(repositories))
 

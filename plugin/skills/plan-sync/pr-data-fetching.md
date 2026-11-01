@@ -1,8 +1,8 @@
 # Fetching live pull request data into pr_data.json
 
 The canonical procedure for gathering the `pr_data.json` shape
-`dashboard/plan_page.py` and `plan/sync_manifest_status.py` both consume -
-referenced by `plan-dashboard/SKILL.md` step 2 instead of restating it.
+`plan/sync_manifest_status.py` consumes - referenced by [`SKILL.md`](SKILL.md) step 2
+instead of restating it.
 
 ## Shape
 
@@ -20,7 +20,7 @@ single repository:
 ```
 
 A file of another shape - `{"488": {...}}` with the repository level left out - is
-refused with `MalformedPullRequestDataError`. [`example/pr_data.json`](example/pr_data.json)
+refused with `MalformedPullRequestDataError`. [`example/pr_data.json`](../plan-create/example/pr_data.json)
 is a complete file.
 
 Source the shared config script first if you haven't already this session -
@@ -42,8 +42,8 @@ this matters:
    with `method: "get"` for that specific `pullNumber`.
 
 A cross-plan dependency (`depends_on: [<plan-id>/<item-id>]`, see
-`plan-schema.md`) widens that: the dashboard shows the foreign item's own
-live state, so its pull request has to be in this data too. It resolves
+`plan-schema.md`) widens that: the foreign item's own live state is read from this data
+too, so its pull request has to be in it. It resolves
 against **its own plan's** `default_repository`, not the rendered plan's, so
 a reference into a plan tracking a different repository adds that repository
 to the list above.

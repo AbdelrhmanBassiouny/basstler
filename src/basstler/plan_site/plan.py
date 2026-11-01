@@ -1,6 +1,6 @@
 """
-A plan.yaml as the dashboard reads it: its waves, tracks and items, each item carrying
-the live state the renderer fills in.
+A plan.yaml as its page on the plan site reads it: its waves, tracks and items, each
+item carrying the live state the renderer fills in.
 """
 
 from __future__ import annotations
@@ -15,7 +15,7 @@ from basstler.render_common import sanitize_http_url
 from basstler.repository import GitHubAddress
 
 if TYPE_CHECKING:
-    from basstler.dashboard.cards import DependencyChip, ItemAction
+    from basstler.plan_site.cards import DependencyChip, ItemAction
 
 
 # %% waves and tracks
@@ -36,7 +36,7 @@ class Wave:
 
     description: str | None = None
     """
-    An optional one-line note about the wave, shown in the dashboard header.
+    An optional one-line note about the wave, shown in the plan page's header.
     """
 
     @classmethod
@@ -153,7 +153,7 @@ class Item:
 
     live_state: LiveState = field(default=LiveState.NO_PULL_REQUEST, init=False)
     """
-    This item's live GitHub state, filled in by :meth:`DashboardRenderer.render`.
+    This item's live GitHub state, filled in by :meth:`PlanPage.render`.
     """
 
     drift_description: str | None = field(default=None, init=False)
@@ -163,30 +163,29 @@ class Item:
 
     pull_request_url: str | None = field(default=None, init=False)
     """This item's pull request URL on GitHub, filled in by
-    :meth:`DashboardRenderer.render` - ``None`` if it has no pull request yet."""
+    :meth:`PlanPage.render` - ``None`` if it has no pull request yet."""
 
     pull_request_record: PullRequestRecord | None = field(default=None, init=False)
     """
     The live state of this item's pull request, filled in by
-    :meth:`DashboardRenderer.render` - ``None`` if it has no pull request yet or GitHub
+    :meth:`PlanPage.render` - ``None`` if it has no pull request yet or GitHub
     has none by its number.
     """
 
     upstream_pull_request_url: str | None = field(default=None, init=False)
     """
     The upstream pull request opened from this item's branch, as its pull request's
-    description links it, filled in by :meth:`DashboardRenderer.render`.
+    description links it, filled in by :meth:`PlanPage.render`.
     """
 
     dependency_chips: list[DependencyChip] = field(default_factory=list, init=False)
     """
-    Ready-to-render chips for :attr:`depends_on`, filled in by
-    :meth:`DashboardRenderer.render`.
+    Ready-to-render chips for :attr:`depends_on`, filled in by :meth:`PlanPage.render`.
     """
 
     action: ItemAction | None = field(default=None, init=False)
-    """This item's dashboard action button, filled in by
-    :meth:`DashboardRenderer.render` - ``None`` only for a ``done`` item
+    """This item's action button, filled in by
+    :meth:`PlanPage.render` - ``None`` only for a ``done`` item
     (nothing left to do) or a not-started item whose dependencies aren't
     all ready yet (starting now would build on unsafe state). Every other
     status always gets one: something is always actionable next."""
@@ -194,26 +193,21 @@ class Item:
     is_bug_fix: bool = field(default=False, init=False)
     """
     Whether this item's pull request carries :attr:`GitHubLabel.BUG`, filled in by
-    :meth:`DashboardRenderer.render`.
-
-    Marks the item wherever it
-    already appears rather than grouping it separately: fixing a bug is a
-    property of the work, not a distinct next action, and it can apply to an
-    item in any of the sidebar's action groups.
+    :meth:`PlanPage.render`.
     """
 
     needs_review: bool = field(default=False, init=False)
     """
     Whether this item's pull request is open, still a draft, and actually worth
-    reviewing right now, filled in by :meth:`DashboardRenderer.render`.
+    reviewing right now, filled in by :meth:`PlanPage.render`.
 
     This plan's convention keeps every pull request in draft until its author has
     reviewed it themselves - so a draft pull request is exactly the population that
     still needs that review, and flipping it to "ready for review" *is*
     the record of having done so. False for a ``deferred`` item even with
     an open draft pull request - deferred means intentionally paused or superseded,
-    so there is nothing to actually review yet. Drives the dashboard's
-    "Review" button and the "ready to review" sidebar list - distinct from
+    so there is nothing to actually review yet. Drives the plan page's
+    "ready to review" list - distinct from
     :attr:`Item.action`, since reviewing a draft pull request and resuming/resolving
     the underlying work are different next steps that can both apply to
     the same item at once.
@@ -227,6 +221,26 @@ class Item:
         return self.live_state in (LiveState.OPEN_DRAFT, LiveState.OPEN_READY)
 
     @property
+    def is_started(self) -> bool:
+        """
+        Whether work on this item has begun: it has a pull request, or its status is
+        past not started and it is not set aside.
+        """
+        return self.live_state is not LiveState.NO_PULL_REQUEST or self.status in (
+            ItemStatus.IN_PROGRESS,
+            ItemStatus.BLOCKED,
+            ItemStatus.DONE,
+        )
+
+    @property
+    def is_reviewed(self) -> bool:
+        """
+        Whether this item's pull request is past its author's review: out of draft, or
+        merged.
+        """
+        return self.live_state in (LiveState.OPEN_READY, LiveState.MERGED)
+
+    @property
     def identifier(self) -> str:
         """
         The item's effective identifier: :attr:`id`, or :attr:`branch` if unset.
@@ -236,7 +250,7 @@ class Item:
     @property
     def anchor(self) -> str:
         """
-        The ``id`` of this item's card on its plan's dashboard, which a link names after
+        The ``id`` of this item's card on its plan's page, which a link names after
         ``#`` to reach that card.
         """
         return self.anchor_of(self.identifier)

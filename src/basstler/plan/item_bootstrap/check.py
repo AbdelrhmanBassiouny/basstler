@@ -94,7 +94,7 @@ class ItemCheckRequest:
     """
     Which item to compare against local git, and the remote its branch is published to.
 
-    Local git only: the dashboard compares the manifest against GitHub on every refresh,
+    Local git only: the plan site compares the manifest against GitHub on every build,
     so what is left is the window before a push.
     """
 

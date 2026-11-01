@@ -13,7 +13,7 @@ import pytest
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.exceptions import RegistryUnreadableError
-from basstler.dashboard.plan import Item
+from basstler.plan_site.plan import Item
 from basstler.plan_site.hub import HubCommand, NotesBranch, PlanHub, SiteAddress, main
 from basstler.plan.model import PlanDocument
 from basstler.repository import Repository

@@ -7,7 +7,7 @@
     {
       "name": "basstler",
       "source": "./plugin",
-      "description": "Personal notes, PR progress, multi-PR plans with live dashboards, and stacked-PR maintenance for Claude Code sessions."
+      "description": "Personal notes, PR progress, multi-PR plans on a live plan site, and stacked-PR maintenance for Claude Code sessions."
     }
   ]
 }

@@ -14,7 +14,7 @@ from typing import Any
 import pytest
 import yaml
 
-from basstler.dashboard.plan import Plan
+from basstler.plan_site.plan import Plan
 from basstler.exceptions import (
     InvalidSchemaVersion,
     MissingPlanDirectory,

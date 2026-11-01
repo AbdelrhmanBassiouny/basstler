@@ -1,7 +1,7 @@
 """
 The parts of a plan's data model that more than one tool has to agree on.
 
-Nothing here imports anything the tools reading it do not already have: the dashboard
+Nothing here imports anything the tools reading it do not already have: the plan site's
 build imports jinja2 and markdown of its own, and the bootstrap tool imports neither.
 The dependency runs one way only.
 """

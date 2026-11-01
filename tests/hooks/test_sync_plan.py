@@ -1,13 +1,13 @@
 """
-Tests for refresh_dashboard.sh's own orchestration logic: argument parsing, the
-correction-triggers-a-push gate, and the optional --tracking-url passthrough.
+Tests for sync_plan.sh's own orchestration logic: argument parsing, the
+correction-triggers-a-push gate, and the --plans-dir passthrough.
 
-The two modules it calls (basstler.plan.sync_manifest_status, basstler.dashboard.plan_page) and
-the personal-notes push (write-personal-notes-file.sh) are replaced with stubs in a
-scratch project-root layout, so these tests exercise only refresh_dashboard.sh's own
-shell logic - no real git remote, network access, or GitHub data is involved.
-basstler.dashboard.refresh_support has no such dependencies, so the real module is reused
-unchanged, with the logging module it prints through.
+The module it calls (basstler.plan.sync_manifest_status) and the personal-notes push
+(write-personal-notes-file.sh) are replaced with stubs in a scratch project-root layout,
+so these tests exercise only sync_plan.sh's own shell logic - no real git remote,
+network access, or GitHub data is involved. basstler.plan.sync_summary has no such
+dependencies, so the real module is reused unchanged, with the logging module it prints
+through.
 """
 
 from __future__ import annotations
@@ -22,18 +22,14 @@ from types import ModuleType
 import pytest
 
 import basstler.class_property
-import basstler.dashboard.exceptions
-import basstler.dashboard.plan_page
-import basstler.dashboard.publication
-import basstler.dashboard.refresh_support
 import basstler.environment
 import basstler.exceptions
 import basstler.exit_codes
 import basstler.locations
 import basstler.plan.sync_manifest_status
+import basstler.plan.sync_summary
 import basstler.standard_streams
 from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
-from basstler.plan.model import PlanDocument
 
 from ..constants.environment import FileMode, ScrubbedEnvironmentPrefix
 from ..constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
@@ -51,18 +47,13 @@ def path_within_package(module: ModuleType) -> Path:
 
 class StubbedScript(StrEnum):
     """
-    The package modules refresh_dashboard.sh calls out to, each stood in for by a stub
+    The package modules sync_plan.sh calls out to, each stood in for by a stub
     that records how it was called.
     """
 
     SYNC_MANIFEST_STATUS = str(path_within_package(basstler.plan.sync_manifest_status))
     """
     Reads the manifest and corrects statuses that drifted.
-    """
-
-    BUILD_DASHBOARD = str(path_within_package(basstler.dashboard.plan_page))
-    """
-    Renders the page.
     """
 
     @property
@@ -73,21 +64,21 @@ class StubbedScript(StrEnum):
         return f"{Path(self).stem}_invocation.json"
 
 
-class RefreshDashboardOption(StrEnum):
+class SyncPlanOption(StrEnum):
     """
-    The options refresh_dashboard.sh takes that only the script defines.
+    The options sync_plan.sh takes that only the script defines.
     """
 
     PLANS_DIRECTORY = "--plans-dir"
     """
-    The directory holding every plan, forwarded to both scripts it calls.
+    The directory holding every plan, forwarded to the sync.
     """
 
 
 @pytest.fixture
 def scratch_project_root(tmp_path: Path) -> Path:
     """
-    Build a scratch layout refresh_dashboard.sh can run against unmodified: a scratch
+    Build a scratch layout sync_plan.sh can run against unmodified: a scratch
     basstler checkout holding the real script plus resolve-personal-notes-config.sh, and
     stand-ins for every script/hook it calls out to, beside the directory it runs in.
 
@@ -96,12 +87,12 @@ def scratch_project_root(tmp_path: Path) -> Path:
     """
     checkout_root = scratch_checkout_root(tmp_path)
     plugin_root = checkout_root / RepositoryLocation.PLUGIN.value.name
-    plan_dashboard_directory = plugin_root / SkillDirectory.PLAN_DASHBOARD
+    plan_sync_directory = plugin_root / SkillDirectory.PLAN_SYNC
     hooks_directory = plugin_root / PluginLocation.HOOKS.value.name
     package_directory = (
         checkout_root / PackageSourceFile.SOURCE / PackageLocation.DIRECTORY.value.name
     )
-    plan_dashboard_directory.mkdir(parents=True)
+    plan_sync_directory.mkdir(parents=True)
     package_directory.mkdir(parents=True)
     shutil.copy(
         DatasetLocation.SET_UP_CHECKOUT / PackageSourceFile.METADATA,
@@ -109,8 +100,8 @@ def scratch_project_root(tmp_path: Path) -> Path:
     )
 
     shutil.copy(
-        RepositoryLocation.PLUGIN / SkillDirectory.DASHBOARD_REFRESH_SCRIPT,
-        plan_dashboard_directory / SkillDirectory.DASHBOARD_REFRESH_SCRIPT.name,
+        RepositoryLocation.PLUGIN / SkillDirectory.SYNC_PLAN_SCRIPT,
+        plan_sync_directory / SkillDirectory.SYNC_PLAN_SCRIPT.name,
     )
     install_hook_scripts_into(
         plugin_root, PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name
@@ -122,9 +113,7 @@ def scratch_project_root(tmp_path: Path) -> Path:
     copies = {
         Path(module.__file__): package_directory / path_within_package(module)
         for module in (
-            basstler.dashboard.refresh_support,
-            basstler.dashboard.publication,
-            basstler.dashboard.exceptions,
+            basstler.plan.sync_summary,
             basstler.exceptions,
             basstler.exit_codes,
             basstler.class_property,
@@ -135,8 +124,6 @@ def scratch_project_root(tmp_path: Path) -> Path:
     } | {
         DatasetLocation.STUBS / "sync_manifest_status_stub.py": package_directory
         / StubbedScript.SYNC_MANIFEST_STATUS,
-        DatasetLocation.STUBS / "build_dashboard_stub.py": package_directory
-        / StubbedScript.BUILD_DASHBOARD,
     }
     initializer = "__init__.py"
     for source, destination in copies.items():
@@ -155,16 +142,16 @@ def scratch_project_root(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def _refresh_dashboard_script_path(scratch_project_root: Path) -> Path:
+def _sync_plan_script_path(scratch_project_root: Path) -> Path:
     """
-    The scratch layout's copy of refresh_dashboard.sh.
+    The scratch layout's copy of sync_plan.sh.
 
     :param scratch_project_root: A fixture-built scratch project root.
     """
     return (
         scratch_checkout_root(scratch_project_root)
         / RepositoryLocation.PLUGIN.value.name
-        / SkillDirectory.DASHBOARD_REFRESH_SCRIPT
+        / SkillDirectory.SYNC_PLAN_SCRIPT
     )
 
 
@@ -188,11 +175,11 @@ def scrubbed_environment() -> dict[str, str]:
     ).environment({})
 
 
-def run_refresh_dashboard(
+def run_sync_plan(
     scratch_project_root: Path, corrected_ids: list[str], extra_arguments: list[str]
 ) -> subprocess.CompletedProcess[str]:
     """
-    Run the scratch layout's refresh_dashboard.sh, working directory set to the scratch
+    Run the scratch layout's sync_plan.sh, working directory set to the scratch
     root so any relative file it writes lands there.
 
     :param scratch_project_root: A fixture-built scratch project root.
@@ -207,22 +194,17 @@ def run_refresh_dashboard(
     pull_request_data_path.write_text(
         json.dumps([{"id": identifier} for identifier in corrected_ids])
     )
-    artifact_directory = scratch_project_root / "dashboard"
 
     return subprocess.run(
         [
             "bash",
-            str(_refresh_dashboard_script_path(scratch_project_root)),
+            str(_sync_plan_script_path(scratch_project_root)),
             "--plan-id",
             "test-plan",
             "--plan",
             str(plan_path),
-            "--roadmap",
-            str(scratch_project_root / PlanDocument.ROADMAP),
             "--pr-data",
             str(pull_request_data_path),
-            "--artifact-directory",
-            str(artifact_directory),
             *extra_arguments,
         ],
         cwd=scratch_project_root,
@@ -236,8 +218,7 @@ def run_refresh_dashboard(
 
 
 def test_missing_required_argument_fails_with_usage(scratch_project_root: Path):
-    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
-    script_path = _refresh_dashboard_script_path(scratch_project_root)
+    script_path = _sync_plan_script_path(scratch_project_root)
     result = subprocess.run(
         ["bash", str(script_path), "--plan-id", "test-plan"],
         cwd=scratch_project_root,
@@ -250,7 +231,7 @@ def test_missing_required_argument_fails_with_usage(scratch_project_root: Path):
 
 
 def test_unrecognized_argument_fails(scratch_project_root: Path):
-    script_path = _refresh_dashboard_script_path(scratch_project_root)
+    script_path = _sync_plan_script_path(scratch_project_root)
     result = subprocess.run(
         ["bash", str(script_path), "--not-a-real-flag", "value"],
         cwd=scratch_project_root,
@@ -266,10 +247,7 @@ def test_unrecognized_argument_fails(scratch_project_root: Path):
 
 
 def test_zero_corrections_does_not_push_to_personal_notes(scratch_project_root: Path):
-    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
-    result = run_refresh_dashboard(
-        scratch_project_root, corrected_ids=[], extra_arguments=[]
-    )
+    result = run_sync_plan(scratch_project_root, corrected_ids=[], extra_arguments=[])
     assert result.returncode == 0, result.stderr
     assert not (
         scratch_project_root / "write_personal_notes_file_invocation.txt"
@@ -277,8 +255,7 @@ def test_zero_corrections_does_not_push_to_personal_notes(scratch_project_root: 
 
 
 def test_a_correction_pushes_to_personal_notes(scratch_project_root: Path):
-    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
-    result = run_refresh_dashboard(
+    result = run_sync_plan(
         scratch_project_root, corrected_ids=["a"], extra_arguments=[]
     )
     assert result.returncode == 0, result.stderr
@@ -292,61 +269,15 @@ def test_a_correction_pushes_to_personal_notes(scratch_project_root: Path):
     assert "1 item(s) to done" in invocation
 
 
-# %% --tracking-url passthrough
+# %% the printed summary
 
 
-def test_tracking_url_is_not_forwarded_when_omitted(scratch_project_root: Path):
-    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
-    run_refresh_dashboard(scratch_project_root, corrected_ids=[], extra_arguments=[])
-    build_invocation = json.loads(
-        (
-            scratch_project_root / StubbedScript.BUILD_DASHBOARD.invocation_record
-        ).read_text()
-    )
-    assert "--tracking-url" not in build_invocation
-
-
-def test_tracking_url_is_forwarded_when_given(scratch_project_root: Path):
-    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
-    run_refresh_dashboard(
-        scratch_project_root,
-        corrected_ids=[],
-        extra_arguments=["--tracking-url", "https://github.com/owner/repo/issues/1"],
-    )
-    build_invocation = json.loads(
-        (
-            scratch_project_root / StubbedScript.BUILD_DASHBOARD.invocation_record
-        ).read_text()
-    )
-    tracking_url_index = build_invocation.index("--tracking-url")
-    assert build_invocation[tracking_url_index + 1] == (
-        "https://github.com/owner/repo/issues/1"
-    )
-
-
-# %% final merged summary
-
-
-def test_prints_the_merged_sync_and_build_summary(scratch_project_root: Path):
-    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
-    result = run_refresh_dashboard(
+def test_prints_the_sync_summary(scratch_project_root: Path):
+    result = run_sync_plan(
         scratch_project_root, corrected_ids=["a"], extra_arguments=[]
     )
     assert result.returncode == 0, result.stderr
-    merged = json.loads(result.stdout)
-    assert merged == {
-        "corrected": [{"id": "a"}],
-        "drift_count": 0,
-    }
-
-
-# %% the artifact directory
-
-
-def test_the_artifact_directory_is_created(scratch_project_root: Path):
-    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
-    run_refresh_dashboard(scratch_project_root, corrected_ids=[], extra_arguments=[])
-    assert (scratch_project_root / "dashboard").is_dir()
+    assert json.loads(result.stdout) == {"corrected": [{"id": "a"}]}
 
 
 # %% --plans-dir passthrough
@@ -354,7 +285,7 @@ def test_the_artifact_directory_is_created(scratch_project_root: Path):
 
 def _invocation_of(scratch_project_root: Path, script: StubbedScript) -> list[str]:
     """
-    The arguments one stub recorded when refresh_dashboard.sh called it.
+    The arguments one stub recorded when sync_plan.sh called it.
 
     :param scratch_project_root: A fixture-built scratch project root.
     :param script: The stubbed script whose invocation to read back.
@@ -367,28 +298,25 @@ def _invocation_of(scratch_project_root: Path, script: StubbedScript) -> list[st
 def test_plans_directory_is_not_forwarded_when_omitted(
     scratch_project_root: Path, script: StubbedScript
 ):
-    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
-    run_refresh_dashboard(scratch_project_root, corrected_ids=[], extra_arguments=[])
-    assert RefreshDashboardOption.PLANS_DIRECTORY not in _invocation_of(
+    run_sync_plan(scratch_project_root, corrected_ids=[], extra_arguments=[])
+    assert SyncPlanOption.PLANS_DIRECTORY not in _invocation_of(
         scratch_project_root, script
     )
 
 
 @pytest.mark.parametrize("script", list(StubbedScript))
-def test_plans_directory_is_forwarded_to_both_scripts_when_given(
+def test_plans_directory_is_forwarded_when_given(
     scratch_project_root: Path, script: StubbedScript
 ):
-    # Both validate the manifest, so a plan whose depends_on names another
-    # plan needs the directory in both places or the refresh stops at the
-    # first one.
-    (scratch_project_root / PlanDocument.ROADMAP).write_text("")
+    # The sync validates the manifest, so a plan whose depends_on names another
+    # plan needs the directory.
     plans_directory = scratch_project_root / "plans"
-    run_refresh_dashboard(
+    run_sync_plan(
         scratch_project_root,
         corrected_ids=[],
-        extra_arguments=[RefreshDashboardOption.PLANS_DIRECTORY, str(plans_directory)],
+        extra_arguments=[SyncPlanOption.PLANS_DIRECTORY, str(plans_directory)],
     )
     invocation = _invocation_of(scratch_project_root, script)
-    assert invocation[
-        invocation.index(RefreshDashboardOption.PLANS_DIRECTORY) + 1
-    ] == str(plans_directory)
+    assert invocation[invocation.index(SyncPlanOption.PLANS_DIRECTORY) + 1] == str(
+        plans_directory
+    )

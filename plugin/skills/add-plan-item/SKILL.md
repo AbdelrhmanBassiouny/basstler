@@ -50,10 +50,10 @@ fetch_personal_notes_branch
 
 Read **every** plan's `plan.yaml` under `${PLANS_DIR}` off `"${PERSONAL_NOTES_REFERENCE}"`, not
 just the one the user has in mind — the right home is often a plan they weren't
-thinking of. [`plan-schema.md`](../plan-dashboard/plan-schema.md) is the field reference.
+thinking of. [`plan-schema.md`](../plan-create/plan-schema.md) is the field reference.
 
 Then fetch live pull request state once, in bulk, per
-[`pr-data-fetching.md`](../plan-dashboard/pr-data-fetching.md).
+[`pr-data-fetching.md`](../plan-sync/pr-data-fetching.md).
 
 Candidates are every unlanded item and every open pull request's branch, plus
 every plan whose own `description` covers the kind of work being described.
@@ -136,4 +136,4 @@ Flag explicitly, never silently paper over:
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.
 
-Carrying the outcome out later follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
+Carrying the outcome out later follows [`manifest-staleness.md`](../plan-sync/manifest-staleness.md).

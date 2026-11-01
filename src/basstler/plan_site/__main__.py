@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build the plan site: the hub, each repository's plans, and each plan's dashboard.
+Build the plan site: the hub, each repository's plans, and each plan's page.
 
 Reads the hub file, fetches every repository it lists, and renders that repository's
 plans with the live state of every pull request they reference. Nothing here needs a
@@ -8,7 +8,7 @@ Claude session or belongs to an account, so the site is the same for everyone:
 
     <site>/                          the hub, one card per repository
     <site>/<owner>/<repo>/           that repository's plans
-    <site>/<owner>/<repo>/<plan>/    a plan's dashboard
+    <site>/<owner>/<repo>/<plan>/    a plan's page
 
 Usage:
     python3 -m basstler.plan_site --registry <owner/repo> --output _site \\
@@ -33,8 +33,8 @@ from typing import Any
 
 import yaml
 
-from basstler.dashboard.plan_page import RenderedDashboard
-from basstler.dashboard.plan import Plan
+from basstler.plan_site.plan import Plan
+from basstler.plan_site.plan_page import PlanPage, RenderedPlanPage
 from basstler.exceptions import PlanValidationError
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.validation import PlanValidator
@@ -48,7 +48,6 @@ from basstler.plan_site.hub_page import (
     SiteSummary,
     SkippedPage,
 )
-from basstler.plan_site.plan_page import SitePlanPage
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan.model import PlanDocument
@@ -180,12 +179,12 @@ class PlanSource:
 @dataclass
 class PublishedPlan:
     """
-    One plan rendered to its dashboard, with the entry the index lists it under.
+    One plan rendered to its page, with the entry the index lists it under.
     """
 
-    dashboard: RenderedDashboard
+    page: RenderedPlanPage
     """
-    The plan's rendered dashboard page.
+    The plan's rendered page.
     """
 
     summary: PlanSummary
@@ -240,7 +239,7 @@ class SiteSection[SectionCard: ProgressCard](ABC):
 @dataclass
 class RepositorySite(SiteSection[RepositorySummary]):
     """
-    One repository's plans: their dashboards plus the index linking them.
+    One repository's plans: their pages plus the index linking them.
     """
 
     repository: Repository
@@ -289,7 +288,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
         }
         repository_directory = output / str(self.repository)
         for directory_name, plan in published.items():
-            self.write_page(repository_directory / directory_name, plan.dashboard.html)
+            self.write_page(repository_directory / directory_name, plan.page.html)
         repository = RepositorySummary.over_plans(
             str(self.repository),
             self.address.repository_url(self.repository),
@@ -323,11 +322,11 @@ class RepositorySite(SiteSection[RepositorySummary]):
         Render one valid plan.
 
         :param source: The plan to render.
-        :return: Its dashboard and its index entry.
+        :return: Its page and its index entry.
         """
         plan = Plan.from_mapping(source.manifest)
         dependencies = DependencyResolver(plan, self.plan_directory)
-        renderer = SitePlanPage(
+        renderer = PlanPage(
             stylesheet_url=self.stylesheet_url,
             plan=plan,
             roadmap_text=source.roadmap_text,
@@ -340,18 +339,18 @@ class RepositorySite(SiteSection[RepositorySummary]):
             plan_directory=self.plan_directory,
             locate_plan_page=self.plan_url,
         )
-        dashboard = renderer.render()
+        page = renderer.render()
         summary = PlanSummary(
             id=plan.id,
             title=plan.title,
             description=plan.description,
-            done=dashboard.summary.status_counts.get(ItemStatus.DONE, 0),
+            done=page.overview.status_counts[ItemStatus.DONE],
+            started=page.overview.started_item_count,
+            reviewed=page.overview.reviewed_item_count,
             total=len(plan.items),
-            open_pull_requests=dashboard.summary.open_pull_requests,
-            reviewed_pull_requests=dashboard.summary.reviewed_pull_requests,
-            dashboard_url=self.plan_url(source.directory_name),
+            page_url=self.plan_url(source.directory_name),
         )
-        return PublishedPlan(dashboard=dashboard, summary=summary)
+        return PublishedPlan(page=page, summary=summary)
 
     def tracking_url_of(self, plan: Plan) -> str | None:
         """

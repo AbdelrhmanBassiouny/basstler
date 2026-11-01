@@ -162,11 +162,11 @@ def test_refuses_when_the_declaration_cannot_be_read(
 # %% the manifest it saves
 
 
-def test_refuses_a_manifest_the_dashboard_would_reject(
+def test_refuses_a_manifest_the_plan_site_would_reject(
     save_plan_repository: ScratchRepository,
 ):
     """
-    Nothing reaches the notes branch that the dashboard could not then be built from.
+    Nothing reaches the notes branch that the plan site could not then be built from.
     """
     manifest_path = save_plan_repository.write(
         PlanDocument.MANIFEST, DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.read_text()

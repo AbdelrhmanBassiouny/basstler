@@ -38,7 +38,7 @@ class AllowedUrlScheme(StrEnum):
 
 class HeadingShift(IntEnum):
     """
-    How a roadmap's own headings are pushed down to nest inside a dashboard page.
+    How a roadmap's own headings are pushed down to nest inside a plan page.
 
     A roadmap's ``<h1>Title</h1>`` becomes ``<h4>Title</h4>`` once embedded, and its
     ``<h5>Deep</h5>`` becomes ``<h6>Deep</h6>`` - shifted but capped, rather than
@@ -48,7 +48,7 @@ class HeadingShift(IntEnum):
     LEVELS = 3
     """
     How many levels to push a roadmap's own headings down by, so they nest below the
-    embedding dashboard page's own h1-h3.
+    embedding plan page's own h1-h3.
     """
 
     DEEPEST_LEVEL = 6
@@ -174,8 +174,7 @@ def sanitize_http_url(url: str | None) -> str | None:
     before it reaches an ``<a href>`` - a ``javascript:`` or ``data:`` value
     would otherwise render as a clickable, script-executing link.
 
-    :param url: A raw URL from plan.yaml (``session``) or plans.json
-        (``dashboard_url``), or ``None`` if unset.
+    :param url: A raw URL from plan.yaml (``session``), or ``None`` if unset.
     :return: *url* unchanged if its scheme is ``http`` or ``https``;
         ``None`` otherwise.
     """

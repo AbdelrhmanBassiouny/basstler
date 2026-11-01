@@ -18,7 +18,7 @@ nothing and writes no code.**
 Step 2 resolves the item's execution mode, and that mode decides what
 happens next: `plan` presents the plan and stops until the user approves it,
 `auto` carries it out on the item's existing branch without asking, and
-`ask` puts the choice to the user. [`execution-modes.md`](../plan-dashboard/execution-modes.md) states what
+`ask` puts the choice to the user. [`execution-modes.md`](../plan-item-mode/execution-modes.md) states what
 each mode means and what it still obliges.
 
 This skill never creates a branch or a pull request — the item already has
@@ -28,7 +28,7 @@ resume any other session.
 
 ## 1. Gather the item's context
 
-Follow [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md) end to end — the setup check, the
+Follow [`plan-item-gathering.md`](../plan-item-kickoff/plan-item-gathering.md) end to end — the setup check, the
 stack pass, the item's brief, the tracking issue's comments and the project's
 rules. `plan-item-kickoff` runs the same procedure.
 
@@ -78,7 +78,7 @@ already exists**, which is where the cause of a stall almost always is:
 
 ## 2. Resolve how this item gets resolved
 
-Follow [`execution-modes.md`](../plan-dashboard/execution-modes.md): run its `resolve --skill resolve`
+Follow [`execution-modes.md`](../plan-item-mode/execution-modes.md): run its `resolve --skill resolve`
 call, and if the answer is `ask`, put its question — with a recommendation
 drawn from what step 1 just turned up, and the reasons behind it.
 
@@ -92,11 +92,11 @@ itself.
 
 ## 3. Draft the plan
 
-First record what you found, per [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md): the real blocker in
+First record what you found, per [`manifest-staleness.md`](../plan-sync/manifest-staleness.md): the real blocker in
 `blockers`, and `status` when it is wrong (`blocked`, `deferred`). `notes` change only when
 what the item means changes.
 
-Apply [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md)'s last section first: anything you
+Apply [`plan-item-gathering.md`](../plan-item-kickoff/plan-item-gathering.md)'s last section first: anything you
 are about to raise as an open question is very often already answered by the
 material step 1 gathered — here including the pull request's own review
 threads and the tracking issue's discussion.
@@ -142,7 +142,7 @@ Work the plan on the item's existing branch, honoring the standing
 conventions step 1 cross-checked: tests first per TDD, commits in the user's
 own git identity, no assistant author or co-author trailer.
 
-[`execution-modes.md`](../plan-dashboard/execution-modes.md) states what stays owed while doing it, and the
+[`execution-modes.md`](../plan-item-mode/execution-modes.md) states what stays owed while doing it, and the
 bar for stopping to ask anyway. Two things are this skill's own, because the
 item is already underway rather than being started:
 
@@ -179,7 +179,7 @@ in `auto` mode this report is the user's first look at the resolution.
 When invoked with a pull request number whose branch no plan tracks, resolve
 the pull request itself. Every step above runs, with these differences:
 
-- **Step 1** skips the plan-reading parts [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md)
+- **Step 1** skips the plan-reading parts [`plan-item-gathering.md`](../plan-item-kickoff/plan-item-gathering.md)
   names, and the tracking-issue bullet above. Everything about the pull
   request's live state - checks, review threads, comments, `/upstream-reviews`,
   the diff - is read exactly as for a tracked item, and the branch's
@@ -189,4 +189,4 @@ the pull request itself. Every step above runs, with these differences:
   [`scope-decision.md`](../add-plan-item/scope-decision.md) against the existing plans. If one fits, say
   which and why, and offer `/add-plan-item` rather than adding it unasked.
 - **Step 4**'s record is the PR-progress note and the pull request
-  description; there is no `plan.yaml` entry or dashboard to update.
+  description; there is no `plan.yaml` entry or plan page to update.
