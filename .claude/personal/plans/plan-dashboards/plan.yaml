@@ -60,58 +60,47 @@ items:
   title: Shared pull_request_state module, and LOC/CI/conflict chips on dashboard items
   branch: null
   pull_request_number: null
-  status: not_started
+  status: deferred
   track: live-state
   depends_on: []
-  notes: 'One pull-request-state module (CI rollup, lines changed, mergeable probe, session
-    link) shared by stack.py and the dashboard, plus LOC/CI/conflict chips and a stack chip
-    on dashboard items. Not started here: CRAM #111''s bastler/-era branch is retired in #52,
-    whose last commit is the reference; its headless build is superseded by build_site.'
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). One pull-request-state module
+    (CI rollup, lines changed, mergeable probe, session link) shared by stack.py and the dashboard,
+    plus LOC/CI/conflict chips and a stack chip on dashboard items. Not started here: CRAM
+    #111''s bastler/-era branch is retired in #52, whose last commit is the reference; its
+    headless build is superseded by build_site.'
 - id: ready-to-promote-upstream-links
   title: Ready-to-promote sidebar list with one-click upstream create-pull-request links
   branch: null
-  status: not_started
+  status: deferred
   track: live-state
   depends_on:
   - shared-pr-state-chips
-  notes: 'A fifth sidebar group - "Ready to promote" - listing every item whose fork pull
-    request is open-and-ready, cleanly mergeable and based on the fork''s default branch,
-    each with a one-click link opening the upstream compare-and-create page with the title
-    and body prefilled and the fork pull request linked from it. This is the Routine''s phase-3
-    link building turned into a surface instead of an emailed summary: the same compare URL,
-    computed at dashboard build time, so it reaches the user with no scheduled run - which
-    is what the cutover requires of every deterministic duty.'
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). A fifth sidebar group - "Ready
+    to promote" - listing every item whose fork pull request is open-and-ready, cleanly mergeable
+    and based on the fork''s default branch, each with a one-click link opening the upstream
+    compare-and-create page with the title and body prefilled and the fork pull request linked
+    from it. This is the Routine''s phase-3 link building turned into a surface instead of
+    an emailed summary: the same compare URL, computed at dashboard build time, so it reaches
+    the user with no scheduled run - which is what the cutover require'
 - id: untracked-pull-requests
   title: List each repository's open pull requests that no plan item tracks
   branch: null
   pull_request_number: null
   track: corrections
   depends_on: []
-  status: not_started
-  notes: 'Added 2026-10-21: the cleanup found basstler #9, #32 and #33 open with no item.
-    Each repository''s site page lists its open pull requests whose number and branch match
-    no item in any plan, each with an add-plan-item link. Rendered by the site builder, not
-    the Artifact page.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). Added 2026-10-21: the cleanup
+    found basstler #9, #32 and #33 open with no item. Each repository''s site page lists its
+    open pull requests whose number and branch match no item in any plan, each with an add-plan-item
+    link. Rendered by the site builder, not the Artifact page.'
 - id: duplicate-plan-ids
   title: Flag a plan id used by more than one hub repository
   branch: null
   pull_request_number: null
   track: corrections
   depends_on: []
-  status: not_started
-  notes: 'Added 2026-10-21: basstler-package existed on both basstler''s and CRAM''s notes.
-    The site build warns on the hub page for every id two hub repositories share, and /plan-create
-    refuses an id another hub repository already uses.'
-- id: split-build-dashboard
-  title: Split build_dashboard.py by concern and group the package and its tests into subpackages
-  branch: claude/brave-einstein-eg0vsz
-  pull_request_number: 66
-  track: corrections
-  depends_on: []
-  status: in progress
-  session: https://claude.ai/code/session_018iudUBraUAiX5vMijyCNYM
-  notes: 'Draft #66. build_dashboard.py is split by concern, and, as the user asked, the
-    whole package and its tests are grouped into subpackages by topic: stack, maintenance,
-    upstream_reviews, plan, dashboard, plan_site, personal_notes, setup. Labelled release:major,
-    because the python -m paths change for every command but stack and maintenance. Every other
-    branch editing the package re-ports onto the new paths when it lands second.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). Added 2026-10-21: basstler-package
+    existed on both basstler''s and CRAM''s notes. The site build warns on the hub page for
+    every id two hub repositories share, and /plan-create refuses an id another hub repository
+    already uses.'
