@@ -46,7 +46,8 @@ items:
   status: in progress
   notes: 'Approved 2026-11-01: pydantic dataclasses at the external-data boundary; ruff as a dev dependency enforcing
     the mechanical rules (their prose leaves AGENTS.md); docstrings only where they add meaning; plain constants
-    for true constants; a few exception types per kind of failure. No open questions: implement directly.'
+    for true constants; a few exception types per kind of failure. Ruff also replaces black as the formatter (owner,
+    2026-11-01), with docformatter on top. Implemented in PR 104, awaiting owner review.'
 - id: cli-launcher
   title: One basstler CLI behind a bin/ launcher, configured through userConfig
   branch: null
