@@ -682,13 +682,13 @@ class PlanManifest:
             plan_identifier=self.identifier, item_identifier=branch
         )
 
-    def item_summary(self, item: PlanItem) -> str:
+    def item_header(self, item: PlanItem) -> dict[str, Any]:
         """
         The part of the plan one item's session needs: the plan's id, title and
         tracking issue, and that item's own entry.
 
         :param item: The item to summarize.
-        :return: The summary as YAML.
+        :return: The summary, keyed as the manifest keys it.
         """
         summary = {
             field_name.key: self.content.get(field_name.key)
@@ -699,6 +699,21 @@ class PlanManifest:
             )
         }
         summary[ItemSummaryKey.ITEM.value] = item.content
+        return summary
+
+    def item_summary(self, item: PlanItem) -> str:
+        """
+        :param item: The item to summarize.
+        :return: :meth:`item_header` as YAML.
+        """
+        return self.summary_text(self.item_header(item))
+
+    @staticmethod
+    def summary_text(summary: dict[str, Any]) -> str:
+        """
+        :param summary: A summary of part of a plan.
+        :return: The summary as YAML, in block style with its keys in their order.
+        """
         return yaml.safe_dump(summary, sort_keys=False, allow_unicode=True, width=88)
 
     def without_landed_items(self) -> PlanManifest:

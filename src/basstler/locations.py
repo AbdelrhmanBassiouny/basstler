@@ -116,6 +116,11 @@ class RepositoryStateLocation(PathEnumeration):
     The exported snapshot of the fork's open pull requests.
     """
 
+    MAINTENANCE_REPORT = DIRECTORY / "maintenance-report.json"
+    """
+    Everything the last maintenance pass did, in full.
+    """
+
 
 class DashboardTemplate(PathEnumeration):
     """
@@ -193,6 +198,11 @@ class BasstlerVariable(EnvironmentVariable):
     The root of the Claude Code plugin whose hooks and skills run this package.
     """
 
+    PYTHON = "BASSTLER_PYTHON"
+    """
+    The interpreter whose environment holds this package, for running its modules.
+    """
+
 
 class PluginLocation(PathEnumeration):
     """
@@ -218,6 +228,12 @@ class PluginLocation(PathEnumeration):
     PERSONAL_NOTES_BRANCH_CREATION_SCRIPT = HOOKS / "create-personal-notes-branch.sh"
     """
     The helper that creates the personal-notes branch where it does not exist yet.
+    """
+
+    ENTRY_POINT_SCRIPT = HOOKS / "basstler.sh"
+    """
+    Runs one module of the package once the package is ready to run, saying in one
+    line why when it cannot be.
     """
 
     SESSION_START_SCRIPT = HOOKS / "session-start.sh"

@@ -116,6 +116,12 @@ class StackExitCode(ExitCode):
     The project names no upstream repository; stderr says where to name it.
     """
 
+    UPSTREAM_UNREADABLE = 12
+    """
+    The fork's upstream-reviews Action could not read the upstream's open pull
+    requests; stderr says why and what to do.
+    """
+
     @property
     def name_for_a_caller(self) -> str:
         """

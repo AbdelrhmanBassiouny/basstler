@@ -167,6 +167,17 @@ class DatasetLocation(PathEnumeration):
     The recorded GraphQL responses the upstream review reader is replayed against.
     """
 
+    BRIEF_PLAN = DIRECTORY / "brief-plan.yaml"
+    """
+    A plan whose one item depends on a merged item, a draft item and an item of
+    another plan.
+    """
+
+    BRIEF_ROADMAP = DIRECTORY / "brief-roadmap.md"
+    """
+    The standing rules of :attr:`BRIEF_PLAN`, one of them wrapped across two lines.
+    """
+
     SITE_PLANS = DIRECTORY / "site-plans"
     """
     A ``plans`` directory as the notes branch carries it: two valid plans, one whose
@@ -239,6 +250,48 @@ class DatasetLocation(PathEnumeration):
     """
 
 
+class RecordedCommitChecks(PathEnumeration):
+    """
+    The check-run listings and combined statuses the API answers for one commit, as
+    recorded.
+    """
+
+    DIRECTORY = DatasetLocation.DIRECTORY / "commit-checks"
+    """
+    The directory holding them.
+    """
+
+    ONE_CHECK_RUN_FAILING = DIRECTORY / "check-runs-one-failing.json"
+    """
+    Three check runs: ``pytest`` failed, ``lint`` passed, ``docs`` is still running.
+    """
+
+    ONE_CHECK_RUN_RUNNING = DIRECTORY / "check-runs-one-running.json"
+    """
+    Two check runs: ``pytest`` is queued and ``lint`` passed.
+    """
+
+    EVERY_CHECK_RUN_FINISHED = DIRECTORY / "check-runs-all-finished.json"
+    """
+    Three finished check runs, ending in success, skipped and neutral.
+    """
+
+    NO_CHECK_RUNS = DIRECTORY / "check-runs-none.json"
+    """
+    A listing with no check runs in it.
+    """
+
+    NO_STATUSES = DIRECTORY / "status-none.json"
+    """
+    A combined status no integration reported to.
+    """
+
+    ONE_STATUS_ERRORING = DIRECTORY / "status-one-erroring.json"
+    """
+    Two statuses: ``legacy-ci`` errored and ``coverage`` succeeded.
+    """
+
+
 class SkillDirectory(PathEnumeration):
     """
     The skills the suites read, relative to the plugin root.
@@ -265,6 +318,11 @@ class SkillDirectory(PathEnumeration):
     PLAN_CREATE = DIRECTORY / "plan-create"
     """
     The skill whose own act of creating a plan is what makes the master index stale.
+    """
+
+    PLAN_ITEM_KICKOFF = DIRECTORY / "plan-item-kickoff"
+    """
+    The instructions a kickoff run follows.
     """
 
     PLAN_ITEM_RESOLVE = DIRECTORY / "plan-item-resolve"

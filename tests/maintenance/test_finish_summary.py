@@ -5,6 +5,8 @@ Tests for the finish summary a whole pass prints: what it lists, and in what ord
 from __future__ import annotations
 
 import argparse
+import json
+from pathlib import Path
 
 import pytest
 
@@ -16,8 +18,9 @@ from basstler.maintenance.finish_summary import (
     FinishSummary,
     FinishSummaryHeading,
     MarkdownLink,
+    PassCount,
 )
-from basstler.maintenance.promotion import Promotion
+from basstler.maintenance.promotion import Promotion, PromotionSummaries
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.maintenance.upstream_pull_request_synchronization import (
@@ -32,7 +35,6 @@ from basstler.stack.model import (
     SkipReason,
     Stack,
 )
-from basstler.stack.promotion_link import PromotionLink
 from basstler.upstream_reviews.vocabulary import RollupState
 
 from ..constants.paths import DatasetLocation
@@ -52,8 +54,8 @@ from .fork import (
     make_configuration,
     the_board,
 )
+from .large_board import LargeBoard, OutputBudget
 from .recorded_fork import AlreadyResolvedPass
-
 
 # %% the stack a summary is written about
 
@@ -141,7 +143,7 @@ def section_of(markdown: str, heading: FinishSummaryHeading) -> list[str]:
 # %% pending upstream links
 
 
-def test_a_link_built_this_pass_names_its_number_title_branch_and_link():
+def test_a_link_built_this_pass_names_its_number_title_and_branch():
     stack = a_titled_stack()
     summary = FinishSummary(MaintenanceReport(promoted=(a_promotion(),)), stack)
 
@@ -151,8 +153,7 @@ def test_a_link_built_this_pass_names_its_number_title_branch_and_link():
     assert entry == (
         f"- [#{StackPullRequestNumber.PARENT}]"
         f"({fork.pull_request_url(StackPullRequestNumber.PARENT)}) "
-        f"{PromotionSampleText.TITLE} - `{StackBranch.PARENT}` - "
-        f"[create upstream pull request]({PromotionSampleText.SECOND_LINK})"
+        f"{PromotionSampleText.TITLE} - `{StackBranch.PARENT}`"
     )
 
 
@@ -162,7 +163,21 @@ def test_a_link_sent_by_an_earlier_pass_and_not_yet_acted_on_is_listed_again():
 
     (entry,) = section_of(summary.as_markdown(), FinishSummaryHeading.PENDING_LINKS)
 
-    assert f"`{StackBranch.CHILD}`" in entry
+    assert entry.endswith(f"`{StackBranch.CHILD}`")
+
+
+def test_no_create_link_is_printed_since_each_description_carries_its_own():
+    """
+    A create-link prefills a whole description into its URL, so a handful of them is
+    most of a summary; the link stays under the description's own Promote heading.
+    """
+    stack = a_titled_stack(child_labels=[GitHubLabel.PROMOTION_LINK_SENT])
+    report = MaintenanceReport(promoted=(a_promotion(body_was_truncated=True),))
+
+    markdown = FinishSummary(report, stack).as_markdown()
+
+    assert PromotionSampleText.SECOND_LINK not in markdown
+    assert PromotionSampleText.FIRST_LINK not in markdown
 
 
 def test_a_link_sent_by_an_earlier_pass_is_listed_without_reading_its_description():
@@ -202,20 +217,6 @@ def test_a_link_sent_earlier_that_is_now_in_review_is_not_pending():
     summary = FinishSummary(MaintenanceReport(), stack)
 
     assert section_of(summary.as_markdown(), FinishSummaryHeading.PENDING_LINKS) == []
-
-
-def test_a_shortened_prefill_also_gets_a_link_carrying_only_the_title():
-    stack = a_titled_stack()
-    summary = FinishSummary(
-        MaintenanceReport(promoted=(a_promotion(body_was_truncated=True),)), stack
-    )
-
-    (entry,) = section_of(summary.as_markdown(), FinishSummaryHeading.PENDING_LINKS)
-
-    title_only = PromotionLink.build(
-        stack.configuration, StackBranch.PARENT, PromotionSampleText.TITLE, ""
-    )
-    assert entry.endswith(f"([title only]({title_only.url}))")
 
 
 def test_the_pending_links_come_before_everything_else():
@@ -345,7 +346,7 @@ def test_every_withheld_branch_shares_one_line():
     assert section == [f"`{StackBranch.PARENT}`, `{StackBranch.CHILD}`"]
 
 
-def test_branches_already_up_to_date_are_counted_rather_than_listed():
+def test_restacked_branches_are_counted_rather_than_listed():
     report = MaintenanceReport(
         restacked=(
             an_outcome(StackBranch.PARENT, RestackOutcome.UP_TO_DATE),
@@ -358,9 +359,7 @@ def test_branches_already_up_to_date_are_counted_rather_than_listed():
         FinishSummaryHeading.RESTACKED,
     )
 
-    assert len(section) == 2
-    assert f"`{StackBranch.CHILD}`" in section[0]
-    assert StackBranch.PARENT not in section[1]
+    assert section == ["1 pushed, 1 already up to date"]
 
 
 def test_a_reparent_still_to_make_names_both_bases():
@@ -425,12 +424,96 @@ def test_a_refused_fast_forward_is_explained():
     assert section[1] == explanation
 
 
+def test_a_branch_whose_integration_failed_is_listed_with_why():
+    explanation = "fatal: refusing to merge unrelated histories"
+    report = MaintenanceReport(
+        restacked=(
+            an_outcome(
+                StackBranch.CHILD,
+                RestackOutcome.INTEGRATION_FAILED,
+                explanation=explanation,
+            ),
+        )
+    )
+
+    (entry,) = section_of(
+        FinishSummary(report, a_titled_stack()).as_markdown(),
+        FinishSummaryHeading.UNPUBLISHED,
+    )
+
+    assert RestackOutcome.INTEGRATION_FAILED in entry
+    assert explanation in entry
+
+
 def test_a_pass_that_did_nothing_still_says_its_status():
     report = MaintenanceReport()
 
     markdown = FinishSummary(report, a_titled_stack()).as_markdown()
 
     assert markdown.splitlines()[0].endswith(report.exit_code.name_for_a_caller)
+
+
+# %% how much a pass prints
+
+
+@pytest.mark.parametrize(
+    "board", [LargeBoard(), LargeBoard().doubled(), LargeBoard().doubled().doubled()]
+)
+def test_a_large_pass_prints_a_summary_within_its_budget(board: LargeBoard):
+    stack = board.stack()
+
+    markdown = FinishSummary(board.report(stack), stack).as_markdown()
+
+    assert len(markdown.encode()) <= OutputBudget.FINISH_SUMMARY
+
+
+def test_a_section_lists_its_first_entries_and_counts_the_rest():
+    board = LargeBoard()
+    stack = board.stack()
+    summary = FinishSummary(board.report(stack), stack)
+
+    section = section_of(summary.as_markdown(), FinishSummaryHeading.REPARENTS)
+
+    assert section[:-1] == summary.reparents()[: summary.entries_per_section]
+    assert section[-1] == (
+        f"- and {board.reparents - summary.entries_per_section} more"
+    )
+
+
+def test_a_conflict_names_its_first_files_and_counts_the_rest():
+    paths = ("a.py", "b.py", "c.py", "d.py")
+    outcome = an_outcome(
+        StackBranch.CHILD,
+        RestackOutcome.CONFLICT,
+        conflicting_paths=paths,
+        reported_at=f"{PromotionSampleText.COMMENT_LINK_PREFIX}1",
+    )
+    summary = FinishSummary(
+        MaintenanceReport(restacked=(outcome,)), a_titled_stack(), paths_per_branch=2
+    )
+
+    assert summary.outcome_detail(outcome) == "conflicts in `a.py`, `b.py` and 2 more"
+
+
+def test_the_status_is_followed_by_what_the_pass_counted():
+    report = MaintenanceReport(
+        restacked=(an_outcome(StackBranch.CHILD, RestackOutcome.PUSHED),),
+        promoted=(a_promotion(),),
+    )
+    summary = FinishSummary(report, a_titled_stack())
+
+    assert summary.as_markdown().splitlines()[1] == summary.counts()
+    assert summary.counts() == (f"1 {PassCount.PUSHED}, 1 {PassCount.LINKS_RECORDED}")
+
+
+def test_the_summary_names_the_file_holding_the_whole_report(tmp_path: Path):
+    full_report = tmp_path / "report.json"
+
+    markdown = FinishSummary(
+        MaintenanceReport(), a_titled_stack(), full_report
+    ).as_markdown()
+
+    assert markdown.splitlines()[-1] == f"Full report: `{full_report}`"
 
 
 # %% the command
@@ -442,7 +525,24 @@ def test_a_whole_pass_prints_the_finish_summary(
     a_parent_and_child(fork_checkout)
     maintenance = AlreadyResolvedPass.over(fork_checkout, the_board())
 
-    RunReportCommand().run(maintenance, argparse.Namespace(json=False, summaries=None))
+    RunReportCommand().run(
+        maintenance, argparse.Namespace(json=False, summaries=None, stacked_on=None)
+    )
 
     printed = capsys.readouterr().out.splitlines()
     assert FinishSummary.heading_line(FinishSummaryHeading.RESTACKED) in printed
+
+
+def test_a_whole_pass_writes_the_whole_report_to_its_file(
+    fork_checkout: ForkCheckout,
+):
+    a_parent_and_child(fork_checkout)
+    maintenance = AlreadyResolvedPass.over(fork_checkout, the_board())
+
+    report = RunReportCommand().perform(
+        maintenance, as_json=False, summaries=PromotionSummaries()
+    )
+
+    assert json.loads(maintenance.full_report.read_text()) == json.loads(
+        report.as_json()
+    )

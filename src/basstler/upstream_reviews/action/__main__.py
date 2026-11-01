@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Read an upstream pull request through the fork's own Actions, from a branch of its own.
+Read the upstream through the fork's own Actions, from a branch of its own: one pull
+request's report, or the open pull requests opened from the fork's branches.
 
 The fork carries one branch, :attr:`ActionBranch.NAME`, sharing no history with its
 other branches and holding nothing but a workflow calling basstler's reusable one, a
@@ -27,7 +28,6 @@ Commands::
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from enum import StrEnum
 from pathlib import Path
@@ -43,9 +43,7 @@ from basstler.upstream_reviews.action.branch import (
 from basstler.upstream_reviews.action.read import (
     ActionRead,
 )
-from basstler.upstream_reviews.action.recording import (
-    ActionResult,
-)
+from basstler.upstream_reviews.action.run import ActionRun
 from basstler.upstream_reviews.clients import (
     GitHubCommandLineClient,
 )
@@ -170,11 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _parse_arguments(argv)
     try:
         if arguments.command == ActionCommand.RUN:
-            request = UpstreamReadRequest.from_json(
-                json.loads(arguments.request.read_text())
-            )
-            result = ActionResult.answering(request, GitHubCommandLineClient())
-            arguments.result.write_text(json.dumps(result.to_json()) + "\n")
+            ActionRun(arguments.request, arguments.result).write_answer()
             return 0
         branch = RemoteBranch(
             GitCommandRunner(arguments.project_root), arguments.remote

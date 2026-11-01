@@ -18,6 +18,8 @@ from typing import Any
 import pytest
 
 import basstler.upstream_reviews.action.__main__
+import basstler.upstream_reviews.action.read
+import basstler.upstream_reviews.action.run
 from basstler.locations import PackageLocation
 from basstler.repository import Repository
 from basstler.upstream_reviews.action.__main__ import (
@@ -40,6 +42,7 @@ from basstler.upstream_reviews.action.recording import (
     RecordedGraphQLResponse,
     ReplayingGraphQLClient,
 )
+from basstler.upstream_reviews.action.run import ActionRun
 from basstler.upstream_reviews.clients import (
     GitHubCommandLineClient,
     RestClient,
@@ -238,6 +241,20 @@ def test_the_error_is_what_the_reader_raises():
         read,
         RecordedGitHub(responses=[RecordedResponse.BRANCH_PULL_REQUESTS_NONE.load()]),
     ).error == str(raised.value)
+
+
+def test_the_run_answers_a_pull_request_report_request_with_its_recording(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        basstler.upstream_reviews.action.run, "GitHubCommandLineClient", github
+    )
+    request_file = tmp_path / ActionFile.REQUEST
+    request_file.write_text(json.dumps(request().as_sent()))
+
+    answer = ActionRun(request_file, tmp_path / ActionFile.RESULT).answer()
+
+    assert answer == ActionResult.answering(request(), github())
 
 
 # %% the workflows
@@ -477,6 +494,43 @@ def test_a_request_no_run_started_for_says_actions_are_disabled(fork):
 
     with pytest.raises(ActionRunNotStarted, match=f"{FORK.url}/actions"):
         read.wait(timeout=60, commit=commit)
+
+
+@dataclass
+class SteppedClock:
+    """
+    Stands in for the ``time`` module: sleeping advances it, so a wait takes no real time.
+    """
+
+    now: float = 0.0
+    """
+    The seconds passed since the wait began.
+    """
+
+    def monotonic(self) -> float:
+        """:return: The seconds passed."""
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        """
+        Advance the clock instead of waiting.
+
+        :param seconds: How long the wait would sleep.
+        """
+        self.now += seconds
+
+
+def test_a_request_no_run_started_for_is_given_up_on_after_twenty_seconds(
+    fork, monkeypatch
+):
+    monkeypatch.setattr(basstler.upstream_reviews.action.read, "time", SteppedClock())
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    read = ActionRead(fork.branch, request(), ListedRuns([]))
+
+    with pytest.raises(ActionRunNotStarted) as raised:
+        read.wait(timeout=480, commit=read.send())
+
+    assert raised.value.waited == 20
 
 
 def test_the_runs_are_listed_on_the_action_branch_alone(fork):

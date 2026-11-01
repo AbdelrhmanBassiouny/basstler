@@ -14,6 +14,8 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+import pytest
+
 from basstler.locations import RepositoryStateLocation
 from basstler.stack.model import (
     BoardKey,
@@ -21,7 +23,9 @@ from basstler.stack.model import (
     IntegrationStrategy,
     PullRequest,
     RestackPlanEntry,
+    Stack,
 )
+from basstler.stack.exceptions import BaseBranchScopeError
 from basstler.upstream_reviews.vocabulary import RollupState
 
 from ..constants.stack import StackBranch, StackLabel
@@ -33,7 +37,6 @@ from .dataset import (
     make_configuration,
     build,
 )
-
 
 # %% deriving a branch status
 
@@ -342,7 +345,7 @@ def test_check_state_and_session_carried_onto_branch():
     assert stack.branches[0].session == StackSampleText.SESSION_LINK
 
 
-def a_ready_branch_whose_checks_reached(check_state: RollupState | None) -> PullRequest:
+def a_ready_branch_whose_checks_reached(check_state: RollupState) -> PullRequest:
     """
     :param check_state: The verdict over the branch's checks.
     :return: An approved branch on the base, otherwise promotable.
@@ -368,7 +371,12 @@ def test_failing_checks_withhold_a_branch_from_promotion():
 
 
 def test_checks_that_have_not_failed_leave_a_branch_promotable():
-    for state in (None, RollupState.SUCCESS, RollupState.PENDING, RollupState.EXPECTED):
+    for state in (
+        RollupState.NOT_REPORTED,
+        RollupState.SUCCESS,
+        RollupState.PENDING,
+        RollupState.EXPECTED,
+    ):
         stack = build([a_ready_branch_whose_checks_reached(state)])
         assert [branch.name for branch in stack.promotion_order()] == [
             StackBranch.FEATURE
@@ -403,8 +411,11 @@ def test_only_branches_promotion_would_otherwise_take_count_as_held_by_their_che
     ]
 
 
-def test_the_board_reads_the_check_state_back_as_its_verdict(tmp_path: Path):
-    written = a_ready_branch_whose_checks_reached(RollupState.PENDING)
+@pytest.mark.parametrize("state", [RollupState.PENDING, RollupState.NOT_REPORTED])
+def test_the_board_reads_the_check_state_back_as_its_verdict(
+    tmp_path: Path, state: RollupState
+):
+    written = a_ready_branch_whose_checks_reached(state)
     board = tmp_path / RepositoryStateLocation.BOARD.name
     board.write_text(json.dumps({BoardKey.PULL_REQUESTS: [asdict(written)]}))
 
@@ -601,3 +612,54 @@ def test_a_subtree_carries_each_branch_own_integration_strategy():
         IntegrationStrategy.REBASE,
         IntegrationStrategy.MERGE,
     ]
+
+
+# %% the stack scoped to one branch
+
+
+def scoped_branch_names(stack: Stack, branch_name: str) -> list[str]:
+    """
+    :param stack: The stack to scope.
+    :param branch_name: The branch to scope it to.
+    :return: The names of the branches the scoped stack keeps, parent before child.
+    """
+    return [branch.name for branch in stack.scoped_to(branch_name).ordered()]
+
+
+def test_scoping_to_a_middle_branch_keeps_what_it_is_stacked_on_and_what_is_stacked_on_it():
+    assert scoped_branch_names(a_three_deep_stack(), StackBranch.CHILD) == [
+        StackBranch.PARENT,
+        StackBranch.CHILD,
+        StackBranch.GRANDCHILD,
+    ]
+
+
+def test_scoping_to_a_branch_leaves_out_a_branch_on_another_chain():
+    assert scoped_branch_names(a_three_deep_stack(), StackBranch.OFF_THE_CHAIN) == [
+        StackBranch.OFF_THE_CHAIN
+    ]
+
+
+def test_a_scoped_stack_reparents_only_its_own_branches():
+    stack = a_three_deep_stack(merged={StackBranch.PARENT})
+
+    reparents = stack.scoped_to(StackBranch.GRANDCHILD).reparents()
+
+    assert [reparent.branch for reparent in reparents] == [StackBranch.CHILD]
+
+
+def test_scoping_to_a_branch_no_pull_request_names_keeps_nothing():
+    assert scoped_branch_names(a_three_deep_stack(), StackBranch.OFF_BOARD_PARENT) == []
+
+
+def test_scoping_to_the_upstream_base_is_refused():
+    stack = a_three_deep_stack()
+
+    with pytest.raises(BaseBranchScopeError):
+        stack.scoped_to(stack.configuration.upstream_base)
+
+
+def test_scoping_to_no_branch_keeps_the_whole_stack():
+    stack = a_three_deep_stack()
+
+    assert stack.scoped_to(None) == stack

@@ -3,24 +3,18 @@ Tests for plan/check_dependency_readiness.py: classifying one item's dependencie
 ready or not-ready to build on, via the dashboard's own live-state rule.
 """
 
-import json
-import sys
 from typing import Any
 
 import pytest
-import yaml
 
 from basstler.dashboard.plan import Item, Plan, Track, Wave
-from basstler.exceptions import InvalidSchemaVersion, PlanValidationError
 from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.model import ItemStatus, ManifestKey
-from basstler.plan.validation import PlanValidator
 from basstler.pull_request_state import LiveState, PullRequestRecord, PullRequestState
 from basstler.plan.check_dependency_readiness import (
     DependencyReadiness,
     ReadinessField,
     UnknownItemError,
-    main,
 )
 
 from ..constants.paths import DatasetLocation
@@ -82,7 +76,7 @@ def reported(
     is_ready: bool,
 ) -> dict[str, Any]:
     """
-    The entry the script prints for one dependency with these values.
+    The entry the readiness serializes to for one dependency with these values.
     """
     return {
         ReadinessField.IDENTIFIER: identifier,
@@ -186,142 +180,6 @@ def test_multiple_dependencies_reported_in_order():
     ] == [False, True]
 
 
-# %% main
-
-
-def _minimal_plan_mapping():
-    return {
-        ManifestKey.SCHEMA_VERSION.key: InvalidSchemaVersion.supported_version,
-        ManifestKey.IDENTIFIER.key: PLAN_UNDER_TEST_ID,
-        ManifestKey.TITLE.key: "Test Plan",
-        ManifestKey.DESCRIPTION.key: "A plan.",
-        ManifestKey.DEFAULT_REPOSITORY.key: "owner/repo",
-        ManifestKey.WAVES.key: [
-            {ManifestKey.IDENTIFIER.key: "wave-1", ManifestKey.NAME.key: "Wave 1"}
-        ],
-        ManifestKey.TRACKS.key: [
-            {
-                ManifestKey.IDENTIFIER.key: "track-1",
-                ManifestKey.NAME.key: "Track 1",
-                ManifestKey.WAVE.key: "wave-1",
-            }
-        ],
-        ManifestKey.ITEMS.key: [
-            _manifest_item("a", "Item A", ItemStatus.DONE),
-            _manifest_item("b", "Item B", ItemStatus.NOT_STARTED, depends_on=["a"]),
-        ],
-    }
-
-
-def _manifest_item(
-    identifier: str,
-    title: str,
-    status: ItemStatus,
-    depends_on: list[str] | None = None,
-) -> dict[str, Any]:
-    """
-    Build one raw, plan.yaml-shaped item ``dict``, keyed by :class:`ManifestKey`.
-
-    :param identifier: The item's ``id``, also used as its ``branch``.
-    :param title: Its title.
-    :param status: Its manifest status.
-    :param depends_on: Its ``depends_on``, left out when omitted.
-    """
-    entry = {
-        ManifestKey.IDENTIFIER.key: identifier,
-        ManifestKey.TITLE.key: title,
-        ManifestKey.BRANCH.key: identifier,
-        ManifestKey.TRACK.key: "track-1",
-        ManifestKey.STATUS.key: status.value,
-    }
-    if depends_on is not None:
-        entry[ManifestKey.DEPENDS_ON.key] = depends_on
-    return entry
-
-
-def test_main_prints_the_dependency_readiness_of_the_requested_item(
-    tmp_path, monkeypatch, capsys
-):
-    plan_path = tmp_path / "plan.yaml"
-    plan_path.write_text(yaml.dump(_minimal_plan_mapping()))
-    pull_request_data_path = tmp_path / "pr_data.json"
-    pull_request_data_path.write_text("{}")
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "plan/check_dependency_readiness.py",
-            "--plan",
-            str(plan_path),
-            "--pr-data",
-            str(pull_request_data_path),
-            "--item",
-            "b",
-        ],
-    )
-    exit_code = main()
-    assert exit_code == 0
-    results = json.loads(capsys.readouterr().out)
-    assert results == [
-        reported(
-            identifier="a",
-            title="Item A",
-            live_state=LiveState.NO_PULL_REQUEST,
-            is_ready=True,
-        )
-    ]
-
-
-def test_main_rejects_an_invalid_manifest_instead_of_crashing(
-    tmp_path, monkeypatch, capsys
-):
-    plan_path = tmp_path / "plan.yaml"
-    plan_path.write_text("")  # yaml.safe_load("") -> None, not a mapping
-    pull_request_data_path = tmp_path / "pr_data.json"
-    pull_request_data_path.write_text("{}")
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "plan/check_dependency_readiness.py",
-            "--plan",
-            str(plan_path),
-            "--pr-data",
-            str(pull_request_data_path),
-            "--item",
-            "b",
-        ],
-    )
-    exit_code = main()
-    assert exit_code == 1
-    with pytest.raises(PlanValidationError) as expected_error:
-        PlanValidator(None).validate()
-    assert capsys.readouterr().err == f"{expected_error.value}\n"
-
-
-def test_main_rejects_an_unknown_item_id(tmp_path, monkeypatch, capsys):
-    plan_path = tmp_path / "plan.yaml"
-    plan_path.write_text(yaml.dump(_minimal_plan_mapping()))
-    pull_request_data_path = tmp_path / "pr_data.json"
-    pull_request_data_path.write_text("{}")
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "plan/check_dependency_readiness.py",
-            "--plan",
-            str(plan_path),
-            "--pr-data",
-            str(pull_request_data_path),
-            "--item",
-            "ghost",
-        ],
-    )
-    exit_code = main()
-    assert exit_code == 1
-    assert "ghost" in capsys.readouterr().err
-
-
 # %% cross-plan references
 
 
@@ -363,34 +221,3 @@ def test_foreign_dependency_is_not_ready_without_a_plans_directory():
     assert [readiness.to_json() for readiness in results] == [
         reported(identifier=reference, title=None, live_state=None, is_ready=False)
     ]
-
-
-def test_main_resolves_a_cross_plan_dependency_against_the_plans_directory(
-    tmp_path, monkeypatch, capsys
-):
-    reference = foreign_reference(ForeignItemId.DONE)
-    plan_mapping = _minimal_plan_mapping()
-    plan_mapping[ManifestKey.ITEMS.key][1][ManifestKey.DEPENDS_ON.key] = [reference]
-    plan_path = tmp_path / "plan.yaml"
-    plan_path.write_text(yaml.dump(plan_mapping))
-    pull_request_data_path = tmp_path / "pr_data.json"
-    pull_request_data_path.write_text("{}")
-    monkeypatch.setattr(
-        sys,
-        "argv",
-        [
-            "plan/check_dependency_readiness.py",
-            "--plan",
-            str(plan_path),
-            "--pr-data",
-            str(pull_request_data_path),
-            "--item",
-            "b",
-            "--plans-dir",
-            str(DatasetLocation.PLANS),
-        ],
-    )
-    assert main() == 0
-    results = json.loads(capsys.readouterr().out)
-    assert [entry[ReadinessField.IDENTIFIER] for entry in results] == [reference]
-    assert [entry[ReadinessField.IS_READY] for entry in results] == [True]

@@ -9,13 +9,16 @@ told it exists.
 from __future__ import annotations
 
 import argparse
-from abc import abstractmethod
-from dataclasses import dataclass
+import json
+from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass
+from enum import StrEnum
 from pathlib import Path
 
 from basstler.exit_codes import StackExitCode
 from basstler.class_property import classproperty
 from basstler.command_line import Command
+from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.board import BoardExport, UpstreamPullRequests
 from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
@@ -26,14 +29,24 @@ from basstler.maintenance.promotion import (
     clear_spent_promotion_labels,
     promote,
 )
+from basstler.maintenance.promotion_context import PromotionContextReader
+from basstler.maintenance.check_overview import CheckOverview
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
+from basstler.maintenance.upstream_action import (
+    OpenPullRequestsAnswer,
+    OpenPullRequestsRequest,
+    UpstreamReadRoute,
+)
 from basstler.maintenance.upstream_pull_request_synchronization import (
     UpstreamPullRequestSynchronization,
 )
 from basstler.stack.model import Stack
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
+from basstler.upstream_reviews.action.branch import RemoteBranch
+from basstler.upstream_reviews.action.read import ActionRead
+from basstler.upstream_reviews.clients import GitHubCommandLineClient
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -66,6 +79,23 @@ class MaintenancePass:
     The exported board this run writes, derives its stack from and discards at its end.
     """
 
+    upstream_read: UpstreamReadRoute = UpstreamReadRoute.DIRECT
+    """
+    How this run reads the upstream's open pull requests.
+    """
+
+    action_timeout: float = 480
+    """
+    How many seconds a read through the fork's Action waits for its run.
+    """
+
+    @property
+    def full_report(self) -> Path:
+        """
+        Where a whole pass writes everything it did, beside :attr:`board`.
+        """
+        return self.board.with_name(RepositoryStateLocation.MAINTENANCE_REPORT.name)
+
     def fork(self) -> GitHubRepository:
         """:return: The fork, as this run's credential can read and write it."""
         return GitHubRepository.from_environment(self.configuration.fork_repository)
@@ -74,9 +104,58 @@ class MaintenancePass:
         """:return: The upstream, as this run's credential can read it."""
         return GitHubRepository.from_environment(self.configuration.upstream_repository)
 
+    def upstream_pull_requests(self) -> UpstreamPullRequests:
+        """
+        :return: The upstream's open pull requests opened from the fork's branches, read
+            the way :attr:`upstream_read` names.
+        :raises ActionUnavailable: If that is the fork's Action and it cannot answer.
+        """
+        fork = self.configuration.fork_repository
+        if self.upstream_read is UpstreamReadRoute.DIRECT:
+            return UpstreamPullRequests.from_api_records(
+                self.upstream().open_pull_requests(), fork
+            )
+        read = ActionRead(
+            RemoteBranch(self.git, self.configuration.fork_remote),
+            OpenPullRequestsRequest.fresh(self.configuration.upstream_repository, fork),
+            GitHubCommandLineClient(),
+            answer_type=OpenPullRequestsAnswer,
+        )
+        return read.wait(self.action_timeout, read.send()).upstream_pull_requests
+
     def stack(self) -> Stack:
         """:return: The derived stack, read from the exported board."""
         return Stack.load(self.board)
+
+    def export_board(self) -> BoardExport:
+        """:return: The fork's open pull requests, each with the upstream pull request
+        reviewing it and the verdict over its head's checks."""
+        fork = self.fork()
+        upstream_pull_requests = self.upstream_pull_requests()
+        return BoardExport.from_api_records(
+            fork.open_pull_requests(), upstream_pull_requests, fork
+        )
+
+    def fresh_stack(self) -> Stack:
+        """:return: The stack derived from a board exported and written just now."""
+        self.export_board().write(self.board)
+        return self.stack()
+
+
+class PreparationKey(StrEnum):
+    """
+    The keys of the document :class:`PrepareCommand` prints.
+    """
+
+    REPARENTS = "reparents"
+    """
+    The pull requests whose base the session retargets before the pass.
+    """
+
+    TO_SUMMARIZE = "to_summarize"
+    """
+    The context of every branch whose upstream summary the session writes.
+    """
 
 
 @dataclass(frozen=True)
@@ -106,13 +185,6 @@ class BoardCommand(MaintenanceCommand):
     """
 
     @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "board"
-
-    @classproperty
     def description(cls) -> str:
         """
         What it does, as ``--help`` puts it.
@@ -136,15 +208,7 @@ class BoardCommand(MaintenanceCommand):
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
-        fork = maintenance.fork()
-        export = BoardExport.from_api_records(
-            fork.open_pull_requests(),
-            UpstreamPullRequests.from_api_records(
-                maintenance.upstream().open_pull_requests(),
-                maintenance.configuration.fork_repository,
-            ),
-            fork,
-        )
+        export = maintenance.export_board()
         if not arguments.write:
             logger.info(export.as_json())
             return StackExitCode.SUCCESS
@@ -153,18 +217,63 @@ class BoardCommand(MaintenanceCommand):
         return StackExitCode.SUCCESS
 
 
+class StackScopeArgument(ABC):
+    """
+    Declares the ``--stacked-on`` argument of a command that passes over every branch,
+    or only over one branch's stack.
+    """
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--stacked-on`` on."""
+        parser.add_argument(
+            "--stacked-on",
+            help=(
+                "pass only over this branch's stack: the branch, the branches it is "
+                "stacked on and the branches stacked on it"
+            ),
+        )
+
+
+@dataclass(frozen=True)
+class PrepareCommand(StackScopeArgument, MaintenanceCommand):
+    """
+    Exports the board and lists everything a session does before the pass: the bases
+    to retarget and the upstream summaries to write.
+    """
+
+    @classproperty
+    def description(cls) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return (
+            "export the board, then list the reparents to make and what each "
+            "upstream summary to write is written from"
+        )
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> StackExitCode:
+        """:param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        stack = maintenance.fresh_stack().scoped_to(arguments.stacked_on)
+        contexts = PromotionContextReader(
+            stack, maintenance.git, maintenance.fork()
+        ).read()
+        document = {
+            PreparationKey.REPARENTS: [asdict(entry) for entry in stack.reparents()],
+            PreparationKey.TO_SUMMARIZE: [asdict(context) for context in contexts],
+        }
+        logger.info(json.dumps(document, ensure_ascii=False))
+        return StackExitCode.SUCCESS
+
+
 @dataclass(frozen=True)
 class FastForwardCommand(MaintenanceCommand):
     """
     Moves the fork's base branch onto the upstream, refusing to force.
     """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "fast-forward"
 
     @classproperty
     def description(cls) -> str:
@@ -191,13 +300,6 @@ class RestackCommand(MaintenanceCommand):
     """
     Integrates every moved parent and publishes what merged cleanly.
     """
-
-    @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "restack"
 
     @classproperty
     def description(cls) -> str:
@@ -243,13 +345,6 @@ class PromoteCommand(MaintenanceCommand):
     """
 
     @classproperty
-    def invoked_as(cls) -> str:
-        """
-        The name it is invoked by on the command line.
-        """
-        return "promote"
-
-    @classproperty
     def description(cls) -> str:
         """
         What it does, as ``--help`` puts it.
@@ -290,17 +385,36 @@ class PromoteCommand(MaintenanceCommand):
 
 
 @dataclass(frozen=True)
-class RunReportCommand(MaintenanceCommand):
+class ChecksCommand(MaintenanceCommand):
     """
-    Performs the whole pass and reports it as one document.
+    Exports the board and reports the verdict over every open branch's checks.
     """
 
     @classproperty
-    def invoked_as(cls) -> str:
+    def description(cls) -> str:
         """
-        The name it is invoked by on the command line.
+        What it does, as ``--help`` puts it.
         """
-        return "run-report"
+        return (
+            "report how many open branches' checks pass, run or fail, naming the rest"
+        )
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> StackExitCode:
+        """:param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code."""
+        logger.info("\n".join(CheckOverview(maintenance.fresh_stack()).as_lines()))
+        maintenance.board.unlink(missing_ok=True)
+        return StackExitCode.SUCCESS
+
+
+@dataclass(frozen=True)
+class RunReportCommand(StackScopeArgument, MaintenanceCommand):
+    """
+    Performs the whole pass and reports it as one document.
+    """
 
     @classproperty
     def description(cls) -> str:
@@ -310,8 +424,9 @@ class RunReportCommand(MaintenanceCommand):
         return "perform the whole pass and report it"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """:param parser: The subparser to declare ``--json`` and the promotion's own
-        arguments on."""
+        """:param parser: The subparser to declare ``--json``, ``--stacked-on`` and the
+        promotion's own arguments on."""
+        super().declare_arguments(parser)
         PromoteCommand().declare_arguments(parser)
         parser.add_argument(
             "--json",
@@ -331,6 +446,7 @@ class RunReportCommand(MaintenanceCommand):
             maintenance,
             as_json=arguments.json,
             summaries=PromotionSummaries.read_from(arguments.summaries),
+            stacked_on=arguments.stacked_on,
         ).exit_code
 
     def perform(
@@ -338,23 +454,30 @@ class RunReportCommand(MaintenanceCommand):
         maintenance: MaintenancePass,
         as_json: bool,
         summaries: PromotionSummaries,
+        stacked_on: str | None = None,
     ) -> MaintenanceReport:
         """
-        Perform every step of the pass, print it, then discard the board it derived
-        from.
+        Export the board, perform every step of the pass, write the whole report and
+        print its summary, then discard the board.
 
         The board is a snapshot of one moment's open pull requests, and a stale one read
-        by a later run is worse than none at all - so a whole pass ends without one, and
-        the next begins by exporting a fresh one.
+        by a later run is worse than none at all - so a whole pass begins by exporting
+        one and ends without it.
+
+        The checks on the board are those on each branch's tip as the pass found it, so
+        what an earlier pass pushed has finished being checked by now; what this pass
+        pushes is read by the next.
 
         :param maintenance: What this run has resolved.
         :param as_json: Whether to print the machine-readable document rather than the
             finish summary.
         :param summaries: What each upstream pull request opens with, where anybody wrote
             it.
+        :param stacked_on: The branch whose stack to pass over, or ``None`` for every
+            branch.
         :return: What the pass did.
         """
-        stack = maintenance.stack()
+        stack = maintenance.fresh_stack().scoped_to(stacked_on)
         fork = maintenance.fork()
         fast_forward_report = fast_forward(stack.configuration, maintenance.git)
         report = MaintenanceReport.of_pass(
@@ -366,10 +489,11 @@ class RunReportCommand(MaintenanceCommand):
             UpstreamPullRequestSynchronization(stack, fork).synchronize(),
         )
         maintenance.board.unlink(missing_ok=True)
+        maintenance.full_report.write_text(report.as_json() + "\n")
         if as_json:
             logger.info(report.as_json())
             return report
-        logger.info(FinishSummary(report, stack).as_markdown())
+        logger.info(FinishSummary(report, stack, maintenance.full_report).as_markdown())
         return report
 
 

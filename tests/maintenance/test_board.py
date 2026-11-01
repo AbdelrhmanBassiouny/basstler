@@ -46,7 +46,6 @@ from .fork import (
     make_configuration,
 )
 
-
 # %% running git
 
 
@@ -307,7 +306,7 @@ def test_the_export_records_the_verdict_over_the_head_commit_s_checks():
 
     assert [entry.check_state for entry in export.pull_requests] == [
         RollupState.FAILURE,
-        None,
+        RollupState.NOT_REPORTED,
     ]
 
 

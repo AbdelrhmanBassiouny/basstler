@@ -170,3 +170,33 @@ class PromotionLinkTooLongError(StackError, ValueError):
 
     def suggest_correction(self) -> str:
         return "Shorten the title."
+
+
+# %% scoping
+
+
+@dataclass
+class BaseBranchScopeError(StackError, ValueError):
+    """
+    Raised when a stack is scoped to the upstream base, which every branch is stacked
+    on.
+    """
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.USAGE
+
+    upstream_base: str
+    """
+    The upstream base the scope named.
+    """
+
+    def error_message(self) -> str:
+        return f"'{self.upstream_base}' is the upstream base: every branch is stacked on it"
+
+    def suggest_correction(self) -> str:
+        return (
+            "Name a branch of the stack, or leave --stacked-on out to pass over every "
+            "branch."
+        )
