@@ -80,7 +80,7 @@ session by `session-start.sh`. Never merge this file into `main`.
   approach abandoned), update `plan.yaml` in the same turn: `status`, `branch`,
   `pull_request_number`, `session`, and `notes` rewritten to what is true now. Reasoning
   goes in the PR; `roadmap.md` gets only rules every later item must follow.
-- Every plan save is a push the plan site rebuilds from, so never republish a dashboard
+- Every plan save is a push the plan site rebuilds from, so never publish a plan as an
   Artifact: link the plan's or item's page with `plan_site_page_url <plan-id> [<item-id>]`.
 - Before any `save-plan.sh`, and when resuming or starting an item, fetch and read only the
   delta since the plan state SHA printed at session start (`plan-updates-since.sh`), then
