@@ -71,3 +71,13 @@ class SiteSampleText(StrEnum):
     """
     The credential a recorded GitHub client is handed, and never checks.
     """
+
+    HEAD_COMMIT = "0123456789abcdef0123456789abcdef01234567"
+    """
+    The commit an open pull request's head points at.
+    """
+
+    ASSIGNEE = "assignee-login"
+    """
+    The login of the account an open pull request is assigned to.
+    """

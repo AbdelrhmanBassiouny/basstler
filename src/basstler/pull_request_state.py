@@ -11,16 +11,18 @@ fetching.md for how a session should gather it.
 
 from __future__ import annotations
 
+import dataclasses
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
 from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import PullRequestField
+from basstler.maintenance.board import PullRequestField, PullRequestHead
 from basstler.maintenance.board import PullRequestRecord as PullRequestAPIRecord
 from basstler.maintenance.description import PullRequestDescription
 from basstler.repository import Repository
+from basstler.upstream_reviews.vocabulary import RollupState
 
 
 # %% classified state
@@ -160,6 +162,23 @@ class PullRequestRecord:
     description, ``None`` while none is linked.
     """
 
+    head_commit: str | None = None
+    """
+    The commit the pull request's head branch points at, ``None`` when the source it was
+    read from does not say.
+    """
+
+    assignees: list[str] = field(default_factory=list)
+    """
+    The logins of the accounts the pull request is assigned to.
+    """
+
+    check_state: RollupState | None = None
+    """
+    The verdict over the checks reported on :attr:`head_commit`, ``None`` while they
+    were not read.
+    """
+
     @property
     def identified_labels(self) -> frozenset[GitHubLabel]:
         """The subset of :attr:`labels` that match a known
@@ -212,10 +231,10 @@ class PullRequestRecord:
         :return: The fields a dashboard classifies it by.
         """
         number = PullRequestField.NUMBER.read(api_record)
-        return cls.from_mapping(
+        record = cls.from_mapping(
             {
-                field.key: field.read(api_record, number)
-                for field in (
+                pull_request_field.key: pull_request_field.read(api_record, number)
+                for pull_request_field in (
                     PullRequestField.STATE,
                     PullRequestField.DRAFT,
                     PullRequestField.MERGED_AT,
@@ -223,6 +242,22 @@ class PullRequestRecord:
                     PullRequestField.BODY,
                 )
             }
+        )
+        return dataclasses.replace(
+            record,
+            head_commit=PullRequestHead.commit_in(api_record),
+            assignees=PullRequestField.ASSIGNEES.read(api_record, number) or [],
+        )
+
+    @property
+    def has_unread_checks(self) -> bool:
+        """
+        Whether the pull request is open at a known commit whose checks were not read.
+        """
+        return (
+            self.state is PullRequestState.OPEN
+            and self.head_commit is not None
+            and self.check_state is None
         )
 
     @property

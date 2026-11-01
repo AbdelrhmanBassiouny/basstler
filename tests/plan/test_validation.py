@@ -165,6 +165,21 @@ def test_validation_rejects_a_non_mapping_manifest_instead_of_crashing():
     assert isinstance(error.value.problems[0], InvalidManifestRoot)
 
 
+def test_problems_of_a_well_formed_manifest_is_empty():
+    assert PlanValidator(minimal_plan()).problems == []
+
+
+def test_problems_lists_what_validate_raises():
+    validator = PlanValidator(minimal_plan(schema_version=2, tracks=[]))
+    with pytest.raises(PlanValidationError) as error:
+        validator.validate()
+    assert validator.problems == error.value.problems
+
+
+def test_problems_of_a_non_mapping_manifest_is_its_invalid_root():
+    assert PlanValidator(None).problems == [InvalidManifestRoot(None)]
+
+
 def test_validation_rejects_a_same_track_dependency_cycle():
     # A same-track cycle (a depends on b, b depends on a) must not pass
     # validation - without this check the cycle silently drops both items

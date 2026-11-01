@@ -27,8 +27,8 @@ from basstler.locations import (
     PluginSkillLocation,
     ProjectLocation,
 )
+from basstler.maintenance.board import AccountField
 from basstler.maintenance.github import (
-    AccountField,
     GitHubPath,
     GitHubRepository,
     LabelField,

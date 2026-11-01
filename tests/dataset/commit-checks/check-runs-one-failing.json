@@ -1,0 +1,8 @@
+{
+  "total_count": 3,
+  "check_runs": [
+    {"name": "pytest", "conclusion": "failure", "details_url": "https://github.com/owner/notes/runs/1"},
+    {"name": "lint", "conclusion": "success", "details_url": "https://github.com/owner/notes/runs/2"},
+    {"name": "docs", "conclusion": null, "details_url": null}
+  ]
+}

@@ -228,6 +228,22 @@ class GitHubPullRequestSource(PullRequestSource):
         return GitHubRepository(repository, self.token)
 
     def pull_request(self, reference: PullRequestReference) -> PullRequestRecord | None:
+        record = self.listed_or_read(reference)
+        if record is None or not record.has_unread_checks:
+            return record
+        record.check_state = self.client_for(reference.repository).check_state(
+            record.head_commit
+        )
+        return record
+
+    def listed_or_read(
+        self, reference: PullRequestReference
+    ) -> PullRequestRecord | None:
+        """
+        :param reference: The pull request to look up.
+        :return: Its state as its repository's listing gave it, read on its own when the
+            listing missed it, or ``None`` if the repository has no such pull request.
+        """
         self.list_pull_requests_of(reference.repository)
         if reference not in self.pull_requests:
             api_record = self.read_if_present(

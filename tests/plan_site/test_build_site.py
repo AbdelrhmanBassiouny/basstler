@@ -5,6 +5,7 @@ each plan's dashboard.
 
 from __future__ import annotations
 
+import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from http import HTTPStatus
@@ -26,18 +27,25 @@ from basstler.plan_site.__main__ import (
     SiteFile,
 )
 from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import PullRequestField
+from basstler.maintenance.board import (
+    AccountField,
+    PullRequestField,
+    PullRequestHeadKey,
+)
 from basstler.maintenance.github import (
+    CommitReport,
     GitHubRepository,
     GitHubRequestFailed,
     PullRequestListState,
+    RepositoryPath,
 )
 from basstler.plan_site.hub import PlanHub
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus
 from basstler.repository import PullRequestReference, Repository
+from basstler.upstream_reviews.vocabulary import RollupState
 
-from ..constants.paths import DatasetLocation
+from ..constants.paths import DatasetLocation, RecordedCommitChecks
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
 from .test_hub import publish_notes
 
@@ -489,6 +497,39 @@ def test_from_api_reads_a_merge():
     assert record.merged_at.isoformat() == merged_at
 
 
+def test_from_api_reads_the_head_commit():
+    commit = SiteSampleText.HEAD_COMMIT.value
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            OPEN_PULL_REQUEST,
+            {PullRequestField.HEAD: {PullRequestHeadKey.COMMIT: commit}},
+        )
+    )
+    assert record.head_commit == commit
+
+
+def test_from_api_without_a_head_reads_no_head_commit():
+    assert (
+        PullRequestRecord.from_api(api_pull_request(OPEN_PULL_REQUEST)).head_commit
+        is None
+    )
+
+
+def test_from_api_reads_the_assignee_logins():
+    logins = [SiteSampleText.ASSIGNEE.value]
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            OPEN_PULL_REQUEST,
+            {
+                PullRequestField.ASSIGNEES: [
+                    {AccountField.LOGIN: login} for login in logins
+                ]
+            },
+        )
+    )
+    assert record.assignees == logins
+
+
 @dataclass(frozen=True)
 class RecordedRepository(GitHubRepository):
     """
@@ -567,6 +608,59 @@ def test_github_source_answers_none_for_a_pull_request_that_does_not_exist():
         token=SiteSampleText.TOKEN, responses={listing_path(): []}
     )
     assert source.pull_request(ELSEWHERE_PULL_REQUEST) is None
+
+
+def commit_report_path(report: CommitReport) -> str:
+    """
+    :param report: Which listing reported against :attr:`SiteSampleText.HEAD_COMMIT`
+        to read.
+    :return: The path its first page is read from.
+    """
+    return (
+        f"{RepositoryPath.COMMITS}/{SiteSampleText.HEAD_COMMIT}/{report}"
+        f"?per_page={GitHubRepository.page_size}&page=1"
+    )
+
+
+def api_pull_request_at_head(state: PullRequestState) -> dict[str, Any]:
+    """
+    :param state: Whether the pull request is open or closed.
+    :return: The open pull request of the first plan, in that state, with its head at
+        :attr:`SiteSampleText.HEAD_COMMIT`.
+    """
+    return api_pull_request(
+        OPEN_PULL_REQUEST,
+        {
+            PullRequestField.STATE: state.value,
+            PullRequestField.HEAD: {
+                PullRequestHeadKey.COMMIT: SiteSampleText.HEAD_COMMIT.value
+            },
+        },
+    )
+
+
+def test_github_source_reads_the_checks_of_an_open_pull_request():
+    source = RecordedGitHubPullRequestSource(
+        token=SiteSampleText.TOKEN,
+        responses={
+            listing_path(): [api_pull_request_at_head(PullRequestState.OPEN)],
+            commit_report_path(CommitReport.CHECK_RUNS): json.loads(
+                RecordedCommitChecks.ONE_CHECK_RUN_FAILING.value.read_text()
+            ),
+            commit_report_path(CommitReport.STATUS): json.loads(
+                RecordedCommitChecks.NO_STATUSES.value.read_text()
+            ),
+        },
+    )
+    assert source.pull_request(OPEN_PULL_REQUEST).check_state is RollupState.FAILURE
+
+
+def test_github_source_leaves_the_checks_of_a_closed_pull_request_unread():
+    source = RecordedGitHubPullRequestSource(
+        token=SiteSampleText.TOKEN,
+        responses={listing_path(): [api_pull_request_at_head(PullRequestState.CLOSED)]},
+    )
+    assert source.pull_request(OPEN_PULL_REQUEST).check_state is None
 
 
 def test_github_source_reads_an_issue_url():
