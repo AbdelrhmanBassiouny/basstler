@@ -81,7 +81,8 @@ session by `session-start.sh`. Never merge this file into `main`.
   `pull_request_number`, `session`, and `notes` rewritten to what is true now. Reasoning
   goes in the PR; `roadmap.md` gets only rules every later item must follow.
 - Republish a plan's dashboard once per session, after its last save, with
-  `/plan-dashboard <plan-id>` - not after every save. Never refresh the all-plans index
+  `/plan-dashboard <plan-id>` - not after every save, and only for plans with active items
+  (in progress or startable); skip plans whose remaining items are all deferred or blocked. Never refresh the all-plans index
   unless asked. (Until the GitHub Pages plan site is live; then the site replaces this.)
 - Before any `save-plan.sh`, and when resuming or starting an item, fetch and read only the
   delta since the plan state SHA printed at session start (`plan-updates-since.sh`), then
