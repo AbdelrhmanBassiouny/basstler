@@ -43,11 +43,12 @@ items:
       about 20 s; otherwise exit with the reason (Actions off, workflow missing) and the link.
   - id: python-in-every-shell
     title: "BASSTLER_PYTHON is set in every Bash call, not only after sourcing the config"
-    branch: null
-    pull_request_number: null
+    branch: claude/basstler-v2-python-shell-mnx3mt
+    pull_request_number: 101
     track: fixes
+    session: https://claude.ai/code/session_018wfiv7756vz1yGExzFurMj
     depends_on: []
-    status: not started
+    status: in progress
     notes: >
       Session start writes BASSTLER_PYTHON to CLAUDE_ENV_FILE beside BASSTLER_PLUGIN_ROOT, so
       a skill's "${BASSTLER_PYTHON}" -m call works without the sourced file.
