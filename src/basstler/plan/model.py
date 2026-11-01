@@ -701,6 +701,21 @@ class PlanManifest:
         summary[ItemSummaryKey.ITEM.value] = item.content
         return yaml.safe_dump(summary, sort_keys=False, allow_unicode=True, width=88)
 
+    def without_dependencies(self, identifiers: set[str]) -> PlanManifest:
+        """
+        :param identifiers: ``depends_on`` entries to stop depending on.
+        :return: This manifest with every item's dependency on *identifiers* removed.
+        """
+        return PlanManifest(
+            {
+                **self.content,
+                ManifestKey.ITEMS.key: [
+                    item.without_dependencies(identifiers).content
+                    for item in self.items
+                ],
+            }
+        )
+
     def without_landed_items(self) -> PlanManifest:
         """
         A landed item tells a future session nothing it needs: its work is in the code

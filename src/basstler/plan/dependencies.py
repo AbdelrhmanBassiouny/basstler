@@ -18,7 +18,6 @@ from basstler.dashboard.plan import Item, Plan
 from basstler.plan.model import PlanDocument
 from basstler.pull_request_state import LiveState, PullRequestsByRepository
 
-
 # %% references
 
 

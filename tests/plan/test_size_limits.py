@@ -10,6 +10,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.plan.dependencies import DependencyReference
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
 from basstler.plan.size_limits import (
@@ -155,6 +156,93 @@ def test_staging_refuses_a_plan_over_its_limits_and_writes_nothing(tmp_path):
         ).stage(destination)
     assert raised.value.document == LimitedDocument.PLAN
     assert not destination.manifest.parent.exists()
+
+
+# %% releasing the dependents of landed items
+
+
+def plan_depending_on(plan_directory: Path, depends_on: list[str]) -> PlanManifest:
+    """
+    Write a plan beside the staged one, whose single item has *depends_on*.
+
+    :return: The manifest written.
+    """
+    manifest = PlanManifest(
+        {
+            ManifestKey.IDENTIFIER.key: plan_directory.name,
+            ManifestKey.ITEMS.key: [
+                {
+                    ManifestKey.IDENTIFIER.key: "dependent",
+                    ManifestKey.DEPENDS_ON.key: depends_on,
+                }
+            ],
+        }
+    )
+    plan_directory.mkdir(parents=True)
+    manifest.write(plan_directory / PlanDocument.MANIFEST)
+    return manifest
+
+
+def dependencies_saved_in(plan_directory: Path) -> list[str]:
+    """
+    :return: The ``depends_on`` of the single item of the plan saved in *plan_directory*.
+    """
+    (item,) = PlanManifest.from_file(plan_directory / PlanDocument.MANIFEST).items
+    return item.dependencies
+
+
+def reference_to(plan: PlanManifest, item_identifier: str) -> str:
+    """
+    :return: The ``depends_on`` entry naming one item of *plan* from another plan.
+    """
+    return DependencyReference(
+        item_identifier=item_identifier, plan_id=plan.identifier
+    ).text
+
+
+def test_staging_drops_other_plans_dependencies_on_the_landed_items(tmp_path):
+    plan = LandedItemsPlan.read()
+    destination = PlanFiles(
+        tmp_path / plan.manifest.identifier / PlanDocument.MANIFEST,
+        tmp_path / plan.manifest.identifier / PlanDocument.ROADMAP,
+    )
+    open_item = plan.item_with_status(ItemStatus.IN_PROGRESS)
+    landed_identifiers = sorted(plan.manifest.landed_identifiers)
+    dependent_directory = tmp_path / "dependent-plan"
+    plan_depending_on(
+        dependent_directory,
+        [
+            *(
+                reference_to(plan.manifest, identifier)
+                for identifier in landed_identifiers
+            ),
+            reference_to(plan.manifest, open_item.identifier),
+        ],
+    )
+    PlanFiles(
+        DatasetLocation.PLAN_WITH_LANDED_ITEMS,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES,
+    ).stage(destination)
+    assert dependencies_saved_in(dependent_directory) == [
+        reference_to(plan.manifest, open_item.identifier)
+    ]
+
+
+def test_staging_a_finished_plan_drops_every_dependency_on_it(tmp_path):
+    plan = PlanManifest.from_file(DatasetLocation.PLAN_ALL_LANDED)
+    destination = PlanFiles(
+        tmp_path / plan.identifier / PlanDocument.MANIFEST,
+        tmp_path / plan.identifier / PlanDocument.ROADMAP,
+    )
+    dependent_directory = tmp_path / "dependent-plan"
+    plan_depending_on(
+        dependent_directory,
+        [reference_to(plan, item.identifier) for item in plan.items],
+    )
+    PlanFiles(
+        DatasetLocation.PLAN_ALL_LANDED, DatasetLocation.ROADMAP_OF_STANDING_RULES
+    ).stage(destination)
+    assert dependencies_saved_in(dependent_directory) == []
 
 
 # %% manifest limits
