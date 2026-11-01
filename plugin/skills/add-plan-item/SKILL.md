@@ -85,28 +85,18 @@ the files are called.
 
 ## 5. Check whether a covering plan still has room
 
-A plan's `description` covering the work is not enough by itself — it also has
-to have room left. For every plan found in step 2 whose `description` covers
-the work, count its *current* items (manifest already fetched off
-`FETCH_HEAD`) against the item limit, `Measure.ITEM_COUNT` in
-`plan/size_limits.py`:
+A plan whose `description` covers the work also needs room. For each such plan
+from step 2, count its current items against `Measure.ITEM_COUNT`
+(`plan/size_limits.py`):
 
 ```bash
 git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/plan.yaml" > <scratchpad>/plan.yaml
 "${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <scratchpad>/plan.yaml
 ```
 
-`is_full: true` disqualifies that plan for growth, whatever its `description`
-says — the plan is already at `item_limit`, so `save-plan.sh` would refuse it
-one more item, and proposing it here only moves that refusal to whoever next
-saves the plan. Landed items are not counted, since a save prunes them first.
-
-Check every covering plan this way before ruling out **New item in an
-existing plan** entirely — a plan qualifies only if it fits both ways, topic
-*and* room; a full plan is disqualified even if its `description` fits, and a
-plan with room is never a candidate if its `description` doesn't cover the
-work in the first place. Only when no plan satisfies both does the outcome
-fall through to **New plan**.
+`is_full: true` rules the plan out, whatever its `description` says: `save-plan.sh`
+would refuse it one more item. A plan qualifies only if it fits by topic *and*
+room; when none does, the outcome is **New plan**.
 
 ## 6. Choose exactly one outcome
 
@@ -117,13 +107,11 @@ fall through to **New plan**.
   `description` covers it, and step 5 found that plan not full. Name the plan,
   the track, the wave, and any real `depends_on`.
 - **New plan** — it stands on its own, spans several pull requests or
-  sessions, and either no existing plan covers it or every plan that does is
-  already full (step 5). Hand off to `/plan-create` via the `Skill` tool
-  rather than drafting a manifest here — if the reason is a full plan rather
-  than no coverage at all, say so, citing the item count step 5 found. A full
-  plan that could itself be split is a second way out: put both options to
-  the user with `AskUserQuestion`, with your recommendation, instead of
-  choosing for them.
+  sessions, and either no existing plan covers it or every one that does is
+  full (step 5). Hand off to `/plan-create` via the `Skill` tool rather than
+  drafting a manifest here, saying which, with the item count. If a full plan
+  could itself be split, put that option and a new plan to the user with
+  `AskUserQuestion`, with your recommendation.
 - **No item at all** — one self-contained change, done in this session, that
   nothing else depends on. `plan-create`'s own guidance against over-modelling
   applies: a plan that tracks everything is a plan nobody reads.
@@ -163,8 +151,7 @@ Flag explicitly, never silently paper over:
 - Paths that had to be guessed rather than derived in step 1.
 - A duplicate-intent match you are unsure about — say what looks the same and
   let the user settle it.
-- A covering plan step 5 ruled out for being full — name it and its item count,
-  so the user can see why the work landed in a new plan instead.
+- A covering plan step 5 ruled out as full — name it and its item count.
 
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.

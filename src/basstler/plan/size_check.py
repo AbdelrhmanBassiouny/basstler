@@ -77,7 +77,7 @@ class PlanSizeCheckResult:
         """
         :return: Whether adding one more item would break the limit.
         """
-        return self.item_count >= self.item_limit
+        return not Measure.ITEM_COUNT.has_room(self.item_count)
 
     @classmethod
     def measure(cls, manifest_path: Path) -> PlanSizeCheckResult:

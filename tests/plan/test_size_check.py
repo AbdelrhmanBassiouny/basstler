@@ -104,3 +104,12 @@ def test_reports_the_measured_count_against_the_limit(tmp_path, monkeypatch, cap
     result = run_check(monkeypatch, capsys, manifest_path)
     assert result.item_count == 4
     assert result.item_limit == Measure.ITEM_COUNT.maximum
+
+
+# %% room
+
+
+def test_a_measure_has_room_only_below_its_maximum():
+    maximum = Measure.ITEM_COUNT.maximum
+    assert Measure.ITEM_COUNT.has_room(maximum - 1)
+    assert not Measure.ITEM_COUNT.has_room(maximum)

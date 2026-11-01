@@ -183,29 +183,19 @@ already require.
 
 ## 7. Check the draft isn't already full
 
-A plan this large before it has even been saved once is the same failure a
-plan can also grow into later: more items than one plan may hold. Catch it
-here, before the first save, rather than after the fact. Count the draft's
-items against the item limit, `Measure.ITEM_COUNT` in `plan/size_limits.py`:
+Count the draft's items against `Measure.ITEM_COUNT` (`plan/size_limits.py`)
+before the first save:
 
 ```bash
 "${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <path/to/plan.yaml>
 ```
 
-If `is_full` is `false`, continue to step 8 unchanged.
+If `is_full` is `false`, continue to step 8.
 
-If `is_full` is `true`, stop — do not call `${SAVE_PLAN_SCRIPT}` on this draft.
-A plan born at `item_limit` has no room for the next item anyone adds. Report
-`item_count` against `item_limit`, and that the source material describes more
-than one plan's worth of work. Don't re-derive a splitting
-methodology from scratch here — a plan that has previously had to split
-itself under this same limit is prior art on how to cut one under real
-constraints (by track/wave first, verified by measuring rather than assumed,
-cut on subject only when a track or wave alone is still over); look for one
-before inventing an approach. Ask, via `AskUserQuestion`, whether to re-draft
-the structure along such a seam (return to step 3 with the split in mind,
-ending in several `<plan-id>`s instead of one) or to trim the source
-material's scope so it fits in one plan.
+If `true`, do not call `${SAVE_PLAN_SCRIPT}`: report `item_count` against
+`item_limit` and ask, via `AskUserQuestion`, whether to re-draft as several
+plans (back to step 3, cutting by track or wave first) or to trim the scope to
+fit one.
 
 ## 8. Bootstrap it through the existing write path — don't invent a new one
 
