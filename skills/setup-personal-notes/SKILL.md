@@ -16,6 +16,12 @@ missing. If it reports nothing missing, check only the labels the script can't
 see (step 5's last part) and stop there. A re-run on an already-set-up clone
 must be a near-no-op, not an interrogation.
 
+**A denied command is a question, not a dead end.** If the permission system
+or its classifier denies a command this skill runs (the dependency install, for
+one), never work around it and never skip the step: ask the user with
+`AskUserQuestion` to accept that exact command, say why it is needed, and run
+it once they agree.
+
 **Never guess a value that is the user's to choose.** Where their notes live
 and what goes in them are personal; ask, with a default. Everything else
 (installing a documented dependency, running a read-only script) is mechanical
@@ -211,10 +217,10 @@ It writes the site repository's workflow onto its default branch, lists this
 repository in the hub file of the registry that workflow names (this repository
 itself, the first time), and commits the notes branch's dispatch workflow, which
 starts the build on every push to the notes branch. It then prints, as one
-copyable line each, the steps only the user can take - creating the site
+copyable line each, with the same steps numbered for github.com, the steps only the user can take - creating the site
 repository, turning on Pages, storing their fine-grained token as the
-`PLAN_SITE_TOKEN` secret - and exits 1 while any is left. Pass those lines on
-as printed; once the user has done them, run the command again: it counts a
+`PLAN_SITE_TOKEN` secret - and exits 1 while any is left. Pass the lines
+and the browser steps on as printed; once the user has done them, run the command again: it counts a
 step done when a run that needs it succeeded.
 
 ## 9. Confirm, by re-running the check
