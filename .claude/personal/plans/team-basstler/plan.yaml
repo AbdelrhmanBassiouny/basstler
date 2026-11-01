@@ -1,22 +1,20 @@
 schema_version: 1
 id: team-basstler
 title: 'Team Basstler: a published plan site, hardened core, and plans a team shares'
-description: A Pages site replaces the dashboard Artifacts and rebuilds on every plan change;
-  saves and kickoffs become safe for several writers and cheap in tokens. A team repository
-  in an organisation then holds the shared plans, one issue per item, a Project board, and
-  each member's own notes, and /malloche picks and starts the next ready item. Pilot - cram2
-  with the domain-models plan.
+description: A Pages site replaces the dashboard Artifacts and rebuilds on every plan change; saves and
+  kickoffs become safe for several writers and cheap in tokens. A team repository in an organisation then
+  holds the shared plans, one issue per item, a Project board, and each member's own notes, and /malloche
+  picks and starts the next ready item. Pilot - cram2 with the domain-models plan.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 62
 waves:
 - id: foundations
   name: 'Wave 1: Site live, core hardened'
-  description: The site deploys itself and looks finished; saves survive concurrent writers;
-    a kickoff loads little text.
+  description: The site deploys itself and looks finished; saves survive concurrent writers; a kickoff
+    loads little text.
 - id: team
   name: 'Wave 2: Team Basstler'
-  description: Shared plans in an organisation's team repository, items as issues on a board,
-    and /malloche.
+  description: Shared plans in an organisation's team repository, items as issues on a board, and /malloche.
 tracks:
 - id: site
   name: Plan site
@@ -35,27 +33,30 @@ tracks:
   wave: team
 items:
 - id: site-design
-  title: An elegant, robust site - one stylesheet, light and dark, waves as columns, live
-    chips, build health
+  title: An elegant, robust site - one stylesheet, light and dark, waves as columns, live chips, build
+    health
   branch: null
   status: not_started
   track: site
   depends_on: []
-  notes: One static stylesheet with design tokens, light and dark, phone width; plan page
-    as wave columns of item cards with status, pull request, CI and assignee chips and dependency
-    hints; hub and repository pages as cards with progress. A health banner names every plan
-    or repository the build skipped, and the build fails when the registry cannot be read.
-    A CI test builds the site from the test dataset. Stays on the current templates; the htpy
-    rewrite (workflow-cutover/site-pages-in-python) is not needed for this.
+  notes: One static stylesheet with design tokens, light and dark, phone width; plan page as wave columns
+    of item cards with status, pull request, CI and assignee chips and dependency hints; hub and repository
+    pages as cards with progress. A health banner names every plan or repository the build skipped, and
+    the build fails when the registry cannot be read. A CI test builds the site from the test dataset.
+    Stays on the current templates; the htpy rewrite (workflow-cutover/site-pages-in-python) is not needed
+    for this.
 - id: site-for-every-repository
-  title: Setup publishes the plan site for any repository and user; every plan save starts
-    its build
+  title: Setup publishes the plan site for any repository and user; every plan save starts its build
   branch: null
   status: not_started
   track: site
-  depends_on:
-  - stack-tooling-install/setup-personal-notes-script
-  notes: 'Today the plan pages 404: stack-board''s only workflow is the legacy board.yml. Setup creates <user>/plans with a caller of plan-site-build.yml, registers each project in its hub, and commits a dispatch workflow to each notes branch that starts the build on every push using the user''s fine-grained PAT secret. Steps it cannot do (Pages on, the PAT) are one copyable line each, then re-checked. Between builds, kickoff checks dependencies live and the page re-checks blocking PRs'' draft state from the browser. Tested on recorded responses.'
+  depends_on: []
+  notes: 'Today the plan pages 404: stack-board''s only workflow is the legacy board.yml. Setup creates
+    <user>/plans with a caller of plan-site-build.yml, registers each project in its hub, and commits
+    a dispatch workflow to each notes branch that starts the build on every push using the user''s fine-grained
+    PAT secret. Steps it cannot do (Pages on, the PAT) are one copyable line each, then re-checked. Between
+    builds, kickoff checks dependencies live and the page re-checks blocking PRs'' draft state from the
+    browser. Tested on recorded responses.'
 - id: artifact-path-retirement
   title: Point every plan skill at the site instead of republishing a dashboard Artifact
   branch: null
@@ -63,24 +64,24 @@ items:
   track: site
   depends_on:
   - site-for-every-repository
-  notes: 'Moved from workflow-cutover. First half now: every republish-/plan-dashboard instruction
-    in the skills and the personal notes becomes printing the site link, and save-plan.sh
-    prints the page URL. Second half once the site has run one green cycle: delete every page
-    each repository''s _generated/dashboard-urls.yaml lists (the Artifact tool''s delete),
-    then remove that cache, record_dashboard_url.py, plan-dashboard step 3 and index mode.'
+  notes: 'Moved from workflow-cutover. First half now: every republish-/plan-dashboard instruction in
+    the skills and the personal notes becomes printing the site link, and save-plan.sh prints the page
+    URL. Second half once the site has run one green cycle: delete every page each repository''s _generated/dashboard-urls.yaml
+    lists (the Artifact tool''s delete), then remove that cache, record_dashboard_url.py, plan-dashboard
+    step 3 and index mode.'
 - id: concurrent-safe-save
-  title: A plan save applies item-level edits onto the latest manifest and retries a rejected
-    push
+  title: A plan save applies item-level edits onto the latest manifest and retries a rejected push
   branch: claude/plan-item-kickoff-concurrent-safe-x35oyo
   status: in progress
   track: core
   pull_request_number: 98
   session: https://claude.ai/code/session_01JxHGiMy8LGpNvoVNMUwzvU
   depends_on: []
-  notes: 'Today save-plan.sh writes the whole file and pushes once, so two writers lose an
-    update or fail. On top of #48''s manifest writer corruption fixes: fetch, apply the session''s
-    item changes onto the fresh manifest, refuse when the same item changed since the session
-    read it, push, and on a rejected push repeat a bounded number of times.'
+  notes: 'Today save-plan.sh writes the whole file and pushes once, so two writers lose an update or fail.
+    On top of #48''s manifest writer corruption fixes: fetch, apply the session''s item changes onto the
+    fresh manifest, refuse when the same item changed since the session read it, push, and on a rejected
+    push repeat a bounded number of times. Needed only until basstler-v3 plan-store-issues; v2-removal
+    deletes it.'
 - id: lean-kickoff
   title: A kickoff loads one compact item brief instead of about 55 KB of skill documents
   branch: ccr-1516c899-kd5dl7
@@ -89,25 +90,23 @@ items:
   pull_request_number: 97
   session: https://claude.ai/code/session_01JxHGiQFQvVfUEyavALErF5
   depends_on: []
-  notes: Kickoff now reads kickoff, gathering, execution modes, readiness, the maintenance
-    skill and the plan schema (about 15k tokens before code). One python -m command prints
-    the item, its dependencies' live state and the standing rules; the skill keeps only its
-    steps; maintenance runs only when an upstream is named; the schema is read only for structural
-    edits. A test caps skill document sizes like plan_size_limits. Target under 5k tokens
-    of tooling text.
+  notes: Kickoff now reads kickoff, gathering, execution modes, readiness, the maintenance skill and the
+    plan schema (about 15k tokens before code). One python -m command prints the item, its dependencies'
+    live state and the standing rules; the skill keeps only its steps; maintenance runs only when an upstream
+    is named; the schema is read only for structural edits. A test caps skill document sizes like plan_size_limits.
+    Target under 5k tokens of tooling text.
 - id: team-notes-store
-  title: Plans come from a configured plan store; each member's personal notes live on their
-    own branch of it
+  title: Plans come from a configured plan store; each member's personal notes live on their own branch
+    of it
   branch: null
-  status: not_started
+  status: deferred
   track: team-store
   depends_on:
-  - concurrent-safe-save
-  notes: A plan store (repository and branch) is configured apart from the personal notes,
-    declared once in basstler.environment, defaulting to the personal notes so a solo setup
-    is unchanged. In a team repository the default branch holds the shared plans and hub,
-    and each member writes notes.md, git identity, settings and pr-progress to their own notes/<login>
-    branch, so no two people ever write one branch except through item-level plan saves.
+  - basstler-v3/plan-store-issues
+  notes: 'Deferred until basstler-v3 plan-store-issues: the shared plans then live as issues on the team
+    repository, so the plan-store half is gone. What remains: each member writes notes.md, git identity,
+    settings and pr-progress to their own notes/<login> branch of the team repository, so no two people
+    ever write one branch.'
 - id: team-repo-setup
   title: Set up a team repository in an organisation, and onboard a member with one command
   branch: null
@@ -115,12 +114,11 @@ items:
   track: team-store
   depends_on:
   - team-notes-store
-  notes: Owner creates the repository in cram2 (name to confirm), enables Pages from Actions
-    and Issues, installs the Claude GitHub App. Setup writes the hub (registry, notes_branch
-    = default branch), site caller, labels and docs/team.md; a member runs setup with the
-    team repository to get their notes branch. Members collaborate on the owner's CRAM fork,
-    so stack tooling is unchanged. Conflict - basstler.setup.personal_notes refuses a notes
-    remote the token's login does not own, so a member is refused on the org repository;
+  notes: Owner creates the repository in cram2 (name to confirm), enables Pages from Actions and Issues,
+    installs the Claude GitHub App. Setup writes the hub (registry, notes_branch = default branch), site
+    caller, labels and docs/team.md; a member runs setup with the team repository to get their notes branch.
+    Members collaborate on the owner's CRAM fork, so stack tooling is unchanged. Conflict - basstler.setup.personal_notes
+    refuses a notes remote the token's login does not own, so a member is refused on the org repository;
     allow the configured plan store, e.g. by checking push access.
 - id: migrate-domain-models
   title: Move the domain-models plan from the CRAM fork's notes to the team repository
@@ -129,56 +127,57 @@ items:
   track: team-store
   depends_on:
   - team-repo-setup
-  notes: 'One home: copied to the team plan store and removed from the fork''s notes. default_repository
-    becomes cram2/cognitive_robot_abstract_machine; items whose pull requests are on the fork
-    set repository to it. A new tracking issue on the team repository replaces fork #525,
-    which gets a pointer comment.'
+  - basstler-v3/plan-import
+  notes: 'After basstler-v3, plan-import moves it into the team repository''s issues. One home: copied
+    to the team plan store and removed from the fork''s notes. default_repository becomes cram2/cognitive_robot_abstract_machine;
+    items whose pull requests are on the fork set repository to it. A new tracking issue on the team repository
+    replaces fork #525, which gets a pointer comment.'
 - id: item-issues
-  title: Every plan item has an issue, a sub-issue of its plan's tracking issue, kept in step
-    by an Action
+  title: Every plan item has an issue, a sub-issue of its plan's tracking issue, kept in step by an Action
   branch: null
-  status: not_started
+  status: deferred
   track: github
   depends_on:
   - team-repo-setup
-  notes: 'A sync command run by the team repository''s Action on every plan push: finds each
-    item''s issue by a marker (nothing written back to plan.yaml), creates missing ones as
-    sub-issues of the tracking issue with plan, wave and track labels, sets blocked-by from
-    depends_on, and closes the issue when the item is done. The issue assignee is the item''s
-    responsible person, the one source; the site shows it. GITHUB_TOKEN suffices, everything
-    is in one repository.'
+  notes: 'Superseded by basstler-v3 plan-store-issues: items are sub-issues there, the source rather than
+    a sync of plan.yaml. Was: A sync command run by the team repository''s Action on every plan push:
+    finds each item''s issue by a marker (nothing written back to plan.yaml), creates missing ones as
+    sub-issues of the tracking issue with plan, wave and track labels, sets blocked-by from depends_on,
+    and closes the issue when the item is done. The issue assignee is the item''s responsible person,
+    the one source; the site shows it. GITHUB_TOKEN suffices, everything is in one repository.'
 - id: project-board
   title: A Project board for the team, driven by GitHub's built-in automations
   branch: null
   status: not_started
   track: github
   depends_on:
-  - item-issues
-  notes: 'One-time manual setup documented in docs/team.md: an organisation Project, auto-add
-    by label, auto-add sub-issues, item closed and pull request merged move to Done, grouped
-    by parent issue (the plan), views by status, by assignee and my items. No API code: an
-    Action''s GITHUB_TOKEN cannot write Projects v2. Board drags do not change plan.yaml.'
+  - basstler-v3/plan-store-issues
+  notes: 'One-time manual setup documented in docs/team.md: an organisation Project, auto-add by label,
+    auto-add sub-issues, item closed and pull request merged move to Done, grouped by parent issue (the
+    plan), views by status, by assignee and my items. No API code: an Action''s GITHUB_TOKEN cannot write
+    Projects v2. Board drags do not change plan.yaml.'
 - id: pr-issue-link
   title: Kickoff links an item's pull requests to its issue
   branch: null
-  status: not_started
+  status: deferred
   track: github
   depends_on:
   - item-issues
-  notes: The draft pull request body says Part of <team>#N; promotion upstream writes Closes
-    <team>#N, so the upstream merge closes the issue and the board moves the card.
+  notes: 'Superseded by basstler-v3 plan-store-issues (a pull request closes its item) and upstream-promotion
+    (the upstream body closes it). Was: The draft pull request body says Part of <team>#N; promotion upstream
+    writes Closes <team>#N, so the upstream merge closes the issue and the board moves the card.'
 - id: malloche
   title: /malloche picks the next ready item, claims it, and starts it
   branch: null
   status: not_started
   track: picker
   depends_on:
-  - item-issues
+  - basstler-v3/plan-store-issues
   - lean-kickoff
-  notes: 'A python -m command ranks: the caller''s own in-progress items first (resume), then
-    unassigned not-started items whose every dependency is merged or an open pull request
-    ready for review (a draft dependency disqualifies), in wave order, skipping items with
-    blockers. When nothing is ready because dependencies are drafts, it says so and suggests
-    reviewing those draft pull requests instead, ranked by how many items each would unblock.
-    Claims by assigning the issue and re-reading it, backing off if someone else holds it;
-    then runs /plan-item-kickoff.'
+  notes: 'Ranks with work-recommender/ranked-work-list''s policy: one ranking, not two. A python -m command
+    ranks: the caller''s own in-progress items first (resume), then unassigned not-started items whose
+    every dependency is merged or an open pull request ready for review (a draft dependency disqualifies),
+    in wave order, skipping items with blockers. When nothing is ready because dependencies are drafts,
+    it says so and suggests reviewing those draft pull requests instead, ranked by how many items each
+    would unblock. Claims by assigning the issue and re-reading it, backing off if someone else holds
+    it;'
