@@ -2,10 +2,10 @@ Plan
 - Retire the dashboard: the plan site is the only plan view (PR 115, draft, release:major).
 
 Done
-- Site links replace republishing; URL cache, record_url, index page removed.
-- basstler.dashboard folded into plan_site; /plan-dashboard renamed /plan-sync.
-- Cards show started/reviewed shares; walkthrough screenshots retaken.
+- basstler.dashboard and /plan-sync removed; a merged item shows as done on the page.
+- plan_page split (chip_tone, item_classifier, plan_overview); rendering tests split by behaviour.
+- 13 review threads answered; 12 resolved.
 
 Next
-- Owner: remove or port the unused is_bug_fix and StackedItem indent levels?
+- Open thread: re-check merges in the browser between builds, on top of PR 116 once it lands.
 - After merge, with confirmation each time: delete the 19 cached Artifacts, then the cache.
