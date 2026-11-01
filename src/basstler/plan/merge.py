@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from functools import cached_property
 from pathlib import Path
 from typing import Any
@@ -25,7 +25,7 @@ from basstler.plan.model import ManifestKey, PlanDocument
 # %% one plan's documents at one point in time
 
 
-class Absence(Enum):
+class Absence(StrEnum):
     """
     What a plan version holds in place of a part it does not have.
     """
@@ -285,7 +285,7 @@ class RoadmapPart(PlanPart):
 # %% merging
 
 
-class PartResolution(Enum):
+class PartResolution(StrEnum):
     """
     Which writer's value of one part the merged plan carries.
     """
@@ -415,7 +415,7 @@ class PlanMerge:
         """
         parts: dict[PlanPart, None] = {}
         for version in (self.latest, self.session, self.read):
-            for kind in (ManifestFieldPart, ItemPart, RoadmapPart):
+            for kind in PlanPart.__subclasses__():
                 parts.update(dict.fromkeys(kind.parts_of(version)))
         return list(parts)
 
