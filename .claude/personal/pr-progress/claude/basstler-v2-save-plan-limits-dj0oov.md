@@ -1,12 +1,12 @@
 PR #102 - save-plan-scoped-limits
 
 Plan
-- Failing test: stage a plan whose stored copy has an over-limit item, editing another item.
 - Plan measured against the stored manifest; unchanged items' violations become warnings.
 - Plan-level limits stay refusals.
 
 Done
-- Branch, draft PR, manifest state.
+- Failing tests, implementation, black; pushed.
+- Full suite: 58 failures, all from subprocess tests lacking yaml/jinja2/rustworkx (environment).
 
 Next
-- Tests, implementation, black/docformatter.
+- Run docformatter via the pre-commit hook; owner review.
