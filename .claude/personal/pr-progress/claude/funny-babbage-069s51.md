@@ -1,9 +1,9 @@
 ## Plan
-- Failing test: default ActionRead raises ActionRunNotStarted after 20 s when no run appears.
-- Lower ActionRead.start_allowance default from 60 to 20.
+- Lower ActionRead.start_allowance default from 60 to 20, test first.
 
 ## Done
-- Branch and draft PR #103 opened.
+- Draft PR #103 opened, `bug` label set.
+- Failing test (fake clock, waited == 20), then the one-line fix; pushed.
 
 ## Next
-- Write the failing test, then the fix; run the upstream_reviews tests.
+- Nothing; awaiting review. 4 tests in tests/maintenance/test_command_line.py fail in this sandbox on main too (subprocess lacks deps).
