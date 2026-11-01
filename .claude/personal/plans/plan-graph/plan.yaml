@@ -1,12 +1,12 @@
 schema_version: 1
 id: plan-graph
 title: 'Plan graph: dependencies and design overlap, caught before they collide'
-description: 'Plans and branches collide in two ways nothing catches early: an item depends
-  on work in another plan or repository, and two items build the same thing under different
-  names. This gives plans, items and their definitions one typed, schema-versioned graph that
-  sessions query in slices and edit through commands; fills it with claims declared before
-  a branch exists and definitions derived once one does; reports every collision as a typed
-  finding with enumerated resolutions; and draws the graph on the dashboard. Absorbs design-overlap.'
+description: 'Plans and branches collide in two ways nothing catches early: an item depends on work in
+  another plan or repository, and two items build the same thing under different names. This gives plans,
+  items and their definitions one typed, schema-versioned graph that sessions query in slices and edit
+  through commands; fills it with claims declared before a branch exists and definitions derived once
+  one does; reports every collision as a typed finding with enumerated resolutions; and draws the graph
+  on the dashboard. Absorbs design-overlap.'
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 35
 waves:
@@ -18,8 +18,7 @@ waves:
   description: Claims before a branch exists, the ast catalogue once it does, and the comparison.
 - id: acting
   name: Doing something about a collision, and seeing it
-  description: Typed findings, the scripted resolutions and the skill that chooses one, the
-    graphs.
+  description: Typed findings, the scripted resolutions and the skill that chooses one, the graphs.
 tracks:
 - id: model
   name: The graph model and its validation
@@ -43,26 +42,26 @@ items:
   pull_request_number: null
   track: model
   depends_on: []
-  status: not started
-  notes: '`src/basstler/plan_graph.py`. Dataclass nodes (Plan, Item, and a Package > Module
-    > Class > Function hierarchy keyed by dotted path) and edges (DependsOn, Introduces, Modifies,
-    Overlaps, Acknowledged), schema-versioned, assembled in memory, never written as one file.
-    A code node exists once a plan mentions it, planned or already on main. `plan_graph query`
-    answers which items introduce or modify a package, module, class or function, rolled up
-    the hierarchy, to a depth; `--doc` returns its documentation. Takes over #17''s DependencyGraph
-    rather than building a second.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). `src/basstler/plan_graph.py`. Dataclass
+    nodes (Plan, Item, and a Package > Module > Class > Function hierarchy keyed by dotted path) and edges
+    (DependsOn, Introduces, Modifies, Overlaps, Acknowledged), schema-versioned, assembled in memory,
+    never written as one file. A code node exists once a plan mentions it, planned or already on main.
+    `plan_graph query` answers which items introduce or modify a package, module, class or function, rolled
+    up the hierarchy, to a depth; `--doc` returns its documentation. Takes over #17''s DependencyGraph
+    rath'
 - id: landed-record
   title: Record landed items when they are pruned, so a reference to one resolves as satisfied
   branch: null
   pull_request_number: null
   track: model
   depends_on: []
-  status: not started
-  notes: '#11''s pruning drops a landed item and every edge to it inside its own plan, but
-    a reference from another plan then reads as a typo. Pruning appends plan, item, repository
-    and pull request to a generated `_generated/landed-items.tsv`, and a reference resolves
-    three ways: live item, landed (satisfied), or neither (refused). Generated, never hand-edited,
-    like branch-index.tsv.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). #11''s pruning drops a landed item and
+    every edge to it inside its own plan, but a reference from another plan then reads as a typo. Pruning
+    appends plan, item, repository and pull request to a generated `_generated/landed-items.tsv`, and
+    a reference resolves three ways: live item, landed (satisfied), or neither (refused). Generated, never
+    hand-edited, like branch-index.tsv.'
 - id: save-time-validation
   title: Refuse a save that breaks the graph across plans, not only at dashboard time
   branch: null
@@ -71,12 +70,12 @@ items:
   depends_on:
   - graph-model
   - landed-record
-  status: not started
-  notes: '#67 validates a saved manifest''s own references and cross-plan cycles against the
-    notes branch. Left: refuse a save that leaves another plan''s reference unresolved (an
-    item removed, moved or pruned that another plan names), naming each; a blocker naming
-    another item uses a structured blocked_by (plan/item or PR) instead of prose, and any
-    plan/item written in notes or blockers must resolve too.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). #67 validates a saved manifest''s own
+    references and cross-plan cycles against the notes branch. Left: refuse a save that leaves another
+    plan''s reference unresolved (an item removed, moved or pruned that another plan names), naming each;
+    a blocker naming another item uses a structured blocked_by (plan/item or PR) instead of prose, and
+    any plan/item written in notes or blockers must resolve too.'
 - id: cross-repository-references
   title: Let depends_on name an item in another repository's plans, through the hub
   branch: null
@@ -85,11 +84,11 @@ items:
   depends_on:
   - landed-record
   - save-time-validation
-  status: not started
-  notes: 'Form `owner/repo:plan-id/item-id`, resolved by fetching that repository''s notes
-    branch (plan_hub.NotesBranch, the hub''s repository list). Its own item because its failure
-    modes are its own: a notes branch that cannot be fetched marks the reference unverified,
-    never refused and never satisfied; each repository keeps its own landed record; cycle
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). Form `owner/repo:plan-id/item-id`, resolved
+    by fetching that repository''s notes branch (plan_hub.NotesBranch, the hub''s repository list). Its
+    own item because its failure modes are its own: a notes branch that cannot be fetched marks the reference
+    unverified, never refused and never satisfied; each repository keeps its own landed record; cycle
     search spans every hub repository.'
 - id: declared-claims
   title: Let an item declare what it will introduce and modify before its branch exists
@@ -98,13 +97,13 @@ items:
   track: detection
   depends_on:
   - graph-model
-  status: not started
-  notes: '`plans/<plan-id>/design.yaml`, one per plan so plans never contend for one file:
-    per item, introduces and modifies, each a package, module, class or function by dotted
-    path with a one-line intent, plus paths. Written only through `plan_graph claim add|update|remove`,
-    bounded like the manifest. A claim on something already on main resolves against main''s
-    code and carries its docstring; one on something planned carries its intent as its doc
-    until built. Declared, then superseded once the branch has commits.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). `plans/<plan-id>/design.yaml`, one per
+    plan so plans never contend for one file: per item, introduces and modifies, each a package, module,
+    class or function by dotted path with a one-line intent, plus paths. Written only through `plan_graph
+    claim add|update|remove`, bounded like the manifest. A claim on something already on main resolves
+    against main''s code and carries its docstring; one on something planned carries its intent as its
+    doc until built. Declared, then superseded once the branch has commits.'
 - id: definition-catalogue
   title: Record what each unlanded branch defines, derived rather than written
   branch: null
@@ -112,12 +111,12 @@ items:
   track: detection
   depends_on:
   - graph-model
-  status: not started
-  notes: '`src/basstler/definitions.py`. Per branch against its merge base with `main`, and
-    on main for every symbol a plan names: `ast` records packages (their `__init__` docstring),
-    modules, classes, functions and methods as `Definition`s - dotted path, kind, file, bases,
-    signature, full docstring, added or modified. Non-Python files by path and first heading:
-    the #110/#106 collision was two sessions building the same markdown under two names. From
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). `src/basstler/definitions.py`. Per branch
+    against its merge base with `main`, and on main for every symbol a plan names: `ast` records packages
+    (their `__init__` docstring), modules, classes, functions and methods as `Definition`s - dotted path,
+    kind, file, bases, signature, full docstring, added or modified. Non-Python files by path and first
+    heading: the #110/#106 collision was two sessions building the same markdown under two names. From
     design-overlap.'
 - id: overlap-detector
   title: Report the items that define the same thing, declared or derived, under any name
@@ -127,12 +126,12 @@ items:
   depends_on:
   - definition-catalogue
   - declared-claims
-  status: not started
-  notes: '`src/basstler/overlaps.py`. Compares every unlanded item''s definitions pairwise,
-    declared and derived alike, skipping pairs already in an ancestor relationship. Signals,
-    strongest first: same name in different files; same path added by both; normalized name
-    similarity; intent and docstring token overlap, which catches a rename. Deterministic,
-    no model call, ranked pairs and no verdict. From design-overlap, widened to declared claims.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). `src/basstler/overlaps.py`. Compares every
+    unlanded item''s definitions pairwise, declared and derived alike, skipping pairs already in an ancestor
+    relationship. Signals, strongest first: same name in different files; same path added by both; normalized
+    name similarity; intent and docstring token overlap, which catches a rename. Deterministic, no model
+    call, ranked pairs and no verdict. From design-overlap, widened to declared claims.'
 - id: claim-drift
   title: Report where a branch's derived definitions differ from what its item declared
   branch: null
@@ -141,11 +140,11 @@ items:
   depends_on:
   - overlap-detector
   - findings-and-resolutions
-  status: not started
-  notes: 'At kickoff, resolve and every save of an item with a branch, compare its declared
-    claims with the catalogue''s derived definitions: a definition built but not claimed,
-    or claimed but not built, is a ClaimDrift finding. This is what keeps declared claims
-    honest instead of prose that goes stale.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). At kickoff, resolve and every save of
+    an item with a branch, compare its declared claims with the catalogue''s derived definitions: a definition
+    built but not claimed, or claimed but not built, is a ClaimDrift finding. This is what keeps declared
+    claims honest instead of prose that goes stale.'
 - id: findings-and-resolutions
   title: Report every collision as a typed finding with enumerated resolutions a script applies
   branch: null
@@ -154,12 +153,12 @@ items:
   depends_on:
   - overlap-detector
   - save-time-validation
-  status: not started
-  notes: Finding types (DuplicateIntroduction, SharedModification, SimilarIntent, ClaimDrift,
-    UnresolvedReference, CrossPlanCycle), each with a severity and a closed list of Resolutions
-    (FOLD_INTO, EXTRACT_COMMON_PARENT, ADD_DEPENDENCY, RENAME, ACKNOWLEDGE). `plan_graph resolve
-    <finding> --resolution ...` applies one; ACKNOWLEDGE stores a rationale so it never re-fires.
-    Commands that find one exit with a dedicated ExitCode and print the findings as JSON.
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). Finding types (DuplicateIntroduction,
+    SharedModification, SimilarIntent, ClaimDrift, UnresolvedReference, CrossPlanCycle), each with a severity
+    and a closed list of Resolutions (FOLD_INTO, EXTRACT_COMMON_PARENT, ADD_DEPENDENCY, RENAME, ACKNOWLEDGE).
+    `plan_graph resolve <finding> --resolution ...` applies one; ACKNOWLEDGE stores a rationale so it
+    never re-fires. Commands that find one exit with a dedicated ExitCode and print the findings as JSON.'
 - id: resolve-finding-skill
   title: A /resolve-finding skill, started by a hook whenever a command reports a finding
   branch: null
@@ -168,12 +167,12 @@ items:
   depends_on:
   - findings-and-resolutions
   - common-parent
-  status: not started
-  notes: 'The skill only judges: it reads a finding''s evidence, picks one of its enumerated
-    resolutions and runs `plan_graph resolve`; the script does the work. A PostToolUse hook
-    on save-plan, kickoff and add-plan-item, and session start for open findings, add "run
-    /resolve-finding <id>" to the session''s context. Absorbs design-overlap/skill-wiring:
-    kickoff''s early query.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). The skill only judges: it reads a finding''s
+    evidence, picks one of its enumerated resolutions and runs `plan_graph resolve`; the script does the
+    work. A PostToolUse hook on save-plan, kickoff and add-plan-item, and session start for open findings,
+    add "run /resolve-finding <id>" to the session''s context. Absorbs design-overlap/skill-wiring: kickoff''s
+    early query.'
 - id: common-parent
   title: Give a set of branches a new common parent, after costing the move
   branch: null
@@ -181,13 +180,12 @@ items:
   track: mitigation
   depends_on:
   - definition-catalogue
-  status: not started
-  notes: '`src/basstler/common_parent.py`, carrying out EXTRACT_COMMON_PARENT. Extracting
-    a shared parent and changing direction mid-plan are one operation in two phases. `probe`
-    runs `git merge-tree --write-tree` per branch against the proposed base, reusing the non-mutating
-    probe in `stack.py`, and reports how many branches move, which conflict, and which files.
-    It mutates nothing, so it is the cost report a direction change is decided against. From
-    design-overlap.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). `src/basstler/common_parent.py`, carrying
+    out EXTRACT_COMMON_PARENT. Extracting a shared parent and changing direction mid-plan are one operation
+    in two phases. `probe` runs `git merge-tree --write-tree` per branch against the proposed base, reusing
+    the non-mutating probe in `stack.py`, and reports how many branches move, which conflict, and which
+    files. It mutates nothing, so it is the cost report a direction change is decided against. From design-overlap.'
 - id: plan-graphs
   title: A clean, always-current graph view one click from the dashboard, drawn from the model
   branch: null
@@ -198,10 +196,10 @@ items:
   - overlap-detector
   - plan-dashboards/deferred-items-hidden-by-default
   - plan-dashboards/shared-pr-state-chips
-  status: not started
-  notes: 'A Graph tab in the dashboard masthead, and a graph link on each item card opening
-    it on that item; rebuilt every render from plan_graph''s query output, so never stale.
-    Cytoscape with ELK layered layout, pinned on cdnjs, in the dashboard''s light and dark
-    tokens. Low clutter by default: the focused item''s neighbourhood, other plans as one
-    node each, done hidden; click to expand. Marks where depends_on and the PR base disagree;
-    overlaps dashed; declared and derived definitions styled apart. No script: a plain list.'
+  status: deferred
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). A Graph tab in the dashboard masthead,
+    and a graph link on each item card opening it on that item; rebuilt every render from plan_graph''s
+    query output, so never stale. Cytoscape with ELK layered layout, pinned on cdnjs, in the dashboard''s
+    light and dark tokens. Low clutter by default: the focused item''s neighbourhood, other plans as one
+    node each, done hidden; click to expand. Marks where depends_on and the PR base disagree; overlaps
+    dashed; declared and derived definitions styled apart. No script: a plain list.'
