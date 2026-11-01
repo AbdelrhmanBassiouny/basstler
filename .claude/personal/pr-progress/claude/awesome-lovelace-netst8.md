@@ -1,14 +1,11 @@
 ## Plan
-- One `site.css` with light/dark tokens, phone width, written once to the site root and linked from every page
-- Site plan template: one column per wave, cards with status, PR, CI and assignee chips plus dependency hints
-- `PullRequestRecord` gains the head commit and assignees; CI read via `GitHubRepository.check_state` for open PRs only
-- Hub and repository pages as cards with progress
-- Build health: a banner naming skipped plans and unreadable repositories; an unreadable registry raises and fails the build
-- End-to-end CI test building the site from the test dataset
+- One `site.css`, wave-column plan page, live status/PR/CI/assignee chips, hub and index cards, build-health banner, failing build on an unreadable registry, end-to-end CI test (all in `basstler.plan_site`; Artifact dashboard untouched)
 
 ## Done
-- Kickoff: draft PR #106 opened, manifest recorded as in progress
+- Implemented and pushed in two commits; PR #106 description is current; draft, labelled `release:minor`
+- Full suite: 1763 passed; the 17 failures also fail on `main` here (hook tests needing `basstler` on the system `python3`)
+- Rendered in Chromium: light/dark, 1280/390 px, no horizontal scroll
 
 ## Next
-- Write failing tests for the stylesheet file and the health record, then implement
-- Keep the `PullRequestSource` edits small: lean-kickoff (#97) moves it to `pull_request_source.py`
+- Owner review of #106
+- Whichever of #106 and lean-kickoff (#97) lands second resolves the `PullRequestSource` move in `plan_site/__main__.py`
