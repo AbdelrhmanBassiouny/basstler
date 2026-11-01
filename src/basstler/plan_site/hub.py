@@ -234,8 +234,7 @@ class NotesBranch:
         :param path: A file's path relative to the branch's root.
         :return: The file's content, or ``None`` when the branch has no such file.
         """
-        shown = self.git.attempt("show", f"FETCH_HEAD:{path}")
-        return shown.output if shown.succeeded else None
+        return self.git.file_at("FETCH_HEAD", path)
 
     def check_out_plans(self) -> Path:
         """

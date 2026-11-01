@@ -34,11 +34,11 @@ from pathlib import Path
 
 from basstler.exit_codes import ExitCode
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
+from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.action.branch import (
     ActionInstallation,
-    RemoteBranch,
 )
 from basstler.upstream_reviews.action.read import (
     ActionRead,
@@ -171,7 +171,9 @@ def main(argv: list[str] | None = None) -> int:
             ActionRun(arguments.request, arguments.result).write_answer()
             return 0
         branch = RemoteBranch(
-            GitCommandRunner(arguments.project_root), arguments.remote
+            GitCommandRunner(arguments.project_root),
+            arguments.remote,
+            ActionBranch.NAME,
         )
         if arguments.command == ActionCommand.INSTALL:
             installation = ActionInstallation(arguments.branch_or_tag)
