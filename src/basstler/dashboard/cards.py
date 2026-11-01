@@ -15,6 +15,7 @@ from basstler.class_property import classproperty
 
 if TYPE_CHECKING:
     from basstler.dashboard.plan import Item, Track, Wave
+    from basstler.repository import PullRequestReference
     from basstler.plan.dependencies import (
         Dependency,
         ResolvedDependency,
@@ -23,6 +24,33 @@ if TYPE_CHECKING:
 
 
 # %% dependency chips
+
+
+class DraftRecheckAttribute(StrEnum):
+    """
+    The data attributes a plan page's script re-checks blocking draft pull requests by.
+    """
+
+    PULL_REQUEST = "data-draft-pull-request"
+    """
+    On a dependency chip: the REST API address of the draft pull request it waits on.
+    """
+
+    READY_TITLE = "data-ready-title"
+    """
+    On a dependency chip: its hover title once that pull request no longer blocks.
+    """
+
+    START_ACTION = "data-start-action"
+    """
+    On a hidden action button: the start action its item gets once no draft holds it
+    back.
+    """
+
+    FINISHED = "data-draft-recheck-finished"
+    """
+    On the page: every re-check has had its answer.
+    """
 
 
 @dataclass
@@ -42,6 +70,12 @@ class DependencyChip:
     """Where the dependency's own card is shown: an anchor on this page for an
     item of this plan, or that card on its own plan's dashboard - ``None`` when
     the entry resolves to nothing, or that dashboard has no known address."""
+
+    draft_pull_request: PullRequestReference | None = None
+    """
+    The open draft pull request that alone keeps the dependency from being ready, or
+    ``None`` when no draft does.
+    """
 
     @classproperty
     def tooltip_separator(cls) -> str:
@@ -73,6 +107,7 @@ class DependencyChip:
                 dependency=dependency,
                 tooltip=dependency.item.title,
                 card_url=f"#{dependency.item.anchor}",
+                draft_pull_request=dependency.draft_pull_request,
             )
         card_url = (
             f"{locate_plan_page(dependency.plan.id)}#{dependency.item.anchor}"
@@ -89,6 +124,7 @@ class DependencyChip:
                 ]
             ),
             card_url=card_url,
+            draft_pull_request=dependency.draft_pull_request,
         )
 
 

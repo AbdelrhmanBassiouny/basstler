@@ -15,7 +15,7 @@ from basstler.render_common import sanitize_http_url
 from basstler.repository import GitHubAddress
 
 if TYPE_CHECKING:
-    from basstler.dashboard.cards import DependencyChip, ItemAction
+    from basstler.dashboard.cards import DependencyChip, ItemAction, StartNowAction
 
 
 # %% waves and tracks
@@ -190,6 +190,12 @@ class Item:
     (nothing left to do) or a not-started item whose dependencies aren't
     all ready yet (starting now would build on unsafe state). Every other
     status always gets one: something is always actionable next."""
+
+    pending_start_action: StartNowAction | None = field(default=None, init=False)
+    """
+    The start action of a not-started item that only open draft dependencies hold back,
+    filled in by :meth:`DashboardRenderer.render` - ``None`` for any other item.
+    """
 
     is_bug_fix: bool = field(default=False, init=False)
     """

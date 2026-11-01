@@ -49,7 +49,8 @@
           <div class="notes">{{ item.notes }}</div>
         </details>
         {% endif %}
-        {{ action_button(item) }}
+        {{ action_button(item.action) }}
+        {{ action_button(item.pending_start_action, hidden=True) }}
       </article>
 {% endmacro %}
 
@@ -124,6 +125,8 @@
 {% block scripts %}
 <script>
 {% include script_template %}
+{% include draft_recheck_script_template %}
 planDashboardRevealLocationHash();
+planSiteRecheckDraftDependencies();
 </script>
 {% endblock %}

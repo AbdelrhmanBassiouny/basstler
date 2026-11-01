@@ -205,6 +205,14 @@ class SiteTemplate(PathEnumeration):
     One plan's page: a column per wave, a card per item.
     """
 
+    PLAN_DRAFT_RECHECK_SCRIPT = (
+        PackageLocation.TEMPLATES.value / "site_plan_draft_recheck.js"
+    )
+    """
+    The plan page's script that asks GitHub whether a blocking draft pull request is
+    now ready for review.
+    """
+
 
 class DashboardArtifactFile(PathEnumeration):
     """

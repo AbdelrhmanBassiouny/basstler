@@ -17,6 +17,7 @@ from basstler.dashboard.cards import DependencyChip
 from basstler.dashboard.plan import Item, Plan
 from basstler.plan.model import PlanDocument
 from basstler.pull_request_state import LiveState, PullRequestsByRepository
+from basstler.repository import PullRequestReference, Repository
 
 
 # %% references
@@ -209,6 +210,21 @@ class ResolvedDependency(Dependency):
         See :attr:`Dependency.live_state`.
         """
         return self.item.live_state
+
+    @property
+    def draft_pull_request(self) -> PullRequestReference | None:
+        """
+        The open draft pull request that alone keeps this dependency from unblocking its
+        dependents, or ``None`` when no draft does.
+        """
+        if (
+            self.item.live_state is not LiveState.OPEN_DRAFT
+            or self.item.is_effectively_done()
+        ):
+            return None
+        return PullRequestReference(
+            Repository.parse(self.repository), self.item.pull_request_number
+        )
 
     def is_ready_to_unblock_dependents(self) -> bool:
         """See :meth:`Dependency.is_ready_to_unblock_dependents` - the

@@ -70,6 +70,7 @@ black = true
 
 [dependency-groups]
 dev = [
+    "playwright",
     "pytest",
     "pytest-xdist",
     "ruff==0.17.3",

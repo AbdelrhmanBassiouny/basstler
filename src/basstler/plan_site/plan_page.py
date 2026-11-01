@@ -12,7 +12,8 @@ from basstler.class_property import classproperty
 from basstler.dashboard.plan_page import DashboardRenderer
 from basstler.locations import SiteTemplate
 from basstler.plan.model import ItemStatus
-from basstler.pull_request_state import LiveState
+from basstler.maintenance.board import PullRequestField
+from basstler.pull_request_state import LiveState, PullRequestState
 from basstler.upstream_reviews.vocabulary import RollupState
 
 # %% chip colours
@@ -113,6 +114,9 @@ class SitePlanPage(DashboardRenderer):
     """
     A plan's page on the site: one column per wave, each item a card with its status,
     pull request, CI, assignee and dependency chips, linking the site's one stylesheet.
+
+    In the browser, the page asks GitHub whether each blocking draft pull request is now
+    ready for review, and shows the items no draft holds back any longer as startable.
     """
 
     stylesheet_url: str
@@ -126,4 +130,10 @@ class SitePlanPage(DashboardRenderer):
 
     @property
     def page_context(self) -> dict[str, Any]:
-        return {"stylesheet_url": self.stylesheet_url, "chip_tone": ChipTone}
+        return {
+            "stylesheet_url": self.stylesheet_url,
+            "chip_tone": ChipTone,
+            "draft_recheck_script_template": SiteTemplate.PLAN_DRAFT_RECHECK_SCRIPT.name,
+            "pull_request_field": PullRequestField,
+            "pull_request_state": PullRequestState,
+        }

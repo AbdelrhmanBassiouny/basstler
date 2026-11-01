@@ -12,9 +12,11 @@ job does not install - is never loaded for it.
 from __future__ import annotations
 
 import os
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
+from playwright.sync_api import Browser, Page, sync_playwright
 
 # A session running the plugin exports BASSTLER_PLUGIN_ROOT as its synced copy, which
 # basstler.locations reads on import; pinned before anything imports it, so the suite
@@ -71,3 +73,25 @@ def fork_checkout(tmp_path: Path) -> ForkCheckout:
     :return: The checkout.
     """
     return ForkCheckout.create(tmp_path)
+
+
+@pytest.fixture(scope="session")
+def browser() -> Iterator[Browser]:
+    """
+    :return: A headless Chromium, shared by every test of the session.
+    """
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        yield browser
+        browser.close()
+
+
+@pytest.fixture
+def browser_page(browser: Browser) -> Iterator[Page]:
+    """
+    :param browser: The session's headless Chromium.
+    :return: A fresh page in it, closed after the test.
+    """
+    page = browser.new_page()
+    yield page
+    page.close()
