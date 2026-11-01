@@ -54,11 +54,12 @@ items:
       a skill's "${BASSTLER_PYTHON}" -m call works without the sourced file.
   - id: save-plan-scoped-limits
     title: "A plan save refuses only size violations in the items it changes"
-    branch: null
-    pull_request_number: null
+    branch: claude/basstler-v2-save-plan-limits-dj0oov
+    pull_request_number: 102
     track: fixes
+    session: https://claude.ai/code/session_018wfiv8z9viHS1EBqWxcwxv
     depends_on: []
-    status: not started
+    status: in progress
     notes: >
       An item already over a limit on the notes branch no longer blocks saving another item;
       it is reported as a warning instead.
