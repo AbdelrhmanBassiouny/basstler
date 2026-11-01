@@ -1,10 +1,8 @@
 ## Plan
-- Stack.scoped_to(branch): ancestors, branch, descendants
-- prepare / run-report take --stacked-on
-- skills pass the item branch
+- scoped maintenance (this PR)
 
 ## Done
-- branch and draft PR #100
+- Stack.scoped_to, --stacked-on on prepare and run-report, skill docs, tests (1761 pass)
 
 ## Next
-- failing tests for Stack.scoped_to
+- owner review; then the next basstler-v2-fixes item in its own PR
