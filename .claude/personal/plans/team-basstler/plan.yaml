@@ -200,6 +200,14 @@ items:
   title: "PlanManifest and PlanItem expose every manifest field as a typed read-only accessor; consumers stop indexing raw dicts"
   branch: null
   track: core
+  notes: >
+    From the review of PR 97: the pattern applies to every document read through raw keys, not only
+    default_repository and pull_request_number. This item covers plan.yaml (basstler.plan.model, its
+    consumers and test helpers). The plan is at its 15-item limit, so these follow-ups are not
+    tracked yet: upstream_reviews helper fetch typed models; TOML settings, pull request data and
+    URL cache through their models; a bug fix for item_bootstrap documents reading the item id with
+    the enum member instead of its key. The two reads in tests/plan/test_item_brief.py wait for PR
+    97 to land.
   depends_on: []
   status: in progress
 
