@@ -1,10 +1,10 @@
 ### Plan
-- #105 (draft, release:minor): plan-site publication command, setup row/step, RemoteBranch shared.
-- stack-board#8 (draft): plan-site.yml calling plan-site-build.yml@main.
+- #111 (draft, no label): base `basstler.branch.Branch` shared by RemoteBranch and the stack's branch (renamed StackBranch); from #105's review.
 
 ### Done
-- Review round 1 handled on both PRs (039d292, stack-board 5f4a95c); 1823 tests pass.
+- #105 merged; its Branch thread answered and resolved, pointing to #111.
+- #111 opened (66d39ef); 1864 tests pass.
 
 ### Next
-- Three #105 threads open, waiting on the owner: Branch inheritance, write() on the runner, run-listing type.
-- After release: run the publication command here; store PLAN_SITE_TOKEN; close stack-board#7.
+- Wait on the owner's review of #111.
+- From #105: two threads were left open (write() on the runner, run-listing type); run the publication command after release; store PLAN_SITE_TOKEN; close stack-board#7.
