@@ -1,5 +1,6 @@
 # session-notes-infrastructure — standing rules
 
+- After basstler-v3 (#99) lands, build every item here on v3, not v2: plans are tracking issues (not plan.yaml), pages render on the Pages plan site (not the Artifact dashboard), code runs through the basstler CLI (not bash hooks or python -m modules), and v3's roadmap rules apply. Read any v2 piece a rule names as its v3 replacement; rewrite an item's notes before starting it.
 - A clone whose owner wants neither plans nor personal notes must see none of this. That needed no new setting: everything added sits after the hook's existing early exit, and within the group that does use the branch, whether the generated branch index exists separates notes-but-no-plans from plans-in-use.
 - Report ambiguity rather than collapsing it. "plan: none" reads as "no plan applies here" when it can equally mean "the plan you were told about has no item for this branch yet". There are five distinct plan-line outcomes now, including an index entry whose manifest has gone missing.
 - Write only when nothing is there. The git identity is written when no repository-local one exists: a fresh clone has none and someone who set one deliberately keeps it, which is precise where blocklisting known assistant identities would be brittle.
