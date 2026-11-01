@@ -55,12 +55,22 @@ items:
   pull_request_number: 105
   session: https://claude.ai/code/session_018wfiv82HPZmBYgkZEvxaeX
   depends_on: []
-  notes: 'Today the plan pages 404: stack-board''s only workflow is the legacy board.yml. Setup creates
-    <user>/plans with a caller of plan-site-build.yml, registers each project in its hub, and commits
-    a dispatch workflow to each notes branch that starts the build on every push using the user''s fine-grained
-    PAT secret. Steps it cannot do (Pages on, the PAT) are one copyable line each, then re-checked. Between
-    builds, kickoff checks dependencies live and the page re-checks blocking PRs'' draft state from the
-    browser. Tested on recorded responses.'
+  notes: 'basstler.plan_site.publication writes the site repository''s caller of plan-site-build.yml,
+    registers the notes repository in the registry''s hub, and commits a dispatch workflow to the notes
+    branch that starts the build on every push with the PLAN_SITE_TOKEN secret; repository creation, Pages
+    and the token are one copyable line each, re-checked from run listings. check-setup gains a plan_site
+    row and /setup-personal-notes step 8 runs it. The owner''s site is stack-board (stack-board#8 replaces
+    board.yml and supersedes #7). The browser re-check of draft state moved to page-draft-recheck.'
+- id: page-draft-recheck
+  title: The plan page re-checks blocking pull requests' draft state from the browser between builds
+  branch: null
+  status: not_started
+  track: site
+  depends_on:
+  - site-for-every-repository
+  notes: 'Split from site-for-every-repository. Between builds, the page asks GitHub''s REST API whether
+    a dependency''s draft pull request is now ready for review, and shows the dependent as startable. Needs
+    an owner-approved browser test dependency (e.g. Playwright) to test the page''s JavaScript.'
 - id: artifact-path-retirement
   title: Point every plan skill at the site instead of republishing a dashboard Artifact
   branch: null
