@@ -112,7 +112,7 @@ def test_a_branch_whose_head_is_on_the_fork_is_not_skipped():
 
 
 @pytest.mark.parametrize(
-    "head_repository, reason",
+    ("head_repository", "reason"),
     [
         (
             StackRepository.SOMEBODY_ELSES_FORK.value.full_name,

@@ -26,7 +26,7 @@ class DataclassException(Exception, ABC):
     at the end.
     """
 
-    def __post_init__(self):
+    def __post_init__(self) -> None:
         # BaseException.__new__ bypasses the usual ABC instantiation check, so enforce it here.
         if getattr(type(self), "__abstractmethods__", None):
             raise TypeError(

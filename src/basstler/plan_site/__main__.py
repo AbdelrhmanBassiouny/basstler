@@ -29,7 +29,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Generic, TypeVar
+from typing import Any
 
 import yaml
 
@@ -175,12 +175,6 @@ class PlanSource:
 
 # %% the site
 
-SectionCard = TypeVar("SectionCard", bound=ProgressCard)
-"""
-The card a site section is summed up by: a repository's on the hub, or the whole
-site's.
-"""
-
 
 @dataclass
 class PublishedPlan:
@@ -200,10 +194,10 @@ class PublishedPlan:
 
 
 @dataclass
-class SiteSection(ABC, Generic[SectionCard]):
+class SiteSection[SectionCard: ProgressCard](ABC):
     """
     One part of the site: the pages it writes under the site's root, and the card that
-    stands for it on the page above.
+    stands for it on the page above: a repository's on the hub, or the whole site's.
     """
 
     site_url: str

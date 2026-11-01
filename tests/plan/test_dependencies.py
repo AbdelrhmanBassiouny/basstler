@@ -3,6 +3,8 @@ Tests for :mod:`basstler.plan.dependencies`: parsing a ``depends_on`` entry and
 resolving it through a plans directory.
 """
 
+from __future__ import annotations
+
 import pytest
 
 from basstler.plan.dependencies import (

@@ -9,6 +9,8 @@ here, so the repository-root test/conftest.py - which imports the robotics stack
 job does not install - is never loaded for it.
 """
 
+from __future__ import annotations
+
 import os
 from pathlib import Path
 

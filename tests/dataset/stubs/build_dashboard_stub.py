@@ -6,6 +6,8 @@ passed it, e.g. whether --tracking-url was forwarded) and prints a minimal summa
 content digest included.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from pathlib import Path

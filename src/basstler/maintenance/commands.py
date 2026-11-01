@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from abc import ABC, abstractmethod
+from abc import abstractmethod
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -218,7 +218,7 @@ class BoardCommand(MaintenanceCommand):
         return StackExitCode.SUCCESS
 
 
-class StackScopeArgument(ABC):
+class StackScopeArgument:
     """
     Declares the ``--stacked-on`` argument of a command that passes over every branch,
     or only over one branch's stack.

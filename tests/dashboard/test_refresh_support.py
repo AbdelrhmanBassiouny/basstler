@@ -3,6 +3,8 @@ Tests for dashboard/refresh_support.py: the JSON-plumbing helpers refresh_dashbo
 calls between plan/sync_manifest_status.py and dashboard/plan_page.py.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 

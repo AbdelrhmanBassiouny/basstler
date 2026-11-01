@@ -27,9 +27,6 @@ from basstler.upstream_reviews.exceptions import (
 from basstler.upstream_reviews.failure_logs import FailureLogReader
 from basstler.upstream_reviews.readers import PullRequestSource
 from basstler.upstream_reviews.report import UpstreamPullRequestReport
-from basstler.upstream_reviews.vocabulary import (
-    JSONModel,
-)
 
 # %% the request
 

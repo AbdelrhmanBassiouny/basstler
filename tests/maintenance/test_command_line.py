@@ -16,7 +16,6 @@ from basstler.maintenance.upstream_action import UpstreamReadRoute
 
 from basstler.exit_codes import StackExitCode
 
-from basstler.class_property import classproperty
 from basstler.maintenance.commands import (
     BoardCommand,
     MaintenanceCommand,
@@ -181,7 +180,7 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
 
 
 @pytest.mark.parametrize(
-    "list_state, states",
+    ("list_state", "states"),
     [
         (PullRequestListState.OPEN, (PullRequestState.OPEN,)),
         (PullRequestListState.CLOSED, (PullRequestState.CLOSED,)),

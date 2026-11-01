@@ -4,7 +4,8 @@ A property that answers on the class rather than on an instance.
 
 from __future__ import annotations
 
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 
 class classproperty:

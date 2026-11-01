@@ -340,7 +340,8 @@ def test_the_shipped_source_is_code_alone_and_runs_without_basstler():
     )
 
     assert '"""' not in source
-    assert "import basstler" not in source and "from basstler" not in source
+    assert "import basstler" not in source
+    assert "from basstler" not in source
     compile(source, "<helper>", "exec")
 
 

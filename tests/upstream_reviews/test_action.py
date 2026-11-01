@@ -172,7 +172,7 @@ def committed(result: ActionResult) -> ActionResult:
 
 
 @pytest.mark.parametrize(
-    "read, by_branch",
+    ("read", "by_branch"),
     [
         (request(), False),
         (request(pull_request=None, branch=Example.BRANCH), True),

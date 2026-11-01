@@ -246,7 +246,7 @@ def test_comparing_against_a_reference_git_cannot_resolve_names_that_reference(
 
 
 @pytest.mark.parametrize(
-    "head_repository, reason",
+    ("head_repository", "reason"),
     [
         (
             PullRequestHeadRepository.ANOTHER_CONTRIBUTORS_FORK.value,

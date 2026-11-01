@@ -286,7 +286,7 @@ def test_any_change_is_released_as_the_next_patch(released_checkout, changed_fil
 
 
 @pytest.mark.parametrize(
-    "labels, expected",
+    ("labels", "expected"),
     [
         ((VersionPart.MINOR.label,), ReleaseSampleVersion.NEXT_MINOR),
         ((VersionPart.MAJOR.label,), ReleaseSampleVersion.NEXT_MAJOR),
@@ -541,7 +541,7 @@ def test_the_release_step_does_nothing_when_nothing_changed(
 
 
 @pytest.mark.parametrize(
-    "part, expected",
+    ("part", "expected"),
     [
         (VersionPart.PATCH, ReleaseSampleVersion.NEXT_PATCH),
         (VersionPart.MINOR, ReleaseSampleVersion.NEXT_MINOR),
