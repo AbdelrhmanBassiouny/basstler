@@ -320,6 +320,15 @@ class CommitChecks(ABC):
         :return: The verdict over every check run and commit status reported on it."""
 
 
+class UpstreamPullRequestsKey(StrEnum):
+    """
+    The keys :class:`UpstreamPullRequests` is written to JSON under.
+    """
+
+    FORK = "fork"
+    PULL_REQUEST_BY_BRANCH = "pull_request_by_branch"
+
+
 @dataclass(frozen=True)
 class UpstreamPullRequests:
     """
@@ -343,6 +352,26 @@ class UpstreamPullRequests:
         if head.repository != self.fork.full_name:
             return None
         return self.pull_request_by_branch.get(head.branch)
+
+    @classmethod
+    def from_json(cls, data: Mapping[str, Any]) -> UpstreamPullRequests:
+        """
+        :param data: What :meth:`to_json` wrote.
+        :return: The pull requests it holds.
+        """
+        return cls(
+            Repository.parse(data[UpstreamPullRequestsKey.FORK]),
+            dict(data[UpstreamPullRequestsKey.PULL_REQUEST_BY_BRANCH]),
+        )
+
+    def to_json(self) -> dict[str, Any]:
+        """:return: The fork and each of its branches' upstream pull request."""
+        return {
+            UpstreamPullRequestsKey.FORK: self.fork.full_name,
+            UpstreamPullRequestsKey.PULL_REQUEST_BY_BRANCH: dict(
+                self.pull_request_by_branch
+            ),
+        }
 
     @classmethod
     def from_api_records(

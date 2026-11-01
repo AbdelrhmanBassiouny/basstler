@@ -53,13 +53,27 @@ branch about to get its upstream link, each with its fork title, description, co
 largest changed files). A branch is listed once in its life: after this pass records its link, it
 is never listed again.
 
-The export reads the upstream's open pull requests through GitHub's API. In a Claude Code cloud
-session that read is refused (403) until the upstream is attached: call `add_repo` with its owner
-and name and `access: "push"`, the only level that lets the session's API calls reach a repository.
-The pass only reads the upstream and never pushes to it; skip the clone the result suggests, and
-re-run. If the attach is refused or blocked, stop and tell the user the pass needs the upstream's
-open pull requests and approving the attach unblocks it. Never run the rest of the pass without
-them: which branches are under upstream review decides how each one is restacked.
+Every command that exports the board (`prepare`, `run-report`, `checks`) reads the upstream's open
+pull requests too. In a Claude Code cloud session it reads them through the fork's upstream-reviews
+Action (up to a minute), so nothing needs attaching. If one exits `12` (`upstream-unreadable`),
+stderr says why:
+
+- *no `basstler/upstream-reviews` branch*: install it, then re-run:
+
+  ```bash
+  source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+  "${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
+  ```
+
+- *no run started*: Actions are off on the fork. Give the user the link stderr names, then read
+  directly instead: call `add_repo` with the upstream's owner and name and `access: "push"`, the
+  only level that lets the session's API calls reach a repository (the pass never pushes to the
+  upstream; skip the clone the result suggests), and re-run as
+  `basstler.sh maintenance --upstream-read direct <command>`. If the attach is refused or blocked,
+  stop and report both remedies.
+
+Never run the rest of the pass without the upstream's pull requests: which branches are under
+upstream review decides how each one is restacked.
 
 ### Reparents (only if any)
 

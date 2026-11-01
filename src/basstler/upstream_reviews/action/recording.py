@@ -10,6 +10,9 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.repository import Repository
+from basstler.upstream_reviews.action.exchange import (
+    ActionAnswer,
+)
 from basstler.upstream_reviews.clients import (
     GitHubCommandLineClient,
     GraphQLClient,
@@ -101,14 +104,9 @@ class RecordedGraphQLResponse(JSONModel):
 
 
 @dataclass(frozen=True)
-class ActionResult(JSONModel):
+class ActionResult(ActionAnswer):
     """
     Everything the run read for one request, or why it could not.
-    """
-
-    request_identifier: str
-    """
-    The request it answers.
     """
 
     error: str | None = None

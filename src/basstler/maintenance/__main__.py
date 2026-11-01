@@ -39,8 +39,10 @@ from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.commands import MaintenanceCommand, MaintenancePass
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.upstream_action import UpstreamReadRoute
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
+from basstler.upstream_reviews.exceptions import UpstreamReadError
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -53,6 +55,16 @@ def _argument_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="basstler.maintenance",
         description="Stacked-PR maintenance: perform the pass, report what happened.",
+    )
+    parser.add_argument(
+        "--upstream-read",
+        choices=list(UpstreamReadRoute),
+        default=UpstreamReadRoute.for_this_session(),
+        help=(
+            "read the upstream's open pull requests with this session's own "
+            "credential, or through the fork's upstream-reviews Action - the default "
+            "in a Claude Code cloud session, whose proxy refuses the upstream's API"
+        ),
     )
     subparsers = parser.add_subparsers(dest="command", required=True)
     for command in MaintenanceCommand.every_command():
@@ -98,11 +110,15 @@ def _dispatch() -> ExitCode:
             configuration=Configuration.load(),
             git=git,
             board=git.repository_state_path(RepositoryStateLocation.BOARD),
+            upstream_read=UpstreamReadRoute(arguments.upstream_read),
         )
         return requested.run(maintenance, arguments)
     except CommandFailure as error:
         logger.error(f"{error}")
         return error.exit_code
+    except UpstreamReadError as error:
+        logger.error(f"{error}")
+        return StackExitCode.UPSTREAM_UNREADABLE
 
 
 if __name__ == "__main__":

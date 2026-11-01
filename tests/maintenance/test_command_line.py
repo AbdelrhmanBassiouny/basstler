@@ -4,10 +4,15 @@ Tests for the maintenance executor's command line, whose exit status a caller ac
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 import pytest
+
+import basstler.maintenance.__main__
+from basstler.environment import GitHubCredentialVariable
+from basstler.maintenance.upstream_action import UpstreamReadRoute
 
 from basstler.exit_codes import StackExitCode
 
@@ -185,3 +190,28 @@ def test_a_single_state_list_filter_asks_for_that_state(
 ) -> None:
     (state,) = list_state.states
     assert list_state.query == state.value
+
+
+def test_a_board_whose_upstream_the_fork_s_action_cannot_read_is_its_own_exit_status(
+    fork_checkout: ForkCheckout, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    The fork has no upstream-reviews Action branch, so the read never starts; the fix
+    is installing or enabling the Action, not a token or a fetch.
+    """
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
+    fork_checkout.name_the_upstream()
+    monkeypatch.chdir(fork_checkout.project_root)
+    monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, "a-token")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            basstler.maintenance.__main__.__name__,
+            "--upstream-read",
+            UpstreamReadRoute.ACTION,
+            BoardCommand.invoked_as,
+        ],
+    )
+
+    assert basstler.maintenance.__main__.main() is StackExitCode.UPSTREAM_UNREADABLE
