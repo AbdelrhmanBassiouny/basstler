@@ -136,7 +136,6 @@ if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate "${MANIFES
   exit 1
 fi
 
-PLAN_DIRECTORY_PATH="$(plan_directory_path "${PLAN_ID}")"
 MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
 ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
 # Prints "saved" or "removed"; exits 1 naming each broken limit.
@@ -153,7 +152,7 @@ mkdir -p "$(dirname "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}")"
   --output "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}"
 
 git -C "${SCRATCH_DIR}" add --all -- \
-  "${PLAN_DIRECTORY_PATH}" \
+  "${PLANS_DIR}" \
   "${PLAN_BRANCH_INDEX_PATH}"
 
 if git -C "${SCRATCH_DIR}" diff --cached --quiet; then
