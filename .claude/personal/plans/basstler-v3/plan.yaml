@@ -81,12 +81,12 @@ items:
   track: plans
   depends_on:
   - plan-store-issues
+  - team-basstler/lean-kickoff
   status: not started
   notes: 'Item scope, dependency readiness, its pull request''s checks, unresolved threads, the mirrored
     upstream state and tracking-issue comments naming it, built by code so a skill never fetches or reads
-    reference docs to assemble context.
-
-    '
+    reference docs to assemble context. Builds on team-basstler/lean-kickoff (#97): reuse its brief command
+    and skill-size test, re-sourced from issues.'
 - id: plan-import
   title: Import every plan.yaml into issues, once
   branch: null
@@ -134,6 +134,7 @@ items:
   notes: The one stack operation unique to basstler. Claude writes only the summary; the command opens
     the upstream pull request link and records it on the fork pull request. Withholds a branch GitHub
     reports conflicted, not yet computed or failing checks; no needs-resolution label (from stack-maintenance/withhold-on-github-state).
+    The upstream pull request body closes the item's issue.
 - id: maintenance-action
   title: Whole-fork maintenance runs in an Action on every push to the default branch
   branch: null

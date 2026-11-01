@@ -10,3 +10,4 @@
 - Every skill has a claude plugin eval with a token and wall-time budget that CI enforces.
 - basstler is for anyone: nothing names the owner, a repository or a branch outside configuration.
 - A new dependency, including a development tool, needs the owner's approval first.
+- Every new workflow passes actions-budget's rules: no schedule, cancel superseded runs, job timeouts, skip on fork pushes.
