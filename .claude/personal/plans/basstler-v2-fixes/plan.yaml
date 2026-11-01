@@ -33,11 +33,12 @@ items:
       promoted or summarized.
   - id: reviews-action-fail-fast
     title: "The upstream-reviews Action read fails fast when no run started"
-    branch: null
-    pull_request_number: null
+    branch: claude/funny-babbage-069s51
+    pull_request_number: 103
     track: fixes
+    session: https://claude.ai/code/session_018wfiv9WbmQUB5KhXu7Dgjs
     depends_on: []
-    status: not started
+    status: in progress
     notes: >
       Before waiting the full timeout, confirm a workflow run picked up the request within
       about 20 s; otherwise exit with the reason (Actions off, workflow missing) and the link.
