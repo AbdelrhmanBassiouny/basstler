@@ -12,7 +12,7 @@ tracking_issue: 99
 waves:
   - id: foundation
     name: "Foundation"
-    description: "Quick v2 relief, the lighter rules, and the v3 entry point"
+    description: "The lighter rules and the v3 entry point"
   - id: core
     name: "Core replacements"
     description: "Plans, stacks and upstream reviews rebuilt on GitHub state"
@@ -38,18 +38,6 @@ tracks:
     wave: cutover
 
 items:
-  - id: v2-quick-wins
-    title: "Fix what the plan-item-resolve 537 session report hit, in v2"
-    branch: null
-    pull_request_number: null
-    track: foundation
-    depends_on: []
-    status: not started
-    notes: >
-      Patch release. Resolve runs maintenance only on the item's stack, without summaries of
-      unrelated pull requests; the Action read fails within about 20 s when no run started;
-      sync stamp files go to .git/info/exclude; BASSTLER_PYTHON resolves without sourcing the
-      config; save-plan validates only the items being saved; the dashboard accepts an item with no branch key.
   - id: code-rules-light
     title: "Lighter code rules, enforced by ruff and pydantic dataclasses"
     branch: null
