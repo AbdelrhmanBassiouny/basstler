@@ -1,13 +1,13 @@
 """
-Pre-commit entry point that formats Python files with black, then applies docformatter
-only where its output stays stable under a second black pass.
+Pre-commit entry point that formats Python files with ruff, then applies docformatter
+only where its output stays stable under a second ruff pass.
 
 docformatter can miscount the blank lines it leaves after an attribute docstring that
 immediately precedes a decorated top-level class or function definition (it forgets to
-special-case the decorator), so it sometimes undoes exactly what black then re-adds. Re-
+special-case the decorator), so it sometimes undoes exactly what ruff then re-adds. Re-
 running both tools forever would never converge for those files, so this script keeps
-the plain black-formatted content for a file whenever docformatter's result does not
-survive a subsequent black pass unchanged.
+the plain ruff-formatted content for a file whenever docformatter's result does not
+survive a subsequent ruff pass unchanged.
 """
 
 from __future__ import annotations
@@ -23,7 +23,7 @@ from tqdm import tqdm
 from collections.abc import Sequence
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
-DOCFORMATTER_CONFIG_PATH = REPOSITORY_ROOT / "pyproject.toml"
+CONFIGURATION_PATH = REPOSITORY_ROOT / "pyproject.toml"
 
 logger = logging.getLogger(__name__)
 
@@ -53,19 +53,27 @@ class FileFormattingOutcome:
     """
     Whether docformatter's changes were kept.
 
-    False means they were discarded because they conflicted with black.
+    False means they were discarded because they conflicted with ruff.
     """
 
 
-def _run_black(file_path: Path) -> bool:
+def _run_ruff_format(file_path: Path) -> bool:
     """
-    Format ``file_path`` with black, in place.
+    Format ``file_path`` with ``ruff format``, in place, under the repository's
+    configuration.
 
     :param file_path: The file to format.
-    :return: Whether black accepted and formatted the file.
+    :return: Whether ruff accepted and formatted the file.
     """
     result = subprocess.run(
-        ["black", "--quiet", str(file_path)],
+        [
+            "ruff",
+            "format",
+            "--quiet",
+            "--config",
+            str(CONFIGURATION_PATH),
+            str(file_path),
+        ],
         capture_output=True,
         text=True,
     )
@@ -84,7 +92,7 @@ def _run_docformatter(file_path: Path) -> bool:
             "docformatter",
             "--in-place",
             "--config",
-            str(DOCFORMATTER_CONFIG_PATH),
+            str(CONFIGURATION_PATH),
             str(file_path),
         ],
         capture_output=True,
@@ -96,8 +104,8 @@ def _run_docformatter(file_path: Path) -> bool:
 
 def _format_file(path: Path) -> FileFormattingOutcome:
     """
-    Format one file, falling back to a black-only result if docformatter conflicts with
-    black.
+    Format one file, falling back to a ruff-only result if docformatter conflicts with
+    ruff.
 
     :param path: The file to format.
     :return: The formatting outcome for ``path``.
@@ -108,26 +116,30 @@ def _format_file(path: Path) -> FileFormattingOutcome:
         scratch_path = Path(scratch_directory) / path.name
         scratch_path.write_text(original_content)
 
-        if not _run_black(scratch_path):
+        if not _run_ruff_format(scratch_path):
             return FileFormattingOutcome(
                 path, original_content, original_content, False
             )
-        black_only_content = scratch_path.read_text()
+        formatter_only_content = scratch_path.read_text()
 
         docformatter_succeeded = _run_docformatter(scratch_path)
         after_docformatter_content = (
             scratch_path.read_text() if docformatter_succeeded else None
         )
 
-        black_succeeded_again = docformatter_succeeded and _run_black(scratch_path)
+        formatter_succeeded_again = docformatter_succeeded and _run_ruff_format(
+            scratch_path
+        )
         reconverged_content = (
-            scratch_path.read_text() if black_succeeded_again else None
+            scratch_path.read_text() if formatter_succeeded_again else None
         )
 
     docstrings_are_stable = (
-        black_succeeded_again and reconverged_content == after_docformatter_content
+        formatter_succeeded_again and reconverged_content == after_docformatter_content
     )
-    final_content = reconverged_content if docstrings_are_stable else black_only_content
+    final_content = (
+        reconverged_content if docstrings_are_stable else formatter_only_content
+    )
 
     return FileFormattingOutcome(
         path=path,
@@ -157,8 +169,8 @@ def main(file_arguments: Sequence[str]) -> int:
 
         if not outcome.docstrings_reformatted:
             logger.info(
-                "%s: formatted with black; docformatter's changes conflicted with "
-                "black and were left as-is",
+                "%s: formatted with ruff; docformatter's changes conflicted with "
+                "ruff and were left as-is",
                 outcome.path,
             )
 

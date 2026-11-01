@@ -34,6 +34,9 @@ jobs:
       - name: Check the code rules
         run: ruff check .
 
+      - name: Check the formatting
+        run: ruff format --check .
+
   test:
     name: pytest on Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest

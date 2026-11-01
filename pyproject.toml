@@ -60,8 +60,8 @@ fallback-version = "0.0.0"
 [tool.hatch.build.targets.wheel]
 packages = ["src/basstler"]
 
-# Docstrings are formatted by docformatter on top of black - scripts/format_docstrings.py
-# runs both, keeping docformatter's change only where black leaves it alone.
+# Docstrings are formatted by docformatter on top of ruff format - scripts/format_docstrings.py
+# runs both, keeping docformatter's change only where ruff leaves it alone.
 [tool.docformatter]
 make-summary-multi-line = true
 pre-summary-newline = true
