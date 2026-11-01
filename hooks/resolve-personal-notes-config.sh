@@ -299,8 +299,8 @@ plan_roadmap_path() {
 
 # PLAN_BRANCH_INDEX_PATH: the generated reverse index mapping every plan
 # item's branch to the plan id that tracks it (see
-# skills/plan-dashboard/plan-schema.md for the
-# full plan-dashboard schema this feeds).
+# skills/plan-create/plan-schema.md for the
+# full plan.yaml schema this feeds).
 PLAN_BRANCH_INDEX_PATH="${PLANS_DIR}/_generated/branch-index.tsv"
 
 # PLAN_HUB_PATH: the hub file - the plan site's address, the registry
@@ -313,7 +313,7 @@ PLAN_HUB_PATH="${PLANS_DIR}/_hub.yaml"
 PLAN_SITE_DISPATCH_WORKFLOW_PATH=".github/workflows/plan-site-dispatch.yml"
 
 # *_MODULE: every Python entry point in this system - defined once, here, so
-# refresh_dashboard.sh, every SKILL.md and every workflow source this file and
+# sync_plan.sh, every SKILL.md and every workflow source this file and
 # use these variables instead of each carrying its own separately-typed literal.
 #
 # A *_MODULE is an import path rather than a file path, and is run as
@@ -333,11 +333,8 @@ if [ -f "${PLUGIN_ROOT}/../pyproject.toml" ] && [ -d "${PLUGIN_ROOT}/../src/bass
   # resolve to.
   export PYTHONPATH="${BASSTLER_CHECKOUT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 fi
-# basstler.dashboard.plan_page: renders one plan's dashboard HTML from its manifest
-# and live GitHub data - see the module's own docstring.
-BUILD_DASHBOARD_MODULE="basstler.dashboard.plan_page"
 # basstler.plan_site: renders the plan site - the hub, every registered repository's
-# index, and every plan's dashboard - from the repositories the hub file lists.
+# index, and every plan's page - from the repositories the hub file lists.
 BUILD_SITE_MODULE="basstler.plan_site"
 # basstler.plan_site.hub: registers a repository in the hub file, and prints the
 # address of a page on the plan site.
@@ -351,9 +348,9 @@ SYNC_MANIFEST_STATUS_MODULE="basstler.plan.sync_manifest_status"
 # basstler.plan.item_brief: prints one plan item's brief - the plan header, the item,
 # its dependencies' live readiness and the plan's standing rules.
 ITEM_BRIEF_MODULE="basstler.plan.item_brief"
-# basstler.dashboard.refresh_support: the JSON-plumbing helpers
-# refresh_dashboard.sh calls between its two module calls.
-REFRESH_DASHBOARD_SUPPORT_MODULE="basstler.dashboard.refresh_support"
+# basstler.plan.sync_summary: reads sync_manifest_status's printed summary for
+# sync_plan.sh.
+SYNC_SUMMARY_MODULE="basstler.plan.sync_summary"
 # basstler.plan.item_bootstrap: opens an item's branch and draft pull request and
 # records its manifest entry - invoked from plan-item-kickoff/SKILL.md and
 # add-plan-item/SKILL.md.
@@ -416,31 +413,29 @@ SETUP_PERSONAL_NOTES_MODULE="basstler.setup.personal_notes"
 PROJECT_STACK_CONFIGURATION_PATH=".claude/basstler/stack.toml"
 PERSONAL_STACK_CONFIGURATION_PATH=".claude/personal/stack.toml"
 
-# PLAN_DASHBOARD_DIRECTORY / REFRESH_DASHBOARD_SCRIPT: what the
-# plan-dashboard skill keeps outside the package - Claude Code discovers a
+# PLAN_SYNC_DIRECTORY / SYNC_PLAN_SCRIPT: what the
+# plan-sync skill keeps outside the package - Claude Code discovers a
 # skill and its reference documents by path, and the shell entry point sits
 # with the skill it belongs to. Every path from here on is absolute, under
 # PLUGIN_ROOT.
-PLAN_DASHBOARD_DIRECTORY="${PLUGIN_ROOT}/skills/plan-dashboard"
-# refresh_dashboard.sh: orchestrates basstler.plan.sync_manifest_status, the
-# conditional push of its correction, then basstler.dashboard.plan_page - the whole
-# refresh sequence /plan-dashboard runs for one plan.
-REFRESH_DASHBOARD_SCRIPT="${PLAN_DASHBOARD_DIRECTORY}/refresh_dashboard.sh"
+PLAN_SYNC_DIRECTORY="${PLUGIN_ROOT}/skills/plan-sync"
+# sync_plan.sh: runs basstler.plan.sync_manifest_status and pushes its correction
+# when it made one - the sequence /plan-sync runs for one plan.
+SYNC_PLAN_SCRIPT="${PLAN_SYNC_DIRECTORY}/sync_plan.sh"
 
 # plan-schema.md: the full plan.yaml field reference every plan-* skill
 # reads before drafting or interpreting a manifest. On main, next to the
 # tooling that enforces it, so every clone has it with no setup - unlike the
 # plan *data* it describes, which lives only on the personal-notes branch.
-PLAN_SCHEMA_DOCUMENT="${PLAN_DASHBOARD_DIRECTORY}/plan-schema.md"
+PLAN_SCHEMA_DOCUMENT="${PLUGIN_ROOT}/skills/plan-create/plan-schema.md"
 # MAINTENANCE_BLOCKER_OWNER: the name stack maintenance writes its own
 # blockers under, so it replaces and clears its own entries and never one a
 # person wrote. Named here once, since the writer and the clearer have to
 # agree on it exactly - see basstler.plan.item_bootstrap's block/unblock operations.
 MAINTENANCE_BLOCKER_OWNER="stacked-pr-maintenance"
 # write-personal-notes-file.sh: generic commit-and-push-one-file-to-the
-# personal-notes-branch helper, used by refresh_dashboard.sh (the manifest
-# auto-sync correction) and plan-dashboard/SKILL.md (the dashboard-URL
-# cache) alike.
+# personal-notes-branch helper, used by sync_plan.sh for the manifest's
+# auto-sync correction.
 WRITE_PERSONAL_NOTES_FILE_SCRIPT="${HOOKS_DIR}/write-personal-notes-file.sh"
 
 # SETUP_PERSONAL_NOTES_DIRECTORY / *_DOCUMENT / STARTER_NOTES_FILE /
@@ -456,7 +451,7 @@ SETUP_PERSONAL_NOTES_DIRECTORY="${PLUGIN_ROOT}/skills/setup-personal-notes"
 CHECK_SETUP_SCRIPT="${HOOKS_DIR}/check-setup.sh"
 # prerequisite-check.md: the shared "run check-setup.sh, run
 # /setup-personal-notes if it fails" procedure that plan-create,
-# plan-dashboard, plan-item-kickoff and plan-item-resolve each reference in
+# plan-sync, plan-item-kickoff and plan-item-resolve each reference in
 # one line rather than each spelling it out.
 SETUP_PREREQUISITE_DOCUMENT="${SETUP_PERSONAL_NOTES_DIRECTORY}/prerequisite-check.md"
 # starter-notes.md: the default content /setup-personal-notes offers to seed a
@@ -469,7 +464,7 @@ STARTER_NOTES_FILE="${SETUP_PERSONAL_NOTES_DIRECTORY}/starter-notes.md"
 # always run directly by a human, once, per hooks/README.md's own setup
 # instructions), save-plan.sh is invoked from plan-create/SKILL.md's own
 # bootstrap step, i.e. a real caller this codebase controls - the same
-# duplication risk, just for a hook script instead of a plan-dashboard one.
+# duplication risk, just for a hook script instead of a skill's own one.
 SAVE_PLAN_SCRIPT="${HOOKS_DIR}/save-plan.sh"
 
 # GITHUB_LIST_PULL_REQUESTS_TOOL / GITHUB_PULL_REQUEST_READ_TOOL: the two

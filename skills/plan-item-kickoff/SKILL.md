@@ -10,7 +10,7 @@ Plan-agnostic: never hardcode a plan id, item or branch. Step 1 creates nothing.
 
 ## 1. Gather
 
-Follow [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md). Then learn
+Follow [`plan-item-gathering.md`](../plan-item-kickoff/plan-item-gathering.md). Then learn
 the pattern this item follows from what landed: for the files it will touch, find the
 merged pull requests that last changed them (`git log <base> -- <paths>`) and read their
 diffs and descriptions (`mcp__github__pull_request_read`), including review-driven
@@ -18,7 +18,7 @@ decisions. If the item's branch already exists, build on what is on it.
 
 ## 2. Resolve the mode
 
-Follow [`execution-modes.md`](../plan-dashboard/execution-modes.md) with
+Follow [`execution-modes.md`](../plan-item-mode/execution-modes.md) with
 `--skill kickoff`, passing `--requested <mode>` only when the invocation named one.
 
 ## 3. Draft the plan
@@ -30,7 +30,7 @@ and how each part is verified (tests first). Cite each part's source (the item's
 a merged pull request, a standing rule) and flag any dependency not ready, any conflict
 between the notes and what landed, and anything still open.
 
-Read `plan-dashboard/plan-schema.md` only when the plan changes the plan's structure.
+Read `plan-create/plan-schema.md` only when the plan changes the plan's structure.
 
 In `plan` mode present it with `ExitPlanMode` and stop. In `auto` mode it is settled;
 the flags go into the pull request description. No git or code in this step.
@@ -64,7 +64,7 @@ Write the plan down:
 
 Then give the item's page on the plan site, `plan_site_page_url <plan-id> <item-id>`,
 which the record's push rebuilds. Later transitions follow
-[`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
+[`manifest-staleness.md`](../plan-sync/manifest-staleness.md).
 
 In `plan` mode the skill ends here.
 
@@ -73,6 +73,6 @@ In `plan` mode the skill ends here.
 Work the plan with tests first, committing in the user's own identity. Keep the pull
 request a draft and its description and progress note true to the work; record
 decisions as they are made, and stop to ask only past the bar in
-[`execution-modes.md`](../plan-dashboard/execution-modes.md). Work that needs more than
+[`execution-modes.md`](../plan-item-mode/execution-modes.md). Work that needs more than
 this pull request goes to the plan's tracking issue and the user. Finish by reporting
 what was built and decided.

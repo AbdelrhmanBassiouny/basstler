@@ -7,7 +7,7 @@ set -euo pipefail
 # plan's manifest/roadmap/branch-index trio) is exactly this shape: copy one
 # already-prepared local file to one destination path, commit, push, done.
 # Extracted so callers with that shape - currently
-# skills/plan-dashboard/refresh_dashboard.sh's manifest-correction
+# skills/plan-sync/sync_plan.sh's manifest-correction
 # push - don't each
 # re-embed the worktree dance as a bash snippet of their own.
 #

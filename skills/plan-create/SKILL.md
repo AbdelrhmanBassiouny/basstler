@@ -8,11 +8,11 @@ allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__githu
 
 Generic, plan-agnostic tooling — nothing in this file may hardcode a
 specific plan's id, branches, or PRs. This is the authoring half of the
-plan-dashboard system; `skills/plan-dashboard/SKILL.md` is the
-reading/publishing half. Read `skills/plan-dashboard/plan-schema.md`
+plan system; the plan site renders every plan, and `skills/plan-sync/SKILL.md`
+keeps a plan's statuses in step with GitHub. Read `skills/plan-create/plan-schema.md`
 for the full `plan.yaml` schema before drafting
 anything — this skill must produce manifests that pass the exact same
-validation `plan-dashboard` step 2 runs, not a close approximation.
+validation the plan site's build and `save-plan.sh` run, not a close approximation.
 
 The output of this skill is the same as if a session had hand-authored the
 manifest via the marker/`save-plan.sh` flow in `save-plan.sh`'s own header
@@ -44,7 +44,7 @@ Then check whether `${PLANS_DIR}/<plan-id>/plan.yaml` already
 exists on `"${PERSONAL_NOTES_REFERENCE}"` (`PLANS_DIR` is defined by the config script sourced
 above).
 If it does, stop and tell the user — point them at editing the existing
-plan (`plan-dashboard`'s doc, or just ask a session to edit it) instead of
+plan (just ask a session to edit it) instead of
 silently clobbering it with a fresh draft. Recreating over an existing plan
 id is exactly the kind of destructive-by-accident action this system is
 meant to prevent, not cause.
@@ -87,7 +87,7 @@ a structural question the source material doesn't settle. Use
 `AskUserQuestion` for anything that would be awkward or costly to redo
 later (e.g., "is this one track or does it actually split into two once
 the work starts stacking?", "should track X's items be sequenced or can
-they run in parallel?") — the same way the plan-dashboard system's own
+they run in parallel?") — the same way the plan system's own
 design was worked out via up-front questions before anything was written,
 not after.
 
@@ -114,7 +114,7 @@ plan, rather than migrated whole.
 
 ## 4. Cross-check every named branch/PR against live GitHub state
 
-Same mechanism as `plan-dashboard` step 2, applied before the item is ever
+Same mechanism as `plan-sync` step 2, applied before the item is ever
 written down rather than after: bulk-fetch `mcp__github__list_pull_requests`
 (`state: "all"`, paginated) for the repo, and use `mcp__github__pull_request_read`
 for anything outside that page window or referenced by number in the source
@@ -166,9 +166,9 @@ ids, so an item can depend on more than one prerequisite (e.g. a track that
 only starts once two other tracks have both landed) — and optional
 `pull_request_number`/`session`/`notes`/`blockers`).
 
-Before saving, validate exactly what `plan-dashboard` step 2 validates —
-do not diverge from that checklist, since a manifest this skill produces
-must pass that same check the first time `/plan-dashboard` runs against it:
+Before saving, validate exactly what the plan site's build validates — do not
+diverge from that checklist, since a manifest this skill produces must pass that
+same check the first time the site is built from it:
 
 - Every `items[].id` (defaulting to `branch` if omitted) is unique.
 - Every `items[].track` resolves to a declared `tracks[].id`.
@@ -177,7 +177,7 @@ must pass that same check the first time `/plan-dashboard` runs against it:
   resolves to another `items[].id`.
 
 Parse with Python's `yaml` module to check this mechanically rather than
-eyeballing it — the same tooling `save-plan.sh` and `plan-dashboard` both
+eyeballing it — the same tooling `save-plan.sh` and the plan site's build both
 already require.
 
 ## 7. Bootstrap it through the existing write path — don't invent a new one
@@ -210,7 +210,7 @@ unprompted — to replace that old doc with a short pointer stub at its
 original location, so anyone still reading the old path finds the new one
 immediately.
 
-Every later change to the plan follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
+Every later change to the plan follows [`manifest-staleness.md`](../plan-sync/manifest-staleness.md).
 
 ## 9. Report back
 

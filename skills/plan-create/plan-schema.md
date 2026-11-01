@@ -15,7 +15,7 @@ for how that's resolved), exactly like the personal notes and `pr-progress/*.md`
 
 New to the system and want to see it end to end before reading the schema?
 Start with [`example-walkthrough.md`](./example-walkthrough.md), a short
-worked example from a plan-mode idea to a published dashboard. A complete,
+worked example from a plan-mode idea to its page on the plan site. A complete,
 schema-conformant manifest you can read alongside this reference is
 committed at [`example/plan.yaml`](./example/plan.yaml), with its standing
 rules at [`example/roadmap.md`](./example/roadmap.md).
@@ -83,7 +83,7 @@ items:                         # the actual trackable units of work - flat,
 ```
 
 Validation is not documentation-only: `plan/validation.py` enforces this
-schema on every `/plan-dashboard` run, and `/plan-create` drafts against the
+schema on every plan site build and every `save-plan.sh`, and `/plan-create` drafts against the
 same checks. If this document and that module ever disagree, the module is
 the authority.
 
@@ -91,8 +91,8 @@ the authority.
 
 `status` is only ever the session's own manual planning assessment. It
 never encodes draft/ready-for-review/merged/closed/CI-green/mergeable —
-those are fetched live from GitHub every time `/plan-dashboard` runs, so
-they can never go stale in the manifest. The dashboard shows both side by
+those are fetched live from GitHub every time the plan site is built, so
+they can never go stale in the manifest. The plan's page shows both side by
 side and flags any item where the two disagree (e.g. `status: in progress`
 on a PR that's already merged) — this is the actual mechanism that replaces
 "a session has to notice a note is stale by accident."
@@ -102,9 +102,9 @@ interpret it — GitHub's state alone can't say whether a still-open PR means
 "blocked", "deferred", or just "in progress", and a mismatched PR number
 usually means the manifest was mistyped, not that GitHub is wrong. But
 "GitHub confirms this PR is merged" has exactly one correct manifest state:
-`done`. There's nothing to interpret, so `/plan-dashboard` doesn't just flag
-it — `plan/sync_manifest_status.py` corrects `status` to `done` for exactly that
-case, in `plan.yaml` itself, every run, before rendering. Every other kind
+`done`. There's nothing to interpret, so `/plan-sync` doesn't just leave it
+flagged — `plan/sync_manifest_status.py` corrects `status` to `done` for exactly
+that case, in `plan.yaml` itself, and pushes the correction. Every other kind
 of drift is still left as a flag for a human.
 
 ### Depending on an item in another plan
@@ -116,7 +116,7 @@ that depends on nothing outside itself never has to know the form exists.
 
 A precondition that lives in another plan used to have nowhere to go but a
 freeform `blockers` sentence, which nothing resolves, re-checks or renders. A
-reference is checked and shown like any other dependency: `/plan-dashboard`
+reference is checked and shown like any other dependency: the plan site
 resolves it against the referenced plan's own manifest, renders it as a chip
 that opens that item's card on its plan's page of the plan site in a new tab,
 and reads the foreign item's live pull request state from its own plan's
@@ -147,7 +147,7 @@ Only the plans some entry actually names are read, and only their manifests —
 never their roadmaps, and never a plan nothing here depends on. What reaches
 the page from a foreign plan is one chip per reference: the reference text, the
 foreign item's title, its plan's title, and its live state. Keeping one plan's
-dashboard from carrying another plan's contents is the whole point of a
+page from carrying another plan's contents is the whole point of a
 per-plan size budget.
 
 ### Why items are flat, not nested under wave/track
@@ -155,8 +155,8 @@ per-plan size budget.
 A track can span or reprioritize across waves, and `depends_on` needs to
 reference any other item directly by id. Nesting would either duplicate
 items across waves or force awkward cross-links. Tag each item with the
-`track` it belongs to instead; look up that track's `wave` for grouping in
-the dashboard.
+`track` it belongs to instead; look up that track's `wave` for grouping on
+the plan's page.
 
 ## The generated reverse index
 
@@ -178,9 +178,9 @@ lookup already does for `pr-progress/<branch>.md`.
 automates this: it gathers the plan's scope (an existing freeform roadmap doc
 to migrate, named branches/PRs to cross-check live, or plain conversation),
 drafts a schema-conformant `plan.yaml`/`roadmap.md`, validates it against the
-same checks `plan-dashboard` runs, asks before assuming anything that's a real
-structural judgment call, then runs `save-plan.sh` and `/plan-dashboard`
-itself.
+same checks the plan site's build runs, asks before assuming anything that's a
+real structural judgment call, then runs `save-plan.sh` itself, whose push
+builds the plan's page.
 
 ## Size limits
 
@@ -276,6 +276,7 @@ predating this convention, don't need one).
 
 ## Checking a plan
 
-Every plan's page is on the plan site. See [`plan-dashboard/SKILL.md`](./SKILL.md):
-`/plan-dashboard <plan-id>` cross-checks one plan against live GitHub state and
-links its page.
+Every plan's page is on the plan site, rebuilt on every push to the notes branch;
+`plan_site_page_url <plan-id>` prints its address. See
+[`plan-sync/SKILL.md`](../plan-sync/SKILL.md): `/plan-sync <plan-id>` marks every
+item whose pull request merged as done and links the page.
