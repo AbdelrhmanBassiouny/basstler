@@ -20,7 +20,7 @@ def branch_on_fork(checkout: ForkCheckout, name: str) -> RemoteBranch:
     :return: The branch called *name* on the checkout's fork remote.
     """
     return RemoteBranch(
-        GitCommandRunner(checkout.project_root), RemoteName.ORIGIN, name
+        name, GitCommandRunner(checkout.project_root), RemoteName.ORIGIN
     )
 
 

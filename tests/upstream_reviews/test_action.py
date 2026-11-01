@@ -310,7 +310,7 @@ class Fork:
     @property
     def branch(self) -> RemoteBranch:
         """:return: The Action branch on the fork."""
-        return RemoteBranch(GitCommandRunner(self.clone), "origin", ActionBranch.NAME)
+        return RemoteBranch(ActionBranch.NAME, GitCommandRunner(self.clone), "origin")
 
     def files(self) -> dict[str, str]:
         """:return: Every file on the remote's Action branch, by path, without its

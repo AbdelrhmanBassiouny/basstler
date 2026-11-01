@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from basstler.stack.model import Branch, BranchStatus, Stack
+from basstler.stack.model import StackBranch, BranchStatus, Stack
 from basstler.upstream_reviews.vocabulary import RollupState
 
 # %% the overview
@@ -29,7 +29,7 @@ class CheckOverview:
     How many branches a line names before counting the rest.
     """
 
-    def open_branches(self) -> list[Branch]:
+    def open_branches(self) -> list[StackBranch]:
         """
         :return: Every branch the pass maintains that has not landed, parent before
             child.
@@ -40,7 +40,7 @@ class CheckOverview:
             if branch.status is not BranchStatus.MERGED
         ]
 
-    def branches_in(self, state: RollupState) -> list[Branch]:
+    def branches_in(self, state: RollupState) -> list[StackBranch]:
         """
         :param state: A verdict.
         :return: The open branches whose checks have that verdict.

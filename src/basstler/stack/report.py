@@ -10,7 +10,7 @@ from enum import StrEnum
 
 from basstler.class_property import classproperty
 from basstler.stack.checkout import CurrentCheckout, GitArgument, MergeTreeStatus
-from basstler.stack.model import Branch, BranchStatus, Stack
+from basstler.stack.model import StackBranch, BranchStatus, Stack
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -230,7 +230,7 @@ class StackReport:
                 f"Draft candidates: {drafts[0].name}"
             )
 
-    def _print_promotable(self, promotable: list[Branch]) -> None:
+    def _print_promotable(self, promotable: list[StackBranch]) -> None:
         """
         :param promotable: The branches to submit upstream next, in dependency order.
         """
@@ -245,7 +245,7 @@ class StackReport:
                 f"approved, parent '{branch.parent}' landed"
             )
 
-    def _print_withheld(self, withheld: list[Branch]) -> None:
+    def _print_withheld(self, withheld: list[StackBranch]) -> None:
         """
         :param withheld: The promotable branches withheld pending conflict resolution.
         """
