@@ -63,9 +63,11 @@ items:
     board.yml and supersedes #7). The browser re-check of draft state moved to page-draft-recheck.'
 - id: page-draft-recheck
   title: The plan page re-checks blocking pull requests' draft state from the browser between builds
-  branch: null
-  status: not_started
+  branch: claude/plan-item-kickoff-basstler-draft-ankppa
+  status: in progress
   track: site
+  pull_request_number: 116
+  session: https://claude.ai/code/session_018wfiv6ZDBwZvHTLeeG7b7k
   depends_on:
   - site-for-every-repository
   notes: 'Split from site-for-every-repository. Between builds, the page asks GitHub''s REST API whether
