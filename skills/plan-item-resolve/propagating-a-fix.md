@@ -2,8 +2,7 @@
 
 A resolve ends with a push to one branch. Every pull request based on that
 branch still has the state the fix replaced, and nothing carries it up on its
-own: `/stacked-pr-maintenance` does, but it is whole-board and runs when it
-runs. So a resolve that stops at its own push leaves its own descendants
+own: `/stacked-pr-maintenance` does, but only when it runs. So a resolve that stops at its own push leaves its own descendants
 stale, and the next person to touch one of them re-hits what was just fixed.
 
 ## When this applies
