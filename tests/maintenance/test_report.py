@@ -379,6 +379,7 @@ def test_a_refused_fast_forward_is_never_reported_as_a_clean_pass():
         RestackOutcome.WITHHELD,
         RestackOutcome.PUSH_REJECTED,
         RestackOutcome.INTEGRATION_FAILED,
+        RestackOutcome.PARENT_GONE,
     ],
 )
 def test_a_branch_left_unpublished_is_never_reported_as_a_clean_pass(

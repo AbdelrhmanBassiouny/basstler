@@ -112,6 +112,11 @@ class StackBranch(StrEnum):
     A branch beside :attr:`STUCK` that nothing holds back.
     """
 
+    GRANDPARENT = "a-grandparent"
+    """
+    Below the parent, cut from the base; a parent can merge into it.
+    """
+
     GRANDCHILD = "a-grandchild"
     """
     Stacked on the child, so it reaches the parent only through it.
