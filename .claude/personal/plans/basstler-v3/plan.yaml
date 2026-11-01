@@ -131,10 +131,9 @@ items:
   depends_on:
   - stack-engine
   status: not started
-  notes: 'The one stack operation unique to basstler. Claude writes only the summary; the command opens
-    the upstream pull request link and records it on the fork pull request.
-
-    '
+  notes: The one stack operation unique to basstler. Claude writes only the summary; the command opens
+    the upstream pull request link and records it on the fork pull request. Withholds a branch GitHub
+    reports conflicted, not yet computed or failing checks; no needs-resolution label (from stack-maintenance/withhold-on-github-state).
 - id: maintenance-action
   title: Whole-fork maintenance runs in an Action on every push to the default branch
   branch: null
