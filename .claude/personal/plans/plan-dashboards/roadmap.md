@@ -1,5 +1,6 @@
 # plan-dashboards — standing rules
 
+- After basstler-v3 (#99) lands, build every item here on v3, not v2: plans are tracking issues (not plan.yaml), pages render on the Pages plan site (not the Artifact dashboard), code runs through the basstler CLI (not bash hooks or python -m modules), and v3's roadmap rules apply. Read any v2 piece a rule names as its v3 replacement; rewrite an item's notes before starting it.
 - Whichever lands second merges. Seven items here edit `build_dashboard.py` and its template with no dependency between them. That is textual overlap, not ownership, and it has been the working arrangement throughout.
 - Bug-fix pull requests carry the `bug` label; tooling that never existed does not. An item that *surfaces* bug fixes is not itself a bug fix.
 - Wording is not pinned by tests. Twice a round added a test asserting a rendered sentence, and twice the user cut it: nobody parses a drift description or a summary line, so pinning the sentence buys a failing test per reword and catches no defect. What survives asserts that each case renders *something*, and pins rules rather than phrasings.
