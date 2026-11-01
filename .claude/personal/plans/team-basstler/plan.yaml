@@ -55,13 +55,7 @@ items:
   track: site
   depends_on:
   - stack-tooling-install/setup-personal-notes-script
-  notes: 'Setup creates <user>/plans (one per user), commits its caller of plan-site-build.yml,
-    registers each project in its hub; steps it cannot do (Pages on) are asked as one copyable
-    line, then re-checked. Skills start the build with the user''s credentials at every plan
-    or PR state change and at session start. Between builds: an item waiting only on a draft
-    dependency keeps its Start link (kickoff checks live), and the page re-checks blocking
-    PRs'' draft state from the browser via GitHub''s public API. Tested on recorded responses.
-    Absorbed plan-site-setup.'
+  notes: 'Today the plan pages 404: stack-board''s only workflow is the legacy board.yml. Setup creates <user>/plans with a caller of plan-site-build.yml, registers each project in its hub, and commits a dispatch workflow to each notes branch that starts the build on every push using the user''s fine-grained PAT secret. Steps it cannot do (Pages on, the PAT) are one copyable line each, then re-checked. Between builds, kickoff checks dependencies live and the page re-checks blocking PRs'' draft state from the browser. Tested on recorded responses.'
 - id: artifact-path-retirement
   title: Point every plan skill at the site instead of republishing a dashboard Artifact
   branch: null
