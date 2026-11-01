@@ -100,12 +100,14 @@ with the interpreter and each module named once in
 
 ```bash
 uv venv --python ">=3.12" .venv && uv pip install --python .venv/bin/python --editable . --group dev
+.venv/bin/python -m playwright install chromium
 PATH="$PWD/.venv/bin:$PATH" pytest tests -n auto
 .venv/bin/ruff check .
 .venv/bin/ruff format --check .
 ```
 
-The hook tests run `python3`, so the environment has to be first on the path. `ruff check`
+The hook tests run `python3`, so the environment has to be first on the path, and the plan
+page's script is tested in the headless Chromium Playwright installs. `ruff check`
 enforces the mechanical code rules, configured in `pyproject.toml`. Python is formatted
 by `python scripts/format_docstrings.py <files>` (ruff format, then docformatter where ruff
 keeps its result), also run as a pre-commit hook. To try a

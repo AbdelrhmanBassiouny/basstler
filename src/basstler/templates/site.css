@@ -223,6 +223,7 @@ a.chip:hover { border-color: currentColor; }
 .notes { font-size: 0.82rem; color: var(--text-muted); white-space: pre-wrap; margin-top: var(--space-1); }
 
 .action-group { display: inline-flex; flex-wrap: wrap; gap: var(--space-1); align-items: center; }
+.action-group[hidden] { display: none; }
 .action-button, .model-picker-toggle {
   font: inherit; font-size: 0.75rem; cursor: pointer;
   border: 1px solid var(--accent); background: var(--accent-tint); color: var(--accent-strong);

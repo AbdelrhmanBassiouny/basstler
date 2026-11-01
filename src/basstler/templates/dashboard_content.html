@@ -1,3 +1,6 @@
+{# What a chip held back by a draft pull request carries for the page's script to re-check it. #}
+{% macro draft_recheck_attributes(chip) %}{% if chip.draft_pull_request %} {{ draft_recheck_attribute.PULL_REQUEST }}="{{ chip.draft_pull_request.api_url }}" {{ draft_recheck_attribute.READY_TITLE }}="{{ chip.tooltip }}"{% endif %}{% endmacro %}
+
 {# A chip links to its dependency's card: on this page it scrolls there and
    highlights it, and on another plan's dashboard it opens that page in a new
    tab at the card. #}
@@ -6,13 +9,14 @@
 {%- set identifier = chip.dependency.reference.text %}
 {%- set chip_class = 'chip' if is_ready else 'chip chip-unmet' %}
 {%- set chip_title = chip.tooltip if is_ready else chip.tooltip ~ ' (not ready yet — this item is blocked on it)' %}
-{% if not chip.card_url %}<span class="{{ chip_class }}" title="{{ chip_title }}">{{ identifier }}</span>{% elif chip.dependency.is_in_another_plan %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" target="_blank" rel="noopener" title="{{ chip_title }}">{{ identifier }}</a>{% else %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" data-item-identifier="{{ identifier }}" onclick="planDashboardHighlightItem(event, this)" title="{{ chip_title }}">{{ identifier }}</a>{% endif %}
+{% if not chip.card_url %}<span class="{{ chip_class }}" title="{{ chip_title }}"{{ draft_recheck_attributes(chip) }}>{{ identifier }}</span>{% elif chip.dependency.is_in_another_plan %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" target="_blank" rel="noopener" title="{{ chip_title }}"{{ draft_recheck_attributes(chip) }}>{{ identifier }}</a>{% else %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" data-item-identifier="{{ identifier }}" onclick="planDashboardHighlightItem(event, this)" title="{{ chip_title }}"{{ draft_recheck_attributes(chip) }}>{{ identifier }}</a>{% endif %}
 {% endmacro %}
 
-{% macro action_button(item) %}
-{% if item.action %}
-<span class="action-group">
-  <span class="model-picker" data-model="" aria-label="Model for {{ item.action.label }}">
+{# The action group is hidden, marked for the page's script to reveal, when hidden is true. #}
+{% macro action_button(action, hidden=False) %}
+{% if action %}
+<span class="action-group"{% if hidden %} hidden {{ draft_recheck_attribute.START_ACTION }}{% endif %}>
+  <span class="model-picker" data-model="" aria-label="Model for {{ action.label }}">
     <button type="button" class="model-picker-toggle" onclick="planDashboardToggleModelPicker(event, this)">{{ available_models[0].label }} ▾</button>
     <ul class="model-picker-list" role="listbox">
       {% for model in available_models %}
@@ -20,7 +24,7 @@
       {% endfor %}
     </ul>
   </span>
-  <button type="button" class="action-button" data-action-command="{{ item.action.command }}" onclick="planDashboardCopyActionCommand(this)">▸ {{ item.action.label }}</button>
+  <button type="button" class="action-button" data-action-command="{{ action.command }}" onclick="planDashboardCopyActionCommand(this)">▸ {{ action.label }}</button>
 </span>
 {% endif %}
 {% endmacro %}
@@ -63,7 +67,7 @@
             {% if item.needs_review %}
             <a class="review-button" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">↗ Review</a>
             {% endif %}
-            {{ action_button(item) }}
+            {{ action_button(item.action) }}
           </div>
           {% if item.drift_description %}
           <div class="drift">⚠ {{ item.drift_description }}</div>

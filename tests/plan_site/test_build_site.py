@@ -102,44 +102,6 @@ def link_to(url: str) -> str:
     return f'href="{url}"'
 
 
-# %% recorded pull request state
-
-
-@pytest.fixture
-def pull_request_source() -> RecordedPullRequestSource:
-    """
-    The live state of the first plan's pull requests, all but one of which exist.
-    """
-    return RecordedPullRequestSource(
-        records={
-            MERGED_PULL_REQUEST: PullRequestRecord(
-                state=PullRequestState.CLOSED, labels=[GitHubLabel.MERGED.value]
-            ),
-            OPEN_PULL_REQUEST: PullRequestRecord(
-                state=PullRequestState.OPEN, draft=True
-            ),
-        },
-        issue_urls={
-            PullRequestReference(
-                PLAN_REPOSITORY, FIRST_PLAN.tracking_issue
-            ): PLAN_REPOSITORY.issue_url(FIRST_PLAN.tracking_issue)
-        },
-    )
-
-
-@pytest.fixture
-def site(pull_request_source: RecordedPullRequestSource) -> RepositorySite:
-    """
-    A site over the dataset's plans directory.
-    """
-    return RepositorySite(
-        site_url=SiteSampleText.SITE_URL,
-        pull_request_source=pull_request_source,
-        repository=NOTES_REPOSITORY,
-        plans_directory=DatasetLocation.SITE_PLANS.value,
-    )
-
-
 def page_of(output: Path, plan: SitePlan | None = None) -> str:
     """
     :param output: The site's root directory.

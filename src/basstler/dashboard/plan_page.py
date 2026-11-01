@@ -17,6 +17,7 @@ from typing import Any
 from basstler.class_property import classproperty
 from basstler.dashboard.cards import (
     DependencyChip,
+    DraftRecheckAttribute,
     ItemAction,
     ModelOption,
     ResolveAction,
@@ -258,6 +259,7 @@ class DashboardRenderer(TemplatePage):
             style_template=DashboardTemplate.STYLE.name,
             content_template=DashboardTemplate.CONTENT.name,
             script_template=DashboardTemplate.SCRIPT.name,
+            draft_recheck_attribute=DraftRecheckAttribute,
             style_file=str(DashboardArtifactFile.STYLE),
             content_file=str(DashboardArtifactFile.CONTENT),
             script_file=str(DashboardArtifactFile.SCRIPT),
@@ -330,6 +332,7 @@ class DashboardRenderer(TemplatePage):
         for item in self.plan.items:
             item.dependency_chips = self._dependency_chips_of(item)
             item.action = self._action_for(item)
+            item.pending_start_action = self._pending_start_action_for(item)
 
     def _pull_request_url_of(self, item: Item) -> str | None:
         """
@@ -359,11 +362,7 @@ class DashboardRenderer(TemplatePage):
             case ItemStatus.NOT_STARTED:
                 if not self._dependencies_are_ready(item):
                     return None
-                return StartNowAction(
-                    label="Start now",
-                    plan_id=self.plan.id,
-                    item_identifier=item.identifier,
-                )
+                return self._start_action_for(item)
             case ItemStatus.BLOCKED:
                 label = "Resolve"
             case ItemStatus.IN_PROGRESS:
@@ -375,6 +374,34 @@ class DashboardRenderer(TemplatePage):
             plan_id=self.plan.id,
             item_identifier=item.identifier,
         )
+
+    def _start_action_for(self, item: Item) -> StartNowAction:
+        """
+        Build the action that starts one not-started item.
+        """
+        return StartNowAction(
+            label="Start now",
+            plan_id=self.plan.id,
+            item_identifier=item.identifier,
+        )
+
+    def _pending_start_action_for(self, item: Item) -> StartNowAction | None:
+        """
+        Build the start action of a not-started item that only open draft dependencies
+        hold back, or ``None`` for any other item.
+
+        Reads :attr:`Item.action` and :attr:`Item.dependency_chips`, so runs after both
+        are filled in.
+        """
+        if item.status is not ItemStatus.NOT_STARTED or item.action is not None:
+            return None
+        if not all(
+            chip.dependency.is_ready_to_unblock_dependents()
+            or chip.draft_pull_request is not None
+            for chip in item.dependency_chips
+        ):
+            return None
+        return self._start_action_for(item)
 
     def _dependencies_are_ready(self, item: Item) -> bool:
         """
