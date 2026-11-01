@@ -16,7 +16,12 @@ from basstler.environment import GitHubCredentialVariable
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.publication import PlanSitePublication, RunListing, UserStep
+from basstler.plan_site.publication import (
+    PlanSitePublication,
+    RunListing,
+    UserStep,
+    UserSteps,
+)
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     DispatchWorkflow,
@@ -26,7 +31,7 @@ from basstler.plan_site.workflows import (
     WorkflowFile,
     WorkflowStep,
 )
-from basstler.repository import Repository
+from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.upstream_reviews.vocabulary import BasstlerSource
 
@@ -378,3 +383,58 @@ def test_a_failed_latest_dispatch_leaves_the_token_to_the_user(published):
     report = published.publication(runs).publish()
 
     assert [pending.step for pending in report.pending] == [UserStep.STORE_TOKEN]
+
+
+# %% the steps in the browser
+
+
+def pending_step(report, step: UserStep):
+    """:return: The step *step* of *report*."""
+    return next(pending for pending in report.pending if pending.step is step)
+
+
+def test_creating_the_site_repository_points_at_github_s_new_repository_page(
+    publishing,
+):
+    report = publishing.publication(publishing.runs_none()).publish()
+
+    browser_steps = pending_step(report, UserStep.CREATE_SITE_REPOSITORY).browser_steps
+
+    assert f"{GitHubAddress.WEB}/new" in browser_steps[0]
+    assert any(publishing.site.repository.name in step for step in browser_steps)
+
+
+def test_turning_on_pages_points_at_the_site_repository_s_pages_settings(published):
+    report = published.publication(published.runs_none()).publish()
+
+    browser_steps = pending_step(report, UserStep.TURN_ON_PAGES).browser_steps
+
+    assert f"{published.site.repository.url}/settings/pages" in browser_steps[0]
+
+
+def test_storing_the_token_walks_through_creating_it_and_saving_it_as_a_secret(
+    published,
+):
+    report = published.publication(published.runs_none()).publish()
+
+    browser_steps = pending_step(report, UserStep.STORE_TOKEN).browser_steps
+
+    text = "\n".join(browser_steps)
+    assert UserSteps.token_page in text
+    assert published.site.repository.full_name in text
+    assert published.notes_repository.full_name in text
+    assert f"{published.notes_repository.url}/settings/secrets/actions/new" in text
+    assert PlanSiteSecret.TOKEN in text
+
+
+def test_a_rendered_step_shows_the_command_and_then_the_browser_steps(published):
+    report = published.publication(published.runs_none()).publish()
+    pending = pending_step(report, UserStep.TURN_ON_PAGES)
+
+    assert pending.render() == (
+        f"- {pending.step}:\n    {pending.line}\n  Or in the browser:\n"
+        + "\n".join(
+            f"    {number}. {step}"
+            for number, step in enumerate(pending.browser_steps, start=1)
+        )
+    )
