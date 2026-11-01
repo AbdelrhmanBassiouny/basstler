@@ -11,6 +11,11 @@ from basstler.plan.model import ManifestKey
 
 BRANCH_WITHOUT_ITEM_ID = "claude/work-without-an-id"
 
+NOTES_COMMIT = "0123456789abcdef0123456789abcdef01234567"
+"""
+The personal-notes commit the documents claim to have been read at.
+"""
+
 
 def documents_holding_an_item_without_an_id() -> PlanDocuments:
     manifest_text = (
@@ -20,7 +25,10 @@ def documents_holding_an_item_without_an_id() -> PlanDocuments:
         f"  {ManifestKey.STATUS.key}: in progress\n"
     )
     return PlanDocuments(
-        plan_identifier="some-plan", manifest_text=manifest_text, roadmap_text=""
+        plan_identifier="some-plan",
+        manifest_text=manifest_text,
+        roadmap_text="",
+        read_at=NOTES_COMMIT,
     )
 
 
