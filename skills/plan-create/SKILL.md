@@ -33,7 +33,8 @@ without asking first, rather than failing partway through drafting a plan.
 
 Source the shared config script — it resolves the personal-notes
 remote/branch precedence into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines
-`SAVE_PLAN_SCRIPT` (used in step 7):
+`SAVE_PLAN_SCRIPT` (used in step 8) and `PLAN_SIZE_CHECK_MODULE` (used in
+step 7):
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
@@ -180,7 +181,23 @@ Parse with Python's `yaml` module to check this mechanically rather than
 eyeballing it — the same tooling `save-plan.sh` and `plan-dashboard` both
 already require.
 
-## 7. Bootstrap it through the existing write path — don't invent a new one
+## 7. Check the draft isn't already full
+
+Count the draft's items against `Measure.ITEM_COUNT` (`plan/size_limits.py`)
+before the first save:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <path/to/plan.yaml>
+```
+
+If `is_full` is `false`, continue to step 8.
+
+If `true`, do not call `${SAVE_PLAN_SCRIPT}`: report `item_count` against
+`item_limit` and ask, via `AskUserQuestion`, whether to re-draft as several
+plans (back to step 3, cutting by track or wave first) or to trim the scope to
+fit one.
+
+## 8. Bootstrap it through the existing write path — don't invent a new one
 
 This skill does not push directly. It uses exactly the flow
 `save-plan.sh`'s own header comment documents for a brand-new plan (there
@@ -199,7 +216,7 @@ through `CLAUDE.local.md`'s markers first), pushes both to the
 personal-notes branch, and regenerates the branch→plan-id index in the same
 commit.
 
-## 8. Publish
+## 9. Publish
 
 Invoke the `plan-dashboard` skill for `<plan-id>` to publish its first
 dashboard Artifact, then invoke it with no argument to republish the master index
@@ -212,7 +229,7 @@ immediately.
 
 Every later change to the plan follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
 
-## 9. Report back
+## 10. Report back
 
 Plan id, item/wave/track counts, the dashboard URL and the index URL, the
 tracking issue link if one was created, and — explicitly, not buried — every judgment call you
