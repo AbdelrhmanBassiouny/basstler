@@ -1,13 +1,10 @@
-## Plan
-- Shared branch writer; publication command (site workflow, hub, dispatch workflow, copyable user steps, re-check).
-- check-setup plan_site row; /setup-personal-notes step 8.
-- stack-board#8 replaces board.yml with the caller (supersedes stack-board#7).
-- Browser re-check of blocking PRs' draft state: awaiting owner's call (needs a JS test dependency).
+### Plan
+- #105 (draft, release:minor): plan-site publication command, setup row/step, RemoteBranch shared.
+- stack-board#8 (draft): plan-site.yml calling plan-site-build.yml@main.
 
-## Done
-- All of the above except the browser re-check; 1779 tests pass; PR #105 description current, release:minor.
+### Done
+- Review round 1 handled on both PRs (039d292, stack-board 5f4a95c); 1823 tests pass.
 
-## Next
-- Owner: decide the browser re-check (this PR, follow-up item, or drop).
-- After release: run the publication command once on this clone to commit the dispatch workflow; store PLAN_SITE_TOKEN; merge stack-board#8, close #7.
-- Follow-up: pass the token into plan-site-build.yml for private repositories.
+### Next
+- Three #105 threads open, waiting on the owner: Branch inheritance, write() on the runner, run-listing type.
+- After release: run the publication command here; store PLAN_SITE_TOKEN; close stack-board#7.
