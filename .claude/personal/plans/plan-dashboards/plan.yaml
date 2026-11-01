@@ -32,13 +32,14 @@ items:
   title: Flag an item stacked on a deferred/closed dependency instead of leaving it to a stale note
   branch: claude/deferred-dependency-drift-pr-qxpfsm
   pull_request_number: 47
-  status: in_progress
+  status: deferred
   session: https://claude.ai/code/session_01VBa9VPHJW4VjpWtdq1XLE2
   track: corrections
   depends_on: []
   notes: 'Flags an in-progress item whose dependency is deferred or whose pull request closed unmerged
     (StalledDependencyDrift, StallReason), with a reparent suggestion. Draft #47, carried from CRAM #184
-    with its history; main is not merged in yet (conflicts in build_dashboard.py and its tests).'
+    with its history; #47 closed unmerged on 2026-11-01: it edits the Artifact dashboard that team-basstler/artifact-path-retirement
+    (#115) removes. Superseded by team-basstler/stalled-dependency-drift.'
 - id: deferred-items-hidden-by-default
   title: Hide deferred items in the dashboard by default, behind their own toggle
   branch: claude/hidden-deferred-plan-items-6weef1
