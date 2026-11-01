@@ -27,9 +27,11 @@ from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.model import (
     ManifestKey,
     PlanDocument,
+    PlanItem,
     PlanManifest,
 )
 from basstler.plugin_root import PluginRoot
+from basstler.repository import Repository
 from basstler.shell_configuration import (
     FetchedBranchReference,
     ShellConfigurationFunction,
@@ -201,19 +203,16 @@ class PlanDocuments:
         """
         return yaml.safe_load(self.manifest_text)
 
-    def repository_for(self, item_identifier: str) -> str:
+    def repository_for(self, item_identifier: str) -> Repository:
         """
-        The ``owner/repo`` an item's pull request belongs to.
+        The repository an item's pull request belongs to.
 
         :param item_identifier: The item's id.
         :raises UnknownItemError: If no item carries that id.
         :return: The item's own repository, or the plan's default one.
         """
-        item = self.item(item_identifier)
-        return (
-            item.get(ManifestKey.REPOSITORY.key)
-            or self.manifest[ManifestKey.DEFAULT_REPOSITORY.key]
-        )
+        item = PlanItem(self.item(item_identifier))
+        return PlanManifest(self.manifest).repository_of(item)
 
     def item(self, item_identifier: str) -> dict[str, Any]:
         """

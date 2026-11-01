@@ -82,7 +82,7 @@ def test_plan_directory_reads_one_plans_manifest_by_id():
     plan = directory.plan(FixturePlanId.OTHER)
     manifest = fixture_manifest(FixturePlanId.OTHER)
     assert plan.title == manifest[ManifestKey.TITLE.key]
-    assert plan.default_repository == manifest[ManifestKey.DEFAULT_REPOSITORY.key]
+    assert plan.default_repository == fixture_repository(FixturePlanId.OTHER)
 
 
 def test_plan_directory_reads_no_manifest_nothing_has_named():
