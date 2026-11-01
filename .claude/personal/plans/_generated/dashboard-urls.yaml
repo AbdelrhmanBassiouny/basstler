@@ -16,7 +16,7 @@ windows-support: https://claude.ai/artifact/E4fYSkWnm2mwAAvV9rAkxG
 _content_digests:
   stack-maintenance: 3eba523b464170971475d880655fc622ee70f8f2afc291922ee7c930ed8767f9
   team-basstler: 2b13d09b219e0ce81c407e54e0089fde381effdcc295242ae757111c800900db
-  basstler-v3: b34f12539979dd74620de842467dd525621dad4d9dcdf0f9d80f302a79584f55
+  basstler-v3: 1400bc5956d5fc9b7ecde4441cefb7adda94ddf5f1a16bf4e98be5be5e8cfb3d
   basstler-v2-fixes: 6b0f2fc8376d843ae0aa89efccada7335874124ecf3db08a8cd10d5645b67e5a
 basstler-v3: https://claude.ai/artifact/FYfVjooVmvZjqvat3xcaAP
 basstler-v2-fixes: https://claude.ai/artifact/M1aSARFv5hLjCanfKsnw5g
