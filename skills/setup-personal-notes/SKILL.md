@@ -235,7 +235,7 @@ reported as finished is worse than one that reported the truth.
 
 Then tell them what they can now do, briefly: ask for notes edits in any
 session, track a PR's progress, and — if the dependencies installed —
-`/plan-create` and `/plan-sync`, pointing at
+`/plan-create`, pointing at
 [`example-walkthrough.md`](../plan-create/example-walkthrough.md) for the
 worked example.
 

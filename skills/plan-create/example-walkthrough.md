@@ -138,14 +138,8 @@ A few things worth noticing in this one small example:
 - **Done items are hidden by default** — the "Show done items" checkbox
   reveals `retry-backoff-strategy` and `retry-fallback-queue` when you want
   them back.
-
-The other drift with no judgment call in it — a merged pull request whose item
-is still marked anything but `done` — is corrected in the manifest itself:
-
-> **You:** `/plan-sync notification-retry-overhaul`
-
-The [`plan-sync`](../plan-sync/SKILL.md) skill marks every such item `done` and
-pushes the correction, which rebuilds the page.
+- **A merged pull request shows as done** — an item whose pull request has
+  merged is shown `done` whatever the manifest says, so it never needs a sync.
 
 ## 5. Kick off, resolve, or review a specific item
 
@@ -185,7 +179,6 @@ prepended so the pasted session starts on that model.
 - [`plan-schema.md`](./plan-schema.md) — the full `plan.yaml` schema
   reference.
 - [`plan-create/SKILL.md`](./SKILL.md),
-  [`plan-sync/SKILL.md`](../plan-sync/SKILL.md),
   [`plan-item-kickoff/SKILL.md`](../plan-item-kickoff/SKILL.md),
   [`plan-item-resolve/SKILL.md`](../plan-item-resolve/SKILL.md) — the exact
   mechanics behind each step above.

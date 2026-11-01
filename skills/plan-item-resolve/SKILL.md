@@ -92,7 +92,7 @@ itself.
 
 ## 3. Draft the plan
 
-First record what you found, per [`manifest-staleness.md`](../plan-sync/manifest-staleness.md): the real blocker in
+First record what you found, per [`manifest-staleness.md`](../plan-create/manifest-staleness.md): the real blocker in
 `blockers`, and `status` when it is wrong (`blocked`, `deferred`). `notes` change only when
 what the item means changes.
 

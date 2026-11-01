@@ -41,4 +41,5 @@ source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 
 These write every item on the branch, and they touch only blockers written under their
 own owner. A branch no plan tracks exits `branch_tracks_no_item`; report it. Write only
-what was decided mechanically. A landed branch is set to `done` by `/plan-sync`.
+what was decided mechanically. A landed branch needs no write: its item's page shows it
+`done` once its pull request merges.
