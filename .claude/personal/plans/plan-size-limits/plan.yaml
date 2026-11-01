@@ -9,8 +9,10 @@ tracking_issue: 37
 waves:
 - id: enforcement
   name: Wave 3 - refusal and the skills
-  description: |
-    The gate starts refusing, and the skills that write plans learn to route new work elsewhere and to write less.
+  description: 'The gate starts refusing, and the skills that write plans learn to route new work elsewhere
+    and to write less.
+
+    '
 tracks:
 - id: gate-and-skills
   name: The save gate and the writing skills
@@ -34,8 +36,10 @@ items:
   pull_request_number: null
   track: gate-and-skills
   depends_on: []
-  status: not_started
-  notes: Added 2026-10-21 after the cleanup found superseded items parked as deferred for months. ItemStatus
-    gains retired, which needs a reason or a replacement (plan/item or PR) on the item; stage prunes it
-    like done, so a plan with only retired or landed items is removed and its branch-index and dashboard
-    entries go with it. The plan skills offer retired instead of deferred when work is superseded.
+  status: deferred
+  notes: 'Superseded by basstler-v3 plan-store-issues: a superseded item''s issue is closed as not planned,
+    with its replacement linked. Was: Added 2026-10-21 after the cleanup found superseded items parked
+    as deferred for months. ItemStatus gains retired, which needs a reason or a replacement (plan/item
+    or PR) on the item; stage prunes it like done, so a plan with only retired or landed items is removed
+    and its branch-index and dashboard entries go with it. The plan skills offer retired instead of deferred
+    when work is superseded.'
