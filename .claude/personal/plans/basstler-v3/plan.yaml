@@ -95,15 +95,15 @@ items:
       Idempotent: rerunning finds the issues already made. Landed items are not imported.
       Moves this plan onto the issue store too.
   - id: plan-site-from-issues
-    title: "The plan site is built from issues in an Action, not republished by a session"
+    title: "The plan site reads plans from issues"
     branch: null
     pull_request_number: null
     track: plans
     depends_on: [plan-store-issues]
     status: not started
     notes: >
-      Reuse the existing Pages build; the Artifact dashboard, its URL cache and the
-      session-side data fetching are retired.
+      Point the existing Pages build at the issue store instead of plan.yaml. Retiring the
+      Artifact dashboard and its URL cache is team-basstler/artifact-path-retirement.
   - id: stack-engine
     title: "Stacks read from pull request bases and restacked with git rebase --update-refs"
     branch: null
