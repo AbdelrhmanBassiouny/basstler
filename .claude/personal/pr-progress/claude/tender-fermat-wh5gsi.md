@@ -2,11 +2,12 @@
 
 ## Plan
 - pyproject: dev group + [tool.ruff]; fix findings; CI + pre-commit run ruff; AGENTS.md lightened
+- Ruff replaces black as the formatter (owner request), docformatter kept on top
 
 ## Done
-- All of the plan; ruff clean, 1749 tests pass
-- Decisions in the PR description: TYPE_CHECKING rule dropped (pydantic), pydantic not added until first boundary, black kept
-- Answered the SiteSection PEP 695 thread (krrood compatibility, importing SectionCard, SubclassSafeGeneric not needed); no code change, thread left open
+- All of the plan; merged main; ruff check + ruff format --check clean, 1791 tests pass
+- SiteSection PEP 695 thread answered and resolved by the owner
+- Decisions in the PR description: TYPE_CHECKING rule dropped (pydantic), pydantic not added until first boundary
 
 ## Next
-- Owner reply on that thread; CI result on the new ruff job
+- Owner review; CI on the pushed merge + reformat
