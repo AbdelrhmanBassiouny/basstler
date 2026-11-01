@@ -423,3 +423,7 @@ class BasstlerSource(StrEnum):
 
     REPOSITORY = "AbdelrhmanBassiouny/basstler"
     REUSABLE_WORKFLOW = ".github/workflows/upstream-reviews-action.yml"
+    LATEST_RELEASE = "main"
+    """
+    The branch every release is tagged on, so it always holds the latest one.
+    """

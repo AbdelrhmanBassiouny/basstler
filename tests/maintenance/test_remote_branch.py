@@ -63,15 +63,15 @@ def test_writing_keeps_the_files_already_on_the_branch(fork_checkout):
     branch.write({"second.txt": "two"}, "Second")
 
     tip = branch.fetch()
-    assert branch.read(tip, "first.txt") == "one"
-    assert branch.read(tip, "second.txt") == "two"
+    assert branch.git.file_at(tip, "first.txt") == "one"
+    assert branch.git.file_at(tip, "second.txt") == "two"
 
 
 def test_a_file_the_branch_lacks_reads_as_none(fork_checkout):
     branch = branch_on_fork(fork_checkout, "notes/someone")
     branch.write({"first.txt": "one"}, "First")
 
-    assert branch.read(branch.fetch(), "missing.txt") is None
+    assert branch.git.file_at(branch.fetch(), "missing.txt") is None
 
 
 def test_two_branches_of_one_remote_are_kept_apart(fork_checkout):
@@ -80,8 +80,8 @@ def test_two_branches_of_one_remote_are_kept_apart(fork_checkout):
     first.write({"file.txt": "first"}, "First")
     second.write({"file.txt": "second"}, "Second")
 
-    assert first.read(first.fetch(), "file.txt") == "first"
-    assert second.read(second.fetch(), "file.txt") == "second"
+    assert first.git.file_at(first.fetch(), "file.txt") == "first"
+    assert second.git.file_at(second.fetch(), "file.txt") == "second"
 
 
 def test_the_branch_names_the_repository_its_remote_points_at(fork_checkout):

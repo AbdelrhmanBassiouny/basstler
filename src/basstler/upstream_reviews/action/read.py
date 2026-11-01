@@ -215,7 +215,7 @@ class ActionRead(Generic[AnswerType]):
             named no request at all.
         """
         tip = self.branch.fetch()
-        text = self.branch.read(tip, ActionFile.RESULT) if tip else None
+        text = self.branch.git.file_at(tip, ActionFile.RESULT) if tip else None
         if text is None:
             return None
         data = json.loads(text)

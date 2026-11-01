@@ -12,8 +12,9 @@ permissions:
   id-token: write
 
 jobs:
-  build:
-    uses: {{ basstler_repository }}/{{ build_workflow }}@{{ branch_or_tag }}
+  {{ job }}:
+    uses: {{ called_workflow }}
     with:
-      basstler_branch_or_tag: {{ branch_or_tag }}
-      registry: {{ registry }}
+{% for input, value in inputs.items() %}
+      {{ input }}: {{ value }}
+{% endfor %}

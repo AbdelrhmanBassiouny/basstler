@@ -4,7 +4,6 @@ One branch of a remote, read and written without touching the working tree.
 
 from __future__ import annotations
 
-import tempfile
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -90,54 +89,14 @@ class RemoteBranch:
         )
         return self.git.commit_at(self.local_reference)
 
-    def read(self, commit: str, path: str) -> str | None:
-        """
-        :param commit: The commit to read from.
-        :param path: The file's path from the branch's root.
-        :return: Its text without the final newline, or ``None`` when the commit has
-            no such file.
-        """
-        shown = self.git.attempt("show", f"{commit}:{path}")
-        return shown.output if shown.succeeded else None
-
-    def read_latest(self, path: str) -> str | None:
+    def read_latest(self, path: str | Path) -> str | None:
         """
         :param path: The file's path from the branch's root.
         :return: Its text at the branch's current tip without the final newline, or
             ``None`` when the remote has no such branch or the branch no such file.
         """
         tip = self.fetch()
-        return self.read(tip, path) if tip else None
-
-    def commit(self, parent: str | None, files: dict[str, str], message: str) -> str:
-        """
-        Commit files on top of the branch, keeping every file not given.
-
-        :param parent: The commit to build on, ``None`` for the branch's first.
-        :param files: What to write, by path, each without its final newline.
-        :param message: The commit message.
-        :return: The new commit.
-        """
-        with tempfile.TemporaryDirectory() as scratch:
-            index = {"GIT_INDEX_FILE": str(Path(scratch) / "index")}
-            if parent is None:
-                self.git.run("read-tree", "--empty", environment=index)
-            else:
-                self.git.run("read-tree", parent, environment=index)
-            for path, text in files.items():
-                blob_file = Path(scratch) / "blob"
-                blob_file.write_text(text + "\n")
-                blob = self.git.run("hash-object", "-w", str(blob_file))
-                self.git.run(
-                    "update-index",
-                    "--add",
-                    "--cacheinfo",
-                    f"100644,{blob},{path}",
-                    environment=index,
-                )
-            tree = self.git.run("write-tree", environment=index)
-        parents = ["-p", parent] if parent else []
-        return self.git.run("commit-tree", tree, *parents, "-m", message)
+        return self.git.file_at(tip, path) if tip else None
 
     def write(self, files: dict[str, str], message: str, attempts: int = 3) -> str:
         """
@@ -151,7 +110,7 @@ class RemoteBranch:
         :raises GitCommandFailed: If the last push is refused too.
         """
         for _ in range(attempts):
-            commit = self.commit(self.fetch(), files, message)
+            commit = self.git.commit_files(self.fetch(), files, message)
             pushed = self.git.push(
                 ProposedPush(self.remote, f"{commit}:refs/heads/{self.name}")
             )

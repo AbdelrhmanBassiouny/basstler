@@ -44,6 +44,17 @@ class OperatingSystemVariable(EnvironmentVariable):
     """
 
 
+class GitVariable(EnvironmentVariable):
+    """
+    The variables git reads that this package sets for the commands it runs.
+    """
+
+    INDEX_FILE = "GIT_INDEX_FILE"
+    """
+    The index git stages into, in place of the clone's own.
+    """
+
+
 class GitHubCredentialVariable(EnvironmentVariable):
     """
     The variables a GitHub token is read from, in the order they are tried.

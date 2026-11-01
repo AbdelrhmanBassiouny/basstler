@@ -8,8 +8,8 @@ creating the site repository, turning Pages on, storing the token - as one copya
 Run again, it re-checks them: a step counts as done once a run that needs it succeeded.
 
 Usage:
-    "${BASSTLER_PYTHON}" -m basstler.plan_site.publication --branch-or-tag <branch or tag> \\
-        [--site-repository <owner/name>]
+    "${BASSTLER_PYTHON}" -m basstler.plan_site.publication \\
+        [--site-repository <owner/name>] [--branch-or-tag <branch or tag>]
 """
 
 from __future__ import annotations
@@ -19,10 +19,11 @@ import os
 import re
 import sys
 from collections.abc import Sequence
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
+from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
 from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
@@ -30,7 +31,13 @@ from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import PlanHub
-from basstler.render_common import create_template_environment
+from basstler.plan_site.site_repository import SiteRepository
+from basstler.plan_site.workflows import (
+    DispatchWorkflow,
+    PlanSiteSecret,
+    PlanSiteWorkflow,
+    SiteWorkflow,
+)
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting, resolve_repository
 from basstler.standard_streams import StandardStreamHandler
@@ -42,163 +49,6 @@ logger = StandardStreamHandler.logger_for(__name__)
 This module's logger, which is also what its command prints through.
 """
 
-# %% names
-
-
-class PlanSiteSecret(StrEnum):
-    """
-    The Actions secrets the plan site's workflows read.
-    """
-
-    TOKEN = "PLAN_SITE_TOKEN"
-    """
-    The user's fine-grained token, stored on each notes repository, that lets its
-    dispatch workflow start the build in the site repository.
-    """
-
-
-class PlanSiteTemplate(StrEnum):
-    """
-    The templates in :attr:`PackageLocation.TEMPLATES` the site's workflows are rendered
-    from.
-    """
-
-    SITE_WORKFLOW = "plan_site_workflow.yml"
-    """
-    The workflow on the site repository.
-    """
-
-    DISPATCH_WORKFLOW = "plan_site_dispatch_workflow.yml"
-    """
-    The workflow on a notes branch.
-    """
-
-    def render(self, **context: Any) -> str:
-        """
-        :param context: The values the template substitutes, by name.
-        :return: The rendered file, without its final newline.
-        """
-        return create_template_environment().get_template(self.value).render(**context)
-
-
-# %% the site repository
-
-
-@dataclass(frozen=True)
-class SiteRepository:
-    """
-    The repository the user owns that builds and serves the plan site.
-    """
-
-    repository: Repository
-    """
-    The repository on GitHub.
-    """
-
-    @classmethod
-    def default_for(
-        cls, notes_repository: Repository, name: str = "plans"
-    ) -> SiteRepository:
-        """
-        :param notes_repository: The repository whose plans the site publishes.
-        :param name: The site repository's name.
-        :return: The repository of that name under the same owner.
-        """
-        return cls(Repository(notes_repository.owner, name))
-
-    @property
-    def site_url(self) -> str:
-        """
-        :return: The address GitHub Pages serves the repository's site from.
-        """
-        host = f"{self.repository.owner.lower()}.github.io"
-        if self.repository.name.lower() == host:
-            return f"https://{host}/"
-        return f"https://{host}/{self.repository.name}/"
-
-
-@dataclass(frozen=True)
-class SiteWorkflow:
-    """
-    The site repository's workflow, as one basstler release writes it.
-    """
-
-    branch_or_tag: str
-    """
-    The basstler branch or release tag whose build it runs.
-    """
-
-    registry: Repository
-    """
-    The repository whose notes hold the complete hub file.
-    """
-
-    @classproperty
-    def registry_line(cls) -> re.Pattern[str]:
-        """
-        The line of a written workflow naming its registry.
-        """
-        return re.compile(r"^\s*registry:\s*(?P<registry>\S+)\s*$", re.MULTILINE)
-
-    @classmethod
-    def registry_in(cls, text: str) -> Repository | None:
-        """
-        :param text: A site workflow as written on the site repository.
-        :return: The registry it names, or ``None`` when it names none.
-        """
-        match = cls.registry_line.search(text)
-        return Repository.parse(match["registry"]) if match else None
-
-    @property
-    def text(self) -> str:
-        """:return: The workflow."""
-        return PlanSiteTemplate.SITE_WORKFLOW.render(
-            basstler_repository=BasstlerSource.REPOSITORY,
-            build_workflow=WorkflowLocation.PLAN_SITE_BUILD.as_posix(),
-            branch_or_tag=self.branch_or_tag,
-            registry=self.registry.full_name,
-        )
-
-
-@dataclass(frozen=True)
-class DispatchWorkflow:
-    """
-    The notes branch's workflow that starts the site's build on every push to it.
-    """
-
-    notes_repository: Repository
-    """
-    The repository the notes branch belongs to.
-    """
-
-    notes_branch: str
-    """
-    The notes branch.
-    """
-
-    site: Repository
-    """
-    The site repository whose workflow it starts.
-    """
-
-    site_branch: str
-    """
-    The site repository's branch its workflow runs on.
-    """
-
-    @property
-    def text(self) -> str:
-        """:return: The workflow."""
-        return PlanSiteTemplate.DISPATCH_WORKFLOW.render(
-            notes_repository=self.notes_repository.full_name,
-            notes_branch=self.notes_branch,
-            site_repository=self.site.full_name,
-            site_branch=self.site_branch,
-            site_workflow_name=WorkflowLocation.PLAN_SITE.name,
-            token_secret=PlanSiteSecret.TOKEN,
-        )
-
-
 # %% the runs that confirm a step
 
 
@@ -208,8 +58,35 @@ class WorkflowRunKey(StrEnum):
     """
 
     WORKFLOW_RUNS = "workflow_runs"
+    """
+    The listed runs, newest first.
+    """
+
     PATH = "path"
+    """
+    The path of the workflow file a run ran, relative to its repository's root.
+    """
+
     CONCLUSION = "conclusion"
+    """
+    How a run ended, ``null`` while it runs.
+    """
+
+
+class RunListingParameter(StrEnum):
+    """
+    The query parameters a run listing is narrowed by.
+    """
+
+    BRANCH = "branch"
+    """
+    The branch the runs ran on.
+    """
+
+    RUNS_PER_PAGE = "per_page"
+    """
+    How many runs the listing holds.
+    """
 
 
 @dataclass(frozen=True)
@@ -218,9 +95,9 @@ class ListedRun(JSONModel):
     One run in a repository's run listing.
     """
 
-    workflow: str
+    workflow: Path
     """
-    The path of the workflow file it ran.
+    The workflow file it ran, relative to its repository's root.
     """
 
     outcome: CheckOutcome
@@ -235,7 +112,7 @@ class ListedRun(JSONModel):
         :return: The parsed run.
         """
         return cls(
-            data[WorkflowRunKey.PATH],
+            Path(data[WorkflowRunKey.PATH]),
             CheckOutcome.from_conclusion(data[WorkflowRunKey.CONCLUSION]),
         )
 
@@ -252,13 +129,20 @@ class RunListing:
     """
 
     @staticmethod
-    def path(repository: Repository, branch: str) -> str:
+    def path(repository: Repository, branch: str, runs_per_page: int = 20) -> str:
         """
         :param repository: The repository.
         :param branch: The branch the runs ran on.
+        :param runs_per_page: How many of the latest runs to list.
         :return: The REST path listing them.
         """
-        return f"{repository.api_path}/actions/runs?branch={branch}&per_page=20"
+        query = urlencode(
+            {
+                RunListingParameter.BRANCH: branch,
+                RunListingParameter.RUNS_PER_PAGE: runs_per_page,
+            }
+        )
+        return f"{repository.api_path}/actions/runs?{query}"
 
     @classmethod
     def read(
@@ -280,9 +164,7 @@ class RunListing:
         :param workflow: The workflow.
         :return: Whether its latest run succeeded.
         """
-        latest = next(
-            (run for run in self.runs if run.workflow == workflow.as_posix()), None
-        )
+        latest = next((run for run in self.runs if run.workflow == workflow), None)
         return latest is not None and latest.outcome is CheckOutcome.SUCCESS
 
 
@@ -295,8 +177,19 @@ class UserStep(StrEnum):
     """
 
     CREATE_SITE_REPOSITORY = "create the site repository"
+    """
+    The site repository does not exist, or cannot be reached.
+    """
+
     TURN_ON_PAGES = "turn on GitHub Pages for the site repository"
+    """
+    No build in the site repository has succeeded yet.
+    """
+
     STORE_TOKEN = "store the token that starts the build"
+    """
+    No dispatch from the notes branch has succeeded yet.
+    """
 
 
 @dataclass(frozen=True)
@@ -331,7 +224,7 @@ class UserSteps:
     The repository whose notes branch starts the build.
     """
 
-    site: Repository
+    site: SiteRepository
     """
     The site repository.
     """
@@ -355,14 +248,15 @@ class UserSteps:
         """
         lines = {
             UserStep.CREATE_SITE_REPOSITORY: (
-                f"gh repo create {self.site.full_name} --public"
+                f"gh repo create {self.site.repository.full_name} --public"
             ),
             UserStep.TURN_ON_PAGES: (
-                f"gh api -X POST {self.site.api_path}/pages -f build_type=workflow"
+                f"gh api -X POST {self.site.repository.api_path}/pages "
+                "-f build_type=workflow"
             ),
             UserStep.STORE_TOKEN: (
                 f"create a fine-grained token at {self.token_page} with Actions: write "
-                f"on {self.site.full_name} and Contents: read on "
+                f"on {self.site.repository.full_name} and Contents: read on "
                 f"{', '.join(self.registered)}, then: gh secret set "
                 f"{PlanSiteSecret.TOKEN} --repo {self.notes_repository.full_name}"
             ),
@@ -422,27 +316,19 @@ class PlanSitePublication:
 
     notes_remote: str
     """
-    The remote the notes branch lives on, as a remote name or a URL.
+    The remote the notes branch lives on, as a remote name or a URL, pointing at
+    :attr:`DispatchWorkflow.notes_repository`.
     """
 
-    notes_repository: Repository
+    dispatch_workflow: DispatchWorkflow
     """
-    The repository :attr:`notes_remote` points at.
-    """
-
-    notes_branch: str
-    """
-    The notes branch.
+    The notes branch's workflow, naming the notes repository, its notes branch and the
+    site repository.
     """
 
-    site: SiteRepository
+    site_workflow: SiteWorkflow
     """
-    The site repository.
-    """
-
-    branch_or_tag: str
-    """
-    The basstler branch or release tag the site's build runs.
+    The site repository's workflow, whose registry an existing one's replaces.
     """
 
     runs: RestClient
@@ -468,17 +354,19 @@ class PlanSitePublication:
         """
         remote = (
             self.notes_remote
-            if repository == self.notes_repository
+            if repository == self.dispatch_workflow.notes_repository
             else repository.clone_url_under(self.remote_root)
         )
-        return RemoteBranch(self.git, remote, self.notes_branch)
+        return RemoteBranch(self.git, remote, self.dispatch_workflow.notes_branch)
 
     def site_branch(self) -> RemoteBranch | None:
         """
         :return: The site repository's default branch, or ``None`` when the site
             repository cannot be reached.
         """
-        remote = self.site.repository.clone_url_under(self.remote_root)
+        remote = self.dispatch_workflow.site.repository.clone_url_under(
+            self.remote_root
+        )
         listed = self.git.attempt("ls-remote", "--symref", remote, "HEAD")
         if not listed.succeeded:
             return None
@@ -495,51 +383,65 @@ class PlanSitePublication:
 
         :return: What was written and what is left.
         """
-        report = PublicationReport(self.site.site_url)
+        notes_repository = self.dispatch_workflow.notes_repository
+        site = self.dispatch_workflow.site
+        report = PublicationReport(site.site_url)
         site_branch = self.site_branch()
-        user_steps = UserSteps(self.notes_repository, self.site.repository, [])
         if site_branch is None:
+            user_steps = UserSteps(notes_repository, site, [])
             report.pending.append(user_steps.pending(UserStep.CREATE_SITE_REPOSITORY))
             return report
-        registry = self.write_site_workflow(site_branch, report)
-        hub = self.register(registry, report)
-        self.write_dispatch_workflow(site_branch.name, report)
-        user_steps = UserSteps(
-            self.notes_repository, self.site.repository, hub.repositories
+        existing = site_branch.read_latest(SiteWorkflow.location)
+        site_workflow = (
+            replace(
+                self.site_workflow, registry=SiteWorkflow.from_text(existing).registry
+            )
+            if existing
+            else self.site_workflow
         )
-        site_runs = RunListing.read(self.runs, self.site.repository, site_branch.name)
-        if not site_runs.succeeded(WorkflowLocation.PLAN_SITE):
+        self.write(
+            site_branch,
+            site_workflow,
+            f"Build the plan site with basstler {site_workflow.branch_or_tag}",
+            report,
+        )
+        hub = self.register(site_workflow.registry, report)
+        self.write(
+            self.notes_branch_of(notes_repository),
+            self.dispatch_workflow,
+            f"Start the plan site build in {site.repository.full_name} on every push",
+            report,
+        )
+        user_steps = UserSteps(notes_repository, site, hub.repositories)
+        site_runs = RunListing.read(self.runs, site.repository, site_branch.name)
+        if not site_runs.succeeded(SiteWorkflow.location):
             report.pending.append(user_steps.pending(UserStep.TURN_ON_PAGES))
         notes_runs = RunListing.read(
-            self.runs, self.notes_repository, self.notes_branch
+            self.runs, notes_repository, self.dispatch_workflow.notes_branch
         )
-        if not notes_runs.succeeded(WorkflowLocation.PLAN_SITE_DISPATCH):
+        if not notes_runs.succeeded(DispatchWorkflow.location):
             report.pending.append(user_steps.pending(UserStep.STORE_TOKEN))
         return report
 
-    def write_site_workflow(
-        self, site_branch: RemoteBranch, report: PublicationReport
-    ) -> Repository:
+    @staticmethod
+    def write(
+        branch: RemoteBranch,
+        workflow: PlanSiteWorkflow,
+        message: str,
+        report: PublicationReport,
+    ) -> None:
         """
-        Write the site workflow, keeping the registry an earlier one names.
+        Write a workflow onto a branch unless the branch already has it as it is.
 
-        :param site_branch: The site repository's default branch.
+        :param branch: The branch to write onto.
+        :param workflow: The workflow.
+        :param message: The commit message.
         :param report: Where to record the write.
-        :return: The registry the workflow names.
         """
-        path = WorkflowLocation.PLAN_SITE.as_posix()
-        existing = site_branch.read_latest(path)
-        registry = (
-            SiteWorkflow.registry_in(existing) if existing else None
-        ) or self.notes_repository
-        workflow = SiteWorkflow(self.branch_or_tag, registry).text
-        if existing != workflow:
-            site_branch.write(
-                {path: workflow},
-                f"Build the plan site with basstler {self.branch_or_tag}",
-            )
-            report.written.append(f"{path} on {site_branch.description}")
-        return registry
+        if branch.read_latest(workflow.location) == workflow.text:
+            return
+        branch.write({workflow.location.as_posix(): workflow.text}, message)
+        report.written.append(f"{workflow.location} on {branch.description}")
 
     def register(self, registry: Repository, report: PublicationReport) -> PlanHub:
         """
@@ -550,45 +452,23 @@ class PlanSitePublication:
         :param report: Where to record the writes.
         :return: The hub file as written.
         """
+        notes_repository = self.dispatch_workflow.notes_repository
         path = ProjectLocation.PLAN_HUB.as_posix()
         hub = PlanHub.from_text(self.notes_branch_of(registry).read_latest(path))
         if hub is None:
             hub = PlanHub(registry=registry.full_name)
-        hub.register(self.notes_repository.full_name)
-        hub.site_url = self.site.site_url
+        hub.register(notes_repository.full_name)
+        hub.site_url = self.dispatch_workflow.site.site_url
         text = hub.to_text().rstrip("\n")
-        for repository in dict.fromkeys([registry, self.notes_repository]):
+        for repository in dict.fromkeys([registry, notes_repository]):
             branch = self.notes_branch_of(repository)
             if branch.read_latest(path) == text:
                 continue
             branch.write(
-                {path: text},
-                f"List {self.notes_repository.full_name} on the plan site",
+                {path: text}, f"List {notes_repository.full_name} on the plan site"
             )
             report.written.append(f"{path} on {branch.description}")
         return hub
-
-    def write_dispatch_workflow(
-        self, site_branch: str, report: PublicationReport
-    ) -> None:
-        """
-        Write the notes branch's dispatch workflow.
-
-        :param site_branch: The site repository's branch its workflow runs on.
-        :param report: Where to record the write.
-        """
-        path = WorkflowLocation.PLAN_SITE_DISPATCH.as_posix()
-        workflow = DispatchWorkflow(
-            self.notes_repository, self.notes_branch, self.site.repository, site_branch
-        ).text
-        notes = self.notes_branch_of(self.notes_repository)
-        if notes.read_latest(path) == workflow:
-            return
-        notes.write(
-            {path: workflow},
-            f"Start the plan site build in {self.site.repository.full_name} on every push",
-        )
-        report.written.append(f"{path} on {notes.description}")
 
 
 # %% command line
@@ -601,7 +481,8 @@ class PublicationOption(StrEnum):
 
     BRANCH_OR_TAG = "--branch-or-tag"
     """
-    The basstler branch or release tag the site's build runs.
+    The basstler branch or release tag the site's build runs, the latest release when
+    not given.
     """
 
     SITE_REPOSITORY = "--site-repository"
@@ -620,7 +501,9 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
     )
-    parser.add_argument(PublicationOption.BRANCH_OR_TAG, required=True)
+    parser.add_argument(
+        PublicationOption.BRANCH_OR_TAG, default=BasstlerSource.LATEST_RELEASE
+    )
     parser.add_argument(
         PublicationOption.SITE_REPOSITORY,
         type=lambda text: SiteRepository(Repository.parse(text)),
@@ -637,10 +520,12 @@ def main(argv: list[str] | None = None) -> int:
     report = PlanSitePublication(
         GitCommandRunner(project_root),
         notes_remote,
-        notes_repository,
-        PersonalNotesSetting.BRANCH.resolve(project_root, os.environ),
-        site,
-        arguments.branch_or_tag,
+        DispatchWorkflow(
+            notes_repository,
+            PersonalNotesSetting.BRANCH.resolve(project_root, os.environ),
+            site,
+        ),
+        SiteWorkflow(arguments.branch_or_tag, notes_repository),
         GitHubCommandLineClient(),
     ).publish()
     logger.info(report.render())

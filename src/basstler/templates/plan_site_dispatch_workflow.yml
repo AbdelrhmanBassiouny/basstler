@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  dispatch:
+  {{ job }}:
     name: Start the plan site build
     if: github.repository == '{{ notes_repository }}'
     runs-on: ubuntu-latest
@@ -23,5 +23,5 @@ jobs:
     steps:
       - name: Start the build
         env:
-          GH_TOKEN: {{ '${{' }} secrets.{{ token_secret }} {{ '}}' }}
-        run: gh workflow run {{ site_workflow_name }} --repo {{ site_repository }} --ref {{ site_branch }}
+          {{ token_variable }}: {{ '${{' }} secrets.{{ token_secret }} {{ '}}' }}
+        run: gh workflow run {{ site_workflow_name }} --repo {{ site_repository }}

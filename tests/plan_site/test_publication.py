@@ -11,19 +11,20 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
-import yaml
 
+from basstler.environment import GitHubCredentialVariable
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.publication import (
+from basstler.plan_site.publication import PlanSitePublication, RunListing, UserStep
+from basstler.plan_site.site_repository import SiteRepository
+from basstler.plan_site.workflows import (
     DispatchWorkflow,
-    PlanSitePublication,
+    PlanSiteJob,
     PlanSiteSecret,
-    RunListing,
-    SiteRepository,
     SiteWorkflow,
-    UserStep,
+    WorkflowFile,
+    WorkflowStep,
 )
 from basstler.repository import Repository
 from basstler.setup.steps import PersonalNotesSetting
@@ -113,10 +114,8 @@ class Publishing:
         return PlanSitePublication(
             GitCommandRunner(self.checkout.project_root),
             RemoteName.ORIGIN,
-            self.notes_repository,
-            NOTES_BRANCH,
-            self.site,
-            BRANCH_OR_TAG,
+            DispatchWorkflow(self.notes_repository, NOTES_BRANCH, self.site),
+            SiteWorkflow(BRANCH_OR_TAG, self.notes_repository),
             runs,
             remote_root=self.root.as_uri(),
         )
@@ -197,7 +196,7 @@ def test_an_empty_site_repository_gets_the_workflow_naming_the_notes_repository(
 ):
     assert (
         published.file(
-            published.site.repository, "main", WorkflowLocation.PLAN_SITE.as_posix()
+            published.site.repository, "main", SiteWorkflow.location.as_posix()
         )
         == SiteWorkflow(BRANCH_OR_TAG, published.notes_repository).text
     )
@@ -215,33 +214,27 @@ def test_the_workflow_goes_on_the_site_repository_s_default_branch(publishing):
 
     assert (
         publishing.file(
-            publishing.site.repository, "trunk", WorkflowLocation.PLAN_SITE.as_posix()
+            publishing.site.repository, "trunk", SiteWorkflow.location.as_posix()
         )
         == SiteWorkflow(BRANCH_OR_TAG, publishing.notes_repository).text
     )
 
 
-def test_the_site_workflow_calls_basstler_s_build_with_the_registry():
-    registry = Repository("an-owner", "a-registry")
+def test_the_site_workflow_calls_basstler_s_build_at_its_branch_or_tag():
+    workflow = SiteWorkflow(BRANCH_OR_TAG, Repository("an-owner", "a-registry"))
 
-    workflow = yaml.safe_load(SiteWorkflow(BRANCH_OR_TAG, registry).text)
+    job = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.BUILD]
 
-    assert workflow["jobs"]["build"]["uses"] == (
+    assert job.called_workflow == (
         f"{BasstlerSource.REPOSITORY}/{WorkflowLocation.PLAN_SITE_BUILD.as_posix()}"
         f"@{BRANCH_OR_TAG}"
     )
-    assert workflow["jobs"]["build"]["with"] == {
-        "basstler_branch_or_tag": BRANCH_OR_TAG,
-        "registry": registry.full_name,
-    }
 
 
-def test_a_written_site_workflow_reads_back_its_registry():
-    registry = Repository("an-owner", "a-registry")
+def test_a_written_site_workflow_reads_back_as_the_same_workflow():
+    workflow = SiteWorkflow(BRANCH_OR_TAG, Repository("an-owner", "a-registry"))
 
-    assert SiteWorkflow.registry_in(SiteWorkflow(BRANCH_OR_TAG, registry).text) == (
-        registry
-    )
+    assert SiteWorkflow.from_text(workflow.text) == workflow
 
 
 @pytest.mark.parametrize(
@@ -303,36 +296,50 @@ def test_the_notes_branch_gets_the_dispatch_workflow(published):
     assert published.file(
         published.notes_repository,
         NOTES_BRANCH,
-        WorkflowLocation.PLAN_SITE_DISPATCH.as_posix(),
+        DispatchWorkflow.location.as_posix(),
     ) == (
-        DispatchWorkflow(
-            published.notes_repository,
-            NOTES_BRANCH,
-            published.site.repository,
-            "main",
-        ).text
+        DispatchWorkflow(published.notes_repository, NOTES_BRANCH, published.site).text
     )
 
 
-def test_the_dispatch_workflow_starts_the_site_build_on_every_push_with_the_token():
+def test_the_dispatch_workflow_runs_on_every_push_to_the_notes_branch():
+    workflow = DispatchWorkflow(
+        Repository("an-owner", "a-project"),
+        NOTES_BRANCH,
+        SiteRepository(Repository("an-owner", "plans")),
+    )
+
+    assert WorkflowFile.from_text(workflow.text).pushed_branches == [NOTES_BRANCH]
+
+
+def test_the_dispatch_workflow_runs_only_in_the_notes_repository():
     notes_repository = Repository("an-owner", "a-project")
-    site = Repository("an-owner", "plans")
-
-    workflow = yaml.safe_load(
-        DispatchWorkflow(notes_repository, NOTES_BRANCH, site, "main").text
+    workflow = DispatchWorkflow(
+        notes_repository, NOTES_BRANCH, SiteRepository(Repository("an-owner", "plans"))
     )
 
-    # PyYAML reads the bare key ``on`` as the boolean true.
-    assert workflow[True]["push"] == {"branches": [NOTES_BRANCH]}
-    job = workflow["jobs"]["dispatch"]
-    assert job["if"] == f"github.repository == '{notes_repository.full_name}'"
-    assert job["steps"][0]["env"] == {
-        "GH_TOKEN": f"${{{{ secrets.{PlanSiteSecret.TOKEN} }}}}"
-    }
-    assert job["steps"][0]["run"] == (
-        f"gh workflow run {WorkflowLocation.PLAN_SITE.name} "
-        f"--repo {site.full_name} --ref main"
-    )
+    job = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.DISPATCH]
+
+    assert job.condition == f"github.repository == '{notes_repository.full_name}'"
+
+
+def test_the_dispatch_workflow_starts_the_site_workflow_with_the_token():
+    site = SiteRepository(Repository("an-owner", "plans"))
+    workflow = DispatchWorkflow(Repository("an-owner", "a-project"), NOTES_BRANCH, site)
+
+    job = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.DISPATCH]
+
+    assert job.steps == [
+        WorkflowStep(
+            f"gh workflow run {SiteWorkflow.location.name} "
+            f"--repo {site.repository.full_name}",
+            {
+                GitHubCredentialVariable.GH_TOKEN: (
+                    f"${{{{ secrets.{PlanSiteSecret.TOKEN} }}}}"
+                )
+            },
+        )
+    ]
 
 
 # %% re-running

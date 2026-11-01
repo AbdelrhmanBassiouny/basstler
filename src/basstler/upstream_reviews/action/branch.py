@@ -105,7 +105,7 @@ class ActionInstallation:
             all.
         """
         tip = branch.fetch()
-        workflow = branch.read(tip, ActionFile.WORKFLOW) if tip else None
+        workflow = branch.git.file_at(tip, ActionFile.WORKFLOW) if tip else None
         if workflow is None:
             return InstallationState.MISSING, None
         match = self.branch_or_tag_line.search(workflow)
