@@ -5,7 +5,7 @@ their cases from.
 
 from __future__ import annotations
 
-from collections.abc import Container
+from collections.abc import Container, Mapping
 from enum import Enum, IntEnum, StrEnum
 from urllib.parse import parse_qs as parse_query_string
 from urllib.parse import urlsplit as split_url
@@ -152,14 +152,44 @@ def make_configuration() -> Configuration:
 
 
 def build(
-    pull_requests: list[PullRequest], merged: Container[str] = frozenset()
+    pull_requests: list[PullRequest],
+    merged: Container[str] = frozenset(),
+    carried_by: Mapping[str, str] | None = None,
 ) -> Stack:
     """
     :param pull_requests: The board entries to derive the stack from.
     :param merged: The branches that have already landed upstream.
+    :param carried_by: Each branch whose commits another branch contains, besides the
+        branches it was cut from, mapped to that other branch.
     :return: The stack those entries describe.
     """
-    return Stack.build(make_configuration(), pull_requests, lambda name: name in merged)
+    bases = {pull_request.head: pull_request.base for pull_request in pull_requests}
+    merged_into = carried_by or {}
+
+    def is_contained_by(candidate: str, container: str) -> bool:
+        reached: set[str] = set()
+        reachable = [container]
+        while reachable:
+            current = reachable.pop()
+            if current == candidate:
+                return True
+            if current in reached:
+                continue
+            reached.add(current)
+            reachable.extend(
+                name
+                for name in [bases.get(current)]
+                + [name for name, into in merged_into.items() if into == current]
+                if name is not None
+            )
+        return False
+
+    return Stack.build(
+        make_configuration(),
+        pull_requests,
+        lambda name: name in merged,
+        is_contained_by,
+    )
 
 
 # %% reading a compare-and-create link

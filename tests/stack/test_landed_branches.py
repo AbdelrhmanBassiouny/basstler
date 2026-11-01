@@ -7,7 +7,8 @@ from __future__ import annotations
 
 import pytest
 
-from basstler.stack.checkout import LandedBranches
+from basstler.exceptions import UnresolvableReferenceError
+from basstler.stack.checkout import CurrentCheckout, LandedBranches
 
 from ..constants.stack import RemoteName, StackBranch
 from ..maintenance.fork import UPSTREAM_BASE, ForkCheckout, make_configuration
@@ -86,4 +87,42 @@ def test_a_branch_named_with_a_slash_has_landed(
 
     assert LandedBranches.from_checkout(make_configuration()).contains(
         StackBranch.NAMESPACED
+    )
+
+
+# %% whether one fork branch's commits are in another
+
+
+def test_a_branch_is_contained_by_the_branch_cut_from_it(
+    fork_with_a_branch: ForkCheckout,
+):
+    fork_with_a_branch.branch_from(StackBranch.CHILD, StackBranch.PARENT)
+    is_contained_by = CurrentCheckout.containment_predicate(make_configuration())
+
+    assert is_contained_by(StackBranch.PARENT, StackBranch.CHILD)
+
+
+def test_a_branch_is_not_contained_by_the_branch_it_was_cut_from(
+    fork_with_a_branch: ForkCheckout,
+):
+    fork_with_a_branch.branch_from(StackBranch.CHILD, StackBranch.PARENT)
+    is_contained_by = CurrentCheckout.containment_predicate(make_configuration())
+
+    assert not is_contained_by(StackBranch.CHILD, StackBranch.PARENT)
+
+
+def test_containment_refuses_a_branch_whose_reference_does_not_resolve(
+    fork_with_a_branch: ForkCheckout,
+):
+    """
+    A reference that was never fetched is not evidence that the commits are elsewhere,
+    and answering ``False`` for it would hand a branch back as having lost its base.
+    """
+    is_contained_by = CurrentCheckout.containment_predicate(make_configuration())
+
+    with pytest.raises(UnresolvableReferenceError) as refusal:
+        is_contained_by(StackBranch.CHILD, StackBranch.PARENT)
+
+    assert refusal.value.reference == make_configuration().reference_on_fork(
+        StackBranch.CHILD
     )

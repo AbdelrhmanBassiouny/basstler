@@ -186,7 +186,10 @@ class LargeBoard:
             landed.
         """
         return Stack.build(
-            make_configuration(), self.board(), lambda branch: branch == UPSTREAM_BASE
+            make_configuration(),
+            self.board(),
+            lambda branch: branch == UPSTREAM_BASE,
+            lambda candidate, container: False,
         )
 
     def restacked(self) -> tuple[BranchOutcome, ...]:

@@ -40,7 +40,9 @@ that base branch is deleted. The inflated diff it shows is a symptom, not the pr
 it is what lets the fast-forward finish it.
 
 `reparents` decides by git ancestry, so it also covers a base whose own pull request was *closed*
-rather than merged - one absent from the board entirely.
+rather than merged - one absent from the board entirely. The target is usually the upstream base, but
+a base that merged into another open branch instead left its commits there, so that branch is what
+its child has to build on.
 
 ### Base changes stay with the session
 
@@ -103,6 +105,12 @@ session never needs it.
 `integration-failed` means integrating the parent failed without conflicting on anything - an
 untracked file in the way, unrelated histories, a reference that does not resolve. The branch is not
 what needs fixing, so its owner is deliberately not told and it is never labelled.
+
+`parent-gone` means the branch's base is in neither the upstream base nor any other open branch, which
+is what a base whose own pull request closed without merging leaves behind. There is no base to
+retarget it at and what superseded the abandoned work is the owner's to say, so the branch is labelled
+and commented on exactly as a conflict is, and nothing is published or reparented. A pass over one
+named subtree leaves it to the caller instead, as it does a conflict.
 
 A `skipped` pull request has a head the credential cannot push to (`head-on-another-fork`) or one
 whose repository is gone (`head-repository-deleted`). Its base is still on the fork, so the session still

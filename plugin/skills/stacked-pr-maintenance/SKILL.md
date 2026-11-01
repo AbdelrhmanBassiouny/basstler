@@ -81,7 +81,10 @@ upstream review decides how each one is restacked.
 
 ### Reparents (only if any)
 
-For each entry, set the pull request's base to `target_base` with `update_pull_request`.
+For each entry, set the pull request's base to `target_base` with `update_pull_request`. Read the
+target rather than assuming it: it is usually the upstream base, but a base that merged into another
+open branch left its commits there, so that branch is what its child builds on. A base whose commits
+reached nothing is listed in neither column; step 3 hands that branch back to its owner.
 
 A `422 ... part of a stack` means a native GitHub stack. Use curl with `GH_TOKEN` and the header
 `X-GitHub-Api-Version: 2026-03-10`:
@@ -123,7 +126,7 @@ The first line is the status:
 
 | status | what you do |
 |---|---|
-| `success`, `branch-needs-attention` | relay the summary |
+| `success`, `branch-needs-attention` | relay the summary; a `parent-gone` branch is its owner's to answer, so name it and never pick a replacement base yourself |
 | `not-fast-forward` | relay it; the fork's base is behind the upstream |
 | `move-refused` | relay it and stop |
 
