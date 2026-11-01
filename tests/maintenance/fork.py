@@ -410,7 +410,12 @@ def a_stack(checkout: ForkCheckout, pull_requests: list[PullRequest]):
     def is_merged(name: str) -> bool:
         return ancestry.is_ancestor(name, upstream)
 
-    return Stack.build(configuration, pull_requests, is_merged)
+    def is_contained_by(candidate: str, container: str) -> bool:
+        return ancestry.is_ancestor(
+            candidate, configuration.reference_on_fork(container)
+        )
+
+    return Stack.build(configuration, pull_requests, is_merged, is_contained_by)
 
 
 # %% the board export

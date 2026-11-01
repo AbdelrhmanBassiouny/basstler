@@ -214,6 +214,14 @@ class StackBranch(Branch):
     description: str | None = None
     """The pull request's description without the sections a pass writes, if known."""
 
+    @property
+    def owner_address(self) -> str:
+        """:return: The session link to address a comment to, or a note that the
+        description names none."""
+        if self.session:
+            return f"\n\n{self.session}"
+        return "\n\nThis pull request's description names no session to address."
+
     upstream_link: str | None = None
     """The URL of the upstream pull request linked on the pull request, if any."""
 
@@ -313,6 +321,34 @@ class Reparent:
     """The base it must be retargeted at."""
 
 
+class ParentSituation(StrEnum):
+    """Where a parent branch's commits are, which decides what its child builds on."""
+
+    TRACKED = "tracked"
+    """It is the upstream base, or a branch an open pull request on the board describes."""
+
+    LANDED = "landed"
+    """Its commits are in the upstream base."""
+
+    IN_ANOTHER_BRANCH = "in-another-branch"
+    """Its commits are in another branch of the stack, having merged there rather than
+    upstream."""
+
+    GONE = "gone"
+    """Its commits are in nothing the stack can see, so no base follows from them."""
+
+
+@dataclass(frozen=True)
+class EffectiveParent:
+    """The branch a child has to build on now, and what became of the one it names."""
+
+    branch: str
+    """The branch to build on, which is the named parent itself when nothing carries it."""
+
+    situation: ParentSituation
+    """What became of the named parent."""
+
+
 @dataclass
 class Stack:
     """The whole stack: configuration plus the branches derived from GitHub and git."""
@@ -327,19 +363,25 @@ class Stack:
     """Maps any branch name - tracked by this stack or not - to whether it has landed
     upstream."""
 
+    is_contained_by: Callable[[str, str], bool]
+    """Maps a pair of branch names to whether the first's commits are in the second."""
+
     @classmethod
     def build(
         cls,
         configuration: Configuration,
         pull_requests: list[PullRequest],
         is_merged: Callable[[str], bool],
+        is_contained_by: Callable[[str, str], bool],
     ) -> Stack:
-        """Assemble the stack from the pull request export and a merged-branch predicate.
+        """Assemble the stack from the pull request export and the two git facts it needs.
 
         :param configuration: The static configuration.
         :param pull_requests: The exported pull requests.
         :param is_merged: Maps a branch name to whether it has landed upstream; injected so
             the pure assembly logic can be tested without git.
+        :param is_contained_by: Maps a pair of branch names to whether the first's commits
+            are in the second, injected for the same reason.
         :return: The assembled stack.
         """
         return cls(
@@ -349,6 +391,7 @@ class Stack:
                 for pull_request in pull_requests
             ],
             is_merged=is_merged,
+            is_contained_by=is_contained_by,
         )
 
     @classmethod
@@ -369,6 +412,7 @@ class Stack:
             configuration,
             pull_requests,
             LandedBranches.from_checkout(configuration).contains,
+            CurrentCheckout.containment_predicate(configuration),
         )
 
     def maintained_branches(self) -> list[StackBranch]:
@@ -406,6 +450,50 @@ class Stack:
         return branch_name == self.configuration.upstream_base or self.is_merged(
             branch_name
         )
+
+    def tracks(self, branch_name: str) -> bool:
+        """:param branch_name: The branch to look for.
+        :return: Whether an open pull request on the board describes it."""
+        return any(branch.name == branch_name for branch in self.branches)
+
+    def effective_parent(self, branch: StackBranch) -> EffectiveParent:
+        """Where a branch's parent went, and what the branch therefore builds on.
+
+        :param branch: The branch whose parent to place.
+        :return: The branch to build on, and what became of the named parent.
+        """
+        parent = branch.parent
+        if parent == self.configuration.upstream_base:
+            return EffectiveParent(parent, ParentSituation.TRACKED)
+        if self.has_landed_upstream(parent):
+            return EffectiveParent(
+                self.configuration.upstream_base, ParentSituation.LANDED
+            )
+        if self.tracks(parent):
+            return EffectiveParent(parent, ParentSituation.TRACKED)
+        carrier = self.carrier_of(branch)
+        if carrier is None:
+            return EffectiveParent(parent, ParentSituation.GONE)
+        return EffectiveParent(carrier, ParentSituation.IN_ANOTHER_BRANCH)
+
+    def carrier_of(self, branch: StackBranch) -> str | None:
+        """The open branch that holds the commits of a branch's absent parent.
+
+        Branches stacked on *branch* are skipped, since they hold the parent too.
+
+        :param branch: The branch whose absent parent to find.
+        :return: The first such branch, parent before child, or ``None`` when there is none.
+        """
+        stacked_on_branch = {branch.name}
+        for candidate in self.ordered():
+            if (
+                candidate.name in stacked_on_branch
+                or candidate.parent in stacked_on_branch
+            ):
+                stacked_on_branch.add(candidate.name)
+            elif self.is_contained_by(branch.parent, candidate.name):
+                return candidate.name
+        return None
 
     def ordered(self) -> list[StackBranch]:
         """:return: The branches, topologically ordered so a parent always precedes its
@@ -484,6 +572,9 @@ class Stack:
         :param branch: The branch to check.
         :return: Whether the branch's parent has landed.
         """
+        effective_parent = self.effective_parent(branch)
+        if effective_parent.situation is not ParentSituation.TRACKED:
+            return effective_parent.situation is ParentSituation.LANDED
         parent = next(
             (
                 candidate
@@ -493,7 +584,7 @@ class Stack:
             None,
         )
         if parent is None:
-            return self.has_landed_upstream(branch.parent)
+            return True
         return parent.status in {
             BranchStatus.IN_REVIEW,
             BranchStatus.MERGED,
@@ -502,12 +593,10 @@ class Stack:
     def integration_parent(self, branch: StackBranch) -> str:
         """
         :param branch: A branch of the stack.
-        :return: What it is brought up to date with: its parent, or the upstream base
-            once that parent has landed.
+        :return: What it is brought up to date with: its parent, or the branch that now
+            carries the parent's commits - the upstream base once the parent landed.
         """
-        if self.has_landed_upstream(branch.parent):
-            return self.configuration.upstream_base
-        return branch.parent
+        return self.effective_parent(branch).branch
 
     def promotion_order(self) -> list[StackBranch]:
         """The branches to submit to the upstream next, in dependency order.
@@ -588,26 +677,23 @@ class Stack:
         ]
 
     def reparents(self) -> list[Reparent]:
-        """Every open pull request whose base has already landed upstream.
+        """Every open pull request whose base left the board with its commits elsewhere.
 
-        Decided by git ancestry rather than by the base's own pull-request state, so it also
-        covers a parent whose pull request was closed rather than merged - which leaves the
-        board with no entry for it at all.
+        A base whose commits reached nothing is not listed, since no target follows.
 
         :return: The children to retarget, parent before child.
         """
-        base = self.configuration.upstream_base
+        retargeting = {ParentSituation.LANDED, ParentSituation.IN_ANOTHER_BRANCH}
         return [
             Reparent(
                 branch=branch.name,
                 pull_request_number=branch.pull_request_number,
                 current_base=branch.parent,
-                target_base=base,
+                target_base=self.effective_parent(branch).branch,
             )
             for branch in self.ordered()
             if branch.status != BranchStatus.MERGED
-            and branch.parent != base
-            and self.has_landed_upstream(branch.parent)
+            and self.effective_parent(branch).situation in retargeting
         ]
 
     def landed_branches(self) -> list[StackBranch]:
