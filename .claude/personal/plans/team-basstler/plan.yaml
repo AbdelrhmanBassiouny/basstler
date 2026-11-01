@@ -47,9 +47,11 @@ items:
     for this.
 - id: site-for-every-repository
   title: Setup publishes the plan site for any repository and user; every plan save starts its build
-  branch: null
-  status: not_started
+  branch: claude/magical-darwin-dydsmk
+  status: in progress
   track: site
+  pull_request_number: 105
+  session: https://claude.ai/code/session_018wfiv82HPZmBYgkZEvxaeX
   depends_on: []
   notes: 'Today the plan pages 404: stack-board''s only workflow is the legacy board.yml. Setup creates
     <user>/plans with a caller of plan-site-build.yml, registers each project in its hub, and commits
