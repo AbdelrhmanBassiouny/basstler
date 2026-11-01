@@ -525,7 +525,9 @@ def test_a_whole_pass_prints_the_finish_summary(
     a_parent_and_child(fork_checkout)
     maintenance = AlreadyResolvedPass.over(fork_checkout, the_board())
 
-    RunReportCommand().run(maintenance, argparse.Namespace(json=False, summaries=None))
+    RunReportCommand().run(
+        maintenance, argparse.Namespace(json=False, summaries=None, stacked_on=None)
+    )
 
     printed = capsys.readouterr().out.splitlines()
     assert FinishSummary.heading_line(FinishSummaryHeading.RESTACKED) in printed

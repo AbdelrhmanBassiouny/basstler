@@ -103,9 +103,9 @@ class Item:
     The item's display title.
     """
 
-    branch: str
+    branch: str | None
     """
-    The git branch this item is implemented on.
+    The git branch this item is implemented on, or ``None`` before one exists.
     """
 
     track: str
@@ -251,7 +251,7 @@ class Item:
         notes = data.get(ManifestKey.NOTES.key)
         return cls(
             title=data[ManifestKey.TITLE.key],
-            branch=data[ManifestKey.BRANCH.key],
+            branch=data.get(ManifestKey.BRANCH.key),
             track=data[ManifestKey.TRACK.key],
             status=ItemStatus(data[ManifestKey.STATUS.key]),
             id=data.get(ManifestKey.IDENTIFIER.key),

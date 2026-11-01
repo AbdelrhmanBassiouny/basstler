@@ -163,7 +163,7 @@ class ActionRead[AnswerType: ActionAnswer]:
     How many seconds to wait between fetches.
     """
 
-    start_allowance: float = 60.0
+    start_allowance: float = 20.0
     """
     How many seconds GitHub gets to start the run before it is looked for.
     """

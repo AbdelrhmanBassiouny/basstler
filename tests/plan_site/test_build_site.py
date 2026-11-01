@@ -17,10 +17,8 @@ from basstler.dashboard.plan import Plan
 from basstler.plan.dependencies import DependencyReference, DependencyResolver
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.plan_site.__main__ import (
-    GitHubPullRequestSource,
     HubSite,
     PlanSource,
-    PullRequestSource,
     RepositorySite,
     SiteDigest,
     SiteFile,
@@ -33,12 +31,14 @@ from basstler.maintenance.github import (
     PullRequestListState,
 )
 from basstler.plan_site.hub import PlanHub
+from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus
 from basstler.repository import PullRequestReference, Repository
 
 from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
+from ..recorded_pull_requests import RecordedPullRequestSource
 from .test_hub import publish_notes
 
 NOTES_REPOSITORY = SiteRepository.NOTES.value
@@ -91,35 +91,6 @@ def link_to(url: str) -> str:
 
 
 # %% recorded pull request state
-
-
-@dataclass
-class RecordedPullRequestSource(PullRequestSource):
-    """
-    Pull request state answered from a fixed record, noting every lookup made.
-    """
-
-    records: dict[PullRequestReference, PullRequestRecord] = field(default_factory=dict)
-    """
-    The pull requests that exist, by reference.
-    """
-
-    issue_urls: dict[PullRequestReference, str] = field(default_factory=dict)
-    """
-    The issue pages that exist, by repository and number.
-    """
-
-    looked_up: list[PullRequestReference] = field(default_factory=list)
-    """
-    Every pull request asked for, in order.
-    """
-
-    def pull_request(self, reference: PullRequestReference) -> PullRequestRecord | None:
-        self.looked_up.append(reference)
-        return self.records.get(reference)
-
-    def issue_url(self, repository: Repository, number: int) -> str | None:
-        return self.issue_urls.get(PullRequestReference(repository, number))
 
 
 @pytest.fixture
@@ -306,9 +277,9 @@ def test_build_looks_up_every_referenced_pull_request_in_its_own_repository(
 
 
 def test_pull_requests_of_leaves_out_a_number_the_repository_does_not_have(
-    site: RepositorySite, pull_request_source: RecordedPullRequestSource
+    pull_request_source: RecordedPullRequestSource,
 ):
-    assert site.pull_requests_of(DependencyResolver(FIRST_PLAN)) == {
+    assert pull_request_source.pull_requests_of(DependencyResolver(FIRST_PLAN)) == {
         str(PLAN_REPOSITORY): {
             str(reference.number): pull_request_source.records[reference]
             for reference in (MERGED_PULL_REQUEST, OPEN_PULL_REQUEST)
