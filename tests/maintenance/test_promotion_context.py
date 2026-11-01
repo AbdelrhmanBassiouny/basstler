@@ -29,9 +29,11 @@ from basstler.stack.promotion_link import PromotionLink
 from ..constants.stack import RemoteName, StackBranch
 
 from .fork import (
+    UPSTREAM_BASE,
     PromotionSampleText,
     StackPullRequestNumber,
     ForkCheckout,
+    a_board_entry,
     a_parent_and_child,
     a_stack,
     the_board,
@@ -166,7 +168,7 @@ def a_prepared_pass(
     :return: The pass, and the document ``prepare`` printed for it.
     """
     maintenance = AlreadyResolvedPass.over(fork_checkout, the_board())
-    PrepareCommand().run(maintenance, argparse.Namespace())
+    PrepareCommand().run(maintenance, argparse.Namespace(stacked_on=None))
     return maintenance, json.loads(capsys.readouterr().out)
 
 
@@ -222,3 +224,56 @@ def test_a_summary_written_for_every_listed_pull_request_is_what_each_opens_with
         ).url
         for number, summary in summaries.by_pull_request_number.items()
     }
+
+
+# %% a pass scoped to one branch's stack
+
+
+def a_stack_beside_another_branch(fork_checkout: ForkCheckout) -> AlreadyResolvedPass:
+    """
+    :param fork_checkout: The checkout to build the branches in.
+    :return: A pass over the two-branch stack and a ready branch cut from the base beside
+        it.
+    """
+    a_parent_and_child(fork_checkout)
+    fork_checkout.branch_from(StackBranch.OFF_THE_CHAIN, UPSTREAM_BASE)
+    board = the_board() + [
+        a_board_entry(
+            StackPullRequestNumber.OFF_THE_CHAIN,
+            StackBranch.OFF_THE_CHAIN,
+            UPSTREAM_BASE,
+        )
+    ]
+    return AlreadyResolvedPass.over(fork_checkout, board)
+
+
+def test_prepare_scoped_to_a_branch_lists_only_its_own_stack_s_summaries(
+    fork_checkout: ForkCheckout, capsys: pytest.CaptureFixture[str]
+):
+    maintenance = a_stack_beside_another_branch(fork_checkout)
+
+    PrepareCommand().run(maintenance, argparse.Namespace(stacked_on=StackBranch.CHILD))
+
+    document = json.loads(capsys.readouterr().out)
+    scoped = maintenance.stack().scoped_to(StackBranch.CHILD)
+    assert [
+        context[PromotionContextKey.PULL_REQUEST_NUMBER]
+        for context in document[PreparationKey.TO_SUMMARIZE]
+    ] == [branch.pull_request_number for branch in scoped.awaiting_promotion_link()]
+
+
+def test_a_pass_scoped_to_a_branch_promotes_nothing_off_its_stack(
+    fork_checkout: ForkCheckout,
+):
+    maintenance = a_stack_beside_another_branch(fork_checkout)
+
+    report = RunReportCommand().perform(
+        maintenance,
+        as_json=True,
+        summaries=PromotionSummaries({}),
+        stacked_on=StackBranch.CHILD,
+    )
+
+    assert StackPullRequestNumber.OFF_THE_CHAIN not in [
+        promotion.pull_request_number for promotion in report.promoted
+    ]

@@ -42,7 +42,6 @@ from .recorded_fork import (
     RecordingPullRequests,
 )
 
-
 # %% promotion
 
 
@@ -267,7 +266,8 @@ def test_a_whole_pass_promotes_with_the_summaries_it_was_given(
     summaries_document = DatasetLocation.PROMOTION_SUMMARIES.value
 
     RunReportCommand().run(
-        maintenance, argparse.Namespace(json=True, summaries=summaries_document)
+        maintenance,
+        argparse.Namespace(json=True, summaries=summaries_document, stacked_on=None),
     )
 
     written = maintenance.recorded_fork.description_writes[0]

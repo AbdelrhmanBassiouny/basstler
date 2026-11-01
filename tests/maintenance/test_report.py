@@ -63,7 +63,6 @@ from .recorded_fork import (
     run_maintenance,
 )
 
-
 # %% the report
 
 
@@ -106,7 +105,9 @@ def test_a_whole_pass_leaves_no_board_behind(fork_checkout: ForkCheckout):
     maintenance = AlreadyResolvedPass.over(fork_checkout, the_board())
     maintenance.board.write_text("{}")
 
-    RunReportCommand().run(maintenance, argparse.Namespace(json=True, summaries=None))
+    RunReportCommand().run(
+        maintenance, argparse.Namespace(json=True, summaries=None, stacked_on=None)
+    )
 
     assert not maintenance.board.exists()
 
@@ -183,7 +184,7 @@ def test_a_pass_over_a_head_on_another_fork_finishes_rather_than_failing_on_git(
     )
 
     status = RunReportCommand().run(
-        maintenance, argparse.Namespace(json=True, summaries=None)
+        maintenance, argparse.Namespace(json=True, summaries=None, stacked_on=None)
     )
 
     assert status == StackExitCode.SUCCESS
