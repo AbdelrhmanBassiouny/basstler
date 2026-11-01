@@ -1,13 +1,11 @@
 # code-rules-light (PR #104)
 
 ## Plan
-- pyproject: `dev` dependency group (ruff, pytest, pytest-xdist) and `[tool.ruff]` for the mechanical rules
-- Fix ruff's findings on existing code
-- CI and pre-commit run `ruff check`
-- AGENTS.md: drop prose ruff enforces; add the approved lighter rules
+- pyproject: dev group + [tool.ruff]; fix findings; CI + pre-commit run ruff; AGENTS.md lightened
 
 ## Done
-- Branch, draft PR, manifest recorded
+- All of the plan; ruff clean, 1749 tests pass
+- Decisions in the PR description: TYPE_CHECKING rule dropped (pydantic), pydantic not added until first boundary, black kept
 
 ## Next
-- ruff configuration and fixes
+- Owner review; CI result on the new ruff job
