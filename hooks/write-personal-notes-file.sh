@@ -8,7 +8,7 @@ set -euo pipefail
 # already-prepared local file to one destination path, commit, push, done.
 # Extracted so callers with that shape - currently
 # skills/plan-dashboard/refresh_dashboard.sh's manifest-correction
-# push, and /plan-dashboard's own dashboard-URL-cache update - don't each
+# push - don't each
 # re-embed the worktree dance as a bash snippet of their own.
 #
 # Usage:

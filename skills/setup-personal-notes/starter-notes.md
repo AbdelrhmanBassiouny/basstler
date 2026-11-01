@@ -81,7 +81,7 @@ personal notes" in any session, or change `CLAUDE.local.md` between the
     though it only lives in this conversation, not a file.
   - **An existing plan covers/extends it** (check auto-discovery on the current
     branch, or ask): edit `plan.yaml` directly and run
-    `hooks/save-plan.sh` + `/plan-dashboard <plan-id>`, after asking
+    `hooks/save-plan.sh`, after asking
     what the change should be rather than deciding unilaterally — see
     `skills/plan-dashboard/plan-schema.md`'s "Proposing structural
     changes" section.

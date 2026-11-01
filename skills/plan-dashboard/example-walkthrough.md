@@ -123,14 +123,14 @@ the pull requests.
 Neither file ever stores live GitHub state (open/draft/merged/CI) — that's
 always fetched fresh, every run, in the next step.
 
-## 4. Publish (or refresh) the dashboard
+## 4. Check the plan and open its page
 
 > **You:** `/plan-dashboard notification-retry-overhaul`
 
 The [`plan-dashboard`](./SKILL.md) skill cross-checks every item's PR against
 live GitHub state, auto-corrects the one kind of drift that's unambiguous (a
-merged PR whose item is still marked anything but `done`), and publishes an
-Artifact:
+merged PR whose item is still marked anything but `done`), and links the
+plan's page on the plan site, which every push to the notes branch rebuilds:
 
 ![Dashboard overview — status counts, drift flag, and a "what to do next" sidebar covering ready-to-start, blocker-may-be-cleared, and ready-to-review items](./example/screenshots/dashboard-overview.png)
 

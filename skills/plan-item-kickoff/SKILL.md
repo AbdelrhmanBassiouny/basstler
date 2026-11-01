@@ -1,6 +1,6 @@
 ---
 name: plan-item-kickoff
-description: Start one tracked plan item: gather its context, open its branch and draft PR, record it, then plan or implement per the execution mode. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use from a dashboard's "Start now" link or when asked to start or kick off an item.
+description: Start one tracked plan item: gather its context, open its branch and draft PR, record it, then plan or implement per the execution mode. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use from a plan page's "Start now" link or when asked to start or kick off an item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__create_pull_request, mcp__github__update_pull_request, mcp__claude-code-remote__subscribe_pr_activity, mcp__github__issue_read
 ---
 
@@ -62,7 +62,8 @@ Write the plan down:
   `"${BASSTLER_PLUGIN_ROOT}/hooks/save-pr-progress.sh" --branch <branch> --source <file>`
   as soon as the branch exists.
 
-Then run `/plan-dashboard <plan-id>`. Later transitions follow
+Then give the item's page on the plan site, `plan_site_page_url <plan-id> <item-id>`,
+which the record's push rebuilds. Later transitions follow
 [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
 
 In `plan` mode the skill ends here.
