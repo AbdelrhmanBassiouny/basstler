@@ -118,8 +118,7 @@ it" leaves the session to improvise the part most likely to lose work.
 `plan.yaml` directly if this session stewards that plan, otherwise propose it on
 the plan's `tracking_issue` — `${PLANS_DIR}/README.md`'s "Proposing structural
 changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}`
-and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn,
-so no published dashboard is older than the manifest behind it.
+in the same turn, whose push rebuilds the plan's page on the plan site.
 
 **If the outcome is a new item**, the `record` operation of
 `"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}"` writes its `plan.yaml` entry and `roadmap.md` section and runs the save

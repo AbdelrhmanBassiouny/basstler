@@ -1,6 +1,6 @@
 ---
 name: plan-item-resolve
-description: Resolve what stalls an underway plan item - conflicts, CI, review threads, tracking-issue discussion - on its existing branch, per the execution mode. Invoke as "/plan-item-resolve <plan-id> <item-id>" or "/plan-item-resolve <pull-request-number>". Use from a dashboard's Resolve/Resume/Reconsider link or when asked to resolve, unblock or resume an item.
+description: Resolve what stalls an underway plan item - conflicts, CI, review threads, tracking-issue discussion - on its existing branch, per the execution mode. Invoke as "/plan-item-resolve <plan-id> <item-id>" or "/plan-item-resolve <pull-request-number>". Use from a plan page's Resolve/Resume/Reconsider link or when asked to resolve, unblock or resume an item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__update_pull_request, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
@@ -153,7 +153,8 @@ item is already underway rather than being started:
   item's branch> --source <file>`, as kickoff writes it) and the pull request
   description the same way. What the resolution was, and why, belongs in the pull request,
   not in `roadmap.md`; add a roadmap entry only for a rule every later item
-  must follow. Then republish the dashboard with `/plan-dashboard`.
+  must follow. The record's push rebuilds the item's page on the plan site; link
+  it with `plan_site_page_url <plan-id> <item-id>`.
 - **Whether the pull request goes back to draft after the push** depends on
   why it is out of draft, which its state tells apart:
   - **Promoted** — an upstream pull request opened from its branch is still

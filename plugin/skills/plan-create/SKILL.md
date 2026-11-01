@@ -1,6 +1,6 @@
 ---
 name: plan-create
-description: Create a multi-PR plan on the personal-notes branch, or migrate a roadmap doc into one, then publish its dashboard. Invoke as "/plan-create <plan-id>". Use when asked to start tracking work as a plan.
+description: Create a multi-PR plan on the personal-notes branch, or migrate a roadmap doc into one, which publishes its page on the plan site. Invoke as "/plan-create <plan-id>". Use when asked to start tracking work as a plan.
 allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
@@ -201,9 +201,9 @@ commit.
 
 ## 8. Publish
 
-Invoke the `plan-dashboard` skill for `<plan-id>` to publish its first
-dashboard Artifact, then invoke it with no argument to republish the master index
-(`_index`): a new plan is the one change that makes the index stale.
+The save's push rebuilds the plan site, which lists the new plan on its
+repository's page and publishes its own. Its address is
+`plan_site_page_url <plan-id>`.
 
 If this was a migration from an existing freeform doc, offer — don't do it
 unprompted — to replace that old doc with a short pointer stub at its
@@ -214,7 +214,7 @@ Every later change to the plan follows [`manifest-staleness.md`](../plan-dashboa
 
 ## 9. Report back
 
-Plan id, item/wave/track counts, the dashboard URL and the index URL, the
+Plan id, item/wave/track counts, the plan's page on the plan site, the
 tracking issue link if one was created, and — explicitly, not buried — every judgment call you
 made or flagged along the way (structural assumptions, any live-vs-source
 disagreement found in step 4) so the user can sanity-check them before

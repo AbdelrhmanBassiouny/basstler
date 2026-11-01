@@ -180,8 +180,8 @@ edit them, and run
   "\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" ${PLAN_ID} --manifest <file> --roadmap <file> --read-at <commit>
 which keeps other writers' edits to other items, refuses one to an item you also
 changed, drops landed items, removes a plan with none left, and refuses a plan
-over the limits in ${PLAN_SIZE_LIMITS_MODULE}. Then run
-/plan-dashboard ${PLAN_ID}.
+over the limits in ${PLAN_SIZE_LIMITS_MODULE}. The save's push rebuilds the
+plan's page on the plan site.
 
 ${TRACKING_ISSUE_NOTE}
 -->

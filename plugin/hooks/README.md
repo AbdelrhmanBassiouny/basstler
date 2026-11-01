@@ -229,9 +229,11 @@ the narrative that doesn't belong in structured data.
 - Worked example → [`example-walkthrough.md`](../skills/plan-dashboard/example-walkthrough.md).
 - Field reference → [`plan-schema.md`](../skills/plan-dashboard/plan-schema.md).
 - Create one → `/plan-create <plan-id>`.
-- Publish or refresh → `/plan-dashboard [<plan-id>]`; no argument publishes the master index of
-  every plan. It cross-checks every item against live GitHub PR/CI/review state, so a manifest
-  can't silently go stale the way a hand-maintained roadmap doc could.
+- See the plans → the plan site, which every push to the notes branch rebuilds; the session-start
+  summary's `plan site` line links this session's place on it.
+- Check one → `/plan-dashboard <plan-id>` cross-checks every item against live GitHub
+  PR/CI/review state, so a manifest can't silently go stale the way a hand-maintained roadmap
+  doc could, and links the plan's page.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in progress` as soon as its plan is approved — via

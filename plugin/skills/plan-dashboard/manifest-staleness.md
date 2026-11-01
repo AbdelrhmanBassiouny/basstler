@@ -5,10 +5,10 @@
 - **Write the manifest at every transition**, before the work that follows: a change to
   an item's `status`, `branch`, `pull_request_number`, `session`, `notes` or `blockers`,
   or to the plan's items.
-- **Republish the dashboard once per turn**, after the turn's last manifest write and
-  before you report. Several writes in one turn get one republish. A turn with no write
-  gets none.
-- Read only what the step needs. Never read a published dashboard back.
+- **Every write is a push to the notes branch, which rebuilds the plan's page on the
+  plan site.** Nothing is republished by hand; when you report, link the page with
+  `plan_site_page_url <plan-id> [<item-id>]`.
+- Read only what the step needs.
 
 ## Writing a field
 
