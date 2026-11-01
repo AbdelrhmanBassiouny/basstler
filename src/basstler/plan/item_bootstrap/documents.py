@@ -9,13 +9,13 @@ import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
 
 from basstler.bash import Bash
-from basstler.locations import PluginLocation
+from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan.item_bootstrap.exceptions import (
     NotesBranchUnavailableError,
     PlanNotWrittenError,
@@ -23,6 +23,7 @@ from basstler.plan.item_bootstrap.exceptions import (
     UnknownItemError,
     UnknownPlanError,
 )
+from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.model import (
     ManifestKey,
     PlanDocument,
@@ -90,6 +91,36 @@ class ProjectCheckout:
         :return: Whether *remote* already carries *branch*.
         """
         return bool(self.run_git("ls-remote", "--heads", remote, branch).strip())
+
+    def check_out_manifests(self, destination: Path) -> PlanDirectory:
+        """
+        Write every plan's manifest on the fetched notes branch out as plain files.
+
+        :param destination: An empty directory to write into, one subdirectory per plan.
+        :return: The plans the manifests were written to.
+        """
+        listing = self.run_git(
+            "ls-tree",
+            "-r",
+            "--name-only",
+            FetchedBranchReference.PERSONAL_NOTES,
+            str(ProjectLocation.PLANS),
+        )
+        for path in map(PurePosixPath, listing.splitlines()):
+            if (
+                path.name != PlanDocument.MANIFEST
+                or path.parent.parent != PurePosixPath(ProjectLocation.PLANS)
+            ):
+                continue
+            manifest = destination / path.parent.name / PlanDocument.MANIFEST
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                self.run_git(
+                    "show", FetchedBranchReference.PERSONAL_NOTES.file_at(path)
+                )
+                + "\n"
+            )
+        return PlanDirectory(destination)
 
     def plan_tracking(self, branch: str) -> str | None:
         """

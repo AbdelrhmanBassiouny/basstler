@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import argparse
 import json
-from abc import abstractmethod
+from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from enum import StrEnum
 from pathlib import Path
@@ -218,8 +218,25 @@ class BoardCommand(MaintenanceCommand):
         return StackExitCode.SUCCESS
 
 
+class StackScopeArgument(ABC):
+    """
+    Declares the ``--stacked-on`` argument of a command that passes over every branch,
+    or only over one branch's stack.
+    """
+
+    def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
+        """:param parser: The subparser to declare ``--stacked-on`` on."""
+        parser.add_argument(
+            "--stacked-on",
+            help=(
+                "pass only over this branch's stack: the branch, the branches it is "
+                "stacked on and the branches stacked on it"
+            ),
+        )
+
+
 @dataclass(frozen=True)
-class PrepareCommand(MaintenanceCommand):
+class PrepareCommand(StackScopeArgument, MaintenanceCommand):
     """
     Exports the board and lists everything a session does before the pass: the bases
     to retarget and the upstream summaries to write.
@@ -241,7 +258,7 @@ class PrepareCommand(MaintenanceCommand):
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
-        stack = maintenance.fresh_stack()
+        stack = maintenance.fresh_stack().scoped_to(arguments.stacked_on)
         contexts = PromotionContextReader(
             stack, maintenance.git, maintenance.fork()
         ).read()
@@ -395,7 +412,7 @@ class ChecksCommand(MaintenanceCommand):
 
 
 @dataclass(frozen=True)
-class RunReportCommand(MaintenanceCommand):
+class RunReportCommand(StackScopeArgument, MaintenanceCommand):
     """
     Performs the whole pass and reports it as one document.
     """
@@ -408,8 +425,9 @@ class RunReportCommand(MaintenanceCommand):
         return "perform the whole pass and report it"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
-        """:param parser: The subparser to declare ``--json`` and the promotion's own
-        arguments on."""
+        """:param parser: The subparser to declare ``--json``, ``--stacked-on`` and the
+        promotion's own arguments on."""
+        super().declare_arguments(parser)
         PromoteCommand().declare_arguments(parser)
         parser.add_argument(
             "--json",
@@ -429,6 +447,7 @@ class RunReportCommand(MaintenanceCommand):
             maintenance,
             as_json=arguments.json,
             summaries=PromotionSummaries.read_from(arguments.summaries),
+            stacked_on=arguments.stacked_on,
         ).exit_code
 
     def perform(
@@ -436,6 +455,7 @@ class RunReportCommand(MaintenanceCommand):
         maintenance: MaintenancePass,
         as_json: bool,
         summaries: PromotionSummaries,
+        stacked_on: str | None = None,
     ) -> MaintenanceReport:
         """
         Export the board, perform every step of the pass, write the whole report and
@@ -454,9 +474,11 @@ class RunReportCommand(MaintenanceCommand):
             finish summary.
         :param summaries: What each upstream pull request opens with, where anybody wrote
             it.
+        :param stacked_on: The branch whose stack to pass over, or ``None`` for every
+            branch.
         :return: What the pass did.
         """
-        stack = maintenance.fresh_stack()
+        stack = maintenance.fresh_stack().scoped_to(stacked_on)
         fork = maintenance.fork()
         fast_forward_report = fast_forward(stack.configuration, maintenance.git)
         report = MaintenanceReport.of_pass(
