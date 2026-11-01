@@ -202,3 +202,10 @@ items:
   track: core
   depends_on: []
   status: in progress
+
+- id: report-keys-in-tests
+  title: "Tests read command reports through the existing report key enums, not bare strings"
+  branch: null
+  track: core
+  depends_on: []
+  status: not started
