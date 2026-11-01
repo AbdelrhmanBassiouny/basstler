@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
 
-from basstler.plan.model import PlanManifest
+from basstler.plan.model import PlanItem, PlanManifest
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -340,8 +340,14 @@ class MeasuredDocument(ABC):
     @abstractmethod
     def violations(self) -> list[Violation]:
         """
-        :return: Every limit the document breaks.
+        :return: Every limit the document breaks that it is refused for.
         """
+
+    def warnings(self) -> list[Violation]:
+        """
+        :return: Every limit the document breaks that it is not refused for.
+        """
+        return []
 
     def check(self) -> None:
         """
@@ -442,13 +448,42 @@ class Plan(MeasuredDocument):
     The plan's standing rules.
     """
 
+    stored_manifest: PlanManifest | None = None
+    """
+    The manifest this plan replaces, when one is already saved. An item identical to
+    its stored entry is not being changed by the save.
+    """
+
     @property
     def limited_document(self) -> LimitedDocument:
         return LimitedDocument.PLAN
 
+    def item_is_changed(self, item: PlanItem) -> bool:
+        """
+        :param item: One of this plan's items.
+        :return: Whether the save changes it: it is new, or differs from its stored entry.
+        """
+        if self.stored_manifest is None:
+            return True
+        return item not in self.stored_manifest.items
+
+    def item_violations(self, item: PlanItem) -> list[Violation]:
+        """
+        :param item: One of this plan's items.
+        :return: Every limit the item breaks.
+        """
+        location = ItemLocation(item.identifier)
+        violations: list[Violation] = []
+        violations += Measure.NOTE_LENGTH.violations(location, len(item.notes))
+        violations += Measure.BLOCKER_COUNT.violations(location, len(item.blockers))
+        for blocker in item.blockers:
+            violations += Measure.BLOCKER_LENGTH.violations(location, len(blocker))
+        return violations
+
     def manifest_violations(self) -> list[Violation]:
         """
-        :return: Every limit the manifest breaks.
+        :return: Every limit the manifest breaks, except in an item the save leaves
+            unchanged.
         """
         manifest = self.manifest
         violations: list[Violation] = []
@@ -459,15 +494,24 @@ class Plan(MeasuredDocument):
             WholePartLocation(DocumentPart.PLAN_DESCRIPTION), len(manifest.description)
         )
         for item in manifest.items:
-            location = ItemLocation(item.identifier)
-            violations += Measure.NOTE_LENGTH.violations(location, len(item.notes))
-            violations += Measure.BLOCKER_COUNT.violations(location, len(item.blockers))
-            for blocker in item.blockers:
-                violations += Measure.BLOCKER_LENGTH.violations(location, len(blocker))
+            if self.item_is_changed(item):
+                violations += self.item_violations(item)
         return violations
 
     def violations(self) -> list[Violation]:
         return self.manifest_violations() + self.roadmap.violations()
+
+    def warnings(self) -> list[Violation]:
+        """
+        :return: Every limit broken by an item the save leaves unchanged, which stays
+            as it was saved.
+        """
+        return [
+            violation
+            for item in self.manifest.items
+            if not self.item_is_changed(item)
+            for violation in self.item_violations(item)
+        ]
 
 
 @dataclass(frozen=True)
@@ -538,10 +582,12 @@ class PlanFiles:
         """
         Write the plan, without its landed items, to *destination*; a plan with no
         items left is finished, and its directory is deleted instead. A manifest with
-        nothing landed is copied unchanged.
+        nothing landed is copied unchanged. An item the save leaves as it is already
+        saved at *destination* is not refused for breaking a limit; it is warned about.
 
         :param destination: Where the plan is saved; both files share one directory.
-        :raises DocumentOverLimitError: If the pruned plan breaks a limit.
+        :raises DocumentOverLimitError: If the pruned plan breaks a limit, other than
+            in an unchanged item.
         :return: Which of the two happened.
         """
         original = PlanManifest.from_file(self.manifest)
@@ -549,7 +595,17 @@ class PlanFiles:
         if not manifest.items:
             shutil.rmtree(destination.manifest.parent, ignore_errors=True)
             return StagedPlan.REMOVED
-        Plan(manifest, Roadmap.from_text(self.roadmap.read_text())).check()
+        stored = (
+            PlanManifest.from_file(destination.manifest)
+            if destination.manifest.exists()
+            else None
+        )
+        plan = Plan(manifest, Roadmap.from_text(self.roadmap.read_text()), stored)
+        plan.check()
+        for warning in plan.warnings():
+            logger.warning(
+                f"Saving anyway, as this save leaves it as it was: {warning}"
+            )
         destination.manifest.parent.mkdir(parents=True, exist_ok=True)
         if original.landed_identifiers:
             manifest.write(destination.manifest)
