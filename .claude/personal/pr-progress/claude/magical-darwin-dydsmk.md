@@ -3,7 +3,7 @@
 
 ### Done
 - #105 merged; its Branch thread answered and resolved, pointing to #111.
-- #111 opened (66d39ef); 1864 tests pass.
+- #111 opened (66d39ef); merged main in (d892907); 1871 tests pass.
 
 ### Next
 - Wait on the owner's review of #111.
