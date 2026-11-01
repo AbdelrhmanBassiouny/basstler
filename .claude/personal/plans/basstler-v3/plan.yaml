@@ -56,9 +56,9 @@ items:
   status: not started
   notes: 'bin/basstler on the Bash PATH runs the release with uv (venv in CLAUDE_PLUGIN_DATA); one command tree
     replaces the python -m modules and the sourced module variables; plugin userConfig replaces personal-notes.env.
-    Verify bin/ works in cloud sessions first. CLI: cyclopts (approved). GitHub through githubkit''s typed REST
-    client (approved), replacing the hand-written REST models. In cloud sessions its paginate() fails: Link headers
-    use /repositories/<id>/ paths the proxy refuses. Page with page=N on repos/<owner>/<repo>/ paths instead (tested).'
+    Verify bin/ works in cloud sessions first. CLI: cyclopts (approved). GitHub: one owned REST client behind a
+    GitHubClient interface, merging the urllib client and gh''s REST half; page=N on repos/<owner>/<repo>/ paths;
+    dataclass models of only the fields used. githubkit stays a fallback behind that interface (decided 2026-11-01).'
 - id: plan-store-issues
   title: Plans as a tracking issue with sub-issues, status labels and stated dependencies
   branch: null
@@ -67,11 +67,11 @@ items:
   depends_on:
   - cli-launcher
   status: not started
-  notes: 'REST only (no Projects v2, no GraphQL). Item scope in the issue body, status as a label, dependencies
-    as issue references read back from the body; a pull request closes its item. Read and write go through pydantic
-    models of the REST responses.
-
-    '
+  notes: "REST only (no Projects v2, no GraphQL). Item scope in the issue body, status as a label, dependencies\
+    \ as issue references read back from the body; a pull request closes its item. Read and write go through pydantic\
+    \ models of the REST responses.\n Its new endpoints go through cli-launcher's GitHubClient. In the PR, report\
+    \ how many endpoint models were hand-written and their line count, so the githubkit fallback can be judged on\
+    \ that measure."
 - id: item-brief
   title: One command prints an item's whole brief in at most 3 KB
   branch: null
