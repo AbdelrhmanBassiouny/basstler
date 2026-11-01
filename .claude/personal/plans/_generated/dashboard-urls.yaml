@@ -11,11 +11,11 @@ plan-graph: https://claude.ai/artifact/8vQY8Wi3xhLiFSuECPmU5s
 bash-to-python: https://claude.ai/artifact/Fi9TJ9xkgieUhQ8NnPk1f6
 actions-budget: https://claude.ai/artifact/JP5wF9kCohWUvM7yED6gpu
 work-recommender: https://claude.ai/artifact/QqrnA3gzrP8wzMrWBqT3t8
-team-basstler: https://claude.ai/artifact/E5GksdXYrQ7BCteC3JumV3
+team-basstler: https://claude.ai/artifact/9GCeqRfCqtyg9X84hvqewS
 windows-support: https://claude.ai/artifact/E4fYSkWnm2mwAAvV9rAkxG
 _content_digests:
   stack-maintenance: 3eba523b464170971475d880655fc622ee70f8f2afc291922ee7c930ed8767f9
-  team-basstler: 2b13d09b219e0ce81c407e54e0089fde381effdcc295242ae757111c800900db
+  team-basstler: b79b9ef368879d2d962db6b19b444c51f09b8a1b9eff615d43e522d9b8937891
   basstler-v3: 596de2f388a2f4edc2fc3dafdce37b320bcb1accf86c910f65ca0f91fcd62462
   basstler-v2-fixes: 7e03b44de8b86b18c9bc07b9282b984371dc6542d9f685d27da085f23dda7403
 basstler-v3: https://claude.ai/artifact/Qy52wDw6EeQRcC88HbrWwY
