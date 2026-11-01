@@ -199,12 +199,13 @@ Unless the row is `ok`. The plan site builds in a repository the user owns,
 never in the project, and which one is the user's to choose: ask for it as
 `<owner>/<name>`, offering as the default the repository the hub file's
 `site_url` already points at (`recorded_site_url`), else
-`<their login>/plans`. Then:
+`<their GitHub username>/plans`. Then:
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${PLAN_SITE_PUBLICATION_MODULE}" \
-  --branch-or-tag "$(basstler_branch_or_tag)" --site-repository <owner>/<name>
+"${BASSTLER_PYTHON}" -m "${PLAN_SITE_PUBLICATION_MODULE}" --site-repository <owner>/<name>
 ```
+
+The site builds with basstler's latest release, so it stays current with no re-run.
 
 It writes the site repository's workflow onto its default branch, lists this
 repository in the hub file of the registry that workflow names (this repository
