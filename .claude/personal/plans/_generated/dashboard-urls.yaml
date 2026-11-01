@@ -1,6 +1,6 @@
 basstler-package: https://claude.ai/artifact/BpcQUzJss8Vx5d3uencHpL
 plan-dashboards: https://claude.ai/artifact/LufrivhnyBcg5yTg4QcNn7
-plan-size-limits: https://claude.ai/artifact/LDKfAM7XqGv6UYyLzygXE2
+plan-size-limits: https://claude.ai/artifact/FHc3NZnZBCN2CcfCu3ic7H
 plan-tracking-skills: https://claude.ai/artifact/L1zrrER3isE8Mr2tzDACvR
 session-notes-infrastructure: https://claude.ai/artifact/CkcWYo9J3inF9yawXVoXvY
 stack-maintenance: https://claude.ai/artifact/EJUGLwL5tV5Hvc55QKLQvf
@@ -18,5 +18,6 @@ _content_digests:
   team-basstler: 73a529b0ac36317733f1e1e0726ca4ce5496dce80c2ba1ac3d5377e67b8c6cf6
   basstler-v3: 596de2f388a2f4edc2fc3dafdce37b320bcb1accf86c910f65ca0f91fcd62462
   basstler-v2-fixes: 7e03b44de8b86b18c9bc07b9282b984371dc6542d9f685d27da085f23dda7403
+  plan-size-limits: a4b3441444bac80aead1c934b4d3c06dc92e83214658eb648fbb23031f77cfaf
 basstler-v3: https://claude.ai/artifact/Qy52wDw6EeQRcC88HbrWwY
 basstler-v2-fixes: https://claude.ai/artifact/TbKLcrW6nZyPvw7cx8SvXT
