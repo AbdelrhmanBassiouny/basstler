@@ -1,10 +1,10 @@
 schema_version: 1
 id: basstler-v3
 title: 'basstler v3: light, reliable and easy for anyone to use and extend'
-description: 'Rebuild basstler next to v2 so code does the mechanics and Claude only judges: each skill
-  runs one command that prints a brief, makes its judgment, and records the result with one command. GitHub
-  is the only state store: plans as issues, stacks from pull request bases, upstream reviews mirrored
-  by an Action. v2 areas are deleted as v3 covers them.
+description: 'Rebuild basstler next to v2 so code does the mechanics and Claude only judges: each skill runs one
+  command that prints a brief, makes its judgment, and records the result with one command. GitHub is the only state
+  store: plans as issues, stacks from pull request bases, upstream reviews mirrored by an Action. v2 areas are deleted
+  as v3 covers them.
 
   '
 default_repository: AbdelrhmanBassiouny/basstler
@@ -43,10 +43,9 @@ items:
   track: foundation
   depends_on: []
   status: not started
-  notes: 'Approved 2026-11-01: pydantic dataclasses at the external-data boundary; ruff as a dev dependency
-    enforcing the mechanical rules (their prose leaves AGENTS.md); docstrings only where they add meaning;
-    plain constants for true constants; a few exception types per kind of failure. No open questions:
-    implement directly.'
+  notes: 'Approved 2026-11-01: pydantic dataclasses at the external-data boundary; ruff as a dev dependency enforcing
+    the mechanical rules (their prose leaves AGENTS.md); docstrings only where they add meaning; plain constants
+    for true constants; a few exception types per kind of failure. No open questions: implement directly.'
 - id: cli-launcher
   title: One basstler CLI behind a bin/ launcher, configured through userConfig
   branch: null
@@ -55,12 +54,11 @@ items:
   depends_on:
   - code-rules-light
   status: not started
-  notes: 'bin/basstler on the Bash PATH runs the release with uv (venv in CLAUDE_PLUGIN_DATA); one command
-    tree replaces the python -m modules and the sourced module variables; plugin userConfig replaces personal-notes.env.
-    Verify bin/ works in cloud sessions first; fall back to a hook-written launcher if not. CLI library:
-    cyclopts (approved 2026-11-01). One core library under the CLI; GitHub through githubkit''s typed
-    REST client (approved 2026-11-01; tested in a cloud session: REST works, GraphQL is refused by the
-    proxy as for any client), replacing the hand-written REST models.'
+  notes: 'bin/basstler on the Bash PATH runs the release with uv (venv in CLAUDE_PLUGIN_DATA); one command tree
+    replaces the python -m modules and the sourced module variables; plugin userConfig replaces personal-notes.env.
+    Verify bin/ works in cloud sessions first. CLI: cyclopts (approved). GitHub through githubkit''s typed REST
+    client (approved), replacing the hand-written REST models. In cloud sessions its paginate() fails: Link headers
+    use /repositories/<id>/ paths the proxy refuses. Page with page=N on repos/<owner>/<repo>/ paths instead (tested).'
 - id: plan-store-issues
   title: Plans as a tracking issue with sub-issues, status labels and stated dependencies
   branch: null
@@ -70,8 +68,8 @@ items:
   - cli-launcher
   status: not started
   notes: 'REST only (no Projects v2, no GraphQL). Item scope in the issue body, status as a label, dependencies
-    as issue references read back from the body; a pull request closes its item. Read and write go through
-    pydantic models of the REST responses.
+    as issue references read back from the body; a pull request closes its item. Read and write go through pydantic
+    models of the REST responses.
 
     '
 - id: item-brief
@@ -83,10 +81,10 @@ items:
   - plan-store-issues
   - team-basstler/lean-kickoff
   status: not started
-  notes: 'Item scope, dependency readiness, its pull request''s checks, unresolved threads, the mirrored
-    upstream state and tracking-issue comments naming it, built by code so a skill never fetches or reads
-    reference docs to assemble context. Builds on team-basstler/lean-kickoff (#97): reuse its brief command
-    and skill-size test, re-sourced from issues.'
+  notes: 'Item scope, dependency readiness, its pull request''s checks, unresolved threads, the mirrored upstream
+    state and tracking-issue comments naming it, built by code so a skill never fetches or reads reference docs
+    to assemble context. Builds on team-basstler/lean-kickoff (#97): reuse its brief command and skill-size test,
+    re-sourced from issues.'
 - id: plan-import
   title: Import every plan.yaml into issues, once
   branch: null
@@ -95,8 +93,8 @@ items:
   depends_on:
   - plan-store-issues
   status: not started
-  notes: 'Idempotent: rerunning finds the issues already made. Landed items are not imported. Moves this
-    plan onto the issue store too.
+  notes: 'Idempotent: rerunning finds the issues already made. Landed items are not imported. Moves this plan onto
+    the issue store too.
 
     '
 - id: plan-site-from-issues
@@ -107,8 +105,8 @@ items:
   depends_on:
   - plan-store-issues
   status: not started
-  notes: 'Point the existing Pages build at the issue store instead of plan.yaml. Retiring the Artifact
-    dashboard and its URL cache is team-basstler/artifact-path-retirement.
+  notes: 'Point the existing Pages build at the issue store instead of plan.yaml. Retiring the Artifact dashboard
+    and its URL cache is team-basstler/artifact-path-retirement.
 
     '
 - id: stack-engine
@@ -119,8 +117,8 @@ items:
   depends_on:
   - cli-launcher
   status: not started
-  notes: 'No local stack metadata. Every command takes one stack (an item, a pull request or a branch);
-    pushes use --force-with-lease; conflicts are reported per branch, never resolved by the tool.
+  notes: 'No local stack metadata. Every command takes one stack (an item, a pull request or a branch); pushes use
+    --force-with-lease; conflicts are reported per branch, never resolved by the tool.
 
     '
 - id: upstream-promotion
@@ -131,9 +129,9 @@ items:
   depends_on:
   - stack-engine
   status: not started
-  notes: The one stack operation unique to basstler. Claude writes only the summary; the command opens
-    the upstream pull request link and records it on the fork pull request. Withholds a branch GitHub
-    reports conflicted, not yet computed or failing checks; no needs-resolution label (from stack-maintenance/withhold-on-github-state).
+  notes: The one stack operation unique to basstler. Claude writes only the summary; the command opens the upstream
+    pull request link and records it on the fork pull request. Withholds a branch GitHub reports conflicted, not
+    yet computed or failing checks; no needs-resolution label (from stack-maintenance/withhold-on-github-state).
     The upstream pull request body closes the item's issue.
 - id: maintenance-action
   title: Whole-fork maintenance runs in an Action on every push to the default branch
@@ -143,8 +141,8 @@ items:
   depends_on:
   - stack-engine
   status: not started
-  notes: 'Restacks stacks whose base moved and retargets pull requests whose base landed. A session never
-    runs a whole-fork pass.
+  notes: 'Restacks stacks whose base moved and retargets pull requests whose base landed. A session never runs a
+    whole-fork pass.
 
     '
 - id: upstream-review-mirror
@@ -155,9 +153,9 @@ items:
   depends_on:
   - cli-launcher
   status: not started
-  notes: 'One sticky comment per promoted pull request, refreshed when a branch is promoted or pushed
-    and on demand. Sessions read only the fork; the helper session, the attach route and the request branch
-    are retired. An on-demand run fails fast when it does not start.
+  notes: 'One sticky comment per promoted pull request, refreshed when a branch is promoted or pushed and on demand.
+    Sessions read only the fork; the helper session, the attach route and the request branch are retired. An on-demand
+    run fails fast when it does not start.
 
     '
 - id: short-skills
@@ -170,9 +168,8 @@ items:
   - upstream-promotion
   - upstream-review-mirror
   status: not started
-  notes: 'Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode replaces
-    the auto/plan/ask execution modes. claude plugin eval cases fail CI when a skill run exceeds its token
-    or wall-time budget.
+  notes: 'Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode replaces the auto/plan/ask
+    execution modes. claude plugin eval cases fail CI when a skill run exceeds its token or wall-time budget.
 
     '
 - id: mcp-server
@@ -183,10 +180,10 @@ items:
   depends_on:
   - short-skills
   status: not started
-  notes: A FastMCP server (the official mcp SDK), shipped in the plugin's .mcp.json, so claude.ai and
-    Cowork, which do not install a plugin's bin/, can use basstler. 5 to 8 tools, each returning the same
-    brief or recording the same result as a CLI command; never thin API wrappers. Adds the mcp dependency
-    (approved 2026-11-01). Its tool definitions count against the skills' eval budgets.
+  notes: A FastMCP server (the official mcp SDK), shipped in the plugin's .mcp.json, so claude.ai and Cowork, which
+    do not install a plugin's bin/, can use basstler. 5 to 8 tools, each returning the same brief or recording the
+    same result as a CLI command; never thin API wrappers. Adds the mcp dependency (approved 2026-11-01). Its tool
+    definitions count against the skills' eval budgets.
 - id: slim-session-start
   title: Session start only writes the session's context
   branch: null
@@ -195,8 +192,8 @@ items:
   depends_on:
   - short-skills
   status: not started
-  notes: 'No install, release lookup, default-branch sync, settings sync or Action upgrade at start: each
-    happens on the command that needs it, or in an Action.
+  notes: 'No install, release lookup, default-branch sync, settings sync or Action upgrade at start: each happens
+    on the command that needs it, or in an Action.
 
     '
 - id: v2-removal
@@ -210,7 +207,7 @@ items:
   - plan-site-from-issues
   - maintenance-action
   status: not started
-  notes: 'Major release: removed commands, files and settings. Release notes list each removed command
-    with its replacement.
+  notes: 'Major release: removed commands, files and settings. Release notes list each removed command with its
+    replacement.
 
     '
