@@ -215,5 +215,8 @@ items:
   title: "Tests read command reports through the existing report key enums, not bare strings"
   branch: null
   track: core
+  notes: >
+    Tests read item_mode, maintenance and bootstrap reports with bare strings although ReportKey and
+    MaintenanceReportKey exist. Use the enums.
   depends_on: []
   status: not started
