@@ -107,8 +107,7 @@ class SetupLink(StrEnum):
     """
 
     GITHUB_AUTHORIZATION = (
-        f"{Host.CLAUDE.url}/customize/connectors"
-        "?auth_start=github&auth_start_force=1"
+        f"{Host.CLAUDE.url}/customize/connectors?auth_start=github&auth_start_force=1"
     )
     """
     Where a user grants Claude access to their own GitHub repositories.

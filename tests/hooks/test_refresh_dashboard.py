@@ -139,11 +139,9 @@ def scratch_project_root(tmp_path: Path) -> Path:
             basstler.standard_streams,
         )
     } | {
-        DatasetLocation.STUBS
-        / "sync_manifest_status_stub.py": package_directory
+        DatasetLocation.STUBS / "sync_manifest_status_stub.py": package_directory
         / StubbedScript.SYNC_MANIFEST_STATUS,
-        DatasetLocation.STUBS
-        / "build_dashboard_stub.py": package_directory
+        DatasetLocation.STUBS / "build_dashboard_stub.py": package_directory
         / StubbedScript.BUILD_DASHBOARD,
     }
     initializer = "__init__.py"

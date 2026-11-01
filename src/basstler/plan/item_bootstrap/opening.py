@@ -160,8 +160,7 @@ class GitHubPullRequestOpener(PullRequestOpener):
                 created = json.loads(response.read())
         except urllib.error.HTTPError as error:
             raise PullRequestRefusedError(
-                detail=f"{error.code} "
-                f"{error.read().decode(errors='replace').strip()}"
+                detail=f"{error.code} {error.read().decode(errors='replace').strip()}"
             ) from error
         return PullRequestReference(
             pull_request.repository, created[PullRequestField.NUMBER.key]

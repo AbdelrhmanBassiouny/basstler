@@ -435,14 +435,15 @@ class DashboardRenderer(TemplatePage):
         match live_state, item.status:
             case LiveState.NOT_FOUND, _:
                 return f"pull request #{item.pull_request_number} not found on GitHub"
-            case (LiveState.OPEN_DRAFT | LiveState.OPEN_READY), ItemStatus.DONE:
+            case ((LiveState.OPEN_DRAFT | LiveState.OPEN_READY), ItemStatus.DONE):
                 return f"marked done, but pull request #{item.pull_request_number} is still open"
             case LiveState.MERGED, (
                 ItemStatus.NOT_STARTED | ItemStatus.BLOCKED | ItemStatus.DEFERRED
             ):
                 return f"marked {item.status.value}, but pull request #{item.pull_request_number} is already merged"
-            case (LiveState.MERGED | LiveState.CLOSED_UNMERGED), (
-                ItemStatus.IN_PROGRESS | ItemStatus.BLOCKED
+            case (
+                (LiveState.MERGED | LiveState.CLOSED_UNMERGED),
+                (ItemStatus.IN_PROGRESS | ItemStatus.BLOCKED),
             ):
                 return f"marked {item.status.value}, but pull request #{item.pull_request_number} is {live_state.value.replace('_', ' ')}"
             case LiveState.CLOSED_UNMERGED, ItemStatus.DONE:

@@ -81,8 +81,9 @@ class HeadingShift(IntEnum):
         :param heading_tag_match: A match of :meth:`tag_pattern`.
         :return: The tag with its level shifted.
         """
-        closing_slash, original_level = heading_tag_match.group(1), int(
-            heading_tag_match.group(2)
+        closing_slash, original_level = (
+            heading_tag_match.group(1),
+            int(heading_tag_match.group(2)),
         )
         shifted_level = min(original_level + cls.LEVELS, cls.DEEPEST_LEVEL)
         return f"<{closing_slash}h{shifted_level}>"
