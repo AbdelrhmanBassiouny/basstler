@@ -5,22 +5,12 @@ The paths the package names, and how a member stands in for its path.
 from __future__ import annotations
 
 import os
-import subprocess
-import sys
 from pathlib import Path
 
 import pytest
 
 import basstler
-from .constants.environment import ScrubbedEnvironmentPrefix
-from .constants.paths import RepositoryLocation
-from basstler import locations
-from basstler.locations import (
-    BasstlerVariable,
-    PackageLocation,
-    PluginLocation,
-    ProjectLocation,
-)
+from basstler.locations import PackageLocation, PluginLocation, ProjectLocation
 
 # %% a member stands in for its path
 
@@ -98,7 +88,7 @@ def test_the_package_directory_is_where_the_package_is_imported_from():
 
 @pytest.mark.parametrize(
     "location",
-    [location for location in PackageLocation if location is not PackageLocation.BOARD],
+    list(PackageLocation),
     ids=lambda member: member._name_,
 )
 def test_every_shipped_location_exists(location: PackageLocation):
@@ -134,52 +124,6 @@ def test_the_dependency_declaration_is_the_source_trees_own_metadata():
 # %% the plugin's files
 
 
-def plugin_root_resolved_with(environment: dict[str, str]) -> Path:
-    """
-    :param environment: Variables to import the package with, on top of this process's
-        own, scrubbed of every variable the shell configuration exports.
-    :return: The plugin root a fresh import of the package resolves.
-    """
-    inherited = {
-        name: value
-        for name, value in os.environ.items()
-        if not name.startswith(ScrubbedEnvironmentPrefix.BASSTLER)
-    }
-    return Path(
-        subprocess.run(
-            [
-                sys.executable,
-                "-c",
-                f"from {locations.__name__} import {PluginLocation.__name__} as l; "
-                f"print(l.ROOT.value)",
-            ],
-            capture_output=True,
-            text=True,
-            check=True,
-            env={**inherited, **environment},
-        ).stdout.strip()
-    )
-
-
-def test_the_plugin_is_the_checkouts_own_when_no_root_is_exported():
-    """
-    A module run from a source checkout, with nothing exported, runs that checkout's
-    plugin.
-    """
-    assert plugin_root_resolved_with({}) == RepositoryLocation.PLUGIN.value
-
-
-def test_the_plugin_is_the_one_the_configuration_exports(tmp_path: Path):
-    """
-    A module run by a hook or skill, which sourced the plugin's configuration, runs that
-    plugin's scripts wherever the package itself is installed.
-    """
-    assert (
-        plugin_root_resolved_with({BasstlerVariable.PLUGIN_ROOT: str(tmp_path)})
-        == tmp_path
-    )
-
-
 def test_the_plugin_scripts_are_under_its_hooks_directory():
     """
     Every script the package runs is one of the plugin's hooks.
@@ -187,5 +131,5 @@ def test_the_plugin_scripts_are_under_its_hooks_directory():
     assert {
         location.parent
         for location in PluginLocation
-        if location not in (PluginLocation.ROOT, PluginLocation.HOOKS)
+        if location is not PluginLocation.HOOKS
     } == {PluginLocation.HOOKS.value}

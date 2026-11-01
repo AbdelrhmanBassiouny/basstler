@@ -22,6 +22,7 @@ from pathlib import Path
 
 from .script_runner import BashScriptRunner
 from basstler.locations import PackageLocation, PluginLocation
+from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.shell_configuration import ShellConfigurationFunction
 
 from .constants.environment import (
@@ -85,9 +86,7 @@ def install_package_into(checkout_root: Path) -> None:
     shutil.copytree(
         RepositoryLocation.ROOT / PackageSourceFile.SOURCE,
         checkout_root / PackageSourceFile.SOURCE,
-        ignore=shutil.ignore_patterns(
-            "__pycache__", "*.egg-info", f"{PackageLocation.BOARD.value.name}*"
-        ),
+        ignore=shutil.ignore_patterns("__pycache__", "*.egg-info"),
         dirs_exist_ok=True,
     )
 
@@ -275,6 +274,11 @@ class ScratchRepository:
         repository.run_git("init", "--quiet")
         repository.run_git("config", "user.name", SCRATCH_IDENTITY.name)
         repository.run_git("config", "user.email", SCRATCH_IDENTITY.email)
+        # A throwaway repository has no reason to sign, and an environment that signs
+        # by default makes every commit here depend on a reachable signing service -
+        # observed failing mid-suite with "signing server returned status 520", on a
+        # different test each run.
+        repository.run_git("config", "commit.gpgsign", "false")
         return repository
 
     def clear_local_git_identity(self) -> None:
@@ -298,6 +302,11 @@ class ScratchRepository:
                 return None
             values.append(result.stdout.strip())
         return GitIdentity(*values)
+
+    @property
+    def git(self) -> GitCommandRunner:
+        """:return: A runner for git in the project root."""
+        return GitCommandRunner(working_directory=self.project_root)
 
     def run_git(
         self, *arguments: str, cwd: Path | None = None
@@ -354,7 +363,7 @@ class ScratchRepository:
         beside the shell file the personal-notes override is fetched through.
 
         :param content: The configuration to write.
-        :return: The path :func:`basstler.stack.load_configuration` should be pointed at.
+        :return: The path :meth:`basstler.stack.settings.Configuration.load` should be pointed at.
         """
         self.install_hook_scripts(
             PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.value.name
@@ -382,10 +391,11 @@ class ScratchRepository:
         """
         return self.configuration_output(f'printf "%s" "${{{variable_name}}}"')
 
-    def configuration_output(self, command: str) -> str:
+    def configuration_output(self, command: str, **overrides: str) -> str:
         """
         :param command: A shell command run once the scratch plugin's configuration is
             sourced in the project, such as a call to one of its functions.
+        :param overrides: Variables the run sets.
         :return: What it printed.
         """
         self.install_hook_scripts(
@@ -402,7 +412,7 @@ class ScratchRepository:
             capture_output=True,
             text=True,
             check=True,
-            env=self.runner_environment(),
+            env=self.runner_environment(**overrides),
         ).stdout
 
     def install_package_environment(self) -> Path:
@@ -591,8 +601,9 @@ class ScratchRepository:
         checkout = self.project_root.parent / "notes-update-checkout"
         shutil.rmtree(checkout, ignore_errors=True)
         self.clone_notes_branch(checkout)
-        self.run_git("config", "user.name", "Scratch Repo", cwd=checkout)
-        self.run_git("config", "user.email", "scratch-repo@example.com", cwd=checkout)
+        self.run_git("config", "user.name", SCRATCH_IDENTITY.name, cwd=checkout)
+        self.run_git("config", "user.email", SCRATCH_IDENTITY.email, cwd=checkout)
+        self.run_git("config", "commit.gpgsign", "false", cwd=checkout)
 
         destination = checkout / relative_path
         destination.parent.mkdir(parents=True, exist_ok=True)

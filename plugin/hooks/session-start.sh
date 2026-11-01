@@ -6,8 +6,10 @@ set -euo pipefail
 # git config or environment, see ./README.md): the notes, this branch's PR
 # progress, and this branch's plan item with the plan's standing rules. Also
 # syncs personal settings and git identity, keeps the package environment
-# installed, stamps the plan state SHA for plan-updates-since.sh, and prints a
-# summary of what it did. Never fails the session on a setup gap.
+# installed, stamps the plan state SHA for plan-updates-since.sh, fast-forwards
+# the default branch to the upstream (see basstler.maintenance.default_branch_sync),
+# brings the fork's upstream-reviews Action to this session's release, and
+# prints a summary of what it did. Never fails the session on a setup gap.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
@@ -20,8 +22,7 @@ fi
 
 fetch_personal_notes_branch || exit 0
 
-# Reads below use FETCH_HEAD, which also works for a URL-form remote.
-
+# Reads below use PERSONAL_NOTES_REFERENCE, which later fetches leave alone.
 record_plan_state_sync_stamp
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
@@ -38,66 +39,46 @@ SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
 
 # Installs the package environment only where something is missing; never
 # fatal. Runs before the plan section and the setup check, which rely on it.
+# Holds the install lock, so a skill started while this runs waits for it.
 ensure_basstler_environment() {
-  if [ ! -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
-    create_and_install_basstler_environment
-    return
-  fi
-  if ! installed_package_is_current; then
-    install_basstler_and_report "$(basstler_package_source)"
-    return
-  fi
-  local missing
-  if ! missing="$(missing_dependencies)"; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)"
-    return
-  fi
-  if [ -z "${missing}" ]; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed \
-      "${BASSTLER_ENVIRONMENT_DIRECTORY}")"
-    return
-  fi
-  install_basstler_and_report "${missing}"
-}
-
-# Installs the package into its existing environment; $1 names the requirements.
-install_basstler_and_report() {
-  local requirements="$1"
-  if ! install_basstler_into_environment; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed "${requirements}" \
-      "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
-      "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
-      "${BASSTLER_INSTALL_COMMAND[*]}")"
-    return
-  fi
-  SUMMARY_DEPENDENCIES="$(dependencies_line_installed "${requirements}" \
-    "${BASSTLER_ENVIRONMENT_DIRECTORY}")"
-}
-
-# Creates the environment, installs the package, and points BASSTLER_PYTHON at it.
-create_and_install_basstler_environment() {
-  if ! create_basstler_environment; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_environment_not_created \
-      "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
-      "$(printf '%s' "${BASSTLER_ENVIRONMENT_OUTPUT}" | tail -1)" \
-      "${BASSTLER_PYTHON_REQUIREMENT}")"
-    return
-  fi
-  resolve_basstler_python
-  if ! install_basstler_into_environment; then
-    SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
-      "$(basstler_package_source)" "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
-      "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
-      "${BASSTLER_INSTALL_COMMAND[*]}")"
-    return
-  fi
-  SUMMARY_DEPENDENCIES="$(dependencies_line_environment_created \
-    "${BASSTLER_ENVIRONMENT_DIRECTORY}" "$(basstler_package_source)")"
+  record_latest_basstler_release
+  ensure_basstler_package || true
+  case "${BASSTLER_PACKAGE_STATE}" in
+    current)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed \
+        "${BASSTLER_ENVIRONMENT_DIRECTORY}")" ;;
+    created)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_environment_created \
+        "${BASSTLER_ENVIRONMENT_DIRECTORY}" "${BASSTLER_PACKAGE_REQUIREMENTS}")" ;;
+    installed)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_installed \
+        "${BASSTLER_PACKAGE_REQUIREMENTS}" "${BASSTLER_ENVIRONMENT_DIRECTORY}")" ;;
+    environment-failed)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_environment_not_created \
+        "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+        "$(printf '%s' "${BASSTLER_ENVIRONMENT_OUTPUT}" | tail -1)" \
+        "${BASSTLER_PYTHON_REQUIREMENT}")" ;;
+    install-failed)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
+        "${BASSTLER_PACKAGE_REQUIREMENTS}" "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+        "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
+        "${BASSTLER_INSTALL_COMMAND[*]}")" ;;
+    locked)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_install_running \
+        "${BASSTLER_INSTALL_LOCK}")" ;;
+    *)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)" ;;
+  esac
 }
 
 ensure_basstler_environment
 
-if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
+# After the install, so it names the environment's interpreter once one exists.
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  printf 'export BASSTLER_PYTHON=%q\n' "${BASSTLER_PYTHON}" >> "${CLAUDE_ENV_FILE}"
+fi
+
+if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" 2>/dev/null; then
   cat <<HEADER >> "${OUTPUT_FILE}"
 <!--
 Personal notes, synced from '${NOTES_BRANCH}' (${NOTES_PATH}) on remote
@@ -111,7 +92,7 @@ ever saved.
 -->
 <!-- BEGIN-PERSONAL-NOTES -->
 HEADER
-  git show "FETCH_HEAD:${NOTES_PATH}" >> "${OUTPUT_FILE}"
+  git show "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" >> "${OUTPUT_FILE}"
   echo "<!-- END-PERSONAL-NOTES -->" >> "${OUTPUT_FILE}"
   WROTE_ANYTHING=1
   SUMMARY_NOTES="loaded from '${NOTES_BRANCH}' (${NOTES_PATH}) on '${ACTIVE_NOTES_REMOTE}'"
@@ -131,8 +112,8 @@ ${PLAN_SIZE_LIMITS_MODULE}. Edit between the markers, then run
 -->
 <!-- BEGIN-PR-PROGRESS -->
 PROGRESS_HEADER
-  if git cat-file -e "FETCH_HEAD:${PROGRESS_PATH}" 2>/dev/null; then
-    git show "FETCH_HEAD:${PROGRESS_PATH}" >> "${OUTPUT_FILE}"
+  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PROGRESS_PATH}" 2>/dev/null; then
+    git show "${PERSONAL_NOTES_REFERENCE}:${PROGRESS_PATH}" >> "${OUTPUT_FILE}"
     SUMMARY_PROGRESS="loaded for branch '${CURRENT_BRANCH}' (${PROGRESS_PATH})"
   else
     cat <<'SCAFFOLD' >> "${OUTPUT_FILE}"
@@ -161,23 +142,24 @@ else
   PLAN_ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
   # Replaced below unless the indexed manifest is missing.
   SUMMARY_PLAN="$(plan_line_manifest_missing "${PLAN_ID}" "${PLAN_MANIFEST_PATH}" "${NOTES_BRANCH}")"
-  if git cat-file -e "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
+  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
     [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
     # `|| true`: a plan without tracking_issue must not kill the hook.
-    TRACKING_ISSUE="$(git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null \
+    TRACKING_ISSUE="$(git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}" 2>/dev/null \
       | grep -oE '^tracking_issue:[[:space:]]*[0-9]+' | head -1 \
       | grep -oE '[0-9]+$' || true)"
     if [ -n "${TRACKING_ISSUE}" ]; then
       TRACKING_ISSUE_NOTE="Structural changes (a wave, a deferral, a split, a reprioritization) are
 the user's call: ask first, then edit the manifest and comment on tracking
-issue #${TRACKING_ISSUE}. While working an item of this plan, subscribe to that issue."
+issue #${TRACKING_ISSUE}. While working an item of this plan, read that issue's
+comments before each push - an issue cannot be subscribed to."
     else
       TRACKING_ISSUE_NOTE="This plan has no tracking_issue set, so there is no coordination
 mailbox for structural changes yet - edit the manifest directly as usual."
     fi
     # Load only this branch's item; the rest costs context every turn.
     MANIFEST_COPY="$(mktemp)"
-    git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" > "${MANIFEST_COPY}"
+    git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}" > "${MANIFEST_COPY}"
     if ! PLAN_ITEM="$("${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" item \
         "${MANIFEST_COPY}" --branch "${CURRENT_BRANCH}" 2>&1)"; then
       PLAN_ITEM="(could not read this branch's item: ${PLAN_ITEM})"
@@ -190,12 +172,14 @@ This branch's item in plan '${PLAN_ID}', read from '${NOTES_BRANCH}'
 session-start.sh, followed by the plan's standing rules (${PLAN_ROADMAP_PATH}).
 Read-only: editing it here changes nothing. To read another item, run
   "\${BASSTLER_PYTHON}" -m ${PLAN_MANIFEST_TOOLS_MODULE} item <manifest-file> --id <item-id>
-on a copy from 'git show FETCH_HEAD:${PLAN_MANIFEST_PATH}' after fetching
+on a copy from 'git show ${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}' after fetching
 '${NOTES_BRANCH}' - never read the whole manifest when one item will do.
-To change the plan, record the item with plan_item_bootstrap's 'record', or
-fetch both files fresh, edit them, and run
-  "\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" ${PLAN_ID} --manifest <file> --roadmap <file>
-which drops landed items, removes a plan with none left, and refuses a plan
+To change the plan, record the item with basstler.plan.item_bootstrap's 'record', or
+fetch both files fresh, note the commit read (git rev-parse ${PERSONAL_NOTES_REFERENCE}),
+edit them, and run
+  "\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" ${PLAN_ID} --manifest <file> --roadmap <file> --read-at <commit>
+which keeps other writers' edits to other items, refuses one to an item you also
+changed, drops landed items, removes a plan with none left, and refuses a plan
 over the limits in ${PLAN_SIZE_LIMITS_MODULE}. Then run
 /plan-dashboard ${PLAN_ID}.
 
@@ -205,9 +189,9 @@ ${TRACKING_ISSUE_NOTE}
 ${PLAN_ITEM}
 <!-- END-PLAN-ITEM -->
 PLAN_HEADER
-    if git cat-file -e "FETCH_HEAD:${PLAN_ROADMAP_PATH}" 2>/dev/null; then
+    if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_ROADMAP_PATH}" 2>/dev/null; then
       printf '\n' >> "${OUTPUT_FILE}"
-      git show "FETCH_HEAD:${PLAN_ROADMAP_PATH}" >> "${OUTPUT_FILE}"
+      git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_ROADMAP_PATH}" >> "${OUTPUT_FILE}"
     fi
     WROTE_ANYTHING=1
     SUMMARY_PLAN="$(plan_line_tracked "${PLAN_ID}" "${TRACKING_ISSUE:-none}")"
@@ -254,15 +238,52 @@ fi
 
 # Personal settings, copied to .claude/settings.local.json unless edited locally.
 SUMMARY_SETTINGS="none on '${NOTES_BRANCH}' (${PERSONAL_SETTINGS_PATH})"
-if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
+if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
   if personal_settings_are_locally_modified; then
     SUMMARY_SETTINGS="kept local edits to ${LOCAL_SETTINGS_RELATIVE_PATH} - run save-personal-settings.sh to push them"
   else
     mkdir -p "$(dirname "${LOCAL_SETTINGS_JSON}")"
-    git show "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" > "${LOCAL_SETTINGS_JSON}"
+    git show "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_SETTINGS_PATH}" > "${LOCAL_SETTINGS_JSON}"
     record_personal_settings_sync
     SUMMARY_SETTINGS="synced to ${LOCAL_SETTINGS_RELATIVE_PATH}"
   fi
+fi
+
+# Default branch, caught up with the upstream this fork tracks: a stale base is
+# invisible from inside the clone. Fast-forward only, never fatal; the
+# checked-out branch moves along only when it has no commits of its own.
+SUMMARY_DEFAULT_BRANCH="$(default_branch_line_not_synced "${DEFAULT_BRANCH_SYNC_MODULE}")"
+if DEFAULT_BRANCH_REPORT="$("${BASSTLER_PYTHON}" -m "${DEFAULT_BRANCH_SYNC_MODULE}" \
+    2>/dev/null)"; then
+  SUMMARY_DEFAULT_BRANCH="${DEFAULT_BRANCH_REPORT}"
+fi
+
+# The fork's upstream-reviews Action, kept at the release this session runs:
+# the run and the session replaying it must run the same package, so every
+# release would otherwise leave it stale. Only a branch already there is
+# touched - installing one is setup's decision. Never fatal.
+SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_not_read "${NOTES_REMOTE}")"
+SESSION_RELEASE="$(basstler_branch_or_tag)"
+if ACTION_STATE="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+    --remote "${NOTES_REMOTE}" status --branch-or-tag "${SESSION_RELEASE}" 2>/dev/null)"; then
+  case "${ACTION_STATE}" in
+    missing*)
+      SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_not_installed)" ;;
+    current*)
+      SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_current \
+        "${SESSION_RELEASE}")" ;;
+    stale*)
+      if "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+          --remote "${NOTES_REMOTE}" install --branch-or-tag "${SESSION_RELEASE}" \
+          > /dev/null 2>&1; then
+        SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_updated \
+          "${ACTION_STATE#stale }" "${SESSION_RELEASE}")"
+      else
+        SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_update_failed \
+          "${ACTION_STATE#stale }" "${SESSION_RELEASE}" \
+          "${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --branch-or-tag ${SESSION_RELEASE}")"
+      fi ;;
+  esac
 fi
 
 # Setup verdict from check-setup.sh, run last so it sees what this run wrote.
@@ -286,8 +307,10 @@ session-start.sh summary:
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
   plan site:       ${SUMMARY_HUB}
+  default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   dependencies:    ${SUMMARY_DEPENDENCIES}
+  reviews Action:  ${SUMMARY_UPSTREAM_REVIEWS_ACTION}
   setup:           ${SUMMARY_SETUP}
-  plan state SHA:  $(git rev-parse FETCH_HEAD) (run plan-updates-since.sh <plan-id> to recheck from here later)
+  plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY

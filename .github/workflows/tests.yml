@@ -13,6 +13,30 @@ permissions:
   contents: read
 
 jobs:
+  lint:
+    name: ruff
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      # Dependency groups need pip 25.1 or later.
+      - name: Install the development tools
+        run: |
+          python -m pip install --upgrade pip
+          pip install --group dev
+
+      - name: Check the code rules
+        run: ruff check .
+
+      - name: Check the formatting
+        run: ruff format --check .
+
   test:
     name: pytest on Python ${{ matrix.python-version }}
     runs-on: ubuntu-latest
@@ -32,31 +56,10 @@ jobs:
       # The hook tests run python3 from the path, so the package is installed into the
       # interpreter setup-python put there.
       - name: Install basstler and the test runner
-        run: pip install --editable . pytest pytest-xdist
+        run: |
+          python -m pip install --upgrade pip
+          pip install --editable . --group dev
 
       - name: Run the tests
         run: pytest tests -n auto
 
-  release-version:
-    name: The package is the release its version names
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      # Every tag, since the check compares the version with the latest release.
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          path: basstler
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
-      - name: Install basstler
-        run: pip install --editable basstler
-
-      # Patch releases are made on merge; a pull request may only name the latest
-      # release's version, or its next minor or major one.
-      - name: Check the version is one a pull request may name
-        run: python -m basstler.release_version check --checkout basstler

@@ -7,7 +7,7 @@ from __future__ import annotations
 import re
 from enum import StrEnum
 
-from basstler.setup_steps import PersonalNotesSetting
+from basstler.setup.steps import PersonalNotesSetting
 
 
 class ScratchBranch(StrEnum):
@@ -73,7 +73,9 @@ class ClaudeLocalSection(StrEnum):
 class ProgressBranch(StrEnum):
     """
     The branches progress notes are kept for in the pruning suites, each standing for
-    one state its pull request can be in. The ones with a pull request are those
+    one state its pull request can be in.
+
+    The ones with a pull request are those
     :attr:`DatasetLocation.PULL_REQUESTS_BY_BRANCH` records.
     """
 

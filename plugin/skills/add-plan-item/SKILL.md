@@ -1,7 +1,7 @@
 ---
 name: add-plan-item
-description: Decide where a newly described piece of work belongs - folded into an unlanded item, as a new item in an existing plan, as a new plan of its own, or tracked nowhere - by running the mechanical scope check against live branch and pull request state, then propose the outcome via plan mode without writing any code. Invoke as "/add-plan-item <description of the work>". Use when someone describes something new to build and asks where it goes, or says "add a plan item", "should this be its own PR", or "is this new work or part of <something>".
-allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__issue_read, mcp__Claude_Code_Remote__subscribe_pr_activity
+description: Decide where new work belongs - folded into an unlanded item, a new item, a new plan, or untracked - and propose it via plan mode without writing code. Invoke as "/add-plan-item <description of the work>". Use when asked where new work goes, to add a plan item, or whether it should be its own PR.
+allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__issue_read, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
 # Add Plan Item
@@ -45,22 +45,22 @@ branch by default.
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+fetch_personal_notes_branch
 ```
 
-Read **every** plan's `plan.yaml` under `${PLANS_DIR}` off `FETCH_HEAD`, not
+Read **every** plan's `plan.yaml` under `${PLANS_DIR}` off `"${PERSONAL_NOTES_REFERENCE}"`, not
 just the one the user has in mind — the right home is often a plan they weren't
-thinking of. `${PLAN_SCHEMA_DOCUMENT}` is the field reference.
+thinking of. [`plan-schema.md`](../plan-dashboard/plan-schema.md) is the field reference.
 
 Then fetch live pull request state once, in bulk, per
-`${PULL_REQUEST_DATA_FETCHING_DOCUMENT}`.
+[`pr-data-fetching.md`](../plan-dashboard/pr-data-fetching.md).
 
 Candidates are every unlanded item and every open pull request's branch, plus
 every plan whose own `description` covers the kind of work being described.
 
 ## 3. Run the scope check
 
-The rule is in `${SCOPE_DECISION_DOCUMENT}` — read it rather than re-deriving
+The rule is in [`scope-decision.md`](scope-decision.md) — read it rather than re-deriving
 it here. Gather its evidence in one call:
 
 ```bash
@@ -72,7 +72,7 @@ it here. Gather its evidence in one call:
 
 Non-empty `paths_absent_from_base` means an unlanded branch introduces those
 files, and whichever one does is a candidate owner. Non-empty `shared_paths`
-names it. Apply the trigger-to-look test from `${SCOPE_DECISION_DOCUMENT}` to
+names it. Apply the trigger-to-look test from [`scope-decision.md`](scope-decision.md) to
 decide what that means; do not treat the output as the verdict by itself.
 
 ## 4. Scan for duplicate intent
@@ -89,11 +89,11 @@ A plan's `description` covering the work is not enough by itself — it also has
 to have room left. For every plan found in step 2 whose `description` covers
 the work, count its *current* items (manifest already fetched off
 `FETCH_HEAD`) against the item limit, `Measure.ITEM_COUNT` in
-`plan_size_limits.py`:
+`plan/size_limits.py`:
 
 ```bash
-git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/plan.yaml" > /tmp/plan.yaml
-"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest /tmp/plan.yaml
+git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/plan.yaml" > <scratchpad>/plan.yaml
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <scratchpad>/plan.yaml
 ```
 
 `is_full: true` disqualifies that plan for growth, whatever its `description`
@@ -165,3 +165,5 @@ Flag explicitly, never silently paper over:
 
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.
+
+Carrying the outcome out later follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).

@@ -19,13 +19,14 @@ all:
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m basstler.build_dashboard \
+"${BASSTLER_PYTHON}" -m basstler.dashboard.plan_page \
   --plan skills/plan-dashboard/example/plan.yaml \
   --roadmap skills/plan-dashboard/example/roadmap.md \
   --pr-data skills/plan-dashboard/example/pr_data.json \
-  --output /tmp/example-dashboard.html
+  --output <scratchpad>/example-dashboard.html
 ```
 
+`<scratchpad>` is the directory [`SKILL.md`](SKILL.md) writes into.
 `BASSTLER_PYTHON` is the package's own environment, which every session start creates
 with the package and its dependencies installed; see `basstler/README.md`.
 

@@ -64,9 +64,24 @@ class ConfigurationVariable(StrEnum):
     The interpreter of the package's own environment.
     """
 
+    PYTHON = "BASSTLER_PYTHON"
+    """
+    The interpreter every caller runs a module of the package with.
+    """
+
     INSTALLED_SOURCE_FILE = "BASSTLER_INSTALLED_SOURCE_FILE"
     """
     The file recording what the environment's package was installed from.
+    """
+
+    INSTALL_LOCK = "BASSTLER_INSTALL_LOCK"
+    """
+    The directory held while the package's environment is installed into.
+    """
+
+    INSTALL_WAIT_SECONDS = "BASSTLER_INSTALL_WAIT_SECONDS"
+    """
+    How long a caller waits for an install another process holds the lock for.
     """
 
     PYTHON_REQUIREMENT = "BASSTLER_PYTHON_REQUIREMENT"
@@ -89,10 +104,25 @@ class ConfigurationVariable(StrEnum):
     The repository an installed plugin's package is installed from.
     """
 
+    RELEASE_FILE = "BASSTLER_RELEASE_FILE"
+    """
+    The file recording the latest release a session start read from that repository.
+    """
+
     UV_DIRECTORY = "BASSTLER_UV_DIRECTORY"
     """
     Where a session start installs ``uv`` when it finds neither ``uv`` nor a supported
     interpreter.
+    """
+
+    INSTALL_MARKER = "BASSTLER_INSTALL_MARKER"
+    """
+    The file a session start holds its process id in while it installs the package.
+    """
+
+    PERSONAL_NOTES_REFERENCE = "PERSONAL_NOTES_REFERENCE"
+    """
+    The ref the personal-notes branch is fetched into.
     """
 
 
@@ -120,4 +150,15 @@ class FileMode(IntEnum):
     EXECUTABLE = 0o755
     """
     Readable and runnable by everyone, writable by its owner.
+    """
+
+
+class BashStubVariable(StrEnum):
+    """
+    The variables ``dataset/stubs/bash.sh`` reads.
+    """
+
+    CALL_LOG = "STUB_BASH_CALL_LOG"
+    """
+    The file every script the stub is asked to run is recorded in, one per line.
     """

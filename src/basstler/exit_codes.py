@@ -116,6 +116,12 @@ class StackExitCode(ExitCode):
     The project names no upstream repository; stderr says where to name it.
     """
 
+    UPSTREAM_UNREADABLE = 12
+    """
+    The fork's upstream-reviews Action could not read the upstream's open pull
+    requests; stderr says why and what to do.
+    """
+
     @property
     def name_for_a_caller(self) -> str:
         """
@@ -124,6 +130,82 @@ class StackExitCode(ExitCode):
         :return: The status's name, in the form a caller reads or matches on.
         """
         return super().name_for_a_caller.replace("_", "-")
+
+
+class SetupCheckExitCode(ExitCode):
+    """
+    What check-setup.sh's exit status tells a caller.
+    """
+
+    SUCCESS = 0
+    """
+    Nothing is left to set up.
+    """
+
+    SETUP_INCOMPLETE = 1
+    """
+    At least one check still needs setting up.
+    """
+
+
+class PersonalNotesSetupExitCode(ExitCode):
+    """
+    What the personal-notes setup's exit status tells a caller.
+
+    The first two are :class:`SetupCheckExitCode`'s, which a completed run passes on.
+    """
+
+    SUCCESS = SetupCheckExitCode.SUCCESS.value
+    """
+    The run finished and check-setup.sh reports nothing left to set up.
+    """
+
+    SETUP_INCOMPLETE = SetupCheckExitCode.SETUP_INCOMPLETE.value
+    """
+    The run finished and check-setup.sh still reports something to set up.
+    """
+
+    USAGE = 2
+    """
+    The wrong arguments, as ``argparse`` reports them.
+    """
+
+    FOREIGN_NOTES_REMOTE = 3
+    """
+    The notes remote belongs to somebody else, so nothing was written.
+    """
+
+    HOOK_SCRIPT_FAILED = 4
+    """
+    A hook script a step runs failed; its own output says why.
+    """
+
+
+class ManifestToolsExitCode(ExitCode):
+    """
+    How a ``basstler.plan.manifest_tools`` subcommand ended, as its caller reads it.
+    """
+
+    SUCCESS = 0
+    """
+    The subcommand did what it was asked.
+    """
+
+    INVALID_MANIFEST = 1
+    """
+    The manifest breaks a rule the dashboard validates; the problems are on stderr.
+    """
+
+    CHANGED_SINCE_READ = 3
+    """
+    Another writer changed a part of the plan the session also changed, or removed the
+    plan, since the session read it.
+    """
+
+    MERGE_DISAGREES = 4
+    """
+    The merged manifest does not read back as the merge decided.
+    """
 
 
 @dataclass

@@ -7,7 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from basstler.plan_model import ItemStatus, PlanItem, PlanManifest
+from basstler.plan.model import ItemStatus, PlanItem, PlanManifest
 
 from .constants.paths import DatasetLocation
 

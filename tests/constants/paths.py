@@ -4,6 +4,7 @@ Paths more than one suite reads: the repository, the dataset, skills and notes.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from pathlib import Path
 
 from basstler.locations import PackageLocation, PathEnumeration, ProjectLocation
@@ -44,6 +45,16 @@ class RepositoryLocation(PathEnumeration):
     The repository's Actions workflows.
     """
 
+    RELEASE_WORKFLOW = WORKFLOWS / "release.yml"
+    """
+    The workflow that tags a merge commit as a release.
+    """
+
+    PLAN_SITE_BUILD_WORKFLOW = WORKFLOWS / "plan-site-build.yml"
+    """
+    The reusable workflow that builds the plan site and deploys a changed one.
+    """
+
 
 class DatasetLocation(PathEnumeration):
     """
@@ -53,6 +64,86 @@ class DatasetLocation(PathEnumeration):
     DIRECTORY = Path(__file__).parents[1] / "dataset"
     """
     The dataset directory itself.
+    """
+
+    BOOTSTRAP_PLAN = DIRECTORY / "bootstrap-plan.yaml"
+    """
+    The item-bootstrap fixture plan: two items, a folded note, blank lines between
+    items.
+    """
+
+    BOOTSTRAP_ROADMAP = DIRECTORY / "bootstrap-roadmap.md"
+    """
+    The item-bootstrap fixture plan's roadmap.
+    """
+
+    MERGE_NEW_ITEM = DIRECTORY / "merge-new-item.yaml"
+    """
+    One item block, indented like :attr:`BOOTSTRAP_PLAN`'s items, that one writer adds.
+    """
+
+    ROADMAP_WITH_SESSION_RULE = DIRECTORY / "bootstrap-roadmap-session-rule.md"
+    """
+    :attr:`BOOTSTRAP_ROADMAP` with a rule the saving session added.
+    """
+
+    ROADMAP_WITH_CONCURRENT_RULE = DIRECTORY / "bootstrap-roadmap-concurrent-rule.md"
+    """
+    :attr:`BOOTSTRAP_ROADMAP` with a different rule another writer added meanwhile.
+    """
+
+    CONCURRENT_WRITER_HOOK = DIRECTORY / "concurrent-writer-pre-push.sh"
+    """
+    A pre-push hook that pushes another writer's commit to the notes branch ahead of
+    the push it runs for.
+    """
+
+    PULL_REQUEST_DATA_KEYED_BY_NUMBER = DIRECTORY / "pr-data-keyed-by-number.json"
+    """
+    A ``pr_data.json`` missing its repository level: one pull request keyed by its
+    number alone.
+    """
+
+    ACTION_RESULT_WITHOUT_REQUEST_IDENTIFIER = (
+        DIRECTORY / "action-result-without-request-identifier.json"
+    )
+    """
+    A result an Action release from before results named their request committed.
+    """
+
+    PLAN_SITE_RUNS_SUCCEEDED = DIRECTORY / "plan-site-runs-succeeded.json"
+    """
+    A site repository's run listing whose latest plan-site run succeeded.
+    """
+
+    PLAN_SITE_DISPATCH_RUNS_SUCCEEDED = (
+        DIRECTORY / "plan-site-dispatch-runs-succeeded.json"
+    )
+    """
+    A notes repository's run listing whose latest dispatch run succeeded.
+    """
+
+    PLAN_SITE_DISPATCH_RUNS_FAILED = DIRECTORY / "plan-site-dispatch-runs-failed.json"
+    """
+    A notes repository's run listing whose latest dispatch run failed after an earlier
+    one succeeded.
+    """
+
+    WORKFLOW_RUNS_NONE = DIRECTORY / "workflow-runs-none.json"
+    """
+    A run listing with no runs at all.
+    """
+
+    PROMOTION_SUMMARIES = DIRECTORY / "promotion-summaries.json"
+    """
+    What a session writes for the upstream pull requests of the two-branch stack: points
+    and a title for the parent, nothing for the child.
+    """
+
+    DESCRIPTION_WITH_PROMOTION_PROSE = DIRECTORY / "description-with-promotion-prose.md"
+    """
+    A fork pull request description whose own prose has a heading starting like the
+    promotion heading, followed by a sentence and a code fence.
     """
 
     PLAN_WITH_LANDED_ITEMS = DIRECTORY / "plan-with-landed-items.yaml"
@@ -82,6 +173,12 @@ class DatasetLocation(PathEnumeration):
     :class:`ProgressBranch` that has one.
     """
 
+    PLANS = DIRECTORY / "plans"
+    """
+    A plans directory the cross-plan reference tests resolve against: one subdirectory
+    per fixture plan.
+    """
+
     STUBS = DIRECTORY / "stubs"
     """
     Executables copied onto a scratch ``PATH`` to stand in for a real ``gh``, ``curl`` or
@@ -91,6 +188,17 @@ class DatasetLocation(PathEnumeration):
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"
     """
     The recorded GraphQL responses the upstream review reader is replayed against.
+    """
+
+    BRIEF_PLAN = DIRECTORY / "brief-plan.yaml"
+    """
+    A plan whose one item depends on a merged item, a draft item and an item of
+    another plan.
+    """
+
+    BRIEF_ROADMAP = DIRECTORY / "brief-roadmap.md"
+    """
+    The standing rules of :attr:`BRIEF_PLAN`, one of them wrapped across two lines.
     """
 
     SITE_PLANS = DIRECTORY / "site-plans"
@@ -165,6 +273,48 @@ class DatasetLocation(PathEnumeration):
     """
 
 
+class RecordedCommitChecks(PathEnumeration):
+    """
+    The check-run listings and combined statuses the API answers for one commit, as
+    recorded.
+    """
+
+    DIRECTORY = DatasetLocation.DIRECTORY / "commit-checks"
+    """
+    The directory holding them.
+    """
+
+    ONE_CHECK_RUN_FAILING = DIRECTORY / "check-runs-one-failing.json"
+    """
+    Three check runs: ``pytest`` failed, ``lint`` passed, ``docs`` is still running.
+    """
+
+    ONE_CHECK_RUN_RUNNING = DIRECTORY / "check-runs-one-running.json"
+    """
+    Two check runs: ``pytest`` is queued and ``lint`` passed.
+    """
+
+    EVERY_CHECK_RUN_FINISHED = DIRECTORY / "check-runs-all-finished.json"
+    """
+    Three finished check runs, ending in success, skipped and neutral.
+    """
+
+    NO_CHECK_RUNS = DIRECTORY / "check-runs-none.json"
+    """
+    A listing with no check runs in it.
+    """
+
+    NO_STATUSES = DIRECTORY / "status-none.json"
+    """
+    A combined status no integration reported to.
+    """
+
+    ONE_STATUS_ERRORING = DIRECTORY / "status-one-erroring.json"
+    """
+    Two statuses: ``legacy-ci`` errored and ``coverage`` succeeded.
+    """
+
+
 class SkillDirectory(PathEnumeration):
     """
     The skills the suites read, relative to the plugin root.
@@ -188,9 +338,53 @@ class SkillDirectory(PathEnumeration):
     The maintenance pass's own instructions.
     """
 
+    PLAN_CREATE = DIRECTORY / "plan-create"
+    """
+    The skill whose own act of creating a plan is what makes the master index stale.
+    """
+
+    PLAN_ITEM_KICKOFF = DIRECTORY / "plan-item-kickoff"
+    """
+    The instructions a kickoff run follows.
+    """
+
+    PLAN_ITEM_RESOLVE = DIRECTORY / "plan-item-resolve"
+    """
+    The instructions a resolve run follows.
+    """
+
+    UPSTREAM_REVIEWS = DIRECTORY / "upstream-reviews"
+    """
+    The instructions for reading a branch's upstream review threads.
+    """
+
     DASHBOARD_REFRESH_SCRIPT = PLAN_DASHBOARD / "refresh_dashboard.sh"
     """
     The dashboard skill's shell entry point.
+    """
+
+    MANIFEST_STALENESS_DOCUMENT = PLAN_DASHBOARD / "manifest-staleness.md"
+    """
+    The rule every skill that writes plan data cites: when to write the manifest and
+    republish the dashboard.
+    """
+
+    @classmethod
+    def skills(cls) -> tuple[SkillDirectory, ...]:
+        """
+        :return: Every member that is a skill's own directory.
+        """
+        return tuple(member for member in cls if member.parent == cls.DIRECTORY.value)
+
+
+class SkillFile(StrEnum):
+    """
+    The files every skill directory carries.
+    """
+
+    INSTRUCTIONS = "SKILL.md"
+    """
+    The instructions Claude Code loads the skill from.
     """
 
 

@@ -9,13 +9,16 @@ set -uo pipefail
 # Recognizes only the two invocations the hooks make:
 #   `venv --no-project --python <requirement> <directory>`, from
 #     create_basstler_environment, which it answers by writing
-#     <directory>/bin/python as a script running STUB_UV_PYTHON - the
-#     interpreter running the suite;
+#     <directory>/<STUB_UV_ENVIRONMENT_INTERPRETER> as a script running
+#     STUB_UV_PYTHON - the interpreter running the suite;
 #   `pip install --python <interpreter> --editable <source tree>`, from
 #     install_basstler_into_environment, which installs nothing.
 #   STUB_UV_CALL_LOG - file the invocation is appended to
 #   STUB_UV_STATUS   - exit status to report, default 0; anything else creates
 #                      and installs nothing
+#   STUB_UV_ENVIRONMENT_INTERPRETER - where in the environment the interpreter
+#                      is written, default bin/python; Scripts/python.exe stands
+#                      in for Windows
 #
 # Exits 64 on an unrecognized invocation for the same reason gh.sh does: a
 # changed call must fail a test rather than pass by accident.
@@ -47,7 +50,8 @@ if [ "${STATUS}" != "0" ]; then
   exit "${STATUS}"
 fi
 
-mkdir -p "$5/bin"
-printf '#!/bin/sh\nexec "%s" "$@"\n' "${STUB_UV_PYTHON}" > "$5/bin/python"
-chmod +x "$5/bin/python"
+INTERPRETER="$5/${STUB_UV_ENVIRONMENT_INTERPRETER:-bin/python}"
+mkdir -p "$(dirname "${INTERPRETER}")"
+printf '#!/bin/sh\nexec "%s" "$@"\n' "${STUB_UV_PYTHON}" > "${INTERPRETER}"
+chmod +x "${INTERPRETER}"
 echo "Creating virtual environment at: $5"

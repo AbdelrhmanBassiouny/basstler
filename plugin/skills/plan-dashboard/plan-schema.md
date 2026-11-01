@@ -26,7 +26,7 @@ rules at [`example/roadmap.md`](./example/roadmap.md).
 .claude/personal/plans/
   _generated/
     branch-index.tsv          (generated - do not hand-edit, see below)
-  _hub.yaml                   (the plan site's hub file - see basstler.plan_hub)
+  _hub.yaml                   (the plan site's hub file - see basstler.plan_site.hub)
   <plan-id>/
     plan.yaml
     roadmap.md
@@ -73,16 +73,18 @@ items:                         # the actual trackable units of work - flat,
     repository: null            # optional, overrides default_repository
     pull_request_number: <int or null>  # the real GitHub PR number, once one exists
     track: <track-id>
-    depends_on: [<item-id>, ...]  # structural/stacking dependency, by item id
+    depends_on: [<item-id>, ...]  # structural/stacking dependency - a bare id for
+                                   # an item of this plan, <plan-id>/<item-id> for
+                                   # one in another plan (see below)
     status: not started | in progress | blocked | deferred | done  # underscores (not_started) still read
     session: <url or omitted>
     notes: "short, freeform"
     blockers: ["freeform reasons", ...]   # optional, defaults to []
 ```
 
-Validation is not documentation-only: `build_dashboard.py` enforces this
+Validation is not documentation-only: `plan/validation.py` enforces this
 schema on every `/plan-dashboard` run, and `/plan-create` drafts against the
-same checks. If this document and that script ever disagree, the script is
+same checks. If this document and that module ever disagree, the module is
 the authority.
 
 ### Why `status` is deliberately thin
@@ -101,9 +103,52 @@ interpret it — GitHub's state alone can't say whether a still-open PR means
 usually means the manifest was mistyped, not that GitHub is wrong. But
 "GitHub confirms this PR is merged" has exactly one correct manifest state:
 `done`. There's nothing to interpret, so `/plan-dashboard` doesn't just flag
-it — `sync_manifest_status.py` corrects `status` to `done` for exactly that
+it — `plan/sync_manifest_status.py` corrects `status` to `done` for exactly that
 case, in `plan.yaml` itself, every run, before rendering. Every other kind
 of drift is still left as a flag for a human.
+
+### Depending on an item in another plan
+
+A `depends_on` entry is a bare `<item-id>` when it names an item of the same
+plan, and `<plan-id>/<item-id>` when it names one in another plan. Neither
+kebab-case id can contain a `/`, so the two forms never collide, and a plan
+that depends on nothing outside itself never has to know the form exists.
+
+A precondition that lives in another plan used to have nowhere to go but a
+freeform `blockers` sentence, which nothing resolves, re-checks or renders. A
+reference is checked and shown like any other dependency: `/plan-dashboard`
+resolves it against the referenced plan's own manifest, renders it as a chip
+that opens that item's card on its plan's page of the plan site in a new tab,
+and reads the foreign item's live pull request state from its own plan's
+`default_repository`. A chip naming an item of this plan scrolls to that item's
+card on the same page.
+
+Four rules, each rejected outright rather than passed over:
+
+- The plan must be in the plans directory, and the item must be in that plan.
+  An unknown plan or item is refused with the same shape of error an unknown
+  same-plan id already gets.
+- A reference must not name **this** plan's own id — the bare id already names
+  that item, and one edge should not have two spellings.
+- A reference has exactly two halves. A third segment would have to mean a
+  plan inside a plan, which means nothing.
+- A cross-plan reference needs the plans directory to resolve against, so a
+  manifest carrying one is refused when the tooling was given no directory
+  (`--plans-dir`, see [`SKILL.md`](./SKILL.md)). Accepting it unchecked is how
+  an unresolvable dependency used to count as *ready*.
+
+The cycle check runs over the resulting union graph, so a loop that closes
+through another plan is caught even though neither manifest can see it alone.
+Indentation is unaffected: an item's indent level is its depth in the
+**same-plan** dependency chain, since an item in another plan has no card on
+this page to indent under.
+
+Only the plans some entry actually names are read, and only their manifests —
+never their roadmaps, and never a plan nothing here depends on. What reaches
+the page from a foreign plan is one chip per reference: the reference text, the
+foreign item's title, its plan's title, and its live state. Keeping one plan's
+dashboard from carrying another plan's contents is the whole point of a
+per-plan size budget.
 
 ### Why items are flat, not nested under wave/track
 
@@ -141,7 +186,7 @@ itself.
 
 Every session that loads a plan pays for every line of it, so the plan holds
 only what a future session needs to act. `save-plan.sh` enforces this with
-the limits `src/basstler/plan_size_limits.py` names (`Measure`):
+the limits `src/basstler/plan/size_limits.py` names (`Measure`):
 
 - **Landed items are dropped on save**, along with every `depends_on` edge to
   them: the work is in the code and its history in git. A plan left with no
@@ -159,18 +204,27 @@ the limits `src/basstler/plan_size_limits.py` names (`Measure`):
 
 A save over a limit is refused with every violation named. Read one item
 rather than the manifest with
-`"${BASSTLER_PYTHON}" -m basstler.plan_manifest_tools item <file> --id <item-id>`.
+`"${BASSTLER_PYTHON}" -m basstler.plan.manifest_tools item <file> --id <item-id>`.
 
 ## Editing an existing plan
 
-Fetch the personal-notes branch, copy `plans/<plan-id>/plan.yaml` and
+Fetch the personal-notes branch, note the commit you read
+(`git rev-parse "${PERSONAL_NOTES_REFERENCE}"`), copy `plans/<plan-id>/plan.yaml` and
 `roadmap.md` to scratch files, edit them, then run
 
 ```bash
-"${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id> --manifest <file> --roadmap <file>
+"${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id> --manifest <file> --roadmap <file> \
+  --read-at <commit>
 ```
 
-to push both files and regenerate the reverse index in one commit. This
+to push both files and regenerate the reverse index in one commit. The save
+applies each top-level field, item and roadmap you changed since `<commit>`
+onto the branch as it is now, so another session's edit to a different item
+survives; it refuses (exit 3) when someone else changed the same part, and
+retries a push the branch rejected. A retry only re-merges edits to *different*
+parts; when the refusal names a part, read the branch's current value and redo that edit
+against it, then save again. Without `--read-at`, your files overwrite
+whatever changed before the save first fetches. This
 pushes data only — it does not publish the dashboard Artifact itself (that
 requires a live Claude session, since only a session can call the
 `Artifact` tool). `save-plan.sh` prints a reminder to run
@@ -200,12 +254,12 @@ check. `/plan-create` creates the tracking issue (titled
 `[plan-tracking] <plan-id>`) when bootstrapping a new plan and records its
 number as `tracking_issue` in `plan.yaml`.
 
-**Real-time awareness for sessions actively working an item.** A session
-working an item in a plan that has a `tracking_issue` should subscribe to that
-issue — not just the session making a structural change. Since every structural change is posted there, subscribing
-turns the tracking issue into a broadcast channel: a change lands in every
-actively subscribed session's conversation as it happens, not only picked up
-by `session-start.sh`'s auto-discovery on that session's *next* fresh start.
+**Staying aware while working an item.** A session working an item in a plan
+that has a `tracking_issue` reads that issue's comments when it starts and
+again before each push - not just the session making a structural change -
+since every structural change is posted there. No tool delivers an issue's
+comments as they arrive: the pull-request activity subscription refuses an
+issue. Only a tracking pull request (the fallback below) can be subscribed to.
 `session-start.sh`'s written header reminds a session of this when it
 auto-discovers the plan.
 

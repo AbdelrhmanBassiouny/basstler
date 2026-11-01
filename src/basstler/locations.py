@@ -1,7 +1,7 @@
 """
 Every file and directory this package names, each written once.
 
-..note:: Imports nothing outside the standard library, since :mod:`basstler.dependencies`
+..note:: Imports nothing outside the standard library, since :mod:`basstler.setup.dependencies`
     reads its declaration's location from here before anything is installed.
 """
 
@@ -67,15 +67,10 @@ class PackageLocation(PathEnumeration):
     ``PYTHONPATH``. Meaningless for a package installed as a copy.
     """
 
-    STACK_CONFIGURATION = DIRECTORY / "stack.toml"
+    STACK_CONFIGURATION = DIRECTORY / "stack" / "stack.toml"
     """
     The shipped stack configuration every run starts from, before a project's and a
     user's overrides.
-    """
-
-    BOARD = DIRECTORY / "board.json"
-    """
-    The exported snapshot of the fork's open pull requests - scratch state, never committed.
     """
 
     DEPENDENCY_DECLARATION = SOURCE_TREE / "pyproject.toml"
@@ -84,37 +79,166 @@ class PackageLocation(PathEnumeration):
     package installs.
     """
 
+    LICENSE = SOURCE_TREE / "LICENSE"
+    """
+    The licence text of a source checkout.
+    """
+
     TEMPLATES = DIRECTORY / "templates"
     """
     The page templates dashboards are rendered from.
     """
 
-    QUERIES = DIRECTORY / "queries"
+    QUERIES = DIRECTORY / "upstream_reviews" / "queries"
     """
     The GraphQL documents the upstream review reader sends.
     """
 
-    PLAN_ITEM_MODE_DEFAULTS = DIRECTORY / "plan-item-modes.toml"
+    PLAN_ITEM_MODE_DEFAULTS = DIRECTORY / "plan" / "plan-item-modes.toml"
     """
     The shipped plan-item execution modes.
     """
 
 
-class CheckoutLocation(PathEnumeration):
+class RepositoryStateLocation(PathEnumeration):
     """
-    The files of a checkout of this repository that write a release's version, relative
-    to the checkout's root.
-    """
-
-    PLUGIN_MANIFEST = Path("plugin") / ".claude-plugin" / "plugin.json"
-    """
-    The plugin's manifest, where a release's version is declared.
+    Scratch state kept per repository, relative to its common git directory, which every
+    worktree of the repository shares and no checkout or install of the package holds.
     """
 
-    EXAMPLE_CALLER = Path("docs") / "examples" / "upstream-reviews.yml"
+    DIRECTORY = Path("basstler")
     """
-    The caller a project copies, naming the release it calls.
+    Everything this package keeps there.
     """
+
+    BOARD = DIRECTORY / "board.json"
+    """
+    The exported snapshot of the fork's open pull requests.
+    """
+
+    MAINTENANCE_REPORT = DIRECTORY / "maintenance-report.json"
+    """
+    Everything the last maintenance pass did, in full.
+    """
+
+
+class CommitScratchFile(PathEnumeration):
+    """
+    The files a commit built outside the working tree is staged through, relative to a
+    scratch directory of its own.
+    """
+
+    INDEX = Path("index")
+    """
+    The index the commit's tree is staged in, leaving the clone's own untouched.
+    """
+
+    BLOB = Path("blob")
+    """
+    One file's content, written out to be stored as a blob.
+    """
+
+
+class DashboardTemplate(PathEnumeration):
+    """
+    The templates a plan's dashboard is rendered from.
+    """
+
+    SELF_CONTAINED_PAGE = PackageLocation.TEMPLATES.value / "dashboard.html"
+    """
+    The whole dashboard as one page, with its style, content and script inline.
+    """
+
+    ARTIFACT_PAGE = PackageLocation.TEMPLATES.value / "dashboard_artifact.html"
+    """
+    The short page published as the dashboard Artifact, which loads the other parts.
+    """
+
+    STYLE = PackageLocation.TEMPLATES.value / "dashboard_style.css"
+    """
+    The dashboard's style sheet.
+    """
+
+    SCRIPT = PackageLocation.TEMPLATES.value / "dashboard_script.js"
+    """
+    The dashboard's behaviour: copying commands, choosing a model, revealing an item.
+    """
+
+    CONTENT = PackageLocation.TEMPLATES.value / "dashboard_content.html"
+    """
+    The dashboard's body: the plan, its items and the next-step sidebar.
+    """
+
+
+class SiteTemplate(PathEnumeration):
+    """
+    The templates the plan site's pages and stylesheet are rendered from.
+    """
+
+    STYLESHEET = PackageLocation.TEMPLATES.value / "site.css"
+    """
+    The one stylesheet every page of the site links.
+    """
+
+    LAYOUT = PackageLocation.TEMPLATES.value / "site_layout.html"
+    """
+    The document every page of the site fills in.
+    """
+
+    PARTS = PackageLocation.TEMPLATES.value / "site_parts.html"
+    """
+    The markup the site's pages share: progress cards and the health banner.
+    """
+
+    HUB = PackageLocation.TEMPLATES.value / "hub.html"
+    """
+    The hub: a card per repository.
+    """
+
+    REPOSITORY_INDEX = PackageLocation.TEMPLATES.value / "site_index.html"
+    """
+    One repository's index: a card per plan.
+    """
+
+    PLAN = PackageLocation.TEMPLATES.value / "site_plan.html"
+    """
+    One plan's page: a column per wave, a card per item.
+    """
+
+
+class DashboardArtifactFile(PathEnumeration):
+    """
+    The files a plan's dashboard Artifact is published as, by their published path.
+    """
+
+    PAGE = Path("dashboard.html")
+    """
+    The Artifact's page.
+    """
+
+    STYLE = Path("dashboard.css")
+    """
+    The style sheet the page links.
+    """
+
+    SCRIPT = Path("dashboard.js")
+    """
+    The script the page loads.
+    """
+
+    CONTENT = Path("dashboard-content.html")
+    """
+    The body the page fetches and shows.
+    """
+
+    @property
+    def template(self) -> DashboardTemplate:
+        """
+        The template this file is rendered from.
+        """
+        if self is DashboardArtifactFile.PAGE:
+            return DashboardTemplate.ARTIFACT_PAGE
+        return DashboardTemplate[self._name_]
 
 
 class BasstlerVariable(EnvironmentVariable):
@@ -127,25 +251,18 @@ class BasstlerVariable(EnvironmentVariable):
     The root of the Claude Code plugin whose hooks and skills run this package.
     """
 
+    PYTHON = "BASSTLER_PYTHON"
+    """
+    The interpreter whose environment holds this package, for running its modules.
+    """
+
 
 class PluginLocation(PathEnumeration):
     """
-    The plugin's files this package runs, as absolute paths.
-
-    The plugin is found through :attr:`BasstlerVariable.PLUGIN_ROOT`, which sourcing the
-    plugin's shell configuration exports, else as the ``plugin`` directory of the source
-    checkout the package is imported from.
+    The plugin's files this package runs, relative to the plugin's root.
     """
 
-    ROOT = Path(
-        BasstlerVariable.PLUGIN_ROOT.read()
-        or PackageLocation.SOURCE_TREE.value / "plugin"
-    )
-    """
-    The plugin's root directory, holding its manifest, hooks and skills.
-    """
-
-    HOOKS = ROOT / "hooks"
+    HOOKS = Path("hooks")
     """
     The shell entry points that read and write personal-notes data.
     """
@@ -164,6 +281,12 @@ class PluginLocation(PathEnumeration):
     PERSONAL_NOTES_BRANCH_CREATION_SCRIPT = HOOKS / "create-personal-notes-branch.sh"
     """
     The helper that creates the personal-notes branch where it does not exist yet.
+    """
+
+    ENTRY_POINT_SCRIPT = HOOKS / "basstler.sh"
+    """
+    Runs one module of the package once the package is ready to run, saying in one
+    line why when it cannot be.
     """
 
     SESSION_START_SCRIPT = HOOKS / "session-start.sh"
@@ -200,6 +323,30 @@ class PluginLocation(PathEnumeration):
     PERSONAL_SETTINGS_SAVING_SCRIPT = HOOKS / "save-personal-settings.sh"
     """
     Saves the user's personal settings to the personal-notes branch.
+    """
+
+    @property
+    def path_under_exported_root(self) -> str:
+        """
+        This file as bash spells it under :attr:`BasstlerVariable.PLUGIN_ROOT`, for a
+        message that names it without knowing the root.
+        """
+        return f"${BasstlerVariable.PLUGIN_ROOT}/{self}"
+
+
+class PluginSkillLocation(PathEnumeration):
+    """
+    The files of the plugin's skills this package reads, relative to the plugin's root.
+    """
+
+    SKILLS = Path("skills")
+    """
+    The directory holding one directory per skill.
+    """
+
+    STARTER_NOTES = SKILLS / "setup-personal-notes" / "starter-notes.md"
+    """
+    The conventions a new personal-notes file can be seeded with.
     """
 
 
@@ -258,6 +405,33 @@ class ProjectLocation(PathEnumeration):
     """
 
 
+class WorkflowLocation(PathEnumeration):
+    """
+    The GitHub Actions workflows the plan site runs on, relative to the root of the
+    branch that holds each.
+    """
+
+    DIRECTORY = Path(".github") / "workflows"
+    """
+    Where GitHub reads a branch's workflows from.
+    """
+
+    PLAN_SITE_BUILD = DIRECTORY / "plan-site-build.yml"
+    """
+    basstler's reusable workflow that builds and deploys the plan site.
+    """
+
+    PLAN_SITE = DIRECTORY / "plan-site.yml"
+    """
+    The workflow on the user's site repository that calls :attr:`PLAN_SITE_BUILD`.
+    """
+
+    PLAN_SITE_DISPATCH = DIRECTORY / "plan-site-dispatch.yml"
+    """
+    The workflow on a notes branch that starts :attr:`PLAN_SITE` on every push to it.
+    """
+
+
 class ClaudeCodeVariable(EnvironmentVariable):
     """
     The environment variables Claude Code sets for the commands it runs.
@@ -266,4 +440,25 @@ class ClaudeCodeVariable(EnvironmentVariable):
     PROJECT_DIRECTORY = "CLAUDE_PROJECT_DIR"
     """
     The root of the project the session runs in.
+    """
+
+    REMOTE = "CLAUDE_CODE_REMOTE"
+    """
+    ``true`` in a Claude Code cloud session, whose proxy answers GitHub's REST API but
+    not its GraphQL API.
+    """
+
+    SESSION_IDENTIFIER = "CLAUDE_CODE_SESSION_ID"
+    """
+    The session's own identifier, which names its transcript file.
+    """
+
+    CONFIGURATION_DIRECTORY = "CLAUDE_CONFIG_DIR"
+    """
+    Where Claude Code keeps its state, transcripts included, when not ``~/.claude``.
+    """
+
+    GIT_BASH_PATH = "CLAUDE_CODE_GIT_BASH_PATH"
+    """
+    The bash Claude Code runs its commands in on Windows, when set.
     """
