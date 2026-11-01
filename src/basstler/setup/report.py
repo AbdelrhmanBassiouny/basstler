@@ -76,6 +76,11 @@ class SetupCheck(StrEnum):
     The fork's own upstream-reviews Action, installed at the session's basstler.
     """
 
+    PLAN_SITE = "plan_site"
+    """
+    The notes branch's workflow that starts the plan site's build on every push.
+    """
+
     GIT_IDENTITY = "git_identity"
     """
     The identity commits are authored with, against the recorded one.
