@@ -40,6 +40,8 @@ tracks:
 items:
   - id: v2-quick-wins
     title: "Fix what the plan-item-resolve 537 session report hit, in v2"
+    branch: null
+    pull_request_number: null
     track: foundation
     depends_on: []
     status: not started
@@ -47,9 +49,11 @@ items:
       Patch release. Resolve runs maintenance only on the item's stack, without summaries of
       unrelated pull requests; the Action read fails within about 20 s when no run started;
       sync stamp files go to .git/info/exclude; BASSTLER_PYTHON resolves without sourcing the
-      config; save-plan validates only the items being saved.
+      config; save-plan validates only the items being saved; the dashboard accepts an item with no branch key.
   - id: code-rules-light
     title: "Lighter code rules, enforced by ruff and pydantic dataclasses"
+    branch: null
+    pull_request_number: null
     track: foundation
     depends_on: []
     status: not started
@@ -60,6 +64,8 @@ items:
       a few exception types per kind of failure.
   - id: cli-launcher
     title: "One basstler CLI behind a bin/ launcher, configured through userConfig"
+    branch: null
+    pull_request_number: null
     track: foundation
     depends_on: [code-rules-light]
     status: not started
@@ -70,6 +76,8 @@ items:
       first; fall back to a hook-written launcher if not. CLI library choice needs approval.
   - id: plan-store-issues
     title: "Plans as a tracking issue with sub-issues, status labels and stated dependencies"
+    branch: null
+    pull_request_number: null
     track: plans
     depends_on: [cli-launcher]
     status: not started
@@ -79,6 +87,8 @@ items:
       its item. Read and write go through pydantic models of the REST responses.
   - id: item-brief
     title: "One command prints an item's whole brief in at most 3 KB"
+    branch: null
+    pull_request_number: null
     track: plans
     depends_on: [plan-store-issues]
     status: not started
@@ -88,6 +98,8 @@ items:
       never fetches or reads reference docs to assemble context.
   - id: plan-import
     title: "Import every plan.yaml into issues, once"
+    branch: null
+    pull_request_number: null
     track: plans
     depends_on: [plan-store-issues]
     status: not started
@@ -96,6 +108,8 @@ items:
       Moves this plan onto the issue store too.
   - id: plan-site-from-issues
     title: "The plan site is built from issues in an Action, not republished by a session"
+    branch: null
+    pull_request_number: null
     track: plans
     depends_on: [plan-store-issues]
     status: not started
@@ -104,6 +118,8 @@ items:
       session-side data fetching are retired.
   - id: stack-engine
     title: "Stacks read from pull request bases and restacked with git rebase --update-refs"
+    branch: null
+    pull_request_number: null
     track: stacks
     depends_on: [cli-launcher]
     status: not started
@@ -113,6 +129,8 @@ items:
       resolved by the tool.
   - id: upstream-promotion
     title: "Promote a branch from the fork to the upstream with a written summary"
+    branch: null
+    pull_request_number: null
     track: stacks
     depends_on: [stack-engine]
     status: not started
@@ -121,6 +139,8 @@ items:
       opens the upstream pull request link and records it on the fork pull request.
   - id: maintenance-action
     title: "Whole-fork maintenance runs in an Action on every push to the default branch"
+    branch: null
+    pull_request_number: null
     track: stacks
     depends_on: [stack-engine]
     status: not started
@@ -129,6 +149,8 @@ items:
       session never runs a whole-fork pass.
   - id: upstream-review-mirror
     title: "A fork Action mirrors upstream checks and unresolved threads onto the fork pull request"
+    branch: null
+    pull_request_number: null
     track: reviews
     depends_on: [cli-launcher]
     status: not started
@@ -138,6 +160,8 @@ items:
       and the request branch are retired. An on-demand run fails fast when it does not start.
   - id: short-skills
     title: "Short skills, one per job, each with a plugin eval token and time budget"
+    branch: null
+    pull_request_number: null
     track: cutover
     depends_on: [item-brief, upstream-promotion, upstream-review-mirror]
     status: not started
@@ -147,6 +171,8 @@ items:
       skill run exceeds its token or wall-time budget.
   - id: slim-session-start
     title: "Session start only writes the session's context"
+    branch: null
+    pull_request_number: null
     track: cutover
     depends_on: [short-skills]
     status: not started
@@ -155,6 +181,8 @@ items:
       start: each happens on the command that needs it, or in an Action.
   - id: v2-removal
     title: "Delete v2: the bash layer, plan.yaml tooling, dashboards and old maintenance"
+    branch: null
+    pull_request_number: null
     track: cutover
     depends_on: [slim-session-start, plan-import, plan-site-from-issues, maintenance-action]
     status: not started
