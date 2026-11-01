@@ -120,7 +120,7 @@ class ManifestText:
         return next(
             (
                 (start, end)
-                for start, end in zip(starts, starts[1:] + [len(self.lines)])
+                for start, end in itertools.pairwise([*starts, len(self.lines)])
                 if self.lines[start].split(":", 1)[0] == key
             ),
             None,
