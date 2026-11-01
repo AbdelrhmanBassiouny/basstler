@@ -46,6 +46,8 @@ items:
   notes: Waits for krrood's light core to be released on PyPI. Then depend on plain krrood (light core,
     a krrood[all] extra for the rest) instead of copying its code, and change AGENTS.md's copy-never-import
     rule in the same PR. The branch (#12) predates this and is reworked on v3's code once v3 lands.
+    Once krrood is a dependency, plan_site.site_repository.SiteRepository becomes a Role[Repository] (asked
+    in https://github.com/AbdelrhmanBassiouny/basstler/pull/105#discussion_r4436512955).
   blockers:
   - Waits on krrood's light core release.
 - id: plugin-from-installed-package
