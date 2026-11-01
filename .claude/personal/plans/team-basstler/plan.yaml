@@ -70,9 +70,10 @@ items:
   session: https://claude.ai/code/session_018wfiv6ZDBwZvHTLeeG7b7k
   depends_on:
   - site-for-every-repository
-  notes: 'Split from site-for-every-repository. Between builds, the page asks GitHub''s REST API whether
-    a dependency''s draft pull request is now ready for review, and shows the dependent as startable. Needs
-    an owner-approved browser test dependency (e.g. Playwright) to test the page''s JavaScript.'
+  notes: 'Implemented in draft #116: a chip held back by a draft carries its pull request''s REST address,
+    and the site page''s script reveals a hidden Start now button once no draft holds the item back (public
+    repositories only, unauthenticated). Playwright, approved by the owner, tests it in headless Chromium,
+    which CI installs.'
 - id: artifact-path-retirement
   title: Point every plan skill at the site instead of republishing a dashboard Artifact
   branch: claude/quirky-brown-i7twwl
