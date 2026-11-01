@@ -221,7 +221,9 @@ to push both files and regenerate the reverse index in one commit. The save
 applies each top-level field, item and roadmap you changed since `<commit>`
 onto the branch as it is now, so another session's edit to a different item
 survives; it refuses (exit 3) when someone else changed the same part, and
-retries a push the branch rejected. Without `--read-at`, your files overwrite
+retries a push the branch rejected. A retry only re-merges edits to *different*
+parts; when the refusal names a part, read the branch's current value and redo that edit
+against it, then save again. Without `--read-at`, your files overwrite
 whatever changed before the save first fetches. This
 pushes data only — it does not publish the dashboard Artifact itself (that
 requires a live Claude session, since only a session can call the
