@@ -419,6 +419,17 @@ class DependencyResolver:
         """
         return [self.resolve(entry) for entry in item.depends_on]
 
+    def dependencies_are_ready(self, item: Item) -> bool:
+        """
+        :param item: The depending item.
+        :return: Whether every dependency of the item is ready to build on; true for an
+            item with none.
+        """
+        return all(
+            dependency.is_ready_to_unblock_dependents()
+            for dependency in self.dependencies_of(item)
+        )
+
     def classify_live_states(
         self, pull_requests_by_repository: PullRequestsByRepository
     ) -> None:

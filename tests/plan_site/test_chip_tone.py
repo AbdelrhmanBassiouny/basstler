@@ -1,5 +1,5 @@
 """
-Tests for :mod:`basstler.plan_site.plan_page`: how an item card's chips are coloured.
+Tests for :mod:`basstler.plan_site.chip_tone`: how an item card's chips are coloured.
 """
 
 from __future__ import annotations
@@ -7,7 +7,7 @@ from __future__ import annotations
 import pytest
 
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.plan_page import ChipTone
+from basstler.plan_site.chip_tone import ChipTone
 from basstler.pull_request_state import LiveState
 from basstler.upstream_reviews.vocabulary import RollupState
 

@@ -8,8 +8,7 @@ allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__githu
 
 Generic, plan-agnostic tooling — nothing in this file may hardcode a
 specific plan's id, branches, or PRs. This is the authoring half of the
-plan system; the plan site renders every plan, and `skills/plan-sync/SKILL.md`
-keeps a plan's statuses in step with GitHub. Read `skills/plan-create/plan-schema.md`
+plan system; the plan site renders every plan against live GitHub state. Read `skills/plan-create/plan-schema.md`
 for the full `plan.yaml` schema before drafting
 anything — this skill must produce manifests that pass the exact same
 validation the plan site's build and `save-plan.sh` run, not a close approximation.
@@ -114,8 +113,7 @@ plan, rather than migrated whole.
 
 ## 4. Cross-check every named branch/PR against live GitHub state
 
-Same mechanism as `plan-sync` step 2, applied before the item is ever
-written down rather than after: bulk-fetch `mcp__github__list_pull_requests`
+Before the item is written down, bulk-fetch `mcp__github__list_pull_requests`
 (`state: "all"`, paginated) for the repo, and use `mcp__github__pull_request_read`
 for anything outside that page window or referenced by number in the source
 doc. Set each item's `status` from what's actually true (open/draft →
@@ -210,7 +208,7 @@ unprompted — to replace that old doc with a short pointer stub at its
 original location, so anyone still reading the old path finds the new one
 immediately.
 
-Every later change to the plan follows [`manifest-staleness.md`](../plan-sync/manifest-staleness.md).
+Every later change to the plan follows [`manifest-staleness.md`](manifest-staleness.md).
 
 ## 9. Report back
 

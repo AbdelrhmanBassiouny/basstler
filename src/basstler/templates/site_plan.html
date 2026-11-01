@@ -110,8 +110,8 @@
       </header>
       {% for track_section in wave_section.tracks %}
       <h3 class="track-name">{{ track_section.track.name }}</h3>
-      {% for stacked in track_section.stacked_items %}
-      {{ item_card(stacked.item) }}
+      {% for item in track_section.items %}
+      {{ item_card(item) }}
       {% else %}
       <p class="track-empty">{{ track_section.empty_state_message }}</p>
       {% endfor %}

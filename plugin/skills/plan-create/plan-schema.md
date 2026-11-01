@@ -93,19 +93,14 @@ the authority.
 never encodes draft/ready-for-review/merged/closed/CI-green/mergeable —
 those are fetched live from GitHub every time the plan site is built, so
 they can never go stale in the manifest. The plan's page shows both side by
-side and flags any item where the two disagree (e.g. `status: in progress`
-on a PR that's already merged) — this is the actual mechanism that replaces
+side and flags any item where the two disagree (e.g. `status: done` on a PR
+that's still open) — this is the actual mechanism that replaces
 "a session has to notice a note is stale by accident."
 
-**One exception, corrected automatically.** Most drift needs a person to
-interpret it — GitHub's state alone can't say whether a still-open PR means
-"blocked", "deferred", or just "in progress", and a mismatched PR number
-usually means the manifest was mistyped, not that GitHub is wrong. But
-"GitHub confirms this PR is merged" has exactly one correct manifest state:
-`done`. There's nothing to interpret, so `/plan-sync` doesn't just leave it
-flagged — `plan/sync_manifest_status.py` corrects `status` to `done` for exactly
-that case, in `plan.yaml` itself, and pushes the correction. Every other kind
-of drift is still left as a flag for a human.
+**One exception, shown without a flag.** Most drift needs a person to interpret
+it, but "GitHub confirms this PR is merged" has exactly one correct state: `done`.
+The page shows a merged item as `done` whatever its `status` says; the manifest
+changes only when someone next edits the plan.
 
 ### Depending on an item in another plan
 
@@ -277,6 +272,4 @@ predating this convention, don't need one).
 ## Checking a plan
 
 Every plan's page is on the plan site, rebuilt on every push to the notes branch;
-`plan_site_page_url <plan-id>` prints its address. See
-[`plan-sync/SKILL.md`](../plan-sync/SKILL.md): `/plan-sync <plan-id>` marks every
-item whose pull request merged as done and links the page.
+`plan_site_page_url <plan-id>` prints its address.

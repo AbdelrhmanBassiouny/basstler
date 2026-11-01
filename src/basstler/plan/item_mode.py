@@ -41,9 +41,8 @@ the document never has to decode an integer back into a meaning.
 
 .. note::
    ``resolve-personal-notes-config.sh`` is the one path spelled literally here. It is the
-   bootstrap seam every script and skill in this system sources to find every other path,
-   for the reason ``sync_plan.sh``'s own header records: something has to name it
-   before anything can ask it where things are.
+   bootstrap seam every script and skill in this system sources to find every other path:
+   something has to name it before anything can ask it where things are.
 """
 
 from __future__ import annotations

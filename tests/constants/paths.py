@@ -328,11 +328,6 @@ class SkillDirectory(PathEnumeration):
     The directory holding every skill.
     """
 
-    PLAN_SYNC = DIRECTORY / "plan-sync"
-    """
-    The sync skill: its instructions, its reference documents and its shell entry point.
-    """
-
     STACKED_PULL_REQUEST_MAINTENANCE = DIRECTORY / "stacked-pr-maintenance"
     """
     The maintenance pass's own instructions.
@@ -358,12 +353,7 @@ class SkillDirectory(PathEnumeration):
     The instructions for reading a branch's upstream review threads.
     """
 
-    SYNC_PLAN_SCRIPT = PLAN_SYNC / "sync_plan.sh"
-    """
-    The sync skill's shell entry point.
-    """
-
-    MANIFEST_STALENESS_DOCUMENT = PLAN_SYNC / "manifest-staleness.md"
+    MANIFEST_STALENESS_DOCUMENT = PLAN_CREATE / "manifest-staleness.md"
     """
     The rule every skill that writes plan data cites: when to write the manifest.
     """

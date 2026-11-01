@@ -1,6 +1,6 @@
 """
 What an item card and its sections show beyond the item itself: its dependency chips, its
-action button and model dropdown, and its place in its track's dependency stack.
+action button and model dropdown, and the track and wave sections it sits in.
 """
 
 from __future__ import annotations
@@ -201,63 +201,53 @@ class ModelOption(StrEnum):
 
 
 @dataclass
-class StackedItem:
-    """One item's position within its track's dependency stack, for the
-    ``item_card`` template macro to render.
-
-    Carries two independent indent computations - as normally shown, and as
-    shown once done items are hidden - so the page can switch between them
-    client-side (see ``hide-done`` in site_plan.html) without a re-render:
-    a done dependency, once hidden, no longer visually justifies indenting
-    its dependents, so they dedent as if they had no dependency on it at
-    all rather than merely one level shallower."""
-
-    item: Item
-    """The item itself."""
-
-    indent_level: int
-    """How deeply nested this item is under its same-track dependency chain,
-    capped at :attr:`PlanPage.maximum_dependency_stack_level`."""
-
-    wrap_parent: Item | None
-    """The item this one visually continues from, if the chain wrapped back
-    to indent level 0 past the cap; ``None`` otherwise."""
-
-    indent_level_with_done_hidden: int
-    """:attr:`indent_level`, recomputed as if every ``done`` item in the
-    same-track dependency chain weren't a dependency at all."""
-
-    wrap_parent_with_done_hidden: Item | None
-    """:attr:`wrap_parent`, recomputed the same way - never itself a
-    ``done`` item, since a done wrap-parent would be invisible in that view."""
-
-    @property
-    def indent_style(self) -> str:
-        """The card's ``style`` attribute value: both indent levels as CSS
-        custom properties, so plain CSS (keyed off the page's ``hide-done``
-        class) picks whichever applies without any per-toggle re-render."""
-        return (
-            f"--indent-level: {self.indent_level}; "
-            f"--indent-level-hidden-done: {self.indent_level_with_done_hidden};"
-        )
-
-
-@dataclass
 class TrackSection:
-    """One track's rendering context: its declared info plus its items,
-    already ordered into a dependency stack."""
+    """
+    One track's rendering context: its declared info plus its items.
+    """
 
     track: Track
-    """The track itself."""
+    """
+    The track itself.
+    """
 
-    stacked_items: list[StackedItem]
-    """The track's items, stacked - empty if the track has none yet."""
+    items: list[Item]
+    """
+    The track's items, each after the same-track item it depends on - empty if the
+    track has none yet.
+    """
 
     @property
     def empty_state_message(self) -> str:
-        """What to show in place of an item list when the track has none yet:
-        the track's own :attr:`Track.description`, or a generic fallback."""
+        """
+        What to show in place of an item list when the track has none yet: the track's
+        own :attr:`Track.description`, or a generic fallback.
+        """
         return self.track.description or "No tracked items."
+
+    @classmethod
+    def of_track(cls, track: Track, track_items: list[Item]) -> TrackSection:
+        """
+        :param track: The track.
+        :param track_items: The track's items, in manifest order.
+        :return: The track's section, with its items ordered depth-first by their first
+            same-track dependency.
+        """
+        identifiers = {item.identifier for item in track_items}
+        dependents: dict[str | None, list[Item]] = {}
+        for item in track_items:
+            parent = next(
+                (entry for entry in item.depends_on if entry in identifiers),
+                None,
+            )
+            dependents.setdefault(parent, []).append(item)
+        ordered_items: list[Item] = []
+        pending = list(reversed(dependents.get(None, [])))
+        while pending:
+            item = pending.pop()
+            ordered_items.append(item)
+            pending.extend(reversed(dependents.get(item.identifier, [])))
+        return cls(track=track, items=ordered_items)
 
 
 @dataclass

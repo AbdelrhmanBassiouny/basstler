@@ -35,7 +35,7 @@ Every run prints a summary of what it found and wrote, so a session never has to
 3. Done. Every session from now on writes `CLAUDE.local.md` automatically.
 
 It is safe to re-run: on a clone that's already set up it reports what it found and asks nothing.
-You don't have to run it first either — `/plan-create`, `/plan-sync`, `/plan-item-kickoff`,
+You don't have to run it first either — `/plan-create`, `/plan-item-kickoff`,
 `/plan-item-resolve` and `/add-plan-item` each run it for you if something is missing, without
 stopping to ask.
 
@@ -231,9 +231,9 @@ the narrative that doesn't belong in structured data.
 - Create one → `/plan-create <plan-id>`.
 - See the plans → the plan site, which every push to the notes branch rebuilds; the session-start
   summary's `plan site` line links this session's place on it.
-- Sync one → each plan's page cross-checks every item against live GitHub PR/CI/review state,
-  so a manifest can't silently go stale the way a hand-maintained roadmap doc could;
-  `/plan-sync <plan-id>` marks every item whose PR merged as `done` in the manifest itself.
+- Keep one current → each plan's page cross-checks every item against live GitHub PR/CI/review
+  state, so a manifest can't silently go stale the way a hand-maintained roadmap doc could, and
+  shows an item whose PR merged as `done`.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in progress` as soon as its plan is approved — via

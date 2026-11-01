@@ -114,7 +114,9 @@ class Item:
     """
 
     status: ItemStatus
-    """The manually-maintained status - see :class:`ItemStatus`."""
+    """
+    The manifest's status, shown as done once the item's pull request has merged.
+    """
 
     id: str | None = None
     """
@@ -153,7 +155,7 @@ class Item:
 
     live_state: LiveState = field(default=LiveState.NO_PULL_REQUEST, init=False)
     """
-    This item's live GitHub state, filled in by :meth:`PlanPage.render`.
+    This item's live GitHub state.
     """
 
     drift_description: str | None = field(default=None, init=False)
@@ -162,55 +164,35 @@ class Item:
     """
 
     pull_request_url: str | None = field(default=None, init=False)
-    """This item's pull request URL on GitHub, filled in by
-    :meth:`PlanPage.render` - ``None`` if it has no pull request yet."""
+    """
+    This item's pull request on GitHub, if it has one.
+    """
 
     pull_request_record: PullRequestRecord | None = field(default=None, init=False)
     """
-    The live state of this item's pull request, filled in by
-    :meth:`PlanPage.render` - ``None`` if it has no pull request yet or GitHub
-    has none by its number.
+    This item's live pull request, if GitHub has one by its number.
     """
 
     upstream_pull_request_url: str | None = field(default=None, init=False)
     """
-    The upstream pull request opened from this item's branch, as its pull request's
-    description links it, filled in by :meth:`PlanPage.render`.
+    The upstream pull request its pull request's description links, if any.
     """
 
     dependency_chips: list[DependencyChip] = field(default_factory=list, init=False)
     """
-    Ready-to-render chips for :attr:`depends_on`, filled in by :meth:`PlanPage.render`.
+    One chip per entry of :attr:`depends_on`.
     """
 
     action: ItemAction | None = field(default=None, init=False)
-    """This item's action button, filled in by
-    :meth:`PlanPage.render` - ``None`` only for a ``done`` item
-    (nothing left to do) or a not-started item whose dependencies aren't
-    all ready yet (starting now would build on unsafe state). Every other
-    status always gets one: something is always actionable next."""
-
-    is_bug_fix: bool = field(default=False, init=False)
     """
-    Whether this item's pull request carries :attr:`GitHubLabel.BUG`, filled in by
-    :meth:`PlanPage.render`.
+    This item's action button; ``None`` for a done item, and for a not-started item
+    until its dependencies are ready to build on.
     """
 
     needs_review: bool = field(default=False, init=False)
     """
-    Whether this item's pull request is open, still a draft, and actually worth
-    reviewing right now, filled in by :meth:`PlanPage.render`.
-
-    This plan's convention keeps every pull request in draft until its author has
-    reviewed it themselves - so a draft pull request is exactly the population that
-    still needs that review, and flipping it to "ready for review" *is*
-    the record of having done so. False for a ``deferred`` item even with
-    an open draft pull request - deferred means intentionally paused or superseded,
-    so there is nothing to actually review yet. Drives the plan page's
-    "ready to review" list - distinct from
-    :attr:`Item.action`, since reviewing a draft pull request and resuming/resolving
-    the underlying work are different next steps that can both apply to
-    the same item at once.
+    Whether this item has an open draft pull request and is not deferred: every pull
+    request stays a draft until its author has reviewed it.
     """
 
     @property
@@ -377,6 +359,13 @@ class Plan:
         Each of :attr:`items`, by its effective id.
         """
         return {item.identifier: item for item in self.items}
+
+    @property
+    def drifted_items(self) -> list[Item]:
+        """
+        The items whose :attr:`Item.drift_description` is set.
+        """
+        return [item for item in self.items if item.drift_description]
 
     @property
     def repository_url(self) -> str:

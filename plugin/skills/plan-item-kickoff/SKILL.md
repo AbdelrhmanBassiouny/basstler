@@ -64,7 +64,7 @@ Write the plan down:
 
 Then give the item's page on the plan site, `plan_site_page_url <plan-id> <item-id>`,
 which the record's push rebuilds. Later transitions follow
-[`manifest-staleness.md`](../plan-sync/manifest-staleness.md).
+[`manifest-staleness.md`](../plan-create/manifest-staleness.md).
 
 In `plan` mode the skill ends here.
 

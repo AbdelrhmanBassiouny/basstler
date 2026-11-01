@@ -37,7 +37,7 @@ set -euo pipefail
 # installed.
 #
 # The one thing it deliberately does not check is GitHub API access, which
-# /plan-sync needs for live pull request state: that is reachable only
+# the plan skills need for live pull request state: that is reachable only
 # through a session's MCP tools, not from a shell. The same goes for the pull
 # request labels the plan site reads. skills/setup-personal-notes
 # covers both as their own steps.
@@ -178,7 +178,6 @@ git_identity_precedence_note() {
 MISSING_TOOLING=""
 for tooling_path in \
     "${PLUGIN_MANIFEST}" \
-    "${SYNC_PLAN_SCRIPT}" \
     "${PLAN_SCHEMA_DOCUMENT}"; do
   [ -f "${tooling_path}" ] || MISSING_TOOLING="${MISSING_TOOLING} ${tooling_path}"
 done
@@ -186,7 +185,7 @@ if [ -n "${MISSING_TOOLING}" ]; then
   report tooling_files needs-setup \
     "the basstler plugin at ${PLUGIN_ROOT} is missing:${MISSING_TOOLING} - reinstall the plugin"
 else
-  report tooling_files ok "the plugin's manifest, the sync entry point and the schema reference are all present"
+  report tooling_files ok "the plugin's manifest and the schema reference are both present"
 fi
 
 # %% session-start wiring

@@ -119,11 +119,6 @@ class SetupPrerequisiteFile(StrEnum):
     The plugin's manifest, naming its version.
     """
 
-    SYNC_PLAN = str(SkillDirectory.SYNC_PLAN_SCRIPT)
-    """
-    The entry point the plan-sync skill runs.
-    """
-
     PLAN_SCHEMA = str(SkillDirectory.PLAN_CREATE / "plan-schema.md")
     """
     The manifest field reference.

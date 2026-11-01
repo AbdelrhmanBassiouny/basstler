@@ -313,7 +313,7 @@ PLAN_HUB_PATH="${PLANS_DIR}/_hub.yaml"
 PLAN_SITE_DISPATCH_WORKFLOW_PATH=".github/workflows/plan-site-dispatch.yml"
 
 # *_MODULE: every Python entry point in this system - defined once, here, so
-# sync_plan.sh, every SKILL.md and every workflow source this file and
+# every SKILL.md and every workflow source this file and
 # use these variables instead of each carrying its own separately-typed literal.
 #
 # A *_MODULE is an import path rather than a file path, and is run as
@@ -342,15 +342,9 @@ PLAN_HUB_MODULE="basstler.plan_site.hub"
 # basstler.plan_site.publication: publishes this repository's plans on the user's plan
 # site, and starts the site's build on every push to the notes branch.
 PLAN_SITE_PUBLICATION_MODULE="basstler.plan_site.publication"
-# basstler.plan.sync_manifest_status: auto-corrects a plan.yaml's item statuses to
-# "done" wherever GitHub confirms the item's pull request is merged.
-SYNC_MANIFEST_STATUS_MODULE="basstler.plan.sync_manifest_status"
 # basstler.plan.item_brief: prints one plan item's brief - the plan header, the item,
 # its dependencies' live readiness and the plan's standing rules.
 ITEM_BRIEF_MODULE="basstler.plan.item_brief"
-# basstler.plan.sync_summary: reads sync_manifest_status's printed summary for
-# sync_plan.sh.
-SYNC_SUMMARY_MODULE="basstler.plan.sync_summary"
 # basstler.plan.item_bootstrap: opens an item's branch and draft pull request and
 # records its manifest entry - invoked from plan-item-kickoff/SKILL.md and
 # add-plan-item/SKILL.md.
@@ -413,16 +407,9 @@ SETUP_PERSONAL_NOTES_MODULE="basstler.setup.personal_notes"
 PROJECT_STACK_CONFIGURATION_PATH=".claude/basstler/stack.toml"
 PERSONAL_STACK_CONFIGURATION_PATH=".claude/personal/stack.toml"
 
-# PLAN_SYNC_DIRECTORY / SYNC_PLAN_SCRIPT: what the
-# plan-sync skill keeps outside the package - Claude Code discovers a
-# skill and its reference documents by path, and the shell entry point sits
-# with the skill it belongs to. Every path from here on is absolute, under
-# PLUGIN_ROOT.
-PLAN_SYNC_DIRECTORY="${PLUGIN_ROOT}/skills/plan-sync"
-# sync_plan.sh: runs basstler.plan.sync_manifest_status and pushes its correction
-# when it made one - the sequence /plan-sync runs for one plan.
-SYNC_PLAN_SCRIPT="${PLAN_SYNC_DIRECTORY}/sync_plan.sh"
-
+# Every path from here on is absolute, under PLUGIN_ROOT: Claude Code discovers
+# a skill and its reference documents by path.
+#
 # plan-schema.md: the full plan.yaml field reference every plan-* skill
 # reads before drafting or interpreting a manifest. On main, next to the
 # tooling that enforces it, so every clone has it with no setup - unlike the
@@ -434,8 +421,7 @@ PLAN_SCHEMA_DOCUMENT="${PLUGIN_ROOT}/skills/plan-create/plan-schema.md"
 # agree on it exactly - see basstler.plan.item_bootstrap's block/unblock operations.
 MAINTENANCE_BLOCKER_OWNER="stacked-pr-maintenance"
 # write-personal-notes-file.sh: generic commit-and-push-one-file-to-the
-# personal-notes-branch helper, used by sync_plan.sh for the manifest's
-# auto-sync correction.
+# personal-notes-branch helper.
 WRITE_PERSONAL_NOTES_FILE_SCRIPT="${HOOKS_DIR}/write-personal-notes-file.sh"
 
 # SETUP_PERSONAL_NOTES_DIRECTORY / *_DOCUMENT / STARTER_NOTES_FILE /
@@ -451,7 +437,7 @@ SETUP_PERSONAL_NOTES_DIRECTORY="${PLUGIN_ROOT}/skills/setup-personal-notes"
 CHECK_SETUP_SCRIPT="${HOOKS_DIR}/check-setup.sh"
 # prerequisite-check.md: the shared "run check-setup.sh, run
 # /setup-personal-notes if it fails" procedure that plan-create,
-# plan-sync, plan-item-kickoff and plan-item-resolve each reference in
+# plan-item-kickoff and plan-item-resolve each reference in
 # one line rather than each spelling it out.
 SETUP_PREREQUISITE_DOCUMENT="${SETUP_PERSONAL_NOTES_DIRECTORY}/prerequisite-check.md"
 # starter-notes.md: the default content /setup-personal-notes offers to seed a

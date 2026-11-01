@@ -72,12 +72,6 @@ class PlanWritingScript(StrEnum):
     The hook that saves an edited manifest.
     """
 
-    WRITE_PERSONAL_NOTES_FILE = "WRITE_PERSONAL_NOTES_FILE_SCRIPT"
-    """
-    How /plan-sync pushes its own manifest corrections, which is a plan-data
-    write like any other.
-    """
-
 
 # %% reading the documents
 

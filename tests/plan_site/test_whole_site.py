@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
+from basstler.locations import ProjectLocation
 from basstler.plan_site.__main__ import HubSite, SiteFile, main
 from basstler.plan_site.exceptions import RegistryUnreadableError
 from basstler.plan_site.hub import PlanHub, SiteAddress
-from basstler.locations import ProjectLocation
 
 from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText

@@ -7,12 +7,12 @@ from __future__ import annotations
 
 import pytest
 
-from basstler.plan_site.plan import Item, Plan
+from basstler.locations import SiteTemplate
 from basstler.plan.model import ItemStatus, ManifestKey
+from basstler.plan_site.plan import Item, Plan
 from basstler.pull_request_state import (
     LiveState,
 )
-from basstler.locations import SiteTemplate
 
 from ..manifest_builders import manifest_item, minimal_plan
 
@@ -32,7 +32,7 @@ def test_item_from_mapping_accepts_an_item_with_no_branch():
     assert item_instance.identifier == "a"
 
 
-# %% Item / StackedItem - precomputed template values
+# %% Item - precomputed template values
 
 
 def test_status_and_drift_css_class_without_drift():
