@@ -16,6 +16,7 @@ from basstler.plan.item_bootstrap.vocabulary import PlanItemBootstrapExitCode, R
 from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
+    PlanManifest,
 )
 
 # %% the items a branch carries
@@ -105,15 +106,17 @@ class BranchReport(OperationReport):
         plan_identifier = ProjectCheckout(project_root).plan_tracking(branch)
         if plan_identifier is None:
             return cls(branch=branch, plan_identifier=None, items=())
-        manifest = PlanDocuments.load(plan_identifier, project_root).manifest
+        manifest = PlanManifest(
+            PlanDocuments.load(plan_identifier, project_root).manifest
+        )
         items = tuple(
             TrackedItem(
-                item_identifier=item[ManifestKey.IDENTIFIER.key],
-                status=ItemStatus(item[ManifestKey.STATUS.key]),
-                blockers=tuple(item.get(ManifestKey.BLOCKERS.key) or ()),
+                item_identifier=item.content[ManifestKey.IDENTIFIER.key],
+                status=item.status,
+                blockers=tuple(item.content.get(ManifestKey.BLOCKERS.key) or ()),
             )
-            for item in manifest[ManifestKey.ITEMS.key]
-            if item.get(ManifestKey.BRANCH.key) == branch
+            for item in manifest.items
+            if item.branch == branch
         )
         return cls(branch=branch, plan_identifier=plan_identifier, items=items)
 

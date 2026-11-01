@@ -304,7 +304,7 @@ class WorkOpener:
                 item_identifier=request.item_identifier
             )
         documents = PlanDocuments.load(request.plan_identifier, self.project_root)
-        repository = Repository.parse(documents.repository_for(request.item_identifier))
+        repository = documents.repository_for(request.item_identifier)
 
         if not ProjectCheckout(self.project_root).branch_is_published(
             request.branch, self.remote
