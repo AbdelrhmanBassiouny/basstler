@@ -177,72 +177,6 @@ class BranchOutcome:
     """
 
 
-def addressed_to(branch: StackBranch) -> str:
-    """
-    :param branch: The branch whose owner is being written to.
-    :return: The session link to address, or a note that the description names none.
-    """
-    if branch.session:
-        return f"\n\n{branch.session}"
-    return "\n\nThis pull request's description names no session to address."
-
-
-def conflict_report(
-    branch: StackBranch, conflicting_paths: Sequence[str], parent: str
-) -> str:
-    """
-    Write the comment telling a branch's owner that their branch needs them.
-
-    :param branch: The branch that could not be integrated.
-    :param conflicting_paths: The paths that conflicted.
-    :param parent: The branch whose tip was being integrated.
-    :return: The comment body.
-    """
-    files = "\n".join(f"- `{path}`" for path in conflicting_paths)
-    return (
-        f"{MaintenanceText.CONFLICT_COMMENT_PREFIX} integrating `{parent}` into `{branch.name}` "
-        f"conflicts, so this branch was left untouched and skipped.\n\n"
-        f"Conflicting files:\n{files}\n\n"
-        f"Please resolve and push. This branch is labelled "
-        f"`needs-resolution` so later passes skip it rather than re-reporting the same "
-        f"conflict; the label is cleared automatically once it merges cleanly again, "
-        f"and the branch rejoins the pass.{addressed_to(branch)}"
-    )
-
-
-def gone_parent_report(branch: StackBranch, parent: str) -> str:
-    """
-    Write the comment telling a branch's owner that its base no longer leads anywhere.
-
-    :param branch: The branch left on it.
-    :param parent: The base whose commits reached nothing.
-    :return: The comment body.
-    """
-    return (
-        f"{MaintenanceText.CONFLICT_COMMENT_PREFIX} this branch is based on `{parent}`, "
-        f"whose commits are neither in the upstream base nor in any other open branch of "
-        f"the stack - so there is no base to retarget it at, and it cannot reach the "
-        f"upstream from where it stands.\n\n"
-        f"That happens when a base branch's own pull request was closed without "
-        f"merging. Only you can say what should replace it: rebase onto whatever "
-        f"superseded that work, or close this pull request if the work went with it.\n\n"
-        f"Nothing was changed here. This branch is labelled `needs-resolution` so later "
-        f"passes skip it rather than re-reporting the same thing, and it rejoins the "
-        f"pass once its base leads somewhere again.{addressed_to(branch)}"
-    )
-
-
-def gone_parent_explanation(restacking: BranchUnderRestack) -> str:
-    """
-    :param restacking: A branch whose parent's commits are in nothing the stack can see.
-    :return: Why there is nothing to build it on, in words its owner can act on.
-    """
-    return (
-        f"its base '{restacking.parent}' is in neither the upstream base nor any other "
-        f"open branch"
-    )
-
-
 # %% who answers a collision
 
 
@@ -313,7 +247,7 @@ class TellTheBranchOwner(ConflictResponse):
             RestackOutcome.CONFLICT,
             conflicting_paths=conflicting_paths,
             reported_at=restacking.hand_back(
-                conflict_report(restacking.branch, conflicting_paths, restacking.parent)
+                restacking.write_conflict_report(conflicting_paths)
             ),
         )
 
@@ -322,10 +256,8 @@ class TellTheBranchOwner(ConflictResponse):
         :return: The outcome, carrying where its owner was told."""
         return restacking.concluded(
             RestackOutcome.PARENT_GONE,
-            explanation=gone_parent_explanation(restacking),
-            reported_at=restacking.hand_back(
-                gone_parent_report(restacking.branch, restacking.parent)
-            ),
+            explanation=restacking.gone_parent_explanation,
+            reported_at=restacking.hand_back(restacking.write_gone_parent_report()),
         )
 
 
@@ -353,7 +285,7 @@ class LeaveItToTheCaller(ConflictResponse):
         """:param restacking: The branch being restacked.
         :return: The outcome, naming the branch and the base that leads nowhere."""
         return restacking.concluded(
-            RestackOutcome.PARENT_GONE, explanation=gone_parent_explanation(restacking)
+            RestackOutcome.PARENT_GONE, explanation=restacking.gone_parent_explanation
         )
 
 
@@ -440,6 +372,51 @@ class BranchUnderRestack:
         """
         return BranchOutcome(
             self.branch.name, self.parent, self.strategy, outcome, **detail
+        )
+
+    @property
+    def gone_parent_explanation(self) -> str:
+        """:return: Why there is nothing to build this branch on, in words its owner can
+        act on."""
+        return (
+            f"its base '{self.parent}' is in neither the upstream base nor any other "
+            f"open branch"
+        )
+
+    def write_conflict_report(self, conflicting_paths: Sequence[str]) -> str:
+        """
+        Write the comment telling this branch's owner that integrating the parent conflicts.
+
+        :param conflicting_paths: The paths that conflicted.
+        :return: The comment body.
+        """
+        files = "\n".join(f"- `{path}`" for path in conflicting_paths)
+        return (
+            f"{MaintenanceText.CONFLICT_COMMENT_PREFIX} integrating `{self.parent}` into "
+            f"`{self.branch.name}` conflicts, so this branch was left untouched and "
+            f"skipped.\n\n"
+            f"Conflicting files:\n{files}\n\n"
+            f"Please resolve and push. This branch is labelled "
+            f"`needs-resolution` so later passes skip it rather than re-reporting the same "
+            f"conflict; the label is cleared automatically once it merges cleanly again, "
+            f"and the branch rejoins the pass.{self.branch.owner_address}"
+        )
+
+    def write_gone_parent_report(self) -> str:
+        """
+        Write the comment telling this branch's owner that its base leads nowhere.
+
+        :return: The comment body.
+        """
+        return (
+            f"{MaintenanceText.CONFLICT_COMMENT_PREFIX} this branch is based on "
+            f"`{self.parent}`, whose commits are neither in the upstream base nor in any "
+            f"other open branch of the stack, so there is nothing to retarget it at.\n\n"
+            f"Rebase it onto whatever superseded that base, or close this pull request "
+            f"if the work went with it.\n\n"
+            f"Nothing was changed here. This branch is labelled `needs-resolution` so "
+            f"later passes skip it, and it rejoins the pass once its base leads "
+            f"somewhere again.{self.branch.owner_address}"
         )
 
     def hand_back(self, report: str) -> str:

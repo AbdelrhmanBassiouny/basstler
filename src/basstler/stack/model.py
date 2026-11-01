@@ -214,6 +214,14 @@ class StackBranch(Branch):
     description: str | None = None
     """The pull request's description without the sections a pass writes, if known."""
 
+    @property
+    def owner_address(self) -> str:
+        """:return: The session link to address a comment to, or a note that the
+        description names none."""
+        if self.session:
+            return f"\n\n{self.session}"
+        return "\n\nThis pull request's description names no session to address."
+
     upstream_link: str | None = None
     """The URL of the upstream pull request linked on the pull request, if any."""
 
@@ -448,39 +456,8 @@ class Stack:
         :return: Whether an open pull request on the board describes it."""
         return any(branch.name == branch_name for branch in self.branches)
 
-    def is_stacked_on(self, branch: StackBranch, ancestor_name: str) -> bool:
-        """Whether a branch sits above another in the stack the board records.
-
-        Read from the bases rather than from git ancestry, which cannot tell a branch
-        stacked on another from one merged into it.
-
-        :param branch: The branch to walk up from.
-        :param ancestor_name: The branch to look for, itself included.
-        :return: Whether that branch is this one or something it is stacked on.
-        """
-        by_name = {candidate.name: candidate for candidate in self.branches}
-        seen: set[str] = set()
-        current: StackBranch | None = branch
-        while current is not None and current.name not in seen:
-            if current.name == ancestor_name:
-                return True
-            seen.add(current.name)
-            current = by_name.get(current.parent)
-        return False
-
     def effective_parent(self, branch: StackBranch) -> EffectiveParent:
-        """Where a branch's parent went, and what it therefore has to build on.
-
-        A parent no open pull request describes has left the board, and the board alone
-        cannot say why. Its commits can: they are in the upstream base, in another branch
-        of this stack that it merged into instead, or in nothing at all - and only the
-        last is something a pass has to hand back to the branch's owner.
-
-        A branch cut from its parent contains that parent, and so does everything stacked
-        on it in turn, so neither is somewhere it can move to. Containment alone does not
-        say which those are - a branch merged up into its own grandparent is contained in
-        it too, and that grandparent is exactly where it belongs - so they are found from
-        the bases the board records rather than from git.
+        """Where a branch's parent went, and what the branch therefore builds on.
 
         :param branch: The branch whose parent to place.
         :return: The branch to build on, and what became of the named parent.
@@ -494,18 +471,29 @@ class Stack:
             )
         if self.tracks(parent):
             return EffectiveParent(parent, ParentSituation.TRACKED)
-        carrier = next(
-            (
-                candidate.name
-                for candidate in self.ordered()
-                if not self.is_stacked_on(candidate, branch.name)
-                and self.is_contained_by(parent, candidate.name)
-            ),
-            None,
-        )
+        carrier = self.carrier_of(branch)
         if carrier is None:
             return EffectiveParent(parent, ParentSituation.GONE)
         return EffectiveParent(carrier, ParentSituation.IN_ANOTHER_BRANCH)
+
+    def carrier_of(self, branch: StackBranch) -> str | None:
+        """The open branch that holds the commits of a branch's absent parent.
+
+        Branches stacked on *branch* are skipped, since they hold the parent too.
+
+        :param branch: The branch whose absent parent to find.
+        :return: The first such branch, parent before child, or ``None`` when there is none.
+        """
+        stacked_on_branch = {branch.name}
+        for candidate in self.ordered():
+            if (
+                candidate.name in stacked_on_branch
+                or candidate.parent in stacked_on_branch
+            ):
+                stacked_on_branch.add(candidate.name)
+            elif self.is_contained_by(branch.parent, candidate.name):
+                return candidate.name
+        return None
 
     def ordered(self) -> list[StackBranch]:
         """:return: The branches, topologically ordered so a parent always precedes its
@@ -689,14 +677,9 @@ class Stack:
         ]
 
     def reparents(self) -> list[Reparent]:
-        """Every open pull request whose base has left the board and left its commits
-        somewhere else.
+        """Every open pull request whose base left the board with its commits elsewhere.
 
-        Decided by git ancestry rather than by the base's own pull-request state, so it also
-        covers a parent whose pull request was closed rather than merged - which leaves the
-        board with no entry for it at all. The target is the upstream base when the commits
-        landed there, and another open branch when the parent merged into that instead. A
-        base whose commits reached nothing is not listed, since no target follows from it.
+        A base whose commits reached nothing is not listed, since no target follows.
 
         :return: The children to retarget, parent before child.
         """
