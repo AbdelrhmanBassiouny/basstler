@@ -11,8 +11,11 @@ first.
 ## 2. The stack, only when an upstream is named
 
 When `bash "${CHECK_SETUP_SCRIPT}" --require-upstream` exits 0, run
-`/stacked-pr-maintenance` first, then fix any conflict on the item's branch or a branch
-it is stacked on (on that branch's own pull request) and run the pass again. Otherwise
+`/stacked-pr-maintenance stacked-on=<branch>` before reading anything below,
+naming the item's branch, or for an item not started yet the branch it will be cut from, then fix any conflict on the item's branch or a branch
+it is stacked on (on that branch's own pull request) and run the pass again. When
+that branch is the fork's base itself, there is no stack to pass over: run only
+`"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance fast-forward`. Otherwise,
 skip this.
 
 ## 3. The brief
