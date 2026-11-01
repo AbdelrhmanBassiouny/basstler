@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 import basstler.upstream_reviews.action.__main__
+import basstler.upstream_reviews.action.run
 from basstler.locations import PackageLocation
 from basstler.repository import Repository
 from basstler.upstream_reviews.action.__main__ import (
@@ -40,6 +41,7 @@ from basstler.upstream_reviews.action.recording import (
     RecordedGraphQLResponse,
     ReplayingGraphQLClient,
 )
+from basstler.upstream_reviews.action.run import ActionRun
 from basstler.upstream_reviews.clients import (
     GitHubCommandLineClient,
     RestClient,
@@ -238,6 +240,20 @@ def test_the_error_is_what_the_reader_raises():
         read,
         RecordedGitHub(responses=[RecordedResponse.BRANCH_PULL_REQUESTS_NONE.load()]),
     ).error == str(raised.value)
+
+
+def test_the_run_answers_a_pull_request_report_request_with_its_recording(
+    tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        basstler.upstream_reviews.action.run, "GitHubCommandLineClient", github
+    )
+    request_file = tmp_path / ActionFile.REQUEST
+    request_file.write_text(json.dumps(request().as_sent()))
+
+    answer = ActionRun(request_file, tmp_path / ActionFile.RESULT).answer()
+
+    assert answer == ActionResult.answering(request(), github())
 
 
 # %% the workflows

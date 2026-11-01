@@ -28,36 +28,22 @@ Commands::
 from __future__ import annotations
 
 import argparse
-import json
 import sys
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 from basstler.exit_codes import ExitCode
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
-from basstler.maintenance.github import GitHubRepository
-from basstler.maintenance.upstream_action import (
-    OpenPullRequestsAnswer,
-    OpenPullRequestsRequest,
-)
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.action.branch import (
     ActionInstallation,
     RemoteBranch,
 )
-from basstler.upstream_reviews.action.exchange import (
-    ActionAnswer,
-    ActionRequest,
-    ActionRequestKind,
-)
 from basstler.upstream_reviews.action.read import (
     ActionRead,
 )
-from basstler.upstream_reviews.action.recording import (
-    ActionResult,
-)
+from basstler.upstream_reviews.action.run import ActionRun
 from basstler.upstream_reviews.clients import (
     GitHubCommandLineClient,
 )
@@ -172,23 +158,6 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def answer_request(data: dict[str, Any]) -> ActionAnswer:
-    """
-    On the runner: read the upstream as the branch's request asks.
-
-    :param data: The pushed request.
-    :return: What the run commits.
-    """
-    if ActionRequest.kind_of(data) is ActionRequestKind.OPEN_PULL_REQUESTS:
-        request = OpenPullRequestsRequest.from_json(data)
-        return OpenPullRequestsAnswer.answering(
-            request, GitHubRepository.from_environment(request.upstream)
-        )
-    return ActionResult.answering(
-        UpstreamReadRequest.from_json(data), GitHubCommandLineClient()
-    )
-
-
 def main(argv: list[str] | None = None) -> int:
     """
     Run one command.
@@ -199,8 +168,7 @@ def main(argv: list[str] | None = None) -> int:
     arguments = _parse_arguments(argv)
     try:
         if arguments.command == ActionCommand.RUN:
-            answer = answer_request(json.loads(arguments.request.read_text()))
-            arguments.result.write_text(json.dumps(answer.to_json()) + "\n")
+            ActionRun(arguments.request, arguments.result).write_answer()
             return 0
         branch = RemoteBranch(
             GitCommandRunner(arguments.project_root), arguments.remote
