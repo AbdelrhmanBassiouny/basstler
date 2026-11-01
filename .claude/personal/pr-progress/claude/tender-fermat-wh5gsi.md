@@ -10,4 +10,5 @@
 - Decisions in the PR description: TYPE_CHECKING rule dropped (pydantic), pydantic not added until first boundary
 
 ## Next
-- Owner review; CI on the latest push
+- CI red only from main's own break (#110 test vs #109 read_at); fixed in bug PR #112 - once it merges, merge main here, check ruff, push
+- Owner review
