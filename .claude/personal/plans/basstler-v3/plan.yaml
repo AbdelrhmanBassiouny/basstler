@@ -58,9 +58,9 @@ items:
   notes: 'bin/basstler on the Bash PATH runs the release with uv (venv in CLAUDE_PLUGIN_DATA); one command
     tree replaces the python -m modules and the sourced module variables; plugin userConfig replaces personal-notes.env.
     Verify bin/ works in cloud sessions first; fall back to a hook-written launcher if not. CLI library:
-    cyclopts (approved 2026-11-01).
-
-    '
+    cyclopts (approved 2026-11-01). One core library under the CLI; GitHub through githubkit''s typed
+    REST client (approved 2026-11-01; tested in a cloud session: REST works, GraphQL is refused by the
+    proxy as for any client), replacing the hand-written REST models.'
 - id: plan-store-issues
   title: Plans as a tracking issue with sub-issues, status labels and stated dependencies
   branch: null
@@ -175,6 +175,18 @@ items:
     or wall-time budget.
 
     '
+- id: mcp-server
+  title: An MCP server over the core library, for clients without the plugin's bin/
+  branch: null
+  pull_request_number: null
+  track: cutover
+  depends_on:
+  - short-skills
+  status: not started
+  notes: A FastMCP server (the official mcp SDK), shipped in the plugin's .mcp.json, so claude.ai and
+    Cowork, which do not install a plugin's bin/, can use basstler. 5 to 8 tools, each returning the same
+    brief or recording the same result as a CLI command; never thin API wrappers. Adds the mcp dependency
+    (approved 2026-11-01). Its tool definitions count against the skills' eval budgets.
 - id: slim-session-start
   title: Session start only writes the session's context
   branch: null
