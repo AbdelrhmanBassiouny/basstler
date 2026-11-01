@@ -351,6 +351,13 @@ this session's work sits on it. To build the site by hand:
 "${BASSTLER_PYTHON}" -m "${BUILD_SITE_MODULE}" --registry <owner/repo> --output <scratchpad>/site
 ```
 
+Between builds, a plan's page asks GitHub's REST API whether each draft pull
+request blocking a dependency is now ready for review or merged; when no draft
+holds a not-started item back any longer, its chip clears and its "Start now"
+button appears. The question is unauthenticated, so it answers only for
+public repositories, within GitHub's per-address rate limit; otherwise the page
+stays as built.
+
 Never publish a hub page as an Artifact: an Artifact belongs to the account
 that published it, which is exactly what the site exists to avoid.
 
