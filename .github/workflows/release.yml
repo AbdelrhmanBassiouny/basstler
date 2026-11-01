@@ -1,0 +1,74 @@
+name: Release
+
+# Every change merged to main is released by tagging the merge commit itself: no file names
+# the version, so nothing is pushed to main and a plugin synced from the merge is already
+# the release. The patch is incremented unless a merged pull request is labelled
+# release:minor or release:major.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+  pull-requests: read
+
+jobs:
+  release:
+    name: Release what changed since the latest release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          path: basstler
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install basstler
+        run: pip install --editable basstler
+
+      # Every pull request merged since the latest release, so a run a later merge
+      # cancelled while it waited still counts its labels.
+      - name: Read the merged pull requests
+        working-directory: basstler
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          python -m basstler.release_version unreleased --checkout . \
+            | while read -r commit; do
+                gh api "repos/${GITHUB_REPOSITORY}/commits/${commit}/pulls"
+              done \
+            | jq --slurp 'add // []' > "${RUNNER_TEMP}/pull-requests.json"
+
+      - name: Tag the release
+        id: release
+        working-directory: basstler
+        run: |
+          release="$(python -m basstler.release_version release --checkout . \
+            --pull-requests "${RUNNER_TEMP}/pull-requests.json")"
+          tag="$(printf '%s\n' "${release}" | sed -n 's/^tag=//p')"
+          if [ -z "${tag}" ]; then
+            echo "Nothing changed since the latest release." >> "${GITHUB_STEP_SUMMARY}"
+            exit 0
+          fi
+          git tag "${tag}"
+          git push --quiet origin "refs/tags/${tag}"
+          echo "Released ${tag} at $(git rev-parse HEAD)." >> "${GITHUB_STEP_SUMMARY}"
+          echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
+
+      - name: Publish the GitHub release
+        if: steps.release.outputs.tag != ''
+        working-directory: basstler
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ steps.release.outputs.tag }}
+        run: gh release create "${TAG}" --verify-tag --title "${TAG}" --generate-notes

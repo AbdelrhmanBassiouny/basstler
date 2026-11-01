@@ -1,0 +1,17 @@
+repos:
+  - repo: local
+    hooks:
+      - id: format-python
+        name: Format Python (ruff, then docformatter where it doesn't conflict with ruff)
+        description: >
+          Runs ruff format, then docformatter on top of it, keeping docformatter's
+          docstring changes only when a subsequent ruff pass leaves them
+          unchanged. See scripts/format_docstrings.py for why.
+        entry: python scripts/format_docstrings.py
+        language: python
+        additional_dependencies: ["ruff==0.17.3", "docformatter==1.7.8", "tqdm"]
+        files: \.py$
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.17.3
+    hooks:
+      - id: ruff-check

@@ -1,50 +1,30 @@
 """
-Fixtures shared by every suite in this directory, and the one ``sys.path`` entry they
-need.
+Fixtures shared by every suite in this directory.
 
-``basstler`` is a plain top-level directory on the repository root, importable with no
-install, so the root just has to be on ``sys.path`` when this directory is run from an
-arbitrary working directory. That single entry replaces the three conftests this suite
-was merged from, each of which inserted its own directory - and one of which reached
-across into two others, which is the path hackery the package exists to end.
+basstler is imported from its editable install, which is this clone's own source under
+basstler/src, as CI installs it and as a session start installs it into basstler/.venv.
 
-This suite runs in the lightweight ``test_basstler`` CI job with ``--confcutdir`` pointed
-here, so the repository-root ``test/conftest.py`` - which imports the robotics stack that
+This suite runs in the lightweight test_basstler CI job with --confcutdir pointed
+here, so the repository-root test/conftest.py - which imports the robotics stack that
 job does not install - is never loaded for it.
 """
 
-import sys
+from __future__ import annotations
+
+import os
 from pathlib import Path
 
-sys.path.insert(0, str(Path(__file__).parent.parent.parent))
+import pytest
 
-import pytest  # noqa: E402
+# A session running the plugin exports BASSTLER_PLUGIN_ROOT as its synced copy, which
+# basstler.locations reads on import; pinned before anything imports it, so the suite
+# tests this checkout's plugin rather than whichever release that session synced.
+os.environ["BASSTLER_PLUGIN_ROOT"] = str(Path(__file__).resolve().parents[1] / "plugin")
 
-from basstler.stack import BOARD_PATH  # noqa: E402
-
-from .executable_stubs import ExecutableStubDirectory  # noqa: E402
-from .scratch_repository import ScratchRepository  # noqa: E402
-from .upstream_reviews_replay import RecordedResponse, ReplayingClient  # noqa: E402
-
-
-@pytest.fixture(autouse=True)
-def board_snapshot_set_aside() -> None:
-    """
-    Hide any board snapshot this checkout happens to be carrying, for every test.
-
-    ``board.json`` lives beside ``stack.py`` rather than in the scratch repository a test
-    runs in, so a developer who has run a maintenance pass has one - and the tests that
-    assert on a *missing* board would fail for a reason that has nothing to do with them.
-    Setting it aside makes the suite independent of whether a pass has been run here, and
-    restores it afterwards so running the tests never costs somebody their snapshot.
-    """
-    if not BOARD_PATH.exists():
-        yield
-        return
-    set_aside = BOARD_PATH.with_suffix(".json.set-aside-for-tests")
-    BOARD_PATH.rename(set_aside)
-    yield
-    set_aside.rename(BOARD_PATH)
+from .executable_stubs import ExecutableStubDirectory
+from .maintenance.fork import ForkCheckout
+from .scratch_repository import ScratchRepository
+from .upstream_reviews.replay import RecordedResponse, ReplayingClient
 
 
 @pytest.fixture
@@ -80,3 +60,14 @@ def paginated_client() -> ReplayingClient:
             RecordedResponse.PULL_REQUEST_PAGE_TWO.load(),
         ]
     )
+
+
+@pytest.fixture
+def fork_checkout(tmp_path: Path) -> ForkCheckout:
+    """
+    A real fork checkout with both remotes wired to local bare repositories.
+
+    :param tmp_path: pytest's per-test temporary directory.
+    :return: The checkout.
+    """
+    return ForkCheckout.create(tmp_path)

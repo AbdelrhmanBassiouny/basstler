@@ -1,0 +1,15 @@
+__pycache__/
+*.egg-info/
+.venv/
+.pytest_cache/
+
+# What the plugin's own session start writes into the project it serves - this
+# repository, when developing it with its own plugin enabled. Personal, never committed.
+CLAUDE.local.md
+.claude/settings.local.json
+.claude/.personal-settings-sync-hash
+.claude/.plan-state-sync-sha
+
+# Everything the last maintenance pass did, written by `python3 -m basstler.maintenance
+# run-report` beside the board. Scratch state, never committed.
+src/basstler/maintenance-report.json

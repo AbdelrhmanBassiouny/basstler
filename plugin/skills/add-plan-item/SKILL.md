@@ -1,7 +1,7 @@
 ---
 name: add-plan-item
-description: Decide where a newly described piece of work belongs - folded into an unlanded item, as a new item in an existing plan, as a new plan of its own, or tracked nowhere - by running the mechanical scope check against live branch and pull request state, then propose the outcome via plan mode without writing any code. Invoke as "/add-plan-item <description of the work>". Use when someone describes something new to build and asks where it goes, or says "add a plan item", "should this be its own PR", or "is this new work or part of <something>".
-allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__issue_read, mcp__Claude_Code_Remote__subscribe_pr_activity
+description: Decide where new work belongs - folded into an unlanded item, a new item, a new plan, or untracked - and propose it via plan mode without writing code. Invoke as "/add-plan-item <description of the work>". Use when asked where new work goes, to add a plan item, or whether it should be its own PR.
+allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__issue_read, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
 # Add Plan Item
@@ -19,13 +19,13 @@ There are exactly four outcomes, and step 5 picks one:
 4. **No item at all** — work small enough that tracking it costs more than it
    returns.
 
-## 0. Check the setup is in place, and offer it if not
+## 0. Check the setup is in place, and run it if not
 
 Every plan's manifest lives on the personal-notes branch, which the user may not
 have set up yet. Follow
-`.claude/skills/setup-personal-notes/prerequisite-check.md` before step 1: run
-the check, and if it reports anything missing, offer `/setup-personal-notes`
-rather than failing on a branch that isn't there.
+`skills/setup-personal-notes/prerequisite-check.md` before step 1: run
+the check, and if it reports anything missing, run `/setup-personal-notes`
+without asking first, rather than failing on a branch that isn't there.
 
 ## 1. Pin down what the work actually touches
 
@@ -44,27 +44,27 @@ branch by default.
 ## 2. Find the candidate homes
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
-git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+fetch_personal_notes_branch
 ```
 
-Read **every** plan's `plan.yaml` under `${PLANS_DIR}` off `FETCH_HEAD`, not
+Read **every** plan's `plan.yaml` under `${PLANS_DIR}` off `"${PERSONAL_NOTES_REFERENCE}"`, not
 just the one the user has in mind — the right home is often a plan they weren't
-thinking of. `${PLAN_SCHEMA_DOCUMENT}` is the field reference.
+thinking of. [`plan-schema.md`](../plan-dashboard/plan-schema.md) is the field reference.
 
 Then fetch live pull request state once, in bulk, per
-`${PULL_REQUEST_DATA_FETCHING_DOCUMENT}`.
+[`pr-data-fetching.md`](../plan-dashboard/pr-data-fetching.md).
 
 Candidates are every unlanded item and every open pull request's branch, plus
 every plan whose own `description` covers the kind of work being described.
 
 ## 3. Run the scope check
 
-The rule is in `${SCOPE_DECISION_DOCUMENT}` — read it rather than re-deriving
+The rule is in [`scope-decision.md`](scope-decision.md) — read it rather than re-deriving
 it here. Gather its evidence in one call:
 
 ```bash
-python3 -m "${CHECK_SCOPE_OVERLAP_MODULE}" \
+"${BASSTLER_PYTHON}" -m "${CHECK_SCOPE_OVERLAP_MODULE}" \
     --base <base-branch> \
     --path <path> [--path <path> ...] \
     --candidate '<item-id-or-title>=<branch>' [--candidate ... ]
@@ -72,7 +72,7 @@ python3 -m "${CHECK_SCOPE_OVERLAP_MODULE}" \
 
 Non-empty `paths_absent_from_base` means an unlanded branch introduces those
 files, and whichever one does is a candidate owner. Non-empty `shared_paths`
-names it. Apply the trigger-to-look test from `${SCOPE_DECISION_DOCUMENT}` to
+names it. Apply the trigger-to-look test from [`scope-decision.md`](scope-decision.md) to
 decide what that means; do not treat the output as the verdict by itself.
 
 ## 4. Scan for duplicate intent
@@ -121,8 +121,8 @@ changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}
 and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn,
 so no published dashboard is older than the manifest behind it.
 
-**If the outcome is a new item**, `${PLAN_ITEM_BOOTSTRAP_SCRIPT}`'s `record`
-operation writes its `plan.yaml` entry and `roadmap.md` section and runs the save
+**If the outcome is a new item**, the `record` operation of
+`"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}"` writes its `plan.yaml` entry and `roadmap.md` section and runs the save
 for you — `record` only, never `open`, which creates the branch and pull request
 this skill does not.
 
@@ -136,3 +136,5 @@ Flag explicitly, never silently paper over:
 
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.
+
+Carrying the outcome out later follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).

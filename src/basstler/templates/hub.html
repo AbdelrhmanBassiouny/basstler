@@ -1,0 +1,21 @@
+{% extends "site_layout.html" %}
+{% from "site_parts.html" import health_banner, progress_card %}
+{% block title %}Plan Hub{% endblock %}
+{% block content %}
+  <header class="masthead">
+    <p class="eyebrow">Plan Hub</p>
+    <h1>Repositories</h1>
+    <p class="lede">Each repository keeps its plans on its own notes branch. Pick one to open its plans.</p>
+    <p class="meta-line mono">{{ site.progress_label }}{% if site.review_label %} · {{ site.review_label }}{% endif %}</p>
+  </header>
+
+  {{ health_banner(site.skipped_pages) }}
+
+  <div class="card-list">
+  {% for repository in repositories %}
+    {{ progress_card(repository, repository.name, url=repository.index_url, error=repository.error) }}
+  {% else %}
+    <p class="empty">No repositories registered in the hub file.</p>
+  {% endfor %}
+  </div>
+{% endblock %}

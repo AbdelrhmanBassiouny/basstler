@@ -1,20 +1,27 @@
 name: Upstream reviews
 
-# Reports the review threads a fork branch's upstream pull request has collected.
+# Reports the checks and review threads a fork branch's upstream pull request has
+# collected, and on request the log behind each check that failed.
 #
-# Thread resolved-state is only exposed by GitHub's GraphQL API, which a Claude
-# session cannot reach, so the read happens here and the session reads this job's
-# log. Dispatch-only on purpose: nothing about this should run on a timer.
+# Thread resolved-state is only exposed by GitHub's GraphQL API, and a Claude session
+# reaches neither that nor the upstream's REST API at all, so both reads happen on a
+# runner and the session reads the job's log.
 #
-# Runs unchanged in any fork - the upstream comes from basstler/stack.toml
-# and the fork owner from the runner's own context, so no repository is named here.
+# Reusable: a project calls it from a dispatch-only workflow of its own (see
+# docs/SETUP.md), naming the release of basstler it calls. The upstream comes from the
+# project's own .claude/basstler/stack.toml and the fork owner from the runner's
+# context, so no repository is named here.
 #
 # A runner starts with nothing installed and no session hook runs on it, so this job
-# installs the package's requirements itself before invoking a module.
+# installs the package itself before invoking a module.
 
 on:
-  workflow_dispatch:
+  workflow_call:
     inputs:
+      basstler_branch_or_tag:
+        description: "The basstler branch or tag to run, the same one the caller uses this workflow at"
+        required: true
+        type: string
       pull_request:
         description: "Upstream pull request number (takes precedence over branch)"
         required: false
@@ -28,29 +35,34 @@ on:
         required: false
         default: false
         type: boolean
+      failure_logs:
+        description: "Quote the log behind each check that failed"
+        required: false
+        default: false
+        type: boolean
 
 permissions:
   contents: read
 
 jobs:
   report:
-    name: Report upstream review threads
+    name: Report the upstream pull request
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.12"
 
-      - name: Install the basstler dependencies
+      - name: Install basstler
         run: |
           set -euo pipefail
-          source .claude/hooks/resolve-personal-notes-config.sh
-          pip install "./${BASSTLER_PACKAGE_DIRECTORY}"
+          pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_branch_or_tag }}"
 
-      - name: Read upstream review threads
+      - name: Read the upstream pull request
         env:
           # gh is preinstalled on the runner; this is the only credential it needs,
           # and read-only is all the job is granted.
@@ -70,5 +82,7 @@ jobs:
           if [ "${{ inputs.include_resolved }}" = "true" ]; then
             ARGUMENTS+=(--include-resolved)
           fi
-          source .claude/hooks/resolve-personal-notes-config.sh
-          python3 -m "${UPSTREAM_REVIEWS_MODULE}" "${ARGUMENTS[@]}"
+          if [ "${{ inputs.failure_logs }}" = "true" ]; then
+            ARGUMENTS+=(--failure-logs)
+          fi
+          python -m basstler.upstream_reviews "${ARGUMENTS[@]}"

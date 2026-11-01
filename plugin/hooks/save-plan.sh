@@ -1,95 +1,45 @@
 #!/bin/bash
 set -euo pipefail
 
-# Persists edits made to CLAUDE.local.md's plan-manifest/plan-roadmap
-# sections back onto the personal-notes branch, at
-# .claude/personal/plans/<plan-id>/{plan.yaml,roadmap.md} - and regenerates
-# the generated branch->plan-id reverse index
-# (.claude/personal/plans/_generated/branch-index.tsv) in the same commit,
-# scanning every plan's plan.yaml so it can never drift out of sync with
-# the manifests it's derived from. See
-# .claude/skills/plan-dashboard/plan-schema.md for the
-# full plan.yaml schema, and .claude/skills/plan-dashboard/SKILL.md for how
-# the manifest is consumed.
+# Saves a plan's plan.yaml and roadmap.md to the personal-notes branch and
+# regenerates the branch index in the same commit. Landed items are pruned, an
+# emptied plan is removed, and a plan over basstler.plan.size_limits is refused.
 #
-# This is the write half of the loop session-start.sh's own plan section
-# points a session at when it wants to update a plan it's already tracking:
-# edit CLAUDE.local.md between the BEGIN-PLAN-MANIFEST/END-PLAN-MANIFEST and
-# BEGIN-PLAN-ROADMAP/END-PLAN-ROADMAP markers, then run this script.
+# The save carries only what the session changed since it read the plan: each
+# top-level field, item and the roadmap the session changed is applied onto the
+# branch as it is now, and the save is refused when another writer changed the
+# same part since. A push the branch rejects because it moved meanwhile is
+# repeated from the fetch, up to --attempts times.
 #
-# Usage (from anywhere, after editing CLAUDE.local.md):
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" [<plan-id>]
-#
-# <plan-id> is optional if the current branch already appears in some
-# plan's items[] (session-start.sh's plan_id_for_branch lookup resolves it,
-# same as it did to populate CLAUDE.local.md in the first place) - pass it
-# explicitly when creating a brand-new plan (not yet in the generated
-# index, so there's nothing to auto-derive from), or when saving a plan
-# from a branch that isn't itself one of its tracked items (e.g. a session
-# coordinating the whole plan rather than working one item).
-#
-# Bootstrapping a brand-new plan - two equivalent ways:
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh" <plan-id> \
-#     --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
-# reads the manifest/roadmap directly from the given files instead of
-# extracting them from CLAUDE.local.md's markers - the plan id must still be
-# explicit, since a brand-new plan has no entry in the reverse index yet to
-# auto-derive it from. This is what .claude/skills/plan-create/SKILL.md
-# uses, since it already has the drafted content in hand and gains nothing
-# from round-tripping it through CLAUDE.local.md first. Doing it by hand is
-# still just as valid: add the BEGIN-PLAN-MANIFEST/END-PLAN-MANIFEST and
-# BEGIN-PLAN-ROADMAP/END-PLAN-ROADMAP marker pairs to CLAUDE.local.md
-# yourself (session-start.sh only ever scaffolds them for a branch the index
-# already resolves, which a brand-new plan by definition isn't in yet),
-# write your plan.yaml/roadmap.md content between them, then run this
-# script with the new plan's id and no --manifest/--roadmap flags.
-#
-# This script pushes data only. It never calls the Artifact tool (only a
-# live Claude session can), so it does not regenerate the dashboard itself -
-# it prints a reminder to run /plan-dashboard <plan-id> afterward.
-#
-# Requires python3 with PyYAML to parse/validate manifests and regenerate
-# the reverse index (unlike session-start.sh's read path, which is
-# grep/awk-only so it stays dependency-free on every session start - this
-# script only runs when a session is actively editing a plan, where python3
-# is a safe assumption in this repo).
-#
-# Resolves the remote/branch exactly like the other hook scripts (git
-# config > environment variable > the zero-config default, plus the
-# same-branch-upstream fallback - see fetch_personal_notes_branch in
-# ./resolve-personal-notes-config.sh).
-#
-# Safe to re-run: a no-op if the extracted content already matches what's on
-# the branch (checked across all three files it may touch). Does its work in
-# a scratch worktree, so it never touches your current branch or working
-# tree - and never touches the plan's own branch(es), or anything that could
-# be merged: the manifest lives only on the personal-notes branch. Fails
-# with a clear message if that branch doesn't exist yet on any resolved
-# remote - run ./create-personal-notes-branch.sh first in that case.
+# Usage: save-plan.sh <plan-id> --manifest <plan.yaml> --roadmap <roadmap.md>
+#                     [--read-at <commit>] [--attempts <count>]
+#    or: save-plan.sh [<plan-id>]   (reads the PLAN-MANIFEST/PLAN-ROADMAP
+#                                    markers in CLAUDE.local.md)
+# --read-at: the personal-notes commit the session read the plan at; without
+#            it, the branch as this save first fetches it.
+# --attempts: how many pushes to make before giving up (default 5).
+# Pushes data only; run /plan-dashboard <plan-id> afterwards.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
-if ! command -v python3 > /dev/null 2>&1; then
-  echo "python3 is required to parse/validate plan manifests and regenerate the branch index." >&2
-  exit 1
-fi
-# Asked through the package's own declaration rather than by importing one
-# name here, so this script carries no Python of its own and no second opinion
-# about what the tooling needs. A session start installs these; a checkout
-# where that never ran reaches this message instead of a traceback.
-MISSING_DEPENDENCIES="$(missing_dependencies)" || MISSING_DEPENDENCIES=""
-if [ -n "${MISSING_DEPENDENCIES}" ]; then
-  echo "The basstler package's dependencies are not installed: ${MISSING_DEPENDENCIES}" >&2
-  echo "Run: pip install ${MISSING_DEPENDENCIES}" >&2
-  exit 1
-fi
+require_basstler_python
 
 PLAN_ID=""
 MANIFEST_SOURCE_FILE=""
 ROADMAP_SOURCE_FILE=""
+READ_AT=""
+ATTEMPTS=5
 while [ $# -gt 0 ]; do
   case "$1" in
+    --read-at)
+      READ_AT="$2"
+      shift 2
+      ;;
+    --attempts)
+      ATTEMPTS="$2"
+      shift 2
+      ;;
     --manifest)
       MANIFEST_SOURCE_FILE="$2"
       shift 2
@@ -108,6 +58,11 @@ while [ $# -gt 0 ]; do
       ;;
   esac
 done
+
+if ! printf '%s' "${ATTEMPTS}" | grep -qE '^[1-9][0-9]*$'; then
+  echo "--attempts must be a positive whole number, not '${ATTEMPTS}'." >&2
+  exit 1
+fi
 
 if [ -n "${MANIFEST_SOURCE_FILE}" ] && [ -z "${ROADMAP_SOURCE_FILE}" ]; then
   echo "--manifest was given without --roadmap - they must be passed together." >&2
@@ -136,9 +91,7 @@ if [ "${BOOTSTRAP_FROM_FILES}" = "0" ]; then
       || ! grep -q '^<!-- BEGIN-PLAN-ROADMAP:' "${CLAUDE_LOCAL_MD}"; then
     echo "CLAUDE.local.md has no plan-manifest/plan-roadmap section to extract." >&2
     echo "Run session-start.sh first (on a branch a plan already tracks), pass" >&2
-    echo "--manifest/--roadmap file paths instead, or add the marker pairs" >&2
-    echo "yourself when bootstrapping a brand-new plan - see the header" >&2
-    echo "comment in this script." >&2
+    echo "--manifest/--roadmap file paths instead." >&2
     exit 1
   fi
 fi
@@ -168,21 +121,21 @@ fi
 MANIFEST_FILE="$(mktemp)"
 ROADMAP_FILE="$(mktemp)"
 SCRATCH_DIR="$(mktemp -d)"
-# Suffixed with $$ (this process's PID) so two concurrent invocations never
-# race over the same worktree branch name.
+READ_PLAN_DIR="$(mktemp -d)"
+SESSION_PLAN_DIR="$(mktemp -d)"
+MERGED_PLAN_DIR="$(mktemp -d)"
 SCRATCH_BRANCH="__save-plan-tmp-$$"
-cleanup() {
+remove_scratch_worktree() {
   git worktree remove --force "${SCRATCH_DIR}" 2>/dev/null || rm -rf "${SCRATCH_DIR}"
   git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
+}
+cleanup() {
+  remove_scratch_worktree
+  rm -rf "${READ_PLAN_DIR}" "${SESSION_PLAN_DIR}" "${MERGED_PLAN_DIR}"
   rm -f "${MANIFEST_FILE}" "${ROADMAP_FILE}"
 }
 trap cleanup EXIT
 
-# BOOTSTRAP_FROM_FILES was set above from whether --manifest/--roadmap were
-# passed (see the argument-parsing block): "1" reads the manifest/roadmap
-# straight from the given files, "0" extracts them from CLAUDE.local.md's
-# markers instead - see this script's own header comment for when each
-# path applies.
 if [ "${BOOTSTRAP_FROM_FILES}" = "1" ]; then
   cp "${MANIFEST_SOURCE_FILE}" "${MANIFEST_FILE}"
   cp "${ROADMAP_SOURCE_FILE}" "${ROADMAP_FILE}"
@@ -198,42 +151,94 @@ if [ ! -s "${MANIFEST_FILE}" ]; then
   exit 1
 fi
 
-MANIFEST_PLAN_ID="$(python3 -m "${PLAN_MANIFEST_TOOLS_MODULE}" read-id "${MANIFEST_FILE}")"
+MANIFEST_PLAN_ID="$("${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" read-id "${MANIFEST_FILE}")"
 if [ "${MANIFEST_PLAN_ID}" != "${PLAN_ID}" ]; then
   echo "The plan manifest's 'id: ${MANIFEST_PLAN_ID}' does not match the plan" >&2
   echo "being saved ('${PLAN_ID}') - refusing to save under a mismatched key." >&2
   exit 1
 fi
 
-git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
-git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" FETCH_HEAD --quiet
-
-PLAN_DIR="${SCRATCH_DIR}/$(plan_directory_path "${PLAN_ID}")"
+PLAN_DIRECTORY_PATH="$(plan_directory_path "${PLAN_ID}")"
 MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
 ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
-mkdir -p "${PLAN_DIR}"
-cp "${MANIFEST_FILE}" "${SCRATCH_DIR}/${MANIFEST_PATH}"
-cp "${ROADMAP_FILE}" "${SCRATCH_DIR}/${ROADMAP_PATH}"
 
-mkdir -p "$(dirname "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}")"
-python3 -m "${PLAN_MANIFEST_TOOLS_MODULE}" regenerate-branch-index \
-  --scratch-dir "${SCRATCH_DIR}" \
-  --plans-dir "${PLANS_DIR}" \
-  --manifest-filename "${PLAN_MANIFEST_FILENAME}" \
-  --output "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}"
+cp "${MANIFEST_FILE}" "${SESSION_PLAN_DIR}/${PLAN_MANIFEST_FILENAME}"
+cp "${ROADMAP_FILE}" "${SESSION_PLAN_DIR}/${PLAN_ROADMAP_FILENAME}"
 
-git -C "${SCRATCH_DIR}" add \
-  "${MANIFEST_PATH}" \
-  "${ROADMAP_PATH}" \
-  "${PLAN_BRANCH_INDEX_PATH}"
+[ -n "${READ_AT}" ] || READ_AT="$(git rev-parse "${PERSONAL_NOTES_REFERENCE}")"
+if ! git cat-file -e "${READ_AT}^{commit}" 2>/dev/null; then
+  echo "--read-at '${READ_AT}' is not a commit of '${NOTES_BRANCH}' this clone has fetched." >&2
+  exit 1
+fi
+for document_path in "${MANIFEST_PATH}" "${ROADMAP_PATH}"; do
+  if git cat-file -e "${READ_AT}:${document_path}" 2>/dev/null; then
+    git show "${READ_AT}:${document_path}" > "${READ_PLAN_DIR}/$(basename "${document_path}")"
+  fi
+done
 
-if git -C "${SCRATCH_DIR}" diff --cached --quiet; then
-  echo "No changes to save - plan '${PLAN_ID}' on '${NOTES_BRANCH}' (remote '${ACTIVE_NOTES_REMOTE}') is already up to date."
+ATTEMPT=1
+while :; do
+  remove_scratch_worktree
+  git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" "${PERSONAL_NOTES_REFERENCE}" --quiet
+
+  rm -rf "${MERGED_PLAN_DIR}"
+  # Exits CHANGED_SINCE_READ when another writer changed a part this save changes.
+  "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" merge \
+    --read "${READ_PLAN_DIR}" \
+    --session "${SESSION_PLAN_DIR}" \
+    --latest "${SCRATCH_DIR}/${PLAN_DIRECTORY_PATH}" \
+    --output "${MERGED_PLAN_DIR}" || exit
+
+  # Validated against the fetched notes branch, so a <plan-id>/<item-id> entry resolves.
+  if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate \
+    "${MERGED_PLAN_DIR}/${PLAN_MANIFEST_FILENAME}" \
+    --plans-dir "${SCRATCH_DIR}/${PLANS_DIR}"; then
+    echo "Nothing was saved - fix the manifest and save again." >&2
+    exit 1
+  fi
+
+  # Prints "saved" or "removed"; exits 1 naming each broken limit.
+  STAGED_PLAN="$("${BASSTLER_PYTHON}" -m "${PLAN_SIZE_LIMITS_MODULE}" stage \
+    "${MERGED_PLAN_DIR}/${PLAN_MANIFEST_FILENAME}" \
+    "${MERGED_PLAN_DIR}/${PLAN_ROADMAP_FILENAME}" \
+    --manifest-destination "${SCRATCH_DIR}/${MANIFEST_PATH}" \
+    --roadmap-destination "${SCRATCH_DIR}/${ROADMAP_PATH}")" || exit 1
+
+  mkdir -p "$(dirname "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}")"
+  "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" regenerate-branch-index \
+    --scratch-dir "${SCRATCH_DIR}" \
+    --plans-dir "${PLANS_DIR}" \
+    --manifest-filename "${PLAN_MANIFEST_FILENAME}" \
+    --output "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}"
+
+  git -C "${SCRATCH_DIR}" add --all -- \
+    "${PLANS_DIR}" \
+    "${PLAN_BRANCH_INDEX_PATH}"
+
+  if git -C "${SCRATCH_DIR}" diff --cached --quiet; then
+    echo "No changes to save - plan '${PLAN_ID}' on '${NOTES_BRANCH}' (remote '${ACTIVE_NOTES_REMOTE}') is already up to date."
+    exit 0
+  fi
+
+  git -C "${SCRATCH_DIR}" commit --quiet -m "Update plan manifest for ${PLAN_ID}"
+  if git -C "${SCRATCH_DIR}" push "${ACTIVE_NOTES_REMOTE}" "HEAD:${NOTES_BRANCH}"; then
+    break
+  fi
+  if [ "${ATTEMPT}" -ge "${ATTEMPTS}" ]; then
+    echo "Gave up after ${ATTEMPTS} rejected pushes to '${NOTES_BRANCH}' on '${ACTIVE_NOTES_REMOTE}' - nothing was saved." >&2
+    exit 1
+  fi
+  ATTEMPT=$((ATTEMPT + 1))
+  echo "'${NOTES_BRANCH}' moved during the save; merging onto it again (attempt ${ATTEMPT} of ${ATTEMPTS})." >&2
+  if ! fetch_personal_notes_branch; then
+    echo "Could not fetch '${NOTES_BRANCH}' again - nothing was saved." >&2
+    exit 1
+  fi
+done
+
+if [ "${STAGED_PLAN}" = "removed" ]; then
+  echo "Every item of plan '${PLAN_ID}' has landed, so the plan was removed from '${NOTES_BRANCH}' on '${ACTIVE_NOTES_REMOTE}'."
   exit 0
 fi
-
-git -C "${SCRATCH_DIR}" commit --quiet -m "Update plan manifest for ${PLAN_ID}"
-git -C "${SCRATCH_DIR}" push "${ACTIVE_NOTES_REMOTE}" "HEAD:${NOTES_BRANCH}"
-
 echo "Saved plan '${PLAN_ID}' (plan.yaml, roadmap.md, and the branch index) back to '${NOTES_BRANCH}' on '${ACTIVE_NOTES_REMOTE}'."
 echo "Run /plan-dashboard ${PLAN_ID} to refresh its dashboard Artifact - this script only pushes data, it can't call the Artifact tool itself."
