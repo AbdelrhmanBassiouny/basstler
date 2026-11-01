@@ -5,6 +5,7 @@ marker-block extraction, run against a local `git init --bare` fixture instead o
 real remote - no network access or real personal-notes branch involved.
 """
 
+import shutil
 import subprocess
 from enum import StrEnum
 from pathlib import Path
@@ -12,13 +13,25 @@ from pathlib import Path
 import pytest
 import yaml
 
+from basstler.exit_codes import ManifestToolsExitCode
 from basstler.locations import PluginLocation, ProjectLocation
+from basstler.plan.item_bootstrap.vocabulary import PlanSavingOption
+from basstler.plan.merge import PlanVersion
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ManifestKey, PlanManifest
 from basstler.shell_configuration import ShellConfigurationFunction
 
+from ..constants.notes import ScratchBranch
 from ..constants.paths import DatasetLocation, PersonalNotesPath
 from ..fixture_plans import FixturePlanId, ForeignItemId, foreign_reference
+from ..plan.concurrent_edits import (
+    FIRST_ITEM,
+    PLAN_IDENTIFIER,
+    SECOND_ITEM,
+    blocked,
+    deferred,
+    read_version,
+)
 from ..project_declaration import ProjectDeclaration
 from ..scratch_repository import PackageSourceFile, ScratchRepository
 
@@ -35,19 +48,14 @@ class DatasetPlan(StrEnum):
     """
 
 
-class SavePlanOption(StrEnum):
+class ConcurrentWriterVariable(StrEnum):
     """
-    The options ``save-plan.sh`` reads its plan from files with.
-    """
-
-    MANIFEST = "--manifest"
-    """
-    The plan.yaml to save.
+    The environment :attr:`DatasetLocation.CONCURRENT_WRITER_HOOK` reads.
     """
 
-    ROADMAP = "--roadmap"
+    CHECKOUT = "CONCURRENT_WRITER_CHECKOUT"
     """
-    The roadmap.md to save beside it.
+    The other writer's clone of the notes branch.
     """
 
 
@@ -166,9 +174,9 @@ def test_refuses_a_manifest_the_dashboard_would_reject(
     result = run_save_plan(
         save_plan_repository,
         DatasetPlan.IDENTIFIER,
-        SavePlanOption.MANIFEST,
+        PlanSavingOption.MANIFEST,
         str(manifest_path),
-        SavePlanOption.ROADMAP,
+        PlanSavingOption.ROADMAP,
         str(roadmap_path),
     )
 
@@ -208,9 +216,9 @@ def save_depending_on(
     return run_save_plan(
         repository,
         DatasetPlan.IDENTIFIER,
-        SavePlanOption.MANIFEST,
+        PlanSavingOption.MANIFEST,
         str(manifest_path),
-        SavePlanOption.ROADMAP,
+        PlanSavingOption.ROADMAP,
         str(roadmap_path),
     )
 
@@ -250,7 +258,7 @@ def test_manifest_without_roadmap_fails(save_plan_repository: ScratchRepository)
     result = run_save_plan(
         save_plan_repository,
         DatasetPlan.IDENTIFIER,
-        SavePlanOption.MANIFEST,
+        PlanSavingOption.MANIFEST,
         str(manifest_path),
     )
     assert result.returncode == 1
@@ -266,7 +274,7 @@ def test_roadmap_without_manifest_fails(save_plan_repository: ScratchRepository)
     result = run_save_plan(
         save_plan_repository,
         DatasetPlan.IDENTIFIER,
-        SavePlanOption.ROADMAP,
+        PlanSavingOption.ROADMAP,
         str(roadmap_path),
     )
     assert result.returncode == 1
@@ -337,9 +345,9 @@ def save_from_files(
     return run_save_plan(
         repository,
         plan_identifier,
-        SavePlanOption.MANIFEST,
+        PlanSavingOption.MANIFEST,
         str(manifest),
-        SavePlanOption.ROADMAP,
+        PlanSavingOption.ROADMAP,
         str(roadmap),
     )
 
@@ -404,3 +412,214 @@ def test_a_roadmap_with_a_dated_section_is_refused(
         save_plan_repository,
         PlanManifest.from_file(DatasetLocation.PLAN_WITH_LANDED_ITEMS).identifier,
     ).exists()
+
+
+# %% saving alongside another writer
+
+
+def notes_branch_tip(repository: ScratchRepository) -> str:
+    """
+    :param repository: A fixture-built scratch repository.
+    :return: The commit the notes remote's notes branch points at.
+    """
+    listing = repository.run_git(
+        "ls-remote", str(repository.notes_remote_path), ScratchBranch.PERSONAL_NOTES
+    )
+    return listing.stdout.split()[0]
+
+
+def plan_path(document: PlanDocument) -> str:
+    """
+    :return: Where the fixture plan keeps *document* on the notes branch.
+    """
+    return document.path_within_notes_branch(PLAN_IDENTIFIER)
+
+
+@pytest.fixture
+def plan_read_at(save_plan_repository: ScratchRepository) -> str:
+    """
+    Publish the fixture plan, as the session then reads it.
+
+    :param save_plan_repository: A fixture-built scratch repository.
+    :return: The notes-branch commit the session read the plan at.
+    """
+    version = read_version()
+    save_plan_repository.update_notes_branch_file(
+        plan_path(PlanDocument.MANIFEST), version.manifest_text
+    )
+    save_plan_repository.update_notes_branch_file(
+        plan_path(PlanDocument.ROADMAP), version.roadmap_text
+    )
+    return notes_branch_tip(save_plan_repository)
+
+
+def save_arguments(
+    repository: ScratchRepository, version: PlanVersion, *options: str
+) -> tuple[str, ...]:
+    """
+    Write *version* of the fixture plan to files for save-plan.sh to read.
+
+    :param repository: A fixture-built scratch repository.
+    :param version: The plan as the session wrote it.
+    :param options: Further options to pass.
+    :return: The arguments that save it.
+    """
+    directory = repository.project_root / "session-plan"
+    version.write(directory)
+    return (
+        PLAN_IDENTIFIER,
+        PlanSavingOption.MANIFEST,
+        str(directory / PlanDocument.MANIFEST),
+        PlanSavingOption.ROADMAP,
+        str(directory / PlanDocument.ROADMAP),
+        *options,
+    )
+
+
+def save_version(
+    repository: ScratchRepository, version: PlanVersion, *options: str
+) -> subprocess.CompletedProcess[str]:
+    """
+    Save *version* of the fixture plan with save-plan.sh.
+
+    :param repository: A fixture-built scratch repository.
+    :param version: The plan as the session wrote it.
+    :param options: Further options to pass.
+    :return: The finished hook.
+    """
+    return run_save_plan(repository, *save_arguments(repository, version, *options))
+
+
+def published_version(repository: ScratchRepository) -> PlanVersion:
+    """
+    :return: The fixture plan as the notes remote now holds it.
+    """
+    return PlanVersion.from_directory(saved_plan_directory(repository, PLAN_IDENTIFIER))
+
+
+def prepare_concurrent_writer(
+    repository: ScratchRepository, writes: int, version: PlanVersion | None = None
+) -> str:
+    """
+    Install :attr:`DatasetLocation.CONCURRENT_WRITER_HOOK` as the repository's pre-push
+    hook, with a clone of the notes branch for it to push from.
+
+    :param repository: A fixture-built scratch repository.
+    :param writes: How many pushes the other writer gets ahead of.
+    :param version: A manifest the other writer has committed, unpushed, before its
+        first write; ``None`` for writes that change nothing.
+    :return: The clone's path, for the run's environment.
+    """
+    writer = repository.clone_notes_branch(repository.project_root.parent / "writer")
+    for setting, value in (
+        ("user.name", "Another Writer"),
+        ("user.email", "another-writer@example.invalid"),
+        ("commit.gpgsign", "false"),
+    ):
+        repository.run_git("config", setting, value, cwd=writer)
+    if version is not None:
+        (writer / plan_path(PlanDocument.MANIFEST)).write_text(version.manifest_text)
+        repository.run_git("commit", "--quiet", "--all", "-m", "edit", cwd=writer)
+    (writer / ".git" / "writes-remaining").write_text(f"{writes}\n")
+    hook = repository.project_root / ".git" / "hooks" / "pre-push"
+    hook.parent.mkdir(parents=True, exist_ok=True)
+    shutil.copy(DatasetLocation.CONCURRENT_WRITER_HOOK, hook)
+    return str(writer)
+
+
+def test_a_save_keeps_another_writer_s_edit_to_another_item(
+    save_plan_repository: ScratchRepository, plan_read_at: str
+):
+    latest = deferred(read_version(), SECOND_ITEM)
+    save_plan_repository.update_notes_branch_file(
+        plan_path(PlanDocument.MANIFEST), latest.manifest_text
+    )
+
+    result = save_version(
+        save_plan_repository,
+        blocked(read_version(), FIRST_ITEM),
+        PlanSavingOption.READ_AT,
+        plan_read_at,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert published_version(save_plan_repository) == blocked(latest, FIRST_ITEM)
+
+
+def test_a_save_refuses_an_item_another_writer_changed_since_the_read(
+    save_plan_repository: ScratchRepository, plan_read_at: str
+):
+    latest = deferred(read_version(), FIRST_ITEM)
+    save_plan_repository.update_notes_branch_file(
+        plan_path(PlanDocument.MANIFEST), latest.manifest_text
+    )
+
+    result = save_version(
+        save_plan_repository,
+        blocked(read_version(), FIRST_ITEM),
+        PlanSavingOption.READ_AT,
+        plan_read_at,
+    )
+
+    assert result.returncode == ManifestToolsExitCode.CHANGED_SINCE_READ
+    assert published_version(save_plan_repository) == latest
+
+
+def test_a_rejected_push_is_retried_onto_the_other_writer_s_save(
+    save_plan_repository: ScratchRepository, plan_read_at: str
+):
+    latest = deferred(read_version(), SECOND_ITEM)
+    writer = prepare_concurrent_writer(save_plan_repository, writes=1, version=latest)
+
+    result = save_plan_repository.run_hook_script(
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
+        *save_arguments(
+            save_plan_repository,
+            blocked(read_version(), FIRST_ITEM),
+            PlanSavingOption.READ_AT,
+            plan_read_at,
+        ),
+        **{ConcurrentWriterVariable.CHECKOUT: writer},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert published_version(save_plan_repository) == blocked(latest, FIRST_ITEM)
+
+
+def test_a_save_without_its_read_point_still_retries_a_rejected_push(
+    save_plan_repository: ScratchRepository, plan_read_at: str
+):
+    writer = prepare_concurrent_writer(save_plan_repository, writes=1)
+    session = blocked(read_version(), FIRST_ITEM)
+
+    result = save_plan_repository.run_hook_script(
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
+        *save_arguments(save_plan_repository, session),
+        **{ConcurrentWriterVariable.CHECKOUT: writer},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert published_version(save_plan_repository) == session
+
+
+def test_a_save_stops_after_its_attempts(
+    save_plan_repository: ScratchRepository, plan_read_at: str
+):
+    attempts = 2
+    writer = prepare_concurrent_writer(save_plan_repository, writes=attempts)
+
+    result = save_plan_repository.run_hook_script(
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
+        *save_arguments(
+            save_plan_repository,
+            blocked(read_version(), FIRST_ITEM),
+            PlanSavingOption.READ_AT,
+            plan_read_at,
+            PlanSavingOption.ATTEMPTS,
+            str(attempts),
+        ),
+        **{ConcurrentWriterVariable.CHECKOUT: writer},
+    )
+
+    assert result.returncode == 1
+    assert published_version(save_plan_repository) == read_version()

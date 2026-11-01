@@ -175,9 +175,11 @@ Read-only: editing it here changes nothing. To read another item, run
 on a copy from 'git show ${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}' after fetching
 '${NOTES_BRANCH}' - never read the whole manifest when one item will do.
 To change the plan, record the item with basstler.plan.item_bootstrap's 'record', or
-fetch both files fresh, edit them, and run
-  "\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" ${PLAN_ID} --manifest <file> --roadmap <file>
-which drops landed items, removes a plan with none left, and refuses a plan
+fetch both files fresh, note the commit read (git rev-parse ${PERSONAL_NOTES_REFERENCE}),
+edit them, and run
+  "\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" ${PLAN_ID} --manifest <file> --roadmap <file> --read-at <commit>
+which keeps other writers' edits to other items, refuses one to an item you also
+changed, drops landed items, removes a plan with none left, and refuses a plan
 over the limits in ${PLAN_SIZE_LIMITS_MODULE}. Then run
 /plan-dashboard ${PLAN_ID}.
 

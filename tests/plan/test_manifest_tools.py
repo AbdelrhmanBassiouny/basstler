@@ -14,6 +14,7 @@ import basstler.plan.manifest_tools
 
 from basstler.exceptions import PlanValidationError
 from basstler.plan.validation import PlanValidator
+from basstler.plan.merge import PlanVersion
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import (
     ItemNotTrackedError,
@@ -35,6 +36,13 @@ from ..constants.paths import DatasetLocation
 from ..fixture_plans import FixturePlanId, ForeignItemId, foreign_reference
 from ..manifest_builders import manifest_item, minimal_plan
 from ..plan_dataset import LandedItemsPlan
+from .concurrent_edits import (
+    FIRST_ITEM,
+    SECOND_ITEM,
+    blocked,
+    deferred,
+    read_version,
+)
 
 SCRIPT_NAME = Path(basstler.plan.manifest_tools.__file__).name
 """
@@ -343,3 +351,55 @@ def test_main_dispatches_item_by_branch(monkeypatch, capsys):
     )
     assert main() == ManifestToolsExitCode.SUCCESS
     assert capsys.readouterr().out == plan.manifest.item_summary(item)
+
+
+# %% merging a session's save
+
+
+def run_merge(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    session: PlanVersion,
+    latest: PlanVersion,
+) -> ManifestToolsExitCode:
+    """
+    Run the merge subcommand on the fixture plan as read, *session* and *latest*.
+
+    :return: How the command ended; what it wrote is under ``tmp_path / "output"``.
+    """
+    arguments = [SCRIPT_NAME, ManifestToolsCommand.MERGE]
+    for option, version in (
+        (ManifestToolsOption.READ, read_version()),
+        (ManifestToolsOption.SESSION, session),
+        (ManifestToolsOption.LATEST, latest),
+    ):
+        version.write(tmp_path / option.lstrip("-"))
+        arguments += [option, str(tmp_path / option.lstrip("-"))]
+    arguments += [ManifestToolsOption.OUTPUT, str(tmp_path / "output")]
+    monkeypatch.setattr(sys, "argv", arguments)
+    return main()
+
+
+def test_main_writes_the_merged_plan(monkeypatch, tmp_path: Path):
+    latest = deferred(read_version(), SECOND_ITEM)
+
+    status = run_merge(
+        monkeypatch, tmp_path, blocked(read_version(), FIRST_ITEM), latest
+    )
+
+    assert status == ManifestToolsExitCode.SUCCESS
+    assert PlanVersion.from_directory(tmp_path / "output") == blocked(
+        latest, FIRST_ITEM
+    )
+
+
+def test_main_refuses_an_item_both_writers_changed(monkeypatch, tmp_path: Path):
+    status = run_merge(
+        monkeypatch,
+        tmp_path,
+        blocked(read_version(), FIRST_ITEM),
+        deferred(read_version(), FIRST_ITEM),
+    )
+
+    assert status == ManifestToolsExitCode.CHANGED_SINCE_READ
+    assert not (tmp_path / "output").exists()
