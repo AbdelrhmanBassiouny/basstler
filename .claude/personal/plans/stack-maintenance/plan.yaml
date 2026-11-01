@@ -16,100 +16,57 @@ tracks:
   name: Maintenance pass
   wave: pass
 items:
-- id: promotion-summaries-and-table
-  title: Promote with a written summary, and send no notification
-  branch: claude/confident-johnson-vd0gld
-  pull_request_number: 78
-  status: done
-  track: pass
-  session: https://claude.ai/code/session_019kfZx96oM3oTs6tFA2DXRQ
-  depends_on: []
-  notes: 'Draft #78 on main: run-report/promote take --summaries (points and optional title
-    per fork pull request); the upstream pull request opens with the bullets and a link back,
-    or the link back alone. The first-paragraph derivation is removed. Link building and the
-    session table were already on main (finish-summary-markdown); nothing sends a notification.
-    Rebuilt from #50''s reference commit, without its PromotionOutcome or GitHubLinks.
-
-    '
-- id: stack-state-from-github
-  title: Derive in-review and CI from GitHub instead of hand-kept labels
-  branch: claude/cool-bardeen-3jxrd1
-  pull_request_number: 77
-  status: in progress
-  track: pass
-  session: https://claude.ai/code/session_01HPKG9jXWywpmwgnLgMsUyo
-  depends_on: []
-  notes: 'Raised in review on basstler#15. The board export records each fork pull request''s
-    open upstream pull request and its head''s check verdict (RollupState via CheckStatus.over),
-    replacing the never-filled ci field; in-review is derived from the upstream pull request
-    and the pass mirrors it as the in-review label and an upstream link in the description
-    (shown on the dashboard card); status shows CI and promotion withholds
-    failing branches. Based on main: #15, which split stack_model.py out of stack.py, has
-    merged. Three #15 threads point here.'
 - id: skip-unmoved-branches
   title: Skip a branch before any merge work when nothing it depends on moved
   branch: null
   pull_request_number: null
-  status: not_started
+  status: deferred
   track: pass
   depends_on: []
-  notes: 'Of 129 restacked branches in the CRAM pass, 82 were up to date and 24 withheld:
-    about 80 % no-op work. Prefer a stateless test: parent tip already an ancestor of head
-    means up to date; withheld state already lives in the labels. A stored fingerprint only
-    if truly needed, under the roadmap''s storage rule.'
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). Of 129 restacked branches
+    in the CRAM pass, 82 were up to date and 24 withheld: about 80 % no-op work. Prefer a
+    stateless test: parent tip already an ancestor of head means up to date; withheld state
+    already lives in the labels. A stored fingerprint only if truly needed, under the roadmap''s
+    storage rule.'
 - id: parallel-merge-tree-probes
   title: Run the read-only merge-tree probes in parallel, keeping pushes serial
   branch: null
   pull_request_number: null
-  status: not_started
+  status: deferred
   track: pass
   depends_on:
   - skip-unmoved-branches
-  notes: stack check ran 133 sequential merge-tree probes (5.2 s in the CRAM pass). Run the
-    read-only probes in parallel; every push and label write stays serial. Probes only the
-    branches skip-unmoved-branches leaves. Measure with GIT_TRACE2 per the roadmap rule.
-- id: maintenance-skill-steps-only
-  title: Cut the stacked-pr-maintenance skill to its steps and move the rationale to the docs
-  branch: claude/compassionate-faraday-un2z43
-  pull_request_number: 81
-  status: done
-  track: pass
-  session: https://claude.ai/code/session_0199xBq1qkAfTycP8ScsWPGx
-  depends_on: []
-  notes: 'Draft #81. SKILL.md cut from 16.6 KB to 5.8 KB, steps only; the rationale is in
-    docs/stack/maintenance-pass.md. Review round 1 answered; its two follow-ups are executor-reparents
-    and withhold-on-github-state. #77 and #78 edit the same skill, so whichever lands last
-    carries the others'' edits into the shorter file.
-
-    '
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). stack check ran 133 sequential
+    merge-tree probes (5.2 s in the CRAM pass). Run the read-only probes in parallel; every
+    push and label write stays serial. Probes only the branches skip-unmoved-branches leaves.
+    Measure with GIT_TRACE2 per the roadmap rule.'
 - id: executor-reparents
   title: Have run-report change the base of a pull request whose base has landed
   branch: null
   pull_request_number: null
-  status: not_started
+  status: deferred
   track: pass
   depends_on: []
-  notes: 'From basstler#81 review (discussion_r4376633783). The 403 that kept base changes
-    out of the executor no longer holds - a REST base PATCH with a session''s GH_TOKEN (Content-Type
-    application/json) succeeded on 2026-10-26. run-report performs reparents through PullRequestWriter
-    instead of listing them, and the skill''s step 1 goes away. Probe whether the native-stack
-    endpoints (the 422 unstack/restack sequence) are reachable the same way; if so move that
-    in too, otherwise report those for the session.
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). From basstler#81 review (discussion_r4376633783).
+    The 403 that kept base changes out of the executor no longer holds - a REST base PATCH
+    with a session''s GH_TOKEN (Content-Type application/json) succeeded on 2026-10-26. run-report
+    performs reparents through PullRequestWriter instead of listing them, and the skill''s
+    step 1 goes away. Probe whether the native-stack endpoints (the 422 unstack/restack sequence)
+    are reachable the same way; if so move that in too, otherwise report those for the session.
 
     '
 - id: withhold-on-github-state
   title: Withhold a branch on GitHub's own conflict and check state, and drop needs-resolution
   branch: null
   pull_request_number: null
-  status: not_started
+  status: deferred
   track: pass
-  depends_on:
-  - stack-state-from-github
-  notes: 'From basstler#81 review (discussion_r4376683912). The board records each pull request''s
-    mergeable state beside #77''s check_state; promotion withholds a branch that is conflicted,
-    not yet computed, or has failed checks, and the summary lists them. Remove the needs-resolution
-    label, its comments and the needs_resolution_label setting (release:major unless kept
-    ignored for a release). The skill''s step 3 goes; a failure on a pushed commit is caught
-    by the next pass''s board before promotion.
+  depends_on: []
+  notes: 'Deferred 2026-11-01: superseded by basstler-v3 (#99). From basstler#81 review (discussion_r4376683912).
+    The board records each pull request''s mergeable state beside #77''s check_state; promotion
+    withholds a branch that is conflicted, not yet computed, or has failed checks, and the
+    summary lists them. Remove the needs-resolution label, its comments and the needs_resolution_label
+    setting (release:major unless kept ignored for a release). The skill''s step 3 goes; a
+    failure on a pushed commit is caught by the next pass''s board before promotion.
 
     '
