@@ -8,8 +8,8 @@ The only thing this assumes is a fork of this repository with the `.claude/`
 tooling on its default branch. If you haven't set anything up yet, run
 `/setup-personal-notes` once — it checks what's already in place, asks about
 anything it can't decide for you, and finishes in seconds if you're already
-set up. (You don't have to run it first: any skill below offers it if you
-need it.) [`.claude/hooks/README.md`](../../hooks/README.md) documents what it
+set up. (You don't have to run it first: any skill below runs it for you if
+you need it, without asking whether to.) [`hooks/README.md`](../../hooks/README.md) documents what it
 configures, for when you want the details.
 
 The example data referenced below is committed alongside this file, under
@@ -18,16 +18,17 @@ files, not just prose. You can render them yourself with no GitHub access at
 all:
 
 ```bash
-pip install ./basstler
-python3 -m basstler.build_dashboard \
-  --plan .claude/skills/plan-dashboard/example/plan.yaml \
-  --roadmap .claude/skills/plan-dashboard/example/roadmap.md \
-  --pr-data .claude/skills/plan-dashboard/example/pr_data.json \
-  --output /tmp/example-dashboard.html
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+"${BASSTLER_PYTHON}" -m basstler.dashboard.plan_page \
+  --plan skills/plan-dashboard/example/plan.yaml \
+  --roadmap skills/plan-dashboard/example/roadmap.md \
+  --pr-data skills/plan-dashboard/example/pr_data.json \
+  --output <scratchpad>/example-dashboard.html
 ```
 
-Run it from the repository root: `basstler` is a plain top-level directory, importable
-with no install, and `-m` is what puts the root on the import path.
+`<scratchpad>` is the directory [`SKILL.md`](SKILL.md) writes into.
+`BASSTLER_PYTHON` is the package's own environment, which every session start creates
+with the package and its dependencies installed; see `basstler/README.md`.
 
 ## 1. Start with the idea, in plan mode
 
@@ -97,7 +98,7 @@ items:
     title: Circuit breaker around the retry loop
     branch: retry-circuit-breaker
     track: retry-logic
-    status: in_progress
+    status: in progress
     pull_request_number: 102
     depends_on: [retry-backoff-strategy]
 
@@ -105,22 +106,20 @@ items:
 ```
 
 `plan.yaml` is the **thin, structured** half: waves/tracks/items, statuses,
-dependencies, PR numbers. Everything's own "why" — design decisions,
-history, standing conventions — belongs in `roadmap.md` instead:
+dependencies, PR numbers, and each item's scope in its `notes`. The plan's
+standing rules - the decisions every item must follow - go in `roadmap.md`,
+as a title and a short list of entries:
 
 ```markdown
-# Notification Retry Overhaul — Roadmap
+# Notification Retry Overhaul — standing rules
 
-## Why
-Notification delivery currently fails hard on the first transient error...
-
-## Decisions locked in
 - Retries use exponential backoff with jitter, not a fixed delay.
-- Every item in the `retry-logic` track stacks its branch directly on
-  `retry-backoff-strategy`'s branch once that pull request is open and
-  ready for review — no need to wait for it to merge first.
+- Every item in the retry-logic track stacks its branch directly on
+  retry-backoff-strategy's branch once that pull request is ready for review.
 ```
 
+History and finished work are kept in neither file; they live in git and on
+the pull requests.
 Neither file ever stores live GitHub state (open/draft/merged/CI) — that's
 always fetched fresh, every run, in the next step.
 
@@ -187,7 +186,8 @@ prepended so the pasted session starts on that model.
   button copies `/plan-item-kickoff notification-retry-overhaul
   retry-metrics-dashboard`. The [`plan-item-kickoff`](../plan-item-kickoff/SKILL.md)
   skill gathers the item's context (manifest entry, roadmap history, its
-  dependency's live state, patterns from already-landed sibling items) and
+  dependency's live state, patterns from the merged pull requests that last
+  changed the files it will touch) and
   proposes a concrete implementation plan via plan mode — it never writes
   code itself.
 - **Resolve a stalled item** — `retry-load-testing`'s "Resolve" button copies
@@ -204,7 +204,7 @@ prepended so the pasted session starts on that model.
 
 ## Where to go from here
 
-- [`.claude/hooks/README.md`](../../hooks/README.md) — the setup guide: what
+- [`hooks/README.md`](../../hooks/README.md) — the setup guide: what
   `/setup-personal-notes` configures, and how to change any of it.
 - [`plan-schema.md`](./plan-schema.md) — the full `plan.yaml` schema
   reference.

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -euo pipefail
 
-# Implements the recheck-deltas convention (cram-notes.md, personal-notes
+# Implements the recheck-deltas convention (personal notes, personal-notes
 # branch): rather than rereading a whole plan.yaml/roadmap.md to answer "what
 # changed since I last looked", diff only from the last commit this clone
 # saw. Also prints the plan's tracking-issue comments newer than that
@@ -9,7 +9,7 @@ set -euo pipefail
 # never touched the manifest.
 #
 # Usage:
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/plan-updates-since.sh" <plan-id> [--since <sha>]
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/plan-updates-since.sh" <plan-id> [--since <sha>]
 #
 # <plan-id> is required - unlike save-plan.sh, there is no current-branch
 # auto-discovery here, since this script is meant to be run from anywhere,
@@ -30,7 +30,7 @@ set -euo pipefail
 # that same pattern, not a new one.
 #
 # Every user-facing message string, and the comment-JSON parsing, live in
-# plan_updates_since_support rather than inline here - so this script
+# basstler.plan.updates_since_support rather than inline here - so this script
 # never carries its own copy of text the test suite also has to check
 # against, and the comment-parsing logic is real, testable Python rather
 # than an inline `python3 -c` snippet. See that module's own docstring.
@@ -41,8 +41,8 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
-if ! command -v python3 > /dev/null 2>&1; then
-  echo "python3 is required (it prints this script's messages and parses" >&2
+if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
+  echo "${BASSTLER_PYTHON} is required (it prints this script's messages and parses" >&2
   echo "GitHub's tracking-issue-comments response)." >&2
   exit 1
 fi
@@ -65,7 +65,7 @@ github_api_token() {
 # print_issue_comments_since: prints every comment on
 # repository#issue_number created or updated at or after since_timestamp_utc
 # (an "YYYY-MM-DDTHH:MM:SSZ" string), formatted by
-# plan_updates_since_support's format_issue_comments.
+# basstler.plan.updates_since_support's format_issue_comments.
 print_issue_comments_since() {
   local repository="$1" issue_number="$2" since_timestamp_utc="$3"
   local path="repos/${repository}/issues/${issue_number}/comments?since=${since_timestamp_utc}&per_page=100"
@@ -82,7 +82,7 @@ print_issue_comments_since() {
       "${GITHUB_API_BASE_URL}/${path}")"
   fi
 
-  printf '%s' "${response}" | python3 -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-comments
+  printf '%s' "${response}" | "${BASSTLER_PYTHON}" -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-comments
 }
 
 PLAN_ID=""
@@ -120,7 +120,7 @@ if ! fetch_personal_notes_branch; then
 fi
 
 MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
-if ! git cat-file -e "FETCH_HEAD:${MANIFEST_PATH}" 2>/dev/null; then
+if ! git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${MANIFEST_PATH}" 2>/dev/null; then
   echo "No such plan '${PLAN_ID}' on '${NOTES_BRANCH}' (${MANIFEST_PATH} not found)." >&2
   exit 1
 fi
@@ -134,30 +134,30 @@ if [ -z "${SINCE_SHA}" ]; then
   exit 1
 fi
 
-NEW_SHA="$(git rev-parse FETCH_HEAD)"
+NEW_SHA="$(git rev-parse "${PERSONAL_NOTES_REFERENCE}")"
 PLAN_DIRECTORY="$(plan_directory_path "${PLAN_ID}")"
 
 echo "=== Changes to ${PLAN_DIRECTORY} (${SINCE_SHA}..${NEW_SHA}) ==="
 DELTA="$(git diff "${SINCE_SHA}" "${NEW_SHA}" -- "${PLAN_DIRECTORY}")"
 if [ -z "${DELTA}" ]; then
-  python3 -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-changes-message
+  "${BASSTLER_PYTHON}" -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-changes-message
 else
   printf '%s\n' "${DELTA}"
 fi
 echo
 
-TRACKING_ISSUE="$(git show "FETCH_HEAD:${MANIFEST_PATH}" \
+TRACKING_ISSUE="$(git show "${PERSONAL_NOTES_REFERENCE}:${MANIFEST_PATH}" \
   | grep -oE '^tracking_issue:[[:space:]]*[0-9]+' | head -1 | grep -oE '[0-9]+$' || true)"
 
 if [ -z "${TRACKING_ISSUE}" ]; then
   echo "=== Tracking issue ==="
-  python3 -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-tracking-issue-message
+  "${BASSTLER_PYTHON}" -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-tracking-issue-message
 else
-  DEFAULT_REPOSITORY="$(git show "FETCH_HEAD:${MANIFEST_PATH}" \
+  DEFAULT_REPOSITORY="$(git show "${PERSONAL_NOTES_REFERENCE}:${MANIFEST_PATH}" \
     | grep -oE '^default_repository:[[:space:]]*.+$' | head -1 \
     | sed -E 's/^default_repository:[[:space:]]*//' || true)"
   if [ -z "${DEFAULT_REPOSITORY}" ]; then
-    python3 -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-default-repository-message \
+    "${BASSTLER_PYTHON}" -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-default-repository-message \
       "${PLAN_ID}" "${TRACKING_ISSUE}"
     exit 1
   fi

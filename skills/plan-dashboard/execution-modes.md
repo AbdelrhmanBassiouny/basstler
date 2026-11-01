@@ -1,9 +1,7 @@
 # Deciding how an item gets worked: auto mode, plan mode, or asking
 
-Shared by `plan-item-kickoff` and `plan-item-resolve`. Both gather an item's
-context and then have to answer the same question — hand the user a plan to
-approve, or go ahead and do the work — so the answer lives here once instead
-of being restated in each skill.
+Shared by `plan-item-kickoff` and `plan-item-resolve`: hand the user a plan to
+approve, or go ahead and do the work.
 
 ## The three modes
 
@@ -12,10 +10,7 @@ of being restated in each skill.
 - **`auto`** — draft the same plan, record it, and implement it without
   asking. The planning phase still happens and is still written down; what it
   stops doing is blocking. The user reviews the finished draft pull request.
-  **The default**, because by the time the mode applies the skill has already
-  read the item's recorded state and the progress on its plan and pull
-  request, and the escalation rule below sends anything that genuinely
-  changes the settled plan back as a question anyway.
+  **The default.**
 - **`ask`** — put the choice between the other two to the user. Pin this to
   be asked every time.
 
@@ -26,8 +21,8 @@ question is only worth putting once you can say something useful about the
 item:
 
 ```bash
-source .claude/hooks/resolve-personal-notes-config.sh
-python3 -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill <kickoff|resolve>
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill <kickoff|resolve>
 ```
 
 It prints one JSON object: `mode` (`ask` | `auto` | `plan`), `source`
@@ -36,15 +31,14 @@ It prints one JSON object: `mode` (`ask` | `auto` | `plan`), `source`
 argument > personal setting > committed default, so pass `--requested <mode>`
 when the user named a mode in the invocation itself.
 
-Do not infer the mode from anything else — not from how well-specified the
-item looks, not from how the user phrased the request. The whole point of the
-setting is that its answer does not depend on the run's own judgement.
+Never infer the mode from anything else, such as how well-specified the item
+looks or how the request was phrased.
 
 To pin a mode, `/plan-item-mode <mode> [kickoff|resolve|both]` — or the script
 it calls, which takes `--skill` once per skill so pinning both is one push:
 
 ```bash
-python3 -m "${PLAN_ITEM_MODE_MODULE}" set --skill kickoff --skill resolve --mode <mode>
+"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" set --skill kickoff --skill resolve --mode <mode>
 ```
 
 This writes the personal-notes branch, so don't run it unprompted. Do run it
@@ -83,8 +77,8 @@ Autonomy is about not waiting for approval, not about skipping the record.
   work actually does as it changes.
 - **Record decisions as you make them**, in the PR-progress note and the
   description, so the review reads the reasoning rather than reconstructing it.
-- **Run the multi-PR-scope judgement anyway.** `cram-notes.md`'s "Plan-mode
-  approval → persistent plans" rule fires on plan-mode approval, which `auto`
+- **Run the multi-PR-scope judgement anyway.** A personal-notes rule that turns an
+  approved plan-mode plan into persistent plan items fires on plan-mode approval, which `auto`
   never reaches — so make the same call at the moment the plan is settled:
   does this span more than one pull request or session, and does it therefore
   need plan items of its own?

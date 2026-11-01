@@ -1,214 +1,90 @@
 #!/bin/bash
 set -euo pipefail
 
-# Generic personal Claude Code notes hook.
-#
-# Populates CLAUDE.local.md (gitignored, never committed on any branch) from a
-# personal branch on a remote (default: `origin`). No-op in effect for anyone
-# who never creates that branch (default or overridden), and collision-free
-# for multiple contributors sharing one remote if each overrides the branch
-# name via local config instead of relying on the shared default.
-#
-# Always writes to the project root, never wherever this happens to be
-# invoked from: a SessionStart hook's cwd isn't guaranteed to be the project
-# root, so a bare `CLAUDE.local.md` could silently land in the wrong place
-# (and Claude Code only auto-loads it from the root) - see CLAUDE_LOCAL_MD in
-# ./resolve-personal-notes-config.sh for how that's resolved deterministically.
-#
-# Works out of the box, zero config: it looks for a branch named
-# `claude/personal-notes` on `origin` and, if found, reads
-# `.claude/personal/cram-notes.md` off it into CLAUDE.local.md.
-# ./create-personal-notes-branch.sh creates that branch (with an empty notes
-# file) for anyone who doesn't have it yet.
-#
-# Override the remote/branch/path per clone, locally (never committed):
-#   git config claude.personalNotesRemote <remote-name-or-url>   # optional
-#   git config claude.personalNotesBranch <your-branch-name>
-#   git config claude.personalNotesPath   <path-on-that-branch>   # optional
-#
-# The remote defaults to `origin`, but only matters when your own notes live
-# somewhere other than the clone's `origin` - e.g. some session environments
-# name the upstream repo `origin` and your own fork something else. Set it to
-# either a remote already configured in this clone (by name) or a raw git URL
-# (`https://github.com/<you>/<repo>`) - `git fetch`/`git push` accept both, and
-# a URL needs no `git remote add` first, so it works even in a clone that's
-# never heard of your fork. See ./README.md for when to use which form.
-#
-# git config is per-clone, so it's the wrong mechanism anywhere sessions start
-# from a fresh clone every time (e.g. cloud/web sessions) - there's no
-# persistent .git/config for it to live in. For that case, override via
-# persistent environment variables instead (configured once at the environment
-# level, outside the repo, so they survive every fresh clone):
-#   CLAUDE_PERSONAL_NOTES_REMOTE=<remote-name-or-url>   # optional
-#   CLAUDE_PERSONAL_NOTES_BRANCH=<your-branch-name>
-#   CLAUDE_PERSONAL_NOTES_PATH=<path-on-that-branch>   # optional
-# See ./README.md for exactly how to wire these into a cloud environment.
-# Precedence: git config > environment variable > the zero-config default, so
-# a local or environment-level override always wins over it.
-#
-# Safe to re-run: it only ever overwrites CLAUDE.local.md, and does nothing if
-# the configured (or default) branch or path isn't reachable (e.g. a fresh
-# clone, or a fork that never created it).
-#
-# Remote fallback: if NOTES_REMOTE doesn't have the branch, this also tries
-# the current branch's own upstream remote (if it has one, and it differs
-# from NOTES_REMOTE) before giving up - see fetch_personal_notes_branch in
-# ./resolve-personal-notes-config.sh. Covers a clone whose checked-out branch
-# already tracks your fork under some other remote name, with no config
-# needed. The written header always names whichever remote actually served
-# the notes, so it's clear which one was used.
-#
-# Editing your notes: the written CLAUDE.local.md starts with a short header
-# (see below) naming the resolved branch/path and pointing at
-# ./save-personal-notes.sh. Since Claude Code loads CLAUDE.local.md as project
-# memory every session, that header is always in context - so asking Claude to
-# "edit my personal notes" needs no other setup: it edits the notes between
-# the BEGIN-PERSONAL-NOTES/END-PERSONAL-NOTES markers, then runs the save
-# script to push the change back.
-#
-# Personal settings: the same branch may also carry a
-# `.claude/personal/settings.local.json`, which is copied verbatim into this
-# clone's `.claude/settings.local.json` - the file Claude Code reads as local
-# settings, so personal permission rules, env vars and the like follow you into
-# every clone the same way your notes do. It is never merged (gitignored, exactly
-# like CLAUDE.local.md), and local edits to it are never overwritten - see the
-# settings block near the bottom of this script and ./save-personal-settings.sh.
-#
-# PR progress: on any branch with a sensible "current PR" (i.e. not the
-# default branch, a detached HEAD, or the personal-notes branch itself - see
-# pr_progress_path in ./resolve-personal-notes-config.sh), CLAUDE.local.md
-# also gets a second section for that branch's plan/progress/next-steps,
-# keyed to the branch name and stored on the personal-notes branch just like
-# the notes above - so it is never committed to the PR branch itself, and
-# survives session restarts automatically. Always present (as a scaffold, if
-# nothing's been saved yet) on such a branch, so the agent is nudged to
-# initialize and maintain it from the start. See ./save-pr-progress.sh.
-#
-# Plan auto-discovery: if the current branch appears as an item in some
-# multi-PR/multi-session plan (see .claude/skills/plan-dashboard/plan-schema.md
-# and .claude/skills/plan-dashboard/SKILL.md), CLAUDE.local.md also gets
-# that plan's manifest
-# (plan.yaml) and narrative (roadmap.md) pulled in - so a session picks up
-# the wider initiative its branch belongs to without anyone having to ask it
-# to go read a roadmap doc by hand. Looked up via the generated
-# branch->plan-id reverse index (plan_id_for_branch in
-# ./resolve-personal-notes-config.sh), never hand-maintained, so it can't
-# drift out of sync with the plans it's derived from. Unlike PR progress
-# above, there is no scaffold for a branch with no plan - most branches
-# don't belong to one, and that's normal. See ./save-plan.sh to push edits
-# back (regenerating the reverse index too).
-#
-# What the summary's plan line says when there is no item for this branch
-# matters as much as the manifest it pulls in when there is one: "no plans
-# are tracked here" and "plans exist, and none of them has an item for this
-# branch" are different answers, and reporting both as one bare "none" is
-# what let a session read the second as the first and start work without
-# recording an item. They are reported separately, along with the case where
-# the index names a plan whose manifest has since gone missing, and the case
-# where no plan item could ever track this branch at all (the default branch,
-# the notes branch, a detached HEAD - see branch_can_hold_plan_item), where
-# the right answer is silence rather than a prompt.
-#
-# Git identity: the notes branch can also carry the contributor's own git
-# identity (.claude/personal/git-identity), which is written into this clone's
-# repository-local config so its commits are authored by the person working in
-# it. A fresh clone otherwise inherits whatever global git config the
-# environment provides, which in an agent session is the agent's own identity -
-# a default, not an oversight, and so not something discipline alone fixes.
-# Only ever fills a gap: a clone that already has a repository-local identity
-# keeps it, and global config is never touched. See ./save-git-identity.sh to
-# record one, and ./README.md for the two cases a hook cannot reach.
-#
-# Dependencies: the package's own are installed on every start, for anyone
-# whose notes branch resolved - the same audience everything else here serves.
-# Only what is missing gets installed, so the usual run costs an import check
-# and nothing more, and a failure is reported rather than allowed to end the
-# run. See install_dependencies in ./resolve-personal-notes-config.sh, and
-# basstler/README.md, which tells a reader this happens.
-#
-# Setup: the summary also carries ./check-setup.sh's verdict, naming any
-# check that still needs setup. It is reported rather than left to be run on
-# purpose because remembering to run it is the step that gets skipped - after
-# which the same gaps surface one failure at a time, during unrelated work.
-# Never fatal: a setup gap is reported, never allowed to fail this hook.
-#
-# If the plan has a `tracking_issue` set, the written header also reminds a
-# session to always comment there when it makes a structural change (new
-# phases, deferring a track, etc.) in addition to editing the manifest
-# directly - any session may make structural changes, there is no
-# designated steward - and to subscribe to the tracking issue itself while
-# actively working an item, so another session's structural change reaches
-# it in real time - see plan-schema.md's "Proposing structural changes"
-# section for the full convention.
-#
-# Recheck stamp: every run also records the personal-notes commit this
-# clone just fetched (gitignored, see PLAN_STATE_SYNC_STAMP in
-# ./resolve-personal-notes-config.sh), regardless of whether this branch
-# tracks a plan. ./plan-updates-since.sh diffs from that stamp instead of a
-# session rereading whole plan files to answer "what changed since I last
-# looked" - see that script and cram-notes.md's recheck-deltas convention.
-#
-# How this script gets invoked (see ../settings.json): Claude Code registers it
-# as a SessionStart hook via `$CLAUDE_PROJECT_DIR/.claude/hooks/session-start.sh`.
-# CLAUDE_PROJECT_DIR is an env var Claude Code itself injects into every hook
-# command's environment, resolving to this project's root - so that path is
-# correct regardless of Claude Code's own cwd when it runs the hook.
-#
-# Coexistence with your own settings: Claude Code merges the `hooks` arrays
-# across all settings layers (managed > CLI args > .claude/settings.local.json
-# > .claude/settings.json (this repo's, committed) > ~/.claude/settings.json)
-# by concatenation, not override. So this SessionStart hook runs alongside -
-# never instead of - any SessionStart hook you already have configured for
-# yourself. settings.json is strict JSON with no comment support, which is why
-# this explanation lives here instead of there.
+# SessionStart hook. Writes CLAUDE.local.md at the project root from the
+# personal-notes branch (default claude/personal-notes on origin; overridable by
+# git config or environment, see ./README.md): the notes, this branch's PR
+# progress, and this branch's plan item with the plan's standing rules. Also
+# syncs personal settings and git identity, keeps the package environment
+# installed, stamps the plan state SHA for plan-updates-since.sh, fast-forwards
+# the default branch to the upstream (see basstler.maintenance.default_branch_sync),
+# brings the fork's upstream-reviews Action to this session's release, and
+# prints a summary of what it did. Never fails the session on a setup gap.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 source "${SCRIPT_DIR}/session-start-messages.sh"
 
+# Tell later commands where the plugin is (CLAUDE_ENV_FILE is SessionStart-only).
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  printf 'export BASSTLER_PLUGIN_ROOT=%q\n' "${PLUGIN_ROOT}" >> "${CLAUDE_ENV_FILE}"
+fi
+
 fetch_personal_notes_branch || exit 0
 
-# FETCH_HEAD, not "${ACTIVE_NOTES_REMOTE}/${NOTES_BRANCH}": a URL-form remote
-# creates no remote-tracking ref, but FETCH_HEAD always points at what was
-# just fetched, whether the serving remote was a name or a raw URL.
-
-# Stamp this run's baseline unconditionally - not only when the current
-# branch turns out to track a plan below. This is the whole branch's tip,
-# fetched regardless, so it's just as valid a "last time I looked" baseline
-# for a session working on a plan more broadly (e.g. a plan-item-kickoff
-# session on a branch that isn't itself a tracked item) as for one on a
-# tracked item's own branch. See ./plan-updates-since.sh, the recheck tool
-# this stamp exists for.
+# Reads below use PERSONAL_NOTES_REFERENCE, which later fetches leave alone.
 record_plan_state_sync_stamp
 
 CURRENT_BRANCH="$(git rev-parse --abbrev-ref HEAD)"
-# Sanitized copy for embedding into this script's <!-- ... --> HTML comment
-# headers: a branch name containing "-->" would otherwise let it break out
-# of the comment. Lookups (pr_progress_path, plan_id_for_branch) still use
-# the unsanitized ${CURRENT_BRANCH}.
+# Safe inside <!-- --> headers; lookups still use CURRENT_BRANCH.
 CURRENT_BRANCH_FOR_COMMENT="${CURRENT_BRANCH//-->/}"
 
 OUTPUT_FILE="$(mktemp)"
 trap 'rm -f "${OUTPUT_FILE}"' EXIT
 WROTE_ANYTHING=0
 
-# SUMMARY_*: what this run actually found/wrote, printed as a deterministic
-# report at the end (see the bottom of this script) instead of leaving a
-# session to describe secondhand, in its own prose, what the hook did.
+# SUMMARY_* lines are printed at the end; the rest are set on every path below.
 SUMMARY_NOTES="not found"
 SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
-# SUMMARY_PLAN, SUMMARY_GIT_IDENTITY, SUMMARY_DEPENDENCIES and SUMMARY_SETUP
-# get no default on purpose: every path below assigns one, so `set -u` turns a
-# path that forgets into a loud failure rather than the silently uninformative
-# report this hook used to print.
 
-if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
+# Installs the package environment only where something is missing; never
+# fatal. Runs before the plan section and the setup check, which rely on it.
+# Holds the install lock, so a skill started while this runs waits for it.
+ensure_basstler_environment() {
+  record_latest_basstler_release
+  ensure_basstler_package || true
+  case "${BASSTLER_PACKAGE_STATE}" in
+    current)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed \
+        "${BASSTLER_ENVIRONMENT_DIRECTORY}")" ;;
+    created)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_environment_created \
+        "${BASSTLER_ENVIRONMENT_DIRECTORY}" "${BASSTLER_PACKAGE_REQUIREMENTS}")" ;;
+    installed)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_installed \
+        "${BASSTLER_PACKAGE_REQUIREMENTS}" "${BASSTLER_ENVIRONMENT_DIRECTORY}")" ;;
+    environment-failed)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_environment_not_created \
+        "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+        "$(printf '%s' "${BASSTLER_ENVIRONMENT_OUTPUT}" | tail -1)" \
+        "${BASSTLER_PYTHON_REQUIREMENT}")" ;;
+    install-failed)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
+        "${BASSTLER_PACKAGE_REQUIREMENTS}" "${BASSTLER_ENVIRONMENT_DIRECTORY}" \
+        "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
+        "${BASSTLER_INSTALL_COMMAND[*]}")" ;;
+    locked)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_install_running \
+        "${BASSTLER_INSTALL_LOCK}")" ;;
+    *)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)" ;;
+  esac
+}
+
+ensure_basstler_environment
+
+# After the install, so it names the environment's interpreter once one exists.
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  printf 'export BASSTLER_PYTHON=%q\n' "${BASSTLER_PYTHON}" >> "${CLAUDE_ENV_FILE}"
+fi
+
+if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" 2>/dev/null; then
   cat <<HEADER >> "${OUTPUT_FILE}"
 <!--
 Personal notes, synced from '${NOTES_BRANCH}' (${NOTES_PATH}) on remote
 '${ACTIVE_NOTES_REMOTE}' by session-start.sh.
 To edit: change the notes between the markers below, then run
-  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-personal-notes.sh"
+  "\${BASSTLER_PLUGIN_ROOT}/hooks/save-personal-notes.sh"
 to push the change back. This header and the markers are regenerated every
 session from git config/environment/default (plus a same-branch-upstream
 fallback) - editing them has no effect; only content between the markers is
@@ -216,7 +92,7 @@ ever saved.
 -->
 <!-- BEGIN-PERSONAL-NOTES -->
 HEADER
-  git show "FETCH_HEAD:${NOTES_PATH}" >> "${OUTPUT_FILE}"
+  git show "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" >> "${OUTPUT_FILE}"
   echo "<!-- END-PERSONAL-NOTES -->" >> "${OUTPUT_FILE}"
   WROTE_ANYTHING=1
   SUMMARY_NOTES="loaded from '${NOTES_BRANCH}' (${NOTES_PATH}) on '${ACTIVE_NOTES_REMOTE}'"
@@ -227,28 +103,22 @@ if [ -n "${PROGRESS_PATH}" ]; then
   [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
   cat <<PROGRESS_HEADER >> "${OUTPUT_FILE}"
 <!--
-PR progress for branch '${CURRENT_BRANCH_FOR_COMMENT}', synced from
-'${NOTES_BRANCH}' (${PROGRESS_PATH}) on remote '${ACTIVE_NOTES_REMOTE}' by
-session-start.sh. Maintain the current plan, what's done, and what's next
-here throughout work on this PR. It is never merged: it lives only on
-'${NOTES_BRANCH}', never on this branch. A stale file left behind after the
-PR merges is harmless (just unread from then on) - delete it directly on
-'${NOTES_BRANCH}' if you want to tidy it up.
-To edit: change the notes between the markers below, then run
-  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-pr-progress.sh"
-to push the change back. This header and the markers are regenerated every
-session - editing them has no effect; only content between the markers is
-ever saved.
+PR progress for branch '${CURRENT_BRANCH_FOR_COMMENT}', from '${NOTES_BRANCH}'
+(${PROGRESS_PATH}) on '${ACTIVE_NOTES_REMOTE}'. Holds only the plan, what is
+done and what is next - history belongs in the commits and on the pull
+request; save-pr-progress.sh refuses notes over the limit in
+${PLAN_SIZE_LIMITS_MODULE}. Edit between the markers, then run
+  "\${BASSTLER_PLUGIN_ROOT}/hooks/save-pr-progress.sh"
 -->
 <!-- BEGIN-PR-PROGRESS -->
 PROGRESS_HEADER
-  if git cat-file -e "FETCH_HEAD:${PROGRESS_PATH}" 2>/dev/null; then
-    git show "FETCH_HEAD:${PROGRESS_PATH}" >> "${OUTPUT_FILE}"
+  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PROGRESS_PATH}" 2>/dev/null; then
+    git show "${PERSONAL_NOTES_REFERENCE}:${PROGRESS_PATH}" >> "${OUTPUT_FILE}"
     SUMMARY_PROGRESS="loaded for branch '${CURRENT_BRANCH}' (${PROGRESS_PATH})"
   else
     cat <<'SCAFFOLD' >> "${OUTPUT_FILE}"
-No progress recorded yet for this branch. Initialize it now: a short plan,
-what's done so far, and what's next. Keep it current as you work.
+No progress recorded yet for this branch. Initialize it now as three short
+lists - Plan, Done, Next - and keep it current as you work.
 SCAFFOLD
     SUMMARY_PROGRESS="no saved progress yet for branch '${CURRENT_BRANCH}' - scaffold written"
   fi
@@ -258,15 +128,7 @@ fi
 
 PLAN_ID="$(plan_id_for_branch "${CURRENT_BRANCH}" || true)"
 
-# A branch with no plan item is several different situations, and reporting
-# them all as a bare "none" is what let a session read "the plan you were told
-# about has no item for this branch yet" as "no plan applies here" and start
-# work without recording an item. Each one now says which it is; the wording
-# is deliberately even-handed, because belonging to no plan is a perfectly
-# ordinary state for most branches and must not read as a reprimand.
-#
-# The first case answers a different question than the rest: on a branch no
-# plan item could ever track, there is nothing to prompt about at all.
+# No plan item: say which case (untrackable branch, no item here, no plans).
 if [ -z "${PLAN_ID}" ]; then
   if ! branch_can_hold_plan_item "${CURRENT_BRANCH}"; then
     SUMMARY_PLAN="$(plan_line_not_applicable)"
@@ -278,80 +140,74 @@ if [ -z "${PLAN_ID}" ]; then
 else
   PLAN_MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
   PLAN_ROADMAP_PATH="$(plan_roadmap_path "${PLAN_ID}")"
-  # An index entry pointing at a manifest that isn't there means the index and
-  # the plan data have drifted apart - previously indistinguishable from having
-  # no plan at all, so it went unnoticed.
+  # Replaced below unless the indexed manifest is missing.
   SUMMARY_PLAN="$(plan_line_manifest_missing "${PLAN_ID}" "${PLAN_MANIFEST_PATH}" "${NOTES_BRANCH}")"
-  if git cat-file -e "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
+  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}" 2>/dev/null; then
     [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
-    # TRACKING_ISSUE: a plain top-level scalar, so grep/sed suffices here too -
-    # same dependency-free reasoning as plan_id_for_branch above. Empty if
-    # the plan has no tracking_issue set (nothing to extract, not an error).
-    # Named for the mailbox's role, not necessarily a literal GitHub Issue -
-    # see plan-schema.md's PR-fallback note for repos with Issues disabled.
-    # The `|| true` is load-bearing: under `set -o pipefail` a plan with no
-    # tracking_issue makes grep exit 1, which `set -e` turns into the whole
-    # hook dying here with no output at all.
-    TRACKING_ISSUE="$(git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" 2>/dev/null \
+    # `|| true`: a plan without tracking_issue must not kill the hook.
+    TRACKING_ISSUE="$(git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}" 2>/dev/null \
       | grep -oE '^tracking_issue:[[:space:]]*[0-9]+' | head -1 \
       | grep -oE '[0-9]+$' || true)"
     if [ -n "${TRACKING_ISSUE}" ]; then
-      TRACKING_ISSUE_NOTE="Structural changes (a new wave/phase, deferring a track, splitting an
-item, reprioritizing) can be made directly to the manifest by any session -
-there is no designated steward gatekeeping them. Before making one, ask the
-user in this session (e.g. via AskUserQuestion) rather than deciding
-unilaterally - a structural change is the user's call, not something to
-infer and apply silently just because editing the manifest directly is
-technically allowed. Once they confirm, make the edit and always also leave
-a comment on the tracking issue (#${TRACKING_ISSUE}) describing it, since
-the user reviews structural changes there and it is the shared record other
-sessions working this plan can check - see plan-schema.md's 'Proposing
-structural changes' section. If this session is actively working an item in
-this plan, also subscribe to the tracking issue itself so a structural change
-another session makes reaches you while you're still working, not just next
-session start."
+      TRACKING_ISSUE_NOTE="Structural changes (a wave, a deferral, a split, a reprioritization) are
+the user's call: ask first, then edit the manifest and comment on tracking
+issue #${TRACKING_ISSUE}. While working an item of this plan, read that issue's
+comments before each push - an issue cannot be subscribed to."
     else
       TRACKING_ISSUE_NOTE="This plan has no tracking_issue set, so there is no coordination
 mailbox for structural changes yet - edit the manifest directly as usual."
     fi
+    # Load only this branch's item; the rest costs context every turn.
+    MANIFEST_COPY="$(mktemp)"
+    git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}" > "${MANIFEST_COPY}"
+    if ! PLAN_ITEM="$("${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" item \
+        "${MANIFEST_COPY}" --branch "${CURRENT_BRANCH}" 2>&1)"; then
+      PLAN_ITEM="(could not read this branch's item: ${PLAN_ITEM})"
+    fi
+    rm -f "${MANIFEST_COPY}"
     cat <<PLAN_HEADER >> "${OUTPUT_FILE}"
 <!--
-Plan manifest for '${PLAN_ID}', synced from '${NOTES_BRANCH}'
+This branch's item in plan '${PLAN_ID}', read from '${NOTES_BRANCH}'
 (${PLAN_MANIFEST_PATH}) on remote '${ACTIVE_NOTES_REMOTE}' by
-session-start.sh. This branch is tracked as an item in this plan - see
-.claude/skills/plan-dashboard/plan-schema.md for the schema and
-.claude/skills/plan-dashboard/SKILL.md for how it's used and refreshed.
-To edit: change the manifest between the markers below, then run
-  "\$CLAUDE_PROJECT_DIR/.claude/hooks/save-plan.sh"
-to push the change back (this also regenerates the branch index), then run
-/plan-dashboard ${PLAN_ID} to refresh its dashboard - save-plan.sh can't call
-the Artifact tool itself. This header and the markers are regenerated every
-session - editing them has no effect; only content between the markers is
-ever saved.
+session-start.sh, followed by the plan's standing rules (${PLAN_ROADMAP_PATH}).
+Read-only: editing it here changes nothing. To read another item, run
+  "\${BASSTLER_PYTHON}" -m ${PLAN_MANIFEST_TOOLS_MODULE} item <manifest-file> --id <item-id>
+on a copy from 'git show ${PERSONAL_NOTES_REFERENCE}:${PLAN_MANIFEST_PATH}' after fetching
+'${NOTES_BRANCH}' - never read the whole manifest when one item will do.
+To change the plan, record the item with basstler.plan.item_bootstrap's 'record', or
+fetch both files fresh, note the commit read (git rev-parse ${PERSONAL_NOTES_REFERENCE}),
+edit them, and run
+  "\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" ${PLAN_ID} --manifest <file> --roadmap <file> --read-at <commit>
+which keeps other writers' edits to other items, refuses one to an item you also
+changed, drops landed items, removes a plan with none left, and refuses a plan
+over the limits in ${PLAN_SIZE_LIMITS_MODULE}. Then run
+/plan-dashboard ${PLAN_ID}.
 
 ${TRACKING_ISSUE_NOTE}
 -->
-<!-- BEGIN-PLAN-MANIFEST: ${PLAN_ID} -->
+<!-- BEGIN-PLAN-ITEM: ${PLAN_ID} -->
+${PLAN_ITEM}
+<!-- END-PLAN-ITEM -->
 PLAN_HEADER
-    git show "FETCH_HEAD:${PLAN_MANIFEST_PATH}" >> "${OUTPUT_FILE}"
-    echo "<!-- END-PLAN-MANIFEST -->" >> "${OUTPUT_FILE}"
-
-    printf '\n' >> "${OUTPUT_FILE}"
-    cat <<ROADMAP_HEADER >> "${OUTPUT_FILE}"
-<!--
-Plan roadmap (narrative) for '${PLAN_ID}' - the "why", history, and design
-decisions behind the manifest above. Same edit/save mechanism: change
-between the markers below, then run save-plan.sh.
--->
-<!-- BEGIN-PLAN-ROADMAP: ${PLAN_ID} -->
-ROADMAP_HEADER
-    if git cat-file -e "FETCH_HEAD:${PLAN_ROADMAP_PATH}" 2>/dev/null; then
-      git show "FETCH_HEAD:${PLAN_ROADMAP_PATH}" >> "${OUTPUT_FILE}"
+    if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_ROADMAP_PATH}" 2>/dev/null; then
+      printf '\n' >> "${OUTPUT_FILE}"
+      git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_ROADMAP_PATH}" >> "${OUTPUT_FILE}"
     fi
-    echo "<!-- END-PLAN-ROADMAP -->" >> "${OUTPUT_FILE}"
     WROTE_ANYTHING=1
     SUMMARY_PLAN="$(plan_line_tracked "${PLAN_ID}" "${TRACKING_ISSUE:-none}")"
   fi
+fi
+
+# This session's page on the plan site, from the hub file.
+SUMMARY_HUB="$(hub_line_not_registered "${NOTES_BRANCH}")"
+if SITE_URL="$(recorded_site_url)"; then
+  HUB_POSITION="${SITE_URL:+${SITE_URL%/}/}$(repository_name)/"
+  if [ -n "${PLAN_ID}" ]; then
+    HUB_POSITION="${HUB_POSITION}${PLAN_ID}/"
+    ITEM_ID="$(item_id_for_branch "${PLAN_ID}" "${CURRENT_BRANCH}")"
+    [ -n "${ITEM_ID}" ] && HUB_POSITION="${HUB_POSITION}#item-${ITEM_ID}"
+  fi
+  SUMMARY_HUB="$(hub_line_registered "${SITE_URL}" "${HUB_POSITION}")"
 fi
 
 if [ "${WROTE_ANYTHING}" = "1" ]; then
@@ -360,14 +216,7 @@ else
   rm -f "${OUTPUT_FILE}"
 fi
 
-# Git identity, from the notes branch - so a fresh clone commits as the person
-# working in it rather than as whatever the environment's global git config
-# happens to be. Only ever fills a gap: a clone that already has its own
-# repository-local identity keeps it, and nothing here touches global config.
-#
-# Written before the setup check below, so check-setup.sh's git_identity row
-# reports on the identity this run has just set rather than the absence it was
-# about to fix - the same ordering, for the same reason, as CLAUDE.local.md.
+# Git identity from the notes branch, only where the clone has no local one.
 if ! recorded_git_identity_exists; then
   SUMMARY_GIT_IDENTITY="$(git_identity_line_not_recorded \
     "${NOTES_BRANCH}" "${PERSONAL_GIT_IDENTITY_PATH}")"
@@ -387,78 +236,60 @@ else
     "$(format_git_identity "${RECORDED_NAME}" "${RECORDED_EMAIL}")")"
 fi
 
-# Personal settings: unlike everything above, these don't go into CLAUDE.local.md -
-# they are copied verbatim to .claude/settings.local.json, the file Claude Code
-# itself reads as this project's local settings (see PERSONAL_SETTINGS_PATH in
-# ./resolve-personal-notes-config.sh). No header or markers: it is strict JSON,
-# which has no comment syntax to carry them.
-#
-# Locally modified settings are never overwritten. Claude Code writes to this same
-# file whenever a permission is granted with "don't ask again", so a blind copy
-# every session start would silently drop those grants - see
-# personal_settings_are_locally_modified. Run ./save-personal-settings.sh to push
-# such edits up, which makes them the new baseline and lets syncing resume.
+# Personal settings, copied to .claude/settings.local.json unless edited locally.
 SUMMARY_SETTINGS="none on '${NOTES_BRANCH}' (${PERSONAL_SETTINGS_PATH})"
-if git cat-file -e "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
+if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_SETTINGS_PATH}" 2>/dev/null; then
   if personal_settings_are_locally_modified; then
     SUMMARY_SETTINGS="kept local edits to ${LOCAL_SETTINGS_RELATIVE_PATH} - run save-personal-settings.sh to push them"
   else
     mkdir -p "$(dirname "${LOCAL_SETTINGS_JSON}")"
-    git show "FETCH_HEAD:${PERSONAL_SETTINGS_PATH}" > "${LOCAL_SETTINGS_JSON}"
+    git show "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_SETTINGS_PATH}" > "${LOCAL_SETTINGS_JSON}"
     record_personal_settings_sync
     SUMMARY_SETTINGS="synced to ${LOCAL_SETTINGS_RELATIVE_PATH}"
   fi
 fi
 
-# Dependencies: install whatever of the package's own this clone is missing,
-# so nothing downstream has to run without them. Reached only after the notes
-# branch resolved above, which is the signal that this is somebody who has run
-# the setup - a clone that never did installs nothing.
-#
-# Run before the setup check below, so check-setup.sh's dashboard_dependencies
-# row reports on what this run has just installed rather than on the absence it
-# was about to fix - the same ordering, for the same reason, as CLAUDE.local.md
-# and the git identity.
-#
-# Only when something is actually missing: the common case then costs one
-# import check and no installer at all, which is what makes doing this on
-# every session start affordable.
-#
-# Never fatal. An installer that is absent, offline or refused by an
-# externally managed environment reports here and the run carries on: a hook
-# that dies at this point takes the notes, the plan and the setup verdict with
-# it, and says nothing about why.
-if ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
-  SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)"
-elif [ -z "${MISSING_DEPENDENCIES}" ]; then
-  SUMMARY_DEPENDENCIES="$(dependencies_line_already_installed "${BASSTLER_PYPROJECT_FILE}")"
-elif install_dependencies "${MISSING_DEPENDENCIES}"; then
-  SUMMARY_DEPENDENCIES="$(dependencies_line_installed \
-    "${MISSING_DEPENDENCIES}" "${BASSTLER_PYPROJECT_FILE}")"
-else
-  SUMMARY_DEPENDENCIES="$(dependencies_line_install_failed \
-    "${MISSING_DEPENDENCIES}" \
-    "$(printf '%s' "${DEPENDENCY_INSTALL_OUTPUT}" | tail -1)")"
+# Default branch, caught up with the upstream this fork tracks: a stale base is
+# invisible from inside the clone. Fast-forward only, never fatal; the
+# checked-out branch moves along only when it has no commits of its own.
+SUMMARY_DEFAULT_BRANCH="$(default_branch_line_not_synced "${DEFAULT_BRANCH_SYNC_MODULE}")"
+if DEFAULT_BRANCH_REPORT="$("${BASSTLER_PYTHON}" -m "${DEFAULT_BRANCH_SYNC_MODULE}" \
+    2>/dev/null)"; then
+  SUMMARY_DEFAULT_BRANCH="${DEFAULT_BRANCH_REPORT}"
 fi
 
-# Setup verdict, from ./check-setup.sh - the single read-only source of truth
-# for whether this clone is set up. Reported here because remembering to run it
-# is exactly what does not happen: a session that skips it discovers the same
-# gaps later, one failure at a time, in the middle of unrelated work.
-#
-# Run last, after everything this run writes: check-setup.sh's claude_local_md
-# check reports on the file this run has just created, so any other order would
-# report needs-setup on a correctly set up clone's first run.
-#
-# Run as a subprocess rather than sourced - it sources
-# resolve-personal-notes-config.sh, which cd's and reassigns every variable
-# already in use here - and captured with `|| true`, so a setup gap can never
-# turn into a session that starts with a broken hook.
+# The fork's upstream-reviews Action, kept at the release this session runs:
+# the run and the session replaying it must run the same package, so every
+# release would otherwise leave it stale. Only a branch already there is
+# touched - installing one is setup's decision. Never fatal.
+SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_not_read "${NOTES_REMOTE}")"
+SESSION_RELEASE="$(basstler_branch_or_tag)"
+if ACTION_STATE="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+    --remote "${NOTES_REMOTE}" status --branch-or-tag "${SESSION_RELEASE}" 2>/dev/null)"; then
+  case "${ACTION_STATE}" in
+    missing*)
+      SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_not_installed)" ;;
+    current*)
+      SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_current \
+        "${SESSION_RELEASE}")" ;;
+    stale*)
+      if "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+          --remote "${NOTES_REMOTE}" install --branch-or-tag "${SESSION_RELEASE}" \
+          > /dev/null 2>&1; then
+        SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_updated \
+          "${ACTION_STATE#stale }" "${SESSION_RELEASE}")"
+      else
+        SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_update_failed \
+          "${ACTION_STATE#stale }" "${SESSION_RELEASE}" \
+          "${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --branch-or-tag ${SESSION_RELEASE}")"
+      fi ;;
+  esac
+fi
+
+# Setup verdict from check-setup.sh, run last so it sees what this run wrote.
 SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
-if [ -f "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" ]; then
-  # Only the needs-setup rows: the info rows are context for someone reading
-  # the full report, not a verdict, and this summary is not that report.
-  NEEDS_SETUP_ROWS="$(bash "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" 2>/dev/null \
+if [ -f "${CHECK_SETUP_SCRIPT}" ]; then
+  NEEDS_SETUP_ROWS="$(bash "${CHECK_SETUP_SCRIPT}" 2>/dev/null \
     | awk -F'\t' '$2 == "needs-setup" { printf "    %s: %s\n", $1, $3 }' || true)"
   if [ -z "${NEEDS_SETUP_ROWS}" ]; then
     SUMMARY_SETUP="$(setup_line_ok)"
@@ -469,20 +300,17 @@ if [ -f "${PROJECT_ROOT}/${CHECK_SETUP_SCRIPT}" ]; then
   fi
 fi
 
-# Deterministic session-start report: what this run found and wrote, printed
-# once by the script itself rather than left for a session to notice and
-# describe secondhand from CLAUDE.local.md's content. SessionStart hook
-# stdout is surfaced as context for the session, so this is the guaranteed
-# confirmation of what got loaded - not something the model has to remember
-# to summarize on its own.
 cat <<SUMMARY
 session-start.sh summary:
   personal notes:  ${SUMMARY_NOTES}
   local settings:  ${SUMMARY_SETTINGS}
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
+  plan site:       ${SUMMARY_HUB}
+  default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   dependencies:    ${SUMMARY_DEPENDENCIES}
+  reviews Action:  ${SUMMARY_UPSTREAM_REVIEWS_ACTION}
   setup:           ${SUMMARY_SETUP}
-  plan state SHA:  $(git rev-parse FETCH_HEAD) (run plan-updates-since.sh <plan-id> to recheck from here later)
+  plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY

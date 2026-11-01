@@ -7,12 +7,12 @@ set -euo pipefail
 # plan's manifest/roadmap/branch-index trio) is exactly this shape: copy one
 # already-prepared local file to one destination path, commit, push, done.
 # Extracted so callers with that shape - currently
-# .claude/skills/plan-dashboard/refresh_dashboard.sh's manifest-correction
+# skills/plan-dashboard/refresh_dashboard.sh's manifest-correction
 # push, and /plan-dashboard's own dashboard-URL-cache update - don't each
 # re-embed the worktree dance as a bash snippet of their own.
 #
 # Usage:
-#   "$CLAUDE_PROJECT_DIR/.claude/hooks/write-personal-notes-file.sh" \
+#   "${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" \
 #     --source <local-file> \
 #     --destination <repo-relative-path> \
 #     --message <commit-message>
@@ -88,10 +88,7 @@ cleanup() {
 trap cleanup EXIT
 
 git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
-# FETCH_HEAD, not "${ACTIVE_NOTES_REMOTE}/${NOTES_BRANCH}": a URL-form remote
-# creates no remote-tracking ref, but FETCH_HEAD always points at what was
-# just fetched, whether the serving remote was a name or a raw URL.
-git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" FETCH_HEAD --quiet
+git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" "${PERSONAL_NOTES_REFERENCE}" --quiet
 
 mkdir -p "${SCRATCH_DIR}/$(dirname "${DESTINATION_PATH}")"
 cp "${SOURCE_FILE}" "${SCRATCH_DIR}/${DESTINATION_PATH}"
