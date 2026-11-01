@@ -35,9 +35,11 @@ items:
 - id: site-design
   title: An elegant, robust site - one stylesheet, light and dark, waves as columns, live chips, build
     health
-  branch: null
-  status: not_started
+  branch: claude/awesome-lovelace-netst8
+  status: in progress
   track: site
+  pull_request_number: 106
+  session: https://claude.ai/code/session_018wfiv6n4re5AG1zHWxm621
   depends_on: []
   notes: One static stylesheet with design tokens, light and dark, phone width; plan page as wave columns
     of item cards with status, pull request, CI and assignee chips and dependency hints; hub and repository
