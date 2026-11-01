@@ -7,4 +7,4 @@ Done
 Next
 - Owner: the commit carries a Co-Authored-By trailer AGENTS.md forbids; amend needs a force push I was denied
 - After PR 97 lands: migrate tests/plan/test_item_brief.py
-- Follow-ups in team-basstler notes: report keys, fetch models, TOML settings, id lookup bug
+- Follow-ups in team-basstler notes: report keys, fetch models, TOML settings (id lookup bug is PR 110)
