@@ -17,6 +17,7 @@ from basstler.maintenance.github import (
     ListingParameter,
     RepositoryPath,
 )
+from basstler.upstream_reviews.vocabulary import RollupState
 
 from ..upstream_reviews.replay import RecordedRestResponse
 from ..upstream_reviews.test_rest import (
@@ -95,9 +96,9 @@ def test_the_verdict_covers_every_page_of_check_runs_and_the_commit_statuses():
     assert repository.check_state(HEAD_SHA) is expected.state
 
 
-def test_a_commit_nothing_reported_on_has_no_verdict():
+def test_a_commit_nothing_reported_on_is_not_reported():
     repository = a_repository_reporting(
         RecordedRestResponse.CHECK_RUNS_NONE, RecordedRestResponse.STATUS_NONE
     )
 
-    assert repository.check_state(HEAD_SHA) is None
+    assert repository.check_state(HEAD_SHA) is RollupState.NOT_REPORTED

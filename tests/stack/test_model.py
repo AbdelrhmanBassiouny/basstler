@@ -14,6 +14,8 @@ import json
 from dataclasses import asdict
 from pathlib import Path
 
+import pytest
+
 from basstler.locations import RepositoryStateLocation
 from basstler.stack.model import (
     BoardKey,
@@ -33,7 +35,6 @@ from .dataset import (
     make_configuration,
     build,
 )
-
 
 # %% deriving a branch status
 
@@ -342,7 +343,7 @@ def test_check_state_and_session_carried_onto_branch():
     assert stack.branches[0].session == StackSampleText.SESSION_LINK
 
 
-def a_ready_branch_whose_checks_reached(check_state: RollupState | None) -> PullRequest:
+def a_ready_branch_whose_checks_reached(check_state: RollupState) -> PullRequest:
     """
     :param check_state: The verdict over the branch's checks.
     :return: An approved branch on the base, otherwise promotable.
@@ -368,7 +369,12 @@ def test_failing_checks_withhold_a_branch_from_promotion():
 
 
 def test_checks_that_have_not_failed_leave_a_branch_promotable():
-    for state in (None, RollupState.SUCCESS, RollupState.PENDING, RollupState.EXPECTED):
+    for state in (
+        RollupState.NOT_REPORTED,
+        RollupState.SUCCESS,
+        RollupState.PENDING,
+        RollupState.EXPECTED,
+    ):
         stack = build([a_ready_branch_whose_checks_reached(state)])
         assert [branch.name for branch in stack.promotion_order()] == [
             StackBranch.FEATURE
@@ -403,8 +409,11 @@ def test_only_branches_promotion_would_otherwise_take_count_as_held_by_their_che
     ]
 
 
-def test_the_board_reads_the_check_state_back_as_its_verdict(tmp_path: Path):
-    written = a_ready_branch_whose_checks_reached(RollupState.PENDING)
+@pytest.mark.parametrize("state", [RollupState.PENDING, RollupState.NOT_REPORTED])
+def test_the_board_reads_the_check_state_back_as_its_verdict(
+    tmp_path: Path, state: RollupState
+):
+    written = a_ready_branch_whose_checks_reached(state)
     board = tmp_path / RepositoryStateLocation.BOARD.name
     board.write_text(json.dumps({BoardKey.PULL_REQUESTS: [asdict(written)]}))
 

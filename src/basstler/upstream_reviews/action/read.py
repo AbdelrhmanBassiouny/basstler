@@ -9,7 +9,7 @@ import json
 import time
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Any, Generic
 
 from basstler.repository import Repository
 from basstler.upstream_reviews.action.branch import (
@@ -18,6 +18,10 @@ from basstler.upstream_reviews.action.branch import (
 from basstler.upstream_reviews.vocabulary import (
     ActionBranch,
     ActionFile,
+)
+from basstler.upstream_reviews.action.exchange import (
+    ActionRequest,
+    AnswerType,
 )
 from basstler.upstream_reviews.action.recording import (
     ActionJSONKey,
@@ -32,9 +36,6 @@ from basstler.upstream_reviews.exceptions import (
     ActionRunFailed,
     ActionRunNotStarted,
     GitHubCommandFailed,
-)
-from basstler.upstream_reviews.request import (
-    UpstreamReadRequest,
 )
 from basstler.upstream_reviews.vocabulary import (
     CheckOutcome,
@@ -136,9 +137,9 @@ class WorkflowRunPage(JSONModel):
 
 
 @dataclass(frozen=True)
-class ActionRead:
+class ActionRead(Generic[AnswerType]):
     """
-    One read through the fork's Action: request it, wait for its result, replay it.
+    One read through the fork's Action: request it, then wait for its answer.
     """
 
     branch: RemoteBranch
@@ -146,7 +147,7 @@ class ActionRead:
     The fork's Action branch.
     """
 
-    request: UpstreamReadRequest
+    request: ActionRequest
     """
     The read.
     """
@@ -167,6 +168,11 @@ class ActionRead:
     How many seconds GitHub gets to start the run before it is looked for.
     """
 
+    answer_type: type[AnswerType] = ActionResult
+    """
+    What the run answers the read with: a pull request's report unless named.
+    """
+
     def send(self) -> str:
         """
         Push the request, which starts the run.
@@ -177,11 +183,11 @@ class ActionRead:
         if self.branch.fetch() is None:
             raise ActionNotInstalled(self.branch.remote)
         return self.branch.write(
-            {ActionFile.REQUEST: json.dumps(self.request.to_json(), indent=2)},
-            f"Request upstream reviews {self.request.identifier}",
+            {ActionFile.REQUEST: json.dumps(self.request.as_sent(), indent=2)},
+            f"Request {self.request.kind} {self.request.identifier}",
         )
 
-    def wait(self, timeout: float, commit: str | None = None) -> ActionResult:
+    def wait(self, timeout: float, commit: str | None = None) -> AnswerType:
         """
         :param timeout: How many seconds to wait at most.
         :param commit: The pushed request, whose run is looked for once
@@ -205,7 +211,7 @@ class ActionRead:
                 )
             time.sleep(self.poll_interval)
 
-    def collect(self) -> ActionResult | None:
+    def collect(self) -> AnswerType | None:
         """
         :return: The result on the branch, when it answers this request; ``None`` for a
             result answering another request, including one from a release whose results
@@ -218,7 +224,7 @@ class ActionRead:
         data = json.loads(text)
         if data.get(ActionJSONKey.REQUEST_IDENTIFIER) != self.request.identifier:
             return None
-        return ActionResult.from_json(data)
+        return self.answer_type.from_json(data)
 
     def check_run(self, commit: str, elapsed: int) -> None:
         """

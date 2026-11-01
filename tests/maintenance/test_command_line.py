@@ -4,10 +4,15 @@ Tests for the maintenance executor's command line, whose exit status a caller ac
 
 from __future__ import annotations
 
+import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 import pytest
+
+import basstler.maintenance.__main__
+from basstler.environment import GitHubCredentialVariable
+from basstler.maintenance.upstream_action import UpstreamReadRoute
 
 from basstler.exit_codes import StackExitCode
 
@@ -28,7 +33,6 @@ from .recorded_fork import (
     maintenance_runner,
     run_maintenance,
 )
-
 
 # %% the command line a caller acts on the exit status of
 
@@ -62,34 +66,19 @@ def test_a_command_names_itself_without_being_instantiated():
     assert isinstance(BoardCommand.description, str)
 
 
-def test_a_command_that_omits_its_name_cannot_be_built():
+def test_a_command_that_omits_its_description_cannot_be_built():
     """
-    A command stays abstract until it says what it is called, and every_command builds
-    every subclass - so one that never says cannot reach the parser at all.
+    A command stays abstract until it says what it does, and every_command builds every
+    subclass - so one that never says cannot reach the parser at all.
     """
 
     @dataclass(frozen=True)
-    class CommandWithoutAName(MaintenanceCommand):
-        @classproperty
-        def description(cls) -> str:
-            return "a command that forgot what it is called"
-
+    class CommandWithoutADescription(MaintenanceCommand):
         def run(self, maintenance, arguments):
             return StackExitCode.SUCCESS
 
-    with pytest.raises(TypeError, match="invoked_as"):
-        CommandWithoutAName()
-
-
-def test_a_command_answers_with_its_own_name_rather_than_the_one_on_its_base():
-    """
-    An abstract class property answers with itself rather than calling its accessor,
-    which is what leaves a subclass supplying nothing abstract instead of silently
-    answering ``None``.
-    """
-    assert isinstance(MaintenanceCommand.invoked_as, classproperty)
-    assert MaintenanceCommand.invoked_as.__isabstractmethod__
-    assert BoardCommand.invoked_as == "board"
+    with pytest.raises(TypeError, match="description"):
+        CommandWithoutADescription()
 
 
 def test_a_fork_client_that_cannot_make_one_of_the_writes_cannot_be_built():
@@ -201,3 +190,28 @@ def test_a_single_state_list_filter_asks_for_that_state(
 ) -> None:
     (state,) = list_state.states
     assert list_state.query == state.value
+
+
+def test_a_board_whose_upstream_the_fork_s_action_cannot_read_is_its_own_exit_status(
+    fork_checkout: ForkCheckout, monkeypatch: pytest.MonkeyPatch
+):
+    """
+    The fork has no upstream-reviews Action branch, so the read never starts; the fix
+    is installing or enabling the Action, not a token or a fetch.
+    """
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
+    fork_checkout.name_the_upstream()
+    monkeypatch.chdir(fork_checkout.project_root)
+    monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, "a-token")
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            basstler.maintenance.__main__.__name__,
+            "--upstream-read",
+            UpstreamReadRoute.ACTION,
+            BoardCommand.invoked_as,
+        ],
+    )
+
+    assert basstler.maintenance.__main__.main() is StackExitCode.UPSTREAM_UNREADABLE

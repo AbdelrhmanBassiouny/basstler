@@ -146,6 +146,13 @@ dependencies_line_not_checked() {
   printf 'not checked - the setup line below says why'
 }
 
+# dependencies_line_install_running: another process held the install lock
+# for longer than a session start waits.
+dependencies_line_install_running() {
+  local lock="$1"
+  printf 'not checked - another process is still installing (lock %s)' "${lock}"
+}
+
 # dependencies_line_already_installed: the package's environment already had
 # every requirement, so nothing was installed.
 dependencies_line_already_installed() {
