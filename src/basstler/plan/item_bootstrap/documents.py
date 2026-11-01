@@ -244,7 +244,7 @@ class PlanDocuments:
         """
         for candidate in self.manifest.get(ManifestKey.ITEMS.key, []):
             identifier = candidate.get(ManifestKey.IDENTIFIER.key) or candidate.get(
-                ManifestKey.BRANCH
+                ManifestKey.BRANCH.key
             )
             if identifier == item_identifier:
                 return candidate
