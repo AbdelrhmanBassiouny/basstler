@@ -21,10 +21,13 @@ without asking first, rather than failing later on a branch that isn't there.
 ## Bring the stack up to date
 
 When the project names an upstream (`bash "${CHECK_SETUP_SCRIPT}" --require-upstream`
-exits 0), run `/stacked-pr-maintenance` before reading anything below. It reparents,
-fast-forwards the fork's base, restacks every branch whose parent moved and promotes
-approved branches, so everything gathered afterwards is the state the work continues
-from. A project that names no upstream has nothing to fast-forward from; skip this.
+exits 0), run `/stacked-pr-maintenance stacked-on=<branch>` before reading anything below,
+naming the item's branch, or for an item not started yet the branch it will be cut from. It
+fast-forwards the fork's base, then reparents, restacks and promotes only within that
+branch's stack, so everything gathered afterwards is the state the work continues from. When
+that branch is the fork's base itself, there is no stack to pass over: run only
+`"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance fast-forward`. A project that names
+no upstream has nothing to fast-forward from; skip this.
 
 Then read its summary for the item's branch and the branches it is stacked on (for an
 item not started yet, the branch it will be cut from):

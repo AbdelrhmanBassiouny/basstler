@@ -70,6 +70,12 @@ class StackPullRequestNumber(IntEnum):
     fork.
     """
 
+    OFF_THE_CHAIN = 43
+    """
+    The pull request of :attr:`StackBranch.OFF_THE_CHAIN`, cut from the base beside the
+    two-branch stack.
+    """
+
     UPSTREAM = 140
     """
     The upstream pull request opened from :attr:`StackBranch.PARENT`.

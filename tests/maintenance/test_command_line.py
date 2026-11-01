@@ -20,13 +20,15 @@ from basstler.class_property import classproperty
 from basstler.maintenance.commands import (
     BoardCommand,
     MaintenanceCommand,
+    PrepareCommand,
     RestackCommand,
+    RunReportCommand,
 )
 from basstler.pull_request_state import PullRequestState
 from basstler.maintenance.github import ForkPullRequests, PullRequestListState
 from basstler.maintenance.restack_steps import RestackStep
 
-from ..constants.stack import RemoteName
+from ..constants.stack import RemoteName, StackBranch
 
 from .fork import ForkCheckout
 from .recorded_fork import (
@@ -132,6 +134,17 @@ def test_every_command_is_reachable_from_the_command_line(fork_checkout: ForkChe
     for command in MaintenanceCommand.every_command():
         result = run_maintenance(fork_checkout, command, "--help")
         assert result.returncode == StackExitCode.SUCCESS, result.stderr
+
+
+@pytest.mark.parametrize("command", [PrepareCommand, RunReportCommand])
+def test_a_whole_pass_command_takes_the_branch_whose_stack_it_passes_over(
+    command: type[MaintenanceCommand],
+):
+    arguments = basstler.maintenance.__main__._argument_parser().parse_args(
+        [command.invoked_as, "--stacked-on", StackBranch.CHILD]
+    )
+
+    assert arguments.stacked_on == StackBranch.CHILD
 
 
 def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
