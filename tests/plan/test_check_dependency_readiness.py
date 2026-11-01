@@ -3,6 +3,8 @@ Tests for plan/check_dependency_readiness.py: classifying one item's dependencie
 ready or not-ready to build on, via the dashboard's own live-state rule.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 import pytest

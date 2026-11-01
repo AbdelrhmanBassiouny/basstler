@@ -3,6 +3,8 @@ Tests for :mod:`basstler.dashboard.plan_page`: what the renderer computes for ea
 and what the rendered page shows.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from collections.abc import Callable

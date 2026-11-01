@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
 Stand-in for plan/sync_manifest_status.py used by hooks/test_refresh_dashboard.py:
+
 records its own invocation arguments to a file (so the test can inspect what
 refresh_dashboard.sh passed it) and echoes back whatever the test wrote into --pr-data's
 file as the "corrected" list, instead of reading a real plan.yaml and computing a
 correction from live pull request state.
 """
+
+from __future__ import annotations
 
 import argparse
 import json

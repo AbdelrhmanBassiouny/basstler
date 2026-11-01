@@ -4,6 +4,8 @@ Patching one item's fields in a manifest's raw text.
 
 from __future__ import annotations
 
+import itertools
+
 from dataclasses import dataclass
 from typing import Any
 
@@ -67,7 +69,7 @@ class ManifestText:
             ),
             len(self.lines),
         )
-        return list(zip(starts, starts[1:] + [end_of_items]))
+        return list(itertools.pairwise([*starts, end_of_items]))
 
     def locate_item_block(
         self, plan_identifier: str, item_identifier: str
@@ -118,7 +120,7 @@ class ManifestText:
         return next(
             (
                 (start, end)
-                for start, end in zip(starts, starts[1:] + [len(self.lines)])
+                for start, end in itertools.pairwise([*starts, len(self.lines)])
                 if self.lines[start].split(":", 1)[0] == key
             ),
             None,

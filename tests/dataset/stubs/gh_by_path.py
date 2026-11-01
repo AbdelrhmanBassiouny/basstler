@@ -11,6 +11,8 @@ helper session's fetch asks for several::
 answer. A path missing from them exits 64, so an unexpected request fails loudly.
 """
 
+from __future__ import annotations
+
 import json
 import os
 import sys

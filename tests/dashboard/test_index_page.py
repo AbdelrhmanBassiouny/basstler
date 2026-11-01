@@ -2,6 +2,8 @@
 Tests for dashboard/index_page.py's master-index rendering.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from typing import Any

@@ -2,6 +2,8 @@
 Tests for plan/model.py: the statuses a plan's items carry.
 """
 
+from __future__ import annotations
+
 import pytest
 
 from basstler.plan.model import ItemStatus, ManifestKey, PlanDocument, PlanManifest
@@ -23,7 +25,7 @@ def test_a_status_value_reads_as_words(status):
 
 
 @pytest.mark.parametrize(
-    "underscore_spelling, status",
+    ("underscore_spelling", "status"),
     [
         ("not_started", ItemStatus.NOT_STARTED),
         ("in_progress", ItemStatus.IN_PROGRESS),

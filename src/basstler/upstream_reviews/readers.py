@@ -263,8 +263,7 @@ class UpstreamRestRoute:
         :return: The statuses posted against it.
         """
         return (
-            f"{self.repository.api_path}/commits/{sha}/status"
-            f"?per_page={self.page_size}"
+            f"{self.repository.api_path}/commits/{sha}/status?per_page={self.page_size}"
         )
 
 

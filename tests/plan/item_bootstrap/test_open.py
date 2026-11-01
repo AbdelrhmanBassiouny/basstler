@@ -21,7 +21,6 @@ from basstler.plan.model import (
     PlanDocument,
     PlanManifest,
 )
-from basstler.repository import Repository
 
 from ...constants.notes import ScratchBranch
 from ...scratch_repository import ScratchRepository

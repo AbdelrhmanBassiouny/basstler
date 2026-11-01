@@ -127,8 +127,7 @@ class UpstreamPullRequestReport:
         lines = [ReportText.REVIEWS_HEADING, ""]
         for review in self.snapshot.reviews:
             lines.append(
-                f"- **{review.author.login}** — {review.state} "
-                f"({review.submitted_at})"
+                f"- **{review.author.login}** — {review.state} ({review.submitted_at})"
             )
             if review.body.strip():
                 lines.append(f"  > {review.body.strip()}")

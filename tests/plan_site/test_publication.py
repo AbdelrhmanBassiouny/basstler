@@ -238,7 +238,7 @@ def test_a_written_site_workflow_reads_back_as_the_same_workflow():
 
 
 @pytest.mark.parametrize(
-    "repository, expected",
+    ("repository", "expected"),
     [
         (Repository("An-Owner", "plans"), "https://an-owner.github.io/plans/"),
         (Repository("An-Owner", "an-owner.github.io"), "https://an-owner.github.io/"),

@@ -3,6 +3,8 @@ Tests for basstler.upstream_reviews's data parsing, check reading, failure-log e
 thread pagination, pull request resolution, report rendering, and the gh-backed client.
 """
 
+from __future__ import annotations
+
 import inspect
 import json
 import os

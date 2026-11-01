@@ -149,8 +149,7 @@ class HelperOutputIncomplete(UpstreamReadError):
 
     def error_message(self) -> str:
         return (
-            f"helper request {self.request_identifier} is missing chunks "
-            f"{self.missing}"
+            f"helper request {self.request_identifier} is missing chunks {self.missing}"
         )
 
     def suggest_correction(self) -> str:

@@ -7,7 +7,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, TypeVar
+from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.upstream_reviews.vocabulary import JSONModel
@@ -56,9 +56,6 @@ class ActionAnswer(JSONModel, ABC):
     @abstractmethod
     def to_json(self) -> dict[str, Any]:
         """:return: The answer as committed."""
-
-
-AnswerType = TypeVar("AnswerType", bound=ActionAnswer)
 
 
 @dataclass(frozen=True)
