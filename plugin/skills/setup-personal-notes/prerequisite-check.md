@@ -48,17 +48,3 @@ exactly that, and duplicating a piece of it here is how the two drift apart.
 3. Re-run the check above. If it now exits 0, continue with the skill as though
    nothing had happened. If it still doesn't, report what remains unresolved and
    stop — do not push on into work that will fail later for the same reason.
-
-## Why this runs without being offered first
-
-A user who invokes a planning skill has already said what they want, and the
-setup is the only route to it: there is no useful answer to "shall I set this
-up?" other than yes, and asking it turns every first invocation into two turns.
-So the yes/no gate is gone.
-
-What survives is narrower and stays inside `/setup-personal-notes`: the choices
-that have more than one reasonable answer — which remote holds the notes, what
-the notes start out saying, whether to create labels in a repository — are still
-asked there, because getting one of those wrong writes to a place the user
-didn't choose. Running the setup is not that kind of decision; picking its
-destination is.

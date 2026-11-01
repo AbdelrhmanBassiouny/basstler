@@ -68,6 +68,41 @@ def manifest_violations(manifest: PlanManifest) -> list[Violation]:
     return Plan(manifest, roadmap).manifest_violations()
 
 
+def saved_plan_with_over_limit_open_item(directory: Path) -> PlanFiles:
+    """
+    :return: The files of a plan already saved in *directory*, whose open item is over
+        the notes limit.
+    """
+    saved = destination_in(directory)
+    saved.manifest.parent.mkdir(parents=True)
+    over_limit = manifest_with_open_item_fields(
+        notes="x" * (Measure.NOTE_LENGTH.maximum + 1)
+    )
+    over_limit.without_landed_items().write(saved.manifest)
+    saved.roadmap.write_text(DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text())
+    return saved
+
+
+def edited_copy_of(saved: PlanFiles, directory: Path, **fields: object) -> PlanFiles:
+    """
+    :param fields: Fields to set on the queued item of the copy.
+    :return: The files of *saved* with *fields* set on its not-started item.
+    """
+    manifest = PlanManifest.from_file(saved.manifest)
+    queued = LandedItemsPlan(manifest).item_with_status(ItemStatus.NOT_STARTED)
+    items = [
+        {**item.content, **fields} if item == queued else item.content
+        for item in manifest.items
+    ]
+    copy = PlanFiles(directory / "plan.yaml", directory / "roadmap.md")
+    directory.mkdir()
+    PlanManifest({**manifest.content, ManifestKey.ITEMS.key: items}).write(
+        copy.manifest
+    )
+    copy.roadmap.write_text(saved.roadmap.read_text())
+    return copy
+
+
 def open_item_location() -> DocumentLocation:
     """
     :return: Where the open item's quantities are counted.
@@ -243,6 +278,76 @@ def test_staging_a_finished_plan_drops_every_dependency_on_it(tmp_path):
         DatasetLocation.PLAN_ALL_LANDED, DatasetLocation.ROADMAP_OF_STANDING_RULES
     ).stage(destination)
     assert dependencies_saved_in(dependent_directory) == []
+
+
+def test_staging_saves_an_edit_to_another_item_when_an_unchanged_item_is_over_its_limit(
+    tmp_path,
+):
+    saved = saved_plan_with_over_limit_open_item(tmp_path / "saved")
+    edited = edited_copy_of(saved, tmp_path / "edited", notes="Waits for review.")
+    assert edited.stage(saved) == StagedPlan.SAVED
+    assert PlanManifest.from_file(saved.manifest) == PlanManifest.from_file(
+        edited.manifest
+    )
+
+
+def test_staging_refuses_an_item_over_its_limit_that_the_edit_changes(tmp_path):
+    saved = saved_plan_with_over_limit_open_item(tmp_path / "saved")
+    stored = PlanManifest.from_file(saved.manifest)
+    edited = edited_copy_of(
+        saved, tmp_path / "edited", notes="y" * (Measure.NOTE_LENGTH.maximum + 1)
+    )
+    with pytest.raises(DocumentOverLimitError) as raised:
+        edited.stage(saved)
+    assert raised.value.document == LimitedDocument.PLAN
+    assert PlanManifest.from_file(saved.manifest) == stored
+
+
+def test_an_unchanged_item_over_its_limit_is_a_warning_not_a_violation():
+    stored = manifest_with_open_item_fields(
+        notes="x" * (Measure.NOTE_LENGTH.maximum + 1)
+    )
+    roadmap = Roadmap.from_text(DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text())
+    plan = Plan(stored, roadmap, stored_manifest=stored)
+    assert plan.violations() == []
+    assert plan.warnings() == [
+        SizeViolation(
+            Measure.NOTE_LENGTH,
+            open_item_location(),
+            Measure.NOTE_LENGTH.maximum + 1,
+        )
+    ]
+
+
+def test_an_item_the_stored_plan_lacks_is_held_to_its_limits():
+    measured = Measure.NOTE_LENGTH.maximum + 1
+    manifest = manifest_with_open_item_fields(notes="x" * measured)
+    roadmap = Roadmap.from_text(DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text())
+    plan = Plan(manifest, roadmap, stored_manifest=PlanManifest({}))
+    assert plan.warnings() == []
+    assert plan.violations() == [
+        SizeViolation(Measure.NOTE_LENGTH, open_item_location(), measured)
+    ]
+
+
+def test_a_refused_staging_leaves_other_plans_dependencies_untouched(tmp_path):
+    plan = LandedItemsPlan.read()
+    destination = PlanFiles(
+        tmp_path / plan.manifest.identifier / PlanDocument.MANIFEST,
+        tmp_path / plan.manifest.identifier / PlanDocument.ROADMAP,
+    )
+    dependent_directory = tmp_path / "dependent-plan"
+    references = [
+        reference_to(plan.manifest, identifier)
+        for identifier in sorted(plan.manifest.landed_identifiers)
+    ]
+    plan_depending_on(dependent_directory, references)
+    with pytest.raises(DocumentOverLimitError):
+        PlanFiles(
+            DatasetLocation.PLAN_WITH_LANDED_ITEMS,
+            DatasetLocation.ROADMAP_WITH_DATED_SECTION,
+        ).stage(destination)
+    assert dependencies_saved_in(dependent_directory) == references
 
 
 # %% manifest limits

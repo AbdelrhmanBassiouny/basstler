@@ -20,7 +20,7 @@ from typing import Any
 from basstler.github_labels import GitHubLabel
 from basstler.repository import Repository
 from basstler.stack.checkout import CurrentCheckout, LandedBranches
-from basstler.stack.exceptions import BoardUnavailable
+from basstler.stack.exceptions import BaseBranchScopeError, BoardUnavailable
 from basstler.stack.settings import Configuration
 from basstler.upstream_reviews.vocabulary import RollupState
 
@@ -449,6 +449,30 @@ class Stack:
             stacked.add(branch.name)
             found.append(branch)
         return found
+
+    def scoped_to(self, branch_name: str | None) -> Stack:
+        """
+        The part of this stack one branch belongs to.
+
+        :param branch_name: The branch to scope to, or ``None`` for the whole stack.
+        :return: A stack of the branch, the branches it is stacked on and the branches
+            stacked on it; empty when no pull request names the branch or anything
+            stacked on it.
+        :raises BaseBranchScopeError: When *branch_name* is the upstream base.
+        """
+        if branch_name is None:
+            return self
+        if branch_name == self.configuration.upstream_base:
+            raise BaseBranchScopeError(upstream_base=branch_name)
+        by_name = {branch.name: branch for branch in self.branches}
+        kept = {branch.name for branch in self.branches_stacked_on(branch_name)}
+        beneath = by_name.get(branch_name)
+        while beneath is not None and beneath.name not in kept:
+            kept.add(beneath.name)
+            beneath = by_name.get(beneath.parent)
+        return replace(
+            self, branches=[branch for branch in self.branches if branch.name in kept]
+        )
 
     def parent_landed(self, branch: Branch) -> bool:
         """Whether a branch's parent has reached the upstream (merged or in-review), so it
