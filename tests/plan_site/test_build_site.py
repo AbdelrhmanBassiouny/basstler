@@ -15,6 +15,7 @@ from typing import Any
 import pytest
 
 from basstler.dashboard.plan import Plan
+from basstler.exceptions import PlanValidationError
 from basstler.plan.dependencies import DependencyReference, DependencyResolver
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.plan_site.__main__ import (
@@ -40,6 +41,9 @@ from basstler.maintenance.github import (
     RepositoryPath,
 )
 from basstler.plan_site.hub import PlanHub
+from basstler.plan_site.hub_page import SiteStylesheet, SkippedPage
+from basstler.plan_site.plan_page import ChipTone
+from basstler.plan.validation import PlanValidator
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus
 from basstler.repository import PullRequestReference, Repository
@@ -220,6 +224,26 @@ def test_build_leaves_out_a_plan_whose_manifest_fails_validation(
     assert [summary.id for summary in repository.plans] == list(PUBLISHED_PLANS)
 
 
+def test_build_reports_a_plan_whose_manifest_fails_validation(
+    site: RepositorySite, tmp_path: Path
+):
+    broken = PlanSource.from_directory(SitePlan.BROKEN.directory)
+    problems = PlanValidator(broken.manifest, site.plan_directory).problems
+    repository = site.build(tmp_path)
+    assert repository.skipped_plans == [
+        SkippedPage(
+            site_path=f"{NOTES_REPOSITORY}/{SitePlan.BROKEN}",
+            reason=PlanValidationError(problems).error_message(),
+        )
+    ]
+
+
+def test_the_index_names_every_plan_it_left_out(site: RepositorySite, tmp_path: Path):
+    repository = site.build(tmp_path)
+    (skipped,) = repository.skipped_plans
+    assert skipped.site_path in page_of(tmp_path)
+
+
 def test_build_links_each_plan_to_its_page_on_the_site(
     site: RepositorySite, tmp_path: Path
 ):
@@ -341,6 +365,42 @@ def test_a_plan_page_links_a_dependency_in_another_plan_to_its_card_there(
     assert link_to(card_url) in page_of(tmp_path, SitePlan.SECOND)
 
 
+def test_a_plan_page_lays_out_a_column_per_wave(site: RepositorySite, tmp_path: Path):
+    site.build(tmp_path)
+    page = page_of(tmp_path, SitePlan.FIRST)
+    for wave in FIRST_PLAN.waves:
+        assert f'id="wave-{wave.id}"' in page
+
+
+def test_every_page_links_the_site_stylesheet(site: RepositorySite, tmp_path: Path):
+    site.build(tmp_path)
+    for plan in (None, *PUBLISHED_PLANS):
+        assert link_to(site.stylesheet_url) in page_of(tmp_path, plan)
+
+
+def test_a_plan_page_shows_the_ci_and_assignees_of_an_open_pull_request(
+    tmp_path: Path,
+):
+    check_state = RollupState.FAILURE
+    open_pull_request = PullRequestRecord(
+        state=PullRequestState.OPEN,
+        check_state=check_state,
+        assignees=[SiteSampleText.ASSIGNEE.value],
+    )
+    site = RepositorySite(
+        site_url=SiteSampleText.SITE_URL,
+        pull_request_source=RecordedPullRequestSource(
+            records={OPEN_PULL_REQUEST: open_pull_request}
+        ),
+        repository=NOTES_REPOSITORY,
+        plans_directory=DatasetLocation.SITE_PLANS.value,
+    )
+    site.build(tmp_path)
+    page = page_of(tmp_path, SitePlan.FIRST)
+    assert f'class="chip {ChipTone.of_check_state(check_state)}"' in page
+    assert f"@{SiteSampleText.ASSIGNEE}" in page
+
+
 def test_build_links_the_tracking_issue_on_the_plan_page(
     site: RepositorySite, tmp_path: Path
 ):
@@ -401,6 +461,35 @@ def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
     )
     assert summary.progress_label in hub_page
     assert (tmp_path / "site" / SiteFile.NO_JEKYLL).exists()
+
+
+def test_the_site_reports_every_plan_and_repository_it_left_out(
+    hub_site: HubSite, tmp_path: Path
+):
+    summary = hub_site.build(tmp_path / "site")
+    readable, unreadable = summary.repositories
+    assert summary.skipped_pages == [
+        *readable.skipped_plans,
+        SkippedPage(site_path=unreadable.name, reason=unreadable.error),
+    ]
+
+
+def test_the_hub_names_every_plan_and_repository_it_left_out(
+    hub_site: HubSite, tmp_path: Path
+):
+    summary = hub_site.build(tmp_path / "site")
+    hub_page = (tmp_path / "site" / SiteFile.PAGE).read_text()
+    for skipped in summary.skipped_pages:
+        assert skipped.site_path in hub_page
+
+
+def test_the_site_build_writes_the_stylesheet_its_pages_link(
+    hub_site: HubSite, tmp_path: Path
+):
+    output = tmp_path / "site"
+    hub_site.build(output)
+    assert (output / SiteFile.STYLESHEET).read_text() == SiteStylesheet().render()
+    assert link_to(hub_site.stylesheet_url) in (output / SiteFile.PAGE).read_text()
 
 
 def test_the_site_build_writes_its_digest(hub_site: HubSite, tmp_path: Path):

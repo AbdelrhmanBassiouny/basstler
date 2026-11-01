@@ -10,7 +10,7 @@ from functools import cached_property
 from typing import TYPE_CHECKING, Any
 
 from basstler.plan.model import ItemStatus, ManifestKey
-from basstler.pull_request_state import LiveState
+from basstler.pull_request_state import LiveState, PullRequestRecord
 from basstler.render_common import sanitize_http_url
 from basstler.repository import GitHubAddress
 
@@ -164,6 +164,13 @@ class Item:
     pull_request_url: str | None = field(default=None, init=False)
     """This item's pull request URL on GitHub, filled in by
     :meth:`DashboardRenderer.render` - ``None`` if it has no pull request yet."""
+
+    pull_request_record: PullRequestRecord | None = field(default=None, init=False)
+    """
+    The live state of this item's pull request, filled in by
+    :meth:`DashboardRenderer.render` - ``None`` if it has no pull request yet or GitHub
+    has none by its number.
+    """
 
     upstream_pull_request_url: str | None = field(default=None, init=False)
     """
