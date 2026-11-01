@@ -212,7 +212,7 @@ while :; do
     --output "${SCRATCH_DIR}/${PLAN_BRANCH_INDEX_PATH}"
 
   git -C "${SCRATCH_DIR}" add --all -- \
-    "${PLAN_DIRECTORY_PATH}" \
+    "${PLANS_DIR}" \
     "${PLAN_BRANCH_INDEX_PATH}"
 
   if git -C "${SCRATCH_DIR}" diff --cached --quiet; then
