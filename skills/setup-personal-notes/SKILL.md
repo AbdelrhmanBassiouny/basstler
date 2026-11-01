@@ -39,8 +39,8 @@ status). Read its own header comment for what each check means.
 
 **If it exited 0:** tell the user everything it covers is already set up, list
 what was found (the remote, branch and path in play, and that dependencies and
-`CLAUDE.local.md` are in place), then check the labels as step 5 describes and
-stop. Do not ask
+`CLAUDE.local.md` are in place), then check the labels as step 5 describes,
+run step 8 if the `plan_site` row is not `ok`, and stop. Do not ask
 anything else. Do not re-verify by hand what the script just verified.
 
 **An `in-progress` row** means a session start is installing that part right
@@ -193,7 +193,30 @@ prints: a fork starts with Actions off, so they enable them once at
 `https://github.com/<fork>/actions`. Until they do, `/upstream-reviews` reads
 the upstream from the session instead.
 
-## 8. Confirm, by re-running the check
+## 8. `plan_site` — publish this repository's plans on the user's plan site
+
+Unless the row is `ok`. The plan site builds in a repository the user owns,
+never in the project, and which one is the user's to choose: ask for it as
+`<owner>/<name>`, offering as the default the repository the hub file's
+`site_url` already points at (`recorded_site_url`), else
+`<their login>/plans`. Then:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${PLAN_SITE_PUBLICATION_MODULE}" \
+  --branch-or-tag "$(basstler_branch_or_tag)" --site-repository <owner>/<name>
+```
+
+It writes the site repository's workflow onto its default branch, lists this
+repository in the hub file of the registry that workflow names (this repository
+itself, the first time), and commits the notes branch's dispatch workflow, which
+starts the build on every push to the notes branch. It then prints, as one
+copyable line each, the steps only the user can take - creating the site
+repository, turning on Pages, storing their fine-grained token as the
+`PLAN_SITE_TOKEN` secret - and exits 1 while any is left. Pass those lines on
+as printed; once the user has done them, run the command again: it counts a
+step done when a run that needs it succeeded.
+
+## 9. Confirm, by re-running the check
 
 ```bash
 bash "${CHECK_SETUP_SCRIPT}" $ARGUMENTS || true
