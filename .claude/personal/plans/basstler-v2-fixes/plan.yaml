@@ -1,0 +1,72 @@
+schema_version: 1
+id: basstler-v2-fixes
+title: "v2 fixes from the plan-item-resolve 537 session report"
+description: >
+  Each fix is one bug pull request off main with one root cause, so v2 stays usable while
+  basstler-v3 replaces it. Moving the sync stamp files out of the working tree is
+  session-notes-infrastructure/stamps-in-git-directory.
+default_repository: AbdelrhmanBassiouny/basstler
+tracking_issue: 99
+
+waves:
+  - id: fixes
+    name: "Fixes"
+
+tracks:
+  - id: fixes
+    name: "Fixes"
+    wave: fixes
+
+items:
+  - id: maintenance-item-scope
+    title: "Maintenance prepare and run-report pass only over one branch's stack"
+    branch: null
+    pull_request_number: null
+    track: fixes
+    depends_on: []
+    status: not started
+    notes: >
+      prepare and run-report take --stacked-on <branch>, like restack: the branch, the
+      branches it is stacked on and those stacked on it. Kickoff and resolve pass the item's
+      branch (or the branch it will be cut from), so no unrelated pull request is restacked,
+      promoted or summarized.
+  - id: reviews-action-fail-fast
+    title: "The upstream-reviews Action read fails fast when no run started"
+    branch: null
+    pull_request_number: null
+    track: fixes
+    depends_on: []
+    status: not started
+    notes: >
+      Before waiting the full timeout, confirm a workflow run picked up the request within
+      about 20 s; otherwise exit with the reason (Actions off, workflow missing) and the link.
+  - id: python-in-every-shell
+    title: "BASSTLER_PYTHON is set in every Bash call, not only after sourcing the config"
+    branch: null
+    pull_request_number: null
+    track: fixes
+    depends_on: []
+    status: not started
+    notes: >
+      Session start writes BASSTLER_PYTHON to CLAUDE_ENV_FILE beside BASSTLER_PLUGIN_ROOT, so
+      a skill's "${BASSTLER_PYTHON}" -m call works without the sourced file.
+  - id: save-plan-scoped-limits
+    title: "A plan save refuses only size violations in the items it changes"
+    branch: null
+    pull_request_number: null
+    track: fixes
+    depends_on: []
+    status: not started
+    notes: >
+      An item already over a limit on the notes branch no longer blocks saving another item;
+      it is reported as a warning instead.
+  - id: dashboard-optional-branch
+    title: "The dashboard accepts an item with no branch key"
+    branch: null
+    pull_request_number: null
+    track: fixes
+    depends_on: []
+    status: not started
+    notes: >
+      plan.Item.from_mapping reads branch with data[...] and raises KeyError, though the
+      schema and save-plan treat branch as optional.
