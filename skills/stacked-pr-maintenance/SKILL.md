@@ -1,136 +1,142 @@
 ---
 name: stacked-pr-maintenance
 description: Run one maintenance pass over a fork's stacked pull requests: reparent, restack, and promote approved branches upstream. Invoke as "/stacked-pr-maintenance [fork=<owner/repo>] [upstream=<owner/repo>]". Use when asked to restack or promote the stack, and as the first step of plan-item-kickoff and plan-item-resolve.
-allowed-tools: Bash, Read, Grep, AskUserQuestion, mcp__github__pull_request_read, mcp__github__list_pull_requests, mcp__github__update_pull_request, mcp__github__issue_write, mcp__github__add_issue_comment
+allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__update_pull_request
 ---
 
 # Stacked-PR maintenance
 
-Reparent pull requests whose base has landed, run the pass, report. Why each rule below holds is in
-`docs/stack/maintenance-pass.md`; you do not need it to run a pass.
+A pass is four commands and one piece of writing. Everything mechanical - the fast-forward,
+the restack, conflict comments, labels, links, CI - is done by the executor; you only write the
+upstream summaries. Why each rule holds is in `docs/stack/maintenance-pass.md`; you do not need it.
+
+Run every command through `"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh"`. It waits for or finishes
+the package install by itself. If it exits 1 with one line on stderr, relay that line and stop;
+never read the hook scripts to debug it.
+
+Every output is small (a few KB at most) and final. Read each once. Never re-run a command to see
+its output again, never pipe it through `grep`, `sed`, `jq` or `head`, and never re-derive what it
+says.
 
 ## Rules
 
-- Change no files and write no code, not even to resolve a conflict: report it and move on.
-- Do not review, answer, resolve or act on review comments. If a review or comment event reaches you,
-  end the turn. The one exception is a check status you are polling.
-- Never call `subscribe_pr_activity`; poll checks instead. Never enter plan mode or post a plan.
-- Do not fan the pass out with Claude Code's Workflow tool (subagents). The executor already does
-  the fast-forward and the merges with plain git; you need only it and the GitHub MCP server.
-- Never force-push a branch with an open upstream pull request unless it carries the `rebase` label.
-- A label write replaces the whole set: pass exactly what `basstler.stack labels` prints.
-- Never open the upstream pull request and never write `in-review` yourself.
+- Change no files in the project and write no code, not even to resolve a conflict.
+- Do not review, answer or act on review comments, and never poll or debug CI. If a review or
+  comment event reaches you, end the turn. Never call `subscribe_pr_activity`, enter plan mode,
+  or fan out to subagents.
+- Never read a branch's diff or source. The summary context below is all you get.
+- Never open the upstream pull request, write `in-review`, or label anything yourself.
 
-## Step 0 - resolve the repositories
+## 1. Repositories
 
 ```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m basstler.stack configuration [--fork <owner/repo>] [--upstream <owner/repo>]
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" stack configuration [--fork <owner/repo>] [--upstream <owner/repo>]
 ```
 
 Pass `fork=` / `upstream=` arguments straight through. Never inspect or guess at remotes yourself.
 
 | exit | what you do |
 |---|---|
-| 0 | use it - the pass reaches the upstream through `upstream_location`, a remote's name or a URL, so never add a remote for it |
-| 4 | ask which repository is the fork (options from `git remote -v`), write `fork_repository = "<owner/repo>"` to a file and save it with `"${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" --source <file> --destination .claude/personal/stack.toml --message "record which repository is my fork"`, re-run |
-| 11 | ask for the upstream, save it with `"${BASSTLER_PYTHON}" -m basstler.setup.steps configure-upstream --repository <owner/repo>`, re-run |
+| 0 | go on - the pass reaches the upstream through `upstream_location`, a remote's name or a URL, so never add a remote for it |
+| 4 | ask which repository is the fork (options from `git remote -v`), write `fork_repository = "<owner/repo>"` to a scratchpad file, save it with `"${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" --source <file> --destination .claude/personal/stack.toml --message "record which repository is my fork"`, re-run |
+| 11 | ask for the upstream, save it with `"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps configure-upstream --repository <owner/repo>`, re-run |
 | other | stop and report |
 
-## Step 1 - reparent
+## 2. Prepare
 
 ```bash
-"${BASSTLER_PYTHON}" -m basstler.maintenance board --write
-"${BASSTLER_PYTHON}" -m basstler.stack reparents
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance prepare
 ```
 
-The export reads the upstream's open pull requests too. In a Claude Code cloud session that read is
-refused (403) until the upstream is attached with `add_repo` (read access); attach it first, and
-never label branches yourself to get past a refusal.
+It prints one JSON document: `reparents` (bases to retarget) and `to_summarize` (one entry per
+branch about to get its upstream link, each with its fork title, description, commit subjects and
+largest changed files). A branch is listed once in its life: after this pass records its link, it
+is never listed again.
 
-For each `branch<TAB>pr<TAB>current base<TAB>target base` line, set the pull request's base with the
-MCP `update_pull_request` tool.
+Every command that exports the board (`prepare`, `run-report`, `checks`) reads the upstream's open
+pull requests too. In a Claude Code cloud session it reads them through the fork's upstream-reviews
+Action (up to a minute), so nothing needs attaching. If one exits `12` (`upstream-unreadable`),
+stderr says why:
 
-If that fails with `422 ... part of a stack`, the pull request is in a native GitHub stack. Call the
-stacks endpoints with curl, `GH_TOKEN` and the header `X-GitHub-Api-Version: 2026-03-10`:
+- *no `basstler/upstream-reviews` branch*: install it, then re-run:
 
-1. `GET /repos/{owner}/{repo}/stacks`; record the stack's pull requests, bottom to top. Do not go on
-   without it.
+  ```bash
+  source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+  "${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
+  ```
+
+- *no run started*: Actions are off on the fork. Give the user the link stderr names, then read
+  directly instead: call `add_repo` with the upstream's owner and name and `access: "push"`, the
+  only level that lets the session's API calls reach a repository (the pass never pushes to the
+  upstream; skip the clone the result suggests), and re-run as
+  `basstler.sh maintenance --upstream-read direct <command>`. If the attach is refused or blocked,
+  stop and report both remedies.
+
+Never run the rest of the pass without the upstream's pull requests: which branches are under
+upstream review decides how each one is restacked.
+
+### Reparents (only if any)
+
+For each entry, set the pull request's base to `target_base` with `update_pull_request`.
+
+A `422 ... part of a stack` means a native GitHub stack. Use curl with `GH_TOKEN` and the header
+`X-GitHub-Api-Version: 2026-03-10`:
+
+1. `GET /repos/{owner}/{repo}/stacks`; record the stack's pull requests, bottom to top.
 2. `POST /repos/{owner}/{repo}/stacks/{number}/unstack`.
 3. `update_pull_request` each orphaned child's base. Never close and reopen it instead.
-4. Restack (step 2).
-5. `POST /repos/{owner}/{repo}/stacks` with `{"pull_requests": [...]}` - the recorded list minus
-   landed and closed members - then `GET` it and confirm every member reports the stack.
+4. Once step 3 has run, `POST /repos/{owner}/{repo}/stacks` with `{"pull_requests": [...]}` - the
+   recorded list minus landed and closed members - then `GET` it and confirm every member.
 
-If any call fails or answers something not described here, stop on that stack and report it. Never
-fast-forward the landed base to get around a 422.
+If any call fails or answers something not described here, stop on that stack and report it.
+Never fast-forward the landed base to get around a 422.
 
-## Step 2 - run the pass
+### Summaries (only if `to_summarize` is not empty)
 
-First, for every branch `"${BASSTLER_PYTHON}" -m basstler.stack next --porcelain` names, read
-its diff against its parent and write what its upstream pull request opens with, as a JSON
-document in your scratchpad keyed by fork pull request number:
+From the `to_summarize` entries alone, write one JSON file in your scratchpad, keyed by
+`pull_request_number`:
 
 ```json
 {"<number>": {"title": "<title in the upstream's own convention>", "points": ["<point>", "..."]}}
 ```
 
-Points are short sentences for an upstream reviewer who has not seen the fork pull request. Both
-fields are optional; a branch you write nothing for opens with its fork title and a link back.
+Two to four points, each a short sentence for an upstream reviewer who has not seen the fork pull
+request. Write an entry for every listed number; both fields are optional.
+
+## 3. Run the pass
 
 ```bash
-"${BASSTLER_PYTHON}" -m basstler.maintenance run-report --summaries <the document>
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance run-report [--summaries <the file>]
 ```
 
-Do not re-derive its output, look up titles, or run the individual commands as well.
+It exports a fresh board, fast-forwards, restacks, comments on and labels conflicts, records the
+upstream links, and reports CI: each pull request's checks are read from its head when the pass
+starts, so what the previous pass pushed is reported now and what this pass pushes is reported by
+the next. Its summary is capped (at most a few KB); the whole report is in the file its last line
+names - do not read it.
+
+The first line is the status:
 
 | status | what you do |
 |---|---|
-| `success` | relay the summary |
-| `not-fast-forward` | report that the fork's base is behind the upstream |
-| `move-refused` | stop; the reasons are in the summary |
-| `branch-needs-attention` | relay every branch it names |
-
-- `reparents` left in the report are made by step 1 of the next pass.
-- A `restacked` entry other than `pushed`, `up-to-date` or `blocked-by-ancestor` is already labelled and commented; name it.
-- `blocked-by-ancestor` names the branch below it that was left unpublished; it clears once that branch does.
-- A `skipped` entry is not yours to fix; list it with its `reason`.
-- `integration-failed` is the pass's own environment, not the branch owner's: report it as yours and
-  never label the branch for it.
-- A landed pull request still open after the pass is reported, never closed by you.
-
-## Step 3 - check CI on what was pushed
-
-Poll `pull_request_read` → `get_check_runs` / `get_status` for each branch the pass pushed; read only
-the conclusion and do not wait on a long run. For a failing check, never debug it or disable it:
-
-- comment on the fork pull request, prefixed `🔴 MAINTENANCE - NEEDS RESOLUTION:`, naming the check
-  and its conclusion, written to stand alone;
-- label it `needs-resolution` through `basstler.stack labels`.
+| `success`, `branch-needs-attention` | relay the summary |
+| `not-fast-forward` | relay it; the fork's base is behind the upstream |
+| `move-refused` | relay it and stop |
 
 ## Finish
 
-Relay `run-report`'s summary as printed, then add only what this session did:
-
-- every reparent step 1 could not complete: number, stuck base, target base, and the native-stack
-  step that stopped you;
-- every failing check reported, with the comment's link;
-- anything you stopped on.
+Relay the summary as printed, then add only what this session did: every reparent step 2 could not
+complete (number, stuck base, target base, the native-stack step that stopped you) and anything
+you stopped on.
 
 ## Resuming a partial run
 
-```bash
-"${BASSTLER_PYTHON}" -m basstler.maintenance board --write
-"${BASSTLER_PYTHON}" -m basstler.maintenance fast-forward
-"${BASSTLER_PYTHON}" -m basstler.maintenance restack
-"${BASSTLER_PYTHON}" -m basstler.maintenance promote
-```
-
-`run-report` deletes the board, so a resumed run exports a fresh one first. Before any push you make
-by hand:
+`run-report` is the whole pass and safe to re-run. The single steps exist for a person, not for a
+pass: `board --write`, then `fast-forward`, `restack`, `promote`, or `checks` for the CI overview.
+Before any push you make by hand:
 
 ```bash
-"${BASSTLER_PYTHON}" -m basstler.stack check-move \
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" stack check-move \
   --action push --source <branch> --destination <branch> --destination-remote <fork-remote>
 ```
 
