@@ -9,13 +9,14 @@ import os
 import subprocess
 import tempfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 import yaml
 
 from basstler.bash import Bash
-from basstler.locations import PluginLocation
+from basstler.locations import PluginLocation, ProjectLocation
+from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.item_bootstrap.exceptions import (
     NotesBranchUnavailableError,
     PlanNotWrittenError,
@@ -23,12 +24,16 @@ from basstler.plan.item_bootstrap.exceptions import (
     UnknownItemError,
     UnknownPlanError,
 )
+from basstler.plan.item_bootstrap.vocabulary import PlanSavingOption
+from basstler.plan.merge import PlanMerge, PlanVersion
 from basstler.plan.model import (
     ManifestKey,
     PlanDocument,
+    PlanItem,
     PlanManifest,
 )
 from basstler.plugin_root import PluginRoot
+from basstler.repository import Repository
 from basstler.shell_configuration import (
     FetchedBranchReference,
     ShellConfigurationFunction,
@@ -91,6 +96,36 @@ class ProjectCheckout:
         """
         return bool(self.run_git("ls-remote", "--heads", remote, branch).strip())
 
+    def check_out_manifests(self, destination: Path) -> PlanDirectory:
+        """
+        Write every plan's manifest on the fetched notes branch out as plain files.
+
+        :param destination: An empty directory to write into, one subdirectory per plan.
+        :return: The plans the manifests were written to.
+        """
+        listing = self.run_git(
+            "ls-tree",
+            "-r",
+            "--name-only",
+            FetchedBranchReference.PERSONAL_NOTES,
+            str(ProjectLocation.PLANS),
+        )
+        for path in map(PurePosixPath, listing.splitlines()):
+            if (
+                path.name != PlanDocument.MANIFEST
+                or path.parent.parent != PurePosixPath(ProjectLocation.PLANS)
+            ):
+                continue
+            manifest = destination / path.parent.name / PlanDocument.MANIFEST
+            manifest.parent.mkdir(parents=True)
+            manifest.write_text(
+                self.run_git(
+                    "show", FetchedBranchReference.PERSONAL_NOTES.file_at(path)
+                )
+                + "\n"
+            )
+        return PlanDirectory(destination)
+
     def plan_tracking(self, branch: str) -> str | None:
         """
         The plan that tracks *branch*, per the branch index on the freshly fetched notes
@@ -128,6 +163,11 @@ class PlanDocuments:
     The roadmap's raw markdown.
     """
 
+    read_at: str
+    """
+    The personal-notes commit both documents were read at.
+    """
+
     @classmethod
     def load(cls, plan_identifier: str, project_root: Path) -> PlanDocuments:
         """
@@ -161,6 +201,18 @@ class PlanDocuments:
             plan_identifier=plan_identifier,
             manifest_text=contents[PlanDocument.MANIFEST],
             roadmap_text=contents[PlanDocument.ROADMAP],
+            read_at=checkout.run_git(
+                "rev-parse", FetchedBranchReference.PERSONAL_NOTES
+            ),
+        )
+
+    @property
+    def version(self) -> PlanVersion:
+        """
+        Both documents, as the plan version they were read as.
+        """
+        return PlanVersion(
+            manifest_text=self.manifest_text, roadmap_text=self.roadmap_text
         )
 
     @property
@@ -170,19 +222,16 @@ class PlanDocuments:
         """
         return yaml.safe_load(self.manifest_text)
 
-    def repository_for(self, item_identifier: str) -> str:
+    def repository_for(self, item_identifier: str) -> Repository:
         """
-        The ``owner/repo`` an item's pull request belongs to.
+        The repository an item's pull request belongs to.
 
         :param item_identifier: The item's id.
         :raises UnknownItemError: If no item carries that id.
         :return: The item's own repository, or the plan's default one.
         """
-        item = self.item(item_identifier)
-        return (
-            item.get(ManifestKey.REPOSITORY.key)
-            or self.manifest[ManifestKey.DEFAULT_REPOSITORY.key]
-        )
+        item = PlanItem(self.item(item_identifier))
+        return PlanManifest(self.manifest).repository_of(item)
 
     def item(self, item_identifier: str) -> dict[str, Any]:
         """
@@ -194,7 +243,7 @@ class PlanDocuments:
         """
         for candidate in self.manifest.get(ManifestKey.ITEMS.key, []):
             identifier = candidate.get(ManifestKey.IDENTIFIER.key) or candidate.get(
-                ManifestKey.BRANCH
+                ManifestKey.BRANCH.key
             )
             if identifier == item_identifier:
                 return candidate
@@ -217,8 +266,9 @@ class PlanDocuments:
 
     def save(self, manifest_text: str, roadmap_text: str, project_root: Path) -> None:
         """
-        Push an edited manifest and roadmap through ``save-plan.sh``, then read the
-        notes branch back to confirm they landed.
+        Push an edited manifest and roadmap through ``save-plan.sh`` as edits of the
+        documents read at :attr:`read_at`, then read the notes branch back to confirm
+        they landed.
 
         :param manifest_text: The full manifest to write.
         :param roadmap_text: The full roadmap to write.
@@ -240,10 +290,12 @@ class PlanDocuments:
                         PluginLocation.PLAN_SAVING_SCRIPT
                     ),
                     self.plan_identifier,
-                    "--manifest",
+                    PlanSavingOption.MANIFEST,
                     str(scratch / PlanDocument.MANIFEST.value),
-                    "--roadmap",
+                    PlanSavingOption.ROADMAP,
                     str(scratch / PlanDocument.ROADMAP.value),
+                    PlanSavingOption.READ_AT,
+                    self.read_at,
                 ),
                 cwd=project_root,
                 capture_output=True,
@@ -257,33 +309,28 @@ class PlanDocuments:
         self, written: dict[PlanDocument, str], project_root: Path
     ) -> None:
         """
-        Check that the notes branch carries what was just saved, as the save stores it:
-        the manifest without its landed items.
+        Check that the notes branch carries every change the save made to the documents
+        as they were read, as the save stores them: the manifest without its landed
+        items.
 
         :param written: The content each document was saved with.
         :param project_root: The repository to read within.
-        :raises PlanNotWrittenError: If a document on the branch differs from what was
-            saved.
+        :raises PlanNotWrittenError: If the branch lacks a change the save made.
         """
         landed = PlanDocuments.load(self.plan_identifier, project_root)
-        expected = {
-            PlanDocument.MANIFEST: PlanManifest(
-                yaml.safe_load(written[PlanDocument.MANIFEST])
-            )
-            .without_landed_items()
-            .content,
-            PlanDocument.ROADMAP: written[PlanDocument.ROADMAP].strip(),
-        }
-        on_the_branch = {
-            PlanDocument.MANIFEST: landed.manifest,
-            PlanDocument.ROADMAP: landed.roadmap_text.strip(),
-        }
-        unwritten = tuple(
-            document
-            for document in written
-            if on_the_branch[document] != expected[document]
+        session = PlanVersion(
+            manifest_text=yaml.safe_dump(
+                PlanManifest(yaml.safe_load(written[PlanDocument.MANIFEST]))
+                .without_landed_items()
+                .content
+            ),
+            roadmap_text=written[PlanDocument.ROADMAP],
         )
-        if unwritten:
+        unapplied = PlanMerge(
+            read=self.version, session=session, latest=landed.version
+        ).unapplied_parts
+        if unapplied:
             raise PlanNotWrittenError(
-                plan_identifier=self.plan_identifier, documents=unwritten
+                plan_identifier=self.plan_identifier,
+                documents=tuple(dict.fromkeys(part.document for part in unapplied)),
             )

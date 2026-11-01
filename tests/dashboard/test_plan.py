@@ -14,7 +14,6 @@ from basstler.locations import DashboardTemplate
 
 from ..manifest_builders import manifest_item, minimal_plan
 
-
 # %% plan items by identifier
 
 
@@ -23,6 +22,12 @@ def test_plan_indexes_its_items_by_identifier():
         minimal_plan(items=[manifest_item("a"), manifest_item("b")])
     )
     assert plan.items_by_identifier == {item.identifier: item for item in plan.items}
+
+
+def test_item_from_mapping_accepts_an_item_with_no_branch():
+    item_instance = Item.from_mapping(manifest_item("a", branch=None))
+    assert item_instance.branch is None
+    assert item_instance.identifier == "a"
 
 
 # %% Item / StackedItem - precomputed template values

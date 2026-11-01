@@ -1119,6 +1119,36 @@ def test_tells_the_session_where_the_plugin_is(
     assert Path(exported) == session_start_repository.plugin_root
 
 
+def test_tells_the_session_which_interpreter_runs_the_package(
+    session_start_repository: ScratchRepository, tmp_path: Path
+):
+    """
+    The commands a session runs afterwards learn the package's interpreter from the
+    same file, so a skill's module call works without sourcing the configuration.
+    """
+    environment_file = tmp_path / "session-environment"
+
+    publish_and_run(
+        session_start_repository,
+        environment={ScrubbedEnvironmentPrefix.ENVIRONMENT_FILE: str(environment_file)},
+    )
+
+    exported = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "$0" && printf "%s" "${{{BasstlerVariable.PYTHON}}}"',
+            environment_file,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert exported == session_start_repository.configuration_value(
+        ConfigurationVariable.PYTHON
+    )
+
+
 # %% creating the package's environment
 
 

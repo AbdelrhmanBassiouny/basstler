@@ -13,8 +13,9 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import PluginLocation, ProjectLocation
+from basstler.locations import PluginLocation, ProjectLocation, WorkflowLocation
 from basstler.exit_codes import SetupCheckExitCode
+from basstler.plan_site import publication
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 
 from ..constants.environment import ConfigurationVariable
@@ -146,6 +147,37 @@ def test_reports_a_notes_branch_that_exists_but_holds_no_notes_file(
     assert report.results[SetupCheck.NOTES_BRANCH].status == CheckStatus.OK
     assert report.results[SetupCheck.NOTES_FILE].status == CheckStatus.NEEDS_SETUP
     assert other_notes in report.results[SetupCheck.NOTES_FILE].detail
+
+
+# %% the plan site
+
+
+def test_a_notes_branch_without_the_dispatch_workflow_says_how_to_publish(
+    check_setup_repository: ScratchRepository,
+):
+    report = run_check_setup(check_setup_repository)
+    assert report.exit_code is SetupCheckExitCode.SUCCESS
+    assert report.results[SetupCheck.PLAN_SITE].status == CheckStatus.INFORMATIONAL
+    assert publication.__name__ in report.results[SetupCheck.PLAN_SITE].detail
+
+
+def test_a_notes_branch_with_the_dispatch_workflow_starts_the_site_build(
+    check_setup_repository: ScratchRepository,
+):
+    check_setup_repository.update_notes_branch_file(
+        WorkflowLocation.PLAN_SITE_DISPATCH, "name: Plan site dispatch\n"
+    )
+
+    report = run_check_setup(check_setup_repository)
+    assert report.results[SetupCheck.PLAN_SITE].status == CheckStatus.OK
+
+
+def test_the_dispatch_workflow_path_matches_the_shell_configuration(
+    check_setup_repository: ScratchRepository,
+):
+    assert check_setup_repository.configuration_value(
+        "PLAN_SITE_DISPATCH_WORKFLOW_PATH"
+    ) == str(WorkflowLocation.PLAN_SITE_DISPATCH)
 
 
 # %% who commits here would be authored as

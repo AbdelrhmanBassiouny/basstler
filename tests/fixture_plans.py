@@ -16,8 +16,7 @@ from typing import Any
 import yaml
 
 from basstler.plan.dependencies import DependencyReference
-from basstler.plan.model import PlanDocument
-from basstler.plan.model import ManifestKey
+from basstler.plan.model import ManifestKey, PlanDocument, PlanManifest
 
 from .constants.paths import DatasetLocation
 
@@ -120,7 +119,7 @@ def fixture_repository(plan_id: str) -> str:
 
     :param plan_id: The plan's id.
     """
-    return fixture_manifest(plan_id)[ManifestKey.DEFAULT_REPOSITORY.key]
+    return PlanManifest(fixture_manifest(plan_id)).default_repository.full_name
 
 
 def fixture_pull_request_number(plan_id: str, item_identifier: str) -> str:
@@ -131,5 +130,7 @@ def fixture_pull_request_number(plan_id: str, item_identifier: str) -> str:
     :param item_identifier: That item's own id.
     """
     return str(
-        fixture_item(plan_id, item_identifier)[ManifestKey.PULL_REQUEST_NUMBER.key]
+        PlanManifest(fixture_manifest(plan_id))
+        .item_named(item_identifier)
+        .pull_request_number
     )

@@ -1,0 +1,6 @@
+  - id: a-merged-in-item
+    branch: null
+    title: "An item one writer added while another edited the plan"
+    track: a-track
+    depends_on: []
+    status: not started

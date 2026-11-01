@@ -19,6 +19,7 @@ from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
     PlanDocument,
+    PlanManifest,
 )
 from basstler.repository import Repository
 
@@ -73,8 +74,9 @@ def test_opening_asks_for_a_draft_pull_request_against_the_plans_repository(
     assert len(opener.requests) == 1
     request = opener.requests[0]
     assert request.draft is True
-    assert request.repository == Repository.parse(
-        yaml.safe_load(PLAN_MANIFEST)[ManifestKey.DEFAULT_REPOSITORY.key]
+    assert (
+        request.repository
+        == PlanManifest(yaml.safe_load(PLAN_MANIFEST)).default_repository
     )
     assert request.head == NEW_BRANCH
     assert request.base == ScratchBranch.WORK

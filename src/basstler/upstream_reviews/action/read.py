@@ -12,9 +12,7 @@ from enum import StrEnum
 from typing import Any, Generic
 
 from basstler.repository import Repository
-from basstler.upstream_reviews.action.branch import (
-    RemoteBranch,
-)
+from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.vocabulary import (
     ActionBranch,
     ActionFile,
@@ -83,11 +81,10 @@ class WorkflowRun(JSONModel):
         :param data: One listed run.
         :return: The parsed run.
         """
-        conclusion = data[WorkflowRunJSONKey.CONCLUSION]
         return cls(
             data[WorkflowRunJSONKey.IDENTIFIER],
             data[WorkflowRunJSONKey.HEAD_SHA],
-            CheckOutcome[conclusion.upper()] if conclusion else CheckOutcome.PENDING,
+            CheckOutcome.from_conclusion(data[WorkflowRunJSONKey.CONCLUSION]),
         )
 
     @property
@@ -163,7 +160,7 @@ class ActionRead(Generic[AnswerType]):
     How many seconds to wait between fetches.
     """
 
-    start_allowance: float = 60.0
+    start_allowance: float = 20.0
     """
     How many seconds GitHub gets to start the run before it is looked for.
     """
@@ -207,7 +204,7 @@ class ActionRead(Generic[AnswerType]):
                 self.check_run(commit, int(elapsed))
             if elapsed >= timeout:
                 raise ActionResultMissing(
-                    self.request.identifier, self.branch.fork, int(timeout)
+                    self.request.identifier, self.branch.repository, int(timeout)
                 )
             time.sleep(self.poll_interval)
 
@@ -218,7 +215,7 @@ class ActionRead(Generic[AnswerType]):
             named no request at all.
         """
         tip = self.branch.fetch()
-        text = self.branch.read(tip, ActionFile.RESULT) if tip else None
+        text = self.branch.git.file_at(tip, ActionFile.RESULT) if tip else None
         if text is None:
             return None
         data = json.loads(text)
@@ -236,7 +233,7 @@ class ActionRead(Generic[AnswerType]):
         :raises ActionRunFailed: If its run failed - but only once a last look finds
             no result, since a run may fail after committing one.
         """
-        fork = self.branch.fork
+        fork = self.branch.repository
         if self.runs is None or fork is None:
             return
         try:

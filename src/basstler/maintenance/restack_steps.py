@@ -33,7 +33,7 @@ from basstler.stack.commit_move import (
     RefusalReason,
 )
 from basstler.stack.label_write import LabelWrite
-from basstler.stack.model import Branch, IntegrationStrategy, Stack
+from basstler.stack.model import StackBranch, IntegrationStrategy, Stack
 from basstler.stack.settings import Configuration
 
 # %% what became of one branch
@@ -166,7 +166,7 @@ class BranchOutcome:
 
 
 def conflict_report(
-    branch: Branch, conflicting_paths: Sequence[str], parent: str
+    branch: StackBranch, conflicting_paths: Sequence[str], parent: str
 ) -> str:
     """
     Write the comment telling a branch's owner that their branch needs them.
@@ -295,7 +295,7 @@ class BranchUnderRestack:
     One branch's restack, and everything a step needs to carry it out.
     """
 
-    branch: Branch
+    branch: StackBranch
     """
     The branch being restacked.
     """

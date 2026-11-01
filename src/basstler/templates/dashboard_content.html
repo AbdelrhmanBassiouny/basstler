@@ -46,7 +46,9 @@
           </div>
           <div class="item-meta">
             <span class="mono id">{{ item.identifier }}</span>
+            {% if item.branch %}
             <span class="mono branch">{{ item.branch }}</span>
+            {% endif %}
             {% if item.pull_request_url %}
             <a class="pr-link" href="{{ item.pull_request_url }}" target="_blank" rel="noopener">#{{ item.pull_request_number }}</a>
             {% else %}

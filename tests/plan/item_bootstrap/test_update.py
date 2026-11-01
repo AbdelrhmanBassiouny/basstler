@@ -15,9 +15,11 @@ from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
     PlanDocument,
+    PlanItem,
 )
 
 from ...scratch_repository import ScratchRepository
+from ..concurrent_edits import FIRST_ITEM, blocked, deferred, read_version
 from .bootstrap_scenario import (
     EXISTING_ITEM,
     LITERALLY_NOTED_ITEM,
@@ -199,7 +201,7 @@ def test_updating_sets_every_plain_field_it_is_given(
     item = published_items(bootstrap_repository)[EXISTING_ITEM]
     assert item[ManifestKey.STATUS.key] == ItemStatus.BLOCKED
     assert item[ManifestKey.BRANCH.key] == NEW_BRANCH
-    assert item[ManifestKey.PULL_REQUEST_NUMBER.key] == 57
+    assert PlanItem(item).pull_request_number == 57
     assert item[ManifestKey.SESSION.key] == SESSION_URL
 
 
@@ -284,6 +286,26 @@ def test_a_save_the_notes_branch_does_not_carry_is_refused(
         )
 
     assert refusal.value.documents == (PlanDocument.ROADMAP,)
+
+
+def test_a_save_keeps_an_edit_another_writer_made_after_the_plan_was_read(
+    bootstrap_repository: ScratchRepository,
+):
+    documents = PlanDocuments.load(PLAN_IDENTIFIER, bootstrap_repository.project_root)
+    latest = deferred(read_version(), SECOND_ITEM)
+    bootstrap_repository.update_notes_branch_file(
+        PlanDocument.MANIFEST.path_within_notes_branch(PLAN_IDENTIFIER),
+        latest.manifest_text,
+    )
+    session = blocked(read_version(), FIRST_ITEM)
+
+    documents.save(
+        session.manifest_text, session.roadmap_text, bootstrap_repository.project_root
+    )
+
+    assert PlanDocuments.load(
+        PLAN_IDENTIFIER, bootstrap_repository.project_root
+    ).version == blocked(latest, FIRST_ITEM)
 
 
 def test_finishing_an_item_saves_the_plan_without_it(

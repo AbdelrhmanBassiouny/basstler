@@ -314,6 +314,10 @@ DASHBOARD_URL_CACHE_PATH="${PLANS_DIR}/_generated/dashboard-urls.yaml"
 # repository holding the complete list of repositories, and that list. Every
 # registered repository's notes carry a copy (see basstler.plan_site.hub).
 PLAN_HUB_PATH="${PLANS_DIR}/_hub.yaml"
+# PLAN_SITE_DISPATCH_WORKFLOW_PATH: the notes branch's workflow that starts the plan
+# site's build on every push (see basstler.plan_site.publication). Mirrors
+# WorkflowLocation.PLAN_SITE_DISPATCH in basstler.locations.
+PLAN_SITE_DISPATCH_WORKFLOW_PATH=".github/workflows/plan-site-dispatch.yml"
 
 # *_MODULE: every Python entry point in this system - defined once, here, so
 # refresh_dashboard.sh, every SKILL.md and every workflow source this file and
@@ -346,12 +350,15 @@ BUILD_INDEX_MODULE="basstler.dashboard.index_page"
 BUILD_SITE_MODULE="basstler.plan_site"
 # basstler.plan_site.hub: registers a repository in the hub file.
 PLAN_HUB_MODULE="basstler.plan_site.hub"
+# basstler.plan_site.publication: publishes this repository's plans on the user's plan
+# site, and starts the site's build on every push to the notes branch.
+PLAN_SITE_PUBLICATION_MODULE="basstler.plan_site.publication"
 # basstler.plan.sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
 SYNC_MANIFEST_STATUS_MODULE="basstler.plan.sync_manifest_status"
-# basstler.plan.check_dependency_readiness: classifies one item's dependencies as
-# ready or not-ready to build on - see dependency-readiness.md below.
-CHECK_DEPENDENCY_READINESS_MODULE="basstler.plan.check_dependency_readiness"
+# basstler.plan.item_brief: prints one plan item's brief - the plan header, the item,
+# its dependencies' live readiness and the plan's standing rules.
+ITEM_BRIEF_MODULE="basstler.plan.item_brief"
 # basstler.dashboard.refresh_support: the JSON-plumbing helpers
 # refresh_dashboard.sh calls between its two module calls.
 REFRESH_DASHBOARD_SUPPORT_MODULE="basstler.dashboard.refresh_support"

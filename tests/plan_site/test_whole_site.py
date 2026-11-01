@@ -17,7 +17,8 @@ from basstler.locations import ProjectLocation
 
 from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
-from .test_build_site import PUBLISHED_PLANS, RecordedPullRequestSource
+from ..recorded_pull_requests import RecordedPullRequestSource
+from .test_build_site import PUBLISHED_PLANS
 from .test_hub import publish_notes
 
 # %% the whole site from the dataset

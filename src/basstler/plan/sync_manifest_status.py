@@ -58,7 +58,7 @@ import yaml
 
 from basstler.exceptions import MissingStatusLineError, PlanValidationError
 from basstler.plan.command_arguments import PlanCommandArguments
-from basstler.plan.model import ItemStatus, ManifestKey
+from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
 from basstler.plan.validation import PlanValidator
 from basstler.pull_request_state import LiveState
 from basstler.standard_streams import StandardStreamHandler
@@ -128,14 +128,14 @@ class StatusCorrection:
             referenced by the plan's items.
         :return: The raw item mappings that need correcting, in manifest order.
         """
-        default_repository = plan[ManifestKey.DEFAULT_REPOSITORY.key]
+        manifest = PlanManifest(plan)
         return [
-            item
-            for item in plan.get(ManifestKey.ITEMS.key, [])
-            if item.get(ManifestKey.STATUS.key) != ItemStatus.DONE.value
+            item.content
+            for item in manifest.items
+            if item.content.get(ManifestKey.STATUS.key) != ItemStatus.DONE.value
             and LiveState.classify(
-                item.get(ManifestKey.PULL_REQUEST_NUMBER.key),
-                item.get(ManifestKey.REPOSITORY.key) or default_repository,
+                item.pull_request_number,
+                manifest.repository_of(item).full_name,
                 pull_requests_by_repository,
             )
             is LiveState.MERGED

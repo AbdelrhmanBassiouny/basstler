@@ -14,6 +14,7 @@ from basstler.plan.item_bootstrap.vocabulary import PlanItemBootstrapExitCode, R
 from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
+    PlanItem,
 )
 
 # %% checking an item
@@ -124,10 +125,12 @@ class ItemCheckRequest:
         :raises UnknownItemError: If the plan tracks no item of that id.
         :return: What is stale, if anything.
         """
-        item = PlanDocuments.load(self.plan_identifier, project_root).item(
-            self.item_identifier
+        item = PlanItem(
+            PlanDocuments.load(self.plan_identifier, project_root).item(
+                self.item_identifier
+            )
         )
-        recorded_branch = item.get(ManifestKey.BRANCH.key)
+        recorded_branch = item.branch
         if not recorded_branch:
             findings: tuple[StalenessFinding, ...] = ()
         elif not ProjectCheckout(project_root).branch_is_published(
@@ -150,7 +153,7 @@ class ItemCheckRequest:
 
     @staticmethod
     def fields_a_published_branch_requires(
-        item: dict[str, Any], branch: str
+        item: PlanItem, branch: str
     ) -> tuple[StalenessFinding, ...]:
         """
         :param item: The item's parsed manifest mapping.
@@ -159,7 +162,7 @@ class ItemCheckRequest:
             unset or contradicts.
         """
         observed = f"{branch} is published"
-        recorded_status = item.get(ManifestKey.STATUS.key)
+        recorded_status = item.content.get(ManifestKey.STATUS.key)
         status_findings = (
             (
                 StalenessFinding(
@@ -176,6 +179,9 @@ class ItemCheckRequest:
             StalenessFinding(
                 manifest_key=manifest_key, recorded=None, observed=observed
             )
-            for manifest_key in (ManifestKey.SESSION, ManifestKey.PULL_REQUEST_NUMBER)
-            if item.get(manifest_key.key) is None
+            for manifest_key, recorded in (
+                (ManifestKey.SESSION, item.session),
+                (ManifestKey.PULL_REQUEST_NUMBER, item.pull_request_number),
+            )
+            if recorded is None
         )

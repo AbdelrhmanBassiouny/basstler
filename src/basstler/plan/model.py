@@ -19,6 +19,7 @@ from typing import Any
 import yaml
 
 from basstler.locations import ProjectLocation
+from basstler.repository import Repository
 
 
 class ItemStatus(StrEnum):
@@ -541,6 +542,27 @@ class PlanItem:
         return ItemStatus(self.content[ManifestKey.STATUS.key])
 
     @property
+    def branch(self) -> str | None:
+        """
+        :return: The branch the item's work happens on, or ``None`` when it has none yet.
+        """
+        return self.content.get(ManifestKey.BRANCH.key)
+
+    @property
+    def session(self) -> str | None:
+        """
+        :return: The session doing the item's work, or ``None`` when none is recorded.
+        """
+        return self.content.get(ManifestKey.SESSION.key)
+
+    @property
+    def pull_request_number(self) -> int | None:
+        """
+        :return: The number of the item's pull request, or ``None`` when it has none yet.
+        """
+        return self.content.get(ManifestKey.PULL_REQUEST_NUMBER.key)
+
+    @property
     def notes(self) -> str:
         """
         :return: The item's notes with their line folding undone, empty when it has none.
@@ -630,6 +652,24 @@ class PlanManifest:
         return str(self.content[ManifestKey.IDENTIFIER.key])
 
     @property
+    def default_repository(self) -> Repository:
+        """
+        :return: The repository every item's pull request is on unless it names its own.
+        """
+        return Repository.parse(self.content[ManifestKey.DEFAULT_REPOSITORY.key])
+
+    def repository_of(self, item: PlanItem) -> Repository:
+        """
+        :param item: An item of this plan.
+        :return: The repository the item's pull request is on: its own, else the plan's
+            default.
+        """
+        own_repository = item.content.get(ManifestKey.REPOSITORY.key)
+        if not own_repository:
+            return self.default_repository
+        return Repository.parse(own_repository)
+
+    @property
     def description(self) -> str:
         """
         :return: The plan's description with its line folding undone.
@@ -682,13 +722,13 @@ class PlanManifest:
             plan_identifier=self.identifier, item_identifier=branch
         )
 
-    def item_summary(self, item: PlanItem) -> str:
+    def item_header(self, item: PlanItem) -> dict[str, Any]:
         """
         The part of the plan one item's session needs: the plan's id, title and
         tracking issue, and that item's own entry.
 
         :param item: The item to summarize.
-        :return: The summary as YAML.
+        :return: The summary, keyed as the manifest keys it.
         """
         summary = {
             field_name.key: self.content.get(field_name.key)
@@ -699,7 +739,37 @@ class PlanManifest:
             )
         }
         summary[ItemSummaryKey.ITEM.value] = item.content
+        return summary
+
+    def item_summary(self, item: PlanItem) -> str:
+        """
+        :param item: The item to summarize.
+        :return: :meth:`item_header` as YAML.
+        """
+        return self.summary_text(self.item_header(item))
+
+    @staticmethod
+    def summary_text(summary: dict[str, Any]) -> str:
+        """
+        :param summary: A summary of part of a plan.
+        :return: The summary as YAML, in block style with its keys in their order.
+        """
         return yaml.safe_dump(summary, sort_keys=False, allow_unicode=True, width=88)
+
+    def without_dependencies(self, identifiers: set[str]) -> PlanManifest:
+        """
+        :param identifiers: ``depends_on`` entries to stop depending on.
+        :return: This manifest with every item's dependency on *identifiers* removed.
+        """
+        return PlanManifest(
+            {
+                **self.content,
+                ManifestKey.ITEMS.key: [
+                    item.without_dependencies(identifiers).content
+                    for item in self.items
+                ],
+            }
+        )
 
     def without_landed_items(self) -> PlanManifest:
         """

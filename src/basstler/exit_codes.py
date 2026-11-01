@@ -181,6 +181,33 @@ class PersonalNotesSetupExitCode(ExitCode):
     """
 
 
+class ManifestToolsExitCode(ExitCode):
+    """
+    How a ``basstler.plan.manifest_tools`` subcommand ended, as its caller reads it.
+    """
+
+    SUCCESS = 0
+    """
+    The subcommand did what it was asked.
+    """
+
+    INVALID_MANIFEST = 1
+    """
+    The manifest breaks a rule the dashboard validates; the problems are on stderr.
+    """
+
+    CHANGED_SINCE_READ = 3
+    """
+    Another writer changed a part of the plan the session also changed, or removed the
+    plan, since the session read it.
+    """
+
+    MERGE_DISAGREES = 4
+    """
+    The merged manifest does not read back as the merge decided.
+    """
+
+
 @dataclass
 class CommandFailure(Exception, ABC):
     """

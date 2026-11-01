@@ -18,6 +18,7 @@ from typing import Any
 import pytest
 
 import basstler.upstream_reviews.action.__main__
+import basstler.upstream_reviews.action.read
 import basstler.upstream_reviews.action.run
 from basstler.locations import PackageLocation
 from basstler.repository import Repository
@@ -27,10 +28,10 @@ from basstler.upstream_reviews.action.__main__ import (
     main,
 )
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.action.branch import (
     ActionInstallation,
     InstallationState,
-    RemoteBranch,
 )
 from basstler.upstream_reviews.action.read import (
     ActionRead,
@@ -309,7 +310,7 @@ class Fork:
     @property
     def branch(self) -> RemoteBranch:
         """:return: The Action branch on the fork."""
-        return RemoteBranch(GitCommandRunner(self.clone), "origin")
+        return RemoteBranch(ActionBranch.NAME, GitCommandRunner(self.clone), "origin")
 
     def files(self) -> dict[str, str]:
         """:return: Every file on the remote's Action branch, by path, without its
@@ -495,6 +496,43 @@ def test_a_request_no_run_started_for_says_actions_are_disabled(fork):
         read.wait(timeout=60, commit=commit)
 
 
+@dataclass
+class SteppedClock:
+    """
+    Stands in for the ``time`` module: sleeping advances it, so a wait takes no real time.
+    """
+
+    now: float = 0.0
+    """
+    The seconds passed since the wait began.
+    """
+
+    def monotonic(self) -> float:
+        """:return: The seconds passed."""
+        return self.now
+
+    def sleep(self, seconds: float) -> None:
+        """
+        Advance the clock instead of waiting.
+
+        :param seconds: How long the wait would sleep.
+        """
+        self.now += seconds
+
+
+def test_a_request_no_run_started_for_is_given_up_on_after_twenty_seconds(
+    fork, monkeypatch
+):
+    monkeypatch.setattr(basstler.upstream_reviews.action.read, "time", SteppedClock())
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    read = ActionRead(fork.branch, request(), ListedRuns([]))
+
+    with pytest.raises(ActionRunNotStarted) as raised:
+        read.wait(timeout=480, commit=read.send())
+
+    assert raised.value.waited == 20
+
+
 def test_the_runs_are_listed_on_the_action_branch_alone(fork):
     runs = ListedRuns([])
     read, commit = waiting(fork, runs)
@@ -541,7 +579,7 @@ def test_a_result_is_collected_even_if_its_run_failed_afterwards(fork):
 
 
 def test_the_fork_is_named_by_its_remote(fork):
-    assert fork.branch.fork == FORK
+    assert fork.branch.repository == FORK
 
 
 def test_read_prints_the_report_from_the_committed_result(fork, monkeypatch, capsys):
