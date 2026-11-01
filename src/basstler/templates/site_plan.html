@@ -1,8 +1,8 @@
 {% extends "site_layout.html" %}
-{% from "dashboard_content.html" import dependency_chip, action_button with context %}
+{% from "site_parts.html" import dependency_chip, action_button with context %}
 {% block title %}{{ title }}{% endblock %}
 {% block page_class %}hide-done{% endblock %}
-{% block page_id %}plan-dashboard-page{% endblock %}
+{% block page_id %}plan-page{% endblock %}
 
 {% macro item_card(item) %}
 {% set record = item.pull_request_record %}
@@ -58,7 +58,7 @@
     <h2>{{ heading }} ({{ items | length }})</h2>
     <ul>
     {% for item in items %}
-      <li><a href="#{{ item.anchor }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)">{{ item.title }}</a> <span class="next-reason">{{ reason or item.drift_description }}</span></li>
+      <li><a href="#{{ item.anchor }}" data-item-identifier="{{ item.identifier }}" onclick="planPageHighlightItem(event, this)">{{ item.title }}</a> <span class="next-reason">{{ reason or item.drift_description }}</span></li>
     {% endfor %}
     </ul>
 {% endif %}
@@ -98,7 +98,7 @@
   {% endif %}
 
   <div class="toolbar">
-    <label><input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)"> Show done items</label>
+    <label><input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-page').classList.toggle('hide-done', !this.checked)"> Show done items</label>
   </div>
 
   <div class="waves">
@@ -124,6 +124,6 @@
 {% block scripts %}
 <script>
 {% include script_template %}
-planDashboardRevealLocationHash();
+planPageRevealLocationHash();
 </script>
 {% endblock %}

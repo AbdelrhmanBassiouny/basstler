@@ -86,7 +86,7 @@ class SetupCheck(StrEnum):
     The identity commits are authored with, against the recorded one.
     """
 
-    DASHBOARD_DEPENDENCIES = "dashboard_dependencies"
+    PACKAGE_DEPENDENCIES = "package_dependencies"
     """
     Every dependency the package declares being installed.
     """

@@ -21,7 +21,7 @@ Three modes, one of which only decides who picks:
 
 Precedence is invocation argument > personal setting > committed default, so one run can
 depart from the setting without changing it. What each mode obliges a skill to do is
-``plan-dashboard/execution-modes.md``'s to say; this module only answers which one is in
+``plan-item-mode/execution-modes.md``'s to say; this module only answers which one is in
 force.
 
 Usage:
@@ -42,7 +42,7 @@ the document never has to decode an integer back into a meaning.
 .. note::
    ``resolve-personal-notes-config.sh`` is the one path spelled literally here. It is the
    bootstrap seam every script and skill in this system sources to find every other path,
-   for the reason ``refresh_dashboard.sh``'s own header records: something has to name it
+   for the reason ``sync_plan.sh``'s own header records: something has to name it
    before anything can ask it where things are.
 """
 

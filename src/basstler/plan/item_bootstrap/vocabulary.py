@@ -197,11 +197,6 @@ class ReportKey(StrEnum):
     Whether the item's manifest entry was written for the first time.
     """
 
-    DASHBOARD_COMMAND = "dashboard_command"
-    """
-    The dashboard republish the caller still has to run.
-    """
-
     PULL_REQUEST_URL = "pull_request_url"
     """
     Where an opened pull request lives.

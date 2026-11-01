@@ -1,6 +1,6 @@
 """
 Tests for basstler.plan_site's static plan site: the hub, each repository's index, and
-each plan's dashboard.
+each plan's page.
 """
 
 from __future__ import annotations
@@ -14,7 +14,7 @@ from typing import Any
 
 import pytest
 
-from basstler.dashboard.plan import Plan
+from basstler.plan_site.plan import Plan
 from basstler.exceptions import PlanValidationError
 from basstler.plan.dependencies import DependencyReference, DependencyResolver
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
@@ -38,8 +38,8 @@ from basstler.maintenance.github import (
     PullRequestListState,
     RepositoryPath,
 )
-from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.hub_page import SiteStylesheet, SkippedPage
+from basstler.plan_site.hub import PlanHub, SiteAddress
+from basstler.plan_site.hub_page import PlanSummary, SiteStylesheet, SkippedPage
 from basstler.plan_site.plan_page import ChipTone
 from basstler.plan.validation import PlanValidator
 from basstler.pull_request_source import GitHubPullRequestSource
@@ -133,7 +133,7 @@ def site(pull_request_source: RecordedPullRequestSource) -> RepositorySite:
     A site over the dataset's plans directory.
     """
     return RepositorySite(
-        site_url=SiteSampleText.SITE_URL,
+        address=SiteAddress(SiteSampleText.SITE_URL),
         pull_request_source=pull_request_source,
         repository=NOTES_REPOSITORY,
         plans_directory=DatasetLocation.SITE_PLANS.value,
@@ -143,7 +143,7 @@ def site(pull_request_source: RecordedPullRequestSource) -> RepositorySite:
 def page_of(output: Path, plan: SitePlan | None = None) -> str:
     """
     :param output: The site's root directory.
-    :param plan: The plan whose dashboard to read, or ``None`` for the index.
+    :param plan: The plan whose page to read, or ``None`` for the index.
     :return: The page the notes repository serves there.
     """
     directory = output / str(NOTES_REPOSITORY)
@@ -221,29 +221,18 @@ def test_build_links_each_plan_to_its_page_on_the_site(
     repository = site.build(tmp_path)
     index = page_of(tmp_path)
     for summary in repository.plans:
-        assert summary.dashboard_url == site.plan_url(summary.id)
-        assert link_to(summary.dashboard_url) in index
+        assert summary.page_url == site.plan_url(summary.id)
+        assert link_to(summary.page_url) in index
 
 
 def test_every_page_links_back_up_to_the_hub_and_its_index(
     site: RepositorySite, tmp_path: Path
 ):
     site.build(tmp_path)
-    dashboard = page_of(tmp_path, SitePlan.FIRST)
+    plan_page = page_of(tmp_path, SitePlan.FIRST)
     assert link_to(SiteSampleText.SITE_URL) in page_of(tmp_path)
-    assert link_to(SiteSampleText.SITE_URL) in dashboard
-    assert link_to(REPOSITORY_URL) in dashboard
-
-
-def test_plan_url_joins_the_site_address_whether_or_not_it_ends_in_a_slash(
-    pull_request_source: RecordedPullRequestSource,
-):
-    with_slash, without_slash = (
-        RepositorySite(site_url, pull_request_source, NOTES_REPOSITORY, Path())
-        for site_url in (SiteSampleText.SITE_URL, SiteSampleText.SITE_URL.rstrip("/"))
-    )
-    assert with_slash.plan_url(SitePlan.FIRST) == without_slash.plan_url(SitePlan.FIRST)
-    assert with_slash.plan_url(SitePlan.FIRST) == f"{REPOSITORY_URL}{SitePlan.FIRST}/"
+    assert link_to(SiteSampleText.SITE_URL) in plan_page
+    assert link_to(REPOSITORY_URL) in plan_page
 
 
 def test_build_counts_done_items_from_the_manifest(
@@ -265,35 +254,42 @@ def test_the_repository_card_counts_every_plan(site: RepositorySite, tmp_path: P
     assert repository.total == sum(plan.total for plan in repository.plans)
 
 
-@pytest.mark.parametrize("draft", [True, False])
-def test_a_plan_card_counts_its_open_pull_requests_and_those_out_of_draft(
+def first_plan_card(site: RepositorySite, output: Path) -> PlanSummary:
+    """
+    :param site: The repository site to build.
+    :param output: The directory to build it into.
+    :return: The first plan's card on the built index.
+    """
+    return next(
+        summary for summary in site.build(output).plans if summary.id == SitePlan.FIRST
+    )
+
+
+def test_a_plan_card_counts_a_pull_request_out_of_draft_as_reviewed(
     site: RepositorySite,
     pull_request_source: RecordedPullRequestSource,
     tmp_path: Path,
-    draft: bool,
 ):
+    in_draft = first_plan_card(site, tmp_path / "draft")
     pull_request_source.records[OPEN_PULL_REQUEST] = PullRequestRecord(
-        state=PullRequestState.OPEN, draft=draft
+        state=PullRequestState.OPEN, draft=False
     )
-    first_plan = next(
-        summary
-        for summary in site.build(tmp_path).plans
-        if summary.id == SitePlan.FIRST
-    )
-    assert first_plan.open_pull_requests == 1
-    assert first_plan.reviewed_pull_requests == int(not draft)
+    out_of_draft = first_plan_card(site, tmp_path / "ready")
+    assert out_of_draft.reviewed == in_draft.reviewed + 1
 
 
-def test_the_repository_card_counts_every_plan_s_pull_requests(
+def test_a_plan_card_counts_every_item_with_a_pull_request_as_started(
+    site: RepositorySite, tmp_path: Path
+):
+    assert first_plan_card(site, tmp_path).started == len(FIRST_PLAN.items)
+
+
+def test_the_repository_card_counts_every_plan_s_started_and_reviewed_items(
     site: RepositorySite, tmp_path: Path
 ):
     repository = site.build(tmp_path)
-    assert repository.open_pull_requests == sum(
-        plan.open_pull_requests for plan in repository.plans
-    )
-    assert repository.reviewed_pull_requests == sum(
-        plan.reviewed_pull_requests for plan in repository.plans
-    )
+    assert repository.started == sum(plan.started for plan in repository.plans)
+    assert repository.reviewed == sum(plan.reviewed for plan in repository.plans)
 
 
 def test_build_looks_up_every_referenced_pull_request_in_its_own_repository(
@@ -359,7 +355,7 @@ def test_a_plan_page_shows_the_ci_and_assignees_of_an_open_pull_request(
         assignees=[SiteSampleText.ASSIGNEE.value],
     )
     site = RepositorySite(
-        site_url=SiteSampleText.SITE_URL,
+        address=SiteAddress(SiteSampleText.SITE_URL),
         pull_request_source=RecordedPullRequestSource(
             records={OPEN_PULL_REQUEST: open_pull_request}
         ),
@@ -405,7 +401,7 @@ def hub_site(pull_request_source: RecordedPullRequestSource, tmp_path: Path) -> 
         repositories=[str(repository) for repository in listed],
     )
     return HubSite(
-        site_url=SiteSampleText.SITE_URL,
+        address=SiteAddress(SiteSampleText.SITE_URL),
         pull_request_source=pull_request_source,
         hub=hub,
         remote_root=str(remotes),
@@ -427,9 +423,8 @@ def test_the_hub_links_every_repository_and_reports_one_it_cannot_fetch(
     assert repositories[1].error
     assert summary.done == sum(repository.done for repository in repositories)
     assert summary.total == sum(repository.total for repository in repositories)
-    assert summary.open_pull_requests == sum(
-        repository.open_pull_requests for repository in repositories
-    )
+    assert summary.started == sum(repository.started for repository in repositories)
+    assert summary.reviewed == sum(repository.reviewed for repository in repositories)
     assert summary.progress_label in hub_page
     assert (tmp_path / "site" / SiteFile.NO_JEKYLL).exists()
 

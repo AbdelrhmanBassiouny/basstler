@@ -66,6 +66,17 @@ class ShellConfigurationFunction(StrEnum):
     nothing when no plan does.
     """
 
+    REPOSITORY_NAME = "repository_name"
+    """
+    Prints the project's ``origin`` as ``owner/repo``.
+    """
+
+    PLAN_SITE_PAGE_URL = "plan_site_page_url"
+    """
+    Prints the address of the project's page on the plan site, of one of its plans, or
+    of one item's card, and fails when the fetched hub file names no site.
+    """
+
     BASSTLER_PACKAGE_SOURCE = "basstler_package_source"
     """
     Prints what the package is installed from: the checkout the plugin sits in, else its

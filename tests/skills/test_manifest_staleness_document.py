@@ -20,6 +20,7 @@ from pathlib import Path
 import pytest
 
 from basstler.locations import PluginLocation
+from basstler.shell_configuration import ShellConfigurationFunction
 
 from ..constants.paths import RepositoryLocation, SkillDirectory, SkillFile
 
@@ -73,19 +74,8 @@ class PlanWritingScript(StrEnum):
 
     WRITE_PERSONAL_NOTES_FILE = "WRITE_PERSONAL_NOTES_FILE_SCRIPT"
     """
-    How the dashboard refresh pushes its own manifest corrections, which is a plan-data
+    How /plan-sync pushes its own manifest corrections, which is a plan-data
     write like any other.
-    """
-
-
-class DashboardUrlKey(StrEnum):
-    """
-    The names the dashboard URL cache keeps pages under.
-    """
-
-    MASTER_INDEX = "_index"
-    """
-    The master index's own page.
     """
 
 
@@ -147,16 +137,12 @@ def test_the_rule_names_the_blocker_owner_through_its_constant():
     assert ShellConstant.BLOCKER_OWNER in staleness_document()
 
 
-def test_creating_a_plan_republishes_the_index_the_new_plan_belongs_in():
+def test_the_rule_links_the_plan_site_page_instead_of_a_republish():
     """
-    The index lists every plan, so adding one is the single change that makes the index
-    itself wrong - the one case where publishing only the plan's own page is not enough.
+    Every manifest write is a push the plan site rebuilds from, so what the rule leaves
+    to the session is the page's address, read through the one function that builds it.
     """
-    instructions = (
-        RepositoryLocation.PLUGIN / SkillDirectory.PLAN_CREATE / SkillFile.INSTRUCTIONS
-    )
-
-    assert DashboardUrlKey.MASTER_INDEX in instructions.read_text()
+    assert ShellConfigurationFunction.PLAN_SITE_PAGE_URL in staleness_document()
 
 
 def test_the_rule_names_no_plan_of_its_own():

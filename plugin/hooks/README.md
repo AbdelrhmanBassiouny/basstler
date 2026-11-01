@@ -10,8 +10,8 @@ committed to a shared branch.
 > and the variables a fresh-clone environment needs. This page is the reference behind it.
 >
 > **Rather see it in action than read about it?**
-> [`example-walkthrough.md`](../skills/plan-dashboard/example-walkthrough.md) is a short worked
-> example of the whole thing in use, from a plan-mode idea to a published dashboard.
+> [`example-walkthrough.md`](../skills/plan-create/example-walkthrough.md) is a short worked
+> example of the whole thing in use, from a plan-mode idea to its page on the plan site.
 
 Three kinds of content, stored the same way and never merged anywhere:
 
@@ -35,7 +35,7 @@ Every run prints a summary of what it found and wrote, so a session never has to
 3. Done. Every session from now on writes `CLAUDE.local.md` automatically.
 
 It is safe to re-run: on a clone that's already set up it reports what it found and asks nothing.
-You don't have to run it first either — `/plan-create`, `/plan-dashboard`, `/plan-item-kickoff`,
+You don't have to run it first either — `/plan-create`, `/plan-sync`, `/plan-item-kickoff`,
 `/plan-item-resolve` and `/add-plan-item` each run it for you if something is missing, without
 stopping to ask.
 
@@ -219,19 +219,21 @@ runs. Every session start therefore brings an Action at another release to this 
 only to that branch; the summary's `reviews Action` line says what it did. A fork without the
 branch is left without it.
 
-## Plan dashboards (multi-PR initiatives)
+## Plans (multi-PR initiatives)
 
 When one PR's progress note isn't enough — a stacked refactor, a multi-wave programme, anything
 you'd otherwise write up as a one-off master-roadmap doc — a **plan** is a `plan.yaml` (waves,
 tracks, and items with branch, PR number, status and dependencies) plus a sibling `roadmap.md` for
 the narrative that doesn't belong in structured data.
 
-- Worked example → [`example-walkthrough.md`](../skills/plan-dashboard/example-walkthrough.md).
-- Field reference → [`plan-schema.md`](../skills/plan-dashboard/plan-schema.md).
+- Worked example → [`example-walkthrough.md`](../skills/plan-create/example-walkthrough.md).
+- Field reference → [`plan-schema.md`](../skills/plan-create/plan-schema.md).
 - Create one → `/plan-create <plan-id>`.
-- Publish or refresh → `/plan-dashboard [<plan-id>]`; no argument publishes the master index of
-  every plan. It cross-checks every item against live GitHub PR/CI/review state, so a manifest
-  can't silently go stale the way a hand-maintained roadmap doc could.
+- See the plans → the plan site, which every push to the notes branch rebuilds; the session-start
+  summary's `plan site` line links this session's place on it.
+- Sync one → each plan's page cross-checks every item against live GitHub PR/CI/review state,
+  so a manifest can't silently go stale the way a hand-maintained roadmap doc could;
+  `/plan-sync <plan-id>` marks every item whose PR merged as `done` in the manifest itself.
 - Start or unblock one item → `/plan-item-kickoff <plan-id> <item-id>`,
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in progress` as soon as its plan is approved — via
@@ -248,7 +250,7 @@ the narrative that doesn't belong in structured data.
   [`plan-item-modes.toml`](../../src/basstler/plan/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
   override at `.claude/personal/plan-item-modes.toml` on the notes branch. What each mode obliges
   the skill to do, and when `auto` still stops to ask →
-  [`execution-modes.md`](../skills/plan-dashboard/execution-modes.md).
+  [`execution-modes.md`](../skills/plan-item-mode/execution-modes.md).
 - Recheck one for updates, without rereading it →
   [`plan-updates-since.sh`](./plan-updates-since.sh) `<plan-id> [--since <sha>]`. Every
   `session-start.sh` run stamps the notes-branch commit it just fetched (gitignored, at
@@ -260,14 +262,12 @@ the narrative that doesn't belong in structured data.
 are pulled into `CLAUDE.local.md` too, via a generated branch-to-plan index that `save-plan.sh`
 regenerates from every manifest on each save, so it can't drift.
 
-**Labels the dashboard reads**, all applied by this repo's convention rather than by GitHub itself:
+**Labels**, all applied by this repo's convention rather than by GitHub itself:
 
 - `merged` — the changes landed but GitHub's merge API never recorded it (branch pushed directly,
   PR then closed by hand). Treated exactly like a real merge.
-- `bug` — marks the item with a `bug` chip in the dashboard's "What to do next" sidebar, in
-  whichever action group it already belongs to, and is what the sidebar's "Bug fixes only" filter
-  keeps. Being a bug fix is a property of the work, not a next action of its own, so it never
-  moves an item into a group or out of one.
+- `bug` — marks a bug-fix pull request. Being a bug fix is a property of the work, not a next
+  action of its own.
 - `in-review` — the fork PR has an open upstream PR; a maintenance pass adds and removes it,
   together with the link to that upstream PR in the fork PR's description.
 

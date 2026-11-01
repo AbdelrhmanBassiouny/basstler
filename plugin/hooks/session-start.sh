@@ -180,8 +180,8 @@ edit them, and run
   "\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh" ${PLAN_ID} --manifest <file> --roadmap <file> --read-at <commit>
 which keeps other writers' edits to other items, refuses one to an item you also
 changed, drops landed items, removes a plan with none left, and refuses a plan
-over the limits in ${PLAN_SIZE_LIMITS_MODULE}. Then run
-/plan-dashboard ${PLAN_ID}.
+over the limits in ${PLAN_SIZE_LIMITS_MODULE}. The save's push rebuilds the
+plan's page on the plan site.
 
 ${TRACKING_ISSUE_NOTE}
 -->
@@ -201,12 +201,9 @@ fi
 # This session's page on the plan site, from the hub file.
 SUMMARY_HUB="$(hub_line_not_registered "${NOTES_BRANCH}")"
 if SITE_URL="$(recorded_site_url)"; then
-  HUB_POSITION="${SITE_URL:+${SITE_URL%/}/}$(repository_name)/"
-  if [ -n "${PLAN_ID}" ]; then
-    HUB_POSITION="${HUB_POSITION}${PLAN_ID}/"
-    ITEM_ID="$(item_id_for_branch "${PLAN_ID}" "${CURRENT_BRANCH}")"
-    [ -n "${ITEM_ID}" ] && HUB_POSITION="${HUB_POSITION}#item-${ITEM_ID}"
-  fi
+  ITEM_ID=""
+  [ -n "${PLAN_ID}" ] && ITEM_ID="$(item_id_for_branch "${PLAN_ID}" "${CURRENT_BRANCH}")"
+  HUB_POSITION="$(plan_site_page_url "${PLAN_ID}" "${ITEM_ID}")" || HUB_POSITION="${SITE_URL}"
   SUMMARY_HUB="$(hub_line_registered "${SITE_URL}" "${HUB_POSITION}")"
 fi
 

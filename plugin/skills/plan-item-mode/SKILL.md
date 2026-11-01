@@ -8,7 +8,7 @@ allowed-tools: Bash, Read
 
 Sets the execution mode the plan-item skills resolve. Every mechanical part
 belongs to the module the commands below run; this skill only reads what the
-user asked for and calls it. [`execution-modes.md`](../plan-dashboard/execution-modes.md) is where the modes are defined and where what
+user asked for and calls it. [`execution-modes.md`](../plan-item-mode/execution-modes.md) is where the modes are defined and where what
 each one obliges is stated — read it if the user asks what a mode means rather
 than restating it here.
 

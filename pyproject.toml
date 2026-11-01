@@ -8,7 +8,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "basstler"
-description = "Workflow tooling: stacked-pull-request maintenance, plan dashboards, personal-notes hooks and upstream review reading."
+description = "Workflow tooling: stacked-pull-request maintenance, the plan site, personal-notes hooks and upstream review reading."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "Apache-2.0"

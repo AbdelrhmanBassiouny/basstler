@@ -140,12 +140,15 @@ a.progress-card:hover, a.progress-card:focus-visible { border-color: var(--accen
 .progress-card.complete { opacity: 0.7; }
 .progress-card h2 { font-size: 1.02rem; margin: 0; overflow-wrap: anywhere; }
 .progress-card p { margin: 0; }
-.progress-label, .review-label { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted); }
+.progress-label, .stage-label { font-family: var(--font-mono); font-size: 0.8rem; color: var(--text-muted); }
 .card-description { color: var(--text-muted); font-size: 0.88rem; }
 .card-error { color: var(--bad); font-size: 0.85rem; }
-.bar { height: 6px; border-radius: 999px; background: var(--surface-alt); overflow: hidden; margin-top: auto; }
-.bar-fill { height: 100%; background: var(--accent); border-radius: 999px; }
-.progress-card.complete .bar-fill { background: var(--good); }
+.bar { position: relative; height: 6px; border-radius: 999px; background: var(--surface-alt); overflow: hidden; margin-top: auto; }
+.bar-fill { position: absolute; inset: 0 auto 0 0; border-radius: 999px; }
+.bar-started { background: var(--info); opacity: 0.35; }
+.bar-reviewed { background: var(--accent); opacity: 0.55; }
+.bar-done { background: var(--accent); }
+.progress-card.complete .bar-done { background: var(--good); }
 
 /* %% chips */
 
@@ -207,6 +210,7 @@ a.chip:hover { border-color: currentColor; }
   border-radius: var(--radius-small); padding: var(--space-3);
   display: flex; flex-direction: column; gap: var(--space-2);
 }
+.item.status-not_started { border-left-color: var(--border); }
 .item.status-done { border-left-color: var(--good); }
 .item.status-in_progress { border-left-color: var(--info); }
 .item.status-blocked { border-left-color: var(--bad); }

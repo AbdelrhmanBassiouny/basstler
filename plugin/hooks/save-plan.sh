@@ -18,7 +18,7 @@ set -euo pipefail
 # --read-at: the personal-notes commit the session read the plan at; without
 #            it, the branch as this save first fetches it.
 # --attempts: how many pushes to make before giving up (default 5).
-# Pushes data only; run /plan-dashboard <plan-id> afterwards.
+# Prints the plan's page on the plan site, which the push rebuilds.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
@@ -241,4 +241,8 @@ if [ "${STAGED_PLAN}" = "removed" ]; then
   exit 0
 fi
 echo "Saved plan '${PLAN_ID}' (plan.yaml, roadmap.md, and the branch index) back to '${NOTES_BRANCH}' on '${ACTIVE_NOTES_REMOTE}'."
-echo "Run /plan-dashboard ${PLAN_ID} to refresh its dashboard Artifact - this script only pushes data, it can't call the Artifact tool itself."
+if PAGE_URL="$(plan_site_page_url "${PLAN_ID}")"; then
+  echo "The push rebuilds its page on the plan site: ${PAGE_URL}"
+else
+  echo "No plan site lists this repository yet - /setup-personal-notes publishes one."
+fi

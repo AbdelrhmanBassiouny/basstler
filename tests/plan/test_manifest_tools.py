@@ -215,17 +215,17 @@ def run_validate(monkeypatch, manifest_path: Path) -> int:
     return main()
 
 
-def test_validate_accepts_a_manifest_the_dashboard_builds(monkeypatch):
+def test_validate_accepts_a_manifest_the_plan_site_builds(monkeypatch):
     assert run_validate(monkeypatch, DatasetLocation.PLAN.value) == (
         ManifestToolsExitCode.SUCCESS
     )
 
 
-def test_validate_refuses_a_manifest_the_dashboard_rejects_and_says_why(
+def test_validate_refuses_a_manifest_the_plan_site_rejects_and_says_why(
     monkeypatch, capsys
 ):
     """
-    A manifest saved past the dashboard's own validation is one no dashboard can be
+    A manifest saved past the plan site's own validation is one no plan page can be
     built from, so the save refuses it with the same problems the build would report.
     """
     with pytest.raises(PlanValidationError) as expected:

@@ -13,8 +13,8 @@ from pathlib import Path
 import yaml
 
 from basstler.class_property import classproperty
-from basstler.dashboard.cards import DependencyChip
-from basstler.dashboard.plan import Item, Plan
+from basstler.plan_site.cards import DependencyChip
+from basstler.plan_site.plan import Item, Plan
 from basstler.plan.model import PlanDocument
 from basstler.pull_request_state import LiveState, PullRequestsByRepository
 
@@ -155,8 +155,8 @@ class Dependency(ABC):
         """
         Render this dependency as a ``needs`` chip on its dependent's card.
 
-        :param locate_plan_page: Where another plan's dashboard is published, given its
-            id, or ``None`` when plan pages have no known address.
+        :param locate_plan_page: Where another plan's page is published, given its id,
+            or ``None`` when plan pages have no known address.
         """
 
     @abstractmethod
@@ -292,7 +292,7 @@ class PlanDirectory:
     A manifest is read the first time a reference names its plan, and never
     otherwise: a plan that nothing here depends on is exactly as expensive as
     a plan that isn't in the directory at all, which is what keeps one plan's
-    dashboard from pulling in every other plan's contents.
+    page from pulling in every other plan's contents.
     """
 
     directory: Path

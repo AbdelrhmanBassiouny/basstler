@@ -51,7 +51,7 @@ class PullRequestSource(ABC):
         :param dependencies: A plan's items, plus the items of other plans it depends
             on.
         :return: The live state of every pull request those items name, in the shape
-            the dashboard renders from; a number the repository does not have is left
+            the plan site renders from; a number the repository does not have is left
             out.
         """
         pull_requests: PullRequestsByRepository = {}

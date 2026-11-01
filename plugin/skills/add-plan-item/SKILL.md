@@ -50,10 +50,10 @@ fetch_personal_notes_branch
 
 Read **every** plan's `plan.yaml` under `${PLANS_DIR}` off `"${PERSONAL_NOTES_REFERENCE}"`, not
 just the one the user has in mind — the right home is often a plan they weren't
-thinking of. [`plan-schema.md`](../plan-dashboard/plan-schema.md) is the field reference.
+thinking of. [`plan-schema.md`](../plan-create/plan-schema.md) is the field reference.
 
 Then fetch live pull request state once, in bulk, per
-[`pr-data-fetching.md`](../plan-dashboard/pr-data-fetching.md).
+[`pr-data-fetching.md`](../plan-sync/pr-data-fetching.md).
 
 Candidates are every unlanded item and every open pull request's branch, plus
 every plan whose own `description` covers the kind of work being described.
@@ -118,8 +118,7 @@ it" leaves the session to improvise the part most likely to lose work.
 `plan.yaml` directly if this session stewards that plan, otherwise propose it on
 the plan's `tracking_issue` — `${PLANS_DIR}/README.md`'s "Proposing structural
 changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}`
-and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn,
-so no published dashboard is older than the manifest behind it.
+in the same turn, whose push rebuilds the plan's page on the plan site.
 
 **If the outcome is a new item**, the `record` operation of
 `"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}"` writes its `plan.yaml` entry and `roadmap.md` section and runs the save
@@ -137,4 +136,4 @@ Flag explicitly, never silently paper over:
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.
 
-Carrying the outcome out later follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
+Carrying the outcome out later follows [`manifest-staleness.md`](../plan-sync/manifest-staleness.md).
