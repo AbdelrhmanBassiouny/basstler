@@ -15,7 +15,7 @@ from basstler.maintenance.description import (
 )
 from basstler.maintenance.github import ForkPullRequests
 from basstler.stack.label_write import LabelWrite
-from basstler.stack.model import Branch, BranchStatus, Stack
+from basstler.stack.model import StackBranch, BranchStatus, Stack
 
 
 class UpstreamPullRequestSynchronizationAction(StrEnum):
@@ -109,7 +109,7 @@ class UpstreamPullRequestSynchronization:
             changes.extend(self.write(branch, link))
         return changes
 
-    def upstream_link_of(self, branch: Branch) -> UpstreamPullRequestLink | None:
+    def upstream_link_of(self, branch: StackBranch) -> UpstreamPullRequestLink | None:
         """
         :param branch: A branch of the stack.
         :return: The link to the open upstream pull request opened from it, ``None``
@@ -145,7 +145,7 @@ class UpstreamPullRequestSynchronization:
         return linked_url == (None if link is None else link.url)
 
     def write(
-        self, branch: Branch, link: UpstreamPullRequestLink | None
+        self, branch: StackBranch, link: UpstreamPullRequestLink | None
     ) -> list[UpstreamPullRequestSynchronizationChange]:
         """
         Write the label and the link that disagree with what *branch*'s pull request

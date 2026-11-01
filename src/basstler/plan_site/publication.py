@@ -357,7 +357,7 @@ class PlanSitePublication:
             if repository == self.dispatch_workflow.notes_repository
             else repository.clone_url_under(self.remote_root)
         )
-        return RemoteBranch(self.git, remote, self.dispatch_workflow.notes_branch)
+        return RemoteBranch(self.dispatch_workflow.notes_branch, self.git, remote)
 
     def site_branch(self) -> RemoteBranch | None:
         """
@@ -374,7 +374,7 @@ class PlanSitePublication:
             r"^ref: refs/heads/(?P<branch>\S+)\s+HEAD$", listed.output, re.MULTILINE
         )
         return RemoteBranch(
-            self.git, remote, match["branch"] if match else self.initial_branch
+            match["branch"] if match else self.initial_branch, self.git, remote
         )
 
     def publish(self) -> PublicationReport:

@@ -16,7 +16,7 @@ from basstler.class_property import classproperty
 from basstler.maintenance.board import PullRequestField
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.github import PullRequestReader
-from basstler.stack.model import Branch, Stack
+from basstler.stack.model import StackBranch, Stack
 
 # %% how much a branch changes
 
@@ -209,7 +209,7 @@ class PromotionContextReader:
             self.context_of(branch) for branch in self.stack.awaiting_promotion_link()
         ]
 
-    def compared_with(self, branch: Branch) -> str:
+    def compared_with(self, branch: StackBranch) -> str:
         """
         :param branch: A branch to be promoted.
         :return: The reference its change is measured against.
@@ -219,7 +219,7 @@ class PromotionContextReader:
             return configuration.upstream_base_reference
         return configuration.reference_on_fork(branch.parent)
 
-    def context_of(self, branch: Branch) -> PromotionContext:
+    def context_of(self, branch: StackBranch) -> PromotionContext:
         """
         :param branch: A branch to be promoted.
         :return: What its upstream summary is written from.

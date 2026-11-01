@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from pathlib import Path
 
+from basstler.branch import Branch
 from basstler.class_property import classproperty
 from basstler.maintenance.git_commands import GitCommandRunner, ProposedPush
 from basstler.repository import Repository
@@ -15,7 +16,7 @@ from basstler.repository import Repository
 
 
 @dataclass(frozen=True)
-class RemoteBranch:
+class RemoteBranch(Branch):
     """
     One branch of one remote, read and written without touching the working tree.
     """
@@ -28,11 +29,6 @@ class RemoteBranch:
     remote: str
     """
     The remote the branch lives on, as a remote name in the clone or a URL.
-    """
-
-    name: str
-    """
-    The branch's name on that remote.
     """
 
     @classproperty
@@ -85,7 +81,7 @@ class RemoteBranch:
             self.remote,
             "--no-tags",
             "--no-write-fetch-head",
-            f"+refs/heads/{self.name}:{self.local_reference}",
+            f"+{self.reference}:{self.local_reference}",
         )
         return self.git.commit_at(self.local_reference)
 
@@ -112,7 +108,7 @@ class RemoteBranch:
         for _ in range(attempts):
             commit = self.git.commit_files(self.fetch(), files, message)
             pushed = self.git.push(
-                ProposedPush(self.remote, f"{commit}:refs/heads/{self.name}")
+                ProposedPush(self.remote, f"{commit}:{self.reference}")
             )
             if pushed.succeeded:
                 return commit

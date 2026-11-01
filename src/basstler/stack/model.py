@@ -17,6 +17,7 @@ from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.branch import Branch
 from basstler.github_labels import GitHubLabel
 from basstler.repository import Repository
 from basstler.stack.checkout import CurrentCheckout, LandedBranches
@@ -174,12 +175,10 @@ class PullRequest:
         return replace(pull_request, check_state=RollupState(pull_request.check_state))
 
 
-@dataclass
-class Branch:
-    """A stack node derived from a fork pull request plus git state."""
-
-    name: str
-    """The branch name (the pull request head)."""
+@dataclass(frozen=True)
+class StackBranch(Branch):
+    """A stack node derived from a fork pull request plus git state, named after the pull
+    request's head."""
 
     parent: str
     """The parent branch (the pull request base)."""
@@ -229,7 +228,7 @@ class Branch:
         pull_request: PullRequest,
         configuration: Configuration,
         is_merged: Callable[[str], bool],
-    ) -> Branch:
+    ) -> StackBranch:
         """:param pull_request: The exported pull request the node names.
         :param configuration: The static configuration naming the labels.
         :param is_merged: Maps a branch name to whether it has landed upstream.
@@ -321,7 +320,7 @@ class Stack:
     configuration: Configuration
     """The static configuration."""
 
-    branches: list[Branch]
+    branches: list[StackBranch]
     """The derived stack nodes."""
 
     is_merged: Callable[[str], bool]
@@ -346,7 +345,7 @@ class Stack:
         return cls(
             configuration=configuration,
             branches=[
-                Branch.from_pull_request(pull_request, configuration, is_merged)
+                StackBranch.from_pull_request(pull_request, configuration, is_merged)
                 for pull_request in pull_requests
             ],
             is_merged=is_merged,
@@ -372,7 +371,7 @@ class Stack:
             LandedBranches.from_checkout(configuration).contains,
         )
 
-    def maintained_branches(self) -> list[Branch]:
+    def maintained_branches(self) -> list[StackBranch]:
         """The branches this pass can restack, promote and write to, parent before child.
 
         :return: Every branch whose head is on the fork.
@@ -389,7 +388,7 @@ class Stack:
             if branch.skipped_pull_request is not None
         ]
 
-    def needs_resolution(self, branch: Branch) -> bool:
+    def needs_resolution(self, branch: StackBranch) -> bool:
         """:param branch: The branch to check.
         :return: Whether the branch is withheld from promotion pending conflict resolution.
         """
@@ -408,14 +407,14 @@ class Stack:
             branch_name
         )
 
-    def ordered(self) -> list[Branch]:
+    def ordered(self) -> list[StackBranch]:
         """:return: The branches, topologically ordered so a parent always precedes its
         children."""
         by_name = {branch.name: branch for branch in self.branches}
-        ordered: list[Branch] = []
+        ordered: list[StackBranch] = []
         seen: set[str] = set()
 
-        def visit(branch: Branch) -> None:
+        def visit(branch: StackBranch) -> None:
             if branch.name in seen:
                 return
             seen.add(branch.name)
@@ -428,7 +427,7 @@ class Stack:
             visit(branch)
         return ordered
 
-    def branches_stacked_on(self, branch_name: str) -> list[Branch]:
+    def branches_stacked_on(self, branch_name: str) -> list[StackBranch]:
         """Every not-yet-merged branch whose parent chain reaches *branch_name*.
 
         A branch is stacked on another when its pull request's base is that branch,
@@ -474,7 +473,7 @@ class Stack:
             self, branches=[branch for branch in self.branches if branch.name in kept]
         )
 
-    def parent_landed(self, branch: Branch) -> bool:
+    def parent_landed(self, branch: StackBranch) -> bool:
         """Whether a branch's parent has reached the upstream (merged or in-review), so it
         can promote.
 
@@ -500,7 +499,7 @@ class Stack:
             BranchStatus.MERGED,
         }
 
-    def integration_parent(self, branch: Branch) -> str:
+    def integration_parent(self, branch: StackBranch) -> str:
         """
         :param branch: A branch of the stack.
         :return: What it is brought up to date with: its parent, or the upstream base
@@ -510,7 +509,7 @@ class Stack:
             return self.configuration.upstream_base
         return branch.parent
 
-    def promotion_order(self) -> list[Branch]:
+    def promotion_order(self) -> list[StackBranch]:
         """The branches to submit to the upstream next, in dependency order.
 
         A branch is a candidate when it is approved (``ready``), its parent has landed, it
@@ -529,7 +528,7 @@ class Stack:
             and not branch.checks_failed
         ]
 
-    def withheld_by_failing_checks(self) -> list[Branch]:
+    def withheld_by_failing_checks(self) -> list[StackBranch]:
         """
         :return: Every approved branch whose parent has landed but whose checks failed,
             in dependency order.
@@ -542,7 +541,7 @@ class Stack:
             and branch.checks_failed
         ]
 
-    def awaiting_promotion_link(self) -> list[Branch]:
+    def awaiting_promotion_link(self) -> list[StackBranch]:
         """
         :return: The branches of :meth:`promotion_order` whose upstream link no pass has
             recorded yet, in dependency order.
@@ -611,7 +610,7 @@ class Stack:
             and self.has_landed_upstream(branch.parent)
         ]
 
-    def landed_branches(self) -> list[Branch]:
+    def landed_branches(self) -> list[StackBranch]:
         """Every open fork pull request whose own branch is already in the upstream base.
 
         These are the ones to label as landed and close; their children are named

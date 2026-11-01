@@ -117,7 +117,7 @@ class MaintenancePass:
                 self.upstream().open_pull_requests(), fork
             )
         read = ActionRead(
-            RemoteBranch(self.git, self.configuration.fork_remote, ActionBranch.NAME),
+            RemoteBranch(ActionBranch.NAME, self.git, self.configuration.fork_remote),
             OpenPullRequestsRequest.fresh(self.configuration.upstream_repository, fork),
             GitHubCommandLineClient(),
             answer_type=OpenPullRequestsAnswer,

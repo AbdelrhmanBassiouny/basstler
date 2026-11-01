@@ -171,9 +171,9 @@ def main(argv: list[str] | None = None) -> int:
             ActionRun(arguments.request, arguments.result).write_answer()
             return 0
         branch = RemoteBranch(
+            ActionBranch.NAME,
             GitCommandRunner(arguments.project_root),
             arguments.remote,
-            ActionBranch.NAME,
         )
         if arguments.command == ActionCommand.INSTALL:
             installation = ActionInstallation(arguments.branch_or_tag)

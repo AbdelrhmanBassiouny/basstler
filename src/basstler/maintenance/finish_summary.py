@@ -23,7 +23,7 @@ from basstler.maintenance.exceptions import MarkdownLinkTargetError
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.render_common import AllowedUrlScheme
-from basstler.stack.model import Branch, BranchStatus, Stack
+from basstler.stack.model import StackBranch, BranchStatus, Stack
 from basstler.upstream_reviews.vocabulary import RollupState
 
 # %% vocabulary
@@ -222,7 +222,7 @@ class FinishSummary:
         return f"### {heading}"
 
     @functools.cached_property
-    def branches_by_name(self) -> dict[str, Branch]:
+    def branches_by_name(self) -> dict[str, StackBranch]:
         """
         The stack's branches, by the name a report entry refers to them by.
         """
@@ -306,7 +306,7 @@ class FinishSummary:
         url = self.stack.configuration.fork_repository.pull_request_url(number)
         return str(MarkdownLink(f"#{number}", url))
 
-    def branch_line(self, branch: Branch) -> str:
+    def branch_line(self, branch: StackBranch) -> str:
         """
         :param branch: A branch of the stack.
         :return: Its pull request, title and name, as an entry opens.
