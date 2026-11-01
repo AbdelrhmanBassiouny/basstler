@@ -15,31 +15,19 @@ tracks:
   name: Windows bug fixes
   wave: fixes
 items:
-- id: windows-environment-interpreter
-  title: Find the package environment's interpreter on Windows
-  branch: claude/blissful-goodall-l5com5
-  status: done
-  track: fixes
-  depends_on: []
-  pull_request_number: 73
-  session: https://claude.ai/code/session_01AXLLt2epPWBnUpHZ3S5TLz
-  notes: resolve-personal-notes-config.sh points BASSTLER_ENVIRONMENT_INTERPRETER at venv/bin/python;
-    Windows has venv/Scripts/python.exe, so BASSTLER_PYTHON falls back to python3 (the report's
-    issue 1). Also check uv/bin/uv vs Scripts. Proceeds on venv\Scripts\python.exe without
-    the reporter's confirmation (user's call); the interpreter candidates moved to windows-interpreter-candidates.
 - id: windows-interpreter-candidates
   title: Create the package environment on Windows without uv
   branch: null
   status: not started
   track: fixes
-  depends_on:
-  - windows-environment-interpreter
+  depends_on: []
   pull_request_number: null
-  notes: BASSTLER_INTERPRETER_CANDIDATES names python3.14/3.13/3.12, which Windows does not
-    install, so without uv on PATH create_basstler_environment always falls back to installing
+  notes: 'Re-check after basstler-v3 cli-launcher: if the launcher always runs through uv,
+    drop this. BASSTLER_INTERPRETER_CANDIDATES names python3.14/3.13/3.12, which Windows does
+    not install, so without uv on PATH create_basstler_environment always falls back to installing
     uv with pip. Also try py -3.14/-3.13/-3.12 (and a python on PATH checked against BASSTLER_PYTHON_REQUIREMENT),
     each resolved to a full path before it runs. Split out of windows-environment-interpreter
-    as its own root cause.
+    as its own root cause.'
 - id: setup-report-strict-parsing
   title: Refuse an incomplete or failed check-setup.sh report with its stderr
   branch: null
@@ -79,8 +67,7 @@ items:
   branch: null
   status: not started
   track: fixes
-  depends_on:
-  - windows-environment-interpreter
+  depends_on: []
   pull_request_number: null
   notes: setup-personal-notes/SKILL.md installs the package before running its module when
     dashboard_dependencies is needs-setup, and says to ask the user for the notes remote's
@@ -91,7 +78,6 @@ items:
   status: not started
   track: fixes
   depends_on:
-  - windows-environment-interpreter
   - plugin-root-required
   pull_request_number: null
   notes: A windows-latest job runs check-setup.sh through python -m basstler.setup.personal_notes.
