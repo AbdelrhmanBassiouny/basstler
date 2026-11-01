@@ -73,9 +73,11 @@ items:
     an owner-approved browser test dependency (e.g. Playwright) to test the page''s JavaScript.'
 - id: artifact-path-retirement
   title: Point every plan skill at the site instead of republishing a dashboard Artifact
-  branch: null
-  status: not_started
+  branch: claude/quirky-brown-i7twwl
+  status: in progress
   track: site
+  pull_request_number: 115
+  session: https://claude.ai/code/session_018wfiv5SwdeaJM95D338HhC
   depends_on:
   - site-for-every-repository
   notes: 'Moved from workflow-cutover. First half now: every republish-/plan-dashboard instruction in
