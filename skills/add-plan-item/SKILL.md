@@ -120,7 +120,10 @@ fall through to **New plan**.
   sessions, and either no existing plan covers it or every plan that does is
   already full (step 5). Hand off to `/plan-create` via the `Skill` tool
   rather than drafting a manifest here — if the reason is a full plan rather
-  than no coverage at all, say so, citing the item count step 5 found.
+  than no coverage at all, say so, citing the item count step 5 found. A full
+  plan that could itself be split is a second way out: put both options to
+  the user with `AskUserQuestion`, with your recommendation, instead of
+  choosing for them.
 - **No item at all** — one self-contained change, done in this session, that
   nothing else depends on. `plan-create`'s own guidance against over-modelling
   applies: a plan that tracks everything is a plan nobody reads.
