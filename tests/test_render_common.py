@@ -3,6 +3,8 @@ Tests for render_common.py: the Jinja2 environment factory and markdown-to-HTML
 rendering (delegated to the `markdown` library, plus a heading-level shift on top).
 """
 
+from __future__ import annotations
+
 import pytest
 
 from basstler.dashboard.plan_page import DashboardRenderer

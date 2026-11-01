@@ -3,6 +3,8 @@ Tests for plan/sync_manifest_status.py: auto-correcting a plan.yaml's item statu
 "done" wherever GitHub confirms the item's pull request is merged.
 """
 
+from __future__ import annotations
+
 import json
 import sys
 from datetime import datetime
@@ -207,7 +209,7 @@ def test_patching_leaves_every_other_line_byte_for_byte_identical():
     patched_lines = patched_text.split("\n")
     changed_line_pairs = [
         (before, after)
-        for before, after in zip(original_lines, patched_lines)
+        for before, after in zip(original_lines, patched_lines, strict=True)
         if before != after
     ]
     assert changed_line_pairs == [("    status: in_progress", "    status: done")]

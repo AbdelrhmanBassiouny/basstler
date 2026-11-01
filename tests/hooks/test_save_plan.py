@@ -5,6 +5,8 @@ marker-block extraction, run against a local `git init --bare` fixture instead o
 real remote - no network access or real personal-notes branch involved.
 """
 
+from __future__ import annotations
+
 import subprocess
 from enum import StrEnum
 from pathlib import Path

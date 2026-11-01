@@ -10,6 +10,8 @@ basstler.dashboard.refresh_support has no such dependencies, so the real module 
 unchanged, with the logging module it prints through.
 """
 
+from __future__ import annotations
+
 import json
 import shutil
 import subprocess

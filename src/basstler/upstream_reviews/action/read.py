@@ -9,7 +9,7 @@ import json
 import time
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any, Generic
+from typing import Any
 
 from basstler.repository import Repository
 from basstler.upstream_reviews.action.branch import (
@@ -20,8 +20,8 @@ from basstler.upstream_reviews.vocabulary import (
     ActionFile,
 )
 from basstler.upstream_reviews.action.exchange import (
+    ActionAnswer,
     ActionRequest,
-    AnswerType,
 )
 from basstler.upstream_reviews.action.recording import (
     ActionJSONKey,
@@ -137,7 +137,7 @@ class WorkflowRunPage(JSONModel):
 
 
 @dataclass(frozen=True)
-class ActionRead(Generic[AnswerType]):
+class ActionRead[AnswerType: ActionAnswer]:
     """
     One read through the fork's Action: request it, then wait for its answer.
     """

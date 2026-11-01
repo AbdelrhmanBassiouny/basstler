@@ -3,6 +3,8 @@ Tests for :mod:`basstler.dashboard.plan`: reading a plan's waves, tracks and ite
 what an item answers about itself.
 """
 
+from __future__ import annotations
+
 import pytest
 
 from basstler.dashboard.plan import Item, Plan

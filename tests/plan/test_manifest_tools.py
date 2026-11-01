@@ -3,6 +3,8 @@ Tests for plan/manifest_tools.py: reading a plan.yaml's id, validating it and
 regenerating the branch->plan-id reverse index, used by save-plan.sh.
 """
 
+from __future__ import annotations
+
 import sys
 from pathlib import Path
 

@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from tqdm import tqdm
-from typing_extensions import Sequence
+from collections.abc import Sequence
 
 REPOSITORY_ROOT = Path(__file__).resolve().parent.parent
 DOCFORMATTER_CONFIG_PATH = REPOSITORY_ROOT / "pyproject.toml"

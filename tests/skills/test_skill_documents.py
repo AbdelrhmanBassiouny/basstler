@@ -107,7 +107,7 @@ class ShellConfiguration:
             cwd=RepositoryLocation.ROOT,
         )
         fields = result.stdout.split("\0")
-        return cls(variables=dict(zip(fields[0:-1:2], fields[1::2])))
+        return cls(variables=dict(zip(fields[0:-1:2], fields[1::2], strict=True)))
 
     def skill_document_variables(self) -> set[str]:
         """

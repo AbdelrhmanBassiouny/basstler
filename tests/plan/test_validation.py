@@ -2,6 +2,8 @@
 Tests for :mod:`basstler.plan.validation`: every schema rule a plan.yaml must satisfy.
 """
 
+from __future__ import annotations
+
 from typing import Any
 
 import pytest

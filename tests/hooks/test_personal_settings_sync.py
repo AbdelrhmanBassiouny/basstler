@@ -7,6 +7,8 @@ Runs the real scripts against a local `git init --bare` fixture instead of a rea
 remote - no network access or real personal-notes branch involved.
 """
 
+from __future__ import annotations
+
 import subprocess
 
 import pytest

@@ -81,7 +81,7 @@ class StatusColumn(StrEnum):
         :return: The cells as one table line, each padded to its column's width.
         """
         return " ".join(
-            f"{cell!s:<{column.width}}" for column, cell in zip(cls, cells)
+            f"{cell!s:<{column.width}}" for column, cell in zip(cls, cells, strict=True)
         ).rstrip()
 
     @classproperty

@@ -2,6 +2,8 @@
 Tests for email_address.py: reading an email address out of the text a user types.
 """
 
+from __future__ import annotations
+
 import pytest
 
 from basstler.email_address import EmailAddress
@@ -35,7 +37,7 @@ def test_email_address_rejects_text_that_is_not_local_part_at_domain(malformed: 
 
 
 @pytest.mark.parametrize(
-    "text, well_formed",
+    ("text", "well_formed"),
     [(str(ADDRESS), True), ("no-separator", False), ("no-domain@", False)],
 )
 def test_email_address_tells_well_formed_text_apart(text: str, well_formed: bool):

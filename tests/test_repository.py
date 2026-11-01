@@ -2,6 +2,8 @@
 Tests for repository.py: reading a GitHub repository out of a reference or a remote URL.
 """
 
+from __future__ import annotations
+
 import pytest
 
 from basstler.repository import MalformedRepositoryError, Repository

@@ -46,6 +46,7 @@ An empty ``corrected`` list means nothing needed fixing.
 from __future__ import annotations
 
 import argparse
+import itertools
 import json
 import re
 from enum import Enum
@@ -215,7 +216,7 @@ class ManifestText:
             preamble=lines[: boundaries[0]],
             item_blocks=[
                 ItemBlock(lines[start:end])
-                for start, end in zip(boundaries, boundaries[1:])
+                for start, end in itertools.pairwise(boundaries)
             ],
         )
 

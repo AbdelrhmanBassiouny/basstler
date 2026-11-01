@@ -3,6 +3,8 @@ Tests for standard_streams.py: the package's logging, which is also what its com
 print through.
 """
 
+from __future__ import annotations
+
 import logging
 from enum import StrEnum
 

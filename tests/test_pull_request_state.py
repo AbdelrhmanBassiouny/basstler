@@ -3,6 +3,8 @@ Tests for :mod:`basstler.pull_request_state`: reading ``pr_data.json`` and class
 pull request's live state.
 """
 
+from __future__ import annotations
+
 import json
 from datetime import datetime
 
