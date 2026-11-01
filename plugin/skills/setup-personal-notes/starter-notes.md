@@ -40,6 +40,13 @@ personal notes" in any session, or change `CLAUDE.local.md` between the
   question.
 - Always reply to a PR comment explaining what you did before resolving it.
 
+## Denied actions
+
+- When the permission system or its classifier denies a command, install or
+  network request, do not work around it and do not skip the step silently.
+  Ask me to accept it, naming the exact action and why it is needed, and run
+  it only once I agree.
+
 ## Before starting work
 
 - Always fetch, pull, and merge from the original repository you cloned (the
