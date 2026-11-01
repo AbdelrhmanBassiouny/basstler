@@ -19,6 +19,7 @@ from typing import Any
 import yaml
 
 from basstler.locations import ProjectLocation
+from basstler.repository import Repository
 
 
 class ItemStatus(StrEnum):
@@ -541,6 +542,27 @@ class PlanItem:
         return ItemStatus(self.content[ManifestKey.STATUS.key])
 
     @property
+    def branch(self) -> str | None:
+        """
+        :return: The branch the item's work happens on, or ``None`` when it has none yet.
+        """
+        return self.content.get(ManifestKey.BRANCH.key)
+
+    @property
+    def session(self) -> str | None:
+        """
+        :return: The session doing the item's work, or ``None`` when none is recorded.
+        """
+        return self.content.get(ManifestKey.SESSION.key)
+
+    @property
+    def pull_request_number(self) -> int | None:
+        """
+        :return: The number of the item's pull request, or ``None`` when it has none yet.
+        """
+        return self.content.get(ManifestKey.PULL_REQUEST_NUMBER.key)
+
+    @property
     def notes(self) -> str:
         """
         :return: The item's notes with their line folding undone, empty when it has none.
@@ -628,6 +650,24 @@ class PlanManifest:
         :return: The plan's id.
         """
         return str(self.content[ManifestKey.IDENTIFIER.key])
+
+    @property
+    def default_repository(self) -> Repository:
+        """
+        :return: The repository every item's pull request is on unless it names its own.
+        """
+        return Repository.parse(self.content[ManifestKey.DEFAULT_REPOSITORY.key])
+
+    def repository_of(self, item: PlanItem) -> Repository:
+        """
+        :param item: An item of this plan.
+        :return: The repository the item's pull request is on: its own, else the plan's
+            default.
+        """
+        own_repository = item.content.get(ManifestKey.REPOSITORY.key)
+        if not own_repository:
+            return self.default_repository
+        return Repository.parse(own_repository)
 
     @property
     def description(self) -> str:
