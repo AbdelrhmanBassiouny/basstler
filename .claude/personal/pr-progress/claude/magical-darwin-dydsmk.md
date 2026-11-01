@@ -1,13 +1,13 @@
 ## Plan
-- Generalize RemoteBranch into a shared branch writer (any branch, any remote).
-- Site repository caller workflow template (workflow_dispatch -> plan-site-build.yml).
-- Notes-branch dispatch workflow template (push -> gh workflow run with PAT secret).
-- basstler.plan_site.publication: push both, register hub, print copyable lines for the rest, re-check on rerun.
-- /setup-personal-notes step; stack-board PR replacing board.yml with the caller.
-- Page re-checks blocking PRs' draft state from the browser.
+- Shared branch writer; publication command (site workflow, hub, dispatch workflow, copyable user steps, re-check).
+- check-setup plan_site row; /setup-personal-notes step 8.
+- stack-board#8 replaces board.yml with the caller (supersedes stack-board#7).
+- Browser re-check of blocking PRs' draft state: awaiting owner's call (needs a JS test dependency).
 
 ## Done
-- Branch + draft PR #105 opened; item recorded in progress.
+- All of the above except the browser re-check; 1779 tests pass; PR #105 description current, release:minor.
 
 ## Next
-- Step 1: shared branch writer, tests first.
+- Owner: decide the browser re-check (this PR, follow-up item, or drop).
+- After release: run the publication command once on this clone to commit the dispatch workflow; store PLAN_SITE_TOKEN; merge stack-board#8, close #7.
+- Follow-up: pass the token into plan-site-build.yml for private repositories.
