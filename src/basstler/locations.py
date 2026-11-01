@@ -198,6 +198,11 @@ class BasstlerVariable(EnvironmentVariable):
     The root of the Claude Code plugin whose hooks and skills run this package.
     """
 
+    PYTHON = "BASSTLER_PYTHON"
+    """
+    The interpreter whose environment holds this package, for running its modules.
+    """
+
 
 class PluginLocation(PathEnumeration):
     """
