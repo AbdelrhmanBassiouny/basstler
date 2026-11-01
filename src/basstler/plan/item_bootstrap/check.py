@@ -86,9 +86,6 @@ class StalenessReport(OperationReport):
             ReportKey.PLAN: self.plan_identifier,
             ReportKey.ITEM: self.item_identifier,
             ReportKey.FINDINGS: [finding.to_json() for finding in self.findings],
-            ReportKey.DASHBOARD_COMMAND: self.dashboard_command_for(
-                self.plan_identifier
-            ),
         }
 
 

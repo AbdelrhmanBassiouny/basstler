@@ -127,18 +127,13 @@ class BranchReport(OperationReport):
         return PlanItemBootstrapExitCode.BRANCH_TRACKS_NO_ITEM
 
     def to_json(self) -> dict[str, Any]:
-        document: dict[str, Any] = {
+        return {
             ReportKey.STATUS: self.exit_code.name_for_a_caller,
             ReportKey.EXIT_CODE: int(self.exit_code),
             ManifestKey.BRANCH.key: self.branch,
             ReportKey.PLAN: self.plan_identifier,
             ReportKey.ITEMS: [item.to_json() for item in self.items],
         }
-        if self.plan_identifier is not None:
-            document[ReportKey.DASHBOARD_COMMAND] = self.dashboard_command_for(
-                self.plan_identifier
-            )
-        return document
 
 
 @dataclass(frozen=True)

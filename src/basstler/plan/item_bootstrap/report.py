@@ -35,15 +35,6 @@ class OperationReport(ABC):
         Render the report as the JSON a caller reads, led by what it means.
         """
 
-    @staticmethod
-    def dashboard_command_for(plan_identifier: str) -> str:
-        """
-        :param plan_identifier: The plan that was written.
-        :return: The republish a live session still has to run, since only it can call
-            ``Artifact``.
-        """
-        return f"/plan-dashboard {plan_identifier}"
-
 
 @dataclass(frozen=True)
 class BootstrapReport(OperationReport):
@@ -90,14 +81,6 @@ class BootstrapReport(OperationReport):
     def exit_code(self) -> PlanItemBootstrapExitCode:
         return PlanItemBootstrapExitCode.SUCCESS
 
-    @property
-    def dashboard_command(self) -> str:
-        """
-        The republish a live session still has to run, since only it can call
-        ``Artifact``.
-        """
-        return OperationReport.dashboard_command_for(self.plan_identifier)
-
     def to_json(self) -> dict[str, Any]:
         document: dict[str, Any] = {
             ReportKey.STATUS: self.exit_code.name_for_a_caller,
@@ -105,7 +88,6 @@ class BootstrapReport(OperationReport):
             ReportKey.PLAN: self.plan_identifier,
             ReportKey.ITEM: self.item_identifier,
             ReportKey.CREATED_ITEM: self.created_item,
-            ReportKey.DASHBOARD_COMMAND: self.dashboard_command,
         }
         if self.branch is not None:
             document[ManifestKey.BRANCH.key] = self.branch

@@ -223,16 +223,6 @@ def test_updating_an_unknown_item_is_refused(bootstrap_repository: ScratchReposi
     assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == PLAN_MANIFEST
 
 
-def test_updating_hands_the_dashboard_republish_back(
-    bootstrap_repository: ScratchRepository,
-):
-    report = update_request(
-        values_by_key={ManifestKey.STATUS: ItemStatus.BLOCKED}
-    ).update(bootstrap_repository.project_root)
-
-    assert report.dashboard_command == f"/plan-dashboard {PLAN_IDENTIFIER}"
-
-
 def test_a_written_note_reports_how_many_paragraphs_it_became(
     bootstrap_repository: ScratchRepository,
 ):
