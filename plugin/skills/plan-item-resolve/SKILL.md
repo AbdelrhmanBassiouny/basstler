@@ -29,10 +29,8 @@ resume any other session.
 ## 1. Gather the item's context
 
 Follow [`plan-item-gathering.md`](../plan-dashboard/plan-item-gathering.md) end to end — the setup check, the
-item's resolution off the personal-notes branch, the tracking issue's
-comments, its recorded state, the plan's standing rules, the dependency
-chain, and the standing conventions. `plan-item-kickoff` runs the same
-procedure, which is why it lives there rather than in either skill.
+stack pass, the item's brief, the tracking issue's comments and the project's
+rules. `plan-item-kickoff` runs the same procedure.
 
 Then add the part only a resolve needs — **the live state of work that
 already exists**, which is where the cause of a stall almost always is:
