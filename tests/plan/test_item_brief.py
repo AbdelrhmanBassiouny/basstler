@@ -48,6 +48,11 @@ BRIEFED_ITEM = BRIEFED_MANIFEST.item_named("briefed-item")
 The item every brief is read for.
 """
 
+BRIEFED_ITEM_SELECTION = ItemByIdentifier(BRIEFED_ITEM.identifier)
+"""
+The selection a brief is read with unless a test names another.
+"""
+
 FOREIGN_MANIFEST = PlanManifest.from_file(
     DatasetLocation.PLANS / FixturePlanId.OTHER / PlanDocument.MANIFEST
 )
@@ -126,9 +131,7 @@ def briefed_repository(scratch_repository: ScratchRepository) -> ScratchReposito
 def read_brief(
     repository: ScratchRepository,
     pull_request_source: RecordedPullRequestSource,
-    selection: ItemByIdentifier | ItemByBranch = ItemByIdentifier(
-        BRIEFED_ITEM.identifier
-    ),
+    selection: ItemByIdentifier | ItemByBranch = BRIEFED_ITEM_SELECTION,
 ) -> dict[str, Any]:
     """
     :param repository: The repository whose notes branch carries the plan.
@@ -168,7 +171,11 @@ def test_the_brief_says_which_dependencies_are_ready_to_build_on(
         (dependency[ReadinessField.IDENTIFIER], dependency[ReadinessField.IS_READY])
         for dependency in brief[ItemBriefKey.DEPENDENCIES]
     ] == list(
-        zip(BRIEFED_ITEM.content[ManifestKey.DEPENDS_ON.key], [True, False, True])
+        zip(
+            BRIEFED_ITEM.content[ManifestKey.DEPENDS_ON.key],
+            [True, False, True],
+            strict=True,
+        )
     )
 
 
