@@ -50,18 +50,6 @@ items:
     in https://github.com/AbdelrhmanBassiouny/basstler/pull/105#discussion_r4436512955).
   blockers:
   - Waits on krrood's light core release.
-- id: plugin-from-installed-package
-  title: Hooks and skill documents run from the installed package's copy of the plugin
-  branch: null
-  status: deferred
-  track: extraction
-  depends_on: []
-  pull_request_number: null
-  notes: 'Superseded by basstler-v3 cli-launcher (the plugin runs the installed release) and short-skills.
-    Was: Option (c) of https://github.com/AbdelrhmanBassiouny/basstler/pull/32#discussion_r4367494752,
-    agreed as a later item there (#32 itself merges as option (a)). Ship plugin/ inside the wheel; hooks
-    and the documents skills tell Claude to read resolve against the installed package''s copy, so the
-    synced plugin shrinks to the SessionStart hook plus thin SKILL.md stubs that stay a stable pointer.'
 - id: cram-development-tools
   title: Install the docstring formatter and a generated AGENTS.md from the shared cram-development-tools
     package
