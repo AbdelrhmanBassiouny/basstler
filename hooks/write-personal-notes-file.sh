@@ -88,10 +88,7 @@ cleanup() {
 trap cleanup EXIT
 
 git branch -D "${SCRATCH_BRANCH}" > /dev/null 2>&1 || true
-# FETCH_HEAD, not "${ACTIVE_NOTES_REMOTE}/${NOTES_BRANCH}": a URL-form remote
-# creates no remote-tracking ref, but FETCH_HEAD always points at what was
-# just fetched, whether the serving remote was a name or a raw URL.
-git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" FETCH_HEAD --quiet
+git worktree add -b "${SCRATCH_BRANCH}" "${SCRATCH_DIR}" "${PERSONAL_NOTES_REFERENCE}" --quiet
 
 mkdir -p "${SCRATCH_DIR}/$(dirname "${DESTINATION_PATH}")"
 cp "${SOURCE_FILE}" "${SCRATCH_DIR}/${DESTINATION_PATH}"

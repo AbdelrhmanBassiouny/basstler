@@ -7,12 +7,6 @@ describes something new to build — and all four need the same answer, applied
 the same way. The procedure is here, once, so each skill references it in a
 line rather than restating it.
 
-Getting it wrong is not hypothetical. In one stack, three separate branches had
-to be folded back into their parents after the fact, and two sessions
-independently built the same artifact under two different filenames without
-either noticing. In each case the split reflected the order the work was
-thought of, not anything about the work.
-
 ## The question
 
 Prefer the change. Work is genuinely new only if it still stands on its own
@@ -58,11 +52,7 @@ exactly this — and compare intent, not just filenames. When it happens, decide
 which copy survives *before* either lands; afterwards it is a merge conflict
 instead of a choice.
 
-## What splitting anyway costs
+## Split on what the work is
 
-The earlier item ships a state nobody should ever run; the later one spends its
-review re-explaining the first; and if either is live infrastructure, landing
-the earlier one alone regresses it until the later one follows.
-
-Prefer one item with a coherent story over two that only make sense read in
-order. Split on *what the work is*, not on when it was thought of.
+Prefer one item with a coherent story over two that only make sense read in order.
+Split on *what the work is*, not on when it was thought of.

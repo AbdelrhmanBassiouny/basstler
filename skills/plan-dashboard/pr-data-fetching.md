@@ -1,11 +1,27 @@
 # Fetching live pull request data into pr_data.json
 
 The canonical procedure for gathering the `pr_data.json` shape
-`build_dashboard.py`, `sync_manifest_status.py`, and
-`check_dependency_readiness.py` all consume - referenced by
-`plan-dashboard/SKILL.md` step 2 and `dependency-readiness.md` instead of
-each restating it. See any of those three scripts' own `--help` / module
-docstring for the exact JSON shape expected.
+`dashboard/plan_page.py` and `plan/sync_manifest_status.py` both consume -
+referenced by `plan-dashboard/SKILL.md` step 2 instead of restating it.
+
+## Shape
+
+The top level is keyed by repository as `"<owner>/<repo>"`, and each repository by
+pull request number as a string - never by number alone, even for a plan tracking a
+single repository:
+
+```json
+{
+  "example-org/notification-service": {
+    "101": {"state": "closed", "draft": false, "merged_at": "2026-01-10T12:00:00+00:00", "labels": [], "body": null},
+    "102": {"state": "open", "draft": true, "merged_at": null, "labels": ["bug"], "body": null}
+  }
+}
+```
+
+A file of another shape - `{"488": {...}}` with the repository level left out - is
+refused with `MalformedPullRequestDataError`. [`example/pr_data.json`](example/pr_data.json)
+is a complete file.
 
 Source the shared config script first if you haven't already this session -
 it defines the tool-name constants referenced below:
@@ -24,6 +40,13 @@ this matters:
 2. For any pull request number not covered by that result set (older than
    the pagination window), fall back to `${GITHUB_PULL_REQUEST_READ_TOOL}`
    with `method: "get"` for that specific `pullNumber`.
+
+A cross-plan dependency (`depends_on: [<plan-id>/<item-id>]`, see
+`plan-schema.md`) widens that: the dashboard shows the foreign item's own
+live state, so its pull request has to be in this data too. It resolves
+against **its own plan's** `default_repository`, not the rendered plan's, so
+a reference into a plan tracking a different repository adds that repository
+to the list above.
 
 ## Fields
 
@@ -48,9 +71,12 @@ response as-is is what the rejection above catches.
 `labels` carries two things this codebase reads. A pull request merged
 out-of-band never gets `merged_at` set, and this repo's convention is to add
 a `"merged"` label by hand in that case - see `github_labels.py`'s
-`GitHubLabel` and `build_dashboard.py`'s `was_merged`. That label is a fallback for a real merge
+`GitHubLabel` and `pull_request_state.py`'s `was_merged`. That label is a fallback for a real merge
 GitHub never recorded, not a substitute for `merged_at` - only pull requests
 that happen to carry it survive a fetch that dropped the timestamp. A
 `"bug"` label separately marks the item as a bug fix wherever it already
 appears in the sidebar, and is what its "Bug fixes only" filter keeps - see
 `Item.is_bug_fix`.
+
+`body` is optional. When present, the link a maintenance pass wrote under the description's
+`## Upstream pull request` heading is shown on the item's card as an `upstream ↗` link.

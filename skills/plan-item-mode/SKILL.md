@@ -1,6 +1,6 @@
 ---
 name: plan-item-mode
-description: Change how /plan-item-kickoff and /plan-item-resolve start work on a tracked item - implementing on their own (auto), stopping for plan approval first (plan), or asking each time (ask) - by pinning the choice in the personal-notes branch so it holds for every future session. Invoke as "/plan-item-mode <auto|plan|ask> [kickoff|resolve|both]". Use whenever the user states a standing preference about being asked, such as "stop asking me, just implement", "always show me a plan first", "go back to asking each time", or "make auto the default from now on".
+description: Pin whether kickoff and resolve implement directly (auto), present a plan first (plan), or ask each time (ask). Invoke as "/plan-item-mode <auto|plan|ask> [kickoff|resolve|both]". Use when the user states a standing preference about being asked.
 allowed-tools: Bash, Read
 ---
 
@@ -8,7 +8,7 @@ allowed-tools: Bash, Read
 
 Sets the execution mode the plan-item skills resolve. Every mechanical part
 belongs to the module the commands below run; this skill only reads what the
-user asked for and calls it. `${EXECUTION_MODES_DOCUMENT}` is where the modes are defined and where what
+user asked for and calls it. [`execution-modes.md`](../plan-dashboard/execution-modes.md) is where the modes are defined and where what
 each one obliges is stated — read it if the user asks what a mode means rather
 than restating it here.
 

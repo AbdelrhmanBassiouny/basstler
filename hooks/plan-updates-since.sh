@@ -30,7 +30,7 @@ set -euo pipefail
 # that same pattern, not a new one.
 #
 # Every user-facing message string, and the comment-JSON parsing, live in
-# plan_updates_since_support rather than inline here - so this script
+# basstler.plan.updates_since_support rather than inline here - so this script
 # never carries its own copy of text the test suite also has to check
 # against, and the comment-parsing logic is real, testable Python rather
 # than an inline `python3 -c` snippet. See that module's own docstring.
@@ -65,7 +65,7 @@ github_api_token() {
 # print_issue_comments_since: prints every comment on
 # repository#issue_number created or updated at or after since_timestamp_utc
 # (an "YYYY-MM-DDTHH:MM:SSZ" string), formatted by
-# plan_updates_since_support's format_issue_comments.
+# basstler.plan.updates_since_support's format_issue_comments.
 print_issue_comments_since() {
   local repository="$1" issue_number="$2" since_timestamp_utc="$3"
   local path="repos/${repository}/issues/${issue_number}/comments?since=${since_timestamp_utc}&per_page=100"
@@ -120,7 +120,7 @@ if ! fetch_personal_notes_branch; then
 fi
 
 MANIFEST_PATH="$(plan_manifest_path "${PLAN_ID}")"
-if ! git cat-file -e "FETCH_HEAD:${MANIFEST_PATH}" 2>/dev/null; then
+if ! git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${MANIFEST_PATH}" 2>/dev/null; then
   echo "No such plan '${PLAN_ID}' on '${NOTES_BRANCH}' (${MANIFEST_PATH} not found)." >&2
   exit 1
 fi
@@ -134,7 +134,7 @@ if [ -z "${SINCE_SHA}" ]; then
   exit 1
 fi
 
-NEW_SHA="$(git rev-parse FETCH_HEAD)"
+NEW_SHA="$(git rev-parse "${PERSONAL_NOTES_REFERENCE}")"
 PLAN_DIRECTORY="$(plan_directory_path "${PLAN_ID}")"
 
 echo "=== Changes to ${PLAN_DIRECTORY} (${SINCE_SHA}..${NEW_SHA}) ==="
@@ -146,14 +146,14 @@ else
 fi
 echo
 
-TRACKING_ISSUE="$(git show "FETCH_HEAD:${MANIFEST_PATH}" \
+TRACKING_ISSUE="$(git show "${PERSONAL_NOTES_REFERENCE}:${MANIFEST_PATH}" \
   | grep -oE '^tracking_issue:[[:space:]]*[0-9]+' | head -1 | grep -oE '[0-9]+$' || true)"
 
 if [ -z "${TRACKING_ISSUE}" ]; then
   echo "=== Tracking issue ==="
   "${BASSTLER_PYTHON}" -m "${PLAN_UPDATES_SINCE_SUPPORT_MODULE}" print-no-tracking-issue-message
 else
-  DEFAULT_REPOSITORY="$(git show "FETCH_HEAD:${MANIFEST_PATH}" \
+  DEFAULT_REPOSITORY="$(git show "${PERSONAL_NOTES_REFERENCE}:${MANIFEST_PATH}" \
     | grep -oE '^default_repository:[[:space:]]*.+$' | head -1 \
     | sed -E 's/^default_repository:[[:space:]]*//' || true)"
   if [ -z "${DEFAULT_REPOSITORY}" ]; then

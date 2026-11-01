@@ -1,7 +1,7 @@
 ---
 name: plan-create
-description: Create (or migrate an existing bespoke roadmap doc into) a new multi-PR/multi-session plan under .claude/personal/plans/<plan-id>/plan.yaml on the personal-notes branch, cross-checked against live GitHub, then bootstrap and publish it. Invoke as "/plan-create <plan-id>". Use when the user asks to start tracking something as a plan, set up a new plan/roadmap, or migrate an existing roadmap doc into the plan-dashboard system.
-allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
+description: Create a multi-PR plan on the personal-notes branch, or migrate a roadmap doc into one, then publish its dashboard. Invoke as "/plan-create <plan-id>". Use when asked to start tracking work as a plan.
+allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
 # Plan Create
@@ -38,11 +38,11 @@ step 7):
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+fetch_personal_notes_branch
 ```
 
 Then check whether `${PLANS_DIR}/<plan-id>/plan.yaml` already
-exists on `FETCH_HEAD` (`PLANS_DIR` is defined by the config script sourced
+exists on `"${PERSONAL_NOTES_REFERENCE}"` (`PLANS_DIR` is defined by the config script sourced
 above).
 If it does, stop and tell the user — point them at editing the existing
 plan (`plan-dashboard`'s doc, or just ask a session to edit it) instead of
@@ -96,7 +96,7 @@ not after.
 
 Ask this of every item before adding it, and prefer the change: an item that
 only modifies what an unlanded item introduces is that item's work, not a
-separate one. Follow `${SCOPE_DECISION_DOCUMENT}` — it holds the check and how
+separate one. Follow [`scope-decision.md`](../add-plan-item/scope-decision.md) — it holds the check and how
 to read it.
 
 For a single piece of work rather than a whole plan, `/add-plan-item` runs that
@@ -137,9 +137,9 @@ single session will obviously own it end to end). If yes:
    explaining its purpose (not a work item — here's how proposals/replies
    work; see `plan-schema.md`'s "Proposing structural changes" section for
    the convention to describe).
-2. Subscribe to it (the same PR-activity subscription tool also works on a
-   plain issue number — confirmed empirically, not assumed; there is no
-   separate issue-subscription tool).
+2. Do not subscribe to it: `mcp__claude-code-remote__subscribe_pr_activity`
+   takes pull requests only. Sessions read its comments instead, as
+   `plan-item-gathering.md` describes.
 3. Record its number as `tracking_issue` in the manifest you're about to
    write in step 6.
 
@@ -148,7 +148,8 @@ repo — check by trying, don't assume): cut a branch off `main` named
 `plan-tracking-<plan-id>`, make a single **empty commit**
 (`git commit --allow-empty` — the branch carries no file changes, ever),
 open it as a **draft** PR (base `main`, same title, a body noting *why* it's
-a PR and not an issue), subscribe to that instead, and still record its
+a PR and not an issue), subscribe to that with
+`mcp__claude-code-remote__subscribe_pr_activity`, and still record its
 number as `tracking_issue` — the field names the mailbox's role, not the
 literal GitHub object type, since which one applies is a per-repo fact
 that can change if Issues get enabled later. Whoever later builds a link
@@ -185,7 +186,7 @@ already require.
 A plan this large before it has even been saved once is the same failure a
 plan can also grow into later: more items than one plan may hold. Catch it
 here, before the first save, rather than after the fact. Count the draft's
-items against the item limit, `Measure.ITEM_COUNT` in `plan_size_limits.py`:
+items against the item limit, `Measure.ITEM_COUNT` in `plan/size_limits.py`:
 
 ```bash
 "${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <path/to/plan.yaml>
@@ -228,20 +229,20 @@ commit.
 ## 9. Publish
 
 Invoke the `plan-dashboard` skill for `<plan-id>` to publish its first
-dashboard Artifact. Ask the user whether they also want the master index
-refreshed (`plan-dashboard` with no argument) — don't do it unprompted,
-same convention `plan-dashboard` itself already follows, since that
-republishes a second, separate page.
+dashboard Artifact, then invoke it with no argument to republish the master index
+(`_index`): a new plan is the one change that makes the index stale.
 
 If this was a migration from an existing freeform doc, offer — don't do it
 unprompted — to replace that old doc with a short pointer stub at its
 original location, so anyone still reading the old path finds the new one
 immediately.
 
+Every later change to the plan follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
+
 ## 10. Report back
 
-Plan id, item/wave/track counts, the dashboard URL, the tracking issue link
-if one was created, and — explicitly, not buried — every judgment call you
+Plan id, item/wave/track counts, the dashboard URL and the index URL, the
+tracking issue link if one was created, and — explicitly, not buried — every judgment call you
 made or flagged along the way (structural assumptions, any live-vs-source
 disagreement found in step 4) so the user can sanity-check them before
 relying on the plan.
