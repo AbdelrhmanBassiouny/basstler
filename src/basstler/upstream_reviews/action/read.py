@@ -81,11 +81,10 @@ class WorkflowRun(JSONModel):
         :param data: One listed run.
         :return: The parsed run.
         """
-        conclusion = data[WorkflowRunJSONKey.CONCLUSION]
         return cls(
             data[WorkflowRunJSONKey.IDENTIFIER],
             data[WorkflowRunJSONKey.HEAD_SHA],
-            CheckOutcome[conclusion.upper()] if conclusion else CheckOutcome.PENDING,
+            CheckOutcome.from_conclusion(data[WorkflowRunJSONKey.CONCLUSION]),
         )
 
     @property

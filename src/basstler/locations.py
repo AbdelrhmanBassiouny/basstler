@@ -347,6 +347,33 @@ class ProjectLocation(PathEnumeration):
     """
 
 
+class WorkflowLocation(PathEnumeration):
+    """
+    The GitHub Actions workflows the plan site runs on, relative to the root of the
+    branch that holds each.
+    """
+
+    DIRECTORY = Path(".github") / "workflows"
+    """
+    Where GitHub reads a branch's workflows from.
+    """
+
+    PLAN_SITE_BUILD = DIRECTORY / "plan-site-build.yml"
+    """
+    basstler's reusable workflow that builds and deploys the plan site.
+    """
+
+    PLAN_SITE = DIRECTORY / "plan-site.yml"
+    """
+    The workflow on the user's site repository that calls :attr:`PLAN_SITE_BUILD`.
+    """
+
+    PLAN_SITE_DISPATCH = DIRECTORY / "plan-site-dispatch.yml"
+    """
+    The workflow on a notes branch that starts :attr:`PLAN_SITE` on every push to it.
+    """
+
+
 class ClaudeCodeVariable(EnvironmentVariable):
     """
     The environment variables Claude Code sets for the commands it runs.

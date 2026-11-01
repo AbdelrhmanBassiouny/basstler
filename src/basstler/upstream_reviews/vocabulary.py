@@ -263,6 +263,15 @@ class CheckOutcome(StrEnum):
     GitHub marked the check run stale after it went too long without finishing.
     """
 
+    @classmethod
+    def from_conclusion(cls, conclusion: str | None) -> CheckOutcome:
+        """
+        :param conclusion: A check run's or workflow run's conclusion as GitHub spells
+            it, ``None`` while it runs.
+        :return: The outcome it reads as.
+        """
+        return cls[conclusion.upper()] if conclusion else cls.PENDING
+
     STARTUP_FAILURE = "startup failure"
     """
     The check run failed before it could start.

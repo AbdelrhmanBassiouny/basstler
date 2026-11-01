@@ -1,0 +1,19 @@
+# Written by basstler's /setup-personal-notes (python -m basstler.plan_site.publication);
+# re-run that to update it rather than editing it here.
+name: Plan site
+
+# Started by each registered repository's notes branch on every push to it, and by hand.
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    uses: {{ basstler_repository }}/{{ build_workflow }}@{{ branch_or_tag }}
+    with:
+      basstler_branch_or_tag: {{ branch_or_tag }}
+      registry: {{ registry }}

@@ -90,3 +90,17 @@ def test_the_branch_names_the_repository_its_remote_points_at(fork_checkout):
     assert branch.repository == Repository.from_remote_url(
         fork_checkout.fork_path.as_uri()
     )
+
+
+def test_the_latest_file_is_read_from_the_remote_s_current_tip(fork_checkout):
+    branch = branch_on_fork(fork_checkout, "notes/someone")
+    branch.write({"file.txt": "first"}, "First")
+    branch.write({"file.txt": "second"}, "Second")
+
+    assert branch.read_latest("file.txt") == "second"
+
+
+def test_a_missing_branch_reads_no_latest_file(fork_checkout):
+    assert (
+        branch_on_fork(fork_checkout, "notes/someone").read_latest("file.txt") is None
+    )

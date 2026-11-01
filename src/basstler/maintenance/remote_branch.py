@@ -100,6 +100,15 @@ class RemoteBranch:
         shown = self.git.attempt("show", f"{commit}:{path}")
         return shown.output if shown.succeeded else None
 
+    def read_latest(self, path: str) -> str | None:
+        """
+        :param path: The file's path from the branch's root.
+        :return: Its text at the branch's current tip without the final newline, or
+            ``None`` when the remote has no such branch or the branch no such file.
+        """
+        tip = self.fetch()
+        return self.read(tip, path) if tip else None
+
     def commit(self, parent: str | None, files: dict[str, str], message: str) -> str:
         """
         Commit files on top of the branch, keeping every file not given.
