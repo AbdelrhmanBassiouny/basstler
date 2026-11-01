@@ -73,6 +73,11 @@ ensure_basstler_environment() {
 
 ensure_basstler_environment
 
+# After the install, so it names the environment's interpreter once one exists.
+if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
+  printf 'export BASSTLER_PYTHON=%q\n' "${BASSTLER_PYTHON}" >> "${CLAUDE_ENV_FILE}"
+fi
+
 if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" 2>/dev/null; then
   cat <<HEADER >> "${OUTPUT_FILE}"
 <!--

@@ -356,9 +356,9 @@ PLAN_SITE_PUBLICATION_MODULE="basstler.plan_site.publication"
 # basstler.plan.sync_manifest_status: auto-corrects a plan.yaml's item statuses to
 # "done" wherever GitHub confirms the item's pull request is merged.
 SYNC_MANIFEST_STATUS_MODULE="basstler.plan.sync_manifest_status"
-# basstler.plan.check_dependency_readiness: classifies one item's dependencies as
-# ready or not-ready to build on - see dependency-readiness.md below.
-CHECK_DEPENDENCY_READINESS_MODULE="basstler.plan.check_dependency_readiness"
+# basstler.plan.item_brief: prints one plan item's brief - the plan header, the item,
+# its dependencies' live readiness and the plan's standing rules.
+ITEM_BRIEF_MODULE="basstler.plan.item_brief"
 # basstler.dashboard.refresh_support: the JSON-plumbing helpers
 # refresh_dashboard.sh calls between its two module calls.
 REFRESH_DASHBOARD_SUPPORT_MODULE="basstler.dashboard.refresh_support"

@@ -1,6 +1,6 @@
 ---
 name: stacked-pr-maintenance
-description: Run one maintenance pass over a fork's stacked pull requests: reparent, restack, and promote approved branches upstream. Invoke as "/stacked-pr-maintenance [fork=<owner/repo>] [upstream=<owner/repo>]". Use when asked to restack or promote the stack, and as the first step of plan-item-kickoff and plan-item-resolve.
+description: Run one maintenance pass over a fork's stacked pull requests, or over one branch's stack: reparent, restack, and promote approved branches upstream. Invoke as "/stacked-pr-maintenance [fork=<owner/repo>] [upstream=<owner/repo>] [stacked-on=<branch>]". Use when asked to restack or promote the stack, and as the first step of plan-item-kickoff and plan-item-resolve.
 allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__update_pull_request
 ---
 
@@ -45,8 +45,12 @@ Pass `fork=` / `upstream=` arguments straight through. Never inspect or guess at
 ## 2. Prepare
 
 ```bash
-"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance prepare
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance prepare [--stacked-on <branch>]
 ```
+
+Pass a `stacked-on=` argument through as `--stacked-on`, here and in step 3. The pass then covers
+only that branch's stack: the branch, the branches it is stacked on and the branches stacked on
+it. Every other pull request is left alone and never listed.
 
 It prints one JSON document: `reparents` (bases to retarget) and `to_summarize` (one entry per
 branch about to get its upstream link, each with its fork title, description, commit subjects and
@@ -106,7 +110,7 @@ request. Write an entry for every listed number; both fields are optional.
 ## 3. Run the pass
 
 ```bash
-"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance run-report [--summaries <the file>]
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance run-report [--stacked-on <branch>] [--summaries <the file>]
 ```
 
 It exports a fresh board, fast-forwards, restacks, comments on and labels conflicts, records the
