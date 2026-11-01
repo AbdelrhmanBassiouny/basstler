@@ -15,6 +15,7 @@ from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
     PlanDocument,
+    PlanItem,
 )
 
 from ...scratch_repository import ScratchRepository
@@ -200,7 +201,7 @@ def test_updating_sets_every_plain_field_it_is_given(
     item = published_items(bootstrap_repository)[EXISTING_ITEM]
     assert item[ManifestKey.STATUS.key] == ItemStatus.BLOCKED
     assert item[ManifestKey.BRANCH.key] == NEW_BRANCH
-    assert item[ManifestKey.PULL_REQUEST_NUMBER.key] == 57
+    assert PlanItem(item).pull_request_number == 57
     assert item[ManifestKey.SESSION.key] == SESSION_URL
 
 
