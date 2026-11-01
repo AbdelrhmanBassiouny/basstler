@@ -20,11 +20,12 @@ tracks:
 items:
   - id: maintenance-item-scope
     title: "Maintenance prepare and run-report pass only over one branch's stack"
-    branch: null
-    pull_request_number: null
+    branch: ccr-ce12f912-wkfqdk
+    pull_request_number: 100
     track: fixes
+    session: https://claude.ai/code/session_01JxHGiNhTHc8GMDsF9iZk7d
     depends_on: []
-    status: not started
+    status: in progress
     notes: >
       prepare and run-report take --stacked-on <branch>, like restack: the branch, the
       branches it is stacked on and those stacked on it. Kickoff and resolve pass the item's
