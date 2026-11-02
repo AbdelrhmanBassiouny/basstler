@@ -1,8 +1,7 @@
 # Fetching live pull request data into pr_data.json
 
-The canonical procedure for gathering the `pr_data.json` shape
-`dashboard/plan_page.py` and `plan/sync_manifest_status.py` both consume -
-referenced by `plan-dashboard/SKILL.md` step 2 instead of restating it.
+The canonical procedure for gathering the `pr_data.json` shape the plan modules
+consume - referenced by [`SKILL.md`](SKILL.md) instead of restating it.
 
 ## Shape
 
@@ -20,7 +19,7 @@ single repository:
 ```
 
 A file of another shape - `{"488": {...}}` with the repository level left out - is
-refused with `MalformedPullRequestDataError`. [`example/pr_data.json`](example/pr_data.json)
+refused with `MalformedPullRequestDataError`. [`example/pr_data.json`](../plan-create/example/pr_data.json)
 is a complete file.
 
 Source the shared config script first if you haven't already this session -
@@ -42,8 +41,8 @@ this matters:
    with `method: "get"` for that specific `pullNumber`.
 
 A cross-plan dependency (`depends_on: [<plan-id>/<item-id>]`, see
-`plan-schema.md`) widens that: the dashboard shows the foreign item's own
-live state, so its pull request has to be in this data too. It resolves
+`plan-schema.md`) widens that: the foreign item's own live state is read from this data
+too, so its pull request has to be in it. It resolves
 against **its own plan's** `default_repository`, not the rendered plan's, so
 a reference into a plan tracking a different repository adds that repository
 to the list above.
@@ -68,15 +67,12 @@ response entirely, so a genuinely unmerged pull request comes back with no
 never asked for. Write the `null` in yourself for those; transcribing the
 response as-is is what the rejection above catches.
 
-`labels` carries two things this codebase reads. A pull request merged
+`labels` carries one thing this codebase reads. A pull request merged
 out-of-band never gets `merged_at` set, and this repo's convention is to add
 a `"merged"` label by hand in that case - see `github_labels.py`'s
 `GitHubLabel` and `pull_request_state.py`'s `was_merged`. That label is a fallback for a real merge
 GitHub never recorded, not a substitute for `merged_at` - only pull requests
-that happen to carry it survive a fetch that dropped the timestamp. A
-`"bug"` label separately marks the item as a bug fix wherever it already
-appears in the sidebar, and is what its "Bug fixes only" filter keeps - see
-`Item.is_bug_fix`.
+that happen to carry it survive a fetch that dropped the timestamp.
 
 `body` is optional. When present, the link a maintenance pass wrote under the description's
 `## Upstream pull request` heading is shown on the item's card as an `upstream ↗` link.
