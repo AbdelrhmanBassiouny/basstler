@@ -59,11 +59,13 @@ items:
     exclude and the all-excluded skip on GitHub.'
 - id: usage-monitor
   title: Measure run volume against the budget and warn before it is exceeded
-  branch: null
+  branch: ccr-efe139af-nejczo
   track: monitor
+  pull_request_number: 120
+  session: https://claude.ai/code/session_018wfiv9MdWYLRNixDsZ2RPF
   depends_on:
   - budget-manifest
-  status: not started
+  status: in progress
   notes: 'A basstler module counts the last 24 hours of runs and jobs per workflow from the
     Actions API against daily ceilings added to `WorkflowLimits`. Three surfaces, none on
     a timer: a session-start warning at 80% and over-budget line at 100%; ci.yml''s first
