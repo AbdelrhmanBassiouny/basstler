@@ -8,14 +8,16 @@ personal-notes remote - no network access or real personal-notes branch involved
 from __future__ import annotations
 
 import os
+import shutil
 import subprocess
 from pathlib import Path
 
 import pytest
 
+import basstler
 from basstler.locations import PluginLocation, ProjectLocation, WorkflowLocation
 from basstler.exit_codes import SetupCheckExitCode
-from basstler.plan_site import publication
+from basstler.plan_site import dispatch_check, publication
 from basstler.plan_site.hub import HubFileKey
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 
@@ -178,7 +180,7 @@ def test_a_listed_repository_without_the_dispatch_workflow_names_the_site_it_is_
     assert publication.__name__ in plan_site.detail
 
 
-def test_a_notes_branch_with_the_dispatch_workflow_starts_the_site_build(
+def test_a_dispatch_workflow_whose_runs_cannot_be_read_says_how_to_check_them(
     check_setup_repository: ScratchRepository,
 ):
     check_setup_repository.update_notes_branch_file(
@@ -186,7 +188,43 @@ def test_a_notes_branch_with_the_dispatch_workflow_starts_the_site_build(
     )
 
     report = run_check_setup(check_setup_repository)
-    assert report.results[SetupCheck.PLAN_SITE].status == CheckStatus.OK
+
+    plan_site = report.results[SetupCheck.PLAN_SITE]
+    assert plan_site.status == CheckStatus.INFORMATIONAL
+    assert publication.__name__ in plan_site.detail
+
+
+@pytest.fixture
+def dispatch_needing_setup(
+    check_setup_repository: ScratchRepository,
+) -> ScratchRepository:
+    """
+    The scratch repository with a dispatch workflow on its notes branch, whose dispatch
+    check reports that it needs setup.
+
+    check-setup.sh runs the check in a process of its own, which imports it from the
+    scratch checkout, so the stand-in replaces the module's file there.
+    """
+    check_setup_repository.update_notes_branch_file(
+        WorkflowLocation.PLAN_SITE_DISPATCH, "name: Plan site dispatch\n"
+    )
+    package_root = Path(basstler.__file__).parent.parent
+    shutil.copy(
+        DatasetLocation.DISPATCH_CHECK_NEEDS_SETUP_STUB,
+        check_setup_repository.checkout_root
+        / PackageSourceFile.SOURCE
+        / Path(dispatch_check.__file__).relative_to(package_root),
+    )
+    return check_setup_repository
+
+
+def test_a_dispatch_workflow_is_reported_as_its_runs_say(
+    dispatch_needing_setup: ScratchRepository,
+):
+    report = run_check_setup(dispatch_needing_setup)
+
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+    assert report.results[SetupCheck.PLAN_SITE].status == CheckStatus.NEEDS_SETUP
 
 
 def test_the_dispatch_workflow_path_matches_the_shell_configuration(

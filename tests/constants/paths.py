@@ -141,6 +141,27 @@ class DatasetLocation(PathEnumeration):
     one succeeded.
     """
 
+    PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED = (
+        DIRECTORY / "plan-site-dispatch-runs-never-succeeded.json"
+    )
+    """
+    A notes repository's run listing in which no dispatch run succeeded.
+    """
+
+    PLAN_SITE_TOKEN_STORED_BEFORE_FAILURE = (
+        DIRECTORY / "plan-site-token-stored-before-failure.json"
+    )
+    """
+    A notes repository's token secret, set before its recorded failed dispatch run.
+    """
+
+    PLAN_SITE_TOKEN_STORED_AFTER_FAILURE = (
+        DIRECTORY / "plan-site-token-stored-after-failure.json"
+    )
+    """
+    A notes repository's token secret, set after its recorded failed dispatch run.
+    """
+
     WORKFLOW_RUNS_NONE = DIRECTORY / "workflow-runs-none.json"
     """
     A run listing with no runs at all.
@@ -215,6 +236,12 @@ class DatasetLocation(PathEnumeration):
     """
     Executables copied onto a scratch ``PATH`` to stand in for a real ``gh``, ``curl`` or
     hook script.
+    """
+
+    DISPATCH_CHECK_NEEDS_SETUP_STUB = STUBS / "dispatch_check_needs_setup.py"
+    """
+    A module standing in for :mod:`basstler.plan_site.dispatch_check`, reporting a
+    dispatch that needs setup.
     """
 
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"

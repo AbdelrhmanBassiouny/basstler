@@ -200,7 +200,9 @@ the upstream from the session instead.
 
 ## 8. `plan_site` — publish this repository's plans on the user's plan site
 
-Unless the row is `ok`. The plan site builds in a repository the user owns,
+Unless the row is `ok`, which it is only once every repository on the site stores
+`PLAN_SITE_TOKEN` and its notes branch's latest dispatch run succeeded. Where the
+credential may not read secrets, the row judges by the runs alone. The plan site builds in a repository the user owns,
 never in the project, and which one is the user's to choose: ask for it as
 `<owner>/<name>`, offering as the default the repository the hub file's
 `site_url` already points at (`recorded_site_url`), else

@@ -10,6 +10,7 @@ import shutil
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -931,6 +932,7 @@ def test_a_failed_dispatch_run_is_linked_from_the_step_it_leaves_to_the_user(
         Path(DispatchWorkflow.location),
         CheckOutcome.FAILURE,
         "https://github.com/an-owner/a-repository/actions/runs/4004",
+        datetime(2026, 10, 2, 10, tzinfo=UTC),
     )
 
 

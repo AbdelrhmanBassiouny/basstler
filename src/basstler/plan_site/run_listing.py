@@ -5,6 +5,7 @@ The workflow runs a repository's branch has had, read from GitHub.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -51,6 +52,11 @@ class WorkflowRunKey(StrEnum):
     The address of the run's page on github.com.
     """
 
+    CREATED_AT = "created_at"
+    """
+    When the run was started.
+    """
+
 
 class RunListingParameter(StrEnum):
     """
@@ -89,6 +95,11 @@ class ListedRun(JSONModel):
     The address of the run's page on github.com, where its log is.
     """
 
+    created_at: datetime
+    """
+    When it was started.
+    """
+
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> ListedRun:
         """
@@ -99,6 +110,7 @@ class ListedRun(JSONModel):
             Path(data[WorkflowRunKey.PATH]),
             CheckOutcome.from_conclusion(data[WorkflowRunKey.CONCLUSION]),
             data[WorkflowRunKey.URL],
+            datetime.fromisoformat(data[WorkflowRunKey.CREATED_AT]),
         )
 
 
@@ -150,6 +162,20 @@ class RunListing:
         :return: Its latest run, ``None`` when the listing holds none.
         """
         return next((run for run in self.runs if run.workflow == workflow), None)
+
+    def latest_success(self, workflow: WorkflowLocation) -> ListedRun | None:
+        """
+        :param workflow: The workflow.
+        :return: Its latest run that succeeded, ``None`` when the listing holds none.
+        """
+        return next(
+            (
+                run
+                for run in self.runs
+                if run.workflow == workflow and run.outcome is CheckOutcome.SUCCESS
+            ),
+            None,
+        )
 
     def succeeded(self, workflow: WorkflowLocation) -> bool:
         """
