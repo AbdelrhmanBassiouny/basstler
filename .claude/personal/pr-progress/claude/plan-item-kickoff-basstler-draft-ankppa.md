@@ -1,12 +1,10 @@
-### Plan
-- A blocking dependency chip carries its draft pull request's REST address
-- A not-started item that only drafts hold back renders a hidden Start now button
-- The site page's script re-checks those pull requests and shows the item as startable
-- Playwright (owner-approved) tests the script against a stubbed GitHub API, with Chromium installed in CI
+Plan
+- Re-check blocking draft pull requests from the plan page between builds (team-basstler/page-draft-recheck).
 
-### Done
-- All of the plan, pushed to draft PR #116, labelled release:minor
-- Full suite passes (1914); ruff check and format are clean
+Done
+- Re-check built and tested in headless Chromium (Playwright); CI green before the merge.
+- Merged main (#115 retired the dashboard) and ported the re-check onto the plan site code; 1813 tests pass.
 
-### Next
-- Wait for CI on #116 (the first run that installs Chromium) and for review
+Next
+- CI on the merge commit.
+- Owner review; the PR is ready for review (owner marked it).
