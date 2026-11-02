@@ -141,6 +141,13 @@ class DatasetLocation(PathEnumeration):
     one succeeded.
     """
 
+    PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED = (
+        DIRECTORY / "plan-site-dispatch-runs-never-succeeded.json"
+    )
+    """
+    A notes repository's run listing in which no dispatch run succeeded.
+    """
+
     PLAN_SITE_TOKEN_STORED_BEFORE_FAILURE = (
         DIRECTORY / "plan-site-token-stored-before-failure.json"
     )

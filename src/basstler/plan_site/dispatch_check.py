@@ -8,7 +8,6 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import os
 import sys
 from dataclasses import dataclass
@@ -17,6 +16,8 @@ from enum import StrEnum
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
+
+from cyclopts import App
 
 from basstler.github.client import (
     GitHubAttemptReader,
@@ -33,7 +34,7 @@ from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.run_listing import ListedRun, RunListing
 from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
-from basstler.repository import Repository
+from basstler.repository import GitHubAddress, Repository
 from basstler.setup.report import CheckResult, CheckStatus
 from basstler.setup.steps import resolve_repository
 from basstler.upstream_reviews.vocabulary import CheckOutcome, JSONModel
@@ -128,6 +129,36 @@ class TokenSecret(JSONModel):
 # %% one repository's dispatch
 
 
+class FailureAfterSuccessCause(StrEnum):
+    """
+    What makes a dispatch that used to start the build fail, as its run log shows it.
+    """
+
+    TOKEN_EXPIRED = (
+        f"{PlanSiteSecret.TOKEN} expired or was revoked - the log shows 'HTTP 401' or "
+        f"'Bad credentials'; store a new token"
+    )
+    """
+    The token no longer authenticates.
+    """
+
+    ACCESS_LOST = (
+        f"{PlanSiteSecret.TOKEN} lost access to the site's repository - the log shows "
+        "'HTTP 403' or 'HTTP 404'; give the token Actions write access to it again"
+    )
+    """
+    The token authenticates, but may no longer start the site's workflow.
+    """
+
+    GITHUB_UNAVAILABLE = (
+        "GitHub was unavailable - the log shows 'HTTP 500', 'HTTP 502' or 'HTTP "
+        "503', or https://www.githubstatus.com lists an incident then; re-run the run"
+    )
+    """
+    The run failed on GitHub's side, which re-running it fixes.
+    """
+
+
 class DispatchState(StrEnum):
     """
     Where one repository's start of the plan site's build stands.
@@ -148,9 +179,15 @@ class DispatchState(StrEnum):
     The latest run did not succeed, but the token was set after it started.
     """
 
+    STOPPED_STARTING_BUILD = "stopped starting build"
+    """
+    The latest run did not succeed with the token as it is stored, but an earlier one
+    did.
+    """
+
     RUN_FAILED = "run failed"
     """
-    The latest run did not succeed with the token as it is stored.
+    No listed run succeeded with the token as it is stored.
     """
 
     STARTS_BUILD = "starts build"
@@ -196,6 +233,11 @@ class RepositoryDispatch:
     Its latest dispatch run, ``None`` when it has none.
     """
 
+    latest_success: ListedRun | None
+    """
+    Its latest dispatch run that succeeded, ``None`` when no listed run did.
+    """
+
     @classmethod
     def read(
         cls,
@@ -211,13 +253,13 @@ class RepositoryDispatch:
         :param notes_branch: The branch its dispatch workflow runs on.
         :return: Its dispatch as GitHub reports it.
         """
+        listing = RunListing.read(runs, repository, notes_branch)
         return cls(
             repository,
             notes_branch,
             TokenSecret.read(secrets, repository),
-            RunListing.read(runs, repository, notes_branch).latest(
-                DispatchWorkflow.location
-            ),
+            listing.latest(DispatchWorkflow.location),
+            listing.latest_success(DispatchWorkflow.location),
         )
 
     @property
@@ -236,6 +278,8 @@ class RepositoryDispatch:
             and self.token.updated_at > self.latest_run.created_at
         ):
             return DispatchState.TOKEN_STORED_SINCE_FAILURE
+        if self.latest_success is not None:
+            return DispatchState.STOPPED_STARTING_BUILD
         return DispatchState.RUN_FAILED
 
     def describe(self) -> str:
@@ -256,6 +300,14 @@ class RepositoryDispatch:
                     f"{name}'s {PlanSiteSecret.TOKEN} was set after its latest "
                     f"dispatch run ({self.latest_run.url}), and takes effect at the "
                     f"next push to '{self.notes_branch}'"
+                )
+            case DispatchState.STOPPED_STARTING_BUILD:
+                causes = "; or ".join(FailureAfterSuccessCause)
+                return (
+                    f"{name}'s latest dispatch run is {self.latest_run.outcome} "
+                    f"({self.latest_run.url}), though {self.latest_success.url} "
+                    f"succeeded on {self.latest_success.created_at:%Y-%m-%d}. Open the "
+                    f"failed run's log to see which happened: {causes}"
                 )
             case DispatchState.RUN_FAILED:
                 return (
@@ -312,39 +364,50 @@ class DispatchCheck:
 
 
 def published_repositories(
-    project_root: Path, location: PersonalNotesLocation, notes_repository: Repository
+    project_root: Path,
+    location: PersonalNotesLocation,
+    notes_repository: Repository,
+    remote_root: str = GitHubAddress.WEB,
 ) -> list[Repository]:
     """
     :param project_root: The clone to read the notes branch from.
     :param location: Where its notes are kept.
     :param notes_repository: The repository its notes branch is on.
+    :param remote_root: Where the registry is fetched from, as
+        :meth:`Repository.clone_url_under` takes it.
     :return: The notes repository, then every other repository the registry's hub file
         lists.
     """
-    local_hub = PlanHub.from_text(
+    # Only the registry's copy lists every repository; this one names the registry.
+    own_copy = PlanHub.from_text(
         RemoteBranch(
             location.branch, GitCommandRunner(project_root), location.remote
         ).read_latest(ProjectLocation.PLAN_HUB)
     )
-    if local_hub is None:
+    if own_copy is None:
         return [notes_repository]
-    registry = Repository.parse(local_hub.registry)
-    hub = local_hub if registry == notes_repository else PlanHub.from_registry(registry)
-    listed = [Repository.parse(name) for name in (hub or local_hub).repositories]
+    hub = (
+        PlanHub.from_registry(Repository.parse(own_copy.registry), remote_root)
+        or own_copy
+    )
+    listed = [Repository.parse(name) for name in hub.repositories]
     return list(dict.fromkeys([notes_repository, *listed]))
 
 
-def main(argv: list[str] | None = None) -> int:
+app = App(help=__doc__)
+"""
+The command, which takes no arguments.
+"""
+
+
+@app.default
+def report_dispatch() -> int:
     """
     Print this clone's dispatch check. See the module docstring.
 
-    :param argv: The arguments to parse, defaulting to the process's own.
     :return: 0 once printed.
     :raises NotesRepositoryUnresolvedError: If the notes remote is not on GitHub.
     """
-    argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    ).parse_args(argv)
     project_root = Path(
         os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
     )
@@ -366,4 +429,4 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

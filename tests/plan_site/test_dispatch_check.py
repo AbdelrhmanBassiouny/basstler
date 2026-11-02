@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass
 from http import HTTPStatus
+from pathlib import Path
 
 import pytest
 
@@ -21,6 +22,7 @@ from basstler.plan_site import dispatch_check
 from basstler.plan_site.dispatch_check import (
     DispatchCheck,
     DispatchState,
+    FailureAfterSuccessCause,
     RepositoryDispatch,
     TokenSecret,
     published_repositories,
@@ -36,6 +38,7 @@ from basstler.setup.steps import PersonalNotesSetting
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName
 from ..maintenance.fork import ForkCheckout
+from .test_hub import publish_notes
 from ..upstream_reviews.replay import ReplayingRestClient
 
 NOTES_REPOSITORY = Repository.parse("an-owner/a-repository")
@@ -156,10 +159,37 @@ def test_a_missing_token_is_reported_even_after_a_succeeded_run():
 
 def test_a_run_that_failed_with_the_stored_token_is_reported():
     dispatch = dispatch_of(
-        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED, TOKEN_BEFORE_FAILURE
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED, TOKEN_BEFORE_FAILURE
     )
 
     assert dispatch.state is DispatchState.RUN_FAILED
+
+
+def test_a_run_failing_after_an_earlier_success_is_told_apart():
+    dispatch = dispatch_of(
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED, TOKEN_BEFORE_FAILURE
+    )
+
+    assert dispatch.state is DispatchState.STOPPED_STARTING_BUILD
+
+
+def test_a_run_failing_after_an_earlier_success_names_every_cause_to_look_for():
+    description = dispatch_of(
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED, TOKEN_BEFORE_FAILURE
+    ).describe()
+
+    assert [cause for cause in FailureAfterSuccessCause if cause in description] == (
+        list(FailureAfterSuccessCause)
+    )
+
+
+def test_a_run_failing_after_an_earlier_success_links_that_success():
+    listing = DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED
+    latest_success = RunListing.read(
+        runs_replaying(listing), NOTES_REPOSITORY, NOTES_BRANCH
+    ).latest_success(DispatchWorkflow.location)
+
+    assert latest_success.url in dispatch_of(listing, TOKEN_BEFORE_FAILURE).describe()
 
 
 def test_a_token_set_after_the_failed_run_waits_for_the_next_push():
@@ -181,7 +211,10 @@ def test_a_dispatch_that_never_ran_is_reported():
     ("listing", "expected"),
     [
         (DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED, DispatchState.STARTS_BUILD),
-        (DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED, DispatchState.RUN_FAILED),
+        (
+            DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED,
+            DispatchState.RUN_FAILED,
+        ),
     ],
 )
 def test_a_secret_that_cannot_be_read_leaves_the_verdict_to_the_runs(listing, expected):
@@ -282,18 +315,28 @@ def test_without_a_hub_only_the_notes_repository_is_published(
 
 
 def test_every_repository_the_registry_s_hub_lists_is_published(
-    fork_checkout: ForkCheckout, notes_location: PersonalNotesLocation
+    fork_checkout: ForkCheckout,
+    notes_location: PersonalNotesLocation,
+    tmp_path: Path,
 ):
-    hub = PlanHub(
-        registry=NOTES_REPOSITORY.full_name,
-        repositories=[OTHER_REPOSITORY.full_name, NOTES_REPOSITORY.full_name],
+    own_copy = PlanHub(
+        registry=OTHER_REPOSITORY.full_name, repositories=[NOTES_REPOSITORY.full_name]
     )
     RemoteBranch(
         NOTES_BRANCH, GitCommandRunner(fork_checkout.project_root), RemoteName.ORIGIN
-    ).write({ProjectLocation.PLAN_HUB.as_posix(): hub.to_text()}, "List the hub")
+    ).write({ProjectLocation.PLAN_HUB.as_posix(): own_copy.to_text()}, "List the hub")
+    registry_copy = PlanHub(
+        registry=OTHER_REPOSITORY.full_name,
+        repositories=[OTHER_REPOSITORY.full_name, NOTES_REPOSITORY.full_name],
+    )
+    publish_notes(
+        tmp_path,
+        OTHER_REPOSITORY,
+        {Path(ProjectLocation.PLAN_HUB.name): registry_copy.to_text()},
+    )
 
     assert published_repositories(
-        fork_checkout.project_root, notes_location, NOTES_REPOSITORY
+        fork_checkout.project_root, notes_location, NOTES_REPOSITORY, str(tmp_path)
     ) == [NOTES_REPOSITORY, OTHER_REPOSITORY]
 
 
@@ -307,4 +350,4 @@ def test_a_notes_remote_off_github_cannot_be_checked(
     monkeypatch.delenv(ClaudeCodeVariable.PROJECT_DIRECTORY, raising=False)
 
     with pytest.raises(NotesRepositoryUnresolvedError):
-        dispatch_check.main([])
+        dispatch_check.report_dispatch()

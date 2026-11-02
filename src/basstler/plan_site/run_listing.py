@@ -163,6 +163,20 @@ class RunListing:
         """
         return next((run for run in self.runs if run.workflow == workflow), None)
 
+    def latest_success(self, workflow: WorkflowLocation) -> ListedRun | None:
+        """
+        :param workflow: The workflow.
+        :return: Its latest run that succeeded, ``None`` when the listing holds none.
+        """
+        return next(
+            (
+                run
+                for run in self.runs
+                if run.workflow == workflow and run.outcome is CheckOutcome.SUCCESS
+            ),
+            None,
+        )
+
     def succeeded(self, workflow: WorkflowLocation) -> bool:
         """
         :param workflow: The workflow.

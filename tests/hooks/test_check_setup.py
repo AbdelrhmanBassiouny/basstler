@@ -194,9 +194,17 @@ def test_a_dispatch_workflow_whose_runs_cannot_be_read_says_how_to_check_them(
     assert publication.__name__ in plan_site.detail
 
 
-def test_a_dispatch_workflow_is_reported_as_its_runs_say(
+@pytest.fixture
+def dispatch_needing_setup(
     check_setup_repository: ScratchRepository,
-):
+) -> ScratchRepository:
+    """
+    The scratch repository with a dispatch workflow on its notes branch, whose dispatch
+    check reports that it needs setup.
+
+    check-setup.sh runs the check in a process of its own, which imports it from the
+    scratch checkout, so the stand-in replaces the module's file there.
+    """
     check_setup_repository.update_notes_branch_file(
         WorkflowLocation.PLAN_SITE_DISPATCH, "name: Plan site dispatch\n"
     )
@@ -207,8 +215,13 @@ def test_a_dispatch_workflow_is_reported_as_its_runs_say(
         / PackageSourceFile.SOURCE
         / Path(dispatch_check.__file__).relative_to(package_root),
     )
+    return check_setup_repository
 
-    report = run_check_setup(check_setup_repository)
+
+def test_a_dispatch_workflow_is_reported_as_its_runs_say(
+    dispatch_needing_setup: ScratchRepository,
+):
+    report = run_check_setup(dispatch_needing_setup)
 
     assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert report.results[SetupCheck.PLAN_SITE].status == CheckStatus.NEEDS_SETUP
