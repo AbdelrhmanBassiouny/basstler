@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import argparse
 import dataclasses
+import re
 import runpy
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass, field
@@ -37,7 +38,7 @@ from basstler.exceptions import (
 )
 from basstler.locations import PackageLocation, ProjectLocation
 from basstler.render_common import create_template_environment
-from basstler.workflows import ActivityType, TriggerEvent, Workflow
+from basstler.workflows import ActivityType, Job, TriggerEvent, Workflow
 
 # %% vocabulary
 
@@ -106,6 +107,26 @@ class WorkflowLimits:
         repository is named.
         """
         return "github.event_name != 'push' || !github.event.repository.fork"
+
+    @classproperty
+    def repository_pin(cls) -> re.Pattern[str]:
+        """
+        A condition that runs a job in one named repository only, which a fork never is.
+        """
+        return re.compile(r"^github\.repository == '[^']+'(?: && .*)?$")
+
+    def skips_forks(self, job: Job) -> bool:
+        """
+        :param job: A first job of a workflow answering ``push``.
+        :return: Whether its condition skips a push to a fork: it carries
+            :attr:`fork_push_condition`, or it is :attr:`repository_pin` with no
+            alternative that could run it anyway.
+        """
+        if self.fork_push_condition in job.condition:
+            return True
+        return bool(self.repository_pin.match(job.condition)) and (
+            "||" not in job.condition
+        )
 
     @classproperty
     def label_reference(cls) -> str:
@@ -210,9 +231,7 @@ class WorkflowLimits:
         if TriggerEvent.PUSH not in workflow.events:
             return ()
         return tuple(
-            job.identifier
-            for job in workflow.first_jobs
-            if self.fork_push_condition not in job.condition
+            job.identifier for job in workflow.first_jobs if not self.skips_forks(job)
         )
 
     def _guard_violations(self, workflow: Workflow) -> tuple[BudgetViolation, ...]:

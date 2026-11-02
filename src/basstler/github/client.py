@@ -25,7 +25,9 @@ from typing import Any
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.exceptions import (
     GitHubCredentialUnavailableError,
+    GitHubCallFailed,
     GitHubRequestFailed,
+    GitHubUnreachableError,
 )
 from basstler.maintenance.constants import GitHubExecutable
 from basstler.repository import GitHubAddress
@@ -73,13 +75,24 @@ class GitHubWriter(ABC):
     """
 
     @abstractmethod
+    def attempt_send(
+        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+    ) -> GitHubResponse:
+        """
+        Like :meth:`send`, but a refusal or a call that got no answer is returned on the
+        answer instead of raised.
+        """
+
     def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
         """
         :param method: How the resource is written.
         :param path: The resource's path.
         :param payload: The JSON body.
         :return: The parsed response, ``None`` when it has no body.
+        :raises GitHubRequestFailed: If the API refuses the write.
+        :raises GitHubUnreachableError: If the write gets no answer.
         """
+        return self.attempt_send(method, path, payload).raise_if_failed()
 
 
 class GitHubClient(GitHubReader, GitHubWriter, ABC):
@@ -144,10 +157,24 @@ class GitHubResponse:
     The parsed JSON body, ``None`` when it has none.
     """
 
-    has_next_page: bool
+    has_next_page: bool = False
     """
     Whether the answer is a page of a listing with a page after it.
     """
+
+    failure: GitHubCallFailed | None = None
+    """
+    Why the call failed, ``None`` when it succeeded.
+    """
+
+    def raise_if_failed(self) -> Any:
+        """
+        :return: :attr:`body`.
+        :raises GitHubCallFailed: If the call did not succeed.
+        """
+        if self.failure is not None:
+            raise self.failure
+        return self.body
 
 
 @dataclass(frozen=True)
@@ -192,7 +219,7 @@ class GitHubRestClient(GitHubClient):
         return login.stdout.strip()
 
     def get(self, path: str) -> Any:
-        return self._exchange(HttpMethod.GET, path, None).body
+        return self._exchange(HttpMethod.GET, path, None).raise_if_failed()
 
     def get_pages(self, path: str) -> list[Any]:
         pages: list[Any] = []
@@ -200,13 +227,15 @@ class GitHubRestClient(GitHubClient):
             response = self._exchange(
                 HttpMethod.GET, self._page_path(path, page_number), None
             )
-            pages.append(response.body)
+            pages.append(response.raise_if_failed())
             if not response.has_next_page:
                 break
         return pages
 
-    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
-        return self._exchange(method, path, payload).body
+    def attempt_send(
+        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+    ) -> GitHubResponse:
+        return self._exchange(method, path, payload)
 
     @staticmethod
     def _page_path(path: str, page_number: int) -> str:
@@ -231,8 +260,8 @@ class GitHubRestClient(GitHubClient):
         :param method: The HTTP method.
         :param path: The path below :attr:`api_root`.
         :param payload: The JSON body, ``None`` for a read.
-        :return: The answer.
-        :raises GitHubRequestFailed: If the API answers with an error status.
+        :return: The answer, carrying the failure when the API answers with an error
+            status or does not answer.
         :raises GitHubCredentialUnavailableError: If no token is available.
         """
         request = urllib.request.Request(
@@ -246,16 +275,25 @@ class GitHubRestClient(GitHubClient):
             },
         )
         opener = urllib.request.build_opener(ErrorResponsePassThrough)
-        with opener.open(request) as response:
-            raw_body = response.read()
-            if response.status >= HTTPStatus.BAD_REQUEST:
-                raise GitHubRequestFailed(
-                    status=response.status,
+        try:
+            with opener.open(request) as response:
+                status = response.status
+                raw_body = response.read()
+                links = response.headers.get(ResponseHeader.LINK) or ""
+        except OSError as error:
+            return GitHubResponse(
+                None, failure=GitHubUnreachableError(method, path, str(error))
+            )
+        if status >= HTTPStatus.BAD_REQUEST:
+            return GitHubResponse(
+                None,
+                failure=GitHubRequestFailed(
+                    status=status,
                     detail=raw_body.decode(errors="replace"),
                     method=method,
                     path=path,
-                )
-            return GitHubResponse(
-                json.loads(raw_body) if raw_body else None,
-                NEXT_PAGE_RELATION in (response.headers.get(ResponseHeader.LINK) or ""),
+                ),
             )
+        return GitHubResponse(
+            json.loads(raw_body) if raw_body else None, NEXT_PAGE_RELATION in links
+        )

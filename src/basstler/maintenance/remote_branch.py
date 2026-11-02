@@ -9,7 +9,11 @@ from pathlib import Path
 
 from basstler.branch import Branch
 from basstler.class_property import classproperty
-from basstler.maintenance.git_commands import GitCommandRunner, ProposedPush
+from basstler.maintenance.git_commands import (
+    GitCommandResult,
+    GitCommandRunner,
+    ProposedPush,
+)
 from basstler.repository import Repository
 
 # %% the branch
@@ -94,7 +98,9 @@ class RemoteBranch(Branch):
         tip = self.fetch()
         return self.git.file_at(tip, path) if tip else None
 
-    def write(self, files: dict[str, str], message: str, attempts: int = 3) -> str:
+    def attempt_write(
+        self, files: dict[str, str], message: str, attempts: int = 3
+    ) -> FileWrite:
         """
         Commit files onto the branch's latest tip and push them, again on top of another
         writer's commit when that landed first.
@@ -102,8 +108,7 @@ class RemoteBranch(Branch):
         :param files: What to write, by path, each without its final newline.
         :param message: The commit message.
         :param attempts: How many times to commit and push before giving up.
-        :return: The pushed commit.
-        :raises GitCommandFailed: If the last push is refused too.
+        :return: The last commit and its push, failed when every attempt was refused.
         """
         for _ in range(attempts):
             commit = self.git.commit_files(self.fetch(), files, message)
@@ -111,6 +116,33 @@ class RemoteBranch(Branch):
                 ProposedPush(self.remote, f"{commit}:{self.reference}")
             )
             if pushed.succeeded:
-                return commit
-        pushed.raise_if_failed()
-        return commit
+                break
+        return FileWrite(commit, pushed)
+
+    def write(self, files: dict[str, str], message: str, attempts: int = 3) -> str:
+        """
+        Like :meth:`attempt_write`, but a refused push is an error.
+
+        :return: The pushed commit.
+        :raises GitCommandFailed: If the last push is refused too.
+        """
+        written = self.attempt_write(files, message, attempts)
+        written.push.raise_if_failed()
+        return written.commit
+
+
+@dataclass(frozen=True)
+class FileWrite:
+    """
+    One commit of files onto a branch, and its push.
+    """
+
+    commit: str
+    """
+    The commit.
+    """
+
+    push: GitCommandResult
+    """
+    Its push, failed when the remote refused it.
+    """

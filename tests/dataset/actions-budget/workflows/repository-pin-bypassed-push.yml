@@ -1,0 +1,13 @@
+name: Repository pin bypassed by an alternative
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  work:
+    if: github.repository == 'an-owner/a-project' || github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo worked

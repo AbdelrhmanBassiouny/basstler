@@ -117,6 +117,7 @@
   - justification of design decisions, comparison with rejected or hypothetical designs, or review and implementation history
   - type information - the type hints carry it
 - Keep docstrings and comments short and never write walls of text. Comments are meaningful and DRY; remove comments that restate the code
+- Make every docstring as short as it can be: one line where one line says it. A module's or class's docstring states its responsibility in a sentence or two; it never lists every step it takes or every case it handles - those belong to the methods that take them
 - Reference code with Sphinx roles (`:func:`, `:class:`, `:attr:`, `:meth:`), never with plain backticks, and use directives such as `.. note::` and `.. warning::` for notes and warnings
 - Never use all-caps words for emphasis in docstrings or comments; use RST emphasis (`*word*`). Genuine identifiers, acronyms and enum/constant names (`UUID`, `WHERE`, `Definiteness.DEFINITE`) are exempt
 - Always format modified Python files with `ruff format` followed by docformatter, through the repository's pre-commit hook (`scripts/format_docstrings.py`)
