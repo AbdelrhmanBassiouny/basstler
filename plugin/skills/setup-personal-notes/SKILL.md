@@ -213,9 +213,10 @@ never in the project, and which one is the user's to choose: ask for it as
 The site builds with basstler's latest release, so it stays current with no re-run.
 
 It reads the site repository's and this repository's workflow runs first and
-writes nothing until it can. In a cloud session that read fails with a 403
-unless the site repository is attached: attach it with `add_repo` (access
-`push`) and run the command again.
+writes nothing until it can. It authenticates with `GH_TOKEN` or
+`GITHUB_TOKEN`, else with `gh`'s login. In a cloud session a read of the site
+repository is refused (403) until it is attached: attach it with `add_repo`
+(access `push`) and run the command again.
 
 It then writes the site repository's workflow onto its default branch, lists
 this repository in the hub file of the registry that workflow names (this
