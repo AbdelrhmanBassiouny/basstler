@@ -74,7 +74,8 @@ class ShellConfigurationFunction(StrEnum):
     PLAN_SITE_PAGE_URL = "plan_site_page_url"
     """
     Prints the address of the project's page on the plan site, of one of its plans, or
-    of one item's card, and fails when the fetched hub file names no site.
+    of one item's card, and fails when the fetched hub file names no site or the lookup
+    fails, the lookup's error going to stderr.
     """
 
     BASSTLER_PACKAGE_SOURCE = "basstler_package_source"
