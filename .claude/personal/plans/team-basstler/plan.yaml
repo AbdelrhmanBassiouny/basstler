@@ -187,9 +187,23 @@ items:
   session: https://claude.ai/code/session_018wfiv6b8ng2PD9TV1MhDw3
   depends_on:
   - site-for-every-repository
-  notes: 'Agreed on #115 (2026-11-02) instead of a browser merge re-check stacked on #116: the site
-    rebuilds only on notes-branch pushes, so a merge waits for the next save. basstler.plan_site.publication
-    also writes, to each tracked repository''s default branch, a workflow on pull_request closed (merged)
-    that starts the same build with PLAN_SITE_TOKEN. Covers private repositories; the merged-means-done
-    rule stays build-side only. Follows actions-budget''s rules (no schedule, cancel superseded, timeout,
-    skip on forks).'
+  notes: >
+    Agreed on #115 instead of a browser merge re-check. basstler.plan_site.publication commits
+    plan-site-merge.yml straight onto the notes repository's default branch: on pull_request_target
+    closed and merged it starts the site build with PLAN_SITE_TOKEN, a fork's pull requests included.
+    A default branch that refuses the push gets it on basstler/plan-site-merge, with a one-line step
+    to merge it. A fork gets none, so its main stays identical to upstream (agreed on #122); its
+    merges reach the page through page-merge-recheck. Awaiting review on #122.
+
+- id: page-merge-recheck
+  title: The plan page shows an item done from the browser once its pull request merges
+  status: not started
+  track: site
+  depends_on:
+  - page-draft-recheck
+  notes: >
+    Agreed on #122 for forks, which get no merge workflow (their main stays identical to upstream),
+    and for upstream merges a fork's workflows never see. Extend site_plan_draft_recheck.js: on page
+    load, an item whose pull request GitHub reports merged shows as done, with the done counts and
+    shares updated. Public repositories only (unauthenticated, 60 requests an hour per viewer); the
+    next build stays the source of truth.
