@@ -1,11 +1,9 @@
 Plan
-- Retire the dashboard: the plan site is the only plan view (PR 115, draft, release:major).
+- Retire the dashboard: the plan site is the only plan view (PR 115, merged 2026-11-02).
 
 Done
-- basstler.dashboard and /plan-sync removed; a merged item shows as done on the page.
-- plan_page split (chip_tone, item_classifier, plan_overview); rendering tests split by behaviour.
-- 13 review threads answered; 12 resolved.
+- PR 115 merged; artifact-path-retirement recorded done (the save dropped the landed item).
 
 Next
-- Open thread: re-check merges in the browser between builds, on top of PR 116 once it lands.
-- After merge, with confirmation each time: delete the 19 cached Artifacts, then the cache.
+- Owner to decide on the plan-sync thread: rebuild the site on merge vs. a browser merge re-check stacked on 116, and whether statuses leave the manifest (folds into basstler-v3/plan-store-issues).
+- With confirmation each time: delete the 19 cached Artifacts, then the cache file.
