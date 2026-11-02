@@ -151,6 +151,14 @@ class CheckResult:
     The human-readable explanation printed alongside the status.
     """
 
+    @property
+    def fields(self) -> str:
+        """
+        :return: The status and the detail as a report row prints them after its
+            check.
+        """
+        return f"{self.status}{ReportRowField.SEPARATOR}{self.detail}"
+
 
 @dataclass(frozen=True)
 class SetupReport:

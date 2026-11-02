@@ -353,6 +353,9 @@ PLAN_HUB_MODULE="basstler.plan_site.hub"
 # basstler.plan_site.publication: publishes this repository's plans on the user's plan
 # site, and starts the site's build on every push to the notes branch.
 PLAN_SITE_PUBLICATION_MODULE="basstler.plan_site.publication"
+# basstler.plan_site.dispatch_check: prints check-setup.sh's plan site status and
+# detail, from the notes branch's latest dispatch run.
+PLAN_SITE_DISPATCH_CHECK_MODULE="basstler.plan_site.dispatch_check"
 # basstler.plan.item_brief: prints one plan item's brief - the plan header, the item,
 # its dependencies' live readiness and the plan's standing rules.
 ITEM_BRIEF_MODULE="basstler.plan.item_brief"

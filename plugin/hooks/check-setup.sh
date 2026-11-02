@@ -122,14 +122,20 @@ report_upstream_reviews_action() {
   esac
 }
 
-# report_plan_site: whether the notes branch starts the plan site's build. Only the
-# dispatch workflow and the hub file are visible from here; the publication command
-# re-checks the rest.
+# report_plan_site: whether the notes branch starts the plan site's build: ok only when
+# its latest dispatch run succeeded, as PLAN_SITE_DISPATCH_CHECK_MODULE reads it from
+# GitHub; info when GitHub cannot be read, so the publication command re-checks it.
 report_plan_site() {
   local publish_command="${BASSTLER_PYTHON} -m ${PLAN_SITE_PUBLICATION_MODULE}"
-  local site_url
+  local site_url dispatch_fields dispatch_status dispatch_detail
   if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_SITE_DISPATCH_WORKFLOW_PATH}" 2>/dev/null; then
-    report plan_site ok "'${NOTES_BRANCH}' starts the plan site's build on every push"
+    if ! dispatch_fields="$("${BASSTLER_PYTHON}" -m "${PLAN_SITE_DISPATCH_CHECK_MODULE}" 2>/dev/null)"; then
+      report plan_site info \
+        "'${NOTES_BRANCH}' has the dispatch workflow, but its runs could not be read from GitHub - to check whether it starts the build, run: ${publish_command}"
+      return 0
+    fi
+    IFS=$'\t' read -r dispatch_status dispatch_detail <<< "${dispatch_fields}"
+    report plan_site "${dispatch_status}" "${dispatch_detail}"
     return 0
   fi
   site_url="$(recorded_site_url || true)"
