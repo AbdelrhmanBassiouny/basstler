@@ -7,6 +7,11 @@ from __future__ import annotations
 from basstler.code_rules.docstring_presence import MissingDocstringChecker
 
 from ..constants.paths import DocstringSnippet
+from ..constants.source_lines import (
+    MODULE_FIRST_LINE,
+    UNDOCUMENTED_FIELD_LINE,
+    UNDOCUMENTED_METHOD_LINE,
+)
 
 # %% undocumented code
 
@@ -28,8 +33,8 @@ def test_an_undocumented_field_and_method_are_reported_and_an_override_is_not():
     :func:`typing.override` inherits its base's docstring.
     """
     assert undocumented_first_lines(DocstringSnippet.UNDOCUMENTED_DEFINITIONS) == [
-        32,
-        38,
+        UNDOCUMENTED_FIELD_LINE,
+        UNDOCUMENTED_METHOD_LINE,
     ]
 
 
@@ -37,4 +42,6 @@ def test_a_module_without_a_docstring_is_reported():
     """
     A module's missing docstring is reported at its first line.
     """
-    assert undocumented_first_lines(DocstringSnippet.NO_MODULE_DOCSTRING) == [1]
+    assert undocumented_first_lines(DocstringSnippet.NO_MODULE_DOCSTRING) == [
+        MODULE_FIRST_LINE
+    ]

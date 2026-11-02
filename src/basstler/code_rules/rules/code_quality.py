@@ -67,6 +67,10 @@ class AskTheDeveloperRules(Section):
 
     ASK_BEFORE_ADDING_DEPENDENCIES = "Before adding a new dependency, ask"
 
+    SUGGEST_MORE_POWERFUL_PACKAGES = (
+        "If a package could be replaced by a more powerful one, tell us"
+    )
+
     ASK_BEFORE_WORKING_AROUND_A_DENIAL = (
         "When the permission system or its classifier denies a tool call, never "
         "work around the denial and never drop the step silently: ask the user to "
@@ -199,6 +203,10 @@ class RunningTestsRules(Section):
         return TestingRules
 
     RUN_TESTS_WITH_PYTEST = "Run tests with pytest"
+
+    USE_THE_PROJECT_INTERPRETER = (
+        "Always use the project's configured Python interpreter for tests and commands"
+    )
 
 
 class CodeStyleRules(Section):
@@ -723,23 +731,4 @@ class VersionControlRules(Section):
         "Never comment on or modify pull requests on the upstream repository unless"
         " the user has explicitly allowed it - through existing personal notes or "
         "instructions, or by accepting when you ask"
-    )
-
-
-class MiscRules(Section):
-    """
-    The rules on nothing else's topic.
-    """
-
-    @classproperty
-    @override
-    def parent(cls) -> type[Section]:
-        return CodeQualityRules
-
-    USE_THE_PROJECT_INTERPRETER = (
-        "Always use the project's configured Python interpreter for tests and commands"
-    )
-
-    SUGGEST_MORE_POWERFUL_PACKAGES = (
-        "If a package could be replaced by a more powerful one, tell us"
     )

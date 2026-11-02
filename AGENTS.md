@@ -12,6 +12,7 @@
 - When you are unsure why something was done or why a specific number was chosen, ask; never invent a reason and write it down as a comment
 - When a method is never used outside of tests, ask whether it can be removed
 - Before adding a new dependency, ask
+- If a package could be replaced by a more powerful one, tell us
 - When the permission system or its classifier denies a tool call, never work around the denial and never drop the step silently: ask the user to accept it, naming the exact action and why it is needed, and run it only once they agree
 
 ## Testing
@@ -41,6 +42,7 @@
 ### Running tests
 <!-- from RunningTestsRules in basstler/code_rules/rules/code_quality.py -->
 - Run tests with pytest
+- Always use the project's configured Python interpreter for tests and commands
 
 ## Code style
 <!-- from CodeStyleRules in basstler/code_rules/rules/code_quality.py -->
@@ -147,11 +149,6 @@
 - These rules apply to every contributor and every tool
 - When you work in a fork, never push to the upstream repository - no branch, no tag, whatever the reason. Push only to the fork; work reaches upstream only through a pull request opened from the fork. Before any push, read the full, untruncated `git remote -v` output and confirm the target remote is the fork
 - Never comment on or modify pull requests on the upstream repository unless the user has explicitly allowed it - through existing personal notes or instructions, or by accepting when you ask
-
-## Misc
-<!-- from MiscRules in basstler/code_rules/rules/code_quality.py -->
-- Always use the project's configured Python interpreter for tests and commands
-- If a package could be replaced by a more powerful one, tell us
 
 # Project
 
