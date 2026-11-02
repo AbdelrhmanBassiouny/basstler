@@ -6,6 +6,7 @@ site, against bare repositories standing in for GitHub and recorded run listings
 from __future__ import annotations
 
 import json
+from http import HTTPStatus
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -14,6 +15,8 @@ import pytest
 
 from basstler.environment import GitHubCredentialVariable
 from basstler.locations import ProjectLocation, WorkflowLocation
+from basstler.github.client import GitHubReader, HttpMethod
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import (
@@ -34,8 +37,6 @@ from basstler.plan_site.workflows import (
 )
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
-from basstler.upstream_reviews.clients import RestClient
-from basstler.upstream_reviews.exceptions import GitHubCommandFailed
 from basstler.upstream_reviews.vocabulary import BasstlerSource, CheckOutcome
 
 from ..constants.paths import DatasetLocation
@@ -393,17 +394,21 @@ def test_a_failed_latest_dispatch_leaves_the_token_to_the_user(published):
 
 
 @dataclass
-class RefusingRestClient(RestClient):
+class RefusingRestClient(GitHubReader):
     """
     A client for which GitHub refuses every request, as it does for a repository the
     session has no access to.
     """
 
     def get(self, path: str):
-        raise GitHubCommandFailed("gh", 1, "HTTP 403")
+        raise GitHubRequestFailed(
+            status=HTTPStatus.FORBIDDEN, detail="", method=HttpMethod.GET, path=path
+        )
 
     def get_pages(self, path: str):
-        raise GitHubCommandFailed("gh", 1, "HTTP 403")
+        raise GitHubRequestFailed(
+            status=HTTPStatus.FORBIDDEN, detail="", method=HttpMethod.GET, path=path
+        )
 
 
 def test_runs_that_cannot_be_read_stop_the_publication_before_anything_is_written(
@@ -411,7 +416,7 @@ def test_runs_that_cannot_be_read_stop_the_publication_before_anything_is_writte
 ):
     publishing.create(publishing.site.repository)
 
-    with pytest.raises(GitHubCommandFailed):
+    with pytest.raises(GitHubRequestFailed):
         publishing.publication(RefusingRestClient()).publish()
 
     assert (
