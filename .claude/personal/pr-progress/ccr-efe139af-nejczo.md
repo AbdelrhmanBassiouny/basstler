@@ -5,7 +5,10 @@
 - Tests first, mocked client
 
 **Done**
-- Context gathered; plan written down
+- Ceilings, `actions_usage` module and report command, with mocked-client tests
+- Session-start "Actions usage" line (silent when no ceilings are set) and its tests
+- `tests.yml`: `usage` job first; `test` matrix skipped over a ceiling unless `budget-override`
 
 **Next**
-- Bootstrap, then limits + exceptions + measurement tests
+- Owner: set the ceilings' numbers in `.github/actions_budget.py` (none exist yet) and create the `budget-override` label
+- Review the draft
