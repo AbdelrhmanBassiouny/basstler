@@ -242,7 +242,9 @@ class ItemPart(PlanPart):
         onto_text = ManifestText.from_text(onto.manifest_text)
         onto_block = onto_text.item_block_named(self.item_identifier)
         if session_block is None:
-            manifest_text = onto_text.with_lines_replaced(onto_block, [])
+            manifest_text = ManifestText.from_text(
+                onto_text.with_lines_replaced(onto_block, [])
+            ).with_empty_items_written_out()
         elif onto_block is None:
             block = "\n".join(session_text.lines[session_block[0] : session_block[1]])
             manifest_text = onto_text.with_item(block.rstrip("\n") + "\n")

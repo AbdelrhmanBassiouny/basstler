@@ -94,6 +94,16 @@ def test_an_item_the_other_writer_dropped_stays_dropped():
     assert parsed_items(result) == parsed_items(blocked(latest, FIRST_ITEM))
 
 
+def test_dropping_every_item_leaves_a_manifest_that_reads_as_no_items():
+    session = read_version()
+    for identifier in read_version().items_by_identifier:
+        session = without_item(session, identifier)
+
+    result = merged(session, read_version())
+
+    assert yaml.safe_load(result.manifest_text)[ManifestKey.ITEMS.key] == []
+
+
 def test_a_plan_field_the_session_changed_joins_an_item_edit():
     session = PlanVersion(
         manifest_text=DatasetLocation.BOOTSTRAP_PLAN.read_text().replace(
