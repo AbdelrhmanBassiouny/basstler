@@ -27,6 +27,34 @@ class EnvironmentVariable(StrEnum):
         return os.environ.get(self)
 
 
+class OperatingSystemVariable(EnvironmentVariable):
+    """
+    The variables the operating system sets for every process.
+    """
+
+    EXECUTABLE_SEARCH_PATH = "PATH"
+    """
+    The directories a program is searched for in.
+    """
+
+    WINDOWS_DIRECTORY = "SYSTEMROOT"
+    """
+    The Windows installation's own directory, set only on Windows, spelled as Windows
+    lists it in a copy of the environment.
+    """
+
+
+class GitVariable(EnvironmentVariable):
+    """
+    The variables git reads that this package sets for the commands it runs.
+    """
+
+    INDEX_FILE = "GIT_INDEX_FILE"
+    """
+    The index git stages into, in place of the clone's own.
+    """
+
+
 class GitHubCredentialVariable(EnvironmentVariable):
     """
     The variables a GitHub token is read from, in the order they are tried.
@@ -59,6 +87,16 @@ class GitHubActionsVariable(EnvironmentVariable):
     STEP_SUMMARY = "GITHUB_STEP_SUMMARY"
     """
     The file a step appends its Markdown job summary to.
+    """
+
+    OUTPUT = "GITHUB_OUTPUT"
+    """
+    The file a step appends its ``<key>=<value>`` outputs to.
+    """
+
+    RUNNER_TEMPORARY_DIRECTORY = "RUNNER_TEMP"
+    """
+    A directory the runner empties for each job, which steps hand files through.
     """
 
     REPOSITORY_OWNER = "GITHUB_REPOSITORY_OWNER"

@@ -1,0 +1,14 @@
+{
+  "number": 513,
+  "title": "[DevTools] Even more scripted and Less agentic stacked PRs maintenance",
+  "html_url": "https://github.com/example-upstream/example-repo/pull/513",
+  "state": "open",
+  "merged_at": null,
+  "head": {
+    "sha": "0123456789abcdef0123456789abcdef01234567",
+    "ref": "some-branch",
+    "user": {
+      "login": "example-fork-owner"
+    }
+  }
+}

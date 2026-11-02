@@ -3,7 +3,7 @@
 # plugin runs from.
 
 [build-system]
-requires = ["hatchling>=1.24"]
+requires = ["hatchling>=1.24", "hatch-vcs>=0.4"]
 build-backend = "hatchling.build"
 
 [project]
@@ -11,12 +11,13 @@ name = "basstler"
 description = "Workflow tooling: stacked-pull-request maintenance, plan dashboards, personal-notes hooks and upstream review reading."
 readme = "README.md"
 requires-python = ">=3.12"
-license = "LGPL-3.0-only"
+license = "Apache-2.0"
+license-files = ["LICENSE", "NOTICE"]
 authors = [
-    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
+    {name = "Abdelrhman Bassiouny", email = "bido.bassuny@gmail.com"}
 ]
 maintainers = [
-    {name = "Abdelrhman Bassiouny", email = "abassiou@uni-bremen.de"}
+    {name = "Abdelrhman Bassiouny", email = "bido.bassuny@gmail.com"}
 ]
 keywords = ["stacked-pull-requests", "developer-tooling", "github", "workflow", "agents"]
 classifiers = [
@@ -29,12 +30,13 @@ classifiers = [
 ]
 
 # Stated here and nowhere else: a session start, an Actions workflow and `pip install .` all
-# install from this one list. `basstler.dependencies` is what reads it.
+# install from this one list. `basstler.setup.dependencies` is what reads it.
 dependencies = [
     "pyyaml>=6",
     "jinja2>=3",
     "markdown>=3",
     "nh3>=0.2",
+    "rustworkx>=0.15",
 ]
 dynamic = ["version"]
 
@@ -42,13 +44,13 @@ dynamic = ["version"]
 "Source" = "https://github.com/AbdelrhmanBassiouny/basstler"
 "Bug Tracker" = "https://github.com/AbdelrhmanBassiouny/basstler/issues"
 
-# One release for the package and the plugin, written in one place: the plugin's manifest.
-# Claude Code reads the version there and runs nothing first, so it has to be a literal in
-# plugin.json; the build reads it from there rather than keeping a second copy. It is also
-# the tag an installed plugin installs the package at, which the release workflow pushes.
+# One release for the package and the plugin: the tag the release workflow puts on a merge
+# commit. The build reads the version from that tag, so no file names it and nothing is
+# committed after a merge; a commit past the latest tag builds as the next development
+# version, and a source with no git history at all as 0.0.0.
 [tool.hatch.version]
-path = "plugin/.claude-plugin/plugin.json"
-pattern = '"version"\s*:\s*"(?P<version>[^"]+)"'
+source = "vcs"
+fallback-version = "0.0.0"
 
 # The whole package directory, so the files the modules resolve beside themselves rather
 # than by an argument - all named in locations.py: the page templates, the GraphQL
@@ -58,10 +60,73 @@ pattern = '"version"\s*:\s*"(?P<version>[^"]+)"'
 [tool.hatch.build.targets.wheel]
 packages = ["src/basstler"]
 
-# Docstrings are formatted by docformatter on top of black - scripts/format_docstrings.py
-# runs both, keeping docformatter's change only where black leaves it alone.
+# Docstrings are formatted by docformatter on top of ruff format - scripts/format_docstrings.py
+# runs both, keeping docformatter's change only where ruff leaves it alone.
 [tool.docformatter]
 make-summary-multi-line = true
 pre-summary-newline = true
 close-quotes-on-newline = true
 black = true
+
+[dependency-groups]
+dev = [
+    "pytest",
+    "pytest-xdist",
+    "ruff==0.17.3",
+]
+
+# The mechanical code rules: AGENTS.md states only what a linter cannot check.
+[tool.ruff]
+target-version = "py312"
+src = ["src"]
+
+[tool.ruff.lint]
+select = [
+    "E4", "E7", "E9", "F",
+    "A",        # names that shadow a builtin
+    "ANN",      # every parameter and return value is annotated
+    "B",        # mutable defaults, getattr with a constant name, and other likely bugs
+    "E402",     # imports at the top of the module
+    "I002",     # from __future__ import annotations in every module
+    "N",        # naming conventions
+    "PLC0415",  # no import inside a function
+    "PLW0603",  # no global statement
+    "PT",       # pytest style, no unittest assertions
+    "S101",     # no assert outside tests
+    "TID",      # absolute imports and banned APIs
+    "UP",       # builtin generics, X | None, unquoted annotations
+]
+ignore = [
+    "ANN401",   # Any is an honest annotation where it is the truth
+    "B027",     # a base class may give a hook an empty default body
+    "N818",     # exception names are chosen for what failed, not for a suffix
+    "PT011",    # a test asserts the exception type, not its message
+]
+
+[tool.ruff.lint.flake8-bugbear]
+extend-immutable-calls = ["basstler.plan.model.ItemIndentation"]
+
+[tool.ruff.lint.isort]
+required-imports = ["from __future__ import annotations"]
+
+[tool.ruff.lint.pep8-naming]
+classmethod-decorators = ["basstler.class_property.classproperty", "classproperty"]
+
+[tool.ruff.lint.flake8-tidy-imports]
+ban-relative-imports = "all"
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+"typing_extensions".msg = "not a dependency of the package; import from typing"
+"unittest.TestCase".msg = "write plain pytest test functions or classes"
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "ANN",      # test functions and fixtures need no annotations
+    "S101",     # tests assert
+    "TID252",   # a test imports another test module relatively
+    "B018",     # a bare attribute access inside pytest.raises is the call under test
+]
+# Imports a fixture from a sibling test module, which pytest finds by its parameter name.
+"tests/upstream_reviews/test_open_pull_requests_action.py" = ["F401", "F811"]
+# Lower case like the builtin property it stands beside.
+"src/basstler/class_property.py" = ["N801"]

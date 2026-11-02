@@ -5,7 +5,7 @@ set -uo pipefail
 # exercise its token fallback - the path taken when `gh` isn't installed -
 # without reaching GitHub. Copied into place as an executable named `curl`,
 # earlier on PATH than the real one; see stub_bin fixture in
-# test_plan_updates_since_sh.py.
+# hooks/test_plan_updates_since.py.
 #
 # Recognizes only a GET against .../issues/<n>/comments, the one request
 # shape plan-updates-since.sh makes through this backend:

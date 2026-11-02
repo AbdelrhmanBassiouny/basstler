@@ -1,0 +1,27 @@
+# Written by basstler's /setup-personal-notes (python -m basstler.plan_site.publication);
+# re-run that to update it rather than editing it here.
+name: Plan site dispatch
+
+# Every push to the notes branch starts the plan site's build in {{ site_repository }}.
+on:
+  push:
+    branches: [{{ notes_branch }}]
+  workflow_dispatch: {}
+
+permissions: {}
+
+concurrency:
+  group: plan-site-dispatch
+  cancel-in-progress: true
+
+jobs:
+  {{ job }}:
+    name: Start the plan site build
+    if: github.repository == '{{ notes_repository }}'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Start the build
+        env:
+          {{ token_variable }}: {{ '${{' }} secrets.{{ token_secret }} {{ '}}' }}
+        run: gh workflow run {{ site_workflow_name }} --repo {{ site_repository }}

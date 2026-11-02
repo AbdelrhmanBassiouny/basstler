@@ -1,7 +1,7 @@
 ---
 name: plan-create
-description: Create (or migrate an existing bespoke roadmap doc into) a new multi-PR/multi-session plan under .claude/personal/plans/<plan-id>/plan.yaml on the personal-notes branch, cross-checked against live GitHub, then bootstrap and publish it. Invoke as "/plan-create <plan-id>". Use when the user asks to start tracking something as a plan, set up a new plan/roadmap, or migrate an existing roadmap doc into the plan-dashboard system.
-allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__Claude_Code_Remote__subscribe_pr_activity
+description: Create a multi-PR plan on the personal-notes branch, or migrate a roadmap doc into one, then publish its dashboard. Invoke as "/plan-create <plan-id>". Use when asked to start tracking work as a plan.
+allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
 # Plan Create
@@ -33,15 +33,16 @@ without asking first, rather than failing partway through drafting a plan.
 
 Source the shared config script — it resolves the personal-notes
 remote/branch precedence into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines
-`SAVE_PLAN_SCRIPT` (used in step 7):
+`SAVE_PLAN_SCRIPT` (used in step 8) and `PLAN_SIZE_CHECK_MODULE` (used in
+step 7):
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-git fetch "${NOTES_REMOTE}" "${NOTES_BRANCH}" --quiet
+fetch_personal_notes_branch
 ```
 
 Then check whether `${PLANS_DIR}/<plan-id>/plan.yaml` already
-exists on `FETCH_HEAD` (`PLANS_DIR` is defined by the config script sourced
+exists on `"${PERSONAL_NOTES_REFERENCE}"` (`PLANS_DIR` is defined by the config script sourced
 above).
 If it does, stop and tell the user — point them at editing the existing
 plan (`plan-dashboard`'s doc, or just ask a session to edit it) instead of
@@ -95,22 +96,22 @@ not after.
 
 Ask this of every item before adding it, and prefer the change: an item that
 only modifies what an unlanded item introduces is that item's work, not a
-separate one. Follow `${SCOPE_DECISION_DOCUMENT}` — it holds the check and how
+separate one. Follow [`scope-decision.md`](../add-plan-item/scope-decision.md) — it holds the check and how
 to read it.
 
 For a single piece of work rather than a whole plan, `/add-plan-item` runs that
 same decision on its own and is the lighter-weight way in.
 
-If migrating a source doc: preserve its detail rather than compressing it
-away. Structured facts (branch, PR, base, status, blockers) become
-`plan.yaml` items; everything else (design rationale, history, "why",
-standing conventions) becomes `roadmap.md`'s narrative — don't drop
-content just because it doesn't fit a YAML field. If the source doc has
-its own per-branch detail files (this repo's convention:
-`.claude/personal/pr-progress/<branch>.md`), you do not need to fold their
-full content into `roadmap.md` — that mechanism keeps working independently
-of the plan; link to it in spirit (mention it exists) rather than
-duplicating it.
+Write only what a future session needs to act, whether drafting fresh or
+migrating a source doc. Structured facts (branch, PR, status, blockers)
+become `plan.yaml` items, with each item's scope and binding decisions in its
+`notes`; the plan's standing rules become `roadmap.md`, a title and a short
+list of one-sentence entries. History, rationale already settled in code, and
+work that has landed are left out: they live in git and on the pull requests.
+`save-plan.sh` refuses a plan over the limits in `${PLAN_SIZE_LIMITS_MODULE}`
+(items per plan, characters per note and blocker, roadmap entries), so a
+source doc that does not fit is condensed now, or split into more than one
+plan, rather than migrated whole.
 
 ## 4. Cross-check every named branch/PR against live GitHub state
 
@@ -136,9 +137,9 @@ single session will obviously own it end to end). If yes:
    explaining its purpose (not a work item — here's how proposals/replies
    work; see `plan-schema.md`'s "Proposing structural changes" section for
    the convention to describe).
-2. Subscribe to it (the same PR-activity subscription tool also works on a
-   plain issue number — confirmed empirically, not assumed; there is no
-   separate issue-subscription tool).
+2. Do not subscribe to it: `mcp__claude-code-remote__subscribe_pr_activity`
+   takes pull requests only. Sessions read its comments instead, as
+   `plan-item-gathering.md` describes.
 3. Record its number as `tracking_issue` in the manifest you're about to
    write in step 6.
 
@@ -147,7 +148,8 @@ repo — check by trying, don't assume): cut a branch off `main` named
 `plan-tracking-<plan-id>`, make a single **empty commit**
 (`git commit --allow-empty` — the branch carries no file changes, ever),
 open it as a **draft** PR (base `main`, same title, a body noting *why* it's
-a PR and not an issue), subscribe to that instead, and still record its
+a PR and not an issue), subscribe to that with
+`mcp__claude-code-remote__subscribe_pr_activity`, and still record its
 number as `tracking_issue` — the field names the mailbox's role, not the
 literal GitHub object type, since which one applies is a per-repo fact
 that can change if Issues get enabled later. Whoever later builds a link
@@ -179,7 +181,23 @@ Parse with Python's `yaml` module to check this mechanically rather than
 eyeballing it — the same tooling `save-plan.sh` and `plan-dashboard` both
 already require.
 
-## 7. Bootstrap it through the existing write path — don't invent a new one
+## 7. Check the draft isn't already full
+
+Count the draft's items against `Measure.ITEM_COUNT` (`plan/size_limits.py`)
+before the first save:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <path/to/plan.yaml>
+```
+
+If `is_full` is `false`, continue to step 8.
+
+If `true`, do not call `${SAVE_PLAN_SCRIPT}`: report `item_count` against
+`item_limit` and ask, via `AskUserQuestion`, whether to re-draft as several
+plans (back to step 3, cutting by track or wave first) or to trim the scope to
+fit one.
+
+## 8. Bootstrap it through the existing write path — don't invent a new one
 
 This skill does not push directly. It uses exactly the flow
 `save-plan.sh`'s own header comment documents for a brand-new plan (there
@@ -198,23 +216,23 @@ through `CLAUDE.local.md`'s markers first), pushes both to the
 personal-notes branch, and regenerates the branch→plan-id index in the same
 commit.
 
-## 8. Publish
+## 9. Publish
 
 Invoke the `plan-dashboard` skill for `<plan-id>` to publish its first
-dashboard Artifact. Ask the user whether they also want the master index
-refreshed (`plan-dashboard` with no argument) — don't do it unprompted,
-same convention `plan-dashboard` itself already follows, since that
-republishes a second, separate page.
+dashboard Artifact, then invoke it with no argument to republish the master index
+(`_index`): a new plan is the one change that makes the index stale.
 
 If this was a migration from an existing freeform doc, offer — don't do it
 unprompted — to replace that old doc with a short pointer stub at its
 original location, so anyone still reading the old path finds the new one
 immediately.
 
-## 9. Report back
+Every later change to the plan follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
 
-Plan id, item/wave/track counts, the dashboard URL, the tracking issue link
-if one was created, and — explicitly, not buried — every judgment call you
+## 10. Report back
+
+Plan id, item/wave/track counts, the dashboard URL and the index URL, the
+tracking issue link if one was created, and — explicitly, not buried — every judgment call you
 made or flagged along the way (structural assumptions, any live-vs-source
 disagreement found in step 4) so the user can sanity-check them before
 relying on the plan.

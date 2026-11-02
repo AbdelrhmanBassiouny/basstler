@@ -1,0 +1,129 @@
+{% extends "site_layout.html" %}
+{% from "dashboard_content.html" import dependency_chip, action_button with context %}
+{% block title %}{{ title }}{% endblock %}
+{% block page_class %}hide-done{% endblock %}
+{% block page_id %}plan-dashboard-page{% endblock %}
+
+{% macro item_card(item) %}
+{% set record = item.pull_request_record %}
+      <article id="{{ item.anchor }}" class="item {{ item.status_and_drift_css_class }}">
+        <h3>{{ item.title }}</h3>
+        <div class="chips">
+          <span class="chip {{ chip_tone.of_status(item.status) }}">{{ item.status.value | capitalize }}</span>
+          {% if item.pull_request_url %}
+          <a class="chip {{ chip_tone.of_live_state(item.live_state) }}" href="{{ item.pull_request_url }}">#{{ item.pull_request_number }} · {{ item.live_state.display_label }}</a>
+          {% endif %}
+          {% if record and record.check_state %}
+          <span class="chip {{ chip_tone.of_check_state(record.check_state) }}">CI {{ record.check_state.value }}</span>
+          {% endif %}
+          {% if record %}
+          {% for login in record.assignees %}
+          <span class="chip chip-idle">@{{ login }}</span>
+          {% endfor %}
+          {% endif %}
+        </div>
+        <span class="item-identifier">{{ item.identifier }}</span>
+        {% if item.dependency_chips %}
+        <div class="dependencies">
+          <span>needs</span>
+          {% for chip in item.dependency_chips %}
+          {{ dependency_chip(chip) }}
+          {% endfor %}
+        </div>
+        {% endif %}
+        {% if item.drift_description %}
+        <div class="drift">⚠ {{ item.drift_description }}</div>
+        {% endif %}
+        {% for blocker in item.blockers %}
+        <div class="blocker">▸ {{ blocker }}</div>
+        {% endfor %}
+        {% if item.upstream_pull_request_url or item.session %}
+        <div class="item-links">
+          {% if item.upstream_pull_request_url %}<a href="{{ item.upstream_pull_request_url }}">upstream ↗</a>{% endif %}
+          {% if item.session %}<a href="{{ item.session }}">session ↗</a>{% endif %}
+        </div>
+        {% endif %}
+        {% if item.notes %}
+        <details>
+          <summary>Notes</summary>
+          <div class="notes">{{ item.notes }}</div>
+        </details>
+        {% endif %}
+        {{ action_button(item) }}
+      </article>
+{% endmacro %}
+
+{% macro next_step_list(heading, items, reason) %}
+{% if items %}
+    <h2>{{ heading }} ({{ items | length }})</h2>
+    <ul>
+    {% for item in items %}
+      <li><a href="#{{ item.anchor }}" data-item-identifier="{{ item.identifier }}" onclick="planDashboardHighlightItem(event, this)">{{ item.title }}</a> <span class="next-reason">{{ reason or item.drift_description }}</span></li>
+    {% endfor %}
+    </ul>
+{% endif %}
+{% endmacro %}
+
+{% block content %}
+  <header class="masthead">
+    <p class="crumbs">{% if hub_url %}<a href="{{ hub_url }}">All repositories</a> › {% endif %}{% if index_url %}<a href="{{ index_url }}">{{ repository }}</a>{% else %}{{ repository }}{% endif %} › {{ title }}</p>
+    <p class="eyebrow">Plan</p>
+    <h1>{{ title }}</h1>
+    <p class="lede">{{ description }}</p>
+    <p class="meta-line">
+      <span>{{ total_items }} tracked items</span>
+      <a href="{{ repository_url }}">{{ repository }}</a>
+      {% if tracking_url %}<a href="{{ tracking_url }}">Propose a structural change →</a>{% endif %}
+    </p>
+    <div class="status-strip">
+      {% for status in item_statuses %}
+      <span class="stat"><strong>{{ status_counts[status] }}</strong>{{ status.value | capitalize }}</span>
+      {% endfor %}
+    </div>
+    {% if roadmap_html %}
+    <details class="roadmap">
+      <summary>Standing rules (roadmap.md)</summary>
+      <div class="roadmap-body">{{ roadmap_html | safe }}</div>
+    </details>
+    {% endif %}
+  </header>
+
+  {% if drift_items or ready_to_start or blocker_maybe_cleared or ready_to_review %}
+  <section class="next-steps" id="next-steps-card">
+    {{ next_step_list("Fix the manifest", drift_items, None) }}
+    {{ next_step_list("Ready to start", ready_to_start, "every dependency is at least ready for review") }}
+    {{ next_step_list("Blocker may be cleared", blocker_maybe_cleared, "a dependency is now ready for review") }}
+    {{ next_step_list("Ready to review", ready_to_review, "open draft pull request") }}
+  </section>
+  {% endif %}
+
+  <div class="toolbar">
+    <label><input type="checkbox" id="show-done-toggle" onchange="document.getElementById('plan-dashboard-page').classList.toggle('hide-done', !this.checked)"> Show done items</label>
+  </div>
+
+  <div class="waves">
+  {% for wave_section in waves %}
+    <section class="wave" id="wave-{{ wave_section.wave.id }}">
+      <header class="wave-head">
+        <h2>{{ wave_section.wave.name }}</h2>
+        {% if wave_section.wave.description %}<p>{{ wave_section.wave.description }}</p>{% endif %}
+      </header>
+      {% for track_section in wave_section.tracks %}
+      <h3 class="track-name">{{ track_section.track.name }}</h3>
+      {% for stacked in track_section.stacked_items %}
+      {{ item_card(stacked.item) }}
+      {% else %}
+      <p class="track-empty">{{ track_section.empty_state_message }}</p>
+      {% endfor %}
+      {% endfor %}
+    </section>
+  {% endfor %}
+  </div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+{% include script_template %}
+planDashboardRevealLocationHash();
+</script>
+{% endblock %}

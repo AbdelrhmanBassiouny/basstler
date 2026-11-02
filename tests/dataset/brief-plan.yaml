@@ -1,0 +1,36 @@
+schema_version: 1
+id: test-plan
+title: A plan whose item is briefed
+description: One item depending on a merged item, a draft item and an item of another plan.
+default_repository: owner/repo
+tracking_issue: 7
+waves:
+- id: wave-1
+  name: Wave One
+tracks:
+- id: track-1
+  name: Track One
+  wave: wave-1
+items:
+- id: merged-dependency
+  title: A dependency whose pull request has merged
+  branch: merged-dependency
+  pull_request_number: 11
+  track: track-1
+  status: in_progress
+- id: draft-dependency
+  title: A dependency whose pull request is still a draft
+  branch: draft-dependency
+  pull_request_number: 12
+  track: track-1
+  status: in_progress
+- id: briefed-item
+  title: The item being briefed
+  branch: briefed-branch
+  track: track-1
+  status: not_started
+  depends_on:
+  - merged-dependency
+  - draft-dependency
+  - other-plan/foreign-ready
+  notes: What the briefed item's session needs to know.

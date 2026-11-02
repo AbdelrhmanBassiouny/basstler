@@ -13,7 +13,8 @@ import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
-from .constants import DatasetLocation, EnvironmentVariable, FileMode
+from .constants.environment import FileMode, SearchPathVariable
+from .constants.paths import DatasetLocation
 
 
 @dataclass(frozen=True)
@@ -68,7 +69,7 @@ class ExecutableStubDirectory:
         :return: This process's own ``PATH`` with this directory first.
         """
         return self.ahead_of(
-            os.environ.get(EnvironmentVariable.EXECUTABLE_SEARCH_PATH, "")
+            os.environ.get(SearchPathVariable.EXECUTABLE_SEARCH_PATH, "")
         )
 
 
@@ -89,7 +90,7 @@ def path_hiding_executables(mirror_parent: Path, *executable_names: str) -> str:
     hidden = frozenset(executable_names)
     entries = []
     for mirror_index, entry in enumerate(
-        os.environ.get(EnvironmentVariable.EXECUTABLE_SEARCH_PATH, "").split(os.pathsep)
+        os.environ.get(SearchPathVariable.EXECUTABLE_SEARCH_PATH, "").split(os.pathsep)
     ):
         directory = Path(entry)
         if not directory.is_dir() or not any(

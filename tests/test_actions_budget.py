@@ -28,7 +28,7 @@ from basstler.exceptions import (
 )
 from basstler.workflows import TriggerEvent, Workflow
 
-from .constants import DatasetLocation
+from .constants.paths import DatasetLocation
 
 # %% reading the dataset
 

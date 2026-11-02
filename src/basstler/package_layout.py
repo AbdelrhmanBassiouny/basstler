@@ -28,19 +28,28 @@ class PackageModule:
 
     name: str
     """
-    The module's name within the package, e.g. ``"stack"``.
+    The module's dotted name within the package, e.g. ``"stack.model"``.
     """
 
     is_command_line_entry_point: bool
     """
     Whether the module guards a block on being run as ``__main__``, which is what makes
-    ``python3 -m basstler.<name> --help`` answer rather than do nothing.
+    ``python3 -m`` with :attr:`command_path` and ``--help`` answer rather than do
+    nothing.
     """
 
     @property
     def import_path(self) -> str:
         """:return: The dotted path this module is imported by."""
         return f"basstler.{self.name}"
+
+    @property
+    def command_path(self) -> str:
+        """
+        :return: The dotted path ``python3 -m`` runs this module by: its subpackage's, for
+            a subpackage's ``__main__`` module.
+        """
+        return self.import_path.removesuffix(".__main__")
 
 
 def _has_a_main_block(source: Path) -> bool:
@@ -60,8 +69,13 @@ def package_modules() -> tuple[PackageModule, ...]:
     :return: Every module in this package, in name order.
     """
     return tuple(
-        PackageModule(path.stem, _has_a_main_block(path))
-        for path in sorted(PackageLocation.DIRECTORY.value.glob("*.py"))
+        PackageModule(
+            ".".join(
+                path.relative_to(PackageLocation.DIRECTORY.value).with_suffix("").parts
+            ),
+            _has_a_main_block(path),
+        )
+        for path in sorted(PackageLocation.DIRECTORY.value.rglob("*.py"))
         if path.stem != "__init__"
     )
 

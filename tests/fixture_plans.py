@@ -1,0 +1,136 @@
+"""
+The plans directory the cross-plan reference tests resolve against.
+
+Every value a test asserts about these fixtures - a repository, a title, a
+pull request number - is read back out of the manifest that declares it, so
+nothing here is a second copy of the fixture that keeps passing once the
+fixture changes. Only the ids are named in code, since they are how a test
+points at one plan or item in the first place.
+"""
+
+from __future__ import annotations
+
+from enum import StrEnum
+from typing import Any
+
+import yaml
+
+from basstler.plan.dependencies import DependencyReference
+from basstler.plan.model import ManifestKey, PlanDocument, PlanManifest
+
+from .constants.paths import DatasetLocation
+
+PLAN_UNDER_TEST_ID = "test-plan"
+"""
+The id of the plan these tests render, which :attr:`ForeignItemId.DEPENDING_BACK` names
+to close a cross-plan cycle.
+"""
+
+
+class FixturePlanId(StrEnum):
+    """
+    The plans the fixture directory holds, plus one it deliberately doesn't.
+    """
+
+    OTHER = "other-plan"
+    """
+    The plan every reference into another plan points at.
+    """
+
+    ABSENT = "ghost-plan"
+    """
+    No such plan, for the reference that must be rejected.
+    """
+
+
+class ForeignItemId(StrEnum):
+    """
+    The items the fixture plans hold, one per state a dependency can be in, plus one id
+    that names nothing.
+    """
+
+    READY = "foreign-ready"
+    """
+    In :attr:`FixturePlanId.OTHER`, with a pull request out of draft.
+    """
+
+    DRAFT = "foreign-draft"
+    """
+    In :attr:`FixturePlanId.OTHER`, with a pull request still in draft.
+    """
+
+    DONE = "foreign-done"
+    """
+    In :attr:`FixturePlanId.OTHER`, already landed.
+    """
+
+    NOT_STARTED = "foreign-not-started"
+    """
+    In :attr:`FixturePlanId.OTHER`, with no pull request at all.
+    """
+
+    DEPENDING_BACK = "foreign-depending-back"
+    """
+    In :attr:`FixturePlanId.OTHER`, depending on :data:`PLAN_UNDER_TEST_ID`.
+    """
+
+    ABSENT = "ghost-item"
+    """
+    No such item, for the reference that must be rejected.
+    """
+
+
+def foreign_reference(item_identifier: str, plan_id: str = FixturePlanId.OTHER) -> str:
+    """
+    The ``depends_on`` text naming one item of another plan.
+
+    :param item_identifier: The foreign item's own id.
+    :param plan_id: The plan holding it.
+    """
+    return DependencyReference(item_identifier=item_identifier, plan_id=plan_id).text
+
+
+def fixture_manifest(plan_id: str) -> dict[str, Any]:
+    """
+    One fixture plan's manifest, exactly as the file writes it.
+
+    :param plan_id: The plan's id, which is also its directory's name.
+    """
+    manifest_path = DatasetLocation.PLANS / plan_id / PlanDocument.MANIFEST
+    return yaml.safe_load(manifest_path.read_text())
+
+
+def fixture_item(plan_id: str, item_identifier: str) -> dict[str, Any]:
+    """
+    One fixture item's entry, exactly as its manifest writes it.
+
+    :param plan_id: The plan holding it.
+    :param item_identifier: That item's own id.
+    """
+    for entry in fixture_manifest(plan_id)[ManifestKey.ITEMS.key]:
+        if entry[ManifestKey.IDENTIFIER.key] == item_identifier:
+            return entry
+    raise KeyError(f"no item {item_identifier!r} in fixture plan {plan_id!r}")
+
+
+def fixture_repository(plan_id: str) -> str:
+    """
+    Where one fixture plan's pull requests live.
+
+    :param plan_id: The plan's id.
+    """
+    return PlanManifest(fixture_manifest(plan_id)).default_repository.full_name
+
+
+def fixture_pull_request_number(plan_id: str, item_identifier: str) -> str:
+    """
+    One fixture item's pull request number, keyed the way ``pr_data.json`` keys it.
+
+    :param plan_id: The plan holding it.
+    :param item_identifier: That item's own id.
+    """
+    return str(
+        PlanManifest(fixture_manifest(plan_id))
+        .item_named(item_identifier)
+        .pull_request_number
+    )

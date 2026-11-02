@@ -1,0 +1,54 @@
+name: Upstream reviews (Action branch)
+
+# Reads the upstream pull request a fork's basstler/upstream-reviews branch requests,
+# and commits what it read back to that branch as result.json.
+
+on:
+  workflow_call:
+    inputs:
+      basstler_branch_or_tag:
+        description: "The basstler branch or tag to run, the same one the caller uses this workflow at"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  read:
+    name: Read the requested upstream pull request
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install basstler
+        run: |
+          set -euo pipefail
+          pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_branch_or_tag }}"
+
+      - name: Read the upstream pull request
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -m basstler.upstream_reviews.action run
+
+      - name: Commit the result
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add result.json
+          git commit --quiet -m "Answer upstream reviews $(python -c 'import json; print(json.load(open("result.json"))["request_identifier"])')"
+          for attempt in 1 2 3; do
+            if git pull --quiet --rebase origin "${GITHUB_REF_NAME}" \
+                && git push --quiet origin "HEAD:${GITHUB_REF_NAME}"; then
+              exit 0
+            fi
+            sleep 2
+          done
+          exit 1

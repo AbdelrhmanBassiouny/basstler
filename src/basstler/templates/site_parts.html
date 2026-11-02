@@ -1,0 +1,26 @@
+{# The markup the site's pages share. #}
+
+{% macro health_banner(skipped_pages) %}
+{% if skipped_pages %}
+  <section class="health" role="alert">
+    <h2>{{ skipped_pages | length }} left out of this build</h2>
+    <ul>
+    {% for skipped in skipped_pages %}
+      <li><code>{{ skipped.site_path }}</code>: {{ skipped.reason }}</li>
+    {% endfor %}
+    </ul>
+  </section>
+{% endif %}
+{% endmacro %}
+
+{# A card with a heading, its progress and a bar; a link when url is given. #}
+{% macro progress_card(card, heading, url=None, description=None, error=None) %}
+  {% if url %}<a class="progress-card {{ card.css_class }}" href="{{ url }}">{% else %}<div class="progress-card {{ card.css_class }}">{% endif %}
+    <h2>{{ heading }}</h2>
+    <p class="progress-label">{{ card.progress_label }}</p>
+    {% if card.review_label %}<p class="review-label">{{ card.review_label }}</p>{% endif %}
+    {% if description %}<p class="card-description">{{ description }}</p>{% endif %}
+    {% if error %}<p class="card-error">{{ error }}</p>{% endif %}
+    <div class="bar"><div class="bar-fill" style="width: {{ card.completion_percentage_label }}"></div></div>
+  {% if url %}</a>{% else %}</div>{% endif %}
+{% endmacro %}

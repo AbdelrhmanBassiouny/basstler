@@ -7,9 +7,14 @@ set -euo pipefail
 #
 # Usage (from anywhere - always inspects this repo specifically, see
 # resolve-personal-notes-config.sh):
-#   "${BASSTLER_PLUGIN_ROOT}"/hooks/check-setup.sh
+#   "${BASSTLER_PLUGIN_ROOT}"/hooks/check-setup.sh [--require-upstream]
 #
-# Read-only: it fetches (into FETCH_HEAD) and reads git config, but never
+# --require-upstream makes a project naming no upstream a needs-setup row
+# rather than info. Only /upstream-reviews and /stacked-pr-maintenance need
+# one, so they pass it; any other caller would otherwise fail every project
+# that simply has no upstream.
+#
+# Read-only: it fetches (into PERSONAL_NOTES_REFERENCE) and reads git config, but never
 # writes config, branches, files, or remotes. Running it can't change the
 # answer it gives.
 #
@@ -18,8 +23,10 @@ set -euo pipefail
 # earlier one being satisfied). Three statuses:
 #   ok           - nothing to do
 #   needs-setup  - something is missing; <detail> says what
+#   in-progress  - another process is setting it up right now; wait for it
+#                  rather than doing it again
 #   info         - context for whoever is reading, never a pass/fail
-# Exit code is 0 when no row is needs-setup, 1 otherwise - so a caller can
+# Exit code is 0 when no row is needs-setup or in-progress, 1 otherwise - so a caller can
 # take the fast path ("everything is already fine") on the exit code alone,
 # without parsing anything.
 #
@@ -40,12 +47,98 @@ source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
 EXIT_CODE=0
 
+REQUIRE_UPSTREAM=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --require-upstream) REQUIRE_UPSTREAM=true; shift ;;
+    *) echo "Unknown argument: $1" >&2; exit 2 ;;
+  esac
+done
+
+# names_upstream: succeeds when the stack.toml text on stdin names an
+# upstream_repository.
+names_upstream() {
+  grep -Eq '^[[:space:]]*upstream_repository[[:space:]]*='
+}
+
+# report_upstream: prints the stack_upstream row, given whether the
+# personal-notes branch could be read at all.
+UPSTREAM_NAMED=false
+
+report_upstream() {
+  local notes_branch_read="$1"
+  local configure_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} configure-upstream --repository <owner>/<name>"
+  if [ -f "${PROJECT_ROOT}/${PROJECT_STACK_CONFIGURATION_PATH}" ] \
+      && names_upstream < "${PROJECT_ROOT}/${PROJECT_STACK_CONFIGURATION_PATH}"; then
+    UPSTREAM_NAMED=true
+    report stack_upstream ok "named in the project's committed ${PROJECT_STACK_CONFIGURATION_PATH}"
+  elif [ "${notes_branch_read}" = true ] \
+      && git show "${PERSONAL_NOTES_REFERENCE}:${PERSONAL_STACK_CONFIGURATION_PATH}" 2>/dev/null | names_upstream; then
+    UPSTREAM_NAMED=true
+    report stack_upstream ok "named in ${PERSONAL_STACK_CONFIGURATION_PATH} on '${NOTES_BRANCH}'"
+  elif [ "${REQUIRE_UPSTREAM}" = true ]; then
+    report stack_upstream needs-setup \
+      "no upstream named, which /upstream-reviews and /stacked-pr-maintenance need - run: ${configure_command}"
+  else
+    report stack_upstream info \
+      "no upstream named - only /upstream-reviews and /stacked-pr-maintenance need one, set with: ${configure_command}"
+  fi
+}
+
 # report: prints one TSV row, and remembers that the overall run failed if the
-# status is needs-setup, so the exit code never has to be tracked by hand at
+# status is needs-setup or in-progress, so the exit code never has to be tracked by hand at
 # each call site.
+# report_upstream_reviews_action: prints the upstream_reviews_action row,
+# checked only once an upstream is named, since only /upstream-reviews runs the
+# Action. Not
+# installed is info, since the skill reads the upstream another way; installed
+# at another branch or tag than the session's package is needs-setup, since the
+# run and the session replaying it must run the same package.
+report_upstream_reviews_action() {
+  if [ "${UPSTREAM_NAMED}" != true ]; then
+    report upstream_reviews_action info "not checked - no upstream named for it to read"
+    return 0
+  fi
+  local branch_or_tag
+  branch_or_tag="$(basstler_branch_or_tag)"
+  local install_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --branch-or-tag ${branch_or_tag}"
+  local state
+  if ! state="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+      --remote "${NOTES_REMOTE}" status --branch-or-tag "${branch_or_tag}" 2>/dev/null)"; then
+    report upstream_reviews_action info \
+      "could not read the ${UPSTREAM_REVIEWS_ACTION_BRANCH} branch on '${NOTES_REMOTE}' - to install it, run: ${install_command}"
+    return 0
+  fi
+  case "${state}" in
+    current*)
+      report upstream_reviews_action ok \
+        "'${NOTES_REMOTE}' runs basstler ${branch_or_tag}'s Action on ${UPSTREAM_REVIEWS_ACTION_BRANCH}" ;;
+    stale*)
+      report upstream_reviews_action needs-setup \
+        "'${NOTES_REMOTE}' runs the Action at ${state#stale }, not ${branch_or_tag} - run: ${install_command}" ;;
+    *)
+      report upstream_reviews_action info \
+        "not installed on '${NOTES_REMOTE}' - /upstream-reviews reads the upstream from the session instead; to read it in the fork's Actions, run: ${install_command}" ;;
+  esac
+}
+
+# report_plan_site: whether the notes branch starts the plan site's build. Only the
+# dispatch workflow is visible from here; the publication command re-checks the rest.
+report_plan_site() {
+  local publish_command="${BASSTLER_PYTHON} -m ${PLAN_SITE_PUBLICATION_MODULE}"
+  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_SITE_DISPATCH_WORKFLOW_PATH}" 2>/dev/null; then
+    report plan_site ok "'${NOTES_BRANCH}' starts the plan site's build on every push"
+  else
+    report plan_site info \
+      "'${NOTES_BRANCH}' does not start a plan site build - to publish this repository's plans, run: ${publish_command}"
+  fi
+}
+
 report() {
   local check="$1" status="$2" detail="$3"
-  [ "${status}" != "needs-setup" ] || EXIT_CODE=1
+  case "${status}" in
+    needs-setup|in-progress) EXIT_CODE=1 ;;
+  esac
   printf '%s\t%s\t%s\n' "${check}" "${status}" "${detail}"
 }
 
@@ -128,12 +221,16 @@ report notes_path info "${NOTES_PATH} (from $(resolution_source claude.personalN
 if fetch_personal_notes_branch; then
   report notes_branch ok "'${NOTES_BRANCH}' found on '${ACTIVE_NOTES_REMOTE}'"
 
-  if git cat-file -e "FETCH_HEAD:${NOTES_PATH}" 2>/dev/null; then
+  if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" 2>/dev/null; then
     report notes_file ok "'${NOTES_PATH}' exists on '${NOTES_BRANCH}'"
   else
     report notes_file needs-setup \
       "'${NOTES_BRANCH}' exists but has no '${NOTES_PATH}' - session-start.sh will write no notes"
   fi
+
+  report_upstream true
+  report_upstream_reviews_action
+  report_plan_site
 
   # %% who commits here would be authored as
 
@@ -165,6 +262,9 @@ else
   report notes_branch needs-setup \
     "no '${NOTES_BRANCH}' branch on any of: ${ATTEMPTED_NOTES_REMOTES} - run ./create-personal-notes-branch.sh (after pointing the remote at your own fork if it isn't already)"
   report notes_file needs-setup "not checked - the branch that would hold it doesn't exist yet"
+  report_upstream false
+  report_upstream_reviews_action
+  report plan_site info "not checked - the branch that would start the build doesn't exist yet"
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 
@@ -180,7 +280,10 @@ fi
 # read the same declaration the same way, for the same interpreter. What stays
 # here is the reasons it can answer nothing, because they are this script's
 # rows to word.
-if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
+if basstler_install_in_progress; then
+  report dashboard_dependencies in-progress \
+    "process $(cat "${BASSTLER_INSTALL_MARKER}") is installing them for ${BASSTLER_PYTHON} now - do not install them yourself; run: wait_for_basstler_install, then this check again"
+elif ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
   report dashboard_dependencies needs-setup "${BASSTLER_PYTHON} is not on PATH, so the plan-dashboard modules cannot run at all"
 elif ! MISSING_DEPENDENCIES="$(missing_dependencies)"; then
   report dashboard_dependencies needs-setup "cannot check: the basstler package's declared dependencies could not be read"

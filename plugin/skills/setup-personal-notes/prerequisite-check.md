@@ -20,8 +20,17 @@ source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 bash "${CHECK_SETUP_SCRIPT}" || true
 ```
 
+A skill that needs the stacked-PR workflow's upstream (`/upstream-reviews`)
+passes `--require-upstream`, which turns a project naming none from context
+into a `needs-setup` row; every other skill runs it bare.
+
 **Exit code 0 — set up.** Say nothing about setup at all; carry straight on
 with the skill. A user who is already set up must never hear about it.
+
+**Non-zero, and every row that is not `ok` or `info` is `in-progress`** — a
+session start is installing it right now. Run `wait_for_basstler_install`, then
+the check again, and go on from what that second run says; never install it
+yourself.
 
 **Non-zero — something is missing.** Do not start the skill's real work, and do
 not attempt the individual fixes inline: `/setup-personal-notes` exists to do
@@ -30,24 +39,12 @@ exactly that, and duplicating a piece of it here is how the two drift apart.
 1. Tell the user, in one or two sentences, what is missing and that setup is
    running now — from the `needs-setup` rows' own `<detail>` text, not a guess.
    This is a statement, not a question: never ask whether to run the setup.
-2. Invoke `/setup-personal-notes` via the `Skill` tool and let it finish. It
+2. Invoke `/setup-personal-notes` via the `Skill` tool and let it finish,
+   passing it any flag your skill gave `check-setup.sh` (such as
+   `--require-upstream`) as its argument, so it checks the same things. It
    asks its own questions for the decisions that are genuinely the user's —
    which repository their notes live in, what goes in them, whether to create
    labels — and does the mechanical parts without asking.
 3. Re-run the check above. If it now exits 0, continue with the skill as though
    nothing had happened. If it still doesn't, report what remains unresolved and
    stop — do not push on into work that will fail later for the same reason.
-
-## Why this runs without being offered first
-
-A user who invokes a planning skill has already said what they want, and the
-setup is the only route to it: there is no useful answer to "shall I set this
-up?" other than yes, and asking it turns every first invocation into two turns.
-So the yes/no gate is gone.
-
-What survives is narrower and stays inside `/setup-personal-notes`: the choices
-that have more than one reasonable answer — which remote holds the notes, what
-the notes start out saying, whether to create labels in a repository — are still
-asked there, because getting one of those wrong writes to a place the user
-didn't choose. Running the setup is not that kind of decision; picking its
-destination is.

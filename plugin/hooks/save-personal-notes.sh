@@ -67,12 +67,9 @@ else
 fi
 
 git branch -D __save-personal-notes-tmp > /dev/null 2>&1 || true
-# FETCH_HEAD, not "${ACTIVE_NOTES_REMOTE}/${NOTES_BRANCH}": a URL-form remote
-# creates no remote-tracking ref, but FETCH_HEAD always points at what was
-# just fetched, whether the serving remote was a name or a raw URL. It's
-# shared across worktrees (unlike HEAD/index), so this scratch worktree sees
-# the fetch above correctly.
-git worktree add -b __save-personal-notes-tmp "${SCRATCH_DIR}" FETCH_HEAD --quiet
+# PERSONAL_NOTES_REFERENCE is shared across worktrees (unlike HEAD/index), so
+# this scratch worktree sees the fetch above.
+git worktree add -b __save-personal-notes-tmp "${SCRATCH_DIR}" "${PERSONAL_NOTES_REFERENCE}" --quiet
 
 mkdir -p "${SCRATCH_DIR}/$(dirname "${NOTES_PATH}")"
 cp "${CONTENT_FILE}" "${SCRATCH_DIR}/${NOTES_PATH}"
