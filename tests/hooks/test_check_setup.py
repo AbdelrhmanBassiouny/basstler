@@ -16,6 +16,7 @@ import pytest
 from basstler.locations import PluginLocation, ProjectLocation, WorkflowLocation
 from basstler.exit_codes import SetupCheckExitCode
 from basstler.plan_site import publication
+from basstler.plan_site.hub import HubFileKey
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 
 from ..constants.environment import ConfigurationVariable
@@ -159,6 +160,22 @@ def test_a_notes_branch_without_the_dispatch_workflow_says_how_to_publish(
     assert report.exit_code is SetupCheckExitCode.SUCCESS
     assert report.results[SetupCheck.PLAN_SITE].status == CheckStatus.INFORMATIONAL
     assert publication.__name__ in report.results[SetupCheck.PLAN_SITE].detail
+
+
+def test_a_listed_repository_without_the_dispatch_workflow_names_the_site_it_is_missing_from(
+    check_setup_repository: ScratchRepository,
+):
+    site_url = "https://an-owner.github.io/plans/"
+    check_setup_repository.update_notes_branch_file(
+        ProjectLocation.PLAN_HUB, f"{HubFileKey.SITE_URL}: {site_url}\n"
+    )
+
+    report = run_check_setup(check_setup_repository)
+
+    plan_site = report.results[SetupCheck.PLAN_SITE]
+    assert plan_site.status == CheckStatus.INFORMATIONAL
+    assert site_url in plan_site.detail
+    assert publication.__name__ in plan_site.detail
 
 
 def test_a_notes_branch_with_the_dispatch_workflow_starts_the_site_build(

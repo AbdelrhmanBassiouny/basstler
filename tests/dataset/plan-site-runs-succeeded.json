@@ -1,7 +1,7 @@
 {
   "total_count": 2,
   "workflow_runs": [
-    {"id": 3002, "name": "Plan site", "path": ".github/workflows/plan-site.yml", "status": "completed", "conclusion": "success"},
-    {"id": 3001, "name": "Plan site", "path": ".github/workflows/plan-site.yml", "status": "completed", "conclusion": "failure"}
+    {"id": 3002, "html_url": "https://github.com/an-owner/a-repository/actions/runs/3002", "name": "Plan site", "path": ".github/workflows/plan-site.yml", "status": "completed", "conclusion": "success"},
+    {"id": 3001, "html_url": "https://github.com/an-owner/a-repository/actions/runs/3001", "name": "Plan site", "path": ".github/workflows/plan-site.yml", "status": "completed", "conclusion": "failure"}
   ]
 }

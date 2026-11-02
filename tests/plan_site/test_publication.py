@@ -18,7 +18,12 @@ import pytest
 
 from basstler.actions_budget import ActionsBudget
 from basstler.environment import GitHubCredentialVariable
-from basstler.github.client import GitHubResponse, GitHubWriter, HttpMethod
+from basstler.github.client import (
+    GitHubReader,
+    GitHubResponse,
+    GitHubWriter,
+    HttpMethod,
+)
 from basstler.github.exceptions import (
     GitHubCallFailed,
     GitHubRequestFailed,
@@ -27,13 +32,9 @@ from basstler.github.exceptions import (
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.publication import (
-    MergeWorkflowProposal,
-    PlanSitePublication,
-    RunListing,
-    UserStep,
-    UserSteps,
-)
+from basstler.plan_site.publication import PlanSitePublication
+from basstler.plan_site.run_listing import ListedRun, RunListing
+from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep, UserSteps
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     DispatchWorkflow,
@@ -48,7 +49,7 @@ from basstler.plan_site.workflows import (
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.upstream_reviews.rest_models import RestPullRequestSummary
-from basstler.upstream_reviews.vocabulary import BasstlerSource
+from basstler.upstream_reviews.vocabulary import BasstlerSource, CheckOutcome
 from basstler.workflows import ActivityType, TriggerEvent, Workflow
 
 from ..constants.paths import DatasetLocation
@@ -604,6 +605,7 @@ def test_a_refused_default_branch_leaves_merging_the_workflow_to_the_user(protec
 
     assert [pending.step for pending in report.pending] == [
         UserStep.TURN_ON_PAGES,
+        UserStep.CREATE_TOKEN,
         UserStep.STORE_TOKEN,
         UserStep.ADD_MERGE_WORKFLOW,
     ]
@@ -744,6 +746,7 @@ def test_without_successful_runs_pages_and_the_token_are_left_to_the_user(publis
 
     assert [pending.step for pending in report.pending] == [
         UserStep.TURN_ON_PAGES,
+        UserStep.CREATE_TOKEN,
         UserStep.STORE_TOKEN,
     ]
 
@@ -765,7 +768,73 @@ def test_a_failed_latest_dispatch_leaves_the_token_to_the_user(published):
 
     report = published.publication(runs).publish()
 
-    assert [pending.step for pending in report.pending] == [UserStep.STORE_TOKEN]
+    assert [pending.step for pending in report.pending] == [
+        UserStep.CREATE_TOKEN,
+        UserStep.STORE_TOKEN,
+    ]
+
+
+@dataclass
+class RefusingRestClient(GitHubReader):
+    """
+    A client for which GitHub refuses every request, as it does for a repository the
+    session has no access to.
+    """
+
+    def get(self, path: str):
+        raise GitHubRequestFailed(
+            status=HTTPStatus.FORBIDDEN, detail="", method=HttpMethod.GET, path=path
+        )
+
+    def get_pages(self, path: str):
+        raise GitHubRequestFailed(
+            status=HTTPStatus.FORBIDDEN, detail="", method=HttpMethod.GET, path=path
+        )
+
+
+def test_runs_that_cannot_be_read_stop_the_publication_before_anything_is_written(
+    publishing,
+):
+    publishing.create(publishing.site.repository)
+
+    with pytest.raises(GitHubRequestFailed):
+        publishing.publication(RefusingRestClient()).publish()
+
+    assert (
+        publishing.file(
+            publishing.notes_repository,
+            NOTES_BRANCH,
+            DispatchWorkflow.location.as_posix(),
+        )
+        is None
+    )
+    assert (
+        publishing.file(
+            publishing.site.repository, "main", SiteWorkflow.location.as_posix()
+        )
+        is None
+    )
+
+
+def test_a_refused_read_ends_the_command_with_the_error_s_own_exit_status(publishing):
+    publishing.create(publishing.site.repository)
+
+    exit_status = publishing.publication(RefusingRestClient()).run()
+
+    assert exit_status == GitHubRequestFailed.exit_code
+
+
+def test_a_command_with_steps_left_ends_with_the_incomplete_exit_status(published):
+    assert published.publication(published.runs_none()).run() == 1
+
+
+def test_a_command_with_nothing_left_ends_successfully(published):
+    runs = published.runs(
+        DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED,
+    )
+
+    assert published.publication(runs).run() == 0
 
 
 # %% the steps in the browser
@@ -795,19 +864,80 @@ def test_turning_on_pages_points_at_the_site_repository_s_pages_settings(publish
     assert f"{published.site.repository.url}/settings/pages" in browser_steps[0]
 
 
-def test_storing_the_token_walks_through_creating_it_and_saving_it_as_a_secret(
+def test_creating_the_token_walks_through_scoping_it_to_every_registered_repository(
     published,
 ):
     report = published.publication(published.runs_none()).publish()
 
-    browser_steps = pending_step(report, UserStep.STORE_TOKEN).browser_steps
+    browser_steps = pending_step(report, UserStep.CREATE_TOKEN).browser_steps
 
     text = "\n".join(browser_steps)
     assert UserSteps.token_page in text
     assert published.site.repository.full_name in text
     assert published.notes_repository.full_name in text
+
+
+def test_creating_a_token_has_no_command_line_because_github_offers_none(published):
+    report = published.publication(published.runs_none()).publish()
+
+    assert pending_step(report, UserStep.CREATE_TOKEN).line is None
+
+
+def test_storing_the_token_is_one_command_that_sets_the_secret_in_every_registered_repository(
+    published, tmp_path
+):
+    second_repository = Repository(published.notes_repository.owner, "another")
+    published.create(second_repository)
+    second = ForkCheckout.create(tmp_path / "second")
+    second.run_git(
+        "remote",
+        "set-url",
+        RemoteName.ORIGIN,
+        published.path_of(second_repository).as_uri(),
+    )
+    second_publishing = Publishing(second, published.root)
+
+    report = second_publishing.publication(second_publishing.runs_none()).publish()
+
+    line = pending_step(report, UserStep.STORE_TOKEN).line
+    assert line.count(f"gh secret set {PlanSiteSecret.TOKEN}") == 1
+    assert published.notes_repository.full_name in line
+    assert second_repository.full_name in line
+
+
+def test_storing_the_token_in_the_browser_opens_each_registered_repository_s_secret_page(
+    published,
+):
+    report = published.publication(published.runs_none()).publish()
+
+    text = "\n".join(pending_step(report, UserStep.STORE_TOKEN).browser_steps)
+
     assert f"{published.notes_repository.url}/settings/secrets/actions/new" in text
     assert PlanSiteSecret.TOKEN in text
+
+
+def test_a_failed_dispatch_run_is_linked_from_the_step_it_leaves_to_the_user(
+    published,
+):
+    runs = published.runs(
+        DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
+    )
+
+    report = published.publication(runs).publish()
+
+    latest_run = pending_step(report, UserStep.STORE_TOKEN).latest_run
+    assert latest_run == ListedRun(
+        Path(DispatchWorkflow.location),
+        CheckOutcome.FAILURE,
+        "https://github.com/an-owner/a-repository/actions/runs/4004",
+    )
+
+
+def test_without_a_run_no_run_is_linked(published):
+    report = published.publication(published.runs_none()).publish()
+
+    assert pending_step(report, UserStep.STORE_TOKEN).latest_run is None
 
 
 def test_a_rendered_step_shows_the_command_and_then_the_browser_steps(published):
@@ -820,4 +950,25 @@ def test_a_rendered_step_shows_the_command_and_then_the_browser_steps(published)
             f"    {number}. {step}"
             for number, step in enumerate(pending.browser_steps, start=1)
         )
+    )
+
+
+def test_a_rendered_step_without_a_command_says_so_before_the_browser_steps(published):
+    report = published.publication(published.runs_none()).publish()
+    pending = pending_step(report, UserStep.CREATE_TOKEN)
+
+    assert pending.render().startswith(
+        f"- {pending.step}:\n  GitHub offers no command for this; in the browser:\n"
+    )
+
+
+def test_a_rendered_step_links_the_latest_run_that_made_it_necessary(published):
+    runs = published.runs(
+        DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
+    )
+    pending = pending_step(published.publication(runs).publish(), UserStep.STORE_TOKEN)
+
+    assert pending.render().splitlines()[1] == (
+        f"  Latest run, {pending.latest_run.outcome}: {pending.latest_run.url}"
     )
