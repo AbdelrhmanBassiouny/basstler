@@ -11,6 +11,8 @@ from ..constants.source_lines import (
     MODULE_FIRST_LINE,
     UNDOCUMENTED_FIELD_LINE,
     UNDOCUMENTED_METHOD_LINE,
+    UNDOCUMENTED_OVERRIDING_METHOD_LINE,
+    UNIMPORTABLE_UNDOCUMENTED_FUNCTION_LINE,
 )
 
 # %% undocumented code
@@ -27,14 +29,26 @@ def undocumented_first_lines(snippet: DocstringSnippet) -> list[int]:
     )
 
 
-def test_an_undocumented_field_and_method_are_reported_and_an_override_is_not():
+def test_undocumented_fields_and_methods_are_reported_but_abstract_implementations_are_not():
     """
-    The field and the method without a docstring are reported; the method decorated with
-    :func:`typing.override` inherits its base's docstring.
+    The field, the override of an implemented method and the new method without a
+    docstring are reported; the implementation of an abstract method inherits its base's
+    docstring.
     """
     assert undocumented_first_lines(DocstringSnippet.UNDOCUMENTED_DEFINITIONS) == [
         UNDOCUMENTED_FIELD_LINE,
+        UNDOCUMENTED_OVERRIDING_METHOD_LINE,
         UNDOCUMENTED_METHOD_LINE,
+    ]
+
+
+def test_an_unimportable_module_is_checked_except_for_its_methods():
+    """
+    A module that raises on import still has its functions checked; only its methods,
+    whose bases cannot be looked up, are skipped.
+    """
+    assert undocumented_first_lines(DocstringSnippet.UNIMPORTABLE_DEFINITIONS) == [
+        UNIMPORTABLE_UNDOCUMENTED_FUNCTION_LINE
     ]
 
 

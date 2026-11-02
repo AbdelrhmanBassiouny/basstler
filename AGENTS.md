@@ -7,6 +7,10 @@
 - Existing code that breaks these rules stays as it is unless a change touches it or the user asks for the cleanup. When you modify a function or class, bring that function or class in line with these rules as part of the change, and leave code the change does not otherwise modify alone. If the cleanup renames a method and so changes the API, ask the user first
 - When a rule seems wrong for the case at hand - a failing test that is itself wrong, an exception that has to be caught, a value that genuinely has to live at module level - ask the user before departing from it; never decide the exception on your own
 
+## Rule modelling
+<!-- from RuleModellingRules in basstler/code_rules/rules/code_quality.py -->
+- When a script can check part of a rule, split the rule: the checkable part becomes a rule of its own that carries its checker, and the part only a person can judge stays a rule without one
+
 ## Ask the developer
 <!-- from AskTheDeveloperRules in basstler/code_rules/rules/code_quality.py -->
 - When you are unsure why something was done or why a specific number was chosen, ask; never invent a reason and write it down as a comment
@@ -127,8 +131,9 @@
 
 ## Documentation
 <!-- from DocumentationRules in basstler/code_rules/rules/code_quality.py -->
-- Every module, class, function and field has a docstring in reStructuredText: a module's or class's responsibility, a function's contract, a field's unit or meaning. A field's docstring goes directly below the field, not in the class docstring (checked by `basstler code-rules check`)
-- An override that keeps its base contract is decorated with `typing.override`, has no docstring and inherits the base one. One that changes the contract documents only the difference and references the overridden method with `:meth:`
+- Every module, class, function and field has a docstring. A field's docstring goes directly below the field, not in the class docstring. A method implementing an abstract method is exempt: the abstract method's docstring is enough (checked by `basstler code-rules check`)
+- Documentation is written in reStructuredText and says something the name and the type hints do not: a module's or class's responsibility, a function's contract, a field's unit or meaning
+- An implementation of an abstract method has no docstring and inherits the base one. An override of an implemented method documents only what differs from the base and references the overridden method with `:meth:`
 - A docstring states what the code does and its contract, short and to the point. It never contains:
   - how the code does it
   - the ways a caller can supply a value (for example, that it may also be given as a query instead of a concrete object)

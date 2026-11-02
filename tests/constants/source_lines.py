@@ -11,16 +11,28 @@ MODULE_FIRST_LINE = 1
 The line a module, and so its docstring, starts on.
 """
 
-UNDOCUMENTED_FIELD_LINE = 32
+UNDOCUMENTED_FIELD_LINE = 38
 """
 The line of the undocumented field in
 :attr:`~tests.constants.paths.DocstringSnippet.UNDOCUMENTED_DEFINITIONS`.
 """
 
-UNDOCUMENTED_METHOD_LINE = 38
+UNDOCUMENTED_OVERRIDING_METHOD_LINE = 43
+"""
+The line of the undocumented override of an implemented method in
+:attr:`~tests.constants.paths.DocstringSnippet.UNDOCUMENTED_DEFINITIONS`.
+"""
+
+UNDOCUMENTED_METHOD_LINE = 46
 """
 The line of the undocumented method in
 :attr:`~tests.constants.paths.DocstringSnippet.UNDOCUMENTED_DEFINITIONS`.
+"""
+
+UNIMPORTABLE_UNDOCUMENTED_FUNCTION_LINE = 19
+"""
+The line of the undocumented function in
+:attr:`~tests.constants.paths.DocstringSnippet.UNIMPORTABLE_DEFINITIONS`.
 """
 
 OVERLONG_ATTRIBUTE_DOCSTRING_LINE = 10

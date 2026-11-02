@@ -502,8 +502,15 @@ class DocstringSnippet(PathEnumeration):
 
     UNDOCUMENTED_DEFINITIONS = DIRECTORY / "undocumented-definitions.py"
     """
-    A documented module whose class leaves one field and one method undocumented, and
-    overrides a method without a docstring.
+    A documented module whose class leaves a field, an override of an implemented
+    method and a new method undocumented, and implements an abstract method without a
+    docstring.
+    """
+
+    UNIMPORTABLE_DEFINITIONS = DIRECTORY / "unimportable-definitions.py"
+    """
+    A documented module that raises on import, leaving a method and a function
+    undocumented.
     """
 
     NO_MODULE_DOCSTRING = DIRECTORY / "no-module-docstring.py"
