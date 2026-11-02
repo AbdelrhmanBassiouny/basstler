@@ -67,9 +67,8 @@ session) and re-run. Stop; every later step depends on those files.
 ## 3. `claude_local_md_ignored` — CLAUDE.local.md could be committed
 
 The project's `.gitignore` does not ignore `CLAUDE.local.md`, so the notes
-could end up in a commit. Offer to add `CLAUDE.local.md`,
-`.claude/settings.local.json`, `.claude/.personal-settings-sync-hash` and
-`.claude/.plan-state-sync-sha` to it; ask before changing the tracked file.
+could end up in a commit. Offer to add `CLAUDE.local.md` and
+`.claude/settings.local.json` to it; ask before changing the tracked file.
 
 ## 4. Ask what only the user can answer
 

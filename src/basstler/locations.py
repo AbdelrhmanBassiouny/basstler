@@ -121,6 +121,19 @@ class RepositoryStateLocation(PathEnumeration):
     Everything the last maintenance pass did, in full.
     """
 
+    PLAN_STATE_SYNC_STAMP = DIRECTORY / "plan-state-sync-sha"
+    """
+    The personal-notes commit this clone last read plan state at. The shell
+    configuration's ``PLAN_STATE_SYNC_STAMP`` spells the same name.
+    """
+
+    PERSONAL_SETTINGS_SYNC_STAMP = DIRECTORY / "personal-settings-sync-hash"
+    """
+    The hash of the personal settings last synced into, or saved out of, this clone's
+    local settings. The shell configuration's ``PERSONAL_SETTINGS_SYNC_STAMP`` spells
+    the same name.
+    """
+
 
 class CommitScratchFile(PathEnumeration):
     """

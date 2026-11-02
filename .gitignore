@@ -7,8 +7,6 @@ __pycache__/
 # repository, when developing it with its own plugin enabled. Personal, never committed.
 CLAUDE.local.md
 .claude/settings.local.json
-.claude/.personal-settings-sync-hash
-.claude/.plan-state-sync-sha
 
 # Everything the last maintenance pass did, written by `python3 -m basstler.maintenance
 # run-report` beside the board. Scratch state, never committed.

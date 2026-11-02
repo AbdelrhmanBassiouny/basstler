@@ -18,7 +18,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import PluginLocation, ProjectLocation
+from basstler.locations import PluginLocation, ProjectLocation, RepositoryStateLocation
 from basstler.maintenance.constants import GitHubClient
 
 from ..constants.environment import ScrubbedEnvironmentPrefix, SearchPathVariable
@@ -52,7 +52,6 @@ PLAN_MANIFEST_TRACKING_ISSUE_NO_REPOSITORY = (
 PLAN_ROADMAP = (DatasetLocation.DIRECTORY / "roadmap.md").read_text()
 
 PLAN_ID = "test-plan"
-STAMP_RELATIVE_PATH = ProjectLocation.CLAUDE_CODE_DIRECTORY / ".plan-state-sync-sha"
 
 TRACKING_ISSUE_REPOSITORY = "octo-org/octo-repo"
 """
@@ -276,7 +275,11 @@ def test_uses_the_recorded_stamp_when_since_is_omitted(scratch_repo: ScratchRepo
     sha_before = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_NOT_STARTED, PLAN_ROADMAP, "v1"
     )
-    (scratch_repo.project_root / STAMP_RELATIVE_PATH).write_text(f"{sha_before}\n")
+    stamp = scratch_repo.git.repository_state_path(
+        RepositoryStateLocation.PLAN_STATE_SYNC_STAMP
+    )
+    stamp.parent.mkdir(parents=True)
+    stamp.write_text(f"{sha_before}\n")
     write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_IN_PROGRESS, PLAN_ROADMAP, "v2"
     )
@@ -296,7 +299,15 @@ def test_stamp_is_updated_after_running(scratch_repo: ScratchRepository):
         scratch_repo, PLAN_ID, PlanUpdatesSinceOption.SINCE, sha
     )
     assert result.returncode == 0, result.stderr
-    assert (scratch_repo.project_root / STAMP_RELATIVE_PATH).read_text().strip() == sha
+    stamp = scratch_repo.git.repository_state_path(
+        RepositoryStateLocation.PLAN_STATE_SYNC_STAMP
+    )
+    assert stamp.read_text().strip() == sha
+    assert not (
+        scratch_repo.project_root
+        / ProjectLocation.CLAUDE_CODE_DIRECTORY
+        / ".plan-state-sync-sha"
+    ).exists()
 
     second_result = run_plan_updates_since(scratch_repo, PLAN_ID)
     assert second_result.returncode == 0, second_result.stderr
