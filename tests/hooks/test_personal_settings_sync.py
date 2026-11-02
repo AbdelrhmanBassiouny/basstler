@@ -13,7 +13,7 @@ import subprocess
 
 import pytest
 
-from basstler.locations import PluginLocation, ProjectLocation
+from basstler.locations import PluginLocation, ProjectLocation, RepositoryStateLocation
 
 from ..constants.notes import ScratchBranch
 from ..constants.paths import DatasetLocation, PersonalNotesPath
@@ -225,3 +225,32 @@ def test_saving_without_local_settings_fails_with_a_clear_message(
         f"({settings_repository.project_root / PersonalNotesPath.LOCAL_SETTINGS})"
         " - nothing to save.\n"
     )
+
+
+# %% where the sync stamp lives
+
+
+def test_records_the_settings_stamp_in_the_git_directory(
+    settings_repository: ScratchRepository,
+):
+    settings_repository.update_notes_branch_file(
+        PersonalNotesPath.SETTINGS_ON_NOTES_BRANCH, PERSONAL_SETTINGS
+    )
+
+    result = run_hook(settings_repository, PluginLocation.SESSION_START_SCRIPT.name)
+
+    assert result.returncode == 0, result.stderr
+    stamp = settings_repository.git.repository_state_path(
+        RepositoryStateLocation.PERSONAL_SETTINGS_SYNC_STAMP
+    )
+    assert (
+        stamp.read_text().strip()
+        == settings_repository.run_git(
+            "hash-object", str(PersonalNotesPath.LOCAL_SETTINGS)
+        ).stdout.strip()
+    )
+    assert not (
+        settings_repository.project_root
+        / ProjectLocation.CLAUDE_CODE_DIRECTORY
+        / ".personal-settings-sync-hash"
+    ).exists()

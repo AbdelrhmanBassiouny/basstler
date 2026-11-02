@@ -45,6 +45,17 @@ NOTES_PATH="${NOTES_PATH:-${CLAUDE_PERSONAL_NOTES_PATH:-.claude/personal/notes.m
 # fork something else) - the URL form works without depending on that
 # session-specific remote name/alias existing at all.
 
+# repository_state_file: prints the path of the file named $1 in the directory under
+# the repository's common git directory that holds the per-clone scratch state
+# (basstler.locations.RepositoryStateLocation.DIRECTORY). Git never tracks that
+# directory, so nothing written there reaches a host project's working tree.
+repository_state_file() {
+  local common_directory
+  common_directory="$(git -C "${PROJECT_ROOT}" rev-parse --path-format=absolute --git-common-dir)" \
+    || return 1
+  printf '%s\n' "${common_directory}/basstler/$1"
+}
+
 # PERSONAL_SETTINGS_PATH / LOCAL_SETTINGS_RELATIVE_PATH / LOCAL_SETTINGS_JSON /
 # PERSONAL_SETTINGS_SYNC_STAMP: the personal Claude Code settings round trip -
 # `.claude/personal/settings.local.json` on the personal-notes branch, synced into
@@ -60,7 +71,7 @@ LOCAL_SETTINGS_JSON="${PROJECT_ROOT}/${LOCAL_SETTINGS_RELATIVE_PATH}"
 # out of - LOCAL_SETTINGS_JSON, which is what makes "has this been edited since?"
 # answerable at all: without it, a session start cannot tell a file it wrote itself
 # last time from one Claude Code (or a human) has since added rules to.
-PERSONAL_SETTINGS_SYNC_STAMP="${PROJECT_ROOT}/.claude/.personal-settings-sync-hash"
+PERSONAL_SETTINGS_SYNC_STAMP="$(repository_state_file personal-settings-sync-hash)" || true
 
 # personal_settings_are_locally_modified: returns 0 if this clone's local settings
 # exist and differ from what was last synced or saved (so overwriting them would
@@ -990,14 +1001,14 @@ install_basstler_into_environment() {
   printf '%s\n' "${source}" > "${BASSTLER_INSTALLED_SOURCE_FILE}"
 }
 
-# PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
+# PLAN_STATE_SYNC_STAMP: file, kept in the git directory, recording the personal-notes commit
 # SHA that was PERSONAL_NOTES_REFERENCE the last time this clone read plan state (either
 # session-start.sh's own auto-discovery, or ./plan-updates-since.sh). This is
 # the "last-seen SHA" the recheck-deltas convention in the personal notes is built
 # around: a session that wants to know what changed since it last looked
 # diffs from this stamp instead of rereading whole files - see
 # ./plan-updates-since.sh, which is also what advances it.
-PLAN_STATE_SYNC_STAMP="${PROJECT_ROOT}/.claude/.plan-state-sync-sha"
+PLAN_STATE_SYNC_STAMP="$(repository_state_file plan-state-sync-sha)" || true
 
 # record_plan_state_sync_stamp: stamps PERSONAL_NOTES_REFERENCE as the notes-branch commit
 # this clone has now read plan state at. Caller must have already fetched
