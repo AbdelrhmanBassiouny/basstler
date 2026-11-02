@@ -19,7 +19,7 @@ from basstler.actions_usage import (
     WorkflowUsage,
 )
 from basstler.repository import Repository
-from basstler.upstream_reviews.clients import RestClient
+from basstler.github.client import GitHubReader
 
 # %% a client that answers from a table
 
@@ -30,7 +30,7 @@ RELEASE_WORKFLOW = "release.yml"
 
 
 @dataclass
-class CannedResponseClient(RestClient):
+class CannedResponseClient(GitHubReader):
     """
     A client that answers a REST path from a table instead of calling GitHub.
     """

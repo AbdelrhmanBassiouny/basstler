@@ -47,7 +47,7 @@ from basstler.standard_streams import StandardStreamHandler
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.vocabulary import ActionBranch
 from basstler.upstream_reviews.action.read import ActionRead
-from basstler.upstream_reviews.clients import GitHubCommandLineClient
+from basstler.github.client import GitHubRestClient
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -119,7 +119,7 @@ class MaintenancePass:
         read = ActionRead(
             RemoteBranch(ActionBranch.NAME, self.git, self.configuration.fork_remote),
             OpenPullRequestsRequest.fresh(self.configuration.upstream_repository, fork),
-            GitHubCommandLineClient(),
+            GitHubRestClient.from_environment(),
             answer_type=OpenPullRequestsAnswer,
         )
         return read.wait(self.action_timeout, read.send()).upstream_pull_requests

@@ -16,7 +16,7 @@ from urllib.parse import quote
 from basstler.actions_budget import ActionsBudget, WorkflowLimits
 from basstler.environment import GitHubActionsVariable
 from basstler.repository import Repository
-from basstler.upstream_reviews.clients import GitHubCommandLineClient, RestClient
+from basstler.github.client import GitHubReader, GitHubRestClient
 
 # %% vocabulary
 
@@ -175,7 +175,7 @@ class UsageReport:
     @classmethod
     def measure(
         cls,
-        client: RestClient,
+        client: GitHubReader,
         repository: Repository,
         budget: ActionsBudget,
         now: datetime,
@@ -270,7 +270,7 @@ def main() -> None:
     if not budget.has_daily_ceilings:
         return
     report = UsageReport.measure(
-        GitHubCommandLineClient(),
+        GitHubRestClient.from_environment(),
         arguments.repository,
         budget,
         datetime.now(UTC),

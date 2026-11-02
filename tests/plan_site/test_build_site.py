@@ -7,7 +7,6 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
-from dataclasses import dataclass, field
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -21,10 +20,10 @@ from basstler.maintenance.board import (
     PullRequestField,
     PullRequestHeadKey,
 )
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.maintenance.github import (
     CommitReport,
     GitHubRepository,
-    GitHubRequestFailed,
     PullRequestListState,
     RepositoryPath,
 )
@@ -50,6 +49,7 @@ from basstler.upstream_reviews.vocabulary import RollupState
 from ..constants.paths import DatasetLocation, RecordedCommitChecks
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
 from ..recorded_pull_requests import RecordedPullRequestSource
+from ..github.recorded_client import RecordedGitHubClient
 from .test_hub import publish_notes
 
 NOTES_REPOSITORY = SiteRepository.NOTES.value
@@ -546,49 +546,14 @@ def test_from_api_reads_the_assignee_logins():
     assert record.assignees == logins
 
 
-@dataclass(frozen=True)
-class RecordedRepository(GitHubRepository):
+def listing_path(repository: Repository) -> str:
     """
-    A repository client answering from recorded responses, keyed by request path.
-    """
-
-    responses: Mapping[str, Any] = field(default_factory=dict)
-    """
-    The decoded response to each ``GET`` path; any other path answers not found.
-    """
-
-    def _call(
-        self, method: str, path: str, payload: Mapping[str, Any] | None = None
-    ) -> Any:
-        if path not in self.responses:
-            raise GitHubRequestFailed(
-                status=HTTPStatus.NOT_FOUND, detail="", method=method, path=path
-            )
-        return self.responses[path]
-
-
-@dataclass
-class RecordedGitHubPullRequestSource(GitHubPullRequestSource):
-    """
-    The GitHub source, with its client answering from recorded responses.
-    """
-
-    responses: Mapping[str, Any] = field(default_factory=dict)
-    """
-    What every repository's client answers, by request path.
-    """
-
-    def client_for(self, repository: Repository) -> GitHubRepository:
-        return RecordedRepository(repository, self.token, responses=self.responses)
-
-
-def listing_path() -> str:
-    """
-    :return: The path the first page of every pull request is listed from.
+    :param repository: The repository whose pull requests are listed.
+    :return: The path every pull request of it is listed from.
     """
     return (
-        f"/pulls?state={PullRequestListState.ALL.query}"
-        f"&per_page={GitHubRepository.page_size}&page=1"
+        f"/{repository.api_path}/pulls?state={PullRequestListState.ALL.query}"
+        f"&per_page={GitHubRepository.page_size}"
     )
 
 
@@ -597,13 +562,15 @@ def pull_request_path(reference: PullRequestReference) -> str:
     :param reference: The pull request to read.
     :return: The path it is read from on its own.
     """
-    return f"/pulls/{reference.number}"
+    return f"/{reference.repository.api_path}/pulls/{reference.number}"
 
 
 def test_github_source_answers_a_listed_pull_request_from_the_listing():
     listed = api_pull_request(OPEN_PULL_REQUEST, {PullRequestField.DRAFT: True})
-    source = RecordedGitHubPullRequestSource(
-        token=SiteSampleText.TOKEN, responses={listing_path(): [listed]}
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(
+            pages={listing_path(OPEN_PULL_REQUEST.repository): [[listed]]}
+        )
     )
     record = source.pull_request(OPEN_PULL_REQUEST)
     assert record == PullRequestRecord.from_api(listed)
@@ -611,17 +578,21 @@ def test_github_source_answers_a_listed_pull_request_from_the_listing():
 
 def test_github_source_reads_an_unlisted_pull_request_on_its_own():
     unlisted = api_pull_request(OPEN_PULL_REQUEST, {PullRequestField.DRAFT: True})
-    source = RecordedGitHubPullRequestSource(
-        token=SiteSampleText.TOKEN,
-        responses={listing_path(): [], pull_request_path(OPEN_PULL_REQUEST): unlisted},
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(
+            responses={pull_request_path(OPEN_PULL_REQUEST): unlisted},
+            pages={listing_path(OPEN_PULL_REQUEST.repository): [[]]},
+        )
     )
     record = source.pull_request(OPEN_PULL_REQUEST)
     assert record == PullRequestRecord.from_api(unlisted)
 
 
 def test_github_source_answers_none_for_a_pull_request_that_does_not_exist():
-    source = RecordedGitHubPullRequestSource(
-        token=SiteSampleText.TOKEN, responses={listing_path(): []}
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(
+            pages={listing_path(ELSEWHERE_PULL_REQUEST.repository): [[]]}
+        )
     )
     assert source.pull_request(ELSEWHERE_PULL_REQUEST) is None
 
@@ -630,11 +601,11 @@ def commit_report_path(report: CommitReport) -> str:
     """
     :param report: Which listing reported against :attr:`SiteSampleText.HEAD_COMMIT`
         to read.
-    :return: The path its first page is read from.
+    :return: The path it is listed from.
     """
     return (
-        f"{RepositoryPath.COMMITS}/{SiteSampleText.HEAD_COMMIT}/{report}"
-        f"?per_page={GitHubRepository.page_size}&page=1"
+        f"/{OPEN_PULL_REQUEST.repository.api_path}{RepositoryPath.COMMITS}/"
+        f"{SiteSampleText.HEAD_COMMIT}/{report}?per_page={GitHubRepository.page_size}"
     )
 
 
@@ -656,69 +627,56 @@ def api_pull_request_at_head(state: PullRequestState) -> dict[str, Any]:
 
 
 def test_github_source_reads_the_checks_of_an_open_pull_request():
-    source = RecordedGitHubPullRequestSource(
-        token=SiteSampleText.TOKEN,
-        responses={
-            listing_path(): [api_pull_request_at_head(PullRequestState.OPEN)],
-            commit_report_path(CommitReport.CHECK_RUNS): json.loads(
-                RecordedCommitChecks.ONE_CHECK_RUN_FAILING.value.read_text()
-            ),
-            commit_report_path(CommitReport.STATUS): json.loads(
-                RecordedCommitChecks.NO_STATUSES.value.read_text()
-            ),
-        },
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(
+            pages={
+                listing_path(OPEN_PULL_REQUEST.repository): [
+                    [api_pull_request_at_head(PullRequestState.OPEN)]
+                ],
+                commit_report_path(CommitReport.CHECK_RUNS): [
+                    json.loads(
+                        RecordedCommitChecks.ONE_CHECK_RUN_FAILING.value.read_text()
+                    )
+                ],
+                commit_report_path(CommitReport.STATUS): [
+                    json.loads(RecordedCommitChecks.NO_STATUSES.value.read_text())
+                ],
+            }
+        )
     )
     assert source.pull_request(OPEN_PULL_REQUEST).check_state is RollupState.FAILURE
 
 
 def test_github_source_leaves_the_checks_of_a_closed_pull_request_unread():
-    source = RecordedGitHubPullRequestSource(
-        token=SiteSampleText.TOKEN,
-        responses={listing_path(): [api_pull_request_at_head(PullRequestState.CLOSED)]},
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(
+            pages={
+                listing_path(OPEN_PULL_REQUEST.repository): [
+                    [api_pull_request_at_head(PullRequestState.CLOSED)]
+                ]
+            }
+        )
     )
     assert source.pull_request(OPEN_PULL_REQUEST).check_state is None
 
 
 def test_github_source_reads_an_issue_url():
     issue_url = PLAN_REPOSITORY.issue_url(FIRST_PLAN.tracking_issue)
-    source = RecordedGitHubPullRequestSource(
-        token=SiteSampleText.TOKEN,
-        responses={
-            f"/issues/{FIRST_PLAN.tracking_issue}": {
-                PullRequestField.HTML_URL.key: issue_url
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(
+            responses={
+                f"/{PLAN_REPOSITORY.api_path}/issues/{FIRST_PLAN.tracking_issue}": {
+                    PullRequestField.HTML_URL.key: issue_url
+                }
             }
-        },
+        )
     )
     assert source.issue_url(PLAN_REPOSITORY, FIRST_PLAN.tracking_issue) == issue_url
 
 
-@dataclass(frozen=True)
-class RefusingRepository(GitHubRepository):
-    """
-    A repository client whose every call is refused as forbidden.
-    """
-
-    def _call(
-        self, method: str, path: str, payload: Mapping[str, Any] | None = None
-    ) -> Any:
-        raise GitHubRequestFailed(
-            status=HTTPStatus.FORBIDDEN, detail="", method=method, path=path
-        )
-
-
-@dataclass
-class RefusingGitHubPullRequestSource(GitHubPullRequestSource):
-    """
-    The GitHub source, with every call refused.
-    """
-
-    def client_for(self, repository: Repository) -> GitHubRepository:
-        return RefusingRepository(repository, self.token)
-
-
 def test_github_source_reraises_a_refusal_other_than_not_found():
     with pytest.raises(GitHubRequestFailed) as refused:
-        RefusingGitHubPullRequestSource(token=SiteSampleText.TOKEN).issue_url(
-            PLAN_REPOSITORY, FIRST_PLAN.tracking_issue
-        )
+        GitHubPullRequestSource(
+            RecordedGitHubClient(refusal=HTTPStatus.FORBIDDEN)
+        ).issue_url(PLAN_REPOSITORY, FIRST_PLAN.tracking_issue)
     assert refused.value.status == HTTPStatus.FORBIDDEN

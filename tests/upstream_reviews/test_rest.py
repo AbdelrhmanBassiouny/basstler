@@ -10,20 +10,13 @@ the same report.
 
 from __future__ import annotations
 
-import json
-import os
-import shutil
-import stat
 from enum import StrEnum
-from pathlib import Path
 
 import pytest
 
+from basstler.environment import GitHubCredentialVariable
 from basstler.locations import ClaudeCodeVariable
 from basstler.repository import Repository
-from basstler.upstream_reviews.clients import (
-    GitHubCommandLineClient,
-)
 from basstler.upstream_reviews.exceptions import (
     UpstreamPullRequestNotFound,
 )
@@ -45,7 +38,6 @@ from basstler.upstream_reviews.vocabulary import (
     RollupState,
 )
 
-from ..constants.paths import DatasetLocation
 from .replay import (
     RecordedResponse,
     RecordedRestResponse,
@@ -63,15 +55,6 @@ class Example(StrEnum):
     UPSTREAM_NAME = "example-repo"
     FORK_OWNER = "example-fork-owner"
     BRANCH = "some-branch"
-
-
-class StubEnvironmentVariable(StrEnum):
-    """
-    The knobs the ``gh`` stub reads for a REST call.
-    """
-
-    REST_JSON = "STUB_GH_REST_JSON"
-    CALL_LOG = "STUB_GH_CALL_LOG"
 
 
 UPSTREAM = Repository(Example.UPSTREAM_OWNER, Example.UPSTREAM_NAME)
@@ -315,52 +298,10 @@ def test_anywhere_else_reads_over_graphql(monkeypatch):
         (ReadSource.GRAPHQL, UpstreamPullRequestReader),
     ],
 )
-def test_each_source_builds_its_own_reader(source: ReadSource, reader_type: type):
-    reader = source.reader(GitHubCommandLineClient(), UPSTREAM, Example.FORK_OWNER)
+def test_each_source_builds_its_own_reader(
+    source: ReadSource, reader_type: type, monkeypatch
+):
+    monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, "example-token")
+    reader = source.reader(UPSTREAM, Example.FORK_OWNER)
 
     assert isinstance(reader, reader_type)
-
-
-# %% gh client
-
-
-@pytest.fixture
-def stubbed_gh(tmp_path, monkeypatch) -> Path:
-    """
-    Put the ``gh`` stub first on ``PATH``.
-
-    :param tmp_path: pytest's per-test temporary directory.
-    :param monkeypatch: The fixture used to prepend the stub directory.
-    :return: The directory the stub was installed into.
-    """
-    stub_directory = tmp_path / "bin"
-    stub_directory.mkdir()
-    installed = stub_directory / "gh"
-    shutil.copy(DatasetLocation.STUBS / "gh.sh", installed)
-    installed.chmod(installed.stat().st_mode | stat.S_IEXEC)
-    monkeypatch.setenv("PATH", f"{stub_directory}{os.pathsep}{os.environ['PATH']}")
-    return stub_directory
-
-
-def test_a_single_response_is_read_from_its_path(stubbed_gh, monkeypatch, tmp_path):
-    call_log = tmp_path / "calls.txt"
-    monkeypatch.setenv(StubEnvironmentVariable.CALL_LOG, str(call_log))
-    recorded = RecordedRestResponse.PULL_REQUEST.load()
-    monkeypatch.setenv(StubEnvironmentVariable.REST_JSON, json.dumps(recorded))
-
-    assert GitHubCommandLineClient().get(ROUTE.pull_request(NUMBER)) == recorded
-    assert call_log.read_text().strip() == f"api {ROUTE.pull_request(NUMBER)}"
-
-
-def test_every_page_is_collected_for_a_paged_path(stubbed_gh, monkeypatch, tmp_path):
-    call_log = tmp_path / "calls.txt"
-    monkeypatch.setenv(StubEnvironmentVariable.CALL_LOG, str(call_log))
-    recorded = RecordedRestResponse.REVIEW_COMMENTS.load()
-    monkeypatch.setenv(StubEnvironmentVariable.REST_JSON, json.dumps(recorded))
-
-    assert (
-        GitHubCommandLineClient().get_pages(ROUTE.review_comments(NUMBER)) == recorded
-    )
-    assert call_log.read_text().strip() == (
-        f"api --paginate --slurp {ROUTE.review_comments(NUMBER)}"
-    )

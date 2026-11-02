@@ -25,15 +25,13 @@ from basstler.upstream_reviews.action.recording import (
     ActionJSONKey,
     ActionResult,
 )
-from basstler.upstream_reviews.clients import (
-    RestClient,
-)
+from basstler.github.client import GitHubReader
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.upstream_reviews.exceptions import (
     ActionNotInstalled,
     ActionResultMissing,
     ActionRunFailed,
     ActionRunNotStarted,
-    GitHubCommandFailed,
 )
 from basstler.upstream_reviews.vocabulary import (
     CheckOutcome,
@@ -149,7 +147,7 @@ class ActionRead[AnswerType: ActionAnswer]:
     The read.
     """
 
-    runs: RestClient | None = None
+    runs: GitHubReader | None = None
     """
     What lists the fork's runs, so a run that never started or already failed is told
     apart from one still going; ``None`` waits for the result alone.
@@ -238,7 +236,7 @@ class ActionRead[AnswerType: ActionAnswer]:
             return
         try:
             page = WorkflowRunPage.from_json(self.runs.get(WorkflowRunPage.path(fork)))
-        except GitHubCommandFailed:
+        except GitHubRequestFailed:
             return
         run = page.run_for(commit)
         if run is None:

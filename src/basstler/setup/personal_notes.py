@@ -36,6 +36,7 @@ from basstler.locations import (
     PluginLocation,
     PluginSkillLocation,
 )
+from basstler.github.client import GitHubRestClient
 from basstler.maintenance.github import GitHubRepository
 from basstler.plugin_root import PluginRoot
 from basstler.setup.exceptions import ForeignNotesRemoteError, HookScriptFailedError
@@ -239,7 +240,7 @@ class PersonalNotesSetup:
         github = (
             None
             if repository is None or token is None
-            else GitHubRepository(repository, token)
+            else GitHubRepository(repository, GitHubRestClient(token))
         )
         return cls(
             project_root, environment, request, github, PluginRoot.locate(environment)

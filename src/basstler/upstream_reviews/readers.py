@@ -13,10 +13,10 @@ from urllib.parse import urlencode
 from basstler.class_property import classproperty
 from basstler.locations import ClaudeCodeVariable
 from basstler.repository import Repository
+from basstler.github.client import GitHubReader, GitHubRestClient
 from basstler.upstream_reviews.clients import (
     GitHubCommandLineClient,
     GraphQLClient,
-    RestClient,
 )
 from basstler.upstream_reviews.exceptions import (
     UpstreamPullRequestNotFound,
@@ -274,7 +274,7 @@ class RestPullRequestReader(PullRequestSource):
     Claude Code session's proxy answers once the upstream is attached to it.
     """
 
-    client: RestClient
+    client: GitHubReader
     """
     How REST requests reach GitHub.
     """
@@ -406,17 +406,19 @@ class ReadSource(StrEnum):
         return cls.GRAPHQL
 
     def reader(
-        self,
-        client: GitHubCommandLineClient,
-        upstream_repository: Repository,
-        fork_owner: str,
+        self, upstream_repository: Repository, fork_owner: str
     ) -> PullRequestSource:
         """
-        :param client: The client both readers go through.
         :param upstream_repository: The repository to read.
         :param fork_owner: Whose branches to claim.
-        :return: The reader for this API.
+        :return: The reader for this API, with its own client.
+        :raises GitHubCredentialUnavailableError: If this is :attr:`REST` and no token
+            is available.
         """
         if self is ReadSource.REST:
-            return RestPullRequestReader(client, upstream_repository, fork_owner)
-        return UpstreamPullRequestReader(client, upstream_repository, fork_owner)
+            return RestPullRequestReader(
+                GitHubRestClient.from_environment(), upstream_repository, fork_owner
+            )
+        return UpstreamPullRequestReader(
+            GitHubCommandLineClient(), upstream_repository, fork_owner
+        )

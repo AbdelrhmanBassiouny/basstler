@@ -41,7 +41,7 @@ from basstler.plan_site.workflows import (
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting, resolve_repository
 from basstler.standard_streams import StandardStreamHandler
-from basstler.upstream_reviews.clients import GitHubCommandLineClient, RestClient
+from basstler.github.client import GitHubReader, GitHubRestClient
 from basstler.upstream_reviews.vocabulary import BasstlerSource, CheckOutcome, JSONModel
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -146,7 +146,7 @@ class RunListing:
 
     @classmethod
     def read(
-        cls, client: RestClient, repository: Repository, branch: str
+        cls, client: GitHubReader, repository: Repository, branch: str
     ) -> RunListing:
         """
         :param client: What reads the listing.
@@ -367,7 +367,7 @@ class PlanSitePublication:
     The site repository's workflow, whose registry an existing one's replaces.
     """
 
-    runs: RestClient
+    runs: GitHubReader
     """
     What lists a repository's workflow runs.
     """
@@ -562,7 +562,7 @@ def main(argv: list[str] | None = None) -> int:
             site,
         ),
         SiteWorkflow(arguments.branch_or_tag, notes_repository),
-        GitHubCommandLineClient(),
+        GitHubRestClient.from_environment(),
     ).publish()
     logger.info(report.render())
     return 0 if report.complete else 1

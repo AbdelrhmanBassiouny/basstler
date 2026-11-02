@@ -16,10 +16,8 @@ from typing import Any
 from basstler.class_property import classproperty
 from basstler.locations import ClaudeCodeVariable
 from basstler.repository import Repository
-from basstler.upstream_reviews.clients import (
-    JobLogReader,
-    RestClient,
-)
+from basstler.github.client import GitHubReader
+from basstler.upstream_reviews.clients import JobLogReader
 from basstler.upstream_reviews.exceptions import (
     HelperOutputIncomplete,
     HelperOutputMissing,
@@ -282,7 +280,7 @@ class HelperChunk:
 
 
 @dataclass
-class ReplayingClient(RestClient, JobLogReader):
+class ReplayingClient(GitHubReader, JobLogReader):
     """
     Answers the reader from what the helper recorded, instead of GitHub.
     """
@@ -304,15 +302,9 @@ class ReplayingClient(RestClient, JobLogReader):
         raise HelperResponseMissing(path)
 
     def get(self, path: str) -> Any:
-        """
-        See :meth:`RestClient.get`.
-        """
         return self._response(path)
 
     def get_pages(self, path: str) -> list[Any]:
-        """
-        See :meth:`RestClient.get_pages`.
-        """
         return self._response(path)
 
     def read_job_log(self, repository: Repository, job_identifier: int) -> str:

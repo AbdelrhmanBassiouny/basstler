@@ -10,6 +10,7 @@ fork - so installing, requesting and collecting a result are exercised as git co
 from __future__ import annotations
 
 import json
+from http import HTTPStatus
 import subprocess
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -43,9 +44,10 @@ from basstler.upstream_reviews.action.recording import (
     ReplayingGraphQLClient,
 )
 from basstler.upstream_reviews.action.run import ActionRun
+from basstler.github.client import GitHubReader
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.upstream_reviews.clients import (
     GitHubCommandLineClient,
-    RestClient,
 )
 from basstler.upstream_reviews.exceptions import (
     ActionNotInstalled,
@@ -53,7 +55,6 @@ from basstler.upstream_reviews.exceptions import (
     ActionResultMissing,
     ActionRunFailed,
     ActionRunNotStarted,
-    GitHubCommandFailed,
     UpstreamPullRequestNotFound,
 )
 from basstler.upstream_reviews.readers import UpstreamPullRequestReader
@@ -450,14 +451,14 @@ def test_a_result_from_a_release_that_named_no_request_is_not_collected(fork):
 
 
 @dataclass
-class ListedRuns(RestClient):
+class ListedRuns(GitHubReader):
     """
     Answers the fork's run listing with the given runs.
     """
 
     runs: list[dict[str, Any]] | None
     """
-    The listed runs, ``None`` to fail as ``gh`` does without access.
+    The listed runs, ``None`` to be refused as a credential without access is.
     """
 
     paths: list[str] = field(default_factory=list)
@@ -469,7 +470,9 @@ class ListedRuns(RestClient):
         """:return: The listing."""
         self.paths.append(path)
         if self.runs is None:
-            raise GitHubCommandFailed("gh", 1, "HTTP 403")
+            raise GitHubRequestFailed(
+                status=HTTPStatus.FORBIDDEN, detail="", method="GET", path=path
+            )
         return {"workflow_runs": self.runs}
 
     def get_pages(self, path: str) -> list[Any]:

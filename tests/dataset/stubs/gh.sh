@@ -8,6 +8,7 @@ set -uo pipefail
 #   api --paginate .../comments?...    prints STUB_GH_ISSUE_COMMENTS_JSON
 #   api --paginate --slurp <path>      prints STUB_GH_REST_JSON
 #   api repos/<path>                   prints STUB_GH_REST_JSON
+#   auth token                         prints STUB_GH_AUTH_TOKEN, fails when it is unset
 # STUB_GH_EXIT_CODE simulates a failure; STUB_GH_CALL_LOG records each request.
 
 if [ "${1:-}" = "api" ] && [ "${2:-}" = "graphql" ] && [ "${3:-}" = "--input" ]; then
@@ -34,6 +35,15 @@ if [ "${1:-}" = "api" ] && [ "${2:-}" = "--allow-escape-sequences" ]; then
     exit "${EXIT_CODE}"
   fi
   printf '%s' "${STUB_GH_JOB_LOG:-}"
+  exit 0
+fi
+
+if [ "${1:-}" = "auth" ] && [ "${2:-}" = "token" ]; then
+  if [ -z "${STUB_GH_AUTH_TOKEN:-}" ]; then
+    echo "stub gh: not logged in" >&2
+    exit 1
+  fi
+  printf '%s\n' "${STUB_GH_AUTH_TOKEN}"
   exit 0
 fi
 

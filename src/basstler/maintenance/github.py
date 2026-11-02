@@ -10,10 +10,7 @@ caller to perform rather than performed.
 
 from __future__ import annotations
 
-import json
-import urllib.error
 import urllib.parse
-import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
@@ -22,8 +19,6 @@ from pathlib import Path
 from typing import Any
 
 from basstler.pull_request_state import PullRequestState
-from basstler.class_property import classproperty
-from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.github_labels import GitHubLabel
 from basstler.locations import PathEnumeration
 from basstler.maintenance.board import (
@@ -31,40 +26,14 @@ from basstler.maintenance.board import (
     CommitChecks,
     PullRequestRecord,
 )
-from basstler.environment import GitHubCredentialVariable
-from basstler.maintenance.exceptions import ExternalCallFailed
-from basstler.repository import GitHubAddress, Repository
+from basstler.github.client import GitHubClient, GitHubRestClient, HttpMethod
+from basstler.repository import Repository
 from basstler.upstream_reviews.pull_request_models import CheckStatus
 from basstler.upstream_reviews.rest_models import (
     RestCheckRunPage,
     RestCombinedStatusPage,
-    RestJSONKey,
 )
 from basstler.upstream_reviews.vocabulary import RollupState
-
-
-@dataclass
-class GitHubCredentialUnavailableError(CommandFailure, RuntimeError):
-    """
-    Raised when no token is available to authenticate the API calls with.
-    """
-
-    @classproperty
-    def exit_code(cls) -> StackExitCode:
-        """:return: The status this kind of error ends a command with."""
-        return StackExitCode.CREDENTIAL_UNAVAILABLE
-
-    variables: tuple[str, ...]
-    """
-    The environment variables that were consulted.
-    """
-
-    def __str__(self) -> str:
-        """:return: What was looked for, so the caller can supply it."""
-        return (
-            f"no GitHub token: set one of {', '.join(self.variables)}, or run this "
-            f"with a caller that has one"
-        )
 
 
 # %% what a pass reads and writes
@@ -216,11 +185,6 @@ class ListingParameter(StrEnum):
     How many entries one page holds.
     """
 
-    PAGE = "page"
-    """
-    Which page to read, counting from one.
-    """
-
 
 class LabelField(StrEnum):
     """
@@ -284,32 +248,6 @@ class PullRequestListState(PullRequestListingSpecification, Enum):
     """
 
 
-@dataclass
-class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
-    """
-    Raised when the API refuses a call this module depends on.
-    """
-
-    @classproperty
-    def exit_code(cls) -> StackExitCode:
-        """:return: The status this kind of error ends a command with."""
-        return StackExitCode.GITHUB_REQUEST_FAILED
-
-    method: str = ""
-    """
-    The HTTP method used.
-    """
-    path: str = ""
-    """
-    The API path called, without the host.
-    """
-
-    @property
-    def call(self) -> str:
-        """:return: The request line, as issued."""
-        return f"{self.method} {self.path}"
-
-
 # %% the client that makes the calls
 
 
@@ -319,9 +257,6 @@ class GitHubRepository(
 ):
     """
     Every pull-request and label call this tooling makes, against one repository.
-
-    ``gh`` is absent from the environment this normally runs in, so the calls are plain
-    authenticated requests rather than a CLI wrapper.
     """
 
     repository: Repository
@@ -329,14 +264,14 @@ class GitHubRepository(
     The repository to read and write.
     """
 
-    token: str
+    client: GitHubClient
     """
-    The credential the requests authenticate with.
+    How the calls reach GitHub.
     """
 
     page_size: int = 100
     """
-    How many pull requests or labels to ask for per request.
+    How many pull requests, labels or checks to ask for per page.
     """
 
     @classmethod
@@ -346,12 +281,9 @@ class GitHubRepository(
 
         :param repository: The repository to read and write.
         :return: The client.
-        :raises GitHubCredentialUnavailableError: If no token is set.
+        :raises GitHubCredentialUnavailableError: If no token is available.
         """
-        token = GitHubCredentialVariable.first_token()
-        if token:
-            return cls(repository, token)
-        raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
+        return cls(repository, GitHubRestClient.from_environment())
 
     def open_pull_requests(self) -> list[PullRequestRecord]:
         """:return: Every open pull request on the repository, oldest page first."""
@@ -364,7 +296,7 @@ class GitHubRepository(
     def issue(self, number: int) -> Mapping[str, Any]:
         """:param number: The issue or pull request to read.
         :return: It, as the issues API describes it."""
-        return self._call("GET", f"/issues/{number}")
+        return self.client.get(self._path(f"/issues/{number}"))
 
     def _pull_requests_in_state(
         self, state: PullRequestListState
@@ -375,36 +307,35 @@ class GitHubRepository(
         :param state: Which pull requests to list.
         :return: Them, oldest page first.
         """
-        return self._every_page(
+        return self._every_entry(
             RepositoryPath.PULL_REQUESTS, {ListingParameter.STATE: state.query}
         )
 
     def labels(self) -> set[str]:
         return {
             label[LabelField.NAME]
-            for label in self._every_page(RepositoryPath.LABELS, {})
+            for label in self._every_entry(RepositoryPath.LABELS, {})
         }
 
     def create_label(self, label: GitHubLabel) -> None:
-        self._call(
-            "POST",
-            str(RepositoryPath.LABELS),
+        self.client.send(
+            HttpMethod.POST,
+            self._path(str(RepositoryPath.LABELS)),
             {LabelField.NAME: label, LabelField.DESCRIPTION: label.purpose},
         )
 
     def check_state(self, commit: str) -> RollupState:
         runs = [
             run.result
-            for page in self._every_page_of_entries(
-                self._commit_report(commit, CommitReport.CHECK_RUNS),
-                RestJSONKey.CHECK_RUNS,
+            for page in self.client.get_pages(
+                self._listing(self._commit_report(commit, CommitReport.CHECK_RUNS), {})
             )
             for run in RestCheckRunPage.from_json(page).check_runs
         ]
         statuses = [
             status.result
-            for page in self._every_page_of_entries(
-                self._commit_report(commit, CommitReport.STATUS), RestJSONKey.STATUSES
+            for page in self.client.get_pages(
+                self._listing(self._commit_report(commit, CommitReport.STATUS), {})
             )
             for status in RestCombinedStatusPage.from_json(page).statuses
         ]
@@ -419,14 +350,14 @@ class GitHubRepository(
         return f"{RepositoryPath.COMMITS}/{commit}/{report}"
 
     def authenticated_login(self) -> str:
-        account = self._request("GET", str(GitHubPath.AUTHENTICATED_USER))
+        account = self.client.get(str(GitHubPath.AUTHENTICATED_USER))
         return str(account[AccountField.LOGIN])
 
-    def _every_page(
+    def _every_entry(
         self, path: RepositoryPath, filters: Mapping[ListingParameter, str]
     ) -> list[Any]:
         """
-        Read a listing below the repository to its end.
+        Read a listing below the repository whose pages are lists, to its end.
 
         :param path: The listing's path below the repository.
         :param filters: The query parameters narrowing the listing.
@@ -434,46 +365,32 @@ class GitHubRepository(
         """
         return [
             entry
-            for page in self._every_page_of_entries(str(path), None, filters)
+            for page in self.client.get_pages(self._listing(str(path), filters))
             for entry in page
         ]
 
-    def _every_page_of_entries(
-        self,
-        path: str,
-        entries_key: str | None,
-        filters: Mapping[ListingParameter, str] | None = None,
-    ) -> list[Any]:
+    def _listing(self, path: str, filters: Mapping[ListingParameter, str]) -> str:
         """
-        Read a paged listing below the repository to its end.
+        :param path: A listing's path below the repository.
+        :param filters: The query parameters narrowing it.
+        :return: Its path below the API root, asking for full pages.
+        """
+        query = urllib.parse.urlencode(
+            {**filters, ListingParameter.PAGE_SIZE: self.page_size}
+        )
+        return self._path(f"{path}?{query}")
 
-        :param path: The listing's path below the repository.
-        :param entries_key: The key a page holds its entries under, ``None`` when a page
-            is the list of entries itself.
-        :param filters: The query parameters narrowing the listing.
-        :return: Every page, first page first.
+    def _path(self, path: str) -> str:
         """
-        pages: list[Any] = []
-        page_number = 1
-        while True:
-            query = urllib.parse.urlencode(
-                {
-                    **(filters or {}),
-                    ListingParameter.PAGE_SIZE: self.page_size,
-                    ListingParameter.PAGE: page_number,
-                }
-            )
-            page = self._call("GET", f"{path}?{query}")
-            pages.append(page)
-            entries = page if entries_key is None else page[entries_key]
-            if len(entries) < self.page_size:
-                return pages
-            page_number += 1
+        :param path: A path below the repository, starting with a slash.
+        :return: It below the API root.
+        """
+        return f"/{self.repository.api_path}{path}"
 
     def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
         :return: That pull request."""
-        return self._call("GET", f"{RepositoryPath.PULL_REQUESTS}/{number}")
+        return self.client.get(self._path(f"{RepositoryPath.PULL_REQUESTS}/{number}"))
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
         """
@@ -483,13 +400,19 @@ class GitHubRepository(
         :param labels: The complete set it must end up with, computed by
             :meth:`stack.LabelWrite.replacing` - this call replaces rather than adds.
         """
-        self._call("PUT", f"/issues/{number}/labels", {"labels": list(labels)})
+        self.client.send(
+            HttpMethod.PUT,
+            self._path(f"/issues/{number}/labels"),
+            {"labels": list(labels)},
+        )
 
     def add_comment(self, number: int, body: str) -> str:
         """:param number: The pull request to comment on.
         :param body: The comment.
         :return: The comment's URL."""
-        created = self._call("POST", f"/issues/{number}/comments", {"body": body})
+        created = self.client.send(
+            HttpMethod.POST, self._path(f"/issues/{number}/comments"), {"body": body}
+        )
         return str(created["html_url"])
 
     def set_description(self, number: int, body: str) -> None:
@@ -499,51 +422,8 @@ class GitHubRepository(
         :param number: The pull request to write.
         :param body: The new description.
         """
-        self._call("PATCH", f"{RepositoryPath.PULL_REQUESTS}/{number}", {"body": body})
-
-    def _call(
-        self, method: str, path: str, payload: Mapping[str, Any] | None = None
-    ) -> Any:
-        """
-        Make one authenticated API call below this repository.
-
-        :param method: The HTTP method.
-        :param path: The path below the repository, starting with a slash.
-        :param payload: The JSON body, absent for a read.
-        :return: The decoded response.
-        :raises GitHubRequestFailed: If the API answers with an error status.
-        """
-        return self._request(method, f"/repos/{self.repository}{path}", payload)
-
-    def _request(
-        self, method: str, path: str, payload: Mapping[str, Any] | None = None
-    ) -> Any:
-        """
-        Make one authenticated API call.
-
-        :param method: The HTTP method.
-        :param path: The path below the API root, starting with a slash.
-        :param payload: The JSON body, absent for a read.
-        :return: The decoded response.
-        :raises GitHubRequestFailed: If the API answers with an error status.
-        """
-        request = urllib.request.Request(
-            f"{GitHubAddress.API}{path}",
-            method=method,
-            data=None if payload is None else json.dumps(payload).encode(),
-            headers={
-                "Authorization": f"Bearer {self.token}",
-                "Accept": "application/vnd.github+json",
-                "Content-Type": "application/json",
-            },
+        self.client.send(
+            HttpMethod.PATCH,
+            self._path(f"{RepositoryPath.PULL_REQUESTS}/{number}"),
+            {"body": body},
         )
-        try:
-            with urllib.request.urlopen(request) as response:
-                return json.loads(response.read())
-        except urllib.error.HTTPError as refused:
-            raise GitHubRequestFailed(
-                status=refused.code,
-                detail=refused.read().decode(errors="replace"),
-                method=method,
-                path=path,
-            ) from refused

@@ -20,6 +20,7 @@ from basstler.maintenance.board import (
     PullRequestRecord,
 )
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.github.client import GitHubRestClient
 from basstler.maintenance.github import GitHubRepository
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
@@ -275,7 +276,7 @@ class ProgressNotesPruning:
             raise UnreadableRemoteError(remote=self.remote)
         repository = Repository.from_remote_url(url.output)
         pull_requests = BranchPullRequests.from_pull_requests(
-            GitHubRepository(repository, token).all_pull_requests(),
+            GitHubRepository(repository, GitHubRestClient(token)).all_pull_requests(),
             repository,
         )
         remote_branches = frozenset(
