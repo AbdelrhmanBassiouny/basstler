@@ -57,9 +57,10 @@ class ManifestLinePattern(Enum):
     key or flush with it.
     """
 
-    TOP_LEVEL_KEY = re.compile(r"^\S")
+    TOP_LEVEL_KEY = re.compile(r"^[^\s-]")
     """
-    Matches a top-level ``plan.yaml`` key, which is where the last item block ends.
+    Matches a top-level ``plan.yaml`` key, which is where the last item block ends. A
+    sequence entry flush with its key starts with ``-`` and is not one.
     """
 
     BLOCK_VALUE = re.compile(
