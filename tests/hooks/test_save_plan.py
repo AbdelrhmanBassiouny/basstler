@@ -21,7 +21,7 @@ from basstler.plan.item_bootstrap.vocabulary import PlanSavingOption
 from basstler.plan.merge import PlanVersion
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ManifestKey, PlanManifest
-from basstler.plan_site.hub import PlanHub, SiteAddress
+from basstler.plan_site.hub import HubFileKey, PlanHub, SiteAddress
 from basstler.shell_configuration import ShellConfigurationFunction
 
 from ..constants.notes import ScratchBranch
@@ -404,6 +404,30 @@ def test_a_save_prints_the_plan_s_page_on_the_plan_site(
         repository, DatasetPlan.IDENTIFIER
     )
     assert result.stdout.splitlines()[-1].endswith(page_url)
+
+
+def test_a_save_reports_a_failed_page_lookup_as_a_failure_not_as_no_site(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    A hub file that names a site but cannot be loaded makes the page lookup fail; the
+    save then names the site it could not look the page up on and passes the lookup's
+    error on, rather than saying no site lists the repository.
+    """
+    save_plan_repository.update_notes_branch_file(
+        ProjectLocation.PLAN_HUB,
+        yaml.safe_dump({HubFileKey.SITE_URL.value: SiteSampleText.SITE_URL.value}),
+    )
+
+    result = save_from_files(
+        save_plan_repository,
+        DatasetLocation.PLAN,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert SiteSampleText.SITE_URL.value in result.stdout.splitlines()[-1]
+    assert KeyError.__name__ in result.stderr
 
 
 def test_a_plan_with_every_item_landed_is_removed(
