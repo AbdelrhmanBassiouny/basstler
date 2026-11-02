@@ -394,7 +394,7 @@ class DispatchWorkflow(PlanSiteWorkflow):
 class MergeWorkflow(PlanSiteWorkflow):
     """
     The notes repository's default-branch workflow that starts the site workflow
-    whenever a pull request from the repository itself merges.
+    whenever a pull request merges into it.
     """
 
     dispatch: DispatchWorkflow

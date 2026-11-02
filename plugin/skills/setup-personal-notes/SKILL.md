@@ -218,7 +218,8 @@ itself, the first time), and commits two workflows that start the build: the not
 branch's dispatch workflow, on every push to the notes branch, and the default branch's
 merge workflow, on every pull request merged in this repository. A fork gets no merge
 workflow, so its default branch stays as its upstream's; a default branch that refuses
-the push gets it on `basstler/plan-site-merge`, with a step to merge it. It then prints, as one
+the push gets it on `basstler/plan-site-merge`, with a pull request opened for it and a
+step to merge that pull request. It then prints, as one
 copyable line each, with the same steps numbered for github.com, the steps only the user can take - creating the site
 repository, turning on Pages, storing their fine-grained token as the
 `PLAN_SITE_TOKEN` secret, merging the merge workflow - and exits 1 while any is left. Pass the lines

@@ -156,6 +156,11 @@ class DatasetLocation(PathEnumeration):
     A repository's REST response for a repository that is not a fork.
     """
 
+    MERGE_WORKFLOW_PULL_REQUEST = DIRECTORY / "merge-workflow-pull-request.json"
+    """
+    The REST response for the pull request proposing the plan site's merge workflow.
+    """
+
     PROMOTION_SUMMARIES = DIRECTORY / "promotion-summaries.json"
     """
     What a session writes for the upstream pull requests of the two-branch stack: points

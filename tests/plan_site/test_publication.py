@@ -8,17 +8,21 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from basstler.actions_budget import ActionsBudget
 from basstler.environment import GitHubCredentialVariable
+from basstler.github.client import GitHubWriter, HttpMethod
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import (
+    MergeWorkflowProposal,
     PlanSitePublication,
     RunListing,
     UserStep,
@@ -37,11 +41,13 @@ from basstler.plan_site.workflows import (
 )
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
+from basstler.upstream_reviews.rest_models import RestPullRequestSummary
 from basstler.upstream_reviews.vocabulary import BasstlerSource
 from basstler.workflows import ActivityType, TriggerEvent, Workflow
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName
+from ..github.recorded_client import SentWrite
 from ..maintenance.fork import UPSTREAM_BASE, ForkCheckout
 from ..upstream_reviews.replay import ReplayingRestClient
 
@@ -56,6 +62,27 @@ The notes branch every repository under test keeps its notes on.
 """
 
 # %% a notes repository, its site repository and other registered repositories
+
+
+@dataclass
+class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
+    """
+    Answers reads from recordings, and every write with :attr:`opened`, recording it.
+    """
+
+    opened: Any = None
+    """
+    The pull request every write answers with.
+    """
+
+    writes: list[SentWrite] = field(default_factory=list)
+    """
+    Every write sent, oldest first.
+    """
+
+    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
+        self.writes.append(SentWrite(method, path, payload))
+        return self.opened
 
 
 def bare_repository(path: Path) -> Path:
@@ -119,7 +146,7 @@ class Publishing:
             "push", "--quiet", path.as_uri(), f"HEAD:refs/heads/{branch}"
         )
 
-    def publication(self, runs: ReplayingRestClient) -> PlanSitePublication:
+    def publication(self, runs: PullRequestOpeningClient) -> PlanSitePublication:
         """:return: Publishing the notes repository on its site."""
         return PlanSitePublication(
             GitCommandRunner(self.checkout.project_root),
@@ -154,10 +181,12 @@ class Publishing:
         notes_listing: DatasetLocation,
         site_branch: str = "main",
         notes_details: DatasetLocation = DatasetLocation.REPOSITORY_NOT_FORK,
-    ) -> ReplayingRestClient:
-        """:return: A client answering both run listings and the notes repository's
-        details from recordings."""
-        return ReplayingRestClient(
+        open_pull_requests: tuple[DatasetLocation, ...] = (),
+    ) -> PullRequestOpeningClient:
+        """:return: A client answering both run listings, the notes repository's
+        details and its open merge workflow pull requests from recordings, and opening
+        :attr:`DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST`."""
+        return PullRequestOpeningClient(
             {
                 RunListing.path(self.site.repository, site_branch): json.loads(
                     site_listing.read_text()
@@ -166,10 +195,24 @@ class Publishing:
                     notes_listing.read_text()
                 ),
                 self.notes_repository.api_path: json.loads(notes_details.read_text()),
-            }
+                self.merge_workflow_proposal.open_pull_requests_path: [
+                    json.loads(listed.read_text()) for listed in open_pull_requests
+                ],
+            },
+            opened=json.loads(DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST.read_text()),
         )
 
-    def fork_runs(self) -> ReplayingRestClient:
+    @property
+    def merge_workflow_proposal(self) -> MergeWorkflowProposal:
+        """:return: The merge workflow as publishing proposes it when the default
+        branch refuses it."""
+        return MergeWorkflowProposal(
+            self.notes_repository,
+            UPSTREAM_BASE,
+            PlanSitePublication.merge_workflow_branch,
+        )
+
+    def fork_runs(self) -> PullRequestOpeningClient:
         """:return: A client answering both run listings with no runs, for a notes
         repository that is a fork."""
         return self.runs(
@@ -178,7 +221,7 @@ class Publishing:
             notes_details=DatasetLocation.REPOSITORY_FORK,
         )
 
-    def runs_none(self) -> ReplayingRestClient:
+    def runs_none(self) -> PullRequestOpeningClient:
         """:return: A client answering both run listings with no runs."""
         return self.runs(
             DatasetLocation.WORKFLOW_RUNS_NONE, DatasetLocation.WORKFLOW_RUNS_NONE
@@ -545,20 +588,47 @@ def test_a_refused_default_branch_leaves_merging_the_workflow_to_the_user(protec
     ]
 
 
-def test_merging_the_workflow_opens_a_pull_request_from_its_branch(protected):
-    publication = protected.publication(protected.runs_none())
-    report = publication.publish()
-    notes = protected.notes_repository
+def test_a_refused_default_branch_opens_a_pull_request_from_the_workflow_s_branch(
+    protected,
+):
+    client = protected.runs_none()
+    proposal = protected.merge_workflow_proposal
 
-    pending = pending_step(report, UserStep.ADD_MERGE_WORKFLOW)
+    protected.publication(client).publish()
 
-    assert pending.line == (
-        f"gh pr create --repo {notes.full_name} --base {UPSTREAM_BASE} "
-        f"--head {publication.merge_workflow_branch} --fill, then merge it"
+    assert client.writes == [
+        SentWrite(
+            HttpMethod.POST,
+            f"{protected.notes_repository.api_path}/pulls",
+            {
+                "title": proposal.title,
+                "head": proposal.head,
+                "base": proposal.base,
+            },
+        )
+    ]
+
+
+def test_an_open_pull_request_for_the_workflow_is_not_opened_again(protected):
+    client = protected.runs(
+        DatasetLocation.WORKFLOW_RUNS_NONE,
+        DatasetLocation.WORKFLOW_RUNS_NONE,
+        open_pull_requests=(DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST,),
     )
-    assert pending.browser_steps[0] == (
-        f"Open {notes.url}/compare/{UPSTREAM_BASE}..."
-        f"{publication.merge_workflow_branch}?expand=1."
+
+    protected.publication(client).publish()
+
+    assert client.writes == []
+
+
+def test_merging_the_workflow_merges_its_pull_request(protected):
+    report = protected.publication(protected.runs_none()).publish()
+    pull_request = RestPullRequestSummary.from_json(
+        json.loads(DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST.read_text())
+    )
+
+    assert pending_step(report, UserStep.ADD_MERGE_WORKFLOW) == (
+        MergeWorkflowProposal.pending(pull_request)
     )
 
 

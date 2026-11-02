@@ -1,13 +1,6 @@
 """
-Publish a repository's plans on the user's own plan site, and start the site's build on
-every push to the repository's notes branch and every pull request merged into it.
-
-Writes the site repository's workflow, registers the repository in the hub file, and
-commits the notes branch's dispatch workflow and the default branch's merge workflow -
-onto a branch of its own for the user to merge, when the default branch refuses it, and
-not at all for a fork, whose default branch stays as its upstream's. Reports each step only the user can take -
-creating the site repository, turning Pages on, storing the token - as one copyable line.
-Run again, it re-checks them: a step counts as done once a run that needs it succeeded.
+Publish a repository's plans on the user's plan site, and start the site's build on every
+push to its notes branch and every merged pull request.
 
 Usage:
     "${BASSTLER_PYTHON}" -m basstler.plan_site.publication \\
@@ -44,7 +37,13 @@ from basstler.plan_site.workflows import (
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting, resolve_repository
 from basstler.standard_streams import StandardStreamHandler
-from basstler.github.client import GitHubReader, GitHubRestClient
+from basstler.github.client import (
+    GitHubClient,
+    GitHubReader,
+    GitHubRestClient,
+    HttpMethod,
+)
+from basstler.upstream_reviews.rest_models import RestPullRequestSummary
 from basstler.upstream_reviews.vocabulary import BasstlerSource, CheckOutcome, JSONModel
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -365,18 +364,51 @@ class MergeWorkflowProposal:
     The branch holding the workflow.
     """
 
-    def pending(self) -> PendingStep:
-        """:return: The step that merges it, with its line and its browser steps."""
+    title: str = "Start the plan site build on every merge"
+    """
+    The title of the pull request proposing it.
+    """
+
+    @property
+    def open_pull_requests_path(self) -> str:
+        """:return: The listing of the open pull requests from :attr:`head` into
+        :attr:`base`."""
+        query = urlencode(
+            {
+                "head": f"{self.repository.owner}:{self.head}",
+                "base": self.base,
+                "state": "open",
+            },
+            safe=":",
+        )
+        return f"{self.repository.api_path}/pulls?{query}"
+
+    def open(self, github: GitHubClient) -> RestPullRequestSummary:
+        """
+        :param github: What reads and opens pull requests.
+        :return: The pull request proposing the workflow, opened unless one already is.
+        """
+        listed = github.get(self.open_pull_requests_path)
+        if listed:
+            return RestPullRequestSummary.from_json(listed[0])
+        return RestPullRequestSummary.from_json(
+            github.send(
+                HttpMethod.POST,
+                f"{self.repository.api_path}/pulls",
+                {"title": self.title, "head": self.head, "base": self.base},
+            )
+        )
+
+    @staticmethod
+    def pending(pull_request: RestPullRequestSummary) -> PendingStep:
+        """
+        :param pull_request: The pull request proposing the workflow.
+        :return: The step that merges it.
+        """
         return PendingStep(
             UserStep.ADD_MERGE_WORKFLOW,
-            f"gh pr create --repo {self.repository.full_name} --base {self.base} "
-            f"--head {self.head} --fill, then merge it",
-            (
-                f"Open {self.repository.url}/compare/{self.base}...{self.head}"
-                "?expand=1.",
-                "Click Create pull request.",
-                "Merge the pull request.",
-            ),
+            f"gh pr merge {pull_request.url} --merge",
+            (f"Open {pull_request.url}.", "Click Merge pull request."),
         )
 
 
@@ -453,9 +485,10 @@ class PlanSitePublication:
     The site repository's workflow, whose registry an existing one's replaces.
     """
 
-    github: GitHubReader
+    github: GitHubClient
     """
-    What reads repositories and their workflow runs from GitHub.
+    What reads repositories and their workflow runs from GitHub, and opens the pull
+    request proposing the merge workflow.
     """
 
     remote_root: str = GitHubAddress.WEB
@@ -562,7 +595,7 @@ class PlanSitePublication:
         if not notes_runs.succeeded(DispatchWorkflow.location):
             report.pending.append(user_steps.pending(UserStep.STORE_TOKEN))
         if proposal is not None:
-            report.pending.append(proposal.pending())
+            report.pending.append(proposal.pending(proposal.open(self.github)))
         return report
 
     @staticmethod
