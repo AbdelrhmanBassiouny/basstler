@@ -92,7 +92,20 @@ class ShellConfigurationFunction(StrEnum):
     RECORD_LATEST_BASSTLER_RELEASE = "record_latest_basstler_release"
     """
     Records the highest release tag of the package's repository, for a plugin outside a
-    checkout, which :attr:`BASSTLER_PACKAGE_SOURCE` then installs.
+    checkout, which :attr:`BASSTLER_PACKAGE_SOURCE` then installs: at a session start,
+    and when a hook finds the plugin changed since the install.
+    """
+
+    PLUGIN_CONTENT_DIGEST = "plugin_content_digest"
+    """
+    Prints a checksum of the plugin's hooks, skills and manifest, which changes whenever
+    the plugin is synced at another commit.
+    """
+
+    READY_BASSTLER_PYTHON = "ready_basstler_python"
+    """
+    Returns once the package is installed and current for the plugin running it,
+    installing it first where it is not, and exits the caller when it still cannot run.
     """
 
     def run(

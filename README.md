@@ -53,7 +53,8 @@ its own.
 What it installs from depends on where the plugin is:
 
 - **A plugin installed on its own** installs `basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@<tag>`,
-  the tag being the latest release, read once per session start; offline, it keeps the one
+  the tag being the latest release, read once per session start and again when a hook
+  finds the plugin synced at another commit since the install; offline, it keeps the one
   it last read.
 - **A plugin run from a clone of this repository** installs that clone editable, so
   `import basstler` is the clone's own source.
@@ -72,7 +73,9 @@ Three things bound it:
   `/setup-personal-notes` installs nothing at all.
 - **Only what is missing or out of date.** The usual start finds the environment installed
   from the source the plugin names, looks the requirements up and runs no installer. A
-  plugin update names a new source, and the environment is installed into again.
+  plugin update names a new source, and the environment is installed into again - also
+  when the plugin is synced during a session, which a hook notices from the plugin's
+  content changing since the install.
 - **Never fatal.** No `pip` to install `uv` with, or no network: the summary's
   `dependencies:` line says so, naming the command to run, and the rest of the run carries
   on.

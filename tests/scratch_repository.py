@@ -410,11 +410,12 @@ class ScratchRepository:
             env=self.runner_environment(**overrides),
         ).stdout
 
-    def install_package_environment(self) -> Path:
+    def install_package_environment(self, **overrides: str) -> Path:
         """
         Stand in for the package's own environment, as a set up machine has one: its
         interpreter runs the one running this suite, which has every requirement, and it
-        records the package as installed from what the plugin names now.
+        records the package as installed from what the plugin names now, for the plugin
+        as it is now.
 
         A script rather than a link, because an interpreter reached through a link outside
         its own environment no longer finds that environment's installed packages.
@@ -430,8 +431,13 @@ class ScratchRepository:
             self.configuration_value(ConfigurationVariable.INSTALLED_SOURCE_FILE)
         ).write_text(
             self.configuration_output(
-                ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE
+                ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE, **overrides
             )
+        )
+        Path(
+            self.configuration_value(ConfigurationVariable.INSTALLED_PLUGIN_DIGEST_FILE)
+        ).write_text(
+            self.configuration_output(ShellConfigurationFunction.PLUGIN_CONTENT_DIGEST)
         )
         return interpreter
 

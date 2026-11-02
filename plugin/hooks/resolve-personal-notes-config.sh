@@ -614,6 +614,11 @@ BASSTLER_INSTALL_MARKER="${BASSTLER_INSTALL_LOCK}/pid"
 # BASSTLER_INSTALLED_SOURCE_FILE: what the environment's package was last
 # installed from, so a plugin update - which names a new source - reinstalls it.
 BASSTLER_INSTALLED_SOURCE_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-source"
+# BASSTLER_INSTALLED_PLUGIN_DIGEST_FILE: plugin_content_digest of the plugin the
+# environment's package was last installed for. Outside a checkout the source
+# names the release recorded at session start, so a plugin synced later in the
+# session names no new source; this is how a hook still notices it.
+BASSTLER_INSTALLED_PLUGIN_DIGEST_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-plugin-digest"
 # BASSTLER_PYTHON_REQUIREMENT: the interpreters the package supports - the
 # requires-python of the package's pyproject.toml, which a test holds this
 # equal to.
@@ -633,9 +638,10 @@ BASSTLER_REPOSITORY_URL="${BASSTLER_REPOSITORY_URL:-https://github.com/Abdelrhma
 # only a tag on its merge commit, so the plugin a session syncs from that merge
 # is already the release, with nothing committed after it to miss.
 PLUGIN_MANIFEST="${PLUGIN_ROOT}/.claude-plugin/plugin.json"
-# BASSTLER_RELEASE_FILE: the latest release tag session-start.sh last read from
+# BASSTLER_RELEASE_FILE: the latest release tag last read from
 # BASSTLER_REPOSITORY_URL - the one the package is installed at, read once per
-# session start rather than by every caller.
+# session start, and again by a hook running a plugin synced since the install,
+# rather than by every caller.
 BASSTLER_RELEASE_FILE="${BASSTLER_HOME}/release"
 
 # latest_basstler_release: prints the highest v<major>.<minor>.<patch> tag
@@ -724,9 +730,36 @@ resolve_basstler_python() {
 }
 resolve_basstler_python
 
+# plugin_content_digest: prints a checksum of the plugin's hooks, skills and
+# manifest, which changes whenever the plugin is synced at another commit.
+plugin_content_digest() {
+  (
+    cd "${PLUGIN_ROOT}" || exit 1
+    local directory
+    for directory in hooks skills .claude-plugin; do
+      if [ -d "${directory}" ]; then find "${directory}" -type f; fi
+    done | LC_ALL=C sort \
+      | while IFS= read -r file; do
+          printf '%s\n' "${file}"
+          cat "${file}"
+        done | cksum
+  )
+}
+
+# installed_for_this_plugin: whether the environment's package was installed
+# for the plugin running now. Always true in a checkout, whose package is the
+# checkout's own source.
+installed_for_this_plugin() {
+  [ -n "${BASSTLER_CHECKOUT}" ] && return 0
+  [ -f "${BASSTLER_INSTALLED_PLUGIN_DIGEST_FILE}" ] || return 1
+  [ "$(cat "${BASSTLER_INSTALLED_PLUGIN_DIGEST_FILE}")" = "$(plugin_content_digest)" ]
+}
+
 # installed_package_is_current: whether BASSTLER_PYTHON imports the package and
-# it was installed from what basstler_package_source names now.
+# it was installed from what basstler_package_source names now, for the plugin
+# running now.
 installed_package_is_current() {
+  installed_for_this_plugin || return 1
   [ -f "${BASSTLER_INSTALLED_SOURCE_FILE}" ] || return 1
   [ "$(cat "${BASSTLER_INSTALLED_SOURCE_FILE}")" = "$(basstler_package_source)" ] \
     || return 1
@@ -824,6 +857,8 @@ install_basstler_package_where_needed() {
     return
   fi
   if ! installed_package_is_current; then
+    # A plugin synced since the install may call what only a later release has.
+    installed_for_this_plugin || record_latest_basstler_release
     BASSTLER_PACKAGE_REQUIREMENTS="$(basstler_package_source)"
     install_basstler_package_or_fail installed
     return
@@ -886,8 +921,10 @@ ready_basstler_python() {
 # require_basstler_python: exits the calling script, saying what to run, unless
 # BASSTLER_PYTHON exists and has every requirement of the package. A session
 # start installs them; a checkout where that never ran reaches this message
-# instead of a traceback.
+# instead of a traceback. A package installed for another plugin is readied
+# first, as ready_basstler_python does.
 require_basstler_python() {
+  installed_for_this_plugin || ready_basstler_python
   if ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
     echo "${BASSTLER_PYTHON} is required to run the basstler package." >&2
     exit 1
@@ -988,6 +1025,7 @@ install_basstler_into_environment() {
   fi
   BASSTLER_INSTALL_OUTPUT="$("${BASSTLER_INSTALL_COMMAND[@]}" 2>&1)" || return
   printf '%s\n' "${source}" > "${BASSTLER_INSTALLED_SOURCE_FILE}"
+  plugin_content_digest > "${BASSTLER_INSTALLED_PLUGIN_DIGEST_FILE}"
 }
 
 # PLAN_STATE_SYNC_STAMP: gitignored file recording the personal-notes commit
