@@ -307,4 +307,4 @@ def test_a_notes_remote_off_github_cannot_be_checked(
     monkeypatch.delenv(ClaudeCodeVariable.PROJECT_DIRECTORY, raising=False)
 
     with pytest.raises(NotesRepositoryUnresolvedError):
-        dispatch_check.main()
+        dispatch_check.main([])

@@ -8,6 +8,7 @@ Usage:
 
 from __future__ import annotations
 
+import argparse
 import os
 import sys
 from dataclasses import dataclass
@@ -333,13 +334,17 @@ def published_repositories(
     return list(dict.fromkeys([notes_repository, *listed]))
 
 
-def main() -> int:
+def main(argv: list[str] | None = None) -> int:
     """
     Print this clone's dispatch check. See the module docstring.
 
+    :param argv: The arguments to parse, defaulting to the process's own.
     :return: 0 once printed.
     :raises NotesRepositoryUnresolvedError: If the notes remote is not on GitHub.
     """
+    argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
+    ).parse_args(argv)
     project_root = Path(
         os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
     )
