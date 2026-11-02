@@ -272,6 +272,18 @@ class PluginLocation(PathEnumeration):
     The messages the session-start hook prints, sourced by it.
     """
 
+    SESSION_RULES = HOOKS / "session-rules.md"
+    """
+    The rules every session using basstler's skills follows, which the session-start
+    hook loads into the project's local instructions.
+    """
+
+    PERSONAL_NOTES_SAVING_SCRIPT = HOOKS / "save-personal-notes.sh"
+    """
+    Saves the personal notes in the project's local instructions back to the
+    personal-notes branch.
+    """
+
     SETUP_CHECK_SCRIPT = HOOKS / "check-setup.sh"
     """
     Reports, one row per prerequisite, what the personal-notes setup still lacks.

@@ -13,7 +13,9 @@ committed to a shared branch.
 > [`example-walkthrough.md`](../skills/plan-create/example-walkthrough.md) is a short worked
 > example of the whole thing in use, from a plan-mode idea to its page on the plan site.
 
-Three kinds of content, stored the same way and never merged anywhere:
+It always starts with basstler's [session rules](./session-rules.md), which every session follows
+whichever skill is running and which nobody saves: they ship with the plugin. Then three kinds of
+content, stored the same way and never merged anywhere:
 
 | Section in `CLAUDE.local.md` | Holds | Stored on the notes branch at | Saved by |
 | --- | --- | --- | --- |
