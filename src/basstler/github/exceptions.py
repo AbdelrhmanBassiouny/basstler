@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from basstler.class_property import classproperty
+from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance.exceptions import ExternalCallFailed
 
@@ -59,3 +60,34 @@ class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
     def call(self) -> str:
         """:return: The request line, as issued."""
         return f"{self.method} {self.path}"
+
+
+@dataclass
+class GitHubUnreachableError(CommandFailure, DataclassException, ConnectionError):
+    """
+    Raised when a call gets no answer from the API, such as when the network is down.
+    """
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.GITHUB_REQUEST_FAILED
+
+    method: str
+    """
+    The HTTP method used.
+    """
+    path: str
+    """
+    The API path called, without the host.
+    """
+    reason: str
+    """
+    What stopped the call.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.method} {self.path} got no answer from GitHub: {self.reason}"
+
+    def suggest_correction(self) -> str:
+        return "Check the network connection to GitHub, then run the command again."

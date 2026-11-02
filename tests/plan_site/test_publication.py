@@ -19,7 +19,7 @@ import pytest
 from basstler.actions_budget import ActionsBudget
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.client import GitHubResponse, GitHubWriter, HttpMethod
-from basstler.github.exceptions import GitHubRequestFailed
+from basstler.github.exceptions import GitHubRequestFailed, GitHubUnreachableError
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.hub import PlanHub
@@ -58,6 +58,11 @@ BRANCH_OR_TAG = "v9.9.9"
 The basstler release the published workflows run.
 """
 
+NETWORK_DOWN = "[Errno 101] Network is unreachable"
+"""
+What a call reports when the network is down.
+"""
+
 NOTES_BRANCH = PersonalNotesSetting.BRANCH.default
 """
 The notes branch every repository under test keeps its notes on.
@@ -69,8 +74,8 @@ The notes branch every repository under test keeps its notes on.
 @dataclass
 class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     """
-    Answers reads from recordings, and every write with :attr:`opened`, or with a
-    refusal when :attr:`refused` is set, recording it.
+    Answers reads from recordings, and every write with :attr:`opened`, or with
+    :attr:`failure` when one is set, recording it.
     """
 
     opened: Any = None
@@ -78,9 +83,9 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     The pull request every write answers with.
     """
 
-    refused: bool = False
+    failure: GitHubRequestFailed | GitHubUnreachableError | None = None
     """
-    Whether every write is refused with :attr:`DatasetLocation.PULL_REQUEST_REFUSED`.
+    Why every write fails, ``None`` when none does.
     """
 
     writes: list[SentWrite] = field(default_factory=list)
@@ -92,17 +97,9 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
         self, method: HttpMethod, path: str, payload: Mapping[str, Any]
     ) -> GitHubResponse:
         self.writes.append(SentWrite(method, path, payload))
-        if not self.refused:
-            return GitHubResponse(self.opened)
-        return GitHubResponse(
-            None,
-            refusal=GitHubRequestFailed(
-                status=HTTPStatus.FORBIDDEN,
-                detail=DatasetLocation.PULL_REQUEST_REFUSED.read_text(),
-                method=method,
-                path=path,
-            ),
-        )
+        if self.failure is not None:
+            return GitHubResponse(None, failure=self.failure)
+        return GitHubResponse(self.opened)
 
 
 def bare_repository(path: Path) -> Path:
@@ -652,26 +649,42 @@ def test_merging_the_workflow_merges_its_pull_request(protected):
     )
 
 
-def test_a_refused_pull_request_leaves_opening_it_to_the_user_with_the_refusal(
-    protected,
-):
-    client = protected.runs_none()
-    client.refused = True
-    proposal = protected.merge_workflow_proposal
-    notes = protected.notes_repository
-
-    pending = pending_step(
-        protected.publication(client).publish(), UserStep.ADD_MERGE_WORKFLOW
-    )
-
-    assert pending.failure == str(
+def pull_request_failures(
+    notes: Repository,
+) -> list[GitHubRequestFailed | GitHubUnreachableError]:
+    """:return: GitHub refusing to open the pull request, and the request getting no
+    answer."""
+    path = f"{notes.api_path}/pulls"
+    return [
         GitHubRequestFailed(
             status=HTTPStatus.FORBIDDEN,
             detail=DatasetLocation.PULL_REQUEST_REFUSED.read_text(),
             method=HttpMethod.POST,
-            path=f"{notes.api_path}/pulls",
-        )
+            path=path,
+        ),
+        GitHubUnreachableError(HttpMethod.POST, path, NETWORK_DOWN),
+    ]
+
+
+@pytest.fixture(params=[0, 1], ids=["refused", "unreachable"])
+def failed_opening(request, protected) -> PullRequestOpeningClient:
+    """:return: A client failing to open the merge workflow's pull request."""
+    client = protected.runs_none()
+    client.failure = pull_request_failures(protected.notes_repository)[request.param]
+    return client
+
+
+def test_an_unopened_pull_request_leaves_opening_it_to_the_user_with_the_reason(
+    protected, failed_opening
+):
+    proposal = protected.merge_workflow_proposal
+    notes = protected.notes_repository
+
+    pending = pending_step(
+        protected.publication(failed_opening).publish(), UserStep.ADD_MERGE_WORKFLOW
     )
+
+    assert pending.failure == str(failed_opening.failure)
     assert pending.line == (
         f"gh pr create --repo {notes.full_name} --base {proposal.base} "
         f"--head {proposal.head} --fill, then merge it"
@@ -681,13 +694,18 @@ def test_a_refused_pull_request_leaves_opening_it_to_the_user_with_the_refusal(
     )
 
 
-def test_a_refused_pull_request_s_reason_is_printed_with_its_step(protected):
-    client = protected.runs_none()
-    client.refused = True
+def test_an_unopened_pull_request_s_reason_is_printed_with_its_step(
+    protected, failed_opening
+):
+    report = protected.publication(failed_opening).publish()
 
-    report = protected.publication(client).publish()
+    rendered = report.render()
 
-    assert pending_step(report, UserStep.ADD_MERGE_WORKFLOW).failure in report.render()
+    assert [
+        line
+        for line in str(failed_opening.failure).splitlines()
+        if line not in rendered
+    ] == []
 
 
 def test_once_the_workflow_is_merged_nothing_about_it_is_left(protected):

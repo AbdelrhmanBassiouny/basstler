@@ -13,6 +13,7 @@ import argparse
 import os
 import re
 import sys
+import textwrap
 from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
@@ -267,7 +268,9 @@ class PendingStep:
             for number, text in enumerate(self.browser_steps, start=1)
         )
         failure = (
-            f"    Could not be done automatically: {self.failure}\n"
+            textwrap.indent(
+                f"Could not be done automatically: {self.failure}\n", "    "
+            )
             if self.failure
             else ""
         )
@@ -400,8 +403,8 @@ class MergeWorkflowProposal:
         """
         :param github: What reads and opens pull requests.
         :return: The step merging the pull request proposing the workflow, opened unless
-            one already is, or, when GitHub refuses to open it, the step opening and
-            merging it, with the refusal.
+            one already is, or, when it cannot be opened, the step opening and
+            merging it, with why it could not be opened.
         """
         listed = github.get(self.open_pull_requests_path)
         if listed:
@@ -411,7 +414,7 @@ class MergeWorkflowProposal:
             f"{self.repository.api_path}/pulls",
             {"title": self.title, "head": self.head, "base": self.base},
         )
-        if opened.refusal is not None:
+        if opened.failure is not None:
             return PendingStep(
                 UserStep.ADD_MERGE_WORKFLOW,
                 f"gh pr create --repo {self.repository.full_name} --base {self.base} "
@@ -422,7 +425,7 @@ class MergeWorkflowProposal:
                     "Click Create pull request.",
                     "Merge the pull request.",
                 ),
-                str(opened.refusal),
+                str(opened.failure),
             )
         return self.merging(RestPullRequestSummary.from_json(opened.body))
 
