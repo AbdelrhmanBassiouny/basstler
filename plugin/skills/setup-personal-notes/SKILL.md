@@ -214,11 +214,16 @@ The site builds with basstler's latest release, so it stays current with no re-r
 
 It writes the site repository's workflow onto its default branch, lists this
 repository in the hub file of the registry that workflow names (this repository
-itself, the first time), and commits the notes branch's dispatch workflow, which
-starts the build on every push to the notes branch. It then prints, as one
+itself, the first time), and commits two workflows that start the build: the notes
+branch's dispatch workflow, on every push to the notes branch, and the default branch's
+merge workflow, on every pull request merged in this repository. A fork gets no merge
+workflow, so its default branch stays as its upstream's; a default branch that refuses
+the push gets it on `basstler/plan-site-merge`, with a pull request opened for it and a
+step to merge that pull request; when GitHub refuses to open it, the step says why and gives
+the line that opens it. It then prints, as one
 copyable line each, with the same steps numbered for github.com, the steps only the user can take - creating the site
 repository, turning on Pages, storing their fine-grained token as the
-`PLAN_SITE_TOKEN` secret - and exits 1 while any is left. Pass the lines
+`PLAN_SITE_TOKEN` secret, merging the merge workflow - and exits 1 while any is left. Pass the lines
 and the browser steps on as printed; once the user has done them, run the command again: it counts a
 step done when a run that needs it succeeded.
 

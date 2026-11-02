@@ -37,6 +37,12 @@ class TriggerEvent(StrEnum):
     A pull request event, whose activity types say which.
     """
 
+    PULL_REQUEST_TARGET = "pull_request_target"
+    """
+    A pull request event run in the base repository's context, with its secrets, even
+    for a pull request from a fork; its activity types say which.
+    """
+
     WORKFLOW_DISPATCH = "workflow_dispatch"
     """
     Started by hand or through the API.
@@ -227,7 +233,10 @@ class Trigger:
         :return: Whether this is a pull-request trigger that runs on each push to the pull
             request, which is when a newer run makes an older one worthless.
         """
-        if self.event is not TriggerEvent.PULL_REQUEST:
+        if self.event not in (
+            TriggerEvent.PULL_REQUEST,
+            TriggerEvent.PULL_REQUEST_TARGET,
+        ):
             return False
         activity_types = self.activity_types or ActivityType.pull_request_defaults
         return ActivityType.SYNCHRONIZE in activity_types

@@ -1,0 +1,14 @@
+{% extends "plan_site_dispatch_workflow.yml" %}
+{% block header %}
+name: Plan site merge dispatch
+
+# Every merged pull request, a fork's included, starts the plan site's build in
+# {{ site_repository }}, so the site shows the merge without waiting for the next push to
+# the notes branch. It runs on pull_request_target to read the token for a fork's pull
+# request too; it checks out nothing and reads nothing the pull request controls.
+on:
+  pull_request_target:
+    types: [closed]
+{% endblock %}
+{% block concurrency_group %}plan-site-merge{% endblock %}
+{% block condition %}{{ super() }} && github.event.pull_request.merged{% endblock %}

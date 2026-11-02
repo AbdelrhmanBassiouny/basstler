@@ -402,6 +402,12 @@ class WorkflowLocation(PathEnumeration):
     The workflow on a notes branch that starts :attr:`PLAN_SITE` on every push to it.
     """
 
+    PLAN_SITE_MERGE = DIRECTORY / "plan-site-merge.yml"
+    """
+    The workflow on a notes repository's default branch that starts :attr:`PLAN_SITE`
+    whenever a pull request merges.
+    """
+
 
 class ClaudeCodeVariable(EnvironmentVariable):
     """

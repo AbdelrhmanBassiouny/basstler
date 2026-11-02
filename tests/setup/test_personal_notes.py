@@ -27,7 +27,7 @@ from basstler.locations import (
     PluginSkillLocation,
     ProjectLocation,
 )
-from basstler.github.client import GitHubClient, HttpMethod
+from basstler.github.client import GitHubClient, GitHubResponse, HttpMethod
 from basstler.maintenance.board import AccountField
 from basstler.maintenance.github import (
     GitHubPath,
@@ -111,10 +111,12 @@ class GitHubAnsweringFromMemory(GitHubClient):
     def get_pages(self, path: str) -> list[Any]:
         return [[{LabelField.NAME: label} for label in sorted(self.present_labels)]]
 
-    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
+    def attempt_send(
+        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+    ) -> GitHubResponse:
         self.created_labels.append(payload)
         self.present_labels.add(payload[LabelField.NAME])
-        return payload
+        return GitHubResponse(payload)
 
     def as_repository(self) -> GitHubRepository:
         """
