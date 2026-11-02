@@ -1,12 +1,9 @@
 ## Plan
-- Answer the review on #126: docstrings on every flagged class, field and method
-- Move the check into `basstler.code_rules`; copy krrood's AGENTS.md generator (rules as Python `Section` enums) and cite krrood with `:cite:`
-- Add `CodeRuleChecker`, the base every checker shares, and link each checker to its rule (`AgentRule.checker`)
-- Add a missing-docstring checker (`@override` methods exempt) and a prose-length checker; one cyclopts command `basstler code-rules` with `check` / `agents-md`
-- AGENTS.md generated from the rules; "docstrings are always there" rule
+- Review on #126: docstrings everywhere, `basstler.code_rules` (krrood copy, rules linked to checkers), cyclopts
 
 ## Done
-- (nothing yet)
+- 87b8831: `code_rules` subpackage, AGENTS.md generated from the rules, missing-docstring and prose-length checkers, `basstler code-rules check|agents-md`, hooks `code-rules`/`agents-md`
+- Replied on every thread; 6 resolved; thread r4442618572 left open
 
 ## Next
-- Implement, test, push, reply on threads
+- Waiting on the user: move `scripts/format_docstrings.py` into code_rules (which behaviour?), the cram PR (no push access), confirm LGPL→Apache via NOTICE
