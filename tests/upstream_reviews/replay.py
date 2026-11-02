@@ -15,10 +15,10 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.repository import Repository
+from basstler.github.client import GitHubReader
 from basstler.upstream_reviews.clients import (
     GraphQLClient,
     JobLogReader,
-    RestClient,
 )
 from basstler.upstream_reviews.pull_request_models import (
     ReviewThreadsPageResult,
@@ -202,7 +202,7 @@ class RecordedRestResponse(StrEnum):
 
 
 @dataclass
-class ReplayingRestClient(RestClient):
+class ReplayingRestClient(GitHubReader):
     """
     A REST client that answers each path from a recorded response instead of calling
     GitHub.

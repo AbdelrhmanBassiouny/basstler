@@ -72,6 +72,12 @@ class DatasetLocation(PathEnumeration):
     items.
     """
 
+    FLUSH_SEQUENCES_PLAN = DIRECTORY / "flush-sequences-plan.yaml"
+    """
+    :attr:`BOOTSTRAP_PLAN` with every sequence written flush with its key instead of
+    indented under it.
+    """
+
     BOOTSTRAP_ROADMAP = DIRECTORY / "bootstrap-roadmap.md"
     """
     The item-bootstrap fixture plan's roadmap.

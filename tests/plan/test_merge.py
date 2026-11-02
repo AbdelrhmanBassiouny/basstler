@@ -104,6 +104,45 @@ def test_dropping_every_item_leaves_a_manifest_that_reads_as_no_items():
     assert yaml.safe_load(result.manifest_text)[ManifestKey.ITEMS.key] == []
 
 
+# %% sequences written flush with their keys
+
+
+def flush_version() -> PlanVersion:
+    """
+    :return: :attr:`DatasetLocation.FLUSH_SEQUENCES_PLAN` as the session read it.
+    """
+    return PlanVersion(
+        manifest_text=DatasetLocation.FLUSH_SEQUENCES_PLAN.read_text(),
+        roadmap_text=DatasetLocation.BOOTSTRAP_ROADMAP.read_text(),
+    )
+
+
+def test_dropping_one_flush_item_keeps_the_others():
+    session = without_item(flush_version(), FIRST_ITEM)
+    latest = deferred(flush_version(), SECOND_ITEM)
+
+    result = PlanMerge(read=flush_version(), session=session, latest=latest).merged()
+
+    assert parsed_items(result) == parsed_items(without_item(latest, FIRST_ITEM))
+
+
+def test_a_flush_plan_field_the_session_changed_is_merged_whole():
+    session = PlanVersion(
+        manifest_text=DatasetLocation.FLUSH_SEQUENCES_PLAN.read_text().replace(
+            'name: "A track"', 'name: "A renamed track"'
+        ),
+        roadmap_text=flush_version().roadmap_text,
+    )
+    latest = deferred(flush_version(), SECOND_ITEM)
+
+    result = PlanMerge(read=flush_version(), session=session, latest=latest).merged()
+
+    assert (
+        yaml.safe_load(result.manifest_text)[ManifestKey.TRACKS.key]
+        == yaml.safe_load(session.manifest_text)[ManifestKey.TRACKS.key]
+    )
+
+
 def test_a_plan_field_the_session_changed_joins_an_item_edit():
     session = PlanVersion(
         manifest_text=DatasetLocation.BOOTSTRAP_PLAN.read_text().replace(

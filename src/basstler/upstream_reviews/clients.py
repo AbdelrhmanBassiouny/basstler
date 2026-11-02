@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from basstler.class_property import classproperty
-from basstler.maintenance.constants import GitHubClient
+from basstler.maintenance.constants import GitHubExecutable
 from basstler.repository import Repository
 from basstler.upstream_reviews.exceptions import (
     GitHubCommandFailed,
@@ -59,41 +59,17 @@ class GraphQLClient(ABC):
         """
 
 
-class RestClient(ABC):
-    """
-    Reads REST responses from GitHub.
-    """
-
-    @abstractmethod
-    def get(self, path: str) -> Any:
-        """
-        Read one response.
-
-        :param path: The REST path, query included.
-        :return: The parsed response.
-        """
-
-    @abstractmethod
-    def get_pages(self, path: str) -> list[Any]:
-        """
-        Read every page of a paged response.
-
-        :param path: The REST path of the first page, query included.
-        :return: Each page's parsed response, in order.
-        """
-
-
 @dataclass
-class GitHubCommandLineClient(GraphQLClient, RestClient, JobLogReader):
+class GitHubCommandLineClient(GraphQLClient, JobLogReader):
     """
-    A client that shells out to ``gh api``.
+    A client that shells out to ``gh api`` for GraphQL and job logs.
 
     A runner ships ``gh`` and authenticates it from ``GITHUB_TOKEN``, and a Claude Code
     session's proxy authenticates it for the repositories the session has attached, so
     this holds no credential handling of its own.
     """
 
-    executable: str = GitHubClient.COMMAND_LINE
+    executable: str = GitHubExecutable.COMMAND_LINE
     """
     The command to invoke, overridable for testing.
     """
@@ -123,27 +99,6 @@ class GitHubCommandLineClient(GraphQLClient, RestClient, JobLogReader):
         return GraphQLResponse.from_json(
             self._run(["api", "graphql", "--input", "-"], request)
         ).result()
-
-    def get(self, path: str) -> Any:
-        """
-        Read one REST response through ``gh``.
-
-        :param path: The REST path, query included.
-        :return: The parsed response.
-        :raises GitHubCommandFailed: If ``gh`` exits non-zero.
-        """
-        return json.loads(self._run(["api", path]))
-
-    def get_pages(self, path: str) -> list[Any]:
-        """
-        Read every page of a REST response through ``gh``, which follows the pages and
-        collects them into one list.
-
-        :param path: The REST path of the first page, query included.
-        :return: Each page's parsed response, in order.
-        :raises GitHubCommandFailed: If ``gh`` exits non-zero.
-        """
-        return json.loads(self._run(["api", "--paginate", "--slurp", path]))
 
     def read_job_log(self, repository: Repository, job_identifier: int) -> str:
         """

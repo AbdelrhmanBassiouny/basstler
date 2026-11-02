@@ -11,12 +11,9 @@ from http import HTTPStatus
 from typing import Any
 
 from basstler.maintenance.board import PullRequestField
-from basstler.environment import GitHubCredentialVariable
-from basstler.maintenance.github import (
-    GitHubCredentialUnavailableError,
-    GitHubRepository,
-    GitHubRequestFailed,
-)
+from basstler.github.client import GitHubClient, GitHubRestClient
+from basstler.github.exceptions import GitHubRequestFailed
+from basstler.maintenance.github import GitHubRepository
 from basstler.plan.dependencies import DependencyResolver
 from basstler.pull_request_state import PullRequestRecord, PullRequestsByRepository
 from basstler.repository import PullRequestReference, Repository
@@ -80,9 +77,9 @@ class GitHubPullRequestSource(PullRequestSource):
     the listing missed is read on its own.
     """
 
-    token: str
+    client: GitHubClient
     """
-    The credential the requests authenticate with.
+    How the requests reach GitHub.
     """
 
     listed_repositories: set[Repository] = field(default_factory=set)
@@ -102,19 +99,15 @@ class GitHubPullRequestSource(PullRequestSource):
         """
         :return: A source authenticating with whichever credential the environment
             carries.
-        :raises GitHubCredentialUnavailableError: If no token is set.
         """
-        token = GitHubCredentialVariable.first_token()
-        if not token:
-            raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
-        return cls(token=token)
+        return cls(client=GitHubRestClient())
 
     def client_for(self, repository: Repository) -> GitHubRepository:
         """
         :param repository: The repository to call.
         :return: A client for it.
         """
-        return GitHubRepository(repository, self.token)
+        return GitHubRepository(repository, self.client)
 
     def pull_request(self, reference: PullRequestReference) -> PullRequestRecord | None:
         record = self.listed_or_read(reference)

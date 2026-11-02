@@ -9,13 +9,14 @@ import subprocess
 from collections.abc import Sequence
 from dataclasses import dataclass
 from dataclasses import field as dataclasses_field
+from enum import StrEnum
 
 from basstler.stack.model import (
     PullRequest,
     Stack,
 )
 
-from basstler.locations import RepositoryStateLocation
+from basstler.locations import ClaudeCodeVariable, RepositoryStateLocation
 from basstler.maintenance.board import PullRequestField
 from basstler.maintenance.commands import (
     MaintenanceCommand,
@@ -303,14 +304,41 @@ class AlreadyResolvedPass(MaintenancePass):
         return self.recorded_fork
 
 
+class LoggedOutCommandLine(StrEnum):
+    """
+    How a run is given a ``gh`` that has no login.
+    """
+
+    CONFIGURATION_DIRECTORY_VARIABLE = "GH_CONFIG_DIR"
+    """
+    The variable naming the directory ``gh`` reads its login from.
+    """
+
+    CONFIGURATION_DIRECTORY = "logged-out-gh"
+    """
+    A directory holding no login, beside the checkout.
+    """
+
+
 def maintenance_runner(checkout: ForkCheckout) -> PythonModuleRunner:
     """
     :param checkout: The fork checkout to run in.
-    :return: A runner for the executor, without the credentials this environment carries.
+    :return: A runner for the executor, as on a machine with no credential outside a
+        cloud session: no token variable, a ``gh`` with no login, and no cloud session
+        marker.
     """
     return PythonModuleRunner(
         project_root=checkout.project_root,
-        removed_variable_prefixes=tuple(GitHubCredentialVariable),
+        removed_variable_prefixes=(
+            *GitHubCredentialVariable,
+            ClaudeCodeVariable.REMOTE,
+        ),
+        set_variables={
+            LoggedOutCommandLine.CONFIGURATION_DIRECTORY_VARIABLE: str(
+                checkout.project_root.parent
+                / LoggedOutCommandLine.CONFIGURATION_DIRECTORY
+            )
+        },
         module_name=MAINTENANCE_MODULE,
     )
 

@@ -37,8 +37,13 @@ dependencies = [
     "markdown>=3",
     "nh3>=0.2",
     "rustworkx>=0.15",
+    "cyclopts>=5.3",
 ]
 dynamic = ["version"]
+
+# The command each v3 command is mounted on; `python -m basstler` runs the same tree.
+[project.scripts]
+basstler = "basstler.__main__:app"
 
 [project.urls]
 "Source" = "https://github.com/AbdelrhmanBassiouny/basstler"
