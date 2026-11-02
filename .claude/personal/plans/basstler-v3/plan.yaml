@@ -82,11 +82,11 @@ items:
   track: plans
   depends_on:
   - plan-store-issues
-  - team-basstler/lean-kickoff
+  - core-robustness/lean-kickoff
   status: not started
   notes: 'Item scope, dependency readiness, its pull request''s checks, unresolved threads, the mirrored upstream
     state and tracking-issue comments naming it, built by code so a skill never fetches or reads reference docs
-    to assemble context. Builds on team-basstler/lean-kickoff (#97): reuse its brief command and skill-size test,
+    to assemble context. Builds on core-robustness/lean-kickoff (#97): reuse its brief command and skill-size test,
     re-sourced from issues.'
 - id: plan-import
   title: Import every plan.yaml into issues, once
