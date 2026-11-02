@@ -283,6 +283,18 @@ if ACTION_STATE="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
   esac
 fi
 
+# Actions usage: the last 24 hours of runs against the budget's daily ceilings, so a
+# workflow nearing its ceiling is seen at the start of a session. Never fatal.
+SUMMARY_ACTIONS_USAGE="$(actions_usage_line_not_checked)"
+if ACTIONS_USAGE_REPORT="$("${BASSTLER_PYTHON}" -m "${ACTIONS_USAGE_MODULE}" \
+    --repository "$(repository_name)" --flagged-only 2>/dev/null)"; then
+  if [ -z "${ACTIONS_USAGE_REPORT}" ]; then
+    SUMMARY_ACTIONS_USAGE="$(actions_usage_line_within_budget)"
+  else
+    SUMMARY_ACTIONS_USAGE="$(actions_usage_line_flagged "${ACTIONS_USAGE_REPORT}")"
+  fi
+fi
+
 # Setup verdict from check-setup.sh, run last so it sees what this run wrote.
 SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
 if [ -f "${CHECK_SETUP_SCRIPT}" ]; then
@@ -308,6 +320,7 @@ session-start.sh summary:
   git identity:    ${SUMMARY_GIT_IDENTITY}
   dependencies:    ${SUMMARY_DEPENDENCIES}
   reviews Action:  ${SUMMARY_UPSTREAM_REVIEWS_ACTION}
+  Actions usage:   ${SUMMARY_ACTIONS_USAGE}
   setup:           ${SUMMARY_SETUP}
   plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY

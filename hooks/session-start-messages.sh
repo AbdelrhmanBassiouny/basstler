@@ -201,6 +201,25 @@ dependencies_line_environment_not_created() {
     "${environment_directory}"
 }
 
+# %% the Actions usage line
+
+# actions_usage_line_not_checked: the usage could not be measured.
+actions_usage_line_not_checked() {
+  printf 'not checked - could not read the repository'"'"'s workflow runs'
+}
+
+# actions_usage_line_within_budget: no workflow is near a daily ceiling.
+actions_usage_line_within_budget() {
+  printf 'no workflow is near a daily ceiling'
+}
+
+# actions_usage_line_flagged: some workflows are near or over a daily ceiling.
+# $1 is the flagged workflows, one per line.
+actions_usage_line_flagged() {
+  local flagged="$1"
+  printf 'near or over a daily ceiling:\n%s' "$(printf '%s\n' "${flagged}" | sed 's/^/    /')"
+}
+
 # %% the upstream-reviews Action line
 
 # upstream_reviews_action_line_not_read: the fork's branches could not be read,
