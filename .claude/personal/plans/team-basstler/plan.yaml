@@ -1,20 +1,22 @@
 schema_version: 1
 id: team-basstler
 title: 'Team Basstler: a published plan site, hardened core, and plans a team shares'
-description: A Pages site replaces the dashboard Artifacts and rebuilds on every plan change; saves and
-  kickoffs become safe for several writers and cheap in tokens. A team repository in an organisation then
-  holds the shared plans, one issue per item, a Project board, and each member's own notes, and /malloche
-  picks and starts the next ready item. Pilot - cram2 with the domain-models plan.
+description: A Pages site replaces the dashboard Artifacts and rebuilds on every plan change;
+  saves and kickoffs become safe for several writers and cheap in tokens. A team repository
+  in an organisation then holds the shared plans, one issue per item, a Project board, and
+  each member's own notes, and /malloche picks and starts the next ready item. Pilot - cram2
+  with the domain-models plan.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 62
 waves:
 - id: foundations
   name: 'Wave 1: Site live, core hardened'
-  description: The site deploys itself and looks finished; saves survive concurrent writers; a kickoff
-    loads little text.
+  description: The site deploys itself and looks finished; saves survive concurrent writers;
+    a kickoff loads little text.
 - id: team
   name: 'Wave 2: Team Basstler'
-  description: Shared plans in an organisation's team repository, items as issues on a board, and /malloche.
+  description: Shared plans in an organisation's team repository, items as issues on a board,
+    and /malloche.
 tracks:
 - id: site
   name: Plan site
@@ -33,22 +35,23 @@ tracks:
   wave: team
 items:
 - id: site-design
-  title: An elegant, robust site - one stylesheet, light and dark, waves as columns, live chips, build
-    health
+  title: An elegant, robust site - one stylesheet, light and dark, waves as columns, live
+    chips, build health
   branch: claude/awesome-lovelace-netst8
   status: in progress
   track: site
   pull_request_number: 106
   session: https://claude.ai/code/session_018wfiv6n4re5AG1zHWxm621
   depends_on: []
-  notes: One static stylesheet with design tokens, light and dark, phone width; plan page as wave columns
-    of item cards with status, pull request, CI and assignee chips and dependency hints; hub and repository
-    pages as cards with progress. A health banner names every plan or repository the build skipped, and
-    the build fails when the registry cannot be read. A CI test builds the site from the test dataset.
-    Stays on the current templates; the htpy rewrite (workflow-cutover/site-pages-in-python) is not needed
-    for this.
+  notes: One static stylesheet with design tokens, light and dark, phone width; plan page
+    as wave columns of item cards with status, pull request, CI and assignee chips and dependency
+    hints; hub and repository pages as cards with progress. A health banner names every plan
+    or repository the build skipped, and the build fails when the registry cannot be read.
+    A CI test builds the site from the test dataset. Stays on the current templates; the htpy
+    rewrite (workflow-cutover/site-pages-in-python) is not needed for this.
 - id: site-for-every-repository
-  title: Setup publishes the plan site for any repository and user; every plan save starts its build
+  title: Setup publishes the plan site for any repository and user; every plan save starts
+    its build
   branch: claude/magical-darwin-dydsmk
   status: in progress
   track: site
@@ -56,13 +59,15 @@ items:
   session: https://claude.ai/code/session_018wfiv82HPZmBYgkZEvxaeX
   depends_on: []
   notes: 'basstler.plan_site.publication writes the site repository''s caller of plan-site-build.yml,
-    registers the notes repository in the registry''s hub, and commits a dispatch workflow to the notes
-    branch that starts the build on every push with the PLAN_SITE_TOKEN secret; repository creation, Pages
-    and the token are one copyable line each, re-checked from run listings. check-setup gains a plan_site
-    row and /setup-personal-notes step 8 runs it. The owner''s site is stack-board (stack-board#8 replaces
-    board.yml and supersedes #7). The browser re-check of draft state moved to page-draft-recheck.'
+    registers the notes repository in the registry''s hub, and commits a dispatch workflow
+    to the notes branch that starts the build on every push with the PLAN_SITE_TOKEN secret;
+    repository creation, Pages and the token are one copyable line each, re-checked from run
+    listings. check-setup gains a plan_site row and /setup-personal-notes step 8 runs it.
+    The owner''s site is stack-board (stack-board#8 replaces board.yml and supersedes #7).
+    The browser re-check of draft state moved to page-draft-recheck.'
 - id: page-draft-recheck
-  title: The plan page re-checks blocking pull requests' draft state from the browser between builds
+  title: The plan page re-checks blocking pull requests' draft state from the browser between
+    builds
   branch: claude/plan-item-kickoff-basstler-draft-ankppa
   status: in progress
   track: site
@@ -70,41 +75,24 @@ items:
   session: https://claude.ai/code/session_018wfiv6ZDBwZvHTLeeG7b7k
   depends_on:
   - site-for-every-repository
-  notes: 'Implemented in draft #116: a chip held back by a draft carries its pull request''s REST address,
-    and the site page''s script reveals a hidden Start now button once no draft holds the item back (public
-    repositories only, unauthenticated). Playwright, approved by the owner, tests it in headless Chromium,
-    which CI installs.'
-- id: artifact-path-retirement
-  title: Point every plan skill at the site instead of republishing a dashboard Artifact
-  branch: claude/quirky-brown-i7twwl
-  status: in progress
-  track: site
-  pull_request_number: 115
-  session: https://claude.ai/code/session_018wfiv5SwdeaJM95D338HhC
-  depends_on:
-  - site-for-every-repository
-  notes: >
-    Both halves are in #115: the site ran its first green cycle on 2026-11-01. Skills, save-plan.sh,
-    session start and the personal notes link the plan site through plan_site_page_url (SiteAddress
-    in plan_site/hub.py). /plan-dashboard keeps only the cross-check, the merged-to-done correction
-    and the report. The URL cache, record_url, the publication check and the index page are removed.
-
-    After merge, with the owner's confirmation: delete the Artifacts dashboard-urls.yaml lists, then
-    remove that file from the notes branch. A follow-up makes plan_page summary-only, without the
-    Artifact files.
+  notes: 'Implemented in draft #116: a chip held back by a draft carries its pull request''s
+    REST address, and the site page''s script reveals a hidden Start now button once no draft
+    holds the item back (public repositories only, unauthenticated). Playwright, approved
+    by the owner, tests it in headless Chromium, which CI installs.'
 - id: concurrent-safe-save
-  title: A plan save applies item-level edits onto the latest manifest and retries a rejected push
+  title: A plan save applies item-level edits onto the latest manifest and retries a rejected
+    push
   branch: claude/plan-item-kickoff-concurrent-safe-x35oyo
   status: in progress
   track: core
   pull_request_number: 98
   session: https://claude.ai/code/session_01JxHGiMy8LGpNvoVNMUwzvU
   depends_on: []
-  notes: 'Today save-plan.sh writes the whole file and pushes once, so two writers lose an update or fail.
-    On top of #48''s manifest writer corruption fixes: fetch, apply the session''s item changes onto the
-    fresh manifest, refuse when the same item changed since the session read it, push, and on a rejected
-    push repeat a bounded number of times. Needed only until basstler-v3 plan-store-issues; v2-removal
-    deletes it.'
+  notes: 'Today save-plan.sh writes the whole file and pushes once, so two writers lose an
+    update or fail. On top of #48''s manifest writer corruption fixes: fetch, apply the session''s
+    item changes onto the fresh manifest, refuse when the same item changed since the session
+    read it, push, and on a rejected push repeat a bounded number of times. Needed only until
+    basstler-v3 plan-store-issues; v2-removal deletes it.'
 - id: lean-kickoff
   title: A kickoff loads one compact item brief instead of about 55 KB of skill documents
   branch: ccr-1516c899-kd5dl7
@@ -113,46 +101,49 @@ items:
   pull_request_number: 97
   session: https://claude.ai/code/session_01JxHGiQFQvVfUEyavALErF5
   depends_on: []
-  notes: Kickoff now reads kickoff, gathering, execution modes, readiness, the maintenance skill and the
-    plan schema (about 15k tokens before code). One python -m command prints the item, its dependencies'
-    live state and the standing rules; the skill keeps only its steps; maintenance runs only when an upstream
-    is named; the schema is read only for structural edits. A test caps skill document sizes like plan_size_limits.
-    Target under 5k tokens of tooling text.
+  notes: Kickoff now reads kickoff, gathering, execution modes, readiness, the maintenance
+    skill and the plan schema (about 15k tokens before code). One python -m command prints
+    the item, its dependencies' live state and the standing rules; the skill keeps only its
+    steps; maintenance runs only when an upstream is named; the schema is read only for structural
+    edits. A test caps skill document sizes like plan_size_limits. Target under 5k tokens
+    of tooling text.
 - id: plan-model-typed-accessors
-  title: "PlanManifest and PlanItem expose every manifest field as a typed read-only accessor; consumers stop indexing raw dicts"
+  title: PlanManifest and PlanItem expose every manifest field as a typed read-only accessor;
+    consumers stop indexing raw dicts
   branch: claude/sleepy-mendel-xpls25
   track: core
   pull_request_number: 109
   session: https://claude.ai/code/session_018wfiv7V2xM8ppUezJJ66Hq
-  notes: >
-    From the review of PR 97: the pattern applies to every document read through raw keys, not only
-    default_repository and pull_request_number. This item covers plan.yaml (basstler.plan.model, its
-    consumers and test helpers). The plan is at its 15-item limit, so these follow-ups are not
-    tracked yet: upstream_reviews helper fetch typed models; TOML settings, pull request data and
-    URL cache through their models; a bug fix for item_bootstrap documents reading the item id with
-    the enum member instead of its key. The two reads in tests/plan/test_item_brief.py wait for PR
-    97 to land.
+  notes: 'From the review of PR 97: the pattern applies to every document read through raw
+    keys, not only default_repository and pull_request_number. This item covers plan.yaml
+    (basstler.plan.model, its consumers and test helpers). The plan is at its 15-item limit,
+    so these follow-ups are not tracked yet: upstream_reviews helper fetch typed models; TOML
+    settings, pull request data and URL cache through their models; a bug fix for item_bootstrap
+    documents reading the item id with the enum member instead of its key. The two reads in
+    tests/plan/test_item_brief.py wait for PR 97 to land.
+
+    '
   depends_on: []
   status: in progress
-
 - id: report-keys-in-tests
-  title: "Tests read command reports through the existing report key enums, not bare strings"
+  title: Tests read command reports through the existing report key enums, not bare strings
   branch: null
   track: core
-  notes: >
-    Tests read item_mode, maintenance and bootstrap reports with bare strings although ReportKey and
-    MaintenanceReportKey exist. Use the enums.
+  notes: 'Tests read item_mode, maintenance and bootstrap reports with bare strings although
+    ReportKey and MaintenanceReportKey exist. Use the enums.
+
+    '
   depends_on: []
   status: not started
-
 - id: stalled-dependency-drift
   title: Flag an item stacked on a deferred or closed dependency on the plan site
   status: not started
   track: site
-  depends_on:
-  - artifact-path-retirement
-  notes: >
-    Replaces plan-dashboards/deferred-dependency-drift-check (draft #47, closed: it edited the Artifact
-    dashboard #115 removes). Re-implement on plan_site.plan_page.PlanPage once #115 lands: flag an item
-    whose dependency is deferred or closed unmerged, suggesting a base to reparent onto. Reference design
-    on branch claude/deferred-dependency-drift-pr-qxpfsm (StallReason, StalledDependencyDrift).
+  depends_on: []
+  notes: 'Replaces plan-dashboards/deferred-dependency-drift-check (draft #47, closed: it
+    edited the Artifact dashboard #115 removes). Re-implement on plan_site.plan_page.PlanPage
+    once #115 lands: flag an item whose dependency is deferred or closed unmerged, suggesting
+    a base to reparent onto. Reference design on branch claude/deferred-dependency-drift-pr-qxpfsm
+    (StallReason, StalledDependencyDrift).
+
+    '
