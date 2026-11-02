@@ -180,8 +180,11 @@ items:
 
 - id: site-rebuild-on-merge
   title: A merged pull request in a tracked repository starts the plan site's build
-  status: not started
+  status: in progress
   track: site
+  branch: ccr-c9742a1d-ep3pmj
+  pull_request_number: 122
+  session: https://claude.ai/code/session_018wfiv6b8ng2PD9TV1MhDw3
   depends_on:
   - site-for-every-repository
   notes: 'Agreed on #115 (2026-11-02) instead of a browser merge re-check stacked on #116: the site
