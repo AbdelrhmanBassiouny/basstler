@@ -26,6 +26,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure
 from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
@@ -522,6 +523,21 @@ class PlanSitePublication:
             )
         return report
 
+    def run(self) -> int:
+        """
+        Publish and print what was written and what is left.
+
+        :return: 0 when nothing is left to the user, 1 otherwise, and a failure's own
+            exit status when GitHub or the credential stopped the publication.
+        """
+        try:
+            report = self.publish()
+        except CommandFailure as error:
+            logger.error(f"{error}")
+            return error.exit_code
+        logger.info(report.render())
+        return 0 if report.complete else 1
+
     @staticmethod
     def write(
         branch: RemoteBranch,
@@ -595,7 +611,7 @@ def main(argv: list[str] | None = None) -> int:
     Publish this clone's notes repository on the plan site. See the module docstring.
 
     :param argv: The arguments to parse, defaulting to the process's own.
-    :return: 0 when nothing is left to the user, 1 otherwise.
+    :return: The status :meth:`PlanSitePublication.run` ends with.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -616,7 +632,7 @@ def main(argv: list[str] | None = None) -> int:
     if notes_repository is None:
         raise NotesRepositoryUnresolvedError(notes_remote)
     site = arguments.site_repository or SiteRepository.default_for(notes_repository)
-    report = PlanSitePublication(
+    return PlanSitePublication(
         GitCommandRunner(project_root),
         notes_remote,
         DispatchWorkflow(
@@ -626,9 +642,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         SiteWorkflow(arguments.branch_or_tag, notes_repository),
         GitHubRestClient(),
-    ).publish()
-    logger.info(report.render())
-    return 0 if report.complete else 1
+    ).run()
 
 
 if __name__ == "__main__":

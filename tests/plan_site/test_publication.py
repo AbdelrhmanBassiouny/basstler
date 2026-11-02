@@ -435,6 +435,27 @@ def test_runs_that_cannot_be_read_stop_the_publication_before_anything_is_writte
     )
 
 
+def test_a_refused_read_ends_the_command_with_the_error_s_own_exit_status(publishing):
+    publishing.create(publishing.site.repository)
+
+    exit_status = publishing.publication(RefusingRestClient()).run()
+
+    assert exit_status == GitHubRequestFailed.exit_code
+
+
+def test_a_command_with_steps_left_ends_with_the_incomplete_exit_status(published):
+    assert published.publication(published.runs_none()).run() == 1
+
+
+def test_a_command_with_nothing_left_ends_successfully(published):
+    runs = published.runs(
+        DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED,
+    )
+
+    assert published.publication(runs).run() == 0
+
+
 # %% the steps in the browser
 
 
