@@ -6,6 +6,7 @@ site, against bare repositories standing in for GitHub and recorded run listings
 from __future__ import annotations
 
 import json
+import shutil
 import subprocess
 from dataclasses import dataclass
 from pathlib import Path
@@ -152,8 +153,10 @@ class Publishing:
         site_listing: DatasetLocation,
         notes_listing: DatasetLocation,
         site_branch: str = "main",
+        notes_details: DatasetLocation = DatasetLocation.REPOSITORY_NOT_FORK,
     ) -> ReplayingRestClient:
-        """:return: A client answering both run listings from recordings."""
+        """:return: A client answering both run listings and the notes repository's
+        details from recordings."""
         return ReplayingRestClient(
             {
                 RunListing.path(self.site.repository, site_branch): json.loads(
@@ -162,7 +165,17 @@ class Publishing:
                 RunListing.path(self.notes_repository, NOTES_BRANCH): json.loads(
                     notes_listing.read_text()
                 ),
+                self.notes_repository.api_path: json.loads(notes_details.read_text()),
             }
+        )
+
+    def fork_runs(self) -> ReplayingRestClient:
+        """:return: A client answering both run listings with no runs, for a notes
+        repository that is a fork."""
+        return self.runs(
+            DatasetLocation.WORKFLOW_RUNS_NONE,
+            DatasetLocation.WORKFLOW_RUNS_NONE,
+            notes_details=DatasetLocation.REPOSITORY_FORK,
         )
 
     def runs_none(self) -> ReplayingRestClient:
@@ -446,6 +459,125 @@ def test_a_build_starting_workflow_keeps_to_the_actions_budget(
     path.write_text(workflow.text)
 
     assert ActionsBudget().violations_of(Workflow.at(path)) == ()
+
+
+# %% a fork
+
+
+@pytest.fixture
+def published_fork(publishing: Publishing) -> Publishing:
+    """:return: A notes repository that is a fork, published once."""
+    publishing.create(publishing.site.repository)
+    publishing.publication(publishing.fork_runs()).publish()
+    return publishing
+
+
+def test_a_fork_s_default_branch_is_left_as_its_upstream_has_it(published_fork):
+    assert (
+        published_fork.file(
+            published_fork.notes_repository,
+            UPSTREAM_BASE,
+            MergeWorkflow.location.as_posix(),
+        )
+        is None
+    )
+
+
+def test_a_fork_still_gets_the_dispatch_workflow(published_fork):
+    assert published_fork.file(
+        published_fork.notes_repository,
+        NOTES_BRANCH,
+        DispatchWorkflow.location.as_posix(),
+    ) == (
+        DispatchWorkflow(
+            published_fork.notes_repository, NOTES_BRANCH, published_fork.site
+        ).text
+    )
+
+
+def test_a_fork_s_skipped_merge_workflow_is_reported(published_fork):
+    report = published_fork.publication(published_fork.fork_runs()).publish()
+
+    assert report.skipped == [PlanSitePublication.fork_skip_reason]
+
+
+# %% a protected default branch
+
+
+@pytest.fixture
+def protected(publishing: Publishing) -> Publishing:
+    """:return: A notes repository whose ``main`` refuses every push, published once."""
+    hook = publishing.checkout.fork_path / "hooks" / "pre-receive"
+    shutil.copy(DatasetLocation.PROTECTED_MAIN_HOOK, hook)
+    publishing.create(publishing.site.repository)
+    publishing.publication(publishing.runs_none()).publish()
+    return publishing
+
+
+def test_a_refused_default_branch_gets_the_merge_workflow_on_a_branch_of_its_own(
+    protected,
+):
+    publication = protected.publication(protected.runs_none())
+    dispatch = publication.dispatch_workflow
+
+    assert protected.file(
+        protected.notes_repository,
+        publication.merge_workflow_branch,
+        MergeWorkflow.location.as_posix(),
+    ) == (MergeWorkflow(dispatch).text)
+    assert (
+        protected.file(
+            protected.notes_repository,
+            UPSTREAM_BASE,
+            MergeWorkflow.location.as_posix(),
+        )
+        is None
+    )
+
+
+def test_a_refused_default_branch_leaves_merging_the_workflow_to_the_user(protected):
+    report = protected.publication(protected.runs_none()).publish()
+
+    assert [pending.step for pending in report.pending] == [
+        UserStep.TURN_ON_PAGES,
+        UserStep.STORE_TOKEN,
+        UserStep.ADD_MERGE_WORKFLOW,
+    ]
+
+
+def test_merging_the_workflow_opens_a_pull_request_from_its_branch(protected):
+    publication = protected.publication(protected.runs_none())
+    report = publication.publish()
+    notes = protected.notes_repository
+
+    pending = pending_step(report, UserStep.ADD_MERGE_WORKFLOW)
+
+    assert pending.line == (
+        f"gh pr create --repo {notes.full_name} --base {UPSTREAM_BASE} "
+        f"--head {publication.merge_workflow_branch} --fill, then merge it"
+    )
+    assert pending.browser_steps[0] == (
+        f"Open {notes.url}/compare/{UPSTREAM_BASE}..."
+        f"{publication.merge_workflow_branch}?expand=1."
+    )
+
+
+def test_once_the_workflow_is_merged_nothing_about_it_is_left(protected):
+    (protected.checkout.fork_path / "hooks" / "pre-receive").unlink()
+    publication = protected.publication(protected.runs_none())
+    protected.git(
+        protected.checkout.fork_path,
+        "branch",
+        "--force",
+        UPSTREAM_BASE,
+        publication.merge_workflow_branch,
+    )
+
+    report = publication.publish()
+
+    assert UserStep.ADD_MERGE_WORKFLOW not in [
+        pending.step for pending in report.pending
+    ]
 
 
 # %% re-running

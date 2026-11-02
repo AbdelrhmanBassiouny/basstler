@@ -3,7 +3,9 @@ Publish a repository's plans on the user's own plan site, and start the site's b
 every push to the repository's notes branch and every pull request merged into it.
 
 Writes the site repository's workflow, registers the repository in the hub file, and
-commits the notes branch's dispatch workflow and the default branch's merge workflow. Reports each step only the user can take -
+commits the notes branch's dispatch workflow and the default branch's merge workflow -
+onto a branch of its own for the user to merge, when the default branch refuses it, and
+not at all for a fork, whose default branch stays as its upstream's. Reports each step only the user can take -
 creating the site repository, turning Pages on, storing the token - as one copyable line.
 Run again, it re-checks them: a step counts as done once a run that needs it succeeded.
 
@@ -28,7 +30,7 @@ from urllib.parse import urlencode
 from basstler.class_property import classproperty
 from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.maintenance.remote_branch import RemoteBranch
+from basstler.maintenance.remote_branch import FileWrite, RemoteBranch
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.site_repository import SiteRepository
@@ -169,6 +171,40 @@ class RunListing:
         return latest is not None and latest.outcome is CheckOutcome.SUCCESS
 
 
+# %% the notes repository on GitHub
+
+
+class RepositoryKey(StrEnum):
+    """
+    Every field read out of a repository's REST response.
+    """
+
+    FORK = "fork"
+    """
+    Whether the repository is a fork.
+    """
+
+
+@dataclass(frozen=True)
+class RepositoryDetails(JSONModel):
+    """
+    What publishing reads about a repository from GitHub.
+    """
+
+    is_fork: bool
+    """
+    Whether it is a fork, whose default branch follows its upstream's.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> RepositoryDetails:
+        """
+        :param data: A repository's REST response.
+        :return: The parsed details.
+        """
+        return cls(data[RepositoryKey.FORK])
+
+
 # %% what is left to the user
 
 
@@ -190,6 +226,12 @@ class UserStep(StrEnum):
     STORE_TOKEN = "store the token that starts the build"
     """
     No dispatch from the notes branch has succeeded yet.
+    """
+
+    ADD_MERGE_WORKFLOW = "merge the workflow that starts the build on every merge"
+    """
+    The notes repository's default branch refused the merge workflow, which waits on a
+    branch of its own.
     """
 
 
@@ -301,6 +343,43 @@ class UserSteps:
         return steps[step]
 
 
+@dataclass(frozen=True)
+class MergeWorkflowProposal:
+    """
+    The merge workflow waiting on a branch of its own, for the user to merge into a
+    default branch that refused it.
+    """
+
+    repository: Repository
+    """
+    The notes repository.
+    """
+
+    base: str
+    """
+    Its default branch, which refused the workflow.
+    """
+
+    head: str
+    """
+    The branch holding the workflow.
+    """
+
+    def pending(self) -> PendingStep:
+        """:return: The step that merges it, with its line and its browser steps."""
+        return PendingStep(
+            UserStep.ADD_MERGE_WORKFLOW,
+            f"gh pr create --repo {self.repository.full_name} --base {self.base} "
+            f"--head {self.head} --fill, then merge it",
+            (
+                f"Open {self.repository.url}/compare/{self.base}...{self.head}"
+                "?expand=1.",
+                "Click Create pull request.",
+                "Merge the pull request.",
+            ),
+        )
+
+
 # %% publishing
 
 
@@ -325,6 +404,11 @@ class PublicationReport:
     The steps left to the user, in the order to take them.
     """
 
+    skipped: list[str] = field(default_factory=list)
+    """
+    What was left out on purpose, one line each, with why.
+    """
+
     @property
     def complete(self) -> bool:
         """:return: Whether nothing is left to the user."""
@@ -334,6 +418,7 @@ class PublicationReport:
         """:return: The report as it is printed."""
         lines = [f"Plan site: {self.site_url}"]
         lines.extend(f"- {line}" for line in self.written or ["nothing to write"])
+        lines.extend(f"- skipped: {line}" for line in self.skipped)
         if self.pending:
             lines.append("Left to you - run this command again once they are done:")
             lines.extend(step.render() for step in self.pending)
@@ -368,9 +453,9 @@ class PlanSitePublication:
     The site repository's workflow, whose registry an existing one's replaces.
     """
 
-    runs: RestClient
+    github: RestClient
     """
-    What lists a repository's workflow runs.
+    What reads repositories and their workflow runs from GitHub.
     """
 
     remote_root: str = GitHubAddress.WEB
@@ -383,6 +468,23 @@ class PlanSitePublication:
     """
     The branch the site workflow goes on when the site repository has none yet.
     """
+
+    merge_workflow_branch: str = "basstler/plan-site-merge"
+    """
+    The branch the merge workflow waits on when the notes repository's default branch
+    refuses it.
+    """
+
+    @classproperty
+    def fork_skip_reason(cls) -> str:
+        """
+        Why a fork gets no merge workflow.
+        """
+        return (
+            f"{WorkflowLocation.PLAN_SITE_MERGE}, because the repository is a fork and "
+            "its default branch has to stay as its upstream's; merges show at the next "
+            "push to the notes branch"
+        )
 
     def notes_branch_of(self, repository: Repository) -> RemoteBranch:
         """
@@ -449,42 +551,91 @@ class PlanSitePublication:
             f"Start the plan site build in {site.repository.full_name} on every push",
             report,
         )
-        self.write(
-            self.default_branch_of(self.notes_remote),
-            MergeWorkflow(self.dispatch_workflow),
-            f"Start the plan site build in {site.repository.full_name} on every merge",
-            report,
-        )
+        proposal = self.write_merge_workflow(report)
         user_steps = UserSteps(notes_repository, site, hub.repositories)
-        site_runs = RunListing.read(self.runs, site.repository, site_branch.name)
+        site_runs = RunListing.read(self.github, site.repository, site_branch.name)
         if not site_runs.succeeded(SiteWorkflow.location):
             report.pending.append(user_steps.pending(UserStep.TURN_ON_PAGES))
         notes_runs = RunListing.read(
-            self.runs, notes_repository, self.dispatch_workflow.notes_branch
+            self.github, notes_repository, self.dispatch_workflow.notes_branch
         )
         if not notes_runs.succeeded(DispatchWorkflow.location):
             report.pending.append(user_steps.pending(UserStep.STORE_TOKEN))
+        if proposal is not None:
+            report.pending.append(proposal.pending())
         return report
 
     @staticmethod
-    def write(
+    def attempt_write(
         branch: RemoteBranch,
         workflow: PlanSiteWorkflow,
         message: str,
         report: PublicationReport,
-    ) -> None:
+    ) -> FileWrite | None:
         """
         Write a workflow onto a branch unless the branch already has it as it is.
 
         :param branch: The branch to write onto.
         :param workflow: The workflow.
         :param message: The commit message.
-        :param report: Where to record the write.
+        :param report: Where to record a write the branch accepted.
+        :return: The write, failed when the branch refused it, or ``None`` when the
+            branch already had the workflow.
         """
         if branch.read_latest(workflow.location) == workflow.text:
-            return
-        branch.write({workflow.location.as_posix(): workflow.text}, message)
-        report.written.append(f"{workflow.location} on {branch.description}")
+            return None
+        written = branch.attempt_write(
+            {workflow.location.as_posix(): workflow.text}, message
+        )
+        if written.push.succeeded:
+            report.written.append(f"{workflow.location} on {branch.description}")
+        return written
+
+    def write(
+        self,
+        branch: RemoteBranch,
+        workflow: PlanSiteWorkflow,
+        message: str,
+        report: PublicationReport,
+    ) -> None:
+        """
+        Like :meth:`attempt_write`, but a refused push is an error.
+
+        :raises GitCommandFailed: If the branch refuses the workflow.
+        """
+        written = self.attempt_write(branch, workflow, message, report)
+        if written is not None:
+            written.push.raise_if_failed()
+
+    def write_merge_workflow(
+        self, report: PublicationReport
+    ) -> MergeWorkflowProposal | None:
+        """
+        Write the merge workflow onto the notes repository's default branch, or onto
+        :attr:`merge_workflow_branch` when the default branch refuses it.
+
+        :param report: Where to record the writes.
+        :return: The workflow left for the user to merge, or ``None`` when the default
+            branch holds it or, for a fork, is left without it.
+        """
+        notes_repository = self.dispatch_workflow.notes_repository
+        if RepositoryDetails.from_json(
+            self.github.get(notes_repository.api_path)
+        ).is_fork:
+            report.skipped.append(self.fork_skip_reason)
+            return None
+        workflow = MergeWorkflow(self.dispatch_workflow)
+        message = (
+            "Start the plan site build in "
+            f"{self.dispatch_workflow.site.repository.full_name} on every merge"
+        )
+        default_branch = self.default_branch_of(self.notes_remote)
+        written = self.attempt_write(default_branch, workflow, message, report)
+        if written is None or written.push.succeeded:
+            return None
+        head = RemoteBranch(self.merge_workflow_branch, self.git, self.notes_remote)
+        self.write(head, workflow, message, report)
+        return MergeWorkflowProposal(notes_repository, default_branch.name, head.name)
 
     def register(self, registry: Repository, report: PublicationReport) -> PlanHub:
         """
