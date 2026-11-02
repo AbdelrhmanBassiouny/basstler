@@ -218,6 +218,17 @@ class BasstlerVariable(EnvironmentVariable):
     """
 
 
+class InstructionsTemplate(PathEnumeration):
+    """
+    The templates the agent instruction files are rendered from.
+    """
+
+    AGENTS = PackageLocation.TEMPLATES.value / "agents.md.jinja"
+    """
+    The content of ``AGENTS.md``: rules under the headings of their sections.
+    """
+
+
 class PluginLocation(PathEnumeration):
     """
     The plugin's files this package runs, relative to the plugin's root.
@@ -373,6 +384,11 @@ class ProjectLocation(PathEnumeration):
     PERSONAL_PLAN_ITEM_MODES = PERSONAL_NOTES / "plan-item-modes.toml"
     """
     The per-user override of :attr:`PackageLocation.PLAN_ITEM_MODE_DEFAULTS`.
+    """
+
+    AGENTS_INSTRUCTIONS = Path("AGENTS.md")
+    """
+    The instructions agents read, generated from :mod:`basstler.code_rules.rules`.
     """
 
 

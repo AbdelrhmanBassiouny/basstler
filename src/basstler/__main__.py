@@ -9,6 +9,7 @@ from importlib.metadata import version
 
 from cyclopts import App
 
+from basstler.code_rules.command_line import code_rules_app
 from basstler.locations import PackageLocation
 
 app = App(
@@ -19,6 +20,8 @@ app = App(
 """
 The command tree; a v3 command is added with ``@app.command``.
 """
+
+app.command(code_rules_app)
 
 if __name__ == "__main__":
     app()

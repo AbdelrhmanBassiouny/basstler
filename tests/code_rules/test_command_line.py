@@ -1,0 +1,77 @@
+"""
+Tests for the ``basstler code-rules`` commands.
+"""
+
+from __future__ import annotations
+
+import pytest
+
+from basstler.code_rules.command_line import (
+    CodeRulesExitCode,
+    check,
+    generate_agents_instructions,
+)
+from basstler.code_rules.instructions import AgentsInstructions
+
+from ..constants.paths import DocstringSnippet, ProseSnippet
+
+# %% checking
+
+
+def test_checking_fails_when_code_breaks_a_rule():
+    """
+    An overlong comment block breaks a checked rule.
+    """
+    assert check([ProseSnippet.COMMENT_BLOCKS], all_lines=True) == (
+        CodeRulesExitCode.CHANGES_NEEDED
+    )
+
+
+def test_checking_passes_when_nothing_breaks_a_rule():
+    """
+    A documented module with short docstrings breaks no checked rule.
+    """
+    assert check([DocstringSnippet.DOCUMENTED_MODULE], all_lines=True) == (
+        CodeRulesExitCode.SUCCESS
+    )
+
+
+# %% generating AGENTS.md
+
+
+@pytest.fixture
+def instructions(tmp_path, monkeypatch) -> AgentsInstructions:
+    """
+    :return: The ``AGENTS.md`` of an empty directory, made the working directory.
+    """
+    monkeypatch.chdir(tmp_path)
+    return AgentsInstructions.of_repository(tmp_path)
+
+
+def test_generating_writes_a_missing_file(instructions):
+    """
+    A missing ``AGENTS.md`` is written, and the command reports the change.
+    """
+    assert generate_agents_instructions() == CodeRulesExitCode.CHANGES_NEEDED
+    assert instructions.is_current()
+
+
+def test_generating_a_current_file_changes_nothing(instructions):
+    """
+    A current ``AGENTS.md`` is left as it is.
+    """
+    instructions.write()
+
+    assert generate_agents_instructions() == CodeRulesExitCode.SUCCESS
+
+
+def test_verifying_a_stale_file_fails_without_writing_it(instructions):
+    """
+    Verifying reports a stale ``AGENTS.md`` and leaves it stale.
+    """
+    instructions.path.write_text("stale")
+
+    assert generate_agents_instructions(verify=True) == (
+        CodeRulesExitCode.CHANGES_NEEDED
+    )
+    assert not instructions.is_current()

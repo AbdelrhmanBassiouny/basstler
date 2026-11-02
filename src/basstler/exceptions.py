@@ -1,6 +1,8 @@
 """
-Krrood's ``DataclassException``, copied rather than imported, which is the boundary
-decision 12 records for this tooling, and the errors built on it.
+Krrood's ``DataclassException`` and the errors built on it.
+
+``DataclassException`` is copied from krrood :cite:`krrood` until krrood's light core is
+released.
 """
 
 from __future__ import annotations

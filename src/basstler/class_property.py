@@ -1,5 +1,7 @@
 """
 A property that answers on the class rather than on an instance.
+
+Copied from krrood :cite:`krrood` until krrood's light core is released.
 """
 
 from __future__ import annotations
