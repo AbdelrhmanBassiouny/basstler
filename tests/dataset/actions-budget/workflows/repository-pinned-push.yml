@@ -1,0 +1,13 @@
+name: Repository-pinned push
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  work:
+    if: github.repository == 'an-owner/a-project'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo worked

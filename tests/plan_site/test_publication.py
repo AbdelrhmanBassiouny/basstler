@@ -29,6 +29,7 @@ from basstler.plan_site.workflows import (
     MergeWorkflow,
     PlanSiteJob,
     PlanSiteSecret,
+    PlanSiteWorkflow,
     SiteWorkflow,
     WorkflowFile,
     WorkflowStep,
@@ -397,15 +398,19 @@ def test_the_merge_workflow_follows_the_notes_repository_s_default_branch(
 
 
 def test_the_merge_workflow_runs_when_a_pull_request_closes(tmp_path):
+    """
+    On the base repository's side, so a merged pull request from a fork starts the build
+    with the token too.
+    """
     path = tmp_path / MergeWorkflow.location.name
     path.write_text(MergeWorkflow(a_dispatch_workflow()).text)
 
-    trigger = Workflow.at(path).trigger(TriggerEvent.PULL_REQUEST)
+    trigger = Workflow.at(path).trigger(TriggerEvent.PULL_REQUEST_TARGET)
 
     assert trigger.activity_types == {ActivityType.CLOSED}
 
 
-def test_the_merge_workflow_runs_only_for_a_merge_in_the_notes_repository():
+def test_the_merge_workflow_runs_for_any_merge_in_the_notes_repository():
     dispatch = a_dispatch_workflow()
 
     job = WorkflowFile.from_text(MergeWorkflow(dispatch).text).jobs[
@@ -415,7 +420,6 @@ def test_the_merge_workflow_runs_only_for_a_merge_in_the_notes_repository():
     assert job.condition == (
         f"github.repository == '{dispatch.notes_repository.full_name}'"
         " && github.event.pull_request.merged"
-        " && github.event.pull_request.head.repo.full_name == github.repository"
     )
 
 
@@ -430,8 +434,14 @@ def test_the_merge_workflow_starts_the_build_as_the_dispatch_workflow_does():
     assert merge_job.steps == dispatch_job.steps
 
 
-def test_the_merge_workflow_keeps_to_the_actions_budget(tmp_path):
-    workflow = MergeWorkflow(a_dispatch_workflow())
+@pytest.mark.parametrize(
+    "workflow",
+    [a_dispatch_workflow(), MergeWorkflow(a_dispatch_workflow())],
+    ids=["dispatch", "merge"],
+)
+def test_a_build_starting_workflow_keeps_to_the_actions_budget(
+    workflow: PlanSiteWorkflow, tmp_path
+):
     path = tmp_path / workflow.location.name
     path.write_text(workflow.text)
 

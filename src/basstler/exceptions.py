@@ -563,7 +563,8 @@ class PluginRootNotADirectoryError(DataclassException, NotADirectoryError):
 @dataclass
 class BudgetViolation(DataclassException):
     """
-    One way a workflow breaks the Actions budget, carrying what a reader needs to fix it.
+    One way a workflow breaks the Actions budget, carrying what a reader needs to fix
+    it.
     """
 
     workflow: str
@@ -681,7 +682,10 @@ class MissingForkGuard(BudgetViolation):
         return f"job {self.job} does not skip a push to a fork"
 
     def suggest_correction(self) -> str:
-        return f"add `if: {self.condition}` to job {self.job}"
+        return (
+            f"add `if: {self.condition}` to job {self.job}, or run it in one "
+            "repository only with `if: github.repository == '<owner>/<name>'`"
+        )
 
 
 @dataclass
