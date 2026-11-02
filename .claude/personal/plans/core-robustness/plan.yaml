@@ -1,0 +1,75 @@
+schema_version: 1
+id: core-robustness
+title: 'Core robustness: concurrent-safe saves, lean kickoffs and typed plan models'
+description: Plan saves survive concurrent writers, a kickoff loads little text, and the plan
+  model and reports are typed. Split out of team-basstler.
+default_repository: AbdelrhmanBassiouny/basstler
+tracking_issue: 62
+waves:
+- id: foundations
+  name: 'Wave 1: Core hardened'
+  description: Saves survive concurrent writers; a kickoff loads little text.
+tracks:
+- id: core
+  name: Core robustness and token cost
+  wave: foundations
+items:
+- id: concurrent-safe-save
+  title: A plan save applies item-level edits onto the latest manifest and retries a rejected
+    push
+  branch: claude/plan-item-kickoff-concurrent-safe-x35oyo
+  status: in progress
+  track: core
+  pull_request_number: 98
+  session: https://claude.ai/code/session_01JxHGiMy8LGpNvoVNMUwzvU
+  depends_on: []
+  notes: 'Today save-plan.sh writes the whole file and pushes once, so two writers lose an
+    update or fail. On top of #48''s manifest writer corruption fixes: fetch, apply the session''s
+    item changes onto the fresh manifest, refuse when the same item changed since the session
+    read it, push, and on a rejected push repeat a bounded number of times. Needed only until
+    basstler-v3 plan-store-issues; v2-removal deletes it.'
+
+- id: lean-kickoff
+  title: A kickoff loads one compact item brief instead of about 55 KB of skill documents
+  branch: ccr-1516c899-kd5dl7
+  status: in progress
+  track: core
+  pull_request_number: 97
+  session: https://claude.ai/code/session_01JxHGiQFQvVfUEyavALErF5
+  depends_on: []
+  notes: Kickoff now reads kickoff, gathering, execution modes, readiness, the maintenance
+    skill and the plan schema (about 15k tokens before code). One python -m command prints
+    the item, its dependencies' live state and the standing rules; the skill keeps only its
+    steps; maintenance runs only when an upstream is named; the schema is read only for structural
+    edits. A test caps skill document sizes like plan_size_limits. Target under 5k tokens
+    of tooling text.
+
+- id: plan-model-typed-accessors
+  title: PlanManifest and PlanItem expose every manifest field as a typed read-only accessor;
+    consumers stop indexing raw dicts
+  branch: claude/sleepy-mendel-xpls25
+  track: core
+  pull_request_number: 109
+  session: https://claude.ai/code/session_018wfiv7V2xM8ppUezJJ66Hq
+  notes: 'From the review of PR 97: the pattern applies to every document read through raw
+    keys, not only default_repository and pull_request_number. This item covers plan.yaml
+    (basstler.plan.model, its consumers and test helpers). The plan is at its 15-item limit,
+    so these follow-ups are not tracked yet: upstream_reviews helper fetch typed models; TOML
+    settings, pull request data and URL cache through their models; a bug fix for item_bootstrap
+    documents reading the item id with the enum member instead of its key. The two reads in
+    tests/plan/test_item_brief.py wait for PR 97 to land.
+
+    '
+  depends_on: []
+  status: in progress
+
+- id: report-keys-in-tests
+  title: Tests read command reports through the existing report key enums, not bare strings
+  branch: null
+  track: core
+  notes: 'Tests read item_mode, maintenance and bootstrap reports with bare strings although
+    ReportKey and MaintenanceReportKey exist. Use the enums.
+
+    '
+  depends_on: []
+  status: not started

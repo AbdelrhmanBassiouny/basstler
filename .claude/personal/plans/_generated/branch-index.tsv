@@ -9,12 +9,12 @@ claude/basstler-v2-save-plan-limits-dj0oov	basstler-v2-fixes
 claude/magical-franklin-4x2epk	basstler-v2-fixes
 claude/tender-fermat-wh5gsi	basstler-v3
 ccr-403b6e8b-xk6nor	basstler-v3
+claude/plan-item-kickoff-concurrent-safe-x35oyo	core-robustness
+ccr-1516c899-kd5dl7	core-robustness
+claude/sleepy-mendel-xpls25	core-robustness
 ccr-3de36b30-i2enxe	session-notes-infrastructure
 claude/awesome-lovelace-netst8	team-basstler
 claude/magical-darwin-dydsmk	team-basstler
 claude/plan-item-kickoff-basstler-draft-ankppa	team-basstler
-claude/plan-item-kickoff-concurrent-safe-x35oyo	team-basstler
-ccr-1516c899-kd5dl7	team-basstler
-claude/sleepy-mendel-xpls25	team-basstler
 ccr-c9742a1d-ep3pmj	team-basstler
 claude/exciting-mayer-qsgl9w	windows-support
