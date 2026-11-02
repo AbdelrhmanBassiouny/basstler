@@ -1,6 +1,6 @@
 ---
 name: plan-create
-description: Create a multi-PR plan on the personal-notes branch, or migrate a roadmap doc into one, then publish its dashboard. Invoke as "/plan-create <plan-id>". Use when asked to start tracking work as a plan.
+description: Create a multi-PR plan on the personal-notes branch, or migrate a roadmap doc into one, which publishes its page on the plan site. Invoke as "/plan-create <plan-id>". Use when asked to start tracking work as a plan.
 allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
@@ -8,11 +8,10 @@ allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__githu
 
 Generic, plan-agnostic tooling — nothing in this file may hardcode a
 specific plan's id, branches, or PRs. This is the authoring half of the
-plan-dashboard system; `skills/plan-dashboard/SKILL.md` is the
-reading/publishing half. Read `skills/plan-dashboard/plan-schema.md`
+plan system; the plan site renders every plan against live GitHub state. Read `skills/plan-create/plan-schema.md`
 for the full `plan.yaml` schema before drafting
 anything — this skill must produce manifests that pass the exact same
-validation `plan-dashboard` step 2 runs, not a close approximation.
+validation the plan site's build and `save-plan.sh` run, not a close approximation.
 
 The output of this skill is the same as if a session had hand-authored the
 manifest via the marker/`save-plan.sh` flow in `save-plan.sh`'s own header
@@ -33,7 +32,8 @@ without asking first, rather than failing partway through drafting a plan.
 
 Source the shared config script — it resolves the personal-notes
 remote/branch precedence into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines
-`SAVE_PLAN_SCRIPT` (used in step 7):
+`SAVE_PLAN_SCRIPT` (used in step 8) and `PLAN_SIZE_CHECK_MODULE` (used in
+step 7):
 
 ```bash
 source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
@@ -44,7 +44,7 @@ Then check whether `${PLANS_DIR}/<plan-id>/plan.yaml` already
 exists on `"${PERSONAL_NOTES_REFERENCE}"` (`PLANS_DIR` is defined by the config script sourced
 above).
 If it does, stop and tell the user — point them at editing the existing
-plan (`plan-dashboard`'s doc, or just ask a session to edit it) instead of
+plan (just ask a session to edit it) instead of
 silently clobbering it with a fresh draft. Recreating over an existing plan
 id is exactly the kind of destructive-by-accident action this system is
 meant to prevent, not cause.
@@ -87,7 +87,7 @@ a structural question the source material doesn't settle. Use
 `AskUserQuestion` for anything that would be awkward or costly to redo
 later (e.g., "is this one track or does it actually split into two once
 the work starts stacking?", "should track X's items be sequenced or can
-they run in parallel?") — the same way the plan-dashboard system's own
+they run in parallel?") — the same way the plan system's own
 design was worked out via up-front questions before anything was written,
 not after.
 
@@ -114,8 +114,7 @@ plan, rather than migrated whole.
 
 ## 4. Cross-check every named branch/PR against live GitHub state
 
-Same mechanism as `plan-dashboard` step 2, applied before the item is ever
-written down rather than after: bulk-fetch `mcp__github__list_pull_requests`
+Before the item is written down, bulk-fetch `mcp__github__list_pull_requests`
 (`state: "all"`, paginated) for the repo, and use `mcp__github__pull_request_read`
 for anything outside that page window or referenced by number in the source
 doc. Set each item's `status` from what's actually true (open/draft →
@@ -166,9 +165,9 @@ ids, so an item can depend on more than one prerequisite (e.g. a track that
 only starts once two other tracks have both landed) — and optional
 `pull_request_number`/`session`/`notes`/`blockers`).
 
-Before saving, validate exactly what `plan-dashboard` step 2 validates —
-do not diverge from that checklist, since a manifest this skill produces
-must pass that same check the first time `/plan-dashboard` runs against it:
+Before saving, validate exactly what the plan site's build validates — do not
+diverge from that checklist, since a manifest this skill produces must pass that
+same check the first time the site is built from it:
 
 - Every `items[].id` (defaulting to `branch` if omitted) is unique.
 - Every `items[].track` resolves to a declared `tracks[].id`.
@@ -177,10 +176,26 @@ must pass that same check the first time `/plan-dashboard` runs against it:
   resolves to another `items[].id`.
 
 Parse with Python's `yaml` module to check this mechanically rather than
-eyeballing it — the same tooling `save-plan.sh` and `plan-dashboard` both
+eyeballing it — the same tooling `save-plan.sh` and the plan site's build both
 already require.
 
-## 7. Bootstrap it through the existing write path — don't invent a new one
+## 7. Check the draft isn't already full
+
+Count the draft's items against `Measure.ITEM_COUNT` (`plan/size_limits.py`)
+before the first save:
+
+```bash
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <path/to/plan.yaml>
+```
+
+If `is_full` is `false`, continue to step 8.
+
+If `true`, do not call `${SAVE_PLAN_SCRIPT}`: report `item_count` against
+`item_limit` and ask, via `AskUserQuestion`, whether to re-draft as several
+plans (back to step 3, cutting by track or wave first) or to trim the scope to
+fit one.
+
+## 8. Bootstrap it through the existing write path — don't invent a new one
 
 This skill does not push directly. It uses exactly the flow
 `save-plan.sh`'s own header comment documents for a brand-new plan (there
@@ -199,22 +214,22 @@ through `CLAUDE.local.md`'s markers first), pushes both to the
 personal-notes branch, and regenerates the branch→plan-id index in the same
 commit.
 
-## 8. Publish
+## 9. Publish
 
-Invoke the `plan-dashboard` skill for `<plan-id>` to publish its first
-dashboard Artifact, then invoke it with no argument to republish the master index
-(`_index`): a new plan is the one change that makes the index stale.
+The save's push rebuilds the plan site, which lists the new plan on its
+repository's page and publishes its own. Its address is
+`plan_site_page_url <plan-id>`.
 
 If this was a migration from an existing freeform doc, offer — don't do it
 unprompted — to replace that old doc with a short pointer stub at its
 original location, so anyone still reading the old path finds the new one
 immediately.
 
-Every later change to the plan follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
+Every later change to the plan follows [`manifest-staleness.md`](manifest-staleness.md).
 
-## 9. Report back
+## 10. Report back
 
-Plan id, item/wave/track counts, the dashboard URL and the index URL, the
+Plan id, item/wave/track counts, the plan's page on the plan site, the
 tracking issue link if one was created, and — explicitly, not buried — every judgment call you
 made or flagged along the way (structural assumptions, any live-vs-source
 disagreement found in step 4) so the user can sanity-check them before

@@ -11,7 +11,7 @@ or branch. Takes a description of something to build and decides where it
 belongs, before any branch exists to regret. **This skill never writes code,
 creates a branch, or pushes anything** — its only output is a proposed plan.
 
-There are exactly four outcomes, and step 5 picks one:
+There are exactly four outcomes, and step 6 picks one:
 
 1. **Fold** it into an unlanded item or branch that already owns this work.
 2. **New item** in a plan that already exists.
@@ -50,10 +50,10 @@ fetch_personal_notes_branch
 
 Read **every** plan's `plan.yaml` under `${PLANS_DIR}` off `"${PERSONAL_NOTES_REFERENCE}"`, not
 just the one the user has in mind — the right home is often a plan they weren't
-thinking of. [`plan-schema.md`](../plan-dashboard/plan-schema.md) is the field reference.
+thinking of. [`plan-schema.md`](../plan-create/plan-schema.md) is the field reference.
 
 Then fetch live pull request state once, in bulk, per
-[`pr-data-fetching.md`](../plan-dashboard/pr-data-fetching.md).
+[`pr-data-fetching.md`](pr-data-fetching.md).
 
 Candidates are every unlanded item and every open pull request's branch, plus
 every plan whose own `description` covers the kind of work being described.
@@ -83,17 +83,35 @@ compare what those branches are *for* against what is being described. A
 match here outranks the path check: same purpose is the same work, whatever
 the files are called.
 
-## 5. Choose exactly one outcome
+## 5. Check whether a covering plan still has room
+
+A plan whose `description` covers the work also needs room. For each such plan
+from step 2, count its current items against `Measure.ITEM_COUNT`
+(`plan/size_limits.py`):
+
+```bash
+git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/plan.yaml" > <scratchpad>/plan.yaml
+"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <scratchpad>/plan.yaml
+```
+
+`is_full: true` rules the plan out, whatever its `description` says: `save-plan.sh`
+would refuse it one more item. A plan qualifies only if it fits by topic *and*
+room; when none does, the outcome is **New plan**.
+
+## 6. Choose exactly one outcome
 
 - **Fold** — the work has nothing substantial left once the overlapping edits
   are removed, or a candidate is already building the same thing. Name the
   branch it goes on.
-- **New item in an existing plan** — it stands on its own and a plan's
-  `description` covers it. Name the plan, the track, the wave, and any real
-  `depends_on`.
-- **New plan** — it stands on its own, spans several pull requests or sessions,
-  and no existing plan covers it. Hand off to `/plan-create` via the `Skill`
-  tool rather than drafting a manifest here.
+- **New item in an existing plan** — it stands on its own, a plan's
+  `description` covers it, and step 5 found that plan not full. Name the plan,
+  the track, the wave, and any real `depends_on`.
+- **New plan** — it stands on its own, spans several pull requests or
+  sessions, and either no existing plan covers it or every one that does is
+  full (step 5). Hand off to `/plan-create` via the `Skill` tool rather than
+  drafting a manifest here, saying which, with the item count. If a full plan
+  could itself be split, put that option and a new plan to the user with
+  `AskUserQuestion`, with your recommendation.
 - **No item at all** — one self-contained change, done in this session, that
   nothing else depends on. `plan-create`'s own guidance against over-modelling
   applies: a plan that tracks everything is a plan nobody reads.
@@ -102,7 +120,7 @@ If two outcomes remain genuinely open after steps 3 and 4, put the choice to
 the user with `AskUserQuestion`, giving the evidence for each rather than
 asking them to re-derive it.
 
-## 6. Propose the plan — plan mode, no code
+## 7. Propose the plan — plan mode, no code
 
 Enter plan mode and present, via `ExitPlanMode`, the chosen outcome and what
 follows from it. Cite where each part came from — the script's output, a
@@ -118,8 +136,7 @@ it" leaves the session to improvise the part most likely to lose work.
 `plan.yaml` directly if this session stewards that plan, otherwise propose it on
 the plan's `tracking_issue` — `${PLANS_DIR}/README.md`'s "Proposing structural
 changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}`
-and republishing the dashboard via `/plan-dashboard <plan-id>` in the same turn,
-so no published dashboard is older than the manifest behind it.
+in the same turn, whose push rebuilds the plan's page on the plan site.
 
 **If the outcome is a new item**, the `record` operation of
 `"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}"` writes its `plan.yaml` entry and `roadmap.md` section and runs the save
@@ -133,8 +150,9 @@ Flag explicitly, never silently paper over:
 - Paths that had to be guessed rather than derived in step 1.
 - A duplicate-intent match you are unsure about — say what looks the same and
   let the user settle it.
+- A covering plan step 5 ruled out as full — name it and its item count.
 
 Do not touch git, create a branch, or write any code in this skill — its only
 output is the plan itself.
 
-Carrying the outcome out later follows [`manifest-staleness.md`](../plan-dashboard/manifest-staleness.md).
+Carrying the outcome out later follows [`manifest-staleness.md`](../plan-create/manifest-staleness.md).

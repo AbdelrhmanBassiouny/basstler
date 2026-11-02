@@ -5,10 +5,10 @@
 - **Write the manifest at every transition**, before the work that follows: a change to
   an item's `status`, `branch`, `pull_request_number`, `session`, `notes` or `blockers`,
   or to the plan's items.
-- **Republish the dashboard once per turn**, after the turn's last manifest write and
-  before you report. Several writes in one turn get one republish. A turn with no write
-  gets none.
-- Read only what the step needs. Never read a published dashboard back.
+- **Every write is a push to the notes branch, which rebuilds the plan's page on the
+  plan site.** Nothing is republished by hand; when you report, link the page with
+  `plan_site_page_url <plan-id> [<item-id>]`.
+- Read only what the step needs.
 
 ## Writing a field
 
@@ -41,5 +41,5 @@ source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 
 These write every item on the branch, and they touch only blockers written under their
 own owner. A branch no plan tracks exits `branch_tracks_no_item`; report it. Write only
-what was decided mechanically. A landed branch is set to `done` by the dashboard
-refresh.
+what was decided mechanically. A landed branch needs no write: its item's page shows it
+`done` once its pull request merges.
