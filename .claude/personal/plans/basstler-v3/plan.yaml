@@ -50,12 +50,13 @@ items:
     2026-11-01), with docformatter on top. Implemented in PR 104, awaiting owner review.'
 - id: cli-launcher
   title: One basstler CLI behind a bin/ launcher, configured through userConfig
-  branch: null
-  pull_request_number: null
+  branch: ccr-403b6e8b-xk6nor
+  pull_request_number: 123
   track: foundation
+  session: https://claude.ai/code/session_018wfiv8YJg9T2FGsvbQZdWk
   depends_on:
   - code-rules-light
-  status: not started
+  status: in progress
   notes: 'bin/basstler on the Bash PATH runs the release with uv (venv in CLAUDE_PLUGIN_DATA); one command tree
     replaces the python -m modules and the sourced module variables; plugin userConfig replaces personal-notes.env.
     Verify bin/ works in cloud sessions first. CLI: cyclopts (approved). GitHub: one owned REST client behind a
