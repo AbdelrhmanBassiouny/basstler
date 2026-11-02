@@ -214,8 +214,9 @@ The site builds with basstler's latest release, so it stays current with no re-r
 
 It writes the site repository's workflow onto its default branch, lists this
 repository in the hub file of the registry that workflow names (this repository
-itself, the first time), and commits the notes branch's dispatch workflow, which
-starts the build on every push to the notes branch. It then prints, as one
+itself, the first time), and commits two workflows that start the build: the notes
+branch's dispatch workflow, on every push to the notes branch, and the default branch's
+merge workflow, on every pull request merged from this repository. It then prints, as one
 copyable line each, with the same steps numbered for github.com, the steps only the user can take - creating the site
 repository, turning on Pages, storing their fine-grained token as the
 `PLAN_SITE_TOKEN` secret - and exits 1 while any is left. Pass the lines
