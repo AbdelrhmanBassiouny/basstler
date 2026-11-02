@@ -281,9 +281,8 @@ class GitHubRepository(
 
         :param repository: The repository to read and write.
         :return: The client.
-        :raises GitHubCredentialUnavailableError: If no token is available.
         """
-        return cls(repository, GitHubRestClient.from_environment())
+        return cls(repository, GitHubRestClient())
 
     def open_pull_requests(self) -> list[PullRequestRecord]:
         """:return: Every open pull request on the repository, oldest page first."""

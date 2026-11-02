@@ -119,7 +119,7 @@ class MaintenancePass:
         read = ActionRead(
             RemoteBranch(ActionBranch.NAME, self.git, self.configuration.fork_remote),
             OpenPullRequestsRequest.fresh(self.configuration.upstream_repository, fork),
-            GitHubRestClient.from_environment(),
+            GitHubRestClient(),
             answer_type=OpenPullRequestsAnswer,
         )
         return read.wait(self.action_timeout, read.send()).upstream_pull_requests

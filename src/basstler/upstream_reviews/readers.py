@@ -412,12 +412,10 @@ class ReadSource(StrEnum):
         :param upstream_repository: The repository to read.
         :param fork_owner: Whose branches to claim.
         :return: The reader for this API, with its own client.
-        :raises GitHubCredentialUnavailableError: If this is :attr:`REST` and no token
-            is available.
         """
         if self is ReadSource.REST:
             return RestPullRequestReader(
-                GitHubRestClient.from_environment(), upstream_repository, fork_owner
+                GitHubRestClient(), upstream_repository, fork_owner
             )
         return UpstreamPullRequestReader(
             GitHubCommandLineClient(), upstream_repository, fork_owner

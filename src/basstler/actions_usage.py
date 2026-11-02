@@ -270,7 +270,7 @@ def main() -> None:
     if not budget.has_daily_ceilings:
         return
     report = UsageReport.measure(
-        GitHubRestClient.from_environment(),
+        GitHubRestClient(),
         arguments.repository,
         budget,
         datetime.now(UTC),

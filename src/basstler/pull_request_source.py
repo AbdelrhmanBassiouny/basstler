@@ -99,9 +99,8 @@ class GitHubPullRequestSource(PullRequestSource):
         """
         :return: A source authenticating with whichever credential the environment
             carries.
-        :raises GitHubCredentialUnavailableError: If no token is available.
         """
-        return cls(client=GitHubRestClient.from_environment())
+        return cls(client=GitHubRestClient())
 
     def client_for(self, repository: Repository) -> GitHubRepository:
         """

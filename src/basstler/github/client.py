@@ -16,6 +16,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import cached_property
 from enum import StrEnum
 from http import HTTPStatus
 from http.client import HTTPResponse
@@ -159,9 +160,10 @@ class GitHubRestClient(GitHubClient):
     ``repositories/<id>/`` path, which the cloud session proxy refuses.
     """
 
-    token: str
+    token: str | None = None
     """
-    The credential the requests authenticate with.
+    The credential the requests authenticate with; ``None`` reads it, at the first
+    request, from the first token variable set, else from ``gh``'s login.
     """
 
     api_root: str = GitHubAddress.API
@@ -169,17 +171,16 @@ class GitHubRestClient(GitHubClient):
     The URL every path is relative to.
     """
 
-    @classmethod
-    def from_environment(cls) -> GitHubRestClient:
+    @cached_property
+    def credential(self) -> str:
         """
-        Build a client from the first token variable set, else from ``gh``'s login.
-
-        :return: The client.
-        :raises GitHubCredentialUnavailableError: If neither has a token.
+        :return: The token the requests authenticate with.
+        :raises GitHubCredentialUnavailableError: If no token was given and neither the
+            environment nor ``gh`` has one.
         """
-        token = GitHubCredentialVariable.first_token()
+        token = self.token or GitHubCredentialVariable.first_token()
         if token:
-            return cls(token)
+            return token
         executable = shutil.which(GitHubExecutable.COMMAND_LINE)
         if executable is None:
             raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
@@ -188,7 +189,7 @@ class GitHubRestClient(GitHubClient):
         )
         if login.returncode != 0 or not login.stdout.strip():
             raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
-        return cls(login.stdout.strip())
+        return login.stdout.strip()
 
     def get(self, path: str) -> Any:
         return self._exchange(HttpMethod.GET, path, None).body
@@ -232,13 +233,14 @@ class GitHubRestClient(GitHubClient):
         :param payload: The JSON body, ``None`` for a read.
         :return: The answer.
         :raises GitHubRequestFailed: If the API answers with an error status.
+        :raises GitHubCredentialUnavailableError: If no token is available.
         """
         request = urllib.request.Request(
             f"{self.api_root}/{path.removeprefix('/')}",
             method=method,
             data=None if payload is None else json.dumps(payload).encode(),
             headers={
-                "Authorization": f"Bearer {self.token}",
+                "Authorization": f"Bearer {self.credential}",
                 "Accept": "application/vnd.github+json",
                 "Content-Type": "application/json",
             },

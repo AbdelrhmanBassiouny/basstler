@@ -14,7 +14,6 @@ from enum import StrEnum
 
 import pytest
 
-from basstler.environment import GitHubCredentialVariable
 from basstler.locations import ClaudeCodeVariable
 from basstler.repository import Repository
 from basstler.upstream_reviews.exceptions import (
@@ -298,10 +297,7 @@ def test_anywhere_else_reads_over_graphql(monkeypatch):
         (ReadSource.GRAPHQL, UpstreamPullRequestReader),
     ],
 )
-def test_each_source_builds_its_own_reader(
-    source: ReadSource, reader_type: type, monkeypatch
-):
-    monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, "example-token")
+def test_each_source_builds_its_own_reader(source: ReadSource, reader_type: type):
     reader = source.reader(UPSTREAM, Example.FORK_OWNER)
 
     assert isinstance(reader, reader_type)

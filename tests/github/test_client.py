@@ -148,7 +148,7 @@ def test_the_credential_comes_from_the_first_token_variable_set(
 ):
     monkeypatch.setenv(GitHubCredentialVariable.GITHUB_TOKEN, TOKEN)
 
-    assert GitHubRestClient.from_environment().token == TOKEN
+    assert GitHubRestClient().credential == TOKEN
 
 
 def test_with_no_token_variable_the_credential_comes_from_gh(
@@ -158,10 +158,10 @@ def test_with_no_token_variable_the_credential_comes_from_gh(
     monkeypatch.setenv(SearchPathVariable.EXECUTABLE_SEARCH_PATH, str(stub_bin.path))
     monkeypatch.setenv(StubEnvironmentVariable.AUTH_TOKEN, TOKEN)
 
-    assert GitHubRestClient.from_environment().token == TOKEN
+    assert GitHubRestClient().credential == TOKEN
 
 
-def test_with_no_token_variable_and_gh_logged_out_no_client_is_built(
+def test_with_no_token_variable_and_gh_logged_out_there_is_no_credential(
     monkeypatch, no_token_variables, stub_bin
 ):
     stub_bin.install(GitHubExecutable.COMMAND_LINE)
@@ -169,13 +169,24 @@ def test_with_no_token_variable_and_gh_logged_out_no_client_is_built(
     monkeypatch.delenv(StubEnvironmentVariable.AUTH_TOKEN, raising=False)
 
     with pytest.raises(GitHubCredentialUnavailableError):
-        GitHubRestClient.from_environment()
+        GitHubRestClient().credential
 
 
-def test_with_no_token_variable_and_no_gh_no_client_is_built(
+def test_with_no_token_variable_and_no_gh_there_is_no_credential(
     monkeypatch, no_token_variables, tmp_path
 ):
     monkeypatch.setenv(SearchPathVariable.EXECUTABLE_SEARCH_PATH, str(tmp_path))
 
     with pytest.raises(GitHubCredentialUnavailableError):
-        GitHubRestClient.from_environment()
+        GitHubRestClient().credential
+
+
+def test_a_client_is_built_with_no_credential_and_asks_for_one_at_its_first_request(
+    monkeypatch, no_token_variables, tmp_path, api_server
+):
+    monkeypatch.setenv(SearchPathVariable.EXECUTABLE_SEARCH_PATH, str(tmp_path))
+    client = GitHubRestClient(api_root=api_server.root)
+
+    with pytest.raises(GitHubCredentialUnavailableError):
+        client.get("/user")
+    assert api_server.requests == []

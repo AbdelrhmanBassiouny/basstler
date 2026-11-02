@@ -188,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         action_read = ActionRead(
             branch,
             UpstreamReadRequest.from_arguments(arguments, arguments.upstream),
-            GitHubRestClient.from_environment(),
+            GitHubRestClient(),
         )
         commit = action_read.send()
         result = action_read.wait(arguments.timeout, commit)

@@ -562,7 +562,7 @@ def main(argv: list[str] | None = None) -> int:
             site,
         ),
         SiteWorkflow(arguments.branch_or_tag, notes_repository),
-        GitHubRestClient.from_environment(),
+        GitHubRestClient(),
     ).publish()
     logger.info(report.render())
     return 0 if report.complete else 1
