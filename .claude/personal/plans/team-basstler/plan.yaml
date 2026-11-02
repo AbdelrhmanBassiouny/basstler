@@ -207,3 +207,29 @@ items:
     load, an item whose pull request GitHub reports merged shows as done, with the done counts and
     shares updated. Public repositories only (unauthenticated, 60 requests an hour per viewer); the
     next build stays the source of truth.
+
+- id: page-viewer-token
+  title: A viewer's own token lets the plan page's re-checks read private repositories
+  status: not started
+  track: site
+  depends_on:
+  - page-merge-recheck
+  notes: >
+    Agreed on #122. The page takes a fine-grained token with Pull requests read-only on chosen
+    repositories, keeps it only in the viewer's localStorage and sends it only to api.github.com;
+    both the draft and the merge re-check use it, and without one they stay public-only. A
+    Content-Security-Policy limits connections to api.github.com. Setup prints the token's
+    creation as one copyable line with browser steps; pasting it into the page is the viewer's step.
+
+- id: private-site
+  title: The plan site can be private, shared with the readers of its site repository
+  status: not started
+  track: site
+  depends_on:
+  - site-for-every-repository
+  notes: >
+    Agreed on #122. Setup offers a private site repository; with GitHub Enterprise Cloud it turns
+    on private Pages (public=false), so only the site repository's readers - the enterprise, an
+    organisation or invited people - see it. Every page link reads the address GitHub assigns
+    (Pages API html_url) instead of computing owner.github.io. Without Enterprise Pages stay
+    public, so setup says so and asks before publishing a private repository's plans there.
