@@ -89,6 +89,16 @@ class WorkflowLimits:
     code the upstream repository has already tested.
     """
 
+    runs_per_day: int | None = None
+    """
+    The most runs the workflow may have in 24 hours, or ``None`` for no ceiling.
+    """
+
+    jobs_per_day: int | None = None
+    """
+    The most jobs the workflow's runs may have in 24 hours, or ``None`` for no ceiling.
+    """
+
     @classproperty
     def fork_push_condition(cls) -> str:
         """
@@ -318,6 +328,16 @@ class ActionsBudget:
                 for file_name, limits in fitted.items()
                 if limits != defaults
             },
+        )
+
+    @property
+    def has_daily_ceilings(self) -> bool:
+        """
+        Whether any workflow is held to a ceiling on its runs or jobs per day.
+        """
+        return any(
+            limits.runs_per_day is not None or limits.jobs_per_day is not None
+            for limits in (self.defaults, *self.overrides.values())
         )
 
     def limits_of(self, file_name: str) -> WorkflowLimits:

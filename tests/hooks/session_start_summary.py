@@ -73,6 +73,11 @@ class SummaryLine(StrEnum):
     What became of the fork's upstream-reviews Action branch.
     """
 
+    ACTIONS_USAGE = "Actions usage"
+    """
+    How near the workflows' runs and jobs are to the budget's daily ceilings.
+    """
+
     PLAN_STATE_SHA = "plan state SHA"
     """
     The personal-notes commit this clone read plan state at.
@@ -220,6 +225,16 @@ class SummaryMessage(StrEnum):
     ACTION_UPDATE_FAILED = "upstream_reviews_action_line_update_failed"
     """
     The Action runs another release, and bringing it to this session's failed.
+    """
+
+    ACTIONS_USAGE_NOT_CHECKED = "actions_usage_line_not_checked"
+    """
+    The workflow runs could not be read.
+    """
+
+    ACTIONS_USAGE_WITHIN_BUDGET = "actions_usage_line_within_budget"
+    """
+    No workflow is near a daily ceiling.
     """
 
 

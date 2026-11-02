@@ -1686,6 +1686,37 @@ def test_installs_no_action_on_a_fork_that_has_none(
     ) == summary_message(SummaryMessage.ACTION_NOT_INSTALLED)
 
 
+# %% the Actions usage line
+
+
+def test_reports_no_workflow_near_a_ceiling_where_the_budget_sets_none(
+    session_start_repository: ScratchRepository,
+):
+    """
+    A budget without daily ceilings has nothing to compare the runs with, so no run is
+    read and nothing is flagged.
+    """
+    session_start_repository.add_remote("origin", "https://github.com/owner/project")
+
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.ACTIONS_USAGE) == summary_message(
+        SummaryMessage.ACTIONS_USAGE_WITHIN_BUDGET
+    )
+
+
+def test_reports_usage_as_not_checked_where_the_repository_is_unknown(
+    session_start_repository: ScratchRepository,
+):
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.ACTIONS_USAGE) == summary_message(
+        SummaryMessage.ACTIONS_USAGE_NOT_CHECKED
+    )
+
+
 # %% every message renders
 
 

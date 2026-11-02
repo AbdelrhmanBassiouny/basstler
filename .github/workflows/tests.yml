@@ -13,6 +13,37 @@ permissions:
   contents: read
 
 jobs:
+  usage:
+    name: Actions usage
+    if: github.event_name != 'push' || !github.event.repository.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      over_budget: ${{ steps.measure.outputs.over_budget }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: basstler
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install basstler
+        run: pip install --editable basstler
+
+      # A measurement that fails never blocks the tests: no output reads as within budget.
+      - name: Measure the last 24 hours of runs against the budget
+        id: measure
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: python -m basstler.actions_usage --repository "${{ github.repository }}" --github-actions
+
   lint:
     name: ruff
     if: github.event_name != 'push' || !github.event.repository.fork
@@ -38,9 +69,15 @@ jobs:
       - name: Check the formatting
         run: ruff format --check .
 
+  # Past a daily ceiling the matrix is skipped, unless the pull request carries the
+  # budget-override label.
   test:
     name: pytest on Python ${{ matrix.python-version }}
-    if: github.event_name != 'push' || !github.event.repository.fork
+    needs: usage
+    if: >-
+      (github.event_name != 'push' || !github.event.repository.fork) &&
+      (needs.usage.outputs.over_budget != 'true' ||
+      contains(github.event.pull_request.labels.*.name, 'budget-override'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:
