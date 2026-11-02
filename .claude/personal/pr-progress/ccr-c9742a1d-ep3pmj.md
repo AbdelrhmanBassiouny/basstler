@@ -1,9 +1,10 @@
 ## Plan
-- Merge workflow starts the site build on merge; placement under discussion: always on `basstler/plan-site-merge` with setup opening its PR, skipped for forks.
+- Merge workflow starts the site build on merge: default branch directly; `basstler/plan-site-merge` + user step when refused; skipped for forks.
 
 ## Done
-- `MergeWorkflow` on `pull_request_target` closed+merged; written to the default branch (for now).
-- Actions budget: reads `pull_request_target`; a repository pin counts as a fork guard; dispatch and merge workflows both pass.
+- `MergeWorkflow` on `pull_request_target`; fallback branch and step; fork skip via GitHub's `fork` flag.
+- Actions budget: `pull_request_target`, repository pin as fork guard.
+- New plan item `page-merge-recheck` (forks' merges from the browser); #62 comment.
 
 ## Next
-- Owner decides placement; then replace the direct default-branch write (parked direct-push fallback patch is superseded if accepted).
+- Review on #122.
