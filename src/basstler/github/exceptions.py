@@ -37,35 +37,9 @@ class GitHubCredentialUnavailableError(CommandFailure, RuntimeError):
 
 
 @dataclass
-class GitHubRequestFailed(CommandFailure, ExternalCallFailed):
+class GitHubCallFailed(CommandFailure):
     """
-    Raised when the API refuses a call.
-    """
-
-    @classproperty
-    def exit_code(cls) -> StackExitCode:
-        """:return: The status this kind of error ends a command with."""
-        return StackExitCode.GITHUB_REQUEST_FAILED
-
-    method: str = ""
-    """
-    The HTTP method used.
-    """
-    path: str = ""
-    """
-    The API path called, without the host.
-    """
-
-    @property
-    def call(self) -> str:
-        """:return: The request line, as issued."""
-        return f"{self.method} {self.path}"
-
-
-@dataclass
-class GitHubUnreachableError(CommandFailure, DataclassException, ConnectionError):
-    """
-    Raised when a call gets no answer from the API, such as when the network is down.
+    Base for a call to the API that did not succeed.
     """
 
     @classproperty
@@ -81,13 +55,33 @@ class GitHubUnreachableError(CommandFailure, DataclassException, ConnectionError
     """
     The API path called, without the host.
     """
+
+    @property
+    def call(self) -> str:
+        """:return: The request line, as issued."""
+        return f"{self.method} {self.path}"
+
+
+@dataclass
+class GitHubRequestFailed(GitHubCallFailed, ExternalCallFailed):
+    """
+    Raised when the API refuses a call.
+    """
+
+
+@dataclass
+class GitHubUnreachableError(GitHubCallFailed, DataclassException, ConnectionError):
+    """
+    Raised when a call gets no answer from the API, such as when the network is down.
+    """
+
     reason: str
     """
     What stopped the call.
     """
 
     def error_message(self) -> str:
-        return f"{self.method} {self.path} got no answer from GitHub: {self.reason}"
+        return f"{self.call} got no answer from GitHub: {self.reason}"
 
     def suggest_correction(self) -> str:
         return "Check the network connection to GitHub, then run the command again."

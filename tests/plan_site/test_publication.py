@@ -19,7 +19,11 @@ import pytest
 from basstler.actions_budget import ActionsBudget
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.client import GitHubResponse, GitHubWriter, HttpMethod
-from basstler.github.exceptions import GitHubRequestFailed, GitHubUnreachableError
+from basstler.github.exceptions import (
+    GitHubCallFailed,
+    GitHubRequestFailed,
+    GitHubUnreachableError,
+)
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.hub import PlanHub
@@ -83,7 +87,7 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     The pull request every write answers with.
     """
 
-    failure: GitHubRequestFailed | GitHubUnreachableError | None = None
+    failure: GitHubCallFailed | None = None
     """
     Why every write fails, ``None`` when none does.
     """
@@ -651,7 +655,7 @@ def test_merging_the_workflow_merges_its_pull_request(protected):
 
 def pull_request_failures(
     notes: Repository,
-) -> list[GitHubRequestFailed | GitHubUnreachableError]:
+) -> list[GitHubCallFailed]:
     """:return: GitHub refusing to open the pull request, and the request getting no
     answer."""
     path = f"{notes.api_path}/pulls"

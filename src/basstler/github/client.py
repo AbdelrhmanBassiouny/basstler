@@ -25,6 +25,7 @@ from typing import Any
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.exceptions import (
     GitHubCredentialUnavailableError,
+    GitHubCallFailed,
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
@@ -161,7 +162,7 @@ class GitHubResponse:
     Whether the answer is a page of a listing with a page after it.
     """
 
-    failure: GitHubRequestFailed | GitHubUnreachableError | None = None
+    failure: GitHubCallFailed | None = None
     """
     Why the call failed, ``None`` when it succeeded.
     """
@@ -169,8 +170,7 @@ class GitHubResponse:
     def raise_if_failed(self) -> Any:
         """
         :return: :attr:`body`.
-        :raises GitHubRequestFailed: If the API refused the call.
-        :raises GitHubUnreachableError: If the call got no answer.
+        :raises GitHubCallFailed: If the call did not succeed.
         """
         if self.failure is not None:
             raise self.failure
