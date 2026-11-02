@@ -10,6 +10,7 @@ import shutil
 import subprocess
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from http import HTTPStatus
 from pathlib import Path
 from typing import Any
 
@@ -17,7 +18,8 @@ import pytest
 
 from basstler.actions_budget import ActionsBudget
 from basstler.environment import GitHubCredentialVariable
-from basstler.github.client import GitHubWriter, HttpMethod
+from basstler.github.client import GitHubResponse, GitHubWriter, HttpMethod
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.hub import PlanHub
@@ -67,7 +69,8 @@ The notes branch every repository under test keeps its notes on.
 @dataclass
 class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     """
-    Answers reads from recordings, and every write with :attr:`opened`, recording it.
+    Answers reads from recordings, and every write with :attr:`opened`, or with a
+    refusal when :attr:`refused` is set, recording it.
     """
 
     opened: Any = None
@@ -75,14 +78,31 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     The pull request every write answers with.
     """
 
+    refused: bool = False
+    """
+    Whether every write is refused with :attr:`DatasetLocation.PULL_REQUEST_REFUSED`.
+    """
+
     writes: list[SentWrite] = field(default_factory=list)
     """
     Every write sent, oldest first.
     """
 
-    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
+    def attempt_send(
+        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+    ) -> GitHubResponse:
         self.writes.append(SentWrite(method, path, payload))
-        return self.opened
+        if not self.refused:
+            return GitHubResponse(self.opened)
+        return GitHubResponse(
+            None,
+            refusal=GitHubRequestFailed(
+                status=HTTPStatus.FORBIDDEN,
+                detail=DatasetLocation.PULL_REQUEST_REFUSED.read_text(),
+                method=method,
+                path=path,
+            ),
+        )
 
 
 def bare_repository(path: Path) -> Path:
@@ -628,8 +648,46 @@ def test_merging_the_workflow_merges_its_pull_request(protected):
     )
 
     assert pending_step(report, UserStep.ADD_MERGE_WORKFLOW) == (
-        MergeWorkflowProposal.pending(pull_request)
+        MergeWorkflowProposal.merging(pull_request)
     )
+
+
+def test_a_refused_pull_request_leaves_opening_it_to_the_user_with_the_refusal(
+    protected,
+):
+    client = protected.runs_none()
+    client.refused = True
+    proposal = protected.merge_workflow_proposal
+    notes = protected.notes_repository
+
+    pending = pending_step(
+        protected.publication(client).publish(), UserStep.ADD_MERGE_WORKFLOW
+    )
+
+    assert pending.failure == str(
+        GitHubRequestFailed(
+            status=HTTPStatus.FORBIDDEN,
+            detail=DatasetLocation.PULL_REQUEST_REFUSED.read_text(),
+            method=HttpMethod.POST,
+            path=f"{notes.api_path}/pulls",
+        )
+    )
+    assert pending.line == (
+        f"gh pr create --repo {notes.full_name} --base {proposal.base} "
+        f"--head {proposal.head} --fill, then merge it"
+    )
+    assert pending.browser_steps[0] == (
+        f"Open {notes.url}/compare/{proposal.base}...{proposal.head}?expand=1."
+    )
+
+
+def test_a_refused_pull_request_s_reason_is_printed_with_its_step(protected):
+    client = protected.runs_none()
+    client.refused = True
+
+    report = protected.publication(client).publish()
+
+    assert pending_step(report, UserStep.ADD_MERGE_WORKFLOW).failure in report.render()
 
 
 def test_once_the_workflow_is_merged_nothing_about_it_is_left(protected):

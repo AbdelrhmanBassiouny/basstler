@@ -255,13 +255,26 @@ class PendingStep:
     The same step taken on github.com, one click or entry each, in order.
     """
 
+    failure: str | None = None
+    """
+    Why publishing could not take the step itself, ``None`` when it does not try.
+    """
+
     def render(self) -> str:
         """:return: The step as it is printed."""
         numbered = "\n".join(
             f"    {number}. {text}"
             for number, text in enumerate(self.browser_steps, start=1)
         )
-        return f"- {self.step}:\n    {self.line}\n  Or in the browser:\n{numbered}"
+        failure = (
+            f"    Could not be done automatically: {self.failure}\n"
+            if self.failure
+            else ""
+        )
+        return (
+            f"- {self.step}:\n{failure}    {self.line}\n"
+            f"  Or in the browser:\n{numbered}"
+        )
 
 
 @dataclass(frozen=True)
@@ -383,24 +396,38 @@ class MergeWorkflowProposal:
         )
         return f"{self.repository.api_path}/pulls?{query}"
 
-    def open(self, github: GitHubClient) -> RestPullRequestSummary:
+    def pending(self, github: GitHubClient) -> PendingStep:
         """
         :param github: What reads and opens pull requests.
-        :return: The pull request proposing the workflow, opened unless one already is.
+        :return: The step merging the pull request proposing the workflow, opened unless
+            one already is, or, when GitHub refuses to open it, the step opening and
+            merging it, with the refusal.
         """
         listed = github.get(self.open_pull_requests_path)
         if listed:
-            return RestPullRequestSummary.from_json(listed[0])
-        return RestPullRequestSummary.from_json(
-            github.send(
-                HttpMethod.POST,
-                f"{self.repository.api_path}/pulls",
-                {"title": self.title, "head": self.head, "base": self.base},
-            )
+            return self.merging(RestPullRequestSummary.from_json(listed[0]))
+        opened = github.attempt_send(
+            HttpMethod.POST,
+            f"{self.repository.api_path}/pulls",
+            {"title": self.title, "head": self.head, "base": self.base},
         )
+        if opened.refusal is not None:
+            return PendingStep(
+                UserStep.ADD_MERGE_WORKFLOW,
+                f"gh pr create --repo {self.repository.full_name} --base {self.base} "
+                f"--head {self.head} --fill, then merge it",
+                (
+                    f"Open {self.repository.url}/compare/{self.base}...{self.head}"
+                    "?expand=1.",
+                    "Click Create pull request.",
+                    "Merge the pull request.",
+                ),
+                str(opened.refusal),
+            )
+        return self.merging(RestPullRequestSummary.from_json(opened.body))
 
     @staticmethod
-    def pending(pull_request: RestPullRequestSummary) -> PendingStep:
+    def merging(pull_request: RestPullRequestSummary) -> PendingStep:
         """
         :param pull_request: The pull request proposing the workflow.
         :return: The step that merges it.
@@ -595,7 +622,7 @@ class PlanSitePublication:
         if not notes_runs.succeeded(DispatchWorkflow.location):
             report.pending.append(user_steps.pending(UserStep.STORE_TOKEN))
         if proposal is not None:
-            report.pending.append(proposal.pending(proposal.open(self.github)))
+            report.pending.append(proposal.pending(self.github))
         return report
 
     @staticmethod

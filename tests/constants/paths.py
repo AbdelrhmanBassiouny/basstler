@@ -161,6 +161,11 @@ class DatasetLocation(PathEnumeration):
     The REST response for the pull request proposing the plan site's merge workflow.
     """
 
+    PULL_REQUEST_REFUSED = DIRECTORY / "pull-request-refused.json"
+    """
+    GitHub's answer refusing to open a pull request for a token without the right.
+    """
+
     PROMOTION_SUMMARIES = DIRECTORY / "promotion-summaries.json"
     """
     What a session writes for the upstream pull requests of the two-branch stack: points
