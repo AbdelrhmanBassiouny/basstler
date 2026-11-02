@@ -207,6 +207,16 @@ class DatasetLocation(PathEnumeration):
     manifest fails validation, and the generated directory that holds no plan.
     """
 
+    ACTIONS_BUDGET = DIRECTORY / "actions-budget"
+    """
+    A budget manifest and one small workflow per rule it holds a workflow to.
+    """
+
+    ACTIONS_BUDGET_WORKFLOWS = ACTIONS_BUDGET / "workflows"
+    """
+    The workflows the dataset's manifest declares, each breaking the rule its name says.
+    """
+
     INSTALLED_DISTRIBUTIONS = DIRECTORY / "installed-distributions"
     """
     A directory that reads as installed distributions once it is on ``sys.path``, holding one

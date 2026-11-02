@@ -555,3 +555,253 @@ class PluginRootNotADirectoryError(DataclassException, NotADirectoryError):
             f"export {BasstlerVariable.PLUGIN_ROOT} as the directory holding the "
             f"plugin's {PluginLocation.HOOKS} directory"
         )
+
+
+# %% budget violations
+
+
+@dataclass
+class BudgetViolation(DataclassException):
+    """
+    One way a workflow breaks the Actions budget, carrying what a reader needs to fix it.
+    """
+
+    workflow: str
+    """
+    The file name of the workflow that breaks it.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.workflow}: {self.problem()}"
+
+    @abstractmethod
+    def problem(self) -> str:
+        """
+        :return: What is wrong with the workflow.
+        """
+
+
+@dataclass
+class ScheduledWorkflow(BudgetViolation):
+    """
+    The workflow runs on a schedule, which nothing in this repository may.
+    """
+
+    def problem(self) -> str:
+        return "runs on a schedule"
+
+    def suggest_correction(self) -> str:
+        return "trigger it on the event it is waiting for instead"
+
+
+@dataclass
+class MissingPullRequestCancellation(BudgetViolation):
+    """
+    The workflow runs on every push to a pull request without cancelling the run for the
+    commit before.
+    """
+
+    def problem(self) -> str:
+        return "runs on every pull-request push without cancel-in-progress concurrency"
+
+    def suggest_correction(self) -> str:
+        return "add a concurrency group with cancel-in-progress: true"
+
+
+@dataclass
+class MissingJobTimeout(BudgetViolation):
+    """
+    A job that takes a runner declares no ``timeout-minutes``, so a hang holds the
+    runner for GitHub's six-hour default.
+    """
+
+    job: str
+    """
+    The job's key.
+    """
+
+    def problem(self) -> str:
+        return f"job {self.job} has no timeout-minutes"
+
+    def suggest_correction(self) -> str:
+        return f"set timeout-minutes on job {self.job}"
+
+
+@dataclass
+class JobTimeoutOverCeiling(BudgetViolation):
+    """
+    A job's ``timeout-minutes`` is above the workflow's ceiling.
+    """
+
+    job: str
+    """
+    The job's key.
+    """
+
+    timeout_minutes: int
+    """
+    The job's timeout.
+    """
+
+    ceiling_minutes: int
+    """
+    The workflow's ceiling.
+    """
+
+    def problem(self) -> str:
+        return (
+            f"job {self.job} times out after {self.timeout_minutes} minutes, "
+            f"above the ceiling of {self.ceiling_minutes}"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"lower the timeout of job {self.job}, or raise the workflow's ceiling "
+            "in the budget file"
+        )
+
+
+@dataclass
+class MissingForkGuard(BudgetViolation):
+    """
+    A first job of a workflow answering ``push`` does not skip a push to a fork.
+    """
+
+    job: str
+    """
+    The job's key.
+    """
+
+    condition: str
+    """
+    The condition the job has to carry.
+    """
+
+    def problem(self) -> str:
+        return f"job {self.job} does not skip a push to a fork"
+
+    def suggest_correction(self) -> str:
+        return f"add `if: {self.condition}` to job {self.job}"
+
+
+@dataclass
+class MissingLabelGuard(BudgetViolation):
+    """
+    A first job of a workflow answering ``labeled`` runs for any label, without
+    comparing the one added.
+    """
+
+    job: str
+    """
+    The job's key.
+    """
+
+    def problem(self) -> str:
+        return f"job {self.job} runs for any label"
+
+    def suggest_correction(self) -> str:
+        return f"compare github.event.label.name in the `if:` of job {self.job}"
+
+
+@dataclass
+class TooManyJobsOnEveryPush(BudgetViolation):
+    """
+    A workflow running on every push takes runners for more jobs a run than its ceiling
+    allows.
+    """
+
+    jobs: int
+    """
+    The most jobs one run takes runners for.
+    """
+
+    ceiling: int
+    """
+    The workflow's ceiling.
+    """
+
+    def problem(self) -> str:
+        return (
+            f"runs up to {self.jobs} jobs on every push, above the ceiling of "
+            f"{self.ceiling}"
+        )
+
+    def suggest_correction(self) -> str:
+        return "narrow its triggers or raise its jobs_per_push_run"
+
+
+@dataclass
+class UncountableJobs(BudgetViolation):
+    """
+    A workflow running on every push has jobs whose number is only known at run time, so
+    its ceiling cannot be checked.
+    """
+
+    def problem(self) -> str:
+        return (
+            "runs on every push with a matrix computed at run time or a reusable "
+            "workflow from another repository, so its jobs cannot be counted"
+        )
+
+    def suggest_correction(self) -> str:
+        return "use a literal matrix and reusable workflows from this repository"
+
+
+@dataclass
+class OverrideWithoutWorkflow(BudgetViolation):
+    """
+    The budget sets limits for a workflow file the repository does not have.
+    """
+
+    def problem(self) -> str:
+        return "has limits in the budget but no workflow file"
+
+    def suggest_correction(self) -> str:
+        return "remove its override"
+
+
+# %% budget file errors
+
+
+@dataclass
+class BudgetFileExists(DataclassException, FileExistsError):
+    """
+    A budget file is already where a new one would be written.
+
+    Once written, the file is reviewed by hand, so writing over it would bless whatever
+    the workflows do now.
+    """
+
+    path: Path
+    """
+    The existing file.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.path} already exists"
+
+    def suggest_correction(self) -> str:
+        return "edit it instead of writing a new one"
+
+
+@dataclass
+class MissingBudgetFunction(DataclassException, LookupError):
+    """
+    A budget file does not define the function that returns its budget.
+    """
+
+    path: Path
+    """
+    The budget file.
+    """
+
+    function: str
+    """
+    The name of the function it has to define.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.path} defines no {self.function}()"
+
+    def suggest_correction(self) -> str:
+        return f"define {self.function}() returning its ActionsBudget"
