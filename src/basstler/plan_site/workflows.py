@@ -83,6 +83,11 @@ class PlanSiteTemplate(StrEnum):
     The workflow on a notes branch.
     """
 
+    MERGE_WORKFLOW = "plan_site_merge_workflow.yml"
+    """
+    The workflow on a notes repository's default branch.
+    """
+
     def render(self, **context: Any) -> str:
         """
         :param context: The values the template substitutes, by name.
@@ -383,3 +388,29 @@ class DispatchWorkflow(PlanSiteWorkflow):
             "token_variable": GitHubCredentialVariable.GH_TOKEN,
             "token_secret": PlanSiteSecret.TOKEN,
         }
+
+
+@dataclass(frozen=True)
+class MergeWorkflow(PlanSiteWorkflow):
+    """
+    The notes repository's default-branch workflow that starts the site workflow
+    whenever a pull request from the repository itself merges.
+    """
+
+    dispatch: DispatchWorkflow
+    """
+    The notes branch's workflow, whose build start this one runs on a merge instead of a
+    push.
+    """
+
+    @classproperty
+    def location(cls) -> WorkflowLocation:
+        return WorkflowLocation.PLAN_SITE_MERGE
+
+    @classproperty
+    def template(cls) -> PlanSiteTemplate:
+        return PlanSiteTemplate.MERGE_WORKFLOW
+
+    @property
+    def template_values(self) -> dict[str, Any]:
+        return self.dispatch.template_values

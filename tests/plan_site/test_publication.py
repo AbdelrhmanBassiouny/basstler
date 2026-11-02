@@ -12,6 +12,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.actions_budget import ActionsBudget
 from basstler.environment import GitHubCredentialVariable
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
@@ -25,6 +26,7 @@ from basstler.plan_site.publication import (
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     DispatchWorkflow,
+    MergeWorkflow,
     PlanSiteJob,
     PlanSiteSecret,
     SiteWorkflow,
@@ -34,10 +36,11 @@ from basstler.plan_site.workflows import (
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.upstream_reviews.vocabulary import BasstlerSource
+from basstler.workflows import ActivityType, TriggerEvent, Workflow
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName
-from ..maintenance.fork import ForkCheckout
+from ..maintenance.fork import UPSTREAM_BASE, ForkCheckout
 from ..upstream_reviews.replay import ReplayingRestClient
 
 BRANCH_OR_TAG = "v9.9.9"
@@ -345,6 +348,94 @@ def test_the_dispatch_workflow_starts_the_site_workflow_with_the_token():
             },
         )
     ]
+
+
+# %% the merge workflow
+
+
+def a_dispatch_workflow() -> DispatchWorkflow:
+    """:return: A dispatch workflow from a notes repository to its site."""
+    return DispatchWorkflow(
+        Repository("an-owner", "a-project"),
+        NOTES_BRANCH,
+        SiteRepository(Repository("an-owner", "plans")),
+    )
+
+
+def test_the_notes_repository_s_default_branch_gets_the_merge_workflow(published):
+    dispatch = DispatchWorkflow(
+        published.notes_repository, NOTES_BRANCH, published.site
+    )
+
+    assert (
+        published.file(
+            published.notes_repository,
+            UPSTREAM_BASE,
+            MergeWorkflow.location.as_posix(),
+        )
+        == MergeWorkflow(dispatch).text
+    )
+
+
+def test_the_merge_workflow_follows_the_notes_repository_s_default_branch(
+    publishing,
+):
+    publishing.create(publishing.site.repository)
+    notes_path = publishing.checkout.fork_path
+    publishing.git(notes_path, "branch", "trunk", UPSTREAM_BASE)
+    publishing.git(notes_path, "symbolic-ref", "HEAD", "refs/heads/trunk")
+
+    publishing.publication(publishing.runs_none()).publish()
+
+    assert publishing.file(
+        publishing.notes_repository, "trunk", MergeWorkflow.location.as_posix()
+    ) == (
+        MergeWorkflow(
+            DispatchWorkflow(publishing.notes_repository, NOTES_BRANCH, publishing.site)
+        ).text
+    )
+
+
+def test_the_merge_workflow_runs_when_a_pull_request_closes(tmp_path):
+    path = tmp_path / MergeWorkflow.location.name
+    path.write_text(MergeWorkflow(a_dispatch_workflow()).text)
+
+    trigger = Workflow.at(path).trigger(TriggerEvent.PULL_REQUEST)
+
+    assert trigger.activity_types == {ActivityType.CLOSED}
+
+
+def test_the_merge_workflow_runs_only_for_a_merge_in_the_notes_repository():
+    dispatch = a_dispatch_workflow()
+
+    job = WorkflowFile.from_text(MergeWorkflow(dispatch).text).jobs[
+        PlanSiteJob.DISPATCH
+    ]
+
+    assert job.condition == (
+        f"github.repository == '{dispatch.notes_repository.full_name}'"
+        " && github.event.pull_request.merged"
+        " && github.event.pull_request.head.repo.full_name == github.repository"
+    )
+
+
+def test_the_merge_workflow_starts_the_build_as_the_dispatch_workflow_does():
+    dispatch = a_dispatch_workflow()
+
+    merge_job = WorkflowFile.from_text(MergeWorkflow(dispatch).text).jobs[
+        PlanSiteJob.DISPATCH
+    ]
+    dispatch_job = WorkflowFile.from_text(dispatch.text).jobs[PlanSiteJob.DISPATCH]
+
+    assert merge_job.steps == dispatch_job.steps
+
+
+def test_the_merge_workflow_keeps_to_the_actions_budget(tmp_path):
+    workflow = MergeWorkflow(a_dispatch_workflow())
+    path = tmp_path / workflow.location.name
+    path.write_text(workflow.text)
+
+    assert ActionsBudget().violations_of(Workflow.at(path)) == ()
 
 
 # %% re-running

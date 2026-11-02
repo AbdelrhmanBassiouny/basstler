@@ -1,9 +1,9 @@
 """
 Publish a repository's plans on the user's own plan site, and start the site's build on
-every push to the repository's notes branch.
+every push to the repository's notes branch and every pull request merged into it.
 
 Writes the site repository's workflow, registers the repository in the hub file, and
-commits the notes branch's dispatch workflow. Reports each step only the user can take -
+commits the notes branch's dispatch workflow and the default branch's merge workflow. Reports each step only the user can take -
 creating the site repository, turning Pages on, storing the token - as one copyable line.
 Run again, it re-checks them: a step counts as done once a run that needs it succeeded.
 
@@ -34,6 +34,7 @@ from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     DispatchWorkflow,
+    MergeWorkflow,
     PlanSiteSecret,
     PlanSiteWorkflow,
     SiteWorkflow,
@@ -395,14 +396,12 @@ class PlanSitePublication:
         )
         return RemoteBranch(self.dispatch_workflow.notes_branch, self.git, remote)
 
-    def site_branch(self) -> RemoteBranch | None:
+    def default_branch_of(self, remote: str) -> RemoteBranch | None:
         """
-        :return: The site repository's default branch, or ``None`` when the site
-            repository cannot be reached.
+        :param remote: A remote, as a remote name or a URL.
+        :return: Its default branch, :attr:`initial_branch` when it has none yet, or
+            ``None`` when it cannot be reached.
         """
-        remote = self.dispatch_workflow.site.repository.clone_url_under(
-            self.remote_root
-        )
         listed = self.git.attempt("ls-remote", "--symref", remote, "HEAD")
         if not listed.succeeded:
             return None
@@ -422,7 +421,9 @@ class PlanSitePublication:
         notes_repository = self.dispatch_workflow.notes_repository
         site = self.dispatch_workflow.site
         report = PublicationReport(site.site_url)
-        site_branch = self.site_branch()
+        site_branch = self.default_branch_of(
+            site.repository.clone_url_under(self.remote_root)
+        )
         if site_branch is None:
             user_steps = UserSteps(notes_repository, site, [])
             report.pending.append(user_steps.pending(UserStep.CREATE_SITE_REPOSITORY))
@@ -446,6 +447,12 @@ class PlanSitePublication:
             self.notes_branch_of(notes_repository),
             self.dispatch_workflow,
             f"Start the plan site build in {site.repository.full_name} on every push",
+            report,
+        )
+        self.write(
+            self.default_branch_of(self.notes_remote),
+            MergeWorkflow(self.dispatch_workflow),
+            f"Start the plan site build in {site.repository.full_name} on every merge",
             report,
         )
         user_steps = UserSteps(notes_repository, site, hub.repositories)
