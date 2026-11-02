@@ -1,11 +1,9 @@
 ## Plan
-- `MergeWorkflow` on the notes repository's default branch, started by a merged pull request; same token and step as the dispatch workflow.
+- Merge workflow starts the site build on merge; placement under discussion: always on `basstler/plan-site-merge` with setup opening its PR, skipped for forks.
 
 ## Done
-- `MergeWorkflow`, `WorkflowLocation.PLAN_SITE_MERGE`, merge template extending the dispatch template (dispatch output unchanged).
-- Publication writes it onto the default branch (`default_branch_of`).
-- Tests (6 new), setup skill step 8, PR description, `release:minor`.
+- `MergeWorkflow` on `pull_request_target` closed+merged; written to the default branch (for now).
+- Actions budget: reads `pull_request_target`; a repository pin counts as a fork guard; dispatch and merge workflows both pass.
 
 ## Next
-- Owner's call: `pull_request_target` to cover fork pull requests; a user step when the default branch refuses direct pushes.
-- After merge: re-run setup in each published repository.
+- Owner decides placement; then replace the direct default-branch write (parked direct-push fallback patch is superseded if accepted).
