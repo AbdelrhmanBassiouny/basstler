@@ -651,6 +651,13 @@ class DocumentationRules(Section):
         " are meaningful and DRY; remove comments that restate the code"
     )
 
+    SHORTEST_DOCSTRINGS = (
+        "Make every docstring as short as it can be: one line where one line says "
+        "it. A module's or class's docstring states its responsibility in a sentence "
+        "or two; it never lists every step it takes or every case it handles - those "
+        "belong to the methods that take them"
+    )
+
     SPHINX_ROLES = (
         "Reference code with Sphinx roles (`:func:`, `:class:`, `:attr:`, "
         "`:meth:`), never with plain backticks, and use directives such as `.. "
