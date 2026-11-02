@@ -6,10 +6,8 @@ set -euo pipefail
 # script (save-personal-notes.sh for CLAUDE.local.md, save-plan.sh for a
 # plan's manifest/roadmap/branch-index trio) is exactly this shape: copy one
 # already-prepared local file to one destination path, commit, push, done.
-# Extracted so callers with that shape - currently
-# skills/plan-dashboard/refresh_dashboard.sh's manifest-correction
-# push, and /plan-dashboard's own dashboard-URL-cache update - don't each
-# re-embed the worktree dance as a bash snippet of their own.
+# Extracted so callers with that shape don't each re-embed the worktree dance
+# as a bash snippet of their own.
 #
 # Usage:
 #   "${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" \

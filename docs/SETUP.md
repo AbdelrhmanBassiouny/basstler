@@ -1,7 +1,7 @@
 # First-time setup
 
 Five steps, once per person and project. They give you personal notes that follow you
-across sessions, per-pull-request progress tracking, and multi-PR plan dashboards.
+across sessions, per-pull-request progress tracking, and multi-PR plans on a live plan site.
 
 Details of everything below: [`hooks/README.md`](../plugin/hooks/README.md).
 
@@ -28,7 +28,7 @@ In any Claude Code session on the project:
 ```
 
 It creates your notes branch, records the git identity your commits are authored
-with, installs what the dashboards need, and asks only about the decisions that
+with, installs what the package needs, and asks only about the decisions that
 are genuinely yours. Re-running it on a set-up project changes nothing.
 
 Without a session, the same setup is one command, once the package's environment exists:

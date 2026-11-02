@@ -90,6 +90,7 @@ def a_titled_stack(
             ),
         ],
         lambda branch: False,
+        lambda candidate, container: False,
     )
 
 
@@ -198,7 +199,10 @@ def test_a_link_sent_by_an_earlier_pass_is_listed_without_reading_its_descriptio
         ]
     )
     stack = Stack.build(
-        make_configuration(), list(export.pull_requests), lambda branch: False
+        make_configuration(),
+        list(export.pull_requests),
+        lambda branch: False,
+        lambda candidate, container: False,
     )
 
     summary = FinishSummary(MaintenanceReport(), stack)
@@ -320,6 +324,7 @@ def test_a_branch_whose_checks_failed_is_listed_as_withheld_from_promotion():
             )
         ],
         lambda branch: False,
+        lambda candidate, container: False,
     )
     summary = FinishSummary(MaintenanceReport(), stack)
 

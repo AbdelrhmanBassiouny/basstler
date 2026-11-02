@@ -46,6 +46,19 @@ def test_the_declaration_is_static_so_a_reader_needs_no_build():
     assert PyprojectKey.DEPENDENCIES not in ProjectDeclaration.of_this_package().dynamic
 
 
+def test_a_declaration_naming_no_dependencies_is_read_as_needing_none(tmp_path):
+    """
+    Distinct from unreadable: a package that declares nothing needs nothing, so the
+    caller installs nothing rather than being told it could not check.
+    """
+    declaration = tmp_path / PackageLocation.DEPENDENCY_DECLARATION.name
+    declaration.write_text(
+        f'[{PyprojectKey.PROJECT}]\n{PyprojectKey.NAME} = "nothing"\n'
+    )
+
+    assert DependencyDeclaration(declaration).dependencies() == ()
+
+
 @pytest.mark.parametrize(
     ("specifier", "distribution_name"),
     [

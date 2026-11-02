@@ -48,7 +48,7 @@ class LiveState(StrEnum):
     @property
     def display_label(self) -> str:
         """
-        The human-readable label shown in the dashboard UI for this state.
+        The human-readable label shown on the plan site for this state.
         """
         match self:
             case LiveState.NO_PULL_REQUEST:
@@ -228,7 +228,7 @@ class PullRequestRecord:
         Read one pull request object as the REST pulls API answers it.
 
         :param api_record: The pull request, as the API describes it.
-        :return: The fields a dashboard classifies it by.
+        :return: The fields the plan site classifies it by.
         """
         number = PullRequestField.NUMBER.read(api_record)
         record = cls.from_mapping(

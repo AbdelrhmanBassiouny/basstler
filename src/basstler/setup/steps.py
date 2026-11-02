@@ -4,7 +4,7 @@ Prints the setup steps that live outside this clone, filled in for the fork the
 clone actually points at.
 
 check-setup.sh reports on everything a shell can inspect - the notes branch, the
-recorded git identity, the dashboard dependencies. What it cannot reach is
+recorded git identity, the package dependencies. What it cannot reach is
 everything held by a service rather than a file: labels in a GitHub repository,
 Claude's access to that repository, and the variables a fresh-clone environment
 has to carry. Those are the steps a first-time user is left holding, so they are
@@ -354,7 +354,7 @@ class ForkLabels(SetupStep):
     def reason(self) -> str:
         """See :attr:`SetupStep.reason`."""
         return (
-            "A fresh fork has none of them: dashboards misread landed work, and "
+            "A fresh fork has none of them: the plan site misreads landed work, and "
             "applying a label a repository lacks fails mid-pull-request."
         )
 
@@ -397,7 +397,7 @@ class RepositoryAccess(SetupStep):
         """See :attr:`SetupStep.reason`."""
         return (
             "This is what lets a session clone the fork, push a branch, open a pull "
-            "request and comment on one - and read the state a dashboard is built from."
+            "request and comment on one - and read the state the plan site is built from."
         )
 
     def instructions(self) -> list[str]:

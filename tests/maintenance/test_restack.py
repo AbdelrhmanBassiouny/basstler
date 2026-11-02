@@ -34,16 +34,21 @@ from basstler.maintenance.restack_steps import (
 from ..constants.stack import RemoteName, StackBranch, StackLabel
 
 from .fork import (
+    A_SESSION_LINK,
+    PromotionSampleText,
     PullRequestHeadRepository,
+    StackPullRequestNumber,
     UPSTREAM_BASE,
     FixtureFile,
     make_configuration,
     ForkCheckout,
+    a_board_entry,
     a_stack,
     a_parent_and_child,
     the_board,
 )
 from .recorded_fork import (
+    RecordedLabelWrite,
     RecordingPullRequests,
     AlreadyResolvedPass,
 )
@@ -541,6 +546,148 @@ def test_a_branch_above_a_collision_is_reported_blocked_rather_than_up_to_date(
     assert grandchild.outcome == RestackOutcome.BLOCKED_BY_ANCESTOR
     assert grandchild.blocking_ancestor == StackBranch.CHILD
     assert fork_checkout.published_commit("origin", StackBranch.GRANDCHILD) == before
+
+
+# %% a branch whose base reached nothing
+
+
+def an_abandoned_base_and_its_child(fork_checkout: ForkCheckout) -> None:
+    """
+    Publish a branch on a base that reached neither the upstream nor any other branch.
+
+    That is what a base whose own pull request closed without merging leaves behind: the
+    ref is still there, the commits are in nothing, and only the child is on the board.
+
+    :param fork_checkout: The checkout to build the branches in.
+    """
+    fork_checkout.branch_from(StackBranch.UNLANDED_ELSEWHERE, UPSTREAM_BASE)
+    fork_checkout.branch_from(StackBranch.CHILD, StackBranch.UNLANDED_ELSEWHERE)
+
+
+def the_board_with_an_abandoned_base(
+    labels: list[str] | None = None, session: str | None = None
+) -> list[PullRequest]:
+    """
+    :param labels: The labels the child's pull request carries.
+    :param session: The session the child's description names.
+    :return: A board carrying only the child, its base absent as a closed one would be.
+    """
+    return [
+        a_board_entry(
+            StackPullRequestNumber.CHILD,
+            StackBranch.CHILD,
+            StackBranch.UNLANDED_ELSEWHERE,
+            labels=labels,
+            session=session,
+        )
+    ]
+
+
+def test_a_branch_whose_base_reached_nothing_is_handed_back_to_its_owner(
+    fork_checkout: ForkCheckout,
+):
+    """
+    Merging that base every pass only keeps building on work nobody is going to land,
+    and no rule can say what should replace it - only its owner can.
+    """
+    an_abandoned_base_and_its_child(fork_checkout)
+    fork = RecordingPullRequests()
+
+    outcomes = restack(
+        a_stack(
+            fork_checkout, the_board_with_an_abandoned_base(session=A_SESSION_LINK)
+        ),
+        fork_checkout.git,
+        fork,
+    )
+
+    assert outcomes[0].outcome == RestackOutcome.PARENT_GONE
+    assert fork.label_writes == [
+        RecordedLabelWrite(
+            StackPullRequestNumber.CHILD, (StackLabel.NEEDS_RESOLUTION.value,)
+        )
+    ]
+    assert [comment.pull_request_number for comment in fork.comments] == [
+        StackPullRequestNumber.CHILD
+    ]
+    assert outcomes[0].reported_at == (
+        f"{PromotionSampleText.COMMENT_LINK_PREFIX}{len(fork.comments)}"
+    )
+
+
+def test_the_comment_on_a_branch_whose_base_reached_nothing_names_the_base_and_session(
+    fork_checkout: ForkCheckout,
+):
+    an_abandoned_base_and_its_child(fork_checkout)
+    fork = RecordingPullRequests()
+
+    restack(
+        a_stack(
+            fork_checkout, the_board_with_an_abandoned_base(session=A_SESSION_LINK)
+        ),
+        fork_checkout.git,
+        fork,
+    )
+
+    assert StackBranch.UNLANDED_ELSEWHERE in fork.comments[0].body
+    assert A_SESSION_LINK in fork.comments[0].body
+
+
+def test_a_branch_whose_base_reached_nothing_publishes_nothing(
+    fork_checkout: ForkCheckout,
+):
+    an_abandoned_base_and_its_child(fork_checkout)
+    published = fork_checkout.commit_on_the_fork(StackBranch.CHILD)
+
+    restack(
+        a_stack(fork_checkout, the_board_with_an_abandoned_base()),
+        fork_checkout.git,
+        RecordingPullRequests(),
+    )
+
+    assert fork_checkout.commit_on_the_fork(StackBranch.CHILD) == published
+
+
+def test_a_branch_already_handed_back_for_a_gone_base_is_not_reported_again(
+    fork_checkout: ForkCheckout,
+):
+    """
+    The label exists so a pass hands a branch back once rather than every run, and a
+    gone base is no more resolvable on the second pass than the first.
+    """
+    an_abandoned_base_and_its_child(fork_checkout)
+    fork = RecordingPullRequests(states={StackPullRequestNumber.CHILD: "dirty"})
+
+    outcomes = restack(
+        a_stack(
+            fork_checkout,
+            the_board_with_an_abandoned_base(labels=[StackLabel.NEEDS_RESOLUTION]),
+        ),
+        fork_checkout.git,
+        fork,
+    )
+
+    assert outcomes[0].outcome == RestackOutcome.WITHHELD
+    assert fork.comments == []
+
+
+def test_naming_a_subtree_leaves_a_gone_base_to_the_caller(
+    fork_checkout: ForkCheckout,
+):
+    an_abandoned_base_and_its_child(fork_checkout)
+    fork = RecordingPullRequests()
+
+    outcomes = restack(
+        a_stack(fork_checkout, the_board_with_an_abandoned_base()),
+        fork_checkout.git,
+        fork,
+        stacked_on=StackBranch.UNLANDED_ELSEWHERE,
+    )
+
+    assert outcomes[0].outcome == RestackOutcome.PARENT_GONE
+    assert outcomes[0].reported_at is None
+    assert fork.label_writes == []
+    assert fork.comments == []
 
 
 def test_naming_a_subtree_leaves_its_collisions_to_the_caller():

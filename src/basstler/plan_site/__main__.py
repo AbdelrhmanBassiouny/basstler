@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Build the plan site: the hub, each repository's plans, and each plan's dashboard.
+Build the plan site: the hub, each repository's plans, and each plan's page.
 
 Reads the hub file, fetches every repository it lists, and renders that repository's
 plans with the live state of every pull request they reference. Nothing here needs a
@@ -8,7 +8,7 @@ Claude session or belongs to an account, so the site is the same for everyone:
 
     <site>/                          the hub, one card per repository
     <site>/<owner>/<repo>/           that repository's plans
-    <site>/<owner>/<repo>/<plan>/    a plan's dashboard
+    <site>/<owner>/<repo>/<plan>/    a plan's page
 
 Usage:
     python3 -m basstler.plan_site --registry <owner/repo> --output _site \\
@@ -33,23 +33,23 @@ from typing import Any
 
 import yaml
 
-from basstler.dashboard.plan_page import RenderedDashboard
-from basstler.dashboard.plan import Plan
+from basstler.plan_site.plan import Plan
+from basstler.plan_site.plan_page import PlanPage, RenderedPlanPage
 from basstler.exceptions import PlanValidationError
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.validation import PlanValidator
 from basstler.plan_site.hub_page import (
     HubPage,
+    PlanSummary,
+    ProgressCard,
     RepositoryIndexPage,
     RepositorySummary,
     SiteStylesheet,
     SiteSummary,
     SkippedPage,
 )
-from basstler.plan_site.plan_page import SitePlanPage
-from basstler.dashboard.index_page import PlanSummary, ProgressCard
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
-from basstler.plan_site.hub import NotesBranch, PlanHub
+from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus
 from basstler.repository import GitHubAddress, Repository
@@ -179,12 +179,12 @@ class PlanSource:
 @dataclass
 class PublishedPlan:
     """
-    One plan rendered to its dashboard, with the entry the index lists it under.
+    One plan rendered to its page, with the entry the index lists it under.
     """
 
-    dashboard: RenderedDashboard
+    page: RenderedPlanPage
     """
-    The plan's rendered dashboard page.
+    The plan's rendered page.
     """
 
     summary: PlanSummary
@@ -200,7 +200,7 @@ class SiteSection[SectionCard: ProgressCard](ABC):
     stands for it on the page above: a repository's on the hub, or the whole site's.
     """
 
-    site_url: str
+    address: SiteAddress
     """
     The address the whole site is served from, which every link is built on.
     """
@@ -211,18 +211,11 @@ class SiteSection[SectionCard: ProgressCard](ABC):
     """
 
     @property
-    def hub_url(self) -> str:
-        """
-        The hub's address, which every page links back up to.
-        """
-        return f"{self.site_url.rstrip('/')}/"
-
-    @property
     def stylesheet_url(self) -> str:
         """
         The address of the site's one stylesheet, which every page links.
         """
-        return f"{self.hub_url}{SiteFile.STYLESHEET}"
+        return f"{self.address.hub_url}{SiteFile.STYLESHEET}"
 
     @abstractmethod
     def build(self, output: Path) -> SectionCard:
@@ -246,7 +239,7 @@ class SiteSection[SectionCard: ProgressCard](ABC):
 @dataclass
 class RepositorySite(SiteSection[RepositorySummary]):
     """
-    One repository's plans: their dashboards plus the index linking them.
+    One repository's plans: their pages plus the index linking them.
     """
 
     repository: Repository
@@ -268,19 +261,12 @@ class RepositorySite(SiteSection[RepositorySummary]):
     def __post_init__(self) -> None:
         self.plan_directory = PlanDirectory(self.plans_directory)
 
-    @property
-    def index_url(self) -> str:
-        """
-        The address this repository's index is served from.
-        """
-        return f"{self.hub_url}{self.repository}/"
-
     def plan_url(self, directory_name: str) -> str:
         """
         :param directory_name: The plan's directory name.
         :return: The address its page is served from.
         """
-        return f"{self.index_url}{directory_name}/"
+        return self.address.plan_url(self.repository, directory_name)
 
     def build(self, output: Path) -> RepositorySummary:
         """
@@ -302,14 +288,16 @@ class RepositorySite(SiteSection[RepositorySummary]):
         }
         repository_directory = output / str(self.repository)
         for directory_name, plan in published.items():
-            self.write_page(repository_directory / directory_name, plan.dashboard.html)
+            self.write_page(repository_directory / directory_name, plan.page.html)
         repository = RepositorySummary.over_plans(
             str(self.repository),
-            self.index_url,
+            self.address.repository_url(self.repository),
             [plan.summary for plan in published.values()],
             list(skipped.values()),
         )
-        index = RepositoryIndexPage(repository, self.hub_url, self.stylesheet_url)
+        index = RepositoryIndexPage(
+            repository, self.address.hub_url, self.stylesheet_url
+        )
         self.write_page(repository_directory, index.render())
         return repository
 
@@ -334,11 +322,11 @@ class RepositorySite(SiteSection[RepositorySummary]):
         Render one valid plan.
 
         :param source: The plan to render.
-        :return: Its dashboard and its index entry.
+        :return: Its page and its index entry.
         """
         plan = Plan.from_mapping(source.manifest)
         dependencies = DependencyResolver(plan, self.plan_directory)
-        renderer = SitePlanPage(
+        renderer = PlanPage(
             stylesheet_url=self.stylesheet_url,
             plan=plan,
             roadmap_text=source.roadmap_text,
@@ -346,23 +334,23 @@ class RepositorySite(SiteSection[RepositorySummary]):
                 dependencies
             ),
             tracking_url=self.tracking_url_of(plan),
-            hub_url=self.hub_url,
-            index_url=self.index_url,
+            hub_url=self.address.hub_url,
+            index_url=self.address.repository_url(self.repository),
             plan_directory=self.plan_directory,
             locate_plan_page=self.plan_url,
         )
-        dashboard = renderer.render()
+        page = renderer.render()
         summary = PlanSummary(
             id=plan.id,
             title=plan.title,
             description=plan.description,
-            done=dashboard.summary.status_counts.get(ItemStatus.DONE, 0),
+            done=page.overview.status_counts[ItemStatus.DONE],
+            started=page.overview.started_item_count,
+            reviewed=page.overview.reviewed_item_count,
             total=len(plan.items),
-            open_pull_requests=dashboard.summary.open_pull_requests,
-            reviewed_pull_requests=dashboard.summary.reviewed_pull_requests,
-            dashboard_url=self.plan_url(source.directory_name),
+            page_url=self.plan_url(source.directory_name),
         )
-        return PublishedPlan(dashboard=dashboard, summary=summary)
+        return PublishedPlan(page=page, summary=summary)
 
     def tracking_url_of(self, plan: Plan) -> str | None:
         """
@@ -433,7 +421,7 @@ class HubSite(SiteSection[SiteSummary]):
                 str(repository), f"cannot fetch {self.hub.notes_branch}"
             )
         site = RepositorySite(
-            site_url=self.site_url,
+            address=self.address,
             pull_request_source=self.pull_request_source,
             repository=repository,
             plans_directory=notes.check_out_plans(),
@@ -475,7 +463,7 @@ def main() -> int:
         logger.error("The hub file names no site_url; pass --site-url.")
         return 1
     site = HubSite(
-        site_url=site_url,
+        address=SiteAddress(site_url),
         pull_request_source=GitHubPullRequestSource.from_environment(),
         hub=hub,
         remote_root=arguments.remote_root,

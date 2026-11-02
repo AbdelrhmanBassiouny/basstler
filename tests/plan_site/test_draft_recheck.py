@@ -13,8 +13,8 @@ from typing import Any
 import pytest
 from playwright.sync_api import Locator, Page, Route, expect
 
-from basstler.dashboard.cards import DraftRecheckAttribute, StartNowAction
-from basstler.dashboard.plan import Plan
+from basstler.plan_site.cards import DraftRecheckAttribute, StartNowAction
+from basstler.plan_site.plan import Plan
 from basstler.maintenance.board import PullRequestField
 from basstler.plan_site.__main__ import PlanSource, RepositorySite, SiteFile
 from basstler.pull_request_state import PullRequestRecord, PullRequestState

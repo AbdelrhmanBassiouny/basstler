@@ -49,8 +49,6 @@ class ManifestLinePattern(Enum):
     ITEM_START = re.compile(rf"^\s*- {re.escape(ManifestKey.IDENTIFIER.key)}:")
     """
     Matches the first line of an item block, which is always its ``id``.
-
-    Same anchor ``plan/sync_manifest_status.py`` uses to find item boundaries in raw text.
     """
 
     SEQUENCE_ENTRY = re.compile(r"^\s*-\s")
@@ -195,11 +193,6 @@ class ReportKey(StrEnum):
     CREATED_ITEM = "created_item"
     """
     Whether the item's manifest entry was written for the first time.
-    """
-
-    DASHBOARD_COMMAND = "dashboard_command"
-    """
-    The dashboard republish the caller still has to run.
     """
 
     PULL_REQUEST_URL = "pull_request_url"

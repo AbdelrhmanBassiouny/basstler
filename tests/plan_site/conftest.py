@@ -8,6 +8,7 @@ import pytest
 
 from basstler.github_labels import GitHubLabel
 from basstler.plan_site.__main__ import RepositorySite
+from basstler.plan_site.hub import SiteAddress
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.repository import PullRequestReference
 
@@ -53,7 +54,7 @@ def site(pull_request_source: RecordedPullRequestSource) -> RepositorySite:
     A site over the dataset's plans directory.
     """
     return RepositorySite(
-        site_url=SiteSampleText.SITE_URL,
+        address=SiteAddress(SiteSampleText.SITE_URL),
         pull_request_source=pull_request_source,
         repository=NOTES_REPOSITORY,
         plans_directory=DatasetLocation.SITE_PLANS.value,

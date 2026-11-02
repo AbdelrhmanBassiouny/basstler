@@ -22,6 +22,7 @@ from basstler.maintenance.restack_steps import (
     IntegrateParent,
     PublishBranch,
     RefuseAnUnsafeMove,
+    ReportAParentThatIsGone,
     RestackOutcome,
     RestackStep,
     SkipBranchAlreadyCurrent,
@@ -51,6 +52,7 @@ def restack_steps() -> tuple[RestackStep, ...]:
     """
     return (
         WithholdBranchStillConflicting(),
+        ReportAParentThatIsGone(),
         SkipBranchAlreadyCurrent(),
         IntegrateParent(),
         RefuseAnUnsafeMove(),

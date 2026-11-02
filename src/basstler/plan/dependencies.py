@@ -13,8 +13,8 @@ from pathlib import Path
 import yaml
 
 from basstler.class_property import classproperty
-from basstler.dashboard.cards import DependencyChip
-from basstler.dashboard.plan import Item, Plan
+from basstler.plan_site.cards import DependencyChip
+from basstler.plan_site.plan import Item, Plan
 from basstler.plan.model import PlanDocument
 from basstler.pull_request_state import LiveState, PullRequestsByRepository
 from basstler.repository import PullRequestReference, Repository
@@ -156,8 +156,8 @@ class Dependency(ABC):
         """
         Render this dependency as a ``needs`` chip on its dependent's card.
 
-        :param locate_plan_page: Where another plan's dashboard is published, given its
-            id, or ``None`` when plan pages have no known address.
+        :param locate_plan_page: Where another plan's page is published, given its id,
+            or ``None`` when plan pages have no known address.
         """
 
     @abstractmethod
@@ -308,7 +308,7 @@ class PlanDirectory:
     A manifest is read the first time a reference names its plan, and never
     otherwise: a plan that nothing here depends on is exactly as expensive as
     a plan that isn't in the directory at all, which is what keeps one plan's
-    dashboard from pulling in every other plan's contents.
+    page from pulling in every other plan's contents.
     """
 
     directory: Path
@@ -434,6 +434,17 @@ class DependencyResolver:
         :return: One dependency per entry, in the order the manifest wrote them.
         """
         return [self.resolve(entry) for entry in item.depends_on]
+
+    def dependencies_are_ready(self, item: Item) -> bool:
+        """
+        :param item: The depending item.
+        :return: Whether every dependency of the item is ready to build on; true for an
+            item with none.
+        """
+        return all(
+            dependency.is_ready_to_unblock_dependents()
+            for dependency in self.dependencies_of(item)
+        )
 
     def classify_live_states(
         self, pull_requests_by_repository: PullRequestsByRepository

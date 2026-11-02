@@ -99,6 +99,13 @@ class Measure(SizeLimit, Enum):
             return []
         return [SizeViolation(measure=self, location=location, measured=measured)]
 
+    def has_room(self, measured: int) -> bool:
+        """
+        :param measured: How much is already counted.
+        :return: Whether one more would still fit within the limit.
+        """
+        return measured < self.maximum
+
 
 # %% violations
 

@@ -11,6 +11,8 @@ from enum import IntEnum, StrEnum
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from basstler.exceptions import UnresolvableReferenceError
+
 if TYPE_CHECKING:
     from basstler.stack.settings import Configuration
 
@@ -55,6 +57,16 @@ class GitArgument(StrEnum):
     QUIET = "-q"
     """
     Silences a fetch's progress output.
+    """
+
+    REVISION_PARSE = "rev-parse"
+    """
+    Resolves a name to the object it stands for.
+    """
+
+    VERIFY = "--verify"
+    """
+    Makes :attr:`REVISION_PARSE` fail unless the name resolves to exactly one object.
     """
 
     MERGE_BASE = "merge-base"
@@ -240,6 +252,45 @@ class CurrentCheckout:
             )
 
         return is_ancestor
+
+    @classmethod
+    def containment_predicate(
+        cls, configuration: Configuration
+    ) -> Callable[[str, str], bool]:
+        """
+        :param configuration: The resolved configuration naming the fork remote.
+        :return: A predicate testing whether one fork branch's commits are contained in
+            another's, which refuses a branch whose reference does not resolve rather
+            than answering for it.
+        """
+
+        def is_contained_by(candidate: str, container: str) -> bool:
+            return cls.succeeds(
+                GitArgument.MERGE_BASE,
+                GitArgument.IS_ANCESTOR,
+                cls.resolved_on_fork(configuration, candidate),
+                cls.resolved_on_fork(configuration, container),
+            )
+
+        return is_contained_by
+
+    @classmethod
+    def resolved_on_fork(cls, configuration: Configuration, branch: str) -> str:
+        """
+        :param configuration: The resolved configuration naming the fork remote.
+        :param branch: A fork branch name.
+        :return: The reference to the fork's copy of it, once known to name a commit.
+        :raises UnresolvableReferenceError: If it names none here.
+        """
+        reference = configuration.reference_on_fork(branch)
+        if not cls.succeeds(
+            GitArgument.REVISION_PARSE,
+            GitArgument.VERIFY,
+            GitArgument.QUIET,
+            f"{reference}^{{commit}}",
+        ):
+            raise UnresolvableReferenceError(reference=reference)
+        return reference
 
 
 # %% which fork branches have landed upstream

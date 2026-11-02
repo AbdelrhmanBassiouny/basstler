@@ -1,10 +1,10 @@
-function planSiteUnblocksDependents(pullRequest) {
+function planPageUnblocksDependents(pullRequest) {
   return pullRequest["{{ pull_request_field.MERGED_AT.key }}"] !== null
     || (pullRequest["{{ pull_request_field.STATE.key }}"] === "{{ pull_request_state.OPEN.value }}"
       && !pullRequest["{{ pull_request_field.DRAFT.key }}"]);
 }
 
-function planSiteMarkDependencyReady(chip) {
+function planPageMarkDependencyReady(chip) {
   chip.classList.remove("chip-unmet");
   chip.title = chip.getAttribute("{{ draft_recheck_attribute.READY_TITLE }}");
   var card = chip.closest(".item");
@@ -17,7 +17,7 @@ function planSiteMarkDependencyReady(chip) {
   }
 }
 
-function planSiteRecheckDraftDependencies() {
+function planPageRecheckDraftDependencies() {
   var chipsByAddress = {};
   document.querySelectorAll("[{{ draft_recheck_attribute.PULL_REQUEST }}]").forEach(function (chip) {
     var address = chip.getAttribute("{{ draft_recheck_attribute.PULL_REQUEST }}");
@@ -29,13 +29,13 @@ function planSiteRecheckDraftDependencies() {
         return response.ok ? response.json() : null;
       })
       .then(function (pullRequest) {
-        if (pullRequest && planSiteUnblocksDependents(pullRequest)) {
-          chipsByAddress[address].forEach(planSiteMarkDependencyReady);
+        if (pullRequest && planPageUnblocksDependents(pullRequest)) {
+          chipsByAddress[address].forEach(planPageMarkDependencyReady);
         }
       });
   });
   Promise.all(rechecks).then(function () {
-    document.getElementById("plan-dashboard-page")
+    document.getElementById("plan-page")
       .setAttribute("{{ draft_recheck_attribute.FINISHED }}", "");
   });
 }

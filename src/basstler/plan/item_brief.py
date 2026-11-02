@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from basstler.dashboard.plan import Plan
+from basstler.plan_site.plan import Plan
 from basstler.plan.check_dependency_readiness import DependencyReadiness
 from basstler.plan.dependencies import DependencyResolver
 from basstler.plan.item_bootstrap.documents import PlanDocuments, ProjectCheckout

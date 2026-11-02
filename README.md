@@ -1,7 +1,7 @@
 # basstler
 
 Workflow tooling for Claude Code sessions: personal notes that follow you across sessions,
-per-pull-request progress, multi-PR plans with live dashboards, stacked-pull-request
+per-pull-request progress, multi-PR plans on a live plan site, stacked-pull-request
 maintenance and an upstream review reader.
 
 The name is the German word for someone who builds things themselves, and shares its
@@ -88,7 +88,7 @@ Every entry point is run as a module, by the package's own interpreter:
 ```bash
 ~/.local/share/basstler/venv/bin/python -m basstler.stack configuration
 ~/.local/share/basstler/venv/bin/python -m basstler.maintenance run-report --json
-~/.local/share/basstler/venv/bin/python -m basstler.dashboard.plan_page --help
+~/.local/share/basstler/venv/bin/python -m basstler.plan_site --help
 ```
 
 The hooks and the skills that call them all use `"${BASSTLER_PYTHON}" -m "${SOME_MODULE}"`,
