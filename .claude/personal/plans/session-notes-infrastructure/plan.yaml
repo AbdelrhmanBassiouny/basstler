@@ -33,11 +33,12 @@ tracks:
 items:
 - id: stamps-in-git-directory
   title: The plugin keeps its per-clone stamp files where git never tracks them
-  branch: null
-  status: not started
+  branch: ccr-3de36b30-i2enxe
+  status: in progress
   track: handover
+  session: https://claude.ai/code/session_018wfiv7sbWFZXYHbQEc77i3
   depends_on: []
-  pull_request_number: null
+  pull_request_number: 118
   notes: 'CRAM #523 dropped the .gitignore entries for .claude/.plan-state-sync-sha and .claude/.personal-settings-sync-hash,
     so the stop hook flags both as untracked in CRAM every session. Session-start must keep
     them out of the working tree and never add a tracked change to the host project. Options:
