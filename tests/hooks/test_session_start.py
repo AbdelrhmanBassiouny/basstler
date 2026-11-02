@@ -1023,6 +1023,104 @@ def test_an_unreadable_repository_keeps_the_release_last_recorded(
     assert source.endswith(f"@{SampleReleaseTag.LATEST}")
 
 
+# %% a plugin updated after the session start
+
+
+def install_older_release_for_this_plugin(
+    repository: ScratchRepository, release_repository: str
+) -> None:
+    """
+    Install the package, outside a checkout, at :attr:`SampleReleaseTag.OLDER`, as a
+    session start before :attr:`SampleReleaseTag.LATEST` was tagged did, then tag it.
+
+    :param repository: The fixture-built scratch repository.
+    :param release_repository: The repository standing in for the package's own.
+    """
+    declaration_file(repository).unlink()
+    repository.run_git("tag", SampleReleaseTag.OLDER)
+    record_latest_release(repository, release_repository)
+    repository.install_package_environment(
+        **{ConfigurationVariable.REPOSITORY_URL: release_repository}
+    )
+    repository.run_git("tag", SampleReleaseTag.LATEST)
+
+
+def ready_package(
+    repository: ScratchRepository,
+    release_repository: str,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+) -> Path:
+    """
+    Ready the package as a hook does, with ``pip`` stubbed and no ``uv``.
+
+    :param repository: The fixture-built scratch repository.
+    :param release_repository: The repository standing in for the package's own.
+    :param stub_bin: The directory of stub executables.
+    :param tmp_path: The test's scratch directory.
+    :return: The file the ``pip`` stub logs each invocation to.
+    """
+    stub_bin.install(PackageManager.PIP)
+    call_log = tmp_path / "pip-calls"
+    repository.configuration_output(
+        ShellConfigurationFunction.READY_BASSTLER_PYTHON,
+        **{
+            ConfigurationVariable.REPOSITORY_URL: release_repository,
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+            StubVariable.PIP_CALL_LOG: str(call_log),
+        },
+    )
+    return call_log
+
+
+def test_a_plugin_updated_after_the_install_reinstalls_the_latest_release(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    A plugin synced during a session can call what only a later release has, so a hook
+    finding the plugin changed since the install reads the latest release again and
+    installs it, rather than running the package the session start installed.
+    """
+    release_repository = str(session_start_repository.project_root)
+    install_older_release_for_this_plugin(session_start_repository, release_repository)
+    session_start_repository.install_hook_scripts(
+        PluginLocation.ENTRY_POINT_SCRIPT.name
+    )
+
+    call_log = ready_package(
+        session_start_repository, release_repository, stub_bin, tmp_path
+    )
+
+    manifest = PluginManifest.of_this_plugin()
+    assert call_log.read_text().splitlines() == [
+        f"--python {environment_interpreter(session_start_repository)} install "
+        f"{manifest.name} @ git+{release_repository}@{SampleReleaseTag.LATEST}"
+    ]
+
+
+def test_an_unchanged_plugin_keeps_the_release_its_package_was_installed_at(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    The latest release is read once per session start: a hook running with the plugin
+    the package was installed for installs nothing, whatever was released since.
+    """
+    release_repository = str(session_start_repository.project_root)
+    install_older_release_for_this_plugin(session_start_repository, release_repository)
+
+    call_log = ready_package(
+        session_start_repository, release_repository, stub_bin, tmp_path
+    )
+
+    assert not call_log.exists()
+
+
 def test_a_plugin_outside_a_checkout_installs_the_default_branch_before_any_release(
     session_start_repository: ScratchRepository,
 ):

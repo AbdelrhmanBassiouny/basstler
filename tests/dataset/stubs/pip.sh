@@ -7,8 +7,9 @@ set -uo pipefail
 # the real one; see the stub_bin fixture in conftest.py.
 #
 # Recognizes only the two invocations the hooks make:
-#   `--python <interpreter> install --editable <source tree>`, from
-#     install_basstler_into_environment;
+#   `--python <interpreter> install [--editable] <source>`, from
+#     install_basstler_into_environment: editable for a checkout, a release's
+#     requirement for a plugin outside one;
 #   `install --target <directory> uv`, from install_uv, which it answers by
 #     writing <directory>/bin/uv as a script running bash on
 #     STUB_PIP_INSTALLED_UV.
@@ -45,15 +46,17 @@ if [ "${1:-}" = "install" ] && [ "${2:-}" = "--target" ] && [ -n "${3:-}" ] \
   exit 0
 fi
 
+SOURCE="${4:-}"
+[ "${SOURCE}" = "--editable" ] && SOURCE="${5:-}"
 if [ "${1:-}" != "--python" ] || [ -z "${2:-}" ] || [ "${3:-}" != "install" ] \
-    || [ "${4:-}" != "--editable" ] || [ -z "${5:-}" ]; then
+    || [ -z "${SOURCE}" ]; then
   echo "pip stub: unrecognized invocation: $*" >&2
   exit 64
 fi
 
 if [ "${STATUS}" = "0" ]; then
-  echo "Successfully installed $5"
+  echo "Successfully installed ${SOURCE}"
   exit 0
 fi
-echo "ERROR: stub pip refused to install $5" >&2
+echo "ERROR: stub pip refused to install ${SOURCE}" >&2
 exit "${STATUS}"

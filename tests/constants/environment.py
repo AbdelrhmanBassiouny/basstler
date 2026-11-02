@@ -74,6 +74,12 @@ class ConfigurationVariable(StrEnum):
     The file recording what the environment's package was installed from.
     """
 
+    INSTALLED_PLUGIN_DIGEST_FILE = "BASSTLER_INSTALLED_PLUGIN_DIGEST_FILE"
+    """
+    The file recording the digest of the plugin the environment's package was installed
+    for.
+    """
+
     INSTALL_LOCK = "BASSTLER_INSTALL_LOCK"
     """
     The directory held while the package's environment is installed into.
