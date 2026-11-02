@@ -26,6 +26,9 @@ says.
   or fan out to subagents.
 - Never read a branch's diff or source. The summary context below is all you get.
 - Never open the upstream pull request, write `in-review`, or label anything yourself.
+- A command the permission system denies is a question for the user, put at once - see
+  [`session-rules.md`](../../hooks/session-rules.md). The pass pushes several branches, so
+  expect the restack to be stopped this way.
 
 ## 1. Repositories
 

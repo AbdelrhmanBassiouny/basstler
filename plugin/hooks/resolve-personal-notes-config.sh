@@ -449,6 +449,9 @@ SETUP_PERSONAL_NOTES_DIRECTORY="${PLUGIN_ROOT}/skills/setup-personal-notes"
 # the single source of truth for that question, so no caller re-implements
 # "is the notes branch there?" with its own git plumbing.
 CHECK_SETUP_SCRIPT="${HOOKS_DIR}/check-setup.sh"
+# SESSION_RULES_FILE: the rules every session using basstler's skills follows,
+# which session-start.sh loads into CLAUDE.local.md.
+SESSION_RULES_FILE="${HOOKS_DIR}/session-rules.md"
 # CREATE_PERSONAL_NOTES_BRANCH_SCRIPT: the script that creates the notes
 # branch, named once here because a script that finds the branch missing tells
 # the user to run it.

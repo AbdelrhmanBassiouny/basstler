@@ -32,6 +32,11 @@ class ClaudeLocalSection(StrEnum):
     :attr:`PersonalNotesPath.LOCAL_INSTRUCTIONS`.
     """
 
+    SESSION_RULES = "SESSION-RULES"
+    """
+    The rules every session using basstler's skills follows.
+    """
+
     PULL_REQUEST_PROGRESS = "PR-PROGRESS"
     """
     The current branch's pull request progress notes.

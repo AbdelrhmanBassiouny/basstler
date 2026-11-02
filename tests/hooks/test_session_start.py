@@ -36,7 +36,11 @@ from ..constants.environment import (
     SearchPathVariable,
 )
 from ..constants.notes import ClaudeLocalSection, ScratchBranch
-from ..constants.paths import DatasetLocation, PersonalNotesPath
+from ..constants.paths import (
+    DatasetLocation,
+    PersonalNotesPath,
+    RepositoryLocation,
+)
 from ..plan_dataset import LandedItemsPlan
 from ..executable_stubs import ExecutableStubDirectory, path_hiding_executables
 from ..plugin_manifest import PluginManifest
@@ -186,6 +190,7 @@ def session_start_repository(
         PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name,
         PluginLocation.SESSION_START_MESSAGES_SCRIPT.name,
         PluginLocation.SESSION_START_SCRIPT.name,
+        PluginLocation.SESSION_RULES.name,
         PluginLocation.SETUP_CHECK_SCRIPT.name,
     )
     scratch_repository.install_package()
@@ -264,6 +269,47 @@ def test_runs_in_a_project_with_no_claude_code_directory(
     assert (
         session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
     ).exists()
+
+
+# %% the session rules
+
+
+def test_every_session_loads_the_session_rules(
+    session_start_repository: ScratchRepository,
+):
+    """
+    The local instructions carry the plugin's session rules unchanged, so every skill a
+    session runs is bound by them.
+    """
+    result = publish_and_run(session_start_repository)
+    assert result.returncode == 0, result.stderr
+    claude_local = (
+        session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
+    ).read_text()
+    assert (
+        ClaudeLocalSection.SESSION_RULES.within(claude_local)
+        == (RepositoryLocation.HOOKS / PluginLocation.SESSION_RULES.name).read_text()
+    )
+
+
+def test_a_session_with_no_personal_notes_still_loads_the_session_rules(
+    session_start_repository: ScratchRepository,
+):
+    """
+    The session rules do not depend on the user having written any notes.
+    """
+    session_start_repository.publish_notes_branch(
+        {PersonalNotesPath.GIT_IDENTITY: SCRATCH_IDENTITY.as_git_config_file()}
+    )
+    result = run_session_start(session_start_repository)
+    assert result.returncode == 0, result.stderr
+    claude_local = (
+        session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
+    ).read_text()
+    assert (
+        ClaudeLocalSection.SESSION_RULES.within(claude_local)
+        == (RepositoryLocation.HOOKS / PluginLocation.SESSION_RULES.name).read_text()
+    )
 
 
 # %% someone who uses neither plans nor personal notes

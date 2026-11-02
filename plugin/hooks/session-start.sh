@@ -3,8 +3,9 @@ set -euo pipefail
 
 # SessionStart hook. Writes CLAUDE.local.md at the project root from the
 # personal-notes branch (default claude/personal-notes on origin; overridable by
-# git config or environment, see ./README.md): the notes, this branch's PR
-# progress, and this branch's plan item with the plan's standing rules. Also
+# git config or environment, see ./README.md): basstler's session rules, the
+# notes, this branch's PR progress, and this branch's plan item with the plan's
+# standing rules. Also
 # syncs personal settings and git identity, keeps the package environment
 # installed, stamps the plan state SHA for plan-updates-since.sh, fast-forwards
 # the default branch to the upstream (see basstler.maintenance.default_branch_sync),
@@ -32,6 +33,16 @@ CURRENT_BRANCH_FOR_COMMENT="${CURRENT_BRANCH//-->/}"
 OUTPUT_FILE="$(mktemp)"
 trap 'rm -f "${OUTPUT_FILE}"' EXIT
 WROTE_ANYTHING=0
+
+# The rules every session using basstler's skills follows, first so none is missed.
+if [ -f "${SESSION_RULES_FILE}" ]; then
+  {
+    echo "<!-- BEGIN-SESSION-RULES -->"
+    cat "${SESSION_RULES_FILE}"
+    echo "<!-- END-SESSION-RULES -->"
+  } >> "${OUTPUT_FILE}"
+  WROTE_ANYTHING=1
+fi
 
 # SUMMARY_* lines are printed at the end; the rest are set on every path below.
 SUMMARY_NOTES="not found"
@@ -79,6 +90,7 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
 fi
 
 if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" 2>/dev/null; then
+  [ "${WROTE_ANYTHING}" = "1" ] && printf '\n' >> "${OUTPUT_FILE}"
   cat <<HEADER >> "${OUTPUT_FILE}"
 <!--
 Personal notes, synced from '${NOTES_BRANCH}' (${NOTES_PATH}) on remote
