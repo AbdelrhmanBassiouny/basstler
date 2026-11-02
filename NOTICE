@@ -5,6 +5,7 @@ basstler is a personal project of Abdelrhman Bassiouny, developed independently
 of any employer or institution, and is licensed under the Apache License,
 Version 2.0 (see LICENSE).
 
-src/basstler/exceptions.py and src/basstler/class_property.py contain code
-adapted from krrood (https://github.com/cram2/krrood), which remains under its
-own licence.
+src/basstler/exceptions.py, src/basstler/class_property.py and
+src/basstler/code_rules/{rule,rule_module,instructions}.py contain code adapted
+from krrood (https://github.com/cram2/cognitive_robot_abstract_machine/tree/main/krrood),
+which remains under its own licence.

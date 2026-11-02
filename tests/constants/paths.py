@@ -462,3 +462,47 @@ class ProseSnippet(PathEnumeration):
     A section header above a three-line comment block, a trailing comment, and a
     four-line comment block.
     """
+
+
+class DocstringSnippet(PathEnumeration):
+    """
+    Python sources the missing docstring check reads.
+    """
+
+    DIRECTORY = DatasetLocation.DIRECTORY / "missing-docstrings"
+    """
+    The directory holding them.
+    """
+
+    UNDOCUMENTED_DEFINITIONS = DIRECTORY / "undocumented-definitions.py"
+    """
+    A documented module whose class leaves one field and one method undocumented, and
+    overrides a method without a docstring.
+    """
+
+    NO_MODULE_DOCSTRING = DIRECTORY / "no-module-docstring.py"
+    """
+    A module without a docstring holding one documented function.
+    """
+
+    DOCUMENTED_MODULE = DIRECTORY / "documented-module.py"
+    """
+    A module breaking no rule a checker enforces.
+    """
+
+
+class RuleSectionsFile(PathEnumeration):
+    """
+    The sections the ``AGENTS.md`` generation tests render, and what they render to.
+    """
+
+    DIRECTORY = DatasetLocation.DIRECTORY / "code_rules"
+    """
+    The directory holding them.
+    """
+
+    EXPECTED_TEXT = DIRECTORY / "rule-sections.md"
+    """
+    The text of the sections in ``rule_sections.py``, with placeholders for the module's
+    path and the commands' invocations.
+    """
