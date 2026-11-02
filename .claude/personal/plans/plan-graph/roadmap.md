@@ -9,6 +9,6 @@
 - Extraction and direction-change are one command, give these branches a new common parent, and the probe runs before any apply: `git merge-tree --write-tree` costs nothing and mutates nothing.
 - Writing to feature branches is a deliberate exception for common-parent, approved 2026-09-06. integration-conflict-triage never writes a fix to a feature branch, and that rule stands for the integration build.
 - An unreachable repository is unverified, never refused and never satisfied. A save must not fail because another repository's notes cannot be fetched, and must not count that reference as ready.
-- #17 owns the reference form `<plan-id>/<item-id>` and stays in plan-dashboards. graph-model builds on it; until it lands no manifest here writes a cross-plan depends_on, since main cannot resolve one.
-- Freshness is tied to the dashboard publish and to every save, not to a scheduled Action.
+- Cross-plan references landed in #17: `depends_on` accepts `<plan-id>/<item-id>`, and a bare id means an item of the same plan. graph-model builds on that form, and a manifest here may name an item of another plan.
+- Freshness is tied to every save: the plan site rebuilds on each push to a notes branch, so the graph is never drawn from a stale copy. Nothing runs on a schedule.
 - Every module lives in `src/basstler/`; plan.yaml keys are spelled only in plan_model.ManifestKey, and design.yaml's keys get one enum of their own beside it.
