@@ -73,7 +73,7 @@ items:
     \ as issue references read back from the body; a pull request closes its item. Read and write go through pydantic\
     \ models of the REST responses.\n Its new endpoints go through cli-launcher's GitHubClient. In the PR, report\
     \ how many endpoint models were hand-written and their line count, so the githubkit fallback can be judged on\
-    \ that measure."
+    \ that measure.\n Labels only for blocked and deferred; other statuses come from the linked pull request."
 - id: item-brief
   title: One command prints an item's whole brief in at most 3 KB
   branch: null
