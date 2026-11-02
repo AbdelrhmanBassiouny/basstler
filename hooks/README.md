@@ -127,7 +127,7 @@ It gets no header or markers — strict JSON has nowhere to put them — so the 
 
 **Your local edits are never overwritten.** Claude Code writes to that same file whenever you grant
 a permission with "don't ask again", so the hook writes only when the file is missing or still
-identical to what it last synced (tracked in the gitignored `.claude/.personal-settings-sync-hash`).
+identical to what it last synced (tracked in `personal-settings-sync-hash`, kept in the repository's git directory).
 Otherwise it keeps your version and says so in its summary. To push your edits up and let syncing
 resume:
 
@@ -253,8 +253,8 @@ the narrative that doesn't belong in structured data.
   [`execution-modes.md`](../skills/plan-item-mode/execution-modes.md).
 - Recheck one for updates, without rereading it →
   [`plan-updates-since.sh`](./plan-updates-since.sh) `<plan-id> [--since <sha>]`. Every
-  `session-start.sh` run stamps the notes-branch commit it just fetched (gitignored, at
-  `.claude/.plan-state-sync-sha`), so this can diff the plan's directory from that stamp and print
+  `session-start.sh` run stamps the notes-branch commit it just fetched (kept in the repository's git
+  directory as `basstler/plan-state-sync-sha`), so this can diff the plan's directory from that stamp and print
   only the tracking-issue comments newer than it. Needs no Claude Code session: it prefers the `gh`
   CLI when installed, otherwise `GH_TOKEN`/`GITHUB_TOKEN` with `curl`.
 - Know which Python dependencies are absent →
@@ -306,8 +306,8 @@ Any other label is preserved but not interpreted.
   run `save-personal-settings.sh` yourself.
 - The git identity sync only ever fills a gap: it writes repository-local config, and only when the
   clone has none of its own. Global config is never written.
-- `CLAUDE.local.md`, `.claude/settings.local.json` and the recheck stamp
-  `.claude/.plan-state-sync-sha` are all gitignored.
+- `CLAUDE.local.md` and `.claude/settings.local.json` are gitignored; the recheck and settings stamps live
+  under the git directory's `basstler/`, so no working tree ever shows them.
 - Always operates on this repo's project root, resolved from the scripts' own location on disk —
   not the caller's cwd, which a `SessionStart` hook can't rely on.
 - Coexists with your own `SessionStart` hooks: Claude Code concatenates hook arrays across settings
