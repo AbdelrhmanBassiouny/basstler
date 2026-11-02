@@ -161,6 +161,22 @@ def test_a_notes_branch_without_the_dispatch_workflow_says_how_to_publish(
     assert publication.__name__ in report.results[SetupCheck.PLAN_SITE].detail
 
 
+def test_a_listed_repository_without_the_dispatch_workflow_names_the_site_it_is_missing_from(
+    check_setup_repository: ScratchRepository,
+):
+    site_url = "https://an-owner.github.io/plans/"
+    check_setup_repository.update_notes_branch_file(
+        ProjectLocation.PLAN_HUB, f"site_url: {site_url}\n"
+    )
+
+    report = run_check_setup(check_setup_repository)
+
+    plan_site = report.results[SetupCheck.PLAN_SITE]
+    assert plan_site.status == CheckStatus.INFORMATIONAL
+    assert site_url in plan_site.detail
+    assert publication.__name__ in plan_site.detail
+
+
 def test_a_notes_branch_with_the_dispatch_workflow_starts_the_site_build(
     check_setup_repository: ScratchRepository,
 ):

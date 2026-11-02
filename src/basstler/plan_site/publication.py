@@ -72,6 +72,11 @@ class WorkflowRunKey(StrEnum):
     How a run ended, ``null`` while it runs.
     """
 
+    URL = "html_url"
+    """
+    The address of the run's page on github.com.
+    """
+
 
 class RunListingParameter(StrEnum):
     """
@@ -105,6 +110,11 @@ class ListedRun(JSONModel):
     How it ended, :attr:`CheckOutcome.PENDING` while it runs.
     """
 
+    url: str
+    """
+    The address of the run's page on github.com, where its log is.
+    """
+
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> ListedRun:
         """
@@ -114,6 +124,7 @@ class ListedRun(JSONModel):
         return cls(
             Path(data[WorkflowRunKey.PATH]),
             CheckOutcome.from_conclusion(data[WorkflowRunKey.CONCLUSION]),
+            data[WorkflowRunKey.URL],
         )
 
 
@@ -159,12 +170,19 @@ class RunListing:
             [ListedRun.from_json(run) for run in data[WorkflowRunKey.WORKFLOW_RUNS]]
         )
 
+    def latest(self, workflow: WorkflowLocation) -> ListedRun | None:
+        """
+        :param workflow: The workflow.
+        :return: Its latest run, ``None`` when the listing holds none.
+        """
+        return next((run for run in self.runs if run.workflow == workflow), None)
+
     def succeeded(self, workflow: WorkflowLocation) -> bool:
         """
         :param workflow: The workflow.
         :return: Whether its latest run succeeded.
         """
-        latest = next((run for run in self.runs if run.workflow == workflow), None)
+        latest = self.latest(workflow)
         return latest is not None and latest.outcome is CheckOutcome.SUCCESS
 
 
@@ -186,9 +204,16 @@ class UserStep(StrEnum):
     No build in the site repository has succeeded yet.
     """
 
-    STORE_TOKEN = "store the token that starts the build"
+    CREATE_TOKEN = "create, or reuse, the token that starts the build"
     """
-    No dispatch from the notes branch has succeeded yet.
+    No dispatch from the notes branch has succeeded yet, so the token it needs may not
+    exist.
+    """
+
+    STORE_TOKEN = "store the token as a secret in every notes repository"
+    """
+    No dispatch from the notes branch has succeeded yet. Actions secrets belong to one
+    repository, so each repository the site publishes needs its own copy.
     """
 
 
@@ -203,14 +228,20 @@ class PendingStep:
     The step.
     """
 
-    line: str
+    line: str | None
     """
-    The one copyable line that takes it.
+    The one copyable line that takes it, ``None`` when GitHub offers no command for it.
     """
 
     browser_steps: tuple[str, ...]
     """
     The same step taken on github.com, one click or entry each, in order.
+    """
+
+    latest_run: ListedRun | None = None
+    """
+    The latest run of the workflow whose failure to succeed makes the step necessary,
+    ``None`` when it has not run.
     """
 
     def render(self) -> str:
@@ -219,7 +250,17 @@ class PendingStep:
             f"    {number}. {text}"
             for number, text in enumerate(self.browser_steps, start=1)
         )
-        return f"- {self.step}:\n    {self.line}\n  Or in the browser:\n{numbered}"
+        lines = [f"- {self.step}:"]
+        if self.latest_run is not None:
+            lines.append(
+                f"  Latest run, {self.latest_run.outcome}: {self.latest_run.url}"
+            )
+        if self.line is None:
+            lines.append("  GitHub offers no command for this; in the browser:")
+        else:
+            lines.extend([f"    {self.line}", "  Or in the browser:"])
+        lines.append(numbered)
+        return "\n".join(lines)
 
 
 @dataclass(frozen=True)
@@ -250,13 +291,17 @@ class UserSteps:
         """
         return f"{GitHubAddress.WEB}/settings/personal-access-tokens/new"
 
-    def pending(self, step: UserStep) -> PendingStep:
+    def pending(
+        self, step: UserStep, latest_run: ListedRun | None = None
+    ) -> PendingStep:
         """
         :param step: The step.
+        :param latest_run: The latest run of the workflow that makes the step
+            necessary, ``None`` when it has not run.
         :return: The step with its line and its browser steps.
         """
         site = self.site.repository
-        notes = self.notes_repository
+        repositories = ", ".join(self.registered)
         steps = {
             UserStep.CREATE_SITE_REPOSITORY: PendingStep(
                 step,
@@ -275,26 +320,36 @@ class UserSteps:
                     f"Open {site.url}/settings/pages.",
                     "Under Build and deployment, set Source to GitHub Actions.",
                 ),
+                latest_run,
             ),
-            UserStep.STORE_TOKEN: PendingStep(
+            UserStep.CREATE_TOKEN: PendingStep(
                 step,
-                f"create a fine-grained token at {self.token_page} with Actions: "
-                f"write on {site.full_name} and Contents: read on "
-                f"{', '.join(self.registered)}, then: gh secret set "
-                f"{PlanSiteSecret.TOKEN} --repo {notes.full_name}",
+                None,
                 (
-                    f"Open {self.token_page}.",
+                    f"Open {self.token_page}, or open the token you already use for "
+                    "the plan site.",
                     f"Name the token and set Resource owner to {site.owner}.",
                     "Under Repository access, choose Only select repositories and "
-                    f"select {site.full_name}, {', '.join(self.registered)}.",
+                    f"select {site.full_name}, {repositories}.",
                     "Under Permissions, open Repository permissions and set Actions "
                     "to Read and write and Contents to Read-only.",
                     "Click Generate token and copy the token now; GitHub shows it "
                     "once.",
-                    f"Open {notes.url}/settings/secrets/actions/new.",
-                    f"Set the name to {PlanSiteSecret.TOKEN}, paste the token as "
-                    "the secret, then click Add secret.",
                 ),
+                latest_run,
+            ),
+            UserStep.STORE_TOKEN: PendingStep(
+                step,
+                f'read -rsp "Token: " token; for repository in {repositories}; do '
+                f'printf %s "$token" | gh secret set {PlanSiteSecret.TOKEN} '
+                '--repo "$repository"; done',
+                tuple(
+                    f"Open {GitHubAddress.WEB}/{repository}/settings/secrets/actions/new, "
+                    f"set the name to {PlanSiteSecret.TOKEN}, paste the token as the "
+                    "secret, then click Add secret."
+                    for repository in self.registered
+                ),
+                latest_run,
             ),
         }
         return steps[step]
@@ -427,6 +482,10 @@ class PlanSitePublication:
             user_steps = UserSteps(notes_repository, site, [])
             report.pending.append(user_steps.pending(UserStep.CREATE_SITE_REPOSITORY))
             return report
+        site_runs = RunListing.read(self.runs, site.repository, site_branch.name)
+        notes_runs = RunListing.read(
+            self.runs, notes_repository, self.dispatch_workflow.notes_branch
+        )
         existing = site_branch.read_latest(SiteWorkflow.location)
         site_workflow = (
             replace(
@@ -449,14 +508,18 @@ class PlanSitePublication:
             report,
         )
         user_steps = UserSteps(notes_repository, site, hub.repositories)
-        site_runs = RunListing.read(self.runs, site.repository, site_branch.name)
         if not site_runs.succeeded(SiteWorkflow.location):
-            report.pending.append(user_steps.pending(UserStep.TURN_ON_PAGES))
-        notes_runs = RunListing.read(
-            self.runs, notes_repository, self.dispatch_workflow.notes_branch
-        )
+            report.pending.append(
+                user_steps.pending(
+                    UserStep.TURN_ON_PAGES, site_runs.latest(SiteWorkflow.location)
+                )
+            )
         if not notes_runs.succeeded(DispatchWorkflow.location):
-            report.pending.append(user_steps.pending(UserStep.STORE_TOKEN))
+            latest_dispatch = notes_runs.latest(DispatchWorkflow.location)
+            report.pending.extend(
+                user_steps.pending(step, latest_dispatch)
+                for step in (UserStep.CREATE_TOKEN, UserStep.STORE_TOKEN)
+            )
         return report
 
     @staticmethod
