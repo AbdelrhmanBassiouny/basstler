@@ -141,6 +141,20 @@ class DatasetLocation(PathEnumeration):
     one succeeded.
     """
 
+    PLAN_SITE_TOKEN_STORED_BEFORE_FAILURE = (
+        DIRECTORY / "plan-site-token-stored-before-failure.json"
+    )
+    """
+    A notes repository's token secret, set before its recorded failed dispatch run.
+    """
+
+    PLAN_SITE_TOKEN_STORED_AFTER_FAILURE = (
+        DIRECTORY / "plan-site-token-stored-after-failure.json"
+    )
+    """
+    A notes repository's token secret, set after its recorded failed dispatch run.
+    """
+
     WORKFLOW_RUNS_NONE = DIRECTORY / "workflow-runs-none.json"
     """
     A run listing with no runs at all.

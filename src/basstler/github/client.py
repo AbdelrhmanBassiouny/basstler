@@ -69,6 +69,19 @@ class GitHubReader(ABC):
         """
 
 
+class GitHubAttemptReader(ABC):
+    """
+    Reading a REST resource that may be refused, such as one that may not exist.
+    """
+
+    @abstractmethod
+    def attempt_get(self, path: str) -> GitHubResponse:
+        """
+        Like :meth:`GitHubReader.get`, but a refusal or a call that got no answer is
+        returned on the answer instead of raised.
+        """
+
+
 class GitHubWriter(ABC):
     """
     Writing REST resources.
@@ -178,7 +191,7 @@ class GitHubResponse:
 
 
 @dataclass(frozen=True)
-class GitHubRestClient(GitHubClient):
+class GitHubRestClient(GitHubClient, GitHubAttemptReader):
     """
     Plain authenticated HTTPS requests, through the proxy the environment names.
 
@@ -219,7 +232,10 @@ class GitHubRestClient(GitHubClient):
         return login.stdout.strip()
 
     def get(self, path: str) -> Any:
-        return self._exchange(HttpMethod.GET, path, None).raise_if_failed()
+        return self.attempt_get(path).raise_if_failed()
+
+    def attempt_get(self, path: str) -> GitHubResponse:
+        return self._exchange(HttpMethod.GET, path, None)
 
     def get_pages(self, path: str) -> list[Any]:
         pages: list[Any] = []
