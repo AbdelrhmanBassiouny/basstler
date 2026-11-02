@@ -122,9 +122,9 @@ report_upstream_reviews_action() {
   esac
 }
 
-# report_plan_site: whether the notes branch starts the plan site's build: ok only when
-# its latest dispatch run succeeded, as PLAN_SITE_DISPATCH_CHECK_MODULE reads it from
-# GitHub; info when GitHub cannot be read, so the publication command re-checks it.
+# report_plan_site: whether every repository on the plan site starts its build, as
+# PLAN_SITE_DISPATCH_CHECK_MODULE reads their tokens and dispatch runs from GitHub; info
+# when GitHub cannot be read, so the publication command re-checks it.
 report_plan_site() {
   local publish_command="${BASSTLER_PYTHON} -m ${PLAN_SITE_PUBLICATION_MODULE}"
   local site_url dispatch_fields dispatch_status dispatch_detail
