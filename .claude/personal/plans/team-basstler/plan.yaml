@@ -140,10 +140,40 @@ items:
   status: not started
   track: site
   depends_on: []
-  notes: 'Replaces plan-dashboards/deferred-dependency-drift-check (draft #47, closed: it
-    edited the Artifact dashboard #115 removes). Re-implement on plan_site.plan_page.PlanPage
-    once #115 lands: flag an item whose dependency is deferred or closed unmerged, suggesting
-    a base to reparent onto. Reference design on branch claude/deferred-dependency-drift-pr-qxpfsm
-    (StallReason, StalledDependencyDrift).
+  notes: >
+    Replaces plan-dashboards/deferred-dependency-drift-check (draft #47, closed: it edited the Artifact
+    dashboard that #115 removed). Build it in plan_site: flag an item whose dependency is deferred or
+    closed unmerged, suggesting a base to reparent onto. Reference design on branch
+    claude/deferred-dependency-drift-pr-qxpfsm (StallReason, StalledDependencyDrift).
 
-    '
+- id: hide-deferred-items
+  title: Hide deferred items on a plan page by default, behind their own toggle
+  status: not started
+  track: site
+  depends_on: []
+  notes: >
+    Replaces plan-dashboards/deferred-items-hidden-by-default (draft #46, closed: it edited the Artifact
+    dashboard). The site only dims deferred items today. Add a toggle on the plan page, hidden by
+    default, and make a link to a hidden item reveal it. Reference: branch
+    claude/hidden-deferred-plan-items-6weef1 (VisibilityFilter, sidebar-link fix in 16d8f77).
+
+- id: untracked-pull-requests
+  title: List each repository's open pull requests that no plan item tracks
+  status: not started
+  track: site
+  depends_on: []
+  notes: >
+    From plan-dashboards. On 2026-10-21 a cleanup found basstler #9, #32 and #33 open with no item.
+    Each repository page on the site lists open pull requests whose number and branch match no item
+    in any plan, each with an /add-plan-item link. Under basstler-v3 this becomes the pull requests
+    that close no item issue.
+
+- id: pull-request-size-and-conflict-chips
+  title: Show lines changed and a merge-conflict chip on plan page items
+  status: not started
+  track: site
+  depends_on: []
+  notes: >
+    From plan-dashboards/shared-pr-state-chips. The site already shows CI chips; add lines changed and
+    whether the pull request merges cleanly. Reuse the pull request state the stack tooling reads
+    instead of a second probe. Reference: the last commit of CRAM #52.
