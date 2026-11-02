@@ -1,12 +1,11 @@
 ## Plan
-- `MergeWorkflow` (plan_site/workflows.py): the dispatch workflow's twin, on `pull_request: closed`, job runs only when merged; template extends the dispatch template.
-- `WorkflowLocation.PLAN_SITE_MERGE` names its file.
-- `PlanSitePublication.publish` writes it onto the notes repository's default branch (same `PLAN_SITE_TOKEN`).
-- Tests first: written on the default branch, re-run writes nothing, trigger/condition/step shape, both workflows pass the Actions budget.
-- Docs: setup-personal-notes SKILL.md section 8.
+- `MergeWorkflow` on the notes repository's default branch, started by a merged pull request; same token and step as the dispatch workflow.
 
 ## Done
-- Bootstrap, draft PR #122.
+- `MergeWorkflow`, `WorkflowLocation.PLAN_SITE_MERGE`, merge template extending the dispatch template (dispatch output unchanged).
+- Publication writes it onto the default branch (`default_branch_of`).
+- Tests (6 new), setup skill step 8, PR description, `release:minor`.
 
 ## Next
-- Tests, then implementation.
+- Owner's call: `pull_request_target` to cover fork pull requests; a user step when the default branch refuses direct pushes.
+- After merge: re-run setup in each published repository.
