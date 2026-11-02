@@ -3,10 +3,10 @@
 - cyclopts `basstler` console script for v3 commands
 
 ## Done
-- basstler.github client + tests; callers moved onto it
-- `basstler` command (--version), cyclopts dependency
-- Unpromoted-branch test pinned to --source graphql (owner-approved)
-- Draft PR #123 description current
+- Client, callers, `basstler` command, cyclopts dependency
+- CI fix: token read at first request (3 Action-read tests needed no token)
+- main merged (#124); description current
 
 ## Next
-- CI result on PR #123; owner review
+- Owner decision: hermetic gh in test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status (fails only where gh is logged in)
+- CI on the new push
