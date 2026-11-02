@@ -16,6 +16,7 @@ import pytest
 from basstler.locations import PluginLocation, ProjectLocation, WorkflowLocation
 from basstler.exit_codes import SetupCheckExitCode
 from basstler.plan_site import publication
+from basstler.plan_site.hub import HubFileKey
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 
 from ..constants.environment import ConfigurationVariable
@@ -166,7 +167,7 @@ def test_a_listed_repository_without_the_dispatch_workflow_names_the_site_it_is_
 ):
     site_url = "https://an-owner.github.io/plans/"
     check_setup_repository.update_notes_branch_file(
-        ProjectLocation.PLAN_HUB, f"site_url: {site_url}\n"
+        ProjectLocation.PLAN_HUB, f"{HubFileKey.SITE_URL}: {site_url}\n"
     )
 
     report = run_check_setup(check_setup_repository)
