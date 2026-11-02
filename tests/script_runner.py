@@ -15,7 +15,7 @@ import subprocess
 import sys
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from basstler.locations import PluginLocation
@@ -47,6 +47,11 @@ class ScriptRunner(ABC):
     absent cannot express that by setting it to something.
     """
 
+    set_variables: Mapping[str, str] = field(default_factory=dict)
+    """
+    Variables every run of this runner sets, ahead of what a single call sets.
+    """
+
     @property
     @abstractmethod
     def command(self) -> tuple[str, ...]:
@@ -56,14 +61,15 @@ class ScriptRunner(ABC):
         """
         :param overrides: Variables this call sets.
         :return: This process's own environment, minus what
-            :attr:`removed_variable_prefixes` names, plus the overrides.
+            :attr:`removed_variable_prefixes` names, plus :attr:`set_variables`, plus the
+            overrides.
         """
         inherited = {
             name: value
             for name, value in os.environ.items()
             if not name.startswith(self.removed_variable_prefixes)
         }
-        return {**inherited, **overrides}
+        return {**inherited, **self.set_variables, **overrides}
 
     def run(
         self, *arguments: str, **environment_overrides: str

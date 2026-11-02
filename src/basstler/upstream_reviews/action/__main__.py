@@ -44,9 +44,7 @@ from basstler.upstream_reviews.action.read import (
     ActionRead,
 )
 from basstler.upstream_reviews.action.run import ActionRun
-from basstler.upstream_reviews.clients import (
-    GitHubCommandLineClient,
-)
+from basstler.github.client import GitHubRestClient
 from basstler.upstream_reviews.exceptions import (
     ActionUnavailable,
     UpstreamReadError,
@@ -190,7 +188,7 @@ def main(argv: list[str] | None = None) -> int:
         action_read = ActionRead(
             branch,
             UpstreamReadRequest.from_arguments(arguments, arguments.upstream),
-            GitHubCommandLineClient(),
+            GitHubRestClient(),
         )
         commit = action_read.send()
         result = action_read.wait(arguments.timeout, commit)

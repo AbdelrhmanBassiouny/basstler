@@ -27,6 +27,7 @@ from basstler.locations import (
     PluginSkillLocation,
     ProjectLocation,
 )
+from basstler.github.client import GitHubClient, HttpMethod
 from basstler.maintenance.board import AccountField
 from basstler.maintenance.github import (
     GitHubPath,
@@ -76,14 +77,17 @@ A repository owned by anybody but the credential's owner, which must be refused.
 # %% GitHub, answered from memory
 
 
-@dataclass(frozen=True)
-class GitHubAnsweringFromMemory(GitHubRepository):
+@dataclass
+class GitHubAnsweringFromMemory(GitHubClient):
     """
-    A repository client whose account and labels live in memory, recording every label
-    it is asked to create.
+    A client whose account and labels live in memory, recording every label it is asked
+    to create.
     """
 
-    token: str = ""
+    repository: Repository
+    """
+    The repository the setup reads and writes.
+    """
 
     login: str = CREDENTIAL_OWNER.owner
     """
@@ -100,16 +104,23 @@ class GitHubAnsweringFromMemory(GitHubRepository):
     Every label-creation payload sent, in order.
     """
 
-    def _request(
-        self, method: str, path: str, payload: Mapping[str, Any] | None = None
-    ) -> Any:
-        if path == str(GitHubPath.AUTHENTICATED_USER):
-            return {AccountField.LOGIN: self.login}
-        if payload is not None:
-            self.created_labels.append(payload)
-            self.present_labels.add(payload[LabelField.NAME])
-            return payload
-        return [{LabelField.NAME: label} for label in sorted(self.present_labels)]
+    def get(self, path: str) -> Any:
+        assert path == str(GitHubPath.AUTHENTICATED_USER)
+        return {AccountField.LOGIN: self.login}
+
+    def get_pages(self, path: str) -> list[Any]:
+        return [[{LabelField.NAME: label} for label in sorted(self.present_labels)]]
+
+    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
+        self.created_labels.append(payload)
+        self.present_labels.add(payload[LabelField.NAME])
+        return payload
+
+    def as_repository(self) -> GitHubRepository:
+        """
+        :return: The repository client the setup is handed, calling through this one.
+        """
+        return GitHubRepository(self.repository, self)
 
 
 # %% the scratch layout
@@ -154,7 +165,7 @@ def identity_arguments(identity: GitIdentity) -> list[str]:
 def setup_for(
     repository: ScratchRepository,
     *arguments: str,
-    github: GitHubRepository | None = None,
+    github: GitHubAnsweringFromMemory | None = None,
     environment: Mapping[str, str] | None = None,
 ) -> PersonalNotesSetup:
     """
@@ -174,7 +185,7 @@ def setup_for(
         request=SetupRequest.from_arguments(
             [SetupOption.REMOTE, str(repository.notes_remote_path), *arguments]
         ),
-        github=github,
+        github=None if github is None else github.as_repository(),
         plugin_root=PluginRoot(repository.plugin_root),
     )
 
@@ -199,7 +210,9 @@ def published_notes_commit(repository: ScratchRepository) -> str:
     ).stdout
 
 
-def labels_setup(*arguments: str, github: GitHubRepository) -> PersonalNotesSetup:
+def labels_setup(
+    *arguments: str, github: GitHubAnsweringFromMemory
+) -> PersonalNotesSetup:
     """
     :param arguments: The command line after ``--remote``.
     :param github: The GitHub access the run has.
@@ -211,7 +224,7 @@ def labels_setup(*arguments: str, github: GitHubRepository) -> PersonalNotesSetu
         request=SetupRequest.from_arguments(
             [SetupOption.REMOTE, CREDENTIAL_OWNER.full_name, *arguments]
         ),
-        github=github,
+        github=github.as_repository(),
         plugin_root=PluginRoot(RepositoryLocation.PLUGIN.value),
     )
 

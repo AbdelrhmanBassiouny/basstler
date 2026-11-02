@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 
 from basstler.locations import PluginLocation, ProjectLocation, RepositoryStateLocation
-from basstler.maintenance.constants import GitHubClient
+from basstler.maintenance.constants import GitHubExecutable
 
 from ..constants.environment import ScrubbedEnvironmentPrefix, SearchPathVariable
 from ..constants.notes import ScratchBranch
@@ -354,7 +354,7 @@ def test_tracking_issue_without_default_repository_fails_clearly(
 def test_prints_tracking_issue_comments_via_the_gh_backend(
     scratch_repo: ScratchRepository, stub_bin: ExecutableStubDirectory, tmp_path: Path
 ):
-    stub_bin.install(GitHubClient.COMMAND_LINE)
+    stub_bin.install(GitHubExecutable.COMMAND_LINE)
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
@@ -389,7 +389,7 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
 def test_prints_tracking_issue_comments_via_the_curl_fallback(
     scratch_repo: ScratchRepository, stub_bin: ExecutableStubDirectory, tmp_path: Path
 ):
-    stub_bin.install(GitHubClient.CURL)
+    stub_bin.install(GitHubExecutable.CURL)
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
@@ -398,7 +398,7 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
         author_login="hubot", created_at="2026-08-01T01:00:00Z", body="Ship it"
     )
     comments_json = json.dumps([comment.to_api_response()])
-    hidden_gh_path = path_hiding_executables(tmp_path, GitHubClient.COMMAND_LINE)
+    hidden_gh_path = path_hiding_executables(tmp_path, GitHubExecutable.COMMAND_LINE)
 
     result = run_plan_updates_since(
         scratch_repo,
@@ -430,7 +430,7 @@ def test_fails_when_neither_gh_nor_a_token_is_available(
     sha = write_plan_commit(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
-    hidden_gh_path = path_hiding_executables(tmp_path, GitHubClient.COMMAND_LINE)
+    hidden_gh_path = path_hiding_executables(tmp_path, GitHubExecutable.COMMAND_LINE)
 
     result = run_plan_updates_since(
         scratch_repo,

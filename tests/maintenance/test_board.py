@@ -25,7 +25,8 @@ from basstler.maintenance.board import (
 from basstler.upstream_reviews.vocabulary import RollupState
 from basstler.maintenance.commands import BoardCommand, MaintenancePass
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
-from basstler.maintenance.github import GitHubRequestFailed, PullRequestReader
+from basstler.github.exceptions import GitHubRequestFailed
+from basstler.maintenance.github import PullRequestReader
 from basstler.maintenance.description import (
     PullRequestDescription,
     UpstreamPullRequestLink,

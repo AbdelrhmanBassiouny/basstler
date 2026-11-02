@@ -152,7 +152,7 @@ def _build_report(arguments: argparse.Namespace) -> str:
     )
     source = arguments.source or ReadSource.detect()
     return UpstreamReadRequest.from_arguments(arguments, upstream).report(
-        source.reader(client, upstream, arguments.fork_owner),
+        source.reader(upstream, arguments.fork_owner),
         client,
         arguments.include_resolved,
     )

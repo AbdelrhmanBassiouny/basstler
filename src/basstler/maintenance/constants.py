@@ -15,7 +15,7 @@ import re
 from enum import Enum, StrEnum
 
 
-class GitHubClient(StrEnum):
+class GitHubExecutable(StrEnum):
     """
     The executables the tooling reaches the GitHub API through, each named as it is on
     ``PATH``.
