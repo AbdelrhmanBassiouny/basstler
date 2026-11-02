@@ -177,3 +177,16 @@ items:
     From plan-dashboards/shared-pr-state-chips. The site already shows CI chips; add lines changed and
     whether the pull request merges cleanly. Reuse the pull request state the stack tooling reads
     instead of a second probe. Reference: the last commit of CRAM #52.
+
+- id: site-rebuild-on-merge
+  title: A merged pull request in a tracked repository starts the plan site's build
+  status: not started
+  track: site
+  depends_on:
+  - site-for-every-repository
+  notes: 'Agreed on #115 (2026-11-02) instead of a browser merge re-check stacked on #116: the site
+    rebuilds only on notes-branch pushes, so a merge waits for the next save. basstler.plan_site.publication
+    also writes, to each tracked repository''s default branch, a workflow on pull_request closed (merged)
+    that starts the same build with PLAN_SITE_TOKEN. Covers private repositories; the merged-means-done
+    rule stays build-side only. Follows actions-budget''s rules (no schedule, cancel superseded, timeout,
+    skip on forks).'
