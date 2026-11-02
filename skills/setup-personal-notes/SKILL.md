@@ -17,10 +17,10 @@ see (step 5's last part) and stop there. A re-run on an already-set-up clone
 must be a near-no-op, not an interrogation.
 
 **A denied command is a question, not a dead end.** If the permission system
-or its classifier denies a command this skill runs (the dependency install, for
-one), never work around it and never skip the step: ask the user with
-`AskUserQuestion` to accept that exact command, say why it is needed, and run
-it once they agree.
+denies a command this skill runs (the dependency install, for one), follow
+[`session-rules.md`](../../hooks/session-rules.md): ask the user to accept it at
+once, and run it when they do. That file is loaded into every session, so the
+rule binds every skill, not only this one.
 
 **Never guess a value that is the user's to choose.** Where their notes live
 and what goes in them are personal; ask, with a default. Everything else

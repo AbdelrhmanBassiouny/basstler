@@ -19,6 +19,10 @@ to find out.
 "${BASSTLER_PYTHON}" -m basstler.maintenance restack --stacked-on <this item's branch>
 ```
 
+It pushes to every descendant, which is what a permission classifier is most likely
+to stop. A denial here is a question, asked at once with `AskUserQuestion`, not an
+item for the closing report - see [`session-rules.md`](../../hooks/session-rules.md).
+
 The second command plans only the branches stacked on the named one — directly
 or through the branches between them — and puts each through the same steps a
 whole-board pass uses, parent before child. It prints one line per branch:

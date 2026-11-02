@@ -63,7 +63,15 @@ if grep -q '^<!-- BEGIN-PERSONAL-NOTES -->$' "${CLAUDE_LOCAL_MD}"; then
   awk '/^<!-- BEGIN-PERSONAL-NOTES -->$/{flag=1; next} /^<!-- END-PERSONAL-NOTES -->$/{flag=0} flag' \
     "${CLAUDE_LOCAL_MD}" > "${CONTENT_FILE}"
 else
-  cp "${CLAUDE_LOCAL_MD}" "${CONTENT_FILE}"
+  # No notes section yet: keep what a person wrote, without the sections and
+  # headers session-start.sh generated, or the blank lines left after them.
+  awk '
+    /^<!-- BEGIN-[A-Z-]+(: .*)? -->$/ { generated = 1; next }
+    /^<!-- END-[A-Z-]+ -->$/ { generated = 0; next }
+    /^<!--$/ { header = 1 }
+    header { if ($0 ~ /-->$/) header = 0; next }
+    !generated
+  ' "${CLAUDE_LOCAL_MD}" | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}' > "${CONTENT_FILE}"
 fi
 
 git branch -D __save-personal-notes-tmp > /dev/null 2>&1 || true
