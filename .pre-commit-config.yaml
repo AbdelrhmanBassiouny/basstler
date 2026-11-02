@@ -11,6 +11,15 @@ repos:
         language: python
         additional_dependencies: ["ruff==0.17.3", "docformatter==1.7.8", "tqdm"]
         files: \.py$
+      - id: prose-length
+        name: Keep docstrings and comments short
+        description: >
+          Fails when a docstring or comment block the staged change touches holds more
+          prose lines than the limit. See src/basstler/prose_length.py.
+        entry: env PYTHONPATH=src python -m basstler.prose_length
+        language: python
+        additional_dependencies: ["pyyaml>=6"]
+        files: \.py$
   - repo: https://github.com/astral-sh/ruff-pre-commit
     rev: v0.17.3
     hooks:

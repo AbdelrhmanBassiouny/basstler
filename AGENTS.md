@@ -120,6 +120,7 @@
 - Reference code with Sphinx roles (`:func:`, `:class:`, `:attr:`, `:meth:`), never with plain backticks, and use directives such as `.. note::` and `.. warning::` for notes and warnings
 - Never use all-caps words for emphasis in docstrings or comments; use RST emphasis (`*word*`). Genuine identifiers, acronyms and enum/constant names (`UUID`, `WHERE`, `Definiteness.DEFINITE`) are exempt
 - Always format modified Python files with `ruff format` followed by docformatter, through the repository's pre-commit hook (`scripts/format_docstrings.py`)
+- The `prose-length` pre-commit hook (`basstler.prose_length`) fails a docstring of more than 4 prose lines, field lists and literal blocks aside, or a comment block of more than 3 lines, wherever the staged change touches one
 
 ## Version Control
 - Author commits as the human user running the tool, with their own configured git `user.name` and `user.email`. Never author or amend a commit as an assistant, and never credit one as author or co-author: no `Co-Authored-By:` trailer for an assistant, no `noreply@anthropic.com` or similar as author or committer

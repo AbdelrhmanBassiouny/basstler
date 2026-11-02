@@ -430,3 +430,35 @@ class PersonalNotesPath(PathEnumeration):
     """
     The generated reverse index mapping an item's branch to the plan tracking it.
     """
+
+
+class ProseSnippet(PathEnumeration):
+    """
+    Python sources the prose length check measures.
+    """
+
+    DIRECTORY = DatasetLocation.DIRECTORY / "prose-length"
+    """
+    The directory holding them.
+    """
+
+    OVERLONG_MODULE_DOCSTRING = DIRECTORY / "overlong-module-docstring.py"
+    """
+    A module docstring of five prose lines.
+    """
+
+    FIELDS_AND_LITERAL_BLOCKS = DIRECTORY / "fields-and-literal-blocks.py"
+    """
+    A function docstring of two prose lines, a literal block and a field list.
+    """
+
+    OVERLONG_ATTRIBUTE_DOCSTRING = DIRECTORY / "overlong-attribute-docstring.py"
+    """
+    A class whose attribute docstring holds five prose lines.
+    """
+
+    COMMENT_BLOCKS = DIRECTORY / "comment-blocks.py"
+    """
+    A section header above a three-line comment block, a trailing comment, and a
+    four-line comment block.
+    """
