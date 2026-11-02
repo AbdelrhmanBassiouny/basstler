@@ -536,7 +536,9 @@ recorded_site_url() {
 # plan_site_page_url: the address of this repository's page on the plan site,
 # of one of its plans ([<plan-id>]), or of one item's card ([<plan-id>
 # <item-id>]), from the fetched hub file. Fails when the notes branch has no
-# hub file, it names no site, or the package cannot run.
+# hub file, it names no site, or the package cannot run; the lookup's own error
+# goes to stderr, so a caller that checked recorded_site_url first can tell a
+# failed lookup from a missing site.
 plan_site_page_url() {
   local plan_id="${1:-}"
   local item_id="${2:-}"
@@ -547,7 +549,7 @@ plan_site_page_url() {
   git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_HUB_PATH}" > "${hub_file}"
   "${BASSTLER_PYTHON}" -m "${PLAN_HUB_MODULE}" page-url --hub "${hub_file}" \
     --repository "$(repository_name)" \
-    ${plan_id:+--plan "${plan_id}"} ${item_id:+--item "${item_id}"} 2>/dev/null \
+    ${plan_id:+--plan "${plan_id}"} ${item_id:+--item "${item_id}"} \
     || status=$?
   rm -f "${hub_file}"
   return "${status}"
