@@ -7,6 +7,7 @@
 - Merged main (#123, #124); publication's client is `GitHubClient`.
 - Review round 1: merge PR opened automatically (reused if open), falling back to the `gh pr create` line with the reason (refusal or no answer); `GitHubWriter.attempt_send`, `GitHubUnreachableError`; short module docstring; AGENTS.md docstring rule.
 - Docstring/comment length pre-commit hook split out as draft #126.
+- Review round 2: `GitHubCallFailed` base for refusal and no-answer failures (3f67d05).
 
 ## Next
 - Review on #122.
