@@ -57,11 +57,11 @@ items:
   depends_on:
   - code-rules-light
   status: in progress
-  notes: 'bin/basstler on the Bash PATH runs the release with uv (venv in CLAUDE_PLUGIN_DATA); one command tree
-    replaces the python -m modules and the sourced module variables; plugin userConfig replaces personal-notes.env.
-    Verify bin/ works in cloud sessions first. CLI: cyclopts (approved). GitHub: one owned REST client behind a
-    GitHubClient interface, merging the urllib client and gh''s REST half; page=N on repos/<owner>/<repo>/ paths;
-    dataclass models of only the fields used. githubkit stays a fallback behind that interface (decided 2026-11-01).'
+  notes: 'Narrowed 2026-11-02 (owner): no bin/ and no userConfig here (moved to plugin-bin-probe); v2 modules keep
+    python -m until the v3 item replacing each deletes it. Delivers the cyclopts basstler console script, which
+    v3 items mount their commands on, and one owned REST client behind a GitHubClient interface (reading and writing
+    halves), merging the urllib client and gh''s REST half; page=N on repos/<owner>/<repo>/ paths, stopping when
+    Link has no next page. githubkit stays a fallback behind that interface (decided 2026-11-01).'
 - id: plan-store-issues
   title: Plans as a tracking issue with sub-issues, status labels and stated dependencies
   branch: null
@@ -214,3 +214,17 @@ items:
     replacement.
 
     '
+
+- id: plugin-bin-probe
+  title: Check whether a plugin bin/ and userConfig reach cloud sessions, then adopt them or drop them
+  branch: null
+  pull_request_number: null
+  track: foundation
+  depends_on:
+  - cli-launcher
+  status: not started
+  notes: 'Docs: claude.ai skips a plugin with a top-level bin/, even one distributed through org settings (how basstler
+    reaches cloud sessions); CLAUDE_PLUGIN_DATA and CLAUDE_PLUGIN_OPTION_* are not set for Bash commands; a sync
+    never prompts for userConfig. Publish a throwaway probe plugin with a bin/ script and one userConfig option,
+    check it in a fresh cloud session, and only if both work put the basstler command behind bin/ (venv in CLAUDE_PLUGIN_DATA,
+    run with uv) and replace personal-notes.env with userConfig; otherwise close with the finding.'
