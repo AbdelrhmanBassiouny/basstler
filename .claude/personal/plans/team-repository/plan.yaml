@@ -99,7 +99,7 @@ items:
   track: picker
   depends_on:
   - basstler-v3/plan-store-issues
-  - team-basstler/lean-kickoff
+  - core-robustness/lean-kickoff
   notes: 'Ranks with work-recommender/ranked-work-list''s policy: one ranking, not two. A python -m command
     ranks: the caller''s own in-progress items first (resume), then unassigned not-started items whose
     every dependency is merged or an open pull request ready for review (a draft dependency disqualifies),
