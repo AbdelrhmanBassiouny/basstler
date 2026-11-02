@@ -137,6 +137,23 @@ class ManifestText:
         start, end = bounds
         return "\n".join(self.lines[:start] + replacement + self.lines[end:])
 
+    def with_empty_items_written_out(self) -> str:
+        """
+        :return: The manifest text, where a bare ``items:`` key that no item block
+            follows is written ``items: []``, which reads as no items and not as
+            nothing.
+        """
+        section = self.top_level_section(ManifestKey.ITEMS.key)
+        if section is None:
+            return self.text
+        start, end = section
+        is_bare_key = self.lines[start].strip() == f"{ManifestKey.ITEMS.key}:"
+        if not is_bare_key or any(line.strip() for line in self.lines[start + 1 : end]):
+            return self.text
+        return self.with_lines_replaced(
+            (start, start + 1), [f"{ManifestKey.ITEMS.key}: []"]
+        )
+
     def item_indentation(self, block: tuple[int, int] | None = None) -> ItemIndentation:
         """
         How this manifest indents its items, read off one item block so a written line
