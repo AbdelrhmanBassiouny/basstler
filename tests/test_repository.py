@@ -6,7 +6,11 @@ from __future__ import annotations
 
 import pytest
 
-from basstler.repository import MalformedRepositoryError, Repository
+from basstler.repository import (
+    MalformedRepositoryError,
+    PullRequestReference,
+    Repository,
+)
 from basstler.setup.steps import Host
 
 REPOSITORY = Repository("an-owner", "a-repository")
@@ -73,4 +77,14 @@ def test_a_job_log_path_is_the_one_the_actions_api_serves_it_from():
     assert (
         REPOSITORY.job_log_path(7)
         == f"repos/{REPOSITORY.full_name}/actions/jobs/7/logs"
+    )
+
+
+# %% pull request references
+
+
+def test_a_pull_request_s_api_url_is_the_one_the_pulls_api_serves_it_from():
+    reference = PullRequestReference(REPOSITORY, 7)
+    assert reference.api_url == (
+        f"https://api.github.com/repos/{REPOSITORY.full_name}/pulls/7"
     )

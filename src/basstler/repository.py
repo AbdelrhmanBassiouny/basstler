@@ -230,3 +230,10 @@ class PullRequestReference:
         The pull request's page on GitHub.
         """
         return self.repository.pull_request_url(self.number)
+
+    @property
+    def api_url(self) -> str:
+        """
+        The pull request's address in GitHub's REST pulls API.
+        """
+        return f"{GitHubAddress.API}/{self.repository.api_path}/pulls/{self.number}"

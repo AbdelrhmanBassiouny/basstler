@@ -273,3 +273,10 @@ predating this convention, don't need one).
 
 Every plan's page is on the plan site, rebuilt on every push to the notes branch;
 `plan_site_page_url <plan-id>` prints its address.
+
+Between builds, a plan's page asks GitHub's REST API whether each draft pull
+request blocking a dependency is now ready for review or merged; when no draft
+holds a not-started item back any longer, its chip clears and its "Start now"
+button appears. The question is unauthenticated, so it answers only for
+public repositories, within GitHub's per-address rate limit; otherwise the page
+stays as built.

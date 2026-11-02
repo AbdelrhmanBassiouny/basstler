@@ -12,12 +12,18 @@ from basstler.class_property import classproperty
 from basstler.locations import SiteTemplate
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.cards import ModelOption, TrackSection, WaveSection
+from basstler.maintenance.board import PullRequestField
+from basstler.plan_site.cards import (
+    DraftRecheckAttribute,
+    ModelOption,
+    TrackSection,
+    WaveSection,
+)
 from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.plan_overview import NextSteps, PlanOverview
-from basstler.pull_request_state import PullRequestsByRepository
+from basstler.pull_request_state import PullRequestsByRepository, PullRequestState
 from basstler.render_common import (
     TemplatePage,
     render_markdown_to_html,
@@ -52,6 +58,9 @@ class PlanPage(TemplatePage):
     """
     A plan's page on the site: one column per wave, each item a card with its status,
     pull request, CI, assignee and dependency chips, plus the plan's next steps.
+
+    In the browser, the page asks GitHub whether each blocking draft pull request is now
+    ready for review, and shows the items no draft holds back any longer as startable.
     """
 
     stylesheet_url: str
@@ -130,6 +139,10 @@ class PlanPage(TemplatePage):
             stylesheet_url=self.stylesheet_url,
             chip_tone=ChipTone,
             script_template=SiteTemplate.PLAN_SCRIPT.name,
+            draft_recheck_script_template=SiteTemplate.PLAN_DRAFT_RECHECK_SCRIPT.name,
+            draft_recheck_attribute=DraftRecheckAttribute,
+            pull_request_field=PullRequestField,
+            pull_request_state=PullRequestState,
             title=self.plan.title,
             description=self.plan.description,
             repository=self.plan.default_repository,

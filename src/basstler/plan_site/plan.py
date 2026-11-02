@@ -15,7 +15,7 @@ from basstler.render_common import sanitize_http_url
 from basstler.repository import GitHubAddress
 
 if TYPE_CHECKING:
-    from basstler.plan_site.cards import DependencyChip, ItemAction
+    from basstler.plan_site.cards import DependencyChip, ItemAction, StartNowAction
 
 
 # %% waves and tracks
@@ -187,6 +187,12 @@ class Item:
     """
     This item's action button; ``None`` for a done item, and for a not-started item
     until its dependencies are ready to build on.
+    """
+
+    pending_start_action: StartNowAction | None = field(default=None, init=False)
+    """
+    The start action of a not-started item that only open draft dependencies hold back;
+    ``None`` for any other item.
     """
 
     needs_review: bool = field(default=False, init=False)

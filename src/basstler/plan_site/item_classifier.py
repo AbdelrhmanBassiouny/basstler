@@ -62,6 +62,7 @@ class ItemClassifier:
                 for dependency in self.dependencies.dependencies_of(item)
             ]
             item.action = self._action_for(item)
+            item.pending_start_action = self._pending_start_action_for(item)
 
     def _classify_pull_request(self, item: Item) -> None:
         """
@@ -109,11 +110,7 @@ class ItemClassifier:
             case ItemStatus.NOT_STARTED:
                 if not self.dependencies.dependencies_are_ready(item):
                     return None
-                return StartNowAction(
-                    label="Start now",
-                    plan_id=self.plan.id,
-                    item_identifier=item.identifier,
-                )
+                return self._start_action_for(item)
             case ItemStatus.BLOCKED:
                 label = "Resolve"
             case ItemStatus.IN_PROGRESS:
@@ -123,6 +120,34 @@ class ItemClassifier:
         return ResolveAction(
             label=label, plan_id=self.plan.id, item_identifier=item.identifier
         )
+
+    def _start_action_for(self, item: Item) -> StartNowAction:
+        """
+        Build the action that starts one not-started item.
+        """
+        return StartNowAction(
+            label="Start now",
+            plan_id=self.plan.id,
+            item_identifier=item.identifier,
+        )
+
+    def _pending_start_action_for(self, item: Item) -> StartNowAction | None:
+        """
+        Build the start action of a not-started item that only open draft dependencies
+        hold back, or ``None`` for any other item.
+
+        Reads :attr:`Item.action` and :attr:`Item.dependency_chips`, so runs after both
+        are filled in.
+        """
+        if item.status is not ItemStatus.NOT_STARTED or item.action is not None:
+            return None
+        if not all(
+            chip.dependency.is_ready_to_unblock_dependents()
+            or chip.draft_pull_request is not None
+            for chip in item.dependency_chips
+        ):
+            return None
+        return self._start_action_for(item)
 
     @staticmethod
     def _drift_description_of(item: Item) -> str | None:
