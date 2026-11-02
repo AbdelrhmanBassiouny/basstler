@@ -46,6 +46,7 @@ from basstler.upstream_reviews.pull_request_models import (
     UpstreamPullRequestSnapshot,
 )
 from basstler.upstream_reviews.readers import (
+    ReadSource,
     UpstreamPullRequestReader,
 )
 from basstler.upstream_reviews.report import (
@@ -864,6 +865,8 @@ def test_a_branch_without_an_upstream_pull_request_exits_without_a_traceback(
             str(Example.FORK_OWNER),
             "--upstream",
             str(UPSTREAM),
+            "--source",
+            ReadSource.GRAPHQL,
         ]
     )
 
