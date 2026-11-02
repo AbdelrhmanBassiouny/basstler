@@ -75,7 +75,7 @@ items:
   session: https://claude.ai/code/session_018wfiv6ZDBwZvHTLeeG7b7k
   depends_on:
   - site-for-every-repository
-  notes: 'Implemented in draft #116: a chip held back by a draft carries its pull request''s
+  notes: 'Implemented in #116 (ready for review, ported onto the plan site code after the dashboard was retired): a chip held back by a draft carries its pull request''s
     REST address, and the site page''s script reveals a hidden Start now button once no draft
     holds the item back (public repositories only, unauthenticated). Playwright, approved
     by the owner, tests it in headless Chromium, which CI installs.'
