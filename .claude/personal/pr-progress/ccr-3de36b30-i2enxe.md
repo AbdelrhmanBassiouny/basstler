@@ -1,9 +1,8 @@
 Plan
-- Move both stamps to <git-common-dir>/basstler/, names once in basstler.locations
-- Tests first; update hooks, .gitignore, README, setup SKILL
+- Both stamps live in <git-common-dir>/basstler/, names in basstler.locations
 
 Done
-- Bootstrap, draft PR #118, plan item recorded
+- Tests, hook change, .gitignore/README/SKILL updated, pushed on PR #118
 
 Next
-- Failing tests, then the shell change
+- Owner review; PR stays draft
