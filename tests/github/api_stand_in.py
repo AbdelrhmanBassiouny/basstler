@@ -107,7 +107,7 @@ class RecordingApiServer:
         self, environment: dict[str, Any], start_response: StartResponse
     ) -> list[bytes]:
         """
-        Record one request and answer it, as a WSGI application.
+        Record one request and answer it; the server calls this for each request.
 
         :param environment: The request.
         :param start_response: What the status and headers are handed to.
