@@ -1,11 +1,11 @@
 """
 The GitHub labels this tooling reads or applies, in one table.
 
-The dashboard reads some of them, a maintenance pass writes one, and setup creates
+The plan site reads some of them, a maintenance pass writes one, and setup creates
 all of them on a fork. One enum names them all, so a label one part recognizes cannot be
 missing from the set setup creates.
 
-Kept free of third-party imports, so the setup script can read it before the dashboard's
+Kept free of third-party imports, so the setup script can read it before the plan site's
 dependencies are installed.
 """
 
@@ -45,7 +45,7 @@ class GitHubLabel(StrEnum):
 
     MERGED = ("merged", "The changes landed even though GitHub never recorded a merge")
     """
-    Read by the dashboard, which treats the label exactly like a real merge.
+    Read by the plan site, which treats the label exactly like a real merge.
     """
 
     IN_REVIEW = ("in-review", "Under review")
@@ -56,7 +56,7 @@ class GitHubLabel(StrEnum):
 
     BUG = ("bug", "A bug fix")
     """
-    Applied by a session opening a bug-fix pull request, and shown as a dashboard chip.
+    Applied by a session opening a bug-fix pull request.
     """
 
     PROMOTION_LINK_SENT = (

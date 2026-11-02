@@ -10,10 +10,10 @@ from pathlib import Path
 
 import pytest
 
+from basstler.locations import ProjectLocation
 from basstler.plan_site.__main__ import HubSite, SiteFile, main
 from basstler.plan_site.exceptions import RegistryUnreadableError
-from basstler.plan_site.hub import PlanHub
-from basstler.locations import ProjectLocation
+from basstler.plan_site.hub import PlanHub, SiteAddress
 
 from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
@@ -56,7 +56,7 @@ def built_site(remotes: Path, tmp_path: Path) -> Path:
     hub = PlanHub.from_registry(SiteRepository.NOTES.value, str(remotes))
     output = tmp_path / "site"
     HubSite(
-        site_url=hub.site_url,
+        address=SiteAddress(hub.site_url),
         pull_request_source=RecordedPullRequestSource(),
         hub=hub,
         remote_root=str(remotes),

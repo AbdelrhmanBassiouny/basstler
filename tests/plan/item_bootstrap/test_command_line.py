@@ -110,16 +110,6 @@ def test_the_command_line_prints_why_the_plan_save_refused(
     assert str(the_length_violation_of(entry)) in result.stderr
 
 
-def test_the_dashboard_republish_is_handed_back_rather_than_attempted(
-    bootstrap_repository: ScratchRepository,
-):
-
-    result = run_bootstrap(bootstrap_repository, *record_arguments())
-
-    report = json.loads(result.stdout)
-    assert report[ReportKey.DASHBOARD_COMMAND] == f"/plan-dashboard {PLAN_IDENTIFIER}"
-
-
 def test_the_update_subcommand_writes_a_note_from_a_file(
     bootstrap_repository: ScratchRepository,
 ):

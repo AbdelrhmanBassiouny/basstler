@@ -13,14 +13,42 @@
 {% endif %}
 {% endmacro %}
 
-{# A card with a heading, its progress and a bar; a link when url is given. #}
+{# A card with a heading, its progress and a bar layering the started, reviewed and
+   done shares; a link when url is given. #}
 {% macro progress_card(card, heading, url=None, description=None, error=None) %}
   {% if url %}<a class="progress-card {{ card.css_class }}" href="{{ url }}">{% else %}<div class="progress-card {{ card.css_class }}">{% endif %}
     <h2>{{ heading }}</h2>
     <p class="progress-label">{{ card.progress_label }}</p>
-    {% if card.review_label %}<p class="review-label">{{ card.review_label }}</p>{% endif %}
+    {% if card.stage_shares_label %}<p class="stage-label">{{ card.stage_shares_label }}</p>{% endif %}
     {% if description %}<p class="card-description">{{ description }}</p>{% endif %}
     {% if error %}<p class="card-error">{{ error }}</p>{% endif %}
-    <div class="bar"><div class="bar-fill" style="width: {{ card.completion_percentage_label }}"></div></div>
+    <div class="bar">{% for share in card.stage_shares %}<div class="bar-fill bar-{{ share.stage }}" style="width: {{ share.width }}" title="{{ share.label }}"></div>{% endfor %}</div>
   {% if url %}</a>{% else %}</div>{% endif %}
+{% endmacro %}
+
+{# A chip links to its dependency's card: on this page it scrolls there and
+   highlights it, and on another plan's page it opens that page in a new
+   tab at the card. #}
+{% macro dependency_chip(chip) %}
+{%- set is_ready = chip.dependency.is_ready_to_unblock_dependents() %}
+{%- set identifier = chip.dependency.reference.text %}
+{%- set chip_class = 'chip' if is_ready else 'chip chip-unmet' %}
+{%- set chip_title = chip.tooltip if is_ready else chip.tooltip ~ ' (not ready yet — this item is blocked on it)' %}
+{% if not chip.card_url %}<span class="{{ chip_class }}" title="{{ chip_title }}">{{ identifier }}</span>{% elif chip.dependency.is_in_another_plan %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" target="_blank" rel="noopener" title="{{ chip_title }}">{{ identifier }}</a>{% else %}<a class="{{ chip_class }}" href="{{ chip.card_url }}" data-item-identifier="{{ identifier }}" onclick="planPageHighlightItem(event, this)" title="{{ chip_title }}">{{ identifier }}</a>{% endif %}
+{% endmacro %}
+
+{% macro action_button(item) %}
+{% if item.action %}
+<span class="action-group">
+  <span class="model-picker" data-model="" aria-label="Model for {{ item.action.label }}">
+    <button type="button" class="model-picker-toggle" onclick="planPageToggleModelPicker(event, this)">{{ available_models[0].label }} ▾</button>
+    <ul class="model-picker-list" role="listbox">
+      {% for model in available_models %}
+      <li role="option" data-value="{{ model.value }}" onclick="planPageSelectModel(event, this)"{% if loop.first %} class="model-picker-option-selected"{% endif %}>{{ model.label }}</li>
+      {% endfor %}
+    </ul>
+  </span>
+  <button type="button" class="action-button" data-action-command="{{ item.action.command }}" onclick="planPageCopyActionCommand(this)">▸ {{ item.action.label }}</button>
+</span>
+{% endif %}
 {% endmacro %}

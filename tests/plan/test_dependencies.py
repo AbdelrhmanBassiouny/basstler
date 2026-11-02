@@ -88,7 +88,7 @@ def test_plan_directory_reads_one_plans_manifest_by_id():
 
 
 def test_plan_directory_reads_no_manifest_nothing_has_named():
-    # One plan's dashboard pulling in every other plan's contents is what the
+    # One plan's page pulling in every other plan's contents is what the
     # per-plan size budget exists to prevent, so a plan nothing references is
     # never opened.
     directory = PlanDirectory(DatasetLocation.PLANS)

@@ -21,10 +21,12 @@ from basstler.plan.item_bootstrap.vocabulary import PlanSavingOption
 from basstler.plan.merge import PlanVersion
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ManifestKey, PlanManifest
+from basstler.plan_site.hub import PlanHub, SiteAddress
 from basstler.shell_configuration import ShellConfigurationFunction
 
 from ..constants.notes import ScratchBranch
 from ..constants.paths import DatasetLocation, PersonalNotesPath
+from ..constants.site import SiteRepository, SiteSampleText
 from ..fixture_plans import FixturePlanId, ForeignItemId, foreign_reference
 from ..plan.concurrent_edits import (
     FIRST_ITEM,
@@ -160,11 +162,11 @@ def test_refuses_when_the_declaration_cannot_be_read(
 # %% the manifest it saves
 
 
-def test_refuses_a_manifest_the_dashboard_would_reject(
+def test_refuses_a_manifest_the_plan_site_would_reject(
     save_plan_repository: ScratchRepository,
 ):
     """
-    Nothing reaches the notes branch that the dashboard could not then be built from.
+    Nothing reaches the notes branch that the plan site could not then be built from.
     """
     manifest_path = save_plan_repository.write(
         PlanDocument.MANIFEST, DatasetLocation.PLAN_WITH_UNKNOWN_STATUS.read_text()
@@ -375,6 +377,33 @@ def test_a_save_drops_the_landed_items(save_plan_repository: ScratchRepository):
         / PlanDocument.MANIFEST
     )
     assert saved == manifest.without_landed_items()
+
+
+def test_a_save_prints_the_plan_s_page_on_the_plan_site(
+    save_plan_repository: ScratchRepository,
+):
+    save_plan_repository.update_notes_branch_file(
+        ProjectLocation.PLAN_HUB,
+        PlanHub(
+            registry=str(SiteRepository.NOTES.value),
+            site_url=SiteSampleText.SITE_URL.value,
+        ).to_text(),
+    )
+
+    result = save_from_files(
+        save_plan_repository,
+        DatasetLocation.PLAN,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES,
+    )
+
+    assert result.returncode == 0, result.stderr
+    repository = save_plan_repository.configuration_output(
+        ShellConfigurationFunction.REPOSITORY_NAME
+    ).strip()
+    page_url = SiteAddress(SiteSampleText.SITE_URL.value).plan_url(
+        repository, DatasetPlan.IDENTIFIER
+    )
+    assert result.stdout.splitlines()[-1].endswith(page_url)
 
 
 def test_a_plan_with_every_item_landed_is_removed(

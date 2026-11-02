@@ -1,6 +1,6 @@
 """
-Classify one item's dependencies as ready or not-ready to build on, reusing the
-dashboard's own live-state classification and readiness rule.
+Classify one item's dependencies as ready or not-ready to build on, reusing the plan
+site's own live-state classification and readiness rule.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from basstler.dashboard.plan import Plan
+from basstler.plan_site.plan import Plan
 from basstler.plan.dependencies import Dependency, DependencyResolver, PlanDirectory
 from basstler.pull_request_state import PullRequestsByRepository
 

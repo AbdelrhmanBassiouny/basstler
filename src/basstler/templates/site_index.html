@@ -7,14 +7,14 @@
     <p class="eyebrow">{{ repository.name }}</p>
     <h1>Plans</h1>
     <p class="lede">Initiatives spanning several pull requests and sessions, each with its own page.</p>
-    <p class="meta-line mono">{{ repository.progress_label }}{% if repository.review_label %} · {{ repository.review_label }}{% endif %}</p>
+    <p class="meta-line mono">{{ repository.progress_label }}{% if repository.stage_shares_label %} · {{ repository.stage_shares_label }}{% endif %}</p>
   </header>
 
   {{ health_banner(repository.skipped_pages) }}
 
   <div class="card-list">
   {% for plan in repository.plans %}
-    {{ progress_card(plan, plan.title, url=plan.dashboard_url, description=plan.description) }}
+    {{ progress_card(plan, plan.title, url=plan.page_url, description=plan.description) }}
   {% else %}
     <p class="empty">No plans published for this repository.</p>
   {% endfor %}

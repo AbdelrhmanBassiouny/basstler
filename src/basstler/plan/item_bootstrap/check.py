@@ -86,9 +86,6 @@ class StalenessReport(OperationReport):
             ReportKey.PLAN: self.plan_identifier,
             ReportKey.ITEM: self.item_identifier,
             ReportKey.FINDINGS: [finding.to_json() for finding in self.findings],
-            ReportKey.DASHBOARD_COMMAND: self.dashboard_command_for(
-                self.plan_identifier
-            ),
         }
 
 
@@ -97,7 +94,7 @@ class ItemCheckRequest:
     """
     Which item to compare against local git, and the remote its branch is published to.
 
-    Local git only: the dashboard compares the manifest against GitHub on every refresh,
+    Local git only: the plan site compares the manifest against GitHub on every build,
     so what is left is the window before a push.
     """
 

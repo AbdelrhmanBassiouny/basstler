@@ -225,7 +225,7 @@ class DatasetLocation(PathEnumeration):
 
     PLAN = DIRECTORY / "plan.yaml"
     """
-    A minimal plan the dashboard builds.
+    A minimal plan the plan site builds.
     """
 
     ROADMAP = DIRECTORY / "roadmap.md"
@@ -328,11 +328,6 @@ class SkillDirectory(PathEnumeration):
     The directory holding every skill.
     """
 
-    PLAN_DASHBOARD = DIRECTORY / "plan-dashboard"
-    """
-    The dashboard skill: its instructions, its worked example and its shell entry point.
-    """
-
     STACKED_PULL_REQUEST_MAINTENANCE = DIRECTORY / "stacked-pr-maintenance"
     """
     The maintenance pass's own instructions.
@@ -340,7 +335,7 @@ class SkillDirectory(PathEnumeration):
 
     PLAN_CREATE = DIRECTORY / "plan-create"
     """
-    The skill whose own act of creating a plan is what makes the master index stale.
+    The skill that creates a plan, beside the schema reference and the worked example.
     """
 
     PLAN_ITEM_KICKOFF = DIRECTORY / "plan-item-kickoff"
@@ -358,15 +353,9 @@ class SkillDirectory(PathEnumeration):
     The instructions for reading a branch's upstream review threads.
     """
 
-    DASHBOARD_REFRESH_SCRIPT = PLAN_DASHBOARD / "refresh_dashboard.sh"
+    MANIFEST_STALENESS_DOCUMENT = PLAN_CREATE / "manifest-staleness.md"
     """
-    The dashboard skill's shell entry point.
-    """
-
-    MANIFEST_STALENESS_DOCUMENT = PLAN_DASHBOARD / "manifest-staleness.md"
-    """
-    The rule every skill that writes plan data cites: when to write the manifest and
-    republish the dashboard.
+    The rule every skill that writes plan data cites: when to write the manifest.
     """
 
     @classmethod
