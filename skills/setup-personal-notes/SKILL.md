@@ -219,7 +219,8 @@ branch's dispatch workflow, on every push to the notes branch, and the default b
 merge workflow, on every pull request merged in this repository. A fork gets no merge
 workflow, so its default branch stays as its upstream's; a default branch that refuses
 the push gets it on `basstler/plan-site-merge`, with a pull request opened for it and a
-step to merge that pull request. It then prints, as one
+step to merge that pull request; when GitHub refuses to open it, the step says why and gives
+the line that opens it. It then prints, as one
 copyable line each, with the same steps numbered for github.com, the steps only the user can take - creating the site
 repository, turning on Pages, storing their fine-grained token as the
 `PLAN_SITE_TOKEN` secret, merging the merge workflow - and exits 1 while any is left. Pass the lines
