@@ -4,7 +4,7 @@
 ## Done
 - `MergeWorkflow` on `pull_request_target`; fallback branch and step; fork skip via GitHub's `fork` flag.
 - Actions budget: `pull_request_target`, repository pin as fork guard.
-- New plan item `page-merge-recheck` (forks' merges from the browser); #62 comment.
+- Merged main (#123, #124): publication's client is now `GitHubReader`.
 
 ## Next
 - Review on #122.
