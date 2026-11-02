@@ -1,0 +1,11 @@
+name: Uncancelled pull request target
+
+on:
+  pull_request_target:
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - run: echo worked

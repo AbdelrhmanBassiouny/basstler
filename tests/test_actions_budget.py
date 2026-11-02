@@ -201,6 +201,33 @@ def test_a_first_job_without_the_fork_guard_is_reported(budget: ActionsBudget):
     )
 
 
+def test_a_first_job_pinned_to_one_repository_skips_forks(budget: ActionsBudget):
+    assert budget.violations_of(dataset_workflow("repository-pinned-push.yml")) == ()
+
+
+def test_a_repository_pin_with_an_alternative_is_no_fork_guard(budget: ActionsBudget):
+    workflow = dataset_workflow("repository-pin-bypassed-push.yml")
+    (first_job,) = workflow.first_jobs
+
+    assert budget.violations_of(workflow) == (
+        MissingForkGuard(
+            workflow=workflow.file_name,
+            job=first_job.identifier,
+            condition=WorkflowLimits.fork_push_condition,
+        ),
+    )
+
+
+def test_a_pull_request_target_workflow_running_on_every_push_must_cancel(
+    budget: ActionsBudget,
+):
+    workflow = dataset_workflow("uncancelled-pull-request-target.yml")
+
+    assert budget.violations_of(workflow) == (
+        MissingPullRequestCancellation(workflow=workflow.file_name),
+    )
+
+
 def test_a_first_job_without_a_label_check_is_reported(budget: ActionsBudget):
     workflow = dataset_workflow("unguarded-label.yml")
     (first_job,) = workflow.first_jobs

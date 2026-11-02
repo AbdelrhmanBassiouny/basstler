@@ -15,6 +15,7 @@ from basstler.github.client import GitHubRestClient, HttpMethod
 from basstler.github.exceptions import (
     GitHubCredentialUnavailableError,
     GitHubRequestFailed,
+    GitHubUnreachableError,
 )
 from basstler.maintenance.constants import GitHubExecutable
 
@@ -135,6 +136,28 @@ def test_a_refused_call_raises_with_its_status_and_request_line(api_server, clie
 
 
 # %% the credential
+
+
+def test_a_write_that_gets_no_answer_carries_why_instead_of_raising():
+    with RecordingApiServer().serving() as stopped_server:
+        root = stopped_server.root
+    client = GitHubRestClient(TOKEN, api_root=root)
+
+    response = client.attempt_send(HttpMethod.POST, "/user", {})
+
+    assert type(response.failure) is GitHubUnreachableError
+    assert (response.failure.method, response.failure.path) == (
+        HttpMethod.POST,
+        "/user",
+    )
+
+
+def test_a_read_that_gets_no_answer_raises():
+    with RecordingApiServer().serving() as stopped_server:
+        root = stopped_server.root
+
+    with pytest.raises(GitHubUnreachableError):
+        GitHubRestClient(TOKEN, api_root=root).get("/user")
 
 
 @pytest.fixture

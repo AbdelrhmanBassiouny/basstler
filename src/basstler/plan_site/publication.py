@@ -1,11 +1,6 @@
 """
-Publish a repository's plans on the user's own plan site, and start the site's build on
-every push to the repository's notes branch.
-
-Writes the site repository's workflow, registers the repository in the hub file, and
-commits the notes branch's dispatch workflow. Reports each step only the user can take -
-creating the site repository, turning Pages on, storing the token - as one copyable line.
-Run again, it re-checks them: a step counts as done once a run that needs it succeeded.
+Publish a repository's plans on the user's plan site, and start the site's build on every
+push to its notes branch and every merged pull request.
 
 Usage:
     "${BASSTLER_PYTHON}" -m basstler.plan_site.publication \\
@@ -18,286 +13,78 @@ import argparse
 import os
 import re
 import sys
-from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
-from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure
 from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.maintenance.remote_branch import RemoteBranch
+from basstler.maintenance.remote_branch import FileWrite, RemoteBranch
+from basstler.plan_site.run_listing import RunListing
+from basstler.plan_site.user_steps import (
+    MergeWorkflowProposal,
+    PendingStep,
+    UserStep,
+    UserSteps,
+)
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     DispatchWorkflow,
-    PlanSiteSecret,
+    MergeWorkflow,
     PlanSiteWorkflow,
     SiteWorkflow,
 )
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting, resolve_repository
 from basstler.standard_streams import StandardStreamHandler
-from basstler.github.client import GitHubReader, GitHubRestClient
-from basstler.upstream_reviews.vocabulary import BasstlerSource, CheckOutcome, JSONModel
+from basstler.github.client import (
+    GitHubClient,
+    GitHubRestClient,
+)
+from basstler.upstream_reviews.vocabulary import BasstlerSource, JSONModel
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
 
-# %% the runs that confirm a step
+# %% the notes repository on GitHub
 
 
-class WorkflowRunKey(StrEnum):
+class RepositoryKey(StrEnum):
     """
-    Every field read out of a repository's run listing.
-    """
-
-    WORKFLOW_RUNS = "workflow_runs"
-    """
-    The listed runs, newest first.
+    Every field read out of a repository's REST response.
     """
 
-    PATH = "path"
+    FORK = "fork"
     """
-    The path of the workflow file a run ran, relative to its repository's root.
-    """
-
-    CONCLUSION = "conclusion"
-    """
-    How a run ended, ``null`` while it runs.
-    """
-
-
-class RunListingParameter(StrEnum):
-    """
-    The query parameters a run listing is narrowed by.
-    """
-
-    BRANCH = "branch"
-    """
-    The branch the runs ran on.
-    """
-
-    RUNS_PER_PAGE = "per_page"
-    """
-    How many runs the listing holds.
+    Whether the repository is a fork.
     """
 
 
 @dataclass(frozen=True)
-class ListedRun(JSONModel):
+class RepositoryDetails(JSONModel):
     """
-    One run in a repository's run listing.
-    """
-
-    workflow: Path
-    """
-    The workflow file it ran, relative to its repository's root.
+    What publishing reads about a repository from GitHub.
     """
 
-    outcome: CheckOutcome
+    is_fork: bool
     """
-    How it ended, :attr:`CheckOutcome.PENDING` while it runs.
+    Whether it is a fork, whose default branch follows its upstream's.
     """
 
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> ListedRun:
+    def from_json(cls, data: dict[str, Any]) -> RepositoryDetails:
         """
-        :param data: One listed run.
-        :return: The parsed run.
+        :param data: A repository's REST response.
+        :return: The parsed details.
         """
-        return cls(
-            Path(data[WorkflowRunKey.PATH]),
-            CheckOutcome.from_conclusion(data[WorkflowRunKey.CONCLUSION]),
-        )
-
-
-@dataclass(frozen=True)
-class RunListing:
-    """
-    The latest runs on one branch of a repository, newest first.
-    """
-
-    runs: list[ListedRun]
-    """
-    The runs.
-    """
-
-    @staticmethod
-    def path(repository: Repository, branch: str, runs_per_page: int = 20) -> str:
-        """
-        :param repository: The repository.
-        :param branch: The branch the runs ran on.
-        :param runs_per_page: How many of the latest runs to list.
-        :return: The REST path listing them.
-        """
-        query = urlencode(
-            {
-                RunListingParameter.BRANCH: branch,
-                RunListingParameter.RUNS_PER_PAGE: runs_per_page,
-            }
-        )
-        return f"{repository.api_path}/actions/runs?{query}"
-
-    @classmethod
-    def read(
-        cls, client: GitHubReader, repository: Repository, branch: str
-    ) -> RunListing:
-        """
-        :param client: What reads the listing.
-        :param repository: The repository.
-        :param branch: The branch the runs ran on.
-        :return: The listing.
-        """
-        data = client.get(cls.path(repository, branch))
-        return cls(
-            [ListedRun.from_json(run) for run in data[WorkflowRunKey.WORKFLOW_RUNS]]
-        )
-
-    def succeeded(self, workflow: WorkflowLocation) -> bool:
-        """
-        :param workflow: The workflow.
-        :return: Whether its latest run succeeded.
-        """
-        latest = next((run for run in self.runs if run.workflow == workflow), None)
-        return latest is not None and latest.outcome is CheckOutcome.SUCCESS
-
-
-# %% what is left to the user
-
-
-class UserStep(StrEnum):
-    """
-    The steps of publishing that only the user can take.
-    """
-
-    CREATE_SITE_REPOSITORY = "create the site repository"
-    """
-    The site repository does not exist, or cannot be reached.
-    """
-
-    TURN_ON_PAGES = "turn on GitHub Pages for the site repository"
-    """
-    No build in the site repository has succeeded yet.
-    """
-
-    STORE_TOKEN = "store the token that starts the build"
-    """
-    No dispatch from the notes branch has succeeded yet.
-    """
-
-
-@dataclass(frozen=True)
-class PendingStep:
-    """
-    One step left to the user, with the command line and the browser steps that take it.
-    """
-
-    step: UserStep
-    """
-    The step.
-    """
-
-    line: str
-    """
-    The one copyable line that takes it.
-    """
-
-    browser_steps: tuple[str, ...]
-    """
-    The same step taken on github.com, one click or entry each, in order.
-    """
-
-    def render(self) -> str:
-        """:return: The step as it is printed."""
-        numbered = "\n".join(
-            f"    {number}. {text}"
-            for number, text in enumerate(self.browser_steps, start=1)
-        )
-        return f"- {self.step}:\n    {self.line}\n  Or in the browser:\n{numbered}"
-
-
-@dataclass(frozen=True)
-class UserSteps:
-    """
-    The command line and the browser steps for each step left to the user.
-    """
-
-    notes_repository: Repository
-    """
-    The repository whose notes branch starts the build.
-    """
-
-    site: SiteRepository
-    """
-    The site repository.
-    """
-
-    registered: Sequence[str]
-    """
-    Every ``owner/name`` the site publishes, which the token has to read.
-    """
-
-    @classproperty
-    def token_page(cls) -> str:
-        """
-        Where a fine-grained token is created.
-        """
-        return f"{GitHubAddress.WEB}/settings/personal-access-tokens/new"
-
-    def pending(self, step: UserStep) -> PendingStep:
-        """
-        :param step: The step.
-        :return: The step with its line and its browser steps.
-        """
-        site = self.site.repository
-        notes = self.notes_repository
-        steps = {
-            UserStep.CREATE_SITE_REPOSITORY: PendingStep(
-                step,
-                f"gh repo create {site.full_name} --public",
-                (
-                    f"Open {GitHubAddress.WEB}/new.",
-                    f"Set the owner to {site.owner} and the repository name to "
-                    f"{site.name}.",
-                    "Choose Public, then click Create repository.",
-                ),
-            ),
-            UserStep.TURN_ON_PAGES: PendingStep(
-                step,
-                f"gh api -X POST {site.api_path}/pages -f build_type=workflow",
-                (
-                    f"Open {site.url}/settings/pages.",
-                    "Under Build and deployment, set Source to GitHub Actions.",
-                ),
-            ),
-            UserStep.STORE_TOKEN: PendingStep(
-                step,
-                f"create a fine-grained token at {self.token_page} with Actions: "
-                f"write on {site.full_name} and Contents: read on "
-                f"{', '.join(self.registered)}, then: gh secret set "
-                f"{PlanSiteSecret.TOKEN} --repo {notes.full_name}",
-                (
-                    f"Open {self.token_page}.",
-                    f"Name the token and set Resource owner to {site.owner}.",
-                    "Under Repository access, choose Only select repositories and "
-                    f"select {site.full_name}, {', '.join(self.registered)}.",
-                    "Under Permissions, open Repository permissions and set Actions "
-                    "to Read and write and Contents to Read-only.",
-                    "Click Generate token and copy the token now; GitHub shows it "
-                    "once.",
-                    f"Open {notes.url}/settings/secrets/actions/new.",
-                    f"Set the name to {PlanSiteSecret.TOKEN}, paste the token as "
-                    "the secret, then click Add secret.",
-                ),
-            ),
-        }
-        return steps[step]
+        return cls(data[RepositoryKey.FORK])
 
 
 # %% publishing
@@ -324,6 +111,11 @@ class PublicationReport:
     The steps left to the user, in the order to take them.
     """
 
+    skipped: list[str] = field(default_factory=list)
+    """
+    What was left out on purpose, one line each, with why.
+    """
+
     @property
     def complete(self) -> bool:
         """:return: Whether nothing is left to the user."""
@@ -333,6 +125,7 @@ class PublicationReport:
         """:return: The report as it is printed."""
         lines = [f"Plan site: {self.site_url}"]
         lines.extend(f"- {line}" for line in self.written or ["nothing to write"])
+        lines.extend(f"- skipped: {line}" for line in self.skipped)
         if self.pending:
             lines.append("Left to you - run this command again once they are done:")
             lines.extend(step.render() for step in self.pending)
@@ -367,9 +160,10 @@ class PlanSitePublication:
     The site repository's workflow, whose registry an existing one's replaces.
     """
 
-    runs: GitHubReader
+    github: GitHubClient
     """
-    What lists a repository's workflow runs.
+    What reads repositories and their workflow runs from GitHub, and opens the pull
+    request proposing the merge workflow.
     """
 
     remote_root: str = GitHubAddress.WEB
@@ -383,6 +177,23 @@ class PlanSitePublication:
     The branch the site workflow goes on when the site repository has none yet.
     """
 
+    merge_workflow_branch: str = "basstler/plan-site-merge"
+    """
+    The branch the merge workflow waits on when the notes repository's default branch
+    refuses it.
+    """
+
+    @classproperty
+    def fork_skip_reason(cls) -> str:
+        """
+        Why a fork gets no merge workflow.
+        """
+        return (
+            f"{WorkflowLocation.PLAN_SITE_MERGE}, because the repository is a fork and "
+            "its default branch has to stay as its upstream's; merges show at the next "
+            "push to the notes branch"
+        )
+
     def notes_branch_of(self, repository: Repository) -> RemoteBranch:
         """
         :param repository: A repository the site publishes.
@@ -395,14 +206,12 @@ class PlanSitePublication:
         )
         return RemoteBranch(self.dispatch_workflow.notes_branch, self.git, remote)
 
-    def site_branch(self) -> RemoteBranch | None:
+    def default_branch_of(self, remote: str) -> RemoteBranch | None:
         """
-        :return: The site repository's default branch, or ``None`` when the site
-            repository cannot be reached.
+        :param remote: A remote, as a remote name or a URL.
+        :return: Its default branch, :attr:`initial_branch` when it has none yet, or
+            ``None`` when it cannot be reached.
         """
-        remote = self.dispatch_workflow.site.repository.clone_url_under(
-            self.remote_root
-        )
         listed = self.git.attempt("ls-remote", "--symref", remote, "HEAD")
         if not listed.succeeded:
             return None
@@ -422,11 +231,17 @@ class PlanSitePublication:
         notes_repository = self.dispatch_workflow.notes_repository
         site = self.dispatch_workflow.site
         report = PublicationReport(site.site_url)
-        site_branch = self.site_branch()
+        site_branch = self.default_branch_of(
+            site.repository.clone_url_under(self.remote_root)
+        )
         if site_branch is None:
             user_steps = UserSteps(notes_repository, site, [])
             report.pending.append(user_steps.pending(UserStep.CREATE_SITE_REPOSITORY))
             return report
+        site_runs = RunListing.read(self.github, site.repository, site_branch.name)
+        notes_runs = RunListing.read(
+            self.github, notes_repository, self.dispatch_workflow.notes_branch
+        )
         existing = site_branch.read_latest(SiteWorkflow.location)
         site_workflow = (
             replace(
@@ -448,36 +263,110 @@ class PlanSitePublication:
             f"Start the plan site build in {site.repository.full_name} on every push",
             report,
         )
+        proposal = self.write_merge_workflow(report)
         user_steps = UserSteps(notes_repository, site, hub.repositories)
-        site_runs = RunListing.read(self.runs, site.repository, site_branch.name)
         if not site_runs.succeeded(SiteWorkflow.location):
-            report.pending.append(user_steps.pending(UserStep.TURN_ON_PAGES))
-        notes_runs = RunListing.read(
-            self.runs, notes_repository, self.dispatch_workflow.notes_branch
-        )
+            report.pending.append(
+                user_steps.pending(
+                    UserStep.TURN_ON_PAGES, site_runs.latest(SiteWorkflow.location)
+                )
+            )
         if not notes_runs.succeeded(DispatchWorkflow.location):
-            report.pending.append(user_steps.pending(UserStep.STORE_TOKEN))
+            latest_dispatch = notes_runs.latest(DispatchWorkflow.location)
+            report.pending.extend(
+                user_steps.pending(step, latest_dispatch)
+                for step in (UserStep.CREATE_TOKEN, UserStep.STORE_TOKEN)
+            )
+        if proposal is not None:
+            report.pending.append(proposal.pending(self.github))
         return report
 
+    def run(self) -> int:
+        """
+        Publish and print what was written and what is left.
+
+        :return: 0 when nothing is left to the user, 1 otherwise, and a failure's own
+            exit status when GitHub or the credential stopped the publication.
+        """
+        try:
+            report = self.publish()
+        except CommandFailure as error:
+            logger.error(f"{error}")
+            return error.exit_code
+        logger.info(report.render())
+        return 0 if report.complete else 1
+
     @staticmethod
-    def write(
+    def attempt_write(
         branch: RemoteBranch,
         workflow: PlanSiteWorkflow,
         message: str,
         report: PublicationReport,
-    ) -> None:
+    ) -> FileWrite | None:
         """
         Write a workflow onto a branch unless the branch already has it as it is.
 
         :param branch: The branch to write onto.
         :param workflow: The workflow.
         :param message: The commit message.
-        :param report: Where to record the write.
+        :param report: Where to record a write the branch accepted.
+        :return: The write, failed when the branch refused it, or ``None`` when the
+            branch already had the workflow.
         """
         if branch.read_latest(workflow.location) == workflow.text:
-            return
-        branch.write({workflow.location.as_posix(): workflow.text}, message)
-        report.written.append(f"{workflow.location} on {branch.description}")
+            return None
+        written = branch.attempt_write(
+            {workflow.location.as_posix(): workflow.text}, message
+        )
+        if written.push.succeeded:
+            report.written.append(f"{workflow.location} on {branch.description}")
+        return written
+
+    def write(
+        self,
+        branch: RemoteBranch,
+        workflow: PlanSiteWorkflow,
+        message: str,
+        report: PublicationReport,
+    ) -> None:
+        """
+        Like :meth:`attempt_write`, but a refused push is an error.
+
+        :raises GitCommandFailed: If the branch refuses the workflow.
+        """
+        written = self.attempt_write(branch, workflow, message, report)
+        if written is not None:
+            written.push.raise_if_failed()
+
+    def write_merge_workflow(
+        self, report: PublicationReport
+    ) -> MergeWorkflowProposal | None:
+        """
+        Write the merge workflow onto the notes repository's default branch, or onto
+        :attr:`merge_workflow_branch` when the default branch refuses it.
+
+        :param report: Where to record the writes.
+        :return: The workflow left for the user to merge, or ``None`` when the default
+            branch holds it or, for a fork, is left without it.
+        """
+        notes_repository = self.dispatch_workflow.notes_repository
+        if RepositoryDetails.from_json(
+            self.github.get(notes_repository.api_path)
+        ).is_fork:
+            report.skipped.append(self.fork_skip_reason)
+            return None
+        workflow = MergeWorkflow(self.dispatch_workflow)
+        message = (
+            "Start the plan site build in "
+            f"{self.dispatch_workflow.site.repository.full_name} on every merge"
+        )
+        default_branch = self.default_branch_of(self.notes_remote)
+        written = self.attempt_write(default_branch, workflow, message, report)
+        if written is None or written.push.succeeded:
+            return None
+        head = RemoteBranch(self.merge_workflow_branch, self.git, self.notes_remote)
+        self.write(head, workflow, message, report)
+        return MergeWorkflowProposal(notes_repository, default_branch.name, head.name)
 
     def register(self, registry: Repository, report: PublicationReport) -> PlanHub:
         """
@@ -532,7 +421,7 @@ def main(argv: list[str] | None = None) -> int:
     Publish this clone's notes repository on the plan site. See the module docstring.
 
     :param argv: The arguments to parse, defaulting to the process's own.
-    :return: 0 when nothing is left to the user, 1 otherwise.
+    :return: The status :meth:`PlanSitePublication.run` ends with.
     """
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
@@ -553,7 +442,7 @@ def main(argv: list[str] | None = None) -> int:
     if notes_repository is None:
         raise NotesRepositoryUnresolvedError(notes_remote)
     site = arguments.site_repository or SiteRepository.default_for(notes_repository)
-    report = PlanSitePublication(
+    return PlanSitePublication(
         GitCommandRunner(project_root),
         notes_remote,
         DispatchWorkflow(
@@ -563,9 +452,7 @@ def main(argv: list[str] | None = None) -> int:
         ),
         SiteWorkflow(arguments.branch_or_tag, notes_repository),
         GitHubRestClient(),
-    ).publish()
-    logger.info(report.render())
-    return 0 if report.complete else 1
+    ).run()
 
 
 if __name__ == "__main__":

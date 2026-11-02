@@ -104,6 +104,12 @@ class DatasetLocation(PathEnumeration):
     the push it runs for.
     """
 
+    PROTECTED_MAIN_HOOK = DIRECTORY / "refuse-main-pre-receive.sh"
+    """
+    A pre-receive hook that refuses every push updating ``main``, as a protected default
+    branch does.
+    """
+
     PULL_REQUEST_DATA_KEYED_BY_NUMBER = DIRECTORY / "pr-data-keyed-by-number.json"
     """
     A ``pr_data.json`` missing its repository level: one pull request keyed by its
@@ -138,6 +144,26 @@ class DatasetLocation(PathEnumeration):
     WORKFLOW_RUNS_NONE = DIRECTORY / "workflow-runs-none.json"
     """
     A run listing with no runs at all.
+    """
+
+    REPOSITORY_FORK = DIRECTORY / "repository-fork.json"
+    """
+    A repository's REST response for a fork.
+    """
+
+    REPOSITORY_NOT_FORK = DIRECTORY / "repository-not-fork.json"
+    """
+    A repository's REST response for a repository that is not a fork.
+    """
+
+    MERGE_WORKFLOW_PULL_REQUEST = DIRECTORY / "merge-workflow-pull-request.json"
+    """
+    The REST response for the pull request proposing the plan site's merge workflow.
+    """
+
+    PULL_REQUEST_REFUSED = DIRECTORY / "pull-request-refused.json"
+    """
+    GitHub's answer refusing to open a pull request for a token without the right.
     """
 
     PROMOTION_SUMMARIES = DIRECTORY / "promotion-summaries.json"

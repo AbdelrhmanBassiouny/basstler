@@ -123,15 +123,23 @@ report_upstream_reviews_action() {
 }
 
 # report_plan_site: whether the notes branch starts the plan site's build. Only the
-# dispatch workflow is visible from here; the publication command re-checks the rest.
+# dispatch workflow and the hub file are visible from here; the publication command
+# re-checks the rest.
 report_plan_site() {
   local publish_command="${BASSTLER_PYTHON} -m ${PLAN_SITE_PUBLICATION_MODULE}"
+  local site_url
   if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_SITE_DISPATCH_WORKFLOW_PATH}" 2>/dev/null; then
     report plan_site ok "'${NOTES_BRANCH}' starts the plan site's build on every push"
-  else
-    report plan_site info \
-      "'${NOTES_BRANCH}' does not start a plan site build - to publish this repository's plans, run: ${publish_command}"
+    return 0
   fi
+  site_url="$(recorded_site_url || true)"
+  if [ -n "${site_url}" ]; then
+    report plan_site info \
+      "the plan site ${site_url} exists, but '${NOTES_BRANCH}' has no workflow starting its build on a push - to add it, run: ${publish_command}"
+    return 0
+  fi
+  report plan_site info \
+    "'${NOTES_BRANCH}' does not start a plan site build - to publish this repository's plans, run: ${publish_command}"
 }
 
 report() {

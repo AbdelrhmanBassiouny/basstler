@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any
 
-from basstler.github.client import GitHubClient, HttpMethod
+from basstler.github.client import GitHubClient, GitHubResponse, HttpMethod
 from basstler.github.exceptions import GitHubRequestFailed
 
 # %% the client
@@ -63,9 +63,11 @@ class RecordedGitHubClient(GitHubClient):
             self._refuse(HttpMethod.GET, path)
         return self.pages[path]
 
-    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
+    def attempt_send(
+        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+    ) -> GitHubResponse:
         self.writes.append(SentWrite(method, path, payload))
-        return payload
+        return GitHubResponse(payload)
 
     def _refuse(self, method: HttpMethod, path: str) -> None:
         """

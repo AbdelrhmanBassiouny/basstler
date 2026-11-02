@@ -212,15 +212,37 @@ never in the project, and which one is the user's to choose: ask for it as
 
 The site builds with basstler's latest release, so it stays current with no re-run.
 
-It writes the site repository's workflow onto its default branch, lists this
-repository in the hub file of the registry that workflow names (this repository
-itself, the first time), and commits the notes branch's dispatch workflow, which
-starts the build on every push to the notes branch. It then prints, as one
-copyable line each, with the same steps numbered for github.com, the steps only the user can take - creating the site
-repository, turning on Pages, storing their fine-grained token as the
-`PLAN_SITE_TOKEN` secret - and exits 1 while any is left. Pass the lines
-and the browser steps on as printed; once the user has done them, run the command again: it counts a
-step done when a run that needs it succeeded.
+It reads the site repository's and this repository's workflow runs first and
+writes nothing until it can. It authenticates with `GH_TOKEN` or
+`GITHUB_TOKEN`, else with `gh`'s login. In a cloud session a read of the site
+repository is refused (403) until it is attached: attach it with `add_repo`
+(access `push`) and run the command again.
+
+It then writes the site repository's workflow onto its default branch, lists
+this repository in the hub file of the registry that workflow names (this
+repository itself, the first time), and commits two workflows that start the
+build: the notes branch's dispatch workflow, on every push to the notes branch,
+and the default branch's merge workflow, on every pull request merged in this
+repository. A fork gets no merge workflow, so its default branch stays as its
+upstream's; a default branch that refuses the push gets it on
+`basstler/plan-site-merge`, with a pull request opened for it and a step to
+merge that pull request; when GitHub refuses to open it, the step says why and
+gives the line that opens it.
+
+It then prints the steps only the user can take, each with its copyable command
+(where GitHub offers one) and the same steps numbered for github.com: creating
+the site repository, turning on Pages, creating - or reusing - the fine-grained
+token, storing it as the `PLAN_SITE_TOKEN` secret, and merging the merge
+workflow. It exits 1 while any is left.
+
+Actions secrets belong to one repository, so the token has to be stored in
+every repository the site publishes; the store step is one command that does
+that for all of them. A token the user already has works if it lists every one
+of those repositories - say so before they create a new one. A step that
+follows a run shows that run's address, so the log says why it failed. Pass the
+lines and the browser steps on exactly as printed, never shortened to one of the
+two; once the user has done them, run the command again: it counts a step done
+when a run that needs it succeeded.
 
 ## 9. Confirm, by re-running the check
 
