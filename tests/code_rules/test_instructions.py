@@ -92,7 +92,7 @@ def test_the_checkers_are_those_of_the_checked_rules():
     The checkers the repository's rules declare, in the order the rules are listed.
     """
     assert RuleModule(rules).checkers == (
-        DocumentationRules.DOCUMENT_EVERYTHING.checker,
+        DocumentationRules.DOCUMENT_EVERY_CONSTRUCT.checker,
         DocumentationRules.SHORT_DOCSTRINGS.checker,
     )
 

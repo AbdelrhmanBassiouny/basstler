@@ -46,6 +46,26 @@ class RuleApplicationRules(Section):
     )
 
 
+class RuleModellingRules(Section):
+    """
+    The rules on writing the rules themselves.
+    """
+
+    @classproperty
+    @override
+    def parent(cls) -> type[Section]:
+        """
+        Nested under :class:`CodeQualityRules`, unlike :meth:`Section.parent`.
+        """
+        return CodeQualityRules
+
+    SPLIT_OFF_THE_CHECKABLE_PART = (
+        "When a script can check part of a rule, split the rule: the checkable "
+        "part becomes a rule of its own that carries its checker, and the part "
+        "only a person can judge stays a rule without one"
+    )
+
+
 class AskTheDeveloperRules(Section):
     """
     The rules on what to ask the developer instead of deciding.
@@ -615,20 +635,25 @@ class DocumentationRules(Section):
     def parent(cls) -> type[Section]:
         return CodeQualityRules
 
-    DOCUMENT_EVERYTHING = (
-        "Every module, class, function and field has a docstring in "
-        "reStructuredText: a module's or class's responsibility, a function's "
-        "contract, a field's unit or meaning. A field's docstring goes directly "
-        "below the field, not in the class docstring",
+    DOCUMENT_EVERY_CONSTRUCT = (
+        "Every module, class, function and field has a docstring. A field's "
+        "docstring goes directly below the field, not in the class docstring. A "
+        "method implementing an abstract method is exempt: the abstract method's "
+        "docstring is enough",
         (),
         MissingDocstringChecker(),
     )
 
+    MEANINGFUL_DOCUMENTATION = (
+        "Documentation is written in reStructuredText and says something the name "
+        "and the type hints do not: a module's or class's responsibility, a "
+        "function's contract, a field's unit or meaning"
+    )
+
     OVERRIDES_INHERIT_DOCSTRINGS = (
-        "An override that keeps its base contract is decorated with "
-        "`typing.override`, has no docstring and inherits the base one. One that "
-        "changes the contract documents only the difference and references the "
-        "overridden method with `:meth:`"
+        "An implementation of an abstract method has no docstring and inherits the "
+        "base one. An override of an implemented method documents only what differs "
+        "from the base and references the overridden method with `:meth:`"
     )
 
     DOCSTRINGS_STATE_THE_CONTRACT = (

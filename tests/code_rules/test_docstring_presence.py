@@ -7,11 +7,6 @@ from __future__ import annotations
 from basstler.code_rules.docstring_presence import MissingDocstringChecker
 
 from ..constants.paths import DocstringSnippet
-from ..constants.source_lines import (
-    MODULE_FIRST_LINE,
-    UNDOCUMENTED_FIELD_LINE,
-    UNDOCUMENTED_METHOD_LINE,
-)
 
 # %% undocumented code
 
@@ -27,14 +22,32 @@ def undocumented_first_lines(snippet: DocstringSnippet) -> list[int]:
     )
 
 
-def test_an_undocumented_field_and_method_are_reported_and_an_override_is_not():
+def test_undocumented_fields_and_methods_are_reported_but_abstract_implementations_are_not():
     """
-    The field and the method without a docstring are reported; the method decorated with
-    :func:`typing.override` inherits its base's docstring.
+    The field, the override of an implemented method and the new method without a
+    docstring are reported; the implementation of an abstract method inherits its base's
+    docstring.
     """
+    undocumented_field_line = 38
+    overriding_method_line = 43
+    new_method_line = 46
+
     assert undocumented_first_lines(DocstringSnippet.UNDOCUMENTED_DEFINITIONS) == [
-        UNDOCUMENTED_FIELD_LINE,
-        UNDOCUMENTED_METHOD_LINE,
+        undocumented_field_line,
+        overriding_method_line,
+        new_method_line,
+    ]
+
+
+def test_an_unimportable_module_is_checked_except_for_its_methods():
+    """
+    A module that raises on import still has its functions checked; only its methods,
+    whose bases cannot be looked up, are skipped.
+    """
+    undocumented_function_line = 19
+
+    assert undocumented_first_lines(DocstringSnippet.UNIMPORTABLE_DEFINITIONS) == [
+        undocumented_function_line
     ]
 
 
@@ -42,6 +55,8 @@ def test_a_module_without_a_docstring_is_reported():
     """
     A module's missing docstring is reported at its first line.
     """
+    module_first_line = 1
+
     assert undocumented_first_lines(DocstringSnippet.NO_MODULE_DOCSTRING) == [
-        MODULE_FIRST_LINE
+        module_first_line
     ]
