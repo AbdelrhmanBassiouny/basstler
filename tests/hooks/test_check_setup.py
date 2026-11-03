@@ -559,11 +559,24 @@ def test_reports_a_claude_local_md_that_was_never_written(
 # %% where it runs
 
 
-def test_run_outside_a_repository_reports_nothing_and_exits_distinctly(
-    check_setup_repository: ScratchRepository, tmp_path: Path
-):
+@pytest.fixture
+def outside_any_repository(tmp_path: Path) -> Path:
+    """
+    :return: A directory no git work tree contains.
+    """
     outside = tmp_path / "outside-any-repository"
     outside.mkdir()
+    return outside
+
+
+def run_check_setup_outside(
+    check_setup_repository: ScratchRepository, outside: Path
+) -> subprocess.CompletedProcess[str]:
+    """
+    :param check_setup_repository: The repository whose plugin and home are used.
+    :param outside: The directory to run in.
+    :return: The finished check-setup.sh run.
+    """
     runner = BashScriptRunner(
         project_root=outside,
         removed_variable_prefixes=tuple(ScrubbedEnvironmentPrefix),
@@ -571,13 +584,32 @@ def test_run_outside_a_repository_reports_nothing_and_exits_distinctly(
         / PluginLocation.HOOKS.value.name
         / PluginLocation.SETUP_CHECK_SCRIPT.name,
     )
-
-    result = runner.run(
+    return runner.run(
         **{ConfigurationVariable.HOME: str(check_setup_repository.basstler_home)}
     )
 
+
+def test_run_outside_a_repository_reports_nothing_and_exits_distinctly(
+    check_setup_repository: ScratchRepository, outside_any_repository: Path
+):
+    """
+    Outside a work tree no row is printed, and the status says why.
+    """
+    result = run_check_setup_outside(check_setup_repository, outside_any_repository)
+
     assert result.returncode == SetupCheckExitCode.NOT_IN_REPOSITORY
     assert result.stdout == ""
+
+
+def test_run_outside_a_repository_names_the_directory_on_stderr(
+    check_setup_repository: ScratchRepository, outside_any_repository: Path
+):
+    """
+    The refusal names the directory it was run in, so the reader can tell what to fix.
+    """
+    result = run_check_setup_outside(check_setup_repository, outside_any_repository)
+
+    assert str(outside_any_repository.resolve()) in result.stderr
 
 
 # %% reporting only the requested checks

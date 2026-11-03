@@ -68,6 +68,11 @@ class MergeProbeResult:
     What merging one fetched branch into another gives.
     """
 
+    base_location: str
+    """
+    The remote name or URL the base branch was fetched from.
+    """
+
     base_commit: str
     """
     The commit the base branch pointed at when it was fetched.
@@ -97,11 +102,22 @@ class MergeProbeResult:
             return StackExitCode.SUCCESS
         return StackExitCode.MERGE_CONFLICTS
 
-    def print_json(self) -> None:
+    def print_report(self) -> None:
         """
-        Print the result as one JSON object.
+        Print the result as one JSON object, and describe a conflict on stderr.
         """
         logger.info(json.dumps(asdict(self), sort_keys=True))
+        if self.verdict is MergeVerdict.CLEAN:
+            return
+        logger.error(
+            "%s: commit %s does not merge cleanly into %s's commit %s; it conflicts "
+            "in %s",
+            self.exit_code.name_for_a_caller,
+            self.head_commit,
+            self.base_location,
+            self.base_commit,
+            ", ".join(self.conflicting_paths),
+        )
 
 
 # %% the probe
@@ -114,9 +130,14 @@ class MergeProbe:
     the working tree.
     """
 
-    remote: str
+    head_location: str
     """
-    The remote name or URL both branches are fetched from.
+    The remote name or URL the head branch is fetched from.
+    """
+
+    base_location: str
+    """
+    The remote name or URL the base branch is fetched from.
     """
 
     base: str
@@ -139,14 +160,17 @@ class MergeProbe:
             merge them for a reason other than a conflict.
         """
         git = GitCommandRunner(working_directory)
-        git.run(
-            GitArgument.FETCH,
-            GitArgument.QUIET,
-            GitArgument.NO_WRITE_FETCH_HEAD,
-            self.remote,
-            f"+refs/heads/{self.base}:{ProbedReference.BASE}",
-            f"+refs/heads/{self.head}:{ProbedReference.HEAD}",
-        )
+        for location, branch, reference in (
+            (self.base_location, self.base, ProbedReference.BASE),
+            (self.head_location, self.head, ProbedReference.HEAD),
+        ):
+            git.run(
+                GitArgument.FETCH,
+                GitArgument.QUIET,
+                GitArgument.NO_WRITE_FETCH_HEAD,
+                location,
+                f"+refs/heads/{branch}:{reference}",
+            )
         merge = git.attempt(
             GitArgument.MERGE_TREE,
             GitArgument.WRITE_TREE,
@@ -163,6 +187,7 @@ class MergeProbe:
             )
         clean = merge.exit_status == MergeTreeStatus.CLEAN
         return MergeProbeResult(
+            base_location=self.base_location,
             base_commit=git.run(GitArgument.REVISION_PARSE, ProbedReference.BASE),
             head_commit=git.run(GitArgument.REVISION_PARSE, ProbedReference.HEAD),
             verdict=MergeVerdict.CLEAN if clean else MergeVerdict.CONFLICTS,

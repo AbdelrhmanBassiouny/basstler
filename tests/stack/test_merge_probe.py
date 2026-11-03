@@ -130,3 +130,72 @@ def test_a_branch_the_remote_does_not_have_is_a_failed_git_command(
 
     assert result.returncode == StackExitCode.GIT_COMMAND_FAILED
     assert result.stdout == ""
+
+
+def test_a_conflict_is_described_on_stderr(fork_checkout: ForkCheckout):
+    """
+    A conflict is described in words on stderr, not only by its exit status.
+    """
+    conflicting_feature(fork_checkout)
+
+    result = probe(fork_checkout, StackBranch.BASE, StackBranch.FEATURE)
+
+    assert StackExitCode.MERGE_CONFLICTS.name_for_a_caller in result.stderr
+
+
+# %% the upstream base
+
+
+def upstream_moved_past_the_fork(checkout: ForkCheckout) -> str:
+    """
+    Publish to the upstream's base a commit the fork's copy lacks, and a feature on the
+    fork that rewrites the same file differently.
+
+    :param checkout: The checkout to build them in.
+    :return: The upstream base's new commit.
+    """
+    checkout.name_the_upstream()
+    shared_file = checkout.own_file(StackBranch.BASE)
+    checkout.branch_from(StackBranch.FEATURE, StackBranch.BASE)
+    checkout.commit_on(StackBranch.FEATURE, shared_file, "the feature's line\n")
+    checkout.run_git(
+        "checkout",
+        "--quiet",
+        "--detach",
+        f"{RemoteName.UPSTREAM}/{StackBranch.BASE}",
+    )
+    upstream_commit = checkout.commit(shared_file, "the upstream's line\n")
+    checkout.run_git("push", "--quiet", RemoteName.UPSTREAM, f"HEAD:{StackBranch.BASE}")
+    return upstream_commit
+
+
+def test_the_upstream_base_is_read_from_the_upstream_not_the_fork(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A base equal to the upstream base is read from the upstream, whose copy the fork's
+    can lag.
+    """
+    upstream_commit = upstream_moved_past_the_fork(fork_checkout)
+
+    result = probe(fork_checkout, StackBranch.BASE, StackBranch.FEATURE)
+
+    report = json.loads(result.stdout)
+    assert result.returncode == StackExitCode.MERGE_CONFLICTS
+    assert report["base_commit"] == upstream_commit
+    assert report["base_location"] == RemoteName.UPSTREAM
+
+
+def test_without_a_named_upstream_the_base_is_read_from_the_given_remote(
+    fork_checkout: ForkCheckout,
+):
+    """
+    A project naming no upstream reads its base from the remote it was given.
+    """
+    fork_checkout.branch_from(StackBranch.FEATURE, StackBranch.BASE)
+
+    report = json.loads(
+        probe(fork_checkout, StackBranch.BASE, StackBranch.FEATURE).stdout
+    )
+
+    assert report["base_location"] == RemoteName.ORIGIN

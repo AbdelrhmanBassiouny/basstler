@@ -6,9 +6,8 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, Ente
 
 # Plan Item Resolve
 
-Run every command as one self-contained Bash call: nothing a call sources or sets
-survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
-`${CLAUDE_PLUGIN_ROOT}`.
+Run commands as [`running-commands.md`](../running-commands.md) says, with
+`${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
 
 Generic, plan-agnostic — nothing here may hardcode a specific plan id,
 item, or branch. Unlike `plan-item-kickoff` (for an item that hasn't
@@ -49,10 +48,11 @@ already exists**, which is where the cause of a stall almost always is:
   "${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" stack merge-probe --remote <the remote of the pull request's repository> --base <base branch> --head <head branch>
   ```
 
-  It fetches both branches and prints one JSON object: `verdict`, every
-  `conflicting_paths` entry, and the `base_commit` and `head_commit` it merged. Exit 0
-  is clean and 13 is conflicting; any other status means the conflict state is *not
-  checked* — say so, and never report the pull request as mergeable. Then read its review threads
+  It fetches both branches - an upstream base from the upstream itself - and prints one
+  JSON object: `verdict`, every `conflicting_paths` entry, the `base_location` it read
+  and the `base_commit` and `head_commit` it merged. Exit 0 (`success`) is clean and 13
+  (`merge-conflicts`) is conflicting; any other status means the conflict state is *not
+  checked* - stderr says why - so say so, and never report the pull request as mergeable. Then read its review threads
   (`method: "get_review_comments"`) and plain comments
   (`method: "get_comments"`) — read every one, not just the most recent,
   since an older unresolved thread is exactly the kind of thing this skill

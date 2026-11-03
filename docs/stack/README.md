@@ -78,10 +78,13 @@ next to the workflow it describes, because it is read rather than run.
     side, a destination that is not the fork, or a push that would make a child an ancestor of its
     own parent (which GitHub reads as a merged pull request).
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack merge-probe --remote <remote> --base A --head B` - fetches
-    both branches and merges them with `git merge-tree`, touching no branch or work tree. Prints
-    one JSON object (`verdict`, the sorted `conflicting_paths`, and the `base_commit` and
-    `head_commit` it merged) and exits `0` when clean and `13` when conflicting, so the answer never
-    waits on GitHub's lazily computed `mergeable_state`.
+    both branches and merges them with `git merge-tree`, touching no branch or work tree. In a
+    project that names an upstream, a `--base` equal to the upstream base is read from the upstream
+    itself, since the fork's copy can lag behind it. Prints one JSON object (`verdict`, the sorted
+    `conflicting_paths`, the `base_location` it read the base from, and the `base_commit` and
+    `head_commit` it merged) and exits `0` (`success`) when clean and `13` (`merge-conflicts`) when
+    conflicting, saying on stderr which commits conflict and where, so the answer never waits on
+    GitHub's lazily computed `mergeable_state`.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack promotion-link --branch B --title T --body ...` - the upstream
     compare-and-create URL, encoded and within the length limit, warning on stderr when the body had
     to be shortened.
