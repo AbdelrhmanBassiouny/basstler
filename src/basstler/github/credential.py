@@ -7,17 +7,34 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import StrEnum
 
-from basstler.environment import GitHubCredentialVariable
-
 # %% where a token comes from
 
 
-class CredentialOrigin(StrEnum):
+class CredentialOrigin:
     """
-    Where a token not read from a :class:`GitHubCredentialVariable` came from.
+    Where the token a GitHub request authenticates with comes from.
     """
 
-    GIVEN = "the token the client was given"
+    def describe_credential(self) -> str:
+        """
+        :return: The token, named by where it came from.
+        """
+        raise NotImplementedError
+
+    def suggest_renewal(self) -> str:
+        """
+        :return: How to replace the token with a valid one.
+        """
+        raise NotImplementedError
+
+
+class CredentialProvider(CredentialOrigin, StrEnum):
+    """
+    The origins of a token not read from a
+    :class:`basstler.environment.GitHubCredentialVariable`.
+    """
+
+    CALLER = "the token the client was given"
     """
     The caller handed the client its token.
     """
@@ -26,6 +43,22 @@ class CredentialOrigin(StrEnum):
     """
     ``gh auth token`` printed it.
     """
+
+    def describe_credential(self) -> str:
+        """
+        :return: :meth:`CredentialOrigin.describe_credential`: this provider's value.
+        """
+        return self.value
+
+    def suggest_renewal(self) -> str:
+        """
+        :return: :meth:`CredentialOrigin.suggest_renewal` for this provider.
+        """
+        match self:
+            case CredentialProvider.CALLER:
+                return "Give the client a valid token."
+            case CredentialProvider.GH_LOGIN:
+                return "Log in again with `gh auth login`."
 
 
 # %% the token
@@ -42,7 +75,7 @@ class GitHubCredential:
     The token, kept out of the representation so it never reaches a log.
     """
 
-    origin: GitHubCredentialVariable | CredentialOrigin
+    origin: CredentialOrigin
     """
     Where the token came from.
     """

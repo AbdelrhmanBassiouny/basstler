@@ -11,6 +11,8 @@ from __future__ import annotations
 import os
 from enum import StrEnum
 
+from basstler.github.credential import CredentialOrigin
+
 
 class EnvironmentVariable(StrEnum):
     """
@@ -55,7 +57,7 @@ class GitVariable(EnvironmentVariable):
     """
 
 
-class GitHubCredentialVariable(EnvironmentVariable):
+class GitHubCredentialVariable(CredentialOrigin, EnvironmentVariable):
     """
     The variables a GitHub token is read from, in the order they are tried.
     """
@@ -69,6 +71,20 @@ class GitHubCredentialVariable(EnvironmentVariable):
     """
     The token GitHub Actions hands a workflow.
     """
+
+    def describe_credential(self) -> str:
+        """
+        :return: :meth:`CredentialOrigin.describe_credential`: the token in this
+            variable.
+        """
+        return f"the token in {self}"
+
+    def suggest_renewal(self) -> str:
+        """
+        :return: :meth:`CredentialOrigin.suggest_renewal`: set a valid token in this
+            variable.
+        """
+        return f"Set a valid token in {self}."
 
     @classmethod
     def first_set(cls) -> GitHubCredentialVariable | None:

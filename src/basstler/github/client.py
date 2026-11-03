@@ -23,7 +23,7 @@ from http.client import HTTPResponse
 from typing import Any
 
 from basstler.environment import GitHubCredentialVariable
-from basstler.github.credential import CredentialOrigin, GitHubCredential
+from basstler.github.credential import CredentialProvider, GitHubCredential
 from basstler.github.exceptions import (
     GitHubCredentialUnavailableError,
     GitHubCallFailed,
@@ -220,7 +220,7 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
             environment nor ``gh`` has one.
         """
         if self.token:
-            return GitHubCredential(self.token, CredentialOrigin.GIVEN)
+            return GitHubCredential(self.token, CredentialProvider.CALLER)
         variable = GitHubCredentialVariable.first_set()
         if variable is not None:
             return GitHubCredential(variable.read(), variable)
@@ -232,7 +232,7 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
         )
         if login.returncode != 0 or not login.stdout.strip():
             raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
-        return GitHubCredential(login.stdout.strip(), CredentialOrigin.GH_LOGIN)
+        return GitHubCredential(login.stdout.strip(), CredentialProvider.GH_LOGIN)
 
     def get(self, path: str) -> Any:
         return self.attempt_get(path).raise_if_failed()

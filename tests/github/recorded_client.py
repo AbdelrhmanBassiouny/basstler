@@ -10,7 +10,7 @@ from http import HTTPStatus
 from typing import Any
 
 from basstler.github.client import GitHubClient, GitHubResponse, HttpMethod
-from basstler.github.credential import CredentialOrigin
+from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
 
 # %% the client
@@ -79,5 +79,5 @@ class RecordedGitHubClient(GitHubClient):
             detail="",
             method=method,
             path=path,
-            credential_origin=CredentialOrigin.GIVEN,
+            credential_origin=CredentialProvider.CALLER,
         )

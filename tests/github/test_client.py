@@ -12,7 +12,11 @@ import pytest
 
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.client import GitHubRestClient, HttpMethod
-from basstler.github.credential import CredentialOrigin, GitHubCredential
+from basstler.github.credential import (
+    CredentialOrigin,
+    CredentialProvider,
+    GitHubCredential,
+)
 from basstler.github.exceptions import (
     GitHubCredentialRejected,
     GitHubCredentialUnavailableError,
@@ -155,7 +159,7 @@ def test_a_refusal_names_a_given_credential(client):
     """
     response = client.attempt_get("/repos/o/r/pulls/404")
 
-    assert response.failure.credential_origin is CredentialOrigin.GIVEN
+    assert response.failure.credential_origin is CredentialProvider.CALLER
 
 
 def test_a_refusal_names_the_variable_the_credential_came_from(
@@ -170,6 +174,33 @@ def test_a_refusal_names_the_variable_the_credential_came_from(
     response = client.attempt_get("/repos/o/r/pulls/404")
 
     assert response.failure.credential_origin is GitHubCredentialVariable.GH_TOKEN
+
+
+@pytest.mark.parametrize(
+    "origin",
+    [*GitHubCredentialVariable, *CredentialProvider],
+)
+def test_every_place_a_token_comes_from_is_a_credential_origin(origin):
+    """
+    Variables and the other providers are all origins a refusal can name.
+    """
+    assert isinstance(origin, CredentialOrigin)
+
+
+def test_a_rejected_token_from_a_variable_suggests_setting_that_variable(
+    monkeypatch, no_token_variables, api_server
+):
+    """
+    A rejected token read from a variable is renewed by setting that variable.
+    """
+    monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, TOKEN)
+    api_server.responses["GET /user"] = CannedResponse(
+        None, status=HTTPStatus.UNAUTHORIZED
+    )
+
+    response = GitHubRestClient(api_root=api_server.root).attempt_get("/user")
+
+    assert GitHubCredentialVariable.GH_TOKEN in response.failure.suggest_correction()
 
 
 # %% the credential
@@ -227,7 +258,7 @@ def test_with_no_token_variable_the_credential_comes_from_gh(
     monkeypatch.setenv(StubEnvironmentVariable.AUTH_TOKEN, TOKEN)
 
     assert GitHubRestClient().credential == GitHubCredential(
-        TOKEN, CredentialOrigin.GH_LOGIN
+        TOKEN, CredentialProvider.GH_LOGIN
     )
 
 

@@ -14,7 +14,7 @@ import pytest
 
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.client import GitHubAttemptReader, GitHubResponse, HttpMethod
-from basstler.github.credential import CredentialOrigin
+from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
@@ -96,7 +96,7 @@ def refused(repository: Repository, status: HTTPStatus) -> GitHubResponse:
             detail="",
             method=HttpMethod.GET,
             path=TokenSecret.path(repository),
-            credential_origin=CredentialOrigin.GIVEN,
+            credential_origin=CredentialProvider.CALLER,
         ),
     )
 
@@ -525,7 +525,7 @@ def test_a_refusal_with_a_multi_line_body_is_reported_on_one_line():
         detail="first line\nsecond line",
         method=HttpMethod.GET,
         path=TokenSecret.path(NOTES_REPOSITORY),
-        credential_origin=CredentialOrigin.GIVEN,
+        credential_origin=CredentialProvider.CALLER,
     )
 
     assert "\n" not in ReadRefusal(failure).describe()

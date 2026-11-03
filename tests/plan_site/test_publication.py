@@ -25,7 +25,7 @@ from basstler.github.client import (
     GitHubWriter,
     HttpMethod,
 )
-from basstler.github.credential import CredentialOrigin
+from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import (
     GitHubCallFailed,
     GitHubRequestFailed,
@@ -745,7 +745,7 @@ def pull_request_failures(
             detail=DatasetLocation.PULL_REQUEST_REFUSED.read_text(),
             method=HttpMethod.POST,
             path=path,
-            credential_origin=CredentialOrigin.GIVEN,
+            credential_origin=CredentialProvider.CALLER,
         ),
         GitHubUnreachableError(HttpMethod.POST, path, NETWORK_DOWN),
     ]
@@ -866,7 +866,7 @@ class RefusingRestClient(GitHubReader):
             detail="",
             method=HttpMethod.GET,
             path=path,
-            credential_origin=CredentialOrigin.GIVEN,
+            credential_origin=CredentialProvider.CALLER,
         )
 
     def get_pages(self, path: str):
@@ -875,7 +875,7 @@ class RefusingRestClient(GitHubReader):
             detail="",
             method=HttpMethod.GET,
             path=path,
-            credential_origin=CredentialOrigin.GIVEN,
+            credential_origin=CredentialProvider.CALLER,
         )
 
 
