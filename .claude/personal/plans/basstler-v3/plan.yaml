@@ -84,10 +84,14 @@ items:
   - plan-store-issues
   - core-robustness/lean-kickoff
   status: not started
-  notes: 'Item scope, dependency readiness, its pull request''s checks, unresolved threads, the mirrored upstream
-    state and tracking-issue comments naming it, built by code so a skill never fetches or reads reference docs
-    to assemble context. Builds on core-robustness/lean-kickoff (#97): reuse its brief command and skill-size test,
-    re-sourced from issues.'
+  notes: >
+    Item scope, dependency readiness, its pull request's checks, unresolved threads, the mirrored
+    upstream state and tracking-issue comments naming it, built by code so a skill never fetches or
+    reads reference docs to assemble context. Builds on core-robustness/lean-kickoff (#97): reuse
+    its brief command and skill-size test, re-sourced from issues.
+
+    From basstler-reliability: conflicts come from stack merge-probe; anything unread is listed as
+    not checked with its reason, and the brief never says clean while one is.
 - id: plan-import
   title: Import every plan.yaml into issues, once
   branch: null
