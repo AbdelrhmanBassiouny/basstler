@@ -40,6 +40,16 @@ class RepositoryLocation(PathEnumeration):
     The shell entry points under test.
     """
 
+    PLUGIN_PROBE = ROOT / "plugin-probe"
+    """
+    The throwaway plugin that reports what a plugin receives in a cloud session.
+    """
+
+    PLUGIN_PROBE_SERVER = PLUGIN_PROBE / "scripts" / "probe-server.sh"
+    """
+    The probe's MCP server.
+    """
+
     WORKFLOWS = ROOT / ".github" / "workflows"
     """
     The repository's Actions workflows.

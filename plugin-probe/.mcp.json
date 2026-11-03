@@ -1,0 +1,11 @@
+{
+  "mcpServers": {
+    "probe": {
+      "command": "bash",
+      "args": ["${CLAUDE_PLUGIN_ROOT}/scripts/probe-server.sh"],
+      "env": {
+        "PROBE_OPTION": "${user_config.probe_value}"
+      }
+    }
+  }
+}

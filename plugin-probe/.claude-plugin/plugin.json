@@ -1,0 +1,17 @@
+{
+  "name": "basstler-plugin-probe",
+  "version": "0.0.1",
+  "description": "Throwaway probe: reports whether a plugin's MCP server, userConfig and data directory reach a Claude Code cloud session.",
+  "author": {
+    "name": "basstler"
+  },
+  "license": "Apache-2.0",
+  "userConfig": {
+    "probe_value": {
+      "type": "string",
+      "title": "Probe value",
+      "description": "Any text; the probe reports whether it reaches the MCP server, the hooks and the skill.",
+      "default": "default-from-manifest"
+    }
+  }
+}

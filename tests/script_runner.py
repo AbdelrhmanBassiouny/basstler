@@ -72,16 +72,21 @@ class ScriptRunner(ABC):
         return {**inherited, **self.set_variables, **overrides}
 
     def run(
-        self, *arguments: str, **environment_overrides: str
+        self,
+        *arguments: str,
+        standard_input: str | None = None,
+        **environment_overrides: str,
     ) -> subprocess.CompletedProcess[str]:
         """
         :param arguments: The arguments this call passes.
+        :param standard_input: Text fed to the run's standard input, if any.
         :param environment_overrides: Variables to set for this run, for the tests that
             exercise resolution from the environment.
         :return: The finished subprocess, with both streams captured as text.
         """
         return subprocess.run(
             [*self.command, *arguments],
+            input=standard_input,
             cwd=self.project_root,
             capture_output=True,
             text=True,
