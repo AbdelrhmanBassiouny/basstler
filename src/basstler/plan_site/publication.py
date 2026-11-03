@@ -412,8 +412,24 @@ class PublicationOption(StrEnum):
 
     SITE_REPOSITORY = "--site-repository"
     """
-    The ``owner/name`` repository that builds and serves the site.
+    The ``owner/name`` repository that builds and serves the site, the one the notes
+    branch records when not given.
     """
+
+
+def recorded_site_repository(notes_branch: RemoteBranch) -> SiteRepository | None:
+    """
+    :param notes_branch: The notes branch.
+    :return: The site repository its dispatch workflow starts the build in, else the
+        one serving the site its hub file names, ``None`` when it records neither.
+    """
+    dispatch_text = notes_branch.read_latest(WorkflowLocation.PLAN_SITE_DISPATCH)
+    if dispatch_text is not None:
+        return DispatchWorkflow.read_site(dispatch_text)
+    hub = PlanHub.from_text(notes_branch.read_latest(ProjectLocation.PLAN_HUB))
+    if hub is None or hub.site_url is None:
+        return None
+    return SiteRepository.from_site_url(hub.site_url)
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -441,15 +457,17 @@ def main(argv: list[str] | None = None) -> int:
     notes_repository = resolve_repository(project_root, notes_remote)
     if notes_repository is None:
         raise NotesRepositoryUnresolvedError(notes_remote)
-    site = arguments.site_repository or SiteRepository.default_for(notes_repository)
+    git = GitCommandRunner(project_root)
+    notes_branch = PersonalNotesSetting.BRANCH.resolve(project_root, os.environ)
+    site = (
+        arguments.site_repository
+        or recorded_site_repository(RemoteBranch(notes_branch, git, notes_remote))
+        or SiteRepository.default_for(notes_repository)
+    )
     return PlanSitePublication(
-        GitCommandRunner(project_root),
+        git,
         notes_remote,
-        DispatchWorkflow(
-            notes_repository,
-            PersonalNotesSetting.BRANCH.resolve(project_root, os.environ),
-            site,
-        ),
+        DispatchWorkflow(notes_repository, notes_branch, site),
         SiteWorkflow(arguments.branch_or_tag, notes_repository),
         GitHubRestClient(),
     ).run()

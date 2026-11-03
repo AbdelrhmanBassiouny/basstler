@@ -10,7 +10,8 @@ from __future__ import annotations
 
 import os
 import sys
-from dataclasses import dataclass
+from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import StrEnum
 from http import HTTPStatus
@@ -19,12 +20,9 @@ from typing import Any
 
 from cyclopts import App
 
-from basstler.github.client import (
-    GitHubAttemptReader,
-    GitHubReader,
-    GitHubRestClient,
-)
-from basstler.github.exceptions import GitHubRequestFailed
+from basstler.environment import GitHubCredentialVariable
+from basstler.github.client import GitHubAttemptReader, GitHubRestClient
+from basstler.github.exceptions import GitHubCallFailed, GitHubRequestFailed
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
@@ -33,11 +31,53 @@ from basstler.plan_site import publication
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.run_listing import ListedRun, RunListing
+from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.report import CheckResult, CheckStatus
 from basstler.setup.steps import resolve_repository
 from basstler.upstream_reviews.vocabulary import CheckOutcome, JSONModel
+
+# %% the credential the check reads GitHub with
+
+
+@dataclass(frozen=True)
+class CheckCredential:
+    """
+    The credential the check reads GitHub with, named so a refusal says whose it was.
+    """
+
+    variable: GitHubCredentialVariable | None
+    """
+    The variable holding the token, ``None`` when it comes from ``gh``'s login.
+    """
+
+    @classmethod
+    def in_use(cls) -> CheckCredential:
+        """
+        :return: The credential :class:`GitHubRestClient` authenticates with here.
+        """
+        return cls(GitHubCredentialVariable.first_set())
+
+    def explain(self, failure: GitHubCallFailed) -> str:
+        """
+        :param failure: Why a read with this credential failed.
+        :return: The failure, naming the credential and, when GitHub rejects it, that
+            it is not :attr:`PlanSiteSecret.TOKEN`.
+        """
+        if not isinstance(failure, GitHubRequestFailed):
+            return str(failure)
+        credential = (
+            "gh's login" if self.variable is None else f"the token in {self.variable}"
+        )
+        if failure.status == HTTPStatus.UNAUTHORIZED:
+            return (
+                f"GitHub rejects {credential} as invalid or expired (HTTP "
+                f"{failure.status}); it is this session's own credential, not the "
+                f"{PlanSiteSecret.TOKEN} secret"
+            )
+        return f"GitHub refused {credential} with HTTP {failure.status}"
+
 
 # %% the token each repository stores
 
@@ -90,6 +130,11 @@ class TokenSecret(JSONModel):
     When its value was last set, ``None`` unless :attr:`SecretState.STORED`.
     """
 
+    refusal: GitHubCallFailed | None = None
+    """
+    Why it could not be read, ``None`` unless :attr:`SecretState.UNREADABLE`.
+    """
+
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> TokenSecret:
         """
@@ -123,7 +168,30 @@ class TokenSecret(JSONModel):
             and answer.failure.status == HTTPStatus.NOT_FOUND
         ):
             return cls(SecretState.MISSING)
-        return cls(SecretState.UNREADABLE)
+        return cls(SecretState.UNREADABLE, refusal=answer.failure)
+
+    def describe(self, repository: Repository) -> str:
+        """
+        :param repository: The repository it belongs to.
+        :return: Whether the repository stores it, in a sentence that names both.
+        """
+        name = repository.full_name
+        match self.state:
+            case SecretState.STORED:
+                return (
+                    f"{name} stores {PlanSiteSecret.TOKEN}, set "
+                    f"{self.updated_at:%Y-%m-%d}"
+                )
+            case SecretState.MISSING:
+                return (
+                    f"{name} stores no {PlanSiteSecret.TOKEN} secret, so its dispatch "
+                    f"runs gh with an empty {GitHubCredentialVariable.GH_TOKEN}"
+                )
+            case SecretState.UNREADABLE:
+                return (
+                    f"whether {name} stores {PlanSiteSecret.TOKEN} could not be read: "
+                    f"{CheckCredential.in_use().explain(self.refusal)}"
+                )
 
 
 # %% one repository's dispatch
@@ -208,14 +276,87 @@ class DispatchState(StrEnum):
 
 
 @dataclass(frozen=True)
-class RepositoryDispatch:
+class DispatchReading(ABC):
     """
-    One repository's token secret and its notes branch's latest dispatch run.
+    What reading one published repository's dispatch from GitHub found.
     """
 
     repository: Repository
     """
     The repository the plan site publishes.
+    """
+
+    @property
+    @abstractmethod
+    def status(self) -> CheckStatus:
+        """
+        :return: The status this repository gives the plan site check.
+        """
+
+    @abstractmethod
+    def describe(self) -> str:
+        """
+        :return: What was found, in a sentence that names the repository.
+        """
+
+    @classmethod
+    def read(
+        cls,
+        runs: GitHubAttemptReader,
+        secrets: GitHubAttemptReader,
+        repository: Repository,
+        notes_branch: str,
+    ) -> DispatchReading:
+        """
+        :param runs: What reads the workflow runs.
+        :param secrets: What reads the secret's metadata.
+        :param repository: The repository.
+        :param notes_branch: The branch its dispatch workflow runs on.
+        :return: Its dispatch as GitHub reports it, or why its runs could not be read.
+        """
+        answer = runs.attempt_get(RunListing.path(repository, notes_branch))
+        if answer.failure is not None:
+            return UnreadableDispatch(repository, answer.failure)
+        return RepositoryDispatch(
+            repository,
+            notes_branch,
+            TokenSecret.read(secrets, repository),
+            RunListing.from_json(answer.body).select(DispatchWorkflow.location),
+        )
+
+
+@dataclass(frozen=True)
+class UnreadableDispatch(DispatchReading):
+    """
+    A repository whose dispatch runs GitHub would not list.
+    """
+
+    failure: GitHubCallFailed
+    """
+    Why the listing failed.
+    """
+
+    credential: CheckCredential = field(default_factory=CheckCredential.in_use)
+    """
+    The credential the listing was read with.
+    """
+
+    @property
+    def status(self) -> CheckStatus:
+        return CheckStatus.UNVERIFIED
+
+    def describe(self) -> str:
+        return (
+            f"the dispatch runs of {self.repository.full_name} could not be read: "
+            f"{self.credential.explain(self.failure)} - read them at "
+            f"{self.repository.url}/actions/workflows/{DispatchWorkflow.location.name}"
+        )
+
+
+@dataclass(frozen=True)
+class RepositoryDispatch(DispatchReading):
+    """
+    One repository's token secret and its notes branch's dispatch runs.
     """
 
     notes_branch: str
@@ -228,39 +369,24 @@ class RepositoryDispatch:
     Its token secret.
     """
 
-    latest_run: ListedRun | None
+    runs: RunListing
     """
-    Its latest dispatch run, ``None`` when it has none.
-    """
-
-    latest_success: ListedRun | None
-    """
-    Its latest dispatch run that succeeded, ``None`` when no listed run did.
+    Its latest dispatch runs, newest first.
     """
 
-    @classmethod
-    def read(
-        cls,
-        runs: GitHubReader,
-        secrets: GitHubAttemptReader,
-        repository: Repository,
-        notes_branch: str,
-    ) -> RepositoryDispatch:
+    @property
+    def latest_run(self) -> ListedRun | None:
         """
-        :param runs: What reads the workflow runs.
-        :param secrets: What reads the secret's metadata.
-        :param repository: The repository.
-        :param notes_branch: The branch its dispatch workflow runs on.
-        :return: Its dispatch as GitHub reports it.
+        :return: Its latest dispatch run, ``None`` when it has none.
         """
-        listing = RunListing.read(runs, repository, notes_branch)
-        return cls(
-            repository,
-            notes_branch,
-            TokenSecret.read(secrets, repository),
-            listing.latest(DispatchWorkflow.location),
-            listing.latest_success(DispatchWorkflow.location),
-        )
+        return self.runs.latest(DispatchWorkflow.location)
+
+    @property
+    def latest_success(self) -> ListedRun | None:
+        """
+        :return: Its latest dispatch run that succeeded, ``None`` when none listed did.
+        """
+        return self.runs.latest_success(DispatchWorkflow.location)
 
     @property
     def state(self) -> DispatchState:
@@ -282,37 +408,57 @@ class RepositoryDispatch:
             return DispatchState.STOPPED_STARTING_BUILD
         return DispatchState.RUN_FAILED
 
+    @property
+    def status(self) -> CheckStatus:
+        return self.state.status
+
+    @property
+    def run_history(self) -> str:
+        """
+        :return: How many of its listed dispatch runs failed, and its latest run.
+        """
+        if self.latest_run is None:
+            return f"it has no dispatch run on '{self.notes_branch}'"
+        return (
+            f"{self.runs.count(CheckOutcome.FAILURE)} of its {len(self.runs.runs)} "
+            f"latest dispatch runs failed, the latest is {self.latest_run.outcome} "
+            f"({self.latest_run.url})"
+        )
+
     def describe(self) -> str:
-        """
-        :return: Its state in a sentence that names the repository.
-        """
         name = self.repository.full_name
         match self.state:
             case DispatchState.TOKEN_MISSING:
-                return f"{name} stores no {PlanSiteSecret.TOKEN} secret"
+                return (
+                    f"{self.token.describe(self.repository)}; {self.run_history} - "
+                    f"store the token with: gh secret set {PlanSiteSecret.TOKEN} "
+                    f"--repo {name}"
+                )
             case DispatchState.NEVER_RAN:
                 return (
                     f"{name} has never run {DispatchWorkflow.location} on "
-                    f"'{self.notes_branch}'"
+                    f"'{self.notes_branch}'; {self.token.describe(self.repository)}"
                 )
             case DispatchState.TOKEN_STORED_SINCE_FAILURE:
                 return (
                     f"{name}'s {PlanSiteSecret.TOKEN} was set after its latest "
                     f"dispatch run ({self.latest_run.url}), and takes effect at the "
-                    f"next push to '{self.notes_branch}'"
+                    f"next push to '{self.notes_branch}'; {self.run_history}"
                 )
             case DispatchState.STOPPED_STARTING_BUILD:
                 causes = "; or ".join(FailureAfterSuccessCause)
                 return (
                     f"{name}'s latest dispatch run is {self.latest_run.outcome} "
                     f"({self.latest_run.url}), though {self.latest_success.url} "
-                    f"succeeded on {self.latest_success.created_at:%Y-%m-%d}. Open the "
-                    f"failed run's log to see which happened: {causes}"
+                    f"succeeded on {self.latest_success.created_at:%Y-%m-%d}; "
+                    f"{self.run_history}; {self.token.describe(self.repository)}. "
+                    f"Open the failed run's log to see which happened: {causes}"
                 )
             case DispatchState.RUN_FAILED:
                 return (
                     f"{name}'s latest dispatch run is {self.latest_run.outcome} "
-                    f"({self.latest_run.url})"
+                    f"({self.latest_run.url}); {self.run_history}; "
+                    f"{self.token.describe(self.repository)}"
                 )
             case DispatchState.STARTS_BUILD:
                 return f"{name} starts the plan site's build on every push"
@@ -321,43 +467,71 @@ class RepositoryDispatch:
 # %% every repository the plan site publishes
 
 
+UNVERIFIED_PREFIX = "not verified"
+"""
+What the detail of a check that could not read every repository's runs opens with.
+"""
+
+
 @dataclass(frozen=True)
 class DispatchCheck:
     """
     Whether every repository the plan site publishes starts its build.
     """
 
-    dispatches: list[RepositoryDispatch]
+    dispatches: list[DispatchReading]
     """
-    Each published repository's dispatch.
+    What was read of each published repository's dispatch.
     """
+
+    site: SiteRepository | None = None
+    """
+    The site repository the notes branch records, ``None`` when it records none.
+    """
+
+    @property
+    def publication_command(self) -> str:
+        """
+        :return: The command that lists what is left, naming the recorded site.
+        """
+        command = f"{sys.executable} -m {publication.__name__}"
+        if self.site is None:
+            return command
+        return (
+            f"{command} {publication.PublicationOption.SITE_REPOSITORY} "
+            f"{self.site.repository.full_name}"
+        )
 
     def result(self) -> CheckResult:
         """
         :return: :attr:`CheckStatus.OK` only when every repository's latest dispatch
-            run succeeded with its token stored.
+            run succeeded with its token stored; :attr:`CheckStatus.UNVERIFIED` when a
+            repository's runs could not be read and none needs setup.
         """
-        states = [dispatch.state for dispatch in self.dispatches]
-        if all(state is DispatchState.STARTS_BUILD for state in states):
+        statuses = {dispatch.status for dispatch in self.dispatches}
+        if statuses <= {CheckStatus.OK}:
             return CheckResult(
                 CheckStatus.OK,
                 "every repository on the plan site starts its build on every push",
             )
-        status = (
-            CheckStatus.NEEDS_SETUP
-            if any(state.status is CheckStatus.NEEDS_SETUP for state in states)
-            else CheckStatus.INFORMATIONAL
+        status = next(
+            status
+            for status in (
+                CheckStatus.NEEDS_SETUP,
+                CheckStatus.UNVERIFIED,
+                CheckStatus.INFORMATIONAL,
+            )
+            if status in statuses
         )
         unfinished = "; ".join(
             dispatch.describe()
             for dispatch in self.dispatches
-            if dispatch.state is not DispatchState.STARTS_BUILD
+            if dispatch.status is not CheckStatus.OK
         )
-        return CheckResult(
-            status,
-            f"{unfinished} - for what is left, run: "
-            f"{sys.executable} -m {publication.__name__}",
-        )
+        detail = f"{unfinished} - for what is left, run: {self.publication_command}"
+        if status is CheckStatus.UNVERIFIED:
+            detail = f"{UNVERIFIED_PREFIX} - {detail}"
+        return CheckResult(status, detail)
 
 
 # %% the command
@@ -418,11 +592,16 @@ def report_dispatch() -> int:
     client = GitHubRestClient()
     check = DispatchCheck(
         [
-            RepositoryDispatch.read(client, client, repository, location.branch)
+            DispatchReading.read(client, client, repository, location.branch)
             for repository in published_repositories(
                 project_root, location, notes_repository
             )
-        ]
+        ],
+        publication.recorded_site_repository(
+            RemoteBranch(
+                location.branch, GitCommandRunner(project_root), location.remote
+            )
+        ),
     )
     print(check.result().fields)
     return 0

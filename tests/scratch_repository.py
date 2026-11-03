@@ -490,7 +490,8 @@ class ScratchRepository:
         """
         Run one of the installed hook scripts from the project root, against an
         environment scrubbed of everything that could change what a test asserts (see
-        :class:`ScrubbedEnvironmentPrefix`).
+        :class:`ScrubbedEnvironmentPrefix`), reading the package's releases from the
+        project itself rather than basstler's own repository.
 
         Returns the finished process rather than asserting on it, since a hook's exit
         code and stderr are often what a test is about.
@@ -507,6 +508,7 @@ class ScratchRepository:
             *arguments,
             **{
                 ConfigurationVariable.HOME: str(self.basstler_home),
+                ConfigurationVariable.REPOSITORY_URL: str(self.project_root),
                 **environment_overrides,
             },
         )

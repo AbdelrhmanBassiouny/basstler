@@ -15,7 +15,7 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.repository import Repository
-from basstler.github.client import GitHubReader
+from basstler.github.client import GitHubAttemptReader, GitHubReader, GitHubResponse
 from basstler.upstream_reviews.clients import (
     GraphQLClient,
     JobLogReader,
@@ -202,7 +202,7 @@ class RecordedRestResponse(StrEnum):
 
 
 @dataclass
-class ReplayingRestClient(GitHubReader):
+class ReplayingRestClient(GitHubReader, GitHubAttemptReader):
     """
     A REST client that answers each path from a recorded response instead of calling
     GitHub.
@@ -235,3 +235,10 @@ class ReplayingRestClient(GitHubReader):
         """
         self.calls.append(path)
         return self.responses[path]
+
+    def attempt_get(self, path: str) -> GitHubResponse:
+        """
+        :param path: The REST path, recorded for assertions.
+        :return: The response recorded for it, as an answer that succeeded.
+        """
+        return GitHubResponse(self.get(path))

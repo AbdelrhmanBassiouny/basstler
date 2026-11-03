@@ -71,12 +71,21 @@ class GitHubCredentialVariable(EnvironmentVariable):
     """
 
     @classmethod
+    def first_set(cls) -> GitHubCredentialVariable | None:
+        """
+        :return: The first variable holding a non-empty token, in the order they are
+            tried, or ``None`` when none does.
+        """
+        return next((variable for variable in cls if variable.read()), None)
+
+    @classmethod
     def first_token(cls) -> str | None:
         """
         :return: The first non-empty token, in the order the variables are tried, or
             ``None`` when none is set.
         """
-        return next((token for variable in cls if (token := variable.read())), None)
+        variable = cls.first_set()
+        return None if variable is None else variable.read()
 
 
 class GitHubActionsVariable(EnvironmentVariable):

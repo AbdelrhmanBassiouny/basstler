@@ -22,8 +22,14 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import BasstlerVariable, PluginLocation, ProjectLocation
+from basstler.locations import (
+    BasstlerVariable,
+    PluginLocation,
+    ProjectLocation,
+    WorkflowLocation,
+)
 from basstler.repository import Repository
+from basstler.setup.report import CheckStatus, SetupCheck
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.upstream_reviews.action.branch import InstallationState
 from basstler.plan.model import PlanDocument
@@ -592,6 +598,33 @@ def test_names_every_check_that_needs_setup(
         SummaryMessage.CHECKS_NEED_SETUP, "1"
     )
     assert f"    {failing_check}: {detail}" in result.stdout
+
+
+def test_names_every_check_that_could_not_be_verified(
+    session_start_repository: ScratchRepository,
+):
+    result = publish_and_run(
+        session_start_repository,
+        {WorkflowLocation.PLAN_SITE_DISPATCH: "name: Plan site dispatch\n"},
+    )
+
+    unverified_check, detail = next(
+        (check, detail)
+        for check, status, detail in (
+            row.split("\t")
+            for row in session_start_repository.run_hook_script(
+                PluginLocation.SETUP_CHECK_SCRIPT.name
+            ).stdout.splitlines()
+        )
+        if status == CheckStatus.UNVERIFIED
+    )
+    assert unverified_check == SetupCheck.PLAN_SITE
+    assert summary_value(result.stdout, SummaryLine.SETUP) == summary_message(
+        SummaryMessage.CHECKS_NEED_SETUP, "1"
+    )
+    assert (
+        f"    {unverified_check} ({CheckStatus.UNVERIFIED}): {detail}" in result.stdout
+    )
 
 
 def test_a_failing_setup_check_does_not_fail_the_hook(

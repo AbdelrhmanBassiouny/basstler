@@ -5,6 +5,7 @@ written one.
 
 from __future__ import annotations
 
+import shlex
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -48,6 +49,17 @@ class PlanSiteJob(StrEnum):
     DISPATCH = "dispatch"
     """
     The dispatch workflow's job, which starts the site workflow.
+    """
+
+
+class GitHubCommandLineOption(StrEnum):
+    """
+    The ``gh`` options the plan site's workflows pass.
+    """
+
+    REPOSITORY = "--repo"
+    """
+    The ``owner/name`` repository a command acts on.
     """
 
 
@@ -377,10 +389,22 @@ class DispatchWorkflow(PlanSiteWorkflow):
     def template(cls) -> PlanSiteTemplate:
         return PlanSiteTemplate.DISPATCH_WORKFLOW
 
+    @staticmethod
+    def read_site(workflow_text: str) -> SiteRepository:
+        """
+        :param workflow_text: A dispatch workflow as written on a notes branch.
+        :return: The site repository it starts the build in.
+        """
+        (step,) = WorkflowFile.from_text(workflow_text).jobs[PlanSiteJob.DISPATCH].steps
+        words = shlex.split(step.command)
+        site = words[words.index(GitHubCommandLineOption.REPOSITORY) + 1]
+        return SiteRepository(Repository.parse(site))
+
     @property
     def template_values(self) -> dict[str, Any]:
         return {
             "job": PlanSiteJob.DISPATCH,
+            "repository_option": GitHubCommandLineOption.REPOSITORY,
             "notes_repository": self.notes_repository.full_name,
             "notes_branch": self.notes_branch,
             "site_repository": self.site.repository.full_name,

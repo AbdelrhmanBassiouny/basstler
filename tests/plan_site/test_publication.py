@@ -32,8 +32,12 @@ from basstler.github.exceptions import (
 )
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.publication import PlanSitePublication
+from basstler.plan_site.publication import (
+    PlanSitePublication,
+    recorded_site_repository,
+)
 from basstler.plan_site.run_listing import ListedRun, RunListing
 from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep, UserSteps
 from basstler.plan_site.site_repository import SiteRepository
@@ -334,6 +338,68 @@ def test_a_written_site_workflow_reads_back_as_the_same_workflow():
 )
 def test_the_site_is_served_from_the_repository_s_pages_address(repository, expected):
     assert SiteRepository(repository).site_url == expected
+
+
+@pytest.mark.parametrize(
+    "repository",
+    [Repository("an-owner", "plans"), Repository("an-owner", "an-owner.github.io")],
+)
+def test_a_site_address_reads_back_as_the_repository_serving_it(repository):
+    site = SiteRepository(repository)
+
+    assert SiteRepository.from_site_url(site.site_url) == site
+
+
+def test_an_address_off_github_pages_names_no_site_repository():
+    assert SiteRepository.from_site_url("https://plans.example.com/") is None
+
+
+def test_a_written_dispatch_workflow_reads_back_its_site_repository():
+    workflow = a_dispatch_workflow()
+
+    assert DispatchWorkflow.read_site(workflow.text) == workflow.site
+
+
+# %% the site the notes branch records
+
+
+def notes_branch_of(fork_checkout: ForkCheckout) -> RemoteBranch:
+    """
+    :param fork_checkout: The fork checkout.
+    :return: Its notes branch on ``origin``.
+    """
+    return RemoteBranch(
+        NOTES_BRANCH, GitCommandRunner(fork_checkout.project_root), RemoteName.ORIGIN
+    )
+
+
+def test_a_notes_branch_recording_no_site_names_none(fork_checkout):
+    assert recorded_site_repository(notes_branch_of(fork_checkout)) is None
+
+
+def test_the_site_the_dispatch_workflow_starts_is_the_recorded_one(fork_checkout):
+    workflow = DispatchWorkflow(
+        Repository("an-owner", "a-project"),
+        NOTES_BRANCH,
+        SiteRepository(Repository("An-Owner", "a-board")),
+    )
+    notes_branch = notes_branch_of(fork_checkout)
+    notes_branch.write(
+        {workflow.location.as_posix(): workflow.text}, "Add the dispatch workflow"
+    )
+
+    assert recorded_site_repository(notes_branch) == workflow.site
+
+
+def test_without_a_dispatch_workflow_the_hub_s_site_is_the_recorded_one(
+    fork_checkout,
+):
+    site = SiteRepository(Repository("an-owner", "a-board"))
+    hub = PlanHub(registry="an-owner/a-project", site_url=site.site_url)
+    notes_branch = notes_branch_of(fork_checkout)
+    notes_branch.write({ProjectLocation.PLAN_HUB.as_posix(): hub.to_text()}, "List")
+
+    assert recorded_site_repository(notes_branch) == site
 
 
 # %% the hub file

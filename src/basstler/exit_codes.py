@@ -144,7 +144,7 @@ class SetupCheckExitCode(ExitCode):
 
     SETUP_INCOMPLETE = 1
     """
-    At least one check still needs setting up.
+    At least one check still needs setting up, is in progress, or could not be verified.
     """
 
 
