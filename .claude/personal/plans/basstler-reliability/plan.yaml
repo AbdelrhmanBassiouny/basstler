@@ -1,0 +1,91 @@
+schema_version: 1
+id: basstler-reliability
+title: 'basstler reliability: checks fail closed and records state only what was read'
+description: >
+  Today's skills give the same verdict on the same repository state, and never report
+  a check they could not run as passing: setup checks fail closed, each gate reads only
+  the rows its step needs, conflicts are decided by git, every skill command is one
+  self-contained call, and a record names the commit it was verified at. The one-command
+  brief is basstler-v3/item-brief.
+default_repository: AbdelrhmanBassiouny/basstler
+tracking_issue: 132
+waves:
+- id: now
+  name: Reliability on today's code
+tracks:
+- id: guards
+  name: Fail-closed checks and verified records
+  wave: now
+items:
+- id: fail-closed-checks
+  title: Checks fail closed, gates read one row, conflicts decided by git
+  branch: ccr-27f5a2af-r2dw2x
+  pull_request_number: 131
+  track: guards
+  session: https://claude.ai/code/session_01JxHGiNsz3xynwBWh3UJ8qd
+  depends_on: []
+  status: in progress
+  notes: >-
+    Shell configuration exits 78 outside a work tree; check-setup.sh --only; the stack
+    pass gates on stack_upstream alone; stack merge-probe (exit 13 on conflict) replaces
+    mergeable_state in plan-item-resolve; skill commands run through basstler.sh and
+    SKILL.md uses ${CLAUDE_PLUGIN_ROOT}, enforced by tests/skills. Awaiting owner review.
+- id: per-skill-setup-gates
+  title: Each skill's prerequisite check reads only the setup rows it needs
+  track: guards
+  depends_on: [fail-closed-checks]
+  status: not started
+  notes: >-
+    prerequisite-check.md runs check-setup.sh bare, so a plan_site row needing setup
+    sends every skill into /setup-personal-notes. Each skill names its rows with --only
+    (in code, as a mapping from skill to checks, not prose), and an unrelated row is
+    reported in one line, never a stop.
+- id: conflict-audit
+  title: Every step that acts on mergeability or check state reads it deterministically
+  track: guards
+  depends_on: [fail-closed-checks]
+  status: not started
+  notes: >-
+    Find each place a skill or the maintenance pass decides on GitHub's mergeable_state
+    or a pending check (kickoff, stacked-pr-maintenance withholding, propagating-a-fix)
+    and use stack merge-probe, or report the state as not checked. A pending or unknown
+    value is never read as clean.
+- id: verified-records
+  title: Records that claim green or conflict-free name the commit they were read at
+  track: guards
+  depends_on: [fail-closed-checks]
+  status: not started
+  notes: >-
+    plan.item_bootstrap update/record and save-pr-progress.sh validate size limits when
+    the content is written, not at save-plan.sh, and stamp a verified claim with the
+    head commit and time. A claim with no stamp, or one older than the branch head, is
+    shown as unverified on the plan page.
+- id: session-start-marker
+  title: A skill knows whether the session start has finished
+  track: guards
+  depends_on: [fail-closed-checks]
+  status: not started
+  notes: >-
+    session-start.sh writes a completion marker in the repository state directory;
+    check-setup.sh reports a session_start row (in-progress while it runs, needs-setup
+    when it never ran), and basstler.sh waits on it as it waits on an install. Seen: a
+    first turn with no summary and no CLAUDE.local.md.
+- id: one-call-prose
+  title: Prose never asks for a configuration function outside the call that sources it
+  track: guards
+  depends_on: [fail-closed-checks]
+  status: not started
+  notes: >-
+    Prose still names plan_site_page_url, plan_id_for_branch and fetch_personal_notes_branch
+    bare. Give each as a one-call command (a basstler.sh subcommand where one fits) and
+    extend tests/skills to inline code spans, as it already checks bash blocks.
+- id: adversarial-regressions
+  title: Regression tests replay the reliability report's failures against fixture repositories
+  track: guards
+  depends_on: [per-skill-setup-gates, conflict-audit, verified-records, session-start-marker]
+  status: not started
+  notes: >-
+    One test per report failure through the real scripts: run from the plugin
+    directory, a fresh shell with no variables, mergeable_state unknown on a conflicting
+    branch, plan_site failing with stack_upstream ok, a save claiming green without a
+    stamp. Skill evals with budgets stay basstler-v3/short-skills.
