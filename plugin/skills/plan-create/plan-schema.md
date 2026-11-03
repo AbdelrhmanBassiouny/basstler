@@ -199,7 +199,7 @@ the limits `src/basstler/plan/size_limits.py` names (`Measure`):
 
 A save over a limit is refused with every violation named. Read one item
 rather than the manifest with
-`"${BASSTLER_PYTHON}" -m basstler.plan.manifest_tools item <file> --id <item-id>`.
+`"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" plan.manifest_tools item <file> --id <item-id>`.
 
 ## Editing an existing plan
 

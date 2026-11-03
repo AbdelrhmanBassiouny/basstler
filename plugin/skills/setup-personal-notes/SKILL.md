@@ -6,6 +6,10 @@ allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__get_me, mcp__git
 
 # Set up personal notes
 
+Run every command as one self-contained Bash call: nothing a call sources or sets
+survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
+`${CLAUDE_PLUGIN_ROOT}`.
+
 Gets a clone from "I have a fork of this repo and nothing else" to "personal
 notes, PR progress and plans all work," asking one question per
 decision that is genuinely the user's, with a default they can accept as-is.
@@ -30,8 +34,7 @@ and what goes in them are personal; ask, with a default. Everything else
 ## 1. Find out what is actually missing
 
 ```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-bash "${CHECK_SETUP_SCRIPT}" $ARGUMENTS || true
+"${CLAUDE_PLUGIN_ROOT}/hooks/check-setup.sh" $ARGUMENTS || true
 ```
 
 `$ARGUMENTS` is whatever this skill was invoked with: `--require-upstream`
@@ -59,8 +62,8 @@ else. Do not re-verify by hand what the script just verified.
 
 **An `in-progress` row** means a session start is installing that part right
 now. Never install it yourself, and never run a `pip` command for it: wait with
-`wait_for_basstler_install` (defined by the script sourced above), then run the
-check again.
+`source "${CLAUDE_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh" && wait_for_basstler_install`
+in one call, then run the check again.
 
 **An `unverified` row** means nothing the script could read decides it yet, as
 when GitHub refuses the session's `GH_TOKEN`; its detail says why. It is never a
@@ -141,7 +144,7 @@ ask only if they want something else.
 ## 5. Run the setup
 
 ```bash
-wait_for_basstler_install && "${BASSTLER_PYTHON}" -m "${SETUP_PERSONAL_NOTES_MODULE}" --remote <remote> \
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.personal_notes --remote <remote> \
   [--name "<name>" --email "<email>"] [--starter-notes]
 ```
 
@@ -170,7 +173,7 @@ lists. A `404` means missing.
 **Labels are visible to everyone who sees the repository, so ask before
 creating any.** If the user agrees, run the same command again with
 `--create-labels`. Every other step is a no-op the second time. Where there
-is no token, `"${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}"` prints the
+is no token, `"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps` prints the
 `gh label create` commands and the labels page for them. Missing labels don't
 block anything else.
 
@@ -189,7 +192,7 @@ one. Then save it to their
 personal `stack.toml`, which keeps it out of the project's tracked files:
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" configure-upstream --repository <owner>/<name>
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps configure-upstream --repository <owner>/<name>
 ```
 
 It keeps every other personal stack setting and replaces an upstream named
@@ -204,7 +207,8 @@ the row is `ok`, install it without asking - it is mechanical, and touches
 nothing but a branch of its own on the user's fork:
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
+source "${CLAUDE_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
 ```
 
 It creates a new branch named `basstler/upstream-reviews` on the user's fork,
@@ -214,7 +218,7 @@ reference, so it works on a fork of any repository. Run again, it updates that
 workflow to the basstler branch or tag this session's package was installed at,
 which every session start also does once the branch exists.
 Then tell
-the user the one step left to them, which `"${BASSTLER_PYTHON}" -m basstler.setup.steps` also
+the user the one step left to them, which `"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps` also
 prints: a fork starts with Actions off, so they enable them once at
 `https://github.com/<fork>/actions`. Until they do, `/upstream-reviews` reads
 the upstream from the session instead.
@@ -234,7 +238,7 @@ confirm it. Otherwise ask for it as `<owner>/<name>`, offering
 `<their GitHub username>/plans` as the default. Then:
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${PLAN_SITE_PUBLICATION_MODULE}" --site-repository <owner>/<name>
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" plan_site.publication --site-repository <owner>/<name>
 ```
 
 The site builds with basstler's latest release, so it stays current with no re-run.
@@ -274,7 +278,7 @@ when a run that needs it succeeded.
 ## 9. Confirm, by re-running the check
 
 ```bash
-bash "${CHECK_SETUP_SCRIPT}" $ARGUMENTS || true
+"${CLAUDE_PLUGIN_ROOT}/hooks/check-setup.sh" $ARGUMENTS || true
 ```
 
 Report what the second run says, not what you expect it to say. If a row is

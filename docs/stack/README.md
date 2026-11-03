@@ -77,6 +77,11 @@ next to the workflow it describes, because it is read rather than run.
     stderr when it is not: wrong branch checked out, a push naming different branches on each
     side, a destination that is not the fork, or a push that would make a child an ancestor of its
     own parent (which GitHub reads as a merged pull request).
+  - `~/.local/share/basstler/venv/bin/python -m basstler.stack merge-probe --remote <remote> --base A --head B` - fetches
+    both branches and merges them with `git merge-tree`, touching no branch or work tree. Prints
+    one JSON object (`verdict`, the sorted `conflicting_paths`, and the `base_commit` and
+    `head_commit` it merged) and exits `0` when clean and `13` when conflicting, so the answer never
+    waits on GitHub's lazily computed `mergeable_state`.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack promotion-link --branch B --title T --body ...` - the upstream
     compare-and-create URL, encoded and within the length limit, warning on stderr when the body had
     to be shortened.

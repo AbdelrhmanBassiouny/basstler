@@ -122,6 +122,11 @@ class StackExitCode(ExitCode):
     requests; stderr says why and what to do.
     """
 
+    MERGE_CONFLICTS = 13
+    """
+    The two branches compared conflict; the report names every conflicting path.
+    """
+
     @property
     def name_for_a_caller(self) -> str:
         """
@@ -130,6 +135,22 @@ class StackExitCode(ExitCode):
         :return: The status's name, in the form a caller reads or matches on.
         """
         return super().name_for_a_caller.replace("_", "-")
+
+
+class ShellConfigurationExitCode(ExitCode):
+    """
+    What a script sourcing the plugin's shell configuration exits with when the
+    configuration itself refuses to resolve.
+
+    Outside every command's own table, so it reads the same from whichever script
+    sourced the configuration.
+    """
+
+    NOT_IN_REPOSITORY = 78
+    """
+    The project the script would inspect is not inside a git work tree; ``sysexits.h``'s
+    ``EX_CONFIG``.
+    """
 
 
 class SetupCheckExitCode(ExitCode):
@@ -145,6 +166,16 @@ class SetupCheckExitCode(ExitCode):
     SETUP_INCOMPLETE = 1
     """
     At least one check still needs setting up, is in progress, or could not be verified.
+    """
+
+    USAGE = 2
+    """
+    An unknown argument, or a check name it does not report on.
+    """
+
+    NOT_IN_REPOSITORY = ShellConfigurationExitCode.NOT_IN_REPOSITORY.value
+    """
+    It was run outside a git work tree, so it reported nothing.
     """
 
 

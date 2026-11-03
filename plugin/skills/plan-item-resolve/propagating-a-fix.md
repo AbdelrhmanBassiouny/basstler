@@ -15,8 +15,8 @@ to find out.
 ## Carrying it
 
 ```bash
-"${BASSTLER_PYTHON}" -m basstler.maintenance board --write
-"${BASSTLER_PYTHON}" -m basstler.maintenance restack --stacked-on <this item's branch>
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance board --write
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance restack --stacked-on <this item's branch>
 ```
 
 It pushes to every descendant, which is what a permission classifier is most likely

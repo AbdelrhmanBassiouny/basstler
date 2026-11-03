@@ -18,6 +18,7 @@ Commands (run from the repo root; ``--help`` on any of them for its flags)::
 
     python -m basstler.stack status         # the whole stack: parent, state, drift
     python -m basstler.stack check          # would each branch merge cleanly onto its parent now?
+    python -m basstler.stack merge-probe    # does one branch merge into another, and where not?
     python -m basstler.stack next           # which branches to submit upstream next
     python -m basstler.stack next --porcelain    # machine-readable: one 'name<TAB>pull request' line per branch
     python -m basstler.stack restack-plan   # bottom-up restack plan as JSON
@@ -45,6 +46,7 @@ from pathlib import Path
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.stack.merge_probe import MergeProbe
 from basstler.repository import Repository
 from basstler.stack.commit_move import (
     CommitMoveAction,
@@ -99,6 +101,9 @@ class Command(StrEnum):
     PROMOTION_LINK = "promotion-link"
     """Build the upstream compare-and-create link for one branch."""
 
+    MERGE_PROBE = "merge-probe"
+    """Answer whether one branch merges into another, naming every conflicting path."""
+
     @property
     def needs_a_board(self) -> bool:
         """Whether answering this command means deriving the stack.
@@ -112,6 +117,7 @@ class Command(StrEnum):
             Command.CONFIGURATION,
             Command.LABELS,
             Command.PROMOTION_LINK,
+            Command.MERGE_PROBE,
         }
 
 
@@ -156,6 +162,15 @@ class CommandOption(StrEnum):
 
     DESTINATION_REMOTE = "--destination-remote"
     """The remote holding the destination."""
+
+    REMOTE = "--remote"
+    """The remote name or URL the probed branches are fetched from."""
+
+    BASE = "--base"
+    """The branch merged into."""
+
+    HEAD = "--head"
+    """The branch merged."""
 
 
 # %% entry point
@@ -249,6 +264,20 @@ class StackCommandLine:
         link.add_argument(CommandOption.TITLE, required=True, help="title to prefill")
         link.add_argument(CommandOption.BODY, default="", help="description to prefill")
 
+        merge_probe = commands.add_parser(
+            Command.MERGE_PROBE,
+            help="does one branch merge into another, and where does it conflict?",
+        )
+        merge_probe.add_argument(
+            CommandOption.REMOTE, required=True, help="the remote name or URL"
+        )
+        merge_probe.add_argument(
+            CommandOption.BASE, required=True, help="the branch merged into"
+        )
+        merge_probe.add_argument(
+            CommandOption.HEAD, required=True, help="the branch merged"
+        )
+
         check_move = commands.add_parser(
             Command.CHECK_MOVE, help="may these commits move onto that branch?"
         )
@@ -313,6 +342,12 @@ class StackCommandLine:
                 arguments.current, arguments.add, arguments.remove
             ).print_labels()
             return StackExitCode.SUCCESS
+        if command is Command.MERGE_PROBE:
+            result = MergeProbe(
+                remote=arguments.remote, base=arguments.base, head=arguments.head
+            ).run(Path.cwd())
+            result.print_json()
+            return result.exit_code
         if command is Command.CONFIGURATION:
             Configuration.load(
                 fork_repository=arguments.fork,

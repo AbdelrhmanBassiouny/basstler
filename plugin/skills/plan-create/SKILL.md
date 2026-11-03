@@ -6,6 +6,10 @@ allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__githu
 
 # Plan Create
 
+Run every command as one self-contained Bash call: nothing a call sources or sets
+survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
+`${CLAUDE_PLUGIN_ROOT}`.
+
 Generic, plan-agnostic tooling — nothing in this file may hardcode a
 specific plan's id, branches, or PRs. This is the authoring half of the
 plan system; the plan site renders every plan against live GitHub state. Read `skills/plan-create/plan-schema.md`
@@ -31,12 +35,11 @@ without asking first, rather than failing partway through drafting a plan.
 ## 1. Establish the plan id and refuse to silently overwrite
 
 Source the shared config script — it resolves the personal-notes
-remote/branch precedence into `NOTES_REMOTE`/`NOTES_BRANCH`, and defines
-`SAVE_PLAN_SCRIPT` (used in step 8) and `PLAN_SIZE_CHECK_MODULE` (used in
-step 7):
+remote/branch precedence into `NOTES_REMOTE`/`NOTES_BRANCH`. What it defines
+lasts only for the Bash call that sources it:
 
 ```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+source "${CLAUDE_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 fetch_personal_notes_branch
 ```
 
@@ -185,12 +188,12 @@ Count the draft's items against `Measure.ITEM_COUNT` (`plan/size_limits.py`)
 before the first save:
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <path/to/plan.yaml>
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" plan.size_check --manifest <path/to/plan.yaml>
 ```
 
 If `is_full` is `false`, continue to step 8.
 
-If `true`, do not call `${SAVE_PLAN_SCRIPT}`: report `item_count` against
+If `true`, do not call `save-plan.sh`: report `item_count` against
 `item_limit` and ask, via `AskUserQuestion`, whether to re-draft as several
 plans (back to step 3, cutting by track or wave first) or to trim the scope to
 fit one.
@@ -204,7 +207,7 @@ convenient, not a replacement for it): write the drafted `plan.yaml` and
 `roadmap.md` content to two temporary files, then run
 
 ```bash
-bash "${SAVE_PLAN_SCRIPT}" <plan-id> --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
+"${CLAUDE_PLUGIN_ROOT}/hooks/save-plan.sh" <plan-id> --manifest <path/to/plan.yaml> --roadmap <path/to/roadmap.md>
 ```
 
 The id must be explicit here, since a brand-new plan has no entry in the

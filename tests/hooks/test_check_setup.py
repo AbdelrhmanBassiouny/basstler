@@ -10,6 +10,7 @@ from __future__ import annotations
 import os
 import shutil
 import subprocess
+from enum import StrEnum
 from pathlib import Path
 
 import pytest
@@ -22,7 +23,7 @@ from basstler.plan_site.dispatch_check import UNVERIFIED_PREFIX
 from basstler.plan_site.hub import HubFileKey
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 
-from ..constants.environment import ConfigurationVariable
+from ..constants.environment import ConfigurationVariable, ScrubbedEnvironmentPrefix
 from ..constants.notes import ScratchBranch
 from ..constants.paths import DatasetLocation, PersonalNotesPath
 from ..project_declaration import ProjectDeclaration
@@ -33,6 +34,7 @@ from ..scratch_repository import (
     SetupPrerequisiteFile,
     initialize_bare_repository,
 )
+from ..script_runner import BashScriptRunner
 
 # %% the scratch layout
 
@@ -73,21 +75,38 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
 
 
 def run_check_setup(
-    repository: ScratchRepository, **environment_overrides: str
+    repository: ScratchRepository, *arguments: str, **environment_overrides: str
 ) -> SetupReport:
     """
     Run the scratch layout's check-setup.sh and parse its report.
 
     :param repository: A fixture-built scratch repository.
+    :param arguments: The flags to pass.
     :param environment_overrides: Environment variables to set for this run, for the
         tests that exercise resolution from the environment.
     :return: The parsed report.
     """
     return SetupReport.from_completed_process(
         repository.run_hook_script(
-            PluginLocation.SETUP_CHECK_SCRIPT.name, **environment_overrides
+            PluginLocation.SETUP_CHECK_SCRIPT.name, *arguments, **environment_overrides
         )
     )
+
+
+class OnlyFlag(StrEnum):
+    """
+    The check-setup.sh flags these tests pass.
+    """
+
+    ONLY = "--only"
+    """
+    Reports only the check named after it.
+    """
+
+    REQUIRE_UPSTREAM = "--require-upstream"
+    """
+    Makes a project naming no upstream a check that needs setup.
+    """
 
 
 # %% the already-set-up fast path
@@ -535,3 +554,81 @@ def test_reports_a_claude_local_md_that_was_never_written(
     report = run_check_setup(check_setup_repository)
     assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert report.results[SetupCheck.CLAUDE_LOCAL_MD].status == CheckStatus.NEEDS_SETUP
+
+
+# %% where it runs
+
+
+def test_run_outside_a_repository_reports_nothing_and_exits_distinctly(
+    check_setup_repository: ScratchRepository, tmp_path: Path
+):
+    outside = tmp_path / "outside-any-repository"
+    outside.mkdir()
+    runner = BashScriptRunner(
+        project_root=outside,
+        removed_variable_prefixes=tuple(ScrubbedEnvironmentPrefix),
+        script_path=check_setup_repository.plugin_root
+        / PluginLocation.HOOKS.value.name
+        / PluginLocation.SETUP_CHECK_SCRIPT.name,
+    )
+
+    result = runner.run(
+        **{ConfigurationVariable.HOME: str(check_setup_repository.basstler_home)}
+    )
+
+    assert result.returncode == SetupCheckExitCode.NOT_IN_REPOSITORY
+    assert result.stdout == ""
+
+
+# %% reporting only the requested checks
+
+
+def test_only_the_requested_checks_are_reported(
+    check_setup_repository: ScratchRepository,
+):
+    report = run_check_setup(
+        check_setup_repository,
+        OnlyFlag.ONLY,
+        SetupCheck.NOTES_BRANCH,
+        OnlyFlag.ONLY,
+        SetupCheck.NOTES_FILE,
+    )
+
+    assert set(report.results) == {SetupCheck.NOTES_BRANCH, SetupCheck.NOTES_FILE}
+
+
+def test_a_failing_unrequested_check_does_not_fail_the_requested_one(
+    dispatch_needing_setup: ScratchRepository,
+):
+    dispatch_needing_setup.write(
+        ProjectLocation.PROJECT_STACK_CONFIGURATION,
+        DatasetLocation.SCRATCH_FORK_STACK_CONFIGURATION.read_text(),
+    )
+
+    report = run_check_setup(
+        dispatch_needing_setup,
+        OnlyFlag.REQUIRE_UPSTREAM,
+        OnlyFlag.ONLY,
+        SetupCheck.STACK_UPSTREAM,
+    )
+
+    assert report.exit_code is SetupCheckExitCode.SUCCESS
+    assert report.results[SetupCheck.STACK_UPSTREAM].status == CheckStatus.OK
+
+
+@pytest.mark.parametrize("check", list(SetupCheck))
+def test_every_documented_check_can_be_requested(
+    check_setup_repository: ScratchRepository, check: SetupCheck
+):
+    report = run_check_setup(check_setup_repository, OnlyFlag.ONLY, check)
+
+    assert set(report.results) == {check}
+
+
+def test_an_unknown_check_is_a_usage_error(check_setup_repository: ScratchRepository):
+    result = check_setup_repository.run_hook_script(
+        PluginLocation.SETUP_CHECK_SCRIPT.name, OnlyFlag.ONLY, "no_such_check"
+    )
+
+    assert result.returncode == SetupCheckExitCode.USAGE
+    assert result.stdout == ""
