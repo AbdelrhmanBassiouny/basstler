@@ -175,10 +175,13 @@ items:
   - upstream-promotion
   - upstream-review-mirror
   status: not started
-  notes: 'Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode replaces the auto/plan/ask
-    execution modes. claude plugin eval cases fail CI when a skill run exceeds its token or wall-time budget.
+  notes: >
+    Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode replaces the
+    auto/plan/ask execution modes. claude plugin eval cases fail CI when a skill run exceeds its
+    token or wall-time budget.
 
-    '
+    Eval cases replay the basstler-reliability report: wrong working directory, mergeable_state
+    unknown, plan_site failing while stack_upstream is ok.
 - id: mcp-server
   title: An MCP server over the core library, for clients without the plugin's bin/
   branch: null
