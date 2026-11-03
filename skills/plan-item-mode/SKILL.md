@@ -6,9 +6,8 @@ allowed-tools: Bash, Read
 
 # Plan Item Mode
 
-Run every command as one self-contained Bash call: nothing a call sources or sets
-survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
-`${CLAUDE_PLUGIN_ROOT}`.
+Run commands as [`running-commands.md`](../running-commands.md) says, with
+`${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
 
 Sets the execution mode the plan-item skills resolve. Every mechanical part
 belongs to the module the commands below run; this skill only reads what the

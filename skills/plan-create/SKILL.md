@@ -6,9 +6,8 @@ allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__githu
 
 # Plan Create
 
-Run every command as one self-contained Bash call: nothing a call sources or sets
-survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
-`${CLAUDE_PLUGIN_ROOT}`.
+Run commands as [`running-commands.md`](../running-commands.md) says, with
+`${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
 
 Generic, plan-agnostic tooling — nothing in this file may hardcode a
 specific plan's id, branches, or PRs. This is the authoring half of the

@@ -6,9 +6,8 @@ allowed-tools: Bash, Read, Skill, mcp__claude-code-remote__add_repo, mcp__claude
 
 # Upstream reviews
 
-Run every command as one self-contained Bash call: nothing a call sources or sets
-survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
-`${CLAUDE_PLUGIN_ROOT}`.
+Run commands as [`running-commands.md`](../running-commands.md) says, with
+`${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
 
 Reads the check and review state of a fork branch's pull request on the
 upstream repository, and on request the log behind each check that failed, and
