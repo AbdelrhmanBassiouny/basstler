@@ -123,3 +123,27 @@ items:
   notes: The plugin's hooks.json registers a PreToolUse hook on Bash that denies a command using a configuration
     name it does not source, or run outside the project, and one on the record commands that denies a claim the
     ledger does not back. Each denial says what to run instead.
+
+- id: locked-install
+  title: Every session installs identical dependencies from uv.lock
+  branch: null
+  pull_request_number: null
+  track: guards
+  depends_on:
+  - fail-closed-checks
+  status: not started
+  notes: Commit uv.lock; session start and basstler.sh install with uv sync --frozen, so two sessions never run
+    different dependency versions, and the install is fast enough to finish before a skill starts. uv approved by
+    the owner 2026-11-03. Coordinate the venv location with basstler-v3/plugin-bin-probe.
+
+- id: repeat-run-evals
+  title: Evals run each case several times and fail on differing verdicts
+  branch: null
+  pull_request_number: null
+  track: guards
+  depends_on:
+  - basstler-v3/short-skills
+  status: not started
+  notes: Each claude plugin eval case runs N times on the same fixture state; CI fails when the recorded verdict
+    JSON differs between runs, beside short-skills' token and time budgets. Moved here because basstler-v3 is at
+    its item limit.
