@@ -23,13 +23,21 @@ items:
   pull_request_number: 131
   track: guards
   session: https://claude.ai/code/session_01JxHGiNsz3xynwBWh3UJ8qd
+  blockers:
+    - >-
+      Six unresolved owner review threads on #131 (CI green at 8447a540): undescribed exit codes,
+      merge-probe against a stale fork main, the repeated SKILL.md preamble, CLAUDE_ vs
+      BASSTLER_PLUGIN_ROOT, and cyclopts for basstler.stack.
   depends_on: []
   status: in progress
-  notes: >-
-    Shell configuration exits 78 outside a work tree; check-setup.sh --only; the stack
-    pass gates on stack_upstream alone; stack merge-probe (exit 13 on conflict) replaces
-    mergeable_state in plan-item-resolve; skill commands run through basstler.sh and
-    SKILL.md uses ${CLAUDE_PLUGIN_ROOT}, enforced by tests/skills. Awaiting owner review.
+  notes: >
+    Fail-closed checks, check-setup.sh --only, stack merge-probe, self-contained skill commands (see
+    #131).
+
+    Resolving review: this PR's exit paths (78, 13, 2) print a description from one ExitCode
+    mechanism; basstler.stack's CLI moves to cyclopts; merge-probe merges against the upstream's
+    copy of the upstream base; the SKILL.md preamble lives in one linked document. Other exit codes
+    and argparse modules are later items.
 - id: per-skill-setup-gates
   title: Each skill's prerequisite check reads only the setup rows it needs
   track: guards
