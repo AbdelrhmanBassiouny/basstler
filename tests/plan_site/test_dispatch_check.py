@@ -390,17 +390,18 @@ def test_only_the_repositories_not_starting_the_build_are_named():
     assert f"{NOTES_REPOSITORY.full_name} " not in detail
 
 
-def test_a_token_waiting_for_the_next_push_is_context_rather_than_setup():
-    check = DispatchCheck(
+def test_a_token_waiting_for_the_next_push_is_not_verified():
+    result = DispatchCheck(
         [
             dispatch_of(
                 DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
                 stored(DatasetLocation.PLAN_SITE_TOKEN_STORED_AFTER_FAILURE),
             )
         ]
-    )
+    ).result()
 
-    assert check.result().status is CheckStatus.INFORMATIONAL
+    assert result.status is CheckStatus.UNVERIFIED
+    assert result.detail.startswith(UNVERIFIED_PREFIX)
 
 
 # %% the repositories the hub lists

@@ -125,7 +125,7 @@ class CheckStatus(StrEnum):
 
     UNVERIFIED = "unverified"
     """
-    The check could not read what decides it, so it is neither passed nor failed.
+    Nothing the check could read decides it yet, so it is neither passed nor failed.
     """
 
     INFORMATIONAL = "info"

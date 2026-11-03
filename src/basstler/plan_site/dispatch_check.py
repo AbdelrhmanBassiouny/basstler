@@ -244,7 +244,8 @@ class DispatchState(StrEnum):
 
     TOKEN_STORED_SINCE_FAILURE = "token stored since failure"
     """
-    The latest run did not succeed, but the token was set after it started.
+    The latest run did not succeed, but the token was set after it started, so no run
+    has used the token yet.
     """
 
     STOPPED_STARTING_BUILD = "stopped starting build"
@@ -271,7 +272,7 @@ class DispatchState(StrEnum):
         if self is DispatchState.STARTS_BUILD:
             return CheckStatus.OK
         if self is DispatchState.TOKEN_STORED_SINCE_FAILURE:
-            return CheckStatus.INFORMATIONAL
+            return CheckStatus.UNVERIFIED
         return CheckStatus.NEEDS_SETUP
 
 
@@ -469,7 +470,7 @@ class RepositoryDispatch(DispatchReading):
 
 UNVERIFIED_PREFIX = "not verified"
 """
-What the detail of a check that could not read every repository's runs opens with.
+What the detail of an unverified plan site check opens with.
 """
 
 
@@ -505,8 +506,8 @@ class DispatchCheck:
     def result(self) -> CheckResult:
         """
         :return: :attr:`CheckStatus.OK` only when every repository's latest dispatch
-            run succeeded with its token stored; :attr:`CheckStatus.UNVERIFIED` when a
-            repository's runs could not be read and none needs setup.
+            run succeeded with its token stored; :attr:`CheckStatus.UNVERIFIED` when no
+            run shows whether a repository starts its build and none needs setup.
         """
         statuses = {dispatch.status for dispatch in self.dispatches}
         if statuses <= {CheckStatus.OK}:
