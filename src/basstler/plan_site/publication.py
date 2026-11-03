@@ -9,14 +9,14 @@ Usage:
 
 from __future__ import annotations
 
-import argparse
 import os
 import re
-import sys
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
+
+from cyclopts import App, Parameter
 
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure
@@ -417,39 +417,31 @@ class PublicationOption(StrEnum):
     """
 
 
-def recorded_site_repository(notes_branch: RemoteBranch) -> SiteRepository | None:
-    """
-    :param notes_branch: The notes branch.
-    :return: The site repository its dispatch workflow starts the build in, else the
-        one serving the site its hub file names, ``None`` when it records neither.
-    """
-    dispatch_text = notes_branch.read_latest(WorkflowLocation.PLAN_SITE_DISPATCH)
-    if dispatch_text is not None:
-        return DispatchWorkflow.read_site(dispatch_text)
-    hub = PlanHub.from_text(notes_branch.read_latest(ProjectLocation.PLAN_HUB))
-    if hub is None or hub.site_url is None:
-        return None
-    return SiteRepository.from_site_url(hub.site_url)
+app = App(help=__doc__)
+"""
+The command.
+"""
 
 
-def main(argv: list[str] | None = None) -> int:
+@app.default
+def publish(
+    *,
+    branch_or_tag: Annotated[
+        str, Parameter(name=PublicationOption.BRANCH_OR_TAG)
+    ] = BasstlerSource.LATEST_RELEASE.value,
+    site_repository: Annotated[
+        str | None, Parameter(name=PublicationOption.SITE_REPOSITORY)
+    ] = None,
+) -> int:
     """
     Publish this clone's notes repository on the plan site. See the module docstring.
 
-    :param argv: The arguments to parse, defaulting to the process's own.
+    :param branch_or_tag: The basstler branch or release tag the site's build runs.
+    :param site_repository: The ``owner/name`` repository that builds and serves the
+        site, the one the notes branch records when not given.
     :return: The status :meth:`PlanSitePublication.run` ends with.
+    :raises NotesRepositoryUnresolvedError: If the notes remote is not on GitHub.
     """
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument(
-        PublicationOption.BRANCH_OR_TAG, default=BasstlerSource.LATEST_RELEASE
-    )
-    parser.add_argument(
-        PublicationOption.SITE_REPOSITORY,
-        type=lambda text: SiteRepository(Repository.parse(text)),
-    )
-    arguments = parser.parse_args(argv)
     project_root = Path(
         os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
     )
@@ -460,18 +452,18 @@ def main(argv: list[str] | None = None) -> int:
     git = GitCommandRunner(project_root)
     notes_branch = PersonalNotesSetting.BRANCH.resolve(project_root, os.environ)
     site = (
-        arguments.site_repository
-        or recorded_site_repository(RemoteBranch(notes_branch, git, notes_remote))
-        or SiteRepository.default_for(notes_repository)
-    )
+        SiteRepository.recorded_on(RemoteBranch(notes_branch, git, notes_remote))
+        if site_repository is None
+        else SiteRepository(Repository.parse(site_repository))
+    ) or SiteRepository.default_for(notes_repository)
     return PlanSitePublication(
         git,
         notes_remote,
         DispatchWorkflow(notes_repository, notes_branch, site),
-        SiteWorkflow(arguments.branch_or_tag, notes_repository),
+        SiteWorkflow(branch_or_tag, notes_repository),
         GitHubRestClient(),
     ).run()
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    app()

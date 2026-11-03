@@ -34,10 +34,8 @@ from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.publication import (
-    PlanSitePublication,
-    recorded_site_repository,
-)
+from basstler.plan_site.publication import PlanSitePublication, PublicationOption
+from basstler.plan_site.publication import app as publication_app
 from basstler.plan_site.run_listing import ListedRun, RunListing
 from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep, UserSteps
 from basstler.plan_site.site_repository import SiteRepository
@@ -355,9 +353,12 @@ def test_an_address_off_github_pages_names_no_site_repository():
 
 
 def test_a_written_dispatch_workflow_reads_back_its_site_repository():
+    """
+    A written dispatch workflow names the site repository it was written for.
+    """
     workflow = a_dispatch_workflow()
 
-    assert DispatchWorkflow.read_site(workflow.text) == workflow.site
+    assert SiteRepository.from_dispatch_workflow(workflow.text) == workflow.site
 
 
 # %% the site the notes branch records
@@ -374,10 +375,16 @@ def notes_branch_of(fork_checkout: ForkCheckout) -> RemoteBranch:
 
 
 def test_a_notes_branch_recording_no_site_names_none(fork_checkout):
-    assert recorded_site_repository(notes_branch_of(fork_checkout)) is None
+    """
+    A notes branch with neither a dispatch workflow nor a hub file records no site.
+    """
+    assert SiteRepository.recorded_on(notes_branch_of(fork_checkout)) is None
 
 
 def test_the_site_the_dispatch_workflow_starts_is_the_recorded_one(fork_checkout):
+    """
+    The dispatch workflow's site repository is the one the notes branch records.
+    """
     workflow = DispatchWorkflow(
         Repository("an-owner", "a-project"),
         NOTES_BRANCH,
@@ -388,18 +395,21 @@ def test_the_site_the_dispatch_workflow_starts_is_the_recorded_one(fork_checkout
         {workflow.location.as_posix(): workflow.text}, "Add the dispatch workflow"
     )
 
-    assert recorded_site_repository(notes_branch) == workflow.site
+    assert SiteRepository.recorded_on(notes_branch) == workflow.site
 
 
 def test_without_a_dispatch_workflow_the_hub_s_site_is_the_recorded_one(
     fork_checkout,
 ):
+    """
+    Without a dispatch workflow, the site the hub file names is the recorded one.
+    """
     site = SiteRepository(Repository("an-owner", "a-board"))
     hub = PlanHub(registry="an-owner/a-project", site_url=site.site_url)
     notes_branch = notes_branch_of(fork_checkout)
     notes_branch.write({ProjectLocation.PLAN_HUB.as_posix(): hub.to_text()}, "List")
 
-    assert recorded_site_repository(notes_branch) == site
+    assert SiteRepository.recorded_on(notes_branch) == site
 
 
 # %% the hub file
@@ -1040,3 +1050,16 @@ def test_a_rendered_step_links_the_latest_run_that_made_it_necessary(published):
     assert pending.render().splitlines()[1] == (
         f"  Latest run, {pending.latest_run.outcome}: {pending.latest_run.url}"
     )
+
+
+# %% the command line
+
+
+@pytest.mark.parametrize("option", list(PublicationOption))
+def test_the_command_takes_every_option_it_names(option):
+    """
+    The command accepts every option :class:`PublicationOption` names.
+    """
+    _, bound, _ = publication_app.parse_args([option, "a-value"])
+
+    assert list(bound.arguments.values()) == ["a-value"]

@@ -4,9 +4,18 @@ The repository the user owns that builds and serves the plan site.
 
 from __future__ import annotations
 
+import shlex
 from dataclasses import dataclass
 from urllib.parse import urlsplit
 
+from basstler.locations import ProjectLocation, WorkflowLocation
+from basstler.maintenance.remote_branch import RemoteBranch
+from basstler.plan_site.hub import PlanHub
+from basstler.plan_site.workflows import (
+    GitHubCommandLineOption,
+    PlanSiteJob,
+    WorkflowFile,
+)
 from basstler.repository import Repository
 
 PAGES_HOST_SUFFIX = ".github.io"
@@ -53,6 +62,32 @@ class SiteRepository:
         owner = address.hostname.removesuffix(PAGES_HOST_SUFFIX)
         name = address.path.strip("/") or address.hostname
         return cls(Repository(owner, name))
+
+    @classmethod
+    def from_dispatch_workflow(cls, workflow_text: str) -> SiteRepository:
+        """
+        :param workflow_text: A dispatch workflow as written on a notes branch.
+        :return: The site repository it starts the build in.
+        """
+        (step,) = WorkflowFile.from_text(workflow_text).jobs[PlanSiteJob.DISPATCH].steps
+        words = shlex.split(step.command)
+        site = words[words.index(GitHubCommandLineOption.REPOSITORY) + 1]
+        return cls(Repository.parse(site))
+
+    @classmethod
+    def recorded_on(cls, notes_branch: RemoteBranch) -> SiteRepository | None:
+        """
+        :param notes_branch: The notes branch.
+        :return: The site repository its dispatch workflow starts the build in, else the
+            one serving the site its hub file names, ``None`` when it records neither.
+        """
+        dispatch_text = notes_branch.read_latest(WorkflowLocation.PLAN_SITE_DISPATCH)
+        if dispatch_text is not None:
+            return cls.from_dispatch_workflow(dispatch_text)
+        hub = PlanHub.from_text(notes_branch.read_latest(ProjectLocation.PLAN_HUB))
+        if hub is None or hub.site_url is None:
+            return None
+        return cls.from_site_url(hub.site_url)
 
     @property
     def site_url(self) -> str:

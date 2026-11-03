@@ -242,7 +242,7 @@ class DispatchState(StrEnum):
     The dispatch has not run on the notes branch.
     """
 
-    TOKEN_STORED_SINCE_FAILURE = "token stored since failure"
+    TOKEN_STORED_AFTER_FAILURE = "token stored after failure"
     """
     The latest run did not succeed, but the token was set after it started, so no run
     has used the token yet.
@@ -271,7 +271,7 @@ class DispatchState(StrEnum):
         """
         if self is DispatchState.STARTS_BUILD:
             return CheckStatus.OK
-        if self is DispatchState.TOKEN_STORED_SINCE_FAILURE:
+        if self is DispatchState.TOKEN_STORED_AFTER_FAILURE:
             return CheckStatus.UNVERIFIED
         return CheckStatus.NEEDS_SETUP
 
@@ -404,7 +404,7 @@ class RepositoryDispatch(DispatchReading):
             self.token.updated_at is not None
             and self.token.updated_at > self.latest_run.created_at
         ):
-            return DispatchState.TOKEN_STORED_SINCE_FAILURE
+            return DispatchState.TOKEN_STORED_AFTER_FAILURE
         if self.latest_success is not None:
             return DispatchState.STOPPED_STARTING_BUILD
         return DispatchState.RUN_FAILED
@@ -440,7 +440,7 @@ class RepositoryDispatch(DispatchReading):
                     f"{name} has never run {DispatchWorkflow.location} on "
                     f"'{self.notes_branch}'; {self.token.describe(self.repository)}"
                 )
-            case DispatchState.TOKEN_STORED_SINCE_FAILURE:
+            case DispatchState.TOKEN_STORED_AFTER_FAILURE:
                 return (
                     f"{name}'s {PlanSiteSecret.TOKEN} was set after its latest "
                     f"dispatch run ({self.latest_run.url}), and takes effect at the "
@@ -598,7 +598,7 @@ def report_dispatch() -> int:
                 project_root, location, notes_repository
             )
         ],
-        publication.recorded_site_repository(
+        SiteRepository.recorded_on(
             RemoteBranch(
                 location.branch, GitCommandRunner(project_root), location.remote
             )

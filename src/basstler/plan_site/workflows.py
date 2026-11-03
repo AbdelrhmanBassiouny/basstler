@@ -5,21 +5,22 @@ written one.
 
 from __future__ import annotations
 
-import shlex
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from basstler.class_property import classproperty
 from basstler.environment import GitHubCredentialVariable
 from basstler.locations import WorkflowLocation
-from basstler.plan_site.site_repository import SiteRepository
 from basstler.render_common import create_template_environment
 from basstler.repository import Repository
 from basstler.upstream_reviews.vocabulary import BasstlerSource, JSONModel
+
+if TYPE_CHECKING:
+    from basstler.plan_site.site_repository import SiteRepository
 
 # %% names
 
@@ -388,17 +389,6 @@ class DispatchWorkflow(PlanSiteWorkflow):
     @classproperty
     def template(cls) -> PlanSiteTemplate:
         return PlanSiteTemplate.DISPATCH_WORKFLOW
-
-    @staticmethod
-    def read_site(workflow_text: str) -> SiteRepository:
-        """
-        :param workflow_text: A dispatch workflow as written on a notes branch.
-        :return: The site repository it starts the build in.
-        """
-        (step,) = WorkflowFile.from_text(workflow_text).jobs[PlanSiteJob.DISPATCH].steps
-        words = shlex.split(step.command)
-        site = words[words.index(GitHubCommandLineOption.REPOSITORY) + 1]
-        return SiteRepository(Repository.parse(site))
 
     @property
     def template_values(self) -> dict[str, Any]:

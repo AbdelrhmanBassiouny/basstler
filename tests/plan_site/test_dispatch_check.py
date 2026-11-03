@@ -35,7 +35,7 @@ from basstler.plan_site.dispatch_check import (
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import PublicationOption
-from basstler.plan_site.run_listing import RunListing, WorkflowRunKey
+from basstler.plan_site.run_listing import RunListing
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
 from basstler.repository import Repository
@@ -218,12 +218,15 @@ def test_a_run_failing_after_an_earlier_success_links_that_success():
 
 
 def test_a_token_set_after_the_failed_run_waits_for_the_next_push():
+    """
+    A token set after the latest failed run is stored after failure.
+    """
     dispatch = dispatch_of(
         DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
         stored(DatasetLocation.PLAN_SITE_TOKEN_STORED_AFTER_FAILURE),
     )
 
-    assert dispatch.state is DispatchState.TOKEN_STORED_SINCE_FAILURE
+    assert dispatch.state is DispatchState.TOKEN_STORED_AFTER_FAILURE
 
 
 def test_a_dispatch_that_never_ran_is_reported():
@@ -258,12 +261,15 @@ def test_a_failed_run_is_linked():
 
 
 def test_every_failed_run_is_counted():
+    """
+    Every failed run in the listing is counted.
+    """
     listing = DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED
-    recorded_runs = json.loads(listing.read_text())[WorkflowRunKey.WORKFLOW_RUNS]
+    recorded = RunListing.read(runs_replaying(listing), NOTES_REPOSITORY, NOTES_BRANCH)
 
     dispatch = dispatch_of(listing, TOKEN_BEFORE_FAILURE)
 
-    assert dispatch.runs.count(CheckOutcome.FAILURE) == len(recorded_runs)
+    assert dispatch.runs.count(CheckOutcome.FAILURE) == len(recorded.runs)
 
 
 def test_a_failed_run_reports_the_dispatch_run_history():
