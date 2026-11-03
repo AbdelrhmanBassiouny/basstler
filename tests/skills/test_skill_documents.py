@@ -12,6 +12,7 @@ document reaches the model as the bare variable name: a document is cited by a l
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from dataclasses import dataclass
@@ -284,17 +285,26 @@ def test_a_command_names_the_plugin_root_as_its_document_receives_it(
     ],
     ids=document_identifier,
 )
-def test_every_skill_says_what_its_linked_documents_plugin_root_is(
+def test_every_skill_links_how_to_run_commands_with_its_plugin_root(
     document: Path,
 ) -> None:
-    mapping_lines = [
-        line
-        for line in document.read_text().split("\n\n")
-        if f"${{{BasstlerVariable.PLUGIN_ROOT}}}" in line
-        and f"${{{ClaudeCodeVariable.PLUGIN_ROOT}}}" in line
+    """
+    Each skill links the shared rules for running commands and says what plugin root
+    they name.
+    """
+    running_commands = os.path.relpath(
+        RepositoryLocation.PLUGIN / SkillDirectory.RUNNING_COMMANDS_DOCUMENT,
+        document.parent,
+    )
+    mapping_paragraphs = [
+        paragraph
+        for paragraph in document.read_text().split("\n\n")
+        if f"${{{BasstlerVariable.PLUGIN_ROOT}}}" in paragraph
+        and f"${{{ClaudeCodeVariable.PLUGIN_ROOT}}}" in paragraph
+        and f"]({running_commands})" in paragraph
     ]
 
-    assert len(mapping_lines) == 1
+    assert len(mapping_paragraphs) == 1
 
 
 # %% the interpreter a module is run with
@@ -308,6 +318,9 @@ in a session is not the package's own environment.
 
 @pytest.mark.parametrize("document", skill_documents(), ids=document_identifier)
 def test_no_skill_document_runs_the_package_with_a_bare_interpreter(document: Path):
+    """
+    Each skill links the shared rules for running commands and says what plugin root they name.
+    """
     assert BARE_INTERPRETER_RUN.findall(document.read_text()) == []
 
 

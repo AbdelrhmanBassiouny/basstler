@@ -6,9 +6,8 @@ allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__update_pull_requ
 
 # Stacked-PR maintenance
 
-Run every command as one self-contained Bash call: nothing a call sources or sets
-survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
-`${CLAUDE_PLUGIN_ROOT}`.
+Run commands as [`running-commands.md`](../running-commands.md) says, with
+`${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
 
 A pass is four commands and one piece of writing. Everything mechanical - the fast-forward,
 the restack, conflict comments, labels, links, CI - is done by the executor; you only write the

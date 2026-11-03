@@ -6,9 +6,8 @@ allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__get_me, mcp__git
 
 # Set up personal notes
 
-Run every command as one self-contained Bash call: nothing a call sources or sets
-survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
-`${CLAUDE_PLUGIN_ROOT}`.
+Run commands as [`running-commands.md`](../running-commands.md) says, with
+`${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
 
 Gets a clone from "I have a fork of this repo and nothing else" to "personal
 notes, PR progress and plans all work," asking one question per
