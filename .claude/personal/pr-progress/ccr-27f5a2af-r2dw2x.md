@@ -1,7 +1,7 @@
 PR #131 (draft): https://github.com/AbdelrhmanBassiouny/basstler/pull/131
 
 Plan
-- Track the report's remaining to-dos in a plan (where: awaiting the owner's choice).
+- Item basstler-reliability/fail-closed-checks; later items tracked in that plan (issue #132).
 
 Done
 - Shell configuration fails closed outside a git work tree (exit 78).
