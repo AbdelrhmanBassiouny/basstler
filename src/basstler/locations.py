@@ -447,6 +447,12 @@ class ClaudeCodeVariable(EnvironmentVariable):
     The root of the project the session runs in.
     """
 
+    PLUGIN_ROOT = "CLAUDE_PLUGIN_ROOT"
+    """
+    The plugin's installation directory, which Claude Code also substitutes into a
+    plugin skill's own instructions when it loads them.
+    """
+
     REMOTE = "CLAUDE_CODE_REMOTE"
     """
     ``true`` in a Claude Code cloud session, whose proxy answers GitHub's REST API but

@@ -20,7 +20,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.locations import PluginLocation
+from basstler.locations import BasstlerVariable, ClaudeCodeVariable, PluginLocation
 
 from ..constants.paths import RepositoryLocation, SkillDirectory
 
@@ -62,30 +62,6 @@ class SkillDocumentName(StrEnum):
     """
     A skill's own instructions, the only document Claude Code substitutes its
     variables in.
-    """
-
-
-class SubstitutedVariable(StrEnum):
-    """
-    The variables Claude Code replaces with their value in a skill's own instructions
-    when it loads them, before any shell sees them.
-    """
-
-    PLUGIN_ROOT = "CLAUDE_PLUGIN_ROOT"
-    """
-    The plugin's installation directory.
-    """
-
-
-class ConfigurationScriptVariable(StrEnum):
-    """
-    The variable a session's environment sets for the plugin, rather than sourcing the
-    shell configuration.
-    """
-
-    PLUGIN_ROOT = "BASSTLER_PLUGIN_ROOT"
-    """
-    The plugin's installation directory, exported by the session start.
     """
 
 
@@ -194,7 +170,7 @@ class ShellConfiguration:
         used = (variables & self.variables.keys()) | (
             set(SHELL_WORD.findall(commands)) & self.functions
         )
-        return used - {ConfigurationScriptVariable.PLUGIN_ROOT}
+        return used - {BasstlerVariable.PLUGIN_ROOT}
 
     def skill_document_variables(self) -> set[str]:
         """
@@ -252,7 +228,9 @@ def test_every_shell_variable_a_skill_document_cites_is_configured(
     """
     cited = cited_shell_variables(document)
     substituted = (
-        set(SubstitutedVariable) if document.name == SkillDocumentName.SKILL else set()
+        {ClaudeCodeVariable.PLUGIN_ROOT}
+        if document.name == SkillDocumentName.SKILL
+        else set()
     )
 
     assert cited - shell_configuration.variables.keys() - substituted == set()
@@ -289,9 +267,9 @@ def test_a_command_names_the_plugin_root_as_its_document_receives_it(
         for variable in re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", commands)
     }
     unavailable = (
-        ConfigurationScriptVariable.PLUGIN_ROOT
+        BasstlerVariable.PLUGIN_ROOT
         if document.name == SkillDocumentName.SKILL
-        else SubstitutedVariable.PLUGIN_ROOT
+        else ClaudeCodeVariable.PLUGIN_ROOT
     )
 
     assert unavailable not in cited
@@ -312,8 +290,8 @@ def test_every_skill_says_what_its_linked_documents_plugin_root_is(
     mapping_lines = [
         line
         for line in document.read_text().split("\n\n")
-        if f"${{{ConfigurationScriptVariable.PLUGIN_ROOT}}}" in line
-        and f"${{{SubstitutedVariable.PLUGIN_ROOT}}}" in line
+        if f"${{{BasstlerVariable.PLUGIN_ROOT}}}" in line
+        and f"${{{ClaudeCodeVariable.PLUGIN_ROOT}}}" in line
     ]
 
     assert len(mapping_lines) == 1
