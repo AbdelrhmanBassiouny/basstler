@@ -142,8 +142,7 @@ items:
   status: not started
   notes: Each claude plugin eval case runs N times on the same fixture state; CI fails when the recorded verdict
     JSON differs between runs, beside short-skills' token and time budgets. Moved here because basstler-v3 is at
-    its item limit.
-
+    its item limit. A case fails at once when system/init lists plugin_errors or mcp_server_errors.
 - id: described-exit-codes
   title: "Every exit code prints what went wrong"
   branch: null
@@ -164,3 +163,15 @@ items:
     Requested in #131's review.
   depends_on: []
   status: not started
+
+- id: schema-checked-records
+  title: Records are written only from schema-validated JSON, in sessions and in Actions
+  branch: null
+  pull_request_number: null
+  track: guards
+  depends_on:
+  - verified-records
+  status: not started
+  notes: Each record (blocker, item note, PR-progress note) is a pydantic model whose JSON schema the record commands
+    export and validate their input against, size limits included. A Claude run in an Action uses claude -p --bare
+    --output-format json --json-schema with that schema and records only structured_output, failing when it is absent.
