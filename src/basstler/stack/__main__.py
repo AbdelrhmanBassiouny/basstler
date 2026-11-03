@@ -38,10 +38,11 @@ by itself once its head is contained in its base, so nothing here has to close o
 
 from __future__ import annotations
 
-import argparse
-from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from typing import Annotated
+
+from cyclopts import App, Parameter, Token
 
 from basstler.exit_codes import CommandFailure, ExitCode, StackExitCode
 from basstler.locations import RepositoryStateLocation
@@ -104,22 +105,6 @@ class Command(StrEnum):
     MERGE_PROBE = "merge-probe"
     """Answer whether one branch merges into another, naming every conflicting path."""
 
-    @property
-    def needs_a_board(self) -> bool:
-        """Whether answering this command means deriving the stack.
-
-        The ones that do not are answerable from git and configuration alone, so they
-        run before a board has ever been exported.
-
-        :return: Whether ``board.json`` must exist.
-        """
-        return self not in {
-            Command.CONFIGURATION,
-            Command.LABELS,
-            Command.PROMOTION_LINK,
-            Command.MERGE_PROBE,
-        }
-
 
 class CommandOption(StrEnum):
     """Every option a command takes, named once so no caller spells one out."""
@@ -173,228 +158,237 @@ class CommandOption(StrEnum):
     """The branch merged."""
 
 
+# %% reading the inputs
+
+
+def derived_stack() -> Stack:
+    """
+    :return: The stack derived from this checkout's ``board.json``.
+    :raises CommandFailure: If the board is missing or unreadable.
+    """
+    return Stack.load(
+        GitCommandRunner(Path.cwd()).repository_state_path(
+            RepositoryStateLocation.BOARD
+        )
+    )
+
+
+def parse_repository(_: type, tokens: tuple[Token, ...]) -> Repository:
+    """
+    Convert a command-line ``owner/name`` value.
+
+    :param tokens: The one token given for the option.
+    :return: The repository it names.
+    :raises MalformedRepositoryError: If the value is not ``owner/name``.
+    """
+    return Repository.parse(tokens[0].value)
+
+
+RepositoryOption = Annotated[
+    Repository | None,
+    Parameter(converter=parse_repository, n_tokens=1, accepts_keys=False),
+]
+"""
+An optional ``owner/name`` repository given on the command line.
+"""
+
+# %% commands
+
+stack_app = App(
+    name="basstler.stack",
+    help="Stacked pull request helper: read state, compute the writes.",
+)
+"""
+This module's command line: one command per :class:`Command`.
+"""
+
+
+@stack_app.command(name=Command.STATUS)
+def status() -> StackExitCode:
+    """
+    Print the whole stack: parent, state, drift.
+    """
+    StackReport(derived_stack()).print_status()
+    return StackExitCode.SUCCESS
+
+
+@stack_app.command(name=Command.CHECK)
+def check() -> StackExitCode:
+    """
+    Print whether each branch would merge cleanly onto its parent.
+    """
+    StackReport(derived_stack()).print_check()
+    return StackExitCode.SUCCESS
+
+
+@stack_app.command(name=Command.NEXT)
+def promotable(
+    *, porcelain: Annotated[bool, Parameter(name=CommandOption.PORCELAIN)] = False
+) -> StackExitCode:
+    """
+    Print which branches to submit upstream next.
+
+    :param porcelain: Print only a ``name<TAB>pull request`` line per branch.
+    """
+    report = StackReport(derived_stack())
+    if porcelain:
+        report.print_next_porcelain()
+    else:
+        report.print_next()
+    return StackExitCode.SUCCESS
+
+
+@stack_app.command(name=Command.RESTACK_PLAN)
+def restack_plan() -> StackExitCode:
+    """
+    Print the bottom-up restack plan as JSON.
+    """
+    StackReport(derived_stack()).print_restack_plan()
+    return StackExitCode.SUCCESS
+
+
+@stack_app.command(name=Command.REPARENTS)
+def reparents() -> StackExitCode:
+    """
+    Print the children whose base has landed, and the base they need.
+    """
+    StackReport(derived_stack()).print_reparents()
+    return StackExitCode.SUCCESS
+
+
+@stack_app.command(name=Command.LANDED)
+def landed() -> StackExitCode:
+    """
+    Print the open pull requests whose branch has landed.
+    """
+    StackReport(derived_stack()).print_landed()
+    return StackExitCode.SUCCESS
+
+
+@stack_app.command(name=Command.CONFIGURATION)
+def configuration(
+    *,
+    fork: Annotated[RepositoryOption, Parameter(name=CommandOption.FORK)] = None,
+    upstream: Annotated[
+        RepositoryOption, Parameter(name=CommandOption.UPSTREAM)
+    ] = None,
+) -> StackExitCode:
+    """
+    Print every resolved setting, including the remotes.
+
+    :param fork: The fork as ``owner/name``, when you already know it.
+    :param upstream: The upstream as ``owner/name``, when you already know it.
+    """
+    Configuration.load(
+        fork_repository=fork, upstream_repository=upstream
+    ).print_settings()
+    return StackExitCode.SUCCESS
+
+
+@stack_app.command(name=Command.LABELS)
+def labels(
+    *,
+    current: Annotated[tuple[str, ...], Parameter(name=CommandOption.CURRENT)] = (),
+    add: Annotated[tuple[str, ...], Parameter(name=CommandOption.ADD)] = (),
+    remove: Annotated[tuple[str, ...], Parameter(name=CommandOption.REMOVE)] = (),
+) -> StackExitCode:
+    """
+    Print the complete label set a label write must send.
+
+    :param current: A label the pull request carries now; repeat per label.
+    :param add: A label to end up with.
+    :param remove: A label to end up without.
+    """
+    LabelWrite.replacing(current, add, remove).print_labels()
+    return StackExitCode.SUCCESS
+
+
+@stack_app.command(name=Command.PROMOTION_LINK)
+def promotion_link(
+    *,
+    branch: Annotated[str, Parameter(name=CommandOption.BRANCH)],
+    title: Annotated[str, Parameter(name=CommandOption.TITLE)],
+    body: Annotated[str, Parameter(name=CommandOption.BODY)] = "",
+) -> StackExitCode:
+    """
+    Print the upstream compare-and-create URL for a branch.
+
+    :param branch: The fork branch to promote.
+    :param title: The title to prefill.
+    :param body: The description to prefill.
+    """
+    PromotionLink.build(Configuration.load(), branch, title, body).print_url()
+    return StackExitCode.SUCCESS
+
+
+@stack_app.command(name=Command.MERGE_PROBE)
+def merge_probe(
+    *,
+    remote: Annotated[str, Parameter(name=CommandOption.REMOTE)],
+    base: Annotated[str, Parameter(name=CommandOption.BASE)],
+    head: Annotated[str, Parameter(name=CommandOption.HEAD)],
+) -> StackExitCode:
+    """
+    Report whether one branch merges into another, and where it conflicts.
+
+    :param remote: The remote name or URL, except that the upstream base of a project
+        naming an upstream is read from the upstream.
+    :param base: The branch merged into.
+    :param head: The branch merged.
+    """
+    result = MergeProbe(
+        head_location=remote,
+        base_location=Configuration.location_of(base, remote),
+        base=base,
+        head=head,
+    ).run(Path.cwd())
+    result.print_report()
+    return result.exit_code
+
+
+@stack_app.command(name=Command.CHECK_MOVE)
+def check_move(
+    *,
+    action: Annotated[CommitMoveAction, Parameter(name=CommandOption.ACTION)],
+    source: Annotated[str, Parameter(name=CommandOption.SOURCE)],
+    destination: Annotated[str, Parameter(name=CommandOption.DESTINATION)],
+    destination_remote: Annotated[
+        str, Parameter(name=CommandOption.DESTINATION_REMOTE)
+    ],
+) -> StackExitCode:
+    """
+    Report whether these commits may move onto that branch.
+
+    :param action: What the move would do.
+    :param source: The branch whose commits move.
+    :param destination: The branch they would land on.
+    :param destination_remote: The remote holding the destination.
+    """
+    return CommitMoveChecks.of_checkout(derived_stack()).print_verdict(
+        ProposedCommitMove(
+            action=action,
+            source=source,
+            destination=destination,
+            destination_remote=destination_remote,
+        ),
+    )
+
+
 # %% entry point
 
 
-@dataclass(frozen=True)
-class StackCommandLine:
-    """This module's command line: one subcommand per :class:`Command`."""
+def main() -> ExitCode:
+    """
+    Run the invoked command, ending with the status a refusal carries.
 
-    @staticmethod
-    def parser() -> argparse.ArgumentParser:
-        """:return: The parser for every command and its own flags."""
-        parser = argparse.ArgumentParser(
-            prog="basstler.stack",
-            description="Stacked pull request helper: read state, compute the writes.",
-        )
-        parser.set_defaults(porcelain=False)
-        commands = parser.add_subparsers(dest="command", required=True)
-
-        commands.add_parser(
-            Command.STATUS, help="the whole stack: parent, state, drift"
-        )
-        commands.add_parser(
-            Command.CHECK, help="would each branch merge cleanly onto its parent"
-        )
-        promote = commands.add_parser(
-            Command.NEXT, help="which branches to submit upstream next"
-        )
-        promote.add_argument(
-            CommandOption.PORCELAIN,
-            action="store_true",
-            help="print only 'name<TAB>pull request' per branch to promote",
-        )
-        commands.add_parser(
-            Command.RESTACK_PLAN, help="the bottom-up restack plan as JSON"
-        )
-        commands.add_parser(
-            Command.REPARENTS,
-            help="children whose base has landed, and the base they need",
-        )
-        commands.add_parser(
-            Command.LANDED, help="open pull requests whose branch has landed"
-        )
-
-        configuration = commands.add_parser(
-            Command.CONFIGURATION, help="every resolved setting, including the remotes"
-        )
-        configuration.add_argument(
-            CommandOption.FORK,
-            type=Repository.parse,
-            help="the fork as 'owner/name', when you already know it",
-        )
-        configuration.add_argument(
-            CommandOption.UPSTREAM,
-            type=Repository.parse,
-            help="the upstream as 'owner/name', when you already know it",
-        )
-
-        labels = commands.add_parser(
-            Command.LABELS, help="the complete label set a label write must send"
-        )
-        labels.add_argument(
-            CommandOption.CURRENT,
-            action="append",
-            default=[],
-            metavar="LABEL",
-            help="a label the pull request carries now; repeat per label",
-        )
-        labels.add_argument(
-            CommandOption.ADD,
-            action="append",
-            default=[],
-            metavar="LABEL",
-            help="a label to end up with",
-        )
-        labels.add_argument(
-            CommandOption.REMOVE,
-            action="append",
-            default=[],
-            metavar="LABEL",
-            help="a label to end up without",
-        )
-
-        link = commands.add_parser(
-            Command.PROMOTION_LINK,
-            help="the upstream compare-and-create URL for a branch",
-        )
-        link.add_argument(
-            CommandOption.BRANCH, required=True, help="the fork branch to promote"
-        )
-        link.add_argument(CommandOption.TITLE, required=True, help="title to prefill")
-        link.add_argument(CommandOption.BODY, default="", help="description to prefill")
-
-        merge_probe = commands.add_parser(
-            Command.MERGE_PROBE,
-            help="does one branch merge into another, and where does it conflict?",
-        )
-        merge_probe.add_argument(
-            CommandOption.REMOTE, required=True, help="the remote name or URL"
-        )
-        merge_probe.add_argument(
-            CommandOption.BASE, required=True, help="the branch merged into"
-        )
-        merge_probe.add_argument(
-            CommandOption.HEAD, required=True, help="the branch merged"
-        )
-
-        check_move = commands.add_parser(
-            Command.CHECK_MOVE, help="may these commits move onto that branch?"
-        )
-        check_move.add_argument(
-            CommandOption.ACTION,
-            required=True,
-            type=CommitMoveAction,
-            choices=list(CommitMoveAction),
-            help="what the move would do",
-        )
-        check_move.add_argument(
-            CommandOption.SOURCE, required=True, help="the branch whose commits move"
-        )
-        check_move.add_argument(
-            CommandOption.DESTINATION,
-            required=True,
-            help="the branch they would land on",
-        )
-        check_move.add_argument(
-            CommandOption.DESTINATION_REMOTE,
-            required=True,
-            help="the remote holding the destination",
-        )
-        return parser
-
-    @staticmethod
-    def main() -> ExitCode:
-        """Dispatch the command-line invocation, ending with the status the refusal carries.
-
-        :return: The process exit code.
-        """
-        arguments = StackCommandLine.parser().parse_args()
-        command = Command(arguments.command)
-        try:
-            if not command.needs_a_board:
-                return StackCommandLine._run_without_a_board(command, arguments)
-            return StackCommandLine._run_against_the_board(
-                command,
-                arguments,
-                Stack.load(
-                    GitCommandRunner(Path.cwd()).repository_state_path(
-                        RepositoryStateLocation.BOARD
-                    )
-                ),
-            )
-        except CommandFailure as error:
-            logger.error(f"{error}")
-            return error.exit_code
-
-    @staticmethod
-    def _run_without_a_board(
-        command: Command, arguments: argparse.Namespace
-    ) -> StackExitCode:
-        """Run a command that needs no ``board.json``.
-
-        :param command: The command to run.
-        :param arguments: The parsed command line.
-        :return: The process exit code.
-        """
-        if command is Command.LABELS:
-            LabelWrite.replacing(
-                arguments.current, arguments.add, arguments.remove
-            ).print_labels()
-            return StackExitCode.SUCCESS
-        if command is Command.MERGE_PROBE:
-            result = MergeProbe(
-                remote=arguments.remote, base=arguments.base, head=arguments.head
-            ).run(Path.cwd())
-            result.print_json()
-            return result.exit_code
-        if command is Command.CONFIGURATION:
-            Configuration.load(
-                fork_repository=arguments.fork,
-                upstream_repository=arguments.upstream,
-            ).print_settings()
-            return StackExitCode.SUCCESS
-        PromotionLink.build(
-            Configuration.load(), arguments.branch, arguments.title, arguments.body
-        ).print_url()
-        return StackExitCode.SUCCESS
-
-    @staticmethod
-    def _run_against_the_board(
-        command: Command, arguments: argparse.Namespace, stack: Stack
-    ) -> StackExitCode:
-        """Run a command that reads the derived stack.
-
-        :param command: The command to run.
-        :param arguments: The parsed command line.
-        :param stack: The derived stack.
-        :return: The process exit code.
-        """
-        if command is Command.CHECK_MOVE:
-            return CommitMoveChecks.of_checkout(stack).print_verdict(
-                ProposedCommitMove(
-                    action=arguments.action,
-                    source=arguments.source,
-                    destination=arguments.destination,
-                    destination_remote=arguments.destination_remote,
-                ),
-            )
-        report = StackReport(stack)
-        reporters = {
-            Command.STATUS: report.print_status,
-            Command.CHECK: report.print_check,
-            Command.NEXT: (
-                report.print_next_porcelain
-                if arguments.porcelain
-                else report.print_next
-            ),
-            Command.RESTACK_PLAN: report.print_restack_plan,
-            Command.REPARENTS: report.print_reparents,
-            Command.LANDED: report.print_landed,
-        }
-        reporters[command]()
-        return StackExitCode.SUCCESS
+    :return: The process exit code.
+    """
+    try:
+        return stack_app(result_action="return_value")
+    except CommandFailure as error:
+        logger.error(f"{error}")
+        return error.exit_code
 
 
 if __name__ == "__main__":
-    raise SystemExit(StackCommandLine.main())
+    raise SystemExit(main())
