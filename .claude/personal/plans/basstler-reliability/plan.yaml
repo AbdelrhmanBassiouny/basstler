@@ -152,5 +152,9 @@ items:
   title: "Every exit code prints what went wrong"
   branch: null
   track: guards
+  notes: >
+    Apply the ExitCode description mechanism fail-closed-checks (#131) introduces to every other
+    ExitCode enum and the shell scripts' exits, so no command fails with a bare number. Requested in
+    #131's review.
   depends_on: []
   status: not started
