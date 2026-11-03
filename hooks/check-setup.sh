@@ -25,8 +25,8 @@ set -euo pipefail
 #   needs-setup  - something is missing; <detail> says what
 #   in-progress  - another process is setting it up right now; wait for it
 #                  rather than doing it again
-#   unverified   - what decides the check could not be read; <detail> says why
-#                  and where to read it instead. Never a pass
+#   unverified   - nothing the check could read decides it yet; <detail> says
+#                  why and how to settle it. Never a pass
 #   info         - context for whoever is reading, never a pass/fail
 # Exit code is 0 when no row is needs-setup, in-progress or unverified, 1
 # otherwise - so a caller can take the fast path ("everything is already fine")

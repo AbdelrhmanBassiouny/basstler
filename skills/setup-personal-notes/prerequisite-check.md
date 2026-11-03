@@ -33,8 +33,8 @@ the check again, and go on from what that second run says; never install it
 yourself.
 
 **Non-zero, and every row that is not `ok`, `info` or `in-progress` is
-`unverified`** — the check could not read something this skill does not
-depend on, such as the plan site's dispatch runs. Tell the user in one line
+`unverified`** — the check could not settle something this skill does not
+depend on, such as whether the plan site's dispatch starts its build. Tell the user in one line
 which row is not verified, with its detail, and carry on with the skill; the
 row is `/setup-personal-notes`'s to resolve.
 

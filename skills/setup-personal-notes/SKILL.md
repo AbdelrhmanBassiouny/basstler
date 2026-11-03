@@ -62,9 +62,12 @@ now. Never install it yourself, and never run a `pip` command for it: wait with
 `wait_for_basstler_install` (defined by the script sourced above), then run the
 check again.
 
-**An `unverified` row** means the script could not read what decides it, as
+**An `unverified` row** means nothing the script could read decides it yet, as
 when GitHub refuses the session's `GH_TOKEN`; its detail says why. It is never a
-pass. For `plan_site`, read the same facts with the session's GitHub tools:
+pass. When the `plan_site` detail says `PLAN_SITE_TOKEN` was set after the
+latest dispatch run, no run has used that token yet: tell the user the next push
+to the notes branch settles it, and carry on with step 8 without reading that
+run's log as the cause. Otherwise, for `plan_site`, read the same facts with the session's GitHub tools:
 `mcp__github__actions_list` (`list_workflow_runs` on the notes repository's
 `plan-site-dispatch.yml`, notes branch), then `mcp__github__get_job_logs` on the
 latest failed run. Report how many runs failed, the latest run's conclusion and
