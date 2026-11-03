@@ -9,3 +9,10 @@ When the permission system or its classifier denies a command or tool call a ski
 - Ask the user with `AskUserQuestion` at once, before going on with anything that depends on it. Name the exact command, what it changes (which branches it pushes, which files it writes) and why the skill needs it.
 - Run it, unchanged, once they accept. If they decline, carry on without it and record what is left undone where the skill keeps its record.
 - Never work around the denial with a different command that has the same effect, and never drop the step. Listing it at the end of a report as left over is dropping it.
+
+## An answer that was not read is not checked
+
+- Each Bash call starts a fresh shell: source the configuration in the same call that uses what it defines. An empty variable means it was not set in that call, never that something is not installed.
+- An empty value, an `unknown` state, a non-zero exit or a command run from the wrong directory is *not checked*, never a pass. Re-run it from the project's checkout before reporting it.
+- Decide a pull request's conflicts with `basstler.sh stack merge-probe`, never from GitHub's `mergeable_state`.
+- Record an item as green, approved or free of conflicts only once this run read it so, naming the commit it was read at.

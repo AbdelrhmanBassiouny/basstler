@@ -14,6 +14,13 @@ set -euo pipefail
 # one, so they pass it; any other caller would otherwise fail every project
 # that simply has no upstream.
 #
+# --only <check>, repeatable, reports only the named checks, and the exit code
+# covers only them: a step gated on one check is never closed by an unrelated
+# one. A check that is not requested and reads GitHub is not run at all.
+#
+# Run outside a git work tree it prints no rows and exits 78
+# (ShellConfigurationExitCode.NOT_IN_REPOSITORY); an unknown argument exits 2.
+#
 # Read-only: it fetches (into PERSONAL_NOTES_REFERENCE) and reads git config, but never
 # writes config, branches, files, or remotes. Running it can't change the
 # answer it gives.
@@ -49,13 +56,31 @@ source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
 EXIT_CODE=0
 
+# Every check this script reports, in the order it reports them; equal to
+# basstler.setup.report.SetupCheck.
+KNOWN_CHECKS=" tooling_files session_start_hook claude_local_md_ignored notes_remote notes_remote_url notes_branch_name notes_path notes_branch notes_file stack_upstream upstream_reviews_action plan_site git_identity package_dependencies basstler_version claude_local_md "
+
 REQUIRE_UPSTREAM=false
+REQUESTED_CHECKS=""
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --require-upstream) REQUIRE_UPSTREAM=true; shift ;;
+    --only)
+      if [ "$#" -lt 2 ] || [[ "${KNOWN_CHECKS}" != *" $2 "* ]]; then
+        echo "--only needs one of:${KNOWN_CHECKS% }" >&2
+        exit 2
+      fi
+      REQUESTED_CHECKS="${REQUESTED_CHECKS} $2 "
+      shift 2 ;;
     *) echo "Unknown argument: $1" >&2; exit 2 ;;
   esac
 done
+
+# requested: succeeds when the check $1 is to be reported - every check, unless
+# --only named some.
+requested() {
+  [ -z "${REQUESTED_CHECKS}" ] || [[ "${REQUESTED_CHECKS}" == *" $1 "* ]]
+}
 
 # names_upstream: succeeds when the stack.toml text on stdin names an
 # upstream_repository.
@@ -155,6 +180,7 @@ report_plan_site() {
 
 report() {
   local check="$1" status="$2" detail="$3"
+  requested "${check}" || return 0
   case "${status}" in
     needs-setup|in-progress|unverified) EXIT_CODE=1 ;;
   esac
@@ -247,8 +273,8 @@ if fetch_personal_notes_branch; then
   fi
 
   report_upstream true
-  report_upstream_reviews_action
-  report_plan_site
+  if requested upstream_reviews_action; then report_upstream_reviews_action; fi
+  if requested plan_site; then report_plan_site; fi
 
   # %% who commits here would be authored as
 
@@ -281,7 +307,7 @@ else
     "no '${NOTES_BRANCH}' branch on any of: ${ATTEMPTED_NOTES_REMOTES} - run ./create-personal-notes-branch.sh (after pointing the remote at your own fork if it isn't already)"
   report notes_file needs-setup "not checked - the branch that would hold it doesn't exist yet"
   report_upstream false
-  report_upstream_reviews_action
+  if requested upstream_reviews_action; then report_upstream_reviews_action; fi
   report plan_site info "not checked - the branch that would start the build doesn't exist yet"
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
@@ -298,7 +324,9 @@ fi
 # read the same declaration the same way, for the same interpreter. What stays
 # here is the reasons it can answer nothing, because they are this script's
 # rows to word.
-if basstler_install_in_progress; then
+if ! requested package_dependencies; then
+  :
+elif basstler_install_in_progress; then
   report package_dependencies in-progress \
     "process $(cat "${BASSTLER_INSTALL_MARKER}") is installing them for ${BASSTLER_PYTHON} now - do not install them yourself; run: wait_for_basstler_install, then this check again"
 elif ! command -v "${BASSTLER_PYTHON}" > /dev/null 2>&1; then
@@ -316,23 +344,25 @@ fi
 
 # Context, never a verdict: a session start installs the latest release by
 # itself, so this only answers which basstler the session runs.
-if ! INSTALLED_VERSION="$("${BASSTLER_PYTHON}" -m "${BASSTLER_COMMAND_MODULE}" --version 2>/dev/null)"; then
-  INSTALLED_VERSION="of unknown version"
-fi
-if [ -n "${BASSTLER_CHECKOUT}" ]; then
-  INSTALLED_SOURCE="run from the checkout ${BASSTLER_CHECKOUT}"
-else
-  INSTALLED_SOURCE="installed at $(basstler_branch_or_tag)"
-fi
-if ! LATEST_RELEASE="$(latest_basstler_release)"; then
-  report basstler_version info \
-    "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}); the latest release could not be read from ${BASSTLER_REPOSITORY_URL}"
-elif [ "v${INSTALLED_VERSION}" = "${LATEST_RELEASE}" ]; then
-  report basstler_version info \
-    "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}), the latest release"
-else
-  report basstler_version info \
-    "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}); the latest release is ${LATEST_RELEASE}"
+if requested basstler_version; then
+  if ! INSTALLED_VERSION="$("${BASSTLER_PYTHON}" -m "${BASSTLER_COMMAND_MODULE}" --version 2>/dev/null)"; then
+    INSTALLED_VERSION="of unknown version"
+  fi
+  if [ -n "${BASSTLER_CHECKOUT}" ]; then
+    INSTALLED_SOURCE="run from the checkout ${BASSTLER_CHECKOUT}"
+  else
+    INSTALLED_SOURCE="installed at $(basstler_branch_or_tag)"
+  fi
+  if ! LATEST_RELEASE="$(latest_basstler_release)"; then
+    report basstler_version info \
+      "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}); the latest release could not be read from ${BASSTLER_REPOSITORY_URL}"
+  elif [ "v${INSTALLED_VERSION}" = "${LATEST_RELEASE}" ]; then
+    report basstler_version info \
+      "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}), the latest release"
+  else
+    report basstler_version info \
+      "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}); the latest release is ${LATEST_RELEASE}"
+  fi
 fi
 
 # %% the result of it all working

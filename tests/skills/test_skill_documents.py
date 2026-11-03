@@ -12,14 +12,16 @@ document reaches the model as the bare variable name: a document is cited by a l
 
 from __future__ import annotations
 
+import os
 import re
 import subprocess
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 import pytest
 
-from basstler.locations import PluginLocation
+from basstler.locations import BasstlerVariable, ClaudeCodeVariable, PluginLocation
 
 from ..constants.paths import RepositoryLocation, SkillDirectory
 
@@ -50,6 +52,37 @@ def cited_shell_variables(document: Path) -> set[str]:
     :return: The name of every shell variable the document references in braces.
     """
     return set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", document.read_text()))
+
+
+class SkillDocumentName(StrEnum):
+    """
+    The file name Claude Code loads a skill from.
+    """
+
+    SKILL = "SKILL.md"
+    """
+    A skill's own instructions, the only document Claude Code substitutes its
+    variables in.
+    """
+
+
+BASH_BLOCK = re.compile(r"^( *)```bash\n(.*?)^\1```", re.MULTILINE | re.DOTALL)
+"""
+Matches a fenced bash block, indented or not, capturing its commands.
+"""
+
+SHELL_WORD = re.compile(r"[A-Za-z_][A-Za-z0-9_]*")
+"""
+Matches every word that could name a shell function.
+"""
+
+
+def bash_blocks(document: Path) -> list[str]:
+    """
+    :param document: A skill document.
+    :return: The commands of every fenced bash block in it, one entry per block.
+    """
+    return [match.group(2) for match in BASH_BLOCK.finditer(document.read_text())]
 
 
 def skill_documents() -> list[Path]:
@@ -83,6 +116,11 @@ class ShellConfiguration:
     Each variable's value, by name.
     """
 
+    functions: frozenset[str]
+    """
+    The name of every function it defines.
+    """
+
     @classmethod
     def from_source(cls) -> ShellConfiguration:
         """
@@ -106,8 +144,34 @@ class ShellConfiguration:
             check=True,
             cwd=RepositoryLocation.ROOT,
         )
+        functions = subprocess.run(
+            [
+                "bash",
+                "-c",
+                f'source "{configuration}" >/dev/null 2>&1; compgen -A function',
+            ],
+            capture_output=True,
+            text=True,
+            check=True,
+            cwd=RepositoryLocation.ROOT,
+        )
         fields = result.stdout.split("\0")
-        return cls(variables=dict(zip(fields[0:-1:2], fields[1::2], strict=True)))
+        return cls(
+            variables=dict(zip(fields[0:-1:2], fields[1::2], strict=True)),
+            functions=frozenset(functions.stdout.split()),
+        )
+
+    def names_used_by(self, commands: str) -> set[str]:
+        """
+        :param commands: The commands of one bash block.
+        :return: Every variable and function of the configuration they use, apart from
+            the plugin root the session's environment sets.
+        """
+        variables = set(re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", commands))
+        used = (variables & self.variables.keys()) | (
+            set(SHELL_WORD.findall(commands)) & self.functions
+        )
+        return used - {BasstlerVariable.PLUGIN_ROOT}
 
     def skill_document_variables(self) -> set[str]:
         """
@@ -164,8 +228,83 @@ def test_every_shell_variable_a_skill_document_cites_is_configured(
     documented command.
     """
     cited = cited_shell_variables(document)
+    substituted = (
+        {ClaudeCodeVariable.PLUGIN_ROOT}
+        if document.name == SkillDocumentName.SKILL
+        else set()
+    )
 
-    assert cited - shell_configuration.variables.keys() == set()
+    assert cited - shell_configuration.variables.keys() - substituted == set()
+
+
+@pytest.mark.parametrize("document", skill_documents(), ids=document_identifier)
+def test_every_bash_block_sources_the_configuration_it_uses(
+    document: Path, shell_configuration: ShellConfiguration
+) -> None:
+    """
+    Each Bash call is a fresh shell, so a block relying on an earlier block's sourcing
+    runs with every configuration name empty.
+    """
+    unsourced = [
+        shell_configuration.names_used_by(commands)
+        for commands in bash_blocks(document)
+        if PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT.name not in commands
+    ]
+
+    assert [names for names in unsourced if names] == []
+
+
+@pytest.mark.parametrize("document", skill_documents(), ids=document_identifier)
+def test_a_command_names_the_plugin_root_as_its_document_receives_it(
+    document: Path,
+) -> None:
+    """
+    Claude Code substitutes the plugin root only into a skill's own instructions; a
+    linked document reads it from the session's environment.
+    """
+    cited = {
+        variable
+        for commands in bash_blocks(document)
+        for variable in re.findall(r"\$\{([A-Za-z_][A-Za-z0-9_]*)", commands)
+    }
+    unavailable = (
+        BasstlerVariable.PLUGIN_ROOT
+        if document.name == SkillDocumentName.SKILL
+        else ClaudeCodeVariable.PLUGIN_ROOT
+    )
+
+    assert unavailable not in cited
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        document
+        for document in skill_documents()
+        if document.name == SkillDocumentName.SKILL
+    ],
+    ids=document_identifier,
+)
+def test_every_skill_links_how_to_run_commands_with_its_plugin_root(
+    document: Path,
+) -> None:
+    """
+    Each skill links the shared rules for running commands and says what plugin root
+    they name.
+    """
+    running_commands = os.path.relpath(
+        RepositoryLocation.PLUGIN / SkillDirectory.RUNNING_COMMANDS_DOCUMENT,
+        document.parent,
+    )
+    mapping_paragraphs = [
+        paragraph
+        for paragraph in document.read_text().split("\n\n")
+        if f"${{{BasstlerVariable.PLUGIN_ROOT}}}" in paragraph
+        and f"${{{ClaudeCodeVariable.PLUGIN_ROOT}}}" in paragraph
+        and f"]({running_commands})" in paragraph
+    ]
+
+    assert len(mapping_paragraphs) == 1
 
 
 # %% the interpreter a module is run with
@@ -179,6 +318,9 @@ in a session is not the package's own environment.
 
 @pytest.mark.parametrize("document", skill_documents(), ids=document_identifier)
 def test_no_skill_document_runs_the_package_with_a_bare_interpreter(document: Path):
+    """
+    Each skill links the shared rules for running commands and says what plugin root they name.
+    """
     assert BARE_INTERPRETER_RUN.findall(document.read_text()) == []
 
 

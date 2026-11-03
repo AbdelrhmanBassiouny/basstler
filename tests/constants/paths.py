@@ -422,6 +422,11 @@ class SkillDirectory(PathEnumeration):
     The instructions for reading a branch's upstream review threads.
     """
 
+    RUNNING_COMMANDS_DOCUMENT = DIRECTORY / "running-commands.md"
+    """
+    How every skill runs its commands, which each skill's instructions link.
+    """
+
     MANIFEST_STALENESS_DOCUMENT = PLAN_CREATE / "manifest-staleness.md"
     """
     The rule every skill that writes plan data cites: when to write the manifest.
@@ -432,7 +437,11 @@ class SkillDirectory(PathEnumeration):
         """
         :return: Every member that is a skill's own directory.
         """
-        return tuple(member for member in cls if member.parent == cls.DIRECTORY.value)
+        return tuple(
+            member
+            for member in cls
+            if member.parent == cls.DIRECTORY.value and not member.suffix
+        )
 
 
 class SkillFile(StrEnum):

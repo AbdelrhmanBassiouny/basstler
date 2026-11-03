@@ -13,6 +13,9 @@ set -euo pipefail
 # prints a summary of what it did. Never fails the session on a setup gap.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# A session outside any repository has nothing to set up; the configuration would
+# refuse it, which must not fail the session.
+git -C "${CLAUDE_PROJECT_DIR:-.}" rev-parse --is-inside-work-tree > /dev/null 2>&1 || exit 0
 source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 source "${SCRIPT_DIR}/session-start-messages.sh"
 

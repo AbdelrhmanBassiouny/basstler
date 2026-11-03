@@ -13,11 +13,10 @@
 ## Writing a field
 
 ```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" update --plan <plan-id> --item <item-id> \
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_bootstrap update --plan <plan-id> --item <item-id> \
     [--status <status>] [--branch <branch>] [--pull-request-number <number>] \
     [--session <url>] [--notes <file> | --append-notes <file>] [--blockers <file> ...]
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" check --plan <plan-id> --item <item-id>
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_bootstrap check --plan <plan-id> --item <item-id>
 ```
 
 - `--append-notes` adds to the recorded note; never read a note back to rewrite it.
@@ -32,10 +31,11 @@ source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 ## Automation holding a branch
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" resolve --branch <branch>
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" block --branch <branch> \
+source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_bootstrap resolve --branch <branch>
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_bootstrap block --branch <branch> \
     --owner "${MAINTENANCE_BLOCKER_OWNER}" --reason <file>
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" unblock --branch <branch> \
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_bootstrap unblock --branch <branch> \
     --owner "${MAINTENANCE_BLOCKER_OWNER}"
 ```
 

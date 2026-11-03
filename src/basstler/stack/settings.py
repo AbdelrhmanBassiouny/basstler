@@ -348,6 +348,29 @@ class Configuration:
             upstream_location=resolution.upstream_location,
         )
 
+    @classmethod
+    def location_of(
+        cls,
+        branch: str,
+        fork_location: str,
+        path: Path = PackageLocation.STACK_CONFIGURATION.value,
+    ) -> str:
+        """
+        Where *branch* is current: the upstream for the upstream base of a project that
+        names an upstream, since the fork's copy of that base can lag behind it.
+
+        :param branch: The branch to read.
+        :param fork_location: The remote name or URL any other branch is read from.
+        :param path: The shipped defaults file.
+        :return: The remote name or URL to fetch *branch* from.
+        """
+        if StackSetting.UPSTREAM_REPOSITORY not in LayeredStackSettings(path).values():
+            return fork_location
+        configuration = cls.load(path)
+        if branch != configuration.upstream_base:
+            return fork_location
+        return configuration.upstream_location
+
     @property
     def upstream_base_reference(self) -> str:
         """

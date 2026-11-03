@@ -6,6 +6,9 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, Ente
 
 # Plan Item Resolve
 
+Run commands as [`running-commands.md`](../running-commands.md) says, with
+`${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
+
 Generic, plan-agnostic — nothing here may hardcode a specific plan id,
 item, or branch. Unlike `plan-item-kickoff` (for an item that hasn't
 started), this skill is for an item that already has real state - a
@@ -36,8 +39,20 @@ Then add the part only a resolve needs — **the live state of work that
 already exists**, which is where the cause of a stall almost always is:
 
 - If `pull_request_number` is set: fetch the PR (`mcp__github__pull_request_read`,
-  `method: "get"`) for its mergeable state and CI status
-  (`method: "get_check_runs"`), then its review threads
+  `method: "get"`) for its base and head branches and CI status
+  (`method: "get_check_runs"`). Decide whether it conflicts with its base with git,
+  never from GitHub's `mergeable_state`, which is computed lazily and reads `unknown`
+  until it has been:
+
+  ```bash
+  "${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" stack merge-probe --remote <the remote of the pull request's repository> --base <base branch> --head <head branch>
+  ```
+
+  It fetches both branches - an upstream base from the upstream itself - and prints one
+  JSON object: `verdict`, every `conflicting_paths` entry, the `base_location` it read
+  and the `base_commit` and `head_commit` it merged. Exit 0 (`success`) is clean and 13
+  (`merge-conflicts`) is conflicting; any other status means the conflict state is *not
+  checked* - stderr says why - so say so, and never report the pull request as mergeable. Then read its review threads
   (`method: "get_review_comments"`) and plain comments
   (`method: "get_comments"`) — read every one, not just the most recent,
   since an older unresolved thread is exactly the kind of thing this skill
@@ -95,6 +110,11 @@ itself.
 First record what you found, per [`manifest-staleness.md`](../plan-create/manifest-staleness.md): the real blocker in
 `blockers`, and `status` when it is wrong (`blocked`, `deferred`). `notes` change only when
 what the item means changes.
+
+A record - blocker, PR-progress note or pull request description - calls the item green,
+approved or free of conflicts only when this run read it so: the check runs, the reviews
+and the merge probe, naming the `head_commit` they were read at. Whatever this run could
+not check is recorded as not checked, never as fine.
 
 Apply [`plan-item-gathering.md`](../plan-item-kickoff/plan-item-gathering.md)'s last section first: anything you
 are about to raise as an open question is very often already answered by the

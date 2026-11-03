@@ -6,6 +6,9 @@ allowed-tools: Bash, Read
 
 # Plan Item Mode
 
+Run commands as [`running-commands.md`](../running-commands.md) says, with
+`${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
+
 Sets the execution mode the plan-item skills resolve. Every mechanical part
 belongs to the module the commands below run; this skill only reads what the
 user asked for and calls it. [`execution-modes.md`](../plan-item-mode/execution-modes.md) is where the modes are defined and where what
@@ -34,8 +37,7 @@ One call, however many skills — the settings file is rewritten whole, so
 naming both in one run is one commit on the notes branch instead of two:
 
 ```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" set \
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_mode set \
     --skill kickoff --skill resolve --mode <mode>
 ```
 
@@ -45,8 +47,8 @@ pinned, the mode, and the file it wrote.
 ## 3. Confirm it from the file, not from the write
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill kickoff
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill resolve
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_mode resolve --skill kickoff
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_mode resolve --skill resolve
 ```
 
 Report the `mode` and `source` these come back with. `source` is the part worth

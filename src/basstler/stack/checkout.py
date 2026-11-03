@@ -59,6 +59,11 @@ class GitArgument(StrEnum):
     Silences a fetch's progress output.
     """
 
+    NO_WRITE_FETCH_HEAD = "--no-write-fetch-head"
+    """
+    Makes :attr:`FETCH` leave ``FETCH_HEAD`` to whoever else fetches.
+    """
+
     REVISION_PARSE = "rev-parse"
     """
     Resolves a name to the object it stands for.

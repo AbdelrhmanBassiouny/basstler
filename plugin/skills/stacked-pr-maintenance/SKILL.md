@@ -6,11 +6,14 @@ allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__update_pull_requ
 
 # Stacked-PR maintenance
 
+Run commands as [`running-commands.md`](../running-commands.md) says, with
+`${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
+
 A pass is four commands and one piece of writing. Everything mechanical - the fast-forward,
 the restack, conflict comments, labels, links, CI - is done by the executor; you only write the
 upstream summaries. Why each rule holds is in `docs/stack/maintenance-pass.md`; you do not need it.
 
-Run every command through `"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh"`. It waits for or finishes
+Run every command through `"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh"`. It waits for or finishes
 the package install by itself. If it exits 1 with one line on stderr, relay that line and stop;
 never read the hook scripts to debug it.
 
@@ -33,7 +36,7 @@ says.
 ## 1. Repositories
 
 ```bash
-"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" stack configuration [--fork <owner/repo>] [--upstream <owner/repo>]
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" stack configuration [--fork <owner/repo>] [--upstream <owner/repo>]
 ```
 
 Pass `fork=` / `upstream=` arguments straight through. Never inspect or guess at remotes yourself.
@@ -41,14 +44,14 @@ Pass `fork=` / `upstream=` arguments straight through. Never inspect or guess at
 | exit | what you do |
 |---|---|
 | 0 | go on - the pass reaches the upstream through `upstream_location`, a remote's name or a URL, so never add a remote for it |
-| 4 | ask which repository is the fork (options from `git remote -v`), write `fork_repository = "<owner/repo>"` to a scratchpad file, save it with `"${BASSTLER_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" --source <file> --destination .claude/personal/stack.toml --message "record which repository is my fork"`, re-run |
-| 11 | ask for the upstream, save it with `"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps configure-upstream --repository <owner/repo>`, re-run |
+| 4 | ask which repository is the fork (options from `git remote -v`), write `fork_repository = "<owner/repo>"` to a scratchpad file, save it with `"${CLAUDE_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" --source <file> --destination .claude/personal/stack.toml --message "record which repository is my fork"`, re-run |
+| 11 | ask for the upstream, save it with `"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps configure-upstream --repository <owner/repo>`, re-run |
 | other | stop and report |
 
 ## 2. Prepare
 
 ```bash
-"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance prepare [--stacked-on <branch>]
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" maintenance prepare [--stacked-on <branch>]
 ```
 
 Pass a `stacked-on=` argument through as `--stacked-on`, here and in step 3. The pass then covers
@@ -68,8 +71,8 @@ stderr says why:
 - *no `basstler/upstream-reviews` branch*: install it, then re-run:
 
   ```bash
-  source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-  "${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
+  source "${CLAUDE_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+  "${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
   ```
 
 - *no run started*: Actions are off on the fork. Give the user the link stderr names, then read
@@ -116,7 +119,7 @@ request. Write an entry for every listed number; both fields are optional.
 ## 3. Run the pass
 
 ```bash
-"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance run-report [--stacked-on <branch>] [--summaries <the file>]
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" maintenance run-report [--stacked-on <branch>] [--summaries <the file>]
 ```
 
 It exports a fresh board, fast-forwards, restacks, comments on and labels conflicts, records the
@@ -146,7 +149,7 @@ pass: `board --write`, then `fast-forward`, `restack`, `promote`, or `checks` fo
 Before any push you make by hand:
 
 ```bash
-"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" stack check-move \
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" stack check-move \
   --action push --source <branch> --destination <branch> --destination-remote <fork-remote>
 ```
 

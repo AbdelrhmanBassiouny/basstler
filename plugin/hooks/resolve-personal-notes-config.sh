@@ -19,6 +19,13 @@ export BASSTLER_PLUGIN_ROOT="${PLUGIN_ROOT}"
 # plugin lives outside the project it serves.
 PROJECT_ROOT="${CLAUDE_PROJECT_DIR:-$(git rev-parse --show-toplevel 2>/dev/null || pwd)}"
 PROJECT_ROOT="$(cd "${PROJECT_ROOT}" && pwd)"
+# Every answer below is about a git repository, so anywhere else fails closed rather
+# than reporting plausible rows about nothing. The status is
+# basstler.exit_codes.ShellConfigurationExitCode.NOT_IN_REPOSITORY.
+if [ "$(git -C "${PROJECT_ROOT}" rev-parse --is-inside-work-tree 2>/dev/null)" != true ]; then
+  echo "basstler: ${PROJECT_ROOT} is not inside a git work tree, so nothing was checked - run this from the project's checkout" >&2
+  exit 78
+fi
 CLAUDE_LOCAL_MD="${PROJECT_ROOT}/CLAUDE.local.md"
 
 # Every caller also does `git` operations (config, fetch, worktree, branch)

@@ -71,7 +71,8 @@ nothing of basstler's:
 
 A project that wants every contributor to share the answer commits
 `upstream_repository = "<owner>/<name>"` in `.claude/basstler/stack.toml` instead.
-`check-setup.sh --require-upstream` reports whether either names one.
+`check-setup.sh --require-upstream` reports whether either names one; add
+`--only stack_upstream` to check that alone, so no unrelated row decides the answer.
 
 `/upstream-reviews` reads the upstream in your fork's own Actions, from a branch of
 basstler's that shares no history with the project - so neither the project nor your
