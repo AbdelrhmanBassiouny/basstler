@@ -11,7 +11,7 @@ from __future__ import annotations
 import os
 import sys
 from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 from enum import StrEnum
 from http import HTTPStatus
@@ -22,7 +22,11 @@ from cyclopts import App
 
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.client import GitHubAttemptReader, GitHubRestClient
-from basstler.github.exceptions import GitHubCallFailed, GitHubRequestFailed
+from basstler.github.exceptions import (
+    GitHubCallFailed,
+    GitHubCredentialRejected,
+    GitHubRequestFailed,
+)
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
@@ -38,45 +42,34 @@ from basstler.setup.report import CheckResult, CheckStatus
 from basstler.setup.steps import resolve_repository
 from basstler.upstream_reviews.vocabulary import CheckOutcome, JSONModel
 
-# %% the credential the check reads GitHub with
+# %% a read GitHub refused
 
 
 @dataclass(frozen=True)
-class CheckCredential:
+class ReadRefusal:
     """
-    The credential the check reads GitHub with, named so a refusal says whose it was.
-    """
-
-    variable: GitHubCredentialVariable | None
-    """
-    The variable holding the token, ``None`` when it comes from ``gh``'s login.
+    A read of GitHub the check could not make, explained on one report line.
     """
 
-    @classmethod
-    def in_use(cls) -> CheckCredential:
-        """
-        :return: The credential :class:`GitHubRestClient` authenticates with here.
-        """
-        return cls(GitHubCredentialVariable.first_set())
+    failure: GitHubCallFailed
+    """
+    Why the read failed.
+    """
 
-    def explain(self, failure: GitHubCallFailed) -> str:
+    def describe(self) -> str:
         """
-        :param failure: Why a read with this credential failed.
-        :return: The failure, naming the credential and, when GitHub rejects it, that
-            it is not :attr:`PlanSiteSecret.TOKEN`.
+        :return: The failure, and that a rejected token is not
+            :attr:`PlanSiteSecret.TOKEN`, without line breaks.
         """
-        if not isinstance(failure, GitHubRequestFailed):
-            return str(failure)
-        credential = (
-            "gh's login" if self.variable is None else f"the token in {self.variable}"
-        )
-        if failure.status == HTTPStatus.UNAUTHORIZED:
-            return (
-                f"GitHub rejects {credential} as invalid or expired (HTTP "
-                f"{failure.status}); it is this session's own credential, not the "
-                f"{PlanSiteSecret.TOKEN} secret"
+        parts = [self.failure.error_message()]
+        if isinstance(self.failure, GitHubCredentialRejected):
+            parts.append(
+                f"it is this session's own credential, not the {PlanSiteSecret.TOKEN} "
+                "secret"
             )
-        return f"GitHub refused {credential} with HTTP {failure.status}"
+        parts.append(self.failure.suggest_correction())
+        # A report row is one line, and GitHub's error bodies may span several.
+        return " ".join("; ".join(part for part in parts if part).split())
 
 
 # %% the token each repository stores
@@ -190,7 +183,7 @@ class TokenSecret(JSONModel):
             case SecretState.UNREADABLE:
                 return (
                     f"whether {name} stores {PlanSiteSecret.TOKEN} could not be read: "
-                    f"{CheckCredential.in_use().explain(self.refusal)}"
+                    f"{ReadRefusal(self.refusal).describe()}"
                 )
 
 
@@ -337,11 +330,6 @@ class UnreadableDispatch(DispatchReading):
     Why the listing failed.
     """
 
-    credential: CheckCredential = field(default_factory=CheckCredential.in_use)
-    """
-    The credential the listing was read with.
-    """
-
     @property
     def status(self) -> CheckStatus:
         return CheckStatus.UNVERIFIED
@@ -349,7 +337,7 @@ class UnreadableDispatch(DispatchReading):
     def describe(self) -> str:
         return (
             f"the dispatch runs of {self.repository.full_name} could not be read: "
-            f"{self.credential.explain(self.failure)} - read them at "
+            f"{ReadRefusal(self.failure).describe()} - read them at "
             f"{self.repository.url}/actions/workflows/{DispatchWorkflow.location.name}"
         )
 

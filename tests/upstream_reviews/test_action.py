@@ -45,6 +45,7 @@ from basstler.upstream_reviews.action.recording import (
 )
 from basstler.upstream_reviews.action.run import ActionRun
 from basstler.github.client import GitHubReader
+from basstler.github.credential import CredentialOrigin
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.upstream_reviews.clients import (
     GitHubCommandLineClient,
@@ -471,7 +472,11 @@ class ListedRuns(GitHubReader):
         self.paths.append(path)
         if self.runs is None:
             raise GitHubRequestFailed(
-                status=HTTPStatus.FORBIDDEN, detail="", method="GET", path=path
+                status=HTTPStatus.FORBIDDEN,
+                detail="",
+                method="GET",
+                path=path,
+                credential_origin=CredentialOrigin.GIVEN,
             )
         return {"workflow_runs": self.runs}
 

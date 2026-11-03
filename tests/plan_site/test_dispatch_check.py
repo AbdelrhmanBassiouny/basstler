@@ -14,6 +14,7 @@ import pytest
 
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.client import GitHubAttemptReader, GitHubResponse, HttpMethod
+from basstler.github.credential import CredentialOrigin
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
@@ -22,11 +23,11 @@ from basstler.personal_notes.branch import PersonalNotesLocation
 from basstler.plan_site import dispatch_check
 from basstler.plan_site.dispatch_check import (
     UNVERIFIED_PREFIX,
-    CheckCredential,
     DispatchCheck,
     DispatchReading,
     DispatchState,
     FailureAfterSuccessCause,
+    ReadRefusal,
     RepositoryDispatch,
     TokenSecret,
     UnreadableDispatch,
@@ -95,6 +96,7 @@ def refused(repository: Repository, status: HTTPStatus) -> GitHubResponse:
             detail="",
             method=HttpMethod.GET,
             path=TokenSecret.path(repository),
+            credential_origin=CredentialOrigin.GIVEN,
         ),
     )
 
@@ -103,15 +105,16 @@ def runs_refused(repository: Repository, status: HTTPStatus) -> GitHubResponse:
     """
     :param repository: The repository whose dispatch runs are asked for.
     :param status: The status GitHub refuses with.
-    :return: The refusal.
+    :return: The refusal of a request made with the token in ``GH_TOKEN``.
     """
     return GitHubResponse(
         None,
-        failure=GitHubRequestFailed(
+        failure=GitHubRequestFailed.for_status(
             status=status,
             detail="",
             method=HttpMethod.GET,
             path=RunListing.path(repository, NOTES_BRANCH),
+            credential_origin=GitHubCredentialVariable.GH_TOKEN,
         ),
     )
 
@@ -331,19 +334,16 @@ def test_runs_that_cannot_be_read_leave_the_dispatch_unverified():
     assert reading.status is CheckStatus.UNVERIFIED
 
 
-def test_a_rejected_session_token_is_named_and_told_apart_from_the_secret(
-    monkeypatch: pytest.MonkeyPatch,
-):
-    monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, "an-invalid-token")
+def test_a_rejected_session_token_is_named_and_told_apart_from_the_secret():
+    """
+    A rejected session token is reported by the failure and told apart from the secret.
+    """
     reading = reading_with_runs_refused(HTTPStatus.UNAUTHORIZED)
 
-    explanation = CheckCredential(GitHubCredentialVariable.GH_TOKEN).explain(
-        reading.failure
-    )
+    description = reading.describe()
 
-    assert explanation in reading.describe()
-    assert GitHubCredentialVariable.GH_TOKEN in explanation
-    assert PlanSiteSecret.TOKEN in explanation
+    assert reading.failure.error_message() in description
+    assert PlanSiteSecret.TOKEN in description
 
 
 # %% every repository the plan site publishes
@@ -493,6 +493,9 @@ def test_a_repository_needing_setup_outranks_one_that_cannot_be_read():
 
 
 def test_the_recorded_site_repository_is_named_in_the_command():
+    """
+    The publication command names the site repository the notes branch records.
+    """
     site = SiteRepository(Repository("An-Owner", "a-site"))
     check = DispatchCheck(
         [
@@ -508,3 +511,21 @@ def test_the_recorded_site_repository_is_named_in_the_command():
         f"{PublicationOption.SITE_REPOSITORY} {site.repository.full_name}"
         in check.result().detail
     )
+
+
+# %% a read GitHub refused
+
+
+def test_a_refusal_with_a_multi_line_body_is_reported_on_one_line():
+    """
+    A refusal whose body spans several lines still fits one report row.
+    """
+    failure = GitHubRequestFailed.for_status(
+        status=HTTPStatus.FORBIDDEN,
+        detail="first line\nsecond line",
+        method=HttpMethod.GET,
+        path=TokenSecret.path(NOTES_REPOSITORY),
+        credential_origin=CredentialOrigin.GIVEN,
+    )
+
+    assert "\n" not in ReadRefusal(failure).describe()

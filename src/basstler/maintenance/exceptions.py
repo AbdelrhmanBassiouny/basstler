@@ -15,15 +15,12 @@ from basstler.exceptions import DataclassException
 
 
 @dataclass
-class ExternalCallFailed(RuntimeError):
+class ExternalCallFailed(DataclassException, RuntimeError):
     """
     Base for a call to git or GitHub that this pass depended on and did not get.
 
-    Both carry the same three things under different names - what was called, the
-    status it came back with, and what it said - so they say so once here and differ
-    only in how they name the call. Mirrors ``krrood``'s dataclass-exception idiom
-    (typed context fields, an abstract message composed by the base) without importing
-    it, since this module is deliberately dependency-free.
+    Both carry what was called, the status it came back with and what it said, and
+    differ only in how they name the call.
     """
 
     status: int
@@ -39,9 +36,11 @@ class ExternalCallFailed(RuntimeError):
         """:return: The call that failed, named the way its own caller named it."""
         raise NotImplementedError
 
-    def __str__(self) -> str:
-        """:return: The call, its status, and the reason given."""
+    def error_message(self) -> str:
         return f"{self.call} failed with {self.status}: {self.detail}"
+
+    def suggest_correction(self) -> str:
+        return ""
 
 
 @dataclass

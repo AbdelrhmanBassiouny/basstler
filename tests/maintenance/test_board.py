@@ -25,6 +25,7 @@ from basstler.maintenance.board import (
 from basstler.upstream_reviews.vocabulary import RollupState
 from basstler.maintenance.commands import BoardCommand, MaintenancePass
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
+from basstler.github.credential import CredentialOrigin
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.maintenance.github import PullRequestReader
 from basstler.maintenance.description import (
@@ -356,12 +357,20 @@ class UnreadableRepository(PullRequestReader):
 
     def open_pull_requests(self) -> list[dict]:
         raise GitHubRequestFailed(
-            status=HTTPStatus.FORBIDDEN, detail="", method="GET", path="/pulls"
+            status=HTTPStatus.FORBIDDEN,
+            detail="",
+            method="GET",
+            path="/pulls",
+            credential_origin=CredentialOrigin.GIVEN,
         )
 
     def pull_request(self, number: int) -> dict:
         raise GitHubRequestFailed(
-            status=HTTPStatus.FORBIDDEN, detail="", method="GET", path="/pulls"
+            status=HTTPStatus.FORBIDDEN,
+            detail="",
+            method="GET",
+            path="/pulls",
+            credential_origin=CredentialOrigin.GIVEN,
         )
 
 

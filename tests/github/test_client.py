@@ -12,7 +12,9 @@ import pytest
 
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.client import GitHubRestClient, HttpMethod
+from basstler.github.credential import CredentialOrigin, GitHubCredential
 from basstler.github.exceptions import (
+    GitHubCredentialRejected,
     GitHubCredentialUnavailableError,
     GitHubRequestFailed,
     GitHubUnreachableError,
@@ -135,6 +137,41 @@ def test_a_refused_call_raises_with_its_status_and_request_line(api_server, clie
     )
 
 
+def test_a_rejected_credential_is_its_own_failure(api_server, client):
+    """
+    A 401 is a :class:`GitHubCredentialRejected`, not only a refused call.
+    """
+    api_server.responses["GET /user"] = CannedResponse(
+        None, status=HTTPStatus.UNAUTHORIZED
+    )
+
+    with pytest.raises(GitHubCredentialRejected):
+        client.get("/user")
+
+
+def test_a_refusal_names_a_given_credential(client):
+    """
+    A refusal of a client given its token says the request used that token.
+    """
+    response = client.attempt_get("/repos/o/r/pulls/404")
+
+    assert response.failure.credential_origin is CredentialOrigin.GIVEN
+
+
+def test_a_refusal_names_the_variable_the_credential_came_from(
+    monkeypatch, no_token_variables, api_server
+):
+    """
+    A refusal says which variable held the token the request used.
+    """
+    monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, TOKEN)
+    client = GitHubRestClient(api_root=api_server.root)
+
+    response = client.attempt_get("/repos/o/r/pulls/404")
+
+    assert response.failure.credential_origin is GitHubCredentialVariable.GH_TOKEN
+
+
 # %% the credential
 
 
@@ -169,19 +206,29 @@ def no_token_variables(monkeypatch):
 def test_the_credential_comes_from_the_first_token_variable_set(
     monkeypatch, no_token_variables
 ):
+    """
+    The credential is the first token variable set, and names that variable.
+    """
     monkeypatch.setenv(GitHubCredentialVariable.GITHUB_TOKEN, TOKEN)
 
-    assert GitHubRestClient().credential == TOKEN
+    assert GitHubRestClient().credential == GitHubCredential(
+        TOKEN, GitHubCredentialVariable.GITHUB_TOKEN
+    )
 
 
 def test_with_no_token_variable_the_credential_comes_from_gh(
     monkeypatch, no_token_variables, stub_bin
 ):
+    """
+    Without a token variable, the credential is gh's login.
+    """
     stub_bin.install(GitHubExecutable.COMMAND_LINE)
     monkeypatch.setenv(SearchPathVariable.EXECUTABLE_SEARCH_PATH, str(stub_bin.path))
     monkeypatch.setenv(StubEnvironmentVariable.AUTH_TOKEN, TOKEN)
 
-    assert GitHubRestClient().credential == TOKEN
+    assert GitHubRestClient().credential == GitHubCredential(
+        TOKEN, CredentialOrigin.GH_LOGIN
+    )
 
 
 def test_with_no_token_variable_and_gh_logged_out_there_is_no_credential(

@@ -5,10 +5,13 @@ The failures of a call to the GitHub REST API.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from http import HTTPStatus
 
 from basstler.class_property import classproperty
+from basstler.environment import GitHubCredentialVariable
 from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.github.credential import CredentialOrigin
 from basstler.maintenance.exceptions import ExternalCallFailed
 
 
@@ -37,7 +40,7 @@ class GitHubCredentialUnavailableError(CommandFailure, RuntimeError):
 
 
 @dataclass
-class GitHubCallFailed(CommandFailure):
+class GitHubCallFailed(CommandFailure, DataclassException):
     """
     Base for a call to the API that did not succeed.
     """
@@ -68,9 +71,82 @@ class GitHubRequestFailed(GitHubCallFailed, ExternalCallFailed):
     Raised when the API refuses a call.
     """
 
+    credential_origin: GitHubCredentialVariable | CredentialOrigin
+    """
+    Where the token the call authenticated with came from.
+    """
+
+    @classmethod
+    def for_status(
+        cls,
+        status: int,
+        detail: str,
+        method: str,
+        path: str,
+        credential_origin: GitHubCredentialVariable | CredentialOrigin,
+    ) -> GitHubRequestFailed:
+        """
+        :return: The refusal, a :class:`GitHubCredentialRejected` for a 401.
+        """
+        refusal = GitHubCredentialRejected if status == HTTPStatus.UNAUTHORIZED else cls
+        return refusal(
+            status=status,
+            detail=detail,
+            method=method,
+            path=path,
+            credential_origin=credential_origin,
+        )
+
+    @property
+    def credential(self) -> str:
+        """
+        :return: The token the call authenticated with, named by where it came from.
+        """
+        if isinstance(self.credential_origin, GitHubCredentialVariable):
+            return f"the token in {self.credential_origin}"
+        return self.credential_origin
+
+    def error_message(self) -> str:
+        """
+        :return: :meth:`ExternalCallFailed.error_message`, naming the credential.
+        """
+        return (
+            f"{self.call} failed with {self.status} using {self.credential}: "
+            f"{self.detail}"
+        )
+
 
 @dataclass
-class GitHubUnreachableError(GitHubCallFailed, DataclassException, ConnectionError):
+class GitHubCredentialRejected(GitHubRequestFailed):
+    """
+    Raised when the API rejects the call's token as invalid or expired.
+    """
+
+    def error_message(self) -> str:
+        """
+        :return: That GitHub rejects the credential, unlike
+            :meth:`GitHubRequestFailed.error_message`.
+        """
+        return (
+            f"GitHub rejects {self.credential} as invalid or expired: {self.call} "
+            f"failed with {self.status}"
+        )
+
+    def suggest_correction(self) -> str:
+        """
+        :return: How to renew the credential, where
+            :meth:`ExternalCallFailed.suggest_correction` has no advice.
+        """
+        return (
+            f"Set a valid token in {self.credential_origin} or log in again with "
+            "`gh auth login`."
+            if isinstance(self.credential_origin, GitHubCredentialVariable)
+            else "Log in again with `gh auth login`, or give the client a valid token."
+        )
+
+
+@dataclass
+class GitHubUnreachableError(GitHubCallFailed, ConnectionError):
     """
     Raised when a call gets no answer from the API, such as when the network is down.
     """
