@@ -147,3 +147,10 @@ items:
   notes: Each claude plugin eval case runs N times on the same fixture state; CI fails when the recorded verdict
     JSON differs between runs, beside short-skills' token and time budgets. Moved here because basstler-v3 is at
     its item limit.
+
+- id: described-exit-codes
+  title: "Every exit code prints what went wrong"
+  branch: null
+  track: guards
+  depends_on: []
+  status: not started
