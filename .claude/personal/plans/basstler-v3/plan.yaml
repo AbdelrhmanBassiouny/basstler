@@ -174,26 +174,29 @@ items:
   - item-brief
   - upstream-promotion
   - upstream-review-mirror
+  - mcp-server
   status: not started
-  notes: >
-    Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode replaces the
-    auto/plan/ask execution modes. claude plugin eval cases fail CI when a skill run exceeds its
-    token or wall-time budget.
+  notes: 'Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode replaces the auto/plan/ask
+    execution modes. claude plugin eval cases fail CI when a skill run exceeds its token or wall-time budget.
 
-    Eval cases replay the basstler-reliability report: wrong working directory, mergeable_state
-    unknown, plan_site failing while stack_upstream is ok.
+    Eval cases replay the basstler-reliability report: wrong working directory, mergeable_state unknown, plan_site
+    failing while stack_upstream is ok.
+
+    '
 - id: mcp-server
-  title: An MCP server over the core library, for clients without the plugin's bin/
+  title: An MCP server is the way skills call basstler, with typed tools
   branch: null
   pull_request_number: null
   track: cutover
   depends_on:
-  - short-skills
+  - item-brief
+  - plugin-bin-probe
   status: not started
-  notes: A FastMCP server (the official mcp SDK), shipped in the plugin's .mcp.json, so claude.ai and Cowork, which
-    do not install a plugin's bin/, can use basstler. 5 to 8 tools, each returning the same brief or recording the
-    same result as a CLI command; never thin API wrappers. Adds the mcp dependency (approved 2026-11-01). Its tool
-    definitions count against the skills' eval budgets.
+  notes: 'A FastMCP server (the official mcp SDK) in the plugin''s .mcp.json, used by every client: 5 to 8 tools
+    with output schemas, each returning a brief or recording a result, so a skill never composes a shell command.
+    The CLI stays for scripts and Actions. Never thin API wrappers. A decision only the user makes is asked through
+    MCP elicitation. Adds the mcp dependency (approved 2026-11-01); tool definitions count against eval budgets.
+    Made the main path 2026-11-03 (owner).'
 - id: slim-session-start
   title: Session start only writes the session's context
   branch: null
@@ -232,6 +235,7 @@ items:
   status: not started
   notes: 'Docs: claude.ai skips a plugin with a top-level bin/, even one distributed through org settings (how basstler
     reaches cloud sessions); CLAUDE_PLUGIN_DATA and CLAUDE_PLUGIN_OPTION_* are not set for Bash commands; a sync
-    never prompts for userConfig. Publish a throwaway probe plugin with a bin/ script and one userConfig option,
-    check it in a fresh cloud session, and only if both work put the basstler command behind bin/ (venv in CLAUDE_PLUGIN_DATA,
-    run with uv) and replace personal-notes.env with userConfig; otherwise close with the finding.'
+    never prompts for userConfig. Publish a throwaway probe plugin with a bin/ script, a .mcp.json server and one
+    userConfig option, check it in a fresh cloud session, and only if both work put the basstler command behind
+    bin/ (venv in CLAUDE_PLUGIN_DATA, run with uv) and replace personal-notes.env with userConfig; otherwise close
+    with the finding.'
