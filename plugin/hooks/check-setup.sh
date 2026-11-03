@@ -20,15 +20,17 @@ set -euo pipefail
 #
 # Output is one tab-separated "<check>\t<status>\t<detail>" row per check, in
 # the order the checks have to be fixed in (a later one can depend on an
-# earlier one being satisfied). Three statuses:
+# earlier one being satisfied). Five statuses:
 #   ok           - nothing to do
 #   needs-setup  - something is missing; <detail> says what
 #   in-progress  - another process is setting it up right now; wait for it
 #                  rather than doing it again
+#   unverified   - nothing the check could read decides it yet; <detail> says
+#                  why and how to settle it. Never a pass
 #   info         - context for whoever is reading, never a pass/fail
-# Exit code is 0 when no row is needs-setup or in-progress, 1 otherwise - so a caller can
-# take the fast path ("everything is already fine") on the exit code alone,
-# without parsing anything.
+# Exit code is 0 when no row is needs-setup, in-progress or unverified, 1
+# otherwise - so a caller can take the fast path ("everything is already fine")
+# on the exit code alone, without parsing anything.
 #
 # TSV rather than JSON for the same reason the plan branch index is TSV (see
 # plan_id_for_branch in ./resolve-personal-notes-config.sh): a tab can't occur
@@ -86,8 +88,8 @@ report_upstream() {
 }
 
 # report: prints one TSV row, and remembers that the overall run failed if the
-# status is needs-setup or in-progress, so the exit code never has to be tracked by hand at
-# each call site.
+# status is needs-setup, in-progress or unverified, so the exit code never has to be
+# tracked by hand at each call site.
 # report_upstream_reviews_action: prints the upstream_reviews_action row,
 # checked only once an upstream is named, since only /upstream-reviews runs the
 # Action. Not
@@ -123,17 +125,20 @@ report_upstream_reviews_action() {
 }
 
 # report_plan_site: whether every repository on the plan site starts its build, as
-# PLAN_SITE_DISPATCH_CHECK_MODULE reads their tokens and dispatch runs from GitHub; info
-# when GitHub cannot be read, so the publication command re-checks it.
+# PLAN_SITE_DISPATCH_CHECK_MODULE reads their tokens and dispatch runs from GitHub;
+# unverified, with the check's own error, when it cannot read GitHub at all.
 report_plan_site() {
   local publish_command="${BASSTLER_PYTHON} -m ${PLAN_SITE_PUBLICATION_MODULE}"
-  local site_url dispatch_fields dispatch_status dispatch_detail
+  local site_url dispatch_fields dispatch_status dispatch_detail dispatch_error
   if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_SITE_DISPATCH_WORKFLOW_PATH}" 2>/dev/null; then
-    if ! dispatch_fields="$("${BASSTLER_PYTHON}" -m "${PLAN_SITE_DISPATCH_CHECK_MODULE}" 2>/dev/null)"; then
-      report plan_site info \
-        "'${NOTES_BRANCH}' has the dispatch workflow, but its runs could not be read from GitHub - to check whether it starts the build, run: ${publish_command}"
+    dispatch_error="$(mktemp)"
+    if ! dispatch_fields="$("${BASSTLER_PYTHON}" -m "${PLAN_SITE_DISPATCH_CHECK_MODULE}" 2>"${dispatch_error}")"; then
+      report plan_site unverified \
+        "not verified - '${NOTES_BRANCH}' has the dispatch workflow, but its runs could not be read from GitHub ($(grep -v '^Suggestion: ' "${dispatch_error}" | tail -n 1)) - read them with the session's GitHub tools, or run: ${publish_command}"
+      rm -f "${dispatch_error}"
       return 0
     fi
+    rm -f "${dispatch_error}"
     IFS=$'\t' read -r dispatch_status dispatch_detail <<< "${dispatch_fields}"
     report plan_site "${dispatch_status}" "${dispatch_detail}"
     return 0
@@ -151,7 +156,7 @@ report_plan_site() {
 report() {
   local check="$1" status="$2" detail="$3"
   case "${status}" in
-    needs-setup|in-progress) EXIT_CODE=1 ;;
+    needs-setup|in-progress|unverified) EXIT_CODE=1 ;;
   esac
   printf '%s\t%s\t%s\n' "${check}" "${status}" "${detail}"
 }
@@ -305,6 +310,29 @@ elif [ -z "${MISSING_DEPENDENCIES}" ]; then
 else
   report package_dependencies needs-setup \
     "not installed for ${BASSTLER_PYTHON}:${MISSING_DEPENDENCIES// / } - a session start installs them, or run: pip --python ${BASSTLER_PYTHON} install '$(basstler_package_source)'"
+fi
+
+# %% the package's version
+
+# Context, never a verdict: a session start installs the latest release by
+# itself, so this only answers which basstler the session runs.
+if ! INSTALLED_VERSION="$("${BASSTLER_PYTHON}" -m "${BASSTLER_COMMAND_MODULE}" --version 2>/dev/null)"; then
+  INSTALLED_VERSION="of unknown version"
+fi
+if [ -n "${BASSTLER_CHECKOUT}" ]; then
+  INSTALLED_SOURCE="run from the checkout ${BASSTLER_CHECKOUT}"
+else
+  INSTALLED_SOURCE="installed at $(basstler_branch_or_tag)"
+fi
+if ! LATEST_RELEASE="$(latest_basstler_release)"; then
+  report basstler_version info \
+    "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}); the latest release could not be read from ${BASSTLER_REPOSITORY_URL}"
+elif [ "v${INSTALLED_VERSION}" = "${LATEST_RELEASE}" ]; then
+  report basstler_version info \
+    "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}), the latest release"
+else
+  report basstler_version info \
+    "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}); the latest release is ${LATEST_RELEASE}"
 fi
 
 # %% the result of it all working

@@ -18,6 +18,7 @@ import basstler
 from basstler.locations import PluginLocation, ProjectLocation, WorkflowLocation
 from basstler.exit_codes import SetupCheckExitCode
 from basstler.plan_site import dispatch_check, publication
+from basstler.plan_site.dispatch_check import UNVERIFIED_PREFIX
 from basstler.plan_site.hub import HubFileKey
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 
@@ -180,7 +181,7 @@ def test_a_listed_repository_without_the_dispatch_workflow_names_the_site_it_is_
     assert publication.__name__ in plan_site.detail
 
 
-def test_a_dispatch_workflow_whose_runs_cannot_be_read_says_how_to_check_them(
+def test_a_dispatch_workflow_whose_runs_cannot_be_read_is_not_verified(
     check_setup_repository: ScratchRepository,
 ):
     check_setup_repository.update_notes_branch_file(
@@ -190,7 +191,9 @@ def test_a_dispatch_workflow_whose_runs_cannot_be_read_says_how_to_check_them(
     report = run_check_setup(check_setup_repository)
 
     plan_site = report.results[SetupCheck.PLAN_SITE]
-    assert plan_site.status == CheckStatus.INFORMATIONAL
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+    assert plan_site.status == CheckStatus.UNVERIFIED
+    assert plan_site.detail.startswith(UNVERIFIED_PREFIX)
     assert publication.__name__ in plan_site.detail
 
 
@@ -233,6 +236,32 @@ def test_the_dispatch_workflow_path_matches_the_shell_configuration(
     assert check_setup_repository.configuration_value(
         "PLAN_SITE_DISPATCH_WORKFLOW_PATH"
     ) == str(WorkflowLocation.PLAN_SITE_DISPATCH)
+
+
+# %% the package's version
+
+
+def test_the_latest_release_is_reported_beside_the_installed_package(
+    check_setup_repository: ScratchRepository,
+):
+    latest_release = "v0.10.0"
+    check_setup_repository.run_git("tag", latest_release)
+
+    report = run_check_setup(check_setup_repository)
+
+    version = report.results[SetupCheck.BASSTLER_VERSION]
+    assert version.status == CheckStatus.INFORMATIONAL
+    assert latest_release in version.detail
+
+
+def test_a_latest_release_that_cannot_be_read_says_where_it_was_looked_for(
+    check_setup_repository: ScratchRepository,
+):
+    report = run_check_setup(check_setup_repository)
+
+    version = report.results[SetupCheck.BASSTLER_VERSION]
+    assert version.status == CheckStatus.INFORMATIONAL
+    assert str(check_setup_repository.project_root) in version.detail
 
 
 # %% who commits here would be authored as

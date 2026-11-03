@@ -8,17 +8,19 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import yaml
 
 from basstler.class_property import classproperty
 from basstler.environment import GitHubCredentialVariable
 from basstler.locations import WorkflowLocation
-from basstler.plan_site.site_repository import SiteRepository
 from basstler.render_common import create_template_environment
 from basstler.repository import Repository
 from basstler.upstream_reviews.vocabulary import BasstlerSource, JSONModel
+
+if TYPE_CHECKING:
+    from basstler.plan_site.site_repository import SiteRepository
 
 # %% names
 
@@ -48,6 +50,17 @@ class PlanSiteJob(StrEnum):
     DISPATCH = "dispatch"
     """
     The dispatch workflow's job, which starts the site workflow.
+    """
+
+
+class GitHubCommandLineOption(StrEnum):
+    """
+    The ``gh`` options the plan site's workflows pass.
+    """
+
+    REPOSITORY = "--repo"
+    """
+    The ``owner/name`` repository a command acts on.
     """
 
 
@@ -381,6 +394,7 @@ class DispatchWorkflow(PlanSiteWorkflow):
     def template_values(self) -> dict[str, Any]:
         return {
             "job": PlanSiteJob.DISPATCH,
+            "repository_option": GitHubCommandLineOption.REPOSITORY,
             "notes_repository": self.notes_repository.full_name,
             "notes_branch": self.notes_branch,
             "site_repository": self.site.repository.full_name,

@@ -12,7 +12,9 @@ from pathlib import Path
 
 import pytest
 
+from basstler.environment import GitHubCredentialVariable
 from basstler.github.client import GitHubAttemptReader, GitHubResponse, HttpMethod
+from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.locations import ClaudeCodeVariable, ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
@@ -20,20 +22,27 @@ from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.personal_notes.branch import PersonalNotesLocation
 from basstler.plan_site import dispatch_check
 from basstler.plan_site.dispatch_check import (
+    UNVERIFIED_PREFIX,
     DispatchCheck,
+    DispatchReading,
     DispatchState,
     FailureAfterSuccessCause,
+    ReadRefusal,
     RepositoryDispatch,
     TokenSecret,
+    UnreadableDispatch,
     published_repositories,
 )
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import PlanHub
+from basstler.plan_site.publication import PublicationOption
 from basstler.plan_site.run_listing import RunListing
-from basstler.plan_site.workflows import DispatchWorkflow
+from basstler.plan_site.site_repository import SiteRepository
+from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
 from basstler.repository import Repository
 from basstler.setup.report import CheckStatus
 from basstler.setup.steps import PersonalNotesSetting
+from basstler.upstream_reviews.vocabulary import CheckOutcome
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName
@@ -87,6 +96,25 @@ def refused(repository: Repository, status: HTTPStatus) -> GitHubResponse:
             detail="",
             method=HttpMethod.GET,
             path=TokenSecret.path(repository),
+            credential_origin=CredentialProvider.CALLER,
+        ),
+    )
+
+
+def runs_refused(repository: Repository, status: HTTPStatus) -> GitHubResponse:
+    """
+    :param repository: The repository whose dispatch runs are asked for.
+    :param status: The status GitHub refuses with.
+    :return: The refusal of a request made with the token in ``GH_TOKEN``.
+    """
+    return GitHubResponse(
+        None,
+        failure=GitHubRequestFailed.for_status(
+            status=status,
+            detail="",
+            method=HttpMethod.GET,
+            path=RunListing.path(repository, NOTES_BRANCH),
+            credential_origin=GitHubCredentialVariable.GH_TOKEN,
         ),
     )
 
@@ -193,12 +221,15 @@ def test_a_run_failing_after_an_earlier_success_links_that_success():
 
 
 def test_a_token_set_after_the_failed_run_waits_for_the_next_push():
+    """
+    A token set after the latest failed run is stored after failure.
+    """
     dispatch = dispatch_of(
         DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
         stored(DatasetLocation.PLAN_SITE_TOKEN_STORED_AFTER_FAILURE),
     )
 
-    assert dispatch.state is DispatchState.TOKEN_STORED_SINCE_FAILURE
+    assert dispatch.state is DispatchState.TOKEN_STORED_AFTER_FAILURE
 
 
 def test_a_dispatch_that_never_ran_is_reported():
@@ -230,6 +261,89 @@ def test_a_failed_run_is_linked():
     ).latest(DispatchWorkflow.location)
 
     assert latest.url in dispatch_of(listing, TOKEN_BEFORE_FAILURE).describe()
+
+
+def test_every_failed_run_is_counted():
+    """
+    Every failed run in the listing is counted.
+    """
+    listing = DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED
+    recorded = RunListing.read(runs_replaying(listing), NOTES_REPOSITORY, NOTES_BRANCH)
+
+    dispatch = dispatch_of(listing, TOKEN_BEFORE_FAILURE)
+
+    assert dispatch.runs.count(CheckOutcome.FAILURE) == len(recorded.runs)
+
+
+def test_a_failed_run_reports_the_dispatch_run_history():
+    dispatch = dispatch_of(
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED, TOKEN_BEFORE_FAILURE
+    )
+
+    assert dispatch.run_history in dispatch.describe()
+
+
+def test_a_missing_token_says_how_to_store_it():
+    description = dispatch_of(
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED,
+        refused(NOTES_REPOSITORY, HTTPStatus.NOT_FOUND),
+    ).describe()
+
+    assert (
+        f"gh secret set {PlanSiteSecret.TOKEN} --repo {NOTES_REPOSITORY.full_name}"
+        in description
+    )
+
+
+def test_a_missing_token_reports_the_dispatch_run_history():
+    dispatch = dispatch_of(
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED,
+        refused(NOTES_REPOSITORY, HTTPStatus.NOT_FOUND),
+    )
+
+    assert dispatch.run_history in dispatch.describe()
+
+
+def test_a_failed_run_says_whether_the_token_is_stored():
+    dispatch = dispatch_of(
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED, TOKEN_BEFORE_FAILURE
+    )
+
+    assert dispatch.token.describe(NOTES_REPOSITORY) in dispatch.describe()
+
+
+def reading_with_runs_refused(status: HTTPStatus) -> DispatchReading:
+    """
+    :param status: The status GitHub refuses the notes repository's runs with.
+    :return: What reading its dispatch found.
+    """
+    refusing = SecretAnsweringClient(
+        {
+            RunListing.path(NOTES_REPOSITORY, NOTES_BRANCH): runs_refused(
+                NOTES_REPOSITORY, status
+            )
+        }
+    )
+    return DispatchReading.read(refusing, refusing, NOTES_REPOSITORY, NOTES_BRANCH)
+
+
+def test_runs_that_cannot_be_read_leave_the_dispatch_unverified():
+    reading = reading_with_runs_refused(HTTPStatus.UNAUTHORIZED)
+
+    assert isinstance(reading, UnreadableDispatch)
+    assert reading.status is CheckStatus.UNVERIFIED
+
+
+def test_a_rejected_session_token_is_named_and_told_apart_from_the_secret():
+    """
+    A rejected session token is reported by the failure and told apart from the secret.
+    """
+    reading = reading_with_runs_refused(HTTPStatus.UNAUTHORIZED)
+
+    description = reading.describe()
+
+    assert reading.failure.error_message() in description
+    assert PlanSiteSecret.TOKEN in description
 
 
 # %% every repository the plan site publishes
@@ -282,17 +396,18 @@ def test_only_the_repositories_not_starting_the_build_are_named():
     assert f"{NOTES_REPOSITORY.full_name} " not in detail
 
 
-def test_a_token_waiting_for_the_next_push_is_context_rather_than_setup():
-    check = DispatchCheck(
+def test_a_token_waiting_for_the_next_push_is_not_verified():
+    result = DispatchCheck(
         [
             dispatch_of(
                 DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
                 stored(DatasetLocation.PLAN_SITE_TOKEN_STORED_AFTER_FAILURE),
             )
         ]
-    )
+    ).result()
 
-    assert check.result().status is CheckStatus.INFORMATIONAL
+    assert result.status is CheckStatus.UNVERIFIED
+    assert result.detail.startswith(UNVERIFIED_PREFIX)
 
 
 # %% the repositories the hub lists
@@ -351,3 +466,66 @@ def test_a_notes_remote_off_github_cannot_be_checked(
 
     with pytest.raises(NotesRepositoryUnresolvedError):
         dispatch_check.report_dispatch()
+
+
+def test_runs_that_cannot_be_read_are_reported_as_not_verified():
+    result = DispatchCheck(
+        [reading_with_runs_refused(HTTPStatus.UNAUTHORIZED)]
+    ).result()
+
+    assert result.status is CheckStatus.UNVERIFIED
+    assert result.detail.startswith(UNVERIFIED_PREFIX)
+
+
+def test_a_repository_needing_setup_outranks_one_that_cannot_be_read():
+    check = DispatchCheck(
+        [
+            reading_with_runs_refused(HTTPStatus.UNAUTHORIZED),
+            dispatch_of(
+                DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED,
+                refused(OTHER_REPOSITORY, HTTPStatus.NOT_FOUND),
+                OTHER_REPOSITORY,
+            ),
+        ]
+    )
+
+    assert check.result().status is CheckStatus.NEEDS_SETUP
+
+
+def test_the_recorded_site_repository_is_named_in_the_command():
+    """
+    The publication command names the site repository the notes branch records.
+    """
+    site = SiteRepository(Repository("An-Owner", "a-site"))
+    check = DispatchCheck(
+        [
+            dispatch_of(
+                DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED,
+                refused(NOTES_REPOSITORY, HTTPStatus.NOT_FOUND),
+            )
+        ],
+        site,
+    )
+
+    assert (
+        f"{PublicationOption.SITE_REPOSITORY} {site.repository.full_name}"
+        in check.result().detail
+    )
+
+
+# %% a read GitHub refused
+
+
+def test_a_refusal_with_a_multi_line_body_is_reported_on_one_line():
+    """
+    A refusal whose body spans several lines still fits one report row.
+    """
+    failure = GitHubRequestFailed.for_status(
+        status=HTTPStatus.FORBIDDEN,
+        detail="first line\nsecond line",
+        method=HttpMethod.GET,
+        path=TokenSecret.path(NOTES_REPOSITORY),
+        credential_origin=CredentialProvider.CALLER,
+    )
+
+    assert "\n" not in ReadRefusal(failure).describe()

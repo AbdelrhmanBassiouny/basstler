@@ -78,7 +78,7 @@ class SetupCheck(StrEnum):
 
     PLAN_SITE = "plan_site"
     """
-    The notes branch's workflow that starts the plan site's build on every push.
+    Every repository on the plan site storing its token and starting the site's build.
     """
 
     GIT_IDENTITY = "git_identity"
@@ -89,6 +89,11 @@ class SetupCheck(StrEnum):
     PACKAGE_DEPENDENCIES = "package_dependencies"
     """
     Every dependency the package declares being installed.
+    """
+
+    BASSTLER_VERSION = "basstler_version"
+    """
+    The installed package's version, against basstler's latest release.
     """
 
     CLAUDE_LOCAL_MD = "claude_local_md"
@@ -116,6 +121,11 @@ class CheckStatus(StrEnum):
     """
     Another process is setting it up right now, so it is waited for rather than set up
     again.
+    """
+
+    UNVERIFIED = "unverified"
+    """
+    Nothing the check could read decides it yet, so it is neither passed nor failed.
     """
 
     INFORMATIONAL = "info"

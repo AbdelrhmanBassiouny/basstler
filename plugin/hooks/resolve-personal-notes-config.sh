@@ -344,6 +344,8 @@ if [ -f "${PLUGIN_ROOT}/../pyproject.toml" ] && [ -d "${PLUGIN_ROOT}/../src/bass
   # resolve to.
   export PYTHONPATH="${BASSTLER_CHECKOUT}/src${PYTHONPATH:+:${PYTHONPATH}}"
 fi
+# basstler: the package's command tree, which prints the installed version.
+BASSTLER_COMMAND_MODULE="basstler"
 # basstler.plan_site: renders the plan site - the hub, every registered repository's
 # index, and every plan's page - from the repositories the hub file lists.
 BUILD_SITE_MODULE="basstler.plan_site"

@@ -23,6 +23,7 @@ from http.client import HTTPResponse
 from typing import Any
 
 from basstler.environment import GitHubCredentialVariable
+from basstler.github.credential import CredentialProvider, GitHubCredential
 from basstler.github.exceptions import (
     GitHubCredentialUnavailableError,
     GitHubCallFailed,
@@ -212,15 +213,17 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
     """
 
     @cached_property
-    def credential(self) -> str:
+    def credential(self) -> GitHubCredential:
         """
-        :return: The token the requests authenticate with.
+        :return: The token the requests authenticate with, and where it came from.
         :raises GitHubCredentialUnavailableError: If no token was given and neither the
             environment nor ``gh`` has one.
         """
-        token = self.token or GitHubCredentialVariable.first_token()
-        if token:
-            return token
+        if self.token:
+            return GitHubCredential(self.token, CredentialProvider.CALLER)
+        variable = GitHubCredentialVariable.first_set()
+        if variable is not None:
+            return GitHubCredential(variable.read(), variable)
         executable = shutil.which(GitHubExecutable.COMMAND_LINE)
         if executable is None:
             raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
@@ -229,7 +232,7 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
         )
         if login.returncode != 0 or not login.stdout.strip():
             raise GitHubCredentialUnavailableError(tuple(GitHubCredentialVariable))
-        return login.stdout.strip()
+        return GitHubCredential(login.stdout.strip(), CredentialProvider.GH_LOGIN)
 
     def get(self, path: str) -> Any:
         return self.attempt_get(path).raise_if_failed()
@@ -285,7 +288,7 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
             method=method,
             data=None if payload is None else json.dumps(payload).encode(),
             headers={
-                "Authorization": f"Bearer {self.credential}",
+                "Authorization": f"Bearer {self.credential.token}",
                 "Accept": "application/vnd.github+json",
                 "Content-Type": "application/json",
             },
@@ -303,11 +306,12 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
         if status >= HTTPStatus.BAD_REQUEST:
             return GitHubResponse(
                 None,
-                failure=GitHubRequestFailed(
+                failure=GitHubRequestFailed.for_status(
                     status=status,
                     detail=raw_body.decode(errors="replace"),
                     method=method,
                     path=path,
+                    credential_origin=self.credential.origin,
                 ),
             )
         return GitHubResponse(

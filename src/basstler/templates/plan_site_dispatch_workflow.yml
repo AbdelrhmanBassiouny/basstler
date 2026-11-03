@@ -28,4 +28,4 @@ jobs:
       - name: Start the build
         env:
           {{ token_variable }}: {{ '${{' }} secrets.{{ token_secret }} {{ '}}' }}
-        run: gh workflow run {{ site_workflow_name }} --repo {{ site_repository }}
+        run: gh workflow run {{ site_workflow_name }} {{ repository_option }} {{ site_repository }}

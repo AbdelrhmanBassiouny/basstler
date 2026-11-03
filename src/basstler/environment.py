@@ -11,6 +11,8 @@ from __future__ import annotations
 import os
 from enum import StrEnum
 
+from basstler.github.credential import CredentialOrigin
+
 
 class EnvironmentVariable(StrEnum):
     """
@@ -55,7 +57,7 @@ class GitVariable(EnvironmentVariable):
     """
 
 
-class GitHubCredentialVariable(EnvironmentVariable):
+class GitHubCredentialVariable(CredentialOrigin, EnvironmentVariable):
     """
     The variables a GitHub token is read from, in the order they are tried.
     """
@@ -70,13 +72,36 @@ class GitHubCredentialVariable(EnvironmentVariable):
     The token GitHub Actions hands a workflow.
     """
 
+    def describe_credential(self) -> str:
+        """
+        :return: :meth:`CredentialOrigin.describe_credential`: the token in this
+            variable.
+        """
+        return f"the token in {self}"
+
+    def suggest_renewal(self) -> str:
+        """
+        :return: :meth:`CredentialOrigin.suggest_renewal`: set a valid token in this
+            variable.
+        """
+        return f"Set a valid token in {self}."
+
+    @classmethod
+    def first_set(cls) -> GitHubCredentialVariable | None:
+        """
+        :return: The first variable holding a non-empty token, in the order they are
+            tried, or ``None`` when none does.
+        """
+        return next((variable for variable in cls if variable.read()), None)
+
     @classmethod
     def first_token(cls) -> str | None:
         """
         :return: The first non-empty token, in the order the variables are tried, or
             ``None`` when none is set.
         """
-        return next((token for variable in cls if (token := variable.read())), None)
+        variable = cls.first_set()
+        return None if variable is None else variable.read()
 
 
 class GitHubActionsVariable(EnvironmentVariable):

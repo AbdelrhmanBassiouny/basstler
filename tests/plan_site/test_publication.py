@@ -25,6 +25,7 @@ from basstler.github.client import (
     GitHubWriter,
     HttpMethod,
 )
+from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import (
     GitHubCallFailed,
     GitHubRequestFailed,
@@ -32,8 +33,10 @@ from basstler.github.exceptions import (
 )
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.publication import PlanSitePublication
+from basstler.plan_site.publication import PlanSitePublication, PublicationOption
+from basstler.plan_site.publication import app as publication_app
 from basstler.plan_site.run_listing import ListedRun, RunListing
 from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep, UserSteps
 from basstler.plan_site.site_repository import SiteRepository
@@ -334,6 +337,80 @@ def test_a_written_site_workflow_reads_back_as_the_same_workflow():
 )
 def test_the_site_is_served_from_the_repository_s_pages_address(repository, expected):
     assert SiteRepository(repository).site_url == expected
+
+
+@pytest.mark.parametrize(
+    "repository",
+    [Repository("an-owner", "plans"), Repository("an-owner", "an-owner.github.io")],
+)
+def test_a_site_address_reads_back_as_the_repository_serving_it(repository):
+    site = SiteRepository(repository)
+
+    assert SiteRepository.from_site_url(site.site_url) == site
+
+
+def test_an_address_off_github_pages_names_no_site_repository():
+    assert SiteRepository.from_site_url("https://plans.example.com/") is None
+
+
+def test_a_written_dispatch_workflow_reads_back_its_site_repository():
+    """
+    A written dispatch workflow names the site repository it was written for.
+    """
+    workflow = a_dispatch_workflow()
+
+    assert SiteRepository.from_dispatch_workflow(workflow.text) == workflow.site
+
+
+# %% the site the notes branch records
+
+
+def notes_branch_of(fork_checkout: ForkCheckout) -> RemoteBranch:
+    """
+    :param fork_checkout: The fork checkout.
+    :return: Its notes branch on ``origin``.
+    """
+    return RemoteBranch(
+        NOTES_BRANCH, GitCommandRunner(fork_checkout.project_root), RemoteName.ORIGIN
+    )
+
+
+def test_a_notes_branch_recording_no_site_names_none(fork_checkout):
+    """
+    A notes branch with neither a dispatch workflow nor a hub file records no site.
+    """
+    assert SiteRepository.recorded_on(notes_branch_of(fork_checkout)) is None
+
+
+def test_the_site_the_dispatch_workflow_starts_is_the_recorded_one(fork_checkout):
+    """
+    The dispatch workflow's site repository is the one the notes branch records.
+    """
+    workflow = DispatchWorkflow(
+        Repository("an-owner", "a-project"),
+        NOTES_BRANCH,
+        SiteRepository(Repository("An-Owner", "a-board")),
+    )
+    notes_branch = notes_branch_of(fork_checkout)
+    notes_branch.write(
+        {workflow.location.as_posix(): workflow.text}, "Add the dispatch workflow"
+    )
+
+    assert SiteRepository.recorded_on(notes_branch) == workflow.site
+
+
+def test_without_a_dispatch_workflow_the_hub_s_site_is_the_recorded_one(
+    fork_checkout,
+):
+    """
+    Without a dispatch workflow, the site the hub file names is the recorded one.
+    """
+    site = SiteRepository(Repository("an-owner", "a-board"))
+    hub = PlanHub(registry="an-owner/a-project", site_url=site.site_url)
+    notes_branch = notes_branch_of(fork_checkout)
+    notes_branch.write({ProjectLocation.PLAN_HUB.as_posix(): hub.to_text()}, "List")
+
+    assert SiteRepository.recorded_on(notes_branch) == site
 
 
 # %% the hub file
@@ -668,6 +745,7 @@ def pull_request_failures(
             detail=DatasetLocation.PULL_REQUEST_REFUSED.read_text(),
             method=HttpMethod.POST,
             path=path,
+            credential_origin=CredentialProvider.CALLER,
         ),
         GitHubUnreachableError(HttpMethod.POST, path, NETWORK_DOWN),
     ]
@@ -784,12 +862,20 @@ class RefusingRestClient(GitHubReader):
 
     def get(self, path: str):
         raise GitHubRequestFailed(
-            status=HTTPStatus.FORBIDDEN, detail="", method=HttpMethod.GET, path=path
+            status=HTTPStatus.FORBIDDEN,
+            detail="",
+            method=HttpMethod.GET,
+            path=path,
+            credential_origin=CredentialProvider.CALLER,
         )
 
     def get_pages(self, path: str):
         raise GitHubRequestFailed(
-            status=HTTPStatus.FORBIDDEN, detail="", method=HttpMethod.GET, path=path
+            status=HTTPStatus.FORBIDDEN,
+            detail="",
+            method=HttpMethod.GET,
+            path=path,
+            credential_origin=CredentialProvider.CALLER,
         )
 
 
@@ -974,3 +1060,16 @@ def test_a_rendered_step_links_the_latest_run_that_made_it_necessary(published):
     assert pending.render().splitlines()[1] == (
         f"  Latest run, {pending.latest_run.outcome}: {pending.latest_run.url}"
     )
+
+
+# %% the command line
+
+
+@pytest.mark.parametrize("option", list(PublicationOption))
+def test_the_command_takes_every_option_it_names(option):
+    """
+    The command accepts every option :class:`PublicationOption` names.
+    """
+    _, bound, _ = publication_app.parse_args([option, "a-value"])
+
+    assert list(bound.arguments.values()) == ["a-value"]
