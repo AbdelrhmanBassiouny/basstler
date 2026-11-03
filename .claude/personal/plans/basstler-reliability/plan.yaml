@@ -163,5 +163,8 @@ items:
   title: "Every command line uses cyclopts"
   branch: null
   track: guards
+  notes: >
+    Port the remaining argparse command lines to cyclopts, following basstler.stack's port in #131.
+    Requested in #131's review.
   depends_on: []
   status: not started
