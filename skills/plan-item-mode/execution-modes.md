@@ -21,8 +21,7 @@ question is only worth putting once you can say something useful about the
 item:
 
 ```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" resolve --skill <kickoff|resolve>
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_mode resolve --skill <kickoff|resolve>
 ```
 
 It prints one JSON object: `mode` (`ask` | `auto` | `plan`), `source`
@@ -38,7 +37,7 @@ To pin a mode, `/plan-item-mode <mode> [kickoff|resolve|both]` — or the script
 it calls, which takes `--skill` once per skill so pinning both is one push:
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_MODE_MODULE}" set --skill kickoff --skill resolve --mode <mode>
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_mode set --skill kickoff --skill resolve --mode <mode>
 ```
 
 This writes the personal-notes branch, so don't run it unprompted. Do run it

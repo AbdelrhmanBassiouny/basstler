@@ -16,21 +16,25 @@ references it in a line rather than restating it.
 Run this **before** the skill's own first step:
 
 ```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-bash "${CHECK_SETUP_SCRIPT}" || true
+"${BASSTLER_PLUGIN_ROOT}/hooks/check-setup.sh"; echo "check-setup exit status: $?"
 ```
 
 A skill that needs the stacked-PR workflow's upstream (`/upstream-reviews`)
 passes `--require-upstream`, which turns a project naming none from context
 into a `needs-setup` row; every other skill runs it bare.
 
+**Exit status 78 — not in a repository.** Nothing was checked and no row was
+printed. Run it again from the project's checkout; never report setup as missing
+because of it.
+
 **Exit code 0 — set up.** Say nothing about setup at all; carry straight on
 with the skill. A user who is already set up must never hear about it.
 
 **Non-zero, and every row that is not `ok` or `info` is `in-progress`** — a
-session start is installing it right now. Run `wait_for_basstler_install`, then
-the check again, and go on from what that second run says; never install it
-yourself.
+session start is installing it right now. Run
+`source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh" && wait_for_basstler_install`
+in one call, then the check again, and go on from what that second run says; never
+install it yourself.
 
 **Non-zero, and every row that is not `ok`, `info` or `in-progress` is
 `unverified`** — the check could not settle something this skill does not

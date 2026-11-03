@@ -6,6 +6,10 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, Ente
 
 # Plan Item Kickoff
 
+Run every command as one self-contained Bash call: nothing a call sources or sets
+survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
+`${CLAUDE_PLUGIN_ROOT}`.
+
 Plan-agnostic: never hardcode a plan id, item or branch. Step 1 creates nothing.
 
 ## 1. Gather
@@ -42,11 +46,10 @@ git checkout -b <branch> <base-branch>
 git commit --allow-empty -m "Bootstrap <item-id>"
 git push -u origin <branch>
 # create the draft pull request yourself, so it is yours, then:
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" open --plan <plan-id> \
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_bootstrap open --plan <plan-id> \
     --item <item-id> --branch <branch> --base <base-branch> \
     --session <this session's url> --pull-request-number <number>
-"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}" record --plan <plan-id> \
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_bootstrap record --plan <plan-id> \
     --item <item-id> --status "in progress" [--roadmap-entry "<a new standing rule>"]
 ```
 
@@ -59,7 +62,7 @@ Write the plan down:
 - **`--roadmap-entry`**: only a rule binding every later item, as one sentence.
 - **The PR-progress note**: Plan, Done, Next as short lists, replaced rather than
   accumulated, saved with
-  `"${BASSTLER_PLUGIN_ROOT}/hooks/save-pr-progress.sh" --branch <branch> --source <file>`
+  `"${CLAUDE_PLUGIN_ROOT}/hooks/save-pr-progress.sh" --branch <branch> --source <file>`
   as soon as the branch exists.
 
 Then give the item's page on the plan site, `plan_site_page_url <plan-id> <item-id>`,

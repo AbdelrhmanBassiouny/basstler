@@ -6,6 +6,10 @@ allowed-tools: Bash, Read, Grep, Glob, AskUserQuestion, Skill, EnterPlanMode, Ex
 
 # Add Plan Item
 
+Run every command as one self-contained Bash call: nothing a call sources or sets
+survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
+`${CLAUDE_PLUGIN_ROOT}`.
+
 Generic, plan-agnostic — nothing here may hardcode a specific plan id, item,
 or branch. Takes a description of something to build and decides where it
 belongs, before any branch exists to regret. **This skill never writes code,
@@ -44,7 +48,7 @@ branch by default.
 ## 2. Find the candidate homes
 
 ```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+source "${CLAUDE_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
 fetch_personal_notes_branch
 ```
 
@@ -64,7 +68,7 @@ The rule is in [`scope-decision.md`](scope-decision.md) — read it rather than 
 it here. Gather its evidence in one call:
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${CHECK_SCOPE_OVERLAP_MODULE}" \
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" plan.check_scope_overlap \
     --base <base-branch> \
     --path <path> [--path <path> ...] \
     --candidate '<item-id-or-title>=<branch>' [--candidate ... ]
@@ -90,8 +94,9 @@ from step 2, count its current items against `Measure.ITEM_COUNT`
 (`plan/size_limits.py`):
 
 ```bash
-git show FETCH_HEAD:"${PLANS_DIR}/<plan-id>/plan.yaml" > <scratchpad>/plan.yaml
-"${BASSTLER_PYTHON}" -m "${PLAN_SIZE_CHECK_MODULE}" --manifest <scratchpad>/plan.yaml
+source "${CLAUDE_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+git show "${PERSONAL_NOTES_REFERENCE}:${PLANS_DIR}/<plan-id>/plan.yaml" > <scratchpad>/plan.yaml
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" plan.size_check --manifest <scratchpad>/plan.yaml
 ```
 
 `is_full: true` rules the plan out, whatever its `description` says: `save-plan.sh`
@@ -135,11 +140,11 @@ it" leaves the session to improvise the part most likely to lose work.
 **If the outcome changes a plan**, say how the manifest gets updated: edit
 `plan.yaml` directly if this session stewards that plan, otherwise propose it on
 the plan's `tracking_issue` — `${PLANS_DIR}/README.md`'s "Proposing structural
-changes" section governs. Either way the proposal ends with `${SAVE_PLAN_SCRIPT}`
+changes" section governs. Either way the proposal ends with `save-plan.sh`
 in the same turn, whose push rebuilds the plan's page on the plan site.
 
 **If the outcome is a new item**, the `record` operation of
-`"${BASSTLER_PYTHON}" -m "${PLAN_ITEM_BOOTSTRAP_MODULE}"` writes its `plan.yaml` entry and `roadmap.md` section and runs the save
+`"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_bootstrap` writes its `plan.yaml` entry and `roadmap.md` section and runs the save
 for you — `record` only, never `open`, which creates the branch and pull request
 this skill does not.
 

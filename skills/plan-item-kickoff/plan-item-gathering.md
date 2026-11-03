@@ -10,19 +10,23 @@ first.
 
 ## 2. The stack, only when an upstream is named
 
-When `bash "${CHECK_SETUP_SCRIPT}" --require-upstream` exits 0, run
+```bash
+"${BASSTLER_PLUGIN_ROOT}/hooks/check-setup.sh" --require-upstream --only stack_upstream; echo "exit status: $?"
+```
+
+When it exits 0, run
 `/stacked-pr-maintenance stacked-on=<branch>` before reading anything below,
 naming the item's branch, or for an item not started yet the branch it will be cut from, then fix any conflict on the item's branch or a branch
 it is stacked on (on that branch's own pull request) and run the pass again. When
 that branch is the fork's base itself, there is no stack to pass over: run only
-`"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance fast-forward`. Otherwise,
-skip this.
+`"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance fast-forward`. Any other
+exit status means the pass does not run: say so, with the row's detail, wherever you
+report on the stack or the item's conflicts, and never call the stack checked.
 
 ## 3. The brief
 
 ```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m "${ITEM_BRIEF_MODULE}" --plan <plan-id> (--item <item-id> | --branch <branch>)
+"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" plan.item_brief --plan <plan-id> (--item <item-id> | --branch <branch>)
 ```
 
 It prints the plan's id, title and `tracking_issue`, the item's entry, each

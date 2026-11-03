@@ -6,6 +6,10 @@ allowed-tools: Bash, Read, Skill, mcp__claude-code-remote__add_repo, mcp__claude
 
 # Upstream reviews
 
+Run every command as one self-contained Bash call: nothing a call sources or sets
+survives into the next. `${BASSTLER_PLUGIN_ROOT}` in a document this skill links is
+`${CLAUDE_PLUGIN_ROOT}`.
+
 Reads the check and review state of a fork branch's pull request on the
 upstream repository, and on request the log behind each check that failed, and
 reports it. Generic and fork-agnostic — nothing here may hardcode a repository,
@@ -64,8 +68,7 @@ everything else this skill relies on, first: follow
 Resolve them rather than assuming:
 
 ```bash
-source "${BASSTLER_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
-"${BASSTLER_PYTHON}" -m "${STACK_MODULE}" configuration
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" stack configuration
 ```
 
 Read `fork_repository` and `upstream_repository` from its output; the fork
@@ -78,7 +81,8 @@ current branch (`git rev-parse --abbrev-ref HEAD`).
 ## 2. Read through the fork's Action
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" --remote "${NOTES_REMOTE}" read \
+source "${CLAUDE_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" upstream_reviews.action --remote "${NOTES_REMOTE}" read \
   --upstream <upstream owner/name> --fork-owner <fork owner> \
   (--pull-request <number> | --branch <branch>) \
   [--include-resolved] [--failure-logs]
@@ -96,7 +100,8 @@ mean in step 4. Then, by exit status:
     more:
 
     ```bash
-    "${BASSTLER_PYTHON}" -m "${SETUP_STEPS_MODULE}" install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
+    source "${CLAUDE_PLUGIN_ROOT}/hooks/resolve-personal-notes-config.sh"
+    "${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps install-upstream-reviews-action --branch-or-tag "$(basstler_branch_or_tag)"
     ```
 
   - *no run started* — Actions are off on the fork. Carry on with step 3 for
@@ -133,7 +138,7 @@ archiving it are part of the skill.
 1. Record the request and print the helper's first message:
 
    ```bash
-   "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_HELPER_MODULE}" prompt \
+   "${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" upstream_reviews.helper prompt \
      --upstream <upstream owner/name> --fork-owner <fork owner> \
      (--pull-request <number> | --branch <branch>) [--failure-logs]
    ```
@@ -155,7 +160,7 @@ archiving it are part of the skill.
 5. Build the report from what those events brought into this session:
 
    ```bash
-   "${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_HELPER_MODULE}" report [--include-resolved]
+   "${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" upstream_reviews.helper report [--include-resolved]
    ```
 
    If it reports chunks missing, read the helper's earlier events and run it
@@ -168,7 +173,7 @@ Then present the report as step 5 describes.
 ## 4. Read it
 
 ```bash
-"${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_MODULE}" \
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" upstream_reviews \
   --upstream <upstream owner/name> --fork-owner <fork owner> \
   (--pull-request <number> | --branch <branch>) \
   [--include-resolved] [--failure-logs]
