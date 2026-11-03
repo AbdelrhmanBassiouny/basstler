@@ -227,12 +227,13 @@ items:
 
 - id: plugin-bin-probe
   title: Check whether a plugin bin/ and userConfig reach cloud sessions, then adopt them or drop them
-  branch: null
-  pull_request_number: null
+  branch: ccr-09a5b707-6y5gz6
+  pull_request_number: 133
   track: foundation
+  session: https://claude.ai/code/session_01JxHGiMUFmRBomhecR9N1RW
   depends_on:
   - cli-launcher
-  status: not started
+  status: in progress
   notes: 'Docs: claude.ai skips a plugin with a top-level bin/, even one distributed through org settings (how basstler
     reaches cloud sessions); CLAUDE_PLUGIN_DATA and CLAUDE_PLUGIN_OPTION_* are not set for Bash commands; a sync
     never prompts for userConfig. Publish a throwaway probe plugin with a bin/ script, a .mcp.json server and one
