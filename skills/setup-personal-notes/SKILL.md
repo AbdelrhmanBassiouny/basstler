@@ -1,7 +1,7 @@
 ---
 name: setup-personal-notes
 description: One-time setup of the personal-notes branch, its configuration and the package's dependencies. Invoke as "/setup-personal-notes". Use on first setup, or when personal notes, PR progress or plans are not working.
-allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__get_me, mcp__github__get_label
+allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__get_me, mcp__github__get_label, mcp__github__actions_list, mcp__github__get_job_logs
 ---
 
 # Set up personal notes
@@ -39,20 +39,38 @@ when a skill needing the stacked-PR workflow's upstream ran it, nothing
 otherwise. Pass the same to every run of the check below.
 
 The script prints one tab-separated `<check>` / `<status>` / `<detail>` row per
-check and exits non-zero if any row is `needs-setup` (`|| true` above keeps a
-non-zero exit from ending the block early — the rows are the point, not the
-status). Read its own header comment for what each check means.
+check and exits non-zero if any row is `needs-setup`, `in-progress` or
+`unverified` (`|| true` above keeps a non-zero exit from ending the block early
+— the rows are the point, not the status). Read its own header comment for
+what each check means.
 
-**If it exited 0:** tell the user everything it covers is already set up, list
-what was found (the remote, branch and path in play, and that dependencies and
-`CLAUDE.local.md` are in place), then check the labels as step 5 describes,
-run step 8 if the `plan_site` row is not `ok`, and stop. Do not ask
-anything else. Do not re-verify by hand what the script just verified.
+On the first run of a session, `package_dependencies` can be `in-progress` and
+`claude_local_md` `needs-setup` only because the session start is still
+installing the package. Tell the user so, wait as the `in-progress` paragraph
+below says, and run the check once more before reading either row as a fault.
+
+**If it exited 0:** no row is `needs-setup`, `in-progress` or `unverified`.
+List what was found (the remote, branch and path in play, that dependencies
+and `CLAUDE.local.md` are in place, and the `basstler_version` row), then check
+the labels as step 5 describes. If the `plan_site` row is `ok`, tell the user
+everything is set up and stop. Otherwise the plan site is not publishing: say
+so, run step 8, and never call the clone fully set up. Do not ask anything
+else. Do not re-verify by hand what the script just verified.
 
 **An `in-progress` row** means a session start is installing that part right
 now. Never install it yourself, and never run a `pip` command for it: wait with
 `wait_for_basstler_install` (defined by the script sourced above), then run the
 check again.
+
+**An `unverified` row** means the script could not read what decides it, as
+when GitHub refuses the session's `GH_TOKEN`; its detail says why. It is never a
+pass. For `plan_site`, read the same facts with the session's GitHub tools:
+`mcp__github__actions_list` (`list_workflow_runs` on the notes repository's
+`plan-site-dispatch.yml`, notes branch), then `mcp__github__get_job_logs` on the
+latest failed run. Report how many runs failed, the latest run's conclusion and
+address, and the failing step's error line, then carry on with step 8. When
+those tools cannot read them either, report the row as *not verified*, never as
+set up.
 
 **Otherwise:** work through the `needs-setup` rows in the order printed —
 they're ordered so an earlier fix can be a prerequisite of a later one — using
@@ -136,7 +154,7 @@ identity, and runs `session-start.sh`, which installs the package's
 dependencies and writes `CLAUDE.local.md`. Then it reports which labels this
 tooling uses are missing from the repository, and ends by printing
 `check-setup.sh`'s report. It exits with that report's status: 0 when
-nothing is left, 1 when something is.
+nothing is left, 1 when something is or could not be verified.
 Exit 4 means a hook script failed; its own output above says why.
 
 The owner check and the label check need a GitHub token (`GH_TOKEN` or
@@ -202,11 +220,15 @@ the upstream from the session instead.
 
 Unless the row is `ok`, which it is only once every repository on the site stores
 `PLAN_SITE_TOKEN` and its notes branch's latest dispatch run succeeded. Where the
-credential may not read secrets, the row judges by the runs alone. The plan site builds in a repository the user owns,
-never in the project, and which one is the user's to choose: ask for it as
-`<owner>/<name>`, offering as the default the repository the hub file's
-`site_url` already points at (`recorded_site_url`), else
-`<their GitHub username>/plans`. Then:
+credential may not read secrets, the row says so and judges by the runs alone.
+Pass on what the row says about each repository: whether it stores the token,
+how many of its dispatch runs failed, and the command it gives to store the token.
+
+The plan site builds in a repository the user owns, never in the project, and
+which one is the user's to choose. When the notes branch already records one,
+the row's command names it with `--site-repository`: ask the user only to
+confirm it. Otherwise ask for it as `<owner>/<name>`, offering
+`<their GitHub username>/plans` as the default. Then:
 
 ```bash
 "${BASSTLER_PYTHON}" -m "${PLAN_SITE_PUBLICATION_MODULE}" --site-repository <owner>/<name>
@@ -253,8 +275,10 @@ bash "${CHECK_SETUP_SCRIPT}" $ARGUMENTS || true
 ```
 
 Report what the second run says, not what you expect it to say. If a row is
-still `needs-setup`, say which and why — a setup that half-worked and was
-reported as finished is worse than one that reported the truth.
+still `needs-setup` or `unverified`, say which and why — a setup that
+half-worked and was reported as finished is worse than one that reported the
+truth. Call the clone set up only when the run exits 0 and `plan_site` is `ok`;
+with `plan_site` `unverified`, say the plan site is *not verified*.
 
 Then tell them what they can now do, briefly: ask for notes edits in any
 session, track a PR's progress, and — if the dependencies installed —
@@ -274,3 +298,4 @@ worked example.
   no-op-if-unchanged push of a file the user just asked for.
 - **Never create labels in someone's repository unasked.** Labels are visible
   to everyone who sees the repository; report what's missing and offer.
+- **Never read an `unverified` or `info` row as a pass.** Only `ok` is one.

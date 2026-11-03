@@ -311,7 +311,8 @@ fi
 SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
 if [ -f "${CHECK_SETUP_SCRIPT}" ]; then
   NEEDS_SETUP_ROWS="$(bash "${CHECK_SETUP_SCRIPT}" 2>/dev/null \
-    | awk -F'\t' '$2 == "needs-setup" { printf "    %s: %s\n", $1, $3 }' || true)"
+    | awk -F'\t' '$2 == "needs-setup" { printf "    %s: %s\n", $1, $3 }
+                  $2 == "unverified" { printf "    %s (unverified): %s\n", $1, $3 }' || true)"
   if [ -z "${NEEDS_SETUP_ROWS}" ]; then
     SUMMARY_SETUP="$(setup_line_ok)"
   else

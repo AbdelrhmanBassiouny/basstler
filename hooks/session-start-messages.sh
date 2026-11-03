@@ -130,11 +130,11 @@ setup_line_ok() {
   printf 'ok'
 }
 
-# setup_line_needs_setup: the heading above the indented needs-setup rows,
-# which check-setup.sh itself words.
+# setup_line_needs_setup: the heading above the indented needs-setup and
+# unverified rows, which check-setup.sh itself words.
 setup_line_needs_setup() {
   local needs_setup_count="$1"
-  printf '%s check(s) need setup - run /setup-personal-notes:' "${needs_setup_count}"
+  printf '%s check(s) need setup or could not be verified - run /setup-personal-notes:' "${needs_setup_count}"
 }
 
 # %% the dependencies line
