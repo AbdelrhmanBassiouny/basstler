@@ -158,3 +158,10 @@ items:
     #131's review.
   depends_on: []
   status: not started
+
+- id: cyclopts-command-lines
+  title: "Every command line uses cyclopts"
+  branch: null
+  track: guards
+  depends_on: []
+  status: not started
