@@ -55,7 +55,7 @@ items:
   title: Defer, restore and delete an item from its card's menu
   track: commands
   status: not started
-  depends_on: [command-issues, basstler-v3/plan-site-from-issues]
+  depends_on: [command-issues, basstler-v3-plans/plan-site-from-issues]
   notes: Built on v3's issue store, not plan.yaml (decided when this plan was created). A card's menu
     sends defer, restore or delete as command issues; delete asks to confirm first and is refused
     for an item other items depend on or one with an open pull request, suggesting defer instead.
