@@ -24,6 +24,7 @@ class GitHubAddress(StrEnum):
     The root of every REST call.
     """
 
+
 @dataclass
 class MalformedRepositoryError(ValueError):
     """
