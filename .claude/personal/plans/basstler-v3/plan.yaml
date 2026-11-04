@@ -1,10 +1,10 @@
 schema_version: 1
 id: basstler-v3
 title: 'basstler v3: light, reliable and easy for anyone to use and extend'
-description: 'Rebuild basstler next to v2 so code does the mechanics and Claude only judges: each skill runs one
-  command that prints a brief, makes its judgment, and records the result with one command. GitHub is the only state
-  store: plans as issues, stacks from pull request bases, upstream reviews mirrored by an Action. v2 areas are deleted
-  as v3 covers them.
+description: 'Rebuild basstler next to v2 so code does the mechanics and Claude only judges:
+  each skill runs one command that prints a brief, makes its judgment, and records the result
+  with one command. GitHub is the only state store: plans as issues, stacks from pull request
+  bases, upstream reviews mirrored by an Action. v2 areas are deleted as v3 covers them.
 
   '
 default_repository: AbdelrhmanBassiouny/basstler
@@ -44,10 +44,11 @@ items:
   session: https://claude.ai/code/session_018wfiv8brzdj7psZCmLEaFt
   depends_on: []
   status: in progress
-  notes: 'Approved 2026-11-01: pydantic dataclasses at the external-data boundary; ruff as a dev dependency enforcing
-    the mechanical rules (their prose leaves AGENTS.md); docstrings only where they add meaning; plain constants
-    for true constants; a few exception types per kind of failure. Ruff also replaces black as the formatter (owner,
-    2026-11-01), with docformatter on top. Implemented in PR 104, awaiting owner review.'
+  notes: 'Approved 2026-11-01: pydantic dataclasses at the external-data boundary; ruff as
+    a dev dependency enforcing the mechanical rules (their prose leaves AGENTS.md); docstrings
+    only where they add meaning; plain constants for true constants; a few exception types
+    per kind of failure. Ruff also replaces black as the formatter (owner, 2026-11-01), with
+    docformatter on top. Implemented in PR 104, awaiting owner review.'
 - id: cli-launcher
   title: One basstler CLI behind a bin/ launcher, configured through userConfig
   branch: ccr-403b6e8b-xk6nor
@@ -57,11 +58,12 @@ items:
   depends_on:
   - code-rules-light
   status: in progress
-  notes: 'Narrowed 2026-11-02 (owner): no bin/ and no userConfig here (moved to plugin-bin-probe); v2 modules keep
-    python -m until the v3 item replacing each deletes it. Delivers the cyclopts basstler console script, which
-    v3 items mount their commands on, and one owned REST client behind a GitHubClient interface (reading and writing
-    halves), merging the urllib client and gh''s REST half; page=N on repos/<owner>/<repo>/ paths, stopping when
-    Link has no next page. githubkit stays a fallback behind that interface (decided 2026-11-01).'
+  notes: 'Narrowed 2026-11-02 (owner): no bin/ and no userConfig here (moved to plugin-bin-probe);
+    v2 modules keep python -m until the v3 item replacing each deletes it. Delivers the cyclopts
+    basstler console script, which v3 items mount their commands on, and one owned REST client
+    behind a GitHubClient interface (reading and writing halves), merging the urllib client
+    and gh''s REST half; page=N on repos/<owner>/<repo>/ paths, stopping when Link has no
+    next page. githubkit stays a fallback behind that interface (decided 2026-11-01).'
 - id: plan-store-issues
   title: Plans as a tracking issue with sub-issues, status labels and stated dependencies
   branch: null
@@ -70,11 +72,13 @@ items:
   depends_on:
   - cli-launcher
   status: not started
-  notes: "REST only (no Projects v2, no GraphQL). Item scope in the issue body, status as a label, dependencies\
-    \ as issue references read back from the body; a pull request closes its item. Read and write go through pydantic\
-    \ models of the REST responses.\n Its new endpoints go through cli-launcher's GitHubClient. In the PR, report\
-    \ how many endpoint models were hand-written and their line count, so the githubkit fallback can be judged on\
-    \ that measure.\n Labels only for blocked and deferred; other statuses come from the linked pull request."
+  notes: "REST only (no Projects v2, no GraphQL). Item scope in the issue body, status as\
+    \ a label, dependencies as issue references read back from the body; a pull request closes\
+    \ its item. Read and write go through pydantic models of the REST responses.\n Its new\
+    \ endpoints go through cli-launcher's GitHubClient. In the PR, report how many endpoint\
+    \ models were hand-written and their line count, so the githubkit fallback can be judged\
+    \ on that measure.\n Labels only for blocked and deferred; other statuses come from the\
+    \ linked pull request."
 - id: item-brief
   title: One command prints an item's whole brief in at most 3 KB
   branch: null
@@ -84,14 +88,15 @@ items:
   - plan-store-issues
   - core-robustness/lean-kickoff
   status: not started
-  notes: >
-    Item scope, dependency readiness, its pull request's checks, unresolved threads, the mirrored
-    upstream state and tracking-issue comments naming it, built by code so a skill never fetches or
-    reads reference docs to assemble context. Builds on core-robustness/lean-kickoff (#97): reuse
-    its brief command and skill-size test, re-sourced from issues.
+  notes: 'Item scope, dependency readiness, its pull request''s checks, unresolved threads,
+    the mirrored upstream state and tracking-issue comments naming it, built by code so a
+    skill never fetches or reads reference docs to assemble context. Builds on core-robustness/lean-kickoff
+    (#97): reuse its brief command and skill-size test, re-sourced from issues.
 
-    From basstler-reliability: conflicts come from stack merge-probe; anything unread is listed as
-    not checked with its reason, and the brief never says clean while one is.
+    From basstler-reliability: conflicts come from stack merge-probe; anything unread is listed
+    as not checked with its reason, and the brief never says clean while one is.
+
+    '
 - id: plan-import
   title: Import every plan.yaml into issues, once
   branch: null
@@ -100,8 +105,8 @@ items:
   depends_on:
   - plan-store-issues
   status: not started
-  notes: 'Idempotent: rerunning finds the issues already made. Landed items are not imported. Moves this plan onto
-    the issue store too.
+  notes: 'Idempotent: rerunning finds the issues already made. Landed items are not imported.
+    Moves this plan onto the issue store too.
 
     '
 - id: plan-site-from-issues
@@ -112,8 +117,8 @@ items:
   depends_on:
   - plan-store-issues
   status: not started
-  notes: 'Point the existing Pages build at the issue store instead of plan.yaml. Retiring the Artifact dashboard
-    and its URL cache is team-basstler/artifact-path-retirement.
+  notes: 'Point the existing Pages build at the issue store instead of plan.yaml. Retiring
+    the Artifact dashboard and its URL cache is team-basstler/artifact-path-retirement.
 
     '
 - id: stack-engine
@@ -124,8 +129,9 @@ items:
   depends_on:
   - cli-launcher
   status: not started
-  notes: 'No local stack metadata. Every command takes one stack (an item, a pull request or a branch); pushes use
-    --force-with-lease; conflicts are reported per branch, never resolved by the tool.
+  notes: 'No local stack metadata. Every command takes one stack (an item, a pull request
+    or a branch); pushes use --force-with-lease; conflicts are reported per branch, never
+    resolved by the tool.
 
     '
 - id: upstream-promotion
@@ -136,10 +142,11 @@ items:
   depends_on:
   - stack-engine
   status: not started
-  notes: The one stack operation unique to basstler. Claude writes only the summary; the command opens the upstream
-    pull request link and records it on the fork pull request. Withholds a branch GitHub reports conflicted, not
-    yet computed or failing checks; no needs-resolution label (from stack-maintenance/withhold-on-github-state).
-    The upstream pull request body closes the item's issue.
+  notes: The one stack operation unique to basstler. Claude writes only the summary; the command
+    opens the upstream pull request link and records it on the fork pull request. Withholds
+    a branch GitHub reports conflicted, not yet computed or failing checks; no needs-resolution
+    label (from stack-maintenance/withhold-on-github-state). The upstream pull request body
+    closes the item's issue.
 - id: maintenance-action
   title: Whole-fork maintenance runs in an Action on every push to the default branch
   branch: null
@@ -148,8 +155,8 @@ items:
   depends_on:
   - stack-engine
   status: not started
-  notes: 'Restacks stacks whose base moved and retargets pull requests whose base landed. A session never runs a
-    whole-fork pass.
+  notes: 'Restacks stacks whose base moved and retargets pull requests whose base landed.
+    A session never runs a whole-fork pass.
 
     '
 - id: upstream-review-mirror
@@ -160,9 +167,9 @@ items:
   depends_on:
   - cli-launcher
   status: not started
-  notes: 'One sticky comment per promoted pull request, refreshed when a branch is promoted or pushed and on demand.
-    Sessions read only the fork; the helper session, the attach route and the request branch are retired. An on-demand
-    run fails fast when it does not start.
+  notes: 'One sticky comment per promoted pull request, refreshed when a branch is promoted
+    or pushed and on demand. Sessions read only the fork; the helper session, the attach route
+    and the request branch are retired. An on-demand run fails fast when it does not start.
 
     '
 - id: short-skills
@@ -176,11 +183,12 @@ items:
   - upstream-review-mirror
   - mcp-server
   status: not started
-  notes: 'Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode replaces the auto/plan/ask
-    execution modes. claude plugin eval cases fail CI when a skill run exceeds its token or wall-time budget.
+  notes: 'Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode
+    replaces the auto/plan/ask execution modes. claude plugin eval cases fail CI when a skill
+    run exceeds its token or wall-time budget.
 
-    Eval cases replay the basstler-reliability report: wrong working directory, mergeable_state unknown, plan_site
-    failing while stack_upstream is ok.
+    Eval cases replay the basstler-reliability report: wrong working directory, mergeable_state
+    unknown, plan_site failing while stack_upstream is ok.
 
     '
 - id: mcp-server
@@ -190,12 +198,12 @@ items:
   track: cutover
   depends_on:
   - item-brief
-  - plugin-bin-probe
   status: not started
-  notes: 'A FastMCP server (the official mcp SDK) in the plugin''s .mcp.json, used by every client: 5 to 8 tools
-    with output schemas, each returning a brief or recording a result, so a skill never composes a shell command.
-    The CLI stays for scripts and Actions. Never thin API wrappers. A decision only the user makes is asked through
-    MCP elicitation. Adds the mcp dependency (approved 2026-11-01); tool definitions count against eval budgets.
+  notes: 'A FastMCP server (the official mcp SDK) in the plugin''s .mcp.json, used by every
+    client: 5 to 8 tools with output schemas, each returning a brief or recording a result,
+    so a skill never composes a shell command. The CLI stays for scripts and Actions. Never
+    thin API wrappers. A decision only the user makes is asked through MCP elicitation. Adds
+    the mcp dependency (approved 2026-11-01); tool definitions count against eval budgets.
     Made the main path 2026-11-03 (owner).'
 - id: slim-session-start
   title: Session start only writes the session's context
@@ -205,8 +213,8 @@ items:
   depends_on:
   - short-skills
   status: not started
-  notes: 'No install, release lookup, default-branch sync, settings sync or Action upgrade at start: each happens
-    on the command that needs it, or in an Action.
+  notes: 'No install, release lookup, default-branch sync, settings sync or Action upgrade
+    at start: each happens on the command that needs it, or in an Action.
 
     '
 - id: v2-removal
@@ -220,23 +228,7 @@ items:
   - plan-site-from-issues
   - maintenance-action
   status: not started
-  notes: 'Major release: removed commands, files and settings. Release notes list each removed command with its
-    replacement.
+  notes: 'Major release: removed commands, files and settings. Release notes list each removed
+    command with its replacement.
 
     '
-
-- id: plugin-bin-probe
-  title: Check whether a plugin bin/ and userConfig reach cloud sessions, then adopt them or drop them
-  branch: ccr-09a5b707-6y5gz6
-  pull_request_number: 133
-  track: foundation
-  session: https://claude.ai/code/session_01JxHGiMUFmRBomhecR9N1RW
-  depends_on:
-  - cli-launcher
-  status: in progress
-  notes: 'Docs: claude.ai skips a plugin with a top-level bin/, even one distributed through org settings (how basstler
-    reaches cloud sessions); CLAUDE_PLUGIN_DATA and CLAUDE_PLUGIN_OPTION_* are not set for Bash commands; a sync
-    never prompts for userConfig. Publish a throwaway probe plugin with a bin/ script, a .mcp.json server and one
-    userConfig option, check it in a fresh cloud session, and only if both work put the basstler command behind
-    bin/ (venv in CLAUDE_PLUGIN_DATA, run with uv) and replace personal-notes.env with userConfig; otherwise close
-    with the finding.'
