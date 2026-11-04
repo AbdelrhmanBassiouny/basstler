@@ -93,3 +93,14 @@ items:
     the progress card the index uses (stage bar, started, reviewed, done). Status filter chips replace
     the done toggle, hiding done and deferred by default, and a link to a hidden item reveals it
     (folds in team-basstler/hide-deferred-items).
+
+- id: site-themes
+  title: Theme and colour options for the site and its chips, chosen on the page and set as site defaults
+  track: display
+  status: not started
+  depends_on: [site-redesign]
+  notes: A theme menu in the header picks light, dark or system and one of several palettes; the
+    choice is kept per viewer in localStorage and applied before first paint. The site owner sets
+    the default theme and may add palettes, including each chip tone's colours, in a theme section
+    of the hub file parsed into pydantic models. The build checks every palette's text and chip
+    contrast (WCAG AA) and reports a failing one in the health banner instead of publishing it.
