@@ -107,3 +107,14 @@ items:
     the default theme and may add palettes, including each chip tone's colours, in a theme section
     of the hub file parsed into pydantic models. The build checks every palette's text and chip
     contrast (WCAG AA) and reports a failing one in the health banner instead of publishing it.
+
+- id: base-chip
+  title: 'Each item card shows what its pull request is based on: the default branch, another item, or
+    another pull request'
+  track: display
+  status: not started
+  depends_on: []
+  notes: 'The build reads each item''s pull request base from GitHub. A card gets a base chip: the default
+    branch by name; a branch some plan item tracks, as that item''s chip linking to its card with its
+    pull request number; otherwise the branch''s open pull request, or the bare branch name. A base that
+    is another item missing from the item''s depends_on is flagged as drift.'
