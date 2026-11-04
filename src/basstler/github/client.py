@@ -141,6 +141,7 @@ class ResponseHeader(StrEnum):
     The links to the listing's other pages.
     """
 
+
 NEXT_PAGE_RELATION = 'rel="next"'
 """
 What a ``Link`` header carries when the listing has a page after this one.

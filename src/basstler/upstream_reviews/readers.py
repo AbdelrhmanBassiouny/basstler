@@ -220,7 +220,7 @@ class UpstreamRestRoute:
         :param number: The pull request's number.
         :return: The pull request itself.
         """
-        return f"{self.repository.api_path}/pulls/{number}"
+        return self.repository.pull_request_path(number)
 
     def reviews(self, number: int) -> str:
         """

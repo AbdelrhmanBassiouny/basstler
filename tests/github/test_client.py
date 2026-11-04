@@ -38,6 +38,9 @@ from .api_stand_in import (
 TOKEN = "example-token"
 REPOSITORY = Repository("example-owner", "example-repo")
 LISTING = RequestLine.get(f"/{REPOSITORY.api_path}/pulls?state=open&per_page=2")
+USER = RequestLine.get("/user")
+MISSING_PULL_REQUEST_PATH = f"/{REPOSITORY.pull_request_path(404)}"
+COMMENTS = RequestLine.post(f"/{REPOSITORY.api_path}/issues/1/comments")
 
 
 class StubEnvironmentVariable(StrEnum):
@@ -77,11 +80,11 @@ def test_a_read_authenticates_with_the_token_and_returns_the_body(api_server, cl
 
 def test_a_path_without_a_leading_slash_reads_the_same_resource(api_server, client):
     body = {"number": 7}
-    api_server.responses["GET /repos/example-owner/example-repo/pulls/7"] = (
-        CannedResponse(body)
-    )
+    api_server.responses[
+        str(RequestLine.get(f"/{REPOSITORY.pull_request_path(7)}"))
+    ] = CannedResponse(body)
 
-    assert client.get("repos/example-owner/example-repo/pulls/7") == body
+    assert client.get(REPOSITORY.pull_request_path(7)) == body
 
 
 def test_paging_asks_for_each_page_by_number_until_no_next_page_is_linked(
@@ -136,10 +139,6 @@ def test_a_write_answered_with_no_content_returns_none(api_server, client):
 
 
 # %% asking again after a server error
-
-USER = RequestLine.get("/user")
-MISSING_PULL_REQUEST_PATH = f"/{REPOSITORY.api_path}/pulls/404"
-COMMENTS = RequestLine.post(f"/{REPOSITORY.api_path}/issues/1/comments")
 
 
 @pytest.fixture
@@ -221,12 +220,12 @@ def test_the_wait_between_attempts_grows_by_the_policys_factor():
 
 def test_a_refused_call_raises_with_its_status_and_request_line(api_server, client):
     with pytest.raises(GitHubRequestFailed) as refused:
-        client.get("/repos/o/r/pulls/404")
+        client.get(MISSING_PULL_REQUEST_PATH)
 
     assert (refused.value.status, refused.value.method, refused.value.path) == (
         HTTPStatus.NOT_FOUND,
         HttpMethod.GET,
-        "/repos/o/r/pulls/404",
+        MISSING_PULL_REQUEST_PATH,
     )
 
 
@@ -246,7 +245,7 @@ def test_a_refusal_names_a_given_credential(client):
     """
     A refusal of a client given its token says the request used that token.
     """
-    response = client.attempt_get("/repos/o/r/pulls/404")
+    response = client.attempt_get(MISSING_PULL_REQUEST_PATH)
 
     assert response.failure.credential_origin is CredentialProvider.CALLER
 
@@ -260,7 +259,7 @@ def test_a_refusal_names_the_variable_the_credential_came_from(
     monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, TOKEN)
     client = GitHubRestClient(api_root=api_server.root)
 
-    response = client.attempt_get("/repos/o/r/pulls/404")
+    response = client.attempt_get(MISSING_PULL_REQUEST_PATH)
 
     assert response.failure.credential_origin is GitHubCredentialVariable.GH_TOKEN
 
