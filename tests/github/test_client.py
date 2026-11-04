@@ -5,6 +5,7 @@ refusals and where its credential comes from.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from enum import StrEnum
 from http import HTTPStatus
 
@@ -24,12 +25,19 @@ from basstler.github.exceptions import (
     GitHubUnreachableError,
 )
 from basstler.maintenance.constants import GitHubExecutable
+from basstler.repository import Repository
 
 from ..constants.environment import SearchPathVariable
-from .api_stand_in import CannedResponse, ReceivedRequest, RecordingApiServer
+from .api_stand_in import (
+    CannedResponse,
+    ReceivedRequest,
+    RecordingApiServer,
+    RequestLine,
+)
 
 TOKEN = "example-token"
-LISTING = "/repos/example-owner/example-repo/pulls?state=open&per_page=2"
+REPOSITORY = Repository("example-owner", "example-repo")
+LISTING = RequestLine.get(f"/{REPOSITORY.api_path}/pulls?state=open&per_page=2")
 
 
 class StubEnvironmentVariable(StrEnum):
@@ -80,15 +88,15 @@ def test_paging_asks_for_each_page_by_number_until_no_next_page_is_linked(
     api_server, client
 ):
     first, second = [{"number": 1}, {"number": 2}], [{"number": 3}]
-    api_server.responses[f"GET {LISTING}&page=1"] = CannedResponse(
+    api_server.responses[str(LISTING.page(1))] = CannedResponse(
         first, next_page_link=True
     )
-    api_server.responses[f"GET {LISTING}&page=2"] = CannedResponse(second)
+    api_server.responses[str(LISTING.page(2))] = CannedResponse(second)
 
-    assert client.get_pages(LISTING) == [first, second]
+    assert client.get_pages(LISTING.target) == [first, second]
     assert [request.target for request in api_server.requests] == [
-        f"{LISTING}&page=1",
-        f"{LISTING}&page=2",
+        LISTING.page(1).target,
+        LISTING.page(2).target,
     ]
 
 
@@ -129,6 +137,10 @@ def test_a_write_answered_with_no_content_returns_none(api_server, client):
 
 # %% asking again after a server error
 
+USER = RequestLine.get("/user")
+MISSING_PULL_REQUEST_PATH = f"/{REPOSITORY.api_path}/pulls/404"
+COMMENTS = RequestLine.post(f"/{REPOSITORY.api_path}/issues/1/comments")
+
 
 @pytest.fixture
 def quick_client(api_server):
@@ -138,42 +150,37 @@ def quick_client(api_server):
     return GitHubRestClient(
         TOKEN,
         api_root=api_server.root,
-        retry_policy=RetryPolicy(first_delay_seconds=0.0),
+        retry_policy=RetryPolicy(first_delay=timedelta(0)),
     )
 
 
 def test_a_read_answered_with_a_server_error_is_asked_again(api_server, quick_client):
     body = {"state": "pending"}
-    api_server.queued_responses["GET /user"] = [
-        CannedResponse(None, HTTPStatus.BAD_GATEWAY)
-    ]
-    api_server.responses["GET /user"] = CannedResponse(body)
+    api_server.queued_responses[str(USER)] = [CannedResponse.bad_gateway()]
+    api_server.responses[str(USER)] = CannedResponse(body)
 
-    assert quick_client.get("/user") == body
+    assert quick_client.get(USER.target) == body
     assert len(api_server.requests) == 2
 
 
 def test_a_page_answered_with_a_server_error_is_asked_again(api_server, quick_client):
     page = [{"number": 1}]
-    api_server.queued_responses[f"GET {LISTING}&page=1"] = [
-        CannedResponse(None, HTTPStatus.INTERNAL_SERVER_ERROR)
-    ]
-    api_server.responses[f"GET {LISTING}&page=1"] = CannedResponse(page)
+    first_page = LISTING.page(1)
+    api_server.queued_responses[str(first_page)] = [CannedResponse.bad_gateway()]
+    api_server.responses[str(first_page)] = CannedResponse(page)
 
-    assert quick_client.get_pages(LISTING) == [page]
+    assert quick_client.get_pages(LISTING.target) == [page]
 
 
 def test_a_read_that_keeps_failing_is_asked_again_only_as_often_as_the_policy_allows(
     api_server, quick_client
 ):
-    api_server.responses["GET /user"] = CannedResponse(
-        None, HTTPStatus.SERVICE_UNAVAILABLE
-    )
+    api_server.responses[str(USER)] = CannedResponse.bad_gateway()
 
     with pytest.raises(GitHubRequestFailed) as refused:
-        quick_client.get("/user")
+        quick_client.get(USER.target)
 
-    assert refused.value.status == HTTPStatus.SERVICE_UNAVAILABLE
+    assert refused.value.status == HTTPStatus.BAD_GATEWAY
     assert len(api_server.requests) == 1 + quick_client.retry_policy.retries
 
 
@@ -181,7 +188,7 @@ def test_a_refusal_that_is_not_a_server_error_is_not_asked_again(
     api_server, quick_client
 ):
     with pytest.raises(GitHubRequestFailed):
-        quick_client.get("/repos/o/r/pulls/404")
+        quick_client.get(MISSING_PULL_REQUEST_PATH)
 
     assert len(api_server.requests) == 1
 
@@ -189,12 +196,10 @@ def test_a_refusal_that_is_not_a_server_error_is_not_asked_again(
 def test_a_write_answered_with_a_server_error_is_not_sent_again(
     api_server, quick_client
 ):
-    api_server.responses["POST /repos/o/r/issues/1/comments"] = CannedResponse(
-        None, HTTPStatus.BAD_GATEWAY
-    )
+    api_server.responses[str(COMMENTS)] = CannedResponse.bad_gateway()
 
     response = quick_client.attempt_send(
-        HttpMethod.POST, "/repos/o/r/issues/1/comments", {"body": "a comment"}
+        COMMENTS.method, COMMENTS.target, {"body": "a comment"}
     )
 
     assert response.failure.status == HTTPStatus.BAD_GATEWAY
@@ -202,9 +207,13 @@ def test_a_write_answered_with_a_server_error_is_not_sent_again(
 
 
 def test_the_wait_between_attempts_grows_by_the_policys_factor():
-    policy = RetryPolicy(retries=3, first_delay_seconds=1.0, delay_factor=2.0)
+    policy = RetryPolicy(retries=3, first_delay=timedelta(seconds=1), delay_factor=2.0)
 
-    assert policy.delays() == [1.0, 2.0, 4.0]
+    assert policy.delays() == [
+        timedelta(seconds=1),
+        timedelta(seconds=2),
+        timedelta(seconds=4),
+    ]
 
 
 # %% refusals

@@ -17,6 +17,7 @@ import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
 from dataclasses import dataclass, field
+from datetime import timedelta
 from functools import cached_property
 from enum import StrEnum
 from http import HTTPStatus
@@ -140,7 +141,6 @@ class ResponseHeader(StrEnum):
     The links to the listing's other pages.
     """
 
-
 NEXT_PAGE_RELATION = 'rel="next"'
 """
 What a ``Link`` header carries when the listing has a page after this one.
@@ -161,6 +161,12 @@ class ErrorResponsePassThrough(urllib.request.HTTPErrorProcessor):
     https_response = http_response
 
 
+SERVER_ERROR_STATUSES = range(HTTPStatus.INTERNAL_SERVER_ERROR, 600)
+"""
+Every status of the 5xx class, including those past the ones :class:`HTTPStatus` names.
+"""
+
+
 @dataclass(frozen=True)
 class RetryPolicy:
     """
@@ -173,7 +179,7 @@ class RetryPolicy:
     How many times a read is asked again after the first attempt.
     """
 
-    first_delay_seconds: float = 1.0
+    first_delay: timedelta = timedelta(seconds=1)
     """
     The wait before the first retry.
     """
@@ -183,13 +189,12 @@ class RetryPolicy:
     What each wait is multiplied by to give the next one.
     """
 
-    def delays(self) -> list[float]:
+    def delays(self) -> list[timedelta]:
         """
-        :return: The wait before each retry, in seconds, first retry first.
+        :return: The wait before each retry, first retry first.
         """
         return [
-            self.first_delay_seconds * self.delay_factor**retry
-            for retry in range(self.retries)
+            self.first_delay * self.delay_factor**retry for retry in range(self.retries)
         ]
 
 
@@ -221,7 +226,7 @@ class GitHubResponse:
         """
         return (
             isinstance(self.failure, GitHubRequestFailed)
-            and self.failure.status >= HTTPStatus.INTERNAL_SERVER_ERROR
+            and self.failure.status in SERVER_ERROR_STATUSES
         )
 
     def raise_if_failed(self) -> Any:
@@ -257,8 +262,9 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
 
     retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
     """
-    When a read answered with a server error is asked again. A write is never sent again,
-    since GitHub may have applied it.
+    When a read answered with a server error is asked again.
+
+    A write is never sent again, since GitHub may have applied it.
     """
 
     @cached_property
@@ -329,7 +335,7 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
         for delay in self.retry_policy.delays():
             if not response.is_server_error:
                 return response
-            time.sleep(delay)
+            time.sleep(delay.total_seconds())
             response = self._exchange(HttpMethod.GET, path, None)
         return response
 
