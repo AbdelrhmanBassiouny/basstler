@@ -1,0 +1,95 @@
+schema_version: 1
+id: plan-site-ui
+title: 'Plan site you can act from: commands, promotion, activity order and a refined design'
+description: Buttons on the plan site defer, restore and delete items and plans, refresh the
+  site and promote an item upstream; plans are ordered by recent activity; and the site gets a
+  polished, easy-to-navigate design with the same progress statistics on every plan.
+default_repository: AbdelrhmanBassiouny/basstler
+tracking_issue: 134
+waves:
+- id: actionable-site
+  name: 'Wave 1: Act from the site'
+  description: Every change the site offers is one button away, and the site shows what is fresh.
+tracks:
+- id: commands
+  name: Site commands
+  wave: actionable-site
+  description: Buttons that change plans or the site, through owner-only command issues.
+- id: display
+  name: Display and design
+  wave: actionable-site
+  description: What the site shows and how it looks; no writes.
+items:
+- id: command-issues
+  title: Site buttons open a prefilled command issue in the site repository, which an owner-only workflow runs and closes
+  track: commands
+  status: not started
+  depends_on: []
+  notes: A command workflow in the site repository runs on issues opened, only when author_association
+    is OWNER, parses the body into a pydantic model (issue text never reaches a shell), runs the
+    command, comments the result and closes the issue - also when it refuses. First command is
+    refresh, which dispatches the site build; a Refresh button sits in every page's header. Publication
+    installs the workflow and enables issues on the site repository.
+- id: command-token-setup
+  title: Setup names the token permissions the site commands need, and offers to fix a missing token now
+  track: commands
+  status: not started
+  depends_on: [command-issues]
+  notes: The site repository's secret needs contents write on every notes repository, on top of the
+    PLAN_SITE_TOKEN permissions; setup-personal-notes and SETUP.md list them. When the token is missing
+    or lacks them, the skill asks with AskUserQuestion, "Fix it now" first and marked recommended,
+    and shows the exact steps the code prints; otherwise it carries on and repeats the missing token
+    in the session's final report.
+- id: rebuild-indicator
+  title: After a button that changes the site, the page shows the site is rebuilding until the new build is live
+  track: commands
+  status: not started
+  depends_on: [command-issues]
+  notes: The page remembers the pending command in sessionStorage, shows a rebuilding banner, polls
+    site-digest.txt until it changes, then reloads; it gives up with a message after a timeout. Works
+    for refresh and every later command.
+- id: item-commands
+  title: Defer, restore and delete an item from its card's menu
+  track: commands
+  status: not started
+  depends_on: [command-issues, basstler-v3/plan-site-from-issues]
+  notes: Built on v3's issue store, not plan.yaml (decided when this plan was created). A card's menu
+    sends defer, restore or delete as command issues; delete asks to confirm first and is refused
+    for an item other items depend on or one with an open pull request, suggesting defer instead.
+- id: plan-commands
+  title: Defer, restore and delete a whole plan from its card; deferred plans sink to a collapsed section
+  track: commands
+  status: not started
+  depends_on: [item-commands]
+  notes: Same command path as item-commands, acting on the plan's tracking issue in v3's store. Deferred
+    plans are listed last on the repository index in a collapsed section; delete asks to confirm and
+    stays recoverable from history.
+- id: promote-button
+  title: A Promote button on each promotable item opens the prefilled upstream compare-and-create page
+  track: display
+  status: not started
+  depends_on: []
+  notes: A plain link, built at site build time, opening in a new tab; no command issue. Promotable
+    is one shared rule with Stack.promotion_order (approved, parent landed, not withheld, checks
+    passing, no upstream pull request). The link is PromotionLink.build's, narrowed to an upstream
+    target read from the fork's parent; title is the fork pull request's, body the one line linking
+    back to it. Disabled with the reason as its hover text otherwise.
+- id: activity-ordering
+  title: Plans and repositories are ordered by recent activity, the stalest last, with a stale mark
+  track: display
+  status: not started
+  depends_on: []
+  notes: A plan's last activity is the later of the last notes commit touching its directory and
+    the newest updated_at of its items' pull requests; the notes fetch keeps enough history for it.
+    Cards say how long ago; past a stale threshold (a field default) they are muted. Repositories on
+    the hub sort the same way.
+- id: site-redesign
+  title: A refined, professional site design with easy navigation and the same progress card on every plan page
+  track: display
+  status: not started
+  depends_on: []
+  notes: Design tokens, one type scale, light and dark; sticky header with breadcrumbs, search and
+    a slot for the Refresh button; keyboard-accessible item menu; toasts. The plan page header shows
+    the progress card the index uses (stage bar, started, reviewed, done). Status filter chips replace
+    the done toggle, hiding done and deferred by default, and a link to a hidden item reveals it
+    (folds in team-basstler/hide-deferred-items).
