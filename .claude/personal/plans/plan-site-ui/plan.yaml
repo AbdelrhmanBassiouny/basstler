@@ -114,7 +114,8 @@ items:
   track: display
   status: not started
   depends_on: []
-  notes: 'The build reads each item''s pull request base from GitHub. A card gets a base chip: the default
-    branch by name; a branch some plan item tracks, as that item''s chip linking to its card with its
-    pull request number; otherwise the branch''s open pull request, or the bare branch name. A base that
-    is another item missing from the item''s depends_on is flagged as drift.'
+  notes: 'The build reads each item''s pull request base from GitHub. A card gets a base chip, always
+    a link: the default branch, linking to its branch page; a branch some plan item tracks, as that item''s
+    chip linking to its card, beside its pull request number linking to the pull request; otherwise the
+    branch''s open pull request, or the branch page. A base that is another item missing from the item''s
+    depends_on is flagged as drift.'
