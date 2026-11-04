@@ -78,6 +78,12 @@ class RecordingApiServer:
     The response for each request line, keyed ``"<method> <path and query>"``.
     """
 
+    queued_responses: dict[str, list[CannedResponse]] = field(default_factory=dict)
+    """
+    Responses a request line is answered with once each, oldest first, before
+    :attr:`responses` answers it.
+    """
+
     requests: list[ReceivedRequest] = field(default_factory=list)
     """
     Every request received, oldest first.
@@ -126,9 +132,15 @@ class RecordingApiServer:
                 json.loads(raw_body) if raw_body else None,
             )
         )
-        response = self.responses.get(
-            f"{method} {target}",
-            CannedResponse({"message": "Not Found"}, HTTPStatus.NOT_FOUND),
+        request_line = f"{method} {target}"
+        queue = self.queued_responses.get(request_line)
+        response = (
+            queue.pop(0)
+            if queue
+            else self.responses.get(
+                request_line,
+                CannedResponse({"message": "Not Found"}, HTTPStatus.NOT_FOUND),
+            )
         )
         payload = b"" if response.body is None else json.dumps(response.body).encode()
         headers = [("Content-Length", str(len(payload)))]

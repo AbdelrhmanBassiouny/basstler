@@ -11,7 +11,7 @@ from http import HTTPStatus
 import pytest
 
 from basstler.environment import GitHubCredentialVariable
-from basstler.github.client import GitHubRestClient, HttpMethod
+from basstler.github.client import GitHubRestClient, HttpMethod, RetryPolicy
 from basstler.github.credential import (
     CredentialOrigin,
     CredentialProvider,
@@ -125,6 +125,86 @@ def test_a_write_answered_with_no_content_returns_none(api_server, client):
     )
 
     assert client.send(HttpMethod.PUT, "/repos/o/r/labels", {}) is None
+
+
+# %% asking again after a server error
+
+
+@pytest.fixture
+def quick_client(api_server):
+    """
+    :return: A client that asks again without waiting between the attempts.
+    """
+    return GitHubRestClient(
+        TOKEN,
+        api_root=api_server.root,
+        retry_policy=RetryPolicy(first_delay_seconds=0.0),
+    )
+
+
+def test_a_read_answered_with_a_server_error_is_asked_again(api_server, quick_client):
+    body = {"state": "pending"}
+    api_server.queued_responses["GET /user"] = [
+        CannedResponse(None, HTTPStatus.BAD_GATEWAY)
+    ]
+    api_server.responses["GET /user"] = CannedResponse(body)
+
+    assert quick_client.get("/user") == body
+    assert len(api_server.requests) == 2
+
+
+def test_a_page_answered_with_a_server_error_is_asked_again(api_server, quick_client):
+    page = [{"number": 1}]
+    api_server.queued_responses[f"GET {LISTING}&page=1"] = [
+        CannedResponse(None, HTTPStatus.INTERNAL_SERVER_ERROR)
+    ]
+    api_server.responses[f"GET {LISTING}&page=1"] = CannedResponse(page)
+
+    assert quick_client.get_pages(LISTING) == [page]
+
+
+def test_a_read_that_keeps_failing_is_asked_again_only_as_often_as_the_policy_allows(
+    api_server, quick_client
+):
+    api_server.responses["GET /user"] = CannedResponse(
+        None, HTTPStatus.SERVICE_UNAVAILABLE
+    )
+
+    with pytest.raises(GitHubRequestFailed) as refused:
+        quick_client.get("/user")
+
+    assert refused.value.status == HTTPStatus.SERVICE_UNAVAILABLE
+    assert len(api_server.requests) == 1 + quick_client.retry_policy.retries
+
+
+def test_a_refusal_that_is_not_a_server_error_is_not_asked_again(
+    api_server, quick_client
+):
+    with pytest.raises(GitHubRequestFailed):
+        quick_client.get("/repos/o/r/pulls/404")
+
+    assert len(api_server.requests) == 1
+
+
+def test_a_write_answered_with_a_server_error_is_not_sent_again(
+    api_server, quick_client
+):
+    api_server.responses["POST /repos/o/r/issues/1/comments"] = CannedResponse(
+        None, HTTPStatus.BAD_GATEWAY
+    )
+
+    response = quick_client.attempt_send(
+        HttpMethod.POST, "/repos/o/r/issues/1/comments", {"body": "a comment"}
+    )
+
+    assert response.failure.status == HTTPStatus.BAD_GATEWAY
+    assert len(api_server.requests) == 1
+
+
+def test_the_wait_between_attempts_grows_by_the_policys_factor():
+    policy = RetryPolicy(retries=3, first_delay_seconds=1.0, delay_factor=2.0)
+
+    assert policy.delays() == [1.0, 2.0, 4.0]
 
 
 # %% refusals
