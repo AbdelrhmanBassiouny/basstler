@@ -6,7 +6,7 @@ description: >
   a check they could not run as passing: setup checks fail closed, each gate reads only
   the rows its step needs, conflicts are decided by git, every skill command is one
   self-contained call, and a record names the commit it was verified at. The one-command
-  brief is basstler-v3/item-brief.
+  brief is basstler-v3-plans/item-brief.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 132
 waves:
@@ -130,7 +130,7 @@ items:
   status: not started
   notes: Commit uv.lock; session start and basstler.sh install with uv sync --frozen, so two sessions never run
     different dependency versions, and the install is fast enough to finish before a skill starts. uv approved by
-    the owner 2026-11-03. Coordinate the venv location with basstler-v3/plugin-bin-probe.
+    the owner 2026-11-03. basstler-v3/plugin-bin-probe (PR 133) found no bin/ allowed, and CLAUDE_PLUGIN_DATA reaches hooks and MCP servers, not Bash commands.
 
 - id: repeat-run-evals
   title: Evals run each case several times and fail on differing verdicts
