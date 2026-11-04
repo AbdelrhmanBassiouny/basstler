@@ -87,16 +87,15 @@ items:
     Cards say how long ago; past a stale threshold (a field default) they are muted. Repositories on
     the hub sort the same way.
 - id: site-redesign
-  title: A refined, professional site design with easy navigation and the same progress card on every plan page
+  title: A refined, professional site design with easy navigation and the same progress card on every
+    plan page
   track: display
   status: not started
   depends_on: []
-  notes: Design tokens, one type scale, light and dark; sticky header with breadcrumbs, search and
-    a slot for the Refresh button; keyboard-accessible item menu; toasts. The plan page header shows
-    the progress card the index uses (stage bar, started, reviewed, done). Status filter chips replace
-    the done toggle, hiding done and deferred by default, and a link to a hidden item reveals it
-    (folds in team-basstler/hide-deferred-items).
-
+  notes: Design tokens, one type scale, light and dark; sticky header with breadcrumbs, search and a slot
+    for the Refresh button; keyboard-accessible item menu; toasts. The plan page header shows the progress
+    card the index uses (stage bar, started, reviewed, done). Status filter chips replace the done toggle,
+    hiding done and deferred by default, and a link to a hidden item reveals it (folds in team-basstler/hide-deferred-items). Every existing link that leaves the site is changed to open in a new tab.
 - id: site-themes
   title: Theme and colour options for the site and its chips, chosen on the page and set as site defaults
   track: display

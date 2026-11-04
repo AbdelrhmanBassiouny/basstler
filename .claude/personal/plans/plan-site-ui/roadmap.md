@@ -5,3 +5,4 @@
 - Issue text is parsed into a pydantic model at the boundary and never interpolated into a shell or workflow expression.
 - A button that changes the site shows that the site is rebuilding until the new build is live.
 - Promotability is one rule shared with the stack's promotion order; the site never decides it separately.
+- A link that leaves the site (a pull request, branch, issue or GitHub page) opens in a new tab with `target="_blank" rel="noopener"`; links between the site's own pages stay in the same tab.
