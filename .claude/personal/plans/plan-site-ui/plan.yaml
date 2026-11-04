@@ -31,15 +31,17 @@ items:
     refresh, which dispatches the site build; a Refresh button sits in every page's header. Publication
     installs the workflow and enables issues on the site repository.
 - id: command-token-setup
-  title: Setup names the token permissions the site commands need, and offers to fix a missing token now
+  title: Setup names the token permissions the site commands need, and reports a missing token without
+    stopping
   track: commands
   status: not started
-  depends_on: [command-issues]
-  notes: The site repository's secret needs contents write on every notes repository, on top of the
+  depends_on:
+  - command-issues
+  notes: 'The site repository''s secret needs contents write on every notes repository, on top of the
     PLAN_SITE_TOKEN permissions; setup-personal-notes and SETUP.md list them. When the token is missing
-    or lacks them, the skill asks with AskUserQuestion, "Fix it now" first and marked recommended,
-    and shows the exact steps the code prints; otherwise it carries on and repeats the missing token
-    in the session's final report.
+    or lacks them, the skill does not ask: it reports that, with the exact steps the code prints, carries
+    on with the session''s work without it, and repeats the missing token and its steps in the session''s
+    final report.'
 - id: rebuild-indicator
   title: After a button that changes the site, the page shows the site is rebuilding until the new build is live
   track: commands
