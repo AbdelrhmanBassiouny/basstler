@@ -183,6 +183,13 @@ class Repository:
         """
         return f"repos/{self.full_name}"
 
+    def pull_request_path(self, number: int) -> str:
+        """
+        :param number: The pull request's number.
+        :return: The REST path of that pull request.
+        """
+        return f"{self.api_path}/pulls/{number}"
+
     def job_log_path(self, job: int) -> str:
         """
         :param job: The Actions job's own number.
@@ -236,4 +243,4 @@ class PullRequestReference:
         """
         The pull request's address in GitHub's REST pulls API.
         """
-        return f"{GitHubAddress.API}/{self.repository.api_path}/pulls/{self.number}"
+        return f"{GitHubAddress.API}/{self.repository.pull_request_path(self.number)}"

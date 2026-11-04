@@ -5,13 +5,14 @@ refusals and where its credential comes from.
 
 from __future__ import annotations
 
+from datetime import timedelta
 from enum import StrEnum
 from http import HTTPStatus
 
 import pytest
 
 from basstler.environment import GitHubCredentialVariable
-from basstler.github.client import GitHubRestClient, HttpMethod
+from basstler.github.client import GitHubRestClient, HttpMethod, RetryPolicy
 from basstler.github.credential import (
     CredentialOrigin,
     CredentialProvider,
@@ -24,12 +25,22 @@ from basstler.github.exceptions import (
     GitHubUnreachableError,
 )
 from basstler.maintenance.constants import GitHubExecutable
+from basstler.repository import Repository
 
 from ..constants.environment import SearchPathVariable
-from .api_stand_in import CannedResponse, ReceivedRequest, RecordingApiServer
+from .api_stand_in import (
+    CannedResponse,
+    ReceivedRequest,
+    RecordingApiServer,
+    RequestLine,
+)
 
 TOKEN = "example-token"
-LISTING = "/repos/example-owner/example-repo/pulls?state=open&per_page=2"
+REPOSITORY = Repository("example-owner", "example-repo")
+LISTING = RequestLine.get(f"/{REPOSITORY.api_path}/pulls?state=open&per_page=2")
+USER = RequestLine.get("/user")
+MISSING_PULL_REQUEST_PATH = f"/{REPOSITORY.pull_request_path(404)}"
+COMMENTS = RequestLine.post(f"/{REPOSITORY.api_path}/issues/1/comments")
 
 
 class StubEnvironmentVariable(StrEnum):
@@ -69,26 +80,26 @@ def test_a_read_authenticates_with_the_token_and_returns_the_body(api_server, cl
 
 def test_a_path_without_a_leading_slash_reads_the_same_resource(api_server, client):
     body = {"number": 7}
-    api_server.responses["GET /repos/example-owner/example-repo/pulls/7"] = (
-        CannedResponse(body)
-    )
+    api_server.responses[
+        str(RequestLine.get(f"/{REPOSITORY.pull_request_path(7)}"))
+    ] = CannedResponse(body)
 
-    assert client.get("repos/example-owner/example-repo/pulls/7") == body
+    assert client.get(REPOSITORY.pull_request_path(7)) == body
 
 
 def test_paging_asks_for_each_page_by_number_until_no_next_page_is_linked(
     api_server, client
 ):
     first, second = [{"number": 1}, {"number": 2}], [{"number": 3}]
-    api_server.responses[f"GET {LISTING}&page=1"] = CannedResponse(
+    api_server.responses[str(LISTING.page(1))] = CannedResponse(
         first, next_page_link=True
     )
-    api_server.responses[f"GET {LISTING}&page=2"] = CannedResponse(second)
+    api_server.responses[str(LISTING.page(2))] = CannedResponse(second)
 
-    assert client.get_pages(LISTING) == [first, second]
+    assert client.get_pages(LISTING.target) == [first, second]
     assert [request.target for request in api_server.requests] == [
-        f"{LISTING}&page=1",
-        f"{LISTING}&page=2",
+        LISTING.page(1).target,
+        LISTING.page(2).target,
     ]
 
 
@@ -127,17 +138,94 @@ def test_a_write_answered_with_no_content_returns_none(api_server, client):
     assert client.send(HttpMethod.PUT, "/repos/o/r/labels", {}) is None
 
 
+# %% asking again after a server error
+
+
+@pytest.fixture
+def quick_client(api_server):
+    """
+    :return: A client that asks again without waiting between the attempts.
+    """
+    return GitHubRestClient(
+        TOKEN,
+        api_root=api_server.root,
+        retry_policy=RetryPolicy(first_delay=timedelta(0)),
+    )
+
+
+def test_a_read_answered_with_a_server_error_is_asked_again(api_server, quick_client):
+    body = {"state": "pending"}
+    api_server.queued_responses[str(USER)] = [CannedResponse.bad_gateway()]
+    api_server.responses[str(USER)] = CannedResponse(body)
+
+    assert quick_client.get(USER.target) == body
+    assert len(api_server.requests) == 2
+
+
+def test_a_page_answered_with_a_server_error_is_asked_again(api_server, quick_client):
+    page = [{"number": 1}]
+    first_page = LISTING.page(1)
+    api_server.queued_responses[str(first_page)] = [CannedResponse.bad_gateway()]
+    api_server.responses[str(first_page)] = CannedResponse(page)
+
+    assert quick_client.get_pages(LISTING.target) == [page]
+
+
+def test_a_read_that_keeps_failing_is_asked_again_only_as_often_as_the_policy_allows(
+    api_server, quick_client
+):
+    api_server.responses[str(USER)] = CannedResponse.bad_gateway()
+
+    with pytest.raises(GitHubRequestFailed) as refused:
+        quick_client.get(USER.target)
+
+    assert refused.value.status == HTTPStatus.BAD_GATEWAY
+    assert len(api_server.requests) == 1 + quick_client.retry_policy.retries
+
+
+def test_a_refusal_that_is_not_a_server_error_is_not_asked_again(
+    api_server, quick_client
+):
+    with pytest.raises(GitHubRequestFailed):
+        quick_client.get(MISSING_PULL_REQUEST_PATH)
+
+    assert len(api_server.requests) == 1
+
+
+def test_a_write_answered_with_a_server_error_is_not_sent_again(
+    api_server, quick_client
+):
+    api_server.responses[str(COMMENTS)] = CannedResponse.bad_gateway()
+
+    response = quick_client.attempt_send(
+        COMMENTS.method, COMMENTS.target, {"body": "a comment"}
+    )
+
+    assert response.failure.status == HTTPStatus.BAD_GATEWAY
+    assert len(api_server.requests) == 1
+
+
+def test_the_wait_between_attempts_grows_by_the_policys_factor():
+    policy = RetryPolicy(retries=3, first_delay=timedelta(seconds=1), delay_factor=2.0)
+
+    assert policy.delays() == [
+        timedelta(seconds=1),
+        timedelta(seconds=2),
+        timedelta(seconds=4),
+    ]
+
+
 # %% refusals
 
 
 def test_a_refused_call_raises_with_its_status_and_request_line(api_server, client):
     with pytest.raises(GitHubRequestFailed) as refused:
-        client.get("/repos/o/r/pulls/404")
+        client.get(MISSING_PULL_REQUEST_PATH)
 
     assert (refused.value.status, refused.value.method, refused.value.path) == (
         HTTPStatus.NOT_FOUND,
         HttpMethod.GET,
-        "/repos/o/r/pulls/404",
+        MISSING_PULL_REQUEST_PATH,
     )
 
 
@@ -157,7 +245,7 @@ def test_a_refusal_names_a_given_credential(client):
     """
     A refusal of a client given its token says the request used that token.
     """
-    response = client.attempt_get("/repos/o/r/pulls/404")
+    response = client.attempt_get(MISSING_PULL_REQUEST_PATH)
 
     assert response.failure.credential_origin is CredentialProvider.CALLER
 
@@ -171,7 +259,7 @@ def test_a_refusal_names_the_variable_the_credential_came_from(
     monkeypatch.setenv(GitHubCredentialVariable.GH_TOKEN, TOKEN)
     client = GitHubRestClient(api_root=api_server.root)
 
-    response = client.attempt_get("/repos/o/r/pulls/404")
+    response = client.attempt_get(MISSING_PULL_REQUEST_PATH)
 
     assert response.failure.credential_origin is GitHubCredentialVariable.GH_TOKEN
 

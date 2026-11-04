@@ -562,7 +562,7 @@ def pull_request_path(reference: PullRequestReference) -> str:
     :param reference: The pull request to read.
     :return: The path it is read from on its own.
     """
-    return f"/{reference.repository.api_path}/pulls/{reference.number}"
+    return f"/{reference.repository.pull_request_path(reference.number)}"
 
 
 def test_github_source_answers_a_listed_pull_request_from_the_listing():

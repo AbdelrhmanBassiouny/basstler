@@ -11,11 +11,13 @@ import itertools
 import json
 import shutil
 import subprocess
+import time
 import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+from datetime import timedelta
 from functools import cached_property
 from enum import StrEnum
 from http import HTTPStatus
@@ -160,6 +162,43 @@ class ErrorResponsePassThrough(urllib.request.HTTPErrorProcessor):
     https_response = http_response
 
 
+SERVER_ERROR_STATUSES = range(HTTPStatus.INTERNAL_SERVER_ERROR, 600)
+"""
+Every status of the 5xx class, including those past the ones :class:`HTTPStatus` names.
+"""
+
+
+@dataclass(frozen=True)
+class RetryPolicy:
+    """
+    How often, and after how long, a read that GitHub answered with a server error is
+    asked again.
+    """
+
+    retries: int = 3
+    """
+    How many times a read is asked again after the first attempt.
+    """
+
+    first_delay: timedelta = timedelta(seconds=1)
+    """
+    The wait before the first retry.
+    """
+
+    delay_factor: float = 2.0
+    """
+    What each wait is multiplied by to give the next one.
+    """
+
+    def delays(self) -> list[timedelta]:
+        """
+        :return: The wait before each retry, first retry first.
+        """
+        return [
+            self.first_delay * self.delay_factor**retry for retry in range(self.retries)
+        ]
+
+
 @dataclass(frozen=True)
 class GitHubResponse:
     """
@@ -180,6 +219,16 @@ class GitHubResponse:
     """
     Why the call failed, ``None`` when it succeeded.
     """
+
+    @property
+    def is_server_error(self) -> bool:
+        """
+        :return: Whether GitHub answered with a 5xx status, which asking again may clear.
+        """
+        return (
+            isinstance(self.failure, GitHubRequestFailed)
+            and self.failure.status in SERVER_ERROR_STATUSES
+        )
 
     def raise_if_failed(self) -> Any:
         """
@@ -212,6 +261,13 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
     The URL every path is relative to.
     """
 
+    retry_policy: RetryPolicy = field(default_factory=RetryPolicy)
+    """
+    When a read answered with a server error is asked again.
+
+    A write is never sent again, since GitHub may have applied it.
+    """
+
     @cached_property
     def credential(self) -> GitHubCredential:
         """
@@ -238,14 +294,12 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
         return self.attempt_get(path).raise_if_failed()
 
     def attempt_get(self, path: str) -> GitHubResponse:
-        return self._exchange(HttpMethod.GET, path, None)
+        return self._read(path)
 
     def get_pages(self, path: str) -> list[Any]:
         pages: list[Any] = []
         for page_number in itertools.count(1):
-            response = self._exchange(
-                HttpMethod.GET, self._page_path(path, page_number), None
-            )
+            response = self._read(self._page_path(path, page_number))
             pages.append(response.raise_if_failed())
             if not response.has_next_page:
                 break
@@ -269,6 +323,22 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
         return urllib.parse.urlunsplit(
             parts._replace(query=urllib.parse.urlencode(query, safe=":"))
         )
+
+    def _read(self, path: str) -> GitHubResponse:
+        """
+        Read a resource, asking again as :attr:`retry_policy` says while GitHub answers
+        with a server error.
+
+        :param path: The path below :attr:`api_root`.
+        :return: The last answer.
+        """
+        response = self._exchange(HttpMethod.GET, path, None)
+        for delay in self.retry_policy.delays():
+            if not response.is_server_error:
+                return response
+            time.sleep(delay.total_seconds())
+            response = self._exchange(HttpMethod.GET, path, None)
+        return response
 
     def _exchange(
         self, method: HttpMethod, path: str, payload: Mapping[str, Any] | None

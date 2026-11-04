@@ -14,6 +14,8 @@ from typing import Any
 from wsgiref.simple_server import WSGIRequestHandler, make_server
 from wsgiref.types import StartResponse
 
+from basstler.github.client import HttpMethod
+
 # %% what the server answers and records
 
 
@@ -37,6 +39,58 @@ class CannedResponse:
     """
     Whether the response carries a ``Link`` header naming a next page.
     """
+
+    @classmethod
+    def bad_gateway(cls) -> CannedResponse:
+        """
+        :return: A server error with an empty body.
+        """
+        return cls(None, HTTPStatus.BAD_GATEWAY)
+
+
+@dataclass(frozen=True)
+class RequestLine:
+    """
+    The method and target a stand-in response is keyed by.
+    """
+
+    method: HttpMethod
+    """
+    The HTTP method.
+    """
+
+    target: str
+    """
+    The path and query.
+    """
+
+    @classmethod
+    def get(cls, target: str) -> RequestLine:
+        """
+        :param target: The path and query.
+        :return: The request line of a read.
+        """
+        return cls(HttpMethod.GET, target)
+
+    @classmethod
+    def post(cls, target: str) -> RequestLine:
+        """
+        :param target: The path and query.
+        :return: The request line of a creation.
+        """
+        return cls(HttpMethod.POST, target)
+
+    def page(self, number: int) -> RequestLine:
+        """
+        :param number: The page of a listing, counting from one.
+        :return: The request line asking for that page, as the client spells it.
+        """
+        separator = "&" if "?" in self.target else "?"
+        return RequestLine(self.method, f"{self.target}{separator}page={number}")
+
+    def __str__(self) -> str:
+        """:return: The key the stand-in looks responses up by."""
+        return f"{self.method} {self.target}"
 
 
 @dataclass(frozen=True)
@@ -76,6 +130,12 @@ class RecordingApiServer:
     responses: dict[str, CannedResponse] = field(default_factory=dict)
     """
     The response for each request line, keyed ``"<method> <path and query>"``.
+    """
+
+    queued_responses: dict[str, list[CannedResponse]] = field(default_factory=dict)
+    """
+    Responses a request line is answered with once each, oldest first, before
+    :attr:`responses` answers it.
     """
 
     requests: list[ReceivedRequest] = field(default_factory=list)
@@ -126,9 +186,15 @@ class RecordingApiServer:
                 json.loads(raw_body) if raw_body else None,
             )
         )
-        response = self.responses.get(
-            f"{method} {target}",
-            CannedResponse({"message": "Not Found"}, HTTPStatus.NOT_FOUND),
+        request_line = f"{method} {target}"
+        queue = self.queued_responses.get(request_line)
+        response = (
+            queue.pop(0)
+            if queue
+            else self.responses.get(
+                request_line,
+                CannedResponse({"message": "Not Found"}, HTTPStatus.NOT_FOUND),
+            )
         )
         payload = b"" if response.body is None else json.dumps(response.body).encode()
         headers = [("Content-Length", str(len(payload)))]
