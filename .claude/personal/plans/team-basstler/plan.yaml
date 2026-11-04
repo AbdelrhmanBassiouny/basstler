@@ -72,17 +72,6 @@ items:
     closed unmerged, suggesting a base to reparent onto. Reference design on branch
     claude/deferred-dependency-drift-pr-qxpfsm (StallReason, StalledDependencyDrift).
 
-- id: hide-deferred-items
-  title: Hide deferred items on a plan page by default, behind their own toggle
-  status: not started
-  track: site
-  depends_on: []
-  notes: >
-    Replaces plan-dashboards/deferred-items-hidden-by-default (draft #46, closed: it edited the Artifact
-    dashboard). The site only dims deferred items today. Add a toggle on the plan page, hidden by
-    default, and make a link to a hidden item reveal it. Reference: branch
-    claude/hidden-deferred-plan-items-6weef1 (VisibilityFilter, sidebar-link fix in 16d8f77).
-
 - id: untracked-pull-requests
   title: List each repository's open pull requests that no plan item tracks
   status: not started
