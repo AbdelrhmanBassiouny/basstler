@@ -28,7 +28,7 @@ items:
   status: deferred
   track: team-store
   depends_on:
-  - basstler-v3/plan-store-issues
+  - basstler-v3-plans/plan-store-issues
   notes: 'Deferred until basstler-v3 plan-store-issues: the shared plans then live as issues on the team
     repository, so the plan-store half is gone. What remains: each member writes notes.md, git identity,
     settings and pr-progress to their own notes/<login> branch of the team repository, so no two people
@@ -53,7 +53,7 @@ items:
   track: team-store
   depends_on:
   - team-repo-setup
-  - basstler-v3/plan-import
+  - basstler-v3-plans/plan-import
   notes: 'After basstler-v3, plan-import moves it into the team repository''s issues. One home: copied
     to the team plan store and removed from the fork''s notes. default_repository becomes cram2/cognitive_robot_abstract_machine;
     items whose pull requests are on the fork set repository to it. A new tracking issue on the team repository
@@ -77,7 +77,7 @@ items:
   status: not_started
   track: github
   depends_on:
-  - basstler-v3/plan-store-issues
+  - basstler-v3-plans/plan-store-issues
   notes: 'One-time manual setup documented in docs/team.md: an organisation Project, auto-add by label,
     auto-add sub-issues, item closed and pull request merged move to Done, grouped by parent issue (the
     plan), views by status, by assignee and my items. No API code: an Action''s GITHUB_TOKEN cannot write
@@ -98,7 +98,7 @@ items:
   status: not_started
   track: picker
   depends_on:
-  - basstler-v3/plan-store-issues
+  - basstler-v3-plans/plan-store-issues
   - core-robustness/lean-kickoff
   notes: 'Ranks with work-recommender/ranked-work-list''s policy: one ranking, not two. A python -m command
     ranks: the caller''s own in-progress items first (resume), then unassigned not-started items whose
