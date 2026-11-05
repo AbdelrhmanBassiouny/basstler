@@ -45,3 +45,17 @@ items:
     write them under $(git rev-parse --git-dir)/basstler/ (preferred, no exclude bookkeeping),
     or add them to .git/info/exclude and verify with git check-ignore in check-setup.sh. The
     user has not picked yet.'
+
+- id: repository-rules
+  title: Per-repository plan rules as structured data, shown in item briefs and on the plan site
+  branch: null
+  status: not started
+  track: conventions
+  depends_on: []
+  notes: >
+    The user's design priorities for every plan of a repository are prose in the personal notes'
+    "Design priorities for every basstler plan" section; only sessions read them. Store them as
+    a structured per-repository rules file on the notes branch (one entry per rule: id, text), edited
+    by one command; plan.item_brief prints them with every item brief, the plan site shows them on
+    each plan page of that repository, and plan-create links them. roadmap.md keeps plan-specific
+    rules only. The personal-notes section is replaced by the file once it lands.
