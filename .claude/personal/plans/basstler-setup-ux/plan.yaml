@@ -100,6 +100,13 @@ items:
   title: "Setup turns on Issues in the fork, or says how"
   branch: null
   track: setup-flow
+  notes: >
+    GitHub starts forks with Issues off, and plan tracking issues need them; no setup step said so.
+    Add a ForkIssues SetupStep beside ForkActions in setup/steps.py, in SetupChecklist.for_clone:
+    read has_issues, set it with gh api -X PATCH repos/<fork> -f has_issues=true, and print the
+    browser step (Settings > General > Features > Issues) only if that is refused. A check-setup.sh
+    row reports a fork with Issues off as needs-setup; plan-create step 5's 410 fallback names this
+    step.
   depends_on: []
   status: not started
 
