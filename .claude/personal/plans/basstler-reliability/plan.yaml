@@ -160,7 +160,9 @@ items:
   track: guards
   notes: >
     Port the remaining argparse command lines to cyclopts, following basstler.stack's port in #131.
-    Requested in #131's review.
+    Requested in #131's review. plan/manifest_tools.py was left on argparse by #138 (review thread
+    https://github.com/AbdelrhmanBassiouny/basstler/pull/138#discussion_r4483101408) and is the first
+    module to port; it must keep ManifestToolsExitCode's exit codes and the --notes-remote-url refusal #138 added.
   depends_on: []
   status: not started
 
