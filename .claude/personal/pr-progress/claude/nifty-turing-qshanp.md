@@ -1,13 +1,11 @@
 ## Plan
-- Add pydantic>=2 (approved), HttpMethod.DELETE, BLOCKED/DEFERRED labels
-- basstler.plan_store: pydantic REST models (issue, label, timeline event)
-- Item issue body: scope + "Depends on" references, written and parsed back
-- Item status from labels and linked pull request (timeline)
-- IssuePlanStore over GitHubClient: create plan, add item (sub-issue), read plan, set/clear blocked/deferred
-- Tests first with a recording fake GitHubClient
+- basstler.plan_store: pydantic REST models, ItemBody (scope + Depends on), ItemIssue status, IssuePlanStore over GitHubClient
 
 ## Done
-- Bootstrap, draft PR #144
+- pydantic>=2.11 added (owner-approved), HttpMethod.DELETE, Repository.issue_path, BLOCKED/DEFERRED labels
+- Store, body format, status from labels + closing PRs on the timeline; 35 tests
+- 8 hand-written endpoint models, 232 lines (58 code), reported in PR #144
+- Full suite green apart from 4 environmental Playwright errors; ruff and code-rules pass
 
 ## Next
-- Tests for the body format and status derivation
+- Owner review of draft PR #144
