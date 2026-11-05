@@ -951,13 +951,9 @@ def test_turning_on_pages_points_at_the_site_repository_s_pages_settings(publish
     assert f"{published.site.repository.url}/settings/pages" in browser_steps[0]
 
 
-def test_creating_the_token_walks_through_scoping_it_to_the_site_repository_only(
+def test_creating_the_token_walks_through_scoping_it_to_every_registered_repository(
     published,
 ):
-    """
-    The token only starts the site's build, so it needs no access to a notes repository,
-    and a repository joining the site needs no new token.
-    """
     report = published.publication(published.runs_none()).publish()
 
     browser_steps = pending_step(report, UserStep.CREATE_TOKEN).browser_steps
@@ -965,7 +961,7 @@ def test_creating_the_token_walks_through_scoping_it_to_the_site_repository_only
     text = "\n".join(browser_steps)
     assert UserSteps.token_page in text
     assert published.site.repository.full_name in text
-    assert published.notes_repository.full_name not in text
+    assert published.notes_repository.full_name in text
 
 
 def test_creating_a_token_has_no_command_line_because_github_offers_none(published):

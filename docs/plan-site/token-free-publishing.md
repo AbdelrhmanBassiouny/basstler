@@ -123,7 +123,7 @@ What it covers and costs:
   would have to name that attachment up front. A save whose build fails to start must
   report it rather than pass silently.
 
-#### Prototype of F, on this branch
+#### Prototype of F, in #139
 
 - `basstler.plan_site.build_start` reads the site repository's default branch and
   dispatches `plan-site.yml` on it through the REST API, with the session's credential.
@@ -178,7 +178,7 @@ Proposals, most effect first:
    Nothing uses that: the token's one use is `gh workflow run` on the site repository,
    and the build reads the notes with the site repository's own `github.token`. The
    request dates from the first version of publishing, `eca4d650`.
-   *Done on this branch:* the steps now ask for Actions write on the site repository
+   *Done in #139:* the steps now ask for Actions write on the site repository
    alone. The token then never changes when a repository joins the site. Only the
    store step repeats, for the new repository.
 5. **Organisation-owned notes repositories** can store the token once, as an
@@ -248,7 +248,7 @@ for pull request states. A page is then fresh even before its rebuild.
 1. **Now, small:** make the fast path reliable and quick to set up, with proposals 1–4
    above. Most of this is in already planned items (`fix-secret-loop`,
    `trigger-and-done`, `retry-dispatch-step`). Proposals 1, 3 and 4 are new.
-2. **F, prototyped on this branch:** basstler's own plan saves start the build. Plan
+2. **F, prototyped in #139:** basstler's own plan saves start the build. Plan
    saves no longer need the token; the merge workflow still does.
 3. **v3:** plan issues per repository, with F for session edits and an issue-event
    workflow for edits made on github.com, using the least-privilege token.
