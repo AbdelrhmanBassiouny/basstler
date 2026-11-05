@@ -134,6 +134,6 @@ items:
     failed with its reason; manual instructions appear only for failed steps, extending
     PendingStep.failure ("Could not be done automatically") to SetupStep. Token creation stays
     manual: GitHub offers no command for it. Related to one-call-labels and trigger-and-done.
-  depends_on: []
+  depends_on: [gh-prerequisite, fork-issues]
   status: not started
 tracking_issue: 135
