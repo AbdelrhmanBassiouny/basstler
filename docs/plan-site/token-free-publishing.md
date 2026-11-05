@@ -1,9 +1,11 @@
-# Publishing the plan site without `PLAN_SITE_TOKEN`
+# Publishing the plan site without `PLAN_SITE_TOKEN`, or with less work
 
 Analysis for the `token-free-site` item of the `basstler-setup-ux` plan. Nothing here
-changes production. It describes how the site is published today, the token-free
-options, how they compare, and a prototype to measure the recommended one on
-stack-board.
+changes production. It covers:
+- how the site is published today;
+- the token-free options;
+- how to make the token fast path easier and more reliable;
+- whether all plans could live in one hub, before and after basstler v3.
 
 ## How the site is published today
 
@@ -20,127 +22,185 @@ stack-board.
   fine-grained token with Actions write access to the site repository. The build needs
   no user token.
 
-What the token costs, measured on 2026-11-05 over the last 100 dispatch runs of each
-notes repository:
+### What the token costs, measured on 2026-11-05
+
+The last 100 dispatch runs of each notes repository:
 
 | Notes repository | Runs since | success | failure | cancelled |
 |---|---|---|---|---|
 | `AbdelrhmanBassiouny/basstler` | 2026-11-01 | 90 | 0 | 9 |
 | `AbdelrhmanBassiouny/cognitive_robot_abstract_machine` | 2026-11-02 | 29 | 62 | 9 |
 
-Each failed run is a notes push that left the site stale. Setup also has to make the
-user create the token, grant it every published repository, store it in each one and
-renew it when it expires. That is most of the user-only steps
-`basstler.plan_site.publication` prints.
+The job logs of the cram failures show two causes:
+- **61 runs:** the secret was not stored. `GH_TOKEN` is empty and `gh` asks for a
+  token. This lasted two days, from 2026-11-02 to 2026-11-04, and every notes push in
+  that time left the site stale. No run said what was missing.
+- **1 run:** `gh workflow run` got a 502, which the `retry-dispatch-step` item covers.
 
-## Options
+Since 2026-11-04 09:45, all 31 finished runs succeeded.
 
-### A. Scheduled build on the site repository
+So the token is not unreliable once it is stored. Getting it stored is the problem.
+
+## Constraint: no workflow runs on a schedule
+
+The `actions-budget` plan has a standing rule that no workflow has a `schedule`. It
+was adopted after GitHub disabled Actions on the cram fork for wasted compute.
+`basstler.actions_budget` reports a scheduled workflow as `ScheduledWorkflow`, and
+basstler-v3's roadmap repeats the rule for every new workflow.
+
+That rules out options A and B below, and their prototype, unless the user makes an
+exception for the site repository. They are kept for the record, and the
+recommendation no longer rests on them.
+
+## Token-free options
+
+### A. Scheduled build on the site repository (breaks the no-schedule rule)
 
 stack-board runs the full build on `schedule`, as its legacy board did until
 2026-11-01 (every 15 minutes).
+- **Gained:** no token.
+- **Latency:** at least 5 minutes, plus GitHub's scheduling delay.
+- **Actions usage:** a full build on every tick, whether or not anything changed.
 
-- **Token**: none. Only stack-board's own `github.token`.
-- **Latency**: the schedule interval plus GitHub's scheduling delay. The shortest interval
-  is 5 minutes, and runs are delayed under load, most often at the top of the hour.
-- **Actions usage**: a full build (Python, `pip install basstler`, every fetch, every
-  pull request read) on each tick, whether or not anything changed. That is 288
-  builds a day at 5 minutes. Free while stack-board is public, but each build also
-  spends GitHub API requests on unchanged state.
+### B. Change-gated poll on the site repository (breaks the no-schedule rule)
 
-### B. Change-gated poll on the site repository (recommended baseline)
+Like A, but each tick first runs a job of a few seconds. That job lists, with `git
+ls-remote` and no credential:
+- the hub's repository list;
+- each listed repository's notes branch head;
+- each listed repository's default branch head.
 
-Like A, but each tick first runs a job of a few seconds. It lists the heads that start
-a build today, using `git ls-remote` with no credential:
-- the hub file's repository list on the registry's notes branch;
-- each listed repository's notes branch, which today starts the dispatch;
-- each listed repository's default branch, where a merge moves it (today's merge dispatch).
+The build runs only when one of them moved. It covers the same events as today's two
+dispatch workflows and costs one short job per tick. The detection was verified
+locally against the live repositories. A keep-alive would be needed, because GitHub
+disables a scheduled workflow after 60 days without repository activity.
 
-The build job runs only when that fingerprint differs from the last one seen.
+### C. Webhook relay, D. GitHub App
 
-- **Token**: none.
-- **Coverage**: the same events as today's two dispatch workflows. A pull request
-  opened, closed without merge or changing CI state starts nothing today either. A
-  periodic full build (for example hourly) can cover that if wanted.
-- **Latency**: as A.
-- **Actions usage**: one short job per tick plus a build per real change. That is the
-  same number of builds as today, and fewer than today's dispatch runs, because a
-  burst of pushes between two ticks becomes one build. Free on a public site repository.
-  A private one would bill each tick as one minute, about 8,600 minutes a month at
-  5 minutes, so the interval would have to grow.
-- **Security**: removes the token from every notes repository and removes the
-  `pull_request_target` merge workflow, the one workflow that reads a secret on a
-  fork's pull request.
-
-### C. Webhook
-
-GitHub cannot deliver a repository webhook to a workflow. A relay service (a small
-serverless function) would receive the push webhook and dispatch the build, holding a
-token itself. This is token-free for the user only if basstler runs that service for
-everyone. It adds infrastructure to operate and secure, and the token still exists,
-moved to a server.
-
-### D. GitHub App
-
-An App's installation token can dispatch across repositories. Either the notes
-repositories store the App's private key as a secret (a token by another name) or a
-server mints installation tokens on webhooks (C again). Installing the App is
-one step instead of a token, but someone has to own and host the App.
+GitHub cannot deliver a webhook to a workflow, so C needs a server that holds a token.
+D needs the App's key stored as a secret, or a server. Both move the credential
+instead of removing it, and both add infrastructure someone has to host.
 
 ### E. Each notes repository publishes its own Pages
 
-Each notes repository builds its plans with its own `GITHUB_TOKEN` and deploys to its
-own Pages. This is instant and token-free, but loses the single site and hub. It also
-takes the repository's one Pages slot, which a project may already use for its docs
-(`cognitive_robot_abstract_machine` has documentation workflows).
+This is instant and token-free. It loses the single site and the hub, and takes the
+repository's one Pages slot, which a project may already use for its docs.
 
-## Private notes repositories
+### F. The writer starts the build
 
-The build already fetches notes anonymously and reads pull requests with stack-board's
-`github.token`, so a private notes repository is *not* published today, whatever the
-trigger. A token-free trigger changes nothing for it. Supporting private repositories
-needs a read credential in any design. A poll (B) needs it once, read-only, on the site
-repository, instead of once per notes repository with write access, as the dispatch
-does.
+basstler's own commands (`save-plan.sh`, `plan.item_bootstrap`, `save-pr-progress.sh`)
+already push the notes. After the push, they could start `plan-site.yml` themselves,
+with the credential they pushed with:
+- **Local sessions:** the user's `gh` login.
+- **Cloud sessions:** the site repository attached with push access.
 
-## Risks of a schedule
+What it covers and costs:
+- **Coverage:** every plan save, which is most of the triggers, with no stored secret
+  and no schedule. Merges are not covered. They stay with the merge workflow, or with
+  `page-merge-recheck`, the planned browser re-check of merges. #115 chose the merge
+  workflow over a browser merge re-check, so dropping the workflow reopens that
+  decision.
+- **Cost:** a cloud session needs one more attachment. The `fewer-questions` item
+  would have to name that attachment up front. A save whose build fails to start must
+  report it rather than pass silently.
 
-- **Inactivity**: GitHub disables a scheduled workflow in a public repository after 60
-  days without repository activity, and stack-board gets no commits from publishing. A
-  keep-alive is needed: the workflow re-enabling itself through the API with
-  `actions: write` on its own repository, or a periodic commit. The prototype measures
-  latency only. The keep-alive must be settled before production.
-- **Delays**: scheduled runs can be skipped or delayed under load. The prototype logs the
-  delay of each detected change, so this is measured, not assumed.
+## Making the token fast path easy and reliable
+
+What the user does today is set out in `basstler.plan_site.user_steps`:
+- **Create the token:** five browser steps.
+- **Store it:** one `gh secret set` line per notes repository. Its loop splits the
+  repositories on commas, which is the `fix-secret-loop` item.
+- **Merge** the merge workflow.
+
+Proposals, most effect first:
+
+1. **Fail loudly on a missing secret.** The dispatch step checks `GH_TOKEN` is not empty
+   and stops with an error that names `PLAN_SITE_TOKEN` and the repository, and gives
+   the store command. This removes the silent two days above. The session-start
+   `plan_site` row can repeat the same line.
+2. **One command that stores and proves the token.** It takes the token from standard
+   input once, stores it in every registered repository, then starts each dispatch
+   workflow and waits for its run. It ends with *done* or with the failing run's error
+   line. This combines `fix-secret-loop` and `trigger-and-done`. Storing a secret needs
+   the user's own `gh` login, because a cloud session's credential is refused, so the
+   command runs on the user's machine.
+3. **Pre-filled token page.** GitHub fills the fine-grained token form from the query
+   string of `settings/personal-access-tokens/new`, with `name`, `description`,
+   `target_name` (the owner), `expires_in` and one parameter per permission, such as
+   `actions=write`. This replaces four of the five browser steps with a link. The
+   repository selection stays manual: no documented parameter selects repositories.
+   *To verify on github.com.*
+4. **Least privilege.** Starting the build needs Actions write on the site repository
+   only. If the token were limited to that, it would never change when a repository
+   joins the site. Only the store step would repeat, for the new repository. Today
+   the steps also ask for Contents read and for every registered repository.
+   *Open question for the user: what needs those?*
+5. **Organisation-owned notes repositories** can store the token once, as an
+   organisation secret shared with the selected repositories. Repositories owned by a
+   user account have no shared Actions secrets, so they keep one secret each.
+6. **Expiry.** A fine-grained token expires. The dispatch's error line for a refused
+   token can give the pre-filled link and the store command, so renewing takes the
+   same two steps as setting it up.
+
+## All plans in one hub repository
+
+The idea: store every plan in the site repository instead of each repository's notes.
+A push there starts the build through the site repository's own `push` event, at once
+and with no token.
+
+Against it, today:
+- **The user's rule:** plans for one repository live in that repository, and #138
+  enforces that when a plan is saved. A hub reverses this.
+- **Write access:** every session that saves a plan needs write access to the hub. In
+  a cloud session that is the same extra attachment as option F, so for plan saves a
+  hub gains nothing over F.
+- **Split state:** personal notes and PR progress stay per repository, so the state
+  would be split across repositories.
+- **Merges:** they still happen in the work repositories, so they still need the merge
+  workflow or the browser re-check.
+
+### In basstler v3
+
+`basstler-v3-plans` moves plans from `plan.yaml` on the notes branch to a tracking issue
+with sub-issues, and the site reads them (`plan-site-from-issues`). The notes stop being
+the plan store, so "plans in the hub's notes" has no v3 form. The v3 question is where
+the plan issues live:
+
+- **Issues in each repository.** This matches the per-repository rule. The build is then
+  started by issue events in each repository, and starting a workflow in the site
+  repository from them needs a cross-repository credential. The token problem moves
+  from notes pushes to issue events, unless the writer starts the build (F).
+- **Issues in a hub repository.** Issue events in the site repository start the build
+  with no token and at once. Pull requests in other repositories still close their
+  items with `Fixes owner/repo#n`. This is the `team-repository` plan's design: a team
+  repository holds the shared plans, with one issue per item.
+
+Recommendation: do not move today's plans to a hub. v3 replaces the notes store anyway,
+and the move would reverse #138. Decide where the plan issues live inside
+`basstler-v3-plans`:
+- per repository, with F starting the build;
+- or a hub, which needs no token but means revisiting #138's rule for v3.
 
 ## Recommendation, for discussion
 
-Make B the default and keep the dispatch as an optional fast path:
+1. **Now, small:** make the fast path reliable and quick to set up, with proposals 1–4
+   above. Most of this is in already planned items (`fix-secret-loop`,
+   `trigger-and-done`, `retry-dispatch-step`). Proposals 1, 3 and 4 are new.
+2. **Next:** prototype F, where basstler's own pushes start the build. With F the token
+   becomes optional for plan saves and stays only for the merge workflow.
+3. **v3:** settle per-repository versus hub plan issues in `basstler-v3-plans`, with this
+   trigger cost in view.
 
-1. The site workflow polls with the change gate and gets a keep-alive.
-2. `PLAN_SITE_TOKEN` becomes optional. A repository that stores it still starts the build
-   at once, and one that does not is picked up by the next tick. The dispatch step must
-   then skip, not fail, without the secret (the `fix-secret-loop` item's concern).
-3. Setup drops the token steps from the required path and offers them as "instant
-   updates".
+A scheduled poll (B) is the simplest token-free design. It needs an exception to the
+no-schedule rule, which only the user can grant.
 
-Open for the user to decide:
-- Is a delay of 5 minutes or more acceptable as the default?
-- Should the merge workflow go even for users who keep the token?
-- Should private notes repositories be in scope now?
+## Prototype of B
 
-## Prototype
+[`plan-site-poll-prototype.yml`](plan-site-poll-prototype.yml) is B's change gate alone.
+It never builds or deploys. Each tick it computes the fingerprint and, when it changed,
+logs the heads and the delay since the newest commit. It remembers fingerprints in the
+Actions cache.
 
-[`plan-site-poll-prototype.yml`](plan-site-poll-prototype.yml) is the change gate of B
-alone. It never builds or deploys. Each tick it computes the fingerprint and, on a
-change, logs which heads moved and how long after the newest commit the tick saw it.
-It remembers fingerprints in the Actions cache.
-
-To verify it, copy it to `.github/workflows/` on stack-board's default branch (schedules
-run only there) and leave it for a day. Then compare its detections with the dispatch
-runs of the same period:
-- every notes push or merge is detected;
-- the delay distribution;
-- the number of ticks and their duration.
-
-Remove it afterwards.
+It runs on a schedule, so it breaks the no-schedule rule. It would go on stack-board's
+default branch only if the user grants the exception, and would be removed after a day
+of measurements.
