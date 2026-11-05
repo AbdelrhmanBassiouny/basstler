@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import Annotated, Any
 
 import yaml
-from cyclopts import App, Group, Parameter, validators
+from cyclopts import App, Parameter
 
 from basstler.exceptions import NotesRemoteNamesNoRepository, PlanValidationError
 from basstler.plan.dependencies import PlanDirectory
@@ -22,6 +22,7 @@ from basstler.plan.validation import PlanValidator
 from basstler.plan import model
 from basstler.repository import Repository
 from basstler.exit_codes import CommandFailure, ExitCode, ManifestToolsExitCode
+from basstler.command_line import plan_item_selection
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -302,13 +303,6 @@ manifest_tools_app = App(
 This module's command line: one command per :class:`ManifestToolsCommand`.
 """
 
-item_selection = Group(
-    "Item selection", validator=validators.LimitedChoice(1), default_parameter=None
-)
-"""
-The two ways :func:`item` names its item, of which exactly one is given.
-"""
-
 
 @manifest_tools_app.command(name=ManifestToolsCommand.READ_ID)
 def read_id(manifest_path: Path, /) -> ManifestToolsExitCode:
@@ -382,10 +376,11 @@ def item(
     *,
     item_identifier: Annotated[
         str | None,
-        Parameter(name=ManifestToolsOption.ITEM_IDENTIFIER, group=item_selection),
+        Parameter(name=ManifestToolsOption.ITEM_IDENTIFIER, group=plan_item_selection),
     ] = None,
     branch: Annotated[
-        str | None, Parameter(name=ManifestToolsOption.BRANCH, group=item_selection)
+        str | None,
+        Parameter(name=ManifestToolsOption.BRANCH, group=plan_item_selection),
     ] = None,
 ) -> ManifestToolsExitCode:
     """

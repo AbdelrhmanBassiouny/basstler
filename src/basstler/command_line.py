@@ -16,7 +16,19 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from typing import TypeVar
 
+from cyclopts import Group, validators
+
 from basstler.class_property import classproperty
+
+# %% parameter groups
+
+plan_item_selection = Group(
+    "Item selection", validator=validators.LimitedChoice(1), default_parameter=None
+)
+"""
+The two ways a command names one plan item - by id or by branch - of which exactly one
+is given.
+"""
 
 # %% a command
 

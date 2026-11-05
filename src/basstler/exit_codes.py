@@ -244,6 +244,28 @@ class ManifestToolsExitCode(ExitCode):
     """
 
 
+class ScopeOverlapExitCode(ExitCode):
+    """
+    How a ``basstler.plan.check_scope_overlap`` run ended, as its caller reads it.
+    """
+
+    SUCCESS = 0
+    """
+    The report was printed.
+    """
+
+    UNREADABLE_INPUT = 1
+    """
+    A branch does not resolve, or a candidate is not ``<label>=<branch>``; stderr says
+    which.
+    """
+
+    USAGE = 2
+    """
+    The wrong arguments; what is wrong is on stderr.
+    """
+
+
 @dataclass
 class CommandFailure(Exception, ABC):
     """
