@@ -52,6 +52,25 @@ That rules out options A and B below, and their prototype, unless the user makes
 exception for the site repository. They are kept for the record, and the
 recommendation no longer rests on them.
 
+### Recommendation: no exception
+
+Keep the rule; F makes a schedule unnecessary.
+- **Reliability:** GitHub delays scheduled runs under load and may drop them, most
+  often near the start of an hour. It disables a scheduled workflow after 60 days
+  without repository activity. A poll gives neither a fixed delay nor a guaranteed run.
+- **Determinism and freshness:** a poll's delay depends on when the tick falls, and
+  between ticks the site is stale. A push that starts the build has neither problem.
+- **Actions budget:** a job is billed by the started minute, so a 5-minute poll costs
+  at least 288 minutes a day, about 8,600 a month. That is free on a public site
+  repository, but it is the kind of idle compute that got Actions disabled on the
+  cram fork. On a private one it is over four times the free plan's 2,000 minutes.
+- **If ever needed:**
+  - only on the site repository;
+  - change-gated as in B, with a 2-minute timeout and one concurrency group;
+  - no more often than every 15 minutes;
+  - declared in `basstler.actions_budget` as the one allowed schedule, so the check
+    still fails on any other.
+
 ## Token-free options
 
 ### A. Scheduled build on the site repository (breaks the no-schedule rule)
@@ -104,6 +123,30 @@ What it covers and costs:
   would have to name that attachment up front. A save whose build fails to start must
   report it rather than pass silently.
 
+#### Prototype of F, on this branch
+
+- `basstler.plan_site.build_start` reads the site repository's default branch and
+  dispatches `plan-site.yml` on it through the REST API, with the session's credential.
+  It prints whether the build started. When it did not, it says what to do:
+  - in a cloud session, attach the site repository with `add_repo` and push access, and
+    if that is refused, ask the user, with attaching as the recommended answer;
+  - elsewhere, log `gh` in with access to the site repository.
+- `save-plan.sh` runs it after every saved plan. All plan writes go through that script,
+  `plan.item_bootstrap` included. A failure to start never fails the save, because the
+  notes are already pushed.
+- The session rules tell every cloud session the same, so the request reaches the user
+  however the save was run.
+
+Verified on 2026-11-05 from a cloud session with stack-board attached for push: the
+command started stack-board's build. Without the attachment the session proxy refuses
+the site repository, and that refusal is what the command reports. `gh workflow run`
+without `--ref` fails in a cloud session because it looks up the default branch with
+GraphQL, which the proxy refuses. The prototype therefore uses REST only.
+
+Still on the notes token:
+- **Merges:** the merge workflow still needs it.
+- **Edits outside basstler:** a hand-edited notes branch still needs it.
+
 ## Making the token fast path easy and reliable
 
 What the user does today is set out in `basstler.plan_site.user_steps`:
@@ -131,10 +174,13 @@ Proposals, most effect first:
    repository selection stays manual: no documented parameter selects repositories.
    *To verify on github.com.*
 4. **Least privilege.** Starting the build needs Actions write on the site repository
-   only. If the token were limited to that, it would never change when a repository
-   joins the site. Only the store step would repeat, for the new repository. Today
-   the steps also ask for Contents read and for every registered repository.
-   *Open question for the user: what needs those?*
+   only. The steps asked for Contents read on every registered repository as well.
+   Nothing uses that: the token's one use is `gh workflow run` on the site repository,
+   and the build reads the notes with the site repository's own `github.token`. The
+   request dates from the first version of publishing, `eca4d650`.
+   *Done on this branch:* the steps now ask for Actions write on the site repository
+   alone. The token then never changes when a repository joins the site. Only the
+   store step repeats, for the new repository.
 5. **Organisation-owned notes repositories** can store the token once, as an
    organisation secret shared with the selected repositories. Repositories owned by a
    user account have no shared Actions secrets, so they keep one secret each.
@@ -176,23 +222,38 @@ the plan issues live:
   repository holds the shared plans, with one issue per item.
 
 Recommendation: do not move today's plans to a hub. v3 replaces the notes store anyway,
-and the move would reverse #138. Decide where the plan issues live inside
-`basstler-v3-plans`:
-- per repository, with F starting the build;
-- or a hub, which needs no token but means revisiting #138's rule for v3.
+and the move would reverse #138.
+
+For v3, keep plan issues in each repository:
+- **Focus:** someone working on one repository sees only its plans in its issue list,
+  search and notifications. GitHub's own filters cover the rest: labels, milestones,
+  closing as *not planned*, pinning.
+- **Team-ready:** each repository's issues follow its own access, so a team works on
+  its repository's plans without access to a shared hub.
+- **One view across repositories:** the plan site already joins every repository's
+  plans.
+
+Freshness then comes from two places:
+- **Edits made by a session:** the session starts the build (F), with no token.
+- **Edits made on github.com** (a comment, a closed or relabelled issue): each
+  repository needs an `issues` and `issue_comment` workflow that starts the build. It
+  uses the same least-privilege token, Actions write on the site repository only, and
+  fails loudly when the token is missing (proposal 1).
+
+The plan page can also read an issue's live state in the browser, as it already does
+for pull request states. A page is then fresh even before its rebuild.
 
 ## Recommendation, for discussion
 
 1. **Now, small:** make the fast path reliable and quick to set up, with proposals 1–4
    above. Most of this is in already planned items (`fix-secret-loop`,
    `trigger-and-done`, `retry-dispatch-step`). Proposals 1, 3 and 4 are new.
-2. **Next:** prototype F, where basstler's own pushes start the build. With F the token
-   becomes optional for plan saves and stays only for the merge workflow.
-3. **v3:** settle per-repository versus hub plan issues in `basstler-v3-plans`, with this
-   trigger cost in view.
+2. **F, prototyped on this branch:** basstler's own plan saves start the build. Plan
+   saves no longer need the token; the merge workflow still does.
+3. **v3:** plan issues per repository, with F for session edits and an issue-event
+   workflow for edits made on github.com, using the least-privilege token.
 
-A scheduled poll (B) is the simplest token-free design. It needs an exception to the
-no-schedule rule, which only the user can grant.
+No schedule: the no-schedule rule stays, with no exception.
 
 ## Prototype of B
 
