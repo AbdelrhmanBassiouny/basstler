@@ -1,6 +1,6 @@
 Plan
-- #137: token-free-site analysis, docs only. #139: option F prototype and least-privilege token.
+- #137: token-free-site analysis, docs only.
 Done
-- Analysis answers the user's four questions; F verified live; #139 opened (release:minor).
+- Closed unmerged on 2026-11-05: recommendations carried out in #139, #140 and #141; token-free-site marked done.
 Next
-- User review of #137 and #139; then fail-loudly dispatch, store-and-verify command, pre-filled token page.
+- Nothing on this branch; follow-up work is on #139-#141.
