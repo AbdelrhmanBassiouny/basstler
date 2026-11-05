@@ -21,7 +21,7 @@ from basstler.exit_codes import SetupCheckExitCode
 from basstler.plan_site import dispatch_check, publication
 from basstler.plan_site.dispatch_check import UNVERIFIED_PREFIX
 from basstler.plan_site.hub import HubFileKey
-from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
+from basstler.setup.report import CheckResult, CheckStatus, SetupCheck, SetupReport
 
 from ..constants.environment import ConfigurationVariable, ScrubbedEnvironmentPrefix
 from ..constants.notes import ScratchBranch
@@ -216,28 +216,57 @@ def test_a_dispatch_workflow_whose_runs_cannot_be_read_is_not_verified(
     assert publication.__name__ in plan_site.detail
 
 
+def with_dispatch_check_stub(
+    repository: ScratchRepository, stub: DatasetLocation
+) -> ScratchRepository:
+    """
+    Give the scratch repository a dispatch workflow on its notes branch, and make its
+    dispatch check print what a stand-in prints.
+
+    check-setup.sh runs the check in a process of its own, which imports it from the
+    scratch checkout, so the stand-in replaces the module's file there.
+
+    :param repository: The scratch repository, fully set up.
+    :param stub: The module whose output replaces the dispatch check's.
+    :return: The same repository.
+    """
+    repository.update_notes_branch_file(
+        WorkflowLocation.PLAN_SITE_DISPATCH, "name: Plan site dispatch\n"
+    )
+    package_root = Path(basstler.__file__).parent.parent
+    shutil.copy(
+        stub,
+        repository.checkout_root
+        / PackageSourceFile.SOURCE
+        / Path(dispatch_check.__file__).relative_to(package_root),
+    )
+    return repository
+
+
 @pytest.fixture
 def dispatch_needing_setup(
     check_setup_repository: ScratchRepository,
 ) -> ScratchRepository:
     """
-    The scratch repository with a dispatch workflow on its notes branch, whose dispatch
-    check reports that it needs setup.
-
-    check-setup.sh runs the check in a process of its own, which imports it from the
-    scratch checkout, so the stand-in replaces the module's file there.
+    The scratch repository whose dispatch check reports that it needs setup.
     """
-    check_setup_repository.update_notes_branch_file(
-        WorkflowLocation.PLAN_SITE_DISPATCH, "name: Plan site dispatch\n"
+    return with_dispatch_check_stub(
+        check_setup_repository, DatasetLocation.DISPATCH_CHECK_NEEDS_SETUP_STUB
     )
-    package_root = Path(basstler.__file__).parent.parent
-    shutil.copy(
-        DatasetLocation.DISPATCH_CHECK_NEEDS_SETUP_STUB,
-        check_setup_repository.checkout_root
-        / PackageSourceFile.SOURCE
-        / Path(dispatch_check.__file__).relative_to(package_root),
+
+
+@pytest.fixture
+def dispatch_with_other_repository(
+    check_setup_repository: ScratchRepository,
+) -> ScratchRepository:
+    """
+    The scratch repository whose dispatch check reports its own repository as starting
+    the build and a second repository as informational.
+    """
+    return with_dispatch_check_stub(
+        check_setup_repository,
+        DatasetLocation.DISPATCH_CHECK_WITH_OTHER_REPOSITORY_STUB,
     )
-    return check_setup_repository
 
 
 def test_a_dispatch_workflow_is_reported_as_its_runs_say(
@@ -247,6 +276,37 @@ def test_a_dispatch_workflow_is_reported_as_its_runs_say(
 
     assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
     assert report.results[SetupCheck.PLAN_SITE].status == CheckStatus.NEEDS_SETUP
+
+
+def test_every_other_repository_on_the_plan_site_gets_a_row_of_its_own(
+    dispatch_with_other_repository: ScratchRepository,
+):
+    report = run_check_setup(dispatch_with_other_repository)
+
+    assert report.results[SetupCheck.PLAN_SITE].status == CheckStatus.OK
+    assert report.repository_results == [
+        CheckResult(CheckStatus.INFORMATIONAL, "another repository's latest run failed")
+    ]
+
+
+def test_a_repository_row_never_fails_the_run(
+    dispatch_with_other_repository: ScratchRepository,
+):
+    report = run_check_setup(
+        dispatch_with_other_repository, OnlyFlag.ONLY, SetupCheck.PLAN_SITE
+    )
+
+    assert report.exit_code is SetupCheckExitCode.SUCCESS
+
+
+def test_a_repository_row_is_not_printed_when_the_plan_site_is_not_requested(
+    dispatch_with_other_repository: ScratchRepository,
+):
+    report = run_check_setup(
+        dispatch_with_other_repository, OnlyFlag.ONLY, SetupCheck.NOTES_FILE
+    )
+
+    assert report.repository_results == []
 
 
 def test_the_dispatch_workflow_path_matches_the_shell_configuration(

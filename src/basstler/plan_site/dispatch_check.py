@@ -1,6 +1,6 @@
 """
-Print check-setup.sh's plan site status and detail: whether every repository the plan
-site publishes stores the token and starts the site's build from its notes branch.
+Print check-setup.sh's plan site rows: whether the clone's own repository stores the
+token and starts the site's build, then what each other published repository reports.
 
 Usage:
     "${BASSTLER_PYTHON}" -m basstler.plan_site.dispatch_check
@@ -465,12 +465,18 @@ What the detail of an unverified plan site check opens with.
 @dataclass(frozen=True)
 class DispatchCheck:
     """
-    Whether every repository the plan site publishes starts its build.
+    Whether the clone's own repository starts the plan site's build, and what the other
+    repositories the site publishes report.
     """
 
-    dispatches: list[DispatchReading]
+    own: DispatchReading
     """
-    What was read of each published repository's dispatch.
+    What was read of the clone's own repository's dispatch, the only one judged.
+    """
+
+    others: list[DispatchReading]
+    """
+    What was read of each other published repository's dispatch, reported as context.
     """
 
     site: SiteRepository | None = None
@@ -493,34 +499,35 @@ class DispatchCheck:
 
     def result(self) -> CheckResult:
         """
-        :return: :attr:`CheckStatus.OK` only when every repository's latest dispatch
-            run succeeded with its token stored; :attr:`CheckStatus.UNVERIFIED` when no
-            run shows whether a repository starts its build and none needs setup.
+        :return: The own repository's status and what was found of it, with the command
+            for what is left unless it starts its build; unverified when its runs could
+            not be read.
         """
-        statuses = {dispatch.status for dispatch in self.dispatches}
-        if statuses <= {CheckStatus.OK}:
-            return CheckResult(
-                CheckStatus.OK,
-                "every repository on the plan site starts its build on every push",
-            )
-        status = next(
-            status
-            for status in (
-                CheckStatus.NEEDS_SETUP,
-                CheckStatus.UNVERIFIED,
-                CheckStatus.INFORMATIONAL,
-            )
-            if status in statuses
+        if self.own.status is CheckStatus.OK:
+            return CheckResult(CheckStatus.OK, self.own.describe())
+        detail = (
+            f"{self.own.describe()} - for what is left, run: {self.publication_command}"
         )
-        unfinished = "; ".join(
-            dispatch.describe()
-            for dispatch in self.dispatches
-            if dispatch.status is not CheckStatus.OK
-        )
-        detail = f"{unfinished} - for what is left, run: {self.publication_command}"
-        if status is CheckStatus.UNVERIFIED:
+        if self.own.status is CheckStatus.UNVERIFIED:
             detail = f"{UNVERIFIED_PREFIX} - {detail}"
-        return CheckResult(status, detail)
+        return CheckResult(self.own.status, detail)
+
+    def other_results(self) -> list[CheckResult]:
+        """
+        :return: One informational result for each other repository, naming it and what
+            was found, whatever that is.
+        """
+        return [
+            CheckResult(CheckStatus.INFORMATIONAL, other.describe())
+            for other in self.others
+        ]
+
+    def rows(self) -> list[CheckResult]:
+        """
+        :return: :meth:`result`, then :meth:`other_results`, in the order they are
+            printed.
+        """
+        return [self.result(), *self.other_results()]
 
 
 # %% the command
@@ -566,7 +573,8 @@ The command, which takes no arguments.
 @app.default
 def report_dispatch() -> int:
     """
-    Print this clone's dispatch check. See the module docstring.
+    Print this clone's dispatch check, one row per published repository. See the module
+    docstring.
 
     :return: 0 once printed.
     :raises NotesRepositoryUnresolvedError: If the notes remote is not on GitHub.
@@ -580,11 +588,13 @@ def report_dispatch() -> int:
         raise NotesRepositoryUnresolvedError(location.remote)
     client = GitHubRestClient()
     check = DispatchCheck(
+        DispatchReading.read(client, client, notes_repository, location.branch),
         [
             DispatchReading.read(client, client, repository, location.branch)
             for repository in published_repositories(
                 project_root, location, notes_repository
             )
+            if repository != notes_repository
         ],
         SiteRepository.recorded_on(
             RemoteBranch(
@@ -592,7 +602,8 @@ def report_dispatch() -> int:
             )
         ),
     )
-    print(check.result().fields)
+    for row in check.rows():
+        print(row.fields)
     return 0
 
 
