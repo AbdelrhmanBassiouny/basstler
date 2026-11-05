@@ -1,13 +1,11 @@
 ## PR progress: ccr-55c61e97-pn7gso (#137, basstler-setup-ux / token-free-site)
 
 **Plan**
-- Analysis document: how the site publishes today, token-free options (schedule poll, change-gated poll, webhook/App, per-repo Pages), private notes repos, latency, Actions usage, security
-- Prototype workflow for stack-board: change-gated scheduled poll that only detects and logs, never deploys
-- Discuss with the user; prototype on stack-board only once they agree
+- Analysis plus a detect-only prototype of the change-gated poll; production waits for the user's decision
 
 **Done**
-- Branch, draft PR #137, item recorded in progress
+- docs/plan-site/token-free-publishing.md and plan-site-poll-prototype.yml (be7c6b38); detection verified locally against live repos
 
 **Next**
-- Write docs/plan-site/token-free-publishing.md and the prototype workflow
-- Ask the user before pushing the prototype to stack-board
+- Pending: user's go-ahead to push the prototype to stack-board's main, run it a day, compare with dispatch runs
+- Pending: user's answers on the default delay, dropping the merge workflow, and private notes repositories
