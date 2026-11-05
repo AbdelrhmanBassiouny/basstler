@@ -91,3 +91,18 @@ session by `session-start.sh`. Never merge this file into `main`.
 - A PR is finished when it merges, closes, or I move it out of draft myself (a session's own
   flip does not count). Then push nothing more, delete scheduled checks referencing it, drop
   subscriptions held only for it, report anything outstanding in chat, and stop.
+
+## Design priorities for every basstler plan
+
+Every plan and item in this repository is designed, and its options weighed, against
+these:
+- Reliable: a failure is reported where the user sees it, never silent.
+- User-friendly and automated: the fewest steps a person takes; whatever a command can
+  do, it does.
+- Deterministic: the same inputs give the same result; no step relies on timing or on
+  GitHub's scheduler.
+- Fresh: the site and notes update on every change, not on a poll.
+- Secure: least privilege; no credential broader or longer-lived than its one use.
+- Team-ready: nothing that blocks several people sharing plans later.
+- Easy to change: deleting, deferring, hiding, searching, and adding notes or comments
+  to a plan or an item stays one simple action.
