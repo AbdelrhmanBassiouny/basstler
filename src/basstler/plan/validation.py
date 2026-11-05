@@ -21,6 +21,7 @@ from basstler.exceptions import (
     InvalidSchemaVersion,
     MalformedDependencyReference,
     MissingPlanDirectory,
+    PlanInAnotherRepository,
     PlanValidationError,
     SelfPlanReference,
     UnknownDependency,
@@ -36,6 +37,7 @@ from basstler.plan.dependencies import (
     ResolvedDependency,
 )
 from basstler.plan.model import ItemStatus, ManifestKey
+from basstler.repository import Repository
 
 
 # %% dependency cycles
@@ -236,6 +238,12 @@ class PlanValidator:
     this plan's own items are available - in which case a cross-plan entry is
     a problem rather than a free pass."""
 
+    notes_repository: Repository | None = None
+    """
+    The repository whose notes branch the plan is saved to, or ``None`` when it is not
+    known.
+    """
+
     def validate(self) -> None:
         """
         Check every rule.
@@ -260,6 +268,7 @@ class PlanValidator:
             *(problem for item in self.items for problem in self.item_problems(item)),
             *self.cycle_problems(),
             *self.wave_problems(),
+            *self.repository_problems(),
         ]
 
     @property
@@ -424,4 +433,26 @@ class PlanValidator:
             )
             for track in self.manifest.get(ManifestKey.TRACKS.key, [])
             if track.get(ManifestKey.WAVE.key) not in self.wave_identifiers
+        ]
+
+    def repository_problems(self) -> list[ValidationProblem]:
+        """
+        The problem of the plan being saved to another repository's notes than the one
+        its ``default_repository`` names, if it is.
+        """
+        default_repository = self.manifest.get(ManifestKey.DEFAULT_REPOSITORY.key)
+        if (
+            self.notes_repository is None
+            or not isinstance(default_repository, str)
+            or not Repository.is_full_name(default_repository)
+        ):
+            return []
+        if default_repository.casefold() == self.notes_repository.full_name.casefold():
+            return []
+        return [
+            PlanInAnotherRepository(
+                self.plan_id,
+                Repository.parse(default_repository),
+                self.notes_repository,
+            )
         ]

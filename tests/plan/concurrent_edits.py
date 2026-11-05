@@ -22,6 +22,13 @@ PLAN_IDENTIFIER = PlanManifest.from_file(DatasetLocation.BOOTSTRAP_PLAN).identif
 The id the fixture plan carries.
 """
 
+PLAN_REPOSITORY = PlanManifest.from_file(
+    DatasetLocation.BOOTSTRAP_PLAN
+).default_repository
+"""
+The repository the fixture plan's work is for, whose notes it is saved to.
+"""
+
 FIRST_ITEM = "an-existing-item"
 """
 The fixture item the session edits.

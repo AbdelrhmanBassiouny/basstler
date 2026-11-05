@@ -17,6 +17,7 @@ import yaml
 
 from basstler.plan.dependencies import DependencyReference
 from basstler.plan.model import ManifestKey, PlanDocument, PlanManifest
+from basstler.repository import Repository
 
 from .constants.paths import DatasetLocation
 
@@ -120,6 +121,13 @@ def fixture_repository(plan_id: str) -> str:
     :param plan_id: The plan's id.
     """
     return PlanManifest(fixture_manifest(plan_id)).default_repository.full_name
+
+
+def dataset_plan_repository() -> Repository:
+    """
+    :return: The repository the dataset plan's work is for.
+    """
+    return PlanManifest.from_file(DatasetLocation.PLAN.value).default_repository
 
 
 def fixture_pull_request_number(plan_id: str, item_identifier: str) -> str:

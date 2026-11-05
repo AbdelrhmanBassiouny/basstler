@@ -117,7 +117,7 @@ class GitHubRepositoryStandIn:
         """
         :return: The git setting that makes the stand-in's GitHub URL resolve to it.
         """
-        return f"url.{self.url}.insteadOf"
+        return ScratchRepository.url_rewriting_key(self.url)
 
 
 @dataclass(frozen=True)
