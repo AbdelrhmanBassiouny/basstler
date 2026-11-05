@@ -21,6 +21,7 @@ from basstler.plan.item_bootstrap.vocabulary import PlanSavingOption
 from basstler.plan.merge import PlanVersion
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ManifestKey, PlanManifest
+from basstler.repository import Repository
 from basstler.plan_site.hub import HubFileKey, PlanHub, SiteAddress
 from basstler.shell_configuration import ShellConfigurationFunction
 
@@ -190,6 +191,73 @@ def test_refuses_a_manifest_the_plan_site_would_reject(
     )
     assert not (
         verify_checkout / ProjectLocation.PLANS / DatasetPlan.IDENTIFIER
+    ).exists()
+
+
+def save_through_notes_remote(
+    repository: ScratchRepository, notes_repository: Repository
+) -> subprocess.CompletedProcess[str]:
+    """
+    Save the dataset plan to the notes branch of *notes_repository*, served by the
+    scratch notes remote.
+
+    :param repository: A fixture-built scratch repository.
+    :param notes_repository: The repository the notes remote names.
+    :return: The finished save-plan.sh.
+    """
+    repository.run_git(
+        "config",
+        f"url.{repository.notes_remote_path}.insteadOf",
+        notes_repository.clone_url,
+    )
+    repository.run_git(
+        "config", "claude.personalNotesRemote", notes_repository.clone_url
+    )
+    return run_save_plan(
+        repository,
+        DatasetPlan.IDENTIFIER,
+        PlanSavingOption.MANIFEST,
+        str(DatasetLocation.PLAN.value),
+        PlanSavingOption.ROADMAP,
+        str(DatasetLocation.ROADMAP.value),
+    )
+
+
+def test_refuses_a_plan_for_another_repository(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    A plan lives in the notes of the repository its work is for, so a save to any
+    other repository's notes is refused before anything is pushed.
+    """
+    result = save_through_notes_remote(
+        save_plan_repository, Repository("another-owner", "another-repository")
+    )
+
+    assert result.returncode == 1
+    assert not saved_plan_directory(
+        save_plan_repository, DatasetPlan.IDENTIFIER
+    ).exists()
+
+
+def test_saves_a_plan_to_its_own_repositorys_notes(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    The plan's own repository's notes take the save.
+    """
+    plan_repository = Repository.parse(
+        yaml.safe_load(DatasetLocation.PLAN.read_text())[
+            ManifestKey.DEFAULT_REPOSITORY.key
+        ]
+    )
+
+    result = save_through_notes_remote(save_plan_repository, plan_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        saved_plan_directory(save_plan_repository, DatasetPlan.IDENTIFIER)
+        / PlanDocument.MANIFEST
     ).exists()
 
 

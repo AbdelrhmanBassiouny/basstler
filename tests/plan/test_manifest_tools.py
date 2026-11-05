@@ -34,6 +34,8 @@ from basstler.plan.manifest_tools import (
     main,
 )
 
+from basstler.repository import Repository
+
 from ..constants.paths import DatasetLocation
 from ..fixture_plans import FixturePlanId, ForeignItemId, foreign_reference
 from ..manifest_builders import manifest_item, minimal_plan
@@ -290,6 +292,70 @@ def test_validate_refuses_a_reference_to_a_plan_the_directory_lacks(
         tmp_path,
         foreign_reference(ForeignItemId.READY, FixturePlanId.ABSENT),
     ) == (ManifestToolsExitCode.INVALID_MANIFEST)
+
+
+# %% main - validating a manifest against the repository its notes are saved to
+
+
+def run_validate_for_notes_remote(monkeypatch, notes_remote_url: str) -> int:
+    """
+    :param monkeypatch: pytest's monkeypatch fixture.
+    :param notes_remote_url: The URL of the remote the manifest would be saved to.
+    :return: The exit status the command line returns for the dataset plan.
+    """
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            SCRIPT_NAME,
+            ManifestToolsCommand.VALIDATE,
+            str(DatasetLocation.PLAN.value),
+            ManifestToolsOption.NOTES_REMOTE_URL,
+            notes_remote_url,
+        ],
+    )
+    return main()
+
+
+def dataset_plan_repository() -> Repository:
+    """
+    :return: The repository the dataset plan's work is for.
+    """
+    return Repository.parse(
+        yaml.safe_load(DatasetLocation.PLAN.read_text())[
+            ManifestKey.DEFAULT_REPOSITORY.key
+        ]
+    )
+
+
+def test_validate_refuses_a_plan_for_another_repository(monkeypatch):
+    """
+    The command line refuses what the validator refuses.
+    """
+    another_repository = Repository("another-owner", "another-repository")
+    assert run_validate_for_notes_remote(monkeypatch, another_repository.url) == (
+        ManifestToolsExitCode.INVALID_MANIFEST
+    )
+
+
+def test_validate_accepts_a_plan_saved_to_its_own_repository(monkeypatch):
+    """
+    A clone URL names the same repository as the plan's ``owner/name``.
+    """
+    assert run_validate_for_notes_remote(
+        monkeypatch, dataset_plan_repository().clone_url
+    ) == (ManifestToolsExitCode.SUCCESS)
+
+
+def test_validate_leaves_a_notes_remote_naming_no_repository_unchecked(
+    monkeypatch, tmp_path
+):
+    """
+    A local remote, as the hook tests use, names no repository to compare against.
+    """
+    assert run_validate_for_notes_remote(monkeypatch, str(tmp_path)) == (
+        ManifestToolsExitCode.SUCCESS
+    )
 
 
 # %% item - one item's slice of a plan

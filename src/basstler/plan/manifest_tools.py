@@ -34,6 +34,7 @@ from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.merge import PlanMerge, PlanVersion
 from basstler.plan.validation import PlanValidator
 from basstler.plan import model
+from basstler.repository import Repository
 from basstler.exit_codes import CommandFailure, ManifestToolsExitCode
 from basstler.standard_streams import StandardStreamHandler
 
@@ -125,6 +126,11 @@ class ManifestToolsOption(StrEnum):
     The branch whose item to print.
     """
 
+    NOTES_REMOTE_URL = "--notes-remote-url"
+    """
+    The URL of the remote whose notes branch the manifest is saved to.
+    """
+
 
 class YamlBooleanCoercionError(ValueError):
     """
@@ -182,17 +188,24 @@ class PlanManifest:
                 branches.append(branch)
         return branches
 
-    def validate(self, plan_directory: PlanDirectory | None = None) -> None:
+    def validate(
+        self,
+        plan_directory: PlanDirectory | None = None,
+        notes_repository: Repository | None = None,
+    ) -> None:
         """
         Check the manifest against the same rules a plan page is built under, so nothing
-        is saved that no page could then be built from.
+        is saved that no page could then be built from, nor to another repository's
+        notes than the one its work is for.
 
         :param plan_directory: The plans a ``<plan-id>/<item-id>`` entry resolves
             against; without one, such an entry is refused.
+        :param notes_repository: The repository whose notes the manifest is saved to, or
+            ``None`` when it is not known.
         :raises PlanValidationError: If it breaks any rule, carrying every problem
             found.
         """
-        PlanValidator(self.content, plan_directory).validate()
+        PlanValidator(self.content, plan_directory, notes_repository).validate()
 
     def string_field(self, value: object, field_name: str) -> str:
         """
@@ -310,6 +323,12 @@ class ManifestToolsCommandLine:
             default=None,
             help="The plans a <plan-id>/<item-id> depends_on entry resolves against",
         )
+        validate_parser.add_argument(
+            ManifestToolsOption.NOTES_REMOTE_URL,
+            dest="notes_remote_url",
+            default=None,
+            help="The remote the manifest is saved to; a plan for another repository is refused",
+        )
 
         regenerate_parser = subcommands.add_parser(
             ManifestToolsCommand.REGENERATE_BRANCH_INDEX,
@@ -368,7 +387,11 @@ class ManifestToolsCommandLine:
         elif arguments.subcommand == ManifestToolsCommand.VALIDATE:
             try:
                 PlanManifest(arguments.manifest_path).validate(
-                    PlanDirectory(arguments.plans_dir) if arguments.plans_dir else None
+                    PlanDirectory(arguments.plans_dir) if arguments.plans_dir else None,
+                    Repository.from_remote_url(arguments.notes_remote_url)
+                    if arguments.notes_remote_url
+                    and Repository.names_a_repository(arguments.notes_remote_url)
+                    else None,
                 )
             except PlanValidationError as error:
                 logger.error(f"{arguments.manifest_path} failed validation: {error}")
