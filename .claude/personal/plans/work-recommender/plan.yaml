@@ -42,11 +42,7 @@ items:
   depends_on:
   - item-kind-and-focus
   status: deferred
-  notes: 'Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on
-    v3 (see roadmap). Was: A priorities.yaml beside _hub.yaml, parsed into dataclasses: kind order (bug,
-    cleanup, feature), focus order (phd, then tooling bugs and cleanup, then high-leverage tooling features,
-    then the rest), and a side-work cap - at most two of the top five slots go to non-PhD work, so most
-    of each day stays on the PhD. Defaults match this; the owner edits the file to retune.'
+  notes: 'Deferred until basstler-v3 lands (see roadmap). A priorities.yaml beside _hub.yaml, parsed into pydantic dataclasses: kind order (bug, cleanup, feature); daily queue shape (10 slots: 3 external reviews, 5 PR stages, 1 reading, 1 writing) and a daily point budget; weekly targets (PhD at least 50% of points); size buckets by changed lines (S=1, M=2, L=4, XL=8); topics mapping repositories, paths, labels and keywords to thesis chapters; the thesis repository, its 150-page target and the .bib sources.'
 - id: ranked-work-list
   title: Rank every actionable item across all hub repositories
   branch: null
@@ -55,12 +51,7 @@ items:
   depends_on:
   - priority-policy
   status: deferred
-  notes: 'Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on
-    v3 (see roadmap). Was: A recommender module loads every hub repository''s plans and live PR state
-    and keeps what can be acted on now: startable items (dependencies landed, not blocked), and open PRs
-    with red CI, conflicts or unresolved review threads. Ordered by the policy with the side-work cap
-    applied; each entry gives its reason and a kickoff or resolve link. Untracked open PRs join as ''track
-    this'' entries.'
+  notes: 'Deferred until basstler-v3 lands (see roadmap). A recommender module ranks, deterministically by the policy, what is actionable now across hub repositories: startable items and each open PR''s next stage that needs the owner (self-review and mark ready, answer review threads, fix CI or conflicts). Each stage is its own task, sized by what it acts on (the diff or the unresolved threads); waiting on upstream review is shown but never queued. Each entry gives its reason, size and a kickoff or resolve link; untracked open PRs join as ''track this''.'
 - id: hub-recommendation-panel
   title: Show the ranked list on the hub page as a sidebar and a full tab
   branch: null
@@ -69,7 +60,34 @@ items:
   depends_on:
   - ranked-work-list
   status: deferred
-  notes: 'Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on
-    v3 (see roadmap). Was: The hub page carries a ''Next up'' sidebar with the top five and a ''Recommended''
-    tab with the whole ranked list, grouped by priority with the reasons. Rebuilt with the site on every
-    plan change (team-basstler''s plan site), so it is always current; no Artifact version.'
+  notes: 'Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on v3 (see roadmap). The hub page carries a ''Today'' sidebar with the daily queue of ten and a ''Recommended'' tab with the whole ranked list, grouped by kind with the reasons. Rebuilt with the site on every plan change (team-basstler''s plan site); the daily refresh comes from daily-queue-refresh; no Artifact version.'
+
+- id: external-review-candidates
+  title: Recommend other people's open PRs to review, related and small first
+  branch: null
+  pull_request_number: null
+  track: recommender
+  depends_on:
+  - ranked-work-list
+  status: deferred
+  notes: 'Deferred like the rest of the plan. Fetches open PRs not authored by the owner and not yet reviewed by them, on every repository the owner works on or has a fork of (the fork''s upstream included). Ranked deterministically by topic relatedness to the owner''s queued PR stages (shared changed paths first, then repository, linked issues, labels, keyword overlap with priorities.yaml topics), then by size, smaller first. Fills the queue''s three review slots.'
+
+- id: daily-queue-refresh
+  title: Rebuild the daily queue every morning and on a Refresh button
+  branch: null
+  pull_request_number: null
+  track: recommender
+  depends_on:
+  - external-review-candidates
+  status: deferred
+  notes: 'Deferred like the rest of the plan. A GitHub Actions workflow with workflow_dispatch (the Refresh link on the hub page) and one daily morning cron, the owner-approved exception to actions-budget''s no-schedule rule, runs the recommender and rebuilds the site. The queue is ordered as phases: PhD work until the day''s 50% PhD share is met, then the other kinds in policy order. It reads other repositories with a read-only fine-grained token scoped to the hub repositories and their upstreams; a failed fetch is shown on the page, never dropped.'
+
+- id: progress-meters
+  title: Show weekly meters and a thesis meter toward 150 pages
+  branch: null
+  pull_request_number: null
+  track: recommender
+  depends_on:
+  - daily-queue-refresh
+  status: deferred
+  notes: 'Deferred like the rest of the plan. Weekly meters in points: PhD share, review share, writing sessions, points finished against recent weeks; done stages and reviews come from GitHub, reading and writing are logged. Thesis meter from the LaTeX repository: compiled pages against 150, words / 250 beside it, trend and projected finish. The reading slot picks related .bib entries from the repositories'' notes; the writing slot names the thesis chapter of finished PRs. /plan-create and /add-plan-item offer related .bib entries as reading items, added only if accepted.'

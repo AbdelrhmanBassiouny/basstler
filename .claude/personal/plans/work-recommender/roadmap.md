@@ -4,3 +4,5 @@
 - Every ranking rule comes from priorities.yaml; the recommender hard-codes no repository, plan or topic name.
 - The recommender reads plans and live state through the existing models (plan_model, the dashboard's pull-request state); it adds no second parser.
 - It renders on the site only; there is no Artifact version.
+- Effort is counted in size-bucket points, never in item counts; shares and meters are weekly, the queue is daily.
+- Each stage of a PR that needs the owner is its own task; waiting on someone else is a state, never a queued task or a counted point.
