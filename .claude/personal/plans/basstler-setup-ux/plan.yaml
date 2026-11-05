@@ -58,13 +58,6 @@ items:
   track: setup-flow
   status: not started
   notes: setup.steps lists missing labels, or a cached list is used, when the session has no token, instead of one get_label call per label.
-- id: fix-secret-loop
-  title: Space-separate repositories in the printed gh secret set loop
-  track: setup-flow
-  status: in progress
-  notes: Folded into token-fast-path (#140), whose store step is one command instead of the printed loop.
-  branch: plan-site-token-fast-path
-  pull_request_number: 140
 - id: token-free-site
   title: Analyse and prototype publishing without PLAN_SITE_TOKEN
   track: token-free
@@ -149,7 +142,7 @@ items:
   notes: >
     Stacked on #139. Dispatch step stops with an ::error:: naming the secret and how to store it.
     basstler.plan_site.token_storage stores the token in every published repository, starts each
-    dispatch and prints done or the failed run (covers fix-secret-loop and the done half of
+    dispatch and prints done or the failed run (replaces the printed gh secret set loop and covers the done half of
     trigger-and-done). The create step links the pre-filled token form. One secret copy per
     repository stays (no user-level Actions secrets); a joining repository costs Regenerate token
     plus the store command. Open: make the token optional (F plus page-merge-recheck).
