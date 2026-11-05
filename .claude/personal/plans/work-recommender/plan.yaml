@@ -80,7 +80,7 @@ items:
   depends_on:
   - external-review-candidates
   status: deferred
-  notes: 'Deferred like the rest of the plan. A GitHub Actions workflow with workflow_dispatch (the Refresh link on the hub page) and one daily morning cron, the owner-approved exception to actions-budget''s no-schedule rule, runs the recommender and rebuilds the site. The queue is ordered as phases: PhD work until the day''s 50% PhD share is met, then the other kinds in policy order. It reads other repositories with a read-only fine-grained token scoped to the hub repositories and their upstreams; a failed fetch is shown on the page, never dropped.'
+  notes: 'Deferred like the rest of the plan. A GitHub Actions workflow started by the hub page''s Refresh button (plan-site-ui/command-issues) and one daily morning cron, the owner-approved exception to actions-budget''s no-schedule rule, runs the recommender and rebuilds the site. The queue is ordered as phases: PhD work until the day''s 50% PhD share is met, then the other kinds in policy order. It reads other repositories with a read-only fine-grained token scoped to the hub repositories and their upstreams; a failed fetch is shown on the page, never dropped.'
 
 - id: progress-meters
   title: Show weekly meters and a thesis meter toward 150 pages
@@ -91,3 +91,14 @@ items:
   - daily-queue-refresh
   status: deferred
   notes: 'Deferred like the rest of the plan. Weekly meters in points: PhD share, review share, writing sessions, points finished against recent weeks; done stages and reviews come from GitHub, reading and writing are logged. Thesis meter from the LaTeX repository: compiled pages against 150, words / 250 beside it, trend and projected finish. The reading slot picks related .bib entries from the repositories'' notes; the writing slot names the thesis chapter of finished PRs. /plan-create and /add-plan-item offer related .bib entries as reading items, added only if accepted.'
+
+- id: settings-and-log-pages
+  title: Edit priorities and log reading and writing from the site, with a live preview
+  branch: null
+  pull_request_number: null
+  track: recommender
+  depends_on:
+  - progress-meters
+  - plan-site-ui/command-issues
+  status: deferred
+  notes: 'Deferred like the rest of the plan. A Settings tab edits every priorities.yaml field as a form (sliders for shares and budgets, drag to reorder kinds, topic and chapter pickers) and a Log button records reading done, writing sessions and accepted .bib suggestions. Saving sends a plan-site-ui command issue, which validates the change into the policy dataclasses, commits it and rebuilds the site; a refused change is reported on the page. Charts and filters run in the browser on the published data. Open: a live re-rank preview needs the Python ranker in the browser (Pyodide); decide at kickoff.'
