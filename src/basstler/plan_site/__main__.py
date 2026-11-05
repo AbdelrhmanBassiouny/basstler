@@ -23,10 +23,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import sys
 import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -49,6 +51,7 @@ from basstler.plan_site.hub_page import (
     SkippedPage,
 )
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
+from basstler.plan_site.cards import PlanTimeAttribute
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus
@@ -87,11 +90,19 @@ class SiteFile(StrEnum):
     """
 
 
+BUILD_TIME_PATTERN = re.compile(
+    rf"<time [^>]*{PlanTimeAttribute.REFRESHED}[^>]*>[^<]*</time>".encode()
+)
+"""
+The element a plan page shows the build time in.
+"""
+
+
 @dataclass(frozen=True)
 class SiteDigest:
     """
     A fingerprint of a built site's pages: two builds have the same digest exactly when
-    they publish the same files with the same content.
+    they publish the same files with the same content, apart from the build time.
     """
 
     site_directory: Path
@@ -110,8 +121,17 @@ class SiteDigest:
             if not path.is_file() or relative_path == Path(SiteFile.DIGEST):
                 continue
             digest.update(relative_path.as_posix().encode())
-            digest.update(hashlib.sha256(path.read_bytes()).digest())
+            digest.update(hashlib.sha256(self.content_of(path)).digest())
         return digest.hexdigest()
+
+    @staticmethod
+    def content_of(path: Path) -> bytes:
+        """
+        :param path: A built file.
+        :return: Its content without the build time, so a build that changed nothing
+            else has the published digest and skips the deploy.
+        """
+        return BUILD_TIME_PATTERN.sub(b"", path.read_bytes())
 
     def write(self) -> None:
         """
@@ -210,6 +230,11 @@ class SiteSection[SectionCard: ProgressCard](ABC):
     Where the live pull request state comes from.
     """
 
+    built_at: datetime = field(default_factory=lambda: datetime.now(UTC), kw_only=True)
+    """
+    When the site is built, which every plan page shows as its last refresh.
+    """
+
     @property
     def stylesheet_url(self) -> str:
         """
@@ -250,6 +275,12 @@ class RepositorySite(SiteSection[RepositorySummary]):
     plans_directory: Path
     """
     That repository's ``plans`` directory, holding one subdirectory per plan.
+    """
+
+    notes: NotesBranch | None = field(default=None, kw_only=True)
+    """
+    The notes branch the plans were checked out of, which dates each plan, ``None``
+    when the plans come from elsewhere.
     """
 
     plan_directory: PlanDirectory = field(init=False)
@@ -338,6 +369,10 @@ class RepositorySite(SiteSection[RepositorySummary]):
             index_url=self.address.repository_url(self.repository),
             plan_directory=self.plan_directory,
             locate_plan_page=self.plan_url,
+            history=(
+                self.notes.history_of(source.directory_name) if self.notes else None
+            ),
+            built_at=self.built_at,
         )
         page = renderer.render()
         summary = PlanSummary(
@@ -425,6 +460,8 @@ class HubSite(SiteSection[SiteSummary]):
             pull_request_source=self.pull_request_source,
             repository=repository,
             plans_directory=notes.check_out_plans(),
+            built_at=self.built_at,
+            notes=notes,
         )
         return site.build(output)
 

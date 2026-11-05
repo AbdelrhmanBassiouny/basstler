@@ -53,6 +53,75 @@ class DraftRecheckAttribute(StrEnum):
     """
 
 
+class LiveStateAttribute(StrEnum):
+    """
+    The data attributes a plan page's script shows each pull request's live state by.
+    """
+
+    PULL_REQUEST = "data-live-pull-request"
+    """
+    On an item's pull request chip: that pull request's REST API address.
+    """
+
+    ITEM_STATUS = "data-item-status"
+    """
+    On an item's card: its status, as the page counts it.
+    """
+
+    STATUS_CHIP = "data-status-chip"
+    """
+    On an item's status chip.
+    """
+
+    STATUS_COUNT = "data-status-count"
+    """
+    On the page's count of one status: the status counted.
+    """
+
+
+class PlanTimeAttribute(StrEnum):
+    """
+    The data attributes of the times a plan page shows.
+    """
+
+    RELATIVE = "data-relative-time"
+    """
+    On a time the page's script shows relative to now.
+    """
+
+    REFRESHED = "data-refreshed-at"
+    """
+    On the time the page's states were last read from GitHub.
+    """
+
+    REFRESH_SOURCE = "data-refresh-source"
+    """
+    On the text saying where :attr:`REFRESHED` came from.
+    """
+
+
+class RefreshSource(StrEnum):
+    """
+    Where the states a plan page shows were last read from, as the page words it.
+    """
+
+    BUILD = "from the site build"
+    """
+    The build read them; the browser has not, or found nothing to read.
+    """
+
+    LIVE = "live from GitHub"
+    """
+    The browser read every pull request from GitHub.
+    """
+
+    REFUSED = "from the site build; GitHub refused the live check"
+    """
+    The browser asked GitHub, which refused or did not answer, as when the viewer's
+    hourly limit is spent.
+    """
+
+
 @dataclass
 class DependencyChip:
     """One ready-to-render ``needs`` chip on an item's card - see

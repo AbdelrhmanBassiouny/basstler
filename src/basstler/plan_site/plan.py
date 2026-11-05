@@ -168,6 +168,12 @@ class Item:
     This item's pull request on GitHub, if it has one.
     """
 
+    pull_request_api_url: str | None = field(default=None, init=False)
+    """
+    The same pull request's address in GitHub's REST pulls API, which the page re-reads
+    in the browser.
+    """
+
     pull_request_record: PullRequestRecord | None = field(default=None, init=False)
     """
     This item's live pull request, if GitHub has one by its number.
@@ -258,7 +264,15 @@ class Item:
         drift`` once :attr:`drift_description` is set.
         """
         drift_suffix = " has-drift" if self.drift_description else ""
-        return f"status-{self.status.name.lower()}{drift_suffix}"
+        return f"{self.status_css_class(self.status)}{drift_suffix}"
+
+    @staticmethod
+    def status_css_class(status: ItemStatus) -> str:
+        """
+        :param status: An item status.
+        :return: The CSS class a card with that status carries.
+        """
+        return f"status-{status.name.lower()}"
 
     @classmethod
     def from_mapping(cls, data: dict[str, Any]) -> Item:

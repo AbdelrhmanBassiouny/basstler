@@ -193,12 +193,12 @@ class SiteTemplate(PathEnumeration):
     A plan page's behaviour: copying commands, choosing a model, revealing an item.
     """
 
-    PLAN_DRAFT_RECHECK_SCRIPT = (
-        PackageLocation.TEMPLATES.value / "site_plan_draft_recheck.js"
+    PLAN_PULL_REQUEST_RECHECK_SCRIPT = (
+        PackageLocation.TEMPLATES.value / "site_plan_pull_request_recheck.js"
     )
     """
-    The plan page's script that asks GitHub whether a blocking draft pull request is
-    now ready for review.
+    The plan page's script that reads every pull request's state from GitHub in the
+    browser, and shows when the page was last refreshed.
     """
 
 

@@ -6,12 +6,12 @@
 
 {% macro item_card(item) %}
 {% set record = item.pull_request_record %}
-      <article id="{{ item.anchor }}" class="item {{ item.status_and_drift_css_class }}">
+      <article id="{{ item.anchor }}" class="item {{ item.status_and_drift_css_class }}" {{ live_state_attribute.ITEM_STATUS }}="{{ item.status.value }}">
         <h3>{{ item.title }}</h3>
         <div class="chips">
-          <span class="chip {{ chip_tone.of_status(item.status) }}">{{ item.status.value | capitalize }}</span>
+          <span class="chip {{ chip_tone.of_status(item.status) }}" {{ live_state_attribute.STATUS_CHIP }}>{{ item.status.value | capitalize }}</span>
           {% if item.pull_request_url %}
-          <a class="chip {{ chip_tone.of_live_state(item.live_state) }}" href="{{ item.pull_request_url }}">#{{ item.pull_request_number }} · {{ item.live_state.display_label }}</a>
+          <a class="chip {{ chip_tone.of_live_state(item.live_state) }}" href="{{ item.pull_request_url }}" {{ live_state_attribute.PULL_REQUEST }}="{{ item.pull_request_api_url }}">#{{ item.pull_request_number }} · {{ item.live_state.display_label }}</a>
           {% endif %}
           {% if record and record.check_state %}
           <span class="chip {{ chip_tone.of_check_state(record.check_state) }}">CI {{ record.check_state.value }}</span>
@@ -65,6 +65,10 @@
 {% endif %}
 {% endmacro %}
 
+{% macro plan_time(moment, marker=None) -%}
+<time {{ plan_time_attribute.RELATIVE }}{% if marker %} {{ marker }}{% endif %} datetime="{{ moment.isoformat() }}">{{ moment.strftime("%Y-%m-%d %H:%M %Z") }}</time>
+{%- endmacro %}
+
 {% block content %}
   <header class="masthead">
     <p class="crumbs">{% if hub_url %}<a href="{{ hub_url }}">All repositories</a> › {% endif %}{% if index_url %}<a href="{{ index_url }}">{{ repository }}</a>{% else %}{{ repository }}{% endif %} › {{ title }}</p>
@@ -76,9 +80,20 @@
       <a href="{{ repository_url }}">{{ repository }}</a>
       {% if tracking_url %}<a href="{{ tracking_url }}">Propose a structural change →</a>{% endif %}
     </p>
+    {% if history or built_at %}
+    <p class="meta-line plan-times">
+      {% if history %}
+      <span>Created {{ plan_time(history.created_at) }}</span>
+      <span>Last modified {{ plan_time(history.modified_at) }}</span>
+      {% endif %}
+      {% if built_at %}
+      <span>Refreshed {{ plan_time(built_at, plan_time_attribute.REFRESHED) }} <span {{ plan_time_attribute.REFRESH_SOURCE }}>{{ refresh_source.BUILD }}</span></span>
+      {% endif %}
+    </p>
+    {% endif %}
     <div class="status-strip">
       {% for status in item_statuses %}
-      <span class="stat"><strong>{{ status_counts[status] }}</strong>{{ status.value | capitalize }}</span>
+      <span class="stat"><strong {{ live_state_attribute.STATUS_COUNT }}="{{ status.value }}">{{ status_counts[status] }}</strong>{{ status.value | capitalize }}</span>
       {% endfor %}
     </div>
     {% if roadmap_html %}
@@ -125,8 +140,8 @@
 {% block scripts %}
 <script>
 {% include script_template %}
-{% include draft_recheck_script_template %}
+{% include recheck_script_template %}
 planPageRevealLocationHash();
-planPageRecheckDraftDependencies();
+planPageStartRechecks();
 </script>
 {% endblock %}
