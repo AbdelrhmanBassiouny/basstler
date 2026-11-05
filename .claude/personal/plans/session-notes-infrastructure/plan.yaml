@@ -48,9 +48,11 @@ items:
 
 - id: repository-rules
   title: Per-repository plan rules as structured data, shown in item briefs and on the plan site
-  branch: null
-  status: not started
+  branch: claude/dazzling-newton-zig14e
+  status: in progress
   track: conventions
+  pull_request_number: 143
+  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on: []
   notes: >
     The user's design priorities for every plan of a repository are prose in the personal notes'
