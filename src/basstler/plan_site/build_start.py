@@ -65,6 +65,22 @@ class GitHubCommand(StrEnum):
     """
 
 
+class CodeFence(StrEnum):
+    """
+    The Markdown lines a command is set between, so it shows as a copyable block.
+    """
+
+    BASH = "```bash"
+    """
+    Opens a block of bash.
+    """
+
+    CLOSE = "```"
+    """
+    Closes the block.
+    """
+
+
 class RepositoryKey(StrEnum):
     """
     The keys read from a repository's REST resource.
@@ -142,9 +158,15 @@ class BuildStart:
             f"{self.response.failure.error_message()}. {fallback}"
         )
         if not in_cloud_session:
-            return (
-                f"{refused} Log gh in with an account that can run workflows in "
-                f"{repository.full_name}: {GitHubCommand.LOG_IN}"
+            return "\n".join(
+                [
+                    f"{refused} Log gh in with an account that can run workflows in "
+                    f"{repository.full_name}:",
+                    "",
+                    CodeFence.BASH,
+                    GitHubCommand.LOG_IN,
+                    CodeFence.CLOSE,
+                ]
             )
         return (
             f"{refused} Attach the site repository to this session: call "
