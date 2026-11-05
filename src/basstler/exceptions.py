@@ -477,6 +477,30 @@ class PlanInAnotherRepository(ValidationProblem):
 
 
 @dataclass
+class NotesRemoteNamesNoRepository(ValidationProblem):
+    """
+    The notes remote the plan is saved to names no ``owner/name``, so the repository
+    it is for cannot be compared against it.
+    """
+
+    notes_remote_url: str
+    """
+    The URL of the notes remote, as configured.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"the notes remote {self.notes_remote_url!r} names no owner/name repository"
+        )
+
+    def suggest_correction(self) -> str:
+        """
+        Unlike :meth:`ValidationProblem.suggest_correction`, names the remote to set.
+        """
+        return "Set the notes remote to the GitHub URL of the plan's repository."
+
+
+@dataclass
 class DependencyCycle(ValidationProblem):
     """
     A ``depends_on`` chain loops back on itself.

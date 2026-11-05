@@ -341,15 +341,26 @@ def test_validate_accepts_a_plan_saved_to_its_own_repository(monkeypatch):
     ) == (ManifestToolsExitCode.SUCCESS)
 
 
-def test_validate_leaves_a_notes_remote_naming_no_repository_unchecked(
-    monkeypatch, tmp_path
-):
+def test_validate_refuses_a_notes_remote_naming_no_repository(monkeypatch, tmp_path):
     """
-    A local remote, as the hook tests use, names no repository to compare against.
+    A remote with no ``owner/name``, such as a local path, leaves nothing to compare the
+    plan's repository against, so the plan is not saved.
     """
     assert run_validate_for_notes_remote(monkeypatch, str(tmp_path)) == (
-        ManifestToolsExitCode.SUCCESS
+        ManifestToolsExitCode.INVALID_MANIFEST
     )
+
+
+def test_validate_without_a_notes_remote_checks_no_repository(monkeypatch):
+    """
+    A manifest validated with no save in mind has no notes remote to compare against.
+    """
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [SCRIPT_NAME, ManifestToolsCommand.VALIDATE, str(DatasetLocation.PLAN.value)],
+    )
+    assert main() == ManifestToolsExitCode.SUCCESS
 
 
 # %% item - one item's slice of a plan

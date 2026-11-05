@@ -29,7 +29,7 @@ from typing import Any
 
 import yaml
 
-from basstler.exceptions import PlanValidationError
+from basstler.exceptions import NotesRemoteNamesNoRepository, PlanValidationError
 from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.merge import PlanMerge, PlanVersion
 from basstler.plan.validation import PlanValidator
@@ -327,7 +327,7 @@ class ManifestToolsCommandLine:
             ManifestToolsOption.NOTES_REMOTE_URL,
             dest="notes_remote_url",
             default=None,
-            help="The remote the manifest is saved to; a plan for another repository is refused",
+            help="The remote the manifest is saved to; a plan for another repository, or a remote naming none, is refused",
         )
 
         regenerate_parser = subcommands.add_parser(
@@ -374,6 +374,20 @@ class ManifestToolsCommandLine:
             merge_parser.add_argument(option, required=True, type=Path)
         return parser
 
+    @staticmethod
+    def notes_repository(notes_remote_url: str | None) -> Repository | None:
+        """
+        :param notes_remote_url: The notes remote's URL, or ``None`` when no save is
+            being checked.
+        :return: The repository that URL names, or ``None`` for no URL.
+        :raises PlanValidationError: If the URL names no repository.
+        """
+        if notes_remote_url is None:
+            return None
+        if not Repository.names_a_repository(notes_remote_url):
+            raise PlanValidationError([NotesRemoteNamesNoRepository(notes_remote_url)])
+        return Repository.from_remote_url(notes_remote_url)
+
     @classmethod
     def run(cls, arguments: argparse.Namespace) -> ManifestToolsExitCode:
         """
@@ -388,10 +402,7 @@ class ManifestToolsCommandLine:
             try:
                 PlanManifest(arguments.manifest_path).validate(
                     PlanDirectory(arguments.plans_dir) if arguments.plans_dir else None,
-                    Repository.from_remote_url(arguments.notes_remote_url)
-                    if arguments.notes_remote_url
-                    and Repository.names_a_repository(arguments.notes_remote_url)
-                    else None,
+                    cls.notes_repository(arguments.notes_remote_url),
                 )
             except PlanValidationError as error:
                 logger.error(f"{arguments.manifest_path} failed validation: {error}")

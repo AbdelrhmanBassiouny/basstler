@@ -179,7 +179,8 @@ same check the first time the site is built from it:
 - `default_repository` is the repository this session's clone saves the plan
   to. A plan lives in the notes of the repository its work is for, so for
   another repository run this skill from a checkout of that one;
-  `save-plan.sh` refuses the save otherwise.
+  `save-plan.sh` refuses the save otherwise, and also when the notes remote is
+  not a GitHub URL naming a repository.
 
 Parse with Python's `yaml` module to check this mechanically rather than
 eyeballing it — the same tooling `save-plan.sh` and the plan site's build both
