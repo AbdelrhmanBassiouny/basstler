@@ -4,3 +4,4 @@
 - A successful run after the last configuration change is proof; an unreadable resource is reported as unreadable, never as a fault.
 - A step the tooling can do itself is not left to the user, and a value already recorded is not asked for again.
 - token-free-site changes nothing in production until the analysis is discussed with the user and a prototype verified.
+- A step a script can take, it tries first; it prints instructions only for a step that failed, with the reason.

@@ -109,4 +109,11 @@ items:
   track: setup-flow
   depends_on: []
   status: not started
+
+- id: try-before-instructing
+  title: "With a logged-in gh, setup takes every step itself and prints only the ones that failed"
+  branch: null
+  track: setup-flow
+  depends_on: []
+  status: not started
 tracking_issue: 135
