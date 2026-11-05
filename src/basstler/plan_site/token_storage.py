@@ -39,7 +39,13 @@ from basstler.plan_site.run_listing import ListedRun, RunListing
 from basstler.plan_site.workflows import GitHubCommandLineOption, PlanSiteSecret
 from basstler.repository import Repository
 from basstler.setup.steps import resolve_repository
+from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.vocabulary import CheckOutcome
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 # %% storing the secret
 
@@ -212,7 +218,7 @@ class TokenStorage:
         earlier = {run.url for run in self.listing(repository).select(workflow).runs}
         dispatch = self.github.attempt_send(
             HttpMethod.POST,
-            f"{repository.api_path}/actions/workflows/{workflow.name}/dispatches",
+            repository.workflow_dispatch_path(workflow),
             {DispatchKey.REF: self.notes_branch},
         )
         if dispatch.failure is not None:
@@ -286,7 +292,7 @@ def store_token() -> int:
     )
     results = storage.store(repositories, token)
     for result in results:
-        print(result.describe(storage.wait))
+        logger.info(result.describe(storage.wait))
     return 0 if all(result.proven for result in results) else 1
 
 

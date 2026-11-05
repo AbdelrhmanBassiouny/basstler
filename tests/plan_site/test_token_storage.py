@@ -214,15 +214,17 @@ def test_a_missing_command_line_client_is_reported_as_the_refusal():
 
 
 def test_a_stored_token_starts_the_dispatch_workflow_on_the_notes_branch():
+    """
+    A stored token is proven by dispatching the workflow on the notes branch.
+    """
     client = RunStartingClient()
 
     storage_with(client).store([FIRST], TOKEN)
 
-    workflow = WorkflowLocation.PLAN_SITE_DISPATCH.name
     assert client.writes == [
         SentWrite(
             HttpMethod.POST,
-            f"{FIRST.api_path}/actions/workflows/{workflow}/dispatches",
+            FIRST.workflow_dispatch_path(WorkflowLocation.PLAN_SITE_DISPATCH),
             {DispatchKey.REF: NOTES_BRANCH},
         )
     ]
