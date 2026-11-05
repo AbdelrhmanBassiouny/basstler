@@ -111,6 +111,12 @@ class GitHubWriter(ABC):
         return self.attempt_send(method, path, payload).raise_if_failed()
 
 
+class GitHubAttemptClient(GitHubAttemptReader, GitHubWriter, ABC):
+    """
+    Reading and writing REST resources, with a refusal returned on the answer.
+    """
+
+
 class GitHubClient(GitHubReader, GitHubWriter, ABC):
     """
     Reading and writing REST resources.
@@ -241,7 +247,7 @@ class GitHubResponse:
 
 
 @dataclass(frozen=True)
-class GitHubRestClient(GitHubClient, GitHubAttemptReader):
+class GitHubRestClient(GitHubClient, GitHubAttemptClient):
     """
     Plain authenticated HTTPS requests, through the proxy the environment names.
 

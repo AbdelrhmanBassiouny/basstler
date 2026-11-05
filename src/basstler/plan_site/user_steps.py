@@ -190,9 +190,9 @@ class UserSteps:
                     "the plan site.",
                     f"Name the token and set Resource owner to {site.owner}.",
                     "Under Repository access, choose Only select repositories and "
-                    f"select {site.full_name}, {repositories}.",
+                    f"select {site.full_name} alone.",
                     "Under Permissions, open Repository permissions and set Actions "
-                    "to Read and write and Contents to Read-only.",
+                    "to Read and write.",
                     "Click Generate token and copy the token now; GitHub shows it "
                     "once.",
                 ),
