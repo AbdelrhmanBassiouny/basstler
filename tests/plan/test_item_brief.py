@@ -11,7 +11,7 @@ import pytest
 import yaml
 
 from basstler.github_labels import GitHubLabel
-from basstler.locations import PluginLocation
+from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan.check_dependency_readiness import ReadinessField
 from basstler.plan.item_brief import (
     ItemBrief,
@@ -27,6 +27,7 @@ from basstler.plan.model import (
     PlanDocument,
     PlanManifest,
 )
+from basstler.plan.repository_rules import RepositoryRules
 from basstler.plan.size_limits import Roadmap
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.repository import PullRequestReference, Repository
@@ -117,6 +118,7 @@ def briefed_repository(scratch_repository: ScratchRepository) -> ScratchReposito
             PlanDocument.ROADMAP.path_within_notes_branch(
                 BRIEFED_MANIFEST.identifier
             ): DatasetLocation.BRIEF_ROADMAP.read_text(),
+            ProjectLocation.PLAN_RULES: DatasetLocation.REPOSITORY_RULES.read_text(),
             PlanDocument.MANIFEST.path_within_notes_branch(
                 FOREIGN_MANIFEST.identifier
             ): (
@@ -203,6 +205,31 @@ def test_the_brief_holds_the_plans_standing_rules(
         brief[ItemBriefKey.STANDING_RULES]
         == Roadmap.from_text(DatasetLocation.BRIEF_ROADMAP.read_text()).entries
     )
+
+
+def test_the_brief_holds_the_repositorys_rules(
+    briefed_repository: ScratchRepository,
+    pull_request_source: RecordedPullRequestSource,
+):
+    brief = read_brief(briefed_repository, pull_request_source)
+
+    assert brief[ItemBriefKey.REPOSITORY_RULES] == [
+        {"id": rule.identifier, "text": rule.text}
+        for rule in RepositoryRules.from_text(
+            DatasetLocation.REPOSITORY_RULES.read_text()
+        ).rules
+    ]
+
+
+def test_a_repository_without_rules_is_briefed_with_none(
+    briefed_repository: ScratchRepository,
+    pull_request_source: RecordedPullRequestSource,
+):
+    briefed_repository.remove_from_notes_branch(ProjectLocation.PLAN_RULES)
+
+    brief = read_brief(briefed_repository, pull_request_source)
+
+    assert brief[ItemBriefKey.REPOSITORY_RULES] == []
 
 
 def test_an_item_is_briefed_the_same_by_its_branch(

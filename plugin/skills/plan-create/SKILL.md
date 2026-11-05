@@ -114,6 +114,11 @@ work that has landed are left out: they live in git and on the pull requests.
 source doc that does not fit is condensed now, or split into more than one
 plan, rather than migrated whole.
 
+A rule that holds for every plan of the repository is not a roadmap entry: it is
+a repository rule, shown in every item brief and on every plan page of the
+repository. List them with `basstler repository-rules show`, and add or reword
+one with `basstler repository-rules set <id> <text>`.
+
 ## 4. Cross-check every named branch/PR against live GitHub state
 
 Before the item is written down, bulk-fetch `mcp__github__list_pull_requests`

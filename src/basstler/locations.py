@@ -378,6 +378,11 @@ class ProjectLocation(PathEnumeration):
     Mirrors ``PLAN_HUB_PATH`` in ``resolve-personal-notes-config.sh``.
     """
 
+    PLAN_RULES = PLANS / "_rules.yaml"
+    """
+    The rules every plan of the repository follows, one entry per rule.
+    """
+
     PERSONAL_STACK_CONFIGURATION = PERSONAL_NOTES / "stack.toml"
     """
     The per-user override of :attr:`PROJECT_STACK_CONFIGURATION`.

@@ -50,7 +50,9 @@ from basstler.plan_site.hub_page import (
 )
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
+from basstler.locations import ProjectLocation
 from basstler.plan.model import PlanDocument
+from basstler.plan.repository_rules import RepositoryRules
 from basstler.plan.model import ItemStatus
 from basstler.repository import GitHubAddress, Repository
 from basstler.standard_streams import StandardStreamHandler
@@ -258,8 +260,19 @@ class RepositorySite(SiteSection[RepositorySummary]):
     against.
     """
 
+    repository_rules: RepositoryRules = field(init=False)
+    """
+    The rules every plan of the repository follows, as its notes branch holds them.
+    """
+
     def __post_init__(self) -> None:
+        """
+        Load the plans' directory and the repository's rules from the notes checkout.
+        """
         self.plan_directory = PlanDirectory(self.plans_directory)
+        self.repository_rules = RepositoryRules.from_file(
+            self.plans_directory / ProjectLocation.PLAN_RULES.name
+        )
 
     def plan_url(self, directory_name: str) -> str:
         """
@@ -330,6 +343,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
             stylesheet_url=self.stylesheet_url,
             plan=plan,
             roadmap_text=source.roadmap_text,
+            repository_rules=self.repository_rules,
             pull_requests_by_repository=self.pull_request_source.pull_requests_of(
                 dependencies
             ),

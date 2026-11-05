@@ -260,6 +260,18 @@ class DatasetLocation(PathEnumeration):
     The standing rules of :attr:`BRIEF_PLAN`, one of them wrapped across two lines.
     """
 
+    REPOSITORY_RULES = DIRECTORY / "repository-rules.yaml"
+    """
+    A repository's plan rules file holding two rules.
+    """
+
+    REPOSITORY_RULES_DUPLICATE_IDENTIFIER = (
+        DIRECTORY / "repository-rules-duplicate-identifier.yaml"
+    )
+    """
+    A rules file in which two rules share an id.
+    """
+
     SITE_PLANS = DIRECTORY / "site-plans"
     """
     A ``plans`` directory as the notes branch carries it: two valid plans, one whose
