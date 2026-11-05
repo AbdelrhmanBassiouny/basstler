@@ -1,15 +1,15 @@
 ## PR progress: plan-saves-start-site-build (#139)
 
 Plan
-- Answer the 12 review threads from 2026-11-05: logging, a StrEnum in place of the
-  "true" literal, REST paths on Repository, one client parameter, gh login command,
-  and tests that the refusal is reported and what a local session is told.
-- Put the unified attempt/reaction pattern (thread on build_start.py:133) to the user
-  as separate work.
+- Settle where the unified attempt/reaction pattern (thread on build_start.py:133) is
+  tracked; that thread stays open until then.
 
 Done
-- Read at c13ea8df: CI green (pytest 3.12/3.13, ruff, Actions usage); merge probe clean
-  against main 5b828eec; 12 unresolved threads, no plain comments.
+- 68e0a841: logger, EnvironmentFlag.TRUE + is_true (3 readers), Repository.workflow_dispatch_path,
+  one GitHubAttemptClient, gh auth login command, tests for the refusal report and the local
+  session; full suite 2129 passed at 68e0a841. 11 of 12 threads replied and resolved.
+- Merged into #140's branch (6dfdfc5d) by hand: maintenance restack needs an upstream.
 
 Next
-- Implement the review fixes test-first, push, reply to each thread, restack #140.
+- Read CI on 68e0a841. #140's token_storage.py:215 still builds the dispatch path by hand
+  and prints with print().
