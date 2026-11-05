@@ -71,14 +71,15 @@ items:
   pull_request_number: 137
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   notes: >
-    Analysis, discussion with the user and a prototype on stack-board only. Cover pull by schedule
-    or webhook, private notes repositories, latency, Actions usage and security trade-offs. No
-    production change until the user decides.
+    No production change until the user decides.
 
-    Analysis and a detect-only prototype are in #137 (docs only). It recommends a change-gated poll
-    on the site repository as the default, with the dispatch kept as an optional fast path. It waits
-    on the user: the go-ahead to run the prototype on stack-board, and decisions on the default
-    delay, the merge workflow and private notes repositories.
+    Analysis in #137 (docs only). The no-schedule rule rules out a poll without an exception.
+    Proposed: a loud error on a missing secret, one store-and-verify command, a pre-filled
+    least-privilege token, basstler's own pushes starting the build, and plan issues per repository
+    or in a hub, settled in basstler-v3-plans.
+
+    Waiting on the user: the Contents permission, a schedule exception, the writer starting the
+    build, and hub or per-repository issues.
 
 - id: retry-transient-errors
   title: Retry transient GitHub server errors when reading in the site build
