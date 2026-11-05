@@ -127,6 +127,13 @@ items:
   title: "With a logged-in gh, setup takes every step itself and prints only the ones that failed"
   branch: null
   track: setup-flow
+  notes: >
+    Depends on gh-prerequisite and fork-issues. In a local session with gh installed and logged in,
+    setup runs every step it can itself (labels, Issues, Actions, site repository, Pages, storing
+    the secret from a token the user gives) and prints one deterministic report of each step done or
+    failed with its reason; manual instructions appear only for failed steps, extending
+    PendingStep.failure ("Could not be done automatically") to SetupStep. Token creation stays
+    manual: GitHub offers no command for it. Related to one-call-labels and trigger-and-done.
   depends_on: []
   status: not started
 tracking_issue: 135
