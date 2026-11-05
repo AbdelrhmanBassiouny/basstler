@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 
 class GitHubAddress(StrEnum):
@@ -196,6 +197,13 @@ class Repository:
         :return: The REST path of that job's whole recorded log.
         """
         return f"{self.api_path}/actions/jobs/{job}/logs"
+
+    def workflow_dispatch_path(self, workflow: Path) -> str:
+        """
+        :param workflow: The workflow's file in the repository.
+        :return: The REST path that starts a run of that workflow.
+        """
+        return f"{self.api_path}/actions/workflows/{workflow.name}/dispatches"
 
     def git_requirement(self, distribution: str, reference: str) -> str:
         """

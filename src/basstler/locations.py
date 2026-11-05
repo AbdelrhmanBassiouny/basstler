@@ -455,7 +455,7 @@ class ClaudeCodeVariable(EnvironmentVariable):
 
     REMOTE = "CLAUDE_CODE_REMOTE"
     """
-    ``true`` in a Claude Code cloud session, whose proxy answers GitHub's REST API but
+    :attr:`~basstler.environment.EnvironmentFlag.TRUE` in a Claude Code cloud session, whose proxy answers GitHub's REST API but
     not its GraphQL API.
     """
 
