@@ -1,0 +1,52 @@
+schema_version: 1
+id: cyclopts-migration
+title: Every remaining basstler command line runs on cyclopts
+description: >
+  Ports the argparse command lines left after basstler.stack (#131) and basstler.plan
+  (#142) to cyclopts, one package per pull request, keeping every command, option and
+  exit status.
+default_repository: AbdelrhmanBassiouny/basstler
+tracking_issue: 147
+waves:
+- id: port
+  name: Port the remaining command lines
+tracks:
+- id: packages
+  name: One package per pull request
+  wave: port
+items:
+- id: command-line-commands
+  title: The Command base, basstler.maintenance and plan.item_bootstrap run on cyclopts
+  track: packages
+  depends_on: []
+  status: not started
+  notes: >
+    Replace basstler/command_line.py's argparse Command base (declare_arguments) and port
+    maintenance/__main__.py, maintenance/commands.py and plan/item_bootstrap/commands.py; the
+    maintenance tests that build argparse.Namespace move with them. command_line.py already holds
+    the shared cyclopts group plan_item_selection (#142).
+- id: upstream-reviews-command-lines
+  title: basstler.upstream_reviews' command lines run on cyclopts
+  track: packages
+  depends_on: []
+  status: not started
+  notes: >
+    Port upstream_reviews/__main__.py, request.py, action/__main__.py, helper/__main__.py and
+    helper/fetch.py.
+- id: plan-site-command-lines
+  title: basstler.plan_site's command lines run on cyclopts
+  track: packages
+  depends_on: []
+  status: not started
+  notes: >
+    Port plan_site/__main__.py and plan_site/hub.py. Open #141 and #140 also change these files;
+    probe with stack merge-probe before starting.
+- id: setup-command-lines
+  title: Setup, progress notes, release and Actions command lines run on cyclopts
+  track: packages
+  depends_on: []
+  status: not started
+  notes: >
+    Port setup/steps.py, setup/dependencies.py, setup/personal_notes.py,
+    personal_notes/progress_notes.py, release_version.py, actions_usage.py and actions_budget.py,
+    and reword exit_codes.py's argparse mentions.
