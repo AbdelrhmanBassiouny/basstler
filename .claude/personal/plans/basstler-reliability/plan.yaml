@@ -1,12 +1,12 @@
 schema_version: 1
 id: basstler-reliability
 title: 'basstler reliability: checks fail closed and records state only what was read'
-description: >
-  Today's skills give the same verdict on the same repository state, and never report
-  a check they could not run as passing: setup checks fail closed, each gate reads only
-  the rows its step needs, conflicts are decided by git, every skill command is one
-  self-contained call, and a record names the commit it was verified at. The one-command
-  brief is basstler-v3-plans/item-brief.
+description: 'Today''s skills give the same verdict on the same repository state, and never
+  report a check they could not run as passing: setup checks fail closed, each gate reads
+  only the rows its step needs, conflicts are decided by git, every skill command is one self-contained
+  call, and a record names the commit it was verified at. The one-command brief is basstler-v3-plans/item-brief.
+
+  '
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 132
 waves:
@@ -17,71 +17,51 @@ tracks:
   name: Fail-closed checks and verified records
   wave: now
 items:
-- id: fail-closed-checks
-  title: Checks fail closed, gates read one row, conflicts decided by git
-  branch: ccr-27f5a2af-r2dw2x
-  pull_request_number: 131
-  track: guards
-  session: https://claude.ai/code/session_01JxHGiNsz3xynwBWh3UJ8qd
-  blockers:
-    - "Awaiting owner review of the replies on #131's six threads; CI on 9dc8811a not yet read."
-  depends_on: []
-  status: in progress
-  notes: >
-    Fail-closed checks, check-setup.sh --only, stack merge-probe, self-contained skill commands (see
-    #131).
-
-    Review fixes pushed at 9dc8811a: basstler.stack on cyclopts; merge-probe reads the upstream base
-    from the upstream and describes conflicts on stderr; the SKILL.md preamble lives in
-    skills/running-commands.md. Other exit codes and argparse modules are later items.
 - id: per-skill-setup-gates
   title: Each skill's prerequisite check reads only the setup rows it needs
   track: guards
-  depends_on: [fail-closed-checks]
+  depends_on: []
   status: not started
-  notes: >-
-    prerequisite-check.md runs check-setup.sh bare, so a plan_site row needing setup
-    sends every skill into /setup-personal-notes. Each skill names its rows with --only
-    (in code, as a mapping from skill to checks, not prose), and an unrelated row is
-    reported in one line, never a stop.
+  notes: prerequisite-check.md runs check-setup.sh bare, so a plan_site row needing setup
+    sends every skill into /setup-personal-notes. Each skill names its rows with --only (in
+    code, as a mapping from skill to checks, not prose), and an unrelated row is reported
+    in one line, never a stop.
 - id: conflict-audit
   title: Every step that acts on mergeability or check state reads it deterministically
   track: guards
-  depends_on: [fail-closed-checks]
+  depends_on: []
   status: not started
-  notes: >-
-    Find each place a skill or the maintenance pass decides on GitHub's mergeable_state
-    or a pending check (kickoff, stacked-pr-maintenance withholding, propagating-a-fix)
-    and use stack merge-probe, or report the state as not checked. A pending or unknown
-    value is never read as clean.
+  notes: Find each place a skill or the maintenance pass decides on GitHub's mergeable_state
+    or a pending check (kickoff, stacked-pr-maintenance withholding, propagating-a-fix) and
+    use stack merge-probe, or report the state as not checked. A pending or unknown value
+    is never read as clean.
 - id: verified-records
   title: Records that claim green or conflict-free name the commit they were read at
   track: guards
   depends_on:
   - interaction-model/attempts
   status: not started
-  notes: plan.item_bootstrap update/record and save-pr-progress.sh validate size limits when the content is written,
-    not at save-plan.sh, and stamp a verified claim with the head commit and time. A claim with no stamp, or one
-    older than the branch head, is shown as unverified on the plan page.
+  notes: plan.item_bootstrap update/record and save-pr-progress.sh validate size limits when
+    the content is written, not at save-plan.sh, and stamp a verified claim with the head
+    commit and time. A claim with no stamp, or one older than the branch head, is shown as
+    unverified on the plan page.
 - id: session-start-marker
   title: A skill knows whether the session start has finished
   track: guards
-  depends_on: [fail-closed-checks]
+  depends_on: []
   status: not started
-  notes: >-
-    session-start.sh writes a completion marker in the repository state directory;
-    check-setup.sh reports a session_start row (in-progress while it runs, needs-setup
-    when it never ran), and basstler.sh waits on it as it waits on an install. Seen: a
-    first turn with no summary and no CLAUDE.local.md.
+  notes: 'session-start.sh writes a completion marker in the repository state directory; check-setup.sh
+    reports a session_start row (in-progress while it runs, needs-setup when it never ran),
+    and basstler.sh waits on it as it waits on an install. Seen: a first turn with no summary
+    and no CLAUDE.local.md.'
 - id: one-call-prose
   title: Prose never asks for a configuration function outside the call that sources it
   track: guards
-  depends_on: [fail-closed-checks]
+  depends_on: []
   status: not started
-  notes: >-
-    Prose still names plan_site_page_url, plan_id_for_branch and fetch_personal_notes_branch
-    bare. Give each as a one-call command (a basstler.sh subcommand where one fits) and
-    extend tests/skills to inline code spans, as it already checks bash blocks.
+  notes: Prose still names plan_site_page_url, plan_id_for_branch and fetch_personal_notes_branch
+    bare. Give each as a one-call command (a basstler.sh subcommand where one fits) and extend
+    tests/skills to inline code spans, as it already checks bash blocks.
 - id: adversarial-regressions
   title: Regression tests replay the reliability report's failures against fixture repositories
   track: guards
@@ -92,10 +72,10 @@ items:
   - session-start-marker
   - hook-enforcement
   status: not started
-  notes: 'One test per report failure through the real scripts: run from the plugin directory, a fresh shell with
-    no variables, mergeable_state unknown on a conflicting branch, plan_site failing with stack_upstream ok, a save
-    claiming green without a stamp. Skill evals with budgets stay basstler-v3/short-skills.'
-
+  notes: 'One test per report failure through the real scripts: run from the plugin directory,
+    a fresh shell with no variables, mergeable_state unknown on a conflicting branch, plan_site
+    failing with stack_upstream ok, a save claiming green without a stamp. Skill evals with
+    budgets stay basstler-v3/short-skills.'
 - id: hook-enforcement
   title: Claude Code hooks enforce the session rules as code
   branch: null
@@ -104,22 +84,22 @@ items:
   depends_on:
   - interaction-model/attempts
   status: not started
-  notes: The plugin's hooks.json registers a PreToolUse hook on Bash that denies a command using a configuration
-    name it does not source, or run outside the project, and one on the record commands that denies a claim the
-    ledger does not back. Each denial says what to run instead.
-
+  notes: The plugin's hooks.json registers a PreToolUse hook on Bash that denies a command
+    using a configuration name it does not source, or run outside the project, and one on
+    the record commands that denies a claim the ledger does not back. Each denial says what
+    to run instead.
 - id: locked-install
   title: Every session installs identical dependencies from uv.lock
   branch: null
   pull_request_number: null
   track: guards
-  depends_on:
-  - fail-closed-checks
+  depends_on: []
   status: not started
-  notes: Commit uv.lock; session start and basstler.sh install with uv sync --frozen, so two sessions never run
-    different dependency versions, and the install is fast enough to finish before a skill starts. uv approved by
-    the owner 2026-11-03. basstler-v3/plugin-bin-probe (PR 133) found no bin/ allowed, and CLAUDE_PLUGIN_DATA reaches hooks and MCP servers, not Bash commands.
-
+  notes: Commit uv.lock; session start and basstler.sh install with uv sync --frozen, so two
+    sessions never run different dependency versions, and the install is fast enough to finish
+    before a skill starts. uv approved by the owner 2026-11-03. basstler-v3/plugin-bin-probe
+    (PR 133) found no bin/ allowed, and CLAUDE_PLUGIN_DATA reaches hooks and MCP servers,
+    not Bash commands.
 - id: repeat-run-evals
   title: Evals run each case several times and fail on differing verdicts
   branch: null
@@ -128,34 +108,36 @@ items:
   depends_on:
   - basstler-v3/short-skills
   status: not started
-  notes: Each claude plugin eval case runs N times on the same fixture state; CI fails when the recorded verdict
-    JSON differs between runs, beside short-skills' token and time budgets. Moved here because basstler-v3 is at
-    its item limit. A case fails at once when system/init lists plugin_errors or mcp_server_errors.
+  notes: Each claude plugin eval case runs N times on the same fixture state; CI fails when
+    the recorded verdict JSON differs between runs, beside short-skills' token and time budgets.
+    Moved here because basstler-v3 is at its item limit. A case fails at once when system/init
+    lists plugin_errors or mcp_server_errors.
 - id: described-exit-codes
-  title: "Every exit code prints what went wrong"
+  title: Every exit code prints what went wrong
   branch: null
   track: guards
-  notes: >
-    Apply the ExitCode description mechanism fail-closed-checks (#131) introduces to every other
-    ExitCode enum and the shell scripts' exits, so no command fails with a bare number. Requested in
-    #131's review.
+  notes: 'Apply the ExitCode description mechanism fail-closed-checks (#131) introduces to
+    every other ExitCode enum and the shell scripts'' exits, so no command fails with a bare
+    number. Requested in #131''s review.
+
+    '
   depends_on: []
   status: not started
-
 - id: cyclopts-command-lines
-  title: "Every command line uses cyclopts"
+  title: Every command line uses cyclopts
   branch: claude/zen-edison-fwzug6
   track: guards
   pull_request_number: 142
   session: https://claude.ai/code/session_01JxHGiNLgdeByKqxXuWzPSA
-  notes: >
-    Port the remaining argparse command lines to cyclopts, following basstler.stack's port in #131.
-    Requested in #131's review. plan/manifest_tools.py was left on argparse by #138 (review thread
-    https://github.com/AbdelrhmanBassiouny/basstler/pull/138#discussion_r4483101408) and is the first
-    module to port; it must keep ManifestToolsExitCode's exit codes and the --notes-remote-url refusal #138 added.
+  notes: 'Port the remaining argparse command lines to cyclopts, following basstler.stack''s
+    port in #131. Requested in #131''s review. plan/manifest_tools.py was left on argparse
+    by #138 (review thread https://github.com/AbdelrhmanBassiouny/basstler/pull/138#discussion_r4483101408)
+    and is the first module to port; it must keep ManifestToolsExitCode''s exit codes and
+    the --notes-remote-url refusal #138 added.
+
+    '
   depends_on: []
   status: in progress
-
 - id: schema-checked-records
   title: Records are written only from schema-validated JSON, in sessions and in Actions
   branch: null
@@ -164,6 +146,7 @@ items:
   depends_on:
   - verified-records
   status: not started
-  notes: Each record (blocker, item note, PR-progress note) is a pydantic model whose JSON schema the record commands
-    export and validate their input against, size limits included. A Claude run in an Action uses claude -p --bare
-    --output-format json --json-schema with that schema and records only structured_output, failing when it is absent.
+  notes: Each record (blocker, item note, PR-progress note) is a pydantic model whose JSON
+    schema the record commands export and validate their input against, size limits included.
+    A Claude run in an Action uses claude -p --bare --output-format json --json-schema with
+    that schema and records only structured_output, failing when it is absent.
