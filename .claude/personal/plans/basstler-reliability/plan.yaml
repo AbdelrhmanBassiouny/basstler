@@ -58,7 +58,7 @@ items:
   title: Records that claim green or conflict-free name the commit they were read at
   track: guards
   depends_on:
-  - check-ledger
+  - interaction-model/attempts
   status: not started
   notes: plan.item_bootstrap update/record and save-pr-progress.sh validate size limits when the content is written,
     not at save-plan.sh, and stamp a verified claim with the head commit and time. A claim with no stamp, or one
@@ -96,25 +96,13 @@ items:
     no variables, mergeable_state unknown on a conflicting branch, plan_site failing with stack_upstream ok, a save
     claiming green without a stamp. Skill evals with budgets stay basstler-v3/short-skills.'
 
-- id: check-ledger
-  title: Every check records its verdict, and a record cites one
-  branch: null
-  pull_request_number: null
-  track: guards
-  depends_on:
-  - fail-closed-checks
-  status: not started
-  notes: merge-probe, check-setup.sh and the check-run read append one JSON line per verdict (check, verdict, head
-    commit, time) to a ledger in the repository state directory. verified-records accepts a green or conflict-free
-    claim only when it cites a ledger entry for the branch's current head.
-
 - id: hook-enforcement
   title: Claude Code hooks enforce the session rules as code
   branch: null
   pull_request_number: null
   track: guards
   depends_on:
-  - check-ledger
+  - interaction-model/attempts
   status: not started
   notes: The plugin's hooks.json registers a PreToolUse hook on Bash that denies a command using a configuration
     name it does not source, or run outside the project, and one on the record commands that denies a claim the
