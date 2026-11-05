@@ -102,4 +102,11 @@ items:
   track: setup-flow
   depends_on: []
   status: not started
+
+- id: gh-prerequisite
+  title: "Every printed gh line comes after the steps to install and log in to gh"
+  branch: null
+  track: setup-flow
+  depends_on: []
+  status: not started
 tracking_issue: 135
