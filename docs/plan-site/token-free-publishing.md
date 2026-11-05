@@ -46,7 +46,7 @@ So the token is not unreliable once it is stored. Getting it stored is the probl
 The `actions-budget` plan has a standing rule that no workflow has a `schedule`. It
 was adopted after GitHub disabled Actions on the cram fork for wasted compute.
 `basstler.actions_budget` reports a scheduled workflow as `ScheduledWorkflow`, and
-basstler-v3's roadmap repeats the rule for every new workflow.
+`basstler-v3-plans`' roadmap repeats the rule for every new workflow.
 
 That rules out options A and B below, and their prototype, unless the user makes an
 exception for the site repository. They are kept for the record, and the
