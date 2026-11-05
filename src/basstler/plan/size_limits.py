@@ -4,7 +4,6 @@ The size limits every plan and every pull request's progress notes are held to o
 
 from __future__ import annotations
 
-import argparse
 import re
 import shutil
 import sys
@@ -12,7 +11,12 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import Enum, StrEnum
 from pathlib import Path
+from typing import Annotated
 
+from cyclopts import App, Parameter
+
+from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, ExitCode, SizeLimitExitCode
 from basstler.plan.dependencies import DependencyReference
 from basstler.plan.model import PlanDocument, PlanItem, PlanManifest
 from basstler.standard_streams import StandardStreamHandler
@@ -301,10 +305,15 @@ class LimitedDocument(DocumentSummary, Enum):
 
 
 @dataclass
-class DocumentOverLimitError(Exception):
+class DocumentOverLimitError(CommandFailure):
     """
     Raised when a document breaks one of its limits.
     """
+
+    @classproperty
+    def exit_code(cls) -> SizeLimitExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return SizeLimitExitCode.OVER_LIMIT
 
     document: LimitedDocument
     """
@@ -669,42 +678,6 @@ class SizeLimitCommand(StrEnum):
     """
 
 
-class SizeLimitArgument(StrEnum):
-    """
-    The names this module's command line parses its subcommand and arguments under.
-    """
-
-    SUBCOMMAND = "subcommand"
-    """
-    The subcommand to run, a :class:`SizeLimitCommand`.
-    """
-
-    MANIFEST_PATH = "manifest_path"
-    """
-    The manifest :attr:`SizeLimitCommand.STAGE` reads.
-    """
-
-    ROADMAP_PATH = "roadmap_path"
-    """
-    The roadmap :attr:`SizeLimitCommand.STAGE` reads.
-    """
-
-    PROGRESS_PATH = "progress_path"
-    """
-    The progress notes :attr:`SizeLimitCommand.CHECK_PROGRESS` checks.
-    """
-
-    MANIFEST_DESTINATION = "manifest_destination"
-    """
-    The value of :attr:`SizeLimitOption.MANIFEST_DESTINATION`.
-    """
-
-    ROADMAP_DESTINATION = "roadmap_destination"
-    """
-    The value of :attr:`SizeLimitOption.ROADMAP_DESTINATION`.
-    """
-
-
 class SizeLimitOption(StrEnum):
     """
     The options this module's command line takes.
@@ -721,65 +694,64 @@ class SizeLimitOption(StrEnum):
     """
 
 
-def build_parser() -> argparse.ArgumentParser:
-    """
-    :return: The parser for the two subcommands.
-    """
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    subcommands = parser.add_subparsers(
-        dest=SizeLimitArgument.SUBCOMMAND, required=True
-    )
-    stage = subcommands.add_parser(
-        SizeLimitCommand.STAGE,
-        help="Write a plan without its landed items, or delete it once all have landed",
-    )
-    stage.add_argument(SizeLimitArgument.MANIFEST_PATH, type=Path)
-    stage.add_argument(SizeLimitArgument.ROADMAP_PATH, type=Path)
-    stage.add_argument(
-        SizeLimitOption.MANIFEST_DESTINATION,
-        dest=SizeLimitArgument.MANIFEST_DESTINATION,
-        required=True,
-        type=Path,
-    )
-    stage.add_argument(
-        SizeLimitOption.ROADMAP_DESTINATION,
-        dest=SizeLimitArgument.ROADMAP_DESTINATION,
-        required=True,
-        type=Path,
-    )
-    check_progress = subcommands.add_parser(
-        SizeLimitCommand.CHECK_PROGRESS, help="Refuse progress notes over their limit"
-    )
-    check_progress.add_argument(SizeLimitArgument.PROGRESS_PATH, type=Path)
-    return parser
+size_limits_app = App(
+    name="basstler.plan.size_limits",
+    help="Hold plans and progress notes to their size limits on save.",
+)
+"""
+This module's command line: one command per :class:`SizeLimitCommand`.
+"""
 
 
-def main() -> int:
+@size_limits_app.command(name=SizeLimitCommand.STAGE)
+def stage(
+    manifest_path: Path,
+    roadmap_path: Path,
+    /,
+    *,
+    manifest_destination: Annotated[
+        Path, Parameter(name=SizeLimitOption.MANIFEST_DESTINATION)
+    ],
+    roadmap_destination: Annotated[
+        Path, Parameter(name=SizeLimitOption.ROADMAP_DESTINATION)
+    ],
+) -> SizeLimitExitCode:
     """
-    Run the requested subcommand. ``stage`` prints what it left at the destination; a
-    document over its limits exits with status 1 and names every violation on standard
-    error.
+    Write a plan without its landed items, or delete it once all have landed, and print
+    what was left at the destination.
+
+    :param manifest_path: The manifest to stage.
+    :param roadmap_path: The roadmap to stage.
+    :param manifest_destination: Where to write the manifest.
+    :param roadmap_destination: Where to write the roadmap.
     """
-    arguments = vars(build_parser().parse_args())
+    source = PlanFiles(manifest_path, roadmap_path)
+    logger.info(source.stage(PlanFiles(manifest_destination, roadmap_destination)))
+    return SizeLimitExitCode.SUCCESS
+
+
+@size_limits_app.command(name=SizeLimitCommand.CHECK_PROGRESS)
+def check_progress(progress_path: Path, /) -> SizeLimitExitCode:
+    """
+    Refuse progress notes over their limit.
+
+    :param progress_path: The progress notes to check.
+    """
+    ProgressNotes.from_file(progress_path).check()
+    return SizeLimitExitCode.SUCCESS
+
+
+def main() -> ExitCode:
+    """
+    Run the invoked command, ending with the status a refusal carries.
+
+    :return: The process exit code.
+    """
     try:
-        if arguments[SizeLimitArgument.SUBCOMMAND] == SizeLimitCommand.STAGE:
-            source = PlanFiles(
-                arguments[SizeLimitArgument.MANIFEST_PATH],
-                arguments[SizeLimitArgument.ROADMAP_PATH],
-            )
-            destination = PlanFiles(
-                arguments[SizeLimitArgument.MANIFEST_DESTINATION],
-                arguments[SizeLimitArgument.ROADMAP_DESTINATION],
-            )
-            logger.info(source.stage(destination))
-        else:
-            ProgressNotes.from_file(arguments[SizeLimitArgument.PROGRESS_PATH]).check()
-    except DocumentOverLimitError as error:
-        logger.error(error)
-        return 1
-    return 0
+        return size_limits_app(sys.argv[1:], result_action="return_value")
+    except CommandFailure as error:
+        logger.error(f"{error}")
+        return error.exit_code
 
 
 if __name__ == "__main__":

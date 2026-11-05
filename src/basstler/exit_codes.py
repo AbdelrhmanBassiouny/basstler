@@ -244,6 +244,27 @@ class ManifestToolsExitCode(ExitCode):
     """
 
 
+class SizeLimitExitCode(ExitCode):
+    """
+    How a ``basstler.plan.size_limits`` subcommand ended, as its caller reads it.
+    """
+
+    SUCCESS = 0
+    """
+    The document is within its limits, and was staged if asked.
+    """
+
+    OVER_LIMIT = 1
+    """
+    The document breaks a limit; every violation is on stderr.
+    """
+
+    USAGE = 2
+    """
+    No such subcommand, or the wrong arguments; what is wrong is on stderr.
+    """
+
+
 class ScopeOverlapExitCode(ExitCode):
     """
     How a ``basstler.plan.check_scope_overlap`` run ended, as its caller reads it.
