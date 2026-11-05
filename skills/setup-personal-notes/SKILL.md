@@ -265,14 +265,20 @@ the site repository, turning on Pages, creating - or reusing - the fine-grained
 token, storing it as the `PLAN_SITE_TOKEN` secret, and merging the merge
 workflow. It exits 1 while any is left.
 
-Actions secrets belong to one repository, so the token has to be stored in
-every repository the site publishes; the store step is one command that does
-that for all of them. A token the user already has works if it lists every one
-of those repositories - say so before they create a new one. A step that
-follows a run shows that run's address, so the log says why it failed. Pass the
-lines and the browser steps on exactly as printed, never shortened to one of the
-two; once the user has done them, run the command again: it counts a step done
-when a run that needs it succeeded.
+Actions secrets belong to one repository, and a user account has no shared
+ones, so the token is stored in every repository the site publishes. The create
+step's link opens GitHub's token form with the name, owner and Actions write
+access filled in; only the site repository is picked by hand. The token reaches
+the site repository alone, so it never changes when a repository joins. The store
+step is one command, run on the user's machine with their own `gh` login: it
+asks for the token once, stores it in every repository, starts each one's
+dispatch workflow and prints, per repository, *done* or the failed run's
+address. To add a repository later, the user clicks Regenerate token on the
+existing token and runs the store command again; no new token is needed. A step
+that follows a run shows that run's address, so the log says why it failed. Pass
+the lines and the browser steps on exactly as printed, never shortened to one of
+the two; once the user has done them, run the command again: it counts a step
+done when a run that needs it succeeded.
 
 ## 9. Confirm, by re-running the check
 
