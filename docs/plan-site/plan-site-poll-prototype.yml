@@ -1,0 +1,67 @@
+# Prototype of the change-gated poll in token-free-publishing.md. It detects and logs;
+# it never builds or deploys. Runs only from the site repository's default branch.
+name: Plan site poll (prototype)
+
+on:
+  schedule:
+    - cron: "*/5 * * * *"
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+concurrency:
+  group: plan-site-poll-prototype
+  cancel-in-progress: false
+
+jobs:
+  detect:
+    name: Detect a change to publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    env:
+      REGISTRY: AbdelrhmanBassiouny/basstler
+      NOTES_BRANCH: claude/personal-notes
+      HUB_FILE: .claude/personal/plans/_hub.yaml
+    steps:
+      - name: List the heads that start a build
+        id: heads
+        run: |
+          git init --quiet sources && cd sources
+          git fetch --quiet --depth 1 "https://github.com/$REGISTRY" "$NOTES_BRANCH"
+          git show "FETCH_HEAD:$HUB_FILE" | sed -n 's/^- //p' > ../repositories.txt
+          while read -r repository; do
+            git ls-remote "https://github.com/$repository" HEAD "refs/heads/$NOTES_BRANCH" \
+              | sed "s|\$| $repository|"
+          done < ../repositories.txt | sort -k2 > ../heads.txt
+          cat ../repositories.txt ../heads.txt
+          echo "fingerprint=$(cat ../repositories.txt ../heads.txt | sha256sum | cut -c1-16)" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Look the fingerprint up
+        id: seen
+        uses: actions/cache/restore@v4
+        with:
+          path: heads.txt
+          key: plan-site-poll-${{ steps.heads.outputs.fingerprint }}
+          lookup-only: true
+
+      - name: Log the change and its delay
+        if: steps.seen.outputs.cache-hit != 'true'
+        run: |
+          cd sources
+          newest=0
+          while read -r commit _ repository; do
+            git fetch --quiet --depth 1 "https://github.com/$repository" "$commit"
+            committed=$(git log -1 --format=%ct "$commit")
+            echo "head: $repository $commit committed $(date -u -d "@$committed" +%FT%TZ)"
+            if [ "$committed" -gt "$newest" ]; then newest=$committed; fi
+          done < ../heads.txt
+          echo "would build: newest head committed $(( $(date +%s) - newest ))s before this tick"
+
+      - name: Remember the fingerprint
+        if: steps.seen.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: heads.txt
+          key: plan-site-poll-${{ steps.heads.outputs.fingerprint }}
