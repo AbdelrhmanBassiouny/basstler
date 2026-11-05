@@ -52,7 +52,7 @@ items:
   status: in progress
   track: conventions
   pull_request_number: 143
-  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
+  session: https://claude.ai/code/session_01JxHGiP6JUBGGaMwQ6FF7vB
   depends_on: []
   notes: >
     The user's design priorities for every plan of a repository are prose in the personal notes'
