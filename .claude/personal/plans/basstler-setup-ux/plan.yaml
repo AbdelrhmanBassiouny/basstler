@@ -71,15 +71,12 @@ items:
   pull_request_number: 137
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   notes: >
-    No production change until the user decides.
-
-    Analysis in #137 (docs only). The no-schedule rule rules out a poll without an exception.
-    Proposed: a loud error on a missing secret, one store-and-verify command, a pre-filled
-    least-privilege token, basstler's own pushes starting the build, and plan issues per repository
-    or in a hub, settled in basstler-v3-plans.
-
-    Waiting on the user: the Contents permission, a schedule exception, the writer starting the
-    build, and hub or per-repository issues.
+    Analysis in #137 (docs only). User's answers: no schedule (recommended, kept); token needs only
+    Actions write on the site repository (Contents read was unused); prototype F; v3 plan issues per
+    repository. F is in #139: plan saves start the build with the session's credential, and cloud
+    sessions attach the site repository, asking the user if refused. Verified live from a cloud
+    session. Next: fail loudly on a missing secret, a store-and-verify command, a pre-filled token
+    page.
 
 - id: retry-transient-errors
   title: Retry transient GitHub server errors when reading in the site build
