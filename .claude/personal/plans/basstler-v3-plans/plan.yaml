@@ -18,12 +18,13 @@ tracks:
 items:
 - id: plan-store-issues
   title: Plans as a tracking issue with sub-issues, status labels and stated dependencies
-  branch: null
-  pull_request_number: null
+  branch: claude/nifty-turing-qshanp
+  pull_request_number: 144
   track: plans
+  session: https://claude.ai/code/session_01JxHGiLu4ECfftbCNUxKfbH
   depends_on:
   - basstler-v3/cli-launcher
-  status: not started
+  status: in progress
   notes: "REST only (no Projects v2, no GraphQL). Item scope in the issue body, status as a label, dependencies\
     \ as issue references read back from the body; a pull request closes its item. Read and write go through\
     \ pydantic models of the REST responses.\n Its new endpoints go through cli-launcher's GitHubClient.\
