@@ -1,0 +1,102 @@
+schema_version: 1
+id: interaction-model
+title: "Interaction model: attempts, explanations, reactions and choices"
+description: >
+  One explicit model for how basstler interacts with the session and the user: attempts and
+  their fallbacks, the explanation of a failure with the commands that fix it, who acts next
+  (the session, or the user asked by the session), the options offered with a recommended
+  one and why, and the ledger every attempt and check writes. Modules are then ported onto
+  it one pull request at a time. From the review of #139 (build_start.py:133 and :147).
+default_repository: AbdelrhmanBassiouny/basstler
+tracking_issue: 148
+
+waves:
+  - id: core
+    name: "Core model"
+  - id: ports
+    name: "Ports"
+
+tracks:
+  - id: model
+    name: "Model"
+    wave: core
+  - id: ports
+    name: "Ports"
+    wave: ports
+
+items:
+  - id: explanations
+    title: "An explanation states a failure and the commands that fix it, rendered in one place"
+    track: model
+    depends_on: []
+    status: not started
+    notes: >
+      Explanation: what happened, why, and the fixing commands as Command values. Rendered as
+      text with each command alone in a fenced bash block, and as JSON for typed tools.
+      Replaces the shape of DataclassException.suggest_correction and
+      CredentialOrigin.suggest_renewal. Asked for on #139 (build_start.py:147).
+  - id: attempts
+    title: "Attempts try techniques in order, and every attempt and check verdict is recorded"
+    track: model
+    depends_on: [explanations, basstler-reliability/fail-closed-checks]
+    status: not started
+    notes: >
+      Attempt: one technique with its outcome, and an Explanation when it fails. An attempt
+      sequence tries fallbacks in order, stops at the first success and logs each through the
+      package logger. Each outcome appends one JSON line (attempt or check, verdict, head
+      commit, time) to a ledger in the repository state directory; merge-probe, check-setup.sh
+      and the check-run read write there too. Folded in from basstler-reliability/check-ledger.
+  - id: reactions
+    title: "A failed interaction names who acts next, with options and a recommended one"
+    track: model
+    depends_on: [explanations]
+    status: not started
+    notes: >
+      Reaction: the session calls a tool, the session asks the user, or the user runs commands.
+      A choice holds options, marks one recommended and says why; it renders as the session's
+      AskUserQuestion with the recommended option first, and as JSON. The answer comes back as
+      a response value.
+  - id: port-build-start
+    title: "The plan site build start runs as attempts and reactions"
+    track: ports
+    depends_on: [attempts, reactions]
+    status: not started
+    notes: >
+      plan_site/build_start (#139): reading the default branch and dispatching are attempts;
+      the cloud session's attach-or-ask guidance and the local gh auth login guidance are
+      reactions. Deletes the hand-built strings in BuildStart.describe.
+  - id: port-user-steps
+    title: "Publishing's user steps are reactions for the user"
+    track: ports
+    depends_on: [reactions]
+    status: not started
+    notes: >
+      plan_site/user_steps: each PendingStep's command line and browser steps become a user
+      reaction with its explanation. Deletes PendingStep.render.
+  - id: port-corrections
+    title: "Exceptions and credentials explain themselves with explanations"
+    track: ports
+    depends_on: [explanations]
+    status: not started
+    notes: >
+      DataclassException.suggest_correction and CredentialOrigin.suggest_renewal return
+      explanations instead of strings. Coordinate with basstler-reliability/described-exit-codes,
+      whose exit code descriptions should print the same explanation.
+  - id: port-setup-report
+    title: "Setup report rows carry explanations and reactions"
+    track: ports
+    depends_on: [reactions]
+    status: not started
+    notes: >
+      setup/report rows that are not ok carry an explanation and the reaction that fixes them
+      (the session runs a step, or asks the user), instead of a free-text detail with an
+      embedded command.
+  - id: port-upstream-routes
+    title: "Upstream reads try their routes as an attempt sequence"
+    track: ports
+    depends_on: [attempts]
+    status: not started
+    notes: >
+      upstream_reviews ReadSource and maintenance UpstreamReadRoute become one attempt sequence
+      (REST, GraphQL, the fork's Action) chosen and logged by the model, instead of a branch on
+      the cloud-session flag.
