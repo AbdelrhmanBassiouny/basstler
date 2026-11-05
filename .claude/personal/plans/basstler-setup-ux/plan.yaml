@@ -1,12 +1,17 @@
 schema_version: 1
 id: basstler-setup-ux
 title: Smoother basstler setup
-description: 'The setup session for a fork asked many questions and ended with plan_site unverified although the clone''s own dispatch run succeeded. The check judges every repository on the site as one row, cannot tell an unreadable repository from a fault, and leaves steps to the user that the tooling could do. This plan makes the status per repository, treats a successful run as proof, and removes avoidable questions and steps.'
+description: The setup session for a fork asked many questions and ended with plan_site unverified
+  although the clone's own dispatch run succeeded. The check judges every repository on the
+  site as one row, cannot tell an unreadable repository from a fault, and leaves steps to
+  the user that the tooling could do. This plan makes the status per repository, treats a
+  successful run as proof, and removes avoidable questions and steps.
 default_repository: AbdelrhmanBassiouny/basstler
 waves:
 - id: reporting
   name: Report status truthfully
-  description: Per-repository rows and proof by run, so a working setup is not reported as unverified.
+  description: Per-repository rows and proof by run, so a working setup is not reported as
+    unverified.
 - id: fewer-steps
   name: Fewer questions and steps
   description: Remove answers and manual steps the tooling can settle itself.
@@ -28,110 +33,114 @@ items:
   title: plan_site check reports one row per repository
   track: status
   status: not started
-  notes: /setup-personal-notes judges only the clone's own repository; other repositories on the site are informational rows.
+  notes: /setup-personal-notes judges only the clone's own repository; other repositories
+    on the site are informational rows.
 - id: run-as-proof
   title: A successful run after the last config change counts as proof
   track: status
-  depends_on: [per-repo-status]
+  depends_on:
+  - per-repo-status
   status: not started
-  notes: Judge by the latest run after the last configuration change, not by failure counts. A 403 on the secrets endpoint or an unreadable other repository must not leave the row unverified; separate "cannot read from this environment" from "unverified".
+  notes: Judge by the latest run after the last configuration change, not by failure counts.
+    A 403 on the secrets endpoint or an unreadable other repository must not leave the row
+    unverified; separate "cannot read from this environment" from "unverified".
 - id: short-summary
   title: One-line plan_site in the session-start summary
   track: status
-  depends_on: [per-repo-status]
+  depends_on:
+  - per-repo-status
   status: not started
   notes: Details move to the skill; no raw 403 JSON in the summary.
 - id: fewer-questions
   title: Reuse the recorded site repository and name needed attachments up front
   track: setup-flow
   status: not started
-  notes: Do not ask when the notes branch records the site repository. State which repositories need add_repo and with what access before asking; the session attached stack-board with push access and never needed it.
+  notes: Do not ask when the notes branch records the site repository. State which repositories
+    need add_repo and with what access before asking; the session attached stack-board with
+    push access and never needed it.
 - id: trigger-and-done
   title: Start the site build without a no-op push and print done
   track: setup-flow
   depends_on:
   - run-as-proof
   status: not started
-  notes: The dispatch workflow already accepts workflow_dispatch. Add a --trigger option on plan_site.publication that starts the site workflow and reports the result. Once a run succeeded, print done instead of repeating the token steps.
+  notes: The dispatch workflow already accepts workflow_dispatch. Add a --trigger option on
+    plan_site.publication that starts the site workflow and reports the result. Once a run
+    succeeded, print done instead of repeating the token steps.
 - id: one-call-labels
   title: List missing labels in one call
   track: setup-flow
   status: not started
-  notes: setup.steps lists missing labels, or a cached list is used, when the session has no token, instead of one get_label call per label.
-- id: token-free-site
-  title: Analyse and prototype publishing without PLAN_SITE_TOKEN
-  track: token-free
-  status: in progress
-  branch: ccr-55c61e97-pn7gso
-  pull_request_number: 137
-  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
-  notes: >
-    Analysis in #137 (docs only). User's answers: no schedule (recommended, kept); token needs only
-    Actions write on the site repository (Contents read was unused); prototype F; v3 plan issues per
-    repository. F is in #139: plan saves start the build with the session's credential, and cloud
-    sessions attach the site repository, asking the user if refused. Verified live from a cloud
-    session. The fast path (fail loudly, store-and-verify, pre-filled token page) is the
-    token-fast-path item, #140.
-
+  notes: setup.steps lists missing labels, or a cached list is used, when the session has
+    no token, instead of one get_label call per label.
 - id: retry-transient-errors
   title: Retry transient GitHub server errors when reading in the site build
   track: setup-flow
   status: in progress
-  notes: 'Done on the branch: reads asked again on a 5xx with 1, 2 and 4 second waits (RetryPolicy in github/client.py); writes never. Left: a check state still unreadable after the retries degrades to unknown instead of failing the build. Cause: one 5xx among the many commit-status reads failed builds 107-109 and 112-113 of stack-board.'
+  notes: 'Done on the branch: reads asked again on a 5xx with 1, 2 and 4 second waits (RetryPolicy
+    in github/client.py); writes never. Left: a check state still unreadable after the retries
+    degrades to unknown instead of failing the build. Cause: one 5xx among the many commit-status
+    reads failed builds 107-109 and 112-113 of stack-board.'
   branch: fix-retry-transient-github-errors
   repository: AbdelrhmanBassiouny/basstler
   pull_request_number: 136
   session: https://claude.ai/code/session_01JxHGiLLiodxFsvyywDM1YS
-
 - id: retry-dispatch-step
   title: Retry the gh workflow run step of the dispatch workflow
   track: setup-flow
   status: not started
-  notes: Dispatch run 76 failed with a 502 from gh workflow run, so a notes push started no build. Retry the step with a growing wait in templates/plan_site_dispatch_workflow.yml. test_publication.py pins the step's command and must change with it; deployed workflows are rewritten at the next setup run.
-
+  notes: Dispatch run 76 failed with a 502 from gh workflow run, so a notes push started no
+    build. Retry the step with a growing wait in templates/plan_site_dispatch_workflow.yml.
+    test_publication.py pins the step's command and must change with it; deployed workflows
+    are rewritten at the next setup run.
 - id: fork-issues
-  title: "Setup turns on Issues in the fork, or says how"
+  title: Setup turns on Issues in the fork, or says how
   branch: null
   track: setup-flow
-  notes: >
-    GitHub starts forks with Issues off, and plan tracking issues need them; no setup step said so.
-    Add a ForkIssues SetupStep beside ForkActions in setup/steps.py, in SetupChecklist.for_clone:
-    read has_issues, set it with gh api -X PATCH repos/<fork> -f has_issues=true, and print the
-    browser step (Settings > General > Features > Issues) only if that is refused. A check-setup.sh
-    row reports a fork with Issues off as needs-setup; plan-create step 5's 410 fallback names this
-    step.
+  notes: 'GitHub starts forks with Issues off, and plan tracking issues need them; no setup
+    step said so. Add a ForkIssues SetupStep beside ForkActions in setup/steps.py, in SetupChecklist.for_clone:
+    read has_issues, set it with gh api -X PATCH repos/<fork> -f has_issues=true, and print
+    the browser step (Settings > General > Features > Issues) only if that is refused. A check-setup.sh
+    row reports a fork with Issues off as needs-setup; plan-create step 5''s 410 fallback
+    names this step.
+
+    '
   depends_on: []
   status: not started
-
 - id: gh-prerequisite
-  title: "Every printed gh line comes after the steps to install and log in to gh"
+  title: Every printed gh line comes after the steps to install and log in to gh
   branch: null
   track: setup-flow
-  notes: >
-    Printed gh lines (gh label create in ForkLabels, gh repo create, gh api .../pages and gh secret
-    set in plan_site/user_steps.py) assume gh is installed and logged in. Print one prerequisite
-    block ahead of the first gh line in both SetupChecklist.render and UserSteps: install with apt
-    (the GitHub CLI apt repository where the distribution's package is too old), then gh auth login.
-    Leave it out when gh auth status already succeeds.
+  notes: 'Printed gh lines (gh label create in ForkLabels, gh repo create, gh api .../pages
+    and gh secret set in plan_site/user_steps.py) assume gh is installed and logged in. Print
+    one prerequisite block ahead of the first gh line in both SetupChecklist.render and UserSteps:
+    install with apt (the GitHub CLI apt repository where the distribution''s package is too
+    old), then gh auth login. Leave it out when gh auth status already succeeds.
+
+    '
   depends_on: []
   status: not started
-
 - id: try-before-instructing
-  title: "With a logged-in gh, setup takes every step itself and prints only the ones that failed"
+  title: With a logged-in gh, setup takes every step itself and prints only the ones that
+    failed
   branch: null
   track: setup-flow
-  notes: >
-    Depends on gh-prerequisite and fork-issues. In a local session with gh installed and logged in,
-    setup runs every step it can itself (labels, Issues, Actions, site repository, Pages, storing
-    the secret from a token the user gives) and prints one deterministic report of each step done or
-    failed with its reason; manual instructions appear only for failed steps, extending
-    PendingStep.failure ("Could not be done automatically") to SetupStep. Token creation stays
-    manual: GitHub offers no command for it. Related to one-call-labels and trigger-and-done.
-  depends_on: [gh-prerequisite, fork-issues]
-  status: not started
+  notes: 'Depends on gh-prerequisite and fork-issues. In a local session with gh installed
+    and logged in, setup runs every step it can itself (labels, Issues, Actions, site repository,
+    Pages, storing the secret from a token the user gives) and prints one deterministic report
+    of each step done or failed with its reason; manual instructions appear only for failed
+    steps, extending PendingStep.failure ("Could not be done automatically") to SetupStep.
+    Token creation stays manual: GitHub offers no command for it. Related to one-call-labels
+    and trigger-and-done.
 
+    '
+  depends_on:
+  - gh-prerequisite
+  - fork-issues
+  status: not started
 - id: token-fast-path
-  title: "Fail loudly on a missing PLAN_SITE_TOKEN, store and prove it with one command, pre-fill the token page"
+  title: Fail loudly on a missing PLAN_SITE_TOKEN, store and prove it with one command, pre-fill
+    the token page
   track: setup-flow
   status: in progress
   branch: plan-site-token-fast-path
@@ -139,11 +148,13 @@ items:
   pull_request_number: 140
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on: []
-  notes: >
-    Stacked on #139. Dispatch step stops with an ::error:: naming the secret and how to store it.
-    basstler.plan_site.token_storage stores the token in every published repository, starts each
-    dispatch and prints done or the failed run (replaces the printed gh secret set loop and covers the done half of
-    trigger-and-done). The create step links the pre-filled token form. One secret copy per
-    repository stays (no user-level Actions secrets); a joining repository costs Regenerate token
-    plus the store command. Open: make the token optional (F plus page-merge-recheck).
+  notes: 'Stacked on #139. Dispatch step stops with an ::error:: naming the secret and how
+    to store it. basstler.plan_site.token_storage stores the token in every published repository,
+    starts each dispatch and prints done or the failed run (replaces the printed gh secret
+    set loop and covers the done half of trigger-and-done). The create step links the pre-filled
+    token form. One secret copy per repository stays (no user-level Actions secrets); a joining
+    repository costs Regenerate token plus the store command. Open: make the token optional
+    (F plus page-merge-recheck).
+
+    '
 tracking_issue: 135
