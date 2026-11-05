@@ -37,7 +37,12 @@ from basstler.plan.manifest_tools import (
 from basstler.repository import Repository
 
 from ..constants.paths import DatasetLocation
-from ..fixture_plans import FixturePlanId, ForeignItemId, foreign_reference
+from ..fixture_plans import (
+    FixturePlanId,
+    ForeignItemId,
+    dataset_plan_repository,
+    foreign_reference,
+)
 from ..manifest_builders import manifest_item, minimal_plan
 from ..plan_dataset import LandedItemsPlan
 from .concurrent_edits import (
@@ -315,17 +320,6 @@ def run_validate_for_notes_remote(monkeypatch, notes_remote_url: str) -> int:
         ],
     )
     return main()
-
-
-def dataset_plan_repository() -> Repository:
-    """
-    :return: The repository the dataset plan's work is for.
-    """
-    return Repository.parse(
-        yaml.safe_load(DatasetLocation.PLAN.read_text())[
-            ManifestKey.DEFAULT_REPOSITORY.key
-        ]
-    )
 
 
 def test_validate_refuses_a_plan_for_another_repository(monkeypatch):

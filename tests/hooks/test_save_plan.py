@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from basstler.exceptions import PlanInAnotherRepository
 from basstler.exit_codes import ManifestToolsExitCode
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan.item_bootstrap.vocabulary import PlanSavingOption
@@ -28,7 +29,12 @@ from basstler.shell_configuration import ShellConfigurationFunction
 from ..constants.notes import ScratchBranch
 from ..constants.paths import DatasetLocation, PersonalNotesPath
 from ..constants.site import SiteRepository, SiteSampleText
-from ..fixture_plans import FixturePlanId, ForeignItemId, foreign_reference
+from ..fixture_plans import (
+    FixturePlanId,
+    ForeignItemId,
+    dataset_plan_repository,
+    foreign_reference,
+)
 from ..plan.concurrent_edits import (
     FIRST_ITEM,
     PLAN_IDENTIFIER,
@@ -230,11 +236,17 @@ def test_refuses_a_plan_for_another_repository(
     A plan lives in the notes of the repository its work is for, so a save to any
     other repository's notes is refused before anything is pushed.
     """
-    result = save_through_notes_remote(
-        save_plan_repository, Repository("another-owner", "another-repository")
-    )
+    notes_repository = Repository("another-owner", "another-repository")
+
+    result = save_through_notes_remote(save_plan_repository, notes_repository)
 
     assert result.returncode == 1
+    assert (
+        PlanInAnotherRepository(
+            DatasetPlan.IDENTIFIER.value, dataset_plan_repository(), notes_repository
+        ).error_message()
+        in result.stderr
+    )
     assert not saved_plan_directory(
         save_plan_repository, DatasetPlan.IDENTIFIER
     ).exists()
@@ -246,13 +258,7 @@ def test_saves_a_plan_to_its_own_repositorys_notes(
     """
     The plan's own repository's notes take the save.
     """
-    plan_repository = Repository.parse(
-        yaml.safe_load(DatasetLocation.PLAN.read_text())[
-            ManifestKey.DEFAULT_REPOSITORY.key
-        ]
-    )
-
-    result = save_through_notes_remote(save_plan_repository, plan_repository)
+    result = save_through_notes_remote(save_plan_repository, dataset_plan_repository())
 
     assert result.returncode == 0, result.stderr
     assert (
