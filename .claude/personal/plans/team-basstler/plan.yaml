@@ -111,17 +111,19 @@ items:
     merges reach the page through page-merge-recheck. Awaiting review on #122.
 
 - id: page-merge-recheck
-  title: The plan page shows an item done from the browser once its pull request merges
-  status: not started
+  title: The plan page shows every pull request's live state - draft, open, merged or closed
+  status: in progress
   track: site
+  branch: plan-site-live-states
+  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on:
   - page-draft-recheck
   notes: >
-    Agreed on #122 for forks, which get no merge workflow (their main stays identical to upstream),
-    and for upstream merges a fork's workflows never see. Extend site_plan_draft_recheck.js: on page
-    load, an item whose pull request GitHub reports merged shows as done, with the done counts and
-    shares updated. Public repositories only (unauthenticated, 60 requests an hour per viewer); the
-    next build stays the source of truth.
+    Widened from merges alone (user, 2026-11-05: most up to date draft/open/merged states). Extend
+    site_plan_draft_recheck.js: on load and when the tab regains focus, each pull request chip shows
+    GitHub's live state, and an item whose pull request merged shows as done, with the counts
+    updated. One request per pull request (60 an hour per viewer without page-viewer-token). When
+    GitHub refuses, the page says it shows the build's state and when that build ran.
 
 - id: page-viewer-token
   title: A viewer's own token lets the plan page's re-checks read private repositories
@@ -161,3 +163,29 @@ items:
     Cloudflare Worker, free tier) holding the secret of an OAuth App the user registers by hand;
     the page's "Sign in with GitHub" then stores the token as page-viewer-token does. Never a
     helper basstler runs for everyone.
+
+- id: rebuild-on-pull-request-state
+  title: Every pull request state change in a tracked repository rebuilds the plan site
+  status: in progress
+  track: site
+  branch: plan-site-live-states
+  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
+  depends_on:
+  - site-rebuild-on-merge
+  notes: >
+    The merge workflow also runs on opened, reopened, ready_for_review and converted_to_draft, and
+    on a pull request closed unmerged, so the built hub, overview and counts follow draft and open
+    changes within a minute, not only merges. Each run follows a real change; no schedule.
+
+- id: plan-timestamps
+  title: Plan pages show when the plan was created, last modified and last refreshed
+  status: in progress
+  track: site
+  branch: plan-site-live-states
+  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
+  depends_on: []
+  notes: >
+    Created and last modified come from the notes branch's git history of the plan's directory (the
+    build fetches it without file contents). Last refreshed is the build time, replaced by the time
+    of the page's live pull request check once that succeeds. The build time is left out of the
+    site digest, so a build with nothing new still skips the deploy.
