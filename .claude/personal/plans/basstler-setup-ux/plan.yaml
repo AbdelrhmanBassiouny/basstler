@@ -114,6 +114,12 @@ items:
   title: "Every printed gh line comes after the steps to install and log in to gh"
   branch: null
   track: setup-flow
+  notes: >
+    Printed gh lines (gh label create in ForkLabels, gh repo create, gh api .../pages and gh secret
+    set in plan_site/user_steps.py) assume gh is installed and logged in. Print one prerequisite
+    block ahead of the first gh line in both SetupChecklist.render and UserSteps: install with apt
+    (the GitHub CLI apt repository where the distribution's package is too old), then gh auth login.
+    Leave it out when gh auth status already succeeds.
   depends_on: []
   status: not started
 
