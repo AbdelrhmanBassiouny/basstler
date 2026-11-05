@@ -20,6 +20,7 @@ from basstler.github.exceptions import GitHubRequestFailed
 from basstler.locations import WorkflowLocation
 from basstler.plan_site.build_start import (
     BuildStart,
+    CodeFence,
     DispatchKey,
     GitHubCommand,
     RepositoryKey,
@@ -150,4 +151,17 @@ def test_a_refused_site_repository_is_reported():
 
     assert attempt.response.failure.error_message() in attempt.describe(
         in_cloud_session=False
+    )
+
+
+def test_a_local_session_is_shown_the_command_in_a_bash_block_of_its_own():
+    """
+    The command to run is on its own line inside a fenced bash block.
+    """
+    client = SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
+
+    description = BuildStart.attempt(SITE, client).describe(in_cloud_session=False)
+
+    assert description.endswith(
+        "\n".join(["", CodeFence.BASH, GitHubCommand.LOG_IN, CodeFence.CLOSE])
     )
