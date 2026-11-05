@@ -227,6 +227,11 @@ class ManifestToolsExitCode(ExitCode):
     The manifest breaks a rule the plan site validates; the problems are on stderr.
     """
 
+    USAGE = 2
+    """
+    No such subcommand, or the wrong arguments; what is wrong is on stderr.
+    """
+
     CHANGED_SINCE_READ = 3
     """
     Another writer changed a part of the plan the session also changed, or removed the
