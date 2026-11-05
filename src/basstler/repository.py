@@ -190,6 +190,13 @@ class Repository:
         """
         return f"{self.api_path}/pulls/{number}"
 
+    def issue_path(self, number: int) -> str:
+        """
+        :param number: The issue's number.
+        :return: The REST path of that issue.
+        """
+        return f"{self.api_path}/issues/{number}"
+
     def job_log_path(self, job: int) -> str:
         """
         :param job: The Actions job's own number.

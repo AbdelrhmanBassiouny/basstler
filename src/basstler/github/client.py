@@ -47,6 +47,7 @@ class HttpMethod(StrEnum):
     POST = "POST"
     PUT = "PUT"
     PATCH = "PATCH"
+    DELETE = "DELETE"
 
 
 class GitHubReader(ABC):

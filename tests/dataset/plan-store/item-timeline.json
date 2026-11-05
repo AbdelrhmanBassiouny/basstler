@@ -1,0 +1,7 @@
+[
+  {"event": "labeled", "label": {"name": "enhancement"}},
+  {"event": "cross-referenced", "source": {"type": "issue", "issue": {"id": 1110, "number": 110, "title": "Store plans", "state": "open", "html_url": "https://github.com/example-owner/example-repo/pull/110", "repository_url": "https://api.github.com/repos/example-owner/example-repo", "body": "Adds the store.\n\nCloses #101", "labels": [], "pull_request": {"merged_at": null}}}},
+  {"event": "cross-referenced", "source": {"type": "issue", "issue": {"id": 1111, "number": 111, "title": "Mention", "state": "closed", "html_url": "https://github.com/example-owner/example-repo/pull/111", "repository_url": "https://api.github.com/repos/example-owner/example-repo", "body": "Prepares for #101.", "labels": [], "pull_request": {"merged_at": "2026-11-01T10:00:00Z"}}}},
+  {"event": "cross-referenced", "source": {"type": "issue", "issue": {"id": 1112, "number": 112, "title": "Question", "state": "open", "html_url": "https://github.com/example-owner/example-repo/issues/112", "repository_url": "https://api.github.com/repos/example-owner/example-repo", "body": "Closes #101?", "labels": []}}},
+  {"event": "cross-referenced", "source": {"type": "issue", "issue": {"id": 1113, "number": 113, "title": "Other repository", "state": "closed", "html_url": "https://github.com/other-owner/other-repo/pull/113", "repository_url": "https://api.github.com/repos/other-owner/other-repo", "body": "Fixes example-owner/example-repo#101", "labels": [], "pull_request": {"merged_at": "2026-11-02T10:00:00Z"}}}}
+]

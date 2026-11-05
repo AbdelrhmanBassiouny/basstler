@@ -1,8 +1,8 @@
 """
 The GitHub labels this tooling reads or applies, in one table.
 
-The plan site reads some of them, a maintenance pass writes one, and setup creates
-all of them on a fork. One enum names them all, so a label one part recognizes cannot be
+The plan site reads some of them, a maintenance pass writes one, and setup creates all
+of them on a fork. One enum names them all, so a label one part recognizes cannot be
 missing from the set setup creates.
 
 Kept free of third-party imports, so the setup script can read it before the plan site's
@@ -47,25 +47,30 @@ class GitHubLabel(StrEnum):
     """
     Read by the plan site, which treats the label exactly like a real merge.
     """
-
     IN_REVIEW = ("in-review", "Under review")
     """
-    Kept in step by a maintenance pass with the open upstream pull request opened from the
-    branch.
+    Kept in step by a maintenance pass with the open upstream pull request opened from
+    the branch.
     """
-
     BUG = ("bug", "A bug fix")
     """
     Applied by a session opening a bug-fix pull request.
     """
-
     PROMOTION_LINK_SENT = (
         "promotion-link-sent",
         "A maintenance pass has written this branch's upstream create-link",
     )
     """
-    Applied by a maintenance pass to a fork pull request whose link it has built,
-    so a later pass does not rebuild it.
+    Applied by a maintenance pass to a fork pull request whose link it has built, so a
+    later pass does not rebuild it.
+    """
+    BLOCKED = ("blocked", "Something outside the item has to move first")
+    """
+    Marks a plan item's issue whose work is stuck on something outside it.
+    """
+    DEFERRED = ("deferred", "Deliberately parked rather than stuck")
+    """
+    Marks a plan item's issue whose work is put off on purpose.
     """
 
     def creation_command(self, repository: Repository) -> str:

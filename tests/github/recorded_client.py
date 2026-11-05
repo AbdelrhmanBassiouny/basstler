@@ -13,6 +13,8 @@ from basstler.github.client import GitHubClient, GitHubResponse, HttpMethod
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
 
+from .api_stand_in import RequestLine
+
 # %% the client
 
 
@@ -31,7 +33,7 @@ class SentWrite:
 class RecordedGitHubClient(GitHubClient):
     """
     Answers each read from :attr:`responses` or :attr:`pages`, refusing any other path
-    with :attr:`refusal`, and records every write.
+    with :attr:`refusal`, and records and answers every write.
     """
 
     responses: Mapping[str, Any] = field(default_factory=dict)
@@ -47,6 +49,11 @@ class RecordedGitHubClient(GitHubClient):
     refusal: HTTPStatus = HTTPStatus.NOT_FOUND
     """
     The status a path with no recording is refused with.
+    """
+
+    write_responses: Mapping[RequestLine, Any] = field(default_factory=dict)
+    """
+    The response to each write; a write with none is answered with its own payload.
     """
 
     writes: list[SentWrite] = field(default_factory=list)
@@ -68,7 +75,9 @@ class RecordedGitHubClient(GitHubClient):
         self, method: HttpMethod, path: str, payload: Mapping[str, Any]
     ) -> GitHubResponse:
         self.writes.append(SentWrite(method, path, payload))
-        return GitHubResponse(payload)
+        return GitHubResponse(
+            self.write_responses.get(RequestLine(method, path), payload)
+        )
 
     def _refuse(self, method: HttpMethod, path: str) -> None:
         """
