@@ -32,7 +32,10 @@ items:
 - id: per-repo-status
   title: plan_site check reports one row per repository
   track: status
-  status: not started
+  status: in progress
+  branch: claude/beautiful-albattani-wv1cfw
+  pull_request_number: 146
+  session: https://claude.ai/code/session_01JxHGiMvXoxRob9r97K7YGE
   notes: /setup-personal-notes judges only the clone's own repository; other repositories
     on the site are informational rows.
 - id: run-as-proof
