@@ -1,11 +1,11 @@
 Plan
-- Tests first: rules file model, brief output, site section, edit command.
-- `_rules.yaml` on the notes branch (id, text), pydantic dataclasses, one cyclopts command to edit.
+- `_rules.yaml` on the notes branch (id, text), edited by `basstler repository-rules`.
 - Brief prints `repository_rules`; plan pages show them; plan-create links them.
 
 Done
-- Branch, draft PR 143, item recorded in progress.
+- Model, store, command, brief, site section, skill text, tests; pydantic added with approval.
+- Draft PR 143 pushed and described; item recorded in progress.
 
 Next
-- Write failing tests, then implement.
-- After merge: replace the personal-notes "Design priorities" section with the file.
+- User review of PR 143, and the test-docstring question in its description.
+- After merge: seed the rules with `repository-rules set`, then drop the personal-notes "Design priorities" section.
