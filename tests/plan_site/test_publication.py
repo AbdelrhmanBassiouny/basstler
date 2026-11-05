@@ -8,6 +8,7 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
+import sys
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
@@ -34,11 +35,12 @@ from basstler.github.exceptions import (
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
+from basstler.plan_site import token_storage
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import PlanSitePublication, PublicationOption
 from basstler.plan_site.publication import app as publication_app
 from basstler.plan_site.run_listing import ListedRun, RunListing
-from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep, UserSteps
+from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     DispatchWorkflow,
@@ -488,23 +490,48 @@ def test_the_dispatch_workflow_runs_only_in_the_notes_repository():
     assert job.condition == f"github.repository == '{notes_repository.full_name}'"
 
 
+def dispatch_step_of(workflow: DispatchWorkflow) -> WorkflowStep:
+    """:return: The one step of *workflow*'s job."""
+    (step,) = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.DISPATCH].steps
+    return step
+
+
 def test_the_dispatch_workflow_starts_the_site_workflow_with_the_token():
     site = SiteRepository(Repository("an-owner", "plans"))
     workflow = DispatchWorkflow(Repository("an-owner", "a-project"), NOTES_BRANCH, site)
 
-    job = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.DISPATCH]
+    step = dispatch_step_of(workflow)
 
-    assert job.steps == [
-        WorkflowStep(
-            f"gh workflow run {SiteWorkflow.location.name} "
-            f"--repo {site.repository.full_name}",
-            {
-                GitHubCredentialVariable.GH_TOKEN: (
-                    f"${{{{ secrets.{PlanSiteSecret.TOKEN} }}}}"
-                )
-            },
-        )
-    ]
+    assert step.environment == {
+        GitHubCredentialVariable.GH_TOKEN: f"${{{{ secrets.{PlanSiteSecret.TOKEN} }}}}"
+    }
+    assert step.command.splitlines()[-1] == (
+        f"gh workflow run {SiteWorkflow.location.name} "
+        f"--repo {site.repository.full_name}"
+    )
+
+
+def test_a_dispatch_without_the_stored_token_fails_with_an_error_saying_how_to_store_it():
+    """
+    A missing secret leaves the token empty, which used to fail inside ``gh`` without
+    naming the secret.
+    """
+    workflow = a_dispatch_workflow()
+    step = dispatch_step_of(workflow)
+
+    finished = subprocess.run(
+        ["bash", "-c", step.command],
+        env={GitHubCredentialVariable.GH_TOKEN: ""},
+        capture_output=True,
+        text=True,
+    )
+
+    assert finished.returncode == 1
+    assert finished.stdout.startswith(f"::error title={PlanSiteSecret.TOKEN} ")
+    assert workflow.site.token_form_url() in finished.stdout
+    assert f"{workflow.notes_repository.url}/settings/secrets/actions/new" in (
+        finished.stdout
+    )
 
 
 # %% the merge workflow
@@ -963,7 +990,7 @@ def test_creating_the_token_walks_through_scoping_it_to_the_site_repository_only
     browser_steps = pending_step(report, UserStep.CREATE_TOKEN).browser_steps
 
     text = "\n".join(browser_steps)
-    assert UserSteps.token_page in text
+    assert published.site.token_form_url() in text
     assert published.site.repository.full_name in text
     assert published.notes_repository.full_name not in text
 
@@ -974,26 +1001,14 @@ def test_creating_a_token_has_no_command_line_because_github_offers_none(publish
     assert pending_step(report, UserStep.CREATE_TOKEN).line is None
 
 
-def test_storing_the_token_is_one_command_that_sets_the_secret_in_every_registered_repository(
-    published, tmp_path
+def test_storing_the_token_is_the_command_that_stores_and_proves_it_everywhere(
+    published,
 ):
-    second_repository = Repository(published.notes_repository.owner, "another")
-    published.create(second_repository)
-    second = ForkCheckout.create(tmp_path / "second")
-    second.run_git(
-        "remote",
-        "set-url",
-        RemoteName.ORIGIN,
-        published.path_of(second_repository).as_uri(),
-    )
-    second_publishing = Publishing(second, published.root)
-
-    report = second_publishing.publication(second_publishing.runs_none()).publish()
+    report = published.publication(published.runs_none()).publish()
 
     line = pending_step(report, UserStep.STORE_TOKEN).line
-    assert line.count(f"gh secret set {PlanSiteSecret.TOKEN}") == 1
-    assert published.notes_repository.full_name in line
-    assert second_repository.full_name in line
+
+    assert line == f"{sys.executable} -m {token_storage.__name__}"
 
 
 def test_storing_the_token_in_the_browser_opens_each_registered_repository_s_secret_page(

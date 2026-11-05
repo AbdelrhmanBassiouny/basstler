@@ -401,6 +401,10 @@ class DispatchWorkflow(PlanSiteWorkflow):
             "site_workflow_name": SiteWorkflow.location.name,
             "token_variable": GitHubCredentialVariable.GH_TOKEN,
             "token_secret": PlanSiteSecret.TOKEN,
+            "token_form_url": self.site.token_form_url(),
+            "secrets_page": (
+                f"{self.notes_repository.url}/settings/secrets/actions/new"
+            ),
         }
 
 

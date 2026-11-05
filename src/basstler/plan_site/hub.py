@@ -38,6 +38,8 @@ from basstler.class_property import classproperty
 from basstler.plan_site.plan import Item
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.remote_branch import RemoteBranch
+from basstler.personal_notes.branch import PersonalNotesLocation
 from basstler.plan_site.exceptions import RegistryUnreadableError
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
@@ -322,6 +324,40 @@ class NotesBranch:
         plans_directory = self.git.working_directory / ProjectLocation.PLANS
         plans_directory.mkdir(parents=True, exist_ok=True)
         return plans_directory
+
+
+# %% the repositories a site publishes
+
+
+def published_repositories(
+    project_root: Path,
+    location: PersonalNotesLocation,
+    notes_repository: Repository,
+    remote_root: str = GitHubAddress.WEB,
+) -> list[Repository]:
+    """
+    :param project_root: The clone to read the notes branch from.
+    :param location: Where its notes are kept.
+    :param notes_repository: The repository its notes branch is on.
+    :param remote_root: Where the registry is fetched from, as
+        :meth:`Repository.clone_url_under` takes it.
+    :return: The notes repository, then every other repository the registry's hub file
+        lists.
+    """
+    # Only the registry's copy lists every repository; this one names the registry.
+    own_copy = PlanHub.from_text(
+        RemoteBranch(
+            location.branch, GitCommandRunner(project_root), location.remote
+        ).read_latest(ProjectLocation.PLAN_HUB)
+    )
+    if own_copy is None:
+        return [notes_repository]
+    hub = (
+        PlanHub.from_registry(Repository.parse(own_copy.registry), remote_root)
+        or own_copy
+    )
+    listed = [Repository.parse(name) for name in hub.repositories]
+    return list(dict.fromkeys([notes_repository, *listed]))
 
 
 def main() -> int:
