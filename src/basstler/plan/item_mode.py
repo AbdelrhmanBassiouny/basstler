@@ -828,6 +828,8 @@ def main() -> int:
         logger.error(f"{error.exit_code.name_for_a_caller}: {error}")
         return int(error.exit_code)
 
+    if report is None:
+        return PlanItemModeExitCode.SUCCESS
     logger.info(json.dumps(report.to_json()))
     return int(report.exit_code)
 
