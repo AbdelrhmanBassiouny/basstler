@@ -40,7 +40,13 @@ from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.report import CheckResult, CheckStatus
 from basstler.setup.steps import resolve_repository
+from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.vocabulary import CheckOutcome, JSONModel
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 # %% a read GitHub refused
 
@@ -469,12 +475,12 @@ class DispatchCheck:
     repositories the site publishes report.
     """
 
-    own: DispatchReading
+    own_repository_dispatch_reading: DispatchReading
     """
     What was read of the clone's own repository's dispatch, the only one judged.
     """
 
-    others: list[DispatchReading]
+    other_repositories_dispatch_readings: list[DispatchReading]
     """
     What was read of each other published repository's dispatch, reported as context.
     """
@@ -503,14 +509,14 @@ class DispatchCheck:
             for what is left unless it starts its build; unverified when its runs could
             not be read.
         """
-        if self.own.status is CheckStatus.OK:
-            return CheckResult(CheckStatus.OK, self.own.describe())
-        detail = (
-            f"{self.own.describe()} - for what is left, run: {self.publication_command}"
-        )
-        if self.own.status is CheckStatus.UNVERIFIED:
+        if self.own_repository_dispatch_reading.status is CheckStatus.OK:
+            return CheckResult(
+                CheckStatus.OK, self.own_repository_dispatch_reading.describe()
+            )
+        detail = f"{self.own_repository_dispatch_reading.describe()} - for what is left, run: {self.publication_command}"
+        if self.own_repository_dispatch_reading.status is CheckStatus.UNVERIFIED:
             detail = f"{UNVERIFIED_PREFIX} - {detail}"
-        return CheckResult(self.own.status, detail)
+        return CheckResult(self.own_repository_dispatch_reading.status, detail)
 
     def other_results(self) -> list[CheckResult]:
         """
@@ -519,7 +525,7 @@ class DispatchCheck:
         """
         return [
             CheckResult(CheckStatus.INFORMATIONAL, other.describe())
-            for other in self.others
+            for other in self.other_repositories_dispatch_readings
         ]
 
     def rows(self) -> list[CheckResult]:
@@ -603,7 +609,7 @@ def report_dispatch() -> int:
         ),
     )
     for row in check.rows():
-        print(row.fields)
+        logger.info(row.fields)
     return 0
 
 

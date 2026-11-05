@@ -401,7 +401,7 @@ class ReadSource(StrEnum):
         """
         :return: The API the place this runs in can reach.
         """
-        if ClaudeCodeVariable.REMOTE.read() == "true":
+        if ClaudeCodeVariable.REMOTE.is_true():
             return cls.REST
         return cls.GRAPHQL
 
