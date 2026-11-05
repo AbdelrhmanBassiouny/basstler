@@ -23,6 +23,8 @@ from pathlib import Path
 from .script_runner import BashScriptRunner
 from basstler.locations import PackageLocation, PluginLocation
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.repository import Repository
+from basstler.setup.steps import PersonalNotesSetting
 from basstler.shell_configuration import ShellConfigurationFunction
 
 from .constants.environment import (
@@ -631,6 +633,30 @@ class ScratchRepository:
         self.run_git("remote", "add", "origin", str(self.work_remote_path))
         return self.work_remote_path
 
+    def serve_notes_remote_as(self, repository: Repository) -> None:
+        """
+        Name the notes remote by *repository*'s clone URL, which git serves from this
+        repository's own notes remote.
+
+        :param repository: The repository the notes remote is to name.
+        """
+        self.run_git(
+            "config",
+            self.url_rewriting_key(str(self.notes_remote_path)),
+            repository.clone_url,
+        )
+        self.run_git(
+            "config", PersonalNotesSetting.REMOTE.git_config_key, repository.clone_url
+        )
+
+    @staticmethod
+    def url_rewriting_key(replacement: str) -> str:
+        """
+        :param replacement: The URL or path git is to use in place of the rewritten URL.
+        :return: The git setting that makes a URL resolve to *replacement*.
+        """
+        return f"url.{replacement}.insteadOf"
+
     def resolve_notes_remote_to(self, remote: Path | None = None) -> None:
         """
         Point the personal-notes remote at *remote* through local git config.
@@ -640,6 +666,6 @@ class ScratchRepository:
         """
         self.run_git(
             "config",
-            "claude.personalNotesRemote",
+            PersonalNotesSetting.REMOTE.git_config_key,
             str(self.notes_remote_path if remote is None else remote),
         )
