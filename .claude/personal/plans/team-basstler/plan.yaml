@@ -115,6 +115,8 @@ items:
   status: in progress
   track: site
   branch: plan-site-live-states
+  pull_request_number: 141
+  repository: AbdelrhmanBassiouny/basstler
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on:
   - page-draft-recheck
@@ -169,6 +171,8 @@ items:
   status: in progress
   track: site
   branch: plan-site-live-states
+  pull_request_number: 141
+  repository: AbdelrhmanBassiouny/basstler
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on:
   - site-rebuild-on-merge
@@ -182,6 +186,8 @@ items:
   status: in progress
   track: site
   branch: plan-site-live-states
+  pull_request_number: 141
+  repository: AbdelrhmanBassiouny/basstler
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on: []
   notes: >
