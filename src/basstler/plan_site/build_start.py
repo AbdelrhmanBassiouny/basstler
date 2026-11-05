@@ -16,10 +16,9 @@ from pathlib import Path
 from cyclopts import App
 
 from basstler.github.client import (
-    GitHubAttemptReader,
+    GitHubAttemptClient,
     GitHubResponse,
     GitHubRestClient,
-    GitHubWriter,
     HttpMethod,
 )
 from basstler.locations import ClaudeCodeVariable, WorkflowLocation
@@ -28,6 +27,12 @@ from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.personal_notes.branch import PersonalNotesLocation
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import PlanSiteSecret
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 # %% the outcome
 
@@ -46,6 +51,17 @@ class SessionTool(StrEnum):
     ASK_USER = "AskUserQuestion"
     """
     Asks the user to choose between options.
+    """
+
+
+class GitHubCommand(StrEnum):
+    """
+    The ``gh`` command lines a local session is told to run when the build did not start.
+    """
+
+    LOG_IN = "gh auth login"
+    """
+    Logs ``gh`` in, which gives this command its credential.
     """
 
 
@@ -86,23 +102,19 @@ class BuildStart:
     """
 
     @classmethod
-    def attempt(
-        cls, site: SiteRepository, reader: GitHubAttemptReader, writer: GitHubWriter
-    ) -> BuildStart:
+    def attempt(cls, site: SiteRepository, client: GitHubAttemptClient) -> BuildStart:
         """
         :param site: The site repository.
-        :param reader: Reads the site repository's default branch.
-        :param writer: Sends the dispatch.
+        :param client: Reads the site repository's default branch and sends the dispatch.
         :return: The attempt, which never raises for a refusal or a call with no answer.
         """
         repository = site.repository
-        read = reader.attempt_get(repository.api_path)
+        read = client.attempt_get(repository.api_path)
         if read.failure is not None:
             return cls(site, read)
-        dispatch = writer.attempt_send(
+        dispatch = client.attempt_send(
             HttpMethod.POST,
-            f"{repository.api_path}/actions/workflows/"
-            f"{WorkflowLocation.PLAN_SITE.name}/dispatches",
+            repository.workflow_dispatch_path(WorkflowLocation.PLAN_SITE),
             {DispatchKey.REF: read.body[RepositoryKey.DEFAULT_BRANCH]},
         )
         return cls(site, dispatch)
@@ -130,7 +142,10 @@ class BuildStart:
             f"{self.response.failure.error_message()}. {fallback}"
         )
         if not in_cloud_session:
-            return f"{refused} Log gh in with access to {repository.full_name}."
+            return (
+                f"{refused} Log gh in with an account that can run workflows in "
+                f"{repository.full_name}: {GitHubCommand.LOG_IN}"
+            )
         return (
             f"{refused} Attach the site repository to this session: call "
             f"{SessionTool.ATTACH_REPOSITORY} with owner {repository.owner}, repo "
@@ -164,11 +179,10 @@ def start_build() -> int:
         RemoteBranch(location.branch, GitCommandRunner(project_root), location.remote)
     )
     if site is None:
-        print("No plan site lists this repository, so no build was started.")
+        logger.info("No plan site lists this repository, so no build was started.")
         return 0
-    client = GitHubRestClient()
-    attempt = BuildStart.attempt(site, client, client)
-    print(attempt.describe(ClaudeCodeVariable.REMOTE.read() == "true"))
+    attempt = BuildStart.attempt(site, GitHubRestClient())
+    logger.info(attempt.describe(ClaudeCodeVariable.REMOTE.is_true()))
     return 0
 
 

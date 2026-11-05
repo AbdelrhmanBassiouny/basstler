@@ -11,9 +11,8 @@ from http import HTTPStatus
 from typing import Any
 
 from basstler.github.client import (
-    GitHubAttemptReader,
+    GitHubAttemptClient,
     GitHubResponse,
-    GitHubWriter,
     HttpMethod,
 )
 from basstler.github.credential import CredentialProvider
@@ -22,6 +21,7 @@ from basstler.locations import WorkflowLocation
 from basstler.plan_site.build_start import (
     BuildStart,
     DispatchKey,
+    GitHubCommand,
     RepositoryKey,
     SessionTool,
 )
@@ -35,16 +35,16 @@ SITE = SiteRepository(Repository.parse("an-owner/plans"))
 The site repository whose build is started.
 """
 
-SITE_DEFAULT_BRANCH = "main"
+SITE_DEFAULT_BRANCH = "trunk"
 """
-The site repository's default branch.
+The default branch the stand-in site repository reports, deliberately not ``main``.
 """
 
 # %% a site repository answering from memory
 
 
 @dataclass
-class SiteAnsweringClient(GitHubAttemptReader, GitHubWriter):
+class SiteAnsweringClient(GitHubAttemptClient):
     """
     Answers the site repository's resource, or refuses it with :attr:`refusal`, and
     accepts and records every write.
@@ -85,36 +85,43 @@ class SiteAnsweringClient(GitHubAttemptReader, GitHubWriter):
 
 
 def test_the_build_is_dispatched_on_the_site_s_default_branch():
+    """
+    The dispatch runs the build on the branch GitHub reports as the default.
+    """
     client = SiteAnsweringClient()
 
-    attempt = BuildStart.attempt(SITE, client, client)
+    attempt = BuildStart.attempt(SITE, client)
 
     assert attempt.started
     assert client.writes == [
         SentWrite(
             HttpMethod.POST,
-            f"{SITE.repository.api_path}/actions/workflows/"
-            f"{WorkflowLocation.PLAN_SITE.name}/dispatches",
+            SITE.repository.workflow_dispatch_path(WorkflowLocation.PLAN_SITE),
             {DispatchKey.REF: SITE_DEFAULT_BRANCH},
         )
     ]
 
 
 def test_a_refused_site_repository_dispatches_nothing():
+    """
+    When reading the site repository is refused, no dispatch is sent.
+    """
     client = SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
 
-    attempt = BuildStart.attempt(SITE, client, client)
+    attempt = BuildStart.attempt(SITE, client)
 
     assert not attempt.started
     assert client.writes == []
 
 
 def test_a_cloud_session_is_told_to_attach_the_site_repository_and_ask_if_refused():
+    """
+    A cloud session is told to attach the site repository, and to ask the user if that
+    is refused.
+    """
     client = SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
 
-    description = BuildStart.attempt(SITE, client, client).describe(
-        in_cloud_session=True
-    )
+    description = BuildStart.attempt(SITE, client).describe(in_cloud_session=True)
 
     assert SessionTool.ATTACH_REPOSITORY in description
     assert SessionTool.ASK_USER in description
@@ -122,10 +129,25 @@ def test_a_cloud_session_is_told_to_attach_the_site_repository_and_ask_if_refuse
 
 
 def test_a_local_session_is_not_told_to_attach_a_repository():
+    """
+    A local session is told to log ``gh`` in, not to attach a repository.
+    """
     client = SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
 
-    description = BuildStart.attempt(SITE, client, client).describe(
-        in_cloud_session=False
-    )
+    description = BuildStart.attempt(SITE, client).describe(in_cloud_session=False)
 
     assert SessionTool.ATTACH_REPOSITORY not in description
+    assert GitHubCommand.LOG_IN in description
+
+
+def test_a_refused_site_repository_is_reported():
+    """
+    The refusal that stopped the build is in what is printed.
+    """
+    client = SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
+
+    attempt = BuildStart.attempt(SITE, client)
+
+    assert attempt.response.failure.error_message() in attempt.describe(
+        in_cloud_session=False
+    )
