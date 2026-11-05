@@ -61,8 +61,10 @@ items:
 - id: fix-secret-loop
   title: Space-separate repositories in the printed gh secret set loop
   track: setup-flow
-  status: not started
-  notes: The printed loop is "for repository in A, B", which keeps the comma in the first name. Cover it with a test.
+  status: in progress
+  notes: Folded into token-fast-path (#140), whose store step is one command instead of the printed loop.
+  branch: plan-site-token-fast-path
+  pull_request_number: 140
 - id: token-free-site
   title: Analyse and prototype publishing without PLAN_SITE_TOKEN
   track: token-free
@@ -75,8 +77,8 @@ items:
     Actions write on the site repository (Contents read was unused); prototype F; v3 plan issues per
     repository. F is in #139: plan saves start the build with the session's credential, and cloud
     sessions attach the site repository, asking the user if refused. Verified live from a cloud
-    session. Next: fail loudly on a missing secret, a store-and-verify command, a pre-filled token
-    page.
+    session. The fast path (fail loudly, store-and-verify, pre-filled token page) is the
+    token-fast-path item, #140.
 
 - id: retry-transient-errors
   title: Retry transient GitHub server errors when reading in the site build
@@ -134,4 +136,21 @@ items:
     manual: GitHub offers no command for it. Related to one-call-labels and trigger-and-done.
   depends_on: [gh-prerequisite, fork-issues]
   status: not started
+
+- id: token-fast-path
+  title: "Fail loudly on a missing PLAN_SITE_TOKEN, store and prove it with one command, pre-fill the token page"
+  track: setup-flow
+  status: in progress
+  branch: plan-site-token-fast-path
+  repository: AbdelrhmanBassiouny/basstler
+  pull_request_number: 140
+  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
+  depends_on: []
+  notes: >
+    Stacked on #139. Dispatch step stops with an ::error:: naming the secret and how to store it.
+    basstler.plan_site.token_storage stores the token in every published repository, starts each
+    dispatch and prints done or the failed run (covers fix-secret-loop and the done half of
+    trigger-and-done). The create step links the pre-filled token form. One secret copy per
+    repository stays (no user-level Actions secrets); a joining repository costs Regenerate token
+    plus the store command. Open: make the token optional (F plus page-merge-recheck).
 tracking_issue: 135
