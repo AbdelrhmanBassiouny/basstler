@@ -15,18 +15,6 @@ tracks:
   name: Fixes
   wave: fixes
 items:
-- id: dashboard-optional-branch
-  title: The dashboard accepts an item with no branch key
-  branch: claude/magical-franklin-4x2epk
-  pull_request_number: 107
-  track: fixes
-  session: https://claude.ai/code/session_018wfiv7F2LCEAFYDkz9idEV
-  depends_on: []
-  status: in progress
-  notes: 'plan.Item.from_mapping reads branch with data[...] and raises KeyError, though the
-    schema and save-plan treat branch as optional.
-
-    '
 - id: restack-without-upstream
   title: Maintenance board and restack run in a repository with no upstream
   branch: null
