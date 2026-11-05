@@ -46,6 +46,7 @@ title: "Human-readable title"
 description: >
   One short paragraph.
 default_repository: <owner>/<repo>   # used by every item unless it sets its own `repository`
+                                     # and the repository whose notes hold the plan
                                        # (roadmap.md is a fixed sibling filename, not configurable)
 tracking_issue: <int, optional> # see "Proposing structural changes" below
 
