@@ -1,13 +1,14 @@
 # claude/zen-edison-fwzug6
 
 ## Plan
-- Port basstler.plan command lines from argparse to cyclopts, manifest_tools first
-- Keep commands, options, exit codes; usage errors exit 2
-- Remaining packages go to a new plan with four items
+- Port basstler.plan command lines from argparse to cyclopts; keep commands, options, statuses
+- Rest of the item lives in plan cyclopts-migration (#147)
 
 ## Done
-- Branch, draft PR #142, item recorded in progress
+- manifest_tools, item_brief, item_mode, size_check, size_limits, check_scope_overlap, updates_since_support on cyclopts
+- Refusals carry statuses as CommandFailure; unused plan/command_arguments.py deleted
+- Full suite green apart from 4 environmental Playwright errors
 
 ## Next
-- Port manifest_tools.py, then the other basstler.plan modules
-- Create the follow-up plan
+- Owner review of #142; read CI on 6189e6de
+- On merge, resolve #138's manifest_tools thread
