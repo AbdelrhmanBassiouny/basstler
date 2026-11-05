@@ -75,3 +75,10 @@ items:
     notes: >
       plan.Item.from_mapping reads branch with data[...] and raises KeyError, though the
       schema and save-plan treat branch as optional.
+
+  - id: restack-without-upstream
+    title: "Maintenance board and restack run in a repository with no upstream"
+    branch: null
+    track: fixes
+    depends_on: []
+    status: not started
