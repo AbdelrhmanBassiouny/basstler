@@ -65,11 +65,13 @@ items:
 
 - id: report-keys-in-tests
   title: Tests read command reports through the existing report key enums, not bare strings
-  branch: null
+  branch: claude/magical-maxwell-grvwey
   track: core
+  pull_request_number: 145
+  session: https://claude.ai/code/session_01JxHGiM4hfRi32XVV1JDTEE
   notes: 'Tests read item_mode, maintenance and bootstrap reports with bare strings although
     ReportKey and MaintenanceReportKey exist. Use the enums.
 
     '
   depends_on: []
-  status: not started
+  status: in progress
