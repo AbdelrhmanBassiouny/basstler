@@ -102,6 +102,17 @@ class SetupCheck(StrEnum):
     """
 
 
+class RepositoryCheck(StrEnum):
+    """
+    The checks check-setup.sh reports once for each repository, after the fixed ones.
+    """
+
+    PLAN_SITE_REPOSITORY = "plan_site_repository"
+    """
+    One repository on the plan site other than the clone's own, informational only.
+    """
+
+
 class CheckStatus(StrEnum):
     """
     The status check-setup.sh reports for a single check.
@@ -186,6 +197,11 @@ class SetupReport:
     Every reported check, keyed by the check it reports on.
     """
 
+    repository_results: list[CheckResult]
+    """
+    What each :class:`RepositoryCheck` row reported, in the order printed.
+    """
+
     @classmethod
     def from_completed_process(
         cls, process: subprocess.CompletedProcess[str]
@@ -199,7 +215,12 @@ class SetupReport:
             with a status, this module does not declare, so a new one cannot go unread.
         """
         results = {}
+        repository_results = []
         for line in process.stdout.splitlines():
             check, status, detail = line.split(ReportRowField.SEPARATOR)
-            results[SetupCheck(check)] = CheckResult(CheckStatus(status), detail)
-        return cls(SetupCheckExitCode(process.returncode), results)
+            result = CheckResult(CheckStatus(status), detail)
+            if check in RepositoryCheck:
+                repository_results.append(result)
+            else:
+                results[SetupCheck(check)] = result
+        return cls(SetupCheckExitCode(process.returncode), results, repository_results)

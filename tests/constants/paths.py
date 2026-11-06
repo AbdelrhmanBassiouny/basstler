@@ -244,6 +244,14 @@ class DatasetLocation(PathEnumeration):
     dispatch that needs setup.
     """
 
+    DISPATCH_CHECK_WITH_OTHER_REPOSITORY_STUB = (
+        STUBS / "dispatch_check_with_other_repository.py"
+    )
+    """
+    A module standing in for :mod:`basstler.plan_site.dispatch_check`, reporting a
+    dispatch that starts the build and a second repository that does not.
+    """
+
     BUILD_START_STUB = STUBS / "build_start_prints_its_name.py"
     """
     A module standing in for :mod:`basstler.plan_site.build_start`, printing its name.
