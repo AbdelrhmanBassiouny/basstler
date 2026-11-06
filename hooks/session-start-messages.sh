@@ -137,6 +137,31 @@ setup_line_needs_setup() {
   printf '%s check(s) need setup or could not be verified - run /setup-personal-notes:' "${needs_setup_count}"
 }
 
+# %% the cited names line
+
+# cited_names_line_no_notes: there are no personal notes to read.
+cited_names_line_no_notes() {
+  printf 'not applicable (no personal notes)'
+}
+
+# cited_names_line_current: every module and skill the notes name is shipped.
+cited_names_line_current() {
+  printf 'every module and skill the notes name is shipped'
+}
+
+# cited_names_line_stale: the heading above the indented rows naming each
+# module or skill the notes cite that this release no longer ships.
+cited_names_line_stale() {
+  local stale_count="$1"
+  printf '%s name(s) in the notes are no longer shipped - correct them between the notes markers in CLAUDE.local.md, then run save-personal-notes.sh:' "${stale_count}"
+}
+
+# cited_names_line_not_checked: the module that reads the notes did not run.
+cited_names_line_not_checked() {
+  local module="$1"
+  printf 'not checked - %s did not run' "${module}"
+}
+
 # %% the dependencies line
 
 # dependencies_line_not_checked: nothing could be looked up - the interpreter or
