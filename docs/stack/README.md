@@ -53,7 +53,7 @@ next to the workflow it describes, because it is read rather than run.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack check` - would each branch integrate cleanly onto its parent
     *now* (fast, non-mutating `git merge-tree` probe)?
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack next` - every branch ready to submit upstream next: approved,
-    parent merged upstream (not merely in review), not withheld. **This is your "what goes upstream next" answer.**
+    parent merged (not merely in review), not withheld. **This is your "what goes upstream next" answer.**
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack next --porcelain` - machine-readable `next`: one
     `name<TAB>pr` line per branch to promote (or nothing).
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack restack-plan` - the bottom-up restack plan as JSON (one

@@ -562,7 +562,7 @@ class Stack:
         )
 
     def parent_landed(self, branch: StackBranch) -> bool:
-        """Whether a branch's parent has merged into the upstream, so it can promote.
+        """Whether a branch's parent has merged into its base, so it can promote.
 
         A parent still in review does not count: the upstream pull request is compared
         against the upstream base, so it would carry the parent's commits too.
