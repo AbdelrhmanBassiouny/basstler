@@ -21,5 +21,6 @@ When the permission system or its classifier denies a command or tool call a ski
 
 A plan save starts the plan site's build itself, with this session's credential (`basstler.plan_site.build_start`). In a cloud session that works only once the site repository is attached:
 
-- When a save prints that the build did not start, call `mcp__claude-code-remote__add_repo` with the site repository it names and `access: "push"`, then run `"${BASSTLER_PYTHON}" -m basstler.plan_site.build_start` again.
+- When the session-start summary's `plan site` line says a plan save cannot start the build yet, attach the site repository it names before the first save: call `mcp__claude-code-remote__add_repo` with it and `access: "push"`.
+- When a save prints that the build did not start, attach it the same way, then run the command the save names, `"${BASSTLER_PYTHON}" -m basstler.plan_site.build_start`. Saving again does not retry it: a save with no changes starts no build.
 - If the attach is refused, ask the user with `AskUserQuestion` to allow it, with "Attach it (Recommended)" first, saying why: every plan save then updates the plan site within a minute, without a stored token.

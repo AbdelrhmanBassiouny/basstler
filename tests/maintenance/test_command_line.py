@@ -20,6 +20,8 @@ from basstler.maintenance.commands import (
     BoardCommand,
     MaintenanceCommand,
     PrepareCommand,
+    PromoteCommand,
+    PushCommand,
     RestackCommand,
     RunReportCommand,
 )
@@ -160,12 +162,13 @@ def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
     )
 
 
-def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
-    fork_checkout: ForkCheckout,
+@pytest.mark.parametrize("command", [RestackCommand, PromoteCommand, PushCommand])
+def test_a_command_that_needs_the_stack_exports_its_own_board(
+    fork_checkout: ForkCheckout, command: type[MaintenanceCommand]
 ):
     """
-    ``restack`` needs both, and the board is the one its caller fixes with the previous
-    command - so reporting the credential first would send them after the wrong thing.
+    No command reads a board an earlier one wrote, so with no board on disk the first
+    thing it misses is the credential its own export needs.
 
     The upstream remote is dropped first because a subprocess reads the committed
     ``stack.toml``, whose upstream is this repository's own - against which both of the
@@ -174,8 +177,8 @@ def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
     fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
 
     assert (
-        run_maintenance(fork_checkout, RestackCommand()).returncode
-        == StackExitCode.BOARD_UNAVAILABLE
+        run_maintenance(fork_checkout, command()).returncode
+        == StackExitCode.CREDENTIAL_UNAVAILABLE
     )
 
 

@@ -9,7 +9,7 @@ hold only what a future session needs to act - see "Size limits" below.
 This document lives on `main`, alongside the tooling that reads it — it is
 generic, plan-agnostic reference material, so every clone has it with no
 setup. The **plan data it describes** is the opposite: it is never merged
-into `main`, living only on the personal-notes branch (`claude/personal-notes`
+into `main`, living only on the personal-notes branch (`${NOTES_BRANCH}`, `claude/personal-notes`
 by default — see [`resolve-personal-notes-config.sh`](../../hooks/resolve-personal-notes-config.sh)
 for how that's resolved), exactly like the personal notes and `pr-progress/*.md`.
 

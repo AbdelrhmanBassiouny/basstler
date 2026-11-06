@@ -1,9 +1,10 @@
 """
 Start the plan site's build with this session's own GitHub credential, after a push to
-the notes branch, and print whether it started.
+the notes branch, and print whether it started; or check, before any push, that it can.
 
 Usage:
     "${BASSTLER_PYTHON}" -m basstler.plan_site.build_start
+    "${BASSTLER_PYTHON}" -m basstler.plan_site.build_start check-access
 """
 
 from __future__ import annotations
@@ -21,7 +22,7 @@ from basstler.github.client import (
     GitHubRestClient,
     HttpMethod,
 )
-from basstler.locations import ClaudeCodeVariable, WorkflowLocation
+from basstler.locations import BasstlerVariable, ClaudeCodeVariable, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.personal_notes.branch import PersonalNotesLocation
@@ -35,6 +36,11 @@ This module's logger, which is also what its command prints through.
 """
 
 # %% the outcome
+
+BUILD_START_COMMAND = f'"${{{BasstlerVariable.PYTHON}}}" -m {__spec__.name}'
+"""
+The command line that starts the build again, once this session can.
+"""
 
 
 class SessionTool(StrEnum):
@@ -101,6 +107,69 @@ class DispatchKey(StrEnum):
 
 
 @dataclass(frozen=True)
+class SiteAccess:
+    """
+    Whether this session's credential reaches :attr:`site`, and how to make it reach it.
+    """
+
+    site: SiteRepository
+    """
+    The repository whose build a plan save starts.
+    """
+
+    def read(self, client: GitHubAttemptClient) -> GitHubResponse:
+        """
+        :param client: Reads the site repository.
+        :return: GitHub's answer, which never raises for a refusal.
+        """
+        return client.attempt_get(self.site.repository.api_path)
+
+    def missing_access(
+        self, client: GitHubAttemptClient, in_cloud_session: bool
+    ) -> str | None:
+        """
+        :param client: Reads the site repository.
+        :param in_cloud_session: Whether this runs in a Claude Code cloud session.
+        :return: Why a plan save could not start the build now and how this session
+            gets the access, ``None`` when it has it.
+        """
+        read = self.read(client)
+        if read.failure is None:
+            return None
+        return (
+            f"A plan save cannot start the build in {self.site.repository.full_name} "
+            f"yet ({read.failure.error_message()}). {self.remedy(in_cloud_session)}"
+        )
+
+    def remedy(self, in_cloud_session: bool) -> str:
+        """
+        :param in_cloud_session: Whether this runs in a Claude Code cloud session.
+        :return: How this session gets the access, and the command that then starts the
+            build.
+        """
+        repository = self.site.repository
+        if not in_cloud_session:
+            return "\n".join(
+                [
+                    f"Log gh in with an account that can run workflows in "
+                    f"{repository.full_name}, then run {BUILD_START_COMMAND}:",
+                    "",
+                    CodeFence.BASH,
+                    GitHubCommand.LOG_IN,
+                    CodeFence.CLOSE,
+                ]
+            )
+        return (
+            f"Attach the site repository to this session: call "
+            f"{SessionTool.ATTACH_REPOSITORY} with owner {repository.owner}, repo "
+            f"{repository.name} and access push, then run {BUILD_START_COMMAND}. If the "
+            f"attach is refused, ask the user with {SessionTool.ASK_USER} to allow it, with "
+            '"Attach it (Recommended)" as the first option: every plan save then '
+            "updates the plan site within a minute, without a stored token."
+        )
+
+
+@dataclass(frozen=True)
 class BuildStart:
     """
     The attempt to start :attr:`site`'s build workflow.
@@ -124,13 +193,12 @@ class BuildStart:
         :param client: Reads the site repository's default branch and sends the dispatch.
         :return: The attempt, which never raises for a refusal or a call with no answer.
         """
-        repository = site.repository
-        read = client.attempt_get(repository.api_path)
+        read = SiteAccess(site).read(client)
         if read.failure is not None:
             return cls(site, read)
         dispatch = client.attempt_send(
             HttpMethod.POST,
-            repository.workflow_dispatch_path(WorkflowLocation.PLAN_SITE),
+            site.repository.workflow_dispatch_path(WorkflowLocation.PLAN_SITE),
             {DispatchKey.REF: read.body[RepositoryKey.DEFAULT_BRANCH]},
         )
         return cls(site, dispatch)
@@ -144,37 +212,16 @@ class BuildStart:
         """
         :param in_cloud_session: Whether this runs in a Claude Code cloud session.
         :return: What happened, and when the build did not start, how this session
-            gets it to start next time.
+            gets it to start.
         """
         repository = self.site.repository
         if self.started:
             return f"Started the plan site build in {repository.full_name}."
-        fallback = (
-            f"The notes branch's dispatch workflow still starts it if "
-            f"{PlanSiteSecret.TOKEN} is stored."
-        )
-        refused = (
-            f"Could not start the plan site build in {repository.full_name}: "
-            f"{self.response.failure.error_message()}. {fallback}"
-        )
-        if not in_cloud_session:
-            return "\n".join(
-                [
-                    f"{refused} Log gh in with an account that can run workflows in "
-                    f"{repository.full_name}:",
-                    "",
-                    CodeFence.BASH,
-                    GitHubCommand.LOG_IN,
-                    CodeFence.CLOSE,
-                ]
-            )
         return (
-            f"{refused} Attach the site repository to this session: call "
-            f"{SessionTool.ATTACH_REPOSITORY} with owner {repository.owner}, repo "
-            f"{repository.name} and access push, then run this command again. If the "
-            f"attach is refused, ask the user with {SessionTool.ASK_USER} to allow it, with "
-            '"Attach it (Recommended)" as the first option: every plan save then '
-            "updates the plan site within a minute, without a stored token."
+            f"Could not start the plan site build in {repository.full_name}: "
+            f"{self.response.failure.error_message()}. The notes branch's dispatch "
+            f"workflow still starts it if {PlanSiteSecret.TOKEN} is stored. "
+            f"{SiteAccess(self.site).remedy(in_cloud_session)}"
         )
 
 
@@ -186,6 +233,20 @@ The command, which takes no arguments.
 """
 
 
+def recorded_site() -> SiteRepository | None:
+    """
+    :return: The site repository this clone's notes branch records, ``None`` when no
+        plan site lists this repository.
+    """
+    project_root = Path(
+        os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
+    )
+    location = PersonalNotesLocation.resolve(project_root, os.environ)
+    return SiteRepository.recorded_on(
+        RemoteBranch(location.branch, GitCommandRunner(project_root), location.remote)
+    )
+
+
 @app.default
 def start_build() -> int:
     """
@@ -193,18 +254,31 @@ def start_build() -> int:
 
     :return: 0, also when the build did not start: the notes were saved either way.
     """
-    project_root = Path(
-        os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
-    )
-    location = PersonalNotesLocation.resolve(project_root, os.environ)
-    site = SiteRepository.recorded_on(
-        RemoteBranch(location.branch, GitCommandRunner(project_root), location.remote)
-    )
+    site = recorded_site()
     if site is None:
         logger.info("No plan site lists this repository, so no build was started.")
         return 0
     attempt = BuildStart.attempt(site, GitHubRestClient())
     logger.info(attempt.describe(ClaudeCodeVariable.REMOTE.is_true()))
+    return 0
+
+
+@app.command(name="check-access")
+def check_access() -> int:
+    """
+    Print how this session gets access to the site repository, and nothing when it
+    already has it or no plan site lists this repository.
+
+    :return: 0, also when the access is missing: the line printed is the answer.
+    """
+    site = recorded_site()
+    if site is None:
+        return 0
+    missing = SiteAccess(site).missing_access(
+        GitHubRestClient(), ClaudeCodeVariable.REMOTE.is_true()
+    )
+    if missing is not None:
+        logger.info(missing)
     return 0
 
 
