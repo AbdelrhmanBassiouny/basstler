@@ -4,7 +4,7 @@ One run of a GitHub Actions workflow, and the jobs it ran.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
 from basstler.class_property import classproperty
@@ -106,3 +106,25 @@ class RunJobPage(JSONModel):
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> RunJobPage:
         return cls([RunJob.from_json(job) for job in data["jobs"]])
+
+
+# %% starting a run
+
+
+@dataclass(frozen=True)
+class WorkflowDispatch:
+    """
+    A request to run a workflow, whose fields are named as GitHub's dispatch endpoint
+    reads them.
+    """
+
+    ref: str
+    """
+    The branch the workflow runs on.
+    """
+
+    def to_json(self) -> dict[str, Any]:
+        """
+        :return: The body GitHub's workflow-dispatch endpoint reads.
+        """
+        return asdict(self)

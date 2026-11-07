@@ -21,6 +21,8 @@ from basstler.github.client import (
     GitHubRestClient,
     HttpMethod,
 )
+from basstler.github.repository_details import RepositoryDetails
+from basstler.github.workflow_run import WorkflowDispatch
 from basstler.locations import ClaudeCodeVariable, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
@@ -81,25 +83,6 @@ class CodeFence(StrEnum):
     """
 
 
-class RepositoryKey(StrEnum):
-    """
-    The keys read from a repository's REST resource.
-    """
-
-    DEFAULT_BRANCH = "default_branch"
-
-
-class DispatchKey(StrEnum):
-    """
-    The keys of a workflow dispatch's body.
-    """
-
-    REF = "ref"
-    """
-    The branch the workflow runs on.
-    """
-
-
 @dataclass(frozen=True)
 class BuildStart:
     """
@@ -131,7 +114,9 @@ class BuildStart:
         dispatch = client.attempt_send(
             HttpMethod.POST,
             repository.workflow_dispatch_path(WorkflowLocation.PLAN_SITE),
-            {DispatchKey.REF: read.body[RepositoryKey.DEFAULT_BRANCH]},
+            WorkflowDispatch(
+                RepositoryDetails.from_json(read.body).default_branch
+            ).to_json(),
         )
         return cls(site, dispatch)
 

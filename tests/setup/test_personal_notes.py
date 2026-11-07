@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from basstler.github.label import RepositoryLabel
 from basstler.exceptions import MalformedEmailAddressError
 from basstler.exit_codes import PersonalNotesSetupExitCode
 from basstler.github_labels import GitHubLabel
@@ -32,7 +33,6 @@ from basstler.maintenance.board import AccountField
 from basstler.maintenance.github import (
     GitHubPath,
     GitHubRepository,
-    LabelField,
 )
 from basstler.plugin_root import PluginRoot
 from basstler.repository import Repository
@@ -109,13 +109,15 @@ class GitHubAnsweringFromMemory(GitHubClient):
         return {AccountField.LOGIN: self.login}
 
     def get_pages(self, path: str) -> list[Any]:
-        return [[{LabelField.NAME: label} for label in sorted(self.present_labels)]]
+        return [
+            [RepositoryLabel(label).to_json() for label in sorted(self.present_labels)]
+        ]
 
     def attempt_send(
         self, method: HttpMethod, path: str, payload: Mapping[str, Any]
     ) -> GitHubResponse:
         self.created_labels.append(payload)
-        self.present_labels.add(payload[LabelField.NAME])
+        self.present_labels.add(RepositoryLabel.from_json(payload).name)
         return GitHubResponse(payload)
 
     def as_repository(self) -> GitHubRepository:
@@ -454,6 +456,9 @@ def test_reports_missing_labels_without_creating_them():
 
 
 def test_creates_only_the_missing_labels_when_asked():
+    """
+    Setup creates the labels the repository lacks, and only those.
+    """
     github = GitHubAnsweringFromMemory(
         CREDENTIAL_OWNER, present_labels=set(GitHubLabel) - {GitHubLabel.IN_REVIEW}
     )
@@ -461,10 +466,7 @@ def test_creates_only_the_missing_labels_when_asked():
     labels_setup(SetupOption.CREATE_LABELS, github=github).check_labels()
 
     assert github.created_labels == [
-        {
-            LabelField.NAME: GitHubLabel.IN_REVIEW,
-            LabelField.DESCRIPTION: GitHubLabel.IN_REVIEW.purpose,
-        }
+        RepositoryLabel(GitHubLabel.IN_REVIEW, GitHubLabel.IN_REVIEW.purpose).to_json()
     ]
 
 

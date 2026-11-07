@@ -206,6 +206,11 @@ class DatasetLocation(PathEnumeration):
     A repository's REST response for a repository that is not a fork.
     """
 
+    REPOSITORY_TRUNK_DEFAULT_BRANCH = DIRECTORY / "repository-trunk-default-branch.json"
+    """
+    A repository's REST response for one whose default branch is not ``main``.
+    """
+
     MAIN_FAILURE_OPEN_ISSUE = DIRECTORY / "main-failure" / "open-issue.json"
     """
     The open issue reporting main's failing tests, as the issues API lists it.

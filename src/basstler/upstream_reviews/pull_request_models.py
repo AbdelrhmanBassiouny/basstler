@@ -6,8 +6,11 @@ GraphQL API returns them, and the snapshot a report is rendered from.
 from __future__ import annotations
 
 import json
-from dataclasses import dataclass, field
-from typing import Any
+from dataclasses import asdict, dataclass, field
+from typing import Annotated, Any
+
+from pydantic import AliasPath, Field, model_validator
+from pydantic.dataclasses import dataclass as validated_dataclass
 
 from basstler.upstream_reviews.exceptions import (
     GraphQLErrorsReturned,
@@ -21,16 +24,16 @@ from basstler.upstream_reviews.review_models import (
 from basstler.upstream_reviews.vocabulary import (
     CheckContextType,
     CheckOutcome,
-    JSONModel,
-    PullRequestJSONKey,
+    Connection,
     RollupState,
+    ValidatedJSONModel,
 )
 
 # %% models mirroring the pull request
 
 
-@dataclass(frozen=True)
-class CheckResult(JSONModel):
+@validated_dataclass(frozen=True)
+class CheckResult(ValidatedJSONModel):
     """
     One check reported against the pull request's head commit.
     """
@@ -50,32 +53,28 @@ class CheckResult(JSONModel):
     Where the check's own output is, empty when it reported none.
     """
 
+    @model_validator(mode="before")
     @classmethod
-    def from_json(cls, data: dict[str, Any]) -> CheckResult:
+    def read_rollup_context(cls, data: Any) -> Any:
         """
-        Read one check out of a rollup context node.
-
-        :param data: The node to read.
-        :return: The parsed check.
+        :param data: A rollup context node, in either shape a rollup can hold, or the
+            arguments the check is constructed with.
+        :return: The check's own fields.
         :raises ValueError: If the node is neither shape a rollup can hold.
         """
-        if (
-            CheckContextType(data[PullRequestJSONKey.TYPE_NAME])
-            is CheckContextType.CHECK_RUN
-        ):
-            conclusion = data[PullRequestJSONKey.CONCLUSION]
-            return cls(
-                name=data[PullRequestJSONKey.NAME],
-                outcome=(
-                    CheckOutcome[conclusion] if conclusion else CheckOutcome.PENDING
-                ),
-                url=data[PullRequestJSONKey.DETAILS_URL] or "",
-            )
-        return cls(
-            name=data[PullRequestJSONKey.CONTEXT],
-            outcome=CheckOutcome[data[PullRequestJSONKey.STATE]],
-            url=data[PullRequestJSONKey.TARGET_URL] or "",
-        )
+        if not isinstance(data, dict):
+            return data
+        if CheckContextType(data["__typename"]) is CheckContextType.CHECK_RUN:
+            return {
+                "name": data["name"],
+                "outcome": CheckOutcome.from_conclusion(data["conclusion"]),
+                "url": data["detailsUrl"] or "",
+            }
+        return {
+            "name": data["context"],
+            "outcome": data["state"],
+            "url": data["targetUrl"] or "",
+        }
 
     @property
     def succeeded(self) -> bool:
@@ -83,8 +82,8 @@ class CheckResult(JSONModel):
         return self.outcome is CheckOutcome.SUCCESS
 
 
-@dataclass(frozen=True)
-class CheckStatus(JSONModel):
+@validated_dataclass(frozen=True)
+class CheckStatus(ValidatedJSONModel):
     """
     Every check reported against the pull request, with GitHub's verdict over them.
     """
@@ -94,23 +93,10 @@ class CheckStatus(JSONModel):
     The verdict GitHub computed over all of them.
     """
 
-    results: list[CheckResult]
+    results: Annotated[Connection[CheckResult], Field(alias="contexts")]
     """
     Every check, in the order GitHub returned them.
     """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> CheckStatus:
-        """
-        Read the rollup out of a ``statusCheckRollup`` object.
-
-        :param data: The rollup to read.
-        :return: The parsed status.
-        """
-        return cls(
-            state=RollupState[data[PullRequestJSONKey.STATE]],
-            results=PullRequestJSONKey.CONTEXTS.read_list(data, CheckResult),
-        )
 
     @classmethod
     def over(cls, results: list[CheckResult]) -> CheckStatus | None:
@@ -133,32 +119,20 @@ class CheckStatus(JSONModel):
         return [result for result in self.results if not result.succeeded]
 
 
-@dataclass(frozen=True)
-class Commit(JSONModel):
+@validated_dataclass(frozen=True)
+class Commit(ValidatedJSONModel):
     """
     A commit, carrying the checks reported against it.
     """
 
-    checks: CheckStatus | None
+    checks: Annotated[CheckStatus | None, Field(alias="statusCheckRollup")]
     """
     The checks reported against this commit, absent when none have reported.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> Commit:
-        """
-        Read a ``commit`` object, whose rollup GitHub leaves null while nothing has
-        reported against it.
 
-        :param data: The object to read.
-        :return: The parsed commit.
-        """
-        rollup = data[PullRequestJSONKey.STATUS_CHECK_ROLLUP]
-        return cls(checks=CheckStatus.from_json(rollup) if rollup else None)
-
-
-@dataclass(frozen=True)
-class PullRequestCommit(JSONModel):
+@validated_dataclass(frozen=True)
+class PullRequestCommit(ValidatedJSONModel):
     """
     One entry of a pull request's commit list, which wraps the commit itself.
     """
@@ -168,19 +142,9 @@ class PullRequestCommit(JSONModel):
     The commit this entry stands for.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> PullRequestCommit:
-        """
-        Read one ``commits`` node.
 
-        :param data: The node to read.
-        :return: The parsed entry.
-        """
-        return cls(commit=Commit.from_json(data[PullRequestJSONKey.COMMIT]))
-
-
-@dataclass(frozen=True)
-class PullRequest(JSONModel):
+@validated_dataclass(frozen=True)
+class PullRequest(ValidatedJSONModel):
     """
     One upstream pull request, as a single page of the review-threads query reads it.
     """
@@ -200,39 +164,20 @@ class PullRequest(JSONModel):
     Its web URL.
     """
 
-    commits: list[PullRequestCommit]
+    commits: Connection[PullRequestCommit]
     """
     The commits the query selected, which is the head commit alone.
     """
 
-    reviews: list[Review]
+    reviews: Connection[Review]
     """
     Every submitted review, oldest first.
     """
 
-    review_threads: ReviewThreadPage
+    review_threads: Annotated[ReviewThreadPage, Field(alias="reviewThreads")]
     """
     The page of review threads this response carried.
     """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> PullRequest:
-        """
-        Read a ``pullRequest`` object.
-
-        :param data: The object to read.
-        :return: The parsed pull request.
-        """
-        return cls(
-            number=data[PullRequestJSONKey.NUMBER],
-            title=data[PullRequestJSONKey.TITLE],
-            url=data[PullRequestJSONKey.URL],
-            commits=PullRequestJSONKey.COMMITS.read_list(data, PullRequestCommit),
-            reviews=PullRequestJSONKey.REVIEWS.read_list(data, Review),
-            review_threads=ReviewThreadPage.from_json(
-                data[PullRequestJSONKey.REVIEW_THREADS]
-            ),
-        )
 
     @property
     def checks(self) -> CheckStatus | None:
@@ -323,56 +268,59 @@ class UpstreamPullRequestSnapshot:
         raise KeyError(identifier)
 
 
-@dataclass(frozen=True)
-class PullRequestForBranchResult(JSONModel):
+@validated_dataclass(frozen=True)
+class PullRequestForBranchResult(ValidatedJSONModel):
     """
     What :attr:`GraphQLDocument.PULL_REQUEST_FOR_BRANCH` returns.
     """
 
-    pull_requests: list[BranchPullRequest]
+    pull_requests: Annotated[
+        Connection[BranchPullRequest],
+        Field(validation_alias=AliasPath("repository", "pullRequests")),
+    ]
     """
     Every pull request the head-branch search matched, newest first.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> PullRequestForBranchResult:
-        """
-        Read the query's ``data``, whose ``repository`` object selects nothing else.
 
-        :param data: The response's ``data`` object.
-        :return: The parsed result.
-        """
-        return cls(
-            pull_requests=PullRequestJSONKey.PULL_REQUESTS.read_list(
-                data[PullRequestJSONKey.REPOSITORY], BranchPullRequest
-            )
-        )
-
-
-@dataclass(frozen=True)
-class ReviewThreadsPageResult(JSONModel):
+@validated_dataclass(frozen=True)
+class ReviewThreadsPageResult(ValidatedJSONModel):
     """
     What :attr:`GraphQLDocument.REVIEW_THREADS_PAGE` returns.
     """
 
-    pull_request: PullRequest
+    pull_request: Annotated[
+        PullRequest, Field(validation_alias=AliasPath("repository", "pullRequest"))
+    ]
     """
     The pull request, carrying one page of its review threads.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> ReviewThreadsPageResult:
-        """
-        Read the query's ``data``, whose ``repository`` object selects nothing else.
 
-        :param data: The response's ``data`` object.
-        :return: The parsed result.
+# %% the GraphQL envelope
+
+
+@dataclass(frozen=True)
+class GraphQLRequest:
+    """
+    One GraphQL query, whose fields are named as the request body names them.
+    """
+
+    query: str
+    """
+    The GraphQL document.
+    """
+
+    variables: dict[str, Any]
+    """
+    The document's variables.
+    """
+
+    def to_json(self) -> dict[str, Any]:
         """
-        return cls(
-            pull_request=PullRequest.from_json(
-                data[PullRequestJSONKey.REPOSITORY][PullRequestJSONKey.PULL_REQUEST]
-            )
-        )
+        :return: The request body GitHub's GraphQL endpoint reads.
+        """
+        return asdict(self)
 
 
 @dataclass(frozen=True)
@@ -401,11 +349,8 @@ class GraphQLResponse:
         """
         body = json.loads(text)
         return cls(
-            data=body.get(PullRequestJSONKey.DATA),
-            errors=[
-                error[PullRequestJSONKey.MESSAGE]
-                for error in body.get(PullRequestJSONKey.ERRORS, [])
-            ],
+            data=body.get("data"),
+            errors=[error["message"] for error in body.get("errors", [])],
         )
 
     def result(self) -> dict[str, Any]:

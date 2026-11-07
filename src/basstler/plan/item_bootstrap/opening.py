@@ -10,10 +10,9 @@ import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
 
 from basstler.environment import GitHubCredentialVariable
-from basstler.github.pull_request import NewPullRequestField
+from basstler.github.pull_request import NewPullRequest
 from basstler.maintenance.board import PullRequestField
 from basstler.plan.item_bootstrap.documents import PlanDocuments, ProjectCheckout
 from basstler.plan.item_bootstrap.exceptions import (
@@ -27,59 +26,9 @@ from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
 )
-from basstler.repository import GitHubAddress, PullRequestReference, Repository
+from basstler.repository import GitHubAddress, PullRequestReference
 
 # %% opening the work
-
-
-@dataclass(frozen=True)
-class NewPullRequest:
-    """
-    A pull request that does not exist yet.
-    """
-
-    repository: Repository
-    """
-    The repository to open it on.
-    """
-
-    title: str
-    """
-    The pull request's title.
-    """
-
-    body: str
-    """
-    The pull request's description.
-    """
-
-    head: str
-    """
-    The branch carrying the changes.
-    """
-
-    base: str
-    """
-    The branch to merge into.
-    """
-
-    draft: bool = True
-    """
-    Always a draft: this repository's convention is that a pull request stays a draft
-    until its author has reviewed it themselves, and at creation time nobody has.
-    """
-
-    def to_json(self) -> dict[NewPullRequestField, Any]:
-        """
-        :return: The body GitHub's create-pull-request endpoint reads.
-        """
-        return {
-            NewPullRequestField.TITLE: self.title,
-            NewPullRequestField.BODY: self.body,
-            NewPullRequestField.HEAD: self.head,
-            NewPullRequestField.BASE: self.base,
-            NewPullRequestField.DRAFT: self.draft,
-        }
 
 
 class PullRequestOpener(ABC):

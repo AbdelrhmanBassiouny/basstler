@@ -8,7 +8,10 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Annotated, Any, Self, TypeVar
+
+from pydantic import BeforeValidator, ConfigDict, GetCoreSchemaHandler, TypeAdapter
+from pydantic_core import core_schema
 
 from basstler.class_property import classproperty
 from basstler.locations import PackageLocation
@@ -19,11 +22,6 @@ from basstler.locations import PackageLocation
 class JSONModel(ABC):
     """
     A dataclass mirroring one object GitHub returns, able to read itself from it.
-
-    Declaring the reader here is what lets :meth:`PullRequestJSONKey.read_list` call
-    it on any model. Without it the shared name would be a convention every model
-    is trusted to have followed, and a model that spelled it differently would fail
-    only when something happened to parse that field.
 
     Every response is parsed into these models as soon as it arrives, and every
     decision after that is made on their attributes, never on the raw object. A
@@ -42,81 +40,88 @@ class JSONModel(ABC):
         """
 
 
-ParsedItem = TypeVar("ParsedItem", bound=JSONModel)
+class ValidatedJSONModel(JSONModel):
+    """
+    A pydantic dataclass whose fields are the object's keys, each spelled as its field
+    name or, where GitHub names it differently, as the field's alias.
+    """
+
+    __pydantic_config__ = ConfigDict(validate_by_name=True, validate_by_alias=True)
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> Self:
+        """
+        :raises pydantic.ValidationError: If the object does not have the model's shape.
+        """
+        return TypeAdapter(cls).validate_python(data)
+
+    @classproperty
+    def read_keys(cls) -> frozenset[str]:
+        """
+        Every key the model reads out of its object, at any depth.
+        """
+        schema = TypeAdapter(cls).json_schema(by_alias=True)
+        definitions = [schema, *schema.get("$defs", {}).values()]
+        return frozenset(
+            key
+            for definition in definitions
+            for key in definition.get("properties", {})
+        )
+
+
+Node = TypeVar("Node")
 """
-Whatever model a list-valued field is being parsed into.
+Whatever model the entries of a connection are parsed into.
+"""
+
+
+def connection_nodes(connection: dict[str, Any] | list[Any]) -> list[Any]:
+    """
+    :param connection: A GraphQL connection object, or its entries already listed.
+    :return: The connection's entries.
+    """
+    if isinstance(connection, list):
+        return connection
+    return connection["nodes"]
+
+
+Connection = Annotated[list[Node], BeforeValidator(connection_nodes)]
+"""
+A list-valued GraphQL field, which GitHub returns as an object holding the entries
+under ``nodes``.
 """
 
 
 # %% wire vocabulary
 
 
-class PullRequestJSONKey(StrEnum):
+class NamedAsGitHub(StrEnum):
     """
-    Every field name this script reads out of a GraphQL response.
-
-    Named once here so a key is never spelled twice, and so a rename in the query
-    document has exactly one place to follow.
+    An enum whose members are named as GitHub spells its values, in any letter case,
+    while each member's value is how it reads in the report.
     """
 
-    DATA = "data"
-    ERRORS = "errors"
-    MESSAGE = "message"
-    REPOSITORY = "repository"
-    PULL_REQUEST = "pullRequest"
-    PULL_REQUESTS = "pullRequests"
-    NODES = "nodes"
-    PAGE_INFO = "pageInfo"
-    HAS_NEXT_PAGE = "hasNextPage"
-    END_CURSOR = "endCursor"
-    IDENTIFIER = "id"
-    IS_RESOLVED = "isResolved"
-    IS_OUTDATED = "isOutdated"
-    PATH = "path"
-    LINE = "line"
-    COMMENTS = "comments"
-    DATABASE_IDENTIFIER = "databaseId"
-    AUTHOR = "author"
-    LOGIN = "login"
-    BODY = "body"
-    CREATED_AT = "createdAt"
-    URL = "url"
-    REVIEWS = "reviews"
-    REVIEW_THREADS = "reviewThreads"
-    STATE = "state"
-    SUBMITTED_AT = "submittedAt"
-    NUMBER = "number"
-    TITLE = "title"
-    HEAD_REPOSITORY_OWNER = "headRepositoryOwner"
-    COMMITS = "commits"
-    COMMIT = "commit"
-    STATUS_CHECK_ROLLUP = "statusCheckRollup"
-    CONTEXTS = "contexts"
-    TYPE_NAME = "__typename"
-    NAME = "name"
-    CONCLUSION = "conclusion"
-    DETAILS_URL = "detailsUrl"
-    CONTEXT = "context"
-    TARGET_URL = "targetUrl"
-    QUERY = "query"
-    VARIABLES = "variables"
-
-    def read_list(
-        self, data: dict[str, Any], model: type[ParsedItem]
-    ) -> list[ParsedItem]:
+    @classmethod
+    def from_github_name(cls, spelling: str) -> Self:
         """
-        Parse every entry of the list-valued field this key names.
-
-        GitHub returns a list-valued field as an object holding the array under
-        ``nodes`` rather than as the array itself, so that step happens here rather
-        than at each call site.
-
-        :param data: The object the field belongs to.
-        :param model: The model to parse each entry into.
-        :return: The parsed entries, in the order GitHub returned them.
+        :param spelling: A value as GitHub spells it, or a member already.
+        :return: The member it names.
+        :raises KeyError: If no member has that name.
         """
-        entries = data[self][PullRequestJSONKey.NODES]
-        return [model.from_json(entry) for entry in entries]
+        if isinstance(spelling, cls):
+            return spelling
+        return cls[spelling.upper()]
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source: type[Any], handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        """
+        :return: How pydantic reads a field of this enum: by :meth:`from_github_name`.
+        """
+        return core_schema.no_info_plain_validator_function(
+            cls.from_github_name, json_schema_input_schema=core_schema.str_schema()
+        )
 
 
 class QueryVariable(StrEnum):
@@ -144,12 +149,10 @@ class GraphQLDocument(StrEnum):
         return (PackageLocation.QUERIES / f"{self}.graphql").read_text()
 
 
-class ReviewState(StrEnum):
+class ReviewState(NamedAsGitHub):
     """
     The verdict a reviewer submitted with a review.
 
-    Members are named as GitHub spells them, so a payload's value is looked up by
-    name, and each member's value is how the verdict reads in the report.
     """
 
     APPROVED = "approved"
@@ -208,14 +211,12 @@ class CheckContextType(StrEnum):
     """
 
 
-class CheckOutcome(StrEnum):
+class CheckOutcome(NamedAsGitHub):
     """
     Where one check stands, over both shapes a rollup can hold.
 
-    Members are named as GitHub spells them, so a payload's value is looked up by
-    name, and each member's value is how the outcome reads in the report. A check run
-    that has not finished reports no conclusion at all, which reads here as
-    :attr:`PENDING` so an unfinished check is never mistaken for a passing one.
+    A check run that has not finished reports no conclusion at all, which reads here
+    as :attr:`PENDING` so an unfinished check is never mistaken for a passing one.
     """
 
     SUCCESS = "success"
@@ -270,7 +271,7 @@ class CheckOutcome(StrEnum):
             it, ``None`` while it runs.
         :return: The outcome it reads as.
         """
-        return cls[conclusion.upper()] if conclusion else cls.PENDING
+        return cls.from_github_name(conclusion) if conclusion else cls.PENDING
 
     STARTUP_FAILURE = "startup failure"
     """
@@ -301,13 +302,19 @@ class CheckOutcome(StrEnum):
         return RollupState.FAILURE
 
 
-class RollupState(StrEnum):
+ConclusionOutcome = Annotated[
+    CheckOutcome, BeforeValidator(CheckOutcome.from_conclusion)
+]
+"""
+A check's outcome, read from the conclusion GitHub gives a check run or workflow run.
+"""
+
+
+class RollupState(NamedAsGitHub):
     """
     The verdict GitHub itself computes over all of a pull request's checks, or that
     nothing has reported one yet.
 
-    Members are named as GitHub spells them, so a payload's value is looked up by
-    name, and each member's value is how the verdict reads in the report.
     """
 
     SUCCESS = "success"

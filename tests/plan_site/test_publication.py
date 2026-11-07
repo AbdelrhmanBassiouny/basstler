@@ -31,7 +31,6 @@ from basstler.github.exceptions import (
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
-from basstler.github.pull_request import NewPullRequestField
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
@@ -762,11 +761,7 @@ def pull_request_opening(proposal: MergeWorkflowProposal) -> SentWrite:
     return SentWrite(
         HttpMethod.POST,
         proposal.repository.pull_requests_path,
-        {
-            NewPullRequestField.TITLE: proposal.title,
-            NewPullRequestField.HEAD: proposal.head,
-            NewPullRequestField.BASE: proposal.base,
-        },
+        proposal.opening.to_json(),
     )
 
 

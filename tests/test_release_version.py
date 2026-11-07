@@ -4,6 +4,7 @@ What the release workflow tags a merge commit as, and its tag step against a scr
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import subprocess
@@ -26,7 +27,6 @@ from basstler.release_version import (
     MalformedVersion,
     MergedPullRequest,
     PlannedRelease,
-    PullRequestJSONKey,
     PullRequestLabel,
     Release,
     ReleaseVersion,
@@ -157,12 +157,9 @@ def pull_request_json(number: int, *labels: str) -> dict[str, Any]:
     :param labels: The names of its labels.
     :return: The pull request as GitHub's ``commits/<sha>/pulls`` returns one.
     """
-    return {
-        PullRequestJSONKey.NUMBER: number,
-        PullRequestJSONKey.LABELS: [
-            {PullRequestJSONKey.NAME: label} for label in labels
-        ],
-    }
+    return dataclasses.asdict(
+        MergedPullRequest(number, tuple(PullRequestLabel(label) for label in labels))
+    )
 
 
 def merged(number: int, *labels: str) -> MergedPullRequest:
