@@ -22,12 +22,11 @@ items:
   pull_request_number: null
   track: recommender
   blockers:
-    - >-
-      Waiting on basstler-v3 (#99): plan-store-issues and plan-site-from-issues are both not
-      started, and plan-store-issues waits on cli-launcher, also not started. Per the plan's
-      standing rule and the owner's deferral on #58, this item is rebuilt on v3's issue-backed plans
-      once those land.
-  depends_on: []
+  - 'Waiting on basstler-v3 (#99): plan-store-issues and plan-site-from-issues are both not started, and
+    plan-store-issues waits on cli-launcher, also not started. Per the plan''s standing rule and the owner''s
+    deferral on #58, this item is rebuilt on v3''s issue-backed plans once those land.'
+  depends_on:
+  - basstler-packages/playbook-model
   status: deferred
   notes: 'Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on
     v3 (see roadmap). Was: Items gain kind (bug, cleanup, feature), defaulting from the bug label on the
@@ -59,9 +58,13 @@ items:
   track: recommender
   depends_on:
   - ranked-work-list
+  - basstler-packages/playbook-model
   status: deferred
-  notes: 'Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on v3 (see roadmap). The hub page carries a ''Today'' sidebar with the daily queue of ten and a ''Recommended'' tab with the whole ranked list, grouped by kind with the reasons. Rebuilt with the site on every plan change (team-basstler''s plan site); the daily refresh comes from daily-queue-refresh; no Artifact version.'
-
+  notes: Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on
+    v3 (see roadmap). The hub page carries a 'Today' sidebar with the daily queue of ten and a 'Recommended'
+    tab with the whole ranked list, grouped by kind with the reasons. Rebuilt with the site on every plan
+    change (team-basstler's plan site); the daily refresh comes from daily-queue-refresh; no Artifact
+    version.
 - id: external-review-candidates
   title: Recommend other people's open PRs to review, related and small first
   branch: null

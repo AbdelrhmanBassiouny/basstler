@@ -6,3 +6,4 @@
 - It renders on the site only; there is no Artifact version.
 - Effort is counted in size-bucket points, never in item counts; shares and meters are weekly, the queue is daily.
 - Each stage of a PR that needs the owner is its own task; waiting on someone else is a state, never a queued task or a counted point.
+- Ships as the opt-in basstler-recommender distribution (basstler-packages), added by the owner's own playbook, never DefaultPlaybook. Item kind (bug, cleanup, feature) lives in basstler-plan; focus and leverage are ItemAttribute components, and the hub panel and tab are SitePanel components.
