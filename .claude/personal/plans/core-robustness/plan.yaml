@@ -85,11 +85,12 @@ items:
   depends_on: []
   status: in progress
   notes: >-
-    First of three slices (owner, at kickoff). Adds pydantic: GitHub API responses
-    become pydantic dataclasses validated by a shared from_json, keys spelled once as
-    field names or aliases. Removes the GitHub API key enums in upstream_reviews,
-    github/pull_request, maintenance, plan_site and release_version. Runs after or
-    before basstler-packages/git-and-github-domain, never alongside.
+    First slice (owner, at kickoff). Adds pydantic: GitHub API responses become
+    pydantic dataclasses validated by a shared ValidatedJSONModel.from_json, keys
+    spelled once as field names or aliases. Removes the key enums in upstream_reviews
+    (GraphQL, REST), github/pull_request, plan_site (build_start, publication,
+    dispatch_check, run_listing), release_version and maintenance labels. The
+    maintenance pull-request record moved to pull-request-record-model (owner).
 
 - id: file-key-models
   title: "Workflow, pyproject, hub, board and exchange-file keys spelled only inside their models"
@@ -112,3 +113,16 @@ items:
     MaintenanceReportKey, ItemBriefKey, ReadinessField, UsageOutputKey, ...) become
     report dataclasses with to_json, and tests read reports through them, reversing
     report-keys-in-tests (#145).
+
+- id: pull-request-record-model
+  title: "Fork pull requests are a pydantic model, not a dict read through PullRequestField"
+  track: core
+  depends_on: [payload-key-models]
+  status: not started
+  notes: >-
+    Split from payload-key-models (owner). Replace PullRequestRecord and the
+    PullRequestField, PullRequestHeadKey, AccountField and PullRequestFieldShape enums
+    in maintenance/board.py with a pydantic pull request model; ~30 modules read the
+    record, the plan site's live state and pull_request_state among them. Runs after
+    or before basstler-packages/git-and-github-domain, never alongside (it moves the
+    board record).
