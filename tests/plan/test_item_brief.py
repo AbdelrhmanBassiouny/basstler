@@ -234,17 +234,17 @@ def test_the_command_prints_the_brief(
     pull_request_source: RecordedPullRequestSource,
     capsys: pytest.CaptureFixture[str],
 ):
-    arguments = ItemBriefCommandLine.parser().parse_args(
+    """
+    The command line prints the same brief :meth:`ItemBrief.read` builds.
+    """
+    ItemBriefCommandLine(pull_request_source, briefed_repository.project_root).app(
         [
             ItemBriefOption.PLAN,
             BRIEFED_MANIFEST.identifier,
             ItemBriefOption.ITEM,
             BRIEFED_ITEM.identifier,
-        ]
-    )
-
-    ItemBriefCommandLine.run(
-        arguments, pull_request_source, briefed_repository.project_root
+        ],
+        result_action="return_value",
     )
 
     assert yaml.safe_load(capsys.readouterr().out) == read_brief(

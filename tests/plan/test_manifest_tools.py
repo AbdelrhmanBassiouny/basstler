@@ -426,6 +426,66 @@ def test_main_dispatches_item_by_branch(monkeypatch, capsys):
     assert capsys.readouterr().out == plan.manifest.item_summary(item)
 
 
+# %% usage errors
+
+
+def run_item(monkeypatch, selection: list[str]) -> None:
+    """
+    Run the item subcommand on the landed-items fixture plan.
+
+    :param monkeypatch: pytest's monkeypatch fixture.
+    :param selection: The options naming the item.
+    """
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            SCRIPT_NAME,
+            ManifestToolsCommand.ITEM,
+            str(DatasetLocation.PLAN_WITH_LANDED_ITEMS),
+            *selection,
+        ],
+    )
+    main()
+
+
+def test_item_with_no_selection_is_a_usage_error(monkeypatch):
+    """
+    An item named neither by id nor by branch cannot be looked up.
+    """
+    with pytest.raises(SystemExit) as exited:
+        run_item(monkeypatch, [])
+    assert exited.value.code == ManifestToolsExitCode.USAGE
+
+
+def test_item_selected_both_by_id_and_by_branch_is_a_usage_error(monkeypatch):
+    """
+    An item named both ways could be named as two different items.
+    """
+    item = LandedItemsPlan.read().item_with_status(ItemStatus.IN_PROGRESS)
+    with pytest.raises(SystemExit) as exited:
+        run_item(
+            monkeypatch,
+            [
+                ManifestToolsOption.ITEM_IDENTIFIER,
+                item.identifier,
+                ManifestToolsOption.BRANCH,
+                item.content[ManifestKey.BRANCH.key],
+            ],
+        )
+    assert exited.value.code == ManifestToolsExitCode.USAGE
+
+
+def test_an_unknown_subcommand_is_a_usage_error(monkeypatch):
+    """
+    A subcommand the tool does not answer ends it as a usage error.
+    """
+    monkeypatch.setattr(sys, "argv", [SCRIPT_NAME, "no-such-subcommand"])
+    with pytest.raises(SystemExit) as exited:
+        main()
+    assert exited.value.code == ManifestToolsExitCode.USAGE
+
+
 # %% merging a session's save
 
 
