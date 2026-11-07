@@ -78,6 +78,11 @@ class SummaryLine(StrEnum):
     How near the workflows' runs and jobs are to the budget's daily ceilings.
     """
 
+    MAIN_TESTS = "main tests"
+    """
+    Whether an issue reports the default branch's tests failing.
+    """
+
     PLAN_STATE_SHA = "plan state SHA"
     """
     The personal-notes commit this clone read plan state at.
@@ -235,6 +240,21 @@ class SummaryMessage(StrEnum):
     ACTIONS_USAGE_WITHIN_BUDGET = "actions_usage_line_within_budget"
     """
     No workflow is near a daily ceiling.
+    """
+
+    MAIN_TESTS_NOT_CHECKED = "main_tests_line_not_checked"
+    """
+    The repository's issues could not be read.
+    """
+
+    MAIN_TESTS_PASSING = "main_tests_line_passing"
+    """
+    No issue reports the default branch's tests failing.
+    """
+
+    MAIN_TESTS_FAILING = "main_tests_line_failing"
+    """
+    An open issue reports the default branch's tests failing.
     """
 
 
