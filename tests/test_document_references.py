@@ -4,6 +4,7 @@ Tests for finding the names a document cites that this release no longer ships.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -40,7 +41,23 @@ def test_a_retired_skill_is_reported_with_what_replaced_it():
 
     stale = CitedNames.in_text(notes).stale(ShippedModules.installed())
 
-    assert stale[0].replacement == RetiredSkill.PLAN_DASHBOARD.value
+    assert stale[0].replacement == RetiredSkill.PLAN_DASHBOARD.value.replacement
+
+
+def test_the_next_major_release_no_longer_reports_a_retired_skill():
+    notes = CitedNames.in_text(DatasetLocation.NOTES_CITING_RETIRED_NAMES.read_text())
+    installed = ShippedModules.installed()
+    next_major = replace(
+        installed, major_version=RetiredSkill.PLAN_DASHBOARD.value.major_version + 1
+    )
+
+    reported = [reference.cited for reference in notes.stale(next_major)]
+
+    assert reported == [
+        reference.cited
+        for reference in notes.stale(installed)
+        if reference.cited != RetiredSkill.PLAN_DASHBOARD.invoked_as
+    ]
 
 
 @pytest.mark.parametrize(
@@ -100,3 +117,10 @@ def test_a_retired_skill_is_not_shipped(skill: RetiredSkill):
     )
 
     assert not skill_directory.exists()
+
+
+@pytest.mark.parametrize("skill", list(RetiredSkill))
+def test_a_retired_skill_is_removed_once_its_major_release_is_superseded(
+    skill: RetiredSkill,
+):
+    assert skill.value.major_version == ShippedModules.installed().major_version
