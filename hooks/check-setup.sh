@@ -10,9 +10,9 @@ set -euo pipefail
 #   "${BASSTLER_PLUGIN_ROOT}"/hooks/check-setup.sh [--require-upstream]
 #
 # --require-upstream makes a project naming no upstream a needs-setup row
-# rather than info. Only /upstream-reviews and /stacked-pr-maintenance need
-# one, so they pass it; any other caller would otherwise fail every project
-# that simply has no upstream.
+# rather than info. Only /upstream-reviews needs one, so only it passes it;
+# /stacked-pr-maintenance follows the clone's own remote in a project that is
+# not a fork.
 #
 # --only <check>, repeatable, reports only the named checks, and the exit code
 # covers only them: a step gated on one check is never closed by an unrelated
@@ -108,10 +108,10 @@ report_upstream() {
     report stack_upstream ok "named in ${PERSONAL_STACK_CONFIGURATION_PATH} on '${NOTES_BRANCH}'"
   elif [ "${REQUIRE_UPSTREAM}" = true ]; then
     report stack_upstream needs-setup \
-      "no upstream named, which /upstream-reviews and /stacked-pr-maintenance need - run: ${configure_command}"
+      "no upstream named, which /upstream-reviews needs - run: ${configure_command}"
   else
     report stack_upstream info \
-      "no upstream named - only /upstream-reviews and /stacked-pr-maintenance need one, set with: ${configure_command}"
+      "no upstream named - the stack pass follows the clone's own remote; only /upstream-reviews needs one, set with: ${configure_command}"
   fi
 }
 
