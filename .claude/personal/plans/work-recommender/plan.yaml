@@ -53,9 +53,9 @@ items:
   notes: 'Deferred until basstler-v3 lands (see roadmap). Ranks deterministically by the policy what is
     actionable now across hub repositories: startable items, each open PR''s next stage that needs the
     owner (self-review, review threads, CI, conflicts), and each external issue''s next stage that needs
-    the owner, ranked as a bug. Each stage is its own task, sized by what it acts on; waiting on someone
-    else is shown, never queued. Each entry gives its reason, size and a kickoff or resolve link; untracked
-    open PRs join as ''track this''.'
+    the owner, ranked as a bug, with placing it first. Each stage is its own task, sized by what it acts
+    on; waiting on someone else is shown, never queued. Each entry gives its reason, size and a kickoff
+    or resolve link; untracked open PRs join as ''track this''.'
 - id: hub-recommendation-panel
   title: Show the ranked list on the hub page as a sidebar and a full tab
   branch: null
