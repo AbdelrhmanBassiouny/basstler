@@ -213,7 +213,7 @@ class UpstreamRestRoute:
             {"head": f"{owner}:{branch}", "state": "all", "per_page": self.page_size},
             safe=":",
         )
-        return f"{self.repository.api_path}/pulls?{query}"
+        return f"{self.repository.pull_requests_path}?{query}"
 
     def pull_request(self, number: int) -> str:
         """

@@ -3,6 +3,7 @@ A Claude Code plugin's ``plugin.json``, read by a test.
 
 Several suites read the plugin's name back, so the manifest's keys live here once rather
 than at every use site. It names no version: a release is only a tag on its merge commit.
+The marketplace's own ``marketplace.json`` is read here too.
 """
 
 from __future__ import annotations
@@ -59,3 +60,56 @@ class PluginManifest:
         :return: This repository's own plugin manifest.
         """
         return cls.read(RepositoryLocation.PLUGIN_MANIFEST)
+
+
+class MarketplaceKey(StrEnum):
+    """
+    The keys of a Claude Code ``marketplace.json`` the suites read.
+    """
+
+    PLUGINS = "plugins"
+    """
+    The plugins the marketplace lists.
+    """
+
+    SOURCE = "source"
+    """
+    Where a listed plugin is served from.
+    """
+
+    PATH = "path"
+    """
+    The plugin's directory within the repository its source names.
+    """
+
+    REF = "ref"
+    """
+    The branch or tag of that repository the plugin is served at.
+    """
+
+
+@dataclass(frozen=True)
+class PluginSource:
+    """
+    Where a marketplace serves its one plugin from: a directory of a repository at a ref.
+    """
+
+    path: str
+    """
+    The plugin's directory, relative to the repository root.
+    """
+
+    ref: str
+    """
+    The branch or tag the plugin is served at.
+    """
+
+    @classmethod
+    def of_this_marketplace(cls) -> PluginSource:
+        """
+        :return: Where this repository's marketplace serves the plugin from.
+        """
+        marketplace = json.loads(RepositoryLocation.MARKETPLACE.read_text())
+        (plugin,) = marketplace[MarketplaceKey.PLUGINS]
+        source = plugin[MarketplaceKey.SOURCE]
+        return cls(path=source[MarketplaceKey.PATH], ref=source[MarketplaceKey.REF])

@@ -6,7 +6,12 @@
   "plugins": [
     {
       "name": "basstler",
-      "source": "./plugin",
+      "source": {
+        "source": "git-subdir",
+        "url": "AbdelrhmanBassiouny/basstler",
+        "path": "plugin",
+        "ref": "release"
+      },
       "description": "Personal notes, PR progress, multi-PR plans on a live plan site, and stacked-PR maintenance for Claude Code sessions."
     }
   ]

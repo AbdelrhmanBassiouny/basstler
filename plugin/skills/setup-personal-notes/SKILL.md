@@ -258,7 +258,8 @@ repository itself, the first time), and commits two workflows that start the
 build: the notes branch's dispatch workflow, on every push to the notes branch,
 and the default branch's merge workflow, on every pull request merged in this
 repository. A fork gets no merge workflow, so its default branch stays as its
-upstream's; a default branch that refuses the push gets it on
+upstream's. The merge workflow never goes onto the default branch directly, so it
+passes the repository's checks like any other change: it goes on
 `basstler/plan-site-merge`, with a pull request opened for it and a step to
 merge that pull request; when GitHub refuses to open it, the step says why and
 gives the line that opens it.

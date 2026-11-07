@@ -1,0 +1,11 @@
+name: Runs the package
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - run: python -m basstler --help
