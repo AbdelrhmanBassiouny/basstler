@@ -54,15 +54,14 @@ items:
   title: Install the docstring formatter and a generated AGENTS.md from the shared cram-development-tools
     package
   branch: null
-  status: blocked
+  status: deferred
   track: development-tools
-  depends_on: []
+  depends_on:
+  - basstler-packages/krrood-sync
   pull_request_number: null
-  notes: 'Follow basstler-v3 code-rules-light''s formatter choice (ruff) first. Design: https://github.com/AbdelrhmanBassiouny/basstler/pull/1#discussion_r4306714398.
-    A PyPI package with `format` (today''s scripts/format_docstrings.py) and `agents-md [--check]`, both
-    pre-commit hooks; per cram fork #517, `agents-md` rewrites only a marked block of AGENTS.md. basstler''s
-    part: pin it in .pre-commit-config.yaml, run pre-commit in CI, delete scripts/format_docstrings.py,
-    and wrap the shared rules in AGENTS.md (hand-copied in #32) in that block. Open: a more neutral package
-    name.'
+  notes: 'Superseded (2026-11-07): krrood now ships the shared format, agents-md and check tooling as
+    krrood[development-tools]. basstler-packages/krrood-sync brings basstler-rules up to it, and basstler-krrood-dependency
+    later replaces the copied engine with that dependency. Kept only until the owner confirms it can be
+    deleted.'
   blockers:
   - Waits on the package's first PyPI release, built in the repository that hosts it.
