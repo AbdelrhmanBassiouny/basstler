@@ -9,4 +9,4 @@ Done
 - AGENTS.md regenerated, rustworkx added to pre-commit hook deps, PR description written (e61ebb4e)
 
 Next
-- answer review; label release:minor
+- answer review (PR labelled release:minor)
