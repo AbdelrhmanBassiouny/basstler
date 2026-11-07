@@ -220,6 +220,23 @@ actions_usage_line_flagged() {
   printf 'near or over a daily ceiling:\n%s' "$(printf '%s\n' "${flagged}" | sed 's/^/    /')"
 }
 
+# %% the main tests line
+
+# main_tests_line_not_checked: the repository's issues could not be read.
+main_tests_line_not_checked() {
+  printf 'not checked - could not read the repository'"'"'s issues'
+}
+
+# main_tests_line_passing: no issue reports the default branch's tests failing.
+main_tests_line_passing() {
+  printf 'no open issue reports them failing'
+}
+
+# main_tests_line_failing: $1 is the open issue reporting them failing.
+main_tests_line_failing() {
+  printf 'failing - fix them first: %s' "$1"
+}
+
 # %% the upstream-reviews Action line
 
 # upstream_reviews_action_line_not_read: the fork's branches could not be read,
