@@ -120,8 +120,8 @@ items:
   notes: 'A README per distribution: what it holds, depends on, and how to install it alone. The guide''s worked
     example is the owner''s own playbook adding basstler-recommender (work-recommender) to DefaultPlaybook, with
     its SitePanel and ItemAttribute components, then dropping a contribution and adding a ruleset of code or plan
-    rules.'
-
+    rules. The guide and NOTICE credit the use cases that inspired the customization items: https://github.com/LucaKro/basstler_domain_model
+    and https://github.com/LucaKro/GitHubWorkflow.'
 - id: extension-points
   title: Open vocabularies, one interface per GitHub capability, and shipped test doubles
   track: playbook
