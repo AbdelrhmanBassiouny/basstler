@@ -145,12 +145,13 @@ you stopped on.
 ## Resuming a partial run
 
 `run-report` is the whole pass and safe to re-run. The single steps exist for a person, not for a
-pass: `board --write`, then `fast-forward`, `restack`, `promote`, or `checks` for the CI overview.
-Before any push you make by hand:
+pass: `fast-forward`, `restack`, `promote`, or `checks` for the CI overview; each exports the board
+it needs itself. Push a branch by hand only through:
 
 ```bash
-"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" stack check-move \
-  --action push --source <branch> --destination <branch> --destination-remote <fork-remote>
+"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" maintenance push
 ```
 
-Exit 5 means do not push; the reasons are on stderr.
+It pushes the checked-out branch to the same branch on the fork, and only once the move checks
+clear it against a board exported now. Exit 0 means it pushed; any other status means nothing was
+pushed, and stderr says why. Never chain a `git push` after it or after `stack check-move`.

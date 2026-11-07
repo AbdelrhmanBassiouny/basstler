@@ -76,6 +76,22 @@ class DatasetLocation(PathEnumeration):
     The dataset directory itself.
     """
 
+    NOTES_CITING_RETIRED_NAMES = (
+        DIRECTORY / "document-references" / "notes-citing-retired-names.md"
+    )
+    """
+    Personal notes written against an older release: moved modules, a source file
+    that moved with one, a retired skill and a module that never existed.
+    """
+
+    NOTES_CITING_SHIPPED_NAMES = (
+        DIRECTORY / "document-references" / "notes-citing-shipped-names.md"
+    )
+    """
+    Personal notes citing only what this release ships, beside names that merely look
+    like the package's: a branch, a file under the git directory, another skill.
+    """
+
     WORKFLOW_NAMING_THE_REPOSITORY = (
         DIRECTORY / "package-contract" / "names-the-repository.yml"
     )

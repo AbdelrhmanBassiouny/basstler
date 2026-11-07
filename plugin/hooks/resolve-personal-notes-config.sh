@@ -385,6 +385,9 @@ PLAN_MANIFEST_TOOLS_MODULE="basstler.plan.manifest_tools"
 # basstler.plan.size_limits: prunes landed items and refuses a plan or progress
 # notes over their limits - the gate save-plan.sh and save-pr-progress.sh run.
 PLAN_SIZE_LIMITS_MODULE="basstler.plan.size_limits"
+# basstler.document_references: names every module and skill a document cites
+# that this release no longer ships, and what replaced it.
+DOCUMENT_REFERENCES_MODULE="basstler.document_references"
 # basstler.personal_notes.progress_notes: deletes the progress notes of branches whose pull requests
 # have all merged or closed, or that are gone from the remote.
 PROGRESS_NOTES_MODULE="basstler.personal_notes.progress_notes"
