@@ -6,11 +6,12 @@ from __future__ import annotations
 
 from typing import override
 
-from basstler import environment, locations
+from basstler import environment, locations, package_map
 from basstler.class_property import classproperty
 from basstler.code_rules import rules
 from basstler.code_rules.checker import CodeRuleChecker
 from basstler.code_rules.commands import CodeRulesCommand
+from basstler.code_rules.package_boundaries import PackageBoundaryChecker
 from basstler.code_rules.rule import CodeReference, Section
 
 
@@ -47,6 +48,15 @@ class PackageAndPluginRules(Section):
         "that comes from `krrood` is copied, never imported; until krrood's light "
         "core is released, a copied module says so and cites krrood with "
         "`` :cite:`krrood` ``, whose entry is in `docs/references.bib`"
+    )
+
+    IMPORT_ONLY_LISTED_PACKAGES = (
+        "A package imports only the basstler packages its pyproject lists: every "
+        "module belongs to a distribution declared in "
+        f"{CodeReference(package_map).path}, and imports only from that distribution "
+        "and the ones it lists",
+        (),
+        PackageBoundaryChecker(),
     )
 
 

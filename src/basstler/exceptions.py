@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from typing import Any
 
@@ -874,3 +875,52 @@ class MissingBudgetFunction(DataclassException, LookupError):
 
     def suggest_correction(self) -> str:
         return f"define {self.function}() returning its ActionsBudget"
+
+
+class PackageMapInconsistency(StrEnum):
+    """
+    The ways the declared distributions break their layering.
+    """
+
+    DEPENDENCY_ON_A_HIGHER_LAYER = "depends on a distribution in a higher layer"
+    """
+    The first distribution lists the second, which sits in a higher layer.
+    """
+
+    DEPENDENCY_CYCLE = "depend on each other in a cycle"
+    """
+    The distributions, in order, each list the next and the last lists the first.
+    """
+
+    UNDECLARED_DISTRIBUTION = "has no declaration"
+    """
+    The distribution is listed or looked up, but nothing declares it.
+    """
+
+    MODULE_CLAIMED_TWICE = "both claim the same module"
+    """
+    Two distributions name the same module or subpackage.
+    """
+
+
+@dataclass
+class InconsistentPackageMap(DataclassException, ValueError):
+    """
+    The declared distributions are not layered and acyclic.
+    """
+
+    inconsistency: PackageMapInconsistency
+    """
+    How the declarations break the layering.
+    """
+
+    distributions: tuple[str, ...]
+    """
+    The package names of the distributions involved.
+    """
+
+    def error_message(self) -> str:
+        return f"{', '.join(self.distributions)} {self.inconsistency}"
+
+    def suggest_correction(self) -> str:
+        return "correct the declarations in basstler.package_map.PACKAGE_MAP"
