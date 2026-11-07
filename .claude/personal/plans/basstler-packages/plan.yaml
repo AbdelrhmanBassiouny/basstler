@@ -31,9 +31,11 @@ items:
 - id: package-map
   title: Declare the distributions and their layers, and check imports against them
   track: package-split
+  branch: claude/loving-gauss-7g1xt6
+  pull_request_number: 154
   depends_on: []
-  status: not started
-  session: https://claude.ai/code/session_018wfiv8ntWsdS2nU92PrJbr
+  status: in progress
+  session: https://claude.ai/code/session_018wfiv7Bw3TgQiQbiuneZDr
   notes: The module-to-distribution map and layers are a typed model in core (Distribution, Layer), declared
     once and read by a package-boundary CodeRuleChecker on a new rule "a package imports only the basstler
     packages its pyproject lists" (undeclared imports and cycles; today's violations a known baseline),
