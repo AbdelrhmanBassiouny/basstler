@@ -43,15 +43,15 @@ items:
   branch: null
   pull_request_number: null
   track: model
-  depends_on: []
+  depends_on:
+  - basstler-packages/package-map
   status: deferred
-  notes: 'Deferred until basstler-v3 plan-store-issues lands, then rebuilt on v3 (see roadmap).
-    Was: `src/basstler/plan_graph.py`. Dataclass nodes (Plan, Item, and a Package > Module
-    > Class > Function hierarchy keyed by dotted path) and edges (DependsOn, Introduces, Modifies,
-    Overlaps, Acknowledged), schema-versioned, assembled in memory, never written as one file.
-    A code node exists once a plan mentions it, planned or already on main. `plan_graph query`
-    answers which items introduce or modify a package, module, class or function, rolled up
-    the hierarchy, to a depth; `--doc` returns its documentation.'
+  notes: 'Deferred until basstler-v3 plan-store-issues lands, then rebuilt on v3 (see roadmap). Was: `src/basstler/plan_graph.py`.
+    Dataclass nodes (Plan, Item, and a Package > Module > Class > Function hierarchy keyed by dotted path)
+    and edges (DependsOn, Introduces, Modifies, Overlaps, Acknowledged), schema-versioned, assembled in
+    memory, never written as one file. A code node exists once a plan mentions it, planned or already
+    on main. `plan_graph query` answers which items introduce or modify a package, module, class or function,
+    rolled up the hierarchy, to a depth; `--doc` returns its documentation.'
 - id: declared-claims
   title: Let an item declare what it will introduce and modify before its branch exists
   branch: null
@@ -133,13 +133,13 @@ items:
   depends_on:
   - findings-and-resolutions
   - common-parent
+  - basstler-packages/playbook-model
   status: deferred
-  notes: 'Deferred until basstler-v3 plan-store-issues lands, then rebuilt on v3 (see roadmap).
-    Was: The skill only judges: it reads a finding''s evidence, picks one of its enumerated
-    resolutions and runs `plan_graph resolve`; the script does the work. A PostToolUse hook
-    on save-plan, kickoff and add-plan-item, and session start for open findings, add "run
-    /resolve-finding <id>" to the session''s context. Absorbs design-overlap/skill-wiring:
-    kickoff''s early query.'
+  notes: 'Deferred until basstler-v3 plan-store-issues lands, then rebuilt on v3 (see roadmap). Was: The
+    skill only judges: it reads a finding''s evidence, picks one of its enumerated resolutions and runs
+    `plan_graph resolve`; the script does the work. A PostToolUse hook on save-plan, kickoff and add-plan-item,
+    and session start for open findings, add "run /resolve-finding <id>" to the session''s context. Absorbs
+    design-overlap/skill-wiring: kickoff''s early query.'
 - id: common-parent
   title: Give a set of branches a new common parent, after costing the move
   branch: null
@@ -163,11 +163,11 @@ items:
   depends_on:
   - graph-model
   - overlap-detector
+  - basstler-packages/playbook-model
   status: deferred
-  notes: 'Deferred until basstler-v3 plan-site-from-issues lands, then drawn on the Pages
-    site from issues (see roadmap). Was: A Graph tab in the plan page header, and a graph
-    link on each item card opening it on that item; rebuilt every render from plan_graph''s
-    query output, so never stale. Cytoscape with ELK layered layout, pinned on cdnjs, in the
-    site''s light and dark tokens. Low clutter by default: the focused item''s neighbourhood,
-    other plans as one node each, done hidden; click to expand. Marks where depends_on and
-    the PR base disagree; overlaps dashed;'
+  notes: 'Deferred until basstler-v3 plan-site-from-issues lands, then drawn on the Pages site from issues
+    (see roadmap). Was: A Graph tab in the plan page header, and a graph link on each item card opening
+    it on that item; rebuilt every render from plan_graph''s query output, so never stale. Cytoscape with
+    ELK layered layout, pinned on cdnjs, in the site''s light and dark tokens. Low clutter by default:
+    the focused item''s neighbourhood, other plans as one node each, done hidden; click to expand. Marks
+    where depends_on and the PR base disagree; overlaps dashed;'

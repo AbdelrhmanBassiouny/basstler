@@ -11,4 +11,4 @@
 - An unreachable repository is unverified, never refused and never satisfied. A save must not fail because another repository's notes cannot be fetched, and must not count that reference as ready.
 - Cross-plan references landed in #17: `depends_on` accepts `<plan-id>/<item-id>`, and a bare id means an item of the same plan. graph-model builds on that form, and a manifest here may name an item of another plan.
 - Freshness is tied to every save: the plan site rebuilds on each push to a notes branch, so the graph is never drawn from a stale copy. Nothing runs on a schedule.
-- Every module lives in `src/basstler/`; plan.yaml keys are spelled only in plan_model.ManifestKey, and design.yaml's keys get one enum of their own beside it.
+- Every module lives in the basstler-graph distribution (basstler-packages): its code hierarchy starts at the Distribution of the package map; plan.yaml keys are spelled only in plan_model.ManifestKey, and design.yaml's keys get one enum of their own beside it. The Graph tab is a SitePanel and the finding hook a HookDefinition of the playbook model.
