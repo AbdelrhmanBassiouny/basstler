@@ -78,10 +78,12 @@ items:
 
 - id: payload-key-models
   title: "Payload keys spelled only inside their models"
-  branch: null
+  branch: claude/vigilant-maxwell-mh2eey
   track: core
+  pull_request_number: 158
+  session: https://claude.ai/code/session_018wfiv7qJrDyBzHF15bMU9k
   depends_on: []
-  status: not started
+  status: in progress
   notes: >-
     Replace the ~40 payload-key StrEnums (GitHub API, workflow/pyproject files,
     command reports) with the dataclasses that own them, per #156's rule and pattern;
