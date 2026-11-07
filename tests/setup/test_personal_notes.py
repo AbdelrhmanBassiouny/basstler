@@ -456,6 +456,9 @@ def test_reports_missing_labels_without_creating_them():
 
 
 def test_creates_only_the_missing_labels_when_asked():
+    """
+    Setup creates the labels the repository lacks, and only those.
+    """
     github = GitHubAnsweringFromMemory(
         CREDENTIAL_OWNER, present_labels=set(GitHubLabel) - {GitHubLabel.IN_REVIEW}
     )
