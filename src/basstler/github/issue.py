@@ -1,5 +1,6 @@
 """
-A GitHub issue, and the requests that open, comment on, close and list issues.
+A GitHub issue and its comments, and the requests that open, comment on, close and
+list issues.
 """
 
 from __future__ import annotations
@@ -67,10 +68,9 @@ class IssueRequest:
     A request to the issues API, whose fields are named as the API names them.
     """
 
-    @property
-    def payload(self) -> dict[str, Any]:
+    def to_json(self) -> dict[str, Any]:
         """
-        The request as the API reads it.
+        :return: The request as the API reads it.
         """
         return asdict(self)
 
@@ -98,9 +98,9 @@ class NewIssue(IssueRequest):
 
 
 @dataclass(frozen=True)
-class NewIssueComment(IssueRequest):
+class IssueComment(IssueRequest):
     """
-    A comment to post on an issue.
+    A comment on an issue or pull request, as it is posted.
     """
 
     body: str
@@ -110,20 +110,55 @@ class NewIssueComment(IssueRequest):
 
 
 @dataclass(frozen=True)
-class IssueStateChange(IssueRequest):
+class PostedIssueComment(IssueComment, JSONModel):
     """
-    A change of an issue's state.
-    """
-
-    state: IssueState
-    """
-    The state it is set to.
+    A comment GitHub has recorded, with who posted it and when.
     """
 
-    state_reason: ClosingReason
+    author_login: str
     """
-    Why it is closed.
+    The GitHub login of whoever posted the comment.
     """
+
+    created_at: str
+    """
+    When the comment was posted, as GitHub's ISO 8601 timestamp.
+    """
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> PostedIssueComment:
+        return cls(data["body"], data["user"]["login"], data["created_at"])
+
+    def to_json(self) -> dict[str, Any]:
+        """
+        :return: The comment in the shape GitHub's issue-comments API returns it.
+        """
+        return {
+            "body": self.body,
+            "user": {"login": self.author_login},
+            "created_at": self.created_at,
+        }
+
+    def formatted(self) -> str:
+        """
+        :return: The comment as a ``[<login> @ <created_at>]`` line, then its body.
+        """
+        return f"[{self.author_login} @ {self.created_at}]\n{self.body}"
+
+
+@dataclass(frozen=True)
+class IssueClosing(IssueRequest):
+    """
+    The closing of an issue.
+    """
+
+    closing_reason: ClosingReason | None = None
+    """
+    Why it is closed, or ``None`` to leave the reason unset.
+    """
+
+    def to_json(self) -> dict[str, Any]:
+        return {"state": IssueState.CLOSED, "state_reason": self.closing_reason}
 
 
 @dataclass(frozen=True)
@@ -152,4 +187,4 @@ class IssueListing(IssueRequest):
         """
         The listing's query string.
         """
-        return urlencode(self.payload)
+        return urlencode(self.to_json())

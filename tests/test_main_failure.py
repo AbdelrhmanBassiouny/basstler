@@ -16,14 +16,14 @@ from basstler.github.client import GitHubResponse, HttpMethod
 from basstler.github.issue import (
     ClosingReason,
     Issue,
-    IssueState,
-    IssueStateChange,
+    IssueClosing,
+    IssueComment,
     NewIssue,
-    NewIssueComment,
 )
 from basstler.github.workflow_run import RunJobPage, WorkflowRun
 from basstler.github_labels import GitHubLabel
-from basstler.main_failure import FinishedRun, MainFailureTracker, Verdict
+from basstler import main_failure
+from basstler.main_failure import FinishedRun, MainFailureTracker
 from basstler.repository import Repository
 from basstler.upstream_reviews.vocabulary import CheckOutcome
 
@@ -104,7 +104,7 @@ def comment_on(issue: Issue, run: FinishedRun) -> SentWrite:
     return SentWrite(
         HttpMethod.POST,
         REPOSITORY.issue_comments_path(issue.number),
-        NewIssueComment(run.describe()).payload,
+        IssueComment(run.describe()).to_json(),
     )
 
 
@@ -114,16 +114,16 @@ def comment_on(issue: Issue, run: FinishedRun) -> SentWrite:
 @pytest.mark.parametrize(
     ("outcome", "verdict"),
     [
-        (CheckOutcome.FAILURE, Verdict.FAILING),
-        (CheckOutcome.TIMED_OUT, Verdict.FAILING),
-        (CheckOutcome.STARTUP_FAILURE, Verdict.FAILING),
-        (CheckOutcome.SUCCESS, Verdict.PASSING),
-        (CheckOutcome.CANCELLED, Verdict.UNDECIDED),
-        (CheckOutcome.SKIPPED, Verdict.UNDECIDED),
+        (CheckOutcome.FAILURE, main_failure.TestsRunVerdict.FAILING),
+        (CheckOutcome.TIMED_OUT, main_failure.TestsRunVerdict.FAILING),
+        (CheckOutcome.STARTUP_FAILURE, main_failure.TestsRunVerdict.FAILING),
+        (CheckOutcome.SUCCESS, main_failure.TestsRunVerdict.PASSING),
+        (CheckOutcome.CANCELLED, main_failure.TestsRunVerdict.UNDECIDED),
+        (CheckOutcome.SKIPPED, main_failure.TestsRunVerdict.UNDECIDED),
     ],
 )
 def test_an_outcome_decides_what_the_run_says_about_main(outcome, verdict):
-    assert Verdict.of(outcome) is verdict
+    assert main_failure.TestsRunVerdict.from_run_check(outcome) is verdict
 
 
 def test_a_failed_run_names_the_jobs_that_failed_or_timed_out():
@@ -163,7 +163,7 @@ def test_the_first_failure_opens_the_issue():
             REPOSITORY.issues_path,
             NewIssue(
                 issue.title, run.describe(), [GitHubLabel.BUG, GitHubLabel.MAIN_RED]
-            ).payload,
+            ).to_json(),
         )
     ]
 
@@ -186,7 +186,7 @@ def test_a_pass_closes_the_open_issue():
     assert client.writes[-1] == SentWrite(
         HttpMethod.PATCH,
         REPOSITORY.issue_path(open_issue().number),
-        IssueStateChange(IssueState.CLOSED, ClosingReason.COMPLETED).payload,
+        IssueClosing(ClosingReason.COMPLETED).to_json(),
     )
 
 

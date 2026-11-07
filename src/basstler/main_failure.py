@@ -23,11 +23,11 @@ from basstler.github.client import (
 from basstler.github.issue import (
     ClosingReason,
     Issue,
+    IssueClosing,
+    IssueComment,
     IssueListing,
     IssueState,
-    IssueStateChange,
     NewIssue,
-    NewIssueComment,
 )
 from basstler.github.workflow_run import RunJobPage, WorkflowRun
 from basstler.github_labels import GitHubLabel
@@ -43,7 +43,7 @@ This module's logger, which is also what its command prints through.
 # %% what one run of the tests says about the default branch
 
 
-class Verdict(StrEnum):
+class TestsRunVerdict(StrEnum):
     """
     What a finished run of the tests says about the default branch.
     """
@@ -64,7 +64,7 @@ class Verdict(StrEnum):
     """
 
     @classmethod
-    def of(cls, outcome: CheckOutcome) -> Verdict:
+    def from_run_check(cls, outcome: CheckOutcome) -> TestsRunVerdict:
         """
         :param outcome: How a run or one of its jobs ended.
         :return: What that says about the default branch.
@@ -111,22 +111,27 @@ class FinishedRun:
         :param github: What reads a failed run's jobs.
         :return: The run, with its failed jobs when it failed.
         """
-        if Verdict.of(workflow_run.outcome) is not Verdict.FAILING:
+        if (
+            TestsRunVerdict.from_run_check(workflow_run.outcome)
+            is not TestsRunVerdict.FAILING
+        ):
             return cls(repository, workflow_run)
         page = RunJobPage.from_json(
             github.get(RunJobPage.path(repository, workflow_run.identifier))
         )
         failed = tuple(
-            job.name for job in page.jobs if Verdict.of(job.outcome) is Verdict.FAILING
+            job.name
+            for job in page.jobs
+            if TestsRunVerdict.from_run_check(job.outcome) is TestsRunVerdict.FAILING
         )
         return cls(repository, workflow_run, failed)
 
     @property
-    def verdict(self) -> Verdict:
+    def verdict(self) -> TestsRunVerdict:
         """
         What the run says about the default branch.
         """
-        return Verdict.of(self.workflow_run.outcome)
+        return TestsRunVerdict.from_run_check(self.workflow_run.outcome)
 
     @property
     def url(self) -> str:
@@ -140,7 +145,7 @@ class FinishedRun:
         :return: The run, its commit and, when it failed, its failed jobs, as Markdown.
         """
         run = f"[This run]({self.url}) on {self.workflow_run.commit}"
-        if self.verdict is not Verdict.FAILING:
+        if self.verdict is not TestsRunVerdict.FAILING:
             return f"{run} passed."
         jobs = ", ".join(f"`{job}`" for job in self.failed_jobs)
         return f"{run} failed in {jobs}."
@@ -191,10 +196,10 @@ class MainFailureTracker:
         :return: The issue the run opened, commented on or closed, or ``None`` when it
             changed nothing.
         """
-        if run.verdict is Verdict.UNDECIDED:
+        if run.verdict is TestsRunVerdict.UNDECIDED:
             return None
         issue = self.open_issue(github)
-        if run.verdict is Verdict.FAILING:
+        if run.verdict is TestsRunVerdict.FAILING:
             return self.report_failure(run, issue, github)
         if issue is None:
             return None
@@ -220,7 +225,7 @@ class MainFailureTracker:
             self.repository.issues_path,
             NewIssue(
                 self.title, run.describe(), [GitHubLabel.BUG, GitHubLabel.MAIN_RED]
-            ).payload,
+            ).to_json(),
         )
         return Issue.from_json(opened)
 
@@ -236,7 +241,7 @@ class MainFailureTracker:
         github.send(
             HttpMethod.PATCH,
             self.repository.issue_path(issue.number),
-            IssueStateChange(IssueState.CLOSED, ClosingReason.COMPLETED).payload,
+            IssueClosing(ClosingReason.COMPLETED).to_json(),
         )
 
     def comment(self, issue: Issue, run: FinishedRun, github: GitHubClient) -> None:
@@ -250,7 +255,7 @@ class MainFailureTracker:
         github.send(
             HttpMethod.POST,
             self.repository.issue_comments_path(issue.number),
-            NewIssueComment(run.describe()).payload,
+            IssueComment(run.describe()).to_json(),
         )
 
 
