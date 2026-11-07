@@ -65,11 +65,11 @@ items:
   - ranked-work-list
   - basstler-packages/playbook-model
   status: deferred
-  notes: Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on
-    v3 (see roadmap). The hub page carries a 'Today' sidebar with the daily queue of ten and a 'Recommended'
-    tab with the whole ranked list, grouped by kind with the reasons. Rebuilt with the site on every plan
-    change (team-basstler's plan site); the daily refresh comes from daily-queue-refresh; no Artifact
-    version.
+  notes: Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on v3 (see roadmap).
+    The hub page carries a 'Today' sidebar with the daily queue of ten and a 'Recommended' tab with the whole ranked
+    list, grouped by kind with the reasons. The panel reads one published recommendations.json, fetched without
+    cache on page load, and shows when it was built. Refresh shows the build's run until a newer file is published,
+    then reloads it. Rebuilt per daily-queue-refresh; no Artifact version.
 - id: external-review-candidates
   title: Recommend other people's open PRs to review, related and small first
   branch: null
@@ -81,15 +81,19 @@ items:
   notes: 'Deferred like the rest of the plan. Fetches open PRs not authored by the owner and not yet reviewed by them, on every repository the owner works on or has a fork of (the fork''s upstream included). Ranked deterministically by topic relatedness to the owner''s queued PR stages (shared changed paths first, then repository, linked issues, labels, keyword overlap with priorities.yaml topics), then by size, smaller first. Fills the queue''s three review slots.'
 
 - id: daily-queue-refresh
-  title: Rebuild the daily queue every morning and on a Refresh button
+  title: Refresh the recommendations on every change, on Refresh and each morning
   branch: null
   pull_request_number: null
   track: recommender
   depends_on:
   - external-review-candidates
   status: deferred
-  notes: 'Deferred like the rest of the plan. A GitHub Actions workflow started by the hub page''s Refresh button (plan-site-ui/command-issues) and one daily morning cron, the owner-approved exception to actions-budget''s no-schedule rule, runs the recommender and rebuilds the site. The queue is ordered as phases: PhD work until the day''s 50% PhD share is met, then the other kinds in policy order. It reads other repositories with a read-only fine-grained token scoped to the hub repositories and their upstreams; a failed fetch is shown on the page, never dropped.'
-
+  notes: 'Deferred like the rest of the plan. Ranking runs once, in the plan site build; the page never ranks. Every
+    trigger starts that one build: a plan save (build_start), a merge, an issue or PR opened, closed or labelled
+    in a hub repository (the merge dispatch workflow extended to those events), the Refresh button (plan-site-ui/command-issues),
+    and one morning cron for the new day''s queue, the approved exception to no-schedule. No interval polling. A
+    concurrency group folds a burst into one run, and ETag requests keep refetching cheap. A failed fetch is shown,
+    never dropped.'
 - id: progress-meters
   title: Show weekly meters and a thesis meter toward 150 pages
   branch: null
