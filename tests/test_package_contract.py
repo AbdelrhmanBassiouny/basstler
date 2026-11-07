@@ -31,7 +31,7 @@ from basstler.package_layout import (
 from basstler.shell_configuration import FetchedBranchReference
 
 from .constants.environment import ConfigurationVariable, SearchPathVariable
-from .constants.paths import RepositoryLocation
+from .constants.paths import DatasetLocation, RepositoryLocation
 from .plugin_manifest import PluginManifestKey
 from .project_declaration import HatchVersionSource, ProjectDeclaration
 from .script_runner import ScriptRunner, configuration_value
@@ -102,20 +102,24 @@ however the caller spells the directory.
 """
 
 
-def names_of(module: PackageModule) -> frozenset[str]:
+def invocation_of(module: PackageModule) -> re.Pattern[str]:
     """
-    Every spelling a caller can invoke a module by.
+    Every spelling a caller can invoke a module by: ``-m`` and its command path, or a
+    shell variable the configuration assigns that path, so a mere mention such as a
+    repository name does not count.
 
-    Bash callers go through a shell variable rather than the dotted path, so the variable
-    names are read from the configuration that assigns them instead of written out here.
-
-    :param module: The module to name.
-    :return: Its command path, plus any shell variable holding that path.
+    :param module: The module to invoke.
+    :return: A pattern matching any of those invocations.
     """
     assignments = MODULE_VARIABLE.findall(SHELL_CONFIGURATION.read_text())
-    return frozenset({module.command_path}) | {
-        variable for variable, path in assignments if path == module.command_path
-    }
+    variables = [
+        rf"\$\{{?{variable}\b"
+        for variable, path in assignments
+        if path == module.command_path
+    ]
+    return re.compile(
+        "|".join([rf"-m\s+{re.escape(module.command_path)}(?![\w.])", *variables])
+    )
 
 
 def installs_the_dependencies(caller_source: str) -> bool:
@@ -154,8 +158,8 @@ def test_the_build_reads_its_version_from_the_release_tag():
 
 def test_the_plugin_manifest_names_no_version():
     """
-    A version in the manifest would need a commit after each merge, which a plugin synced
-    from the merge misses, and would keep marketplace installs on it until it changed.
+    A version in the manifest would need a commit after each release, and would keep
+    marketplace installs on it until it changed.
     """
     manifest = json.loads(RepositoryLocation.PLUGIN_MANIFEST.read_text())
 
@@ -214,8 +218,30 @@ def workflows_that_run_a_module() -> tuple[tuple[Path, PackageModule], ...]:
         (workflow_path, module)
         for workflow_path in sorted(WORKFLOWS_DIRECTORY.glob("*.yml"))
         for module in package_modules()
-        if any(name in workflow_path.read_text() for name in names_of(module))
+        if invocation_of(module).search(workflow_path.read_text())
     )
+
+
+def package_entry_point() -> PackageModule:
+    """
+    :return: The module ``python -m basstler`` runs, as the package's discovery finds it.
+    """
+    (entry_point,) = (
+        module for module in package_modules() if module.name == "__main__"
+    )
+    return entry_point
+
+
+def test_a_workflow_that_only_names_the_repository_runs_no_module():
+    workflow_text = DatasetLocation.WORKFLOW_NAMING_THE_REPOSITORY.read_text()
+
+    assert invocation_of(package_entry_point()).search(workflow_text) is None
+
+
+def test_a_workflow_that_runs_the_entry_point_is_found():
+    workflow_text = DatasetLocation.WORKFLOW_RUNNING_THE_PACKAGE.read_text()
+
+    assert invocation_of(package_entry_point()).search(workflow_text) is not None
 
 
 def test_every_workflow_that_runs_a_module_installs_the_dependencies_first():

@@ -35,7 +35,7 @@ class BranchStatus(StrEnum):
     """Its author has not yet reviewed it themselves, so it may not be promoted."""
 
     READY = "ready"
-    """Out of draft - reviewed by its author, and promotable once its parent is."""
+    """Out of draft - reviewed by its author, and promotable once its parent has merged."""
 
     IN_REVIEW = "in-review"
     """Promoted to the upstream, where it waits on that queue rather than on us."""
@@ -570,8 +570,10 @@ class Stack:
         )
 
     def parent_landed(self, branch: StackBranch) -> bool:
-        """Whether a branch's parent has reached the upstream (merged or in-review), so it
-        can promote.
+        """Whether a branch's parent has merged into its base, so it can promote.
+
+        A parent still in review does not count: the upstream pull request is compared
+        against the upstream base, so it would carry the parent's commits too.
 
         A parent no open fork pull request describes is not on the board, so git ancestry
         is the only evidence available for it - and absence from the board is not itself
@@ -593,10 +595,7 @@ class Stack:
         )
         if parent is None:
             return True
-        return parent.status in {
-            BranchStatus.IN_REVIEW,
-            BranchStatus.MERGED,
-        }
+        return parent.status is BranchStatus.MERGED
 
     def integration_parent(self, branch: StackBranch) -> str:
         """

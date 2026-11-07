@@ -184,12 +184,19 @@ class Repository:
         """
         return f"repos/{self.full_name}"
 
+    @property
+    def pull_requests_path(self) -> str:
+        """
+        The REST path of the repository's pull requests, which lists and opens them.
+        """
+        return f"{self.api_path}/pulls"
+
     def pull_request_path(self, number: int) -> str:
         """
         :param number: The pull request's number.
         :return: The REST path of that pull request.
         """
-        return f"{self.api_path}/pulls/{number}"
+        return f"{self.pull_requests_path}/{number}"
 
     def job_log_path(self, job: int) -> str:
         """

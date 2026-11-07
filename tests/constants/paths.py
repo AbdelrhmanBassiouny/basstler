@@ -25,6 +25,11 @@ class RepositoryLocation(PathEnumeration):
     The repository root.
     """
 
+    MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
+    """
+    The marketplace that lists the plugin and says where it is served from.
+    """
+
     PLUGIN = ROOT / "plugin"
     """
     The Claude Code plugin: its manifest, hooks and skills.
@@ -48,6 +53,11 @@ class RepositoryLocation(PathEnumeration):
     RELEASE_WORKFLOW = WORKFLOWS / "release.yml"
     """
     The workflow that tags a merge commit as a release.
+    """
+
+    TESTS_WORKFLOW = WORKFLOWS / "tests.yml"
+    """
+    The workflow that lints and tests every pull request and every push to main.
     """
 
     PLAN_SITE_BUILD_WORKFLOW = WORKFLOWS / "plan-site-build.yml"
@@ -80,6 +90,20 @@ class DatasetLocation(PathEnumeration):
     """
     Personal notes citing only what this release ships, beside names that merely look
     like the package's: a branch, a file under the git directory, another skill.
+    """
+
+    WORKFLOW_NAMING_THE_REPOSITORY = (
+        DIRECTORY / "package-contract" / "names-the-repository.yml"
+    )
+    """
+    A workflow that names this repository and the package but runs none of its modules.
+    """
+
+    WORKFLOW_RUNNING_THE_PACKAGE = (
+        DIRECTORY / "package-contract" / "runs-the-package.yml"
+    )
+    """
+    A workflow that runs the package's own entry point.
     """
 
     BOOTSTRAP_PLAN = DIRECTORY / "bootstrap-plan.yaml"
