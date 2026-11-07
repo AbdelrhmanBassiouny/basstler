@@ -14,10 +14,13 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from basstler.environment import GitHubActionsVariable
 from basstler.locations import PathEnumeration
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.workflows import ActivityType, Trigger, TriggerEvent, WorkflowKey
+from basstler.workflows import Workflow as DeclaredWorkflow
 from basstler.release_version import (
     MalformedVersion,
     MergedPullRequest,
@@ -368,6 +371,129 @@ def test_a_part_s_own_label_releases_it(part):
 
 def test_any_other_label_releases_a_patch():
     assert PullRequestLabel(ReleaseSampleLabel.UNRELATED).part is VersionPart.PATCH
+
+
+# %% when the workflow releases
+
+
+class ReleaseGate(StrEnum):
+    """
+    What the release workflow waits for before it tags a commit.
+    """
+
+    BRANCH = "main"
+    """
+    The branch whose tested commits are released.
+    """
+
+    TESTS_PASSED = "github.event.workflow_run.conclusion == 'success'"
+    """
+    The condition that the Tests run it follows passed.
+    """
+
+    PUSHED = "github.event.workflow_run.event == 'push'"
+    """
+    The condition that the Tests run it follows tested a push, not a pull request.
+    """
+
+    TESTED_COMMIT = "${{ github.event.workflow_run.head_sha }}"
+    """
+    The commit the Tests run it follows tested.
+    """
+
+    PUSH_TESTED_WHATEVER_THE_BUDGET = "github.event_name == 'push' ||"
+    """
+    The clause that runs the test matrix on a push even past the daily budget.
+    """
+
+    TEST_JOB = "test"
+    """
+    The Tests workflow's job that runs the test matrix.
+    """
+
+
+class WorkflowFileKey(StrEnum):
+    """
+    The keys of a workflow file read here, beyond those :mod:`basstler.workflows` reads.
+    """
+
+    NAME = "name"
+    """
+    The workflow's name, which another workflow's ``workflow_run`` trigger follows it by.
+    """
+
+    WORKFLOWS = "workflows"
+    """
+    The workflows a ``workflow_run`` trigger follows.
+    """
+
+    STEPS = "steps"
+    """
+    A job's steps.
+    """
+
+    WITH = "with"
+    """
+    The inputs a step hands its action.
+    """
+
+    REF = "ref"
+    """
+    The commit the checkout action checks out.
+    """
+
+
+def release_workflow_file() -> dict[Any, Any]:
+    """
+    :return: The release workflow as YAML loads it, which reads the ``on`` key as ``True``.
+    """
+    return yaml.safe_load(RepositoryLocation.RELEASE_WORKFLOW.read_text())
+
+
+def test_the_release_runs_when_a_tests_run_on_main_completes():
+    workflow = DeclaredWorkflow.at(RepositoryLocation.RELEASE_WORKFLOW)
+    tests_name = yaml.safe_load(RepositoryLocation.TESTS_WORKFLOW.read_text())[
+        WorkflowFileKey.NAME
+    ]
+
+    assert workflow.triggers == (
+        Trigger(
+            TriggerEvent.WORKFLOW_RUN,
+            frozenset({ActivityType.COMPLETED}),
+            frozenset({ReleaseGate.BRANCH}),
+        ),
+    )
+    assert release_workflow_file()[True][TriggerEvent.WORKFLOW_RUN][
+        WorkflowFileKey.WORKFLOWS
+    ] == [tests_name]
+
+
+@pytest.mark.parametrize(
+    "clause", [ReleaseGate.TESTS_PASSED, ReleaseGate.PUSHED], ids=str
+)
+def test_the_release_job_runs_only_after_the_tests_of_a_push_passed(clause):
+    (job,) = DeclaredWorkflow.at(RepositoryLocation.RELEASE_WORKFLOW).jobs
+
+    assert clause in job.condition
+
+
+def test_the_release_checks_out_the_commit_the_tests_ran_on():
+    (job,) = release_workflow_file()[WorkflowKey.JOBS].values()
+    checkout = job[WorkflowFileKey.STEPS][0]
+
+    assert checkout[WorkflowFileKey.WITH][WorkflowFileKey.REF] == (
+        ReleaseGate.TESTED_COMMIT
+    )
+
+
+def test_a_push_runs_the_tests_whatever_the_budget():
+    (test_job,) = (
+        job
+        for job in DeclaredWorkflow.at(RepositoryLocation.TESTS_WORKFLOW).jobs
+        if job.identifier == ReleaseGate.TEST_JOB
+    )
+
+    assert ReleaseGate.PUSH_TESTED_WHATEVER_THE_BUDGET in test_job.condition
 
 
 # %% the workflow's tag step

@@ -1,12 +1,15 @@
 name: Release
 
-# Every change merged to main is released by tagging the merge commit itself: no file names
-# the version, so nothing is pushed to main and a plugin synced from the merge is already
-# the release. The patch is incremented unless a merged pull request is labelled
-# release:minor or release:major.
+# Every change merged to main is released by tagging the merge commit itself, once the
+# Tests run on that commit has passed: no file names the version, so nothing is pushed to
+# main. The patch is incremented unless a merged pull request is labelled release:minor or
+# release:major. A commit whose tests fail is never tagged, so installs stay on the latest
+# release that passed; the next commit that passes releases everything merged since.
 
 on:
-  push:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
     branches: [main]
 
 concurrency:
@@ -20,12 +23,16 @@ permissions:
 jobs:
   release:
     name: Release what changed since the latest release
-    if: github.event_name != 'push' || !github.event.repository.fork
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      !github.event.repository.fork
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
         with:
+          ref: ${{ github.event.workflow_run.head_sha }}
           fetch-depth: 0
           path: basstler
 

@@ -24,7 +24,9 @@ package at the plugin's own version, so the two are always one release.
 
 ## Releasing
 
-Every push to `main` that changes anything is a release, made by `release.yml`. An install
+Every push to `main` that changes anything is a release once its Tests run passes, made by
+`release.yml`. A commit whose tests fail is never tagged, so installs stay on the latest
+release that passed, and the next passing commit releases everything merged since. An install
 takes the package from the latest release tag, so a change merged without one would reach
 some installs and not others: a plugin's hooks would call a package that predates them.
 Every change counts, not only those to the package, since a list of shipped paths would go
@@ -39,8 +41,8 @@ stale.
   pull request merged since is labelled `release:minor` or `release:major`. It then
   publishes a GitHub release with generated notes.
 - **A session start installs the highest `v<major>.<minor>.<patch>` tag** of this
-  repository. One that starts between a merge and its tag gets the release before, until
-  its next start.
+  repository. One that starts between a merge and its tag - the Tests run included - gets
+  the release before, until its next start.
 
 ## The package's own environment
 

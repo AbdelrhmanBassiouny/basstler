@@ -1,5 +1,6 @@
 """
-Releases: every change merged to ``main`` is one, tagged on the merge commit itself.
+Releases: every change merged to ``main`` is one once its tests pass, tagged on the
+merge commit itself.
 
 No file names the version, so nothing is committed after a merge: the release is the
 latest release tag with one part incremented - the patch, unless a merged pull request is
