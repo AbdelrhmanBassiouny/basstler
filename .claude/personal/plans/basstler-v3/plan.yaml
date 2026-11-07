@@ -63,6 +63,7 @@ items:
   - basstler-v3-stacks/upstream-promotion
   - basstler-v3-stacks/upstream-review-mirror
   - mcp-server
+  - basstler-packages/playbook-model
   status: not started
   notes: 'Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode replaces
     the auto/plan/ask execution modes. claude plugin eval cases fail CI when a skill run exceeds its token
@@ -79,12 +80,14 @@ items:
   track: cutover
   depends_on:
   - basstler-v3-plans/item-brief
+  - basstler-packages/playbook-model
   status: not started
   notes: 'A FastMCP server (the official mcp SDK) in the plugin''s .mcp.json, used by every client: 5
     to 8 tools with output schemas, each returning a brief or recording a result, so a skill never composes
     a shell command. The CLI stays for scripts and Actions. Never thin API wrappers. A decision only the
     user makes is asked through MCP elicitation. Adds the mcp dependency (approved 2026-11-01); tool definitions
-    count against eval budgets. Made the main path 2026-11-03 (owner).'
+    count against eval budgets. Made the main path 2026-11-03 (owner). Ships as the basstler-mcp distribution,
+    serving the playbook''s McpTool components.'
 - id: slim-session-start
   title: Session start only writes the session's context
   branch: null
