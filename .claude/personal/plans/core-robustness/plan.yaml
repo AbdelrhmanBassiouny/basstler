@@ -82,3 +82,10 @@ items:
   track: core
   depends_on: []
   status: not started
+  notes: >-
+    Replace the ~40 payload-key StrEnums (GitHub API, workflow/pyproject files,
+    command reports) with the dataclasses that own them, per #156's rule and pattern;
+    tests read reports through those dataclasses, reversing #145. Waits for #156.
+    Runs after or before basstler-packages/git-and-github-domain, never alongside
+    (same upstream_reviews models). Ask at kickoff whether to add pydantic. May split
+    into 3 PRs.
