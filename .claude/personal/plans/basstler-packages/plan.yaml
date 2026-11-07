@@ -53,14 +53,14 @@ items:
 - id: break-remaining-cycles
   title: Break the remaining cycles and give each distribution its own locations, environment and exceptions
   track: package-split
-  depends_on: [git-and-github-domain]
+  depends_on:
+  - git-and-github-domain
   status: not started
-  notes: >-
-    Plan, Item, Track, Wave models from plan_site/plan.py into basstler.plan; the part of
-    stack.configuration upstream_reviews reads into github; maintenance->upstream_reviews.action
-    inverted so only stack depends on reviews. Split locations.py, environment.py and exceptions.py
-    per distribution and change the project rule to "once, in its own package's locations". The
-    boundary checker then fails CI with an empty baseline.
+  notes: Plan, Item, Track, Wave models from plan_site/plan.py into basstler.plan; the part of stack.configuration
+    upstream_reviews reads into github; maintenance->upstream_reviews.action inverted so only stack depends
+    on reviews; plugin_root into core, since core's shell_configuration imports it (#76 touches it). Split
+    locations, environment and exceptions per distribution, the project rule becoming "once, in its own
+    package's locations". The boundary checker then fails CI with an empty baseline.
 - id: uv-workspace
   title: Move each distribution into packages/<name> as a uv workspace with lockstep versions
   track: package-split
@@ -90,11 +90,12 @@ items:
   depends_on:
   - uv-workspace
   status: not started
-  notes: 'basstler.playbook in core: PlaybookComponent kinds CommandGroup, SkillDefinition, HookDefinition,
-    McpTool, SessionStep, ActionsWorkflow, Ruleset[RuleKind], SitePanel (a hub tab or sidebar) and ItemAttribute
-    (typed per-item fields basstler-plan validates without depending on their owner), krrood-style with
-    bound generics; PackageContribution via basstler.contributions entry points; Playbook.without/with_components;
-    DefaultPlaybook; a root basstler_playbook module. skills build --check reproduces plugin/. release:minor.'
+  notes: 'basstler.playbook in core: component kinds CommandGroup, SkillDefinition, HookDefinition, McpTool,
+    ActionsWorkflow, Ruleset[RuleKind], SitePanel (hub tab or sidebar), ItemAttribute (typed item fields
+    basstler-plan validates without depending on their owner), and the existing SetupStep, whose SetupChecklist
+    moves to core so each distribution contributes its own steps. PackageContribution via basstler.contributions
+    entry points; Playbook.without/with_components; DefaultPlaybook; a root basstler_playbook. skills
+    build --check. release:minor.'
 - id: krrood-sync
   title: Bring code_rules up to krrood's latest development tools, with credit
   track: rules

@@ -7,4 +7,4 @@
 - Every distribution is released at the same version from the one tag release.yml puts on the merge commit, and pins its siblings exactly; no file carries a version.
 - Copied krrood code lives only in basstler-core and basstler-rules, cited with :cite:`krrood`, its module and commit, and listed in NOTICE.
 - The customization model is called a playbook; workflow keeps meaning a GitHub Actions workflow.
-- Two opt-in distributions sit beside the hub: basstler-graph (plan-graph; plan, git, github) and basstler-recommender (work-recommender). Neither is in DefaultPlaybook; each reaches the hub and plan items only through SitePanel and ItemAttribute components.
+- Two opt-in distributions sit beside the hub: basstler-graph (plan-graph; plan, git, github) and basstler-recommender (work-recommender's general ranker and priorities policy model). Neither is in DefaultPlaybook; a playbook adds them, and they reach the hub and plan items only through SitePanel and ItemAttribute components.
