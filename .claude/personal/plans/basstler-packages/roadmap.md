@@ -8,3 +8,4 @@
 - Copied krrood code lives only in basstler-core and basstler-rules, cited with :cite:`krrood`, its module and commit, and listed in NOTICE.
 - The customization model is called a playbook; workflow keeps meaning a GitHub Actions workflow.
 - Two opt-in distributions sit beside the hub: basstler-graph (plan-graph; plan, git, github) and basstler-recommender (work-recommender's general ranker and priorities policy model). Neither is in DefaultPlaybook; a playbook adds them, and they reach the hub and plan items only through SitePanel and ItemAttribute components.
+- Freeze until uv-workspace lands: no new branch starts in plan, plan_site, github or stack; the open pull requests finish and land first, while package-map runs beside them. One that stalls in review is rebased across the moves rather than waited for.

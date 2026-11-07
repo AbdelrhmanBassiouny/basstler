@@ -42,14 +42,14 @@ items:
 - id: git-and-github-domain
   title: Extract basstler.git and gather the GitHub domain model into basstler.github
   track: package-split
-  depends_on: [package-map]
+  depends_on:
+  - package-map
   status: not started
-  notes: >-
-    GitCommandRunner, GitCommandFailed, branch, remote_branch, commit_move into basstler.git. Into
-    basstler.github: repository, github_labels, pull_request_state, pull_request_source, maintenance
-    github/board record/description/constants, ExternalCallFailed, upstream_reviews REST/GraphQL
-    models, vocabulary and queries, actions usage/budget, workflows, release_version. Removes
-    github->maintenance and environment->github. Pure moves. Coordinate with #123 (GitHubClient).
+  notes: 'GitCommandRunner, GitCommandFailed, branch, remote_branch, commit_move into basstler.git. Into
+    basstler.github: repository, github_labels, pull_request_state, pull_request_source, maintenance github/board
+    record/description/constants, ExternalCallFailed, upstream_reviews REST/GraphQL models, vocabulary
+    and queries, actions usage/budget, workflows, release_version. Removes github->maintenance and environment->github.
+    Pure moves. GitHubClient (#123, merged) is already in github/client.py.'
 - id: break-remaining-cycles
   title: Break the remaining cycles and give each distribution its own locations, environment and exceptions
   track: package-split
@@ -64,14 +64,14 @@ items:
 - id: uv-workspace
   title: Move each distribution into packages/<name> as a uv workspace with lockstep versions
   track: package-split
-  depends_on: [break-remaining-cycles]
+  depends_on:
+  - break-remaining-cycles
   status: not started
-  notes: >-
-    Pure-rename move (git diff -M shows only renames plus pyproject files). hatch-vcs per package
-    with root ../..; a custom hatch metadata hook, force-included in each sdist, pins siblings
-    ==version. Committed uv.lock and uv sync --frozen at session start (absorbs
-    basstler-reliability/locked-install). package_layout reads importlib.metadata. CI installs
-    each package alone and runs its tests. release:major.
+  notes: Pure-rename move (git diff -M shows only renames plus pyproject files). hatch-vcs per package
+    with root ../..; a custom hatch metadata hook, force-included in each sdist, pins siblings ==version.
+    Committed uv.lock and uv sync --frozen at session start (absorbs basstler-reliability/locked-install).
+    package_layout reads importlib.metadata. CI installs each package alone and runs its tests, every
+    package on each change (#55's change-based selection closed unmerged). release:major.
 - id: pypi-release
   title: Publish every distribution to PyPI on each release with trusted publishing
   track: package-split
@@ -99,15 +99,14 @@ items:
 - id: krrood-sync
   title: Bring code_rules up to krrood's latest development tools, with credit
   track: rules
-  depends_on: [uv-workspace, basstler-v3/code-rules-light]
+  depends_on:
+  - uv-workspace
   status: not started
-  notes: >-
-    From krrood@be69c37d: one module per top-level section, project rules in a root agent_rules
-    package, checker as a rule's third element with Section.checkers and check --all-lines,
-    ImportsRules, SerializationRules, ErrorsRules->ExceptionModellingRules, leading-preposition and
-    name-completion checkers, a format subcommand replacing scripts/format_docstrings.py,
-    .pre-commit-hooks.yaml, RepositoryInstructionsFile. Cite krrood and update NOTICE. Ask before
-    copying FieldAccessorDefinitionChecker. release:minor.
+  notes: 'From krrood@be69c37d: one module per top-level section, project rules in a root agent_rules
+    package, checker as a rule''s third element with Section.checkers and check --all-lines, ImportsRules,
+    SerializationRules, ErrorsRules->ExceptionModellingRules, leading-preposition and name-completion
+    checkers, a format subcommand replacing scripts/format_docstrings.py, .pre-commit-hooks.yaml, RepositoryInstructionsFile.
+    Cite krrood and update NOTICE. Ask before copying FieldAccessorDefinitionChecker. release:minor.'
 - id: customization-docs
   title: A README per distribution and a guide to writing your own playbook and ruleset
   track: playbook
