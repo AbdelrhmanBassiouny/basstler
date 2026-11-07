@@ -18,6 +18,7 @@ from basstler.plan_site.workflows import (
 )
 from basstler.repository import GitHubAddress, Repository
 from basstler.standard_streams import StandardStreamHandler
+from basstler.github.pull_request import NewPullRequestField
 from basstler.github.client import (
     GitHubClient,
     HttpMethod,
@@ -254,7 +255,7 @@ class MergeWorkflowProposal:
             },
             safe=":",
         )
-        return f"{self.repository.api_path}/pulls?{query}"
+        return f"{self.repository.pull_requests_path}?{query}"
 
     def pending(self, github: GitHubClient) -> PendingStep:
         """
@@ -268,8 +269,12 @@ class MergeWorkflowProposal:
             return self.merging(RestPullRequestSummary.from_json(listed[0]))
         opened = github.attempt_send(
             HttpMethod.POST,
-            f"{self.repository.api_path}/pulls",
-            {"title": self.title, "head": self.head, "base": self.base},
+            self.repository.pull_requests_path,
+            {
+                NewPullRequestField.TITLE: self.title,
+                NewPullRequestField.HEAD: self.head,
+                NewPullRequestField.BASE: self.base,
+            },
         )
         if opened.failure is not None:
             return PendingStep(

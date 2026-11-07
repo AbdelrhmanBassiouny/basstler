@@ -16,6 +16,7 @@ from typing import Any
 import pytest
 import yaml
 
+from basstler.branch import Branch
 from basstler.environment import GitHubActionsVariable
 from basstler.locations import PathEnumeration
 from basstler.maintenance.git_commands import GitCommandRunner
@@ -682,10 +683,10 @@ def test_the_release_step_tags_the_merge_commit_and_moves_the_release_branch_to_
 
     assert result.returncode == 0, result.stderr
     tag = version(ReleaseSampleVersion.NEXT_MINOR).tag
-    assert published_checkout.remote_commit("refs/heads/main") == merge_commit
+    assert published_checkout.remote_commit(Branch("main").reference) == merge_commit
     assert published_checkout.remote_commit(f"refs/tags/{tag}") == merge_commit
     assert (
-        published_checkout.remote_commit(f"refs/heads/{release_branch()}")
+        published_checkout.remote_commit(Branch(release_branch()).reference)
         == merge_commit
     )
     assert release_step_files.output.read_text() == f"tag={tag}\n"

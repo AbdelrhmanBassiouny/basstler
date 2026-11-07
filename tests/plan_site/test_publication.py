@@ -31,6 +31,7 @@ from basstler.github.exceptions import (
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
+from basstler.github.pull_request import NewPullRequestField
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
@@ -579,13 +580,8 @@ def test_the_merge_workflow_follows_the_notes_repository_s_default_branch(
 
     publishing.publication(client).publish()
 
-    proposal = publishing.merge_workflow_proposal_into("trunk")
     assert client.writes == [
-        SentWrite(
-            HttpMethod.POST,
-            f"{publishing.notes_repository.api_path}/pulls",
-            {"title": proposal.title, "head": proposal.head, "base": proposal.base},
-        )
+        pull_request_opening(publishing.merge_workflow_proposal_into("trunk"))
     ]
 
 
@@ -729,21 +725,10 @@ def test_a_refused_default_branch_opens_a_pull_request_from_the_workflow_s_branc
     protected,
 ):
     client = protected.runs_none()
-    proposal = protected.merge_workflow_proposal
 
     protected.publication(client).publish()
 
-    assert client.writes == [
-        SentWrite(
-            HttpMethod.POST,
-            f"{protected.notes_repository.api_path}/pulls",
-            {
-                "title": proposal.title,
-                "head": proposal.head,
-                "base": proposal.base,
-            },
-        )
-    ]
+    assert client.writes == [pull_request_opening(protected.merge_workflow_proposal)]
 
 
 def test_an_open_pull_request_for_the_workflow_is_not_opened_again(protected):
@@ -769,12 +754,28 @@ def test_merging_the_workflow_merges_its_pull_request(protected):
     )
 
 
+def pull_request_opening(proposal: MergeWorkflowProposal) -> SentWrite:
+    """
+    :param proposal: The workflow's proposal.
+    :return: The request opening its pull request from its branch into its base.
+    """
+    return SentWrite(
+        HttpMethod.POST,
+        proposal.repository.pull_requests_path,
+        {
+            NewPullRequestField.TITLE: proposal.title,
+            NewPullRequestField.HEAD: proposal.head,
+            NewPullRequestField.BASE: proposal.base,
+        },
+    )
+
+
 def pull_request_failures(
     notes: Repository,
 ) -> list[GitHubCallFailed]:
     """:return: GitHub refusing to open the pull request, and the request getting no
     answer."""
-    path = f"{notes.api_path}/pulls"
+    path = notes.pull_requests_path
     return [
         GitHubRequestFailed(
             status=HTTPStatus.FORBIDDEN,
