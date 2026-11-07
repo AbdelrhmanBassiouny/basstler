@@ -75,3 +75,10 @@ items:
     '
   depends_on: []
   status: in progress
+
+- id: payload-key-models
+  title: "Payload keys spelled only inside their models"
+  branch: null
+  track: core
+  depends_on: []
+  status: not started
