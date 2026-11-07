@@ -45,9 +45,10 @@ def test_a_push_that_would_close_a_child_as_merged_is_refused_and_not_made(
     fork_checkout: ForkCheckout,
 ):
     """
-    The child's pull request targets the parent's branch. Once the parent contains every
-    commit of the child, GitHub treats the child as merged and closes its pull request,
-    so the move check refuses that push instead of letting the child be lost.
+    The child's pull request targets the parent's branch on the fork. Pushing a parent
+    that already contains every commit of its child - here by a merge made in the wrong
+    direction - makes GitHub close the child's pull request as merged, though nothing of
+    it was reviewed or landed, so the move check refuses the push.
     """
     a_parent_and_child(fork_checkout)
     before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.PARENT)
