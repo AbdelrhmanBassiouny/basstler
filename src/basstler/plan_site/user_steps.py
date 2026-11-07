@@ -61,8 +61,8 @@ class UserStep(StrEnum):
 
     ADD_MERGE_WORKFLOW = "merge the workflow that starts the build on every merge"
     """
-    The notes repository's default branch refused the merge workflow, which waits on a
-    branch of its own.
+    The merge workflow waits on a branch of its own until its pull request merges into the
+    notes repository's default branch.
     """
 
 
@@ -218,8 +218,8 @@ class UserSteps:
 @dataclass(frozen=True)
 class MergeWorkflowProposal:
     """
-    The merge workflow waiting on a branch of its own, for the user to merge into a
-    default branch that refused it.
+    The merge workflow waiting on a branch of its own, for the user to merge into the
+    notes repository's default branch.
     """
 
     repository: Repository

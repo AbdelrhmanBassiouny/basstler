@@ -5,6 +5,9 @@ name: Release
 # main. The patch is incremented unless a merged pull request is labelled release:minor or
 # release:major. A commit whose tests fail is never tagged, so installs stay on the latest
 # release that passed; the next commit that passes releases everything merged since.
+#
+# The same push moves the release branch to the tag. The marketplace serves the plugin
+# from that branch, so a synced plugin and the package it installs are one release.
 
 on:
   workflow_run:
@@ -19,6 +22,10 @@ concurrency:
 permissions:
   contents: write
   pull-requests: read
+
+env:
+  # The branch the marketplace serves the plugin from, always at the latest release.
+  RELEASE_BRANCH: release
 
 jobs:
   release:
@@ -69,7 +76,9 @@ jobs:
             exit 0
           fi
           git tag "${tag}"
-          git push --quiet origin "refs/tags/${tag}"
+          # One atomic push: the plugin never syncs a release the tag does not name yet,
+          # and a release behind the branch moves neither.
+          git push --atomic --quiet origin "refs/tags/${tag}" "HEAD:refs/heads/${RELEASE_BRANCH}"
           echo "Released ${tag} at $(git rev-parse HEAD)." >> "${GITHUB_STEP_SUMMARY}"
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 

@@ -34,15 +34,16 @@ stale.
 
 - **A release is only a tag on the merge commit.** No file names the version - the build
   reads it from the tag (`hatch-vcs`), and `plugin/.claude-plugin/plugin.json` names none -
-  so nothing is pushed to `main` after a merge. A plugin synced from the merge is already
-  the release; a version commit pushed seconds after the merge is what a synced plugin used
-  to miss, leaving it installing the release before.
+  so nothing is pushed to `main` after a merge.
+- **The plugin is served from the `release` branch,** which the same atomic push moves to
+  the tag (`.claude-plugin/marketplace.json` names it as the plugin's `ref`). A synced
+  plugin is therefore always a release, and its session start installs that same release:
+  a merge whose tests fail, or are still running, reaches no install at all.
 - **The workflow increments the latest release's patch,** or its minor or major part when a
   pull request merged since is labelled `release:minor` or `release:major`. It then
   publishes a GitHub release with generated notes.
 - **A session start installs the highest `v<major>.<minor>.<patch>` tag** of this
-  repository. One that starts between a merge and its tag - the Tests run included - gets
-  the release before, until its next start.
+  repository, and a hook reads it again once the plugin syncs to a newer release.
 
 ## The package's own environment
 

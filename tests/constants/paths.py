@@ -25,6 +25,11 @@ class RepositoryLocation(PathEnumeration):
     The repository root.
     """
 
+    MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
+    """
+    The marketplace that lists the plugin and says where it is served from.
+    """
+
     PLUGIN = ROOT / "plugin"
     """
     The Claude Code plugin: its manifest, hooks and skills.

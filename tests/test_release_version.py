@@ -34,6 +34,7 @@ from basstler.release_version import (
 
 from .constants.environment import SearchPathVariable
 from .constants.paths import RepositoryLocation
+from .plugin_manifest import PluginSource
 from .script_runner import BashCommandRunner
 from .scratch_repository import ScratchRepository, initialize_bare_repository
 from .workflow_definition import Workflow
@@ -442,6 +443,22 @@ class WorkflowFileKey(StrEnum):
     The commit the checkout action checks out.
     """
 
+    ENVIRONMENT = "env"
+    """
+    The variables a workflow sets for every job.
+    """
+
+
+class ReleaseWorkflowVariable(StrEnum):
+    """
+    The variables the release workflow sets for its steps.
+    """
+
+    RELEASE_BRANCH = "RELEASE_BRANCH"
+    """
+    The branch the release moves to its tag, which the marketplace serves the plugin from.
+    """
+
 
 def release_workflow_file() -> dict[Any, Any]:
     """
@@ -483,6 +500,24 @@ def test_the_release_checks_out_the_commit_the_tests_ran_on():
 
     assert checkout[WorkflowFileKey.WITH][WorkflowFileKey.REF] == (
         ReleaseGate.TESTED_COMMIT
+    )
+
+
+def release_branch() -> str:
+    """
+    :return: The branch the release workflow moves to each release.
+    """
+    return release_workflow_file()[WorkflowFileKey.ENVIRONMENT][
+        ReleaseWorkflowVariable.RELEASE_BRANCH
+    ]
+
+
+def test_the_marketplace_serves_the_plugin_from_the_release_branch():
+    source = PluginSource.of_this_marketplace()
+
+    assert source == PluginSource(
+        path=RepositoryLocation.PLUGIN.relative_to(RepositoryLocation.ROOT).as_posix(),
+        ref=release_branch(),
     )
 
 
@@ -562,6 +597,7 @@ def run_release_step(
             GitHubActionsVariable.STEP_SUMMARY: str(files.summary),
             GitHubActionsVariable.OUTPUT: str(files.output),
             GitHubActionsVariable.RUNNER_TEMPORARY_DIRECTORY: str(files.directory),
+            ReleaseWorkflowVariable.RELEASE_BRANCH: release_branch(),
         }
     )
 
@@ -629,12 +665,12 @@ def release_step_files(tmp_path) -> ReleaseStepFiles:
     return ReleaseStepFiles(directory)
 
 
-def test_the_release_step_tags_the_merge_commit_and_pushes_nothing_else(
+def test_the_release_step_tags_the_merge_commit_and_moves_the_release_branch_to_it(
     published_checkout, release_step_files
 ):
     """
-    The merge commit is the release, so a plugin synced from the merge already has it:
-    ``main`` is left where the merge put it.
+    The merge commit is the release: ``main`` is left where the merge put it, and the
+    branch the plugin is served from moves to the tag.
     """
     merge_commit = published_checkout.merge()
 
@@ -648,6 +684,10 @@ def test_the_release_step_tags_the_merge_commit_and_pushes_nothing_else(
     tag = version(ReleaseSampleVersion.NEXT_MINOR).tag
     assert published_checkout.remote_commit("refs/heads/main") == merge_commit
     assert published_checkout.remote_commit(f"refs/tags/{tag}") == merge_commit
+    assert (
+        published_checkout.remote_commit(f"refs/heads/{release_branch()}")
+        == merge_commit
+    )
     assert release_step_files.output.read_text() == f"tag={tag}\n"
 
 

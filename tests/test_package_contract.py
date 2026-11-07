@@ -158,8 +158,8 @@ def test_the_build_reads_its_version_from_the_release_tag():
 
 def test_the_plugin_manifest_names_no_version():
     """
-    A version in the manifest would need a commit after each merge, which a plugin synced
-    from the merge misses, and would keep marketplace installs on it until it changed.
+    A version in the manifest would need a commit after each release, and would keep
+    marketplace installs on it until it changed.
     """
     manifest = json.loads(RepositoryLocation.PLUGIN_MANIFEST.read_text())
 
