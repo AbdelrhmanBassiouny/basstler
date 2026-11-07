@@ -10,3 +10,5 @@
 - Two opt-in distributions sit beside the hub: basstler-graph (plan-graph; plan, git, github) and basstler-recommender (work-recommender's general ranker and priorities policy model). Neither is in DefaultPlaybook; a playbook adds them, and they reach the hub and plan items only through SitePanel and ItemAttribute components.
 - Freeze until uv-workspace lands: no new branch starts in plan, plan_site, github or stack; the open pull requests finish and land first, while package-map runs beside them. One that stalls in review is rebased across the moves rather than waited for.
 - Every module is placed in a distribution in basstler.package_map by the pull request that adds or moves it; the package-boundary check fails on a module no distribution claims.
+- Every value a user's workflow may differ in is a playbook setting whose default is today's behaviour; no owner, branch name, label or stage is hardcoded outside the settings and the default playbook.
+- A user customizes basstler by depending on its distributions and declaring a playbook, never by copying its code; whatever a user would have to copy is a missing extension point.

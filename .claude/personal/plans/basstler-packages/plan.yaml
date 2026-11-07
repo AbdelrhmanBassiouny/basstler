@@ -1,13 +1,11 @@
 schema_version: 1
 id: basstler-packages
 title: 'basstler packages: basstler-* distributions with one lockstep version and a playbook model'
-description: >-
-  Split basstler into acyclic basstler-* PyPI distributions (core, git, rules, github, reviews,
-  stack, plan, notes, hub, skills, mcp and the basstler meta-package) under the basstler.<part>
-  namespace, released together at one version with exact sibling pins. Then a dataclass playbook
-  model lets anyone compose their own commands, skills, hooks, MCP tools and rulesets on top of a
-  default one, and code_rules catches up with krrood's development tools. The reorganization goes
-  first; other plans' items land in their distribution.
+description: Split basstler into acyclic basstler-* PyPI distributions under the basstler.<part> namespace, released
+  together at one version with exact sibling pins. Then a dataclass playbook model, with settings, a write guard,
+  report sections and an item lifecycle set up through a guided init, lets anyone depend on basstler and compose
+  their own workflow on top of a default one, and code_rules catches up with krrood's development tools. The reorganization
+  goes first.
 default_repository: AbdelrhmanBassiouny/basstler
 tracking_issue: 151
 waves:
@@ -77,14 +75,14 @@ items:
 - id: pypi-release
   title: Publish every distribution to PyPI on each release with trusted publishing
   track: package-split
-  depends_on: [uv-workspace]
+  depends_on:
+  - uv-workspace
   status: not started
-  notes: >-
-    After release.yml tags, uv build --all-packages and pypa/gh-action-pypi-publish via OIDC (no
-    token); every package every release, TestPyPI first. The owner registers a pending trusted
-    publisher per name on PyPI and TestPyPI. Session start installs basstler==<plugin release> from
-    PyPI, editable from the workspace in a clone; pip install keeps working without uv
-    (windows-support). release:minor.
+  notes: After release.yml tags, uv build --all-packages and pypa/gh-action-pypi-publish via OIDC (no token); every
+    package every release, TestPyPI first. The owner registers a pending trusted publisher per name on PyPI and
+    TestPyPI. Session start installs basstler==<plugin release> from PyPI, editable from the workspace in a clone;
+    pip install keeps working without uv (windows-support). release:minor. When PyPI is unreachable, session start
+    installs from a pinned git source instead, and switches to a new runtime only once its hooks and commands load.
 - id: playbook-model
   title: A Playbook dataclass model that every distribution contributes commands, skills, hooks and rules
     to
@@ -116,8 +114,80 @@ items:
   - playbook-model
   - krrood-sync
   - pypi-release
+  - playbook-setup-wizard
+  - item-lifecycle
   status: not started
-  notes: 'A README per distribution: what it holds, depends on, and how to install it alone. The guide''s
-    worked example is the owner''s own playbook adding basstler-recommender (work-recommender) to DefaultPlaybook,
-    with its SitePanel and ItemAttribute components, then dropping a contribution and adding a ruleset
-    of code or plan rules.'
+  notes: 'A README per distribution: what it holds, depends on, and how to install it alone. The guide''s worked
+    example is the owner''s own playbook adding basstler-recommender (work-recommender) to DefaultPlaybook, with
+    its SitePanel and ItemAttribute components, then dropping a contribution and adding a ruleset of code or plan
+    rules.'
+
+- id: extension-points
+  title: Open vocabularies, one interface per GitHub capability, and shipped test doubles
+  track: playbook
+  depends_on:
+  - uv-workspace
+  status: not started
+  notes: Labels (with description and colour), discussion categories and item stages become base classes a user's
+    own enum extends. basstler.github gets one small abstract interface per capability (read pull requests, write
+    labels, comment, read stacks, read workflows) that GitHubRestClient implements. basstler.github.testing ships
+    a recording and replaying client plus fixtures. A general Actions relay for API calls a cloud proxy refuses,
+    generalizing the upstream-reviews route. release:minor.
+
+- id: playbook-settings
+  title: A typed settings model for every value a workflow may differ in
+  track: playbook
+  depends_on:
+  - playbook-model
+  status: not started
+  notes: Owners whose repositories may be written to, notes branch and its place (per repository or central), merge
+    or rebase, force-push allowed or never, GitHub-native stacks or basstler restacking, commit attribution policy,
+    protected branches, command name. Defaults equal today's behaviour; no owner, branch name or label is hardcoded
+    outside it. release:minor.
+
+- id: write-guard
+  title: 'basstler-guard: hooks generated from the playbook that enforce its write rules'
+  track: playbook
+  depends_on:
+  - playbook-settings
+  - extension-points
+  status: not started
+  notes: 'New opt-in distribution basstler-guard (git, github), in DefaultPlaybook. Every CommandGroup command declares
+    who may run it: the session alone, the session when told, or only the person. Generates a PreToolUse guard denying
+    direct git and GitHub writes (falling back to the standard library when the runtime is broken), a pre-push hook,
+    and auto-approval of the commands a session may run alone. release:minor.'
+
+- id: session-report-sections
+  title: Session start as a list of report sections a playbook composes
+  track: playbook
+  depends_on:
+  - playbook-model
+  status: not started
+  notes: 'SessionReportSection component kind: each section reports that something holds (CI red, conflict, threads
+    waiting, stale base), never the detail, and fails alone and visibly. Today''s session-start messages become
+    the default sections. release:minor.'
+
+- id: item-lifecycle
+  title: Work-item stages, transitions and who may make them
+  track: playbook
+  depends_on:
+  - playbook-model
+  - basstler-v3-plans/plan-store-issues
+  status: not started
+  notes: 'An ItemLifecycle model: stages, allowed transitions and whether a session or only the person makes each,
+    with labels from extension-points. Default lifecycle equals today''s item statuses; an issue-backed one reads
+    stages from labels through the PlanStore. Item priority and a proof (a failing test the code runs itself) as
+    ItemAttribute components. release:minor.'
+
+- id: playbook-setup-wizard
+  title: 'basstler init: guided setup with recommended choices that writes the user''s playbook'
+  track: playbook
+  depends_on:
+  - playbook-settings
+  - write-guard
+  - session-report-sections
+  status: not started
+  notes: 'A few questions, the recommended choice first, each answer becoming a playbook setting; writes the repository''s
+    basstler_playbook and verifies every step. Never changes repository settings: detects issues, Discussions, Actions
+    or branch auto-delete being off and gives the link to turn them on. Builds on basstler-setup-ux''s checklist.
+    release:minor.'
