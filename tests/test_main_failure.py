@@ -13,20 +13,19 @@ import pytest
 import yaml
 
 from basstler.github.client import GitHubResponse, HttpMethod
-from basstler.github_labels import GitHubLabel
-from basstler.main_failure import (
-    JOBS_PER_PAGE,
+from basstler.github.issue import (
     ClosingReason,
-    FinishedRun,
-    IssueField,
+    Issue,
     IssueState,
-    JobField,
-    MainFailureIssue,
-    ReportedIssue,
-    RunConclusion,
-    RunOutcome,
+    IssueStateChange,
+    NewIssue,
+    NewIssueComment,
 )
+from basstler.github.workflow_run import RunJobPage, WorkflowRun
+from basstler.github_labels import GitHubLabel
+from basstler.main_failure import FinishedRun, MainFailureTracker, Verdict
 from basstler.repository import Repository
+from basstler.upstream_reviews.vocabulary import CheckOutcome
 
 from .constants.paths import DatasetLocation, RepositoryLocation
 from .github.recorded_client import RecordedGitHubClient, SentWrite
@@ -36,7 +35,7 @@ from .github.recorded_client import RecordedGitHubClient, SentWrite
 REPOSITORY = Repository(owner="owner", name="project")
 RUN_ID = 42
 COMMIT = "0123456789abcdef0123456789abcdef01234567"
-RUN_JOBS_PATH = f"{REPOSITORY.workflow_run_path(RUN_ID)}/jobs?per_page={JOBS_PER_PAGE}"
+RUN_JOBS_PATH = RunJobPage.path(REPOSITORY, RUN_ID)
 
 
 def recorded(location: DatasetLocation) -> Any:
@@ -70,7 +69,7 @@ def client_listing(*issues: DatasetLocation) -> IssueOpeningClient:
     """
     return IssueOpeningClient(
         responses={
-            MainFailureIssue(REPOSITORY).open_issues_path: [
+            MainFailureTracker(REPOSITORY).open_issues_path: [
                 recorded(issue) for issue in issues
             ],
             RUN_JOBS_PATH: recorded(DatasetLocation.MAIN_FAILURE_RUN_JOBS),
@@ -78,32 +77,34 @@ def client_listing(*issues: DatasetLocation) -> IssueOpeningClient:
     )
 
 
-def finished_run(conclusion: RunConclusion) -> FinishedRun:
+def finished_run(outcome: CheckOutcome) -> FinishedRun:
     """
-    :param conclusion: How the run ended.
+    :param outcome: How the run ended.
     :return: The run on :data:`REPOSITORY` at :data:`COMMIT`, its jobs read from
         :func:`client_listing`.
     """
-    return FinishedRun.read(REPOSITORY, RUN_ID, COMMIT, conclusion, client_listing())
+    return FinishedRun.read(
+        REPOSITORY, WorkflowRun(RUN_ID, COMMIT, outcome), client_listing()
+    )
 
 
-def open_issue() -> ReportedIssue:
+def open_issue() -> Issue:
     """
     :return: The issue the recorded listing holds.
     """
-    return ReportedIssue.from_json(recorded(DatasetLocation.MAIN_FAILURE_OPEN_ISSUE))
+    return Issue.from_json(recorded(DatasetLocation.MAIN_FAILURE_OPEN_ISSUE))
 
 
-def comment_on(issue: ReportedIssue, text: str) -> SentWrite:
+def comment_on(issue: Issue, run: FinishedRun) -> SentWrite:
     """
     :param issue: The issue commented on.
-    :param text: The comment's Markdown.
+    :param run: The run the comment describes.
     :return: The write posting the comment.
     """
     return SentWrite(
         HttpMethod.POST,
-        f"{REPOSITORY.issue_path(issue.number)}/comments",
-        {IssueField.BODY: text},
+        REPOSITORY.issue_comments_path(issue.number),
+        NewIssueComment(run.describe()).payload,
     )
 
 
@@ -111,30 +112,33 @@ def comment_on(issue: ReportedIssue, text: str) -> SentWrite:
 
 
 @pytest.mark.parametrize(
-    ("conclusion", "outcome"),
+    ("outcome", "verdict"),
     [
-        (RunConclusion.FAILURE, RunOutcome.FAILED),
-        (RunConclusion.TIMED_OUT, RunOutcome.FAILED),
-        (RunConclusion.SUCCESS, RunOutcome.PASSED),
-        (RunConclusion.CANCELLED, RunOutcome.UNDECIDED),
-        (RunConclusion.SKIPPED, RunOutcome.UNDECIDED),
+        (CheckOutcome.FAILURE, Verdict.FAILING),
+        (CheckOutcome.TIMED_OUT, Verdict.FAILING),
+        (CheckOutcome.STARTUP_FAILURE, Verdict.FAILING),
+        (CheckOutcome.SUCCESS, Verdict.PASSING),
+        (CheckOutcome.CANCELLED, Verdict.UNDECIDED),
+        (CheckOutcome.SKIPPED, Verdict.UNDECIDED),
     ],
 )
-def test_a_conclusion_decides_what_the_run_says_about_main(conclusion, outcome):
-    assert conclusion.outcome is outcome
+def test_an_outcome_decides_what_the_run_says_about_main(outcome, verdict):
+    assert Verdict.of(outcome) is verdict
 
 
 def test_a_failed_run_names_the_jobs_that_failed_or_timed_out():
-    jobs = recorded(DatasetLocation.MAIN_FAILURE_RUN_JOBS)[JobField.JOBS]
+    jobs = RunJobPage.from_json(recorded(DatasetLocation.MAIN_FAILURE_RUN_JOBS)).jobs
 
-    run = finished_run(RunConclusion.FAILURE)
+    run = finished_run(CheckOutcome.FAILURE)
 
-    assert run.failed_jobs == (jobs[1][JobField.NAME], jobs[2][JobField.NAME])
+    assert run.failed_jobs == (jobs[1].name, jobs[2].name)
 
 
 def test_a_passed_run_reads_no_jobs():
     run = FinishedRun.read(
-        REPOSITORY, RUN_ID, COMMIT, RunConclusion.SUCCESS, RecordedGitHubClient()
+        REPOSITORY,
+        WorkflowRun(RUN_ID, COMMIT, CheckOutcome.SUCCESS),
+        RecordedGitHubClient(),
     )
 
     assert run.failed_jobs == ()
@@ -145,68 +149,63 @@ def test_a_passed_run_reads_no_jobs():
 
 def test_the_first_failure_opens_the_issue():
     client = client_listing()
-    run = finished_run(RunConclusion.FAILURE)
-    issue = MainFailureIssue(REPOSITORY)
+    run = finished_run(CheckOutcome.FAILURE)
+    issue = MainFailureTracker(REPOSITORY)
 
     recorded_issue = issue.record(run, client)
 
-    assert recorded_issue == ReportedIssue.from_json(
+    assert recorded_issue == Issue.from_json(
         recorded(DatasetLocation.MAIN_FAILURE_OPENED_ISSUE)
     )
     assert client.writes == [
         SentWrite(
             HttpMethod.POST,
             REPOSITORY.issues_path,
-            {
-                IssueField.TITLE: issue.title,
-                IssueField.BODY: run.describe(),
-                IssueField.LABELS: [GitHubLabel.BUG, GitHubLabel.MAIN_RED],
-            },
+            NewIssue(
+                issue.title, run.describe(), [GitHubLabel.BUG, GitHubLabel.MAIN_RED]
+            ).payload,
         )
     ]
 
 
 def test_a_later_failure_comments_on_the_open_issue():
     client = client_listing(DatasetLocation.MAIN_FAILURE_OPEN_ISSUE)
-    run = finished_run(RunConclusion.FAILURE)
+    run = finished_run(CheckOutcome.FAILURE)
 
-    recorded_issue = MainFailureIssue(REPOSITORY).record(run, client)
+    recorded_issue = MainFailureTracker(REPOSITORY).record(run, client)
 
     assert recorded_issue == open_issue()
-    assert client.writes == [comment_on(open_issue(), run.describe())]
+    assert client.writes == [comment_on(open_issue(), run)]
 
 
 def test_a_pass_closes_the_open_issue():
     client = client_listing(DatasetLocation.MAIN_FAILURE_OPEN_ISSUE)
 
-    MainFailureIssue(REPOSITORY).record(finished_run(RunConclusion.SUCCESS), client)
+    MainFailureTracker(REPOSITORY).record(finished_run(CheckOutcome.SUCCESS), client)
 
     assert client.writes[-1] == SentWrite(
         HttpMethod.PATCH,
         REPOSITORY.issue_path(open_issue().number),
-        {
-            IssueField.STATE: IssueState.CLOSED,
-            IssueField.STATE_REASON: ClosingReason.COMPLETED,
-        },
+        IssueStateChange(IssueState.CLOSED, ClosingReason.COMPLETED).payload,
     )
 
 
 def test_a_pass_with_no_open_issue_writes_nothing():
     client = client_listing()
 
-    recorded_issue = MainFailureIssue(REPOSITORY).record(
-        finished_run(RunConclusion.SUCCESS), client
+    recorded_issue = MainFailureTracker(REPOSITORY).record(
+        finished_run(CheckOutcome.SUCCESS), client
     )
 
     assert recorded_issue is None
     assert client.writes == []
 
 
-@pytest.mark.parametrize("conclusion", [RunConclusion.CANCELLED, RunConclusion.SKIPPED])
+@pytest.mark.parametrize("conclusion", [CheckOutcome.CANCELLED, CheckOutcome.SKIPPED])
 def test_an_undecided_run_leaves_the_open_issue_alone(conclusion):
     client = client_listing(DatasetLocation.MAIN_FAILURE_OPEN_ISSUE)
 
-    recorded_issue = MainFailureIssue(REPOSITORY).record(
+    recorded_issue = MainFailureTracker(REPOSITORY).record(
         finished_run(conclusion), client
     )
 
@@ -220,11 +219,11 @@ def test_an_undecided_run_leaves_the_open_issue_alone(conclusion):
 def test_the_open_issue_is_read_from_the_listing():
     client = client_listing(DatasetLocation.MAIN_FAILURE_OPEN_ISSUE)
 
-    assert MainFailureIssue(REPOSITORY).open_issue(client) == open_issue()
+    assert MainFailureTracker(REPOSITORY).open_issue(client) == open_issue()
 
 
 def test_no_open_issue_while_the_tests_pass():
-    assert MainFailureIssue(REPOSITORY).open_issue(client_listing()) is None
+    assert MainFailureTracker(REPOSITORY).open_issue(client_listing()) is None
 
 
 # %% the workflow recording each run

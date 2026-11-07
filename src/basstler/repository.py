@@ -198,6 +198,13 @@ class Repository:
         """
         return f"{self.issues_path}/{number}"
 
+    def issue_comments_path(self, number: int) -> str:
+        """
+        :param number: The issue's number.
+        :return: The REST path that lists and posts that issue's comments.
+        """
+        return f"{self.issue_path(number)}/comments"
+
     @property
     def pull_requests_path(self) -> str:
         """

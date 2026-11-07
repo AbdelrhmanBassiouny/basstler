@@ -10,9 +10,7 @@ Usage:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum, StrEnum
-from typing import Any
-from urllib.parse import urlencode
+from enum import StrEnum
 
 from cyclopts import App
 
@@ -22,157 +20,42 @@ from basstler.github.client import (
     GitHubRestClient,
     HttpMethod,
 )
+from basstler.github.issue import (
+    ClosingReason,
+    Issue,
+    IssueListing,
+    IssueState,
+    IssueStateChange,
+    NewIssue,
+    NewIssueComment,
+)
+from basstler.github.workflow_run import RunJobPage, WorkflowRun
 from basstler.github_labels import GitHubLabel
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
+from basstler.upstream_reviews.vocabulary import CheckOutcome
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
 """
 
-# %% what the issues API reads and writes
+# %% what one run of the tests says about the default branch
 
 
-class IssueField(StrEnum):
+class Verdict(StrEnum):
     """
-    The fields of an issue this module writes or reads.
-    """
-
-    NUMBER = "number"
-    """
-    The issue's number in its repository.
+    What a finished run of the tests says about the default branch.
     """
 
-    HTML_URL = "html_url"
+    FAILING = "failing"
     """
-    The issue's page on GitHub.
-    """
-
-    TITLE = "title"
-    """
-    The issue's title.
+    The run failed, so the tests on the default branch fail.
     """
 
-    BODY = "body"
+    PASSING = "passing"
     """
-    The issue's description, or a comment's text.
-    """
-
-    LABELS = "labels"
-    """
-    The names of the labels it carries.
-    """
-
-    STATE = "state"
-    """
-    Whether it is open or closed.
-    """
-
-    STATE_REASON = "state_reason"
-    """
-    Why it was closed.
-    """
-
-
-class IssueListingParameter(StrEnum):
-    """
-    The query parameters of the issue listing this module sends.
-    """
-
-    LABELS = "labels"
-    STATE = "state"
-    PER_PAGE = "per_page"
-
-
-class IssueState(StrEnum):
-    """
-    The states an issue is listed or set in.
-    """
-
-    OPEN = "open"
-    CLOSED = "closed"
-
-
-class ClosingReason(StrEnum):
-    """
-    Why an issue is closed.
-    """
-
-    COMPLETED = "completed"
-    """
-    The tests pass again.
-    """
-
-
-@dataclass(frozen=True)
-class ReportedIssue:
-    """
-    The issue reporting the failing tests, as GitHub returned it.
-    """
-
-    number: int
-    """
-    Its number in the repository.
-    """
-
-    url: str
-    """
-    Its page on GitHub.
-    """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> ReportedIssue:
-        """
-        :param data: An issue as the issues API returns it.
-        :return: The parsed issue.
-        """
-        return cls(data[IssueField.NUMBER], data[IssueField.HTML_URL])
-
-
-# %% what one run of the tests concluded
-
-
-class RunConclusion(StrEnum):
-    """
-    The conclusions Actions reports for a finished run or job.
-    """
-
-    SUCCESS = "success"
-    FAILURE = "failure"
-    TIMED_OUT = "timed_out"
-    STARTUP_FAILURE = "startup_failure"
-    CANCELLED = "cancelled"
-    SKIPPED = "skipped"
-    NEUTRAL = "neutral"
-    ACTION_REQUIRED = "action_required"
-    STALE = "stale"
-
-    @property
-    def outcome(self) -> RunOutcome:
-        """
-        What a run ending so says about the default branch.
-        """
-        if self in {self.FAILURE, self.TIMED_OUT, self.STARTUP_FAILURE}:
-            return RunOutcome.FAILED
-        if self is self.SUCCESS:
-            return RunOutcome.PASSED
-        return RunOutcome.UNDECIDED
-
-
-class RunOutcome(Enum):
-    """
-    What a run of the tests on the default branch says about it.
-    """
-
-    FAILED = "failed"
-    """
-    The run failed.
-    """
-
-    PASSED = "passed"
-    """
-    The run succeeded.
+    The run succeeded, so the tests on the default branch pass.
     """
 
     UNDECIDED = "undecided"
@@ -180,27 +63,27 @@ class RunOutcome(Enum):
     The run was cancelled, skipped or otherwise proves nothing.
     """
 
-
-class JobField(StrEnum):
-    """
-    The fields of a run's job listing this module reads.
-    """
-
-    JOBS = "jobs"
-    NAME = "name"
-    CONCLUSION = "conclusion"
-
-
-JOBS_PER_PAGE = 100
-"""
-The most jobs GitHub returns in one page.
-"""
+    @classmethod
+    def of(cls, outcome: CheckOutcome) -> Verdict:
+        """
+        :param outcome: How a run or one of its jobs ended.
+        :return: What that says about the default branch.
+        """
+        if outcome in {
+            CheckOutcome.FAILURE,
+            CheckOutcome.TIMED_OUT,
+            CheckOutcome.STARTUP_FAILURE,
+        }:
+            return cls.FAILING
+        if outcome is CheckOutcome.SUCCESS:
+            return cls.PASSING
+        return cls.UNDECIDED
 
 
 @dataclass(frozen=True)
 class FinishedRun:
     """
-    One finished run of the tests on the default branch.
+    One finished run of the tests on the default branch, with the jobs that failed.
     """
 
     repository: Repository
@@ -208,19 +91,9 @@ class FinishedRun:
     The repository the run tested.
     """
 
-    run_id: int
+    workflow_run: WorkflowRun
     """
-    The Actions run's own number.
-    """
-
-    commit: str
-    """
-    The commit the run tested.
-    """
-
-    conclusion: RunConclusion
-    """
-    How the run ended.
+    The run.
     """
 
     failed_jobs: tuple[str, ...] = ()
@@ -230,56 +103,57 @@ class FinishedRun:
 
     @classmethod
     def read(
-        cls,
-        repository: Repository,
-        run_id: int,
-        commit: str,
-        conclusion: RunConclusion,
-        github: GitHubReader,
+        cls, repository: Repository, workflow_run: WorkflowRun, github: GitHubReader
     ) -> FinishedRun:
         """
         :param repository: The repository the run tested.
-        :param run_id: The Actions run's own number.
-        :param commit: The commit the run tested.
-        :param conclusion: How the run ended.
+        :param workflow_run: The finished run.
         :param github: What reads a failed run's jobs.
         :return: The run, with its failed jobs when it failed.
         """
-        if conclusion.outcome is not RunOutcome.FAILED:
-            return cls(repository, run_id, commit, conclusion)
-        listed = github.get(
-            f"{repository.workflow_run_path(run_id)}/jobs?per_page={JOBS_PER_PAGE}"
+        if Verdict.of(workflow_run.outcome) is not Verdict.FAILING:
+            return cls(repository, workflow_run)
+        page = RunJobPage.from_json(
+            github.get(RunJobPage.path(repository, workflow_run.identifier))
         )
         failed = tuple(
-            job[JobField.NAME]
-            for job in listed[JobField.JOBS]
-            if RunConclusion(job[JobField.CONCLUSION]).outcome is RunOutcome.FAILED
+            job.name for job in page.jobs if Verdict.of(job.outcome) is Verdict.FAILING
         )
-        return cls(repository, run_id, commit, conclusion, failed)
+        return cls(repository, workflow_run, failed)
+
+    @property
+    def verdict(self) -> Verdict:
+        """
+        What the run says about the default branch.
+        """
+        return Verdict.of(self.workflow_run.outcome)
 
     @property
     def url(self) -> str:
         """
         The run's page on GitHub.
         """
-        return self.repository.workflow_run_url(self.run_id)
+        return self.repository.workflow_run_url(self.workflow_run.identifier)
 
     def describe(self) -> str:
         """
-        :return: The run, its commit and its failed jobs, as an issue's Markdown.
+        :return: The run, its commit and, when it failed, its failed jobs, as Markdown.
         """
+        run = f"[This run]({self.url}) on {self.workflow_run.commit}"
+        if self.verdict is not Verdict.FAILING:
+            return f"{run} passed."
         jobs = ", ".join(f"`{job}`" for job in self.failed_jobs)
-        return f"[This run]({self.url}) on {self.commit} failed in {jobs}."
+        return f"{run} failed in {jobs}."
 
 
 # %% the issue
 
 
 @dataclass(frozen=True)
-class MainFailureIssue:
+class MainFailureTracker:
     """
-    Opens, updates and closes the one issue reporting that the default branch's tests
-    fail.
+    Keeps exactly one issue open, labelled :attr:`GitHubLabel.MAIN_RED`, while the
+    default branch's tests fail.
     """
 
     repository: Repository
@@ -297,16 +171,10 @@ class MainFailureIssue:
         """
         The listing of the open issue, if there is one.
         """
-        query = urlencode(
-            {
-                IssueListingParameter.LABELS: GitHubLabel.MAIN_RED,
-                IssueListingParameter.STATE: IssueState.OPEN,
-                IssueListingParameter.PER_PAGE: 1,
-            }
-        )
-        return f"{self.repository.issues_path}?{query}"
+        listing = IssueListing(GitHubLabel.MAIN_RED, IssueState.OPEN, per_page=1)
+        return f"{self.repository.issues_path}?{listing.query}"
 
-    def open_issue(self, github: GitHubReader) -> ReportedIssue | None:
+    def open_issue(self, github: GitHubReader) -> Issue | None:
         """
         :param github: What reads the issues.
         :return: The open issue, or ``None`` while the tests pass.
@@ -314,19 +182,19 @@ class MainFailureIssue:
         listed = github.get(self.open_issues_path)
         if not listed:
             return None
-        return ReportedIssue.from_json(listed[0])
+        return Issue.from_json(listed[0])
 
-    def record(self, run: FinishedRun, github: GitHubClient) -> ReportedIssue | None:
+    def record(self, run: FinishedRun, github: GitHubClient) -> Issue | None:
         """
         :param run: The run of the tests that just finished.
         :param github: What reads and writes the issues.
         :return: The issue the run opened, commented on or closed, or ``None`` when it
             changed nothing.
         """
-        if run.conclusion.outcome is RunOutcome.UNDECIDED:
+        if run.verdict is Verdict.UNDECIDED:
             return None
         issue = self.open_issue(github)
-        if run.conclusion.outcome is RunOutcome.FAILED:
+        if run.verdict is Verdict.FAILING:
             return self.report_failure(run, issue, github)
         if issue is None:
             return None
@@ -334,56 +202,55 @@ class MainFailureIssue:
         return issue
 
     def report_failure(
-        self, run: FinishedRun, issue: ReportedIssue | None, github: GitHubClient
-    ) -> ReportedIssue:
+        self, run: FinishedRun, issue: Issue | None, github: GitHubClient
+    ) -> Issue:
         """
+        Comment on the open issue, or open one when none is.
+
         :param run: The failed run.
         :param issue: The issue already open, if there is one.
         :param github: What writes the issues.
         :return: The issue now reporting the failure.
         """
         if issue is not None:
-            self.comment(issue, run.describe(), github)
+            self.comment(issue, run, github)
             return issue
         opened = github.send(
             HttpMethod.POST,
             self.repository.issues_path,
-            {
-                IssueField.TITLE: self.title,
-                IssueField.BODY: run.describe(),
-                IssueField.LABELS: [GitHubLabel.BUG, GitHubLabel.MAIN_RED],
-            },
+            NewIssue(
+                self.title, run.describe(), [GitHubLabel.BUG, GitHubLabel.MAIN_RED]
+            ).payload,
         )
-        return ReportedIssue.from_json(opened)
+        return Issue.from_json(opened)
 
-    def report_pass(
-        self, run: FinishedRun, issue: ReportedIssue, github: GitHubClient
-    ) -> None:
+    def report_pass(self, run: FinishedRun, issue: Issue, github: GitHubClient) -> None:
         """
+        Comment the passing run on the open issue and close it as completed.
+
         :param run: The run that passed.
-        :param issue: The open issue, which it closes.
+        :param issue: The open issue.
         :param github: What writes the issues.
         """
-        self.comment(issue, f"[This run]({run.url}) on {run.commit} passed.", github)
+        self.comment(issue, run, github)
         github.send(
             HttpMethod.PATCH,
             self.repository.issue_path(issue.number),
-            {
-                IssueField.STATE: IssueState.CLOSED,
-                IssueField.STATE_REASON: ClosingReason.COMPLETED,
-            },
+            IssueStateChange(IssueState.CLOSED, ClosingReason.COMPLETED).payload,
         )
 
-    def comment(self, issue: ReportedIssue, text: str, github: GitHubClient) -> None:
+    def comment(self, issue: Issue, run: FinishedRun, github: GitHubClient) -> None:
         """
+        Post the run's description on the issue.
+
         :param issue: The issue to comment on.
-        :param text: The comment's Markdown.
+        :param run: The run the comment describes.
         :param github: What writes the comment.
         """
         github.send(
             HttpMethod.POST,
-            f"{self.repository.issue_path(issue.number)}/comments",
-            {IssueField.BODY: text},
+            self.repository.issue_comments_path(issue.number),
+            NewIssueComment(run.describe()).payload,
         )
 
 
@@ -396,19 +263,20 @@ The commands recording a run and showing the open issue.
 
 
 @app.command
-def record(repository: str, run: int, commit: str, conclusion: RunConclusion) -> None:
+def record(repository: str, run: int, commit: str, conclusion: str) -> None:
     """
     Open, comment on or close the issue after a run of the tests on the default branch.
 
     :param repository: The tested repository, as ``owner/name``.
     :param run: The Actions run's own number.
     :param commit: The commit the run tested.
-    :param conclusion: How the run ended.
+    :param conclusion: How the run ended, as Actions spells it.
     """
     tested = Repository.parse(repository)
     github = GitHubRestClient()
-    issue = MainFailureIssue(tested).record(
-        FinishedRun.read(tested, run, commit, conclusion, github), github
+    workflow_run = WorkflowRun(run, commit, CheckOutcome.from_conclusion(conclusion))
+    issue = MainFailureTracker(tested).record(
+        FinishedRun.read(tested, workflow_run, github), github
     )
     if issue is not None:
         logger.info(issue.url)
@@ -421,7 +289,7 @@ def show(repository: str) -> None:
 
     :param repository: The repository, as ``owner/name``.
     """
-    issue = MainFailureIssue(Repository.parse(repository)).open_issue(
+    issue = MainFailureTracker(Repository.parse(repository)).open_issue(
         GitHubRestClient()
     )
     if issue is not None:
