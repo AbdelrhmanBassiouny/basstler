@@ -1,0 +1,29 @@
+# Written by basstler's /setup-personal-notes (python -m basstler.plan_site.publication);
+# re-run that to update it rather than editing it here.
+name: Plan site merge dispatch
+
+# Every merged pull request, a fork's included, starts the plan site's build in
+# AbdelrhmanBassiouny/stack-board, so the site shows the merge without waiting for the next push to
+# the notes branch. It runs on pull_request_target to read the token for a fork's pull
+# request too; it checks out nothing and reads nothing the pull request controls.
+on:
+  pull_request_target:
+    types: [closed]
+
+permissions: {}
+
+concurrency:
+  group: plan-site-merge
+  cancel-in-progress: true
+
+jobs:
+  dispatch:
+    name: Start the plan site build
+    if: github.repository == 'AbdelrhmanBassiouny/basstler' && github.event.pull_request.merged
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Start the build
+        env:
+          GH_TOKEN: ${{ secrets.PLAN_SITE_TOKEN }}
+        run: gh workflow run plan-site.yml --repo AbdelrhmanBassiouny/stack-board
