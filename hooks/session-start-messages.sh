@@ -224,7 +224,7 @@ actions_usage_line_flagged() {
 
 # main_tests_line_not_checked: the repository's issues could not be read.
 main_tests_line_not_checked() {
-  printf 'not checked - could not read the repository'"'"'s issues'
+  printf "not checked - could not read the repository's issues"
 }
 
 # main_tests_line_passing: no issue reports the default branch's tests failing.
