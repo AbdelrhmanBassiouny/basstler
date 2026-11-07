@@ -162,6 +162,7 @@
 - Every Python module lives in the `basstler` package under `src/`; the plugin under `plugin/` carries only its `SKILL.md` files, manifest and bash entry points, which call the installed package with `python -m basstler.<module>`
 - Name every file and directory once, in `basstler.locations`; every environment variable once, in `basstler.environment`
 - The package depends only on the libraries `pyproject.toml` lists. Code that comes from `krrood` is copied, never imported; until krrood's light core is released, a copied module says so and cites krrood with `` :cite:`krrood` ``, whose entry is in `docs/references.bib`
+- A package imports only the basstler packages its pyproject lists: every module belongs to a distribution declared in `basstler.package_map`, and imports only from that distribution and the ones it lists (checked by `basstler code-rules check`)
 
 ## Agent instructions
 <!-- from AgentInstructionsRules in basstler/code_rules/rules/project.py -->

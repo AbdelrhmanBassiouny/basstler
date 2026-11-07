@@ -1,0 +1,40 @@
+# Imports across a distribution boundary that basstler.package_map does not list yet,
+# by importing module. Remove an entry when the code it names moves; never add one.
+environment:
+  - github.credential
+exceptions:
+  - repository
+github.exceptions:
+  - maintenance.exceptions
+maintenance.git_commands:
+  - maintenance.constants
+  - maintenance.exceptions
+  - stack.model
+  - stack.settings
+maintenance.github:
+  - maintenance.board
+maintenance.remote_branch:
+  - repository
+plan.check_dependency_readiness:
+  - plan_site.plan
+plan.dependencies:
+  - plan_site.cards
+  - plan_site.plan
+plan.item_bootstrap.opening:
+  - maintenance.board
+plan.item_brief:
+  - plan_site.plan
+pull_request_source:
+  - maintenance.board
+  - plan.dependencies
+pull_request_state:
+  - maintenance.board
+stack.commit_move:
+  - stack.checkout
+  - stack.model
+upstream_reviews.__main__:
+  - stack.configuration
+upstream_reviews.action.run:
+  - maintenance.upstream_action
+upstream_reviews.pull_request_models:
+  - upstream_reviews.exceptions
