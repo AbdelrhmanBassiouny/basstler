@@ -185,6 +185,27 @@ class Repository:
         return f"repos/{self.full_name}"
 
     @property
+    def issues_path(self) -> str:
+        """
+        The REST path of the repository's issues, which lists and opens them.
+        """
+        return f"{self.api_path}/issues"
+
+    def issue_path(self, number: int) -> str:
+        """
+        :param number: The issue's number.
+        :return: The REST path of that issue.
+        """
+        return f"{self.issues_path}/{number}"
+
+    def issue_comments_path(self, number: int) -> str:
+        """
+        :param number: The issue's number.
+        :return: The REST path that lists and posts that issue's comments.
+        """
+        return f"{self.issue_path(number)}/comments"
+
+    @property
     def pull_requests_path(self) -> str:
         """
         The REST path of the repository's pull requests, which lists and opens them.
@@ -197,6 +218,13 @@ class Repository:
         :return: The REST path of that pull request.
         """
         return f"{self.pull_requests_path}/{number}"
+
+    def workflow_run_path(self, run: int) -> str:
+        """
+        :param run: The Actions workflow run's own number.
+        :return: The REST path of that run.
+        """
+        return f"{self.api_path}/actions/runs/{run}"
 
     def job_log_path(self, job: int) -> str:
         """

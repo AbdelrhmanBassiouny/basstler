@@ -1,0 +1,48 @@
+name: Main's failure issue
+
+# One issue stays open while main's tests fail: the first failed push opens it, later
+# ones comment on it, and the next push whose tests pass closes it.
+
+on:
+  workflow_run:
+    workflows: [Tests]
+    types: [completed]
+    branches: [main]
+
+concurrency:
+  group: main-failure
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+
+jobs:
+  record:
+    name: Open, comment on or close the issue
+    if: github.event.workflow_run.event == 'push' && !github.event.repository.fork
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: basstler
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install basstler
+        run: pip install --editable basstler
+
+      - name: Record the run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python -m basstler.main_failure record
+          --repository "${{ github.repository }}"
+          --run "${{ github.event.workflow_run.id }}"
+          --commit "${{ github.event.workflow_run.head_sha }}"
+          --conclusion "${{ github.event.workflow_run.conclusion }}"

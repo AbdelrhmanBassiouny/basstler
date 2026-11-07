@@ -8,10 +8,10 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Any
 
 from basstler.repository import Repository
+from basstler.github.workflow_run import WorkflowRun
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.vocabulary import (
     ActionBranch,
@@ -33,62 +33,9 @@ from basstler.upstream_reviews.exceptions import (
     ActionRunFailed,
     ActionRunNotStarted,
 )
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-    JSONModel,
-)
+from basstler.upstream_reviews.vocabulary import JSONModel
 
 # %% the session's side
-
-
-class WorkflowRunJSONKey(StrEnum):
-    """
-    Every field read out of the fork's workflow-run listing.
-    """
-
-    WORKFLOW_RUNS = "workflow_runs"
-    IDENTIFIER = "id"
-    HEAD_SHA = "head_sha"
-    CONCLUSION = "conclusion"
-
-
-@dataclass(frozen=True)
-class WorkflowRun(JSONModel):
-    """
-    One run of the fork's workflow.
-    """
-
-    identifier: int
-    """
-    The run's own number, which its page is addressed by.
-    """
-
-    commit: str
-    """
-    The commit it ran on - the request's, for the run answering it.
-    """
-
-    outcome: CheckOutcome
-    """
-    How it ended, :attr:`CheckOutcome.PENDING` while it runs.
-    """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> WorkflowRun:
-        """
-        :param data: One listed run.
-        :return: The parsed run.
-        """
-        return cls(
-            data[WorkflowRunJSONKey.IDENTIFIER],
-            data[WorkflowRunJSONKey.HEAD_SHA],
-            CheckOutcome.from_conclusion(data[WorkflowRunJSONKey.CONCLUSION]),
-        )
-
-    @property
-    def failed(self) -> bool:
-        """:return: Whether it ended without succeeding."""
-        return self.outcome not in {CheckOutcome.SUCCESS, CheckOutcome.PENDING}
 
 
 @dataclass(frozen=True)
@@ -108,12 +55,7 @@ class WorkflowRunPage(JSONModel):
         :param data: The listing.
         :return: The parsed page.
         """
-        return cls(
-            [
-                WorkflowRun.from_json(run)
-                for run in data[WorkflowRunJSONKey.WORKFLOW_RUNS]
-            ]
-        )
+        return cls([WorkflowRun.from_json(run) for run in data["workflow_runs"]])
 
     @staticmethod
     def path(fork: Repository) -> str:

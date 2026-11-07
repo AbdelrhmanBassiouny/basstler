@@ -1,0 +1,7 @@
+{
+  "number": 161,
+  "html_url": "https://github.com/owner/project/issues/161",
+  "title": "The tests on main are failing",
+  "state": "open",
+  "labels": [{"name": "bug"}, {"name": "main-red"}]
+}

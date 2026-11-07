@@ -1833,6 +1833,20 @@ def test_reports_usage_as_not_checked_where_the_repository_is_unknown(
     )
 
 
+# %% the main tests line
+
+
+def test_reports_main_s_tests_as_not_checked_where_the_repository_is_unknown(
+    session_start_repository: ScratchRepository,
+):
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.MAIN_TESTS) == summary_message(
+        SummaryMessage.MAIN_TESTS_NOT_CHECKED
+    )
+
+
 # %% every message renders
 
 
