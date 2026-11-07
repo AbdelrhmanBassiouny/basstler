@@ -4,12 +4,13 @@ The workflow runs a repository's branch has had, read from GitHub.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from datetime import datetime
-from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Annotated
 from urllib.parse import urlencode
+
+from pydantic import Field
+from pydantic.dataclasses import dataclass as validated_dataclass
 
 from basstler.locations import WorkflowLocation
 from basstler.repository import Repository
@@ -17,7 +18,11 @@ from basstler.standard_streams import StandardStreamHandler
 from basstler.github.client import (
     GitHubReader,
 )
-from basstler.upstream_reviews.vocabulary import CheckOutcome, JSONModel
+from basstler.upstream_reviews.vocabulary import (
+    CheckOutcome,
+    ConclusionOutcome,
+    ValidatedJSONModel,
+)
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -32,70 +37,23 @@ The most runs GitHub lists on one page.
 # %% the runs that confirm a step
 
 
-class WorkflowRunKey(StrEnum):
-    """
-    Every field read out of a repository's run listing.
-    """
-
-    WORKFLOW_RUNS = "workflow_runs"
-    """
-    The listed runs, newest first.
-    """
-
-    PATH = "path"
-    """
-    The path of the workflow file a run ran, relative to its repository's root.
-    """
-
-    CONCLUSION = "conclusion"
-    """
-    How a run ended, ``null`` while it runs.
-    """
-
-    URL = "html_url"
-    """
-    The address of the run's page on github.com.
-    """
-
-    CREATED_AT = "created_at"
-    """
-    When the run was started.
-    """
-
-
-class RunListingParameter(StrEnum):
-    """
-    The query parameters a run listing is narrowed by.
-    """
-
-    BRANCH = "branch"
-    """
-    The branch the runs ran on.
-    """
-
-    RUNS_PER_PAGE = "per_page"
-    """
-    How many runs the listing holds.
-    """
-
-
-@dataclass(frozen=True)
-class ListedRun(JSONModel):
+@validated_dataclass(frozen=True)
+class ListedRun(ValidatedJSONModel):
     """
     One run in a repository's run listing.
     """
 
-    workflow: Path
+    workflow: Annotated[Path, Field(alias="path")]
     """
     The workflow file it ran, relative to its repository's root.
     """
 
-    outcome: CheckOutcome
+    outcome: Annotated[ConclusionOutcome, Field(alias="conclusion")]
     """
     How it ended, :attr:`CheckOutcome.PENDING` while it runs.
     """
 
-    url: str
+    url: Annotated[str, Field(alias="html_url")]
     """
     The address of the run's page on github.com, where its log is.
     """
@@ -105,27 +63,14 @@ class ListedRun(JSONModel):
     When it was started.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> ListedRun:
-        """
-        :param data: One listed run.
-        :return: The parsed run.
-        """
-        return cls(
-            Path(data[WorkflowRunKey.PATH]),
-            CheckOutcome.from_conclusion(data[WorkflowRunKey.CONCLUSION]),
-            data[WorkflowRunKey.URL],
-            datetime.fromisoformat(data[WorkflowRunKey.CREATED_AT]),
-        )
 
-
-@dataclass(frozen=True)
-class RunListing:
+@validated_dataclass(frozen=True)
+class RunListing(ValidatedJSONModel):
     """
     The latest runs on one branch of a repository, newest first.
     """
 
-    runs: list[ListedRun]
+    runs: Annotated[list[ListedRun], Field(alias="workflow_runs")]
     """
     The runs.
     """
@@ -142,8 +87,8 @@ class RunListing:
         """
         query = urlencode(
             {
-                RunListingParameter.BRANCH: branch,
-                RunListingParameter.RUNS_PER_PAGE: runs_per_page,
+                "branch": branch,
+                "per_page": runs_per_page,
             }
         )
         return f"{repository.api_path}/actions/runs?{query}"
@@ -159,16 +104,6 @@ class RunListing:
         :return: The listing.
         """
         return cls.from_json(client.get(cls.path(repository, branch)))
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RunListing:
-        """
-        :param data: A run listing's REST response.
-        :return: The parsed listing.
-        """
-        return cls(
-            [ListedRun.from_json(run) for run in data[WorkflowRunKey.WORKFLOW_RUNS]]
-        )
 
     def select(self, workflow: WorkflowLocation) -> RunListing:
         """

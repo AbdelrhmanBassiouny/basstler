@@ -8,7 +8,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated
 
-from pydantic import BeforeValidator, Field
+from pydantic import Field
 from pydantic.dataclasses import dataclass
 
 from basstler.upstream_reviews.pull_request_models import (
@@ -23,6 +23,7 @@ from basstler.upstream_reviews.review_models import (
 )
 from basstler.upstream_reviews.vocabulary import (
     CheckOutcome,
+    ConclusionOutcome,
     PullRequestState,
     ReviewState,
     ValidatedJSONModel,
@@ -262,11 +263,7 @@ class RestCheckRun(ValidatedJSONModel):
     What the check calls itself.
     """
 
-    outcome: Annotated[
-        CheckOutcome,
-        Field(alias="conclusion"),
-        BeforeValidator(CheckOutcome.from_conclusion),
-    ]
+    outcome: Annotated[ConclusionOutcome, Field(alias="conclusion")]
     """
     Where the check stands.
     """

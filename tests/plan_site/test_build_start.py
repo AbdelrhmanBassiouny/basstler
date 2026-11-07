@@ -6,6 +6,7 @@ session's own credential.
 from __future__ import annotations
 
 from collections.abc import Mapping
+import json
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any
@@ -17,18 +18,19 @@ from basstler.github.client import (
 )
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
+from basstler.github.repository_details import RepositoryDetails
+from basstler.github.workflow_run import WorkflowDispatch
 from basstler.locations import WorkflowLocation
 from basstler.plan_site.build_start import (
     BuildStart,
     CodeFence,
-    DispatchKey,
     GitHubCommand,
-    RepositoryKey,
     SessionTool,
 )
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.repository import Repository
 
+from ..constants.paths import DatasetLocation
 from ..github.recorded_client import SentWrite
 
 SITE = SiteRepository(Repository.parse("an-owner/plans"))
@@ -36,9 +38,9 @@ SITE = SiteRepository(Repository.parse("an-owner/plans"))
 The site repository whose build is started.
 """
 
-SITE_DEFAULT_BRANCH = "trunk"
+SITE_DETAILS = json.loads(DatasetLocation.REPOSITORY_TRUNK_DEFAULT_BRANCH.read_text())
 """
-The default branch the stand-in site repository reports, deliberately not ``main``.
+The resource the stand-in site repository answers with.
 """
 
 # %% a site repository answering from memory
@@ -63,7 +65,7 @@ class SiteAnsweringClient(GitHubAttemptClient):
 
     def attempt_get(self, path: str) -> GitHubResponse:
         if self.refusal is None:
-            return GitHubResponse({RepositoryKey.DEFAULT_BRANCH: SITE_DEFAULT_BRANCH})
+            return GitHubResponse(SITE_DETAILS)
         return GitHubResponse(
             None,
             failure=GitHubRequestFailed(
@@ -98,7 +100,9 @@ def test_the_build_is_dispatched_on_the_site_s_default_branch():
         SentWrite(
             HttpMethod.POST,
             SITE.repository.workflow_dispatch_path(WorkflowLocation.PLAN_SITE),
-            {DispatchKey.REF: SITE_DEFAULT_BRANCH},
+            WorkflowDispatch(
+                RepositoryDetails.from_json(SITE_DETAILS).default_branch
+            ).to_json(),
         )
     ]
 

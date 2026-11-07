@@ -81,17 +81,6 @@ class ReadRefusal:
 # %% the token each repository stores
 
 
-class SecretKey(StrEnum):
-    """
-    Every field read out of a repository secret's REST response.
-    """
-
-    UPDATED_AT = "updated_at"
-    """
-    When the secret's value was last set.
-    """
-
-
 class SecretState(StrEnum):
     """
     What GitHub says about the token secret in one repository.
@@ -140,9 +129,7 @@ class TokenSecret(JSONModel):
         :param data: A repository secret's REST response.
         :return: The stored secret.
         """
-        return cls(
-            SecretState.STORED, datetime.fromisoformat(data[SecretKey.UPDATED_AT])
-        )
+        return cls(SecretState.STORED, datetime.fromisoformat(data["updated_at"]))
 
     @staticmethod
     def path(repository: Repository) -> str:

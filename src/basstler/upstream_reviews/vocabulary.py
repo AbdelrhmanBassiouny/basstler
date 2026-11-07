@@ -302,6 +302,14 @@ class CheckOutcome(NamedAsGitHub):
         return RollupState.FAILURE
 
 
+ConclusionOutcome = Annotated[
+    CheckOutcome, BeforeValidator(CheckOutcome.from_conclusion)
+]
+"""
+A check's outcome, read from the conclusion GitHub gives a check run or workflow run.
+"""
+
+
 class RollupState(NamedAsGitHub):
     """
     The verdict GitHub itself computes over all of a pull request's checks, or that
