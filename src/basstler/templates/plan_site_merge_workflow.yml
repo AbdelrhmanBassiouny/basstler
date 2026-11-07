@@ -2,13 +2,13 @@
 {% block header %}
 name: Plan site merge dispatch
 
-# Every merged pull request, a fork's included, starts the plan site's build in
-# {{ site_repository }}, so the site shows the merge without waiting for the next push to
-# the notes branch. It runs on pull_request_target to read the token for a fork's pull
-# request too; it checks out nothing and reads nothing the pull request controls.
+# Every pull request opened, reopened, marked ready, turned back into a draft, merged or
+# closed, a fork's included, starts the plan site's build in {{ site_repository }}, so the
+# site shows its state without waiting for the next push to the notes branch. It runs on
+# pull_request_target to read the token for a fork's pull request too; it checks out
+# nothing and reads nothing the pull request controls.
 on:
   pull_request_target:
-    types: [closed]
+    types: [{{ pull_request_activities | join(", ") }}]
 {% endblock %}
 {% block concurrency_group %}plan-site-merge{% endblock %}
-{% block condition %}{{ super() }} && github.event.pull_request.merged{% endblock %}

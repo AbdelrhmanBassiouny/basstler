@@ -7,23 +7,33 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import datetime
 
 from basstler.class_property import classproperty
 from basstler.locations import SiteTemplate
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
 from basstler.maintenance.board import PullRequestField
+from basstler.github_labels import GitHubLabel
 from basstler.plan_site.cards import (
     DraftRecheckAttribute,
+    LiveStateAttribute,
     ModelOption,
+    PlanTimeAttribute,
+    RefreshSource,
     TrackSection,
     WaveSection,
 )
 from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.item_classifier import ItemClassifier
+from basstler.plan_site.hub import PlanHistory
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.plan_overview import NextSteps, PlanOverview
-from basstler.pull_request_state import PullRequestsByRepository, PullRequestState
+from basstler.pull_request_state import (
+    LiveState,
+    PullRequestsByRepository,
+    PullRequestState,
+)
 from basstler.render_common import (
     TemplatePage,
     render_markdown_to_html,
@@ -59,8 +69,8 @@ class PlanPage(TemplatePage):
     A plan's page on the site: one column per wave, each item a card with its status,
     pull request, CI, assignee and dependency chips, plus the plan's next steps.
 
-    In the browser, the page asks GitHub whether each blocking draft pull request is now
-    ready for review, and shows the items no draft holds back any longer as startable.
+    In the browser, the page reads every pull request's state from GitHub, shows it
+    live, and shows the items no draft holds back any longer as startable.
     """
 
     stylesheet_url: str
@@ -109,6 +119,17 @@ class PlanPage(TemplatePage):
     have no known address.
     """
 
+    history: PlanHistory | None = None
+    """
+    When the plan was created and last changed, ``None`` when its history is unknown.
+    """
+
+    built_at: datetime | None = None
+    """
+    When the site was built, which the page shows as its refresh time until the browser
+    reads GitHub itself; ``None`` to leave it out.
+    """
+
     dependencies: DependencyResolver = field(init=False)
     """
     The resolver every reader of the plan's ``depends_on`` entries goes through.
@@ -139,8 +160,29 @@ class PlanPage(TemplatePage):
             stylesheet_url=self.stylesheet_url,
             chip_tone=ChipTone,
             script_template=SiteTemplate.PLAN_SCRIPT.name,
-            draft_recheck_script_template=SiteTemplate.PLAN_DRAFT_RECHECK_SCRIPT.name,
+            recheck_script_template=SiteTemplate.PLAN_PULL_REQUEST_RECHECK_SCRIPT.name,
             draft_recheck_attribute=DraftRecheckAttribute,
+            live_state_attribute=LiveStateAttribute,
+            plan_time_attribute=PlanTimeAttribute,
+            refresh_source=RefreshSource,
+            live_state=LiveState,
+            chip_tones=[tone.value for tone in ChipTone],
+            live_states={
+                state.name: {
+                    "label": state.display_label,
+                    "tone": ChipTone.of_live_state(state).value,
+                }
+                for state in LiveState
+            },
+            merged_label=GitHubLabel.MERGED.value,
+            done_status={
+                "status": ItemStatus.DONE.value,
+                "label": ItemStatus.DONE.value.capitalize(),
+                "tone": ChipTone.of_status(ItemStatus.DONE).value,
+                "css_class": Item.status_css_class(ItemStatus.DONE),
+            },
+            history=self.history,
+            built_at=self.built_at,
             pull_request_field=PullRequestField,
             pull_request_state=PullRequestState,
             title=self.plan.title,

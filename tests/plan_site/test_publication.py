@@ -56,7 +56,7 @@ from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.upstream_reviews.rest_models import RestPullRequestSummary
 from basstler.upstream_reviews.vocabulary import BasstlerSource, CheckOutcome
-from basstler.workflows import ActivityType, TriggerEvent, Workflow
+from basstler.workflows import TriggerEvent, Workflow
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName
@@ -580,20 +580,23 @@ def test_the_merge_workflow_follows_the_notes_repository_s_default_branch(
     )
 
 
-def test_the_merge_workflow_runs_when_a_pull_request_closes(tmp_path):
+def test_the_merge_workflow_runs_on_every_pull_request_state_change(tmp_path):
     """
-    On the base repository's side, so a merged pull request from a fork starts the build
-    with the token too.
+    On the base repository's side, so a pull request from a fork starts the build with
+    the token too.
     """
     path = tmp_path / MergeWorkflow.location.name
     path.write_text(MergeWorkflow(a_dispatch_workflow()).text)
 
     trigger = Workflow.at(path).trigger(TriggerEvent.PULL_REQUEST_TARGET)
 
-    assert trigger.activity_types == {ActivityType.CLOSED}
+    assert trigger.activity_types == set(MergeWorkflow.pull_request_activities)
 
 
-def test_the_merge_workflow_runs_for_any_merge_in_the_notes_repository():
+def test_the_merge_workflow_runs_for_any_pull_request_in_the_notes_repository():
+    """
+    A pull request closed unmerged changes its state on the site too.
+    """
     dispatch = a_dispatch_workflow()
 
     job = WorkflowFile.from_text(MergeWorkflow(dispatch).text).jobs[
@@ -602,7 +605,6 @@ def test_the_merge_workflow_runs_for_any_merge_in_the_notes_repository():
 
     assert job.condition == (
         f"github.repository == '{dispatch.notes_repository.full_name}'"
-        " && github.event.pull_request.merged"
     )
 
 
