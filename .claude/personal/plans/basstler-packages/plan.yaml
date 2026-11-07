@@ -34,11 +34,11 @@ items:
   depends_on: []
   status: not started
   session: https://claude.ai/code/session_018wfiv8ntWsdS2nU92PrJbr
-  notes: >-
-    Module-to-distribution map and layers in [tool.basstler.packages] (layer table in the plan
-    session). A package-boundary CodeRuleChecker in code_rules, set on a new rule "a package imports
-    only the basstler packages its pyproject lists", reporting undeclared imports and cycles; today's
-    violations are a known baseline. Add the placement rule to the roadmap. Module paths never change.
+  notes: The module-to-distribution map and layers are a typed model in core (Distribution, Layer), declared
+    once and read by a package-boundary CodeRuleChecker on a new rule "a package imports only the basstler
+    packages its pyproject lists" (undeclared imports and cycles; today's violations a known baseline),
+    and later by plan-graph/graph-model as the level above Package. Add the placement rule to the roadmap.
+    Module paths never change.
 - id: git-and-github-domain
   title: Extract basstler.git and gather the GitHub domain model into basstler.github
   track: package-split
@@ -84,17 +84,17 @@ items:
     PyPI, editable from the workspace in a clone; pip install keeps working without uv
     (windows-support). release:minor.
 - id: playbook-model
-  title: A Playbook dataclass model that every distribution contributes commands, skills, hooks and rules to
+  title: A Playbook dataclass model that every distribution contributes commands, skills, hooks and rules
+    to
   track: playbook
-  depends_on: [uv-workspace]
+  depends_on:
+  - uv-workspace
   status: not started
-  notes: >-
-    basstler.playbook in core: PlaybookComponent (CommandGroup, SkillDefinition, HookDefinition,
-    McpTool, SessionStep, ActionsWorkflow, Ruleset[RuleKind]) as krrood-style dataclasses with
-    bound generics; PackageContribution per distribution via the basstler.contributions entry
-    points; Playbook.without/with_components; DefaultPlaybook in the meta-package; a user's
-    basstler_playbook module at the repository root. basstler skills build --check reproduces
-    plugin/ byte for byte. release:minor.
+  notes: 'basstler.playbook in core: PlaybookComponent kinds CommandGroup, SkillDefinition, HookDefinition,
+    McpTool, SessionStep, ActionsWorkflow, Ruleset[RuleKind], SitePanel (a hub tab or sidebar) and ItemAttribute
+    (typed per-item fields basstler-plan validates without depending on their owner), krrood-style with
+    bound generics; PackageContribution via basstler.contributions entry points; Playbook.without/with_components;
+    DefaultPlaybook; a root basstler_playbook module. skills build --check reproduces plugin/. release:minor.'
 - id: krrood-sync
   title: Bring code_rules up to krrood's latest development tools, with credit
   track: rules
@@ -110,9 +110,12 @@ items:
 - id: customization-docs
   title: A README per distribution and a guide to writing your own playbook and ruleset
   track: playbook
-  depends_on: [playbook-model, krrood-sync, pypi-release]
+  depends_on:
+  - playbook-model
+  - krrood-sync
+  - pypi-release
   status: not started
-  notes: >-
-    Each distribution's README says what it holds, what it depends on and how to install it alone.
-    The guide shows deriving a playbook from DefaultPlaybook, dropping a distribution's
-    contribution, and adding a ruleset of code or plan rules.
+  notes: 'A README per distribution: what it holds, depends on, and how to install it alone. The guide''s
+    worked example is the owner''s own playbook adding basstler-recommender (work-recommender) to DefaultPlaybook,
+    with its SitePanel and ItemAttribute components, then dropping a contribution and adding a ruleset
+    of code or plan rules.'
