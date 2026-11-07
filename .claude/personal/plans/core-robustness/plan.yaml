@@ -77,7 +77,7 @@ items:
   status: in progress
 
 - id: payload-key-models
-  title: "Payload keys spelled only inside their models"
+  title: "GitHub API payload keys spelled only inside their models"
   branch: claude/vigilant-maxwell-mh2eey
   track: core
   pull_request_number: 158
@@ -85,9 +85,30 @@ items:
   depends_on: []
   status: in progress
   notes: >-
-    Replace the ~40 payload-key StrEnums (GitHub API, workflow/pyproject files,
-    command reports) with the dataclasses that own them, per #156's rule and pattern;
-    tests read reports through those dataclasses, reversing #145. Waits for #156.
-    Runs after or before basstler-packages/git-and-github-domain, never alongside
-    (same upstream_reviews models). Ask at kickoff whether to add pydantic. May split
-    into 3 PRs.
+    First of three slices (owner, at kickoff). Adds pydantic: GitHub API responses
+    become pydantic dataclasses validated by a shared from_json, keys spelled once as
+    field names or aliases. Removes the GitHub API key enums in upstream_reviews,
+    github/pull_request, maintenance, plan_site and release_version. Runs after or
+    before basstler-packages/git-and-github-domain, never alongside.
+
+- id: file-key-models
+  title: "Workflow, pyproject, hub, board and exchange-file keys spelled only inside their models"
+  track: core
+  depends_on: [payload-key-models]
+  status: not started
+  notes: >-
+    Second slice of payload-key-models: WorkflowKey (workflows, plan_site/workflows),
+    PyprojectKey, HubFileKey, BoardKey and the upstream_reviews action/helper exchange
+    keys become the dataclasses that read and write those files, on the pydantic base
+    payload-key-models adds.
+
+- id: report-key-models
+  title: "Command reports are dataclasses, and tests read them through those"
+  track: core
+  depends_on: [payload-key-models]
+  status: not started
+  notes: >-
+    Third slice of payload-key-models: the command-report key enums (ReportKey,
+    MaintenanceReportKey, ItemBriefKey, ReadinessField, UsageOutputKey, ...) become
+    report dataclasses with to_json, and tests read reports through them, reversing
+    report-keys-in-tests (#145).
