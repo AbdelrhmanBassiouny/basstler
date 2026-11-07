@@ -27,7 +27,11 @@ from basstler.stack.configuration import (
     CommittedStackConfiguration,
     StackSetting,
 )
-from basstler.stack.exceptions import AmbiguousForkRemoteError, ForkRemoteNotFoundError
+from basstler.stack.exceptions import (
+    AmbiguousForkRemoteError,
+    ForkRemoteNotFoundError,
+    OwnRemoteNotFoundError,
+)
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -282,10 +286,11 @@ class Configuration:
     Git remote for the fork that holds the full stack.
     """
 
-    upstream_repository: Repository
+    upstream_repository: Repository | None
     """
     The repository every fork is forked from, and the only one constant across
-    contributors.
+    contributors; ``None`` for a project that is not a fork, whose own remote is its
+    base.
     """
 
     upstream_remote: str
@@ -322,17 +327,21 @@ class Configuration:
         A repository passed here outranks all three, so a caller that has been told
         which repository is which never has one inferred for it.
 
+        A project that names no upstream follows its own remote instead, see
+        :meth:`following_own_remote`.
+
         :param path: The shipped defaults file.
         :param fork_repository: The fork, when the caller already knows it.
         :param upstream_repository: The upstream, when the caller already knows it.
         :return: The layered configuration.
         """
         values = LayeredStackSettings(path).values()
-        upstream_repository = upstream_repository or CommittedStackConfiguration(
-            path
-        ).upstream_repository_in(
-            values, ProjectLocation.PERSONAL_STACK_CONFIGURATION.value
+        upstream_repository = (
+            upstream_repository
+            or CommittedStackConfiguration.named_upstream_repository(values)
         )
+        if upstream_repository is None:
+            return cls.following_own_remote(values)
         resolution = RemoteResolution.of_checkout(
             path, fork_repository, upstream_repository
         )
@@ -347,6 +356,37 @@ class Configuration:
             upstream_base=values[StackSetting.UPSTREAM_BASE],
             upstream_location=resolution.upstream_location,
         )
+
+    @classmethod
+    def following_own_remote(cls, values: dict[str, str]) -> Configuration:
+        """
+        :param values: Layered stack settings naming no upstream.
+        :return: The configuration of a project that is not a fork: the remote
+            :attr:`StackSetting.FORK_REMOTE` names stands where the upstream would.
+        :raises OwnRemoteNotFoundError: If the clone has no remote of that name.
+        """
+        own_remote = values[StackSetting.FORK_REMOTE]
+        remote_urls = CurrentCheckout.remote_urls()
+        if own_remote not in remote_urls:
+            raise OwnRemoteNotFoundError(own_remote)
+        return cls(
+            in_review_label=values[StackSetting.IN_REVIEW_LABEL],
+            rebase_label=values[StackSetting.REBASE_LABEL],
+            needs_resolution_label=values[StackSetting.NEEDS_RESOLUTION_LABEL],
+            fork_repository=Repository.from_remote_url(remote_urls[own_remote]),
+            fork_remote=own_remote,
+            upstream_repository=None,
+            upstream_remote=own_remote,
+            upstream_base=values[StackSetting.UPSTREAM_BASE],
+            upstream_location=own_remote,
+        )
+
+    @property
+    def has_upstream(self) -> bool:
+        """
+        Whether the project is a fork whose branches are promoted to an upstream.
+        """
+        return self.upstream_repository is not None
 
     @classmethod
     def location_of(

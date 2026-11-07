@@ -31,6 +31,7 @@ from basstler.maintenance.promotion import (
 )
 from basstler.maintenance.promotion_context import PromotionContextReader
 from basstler.maintenance.check_overview import CheckOverview
+from basstler.maintenance.constants import MaintenanceNotice
 from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_procedure import restack
 from basstler.maintenance.upstream_action import (
@@ -108,10 +109,13 @@ class MaintenancePass:
     def upstream_pull_requests(self) -> UpstreamPullRequests:
         """
         :return: The upstream's open pull requests opened from the fork's branches, read
-            the way :attr:`upstream_read` names.
+            the way :attr:`upstream_read` names; none for a project with no upstream.
         :raises ActionUnavailable: If that is the fork's Action and it cannot answer.
         """
         fork = self.configuration.fork_repository
+        if not self.configuration.has_upstream:
+            logger.warning(MaintenanceNotice.NO_UPSTREAM)
+            return UpstreamPullRequests(fork, {})
         if self.upstream_read is UpstreamReadRoute.DIRECT:
             return UpstreamPullRequests.from_api_records(
                 self.upstream().open_pull_requests(), fork

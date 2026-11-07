@@ -43,9 +43,8 @@ Pass `fork=` / `upstream=` arguments straight through. Never inspect or guess at
 
 | exit | what you do |
 |---|---|
-| 0 | go on - the pass reaches the upstream through `upstream_location`, a remote's name or a URL, so never add a remote for it |
+| 0 | go on - the pass reaches the upstream through `upstream_location`, a remote's name or a URL, so never add a remote for it. With no `upstream_repository` printed, the project is not a fork: the pass follows the clone's own remote and promotes nothing, so step 2 lists nothing to summarize |
 | 4 | ask which repository is the fork (options from `git remote -v`), write `fork_repository = "<owner/repo>"` to a scratchpad file, save it with `"${CLAUDE_PLUGIN_ROOT}/hooks/write-personal-notes-file.sh" --source <file> --destination .claude/personal/stack.toml --message "record which repository is my fork"`, re-run |
-| 11 | ask for the upstream, save it with `"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" setup.steps configure-upstream --repository <owner/repo>`, re-run |
 | other | stop and report |
 
 ## 2. Prepare

@@ -160,6 +160,18 @@ class CommittedStackConfiguration:
         :return: The upstream repository the settings name.
         :raises MissingUpstreamRepositoryError: If they name none.
         """
-        if StackSetting.UPSTREAM_REPOSITORY not in values:
+        upstream_repository = self.named_upstream_repository(values)
+        if upstream_repository is None:
             raise MissingUpstreamRepositoryError(self.project_file, personal_file)
+        return upstream_repository
+
+    @staticmethod
+    def named_upstream_repository(values: dict[str, Any]) -> Repository | None:
+        """
+        :param values: Layered stack settings.
+        :return: The upstream repository they name, or ``None`` for a project that is
+            not a fork.
+        """
+        if StackSetting.UPSTREAM_REPOSITORY not in values:
+            return None
         return Repository.parse(values[StackSetting.UPSTREAM_REPOSITORY])

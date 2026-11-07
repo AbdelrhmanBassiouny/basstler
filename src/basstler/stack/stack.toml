@@ -26,5 +26,6 @@ needs_resolution_label = "needs-resolution"  # set by a maintenance pass on a de
 # the fork.
 fork_remote = "origin"
 # upstream_repository: deliberately unset - the project names it in .claude/basstler/stack.toml.
+# A project naming none is not a fork: `fork_remote` then stands where the upstream would.
 upstream_remote = "upstream"     # name to give the upstream remote when one has to be added
 upstream_base = "main"
