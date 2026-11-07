@@ -28,4 +28,9 @@ jobs:
       - name: Start the build
         env:
           {{ token_variable }}: {{ '${{' }} secrets.{{ token_secret }} {{ '}}' }}
-        run: gh workflow run {{ site_workflow_name }} {{ repository_option }} {{ site_repository }}
+        run: |
+          if [ -z "${{ token_variable }}" ]; then
+            echo "::error title={{ token_secret }} is not stored::{{ notes_repository }} stores no {{ token_secret }} secret, so this run started no build in {{ site_repository }}. Run /setup-personal-notes, or create the token at {{ token_form_url }} and store it at {{ secrets_page }}"
+            exit 1
+          fi
+          gh workflow run {{ site_workflow_name }} {{ repository_option }} {{ site_repository }}

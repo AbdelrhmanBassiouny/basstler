@@ -4,13 +4,14 @@ The steps of publishing that only the user can take, and the lines and browser s
 
 from __future__ import annotations
 
+import sys
 import textwrap
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from urllib.parse import urlencode
 
-from basstler.class_property import classproperty
+from basstler.plan_site import token_storage
 from basstler.plan_site.run_listing import ListedRun
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
@@ -47,7 +48,7 @@ class UserStep(StrEnum):
     No build in the site repository has succeeded yet.
     """
 
-    CREATE_TOKEN = "create, or reuse, the token that starts the build"
+    CREATE_TOKEN = "create, or regenerate, the token that starts the build"
     """
     No dispatch from the notes branch has succeeded yet, so the token it needs may not
     exist.
@@ -144,13 +145,6 @@ class UserSteps:
     Every ``owner/name`` the site publishes, which the token has to read.
     """
 
-    @classproperty
-    def token_page(cls) -> str:
-        """
-        Where a fine-grained token is created.
-        """
-        return f"{GitHubAddress.WEB}/settings/personal-access-tokens/new"
-
     def pending(
         self, step: UserStep, latest_run: ListedRun | None = None
     ) -> PendingStep:
@@ -161,7 +155,6 @@ class UserSteps:
         :return: The step with its line and its browser steps.
         """
         site = self.site.repository
-        repositories = ", ".join(self.registered)
         steps = {
             UserStep.CREATE_SITE_REPOSITORY: PendingStep(
                 step,
@@ -186,13 +179,12 @@ class UserSteps:
                 step,
                 None,
                 (
-                    f"Open {self.token_page}, or open the token you already use for "
-                    "the plan site.",
-                    f"Name the token and set Resource owner to {site.owner}.",
+                    f"Open {self.site.token_form_url()} - its name, owner "
+                    "and Actions write access are filled in. To reuse the token you "
+                    "already have for the plan site, open it instead and click "
+                    "Regenerate token.",
                     "Under Repository access, choose Only select repositories and "
                     f"select {site.full_name} alone.",
-                    "Under Permissions, open Repository permissions and set Actions "
-                    "to Read and write.",
                     "Click Generate token and copy the token now; GitHub shows it "
                     "once.",
                 ),
@@ -200,9 +192,7 @@ class UserSteps:
             ),
             UserStep.STORE_TOKEN: PendingStep(
                 step,
-                f'read -rsp "Token: " token; for repository in {repositories}; do '
-                f'printf %s "$token" | gh secret set {PlanSiteSecret.TOKEN} '
-                '--repo "$repository"; done',
+                f"{sys.executable} -m {token_storage.__name__}",
                 tuple(
                     f"Open {GitHubAddress.WEB}/{repository}/settings/secrets/actions/new, "
                     f"set the name to {PlanSiteSecret.TOKEN}, paste the token as the "

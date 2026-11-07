@@ -61,3 +61,24 @@ class RegistryUnreadableError(DataclassException):
             f"Check that {self.registry} exists, that it has a {self.notes_branch} "
             f"branch, and that the build's credential can read it."
         )
+
+
+# %% storing the token
+
+
+@dataclass
+class PlanSiteTokenEmptyError(DataclassException, ValueError):
+    """
+    Raised when no token was given to store.
+    """
+
+    secret: str
+    """
+    The secret the token was to be stored as.
+    """
+
+    def error_message(self) -> str:
+        return f"no token was given to store as {self.secret}"
+
+    def suggest_correction(self) -> str:
+        return "paste the token at the prompt, or pipe it to the command"
