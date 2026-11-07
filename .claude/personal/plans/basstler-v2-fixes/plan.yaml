@@ -21,6 +21,10 @@ items:
   track: fixes
   depends_on: []
   status: not started
+  notes: 'Also covers check-setup reporting stack_upstream needs-setup (and exiting 1) in a repository
+    that is not a fork: no upstream is a supported setup, so that row passes there. Folded in 2026-11-07
+    from https://github.com/AbdelrhmanBassiouny/basstler/pull/155 at the user''s request; own bug PR
+    off main after #155.'
 
 - id: separate-notes-remote-save
   title: save-plan.sh saves when the notes remote is a separate repository
