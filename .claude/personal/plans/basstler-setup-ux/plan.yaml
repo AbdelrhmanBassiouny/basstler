@@ -174,4 +174,17 @@ items:
     polling: the session-start summary and the setup check read the site''s latest run, and a failure
     shows its annotations (check-runs annotations API), e.g. the billing lock and the settings page that
     fixes it. A build start says it started a run, never that the site is updated.'
+
+- id: private-notes-site-build
+  title: Plan site build reads a private notes repository
+  branch: null
+  pull_request_number: null
+  track: setup-flow
+  depends_on: []
+  status: not started
+  notes: 'External report #152 (tomsch420), placed 2026-11-07: no item covers it; it fits this plan''s
+    unreadable-repository and setup-steps rules. plan_site.publication accepts a private registry the
+    build''s github.token cannot read. Detect it before writing anything and offer an optional read-only
+    token secret for the build, or making it public. Discuss on the issue first, then a failing test,
+    then one bug PR off main closing #152.'
 tracking_issue: 135
