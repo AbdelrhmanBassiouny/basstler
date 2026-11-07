@@ -165,12 +165,22 @@ class IssuePlanStore:
         :return: The item's new issue.
         """
         issue = self._create_issue(IssueCreation(title, body.render(self.repository)))
+        self.adopt_issue(plan_number, issue)
+        return issue
+
+    def adopt_issue(self, plan_number: int, issue: RestIssue) -> None:
+        """
+        List an existing issue under a plan's tracking issue, making it one of the
+        plan's items as it stands.
+
+        :param plan_number: The plan's tracking issue.
+        :param issue: The issue to list.
+        """
         self.client.send(
             HttpMethod.POST,
             self._resource_path(self.repository, plan_number, IssueResource.SUB_ISSUES),
             SubIssueAddition(issue.identifier).payload(),
         )
-        return issue
 
     def read_plan(self, plan_number: int) -> IssuePlan:
         """

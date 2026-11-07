@@ -104,6 +104,21 @@ def test_add_item_opens_its_issue_and_lists_it_under_the_plan(item_issue):
     ]
 
 
+def test_adopt_issue_lists_the_existing_issue_under_the_plan(item_issue):
+    """
+    Adopting lists the issue as a sub-issue and opens no new one.
+    """
+    client = RecordedGitHubClient()
+    IssuePlanStore(client, REPOSITORY).adopt_issue(PLAN_NUMBER, item_issue)
+    assert client.writes == [
+        SentWrite(
+            HttpMethod.POST,
+            SUB_ISSUES_PATH,
+            SubIssueAddition(item_issue.identifier).payload(),
+        )
+    ]
+
+
 def test_sub_issue_is_added_by_the_identifier_field_github_reads():
     assert SubIssueAddition(7).payload() == {"sub_issue_id": 7}
 
