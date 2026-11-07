@@ -36,11 +36,11 @@ items:
   depends_on: []
   status: in progress
   session: https://claude.ai/code/session_018wfiv7Bw3TgQiQbiuneZDr
-  notes: The module-to-distribution map and layers are a typed model in core (Distribution, Layer), declared
-    once and read by a package-boundary CodeRuleChecker on a new rule "a package imports only the basstler
-    packages its pyproject lists" (undeclared imports and cycles; today's violations a known baseline),
-    and later by plan-graph/graph-model as the level above Package. Add the placement rule to the roadmap.
-    Module paths never change.
+  notes: >
+    Implemented in draft #154: basstler.package_map (Layer, Distribution, PACKAGE_MAP) and
+    PackageBoundaryChecker on "a package imports only the basstler packages its pyproject lists",
+    with a 22-crossing baseline (code_rules/known-boundary-crossings.yaml) a test keeps exact. Next:
+    review of the module placement and dependency lists. Module paths never change.
 - id: git-and-github-domain
   title: Extract basstler.git and gather the GitHub domain model into basstler.github
   track: package-split
