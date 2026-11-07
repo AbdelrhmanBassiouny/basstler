@@ -18,6 +18,7 @@ from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.github.label import RepositoryLabel
 from basstler.pull_request_state import PullRequestState
 from basstler.github_labels import GitHubLabel
 from basstler.locations import PathEnumeration
@@ -186,22 +187,6 @@ class ListingParameter(StrEnum):
     """
 
 
-class LabelField(StrEnum):
-    """
-    The fields of a label the API reads and writes.
-    """
-
-    NAME = "name"
-    """
-    The label's name.
-    """
-
-    DESCRIPTION = "description"
-    """
-    What the label means.
-    """
-
-
 @dataclass(frozen=True)
 class PullRequestListingSpecification:
     """
@@ -312,7 +297,7 @@ class GitHubRepository(
 
     def labels(self) -> set[str]:
         return {
-            label[LabelField.NAME]
+            RepositoryLabel.from_json(label).name
             for label in self._every_entry(RepositoryPath.LABELS, {})
         }
 
@@ -320,7 +305,7 @@ class GitHubRepository(
         self.client.send(
             HttpMethod.POST,
             self._path(str(RepositoryPath.LABELS)),
-            {LabelField.NAME: label, LabelField.DESCRIPTION: label.purpose},
+            RepositoryLabel(label, label.purpose).to_json(),
         )
 
     def check_state(self, commit: str) -> RollupState:
