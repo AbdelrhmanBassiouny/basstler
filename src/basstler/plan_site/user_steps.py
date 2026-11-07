@@ -18,7 +18,7 @@ from basstler.plan_site.workflows import (
 )
 from basstler.repository import GitHubAddress, Repository
 from basstler.standard_streams import StandardStreamHandler
-from basstler.github.pull_request import NewPullRequestField
+from basstler.github.pull_request import NewPullRequest
 from basstler.github.client import (
     GitHubClient,
     HttpMethod,
@@ -244,6 +244,13 @@ class MergeWorkflowProposal:
     """
 
     @property
+    def opening(self) -> NewPullRequest:
+        """:return: The pull request proposing the workflow, opened ready to merge."""
+        return NewPullRequest(
+            self.repository, self.title, self.head, self.base, draft=False
+        )
+
+    @property
     def open_pull_requests_path(self) -> str:
         """:return: The listing of the open pull requests from :attr:`head` into
         :attr:`base`."""
@@ -270,11 +277,7 @@ class MergeWorkflowProposal:
         opened = github.attempt_send(
             HttpMethod.POST,
             self.repository.pull_requests_path,
-            {
-                NewPullRequestField.TITLE: self.title,
-                NewPullRequestField.HEAD: self.head,
-                NewPullRequestField.BASE: self.base,
-            },
+            self.opening.to_json(),
         )
         if opened.failure is not None:
             return PendingStep(
