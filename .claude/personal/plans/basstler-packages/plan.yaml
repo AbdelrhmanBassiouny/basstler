@@ -1,0 +1,118 @@
+schema_version: 1
+id: basstler-packages
+title: 'basstler packages: basstler-* distributions with one lockstep version and a playbook model'
+description: >-
+  Split basstler into acyclic basstler-* PyPI distributions (core, git, rules, github, reviews,
+  stack, plan, notes, hub, skills, mcp and the basstler meta-package) under the basstler.<part>
+  namespace, released together at one version with exact sibling pins. Then a dataclass playbook
+  model lets anyone compose their own commands, skills, hooks, MCP tools and rulesets on top of a
+  default one, and code_rules catches up with krrood's development tools. The reorganization goes
+  first; other plans' items land in their distribution.
+default_repository: AbdelrhmanBassiouny/basstler
+tracking_issue: 151
+waves:
+- id: reorganization
+  name: Reorganization
+  description: Acyclic distributions, a uv workspace and lockstep PyPI releases; every in-flight item rebases onto it.
+- id: extensibility
+  name: Extensibility
+  description: The playbook model, krrood's latest development tools and the customization guide.
+tracks:
+- id: package-split
+  name: Package split and release
+  wave: reorganization
+- id: playbook
+  name: Playbook model
+  wave: extensibility
+- id: rules
+  name: Code rules from krrood
+  wave: extensibility
+items:
+- id: package-map
+  title: Declare the distributions and their layers, and check imports against them
+  track: package-split
+  depends_on: []
+  status: not started
+  session: https://claude.ai/code/session_018wfiv8ntWsdS2nU92PrJbr
+  notes: >-
+    Module-to-distribution map and layers in [tool.basstler.packages] (layer table in the plan
+    session). A package-boundary CodeRuleChecker in code_rules, set on a new rule "a package imports
+    only the basstler packages its pyproject lists", reporting undeclared imports and cycles; today's
+    violations are a known baseline. Add the placement rule to the roadmap. Module paths never change.
+- id: git-and-github-domain
+  title: Extract basstler.git and gather the GitHub domain model into basstler.github
+  track: package-split
+  depends_on: [package-map]
+  status: not started
+  notes: >-
+    GitCommandRunner, GitCommandFailed, branch, remote_branch, commit_move into basstler.git. Into
+    basstler.github: repository, github_labels, pull_request_state, pull_request_source, maintenance
+    github/board record/description/constants, ExternalCallFailed, upstream_reviews REST/GraphQL
+    models, vocabulary and queries, actions usage/budget, workflows, release_version. Removes
+    github->maintenance and environment->github. Pure moves. Coordinate with #123 (GitHubClient).
+- id: break-remaining-cycles
+  title: Break the remaining cycles and give each distribution its own locations, environment and exceptions
+  track: package-split
+  depends_on: [git-and-github-domain]
+  status: not started
+  notes: >-
+    Plan, Item, Track, Wave models from plan_site/plan.py into basstler.plan; the part of
+    stack.configuration upstream_reviews reads into github; maintenance->upstream_reviews.action
+    inverted so only stack depends on reviews. Split locations.py, environment.py and exceptions.py
+    per distribution and change the project rule to "once, in its own package's locations". The
+    boundary checker then fails CI with an empty baseline.
+- id: uv-workspace
+  title: Move each distribution into packages/<name> as a uv workspace with lockstep versions
+  track: package-split
+  depends_on: [break-remaining-cycles]
+  status: not started
+  notes: >-
+    Pure-rename move (git diff -M shows only renames plus pyproject files). hatch-vcs per package
+    with root ../..; a custom hatch metadata hook, force-included in each sdist, pins siblings
+    ==version. Committed uv.lock and uv sync --frozen at session start (absorbs
+    basstler-reliability/locked-install). package_layout reads importlib.metadata. CI installs
+    each package alone and runs its tests. release:major.
+- id: pypi-release
+  title: Publish every distribution to PyPI on each release with trusted publishing
+  track: package-split
+  depends_on: [uv-workspace]
+  status: not started
+  notes: >-
+    After release.yml tags, uv build --all-packages and pypa/gh-action-pypi-publish via OIDC (no
+    token); every package every release, TestPyPI first. The owner registers a pending trusted
+    publisher per name on PyPI and TestPyPI. Session start installs basstler==<plugin release> from
+    PyPI, editable from the workspace in a clone; pip install keeps working without uv
+    (windows-support). release:minor.
+- id: playbook-model
+  title: A Playbook dataclass model that every distribution contributes commands, skills, hooks and rules to
+  track: playbook
+  depends_on: [uv-workspace]
+  status: not started
+  notes: >-
+    basstler.playbook in core: PlaybookComponent (CommandGroup, SkillDefinition, HookDefinition,
+    McpTool, SessionStep, ActionsWorkflow, Ruleset[RuleKind]) as krrood-style dataclasses with
+    bound generics; PackageContribution per distribution via the basstler.contributions entry
+    points; Playbook.without/with_components; DefaultPlaybook in the meta-package; a user's
+    basstler_playbook module at the repository root. basstler skills build --check reproduces
+    plugin/ byte for byte. release:minor.
+- id: krrood-sync
+  title: Bring code_rules up to krrood's latest development tools, with credit
+  track: rules
+  depends_on: [uv-workspace, basstler-v3/code-rules-light]
+  status: not started
+  notes: >-
+    From krrood@be69c37d: one module per top-level section, project rules in a root agent_rules
+    package, checker as a rule's third element with Section.checkers and check --all-lines,
+    ImportsRules, SerializationRules, ErrorsRules->ExceptionModellingRules, leading-preposition and
+    name-completion checkers, a format subcommand replacing scripts/format_docstrings.py,
+    .pre-commit-hooks.yaml, RepositoryInstructionsFile. Cite krrood and update NOTICE. Ask before
+    copying FieldAccessorDefinitionChecker. release:minor.
+- id: customization-docs
+  title: A README per distribution and a guide to writing your own playbook and ruleset
+  track: playbook
+  depends_on: [playbook-model, krrood-sync, pypi-release]
+  status: not started
+  notes: >-
+    Each distribution's README says what it holds, what it depends on and how to install it alone.
+    The guide shows deriving a playbook from DefaultPlaybook, dropping a distribution's
+    contribution, and adding a ruleset of code or plan rules.
