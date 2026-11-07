@@ -20,14 +20,15 @@ items:
   branch: null
   status: not started
   track: fixes
-  depends_on: []
+  depends_on:
+  - basstler-packages/uv-workspace
   pull_request_number: null
-  notes: 'Re-check after basstler-v3 cli-launcher: if the launcher always runs through uv,
-    drop this. BASSTLER_INTERPRETER_CANDIDATES names python3.14/3.13/3.12, which Windows does
-    not install, so without uv on PATH create_basstler_environment always falls back to installing
+  notes: 'Re-check once basstler-packages/uv-workspace (uv sync --frozen at session start) lands: if every
+    install runs through uv, drop this. BASSTLER_INTERPRETER_CANDIDATES names python3.14/3.13/3.12, which
+    Windows does not install, so without uv on PATH create_basstler_environment always falls back to installing
     uv with pip. Also try py -3.14/-3.13/-3.12 (and a python on PATH checked against BASSTLER_PYTHON_REQUIREMENT),
-    each resolved to a full path before it runs. Split out of windows-environment-interpreter
-    as its own root cause.'
+    each resolved to a full path before it runs. Split out of windows-environment-interpreter as its own
+    root cause.'
 - id: setup-report-strict-parsing
   title: Refuse an incomplete or failed check-setup.sh report with its stderr
   branch: null
