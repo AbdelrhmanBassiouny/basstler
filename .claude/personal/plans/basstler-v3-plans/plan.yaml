@@ -25,12 +25,11 @@ items:
   depends_on:
   - basstler-v3/cli-launcher
   status: in progress
-  notes: "REST only (no Projects v2, no GraphQL). Item scope in the issue body, status as a label, dependencies\
-    \ as issue references read back from the body; a pull request closes its item. Read and write go through\
-    \ pydantic models of the REST responses.\n Its new endpoints go through cli-launcher's GitHubClient.\
-    \ In the PR, report how many endpoint models were hand-written and their line count, so the githubkit\
-    \ fallback can be judged on that measure.\n Labels only for blocked and deferred; other statuses come\
-    \ from the linked pull request."
+  notes: REST only (no Projects v2, no GraphQL), through cli-launcher's GitHubClient and pydantic models
+    of the responses. Item scope in the issue body, dependencies as issue references in it, a pull request
+    closes its item; labels only for blocked and deferred. Also adds IssuePlanStore.adopt_issue, listing
+    an existing issue as a sub-issue without copying it, for external-issue-intake. The PR reports how
+    many endpoint models were hand-written and their line count, to judge the githubkit fallback.
 - id: item-brief
   title: One command prints an item's whole brief in at most 3 KB
   branch: null
@@ -72,4 +71,22 @@ items:
   notes: 'Point the existing Pages build at the issue store instead of plan.yaml. Retiring the Artifact
     dashboard and its URL cache is team-basstler/artifact-path-retirement.
 
+    Renders the External issues plan from external-issue-intake: each card shows its ExternalIssueStage
+    chip and its reporter.
+
     '
+
+- id: external-issue-intake
+  title: Issues opened by external users become plan items automatically
+  branch: null
+  pull_request_number: null
+  track: plans
+  depends_on:
+  - plan-store-issues
+  status: not started
+  notes: 'A workflow on issues opened/reopened and workflow_dispatch runs basstler issues intake with
+    GITHUB_TOKEN (issues: write), checking nothing out. Each run reconciles: every open issue by a non-collaborator
+    that is in no plan is adopted under the tracking issue labelled external-issues, with one acknowledgement
+    comment. No schedule; one concurrency group, a job-level collaborator filter and a 3-minute timeout
+    bound spam. Stage (discuss, verify, test, implement, done) is read from GitHub: owner reply, confirmed
+    label, closing PR draft, ready, merged.'

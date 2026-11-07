@@ -7,3 +7,4 @@
 - v3 lives next to v2 in the same package, and the pull request that makes a v2 area unnecessary deletes it.
 - basstler is for anyone: nothing names the owner, a repository or a branch outside configuration.
 - Every new workflow passes actions-budget's rules: no schedule, cancel superseded runs, job timeouts, skip on fork pushes.
+- External issues are adopted as sub-issues, never copied: the reporter's issue is the item, and its stage is read from GitHub state.
