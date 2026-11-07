@@ -248,8 +248,12 @@ fi
 echo "Saved plan '${PLAN_ID}' (plan.yaml, roadmap.md, and the branch index) back to '${NOTES_BRANCH}' on '${ACTIVE_NOTES_REMOTE}'."
 if ! SITE_URL="$(recorded_site_url)" || [ -z "${SITE_URL}" ]; then
   echo "No plan site lists this repository yet - /setup-personal-notes publishes one."
-elif PAGE_URL="$(plan_site_page_url "${PLAN_ID}")"; then
-  echo "The push rebuilds its page on the plan site: ${PAGE_URL}"
 else
-  echo "The push rebuilds the plan site ${SITE_URL}, but looking up this plan's page there failed; the error is above."
+  "${BASSTLER_PYTHON}" -m "${PLAN_SITE_BUILD_START_MODULE}" \
+    || echo "Starting the plan site build failed; the error is above."
+  if PAGE_URL="$(plan_site_page_url "${PLAN_ID}")"; then
+    echo "The plan's page on the plan site: ${PAGE_URL}"
+  else
+    echo "Looking up this plan's page on the plan site ${SITE_URL} failed; the error is above."
+  fi
 fi

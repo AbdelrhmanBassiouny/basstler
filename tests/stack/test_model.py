@@ -225,10 +225,7 @@ def test_ready_child_blocked_until_parent_lands():
     assert build(pull_requests).promotion_order() == []
 
 
-def test_child_promotable_once_parent_reaches_review():
-    # there is no per-stack review-slot limit anymore, so a child may promote alongside
-    # its own parent the moment the parent has reached in-review - it does not have to
-    # wait for the parent to fully merge.
+def test_child_blocked_while_parent_is_only_in_review():
     pull_requests = [
         PullRequest(
             1,
@@ -246,9 +243,7 @@ def test_child_promotable_once_parent_reaches_review():
             head_repository=StackRepository.FORK.value.full_name,
         ),
     ]
-    assert [branch.name for branch in build(pull_requests).promotion_order()] == [
-        StackBranch.CHILD
-    ]
+    assert build(pull_requests).promotion_order() == []
 
 
 def test_child_promotable_once_parent_merged():

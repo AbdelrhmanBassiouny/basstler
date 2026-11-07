@@ -40,7 +40,7 @@ from basstler.plan_site.run_listing import RunListing
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
 from basstler.repository import Repository
-from basstler.setup.report import CheckStatus
+from basstler.setup.report import CheckResult, CheckStatus
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.upstream_reviews.vocabulary import CheckOutcome
 
@@ -346,68 +346,137 @@ def test_a_rejected_session_token_is_named_and_told_apart_from_the_secret():
     assert PlanSiteSecret.TOKEN in description
 
 
-# %% every repository the plan site publishes
+# %% the clone's own repository is judged
 
 
-def test_every_repository_starting_the_build_is_ok():
-    check = DispatchCheck(
-        [
-            dispatch_of(
-                DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED,
-                TOKEN_BEFORE_FAILURE,
-                repository,
+def starting_the_build(repository: Repository) -> RepositoryDispatch:
+    """
+    :param repository: The repository.
+    :return: Its dispatch, which starts the build.
+    """
+    return dispatch_of(
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED,
+        TOKEN_BEFORE_FAILURE,
+        repository,
+    )
+
+
+def missing_the_token(repository: Repository) -> RepositoryDispatch:
+    """
+    :param repository: The repository.
+    :return: Its dispatch, which stores no token.
+    """
+    return dispatch_of(
+        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED,
+        refused(repository, HTTPStatus.NOT_FOUND),
+        repository,
+    )
+
+
+def unreadable(repository: Repository) -> UnreadableDispatch:
+    """
+    :param repository: The repository.
+    :return: Its dispatch, whose runs GitHub refuses to list.
+    """
+    refusing = SecretAnsweringClient(
+        {
+            RunListing.path(repository, NOTES_BRANCH): runs_refused(
+                repository, HTTPStatus.FORBIDDEN
             )
-            for repository in (NOTES_REPOSITORY, OTHER_REPOSITORY)
-        ]
+        }
+    )
+    return DispatchReading.read(refusing, refusing, repository, NOTES_BRANCH)
+
+
+def test_the_own_repository_starting_the_build_is_ok():
+    check = DispatchCheck(starting_the_build(NOTES_REPOSITORY), [])
+
+    assert check.result().status is CheckStatus.OK
+
+
+def test_the_own_repository_missing_the_token_needs_setup():
+    check = DispatchCheck(missing_the_token(NOTES_REPOSITORY), [])
+
+    assert check.result().status is CheckStatus.NEEDS_SETUP
+
+
+def test_the_own_repository_is_judged_whatever_the_others_are():
+    check = DispatchCheck(
+        starting_the_build(NOTES_REPOSITORY), [missing_the_token(OTHER_REPOSITORY)]
     )
 
     assert check.result().status is CheckStatus.OK
 
 
-def one_repository_missing_the_token() -> DispatchCheck:
-    """
-    :return: A check over the notes repository, starting the build, and
-        :data:`OTHER_REPOSITORY`, which stores no token.
-    """
-    return DispatchCheck(
-        [
-            dispatch_of(
-                DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED, TOKEN_BEFORE_FAILURE
-            ),
-            dispatch_of(
-                DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED,
-                refused(OTHER_REPOSITORY, HTTPStatus.NOT_FOUND),
-                OTHER_REPOSITORY,
-            ),
-        ]
+def test_the_verdict_names_only_the_own_repository():
+    check = DispatchCheck(
+        missing_the_token(NOTES_REPOSITORY), [missing_the_token(OTHER_REPOSITORY)]
     )
 
+    detail = check.result().detail
 
-def test_one_repository_missing_the_token_needs_setup():
-    assert one_repository_missing_the_token().result().status is (
-        CheckStatus.NEEDS_SETUP
-    )
-
-
-def test_only_the_repositories_not_starting_the_build_are_named():
-    detail = one_repository_missing_the_token().result().detail
-
-    assert OTHER_REPOSITORY.full_name in detail
-    assert f"{NOTES_REPOSITORY.full_name} " not in detail
+    assert NOTES_REPOSITORY.full_name in detail
+    assert OTHER_REPOSITORY.full_name not in detail
 
 
 def test_a_token_waiting_for_the_next_push_is_not_verified():
     result = DispatchCheck(
-        [
-            dispatch_of(
-                DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
-                stored(DatasetLocation.PLAN_SITE_TOKEN_STORED_AFTER_FAILURE),
-            )
-        ]
+        dispatch_of(
+            DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
+            stored(DatasetLocation.PLAN_SITE_TOKEN_STORED_AFTER_FAILURE),
+        ),
+        [],
     ).result()
 
     assert result.status is CheckStatus.UNVERIFIED
     assert result.detail.startswith(UNVERIFIED_PREFIX)
+
+
+# %% every other repository is informational
+
+
+def test_every_other_repository_has_one_informational_row():
+    others = [
+        starting_the_build(OTHER_REPOSITORY),
+        missing_the_token(Repository.parse("an-owner/a-third-repository")),
+    ]
+    check = DispatchCheck(starting_the_build(NOTES_REPOSITORY), others)
+
+    assert check.other_results() == [
+        CheckResult(CheckStatus.INFORMATIONAL, other.describe()) for other in others
+    ]
+
+
+def test_another_repository_missing_the_token_stays_informational_and_says_so():
+    check = DispatchCheck(
+        starting_the_build(NOTES_REPOSITORY), [missing_the_token(OTHER_REPOSITORY)]
+    )
+
+    (row,) = check.other_results()
+
+    assert row.status is CheckStatus.INFORMATIONAL
+    assert row.detail == missing_the_token(OTHER_REPOSITORY).describe()
+
+
+def test_another_repository_that_cannot_be_read_is_not_a_fault():
+    check = DispatchCheck(
+        starting_the_build(NOTES_REPOSITORY), [unreadable(OTHER_REPOSITORY)]
+    )
+
+    (row,) = check.other_results()
+
+    assert row.status is CheckStatus.INFORMATIONAL
+    assert row.detail == unreadable(OTHER_REPOSITORY).describe()
+    assert check.result().status is CheckStatus.OK
+
+
+def test_the_rows_are_the_verdict_then_one_per_other_repository():
+    check = DispatchCheck(
+        starting_the_build(NOTES_REPOSITORY),
+        [missing_the_token(OTHER_REPOSITORY)],
+    )
+
+    assert check.rows() == [check.result(), *check.other_results()]
 
 
 # %% the repositories the hub lists
@@ -470,26 +539,11 @@ def test_a_notes_remote_off_github_cannot_be_checked(
 
 def test_runs_that_cannot_be_read_are_reported_as_not_verified():
     result = DispatchCheck(
-        [reading_with_runs_refused(HTTPStatus.UNAUTHORIZED)]
+        reading_with_runs_refused(HTTPStatus.UNAUTHORIZED), []
     ).result()
 
     assert result.status is CheckStatus.UNVERIFIED
     assert result.detail.startswith(UNVERIFIED_PREFIX)
-
-
-def test_a_repository_needing_setup_outranks_one_that_cannot_be_read():
-    check = DispatchCheck(
-        [
-            reading_with_runs_refused(HTTPStatus.UNAUTHORIZED),
-            dispatch_of(
-                DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED,
-                refused(OTHER_REPOSITORY, HTTPStatus.NOT_FOUND),
-                OTHER_REPOSITORY,
-            ),
-        ]
-    )
-
-    assert check.result().status is CheckStatus.NEEDS_SETUP
 
 
 def test_the_recorded_site_repository_is_named_in_the_command():
@@ -498,12 +552,11 @@ def test_the_recorded_site_repository_is_named_in_the_command():
     """
     site = SiteRepository(Repository("An-Owner", "a-site"))
     check = DispatchCheck(
-        [
-            dispatch_of(
-                DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED,
-                refused(NOTES_REPOSITORY, HTTPStatus.NOT_FOUND),
-            )
-        ],
+        dispatch_of(
+            DatasetLocation.PLAN_SITE_DISPATCH_RUNS_NEVER_SUCCEEDED,
+            refused(NOTES_REPOSITORY, HTTPStatus.NOT_FOUND),
+        ),
+        [],
         site,
     )
 

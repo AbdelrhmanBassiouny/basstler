@@ -365,6 +365,9 @@ PLAN_SITE_PUBLICATION_MODULE="basstler.plan_site.publication"
 # basstler.plan_site.dispatch_check: prints check-setup.sh's plan site status and
 # detail, from the notes branch's latest dispatch run.
 PLAN_SITE_DISPATCH_CHECK_MODULE="basstler.plan_site.dispatch_check"
+# basstler.plan_site.build_start: starts the plan site's build with this session's own
+# GitHub credential, after a push to the notes branch.
+PLAN_SITE_BUILD_START_MODULE="basstler.plan_site.build_start"
 # basstler.plan.item_brief: prints one plan item's brief - the plan header, the item,
 # its dependencies' live readiness and the plan's standing rules.
 ITEM_BRIEF_MODULE="basstler.plan.item_brief"
@@ -666,8 +669,8 @@ BASSTLER_INSTALLED_UV="${BASSTLER_UV_DIRECTORY}/bin/uv"
 # its latest release.
 BASSTLER_REPOSITORY_URL="${BASSTLER_REPOSITORY_URL:-https://github.com/AbdelrhmanBassiouny/basstler}"
 # PLUGIN_MANIFEST: the plugin's manifest, which names no version: a release is
-# only a tag on its merge commit, so the plugin a session syncs from that merge
-# is already the release, with nothing committed after it to miss.
+# only a tag on its merge commit, and the marketplace serves the plugin from the
+# release branch at that tag, with nothing committed after it to miss.
 PLUGIN_MANIFEST="${PLUGIN_ROOT}/.claude-plugin/plugin.json"
 # BASSTLER_RELEASE_FILE: the latest release tag last read from
 # BASSTLER_REPOSITORY_URL - the one the package is installed at, read once per

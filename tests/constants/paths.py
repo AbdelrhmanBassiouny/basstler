@@ -25,6 +25,11 @@ class RepositoryLocation(PathEnumeration):
     The repository root.
     """
 
+    MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
+    """
+    The marketplace that lists the plugin and says where it is served from.
+    """
+
     PLUGIN = ROOT / "plugin"
     """
     The Claude Code plugin: its manifest, hooks and skills.
@@ -50,6 +55,11 @@ class RepositoryLocation(PathEnumeration):
     The workflow that tags a merge commit as a release.
     """
 
+    TESTS_WORKFLOW = WORKFLOWS / "tests.yml"
+    """
+    The workflow that lints and tests every pull request and every push to main.
+    """
+
     PLAN_SITE_BUILD_WORKFLOW = WORKFLOWS / "plan-site-build.yml"
     """
     The reusable workflow that builds the plan site and deploys a changed one.
@@ -64,6 +74,20 @@ class DatasetLocation(PathEnumeration):
     DIRECTORY = Path(__file__).parents[1] / "dataset"
     """
     The dataset directory itself.
+    """
+
+    WORKFLOW_NAMING_THE_REPOSITORY = (
+        DIRECTORY / "package-contract" / "names-the-repository.yml"
+    )
+    """
+    A workflow that names this repository and the package but runs none of its modules.
+    """
+
+    WORKFLOW_RUNNING_THE_PACKAGE = (
+        DIRECTORY / "package-contract" / "runs-the-package.yml"
+    )
+    """
+    A workflow that runs the package's own entry point.
     """
 
     BOOTSTRAP_PLAN = DIRECTORY / "bootstrap-plan.yaml"
@@ -242,6 +266,19 @@ class DatasetLocation(PathEnumeration):
     """
     A module standing in for :mod:`basstler.plan_site.dispatch_check`, reporting a
     dispatch that needs setup.
+    """
+
+    DISPATCH_CHECK_WITH_OTHER_REPOSITORY_STUB = (
+        STUBS / "dispatch_check_with_other_repository.py"
+    )
+    """
+    A module standing in for :mod:`basstler.plan_site.dispatch_check`, reporting a
+    dispatch that starts the build and a second repository that does not.
+    """
+
+    BUILD_START_STUB = STUBS / "build_start_prints_its_name.py"
+    """
+    A module standing in for :mod:`basstler.plan_site.build_start`, printing its name.
     """
 
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"

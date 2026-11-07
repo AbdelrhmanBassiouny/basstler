@@ -18,6 +18,7 @@ from basstler.plan_site.workflows import (
 )
 from basstler.repository import GitHubAddress, Repository
 from basstler.standard_streams import StandardStreamHandler
+from basstler.github.pull_request import NewPullRequestField
 from basstler.github.client import (
     GitHubClient,
     HttpMethod,
@@ -61,8 +62,8 @@ class UserStep(StrEnum):
 
     ADD_MERGE_WORKFLOW = "merge the workflow that starts the build on every merge"
     """
-    The notes repository's default branch refused the merge workflow, which waits on a
-    branch of its own.
+    The merge workflow waits on a branch of its own until its pull request merges into the
+    notes repository's default branch.
     """
 
 
@@ -190,9 +191,9 @@ class UserSteps:
                     "the plan site.",
                     f"Name the token and set Resource owner to {site.owner}.",
                     "Under Repository access, choose Only select repositories and "
-                    f"select {site.full_name}, {repositories}.",
+                    f"select {site.full_name} alone.",
                     "Under Permissions, open Repository permissions and set Actions "
-                    "to Read and write and Contents to Read-only.",
+                    "to Read and write.",
                     "Click Generate token and copy the token now; GitHub shows it "
                     "once.",
                 ),
@@ -218,8 +219,8 @@ class UserSteps:
 @dataclass(frozen=True)
 class MergeWorkflowProposal:
     """
-    The merge workflow waiting on a branch of its own, for the user to merge into a
-    default branch that refused it.
+    The merge workflow waiting on a branch of its own, for the user to merge into the
+    notes repository's default branch.
     """
 
     repository: Repository
@@ -254,7 +255,7 @@ class MergeWorkflowProposal:
             },
             safe=":",
         )
-        return f"{self.repository.api_path}/pulls?{query}"
+        return f"{self.repository.pull_requests_path}?{query}"
 
     def pending(self, github: GitHubClient) -> PendingStep:
         """
@@ -268,8 +269,12 @@ class MergeWorkflowProposal:
             return self.merging(RestPullRequestSummary.from_json(listed[0]))
         opened = github.attempt_send(
             HttpMethod.POST,
-            f"{self.repository.api_path}/pulls",
-            {"title": self.title, "head": self.head, "base": self.base},
+            self.repository.pull_requests_path,
+            {
+                NewPullRequestField.TITLE: self.title,
+                NewPullRequestField.HEAD: self.head,
+                NewPullRequestField.BASE: self.base,
+            },
         )
         if opened.failure is not None:
             return PendingStep(

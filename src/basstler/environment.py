@@ -14,6 +14,17 @@ from enum import StrEnum
 from basstler.github.credential import CredentialOrigin
 
 
+class EnvironmentFlag(StrEnum):
+    """
+    The values a variable that switches something on or off is set to.
+    """
+
+    TRUE = "true"
+    """
+    The thing the variable stands for is on.
+    """
+
+
 class EnvironmentVariable(StrEnum):
     """
     An environment variable, named by its value.
@@ -27,6 +38,10 @@ class EnvironmentVariable(StrEnum):
             is not set.
         """
         return os.environ.get(self)
+
+    def is_true(self) -> bool:
+        """:return: Whether the variable is set to :attr:`EnvironmentFlag.TRUE`."""
+        return self.read() == EnvironmentFlag.TRUE
 
 
 class OperatingSystemVariable(EnvironmentVariable):

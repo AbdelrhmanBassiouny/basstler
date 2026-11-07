@@ -213,7 +213,7 @@ class UpstreamRestRoute:
             {"head": f"{owner}:{branch}", "state": "all", "per_page": self.page_size},
             safe=":",
         )
-        return f"{self.repository.api_path}/pulls?{query}"
+        return f"{self.repository.pull_requests_path}?{query}"
 
     def pull_request(self, number: int) -> str:
         """
@@ -401,7 +401,7 @@ class ReadSource(StrEnum):
         """
         :return: The API the place this runs in can reach.
         """
-        if ClaudeCodeVariable.REMOTE.read() == "true":
+        if ClaudeCodeVariable.REMOTE.is_true():
             return cls.REST
         return cls.GRAPHQL
 

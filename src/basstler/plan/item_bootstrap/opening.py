@@ -9,11 +9,11 @@ import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
 from basstler.environment import GitHubCredentialVariable
+from basstler.github.pull_request import NewPullRequestField
 from basstler.maintenance.board import PullRequestField
 from basstler.plan.item_bootstrap.documents import PlanDocuments, ProjectCheckout
 from basstler.plan.item_bootstrap.exceptions import (
@@ -30,37 +30,6 @@ from basstler.plan.model import (
 from basstler.repository import GitHubAddress, PullRequestReference, Repository
 
 # %% opening the work
-
-
-class NewPullRequestField(StrEnum):
-    """
-    The fields GitHub's create-pull-request endpoint reads from its JSON body.
-    """
-
-    TITLE = "title"
-    """
-    The pull request's title.
-    """
-
-    BODY = "body"
-    """
-    The pull request's description.
-    """
-
-    HEAD = "head"
-    """
-    The branch carrying the changes.
-    """
-
-    BASE = "base"
-    """
-    The branch to merge into.
-    """
-
-    DRAFT = "draft"
-    """
-    Whether it opens as a draft.
-    """
 
 
 @dataclass(frozen=True)
@@ -146,7 +115,7 @@ class GitHubPullRequestOpener(PullRequestOpener):
 
     def open_pull_request(self, pull_request: NewPullRequest) -> PullRequestReference:
         http_request = urllib.request.Request(
-            f"{self.api_root}/{pull_request.repository.api_path}/pulls",
+            f"{self.api_root}/{pull_request.repository.pull_requests_path}",
             data=json.dumps(pull_request.to_json()).encode(),
             method="POST",
             headers={
