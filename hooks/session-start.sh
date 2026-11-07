@@ -331,6 +331,18 @@ if ACTIONS_USAGE_REPORT="$("${BASSTLER_PYTHON}" -m "${ACTIONS_USAGE_MODULE}" \
   fi
 fi
 
+# Main's tests: the issue the test workflow keeps open while they fail, so a failing
+# default branch is seen at the start of a session. Never fatal.
+SUMMARY_MAIN_TESTS="$(main_tests_line_not_checked)"
+if MAIN_FAILURE_ISSUE="$("${BASSTLER_PYTHON}" -m "${MAIN_FAILURE_MODULE}" show \
+    --repository "$(repository_name)" 2>/dev/null)"; then
+  if [ -z "${MAIN_FAILURE_ISSUE}" ]; then
+    SUMMARY_MAIN_TESTS="$(main_tests_line_passing)"
+  else
+    SUMMARY_MAIN_TESTS="$(main_tests_line_failing "${MAIN_FAILURE_ISSUE}")"
+  fi
+fi
+
 # Setup verdict from check-setup.sh, run last so it sees what this run wrote.
 SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
 if [ -f "${CHECK_SETUP_SCRIPT}" ]; then
@@ -359,6 +371,7 @@ session-start.sh summary:
   dependencies:    ${SUMMARY_DEPENDENCIES}
   reviews Action:  ${SUMMARY_UPSTREAM_REVIEWS_ACTION}
   Actions usage:   ${SUMMARY_ACTIONS_USAGE}
+  main tests:      ${SUMMARY_MAIN_TESTS}
   setup:           ${SUMMARY_SETUP}
   plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY
