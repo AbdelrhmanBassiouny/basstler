@@ -8,3 +8,4 @@
 - basstler is for anyone: nothing names the owner, a repository or a branch outside configuration.
 - Every new workflow passes actions-budget's rules: no schedule, cancel superseded runs, job timeouts, skip on fork pushes.
 - External issues are adopted as sub-issues, never copied: the reporter's issue is the item, and its stage is read from GitHub state.
+- An external issue is placed with /add-plan-item before any other stage; the intake only adopts it into the inbox and never decides where it belongs.

@@ -84,9 +84,9 @@ items:
   depends_on:
   - plan-store-issues
   status: not started
-  notes: 'A workflow on issues opened/reopened and workflow_dispatch runs basstler issues intake with
-    GITHUB_TOKEN (issues: write), checking nothing out. Each run reconciles: every open issue by a non-collaborator
-    that is in no plan is adopted under the tracking issue labelled external-issues, with one acknowledgement
-    comment. No schedule; one concurrency group, a job-level collaborator filter and a 3-minute timeout
-    bound spam. Stage (discuss, verify, test, implement, done) is read from GitHub: owner reply, confirmed
-    label, closing PR draft, ready, merged.'
+  notes: 'A workflow on issues opened/reopened and workflow_dispatch runs basstler issues intake (GITHUB_TOKEN,
+    issues: write). Each run adopts every open non-collaborator issue in no plan into the inbox plan labelled
+    external-issues. Stages, read from GitHub: place while in the inbox (a session runs /add-plan-item:
+    fold into an item, join a plan, or start one), then discuss, verify (confirmed label), test (draft
+    PR), implement, done. No schedule, no LLM in the Action; one concurrency group, a job-level filter
+    and a 3-minute timeout bound spam.'
