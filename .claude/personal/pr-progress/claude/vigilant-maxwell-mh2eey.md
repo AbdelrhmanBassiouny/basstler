@@ -1,10 +1,11 @@
 ## Plan
-- Add pydantic; give JSONModel a validated pydantic subclass with a shared from_json.
-- Remove the GitHub API key enums: upstream_reviews (GraphQL, REST), github/pull_request, maintenance (board, github, upstream_action), plan_site (build_start, dispatch_check, publication, run_listing), release_version.
-- Tests first for each model; ruff, format hook, code-rules check, full suite.
+- GitHub API payload keys only inside their models, on pydantic (first slice of payload-key-models).
 
 ## Done
-- Kickoff: pydantic approved, split into 3 items (file-key-models, report-key-models added), draft PR #158.
+- ValidatedJSONModel, Connection, NamedAsGitHub, ConclusionOutcome; pydantic added.
+- upstream_reviews GraphQL/REST, release_version, NewPullRequest, RepositoryDetails, WorkflowDispatch, RunListing, RepositoryLabel.
+- Full suite at af7cf1d1: 2193 passed, 1 skipped; ruff and code-rules pass.
+- Plan: file-key-models, report-key-models, pull-request-record-model added.
 
 ## Next
-- Validated JSONModel base and its tests.
+- Owner review of draft PR #158.
