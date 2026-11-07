@@ -17,10 +17,12 @@ tracks:
 items:
 - id: restack-without-upstream
   title: Maintenance board and restack run in a repository with no upstream
-  branch: null
+  branch: ccr-53ae99bc-4074dn
   track: fixes
+  pull_request_number: 157
+  session: https://claude.ai/code/session_018wfiv76b5y8sk4AkE4DwbU
   depends_on: []
-  status: not started
+  status: in progress
   notes: 'Also covers check-setup reporting stack_upstream needs-setup (and exiting 1) in a repository
     that is not a fork: no upstream is a supported setup. Folded in from #155. Own bug PR off main
     after #155. Decide with the user whether the stack pass merges or rebases a branch based on main,
