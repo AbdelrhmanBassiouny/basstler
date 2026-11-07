@@ -43,8 +43,10 @@ next to the workflow it describes, because it is read rather than run.
   both (see `Configuration.load` in `stack/settings.py`), including a `fork_repository` to pick between
   remotes when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `check_state`,
-  `session`) that `basstler.stack` reads. Written from GitHub as scratch by whatever refreshes it,
-  to `basstler/board.json` under the repository's common git directory
+  `session`) that `basstler.stack` reads. Only `basstler.maintenance board --write` writes it, for a
+  person to inspect; every `basstler.maintenance` command that needs the stack exports its own,
+  in memory, so none depends on a file an earlier command left or a whole pass discarded. It is
+  written to `basstler/board.json` under the repository's common git directory
   (`git rev-parse --git-common-dir`): one file every worktree of the repository shares, which no
   checkout can commit and no install of the package holds. The maintenance pass's full report sits
   beside it as `basstler/maintenance-report.json`.
@@ -73,8 +75,10 @@ next to the workflow it describes, because it is read rather than run.
     so computing it from the intended change alone silently strips the rest; this is what the
     maintenance skill passes to every label write rather than working it out itself.
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack check-move --action push --source B --destination B
-    --destination-remote <remote>` - exits `0` when the move is safe and `5` with its reasons on
-    stderr when it is not: wrong branch checked out, a push naming different branches on each
+    --destination-remote <remote>` - exits `0` when the move is safe; any other status means *not
+    cleared* - `5` with its reasons on stderr when it is unsafe, `3` when there is no `board.json`
+    to check it against. A push by hand uses `basstler.maintenance push` instead, which checks the
+    move against a fresh export and pushes only when it is clear. The checks refuse: wrong branch checked out, a push naming different branches on each
     side, a destination that is not the fork, or a push that would make a child an ancestor of its
     own parent (which GitHub reads as a merged pull request).
   - `~/.local/share/basstler/venv/bin/python -m basstler.stack merge-probe --remote <remote> --base A --head B` - fetches
@@ -98,7 +102,8 @@ next to the workflow it describes, because it is read rather than run.
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.
 - **`basstler.maintenance`** - the executor: the half of a pass that moves commits, where `basstler.stack`
-  only derives and prints. `board --write`, `prepare` (the reparents and what each upstream
+  only derives and prints. `board --write`, `push` (publish the checked-out branch to the fork,
+  only once the move checks clear it), `prepare` (the reparents and what each upstream
   summary is written from, as JSON), `fast-forward`, `restack`, `promote`, `checks` (the verdict
   over every open branch's checks) and `run-report` (the whole pass, ending in a size-bounded
   finish summary with the full report in a file, or `--json` for tooling); see [Running a maintenance pass](#running-a-maintenance-pass). It is the
@@ -186,8 +191,8 @@ merged onto the published tip as before.
 - **The branch is the durable state** - commit + push often; cloud containers are ephemeral.
 - **Restack only after the parent has landed/updated.** Restacking onto a still-conflicting,
   unmerged parent is premature - land the parent first.
-- **Refresh `board.json` before acting.** It's a snapshot; a pass exports a fresh one from
-  GitHub.
+- **Never act on an old `board.json`.** It's a snapshot; every maintenance command exports a fresh
+  one from GitHub for itself.
 - **CI is the validator.** A suite the cloud container cannot run (missing system
   dependencies, hardware, services) is never run locally - poll a PR's CI with the GitHub MCP and treat its
   red/green as the oracle (no session subscribes to a PR's activity - CI is learned by polling; see [maintenance-pass.md](maintenance-pass.md)). A

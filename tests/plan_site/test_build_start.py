@@ -10,6 +10,10 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any
 
+import pytest
+
+import basstler.plan_site.build_start
+
 from basstler.github.client import (
     GitHubAttemptClient,
     GitHubResponse,
@@ -19,12 +23,14 @@ from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.locations import WorkflowLocation
 from basstler.plan_site.build_start import (
+    BUILD_START_COMMAND,
     BuildStart,
     CodeFence,
     DispatchKey,
     GitHubCommand,
     RepositoryKey,
     SessionTool,
+    SiteAccess,
 )
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.repository import Repository
@@ -165,3 +171,37 @@ def test_a_local_session_is_shown_the_command_in_a_bash_block_of_its_own():
     assert description.endswith(
         "\n".join(["", CodeFence.BASH, GitHubCommand.LOG_IN, CodeFence.CLOSE])
     )
+
+
+@pytest.mark.parametrize("in_cloud_session", [True, False])
+def test_a_build_that_did_not_start_names_the_command_that_starts_it_again(
+    in_cloud_session: bool,
+):
+    """
+    Saving the plan again changes nothing and so starts no build: the retry has to be
+    this command itself.
+    """
+    client = SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
+
+    description = BuildStart.attempt(SITE, client).describe(in_cloud_session)
+
+    assert BUILD_START_COMMAND in description
+
+
+def test_the_retry_command_runs_this_module():
+    assert BUILD_START_COMMAND.endswith(f"-m {basstler.plan_site.build_start.__name__}")
+
+
+# %% checking the access before any save
+
+
+def test_a_session_that_can_read_the_site_repository_is_told_nothing():
+    assert SiteAccess(SITE).missing_access(SiteAnsweringClient(), True) is None
+
+
+def test_a_cloud_session_that_cannot_read_the_site_repository_is_told_to_attach_it():
+    client = SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
+
+    missing = SiteAccess(SITE).missing_access(client, in_cloud_session=True)
+
+    assert missing.endswith(SiteAccess(SITE).remedy(in_cloud_session=True))
