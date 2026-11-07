@@ -1,0 +1,1 @@
+{"id": 1101, "number": 101, "title": "Store plans as issues", "state": "open", "html_url": "https://github.com/example-owner/example-repo/issues/101", "repository_url": "https://api.github.com/repos/example-owner/example-repo", "body": "Store plans as issues.\n\n## Depends on\n\n- #103\n- other-owner/other-repo#7", "labels": []}

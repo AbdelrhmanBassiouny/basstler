@@ -1,0 +1,5 @@
+[
+  {"id": 1101, "number": 101, "title": "Store plans as issues", "state": "open", "html_url": "https://github.com/example-owner/example-repo/issues/101", "repository_url": "https://api.github.com/repos/example-owner/example-repo", "body": "Store plans as issues.\n\n## Depends on\n\n- #103\n- other-owner/other-repo#7", "labels": []},
+  {"id": 1102, "number": 102, "title": "Import plans", "state": "open", "html_url": "https://github.com/example-owner/example-repo/issues/102", "repository_url": "https://api.github.com/repos/example-owner/example-repo", "body": "Import every v2 plan.", "labels": [{"id": 5, "name": "blocked", "color": "b60205"}]},
+  {"id": 1103, "number": 103, "title": "Read plans", "state": "closed", "html_url": "https://github.com/example-owner/example-repo/issues/103", "repository_url": "https://api.github.com/repos/example-owner/example-repo", "body": null, "labels": []}
+]

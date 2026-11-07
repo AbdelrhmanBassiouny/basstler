@@ -588,3 +588,41 @@ class RuleSectionsFile(PathEnumeration):
     The text of the sections in ``rule_sections.py``, with placeholders for the module's
     path and the commands' invocations.
     """
+
+
+class PlanStoreResponse(PathEnumeration):
+    """
+    The REST responses the issue-based plan store is answered with, as recorded.
+    """
+
+    DIRECTORY = DatasetLocation.DIRECTORY / "plan-store"
+    """
+    The directory holding them.
+    """
+
+    TRACKING_ISSUE = DIRECTORY / "tracking-issue.json"
+    """
+    Issue 100, a plan's tracking issue.
+    """
+
+    CREATED_ITEM_ISSUE = DIRECTORY / "created-item-issue.json"
+    """
+    Issue 101, an item depending on issue 103 and on ``other-owner/other-repo#7``.
+    """
+
+    SUB_ISSUES = DIRECTORY / "sub-issues.json"
+    """
+    One page listing issue 101, issue 102 labelled ``blocked``, and closed issue 103.
+    """
+
+    ITEM_TIMELINE = DIRECTORY / "item-timeline.json"
+    """
+    Issue 101's timeline: a label, then references from open pull request 110 closing
+    it, merged pull request 111 only mentioning it, issue 112, and merged pull request
+    113 on another repository closing it.
+    """
+
+    EMPTY_TIMELINE = DIRECTORY / "empty-timeline.json"
+    """
+    A timeline with no events.
+    """
