@@ -9,3 +9,4 @@
 - The customization model is called a playbook; workflow keeps meaning a GitHub Actions workflow.
 - Two opt-in distributions sit beside the hub: basstler-graph (plan-graph; plan, git, github) and basstler-recommender (work-recommender's general ranker and priorities policy model). Neither is in DefaultPlaybook; a playbook adds them, and they reach the hub and plan items only through SitePanel and ItemAttribute components.
 - Freeze until uv-workspace lands: no new branch starts in plan, plan_site, github or stack; the open pull requests finish and land first, while package-map runs beside them. One that stalls in review is rebased across the moves rather than waited for.
+- Every module is placed in a distribution in basstler.package_map by the pull request that adds or moves it; the package-boundary check fails on a module no distribution claims.
