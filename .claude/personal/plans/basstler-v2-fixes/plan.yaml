@@ -21,3 +21,24 @@ items:
   track: fixes
   depends_on: []
   status: not started
+
+- id: private-notes-site-build
+  title: Plan site build reads a private notes repository
+  branch: null
+  pull_request_number: null
+  track: fixes
+  depends_on: []
+  status: not started
+  notes: 'External report #152 (tomsch420): the plan site build cannot read a private notes repository.
+    Discuss and reproduce on the issue first, then a failing test, then one bug PR off main closing #152.'
+
+- id: separate-notes-remote-save
+  title: save-plan.sh saves when the notes remote is a separate repository
+  branch: null
+  pull_request_number: null
+  track: fixes
+  depends_on: []
+  status: not started
+  notes: 'External report #153 (tomsch420): save-plan.sh refuses every plan when the notes remote is a
+    separate repository. Discuss and reproduce on the issue first, then a failing test, then one bug PR
+    off main closing #153.'
