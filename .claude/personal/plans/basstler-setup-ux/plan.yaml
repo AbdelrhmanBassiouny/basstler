@@ -160,4 +160,18 @@ items:
     (F plus page-merge-recheck).
 
     '
+
+- id: build-failure-report
+  title: Report the plan site's failed builds, with GitHub's reason, where the user sees them
+  track: status
+  depends_on:
+  - run-as-proof
+  - basstler-packages/uv-workspace
+  status: not started
+  session: https://claude.ai/code/session_018wfiv8ntWsdS2nU92PrJbr
+  notes: 'On 2026-11-07, eleven plan saves printed "Started the plan site build" while every run failed
+    in 2 s with no step run: GitHub locked the account over billing, shown only as a run annotation. Without
+    polling: the session-start summary and the setup check read the site''s latest run, and a failure
+    shows its annotations (check-runs annotations API), e.g. the billing lock and the settings page that
+    fixes it. A build start says it started a run, never that the site is updated.'
 tracking_issue: 135
