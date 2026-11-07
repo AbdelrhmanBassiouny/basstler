@@ -16,6 +16,7 @@ from pathlib import Path
 
 from cyclopts import App
 
+from basstler.exit_codes import StackExitCode
 from basstler.github.client import (
     GitHubAttemptClient,
     GitHubResponse,
@@ -248,38 +249,38 @@ def recorded_site() -> SiteRepository | None:
 
 
 @app.default
-def start_build() -> int:
+def start_build() -> StackExitCode:
     """
     Start this clone's plan site build and print what happened.
 
-    :return: 0, also when the build did not start: the notes were saved either way.
+    :return: :attr:`StackExitCode.SUCCESS`, also when the build did not start: the notes were saved either way.
     """
     site = recorded_site()
     if site is None:
         logger.info("No plan site lists this repository, so no build was started.")
-        return 0
+        return StackExitCode.SUCCESS
     attempt = BuildStart.attempt(site, GitHubRestClient())
     logger.info(attempt.describe(ClaudeCodeVariable.REMOTE.is_true()))
-    return 0
+    return StackExitCode.SUCCESS
 
 
 @app.command(name="check-access")
-def check_access() -> int:
+def check_access() -> StackExitCode:
     """
     Print how this session gets access to the site repository, and nothing when it
     already has it or no plan site lists this repository.
 
-    :return: 0, also when the access is missing: the line printed is the answer.
+    :return: :attr:`StackExitCode.SUCCESS`, also when the access is missing: the line printed is the answer.
     """
     site = recorded_site()
     if site is None:
-        return 0
+        return StackExitCode.SUCCESS
     missing = SiteAccess(site).missing_access(
         GitHubRestClient(), ClaudeCodeVariable.REMOTE.is_true()
     )
     if missing is not None:
         logger.info(missing)
-    return 0
+    return StackExitCode.SUCCESS
 
 
 if __name__ == "__main__":

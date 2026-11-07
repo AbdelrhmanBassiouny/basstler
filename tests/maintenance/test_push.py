@@ -45,8 +45,9 @@ def test_a_push_that_would_close_a_child_as_merged_is_refused_and_not_made(
     fork_checkout: ForkCheckout,
 ):
     """
-    A parent that has swallowed its own child would, once pushed, make GitHub close the
-    child's pull request as merged.
+    The child's pull request targets the parent's branch. Once the parent contains every
+    commit of the child, GitHub treats the child as merged and closes its pull request,
+    so the move check refuses that push instead of letting the child be lost.
     """
     a_parent_and_child(fork_checkout)
     before = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.PARENT)
@@ -65,7 +66,10 @@ def test_a_push_that_would_close_a_child_as_merged_is_refused_and_not_made(
 
 def test_a_push_the_fork_rejects_is_a_failed_git_command(fork_checkout: ForkCheckout):
     """
-    A branch that moved on the fork since this checkout last saw it is never forced.
+    The branch was pushed from somewhere else after this checkout last fetched it, and
+    this checkout has since made a different commit on top of the old head. The two have
+    diverged, so a plain push is rejected; the command never forces it, which would
+    discard the commit pushed elsewhere, and reports the failed git command instead.
     """
     a_parent_and_child(fork_checkout)
     published = fork_checkout.commit_on(

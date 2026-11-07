@@ -168,7 +168,8 @@ def test_a_command_that_needs_the_stack_exports_its_own_board(
 ):
     """
     No command reads a board an earlier one wrote, so with no board on disk the first
-    thing it misses is the credential its own export needs.
+    thing it misses is the GitHub token its own export needs: the subprocess runs without
+    one, so exporting the board is what fails.
 
     The upstream remote is dropped first because a subprocess reads the committed
     ``stack.toml``, whose upstream is this repository's own - against which both of the
