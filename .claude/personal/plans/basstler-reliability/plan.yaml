@@ -93,13 +93,12 @@ items:
   branch: null
   pull_request_number: null
   track: guards
-  depends_on: []
-  status: not started
-  notes: Commit uv.lock; session start and basstler.sh install with uv sync --frozen, so two
-    sessions never run different dependency versions, and the install is fast enough to finish
-    before a skill starts. uv approved by the owner 2026-11-03. basstler-v3/plugin-bin-probe
-    (PR 133) found no bin/ allowed, and CLAUDE_PLUGIN_DATA reaches hooks and MCP servers,
-    not Bash commands.
+  depends_on:
+  - basstler-packages/uv-workspace
+  status: deferred
+  notes: 'Folded into basstler-packages/uv-workspace (2026-11-07): that item commits uv.lock and makes
+    the session start install with uv sync --frozen. uv approved by the owner 2026-11-03. basstler-v3/plugin-bin-probe
+    (PR 133) found no bin/ allowed, and CLAUDE_PLUGIN_DATA reaches hooks and MCP servers, not Bash commands.'
 - id: repeat-run-evals
   title: Evals run each case several times and fail on differing verdicts
   branch: null
