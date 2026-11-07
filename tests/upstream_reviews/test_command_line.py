@@ -5,6 +5,7 @@ thread pagination, pull request resolution, report rendering, and the gh-backed 
 
 from __future__ import annotations
 
+import dataclasses
 import inspect
 import json
 import os
@@ -42,7 +43,7 @@ from basstler.upstream_reviews.failure_logs import (
 from basstler.upstream_reviews.pull_request_models import (
     CheckResult,
     CheckStatus,
-    PullRequest,
+    GraphQLRequest,
     UpstreamPullRequestSnapshot,
 )
 from basstler.upstream_reviews.readers import (
@@ -60,7 +61,6 @@ from basstler.upstream_reviews.review_models import (
 from basstler.upstream_reviews.vocabulary import (
     CheckOutcome,
     JSONModel,
-    PullRequestJSONKey,
     QueryVariable,
     ReviewState,
     RollupState,
@@ -285,12 +285,12 @@ def test_a_pull_request_reads_its_checks_off_its_head_commit():
 
 
 def test_a_pull_request_listing_no_commits_has_no_checks():
-    data = RecordedResponse.PULL_REQUEST_PAGE_TWO.load()[PullRequestJSONKey.REPOSITORY][
-        PullRequestJSONKey.PULL_REQUEST
-    ]
-    data[PullRequestJSONKey.COMMITS][PullRequestJSONKey.NODES] = []
+    """
+    A pull request whose commit list is empty has no checks.
+    """
+    recorded = RecordedResponse.PULL_REQUEST_PAGE_TWO.recorded().pull_request
 
-    assert PullRequest.from_json(data).checks is None
+    assert dataclasses.replace(recorded, commits=[]).checks is None
 
 
 def test_a_thread_page_reads_its_cursor_from_its_page_info():
@@ -386,8 +386,11 @@ def test_only_the_checks_that_did_not_pass_are_unsuccessful(current_checks):
 
 
 def test_a_rollup_shape_this_script_cannot_read_is_rejected():
+    """
+    A rollup context in neither shape a rollup can hold is refused.
+    """
     with pytest.raises(ValueError):
-        CheckResult.from_json({PullRequestJSONKey.TYPE_NAME: "SomeNewContextShape"})
+        CheckResult.from_json({"__typename": "SomeNewContextShape"})
 
 
 def test_a_head_commit_nothing_reported_against_has_no_checks():
@@ -760,11 +763,11 @@ def stubbed_gh(tmp_path, monkeypatch) -> Path:
 
 
 def test_the_data_is_unwrapped(stubbed_gh, monkeypatch):
-    data = {PullRequestJSONKey.REPOSITORY: None}
-    monkeypatch.setenv(
-        StubEnvironmentVariable.GRAPHQL_JSON,
-        json.dumps({PullRequestJSONKey.DATA: data}),
-    )
+    """
+    The client returns the response's data, not the whole envelope.
+    """
+    data = {"repository": None}
+    monkeypatch.setenv(StubEnvironmentVariable.GRAPHQL_JSON, json.dumps({"data": data}))
 
     assert GitHubCommandLineClient().execute("query {}", {}) == data
 
@@ -772,19 +775,20 @@ def test_the_data_is_unwrapped(stubbed_gh, monkeypatch):
 def test_the_query_and_variables_are_sent_as_the_request_body(
     stubbed_gh, monkeypatch, tmp_path
 ):
+    """
+    The client sends the query and its variables as the request body.
+    """
     call_log = tmp_path / "calls.txt"
     monkeypatch.setenv(StubEnvironmentVariable.CALL_LOG, str(call_log))
-    monkeypatch.setenv(
-        StubEnvironmentVariable.GRAPHQL_JSON, json.dumps({PullRequestJSONKey.DATA: {}})
-    )
+    monkeypatch.setenv(StubEnvironmentVariable.GRAPHQL_JSON, json.dumps({"data": {}}))
     sent = RecordedCall("query Example {}", {QueryVariable.NUMBER: 513})
 
     GitHubCommandLineClient().execute(sent.query, sent.variables)
 
-    assert json.loads(call_log.read_text()) == {
-        PullRequestJSONKey.QUERY: sent.query,
-        PullRequestJSONKey.VARIABLES: sent.variables,
-    }
+    assert (
+        json.loads(call_log.read_text())
+        == GraphQLRequest(sent.query, sent.variables).to_json()
+    )
 
 
 def test_a_failing_gh_invocation_is_raised(stubbed_gh, monkeypatch):
@@ -797,15 +801,12 @@ def test_a_failing_gh_invocation_is_raised(stubbed_gh, monkeypatch):
 
 
 def test_graphql_errors_are_raised_rather_than_returned(stubbed_gh, monkeypatch):
+    """
+    Errors GitHub answers with are raised instead of read as data.
+    """
     monkeypatch.setenv(
         StubEnvironmentVariable.GRAPHQL_JSON,
-        json.dumps(
-            {
-                PullRequestJSONKey.ERRORS: [
-                    {PullRequestJSONKey.MESSAGE: GRAPHQL_ERROR_MESSAGE}
-                ]
-            }
-        ),
+        json.dumps({"errors": [{"message": GRAPHQL_ERROR_MESSAGE}]}),
     )
 
     with pytest.raises(GraphQLErrorsReturned) as raised:
@@ -849,12 +850,13 @@ def test_a_failing_job_log_read_is_raised(stubbed_gh, monkeypatch):
 def test_a_branch_without_an_upstream_pull_request_exits_without_a_traceback(
     stubbed_gh, monkeypatch, capsys
 ):
+    """
+    A search finding no pull request ends with a message, not a traceback.
+    """
     monkeypatch.delenv("GITHUB_STEP_SUMMARY", raising=False)
     monkeypatch.setenv(
         StubEnvironmentVariable.GRAPHQL_JSON,
-        json.dumps(
-            {PullRequestJSONKey.DATA: RecordedResponse.BRANCH_PULL_REQUESTS_NONE.load()}
-        ),
+        json.dumps({"data": RecordedResponse.BRANCH_PULL_REQUESTS_NONE.load()}),
     )
 
     status = main(

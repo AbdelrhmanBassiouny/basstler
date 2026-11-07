@@ -5,23 +5,25 @@ them.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import Field, model_validator
+from pydantic.dataclasses import dataclass
 
 from basstler.class_property import classproperty
 from basstler.upstream_reviews.vocabulary import (
-    JSONModel,
-    PullRequestJSONKey,
+    Connection,
     PullRequestState,
     ReviewState,
     ThreadMarker,
+    ValidatedJSONModel,
 )
 
 # %% models mirroring the data
 
 
 @dataclass(frozen=True)
-class Author(JSONModel):
+class Author(ValidatedJSONModel):
     """
     Whoever wrote a comment or submitted a review.
     """
@@ -38,26 +40,26 @@ class Author(JSONModel):
         """
         return "(unknown)"
 
+    @model_validator(mode="before")
     @classmethod
-    def from_json(cls, data: dict[str, Any] | None) -> Author:
+    def read_deleted_account(cls, data: Any) -> Any:
         """
-        Read an author, tolerating the null GitHub returns for deleted users.
-
-        :param data: The ``author`` object, which GitHub may report as null.
-        :return: The parsed author.
+        :param data: The ``author`` object, which GitHub reports as null for a deleted
+            account.
+        :return: The object, with :attr:`unknown_login` standing in for a deleted one.
         """
         if data is None:
-            return cls(cls.unknown_login)
-        return cls(data[PullRequestJSONKey.LOGIN])
+            return {"login": cls.unknown_login}
+        return data
 
 
 @dataclass(frozen=True)
-class ThreadComment(JSONModel):
+class ThreadComment(ValidatedJSONModel):
     """
     One comment inside a review thread.
     """
 
-    database_identifier: int
+    database_identifier: Annotated[int, Field(alias="databaseId")]
     """
     GitHub's numeric identifier, the one that appears in comment permalinks.
     """
@@ -72,7 +74,7 @@ class ThreadComment(JSONModel):
     The comment text, exactly as written.
     """
 
-    created_at: str
+    created_at: Annotated[str, Field(alias="createdAt")]
     """
     When the comment was posted, as an ISO 8601 timestamp.
     """
@@ -82,40 +84,24 @@ class ThreadComment(JSONModel):
     The permalink to this comment.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> ThreadComment:
-        """
-        Build a comment from one ``comments`` node.
-
-        :param data: The node to read.
-        :return: The parsed comment.
-        """
-        return cls(
-            database_identifier=data[PullRequestJSONKey.DATABASE_IDENTIFIER],
-            author=Author.from_json(data[PullRequestJSONKey.AUTHOR]),
-            body=data[PullRequestJSONKey.BODY],
-            created_at=data[PullRequestJSONKey.CREATED_AT],
-            url=data[PullRequestJSONKey.URL],
-        )
-
 
 @dataclass(frozen=True)
-class ReviewThread(JSONModel):
+class ReviewThread(ValidatedJSONModel):
     """
     A conversation anchored to one location in the pull request's diff.
     """
 
-    identifier: str
+    identifier: Annotated[str, Field(alias="id")]
     """
     GitHub's node identifier for the thread.
     """
 
-    is_resolved: bool
+    is_resolved: Annotated[bool, Field(alias="isResolved")]
     """
     Whether a reviewer has marked the thread resolved.
     """
 
-    is_outdated: bool
+    is_outdated: Annotated[bool, Field(alias="isOutdated")]
     """
     Whether the diff hunk the thread was anchored to has since changed.
     """
@@ -130,27 +116,10 @@ class ReviewThread(JSONModel):
     The line the thread is attached to, absent once the hunk is outdated.
     """
 
-    comments: list[ThreadComment]
+    comments: Connection[ThreadComment]
     """
     Every comment in the thread, oldest first.
     """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> ReviewThread:
-        """
-        Build a thread from one ``reviewThreads`` node.
-
-        :param data: The node to read.
-        :return: The parsed thread.
-        """
-        return cls(
-            identifier=data[PullRequestJSONKey.IDENTIFIER],
-            is_resolved=data[PullRequestJSONKey.IS_RESOLVED],
-            is_outdated=data[PullRequestJSONKey.IS_OUTDATED],
-            path=data[PullRequestJSONKey.PATH],
-            line=data[PullRequestJSONKey.LINE],
-            comments=PullRequestJSONKey.COMMENTS.read_list(data, ThreadComment),
-        )
 
     @property
     def location(self) -> str:
@@ -171,7 +140,7 @@ class ReviewThread(JSONModel):
 
 
 @dataclass(frozen=True)
-class Review(JSONModel):
+class Review(ValidatedJSONModel):
     """
     A submitted review, separate from the threads it may have opened.
     """
@@ -191,29 +160,14 @@ class Review(JSONModel):
     The review's summary text, which is often empty.
     """
 
-    submitted_at: str
+    submitted_at: Annotated[str, Field(alias="submittedAt")]
     """
     When the review was submitted, as an ISO 8601 timestamp.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> Review:
-        """
-        Build a review from one ``reviews`` node.
-
-        :param data: The node to read.
-        :return: The parsed review.
-        """
-        return cls(
-            author=Author.from_json(data[PullRequestJSONKey.AUTHOR]),
-            state=ReviewState[data[PullRequestJSONKey.STATE]],
-            body=data[PullRequestJSONKey.BODY],
-            submitted_at=data[PullRequestJSONKey.SUBMITTED_AT],
-        )
-
 
 @dataclass(frozen=True)
-class BranchPullRequest(JSONModel):
+class BranchPullRequest(ValidatedJSONModel):
     """
     One pull request found by searching the upstream for a head branch.
     """
@@ -228,83 +182,41 @@ class BranchPullRequest(JSONModel):
     Its lifecycle state.
     """
 
-    head_owner: Author
+    head_owner: Annotated[Author, Field(alias="headRepositoryOwner")]
     """
     The owner of the repository the head branch lives in.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> BranchPullRequest:
-        """
-        Build a summary from one ``pullRequests`` node.
-
-        :param data: The node to read.
-        :return: The parsed summary.
-        """
-        return cls(
-            number=data[PullRequestJSONKey.NUMBER],
-            state=PullRequestState(data[PullRequestJSONKey.STATE]),
-            head_owner=Author.from_json(data[PullRequestJSONKey.HEAD_REPOSITORY_OWNER]),
-        )
-
 
 @dataclass(frozen=True)
-class PageInfo(JSONModel):
+class PageInfo(ValidatedJSONModel):
     """
     Where one page of a paged list stands in the whole list.
     """
 
-    has_next_page: bool
+    has_next_page: Annotated[bool, Field(alias="hasNextPage")]
     """
     Whether another page follows.
     """
 
-    end_cursor: str | None
+    end_cursor: Annotated[str | None, Field(alias="endCursor")]
     """
     The cursor to request that next page with.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> PageInfo:
-        """
-        Read a ``pageInfo`` object.
-
-        :param data: The object to read.
-        :return: The parsed page position.
-        """
-        return cls(
-            has_next_page=data[PullRequestJSONKey.HAS_NEXT_PAGE],
-            end_cursor=data[PullRequestJSONKey.END_CURSOR],
-        )
-
 
 @dataclass(frozen=True)
-class ReviewThreadPage(JSONModel):
+class ReviewThreadPage(ValidatedJSONModel):
     """
     One page of review threads, with where it stands in the whole list.
     """
 
-    threads: list[ReviewThread]
+    threads: Annotated[list[ReviewThread], Field(alias="nodes")]
     """
     The threads on this page.
     """
 
-    page_info: PageInfo
+    page_info: Annotated[PageInfo, Field(alias="pageInfo")]
     """
     Whether another page follows, and the cursor to request it with.
     """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> ReviewThreadPage:
-        """
-        Build a page from a ``reviewThreads`` object.
-
-        :param data: The object to read.
-        :return: The parsed page.
-        """
-        return cls(
-            threads=[
-                ReviewThread.from_json(node) for node in data[PullRequestJSONKey.NODES]
-            ],
-            page_info=PageInfo.from_json(data[PullRequestJSONKey.PAGE_INFO]),
-        )

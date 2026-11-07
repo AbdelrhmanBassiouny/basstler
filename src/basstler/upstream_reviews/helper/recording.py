@@ -30,11 +30,15 @@ from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
 from basstler.upstream_reviews.rest_models import (
-    RestJSONKey,
+    RestCheckRunPage,
+    RestCombinedStatusPage,
+    RestPullRequestSummary,
+    RestReview,
+    RestReviewComment,
+    RestReviewThread,
 )
 from basstler.upstream_reviews.vocabulary import (
     JSONModel,
-    PullRequestJSONKey,
 )
 
 # %% the recording
@@ -50,9 +54,15 @@ class RecordedFields:
         """
         Every field name a REST model reads, at any depth.
         """
-        return frozenset(key.value for key in RestJSONKey) | {
-            PullRequestJSONKey.LOGIN.value
-        }
+        responses = [
+            RestPullRequestSummary,
+            RestReview,
+            RestReviewComment,
+            RestReviewThread,
+            RestCheckRunPage,
+            RestCombinedStatusPage,
+        ]
+        return frozenset().union(*(response.read_keys for response in responses))
 
 
 @dataclass(frozen=True)

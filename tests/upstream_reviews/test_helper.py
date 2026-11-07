@@ -39,7 +39,6 @@ from basstler.upstream_reviews.helper.__main__ import (
 from basstler.upstream_reviews.helper.recording import (
     HelperChunk,
     HelperRecording,
-    RecordedFields,
     ReplayingClient,
     SessionTranscript,
 )
@@ -50,11 +49,7 @@ from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
 from basstler.upstream_reviews.rest_models import (
-    RestJSONKey,
     RestPullRequestSummary,
-)
-from basstler.upstream_reviews.vocabulary import (
-    PullRequestJSONKey,
 )
 
 from ..constants.paths import DatasetLocation
@@ -307,10 +302,20 @@ def test_only_the_fields_the_models_read_are_kept():
     assert kept == {"title": "t", "body": "b", "head": {"sha": "s"}}
 
 
-def test_the_kept_fields_are_every_field_a_rest_model_reads():
-    assert RecordedFields.names == {key.value for key in RestJSONKey} | {
-        PullRequestJSONKey.LOGIN.value
-    }
+def test_the_kept_fields_read_the_pull_request_the_whole_responses_do():
+    """
+    The fields a helper keeps are enough to read the pull request as the whole responses
+    read it.
+    """
+    fetch = basstler.upstream_reviews.helper.fetch.Fetch(
+        HelperScript(request()).configuration
+    )
+    responses = pull_request_responses()
+    kept = {path: fetch.kept(body) for path, body in responses.items()}
+
+    assert make_reader(kept).read_current_state(NUMBER) == make_reader(
+        responses
+    ).read_current_state(NUMBER)
 
 
 def test_output_too_long_for_one_command_is_split_into_files(stubbed_gh, monkeypatch):
