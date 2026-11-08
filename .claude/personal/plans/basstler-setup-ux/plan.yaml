@@ -176,11 +176,12 @@ items:
 
 - id: private-notes-site-build
   title: Plan site build reads a private notes repository
-  branch: null
-  pull_request_number: null
+  branch: claude/youthful-franklin-kgm14o
+  pull_request_number: 170
   track: setup-flow
+  session: https://claude.ai/code/session_018wfiv5aUKe85gftP8o1U1C
   depends_on: []
-  status: not started
+  status: in progress
   notes: 'External report #152 (tomsch420), placed 2026-11-07: no item covers it; it fits this plan''s
     unreadable-repository and setup-steps rules. plan_site.publication accepts a private registry the
     build''s github.token cannot read. Detect it before writing anything and offer an optional read-only
