@@ -1,9 +1,8 @@
 Plan
-- Wait for discussion on #152 and review of draft PR #170; adjust the design if replies ask for it
+- Wait for review of draft PR #170
 Done
-- Proposal posted on #152; draft PR #170 opened (label bug, patch release)
-- Build accepts optional notes_token secret (GH_TOKEN + gh auth setup-git); site workflow passes PLAN_SITE_NOTES_TOKEN
-- Publication checks registry/notes privacy: missing token writes nothing, unreadable writes and reports
-- Tests added; plan_site suite green; pre-commit passes (89a00df)
+- Build reads private repositories with optional read_token (PLAN_SITE_READ_TOKEN); site workflow passes it
+- Publication checks registry, hub repositories and every repository their plans name; private + missing secret writes nothing; unreadable is reported
+- Review on #170 (gaps 1, 2, 4) addressed in 3f859ad and answered; gap 3 is new item unreadable-repository-items (#135)
 Next
-- Respond to #152 replies and review comments when they arrive
+- Respond to review comments when they arrive
