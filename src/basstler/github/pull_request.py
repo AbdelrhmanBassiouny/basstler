@@ -4,24 +4,20 @@ The requests GitHub's pull request endpoints read.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from typing import Any
 
-from basstler.github.client import RequestBody
-from basstler.repository import Repository
+from basstler.class_property import classproperty
+from basstler.github.client import HttpMethod, RepositoryWrite
+from basstler.github.issue import IssueWrite
 
 # %% opening a pull request
 
 
 @dataclass(frozen=True)
-class NewPullRequest(RequestBody):
+class NewPullRequest(RepositoryWrite):
     """
     A pull request that does not exist yet.
-    """
-
-    repository: Repository
-    """
-    The repository to open it on.
     """
 
     title: str
@@ -50,6 +46,14 @@ class NewPullRequest(RequestBody):
     reviewed it themselves.
     """
 
+    @classproperty
+    def method(cls) -> HttpMethod:
+        return HttpMethod.POST
+
+    @property
+    def path(self) -> str:
+        return self.repository.pull_requests_path
+
     def to_json(self) -> dict[str, Any]:
         return {
             "title": self.title,
@@ -64,7 +68,7 @@ class NewPullRequest(RequestBody):
 
 
 @dataclass(frozen=True)
-class PullRequestDescription(RequestBody):
+class PullRequestDescription(IssueWrite):
     """
     A pull request's new description, leaving everything else about it unchanged.
     """
@@ -74,5 +78,13 @@ class PullRequestDescription(RequestBody):
     The description, in Markdown.
     """
 
+    @classproperty
+    def method(cls) -> HttpMethod:
+        return HttpMethod.PATCH
+
+    @property
+    def path(self) -> str:
+        return self.repository.pull_request_path(self.number)
+
     def to_json(self) -> dict[str, Any]:
-        return asdict(self)
+        return {"body": self.body}

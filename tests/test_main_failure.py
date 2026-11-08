@@ -11,7 +11,7 @@ from typing import Any
 import pytest
 import yaml
 
-from basstler.github.client import GitHubResponse, HttpMethod, RequestBody
+from basstler.github.client import GitHubResponse, GitHubWrite
 from basstler.github.issue import (
     ClosingReason,
     Issue,
@@ -27,7 +27,7 @@ from basstler.repository import Repository
 from basstler.github.states import CheckOutcome
 
 from .constants.paths import DatasetLocation, RepositoryLocation
-from .github.recorded_client import RecordedGitHubClient, SentWrite
+from .github.recorded_client import RecordedGitHubClient
 
 # %% a repository whose issues are recorded
 
@@ -51,13 +51,11 @@ class IssueOpeningClient(RecordedGitHubClient):
     Records every write, and answers the opening of an issue as GitHub does.
     """
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, body: RequestBody
-    ) -> GitHubResponse:
-        super().attempt_send(method, path, body)
-        if method is HttpMethod.POST and path == REPOSITORY.issues_path:
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        super().attempt_send(write)
+        if isinstance(write, NewIssue):
             return GitHubResponse(recorded(DatasetLocation.MAIN_FAILURE_OPENED_ISSUE))
-        return GitHubResponse(body.to_json())
+        return GitHubResponse(write.to_json())
 
 
 def client_listing(*issues: DatasetLocation) -> IssueOpeningClient:
@@ -94,17 +92,13 @@ def open_issue() -> Issue:
     return Issue.from_json(recorded(DatasetLocation.MAIN_FAILURE_OPEN_ISSUE))
 
 
-def comment_on(issue: Issue, run: FinishedRun) -> SentWrite:
+def comment_on(issue: Issue, run: FinishedRun) -> IssueComment:
     """
     :param issue: The issue commented on.
     :param run: The run the comment describes.
     :return: The write posting the comment.
     """
-    return SentWrite(
-        HttpMethod.POST,
-        REPOSITORY.issue_comments_path(issue.number),
-        IssueComment(run.describe()),
-    )
+    return IssueComment(REPOSITORY, issue.number, run.describe())
 
 
 # %% what a run concludes
@@ -160,12 +154,11 @@ def test_the_first_failure_opens_the_issue():
         recorded(DatasetLocation.MAIN_FAILURE_OPENED_ISSUE)
     )
     assert client.writes == [
-        SentWrite(
-            HttpMethod.POST,
-            REPOSITORY.issues_path,
-            NewIssue(
-                issue.title, run.describe(), [GitHubLabel.BUG, GitHubLabel.MAIN_RED]
-            ),
+        NewIssue(
+            REPOSITORY,
+            issue.title,
+            run.describe(),
+            [GitHubLabel.BUG, GitHubLabel.MAIN_RED],
         )
     ]
 
@@ -188,10 +181,8 @@ def test_a_pass_closes_the_open_issue():
 
     MainFailureTracker(REPOSITORY).record(finished_run(CheckOutcome.SUCCESS), client)
 
-    assert client.writes[-1] == SentWrite(
-        HttpMethod.PATCH,
-        REPOSITORY.issue_path(open_issue().number),
-        IssueClosing(ClosingReason.COMPLETED),
+    assert client.writes[-1] == IssueClosing(
+        REPOSITORY, open_issue().number, ClosingReason.COMPLETED
     )
 
 
