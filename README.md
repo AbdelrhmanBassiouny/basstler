@@ -125,7 +125,8 @@ sits in this clone, and installs the clone editable.
 
 basstler was written by Abdelrhman Bassiouny (<bido.bassuny@gmail.com>), independently of any
 employer or institution, and is maintained in the
-[KAOS-repositories](https://github.com/KAOS-repositories) organization. It is licensed under
+[KAOS-repositories](https://github.com/KAOS-repositories) organization, which Abdelrhman
+Bassiouny co-founded. It is licensed under
 the [Apache License 2.0](LICENSE). The few modules adapted from
 [krrood](https://github.com/cram2/cognitive_robot_abstract_machine/tree/main/krrood) keep
 krrood's licence, the LGPL-3.0; [NOTICE](NOTICE) names them.
