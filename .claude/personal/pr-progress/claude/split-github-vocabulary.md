@@ -1,10 +1,11 @@
 Plan
-- PR 164 (stacked on 158): split upstream_reviews.vocabulary by subject.
+- PR 164: split upstream_reviews/vocabulary.py; base is main (158 merged).
 
 Done
-- Pure moves into json_model, github.graphql/web_page/states,
-  upstream_reviews.query_documents, action.branch, review_models. At 6710e58e.
+- Review: LATEST_RELEASE is the release branch, test added, at 27606438.
+  Merged into 165 (f8c8a2d2).
 
 Next
-- Owner reviews. Record item core-robustness/vocabulary-split in the plan
-  (save blocked here); restack onto main once 158 lands.
+- Owner reviews. Resolve the LATEST_RELEASE thread from a session on
+  KAOS-repositories/basstler (scope blocks it here).
+- Plan save of vocabulary-split item blocked: notes push to KAOS refused.
