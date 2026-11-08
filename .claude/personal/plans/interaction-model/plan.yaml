@@ -115,3 +115,17 @@ items:
     a branch on the cloud-session flag.
 
     '
+
+- id: session-actions
+  title: Research a deterministic way for basstler to have the session act
+  track: model
+  depends_on:
+  - reactions
+  status: not started
+  notes: 'From the review of #169 (manifest_tools.py, discussion_r4508207555). Today skills and
+    printed text tell the session in prose to act, for example to attach a repository with
+    add_repo. Research and try out a controllable channel instead (MCP tools, hooks, structured
+    output the session acts on), then list every prose instruction it can replace and add a
+    port item for each. separate-notes-repository-attach in basstler-v2-fixes is the first case.
+
+    '
