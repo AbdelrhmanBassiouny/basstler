@@ -200,9 +200,9 @@ class PullRequest(ValidatedJSONModel):
     Its title.
     """
 
-    url: str
+    page_url: Annotated[str, Field(alias="url")]
     """
-    Its web URL.
+    Its own page on GitHub.
     """
 
     commits: GraphQLConnection[PullRequestCommit]
@@ -250,9 +250,9 @@ class UpstreamPullRequestSnapshot:
     The pull request's title.
     """
 
-    url: str
+    page_url: str
     """
-    The pull request's web URL.
+    The pull request's own page on GitHub.
     """
 
     reviews: list[Review]
@@ -284,7 +284,7 @@ class UpstreamPullRequestSnapshot:
         return cls(
             number=pull_request.number,
             title=pull_request.title,
-            url=pull_request.url,
+            page_url=pull_request.page_url,
             reviews=pull_request.reviews,
             threads=threads,
             checks=pull_request.checks,

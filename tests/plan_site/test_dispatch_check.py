@@ -212,12 +212,17 @@ def test_a_run_failing_after_an_earlier_success_names_every_cause_to_look_for():
 
 
 def test_a_run_failing_after_an_earlier_success_links_that_success():
+    """
+    A failure after an earlier success links that success's page.
+    """
     listing = DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED
     latest_success = RunListing.read(
         runs_replaying(listing), NOTES_REPOSITORY, NOTES_BRANCH
     ).latest_success(DispatchWorkflow.location)
 
-    assert latest_success.url in dispatch_of(listing, TOKEN_BEFORE_FAILURE).describe()
+    assert (
+        latest_success.page_url in dispatch_of(listing, TOKEN_BEFORE_FAILURE).describe()
+    )
 
 
 def test_a_token_set_after_the_failed_run_waits_for_the_next_push():
@@ -255,12 +260,15 @@ def test_a_secret_that_cannot_be_read_leaves_the_verdict_to_the_runs(listing, ex
 
 
 def test_a_failed_run_is_linked():
+    """
+    The latest failed run's page is linked.
+    """
     listing = DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED
     latest = RunListing.read(
         runs_replaying(listing), NOTES_REPOSITORY, NOTES_BRANCH
     ).latest(DispatchWorkflow.location)
 
-    assert latest.url in dispatch_of(listing, TOKEN_BEFORE_FAILURE).describe()
+    assert latest.page_url in dispatch_of(listing, TOKEN_BEFORE_FAILURE).describe()
 
 
 def test_every_failed_run_is_counted():

@@ -114,7 +114,7 @@ class PendingStep:
             )
         if self.latest_run is not None:
             lines.append(
-                f"  Latest run, {self.latest_run.outcome}: {self.latest_run.url}"
+                f"  Latest run, {self.latest_run.outcome}: {self.latest_run.page_url}"
             )
         if self.line is None:
             lines.append("  GitHub offers no command for this; in the browser:")
@@ -302,6 +302,6 @@ class MergeWorkflowProposal:
         """
         return PendingStep(
             UserStep.ADD_MERGE_WORKFLOW,
-            f"gh pr merge {pull_request.url} --merge",
-            (f"Open {pull_request.url}.", "Click Merge pull request."),
+            f"gh pr merge {pull_request.page_url} --merge",
+            (f"Open {pull_request.page_url}.", "Click Merge pull request."),
         )

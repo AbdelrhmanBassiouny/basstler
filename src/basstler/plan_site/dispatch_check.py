@@ -404,7 +404,7 @@ class RepositoryDispatch(DispatchReading):
         return (
             f"{self.runs.count(CheckOutcome.FAILURE)} of its {len(self.runs.workflow_runs)} "
             f"latest dispatch runs failed, the latest is {self.latest_run.outcome} "
-            f"({self.latest_run.url})"
+            f"({self.latest_run.page_url})"
         )
 
     def describe(self) -> str:
@@ -424,14 +424,14 @@ class RepositoryDispatch(DispatchReading):
             case DispatchState.TOKEN_STORED_AFTER_FAILURE:
                 return (
                     f"{name}'s {PlanSiteSecret.TOKEN} was set after its latest "
-                    f"dispatch run ({self.latest_run.url}), and takes effect at the "
+                    f"dispatch run ({self.latest_run.page_url}), and takes effect at the "
                     f"next push to '{self.notes_branch}'; {self.run_history}"
                 )
             case DispatchState.STOPPED_STARTING_BUILD:
                 causes = "; or ".join(FailureAfterSuccessCause)
                 return (
                     f"{name}'s latest dispatch run is {self.latest_run.outcome} "
-                    f"({self.latest_run.url}), though {self.latest_success.url} "
+                    f"({self.latest_run.page_url}), though {self.latest_success.page_url} "
                     f"succeeded on {self.latest_success.created_at:%Y-%m-%d}; "
                     f"{self.run_history}; {self.token.describe(self.repository)}. "
                     f"Open the failed run's log to see which happened: {causes}"
@@ -439,7 +439,7 @@ class RepositoryDispatch(DispatchReading):
             case DispatchState.RUN_FAILED:
                 return (
                     f"{name}'s latest dispatch run is {self.latest_run.outcome} "
-                    f"({self.latest_run.url}); {self.run_history}; "
+                    f"({self.latest_run.page_url}); {self.run_history}; "
                     f"{self.token.describe(self.repository)}"
                 )
             case DispatchState.STARTS_BUILD:

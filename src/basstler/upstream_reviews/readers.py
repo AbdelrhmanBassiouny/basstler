@@ -322,7 +322,7 @@ class RestPullRequestReader(PullRequestSource):
         return UpstreamPullRequestSnapshot(
             number=pull_request.number,
             title=pull_request.title,
-            url=pull_request.url,
+            page_url=pull_request.page_url,
             reviews=self._reviews(pull_request_number),
             threads=self._threads(pull_request_number),
             checks=self._checks(pull_request.head.sha),

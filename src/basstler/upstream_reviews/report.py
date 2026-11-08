@@ -61,7 +61,7 @@ class UpstreamPullRequestReport:
         lines = [
             f"# Upstream pull request: #{self.snapshot.number} {self.snapshot.title}",
             "",
-            self.snapshot.url,
+            self.snapshot.page_url,
             "",
         ]
         lines.extend(self._render_checks())
@@ -158,5 +158,5 @@ class UpstreamPullRequestReport:
         for comment in thread.comments:
             lines.append(f"- **{comment.author.login}**: {comment.body.strip()}")
         if thread.comments:
-            lines.extend(["", f"<{thread.comments[0].url}>", ""])
+            lines.extend(["", f"<{thread.comments[0].page_url}>", ""])
         return lines

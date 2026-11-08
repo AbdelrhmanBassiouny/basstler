@@ -219,6 +219,9 @@ def test_every_recorded_thread_survives_the_read_unchanged(paginated_client):
 
 
 def test_the_snapshot_identifies_the_pull_request_it_read(paginated_client):
+    """
+    The snapshot carries the number, title and page of the pull request it read.
+    """
     snapshot = make_reader(paginated_client).read_current_state(
         RECORDED_PULL_REQUEST_NUMBER
     )
@@ -226,7 +229,7 @@ def test_the_snapshot_identifies_the_pull_request_it_read(paginated_client):
     recorded = RecordedResponse.PULL_REQUEST_PAGE_ONE.recorded().pull_request
     assert snapshot.number == recorded.number
     assert snapshot.title == recorded.title
-    assert snapshot.url == recorded.url
+    assert snapshot.page_url == recorded.page_url
 
 
 def test_a_thread_keeps_every_comment_in_order(paginated_client):
@@ -674,10 +677,13 @@ def test_comment_bodies_are_reproduced(current_state):
 
 
 def test_each_thread_links_back_to_its_first_comment(current_state):
+    """
+    The report links each unresolved thread to its first comment's page.
+    """
     rendered = UpstreamPullRequestReport(current_state).render()
 
     for thread in current_state.unresolved_threads:
-        assert thread.comments[0].url in rendered
+        assert thread.comments[0].page_url in rendered
 
 
 def test_an_outdated_thread_is_marked_as_such(current_state):
@@ -719,10 +725,13 @@ def test_a_passing_check_is_not_listed_individually(current_state):
 
 
 def test_a_pull_request_without_checks_says_so(current_state):
+    """
+    A pull request nothing has reported checks for says so.
+    """
     unchecked = UpstreamPullRequestSnapshot(
         number=current_state.number,
         title=current_state.title,
-        url=current_state.url,
+        page_url=current_state.page_url,
         reviews=current_state.reviews,
         threads=current_state.threads,
         checks=None,
@@ -755,10 +764,13 @@ def test_a_verdict_reads_as_words_rather_than_as_github_spells_it(current_state)
 
 
 def test_a_pull_request_with_nothing_outstanding_says_so(current_state):
+    """
+    A pull request with no unresolved thread says nothing needs acting on.
+    """
     settled = UpstreamPullRequestSnapshot(
         number=current_state.number,
         title=current_state.title,
-        url=current_state.url,
+        page_url=current_state.page_url,
         reviews=current_state.reviews,
         threads=[thread for thread in current_state.threads if thread.is_resolved],
         checks=current_state.checks,

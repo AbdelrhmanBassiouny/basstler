@@ -401,7 +401,7 @@ class GitHubRepository(
             self._path(f"/issues/{number}/comments"),
             IssueComment(body),
         )
-        return WebPage.from_json(created).url
+        return WebPage.from_json(created).page_url
 
     def set_description(self, number: int, body: str) -> None:
         """

@@ -234,9 +234,9 @@ class WebPage(ValidatedJSONModel):
     A REST resource that has a page of its own on github.com.
     """
 
-    url: Annotated[str, Field(alias="html_url")]
+    page_url: Annotated[str, Field(alias="html_url")]
     """
-    The address of its page.
+    The address of its own page on GitHub.
     """
 
 

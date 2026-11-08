@@ -76,7 +76,7 @@ class ThreadComment(ValidatedJSONModel):
     When the comment was posted, as an ISO 8601 timestamp.
     """
 
-    url: str
+    page_url: Annotated[str, Field(alias="url")]
     """
     The permalink to this comment.
     """

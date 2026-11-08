@@ -181,7 +181,7 @@ class RestReviewComment(RestResponse, WebPage):
             author=self.author,
             body=self.body,
             created_at=self.created_at,
-            url=self.url,
+            page_url=self.page_url,
         )
 
 
