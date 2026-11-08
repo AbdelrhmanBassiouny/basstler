@@ -17,6 +17,7 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated
 
+import yaml
 from cyclopts import App, Parameter
 
 from basstler.class_property import classproperty
@@ -29,11 +30,12 @@ from basstler.github.run_listing import RunListing
 from basstler.plan_site.user_steps import (
     MergeWorkflowProposal,
     PendingStep,
-    PrivateNotesAccess,
+    PrivateRepositoryAccess,
     UserStep,
     UserSteps,
 )
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
+from basstler.plan.model import PlanDocument, PlanManifest
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
@@ -226,10 +228,11 @@ class PlanSitePublication:
         notes_details = RepositoryDetails.from_json(
             self.github.get(notes_repository.api_path)
         )
-        notes_access = self.private_notes_access(site_workflow.registry, notes_details)
-        # The token is known to be missing, so nothing written now could build.
-        if notes_access is not None and notes_access.secret_refusal is None:
-            report.pending.append(notes_access.pending)
+        access = self.private_repository_access(
+            self.repositories_read_by_build(site_workflow.registry), notes_details
+        )
+        if access is not None and access.holds_back_publication:
+            report.pending.append(access.pending)
             return report
         self.write(
             site_branch,
@@ -246,8 +249,8 @@ class PlanSitePublication:
         )
         proposal = self.write_merge_workflow(notes_details, report)
         user_steps = UserSteps(notes_repository, site, hub.repositories)
-        if notes_access is not None:
-            report.pending.append(notes_access.pending)
+        if access is not None:
+            report.pending.append(access.pending)
         if not site_runs.succeeded(SiteWorkflow.location):
             report.pending.append(
                 user_steps.pending(
@@ -300,31 +303,68 @@ class PlanSitePublication:
         branch.write({workflow.location.as_posix(): workflow.text}, message)
         report.written.append(f"{workflow.location} on {branch.description}")
 
-    def private_notes_access(
-        self, registry: Repository, notes_details: RepositoryDetails
-    ) -> PrivateNotesAccess | None:
+    def repositories_read_by_build(self, registry: Repository) -> list[Repository]:
         """
         :param registry: The repository whose notes hold the complete hub file.
+        :return: The registry, every repository its hub file lists, the notes
+            repository, and every repository their plans' pull requests are on, each
+            once.
+        """
+        hub = PlanHub.from_text(
+            self.notes_branch_of(registry).read_latest(ProjectLocation.PLAN_HUB)
+        )
+        notes_repositories = dict.fromkeys(
+            [
+                registry,
+                *map(Repository.parse, hub.repositories if hub else []),
+                self.dispatch_workflow.notes_repository,
+            ]
+        )
+        manifests = [
+            PlanManifest(yaml.safe_load(text) or {})
+            for repository in notes_repositories
+            for text in self.notes_branch_of(repository).read_every_latest(
+                ProjectLocation.PLANS, PlanDocument.MANIFEST
+            )
+        ]
+        return list(
+            dict.fromkeys(
+                [
+                    *notes_repositories,
+                    *(
+                        repository
+                        for manifest in manifests
+                        for repository in manifest.repositories
+                    ),
+                ]
+            )
+        )
+
+    def private_repository_access(
+        self, repositories: list[Repository], notes_details: RepositoryDetails
+    ) -> PrivateRepositoryAccess | None:
+        """
+        :param repositories: The repositories the build reads.
         :param notes_details: The notes repository's details.
-        :return: The private ones of the registry and the notes repository, unless
+        :return: Those that are private or whose visibility cannot be read, unless
             there are none or the site repository stores the token that reads them.
         """
         notes_repository = self.dispatch_workflow.notes_repository
-        details = {notes_repository: notes_details}
-        if registry != notes_repository:
-            details[registry] = RepositoryDetails.from_json(
-                self.github.get(registry.api_path)
-            )
-        private = tuple(
-            repository
-            for repository, repository_details in details.items()
-            if repository_details.is_private
-        )
-        if not private:
+        private = [notes_repository] if notes_details.is_private else []
+        unreadable = {}
+        for repository in repositories:
+            if repository == notes_repository:
+                continue
+            answer = self.github.attempt_get(repository.api_path)
+            if answer.failure is not None:
+                unreadable[repository] = answer.failure
+            elif RepositoryDetails.from_json(answer.body).is_private:
+                private.append(repository)
+        if not private and not unreadable:
             return None
         site = self.dispatch_workflow.site
         secret = self.github.attempt_get(
-            PlanSiteSecret.NOTES_TOKEN.path_on(site.repository)
+            PlanSiteSecret.READ_TOKEN.path_on(site.repository)
         )
         if secret.failure is None:
             return None
@@ -332,8 +372,10 @@ class PlanSitePublication:
             isinstance(secret.failure, GitHubRequestFailed)
             and secret.failure.status == HTTPStatus.NOT_FOUND
         ):
-            return PrivateNotesAccess(site, private)
-        return PrivateNotesAccess(site, private, secret.failure)
+            return PrivateRepositoryAccess(
+                site, tuple(private), unreadable_repositories=unreadable
+            )
+        return PrivateRepositoryAccess(site, tuple(private), secret.failure, unreadable)
 
     def write_merge_workflow(
         self, notes_details: RepositoryDetails, report: PublicationReport

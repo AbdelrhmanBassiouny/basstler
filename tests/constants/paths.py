@@ -207,7 +207,7 @@ class DatasetLocation(PathEnumeration):
     A notes repository's token secret, set after its recorded failed dispatch run.
     """
 
-    PLAN_SITE_NOTES_TOKEN_STORED = DIRECTORY / "plan-site-notes-token-stored.json"
+    PLAN_SITE_READ_TOKEN_STORED = DIRECTORY / "plan-site-read-token-stored.json"
     """
     A site repository's notes token secret, as stored.
     """

@@ -87,14 +87,14 @@ def test_a_build_waits_for_the_running_one_instead_of_cancelling_it(
 # %% reading private notes
 
 
-def test_the_build_accepts_an_optional_notes_token(build_workflow: Workflow):
+def test_the_build_accepts_an_optional_read_token(build_workflow: Workflow):
     """
     A caller may pass the token, and one that does not still builds.
     """
-    assert build_workflow.called_secrets == {BuildSecret.NOTES_TOKEN: False}
+    assert build_workflow.called_secrets == {BuildSecret.READ_TOKEN: False}
 
 
-def test_the_build_reads_the_notes_with_the_notes_token_when_one_is_passed(
+def test_the_build_reads_the_notes_with_the_read_token_when_one_is_passed(
     build_workflow: Workflow,
 ):
     """
@@ -106,7 +106,7 @@ def test_the_build_reads_the_notes_with_the_notes_token_when_one_is_passed(
 
     assert build.environment == {
         GitHubCredentialVariable.GH_TOKEN: (
-            f"${{{{ secrets.{BuildSecret.NOTES_TOKEN} || github.token }}}}"
+            f"${{{{ secrets.{BuildSecret.READ_TOKEN} || github.token }}}}"
         )
     }
 

@@ -39,6 +39,7 @@ from basstler.plan_site.plan import Item
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan_site.exceptions import RegistryUnreadableError
+from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.standard_streams import StandardStreamHandler
@@ -300,7 +301,8 @@ class NotesBranch:
         )
         if not fetched.succeeded:
             logger.warning(
-                f"{repository}: cannot fetch {branch}: {fetched.error_output}"
+                f"{repository}: cannot fetch {branch}: {fetched.error_output}; "
+                f"{PlanSiteSecret.private_repository_correction}"
             )
             return None
         return cls(repository, git)

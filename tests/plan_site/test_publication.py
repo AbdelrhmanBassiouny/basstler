@@ -15,6 +15,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
 from basstler.actions_budget import ActionsBudget
 from basstler.environment import GitHubCredentialVariable
@@ -34,13 +35,14 @@ from basstler.github.exceptions import (
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
+from basstler.plan.model import PlanDocument
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import PlanSitePublication, PublicationOption
 from basstler.plan_site.publication import app as publication_app
 from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.user_steps import (
     MergeWorkflowProposal,
-    PrivateNotesAccess,
+    PrivateRepositoryAccess,
     UserStep,
     UserSteps,
 )
@@ -659,12 +661,13 @@ def test_a_build_starting_workflow_keeps_to_the_actions_budget(
     assert ActionsBudget().violations_of(Workflow.at(path)) == ()
 
 
-# %% a private notes repository
+# %% a private repository the build reads
 
 
 @pytest.fixture
 def private_publishing(publishing: Publishing) -> Publishing:
-    """:return: A private notes repository, with an empty site repository."""
+    """:return: A notes repository with an empty site repository, for a test to
+    decide which repositories are private."""
     publishing.create(publishing.site.repository)
     return publishing
 
@@ -674,7 +677,7 @@ def private_runs(
 ) -> PullRequestOpeningClient:
     """
     :param publishing: The private notes repository.
-    :param secret_refusal: Why reading the site repository's notes token is refused,
+    :param secret_refusal: Why reading the site repository's read token is refused,
         ``None`` when it is stored.
     :return: A client answering as :meth:`Publishing.runs` does for a private notes
         repository.
@@ -684,10 +687,10 @@ def private_runs(
         DatasetLocation.WORKFLOW_RUNS_NONE,
         notes_details=DatasetLocation.REPOSITORY_PRIVATE,
     )
-    secret_path = PlanSiteSecret.NOTES_TOKEN.path_on(publishing.site.repository)
+    secret_path = PlanSiteSecret.READ_TOKEN.path_on(publishing.site.repository)
     if secret_refusal is None:
         client.responses[secret_path] = json.loads(
-            DatasetLocation.PLAN_SITE_NOTES_TOKEN_STORED.read_text()
+            DatasetLocation.PLAN_SITE_READ_TOKEN_STORED.read_text()
         )
     else:
         client.refusals[secret_path] = secret_refusal
@@ -697,19 +700,19 @@ def private_runs(
 def secret_refused(publishing: Publishing, status: HTTPStatus) -> GitHubRequestFailed:
     """
     :param publishing: The private notes repository.
-    :param status: The status GitHub refuses the site repository's notes token with.
+    :param status: The status GitHub refuses the site repository's read token with.
     :return: The refusal.
     """
     return GitHubRequestFailed(
         status=status,
         detail="",
         method=HttpMethod.GET,
-        path=PlanSiteSecret.NOTES_TOKEN.path_on(publishing.site.repository),
+        path=PlanSiteSecret.READ_TOKEN.path_on(publishing.site.repository),
         credential_origin=CredentialProvider.CALLER,
     )
 
 
-def test_a_private_notes_repository_without_a_notes_token_writes_nothing(
+def test_a_private_notes_repository_without_a_read_token_writes_nothing(
     private_publishing,
 ):
     """
@@ -723,13 +726,13 @@ def test_a_private_notes_repository_without_a_notes_token_writes_nothing(
 
     assert report.written == []
     assert report.pending == [
-        PrivateNotesAccess(
+        PrivateRepositoryAccess(
             private_publishing.site, (private_publishing.notes_repository,)
         ).pending
     ]
 
 
-def test_a_private_notes_repository_with_a_notes_token_is_published(
+def test_a_private_notes_repository_with_a_read_token_is_published(
     private_publishing,
 ):
     """
@@ -745,12 +748,12 @@ def test_a_private_notes_repository_with_a_notes_token_is_published(
         )
         == SiteWorkflow(BRANCH_OR_TAG, private_publishing.notes_repository).text
     )
-    assert UserStep.GIVE_BUILD_NOTES_ACCESS not in [
+    assert UserStep.GIVE_BUILD_READ_ACCESS not in [
         pending.step for pending in report.pending
     ]
 
 
-def test_an_unreadable_notes_token_is_published_and_left_to_the_user_to_check(
+def test_an_unreadable_read_token_is_published_and_left_to_the_user_to_check(
     private_publishing,
 ):
     """
@@ -770,14 +773,14 @@ def test_an_unreadable_notes_token_is_published_and_left_to_the_user_to_check(
         == SiteWorkflow(BRANCH_OR_TAG, private_publishing.notes_repository).text
     )
     assert (
-        PrivateNotesAccess(
+        PrivateRepositoryAccess(
             private_publishing.site, (private_publishing.notes_repository,), refusal
         ).pending
         in report.pending
     )
 
 
-def test_a_public_notes_repository_never_reads_the_notes_token(published):
+def test_a_public_notes_repository_never_reads_the_read_token(published):
     """
     Public notes need no token, so publishing never asks for the secret.
     """
@@ -785,12 +788,114 @@ def test_a_public_notes_repository_never_reads_the_notes_token(published):
 
     published.publication(runs).publish()
 
-    assert PlanSiteSecret.NOTES_TOKEN.path_on(published.site.repository) not in (
+    assert PlanSiteSecret.READ_TOKEN.path_on(published.site.repository) not in (
         runs.calls
     )
 
 
-def test_the_site_workflow_passes_the_notes_token_to_the_build():
+WORK_REPOSITORY = Repository("an-organization", "private-work")
+"""
+A private repository of another owner that a plan's items are on.
+"""
+
+
+def plan_naming(publishing: Publishing, repository: Repository) -> None:
+    """
+    Save a plan on the notes branch whose item is on *repository*.
+    """
+    manifest = {
+        "id": "a-plan",
+        "default_repository": publishing.notes_repository.full_name,
+        "items": [{"id": "an-item", "repository": repository.full_name}],
+    }
+    notes_branch_of(publishing.checkout).write(
+        {
+            (ProjectLocation.PLANS / "a-plan" / PlanDocument.MANIFEST).as_posix(): (
+                yaml.safe_dump(manifest, sort_keys=False).rstrip("\n")
+            )
+        },
+        "Save a plan",
+    )
+
+
+def test_a_private_repository_a_plan_names_without_a_read_token_writes_nothing(
+    private_publishing,
+):
+    """
+    The notes are public, but the build could not read the items' pull requests.
+    """
+    plan_naming(private_publishing, WORK_REPOSITORY)
+    runs = private_publishing.runs_none()
+    runs.responses[WORK_REPOSITORY.api_path] = json.loads(
+        DatasetLocation.REPOSITORY_PRIVATE.read_text()
+    )
+    runs.refusals[
+        PlanSiteSecret.READ_TOKEN.path_on(private_publishing.site.repository)
+    ] = secret_refused(private_publishing, HTTPStatus.NOT_FOUND)
+
+    report = private_publishing.publication(runs).publish()
+
+    assert report.written == []
+    assert report.pending == [
+        PrivateRepositoryAccess(private_publishing.site, (WORK_REPOSITORY,)).pending
+    ]
+
+
+def test_a_repository_whose_details_are_refused_is_published_and_left_to_check(
+    private_publishing,
+):
+    """
+    A repository the credential may not read could be public, so nothing is held back.
+    """
+    plan_naming(private_publishing, WORK_REPOSITORY)
+    runs = private_publishing.runs_none()
+    refusal = GitHubRequestFailed(
+        status=HTTPStatus.NOT_FOUND,
+        detail="",
+        method=HttpMethod.GET,
+        path=WORK_REPOSITORY.api_path,
+        credential_origin=CredentialProvider.CALLER,
+    )
+    runs.refusals[WORK_REPOSITORY.api_path] = refusal
+    runs.refusals[
+        PlanSiteSecret.READ_TOKEN.path_on(private_publishing.site.repository)
+    ] = secret_refused(private_publishing, HTTPStatus.NOT_FOUND)
+
+    report = private_publishing.publication(runs).publish()
+
+    assert (
+        private_publishing.file(
+            private_publishing.site.repository,
+            "main",
+            SiteWorkflow.location.as_posix(),
+        )
+        == SiteWorkflow(BRANCH_OR_TAG, private_publishing.notes_repository).text
+    )
+    assert (
+        PrivateRepositoryAccess(
+            private_publishing.site,
+            (),
+            unreadable_repositories={WORK_REPOSITORY: refusal},
+        ).pending
+        in report.pending
+    )
+
+
+def test_private_repositories_of_several_owners_need_a_classic_token():
+    """
+    A fine-grained token reads the repositories of one owner only.
+    """
+    site = SiteRepository(Repository("an-owner", "plans"))
+    access = PrivateRepositoryAccess(
+        site, (Repository("an-owner", "notes"), WORK_REPOSITORY)
+    )
+
+    assert access.pending.browser_steps[0] == (
+        f"Open {PrivateRepositoryAccess.classic_token_page}."
+    )
+
+
+def test_the_site_workflow_passes_the_read_token_to_the_build():
     """
     The site repository's secret reaches the build under the name the build accepts.
     """
@@ -799,7 +904,7 @@ def test_the_site_workflow_passes_the_notes_token_to_the_build():
     job = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.BUILD]
 
     assert job.secrets == {
-        BuildSecret.NOTES_TOKEN: f"${{{{ secrets.{PlanSiteSecret.NOTES_TOKEN} }}}}"
+        BuildSecret.READ_TOKEN: f"${{{{ secrets.{PlanSiteSecret.READ_TOKEN} }}}}"
     }
 
 

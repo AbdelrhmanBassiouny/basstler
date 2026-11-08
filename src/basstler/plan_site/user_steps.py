@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import textwrap
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from urllib.parse import urlencode
 
@@ -60,12 +60,12 @@ class UserStep(StrEnum):
     repository, so each repository the site publishes needs its own copy.
     """
 
-    GIVE_BUILD_NOTES_ACCESS = (
-        "let the build read the private notes repositories, or make them public"
+    GIVE_BUILD_READ_ACCESS = (
+        "let the build read the private repositories, or make them public"
     )
     """
-    A notes repository the site publishes is private, and the build's own credential
-    cannot read a private repository outside the site repository.
+    A repository the build reads - a notes repository or one a plan's pull requests
+    are on - is private, and the build's own credential cannot read it.
     """
 
     ADD_MERGE_WORKFLOW = "merge the workflow that starts the build on every merge"
@@ -225,9 +225,9 @@ class UserSteps:
 
 
 @dataclass(frozen=True)
-class PrivateNotesAccess:
+class PrivateRepositoryAccess:
     """
-    The private notes repositories the site's build needs a read-only token for.
+    The repositories the site's build reads that it may need a read-only token for.
     """
 
     site: SiteRepository
@@ -237,7 +237,7 @@ class PrivateNotesAccess:
 
     private_repositories: tuple[Repository, ...]
     """
-    The private notes repositories, which the token has to read.
+    The private repositories the build reads, which the token has to read.
     """
 
     secret_refusal: GitHubCallFailed | None = None
@@ -246,44 +246,77 @@ class PrivateNotesAccess:
     when it is known not to.
     """
 
+    unreadable_repositories: dict[Repository, GitHubCallFailed] = field(
+        default_factory=dict
+    )
+    """
+    The repositories the build reads whose visibility could not be read, with why.
+    """
+
+    @classproperty
+    def classic_token_page(cls) -> str:
+        """
+        Where a classic token is created.
+        """
+        return f"{GitHubAddress.WEB}/settings/tokens/new"
+
+    @property
+    def holds_back_publication(self) -> bool:
+        """
+        :return: Whether a repository is known to be private and the token known to be
+            missing, so nothing written now could build.
+        """
+        return bool(self.private_repositories) and self.secret_refusal is None
+
     @property
     def pending(self) -> PendingStep:
         """:return: The step storing the token, or making the repositories public."""
         site = self.site.repository
-        names = ", ".join(
-            repository.full_name for repository in self.private_repositories
-        )
-        owners = ", ".join(
-            dict.fromkeys(repository.owner for repository in self.private_repositories)
-        )
-        return PendingStep(
-            UserStep.GIVE_BUILD_NOTES_ACCESS,
-            f'read -rsp "Token: " token; printf %s "$token" | gh secret set '
-            f"{PlanSiteSecret.NOTES_TOKEN} --repo {site.full_name}",
+        repositories = [*self.private_repositories, *self.unreadable_repositories]
+        names = ", ".join(repository.full_name for repository in repositories)
+        owners = list(dict.fromkeys(repository.owner for repository in repositories))
+        token_steps = (
             (
+                f"Open {self.classic_token_page}.",
+                "A fine-grained token reads the repositories of one owner only, and "
+                f"these belong to {', '.join(owners)}: name the token and select "
+                "the repo scope.",
+                "Click Generate token and copy the token now; GitHub shows it once.",
+            )
+            if len(owners) > 1
+            else (
                 f"Open {UserSteps.token_page}.",
-                f"Name the token and set Resource owner to {owners}.",
+                f"Name the token and set Resource owner to {owners[0]}.",
                 "Under Repository access, choose Only select repositories and "
                 f"select {names}.",
-                "Under Permissions, open Repository permissions and set Contents "
-                "and Pull requests to Read-only.",
+                "Under Permissions, open Repository permissions and set Contents, "
+                "Issues, Pull requests, Commit statuses and Checks to Read-only.",
                 "Click Generate token and copy the token now; GitHub shows it once.",
+            )
+        )
+        failures = [
+            f"whether {repository.full_name} is private could not be read: {refusal}"
+            for repository, refusal in self.unreadable_repositories.items()
+        ]
+        if self.secret_refusal is not None:
+            failures.append(
+                f"whether {site.full_name} stores {PlanSiteSecret.READ_TOKEN} could "
+                f"not be read: {self.secret_refusal}"
+            )
+        return PendingStep(
+            UserStep.GIVE_BUILD_READ_ACCESS,
+            f'read -rsp "Token: " token; printf %s "$token" | gh secret set '
+            f"{PlanSiteSecret.READ_TOKEN} --repo {site.full_name}",
+            (
+                *token_steps,
                 f"Open {site.url}/settings/secrets/actions/new, set the name to "
-                f"{PlanSiteSecret.NOTES_TOKEN}, paste the token as the secret, then "
+                f"{PlanSiteSecret.READ_TOKEN}, paste the token as the secret, then "
                 "click Add secret.",
                 "Or, instead of the token, make each of them public: open "
-                + ", ".join(
-                    f"{repository.url}/settings"
-                    for repository in self.private_repositories
-                )
+                + ", ".join(f"{repository.url}/settings" for repository in repositories)
                 + ", and under Danger Zone click Change visibility.",
             ),
-            failure=(
-                None
-                if self.secret_refusal is None
-                else f"whether {site.full_name} stores {PlanSiteSecret.NOTES_TOKEN} "
-                f"could not be read: {self.secret_refusal}"
-            ),
+            failure="; ".join(failures) or None,
         )
 
 

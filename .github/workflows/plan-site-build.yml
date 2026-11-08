@@ -18,7 +18,7 @@ on:
         type: string
         default: ""
     secrets:
-      notes_token:
+      read_token:
         description: "A read-only token for private notes repositories; the site repository's own token when not passed"
         required: false
 
@@ -57,7 +57,7 @@ jobs:
       - name: Build the site
         id: build
         env:
-          GH_TOKEN: ${{ secrets.notes_token || github.token }}
+          GH_TOKEN: ${{ secrets.read_token || github.token }}
         run: |
           gh auth setup-git
           python -m basstler.plan_site \

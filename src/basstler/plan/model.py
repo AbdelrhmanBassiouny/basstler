@@ -670,6 +670,18 @@ class PlanManifest:
         return Repository.parse(own_repository)
 
     @property
+    def repositories(self) -> list[Repository]:
+        """
+        :return: Every repository the plan's pull requests are on, each once, the
+            default first.
+        """
+        return list(
+            dict.fromkeys(
+                [self.default_repository, *map(self.repository_of, self.items)]
+            )
+        )
+
+    @property
     def description(self) -> str:
         """
         :return: The plan's description with its line folding undone.

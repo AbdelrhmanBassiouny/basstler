@@ -37,11 +37,22 @@ class PlanSiteSecret(StrEnum):
     dispatch workflow start the build in the site repository.
     """
 
-    NOTES_TOKEN = "PLAN_SITE_NOTES_TOKEN"
+    READ_TOKEN = "PLAN_SITE_READ_TOKEN"
     """
     The user's read-only fine-grained token, stored on the site repository, that lets
     the build read private notes repositories.
     """
+
+    @classproperty
+    def private_repository_correction(cls) -> str:
+        """
+        How the build comes to read a private repository, as a clause of a correction.
+        """
+        return (
+            f"for a private repository, store a read-only token as {cls.READ_TOKEN} on "
+            "the site repository and re-run plan_site.publication "
+            "(/setup-personal-notes), so the site workflow passes it to the build"
+        )
 
     def path_on(self, repository: Repository) -> str:
         """
@@ -100,7 +111,7 @@ class BuildSecret(StrEnum):
     accepts.
     """
 
-    NOTES_TOKEN = "notes_token"
+    READ_TOKEN = "read_token"
     """
     The token that reads the notes repositories in place of the site repository's own.
     """
@@ -396,7 +407,7 @@ class SiteWorkflow(PlanSiteWorkflow):
                 BuildInput.REGISTRY: self.registry.full_name,
             },
             "secrets": {
-                BuildSecret.NOTES_TOKEN: f"${{{{ secrets.{PlanSiteSecret.NOTES_TOKEN} }}}}"
+                BuildSecret.READ_TOKEN: f"${{{{ secrets.{PlanSiteSecret.READ_TOKEN} }}}}"
             },
         }
 

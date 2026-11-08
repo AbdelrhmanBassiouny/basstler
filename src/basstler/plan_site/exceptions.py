@@ -7,6 +7,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from basstler.exceptions import DataclassException
+from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.repository import Repository
 
 # %% publishing the site
@@ -59,5 +60,6 @@ class RegistryUnreadableError(DataclassException):
     def suggest_correction(self) -> str:
         return (
             f"Check that {self.registry} exists, that it has a {self.notes_branch} "
-            f"branch, and that the build's credential can read it."
+            "branch, and that the build's credential can read it: "
+            f"{PlanSiteSecret.private_repository_correction}."
         )
