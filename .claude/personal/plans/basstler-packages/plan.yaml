@@ -97,16 +97,16 @@ items:
     entry points; Playbook.without/with_components; DefaultPlaybook; a root basstler_playbook. skills
     build --check. release:minor.'
 - id: krrood-sync
-  title: Bring code_rules up to krrood's latest development tools, with credit
+  title: basstler-rules is the rule engine krrood's development tools build on
   track: rules
   depends_on:
   - uv-workspace
   status: not started
-  notes: 'From krrood@be69c37d: one module per top-level section, project rules in a root agent_rules
-    package, checker as a rule''s third element with Section.checkers and check --all-lines, ImportsRules,
-    SerializationRules, ErrorsRules->ExceptionModellingRules, leading-preposition and name-completion
-    checkers, a format subcommand replacing scripts/format_docstrings.py, .pre-commit-hooks.yaml, RepositoryInstructionsFile.
-    Cite krrood and update NOTICE. Ask before copying FieldAccessorDefinitionChecker. release:minor.'
+  notes: 'Parity with krrood@be69c37d: one module per top-level section, project rules in a root agent_rules package, checker
+    as a rule''s third element with Section.checkers and check --all-lines, ImportsRules, SerializationRules, ExceptionModellingRules,
+    leading-preposition and name-completion checkers, a format subcommand, .pre-commit-hooks.yaml, RepositoryInstructionsFile.
+    Plus what krrood-development-tools needs to mount it: rulesets a dependent package contributes, and check/format/agents-md
+    commands another CLI mounts. Its API is semver-stable from here. Cite krrood; NOTICE. release:minor.'
 - id: customization-docs
   title: A README per distribution and a guide to writing your own playbook and ruleset
   track: playbook

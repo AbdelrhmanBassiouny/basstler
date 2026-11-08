@@ -4,7 +4,7 @@
 - Module paths never change: every distribution ships modules under the basstler.<part> namespace, so imports and python -m entry points survive every move.
 - New code from any plan goes in the distribution that owns its subject; a v3 area lives next to its v2 code in the same distribution, and v2-removal deletes it there.
 - A reorganization pull request only moves code, never changes behaviour, so in-flight branches rebase across it by rename detection.
-- Every distribution is released at the same version from the one tag release.yml puts on the merge commit, and pins its siblings exactly; no file carries a version.
+- Every distribution is released at the same version from the one tag release.yml puts on the merge commit, and pins its siblings exactly; no file carries a version. A basstler distribution depends on a krrood one, and a krrood one on a basstler one, only through a range (>=X,<next-major), so neither repository's release waits on the other.
 - Copied krrood code lives only in basstler-core and basstler-rules, cited with :cite:`krrood`, its module and commit, and listed in NOTICE.
 - The customization model is called a playbook; workflow keeps meaning a GitHub Actions workflow.
 - Two opt-in distributions sit beside the hub: basstler-graph (plan-graph; plan, git, github) and basstler-recommender (work-recommender's general ranker and priorities policy model). Neither is in DefaultPlaybook; a playbook adds them, and they reach the hub and plan items only through SitePanel and ItemAttribute components.
