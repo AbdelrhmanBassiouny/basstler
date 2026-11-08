@@ -24,7 +24,7 @@ from basstler.github.repository_details import RepositoryDetails
 from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
-from basstler.plan_site.run_listing import RunListing
+from basstler.github.run_listing import RunListing
 from basstler.plan_site.user_steps import (
     MergeWorkflowProposal,
     PendingStep,

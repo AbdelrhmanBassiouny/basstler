@@ -34,7 +34,7 @@ from basstler.personal_notes.branch import PersonalNotesLocation
 from basstler.plan_site import publication
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.run_listing import ListedRun, RunListing
+from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
 from basstler.repository import GitHubAddress, Repository

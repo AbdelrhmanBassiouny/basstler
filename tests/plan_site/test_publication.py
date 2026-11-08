@@ -37,7 +37,7 @@ from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import PlanSitePublication, PublicationOption
 from basstler.plan_site.publication import app as publication_app
-from basstler.plan_site.run_listing import ListedRun, RunListing
+from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep, UserSteps
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (

@@ -11,7 +11,7 @@ from enum import StrEnum
 from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
-from basstler.plan_site.run_listing import ListedRun
+from basstler.github.run_listing import ListedRun
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     PlanSiteSecret,

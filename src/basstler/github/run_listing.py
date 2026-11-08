@@ -93,6 +93,13 @@ class RunListing(ValidatedJSONModel):
         """
         return cls.from_json(client.get(cls.path(repository, branch)))
 
+    def run_for(self, commit: str) -> ListedRun | None:
+        """
+        :param commit: The commit a run was started for.
+        :return: The latest run started for it, ``None`` when none was.
+        """
+        return next((run for run in self.workflow_runs if run.commit == commit), None)
+
     def select(self, workflow: WorkflowLocation) -> RunListing:
         """
         :param workflow: The workflow.
