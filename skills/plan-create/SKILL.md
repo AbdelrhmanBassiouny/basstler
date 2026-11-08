@@ -117,7 +117,10 @@ plan, rather than migrated whole.
 A rule that holds for every plan of the repository is not a roadmap entry: it is
 a repository rule, shown in every item brief and on every plan page of the
 repository. List them with `basstler repository-rules show`, and add or reword
-one with `basstler repository-rules set <id> <text>`.
+one with `basstler repository-rules set <id> <text>`. To set several at once,
+write them to a YAML file in the rules file's own format (`rules:`, each entry an
+`id` and `text`) and run `basstler repository-rules import <file>`: the file is
+validated before anything is pushed, and its rules land in one commit.
 
 ## 4. Cross-check every named branch/PR against live GitHub state
 
