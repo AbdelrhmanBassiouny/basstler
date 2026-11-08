@@ -151,15 +151,14 @@ items:
   pull_request_number: 140
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on: []
-  notes: 'Stacked on #139. Dispatch step stops with an ::error:: naming the secret and how
-    to store it. basstler.plan_site.token_storage stores the token in every published repository,
-    starts each dispatch and prints done or the failed run (replaces the printed gh secret
-    set loop and covers the done half of trigger-and-done). The create step links the pre-filled
-    token form. One secret copy per repository stays (no user-level Actions secrets); a joining
-    repository costs Regenerate token plus the store command. Open: make the token optional
-    (F plus page-merge-recheck).
-
-    '
+  notes: >
+    Based on main (#139 merged; main merged in at ed479e2). Dispatch step stops with an ::error::
+    naming the secret and how to store it. basstler.plan_site.token_storage stores the token in
+    every published repository, starts each dispatch and prints done or the failed run (replaces the
+    gh secret set loop; covers the done half of trigger-and-done). The create step links the
+    pre-filled token form. One secret copy per repository stays; a joining repository costs
+    Regenerate token plus the store command. Open: make the token optional (F plus
+    page-merge-recheck).
 
 - id: build-failure-report
   title: Report the plan site's failed builds, with GitHub's reason, where the user sees them
