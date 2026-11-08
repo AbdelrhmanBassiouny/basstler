@@ -14,6 +14,12 @@ from basstler.github.credential import CredentialOrigin
 from basstler.maintenance.exceptions import ExternalCallFailed
 
 
+REDIRECTION_STATUSES = range(HTTPStatus.MULTIPLE_CHOICES, HTTPStatus.BAD_REQUEST)
+"""
+Every status of the 3xx class, with which the API answers a path naming a moved resource.
+"""
+
+
 @dataclass
 class GitHubCredentialUnavailableError(CommandFailure, RuntimeError):
     """
@@ -85,9 +91,14 @@ class GitHubRequestFailed(GitHubCallFailed, ExternalCallFailed):
         credential_origin: CredentialOrigin,
     ) -> GitHubRequestFailed:
         """
-        :return: The refusal, a :class:`GitHubCredentialRejected` for a 401.
+        :return: The refusal, a :class:`GitHubCredentialRejected` for a 401 and a
+            :class:`GitHubRepositoryMoved` for a redirection.
         """
-        refusal = GitHubCredentialRejected if status == HTTPStatus.UNAUTHORIZED else cls
+        refusal = cls
+        if status == HTTPStatus.UNAUTHORIZED:
+            refusal = GitHubCredentialRejected
+        if status in REDIRECTION_STATUSES:
+            refusal = GitHubRepositoryMoved
         return refusal(
             status=status,
             detail=detail,
@@ -129,6 +140,26 @@ class GitHubCredentialRejected(GitHubRequestFailed):
             :meth:`ExternalCallFailed.suggest_correction` has no advice.
         """
         return self.credential_origin.suggest_renewal()
+
+
+@dataclass
+class GitHubRepositoryMoved(GitHubRequestFailed):
+    """
+    Raised when the API redirects the call because the repository it names was renamed
+    or transferred.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"{self.call} names a repository that moved: GitHub answered "
+            f"{self.status} with {self.detail}"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Look up the repository's new owner and name on github.com, then point the "
+            "git remote, configuration or plan that named the old one at it."
+        )
 
 
 @dataclass
