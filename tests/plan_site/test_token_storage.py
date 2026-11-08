@@ -224,7 +224,8 @@ def test_the_token_is_not_read_without_a_terminal(monkeypatch):
 
 def test_an_empty_token_is_refused(monkeypatch):
     """
-    Nothing typed at the prompt is refused as no token entered.
+    An empty answer at the command's hidden terminal prompt is refused as no token
+    entered.
     """
     monkeypatch.setattr("sys.stdin", TerminalInput())
     monkeypatch.setattr("getpass.getpass", lambda prompt: "\n")
@@ -237,9 +238,10 @@ def test_an_empty_token_is_refused(monkeypatch):
     )
 
 
-def test_a_typed_token_is_read_without_surrounding_whitespace(monkeypatch):
+def test_a_pasted_token_is_read_without_surrounding_whitespace(monkeypatch):
     """
-    The token typed at the prompt is read without its surrounding whitespace.
+    A token pasted at the command's hidden terminal prompt is read without the spaces or
+    newline a paste can carry around it.
     """
     monkeypatch.setattr("sys.stdin", TerminalInput())
     monkeypatch.setattr("getpass.getpass", lambda prompt: f" {TOKEN}\n")

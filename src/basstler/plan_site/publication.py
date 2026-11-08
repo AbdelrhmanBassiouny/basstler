@@ -152,6 +152,11 @@ class PlanSitePublication:
     The branch the merge workflow waits on until its pull request merges.
     """
 
+    in_cloud_session: bool = False
+    """
+    Whether this runs in a Claude Code cloud session, whose user has no terminal on it.
+    """
+
     @classproperty
     def fork_skip_reason(cls) -> str:
         """
@@ -233,7 +238,9 @@ class PlanSitePublication:
             report,
         )
         proposal = self.write_merge_workflow(report)
-        user_steps = UserSteps(notes_repository, site, hub.repositories)
+        user_steps = UserSteps(
+            notes_repository, site, hub.repositories, self.in_cloud_session
+        )
         if not site_runs.succeeded(SiteWorkflow.location):
             report.pending.append(
                 user_steps.pending(
@@ -410,6 +417,7 @@ def publish(
         DispatchWorkflow(notes_repository, notes_branch, site),
         SiteWorkflow(branch_or_tag, notes_repository),
         GitHubRestClient(),
+        in_cloud_session=ClaudeCodeVariable.REMOTE.is_true(),
     ).run()
 
 

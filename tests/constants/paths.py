@@ -149,6 +149,12 @@ class DatasetLocation(PathEnumeration):
     the push it runs for.
     """
 
+    RECORDING_GH = DIRECTORY / "recording-gh.sh"
+    """
+    A ``gh`` that records each call's arguments, ``GH_TOKEN`` and standard input, and
+    fails a workflow run when ``GH_WORKFLOW_RUN_STATUS`` is non-zero.
+    """
+
     PROTECTED_MAIN_HOOK = DIRECTORY / "refuse-main-pre-receive.sh"
     """
     A pre-receive hook that refuses every push updating ``main``, as a protected default

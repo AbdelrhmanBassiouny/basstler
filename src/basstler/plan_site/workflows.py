@@ -99,8 +99,8 @@ class BuildInput(StrEnum):
 
 class PlanSiteTemplate(StrEnum):
     """
-    The templates in :attr:`PackageLocation.TEMPLATES` the site's workflows are rendered
-    from.
+    The templates in :attr:`PackageLocation.TEMPLATES` the site's workflows and the
+    token's store command are rendered from.
     """
 
     SITE_WORKFLOW = "plan_site_workflow.yml"
@@ -116,6 +116,12 @@ class PlanSiteTemplate(StrEnum):
     MERGE_WORKFLOW = "plan_site_merge_workflow.yml"
     """
     The workflow on a notes repository's default branch.
+    """
+
+    STORE_TOKEN_COMMAND = "plan_site_store_token_command.sh"
+    """
+    The command a user runs on their own computer to prove the token by starting the
+    site's build with it, then store it in every repository the site publishes.
     """
 
     def render(self, **context: Any) -> str:

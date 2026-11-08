@@ -11,11 +11,16 @@ from dataclasses import dataclass
 from enum import StrEnum
 from urllib.parse import urlencode
 
+from basstler.environment import GitHubCredentialVariable
 from basstler.plan_site import token_storage
+from basstler.plan_site.build_start import CodeFence
 from basstler.github.run_listing import ListedRun
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
+    GitHubCommandLineOption,
     PlanSiteSecret,
+    PlanSiteTemplate,
+    SiteWorkflow,
 )
 from basstler.repository import GitHubAddress, Repository
 from basstler.standard_streams import StandardStreamHandler
@@ -80,7 +85,7 @@ class PendingStep:
 
     line: str | None
     """
-    The one copyable line that takes it, ``None`` when GitHub offers no command for it.
+    The copyable command that takes it, ``None`` when GitHub offers no command for it.
     """
 
     browser_steps: tuple[str, ...]
@@ -119,7 +124,8 @@ class PendingStep:
         if self.line is None:
             lines.append("  GitHub offers no command for this; in the browser:")
         else:
-            lines.extend([f"    {self.line}", "  Or in the browser:"])
+            command = "\n".join([CodeFence.BASH, self.line, CodeFence.CLOSE])
+            lines.extend([textwrap.indent(command, "    "), "  Or in the browser:"])
         lines.append(numbered)
         return "\n".join(lines)
 
@@ -143,6 +149,11 @@ class UserSteps:
     registered: Sequence[str]
     """
     Every ``owner/name`` the site publishes, which the token has to read.
+    """
+
+    in_cloud_session: bool = False
+    """
+    Whether this runs in a Claude Code cloud session, whose user has no terminal on it.
     """
 
     def pending(
@@ -192,7 +203,7 @@ class UserSteps:
             ),
             UserStep.STORE_TOKEN: PendingStep(
                 step,
-                f"{sys.executable} -m {token_storage.__name__}",
+                self.store_token_command,
                 tuple(
                     f"Open {Repository.parse(repository).new_actions_secret_url}, "
                     f"set the name to {PlanSiteSecret.TOKEN}, paste the token as the "
@@ -203,6 +214,24 @@ class UserSteps:
             ),
         }
         return steps[step]
+
+    @property
+    def store_token_command(self) -> str:
+        """
+        :return: The command that proves the token by starting the site's build with
+            it, then stores it in every registered repository; in a cloud session, one
+            the user runs on their own computer with only ``gh``.
+        """
+        if not self.in_cloud_session:
+            return f"{sys.executable} -m {token_storage.__name__}"
+        return PlanSiteTemplate.STORE_TOKEN_COMMAND.render(
+            token_secret=PlanSiteSecret.TOKEN,
+            token_variable=GitHubCredentialVariable.GH_TOKEN,
+            site_workflow_name=SiteWorkflow.location.name,
+            repository_option=GitHubCommandLineOption.REPOSITORY,
+            site_repository=self.site.repository.full_name,
+            repositories=" ".join(self.registered),
+        )
 
 
 @dataclass(frozen=True)

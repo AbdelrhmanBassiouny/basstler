@@ -6,11 +6,13 @@ site, against bare repositories standing in for GitHub and recorded run listings
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -36,6 +38,7 @@ from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site import token_storage
+from basstler.plan_site.build_start import CodeFence
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import PlanSitePublication, PublicationOption
 from basstler.plan_site.publication import app as publication_app
@@ -44,6 +47,7 @@ from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     DispatchWorkflow,
+    GitHubCommandLineOption,
     MergeWorkflow,
     PlanSiteJob,
     PlanSiteSecret,
@@ -172,7 +176,9 @@ class Publishing:
             "push", "--quiet", path.as_uri(), f"HEAD:refs/heads/{branch}"
         )
 
-    def publication(self, runs: PullRequestOpeningClient) -> PlanSitePublication:
+    def publication(
+        self, runs: PullRequestOpeningClient, in_cloud_session: bool = False
+    ) -> PlanSitePublication:
         """:return: Publishing the notes repository on its site."""
         return PlanSitePublication(
             GitCommandRunner(self.checkout.project_root),
@@ -181,6 +187,7 @@ class Publishing:
             SiteWorkflow(BRANCH_OR_TAG, self.notes_repository),
             runs,
             remote_root=self.root.as_uri(),
+            in_cloud_session=in_cloud_session,
         )
 
     @staticmethod
@@ -1058,6 +1065,113 @@ def test_storing_the_token_in_the_browser_opens_each_registered_repository_s_sec
     assert PlanSiteSecret.TOKEN in text
 
 
+# %% storing the token from a cloud session
+
+TYPED_TOKEN = "github_pat_typed"
+"""
+The token typed at the store command's hidden prompt.
+"""
+
+
+class RecordingGitHubVariable(StrEnum):
+    """
+    The environment variables :attr:`DatasetLocation.RECORDING_GH` reads.
+    """
+
+    CALLS = "GH_CALLS"
+    """
+    The file each call is appended to.
+    """
+
+    WORKFLOW_RUN_STATUS = "GH_WORKFLOW_RUN_STATUS"
+    """
+    The status a workflow run exits with.
+    """
+
+
+def run_cloud_store_command(
+    published, tmp_path: Path, monkeypatch, workflow_run_status: int = 0
+) -> list[str]:
+    """
+    Run the store step's command of a cloud session's publication with a recording
+    ``gh``, typing :data:`TYPED_TOKEN` at its prompt.
+
+    :return: The recorded ``gh`` calls, one ``GH_TOKEN|arguments|standard input`` each.
+    """
+    report = published.publication(
+        published.runs_none(), in_cloud_session=True
+    ).publish()
+    command = pending_step(report, UserStep.STORE_TOKEN).line
+    executables = tmp_path / "bin"
+    executables.mkdir()
+    (executables / "gh").symlink_to(DatasetLocation.RECORDING_GH)
+    calls = tmp_path / "gh-calls"
+    monkeypatch.delenv(GitHubCredentialVariable.GH_TOKEN, raising=False)
+    monkeypatch.setenv("PATH", f"{executables}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(RecordingGitHubVariable.CALLS, str(calls))
+    monkeypatch.setenv(
+        RecordingGitHubVariable.WORKFLOW_RUN_STATUS, str(workflow_run_status)
+    )
+    subprocess.run(["sh", "-c", command], input=f"{TYPED_TOKEN}\n", text=True)
+    return calls.read_text().splitlines()
+
+
+def test_a_cloud_session_s_store_command_runs_without_this_session_s_python(published):
+    """
+    A cloud session's user runs the command on their own computer, where this session's
+    interpreter does not exist.
+    """
+    report = published.publication(
+        published.runs_none(), in_cloud_session=True
+    ).publish()
+
+    assert sys.executable not in pending_step(report, UserStep.STORE_TOKEN).line
+
+
+def test_a_cloud_session_s_store_command_proves_the_token_by_starting_the_build(
+    published, tmp_path, monkeypatch
+):
+    """
+    The typed token starts the site's build first, as the dispatch workflow does.
+    """
+    calls = run_cloud_store_command(published, tmp_path, monkeypatch)
+
+    assert calls[0] == (
+        f"{TYPED_TOKEN}|workflow run {SiteWorkflow.location.name} "
+        f"{GitHubCommandLineOption.REPOSITORY} {published.site.repository.full_name}|"
+    )
+
+
+def test_a_cloud_session_s_store_command_stores_the_token_in_every_registered_repository(
+    published, tmp_path, monkeypatch
+):
+    """
+    Once the build started, the token is stored in every registered repository with the
+    user's own login.
+    """
+    calls = run_cloud_store_command(published, tmp_path, monkeypatch)
+
+    registered = published.hub_on(published.notes_repository).repositories
+    assert calls[1:] == [
+        f"|secret set {PlanSiteSecret.TOKEN} {GitHubCommandLineOption.REPOSITORY} "
+        f"{repository}|{TYPED_TOKEN}"
+        for repository in registered
+    ]
+
+
+def test_a_cloud_session_s_store_command_stores_nothing_when_the_build_is_refused(
+    published, tmp_path, monkeypatch
+):
+    """
+    A token GitHub refuses to start the build with is stored nowhere.
+    """
+    calls = run_cloud_store_command(
+        published, tmp_path, monkeypatch, workflow_run_status=1
+    )
+
+    assert len(calls) == 1
+
+
 def test_a_failed_dispatch_run_is_linked_from_the_step_it_leaves_to_the_user(
     published,
 ):
@@ -1089,11 +1203,15 @@ def test_without_a_run_no_run_is_linked(published):
 
 
 def test_a_rendered_step_shows_the_command_and_then_the_browser_steps(published):
+    """
+    The command is set in a bash block, so it is copied whole, before the browser steps.
+    """
     report = published.publication(published.runs_none()).publish()
     pending = pending_step(report, UserStep.TURN_ON_PAGES)
 
     assert pending.render() == (
-        f"- {pending.step}:\n    {pending.line}\n  Or in the browser:\n"
+        f"- {pending.step}:\n    {CodeFence.BASH}\n    {pending.line}\n"
+        f"    {CodeFence.CLOSE}\n  Or in the browser:\n"
         + "\n".join(
             f"    {number}. {step}"
             for number, step in enumerate(pending.browser_steps, start=1)
