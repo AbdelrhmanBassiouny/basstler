@@ -9,27 +9,31 @@ import pytest
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.chip_tone import ChipTone
 from basstler.pull_request_state import LiveState
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.upstream_reviews.vocabulary import CombinedCheckState
 
 # %% chip tones
 
 
-@pytest.mark.parametrize("check_state", [RollupState.FAILURE, RollupState.ERROR])
-def test_a_failed_check_is_bad(check_state: RollupState):
+@pytest.mark.parametrize(
+    "check_state", [CombinedCheckState.FAILURE, CombinedCheckState.ERROR]
+)
+def test_a_failed_check_is_bad(check_state: CombinedCheckState):
     assert ChipTone.of_check_state(check_state) is ChipTone.BAD
 
 
 def test_passing_checks_are_good():
-    assert ChipTone.of_check_state(RollupState.SUCCESS) is ChipTone.GOOD
+    assert ChipTone.of_check_state(CombinedCheckState.SUCCESS) is ChipTone.GOOD
 
 
-@pytest.mark.parametrize("check_state", [RollupState.PENDING, RollupState.EXPECTED])
-def test_unfinished_checks_are_a_warning(check_state: RollupState):
+@pytest.mark.parametrize(
+    "check_state", [CombinedCheckState.PENDING, CombinedCheckState.EXPECTED]
+)
+def test_unfinished_checks_are_a_warning(check_state: CombinedCheckState):
     assert ChipTone.of_check_state(check_state) is ChipTone.WARNING
 
 
 def test_checks_nothing_reported_are_idle():
-    assert ChipTone.of_check_state(RollupState.NOT_REPORTED) is ChipTone.IDLE
+    assert ChipTone.of_check_state(CombinedCheckState.NOT_REPORTED) is ChipTone.IDLE
 
 
 def test_every_status_and_live_state_has_a_tone():

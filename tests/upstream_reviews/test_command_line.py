@@ -43,7 +43,7 @@ from basstler.upstream_reviews.failure_logs import (
 )
 from basstler.upstream_reviews.pull_request_models import (
     CheckResult,
-    CheckRollup,
+    GraphQLCheckStatus,
     CheckStatus,
     GraphQLRequest,
     UpstreamPullRequestSnapshot,
@@ -65,7 +65,7 @@ from basstler.upstream_reviews.vocabulary import (
     JSONModel,
     QueryVariable,
     ReviewState,
-    RollupState,
+    CombinedCheckState,
     ThreadMarker,
 )
 
@@ -286,7 +286,7 @@ def test_a_pull_request_reads_its_checks_off_its_head_commit():
     [head] = pull_request.commits
 
     assert pull_request.checks == head.commit.checks
-    assert pull_request.checks.state is RollupState.FAILURE
+    assert pull_request.checks.state is CombinedCheckState.FAILURE
 
 
 def test_a_pull_request_listing_no_commits_has_no_checks():
@@ -332,10 +332,10 @@ def current_checks(paginated_client) -> CheckStatus:
     )
 
 
-def test_the_rollup_verdict_is_read_rather_than_recomputed(current_checks):
-    """The recorded rollup says failure while a check is still pending, which a
+def test_the_combined_state_is_read_rather_than_recomputed(current_checks):
+    """The recorded combined state says failure while a check is still pending, which a
     verdict recomputed from the worst outcome would not say."""
-    assert current_checks.state is RollupState.FAILURE
+    assert current_checks.state is CombinedCheckState.FAILURE
 
 
 def test_every_recorded_check_is_read(current_checks):
@@ -390,9 +390,9 @@ def test_only_the_checks_that_did_not_pass_are_unsuccessful(current_checks):
     ]
 
 
-def test_a_rollup_context_of_a_graphql_type_no_model_reads_is_rejected():
+def test_a_check_of_a_graphql_type_no_model_reads_is_rejected():
     """
-    A rollup context whose GraphQL type names neither shape a rollup can hold is
+    A check whose GraphQL type names neither shape a check comes in is
     refused.
     """
     context_of_a_new_type = {
@@ -403,14 +403,14 @@ def test_a_rollup_context_of_a_graphql_type_no_model_reads_is_rejected():
     }
 
     with pytest.raises(ValidationError):
-        CheckRollup.from_json(
+        GraphQLCheckStatus.from_json(
             {"state": "SUCCESS", "contexts": {"nodes": [context_of_a_new_type]}}
         )
 
 
 def test_a_check_run_is_read_only_from_a_check_run_s_keys():
     """
-    A rollup context tagged as a check run that carries a status's keys is refused.
+    A check tagged as a check run that carries a status's keys is refused.
     """
     check_run_with_status_keys = {
         "__typename": "CheckRun",
@@ -420,7 +420,7 @@ def test_a_check_run_is_read_only_from_a_check_run_s_keys():
     }
 
     with pytest.raises(ValidationError):
-        CheckRollup.from_json(
+        GraphQLCheckStatus.from_json(
             {"state": "SUCCESS", "contexts": {"nodes": [check_run_with_status_keys]}}
         )
 

@@ -36,7 +36,7 @@ from basstler.upstream_reviews.rest_models import (
     RestCheckRunPage,
     RestCombinedStatusPage,
 )
-from basstler.upstream_reviews.vocabulary import RollupState, WebPage
+from basstler.upstream_reviews.vocabulary import CombinedCheckState, WebPage
 
 
 # %% what a pass reads and writes
@@ -310,7 +310,7 @@ class GitHubRepository(
             RepositoryLabel(label, label.purpose),
         )
 
-    def check_state(self, commit: str) -> RollupState:
+    def check_state(self, commit: str) -> CombinedCheckState:
         runs = [
             run
             for page in self.client.get_pages(
@@ -326,7 +326,7 @@ class GitHubRepository(
             for status in RestCombinedStatusPage.from_json(page).statuses
         ]
         checks = CheckStatus.over(runs + statuses)
-        return RollupState.NOT_REPORTED if checks is None else checks.state
+        return CombinedCheckState.NOT_REPORTED if checks is None else checks.state
 
     @staticmethod
     def _commit_report(commit: str, report: CommitReport) -> str:

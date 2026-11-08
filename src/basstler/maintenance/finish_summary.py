@@ -24,7 +24,7 @@ from basstler.maintenance.report import MaintenanceReport
 from basstler.maintenance.restack_steps import BranchOutcome, RestackOutcome
 from basstler.render_common import AllowedUrlScheme
 from basstler.stack.model import StackBranch, BranchStatus, Stack
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.upstream_reviews.vocabulary import CombinedCheckState
 
 # %% vocabulary
 
@@ -276,12 +276,12 @@ class FinishSummary:
             PassCount.LEFT_FOR_SOMEBODY: len(report.branches_left_unpublished),
             PassCount.LINKS_RECORDED: len(report.promoted),
             PassCount.FAILING_CHECKS: len(
-                checks.branches_in(RollupState.FAILURE)
-                + checks.branches_in(RollupState.ERROR)
+                checks.branches_in(CombinedCheckState.FAILURE)
+                + checks.branches_in(CombinedCheckState.ERROR)
             ),
             PassCount.CHECKS_RUNNING: len(
-                checks.branches_in(RollupState.PENDING)
-                + checks.branches_in(RollupState.EXPECTED)
+                checks.branches_in(CombinedCheckState.PENDING)
+                + checks.branches_in(CombinedCheckState.EXPECTED)
             ),
             PassCount.REPARENTS_LEFT: len(report.reparents),
         }
