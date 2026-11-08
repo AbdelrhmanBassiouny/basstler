@@ -22,9 +22,10 @@ Prints a one-line JSON object to stdout:
 
 ``paths_absent_from_base`` holds the requested paths the base branch doesn't have yet -
 non-empty means whichever unlanded branch introduces them is a candidate owner of the
-work. ``shared_paths`` is the intersection of a candidate's own changes with the
-requested paths; ``changed_paths`` is everything that candidate changes, for comparing
-by purpose when two branches build the same thing under different names.
+work. ``shared_paths`` holds the files a candidate changes that the requested paths
+cover, a directory covering every file below it; ``changed_paths`` is everything that
+candidate changes, for comparing by purpose when two branches build the same thing under
+different names.
 
 A branch that doesn't resolve raises :class:`UnknownBranchError` rather than being
 reported as no overlap.
@@ -39,7 +40,7 @@ import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 from basstler.class_property import classproperty
 from basstler.standard_streams import StandardStreamHandler
@@ -183,7 +184,7 @@ class CandidateOverlap:
 
     shared_paths: list[str]
     """
-    The requested paths this candidate already changes.
+    The files this candidate changes that the requested paths cover.
     """
 
     changed_paths: list[str]
@@ -201,6 +202,25 @@ class CandidateOverlap:
             ReportKey.SHARED_PATHS: self.shared_paths,
             ReportKey.CHANGED_PATHS: self.changed_paths,
         }
+
+
+@dataclass(frozen=True)
+class RequestedPath:
+    """
+    A path the work touches: one file, or a directory with every file below it.
+    """
+
+    path: str
+    """
+    The path as requested, relative to the repository root.
+    """
+
+    def covers(self, file: str) -> bool:
+        """
+        :param file: A file's path, relative to the repository root.
+        :return: Whether the file is this path or lies below it.
+        """
+        return PurePosixPath(file).is_relative_to(self.path.rstrip("/"))
 
 
 @dataclass(frozen=True)
@@ -267,8 +287,12 @@ def paths_present_on(
     listing = run_git(
         repository_path, "ls-tree", "-r", "--name-only", branch, "--", *paths
     )
-    found = {line for line in listing.splitlines() if line}
-    return {path for path in paths if path.rstrip("/") in found or path in found}
+    found = [line for line in listing.splitlines() if line]
+    return {
+        path
+        for path in paths
+        if any(RequestedPath(path).covers(file) for file in found)
+    }
 
 
 def changed_paths_since_base(
@@ -311,7 +335,7 @@ def build_scope_report(
     :return: The assembled report.
     """
     present = paths_present_on(repository_path, base_branch, paths)
-    requested = set(paths)
+    requested = [RequestedPath(path) for path in paths]
     overlaps = []
     for candidate in candidates:
         changed = changed_paths_since_base(
@@ -320,7 +344,11 @@ def build_scope_report(
         overlaps.append(
             CandidateOverlap(
                 candidate,
-                [path for path in changed if path in requested],
+                [
+                    file
+                    for file in changed
+                    if any(path.covers(file) for path in requested)
+                ],
                 changed,
             )
         )

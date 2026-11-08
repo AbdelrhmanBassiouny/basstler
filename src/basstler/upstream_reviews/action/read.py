@@ -8,10 +8,8 @@ from __future__ import annotations
 import json
 import time
 from dataclasses import dataclass
-from enum import StrEnum
-from typing import Any
 
-from basstler.repository import Repository
+from basstler.github.run_listing import RunListing
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.vocabulary import (
     ActionBranch,
@@ -33,102 +31,8 @@ from basstler.upstream_reviews.exceptions import (
     ActionRunFailed,
     ActionRunNotStarted,
 )
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-    JSONModel,
-)
 
 # %% the session's side
-
-
-class WorkflowRunJSONKey(StrEnum):
-    """
-    Every field read out of the fork's workflow-run listing.
-    """
-
-    WORKFLOW_RUNS = "workflow_runs"
-    IDENTIFIER = "id"
-    HEAD_SHA = "head_sha"
-    CONCLUSION = "conclusion"
-
-
-@dataclass(frozen=True)
-class WorkflowRun(JSONModel):
-    """
-    One run of the fork's workflow.
-    """
-
-    identifier: int
-    """
-    The run's own number, which its page is addressed by.
-    """
-
-    commit: str
-    """
-    The commit it ran on - the request's, for the run answering it.
-    """
-
-    outcome: CheckOutcome
-    """
-    How it ended, :attr:`CheckOutcome.PENDING` while it runs.
-    """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> WorkflowRun:
-        """
-        :param data: One listed run.
-        :return: The parsed run.
-        """
-        return cls(
-            data[WorkflowRunJSONKey.IDENTIFIER],
-            data[WorkflowRunJSONKey.HEAD_SHA],
-            CheckOutcome.from_conclusion(data[WorkflowRunJSONKey.CONCLUSION]),
-        )
-
-    @property
-    def failed(self) -> bool:
-        """:return: Whether it ended without succeeding."""
-        return self.outcome not in {CheckOutcome.SUCCESS, CheckOutcome.PENDING}
-
-
-@dataclass(frozen=True)
-class WorkflowRunPage(JSONModel):
-    """
-    The fork's latest runs on the Action branch.
-    """
-
-    runs: list[WorkflowRun]
-    """
-    The runs, newest first.
-    """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> WorkflowRunPage:
-        """
-        :param data: The listing.
-        :return: The parsed page.
-        """
-        return cls(
-            [
-                WorkflowRun.from_json(run)
-                for run in data[WorkflowRunJSONKey.WORKFLOW_RUNS]
-            ]
-        )
-
-    @staticmethod
-    def path(fork: Repository) -> str:
-        """
-        :param fork: The fork.
-        :return: The REST path listing its latest runs on the Action branch.
-        """
-        return f"{fork.api_path}/actions/runs?branch={ActionBranch.NAME}&per_page=10"
-
-    def run_for(self, commit: str) -> WorkflowRun | None:
-        """
-        :param commit: A pushed request.
-        :return: The run answering it, if GitHub started one.
-        """
-        return next((run for run in self.runs if run.commit == commit), None)
 
 
 @dataclass(frozen=True)
@@ -235,13 +139,11 @@ class ActionRead[AnswerType: ActionAnswer]:
         if self.runs is None or fork is None:
             return
         try:
-            page = WorkflowRunPage.from_json(self.runs.get(WorkflowRunPage.path(fork)))
+            listing = RunListing.read(self.runs, fork, ActionBranch.NAME)
         except GitHubRequestFailed:
             return
-        run = page.run_for(commit)
+        run = listing.run_for(commit)
         if run is None:
             raise ActionRunNotStarted(fork, elapsed)
         if run.failed and self.collect() is None:
-            raise ActionRunFailed(
-                f"its run ended {run.outcome}: {fork.workflow_run_url(run.identifier)}"
-            )
+            raise ActionRunFailed(f"its run ended {run.outcome}: {run.page_url}")

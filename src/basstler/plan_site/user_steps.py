@@ -11,13 +11,14 @@ from enum import StrEnum
 from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
-from basstler.plan_site.run_listing import ListedRun
+from basstler.github.run_listing import ListedRun
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     PlanSiteSecret,
 )
 from basstler.repository import GitHubAddress, Repository
 from basstler.standard_streams import StandardStreamHandler
+from basstler.github.pull_request import NewPullRequest
 from basstler.github.client import (
     GitHubClient,
     HttpMethod,
@@ -61,8 +62,8 @@ class UserStep(StrEnum):
 
     ADD_MERGE_WORKFLOW = "merge the workflow that starts the build on every merge"
     """
-    The notes repository's default branch refused the merge workflow, which waits on a
-    branch of its own.
+    The merge workflow waits on a branch of its own until its pull request merges into the
+    notes repository's default branch.
     """
 
 
@@ -113,7 +114,7 @@ class PendingStep:
             )
         if self.latest_run is not None:
             lines.append(
-                f"  Latest run, {self.latest_run.outcome}: {self.latest_run.url}"
+                f"  Latest run, {self.latest_run.outcome}: {self.latest_run.page_url}"
             )
         if self.line is None:
             lines.append("  GitHub offers no command for this; in the browser:")
@@ -190,9 +191,9 @@ class UserSteps:
                     "the plan site.",
                     f"Name the token and set Resource owner to {site.owner}.",
                     "Under Repository access, choose Only select repositories and "
-                    f"select {site.full_name}, {repositories}.",
+                    f"select {site.full_name} alone.",
                     "Under Permissions, open Repository permissions and set Actions "
-                    "to Read and write and Contents to Read-only.",
+                    "to Read and write.",
                     "Click Generate token and copy the token now; GitHub shows it "
                     "once.",
                 ),
@@ -218,8 +219,8 @@ class UserSteps:
 @dataclass(frozen=True)
 class MergeWorkflowProposal:
     """
-    The merge workflow waiting on a branch of its own, for the user to merge into a
-    default branch that refused it.
+    The merge workflow waiting on a branch of its own, for the user to merge into the
+    notes repository's default branch.
     """
 
     repository: Repository
@@ -243,6 +244,13 @@ class MergeWorkflowProposal:
     """
 
     @property
+    def opening(self) -> NewPullRequest:
+        """:return: The pull request proposing the workflow, opened ready to merge."""
+        return NewPullRequest(
+            self.repository, self.title, self.head, self.base, draft=False
+        )
+
+    @property
     def open_pull_requests_path(self) -> str:
         """:return: The listing of the open pull requests from :attr:`head` into
         :attr:`base`."""
@@ -254,7 +262,7 @@ class MergeWorkflowProposal:
             },
             safe=":",
         )
-        return f"{self.repository.api_path}/pulls?{query}"
+        return f"{self.repository.pull_requests_path}?{query}"
 
     def pending(self, github: GitHubClient) -> PendingStep:
         """
@@ -268,8 +276,8 @@ class MergeWorkflowProposal:
             return self.merging(RestPullRequestSummary.from_json(listed[0]))
         opened = github.attempt_send(
             HttpMethod.POST,
-            f"{self.repository.api_path}/pulls",
-            {"title": self.title, "head": self.head, "base": self.base},
+            self.repository.pull_requests_path,
+            self.opening,
         )
         if opened.failure is not None:
             return PendingStep(
@@ -294,6 +302,6 @@ class MergeWorkflowProposal:
         """
         return PendingStep(
             UserStep.ADD_MERGE_WORKFLOW,
-            f"gh pr merge {pull_request.url} --merge",
-            (f"Open {pull_request.url}.", "Click Merge pull request."),
+            f"gh pr merge {pull_request.page_url} --merge",
+            (f"Open {pull_request.page_url}.", "Click Merge pull request."),
         )

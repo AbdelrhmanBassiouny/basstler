@@ -14,16 +14,17 @@ import re
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 from cyclopts import App, Parameter
 
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure
+from basstler.github.repository_details import RepositoryDetails
 from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.maintenance.remote_branch import FileWrite, RemoteBranch
-from basstler.plan_site.run_listing import RunListing
+from basstler.maintenance.remote_branch import RemoteBranch
+from basstler.github.run_listing import RunListing
 from basstler.plan_site.user_steps import (
     MergeWorkflowProposal,
     PendingStep,
@@ -46,7 +47,7 @@ from basstler.github.client import (
     GitHubClient,
     GitHubRestClient,
 )
-from basstler.upstream_reviews.vocabulary import BasstlerSource, JSONModel
+from basstler.upstream_reviews.vocabulary import BasstlerSource
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -54,37 +55,6 @@ This module's logger, which is also what its command prints through.
 """
 
 # %% the notes repository on GitHub
-
-
-class RepositoryKey(StrEnum):
-    """
-    Every field read out of a repository's REST response.
-    """
-
-    FORK = "fork"
-    """
-    Whether the repository is a fork.
-    """
-
-
-@dataclass(frozen=True)
-class RepositoryDetails(JSONModel):
-    """
-    What publishing reads about a repository from GitHub.
-    """
-
-    is_fork: bool
-    """
-    Whether it is a fork, whose default branch follows its upstream's.
-    """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RepositoryDetails:
-        """
-        :param data: A repository's REST response.
-        :return: The parsed details.
-        """
-        return cls(data[RepositoryKey.FORK])
 
 
 # %% publishing
@@ -179,8 +149,7 @@ class PlanSitePublication:
 
     merge_workflow_branch: str = "basstler/plan-site-merge"
     """
-    The branch the merge workflow waits on when the notes repository's default branch
-    refuses it.
+    The branch the merge workflow waits on until its pull request merges.
     """
 
     @classproperty
@@ -297,53 +266,33 @@ class PlanSitePublication:
         return 0 if report.complete else 1
 
     @staticmethod
-    def attempt_write(
-        branch: RemoteBranch,
-        workflow: PlanSiteWorkflow,
-        message: str,
-        report: PublicationReport,
-    ) -> FileWrite | None:
-        """
-        Write a workflow onto a branch unless the branch already has it as it is.
-
-        :param branch: The branch to write onto.
-        :param workflow: The workflow.
-        :param message: The commit message.
-        :param report: Where to record a write the branch accepted.
-        :return: The write, failed when the branch refused it, or ``None`` when the
-            branch already had the workflow.
-        """
-        if branch.read_latest(workflow.location) == workflow.text:
-            return None
-        written = branch.attempt_write(
-            {workflow.location.as_posix(): workflow.text}, message
-        )
-        if written.push.succeeded:
-            report.written.append(f"{workflow.location} on {branch.description}")
-        return written
-
     def write(
-        self,
         branch: RemoteBranch,
         workflow: PlanSiteWorkflow,
         message: str,
         report: PublicationReport,
     ) -> None:
         """
-        Like :meth:`attempt_write`, but a refused push is an error.
+        Write a workflow onto a branch unless the branch already has it as it is.
 
+        :param branch: The branch to write onto.
+        :param workflow: The workflow.
+        :param message: The commit message.
+        :param report: Where to record the write.
         :raises GitCommandFailed: If the branch refuses the workflow.
         """
-        written = self.attempt_write(branch, workflow, message, report)
-        if written is not None:
-            written.push.raise_if_failed()
+        if branch.read_latest(workflow.location) == workflow.text:
+            return
+        branch.write({workflow.location.as_posix(): workflow.text}, message)
+        report.written.append(f"{workflow.location} on {branch.description}")
 
     def write_merge_workflow(
         self, report: PublicationReport
     ) -> MergeWorkflowProposal | None:
         """
-        Write the merge workflow onto the notes repository's default branch, or onto
-        :attr:`merge_workflow_branch` when the default branch refuses it.
+        Write the merge workflow onto :attr:`merge_workflow_branch` for a pull request
+        into the notes repository's default branch, so it reaches that branch through
+        the repository's own checks.
 
         :param report: Where to record the writes.
         :return: The workflow left for the user to merge, or ``None`` when the default
@@ -361,8 +310,7 @@ class PlanSitePublication:
             f"{self.dispatch_workflow.site.repository.full_name} on every merge"
         )
         default_branch = self.default_branch_of(self.notes_remote)
-        written = self.attempt_write(default_branch, workflow, message, report)
-        if written is None or written.push.succeeded:
+        if default_branch.read_latest(workflow.location) == workflow.text:
             return None
         head = RemoteBranch(self.merge_workflow_branch, self.git, self.notes_remote)
         self.write(head, workflow, message, report)

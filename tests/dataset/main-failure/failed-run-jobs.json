@@ -1,0 +1,9 @@
+{
+  "total_count": 4,
+  "jobs": [
+    {"id": 1, "name": "Actions usage", "conclusion": "success"},
+    {"id": 2, "name": "ruff", "conclusion": "failure"},
+    {"id": 3, "name": "pytest on Python 3.12", "conclusion": "timed_out"},
+    {"id": 4, "name": "pytest on Python 3.13", "conclusion": "success"}
+  ]
+}

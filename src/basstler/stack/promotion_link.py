@@ -9,6 +9,11 @@ from enum import StrEnum
 from urllib.parse import quote
 
 from basstler.class_property import classproperty
+from basstler.locations import ProjectLocation
+from basstler.stack.configuration import (
+    CommittedStackConfiguration,
+    MissingUpstreamRepositoryError,
+)
 from basstler.stack.exceptions import PromotionLinkTooLongError
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
@@ -69,11 +74,18 @@ class PromotionLink:
         :param title: Title to prefill.
         :param body: Description to prefill, shortened if the URL would not otherwise fit.
         :return: The link, flagged if the body was shortened.
+        :raises MissingUpstreamRepositoryError: If the project names no upstream.
         """
+        upstream_repository = configuration.upstream_repository
+        if upstream_repository is None:
+            raise MissingUpstreamRepositoryError(
+                CommittedStackConfiguration().project_file,
+                ProjectLocation.PERSONAL_STACK_CONFIGURATION.value,
+            )
 
         def url_for(text: str) -> str:
             return (
-                f"{configuration.upstream_repository.url}/compare/"
+                f"{upstream_repository.url}/compare/"
                 f"{configuration.upstream_base}..."
                 f"{configuration.fork_repository.owner}:{branch}"
                 f"?{PromotionLinkParameter.EXPAND}=1"

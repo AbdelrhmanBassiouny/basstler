@@ -4,6 +4,7 @@ What the release workflow tags a merge commit as, and its tag step against a scr
 
 from __future__ import annotations
 
+import dataclasses
 import json
 import os
 import subprocess
@@ -14,15 +15,18 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+import yaml
 
+from basstler.branch import Branch
 from basstler.environment import GitHubActionsVariable
 from basstler.locations import PathEnumeration
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.workflows import ActivityType, Trigger, TriggerEvent, WorkflowKey
+from basstler.workflows import Workflow as DeclaredWorkflow
 from basstler.release_version import (
     MalformedVersion,
     MergedPullRequest,
     PlannedRelease,
-    PullRequestJSONKey,
     PullRequestLabel,
     Release,
     ReleaseVersion,
@@ -31,6 +35,7 @@ from basstler.release_version import (
 
 from .constants.environment import SearchPathVariable
 from .constants.paths import RepositoryLocation
+from .plugin_manifest import PluginSource
 from .script_runner import BashCommandRunner
 from .scratch_repository import ScratchRepository, initialize_bare_repository
 from .workflow_definition import Workflow
@@ -152,12 +157,9 @@ def pull_request_json(number: int, *labels: str) -> dict[str, Any]:
     :param labels: The names of its labels.
     :return: The pull request as GitHub's ``commits/<sha>/pulls`` returns one.
     """
-    return {
-        PullRequestJSONKey.NUMBER: number,
-        PullRequestJSONKey.LABELS: [
-            {PullRequestJSONKey.NAME: label} for label in labels
-        ],
-    }
+    return dataclasses.asdict(
+        MergedPullRequest(number, tuple(PullRequestLabel(label) for label in labels))
+    )
 
 
 def merged(number: int, *labels: str) -> MergedPullRequest:
@@ -370,6 +372,163 @@ def test_any_other_label_releases_a_patch():
     assert PullRequestLabel(ReleaseSampleLabel.UNRELATED).part is VersionPart.PATCH
 
 
+# %% when the workflow releases
+
+
+class ReleaseGate(StrEnum):
+    """
+    What the release workflow waits for before it tags a commit.
+    """
+
+    BRANCH = "main"
+    """
+    The branch whose tested commits are released.
+    """
+
+    TESTS_PASSED = "github.event.workflow_run.conclusion == 'success'"
+    """
+    The condition that the Tests run it follows passed.
+    """
+
+    PUSHED = "github.event.workflow_run.event == 'push'"
+    """
+    The condition that the Tests run it follows tested a push, not a pull request.
+    """
+
+    TESTED_COMMIT = "${{ github.event.workflow_run.head_sha }}"
+    """
+    The commit the Tests run it follows tested.
+    """
+
+    PUSH_TESTED_WHATEVER_THE_BUDGET = "github.event_name == 'push' ||"
+    """
+    The clause that runs the test matrix on a push even past the daily budget.
+    """
+
+    TEST_JOB = "test"
+    """
+    The Tests workflow's job that runs the test matrix.
+    """
+
+
+class WorkflowFileKey(StrEnum):
+    """
+    The keys of a workflow file read here, beyond those :mod:`basstler.workflows` reads.
+    """
+
+    NAME = "name"
+    """
+    The workflow's name, which another workflow's ``workflow_run`` trigger follows it by.
+    """
+
+    WORKFLOWS = "workflows"
+    """
+    The workflows a ``workflow_run`` trigger follows.
+    """
+
+    STEPS = "steps"
+    """
+    A job's steps.
+    """
+
+    WITH = "with"
+    """
+    The inputs a step hands its action.
+    """
+
+    REF = "ref"
+    """
+    The commit the checkout action checks out.
+    """
+
+    ENVIRONMENT = "env"
+    """
+    The variables a workflow sets for every job.
+    """
+
+
+class ReleaseWorkflowVariable(StrEnum):
+    """
+    The variables the release workflow sets for its steps.
+    """
+
+    RELEASE_BRANCH = "RELEASE_BRANCH"
+    """
+    The branch the release moves to its tag, which the marketplace serves the plugin from.
+    """
+
+
+def release_workflow_file() -> dict[Any, Any]:
+    """
+    :return: The release workflow as YAML loads it, which reads the ``on`` key as ``True``.
+    """
+    return yaml.safe_load(RepositoryLocation.RELEASE_WORKFLOW.read_text())
+
+
+def test_the_release_runs_when_a_tests_run_on_main_completes():
+    workflow = DeclaredWorkflow.at(RepositoryLocation.RELEASE_WORKFLOW)
+    tests_name = yaml.safe_load(RepositoryLocation.TESTS_WORKFLOW.read_text())[
+        WorkflowFileKey.NAME
+    ]
+
+    assert workflow.triggers == (
+        Trigger(
+            TriggerEvent.WORKFLOW_RUN,
+            frozenset({ActivityType.COMPLETED}),
+            frozenset({ReleaseGate.BRANCH}),
+        ),
+    )
+    assert release_workflow_file()[True][TriggerEvent.WORKFLOW_RUN][
+        WorkflowFileKey.WORKFLOWS
+    ] == [tests_name]
+
+
+@pytest.mark.parametrize(
+    "clause", [ReleaseGate.TESTS_PASSED, ReleaseGate.PUSHED], ids=str
+)
+def test_the_release_job_runs_only_after_the_tests_of_a_push_passed(clause):
+    (job,) = DeclaredWorkflow.at(RepositoryLocation.RELEASE_WORKFLOW).jobs
+
+    assert clause in job.condition
+
+
+def test_the_release_checks_out_the_commit_the_tests_ran_on():
+    (job,) = release_workflow_file()[WorkflowKey.JOBS].values()
+    checkout = job[WorkflowFileKey.STEPS][0]
+
+    assert checkout[WorkflowFileKey.WITH][WorkflowFileKey.REF] == (
+        ReleaseGate.TESTED_COMMIT
+    )
+
+
+def release_branch() -> str:
+    """
+    :return: The branch the release workflow moves to each release.
+    """
+    return release_workflow_file()[WorkflowFileKey.ENVIRONMENT][
+        ReleaseWorkflowVariable.RELEASE_BRANCH
+    ]
+
+
+def test_the_marketplace_serves_the_plugin_from_the_release_branch():
+    source = PluginSource.of_this_marketplace()
+
+    assert source == PluginSource(
+        path=RepositoryLocation.PLUGIN.relative_to(RepositoryLocation.ROOT).as_posix(),
+        ref=release_branch(),
+    )
+
+
+def test_a_push_runs_the_tests_whatever_the_budget():
+    (test_job,) = (
+        job
+        for job in DeclaredWorkflow.at(RepositoryLocation.TESTS_WORKFLOW).jobs
+        if job.identifier == ReleaseGate.TEST_JOB
+    )
+
+    assert ReleaseGate.PUSH_TESTED_WHATEVER_THE_BUDGET in test_job.condition
+
+
 # %% the workflow's tag step
 
 
@@ -436,6 +595,7 @@ def run_release_step(
             GitHubActionsVariable.STEP_SUMMARY: str(files.summary),
             GitHubActionsVariable.OUTPUT: str(files.output),
             GitHubActionsVariable.RUNNER_TEMPORARY_DIRECTORY: str(files.directory),
+            ReleaseWorkflowVariable.RELEASE_BRANCH: release_branch(),
         }
     )
 
@@ -503,12 +663,12 @@ def release_step_files(tmp_path) -> ReleaseStepFiles:
     return ReleaseStepFiles(directory)
 
 
-def test_the_release_step_tags_the_merge_commit_and_pushes_nothing_else(
+def test_the_release_step_tags_the_merge_commit_and_moves_the_release_branch_to_it(
     published_checkout, release_step_files
 ):
     """
-    The merge commit is the release, so a plugin synced from the merge already has it:
-    ``main`` is left where the merge put it.
+    The merge commit is the release: ``main`` is left where the merge put it, and the
+    branch the plugin is served from moves to the tag.
     """
     merge_commit = published_checkout.merge()
 
@@ -520,8 +680,12 @@ def test_the_release_step_tags_the_merge_commit_and_pushes_nothing_else(
 
     assert result.returncode == 0, result.stderr
     tag = version(ReleaseSampleVersion.NEXT_MINOR).tag
-    assert published_checkout.remote_commit("refs/heads/main") == merge_commit
+    assert published_checkout.remote_commit(Branch("main").reference) == merge_commit
     assert published_checkout.remote_commit(f"refs/tags/{tag}") == merge_commit
+    assert (
+        published_checkout.remote_commit(Branch(release_branch()).reference)
+        == merge_commit
+    )
     assert release_step_files.output.read_text() == f"tag={tag}\n"
 
 

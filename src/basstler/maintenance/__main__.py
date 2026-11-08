@@ -11,6 +11,7 @@ read as a legitimate value.
 This module is the command line onto the modules that perform those steps::
 
     python -m basstler.maintenance board --write     # export the fork's open pull requests
+    python -m basstler.maintenance push              # publish the checked-out branch, once the move checks clear it
     python -m basstler.maintenance fast-forward      # move the fork's base onto the upstream
     python -m basstler.maintenance restack           # integrate every moved parent, report every conflict
     python -m basstler.maintenance restack --stacked-on <branch>  # carry one branch into what is stacked on it

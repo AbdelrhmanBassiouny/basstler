@@ -51,7 +51,7 @@
 ## Code style
 <!-- from CodeStyleRules in basstler/code_rules/rules/code_quality.py -->
 - `ruff check .` passes on every change. The rules it enforces are configured in `pyproject.toml` and not repeated here; never silence a finding with `noqa` or a new ignore without asking
-- Use dataclasses: pydantic dataclasses for data parsed from outside the program (an API response, a configuration file, a command's input), plain dataclasses everywhere else
+- Use dataclasses: a `ValidatedJSONModel` for data parsed from outside the program (an API response, a configuration file, a command's input), plain dataclasses everywhere else
 - Divide every file, source and test, into sections with `# %% <short description>` headers (e.g. `# %% same-noun disambiguation`), never decorative box-drawing dividers
 - A group of primitives that travels together, or a return type that keeps being repeated, becomes a dataclass
 - Never duplicate code. Never put methods in a catch-all module such as `utils.py`; move them onto the class that owns the behaviour
@@ -87,6 +87,7 @@
 - Eliminate YAGNI smells
 - Make interfaces hard to misuse
 - Model the relationship between related concepts in the source, never only in a test that checks two separate definitions agree: derive one from the other, or unify them into one concept when that is the cleaner design by SOLID and the domain's semantics
+- Before writing a new class, look for an existing class it can hold as a field or subclass, and use it; when related classes share fields or behaviour, give them a common base
 
 ### Methods
 <!-- from MethodsRules in basstler/code_rules/rules/code_quality.py -->
@@ -116,10 +117,12 @@
 ### Structured data
 <!-- from StructuredDataRules in basstler/code_rules/rules/code_quality.py -->
 - Structured data is the default over bare strings, hardcoded values and meaningless numbers: reach for the structured form first and justify the literal, never the other way round
-- A string that names a fixed thing - a payload key, a state, a label, a filename, an environment variable, a command flag, a status - is a `StrEnum` member. A value spelled in two places has no single source to rename, and nothing fails when the two drift apart
+- A string that names a fixed thing - a state, a label, a filename, an environment variable, a command flag, a status - is a `StrEnum` member. A value spelled in two places has no single source to rename, and nothing fails when the two drift apart
+- A payload is a dataclass, and its keys are spelled only inside that dataclass: as its field names where they match the payload, otherwise as a field's alias or inside the method that parses or writes it. Never declare an enum of payload keys, or of the values a payload tags its shapes with, that nothing beyond the parser reads, and never declare one key in two places
+- When the same thing arrives in several shapes - a check run and a commit status, a GraphQL node and its REST resource - each shape is a model of its own subclassing a common base that declares the shared fields, and the payload's tag (`kind: Annotated[Literal["CheckRun"], Field(alias="__typename")]`) or the endpoint picks the model. Never one model listing every shape's keys as alias choices
 - When the values are more than text - paths, numbers - give the enum values of that type, mixing the type in (`IntEnum`, `StrEnum`)
 - A magic number becomes an enum member, a field default or a named constant; a bare literal that carries meaning is unreadable where it is used and unsearchable everywhere else
-- Data whose shape someone else controls - an API response, a configuration file - is parsed into pydantic dataclasses at the boundary, so it is validated once and the field names and the access path into the payload are written once
+- Data whose shape someone else controls - an API response, a configuration file - is parsed at the boundary into subclasses of `basstler.upstream_reviews.vocabulary.ValidatedJSONModel`, so it is validated once and the field names and the access path into the payload are written once. A subclass is a frozen pydantic dataclass already: give it no dataclass decorator, and pass the pydantic settings it needs as the class keyword `config`
 - A tuple whose positions carry meaning becomes a dataclass, or an enum when the positions are a fixed set of alternatives rather than fields
 - A long literal document - a query, a template, a schema - lives in a file of its own type and is read in, never embedded as a string
 - A path enum subclasses `basstler.locations.PathEnumeration`, so every path derived from a member is a plain `Path`; its members' `name` is the path's last component, so read the member name as `_name_`

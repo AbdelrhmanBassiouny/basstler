@@ -35,7 +35,7 @@ class BranchStatus(StrEnum):
     """Its author has not yet reviewed it themselves, so it may not be promoted."""
 
     READY = "ready"
-    """Out of draft - reviewed by its author, and promotable once its parent is."""
+    """Out of draft - reviewed by its author, and promotable once its parent has merged."""
 
     IN_REVIEW = "in-review"
     """Promoted to the upstream, where it waits on that queue rather than on us."""
@@ -398,9 +398,17 @@ class Stack:
     def load(cls, board: Path) -> Stack:
         """:param board: The exported board to derive the stack from.
         :return: The full live stack: configuration + board export + git merged-detection.
+        :raises BoardUnavailable: If *board* does not exist.
+        """
+        return cls.from_pull_requests(PullRequest.read_board(board))
+
+    @classmethod
+    def from_pull_requests(cls, pull_requests: list[PullRequest]) -> Stack:
+        """:param pull_requests: The fork's open pull requests, as a board holds them.
+        :return: The full live stack: configuration + those pull requests + git
+            merged-detection.
         """
         configuration = Configuration.load()
-        pull_requests = PullRequest.read_board(board)
         heads_on_fork = {
             pull_request.head
             for pull_request in pull_requests
@@ -562,8 +570,10 @@ class Stack:
         )
 
     def parent_landed(self, branch: StackBranch) -> bool:
-        """Whether a branch's parent has reached the upstream (merged or in-review), so it
-        can promote.
+        """Whether a branch's parent has merged into its base, so it can promote.
+
+        A parent still in review does not count: the upstream pull request is compared
+        against the upstream base, so it would carry the parent's commits too.
 
         A parent no open fork pull request describes is not on the board, so git ancestry
         is the only evidence available for it - and absence from the board is not itself
@@ -585,10 +595,7 @@ class Stack:
         )
         if parent is None:
             return True
-        return parent.status in {
-            BranchStatus.IN_REVIEW,
-            BranchStatus.MERGED,
-        }
+        return parent.status is BranchStatus.MERGED
 
     def integration_parent(self, branch: StackBranch) -> str:
         """
@@ -604,10 +611,12 @@ class Stack:
         A branch is a candidate when it is approved (``ready``), its parent has landed, it
         has not been withheld pending conflict resolution, and its checks have not failed.
         Every such branch promotes together - there is no admission cap or per-stack slot
-        limit.
+        limit. A project with no upstream promotes nothing.
 
         :return: The promotable branches, in dependency order.
         """
+        if not self.configuration.has_upstream:
+            return []
         return [
             branch
             for branch in self.maintained_branches()
@@ -620,8 +629,10 @@ class Stack:
     def withheld_by_failing_checks(self) -> list[StackBranch]:
         """
         :return: Every approved branch whose parent has landed but whose checks failed,
-            in dependency order.
+            in dependency order; none for a project with no upstream to promote to.
         """
+        if not self.configuration.has_upstream:
+            return []
         return [
             branch
             for branch in self.maintained_branches()

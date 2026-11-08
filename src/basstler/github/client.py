@@ -85,6 +85,18 @@ class GitHubAttemptReader(ABC):
         """
 
 
+class RequestBody(ABC):
+    """
+    The JSON body a write sends to the REST API.
+    """
+
+    @abstractmethod
+    def to_json(self) -> dict[str, Any]:
+        """
+        :return: The body as the API reads it.
+        """
+
+
 class GitHubWriter(ABC):
     """
     Writing REST resources.
@@ -92,23 +104,29 @@ class GitHubWriter(ABC):
 
     @abstractmethod
     def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+        self, method: HttpMethod, path: str, body: RequestBody
     ) -> GitHubResponse:
         """
         Like :meth:`send`, but a refusal or a call that got no answer is returned on the
         answer instead of raised.
         """
 
-    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
+    def send(self, method: HttpMethod, path: str, body: RequestBody) -> Any:
         """
         :param method: How the resource is written.
         :param path: The resource's path.
-        :param payload: The JSON body.
+        :param body: What the write sends.
         :return: The parsed response, ``None`` when it has no body.
         :raises GitHubRequestFailed: If the API refuses the write.
         :raises GitHubUnreachableError: If the write gets no answer.
         """
-        return self.attempt_send(method, path, payload).raise_if_failed()
+        return self.attempt_send(method, path, body).raise_if_failed()
+
+
+class GitHubAttemptClient(GitHubAttemptReader, GitHubWriter, ABC):
+    """
+    Reading and writing REST resources, with a refusal returned on the answer.
+    """
 
 
 class GitHubClient(GitHubReader, GitHubWriter, ABC):
@@ -241,7 +259,7 @@ class GitHubResponse:
 
 
 @dataclass(frozen=True)
-class GitHubRestClient(GitHubClient, GitHubAttemptReader):
+class GitHubRestClient(GitHubClient, GitHubAttemptClient):
     """
     Plain authenticated HTTPS requests, through the proxy the environment names.
 
@@ -306,9 +324,9 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
         return pages
 
     def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+        self, method: HttpMethod, path: str, body: RequestBody
     ) -> GitHubResponse:
-        return self._exchange(method, path, payload)
+        return self._exchange(method, path, body.to_json())
 
     @staticmethod
     def _page_path(path: str, page_number: int) -> str:
@@ -373,7 +391,7 @@ class GitHubRestClient(GitHubClient, GitHubAttemptReader):
             return GitHubResponse(
                 None, failure=GitHubUnreachableError(method, path, str(error))
             )
-        if status >= HTTPStatus.BAD_REQUEST:
+        if status >= HTTPStatus.MULTIPLE_CHOICES:
             return GitHubResponse(
                 None,
                 failure=GitHubRequestFailed.for_status(

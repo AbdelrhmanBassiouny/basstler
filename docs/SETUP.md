@@ -10,9 +10,9 @@ Details of everything below: [`hooks/README.md`](../plugin/hooks/README.md).
 basstler is a Claude Code plugin, and this repository is its marketplace.
 
 - **Cloud sessions (claude.ai):** add it under Customize > Plugins, from the marketplace
-  `AbdelrhmanBassiouny/basstler` - or have an organization Owner install it for members.
+  `KAOS-repositories/basstler` - or have an organization Owner install it for members.
   Plugins a repository names in its own settings do not load in cloud sessions.
-- **Local sessions and CI:** `/plugin marketplace add AbdelrhmanBassiouny/basstler`, then
+- **Local sessions and CI:** `/plugin marketplace add KAOS-repositories/basstler`, then
   `/plugin install basstler@basstler` - or enable it for everyone working on a project in
   its committed `.claude/settings.json` (`extraKnownMarketplaces` and `enabledPlugins`).
 
@@ -59,9 +59,10 @@ It prints these three, already filled in for your fork:
 
 ## 3. For the stacked-PR workflow: name the project's upstream
 
-Only if the project uses `/stacked-pr-maintenance` or `/upstream-reviews`. Both skills
-ask for it themselves the first time they need it, so there is nothing to do ahead of
-time. To name it yourself, save the repository the project's pull requests are reviewed
+Only if the project is a fork that uses `/stacked-pr-maintenance` or `/upstream-reviews`.
+In a project that names no upstream, `/stacked-pr-maintenance` follows the clone's own
+remote and promotes nothing; `/upstream-reviews` asks for the upstream the first time
+it needs it, so there is nothing to do ahead of time. To name it yourself, save the repository the project's pull requests are reviewed
 on to `.claude/personal/stack.toml` on your personal-notes branch, so the project commits
 nothing of basstler's:
 

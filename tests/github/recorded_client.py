@@ -9,7 +9,12 @@ from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any
 
-from basstler.github.client import GitHubClient, GitHubResponse, HttpMethod
+from basstler.github.client import (
+    GitHubClient,
+    GitHubResponse,
+    HttpMethod,
+    RequestBody,
+)
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
 
@@ -23,8 +28,19 @@ class SentWrite:
     """
 
     method: HttpMethod
+    """
+    How the resource is written.
+    """
+
     path: str
-    payload: Mapping[str, Any]
+    """
+    The resource's path.
+    """
+
+    body: RequestBody
+    """
+    What the write sends.
+    """
 
 
 @dataclass
@@ -65,10 +81,10 @@ class RecordedGitHubClient(GitHubClient):
         return self.pages[path]
 
     def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+        self, method: HttpMethod, path: str, body: RequestBody
     ) -> GitHubResponse:
-        self.writes.append(SentWrite(method, path, payload))
-        return GitHubResponse(payload)
+        self.writes.append(SentWrite(method, path, body))
+        return GitHubResponse(body.to_json())
 
     def _refuse(self, method: HttpMethod, path: str) -> None:
         """

@@ -69,14 +69,15 @@ jobs:
       - name: Check the formatting
         run: ruff format --check .
 
-  # Past a daily ceiling the matrix is skipped, unless the pull request carries the
-  # budget-override label.
+  # Past a daily ceiling a pull request's matrix is skipped, unless it carries the
+  # budget-override label. A push to main always runs it, since its pass is what releases.
   test:
     name: pytest on Python ${{ matrix.python-version }}
     needs: usage
     if: >-
       (github.event_name != 'push' || !github.event.repository.fork) &&
-      (needs.usage.outputs.over_budget != 'true' ||
+      (github.event_name == 'push' ||
+      needs.usage.outputs.over_budget != 'true' ||
       contains(github.event.pull_request.labels.*.name, 'budget-override'))
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -85,7 +86,10 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
+      # The tags give the installed package its release version, which the tests read.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5

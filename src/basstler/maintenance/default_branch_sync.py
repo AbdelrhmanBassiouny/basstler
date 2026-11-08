@@ -17,13 +17,8 @@ from basstler.maintenance.fast_forward import (
     RefusedPushHandling,
 )
 from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.repository import MalformedRepositoryError, Repository
+from basstler.repository import MalformedRepositoryError
 from basstler.stack.settings import Configuration
-from basstler.stack.configuration import (
-    CommittedStackConfiguration,
-    MissingUpstreamRepositoryError,
-    StackSetting,
-)
 
 FOLLOW_UP_ROW_INDENT = "    "
 """
@@ -245,42 +240,21 @@ class BaseSource:
     """
 
     @classmethod
-    def upstream_of(cls, configuration: Configuration) -> BaseSource:
+    def from_configuration(cls, configuration: Configuration) -> BaseSource:
         """
         :param configuration: The resolved stacked-PR configuration.
-        :return: The upstream it names, published to the fork after.
+        :return: The upstream it names, published to the fork after; or, for a project
+            naming none, the clone's own remote.
         """
         return cls(
             base_branch=configuration.upstream_base,
             location=configuration.upstream_location,
             remote_name=configuration.upstream_remote,
-            name=configuration.upstream_repository.full_name,
+            name=(
+                configuration.upstream_repository or configuration.fork_repository
+            ).full_name,
             fork_remote=configuration.fork_remote,
-            publishes_to_fork=True,
-        )
-
-    @classmethod
-    def own_remote_of(cls, project_root: Path, git: GitCommandRunner) -> BaseSource:
-        """
-        :param project_root: The clone, whose committed settings name its remote and base.
-        :param git: The runner to read the remote's URL through.
-        :return: The clone's own remote, for a project that names no upstream.
-        :raises GitCommandFailed: If the clone has no such remote.
-        """
-        values = CommittedStackConfiguration(project_root=project_root).values()
-        remote = values[StackSetting.FORK_REMOTE]
-        url = git.run("remote", "get-url", remote)
-        try:
-            name = Repository.from_remote_url(url).full_name
-        except MalformedRepositoryError:
-            name = remote
-        return cls(
-            base_branch=values[StackSetting.UPSTREAM_BASE],
-            location=remote,
-            remote_name=remote,
-            name=name,
-            fork_remote=remote,
-            publishes_to_fork=False,
+            publishes_to_fork=configuration.has_upstream,
         )
 
 
@@ -310,13 +284,9 @@ class DefaultBranchSync:
             since the configuration resolves the project from it.
         :return: What was done.
         """
-        git = GitCommandRunner(project_root)
         try:
-            try:
-                source = BaseSource.upstream_of(Configuration.load())
-            except MissingUpstreamRepositoryError:
-                source = BaseSource.own_remote_of(project_root, git)
-            return cls(source, git).run()
+            source = BaseSource.from_configuration(Configuration.load())
+            return cls(source, GitCommandRunner(project_root)).run()
         except (CommandFailure, MalformedRepositoryError) as refusal:
             return DefaultBranchReport(BaseOutcome.NOT_SYNCED, reason=str(refusal))
 

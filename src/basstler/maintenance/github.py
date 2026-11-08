@@ -18,6 +18,9 @@ from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.github.issue import IssueComment
+from basstler.github.label import LabelReplacement, RepositoryLabel
+from basstler.github.pull_request import PullRequestDescription
 from basstler.pull_request_state import PullRequestState
 from basstler.github_labels import GitHubLabel
 from basstler.locations import PathEnumeration
@@ -33,7 +36,7 @@ from basstler.upstream_reviews.rest_models import (
     RestCheckRunPage,
     RestCombinedStatusPage,
 )
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.upstream_reviews.vocabulary import RollupState, WebPage
 
 
 # %% what a pass reads and writes
@@ -186,22 +189,6 @@ class ListingParameter(StrEnum):
     """
 
 
-class LabelField(StrEnum):
-    """
-    The fields of a label the API reads and writes.
-    """
-
-    NAME = "name"
-    """
-    The label's name.
-    """
-
-    DESCRIPTION = "description"
-    """
-    What the label means.
-    """
-
-
 @dataclass(frozen=True)
 class PullRequestListingSpecification:
     """
@@ -312,7 +299,7 @@ class GitHubRepository(
 
     def labels(self) -> set[str]:
         return {
-            label[LabelField.NAME]
+            RepositoryLabel.from_json(label).name
             for label in self._every_entry(RepositoryPath.LABELS, {})
         }
 
@@ -320,19 +307,19 @@ class GitHubRepository(
         self.client.send(
             HttpMethod.POST,
             self._path(str(RepositoryPath.LABELS)),
-            {LabelField.NAME: label, LabelField.DESCRIPTION: label.purpose},
+            RepositoryLabel(label, label.purpose),
         )
 
     def check_state(self, commit: str) -> RollupState:
         runs = [
-            run.result
+            run
             for page in self.client.get_pages(
                 self._listing(self._commit_report(commit, CommitReport.CHECK_RUNS), {})
             )
             for run in RestCheckRunPage.from_json(page).check_runs
         ]
         statuses = [
-            status.result
+            status
             for page in self.client.get_pages(
                 self._listing(self._commit_report(commit, CommitReport.STATUS), {})
             )
@@ -402,7 +389,7 @@ class GitHubRepository(
         self.client.send(
             HttpMethod.PUT,
             self._path(f"/issues/{number}/labels"),
-            {"labels": list(labels)},
+            LabelReplacement(list(labels)),
         )
 
     def add_comment(self, number: int, body: str) -> str:
@@ -410,9 +397,11 @@ class GitHubRepository(
         :param body: The comment.
         :return: The comment's URL."""
         created = self.client.send(
-            HttpMethod.POST, self._path(f"/issues/{number}/comments"), {"body": body}
+            HttpMethod.POST,
+            self._path(f"/issues/{number}/comments"),
+            IssueComment(body),
         )
-        return str(created["html_url"])
+        return WebPage.from_json(created).page_url
 
     def set_description(self, number: int, body: str) -> None:
         """
@@ -424,5 +413,5 @@ class GitHubRepository(
         self.client.send(
             HttpMethod.PATCH,
             self._path(f"{RepositoryPath.PULL_REQUESTS}/{number}"),
-            {"body": body},
+            PullRequestDescription(body),
         )

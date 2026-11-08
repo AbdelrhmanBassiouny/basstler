@@ -104,7 +104,7 @@ class FailedJob:
         :param result: The check to locate.
         :return: The job, or ``None`` where the link names none.
         """
-        match = cls.link_pattern.search(result.url)
+        match = cls.link_pattern.search(result.target_url)
         if match is None:
             return None
         return cls(int(match.group(cls.identifier_group)))
