@@ -22,6 +22,7 @@ from .fork import (
     UPSTREAM_BASE,
     StackPullRequestNumber,
     make_configuration,
+    make_own_remote_configuration,
     ForkCheckout,
     a_board_entry,
     a_stack,
@@ -344,3 +345,41 @@ def test_replacing_superseded_merges_authorises_rewriting_published_history():
     )
 
     assert replacing.with_lease
+
+
+# %% a repository naming no upstream
+
+
+def test_a_branch_on_the_base_keeps_one_merge_of_it_with_no_upstream(
+    fork_checkout: ForkCheckout,
+):
+    """
+    With no upstream the base moves on the clone's own remote, and each pass that merges
+    it in replaces the merge the pass before left.
+    """
+    fork_checkout.branch_from(StackBranch.PARENT, UPSTREAM_BASE)
+    board = the_board()[:1]
+    configuration = make_own_remote_configuration()
+    fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "the base moved\n")
+    restack(
+        a_stack(fork_checkout, board, configuration),
+        fork_checkout.git,
+        RecordingPullRequests(),
+    )
+    first_merge = fork_checkout.published_commit(RemoteName.ORIGIN, StackBranch.PARENT)
+    base_tip = fork_checkout.commit_on(UPSTREAM_BASE, "a-base-file", "moved again\n")
+
+    (parent,) = restack(
+        a_stack(fork_checkout, board, configuration),
+        fork_checkout.git,
+        RecordingPullRequests(),
+    )
+
+    assert parent.outcome == RestackOutcome.PUSHED
+    assert merges_between(fork_checkout, UPSTREAM_BASE, StackBranch.PARENT) == 1
+    assert not fork_checkout.git.contains(
+        first_merge, f"{RemoteName.ORIGIN}/{StackBranch.PARENT}"
+    )
+    assert fork_checkout.git.contains(
+        base_tip, f"{RemoteName.ORIGIN}/{StackBranch.PARENT}"
+    )

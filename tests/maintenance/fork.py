@@ -7,6 +7,7 @@ network.
 
 from __future__ import annotations
 
+import dataclasses
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -204,6 +205,19 @@ def make_configuration() -> Configuration:
     )
 
 
+def make_own_remote_configuration() -> Configuration:
+    """
+    :return: The configuration a scratch checkout naming no upstream resolves to, its own
+        remote standing where the upstream would.
+    """
+    return dataclasses.replace(
+        make_configuration(),
+        upstream_repository=None,
+        upstream_remote=RemoteName.ORIGIN,
+        upstream_location=RemoteName.ORIGIN,
+    )
+
+
 # %% a real fork checkout to execute against
 
 
@@ -395,15 +409,21 @@ class ForkCheckout:
         return GitCommandRunner(working_directory=self.project_root)
 
 
-def a_stack(checkout: ForkCheckout, pull_requests: list[PullRequest]):
+def a_stack(
+    checkout: ForkCheckout,
+    pull_requests: list[PullRequest],
+    configuration: Configuration | None = None,
+):
     """
     Build the derived stack the executor consumes, with landedness read from real git.
 
     :param checkout: The checkout to answer ancestry questions from.
     :param pull_requests: The board entries.
+    :param configuration: The configuration the stack runs on, by default
+        :func:`make_configuration`'s.
     :return: The derived stack.
     """
-    configuration = make_configuration()
+    configuration = configuration or make_configuration()
     upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
     ancestry = BranchAncestry(configuration, checkout.git)
 

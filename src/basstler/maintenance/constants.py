@@ -96,6 +96,20 @@ class MaintenanceText(StrEnum):
     """
 
 
+class MaintenanceNotice(StrEnum):
+    """
+    What a maintenance command tells its caller on stderr about how it ran.
+    """
+
+    NO_UPSTREAM = (
+        "no upstream is named, so the clone's own remote is the base: no upstream pull "
+        "request is read and no branch is promoted"
+    )
+    """
+    The project is not a fork, so the pass leaves out every step that needs an upstream.
+    """
+
+
 class CommitTrailer(StrEnum):
     """
     The trailer keys a maintenance pass writes into the commits it makes, and later
