@@ -238,10 +238,10 @@ class PlanValidator:
     this plan's own items are available - in which case a cross-plan entry is
     a problem rather than a free pass."""
 
-    notes_repository: Repository | None = None
+    checkout_repository: Repository | None = None
     """
-    The repository whose notes branch the plan is saved to, or ``None`` when it is not
-    known.
+    The repository the ``origin`` of the checkout saving the plan names, or ``None``
+    when no save is being checked.
     """
 
     def validate(self) -> None:
@@ -437,22 +437,25 @@ class PlanValidator:
 
     def repository_problems(self) -> list[ValidationProblem]:
         """
-        The problem of the plan being saved to another repository's notes than the one
-        its ``default_repository`` names, if it is.
+        The problem of the plan being saved from a checkout of another repository than
+        the one its ``default_repository`` names, if it is.
         """
         default_repository = self.manifest.get(ManifestKey.DEFAULT_REPOSITORY.key)
         if (
-            self.notes_repository is None
+            self.checkout_repository is None
             or not isinstance(default_repository, str)
             or not Repository.is_full_name(default_repository)
         ):
             return []
-        if default_repository.casefold() == self.notes_repository.full_name.casefold():
+        if (
+            default_repository.casefold()
+            == self.checkout_repository.full_name.casefold()
+        ):
             return []
         return [
             PlanInAnotherRepository(
                 self.plan_id,
                 Repository.parse(default_repository),
-                self.notes_repository,
+                self.checkout_repository,
             )
         ]

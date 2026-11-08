@@ -176,8 +176,8 @@ for document_path in "${MANIFEST_PATH}" "${ROADMAP_PATH}"; do
   fi
 done
 
-# A remote's name or a raw URL; its configured URL, not git's insteadOf rewrite of it.
-NOTES_REMOTE_URL="$(git config --get "remote.${ACTIVE_NOTES_REMOTE}.url" || printf '%s' "${ACTIVE_NOTES_REMOTE}")"
+# origin's configured URL, not git's insteadOf rewrite of it; empty without an origin.
+ORIGIN_URL="$(git config --get remote.origin.url || true)"
 
 ATTEMPT=1
 while :; do
@@ -193,11 +193,11 @@ while :; do
     --output "${MERGED_PLAN_DIR}" || exit
 
   # Validated against the fetched notes branch, so a <plan-id>/<item-id> entry resolves,
-  # and against the notes remote, so a plan is saved only to its own repository's notes.
+  # and against origin, so a plan is saved only from a checkout of its own repository.
   if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate \
     "${MERGED_PLAN_DIR}/${PLAN_MANIFEST_FILENAME}" \
     --plans-dir "${SCRATCH_DIR}/${PLANS_DIR}" \
-    --notes-remote-url "${NOTES_REMOTE_URL}"; then
+    --origin-url "${ORIGIN_URL}"; then
     echo "Nothing was saved - fix the manifest and save again." >&2
     exit 1
   fi
