@@ -22,6 +22,7 @@ from pathlib import Path
 
 import pytest
 
+from basstler.document_references import CitedNames, ShippedModules
 from basstler.locations import (
     BasstlerVariable,
     PluginLocation,
@@ -316,6 +317,42 @@ def test_a_session_with_no_personal_notes_still_loads_the_session_rules(
         ClaudeLocalSection.SESSION_RULES.within(claude_local)
         == (RepositoryLocation.HOOKS / PluginLocation.SESSION_RULES.name).read_text()
     )
+
+
+# %% the names the personal notes cite
+
+
+def test_notes_naming_only_shipped_modules_and_skills_are_reported_current(
+    session_start_repository: ScratchRepository,
+):
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.CITED_NAMES) == summary_message(
+        SummaryMessage.CITED_NAMES_CURRENT
+    )
+
+
+def test_every_name_the_notes_cite_that_is_no_longer_shipped_is_listed(
+    session_start_repository: ScratchRepository,
+):
+    """
+    Notes outlive the release they were written against, so a session is told up front
+    which of their commands would fail, and what replaced each.
+    """
+    notes = DatasetLocation.NOTES_CITING_RETIRED_NAMES.read_text()
+    stale = CitedNames.in_text(notes).stale(ShippedModules.installed())
+
+    result = publish_and_run(
+        session_start_repository, {ProjectLocation.PERSONAL_NOTES_DOCUMENT: notes}
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.CITED_NAMES) == summary_message(
+        SummaryMessage.CITED_NAMES_STALE, str(len(stale))
+    )
+    for reference in stale:
+        assert f"    {reference.as_line()}" in result.stdout.splitlines()
 
 
 # %% someone who uses neither plans nor personal notes

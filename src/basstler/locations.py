@@ -294,6 +294,11 @@ class PluginLocation(PathEnumeration):
     Pushes an edited plan manifest and roadmap to the personal-notes branch.
     """
 
+    PULL_REQUEST_PROGRESS_SAVING_SCRIPT = HOOKS / "save-pr-progress.sh"
+    """
+    Saves a branch's pull-request progress notes to the personal-notes branch.
+    """
+
     PLAN_UPDATES_SINCE_SCRIPT = HOOKS / "plan-updates-since.sh"
     """
     Reports what changed in the plans since this clone last read them.

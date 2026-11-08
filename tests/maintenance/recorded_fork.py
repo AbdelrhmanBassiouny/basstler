@@ -284,12 +284,6 @@ class AlreadyResolvedPass(MaintenancePass):
             resolved_stack=a_stack(checkout, pull_requests),
         )
 
-    def stack(self) -> Stack:
-        """
-        :return: The stack derived from the scratch checkout.
-        """
-        return self.resolved_stack
-
     def fresh_stack(self) -> Stack:
         """
         :return: The stack derived from the scratch checkout, which stands for a board

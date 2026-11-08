@@ -7,6 +7,7 @@ from __future__ import annotations
 import sys
 from collections.abc import Sequence
 from dataclasses import dataclass
+from dataclasses import field as dataclasses_field
 
 import pytest
 
@@ -16,20 +17,23 @@ from basstler.maintenance.upstream_action import UpstreamReadRoute
 
 from basstler.exit_codes import StackExitCode
 
+from basstler.locations import RepositoryStateLocation
+from basstler.maintenance.board import BoardExport
 from basstler.maintenance.commands import (
     BoardCommand,
     MaintenanceCommand,
+    MaintenancePass,
     PrepareCommand,
-    RestackCommand,
     RunReportCommand,
 )
 from basstler.pull_request_state import PullRequestState
+from basstler.stack.model import PullRequest
 from basstler.maintenance.github import ForkPullRequests, PullRequestListState
 from basstler.maintenance.restack_steps import RestackStep
 
 from ..constants.stack import RemoteName, StackBranch
 
-from .fork import ForkCheckout
+from .fork import ForkCheckout, a_parent_and_child, make_configuration, the_board
 from .recorded_fork import (
     maintenance_runner,
     run_maintenance,
@@ -160,23 +164,54 @@ def test_a_run_needing_a_credential_it_has_not_got_is_its_own_exit_status(
     )
 
 
-def test_a_missing_board_is_reported_ahead_of_a_missing_credential(
-    fork_checkout: ForkCheckout,
+@dataclass(frozen=True)
+class PassCountingItsExports(MaintenancePass):
+    """
+    A pass whose export is served from memory, counting how often it is asked for.
+    """
+
+    exported_pull_requests: tuple[PullRequest, ...] = ()
+    """
+    The pull requests every export returns.
+    """
+
+    exports_made: list[int] = dataclasses_field(default_factory=list)
+    """
+    One entry per export made.
+    """
+
+    def export_board(self) -> BoardExport:
+        """
+        :return: The recorded pull requests, counting the export.
+        """
+        self.exports_made.append(len(self.exports_made) + 1)
+        return BoardExport(self.exported_pull_requests)
+
+
+def test_each_stack_is_derived_from_an_export_made_for_it_never_from_the_board_file(
+    fork_checkout: ForkCheckout, monkeypatch: pytest.MonkeyPatch
 ):
     """
-    ``restack`` needs both, and the board is the one its caller fixes with the previous
-    command - so reporting the credential first would send them after the wrong thing.
-
-    The upstream remote is dropped first because a subprocess reads the committed
-    ``stack.toml``, whose upstream is this repository's own - against which both of the
-    fixture's remotes look like candidate forks, and inference rightly refuses to guess.
+    A board file left on disk by an earlier command may describe a stack that a push or a
+    restack has since changed, so :meth:`MaintenancePass.fresh_stack` never reads it.
     """
-    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
-
-    assert (
-        run_maintenance(fork_checkout, RestackCommand()).returncode
-        == StackExitCode.BOARD_UNAVAILABLE
+    a_parent_and_child(fork_checkout)
+    fork_checkout.name_the_upstream()
+    monkeypatch.chdir(fork_checkout.project_root)
+    board = fork_checkout.project_root / RepositoryStateLocation.BOARD.name
+    board.write_text("not a board")
+    maintenance = PassCountingItsExports(
+        configuration=make_configuration(),
+        git=fork_checkout.git,
+        board=board,
+        exported_pull_requests=tuple(the_board()),
     )
+
+    maintenance.fresh_stack()
+    maintenance.fresh_stack()
+
+    assert len(maintenance.exports_made) == 2
+    assert board.read_text() == "not a board"
 
 
 @pytest.mark.parametrize(
