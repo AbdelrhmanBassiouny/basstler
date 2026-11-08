@@ -252,6 +252,13 @@ writes nothing until it can. It authenticates with `GH_TOKEN` or
 repository is refused (403) until it is attached: attach it with `add_repo`
 (access `push`) and run the command again.
 
+If the registry or this repository is private, the build needs a read-only token,
+stored on the site repository as `PLAN_SITE_NOTES_TOKEN`. Without that secret,
+publication writes nothing and prints one step: store such a token, or make those
+repositories public. Ask the user which they want. When GitHub does not say
+whether the secret is stored, publication writes the files anyway and prints
+the same step, so the user can check.
+
 It then writes the site repository's workflow onto its default branch, lists
 this repository in the hub file of the registry that workflow names (this
 repository itself, the first time), and commits two workflows that start the
