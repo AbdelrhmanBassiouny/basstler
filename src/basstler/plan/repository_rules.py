@@ -11,7 +11,7 @@ import pydantic
 import yaml
 
 from basstler.plan.exceptions import UnknownRepositoryRuleError
-from basstler.upstream_reviews.vocabulary import ValidatedJSONModel
+from basstler.json_model import ValidatedJSONModel
 
 # %% rules
 
