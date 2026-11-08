@@ -8,7 +8,6 @@ from dataclasses import dataclass
 from typing import Annotated, Any
 
 from pydantic import Field
-from pydantic.dataclasses import dataclass as validated_dataclass
 
 from basstler.class_property import classproperty
 from basstler.github.client import RequestBody
@@ -23,7 +22,6 @@ from basstler.upstream_reviews.vocabulary import (
 # %% a run
 
 
-@validated_dataclass(frozen=True)
 class WorkflowRun(ValidatedJSONModel):
     """
     One run of a workflow.
@@ -112,7 +110,6 @@ class RunJobPage(JSONModel):
 # %% starting a run
 
 
-@validated_dataclass(frozen=True)
 class WorkflowDispatch(ValidatedJSONModel, RequestBody):
     """
     The body of a request to run a workflow.

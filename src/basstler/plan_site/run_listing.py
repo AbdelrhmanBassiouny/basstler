@@ -10,7 +10,6 @@ from typing import Annotated
 from urllib.parse import urlencode
 
 from pydantic import Field
-from pydantic.dataclasses import dataclass as validated_dataclass
 
 from basstler.locations import WorkflowLocation
 from basstler.repository import Repository
@@ -38,7 +37,6 @@ The most runs GitHub lists on one page.
 # %% the runs that confirm a step
 
 
-@validated_dataclass(frozen=True)
 class ListedRun(WorkflowRun, WebPage):
     """
     One run, as a repository's run listing describes it.
@@ -55,7 +53,6 @@ class ListedRun(WorkflowRun, WebPage):
     """
 
 
-@validated_dataclass(frozen=True)
 class RunListing(ValidatedJSONModel):
     """
     The latest runs on one branch of a repository, newest first.

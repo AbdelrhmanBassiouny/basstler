@@ -18,11 +18,12 @@ from pydantic import (
     GetCoreSchemaHandler,
     TypeAdapter,
 )
-from pydantic.dataclasses import dataclass
+from pydantic.dataclasses import dataclass as pydantic_dataclass
 from pydantic.fields import FieldInfo
 from pydantic_core import core_schema
 
 from basstler.class_property import classproperty
+from basstler.exceptions import DuplicateKeyError
 from basstler.locations import PackageLocation
 
 # %% the reading contract
@@ -51,11 +52,37 @@ class JSONModel(ABC):
 
 class ValidatedJSONModel(JSONModel):
     """
-    A pydantic dataclass whose fields are the object's keys, each spelled as its field
-    name or, where GitHub names it differently, as the field's alias.
+    A frozen pydantic dataclass by subclassing alone, whose fields are the object's keys,
+    each spelled as its field name or, where GitHub names it differently, as its alias.
+
+    Copied from krrood's ``ValidatedDataclass`` :cite:`krrood` until krrood's light core
+    is released.
     """
 
     __pydantic_config__ = ConfigDict(validate_by_name=True, validate_by_alias=True)
+    """
+    The pydantic settings every subclass starts from.
+    """
+
+    def __init_subclass__(cls, config: ConfigDict | None = None, **kwargs: Any) -> None:
+        """
+        Make the subclass a frozen pydantic dataclass.
+
+        :param config: Pydantic settings added to those the subclass inherits.
+        :param kwargs: Passed on to the next base.
+        :raises DuplicateKeyError: If two of its fields read the same key.
+        """
+        super().__init_subclass__(**kwargs)
+        cls.__pydantic_config__ = ConfigDict(
+            **cls.__pydantic_config__, **(config or {})
+        )
+        pydantic_dataclass(cls, frozen=True)
+        readers: dict[str, str] = {}
+        for name, field_info in cls.__pydantic_fields__.items():
+            for key in cls.entry_keys(name, field_info):
+                if key in readers:
+                    raise DuplicateKeyError(cls.__name__, key, (readers[key], name))
+                readers[key] = name
 
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> Self:
@@ -90,13 +117,35 @@ class ValidatedJSONModel(JSONModel):
         :return: Every key the field is read from, each step of a nested key path
             included.
         """
+        return {
+            step
+            for path in ValidatedJSONModel.key_paths(name, field_info)
+            for step in path
+            if isinstance(step, str)
+        }
+
+    @staticmethod
+    def entry_keys(name: str, field_info: FieldInfo) -> set[str]:
+        """
+        :param name: The field's name.
+        :param field_info: The field.
+        :return: The keys of the model's own object the field is read from.
+        """
+        return {path[0] for path in ValidatedJSONModel.key_paths(name, field_info)}
+
+    @staticmethod
+    def key_paths(name: str, field_info: FieldInfo) -> list[list[str | int]]:
+        """
+        :param name: The field's name.
+        :param field_info: The field.
+        :return: Each path of keys the field can be read from, outermost key first.
+        """
         alias = field_info.validation_alias or field_info.alias or name
         choices = alias.choices if isinstance(alias, AliasChoices) else [alias]
-        paths = [
-            choice.path if isinstance(choice, AliasPath) else [choice]
+        return [
+            list(choice.path) if isinstance(choice, AliasPath) else [choice]
             for choice in choices
         ]
-        return {step for path in paths for step in path if isinstance(step, str)}
 
     @staticmethod
     def nested_models(annotation: Any) -> list[type[ValidatedJSONModel]]:
@@ -180,7 +229,6 @@ A list-valued GraphQL field, which GitHub returns as a connection.
 """
 
 
-@dataclass(frozen=True)
 class WebPage(ValidatedJSONModel):
     """
     A REST resource that has a page of its own on github.com.

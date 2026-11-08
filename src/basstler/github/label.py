@@ -8,7 +8,6 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from pydantic.dataclasses import dataclass as validated_dataclass
 
 from basstler.github.client import RequestBody
 from basstler.upstream_reviews.vocabulary import ValidatedJSONModel
@@ -16,7 +15,6 @@ from basstler.upstream_reviews.vocabulary import ValidatedJSONModel
 # %% a label
 
 
-@validated_dataclass(frozen=True)
 class RepositoryLabel(ValidatedJSONModel, RequestBody):
     """
     One label, whose fields are named as the labels API names them.

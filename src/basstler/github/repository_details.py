@@ -7,14 +7,12 @@ from __future__ import annotations
 from typing import Annotated
 
 from pydantic import Field
-from pydantic.dataclasses import dataclass
 
 from basstler.upstream_reviews.vocabulary import ValidatedJSONModel
 
 # %% the repository resource
 
 
-@dataclass(frozen=True)
 class RepositoryDetails(ValidatedJSONModel):
     """
     One repository, as its REST resource describes it.

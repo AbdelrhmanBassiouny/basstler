@@ -16,7 +16,6 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-from pydantic.dataclasses import dataclass as validated_dataclass
 
 from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
@@ -119,7 +118,6 @@ class ReleaseOutputKey(StrEnum):
     """
 
 
-@validated_dataclass(frozen=True)
 class PullRequestLabel(ValidatedJSONModel):
     """
     One label on a merged pull request.
@@ -136,7 +134,6 @@ class PullRequestLabel(ValidatedJSONModel):
         return VersionPart.labelled(self.name)
 
 
-@validated_dataclass(frozen=True)
 class MergedPullRequest(ValidatedJSONModel):
     """
     A pull request merged since the latest release, and the labels it carries.

@@ -8,7 +8,6 @@ from __future__ import annotations
 from typing import Annotated, Any
 
 from pydantic import Field, model_validator
-from pydantic.dataclasses import dataclass
 
 from basstler.class_property import classproperty
 from basstler.upstream_reviews.vocabulary import (
@@ -22,7 +21,6 @@ from basstler.upstream_reviews.vocabulary import (
 # %% models mirroring the data
 
 
-@dataclass(frozen=True)
 class Author(ValidatedJSONModel):
     """
     Whoever wrote a comment or submitted a review.
@@ -53,7 +51,6 @@ class Author(ValidatedJSONModel):
         return data
 
 
-@dataclass(frozen=True)
 class ThreadComment(ValidatedJSONModel):
     """
     One comment inside a review thread.
@@ -85,7 +82,6 @@ class ThreadComment(ValidatedJSONModel):
     """
 
 
-@dataclass(frozen=True)
 class ReviewThread(ValidatedJSONModel):
     """
     A conversation anchored to one location in the pull request's diff.
@@ -139,7 +135,6 @@ class ReviewThread(ValidatedJSONModel):
         return carried
 
 
-@dataclass(frozen=True)
 class Review(ValidatedJSONModel):
     """
     A submitted review, separate from the threads it may have opened.
@@ -166,7 +161,6 @@ class Review(ValidatedJSONModel):
     """
 
 
-@dataclass(frozen=True)
 class BranchPullRequest(ValidatedJSONModel):
     """
     One pull request found by searching the upstream for a head branch.
@@ -188,7 +182,6 @@ class BranchPullRequest(ValidatedJSONModel):
     """
 
 
-@dataclass(frozen=True)
 class PageInfo(ValidatedJSONModel):
     """
     Where one page of a paged list stands in the whole list.
@@ -205,7 +198,6 @@ class PageInfo(ValidatedJSONModel):
     """
 
 
-@dataclass(frozen=True)
 class ReviewThreadPage(ValidatedJSONModel):
     """
     One page of review threads, with where it stands in the whole list.

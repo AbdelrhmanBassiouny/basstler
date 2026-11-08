@@ -4,12 +4,17 @@ Tests for the models that validate GitHub's objects as they read them.
 
 from __future__ import annotations
 
+import dataclasses
+from typing import Annotated
+
 import pytest
-from pydantic import ValidationError
+from pydantic import Field, ValidationError
+
+from basstler.exceptions import DuplicateKeyError
 
 from basstler.upstream_reviews.review_models import Author, PageInfo, ReviewThread
 from basstler.upstream_reviews.rest_models import RestReview
-from basstler.upstream_reviews.vocabulary import ReviewState
+from basstler.upstream_reviews.vocabulary import ReviewState, ValidatedJSONModel
 
 from .replay import RecordedResponse
 
@@ -77,3 +82,38 @@ def test_the_keys_a_model_reads_include_its_nested_models_keys():
     A model's keys include every key the models nested in it read.
     """
     assert Author.read_keys <= RestReview.read_keys
+
+
+# %% a model is a frozen dataclass by declaring its base
+
+
+def test_a_model_is_a_frozen_dataclass_without_a_decorator():
+    """
+    Subclassing the base makes a class a frozen dataclass that validates its fields.
+    """
+    page = PageInfo.from_json({"hasNextPage": False, "endCursor": None})
+
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        page.has_next_page = True
+
+
+def test_two_fields_reading_one_key_are_refused_when_the_model_is_declared():
+    """
+    A model whose fields would read the same key is refused before it reads anything.
+    """
+    with pytest.raises(DuplicateKeyError):
+
+        class TwoFieldsOnOneKey(ValidatedJSONModel):
+            """
+            Reads one key into two fields.
+            """
+
+            first: Annotated[str, Field(alias="shared")]
+            """
+            The first reader.
+            """
+
+            second: Annotated[str, Field(alias="shared")]
+            """
+            The second reader.
+            """

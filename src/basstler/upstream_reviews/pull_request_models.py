@@ -10,7 +10,6 @@ from dataclasses import asdict, dataclass, field
 from typing import Annotated, Any
 
 from pydantic import AliasChoices, AliasPath, Field
-from pydantic.dataclasses import dataclass as validated_dataclass
 
 from basstler.upstream_reviews.exceptions import (
     GraphQLErrorsReturned,
@@ -33,7 +32,6 @@ from basstler.upstream_reviews.vocabulary import (
 # %% models mirroring the pull request
 
 
-@validated_dataclass(frozen=True)
 class CheckResult(ValidatedJSONModel):
     """
     One check reported against the pull request's head commit: a check run, such as a
@@ -71,7 +69,6 @@ class CheckResult(ValidatedJSONModel):
         return self.outcome is CheckOutcome.SUCCESS
 
 
-@validated_dataclass(frozen=True)
 class CheckStatus(ValidatedJSONModel):
     """
     Every check reported against the pull request, with GitHub's verdict over them.
@@ -108,7 +105,6 @@ class CheckStatus(ValidatedJSONModel):
         return [result for result in self.results if not result.succeeded]
 
 
-@validated_dataclass(frozen=True)
 class Commit(ValidatedJSONModel):
     """
     A commit, carrying the checks reported against it.
@@ -120,7 +116,6 @@ class Commit(ValidatedJSONModel):
     """
 
 
-@validated_dataclass(frozen=True)
 class PullRequestCommit(ValidatedJSONModel):
     """
     One entry of a pull request's commit list, which wraps the commit itself.
@@ -132,7 +127,6 @@ class PullRequestCommit(ValidatedJSONModel):
     """
 
 
-@validated_dataclass(frozen=True)
 class PullRequest(ValidatedJSONModel):
     """
     One upstream pull request, as a single page of the review-threads query reads it.
@@ -257,7 +251,6 @@ class UpstreamPullRequestSnapshot:
         raise KeyError(identifier)
 
 
-@validated_dataclass(frozen=True)
 class PullRequestForBranchResult(ValidatedJSONModel):
     """
     What :attr:`GraphQLDocument.PULL_REQUEST_FOR_BRANCH` returns.
@@ -272,7 +265,6 @@ class PullRequestForBranchResult(ValidatedJSONModel):
     """
 
 
-@validated_dataclass(frozen=True)
 class ReviewThreadsPageResult(ValidatedJSONModel):
     """
     What :attr:`GraphQLDocument.REVIEW_THREADS_PAGE` returns.

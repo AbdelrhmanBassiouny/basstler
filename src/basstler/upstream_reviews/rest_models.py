@@ -9,7 +9,6 @@ from enum import StrEnum
 from typing import Annotated
 
 from pydantic import Field
-from pydantic.dataclasses import dataclass
 
 from basstler.upstream_reviews.pull_request_models import (
     CheckResult,
@@ -46,7 +45,6 @@ class RestPullRequestState(StrEnum):
     CLOSED = "closed"
 
 
-@dataclass(frozen=True)
 class RestPullRequestHead(ValidatedJSONModel):
     """
     The branch a pull request was opened from.
@@ -63,7 +61,6 @@ class RestPullRequestHead(ValidatedJSONModel):
     """
 
 
-@dataclass(frozen=True)
 class RestPullRequestSummary(RestResponse, WebPage):
     """
     One pull request as REST describes it, whether listed or read on its own.
@@ -113,7 +110,6 @@ class RestPullRequestSummary(RestResponse, WebPage):
         )
 
 
-@dataclass(frozen=True)
 class RestReview(RestResponse, ValidatedJSONModel):
     """
     One review, as REST lists it, whose body and submission time are null until it is
@@ -151,7 +147,6 @@ class RestReview(RestResponse, ValidatedJSONModel):
         )
 
 
-@dataclass(frozen=True)
 class RestReviewComment(RestResponse, WebPage):
     """
     One review comment, as REST lists every comment on a pull request.
@@ -189,7 +184,6 @@ class RestReviewComment(RestResponse, WebPage):
         )
 
 
-@dataclass(frozen=True)
 class RestReviewThread(RestResponse, ValidatedJSONModel):
     """
     One review thread, as a Claude Code session's proxy reports it: its state and
@@ -246,7 +240,6 @@ class RestReviewThread(RestResponse, ValidatedJSONModel):
         )
 
 
-@dataclass(frozen=True)
 class RestCheckRunPage(RestResponse, ValidatedJSONModel):
     """
     One page of the check runs reported against a commit.
@@ -258,7 +251,6 @@ class RestCheckRunPage(RestResponse, ValidatedJSONModel):
     """
 
 
-@dataclass(frozen=True)
 class RestCombinedStatusPage(RestResponse, ValidatedJSONModel):
     """
     One page of the statuses posted against a commit.
