@@ -227,6 +227,11 @@ class ManifestToolsExitCode(ExitCode):
     The manifest breaks a rule the plan site validates; the problems are on stderr.
     """
 
+    USAGE = 2
+    """
+    No such subcommand, or the wrong arguments; what is wrong is on stderr.
+    """
+
     CHANGED_SINCE_READ = 3
     """
     Another writer changed a part of the plan the session also changed, or removed the
@@ -236,6 +241,49 @@ class ManifestToolsExitCode(ExitCode):
     MERGE_DISAGREES = 4
     """
     The merged manifest does not read back as the merge decided.
+    """
+
+
+class SizeLimitExitCode(ExitCode):
+    """
+    How a ``basstler.plan.size_limits`` subcommand ended, as its caller reads it.
+    """
+
+    SUCCESS = 0
+    """
+    The document is within its limits, and was staged if asked.
+    """
+
+    OVER_LIMIT = 1
+    """
+    The document breaks a limit; every violation is on stderr.
+    """
+
+    USAGE = 2
+    """
+    No such subcommand, or the wrong arguments; what is wrong is on stderr.
+    """
+
+
+class ScopeOverlapExitCode(ExitCode):
+    """
+    How a ``basstler.plan.check_scope_overlap`` run ended, as its caller reads it.
+    """
+
+    SUCCESS = 0
+    """
+    The report was printed.
+    """
+
+    UNREADABLE_INPUT = 1
+    """
+    A branch does not resolve, or a candidate is not ``<label>=<branch>``; stderr says
+    which.
+    """
+
+    USAGE = 2
+    """
+    The wrong arguments; what is wrong is on stderr.
     """
 
 

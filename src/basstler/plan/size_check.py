@@ -9,20 +9,18 @@ at that limit is full: one more item and the save is refused. Unlike the save, t
 refuses anything - it only answers the question a skill has to ask *before* a save is
 even attempted, so the routing decision (grow this plan, or open a new one) can be made
 before writing anything doomed to be refused later.
-
-Usage:
-    python3 -m basstler.plan.size_check --manifest <path>
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
+
+from cyclopts import App, Parameter
 
 from basstler.plan.model import PlanManifest
 from basstler.plan.size_limits import Measure
@@ -130,36 +128,34 @@ class PlanSizeCheckOption(StrEnum):
     """
 
 
-class PlanSizeCheckArgument(StrEnum):
-    """
-    The names this script's command line parses its options under.
-    """
+size_check_app = App(
+    name="basstler.plan.size_check",
+    help="Report whether a plan is already full.",
+)
+"""
+This module's command line.
+"""
 
-    MANIFEST = "manifest"
+
+@size_check_app.default
+def check(
+    *, manifest: Annotated[Path, Parameter(name=PlanSizeCheckOption.MANIFEST)]
+) -> None:
     """
-    The value of :attr:`PlanSizeCheckOption.MANIFEST`.
+    Print whether the manifest is already full, as one line of JSON; this never refuses.
+
+    :param manifest: The manifest to measure.
     """
+    print(json.dumps(PlanSizeCheckResult.measure(manifest).to_json()))
 
 
 def main() -> int:
     """
-    Parse arguments and print whether the given manifest is already full.
+    Run the command line.
 
     :return: 0, always - this reports, it never refuses.
     """
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument(
-        PlanSizeCheckOption.MANIFEST,
-        dest=PlanSizeCheckArgument.MANIFEST,
-        required=True,
-        type=Path,
-    )
-    arguments = vars(parser.parse_args())
-
-    result = PlanSizeCheckResult.measure(arguments[PlanSizeCheckArgument.MANIFEST])
-    print(json.dumps(result.to_json()))
+    size_check_app(sys.argv[1:], result_action="return_value")
     return 0
 
 

@@ -8,12 +8,6 @@ The judgement itself - fold or split - stays with the reader; this only gathers 
 evidence, so the check is actually run rather than eyeballed. Pure git, so it needs no
 network access and no GitHub API call.
 
-Usage:
-    python3 plan/check_scope_overlap.py \\
-        --base <base-branch> \\
-        --path <path> [--path <path> ...] \\
-        --candidate '<label>=<branch>' [--candidate '<label>=<branch>' ...]
-
 Prints a one-line JSON object to stdout:
     {"paths_absent_from_base": ["<path>", ...],
      "candidates": [{"label": "<label>", "branch": "<branch>",
@@ -33,7 +27,6 @@ reported as no overlap.
 
 from __future__ import annotations
 
-import argparse
 import json
 import subprocess
 import sys
@@ -41,8 +34,12 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
-from typing import Any
+from typing import Annotated, Any
+
+from cyclopts import App, Parameter
+
 from basstler.class_property import classproperty
+from basstler.exit_codes import CommandFailure, ExitCode, ScopeOverlapExitCode
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -91,10 +88,15 @@ class ReportKey(StrEnum):
 
 
 @dataclass
-class UnknownBranchError(ValueError):
+class UnknownBranchError(CommandFailure, ValueError):
     """
     Raised when a requested base or candidate branch doesn't resolve in the repository.
     """
+
+    @classproperty
+    def exit_code(cls) -> ScopeOverlapExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return ScopeOverlapExitCode.UNREADABLE_INPUT
 
     git_command: str
     """
@@ -110,10 +112,15 @@ class UnknownBranchError(ValueError):
 
 
 @dataclass
-class MalformedCandidateError(ValueError):
+class MalformedCandidateError(CommandFailure, ValueError):
     """
     Raised when a ``--candidate`` argument isn't in ``<label>=<branch>`` form.
     """
+
+    @classproperty
+    def exit_code(cls) -> ScopeOverlapExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return ScopeOverlapExitCode.UNREADABLE_INPUT
 
     expected_candidate: str
     """
@@ -355,50 +362,83 @@ def build_scope_report(
     return ScopeReport([path for path in paths if path not in present], overlaps)
 
 
-def main() -> int:
+class ScopeOverlapOption(StrEnum):
     """
-    Parse the command line, build the report, and print it as one line of JSON.
+    The options this script's command line takes.
+    """
+
+    REPOSITORY = "--repository"
+    """
+    The repository to inspect.
+    """
+
+    BASE = "--base"
+    """
+    The branch the work ultimately targets.
+    """
+
+    PATH = "--path"
+    """
+    A path the work would create or modify, repeated per path.
+    """
+
+    CANDIDATE = "--candidate"
+    """
+    An unlanded branch to compare against, as ``<label>=<branch>``, repeated per branch.
+    """
+
+
+scope_overlap_app = App(
+    name="basstler.plan.check_scope_overlap",
+    help="Report which paths the base lacks and which unlanded branches touch them.",
+)
+"""
+This module's command line.
+"""
+
+
+@scope_overlap_app.default
+def check(
+    *,
+    base: Annotated[str, Parameter(name=ScopeOverlapOption.BASE)],
+    paths: Annotated[list[str], Parameter(name=ScopeOverlapOption.PATH)],
+    candidates: Annotated[
+        tuple[str, ...], Parameter(name=ScopeOverlapOption.CANDIDATE)
+    ] = (),
+    repository: Annotated[Path, Parameter(name=ScopeOverlapOption.REPOSITORY)] = Path(
+        "."
+    ),
+) -> ScopeOverlapExitCode:
+    """
+    Print the scope report as one line of JSON.
+
+    :param base: The branch the work ultimately targets.
+    :param paths: A path the work would create or modify; repeat for each one.
+    :param candidates: An unlanded branch to compare against, as
+        ``<label>=<branch>``; repeat for each one.
+    :param repository: The repository to inspect.
+    """
+    report = build_scope_report(
+        repository,
+        base,
+        paths,
+        [Candidate.parse(candidate) for candidate in candidates],
+    )
+    logger.info(json.dumps(report.as_json()))
+    return ScopeOverlapExitCode.SUCCESS
+
+
+def main() -> ExitCode:
+    """
+    Run the command line, ending with the status a refusal carries.
 
     :return: The process exit code.
     """
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    parser.add_argument(
-        "--repository",
-        default=".",
-        help="Repository to inspect (default: the current directory)",
-    )
-    parser.add_argument(
-        "--base", required=True, help="The branch the work ultimately targets"
-    )
-    parser.add_argument(
-        "--path",
-        action="append",
-        required=True,
-        dest="paths",
-        help="A path the work would create or modify; repeat for each one",
-    )
-    parser.add_argument(
-        "--candidate",
-        action="append",
-        default=[],
-        dest="candidates",
-        help="An unlanded branch to compare against, as '<label>=<branch>'; repeat",
-    )
-    arguments = parser.parse_args()
-
     try:
-        candidates = [Candidate.parse(argument) for argument in arguments.candidates]
-        report = build_scope_report(
-            Path(arguments.repository), arguments.base, arguments.paths, candidates
-        )
-    except (UnknownBranchError, MalformedCandidateError) as error:
-        logger.error(str(error))
-        return 1
-
-    logger.info(json.dumps(report.as_json()))
-    return 0
+        return scope_overlap_app(sys.argv[1:], result_action="return_value")
+    except CommandFailure as error:
+        logger.error(f"{error}")
+        return error.exit_code
 
 
 if __name__ == "__main__":

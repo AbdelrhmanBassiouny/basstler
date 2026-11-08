@@ -284,7 +284,8 @@ def test_a_usage_error_exits_with_the_status_the_enum_reserves_for_it(
     mode_repository: ScratchRepository,
 ):
     """
-    2 is left out of the refusals this tool raises because ``argparse`` already owns it.
+    2 is left out of the refusals this tool raises because the command-line parser owns
+    it.
     """
     finished = run_mode(
         mode_repository, Subcommand.RESOLVE, CommandLineOption.SKILL, "bogus"

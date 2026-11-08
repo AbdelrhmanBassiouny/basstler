@@ -13,7 +13,11 @@ from pathlib import Path, PurePosixPath
 from typing import Any
 
 from basstler.class_property import classproperty
-from basstler.exit_codes import CommandFailure, StackExitCode
+from basstler.exit_codes import (
+    CommandFailure,
+    ManifestToolsExitCode,
+    StackExitCode,
+)
 from basstler.locations import BasstlerVariable, ClaudeCodeVariable, PluginLocation
 from basstler.repository import Repository
 
@@ -520,8 +524,13 @@ class DependencyCycle(ValidationProblem):
 
 
 @dataclass
-class PlanValidationError(DataclassException):
+class PlanValidationError(CommandFailure, DataclassException):
     """Raised when a plan.yaml fails schema validation - see plan-schema.md."""
+
+    @classproperty
+    def exit_code(cls) -> ManifestToolsExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return ManifestToolsExitCode.INVALID_MANIFEST
 
     problems: list[ValidationProblem]
     """

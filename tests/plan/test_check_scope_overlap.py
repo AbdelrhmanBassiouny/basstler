@@ -18,9 +18,11 @@ from ..constants.paths import RepositoryLocation
 from basstler.plan.check_scope_overlap import (
     Candidate,
     ReportKey,
+    ScopeOverlapOption,
     UnknownBranchError,
     build_scope_report,
 )
+from basstler.exit_codes import ScopeOverlapExitCode
 
 from basstler.locations import ProjectLocation
 
@@ -316,3 +318,46 @@ def test_command_line_reports_an_unresolvable_branch_as_a_failure(
 
     assert result.returncode != 0
     assert "no-such-base" in result.stderr
+
+
+def run_command_line(*arguments: str) -> subprocess.CompletedProcess[str]:
+    """
+    :param arguments: The command line's arguments.
+    :return: The finished run of the command line.
+    """
+    return subprocess.run(
+        [sys.executable, "-m", CHECK_SCOPE_OVERLAP_MODULE, *arguments],
+        capture_output=True,
+        text=True,
+        cwd=RepositoryLocation.ROOT,
+    )
+
+
+def test_command_line_refuses_a_malformed_candidate(
+    candidate_repository: CandidateScratchRepository,
+) -> None:
+    """
+    A candidate with no ``=`` names no branch to compare against.
+    """
+    result = run_command_line(
+        ScopeOverlapOption.REPOSITORY,
+        str(candidate_repository.project_root),
+        ScopeOverlapOption.BASE,
+        BASE_BRANCH,
+        ScopeOverlapOption.PATH,
+        NEW_SKILL_PATH,
+        ScopeOverlapOption.CANDIDATE,
+        "no-separator",
+    )
+
+    assert result.returncode == ScopeOverlapExitCode.UNREADABLE_INPUT
+    assert "no-separator" in result.stderr
+
+
+def test_command_line_without_a_base_is_a_usage_error() -> None:
+    """
+    No base leaves nothing to compare the paths against.
+    """
+    result = run_command_line(ScopeOverlapOption.PATH, NEW_SKILL_PATH)
+
+    assert result.returncode == ScopeOverlapExitCode.USAGE

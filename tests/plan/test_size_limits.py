@@ -6,10 +6,12 @@ progress notes are held to.
 from __future__ import annotations
 
 import re
+import sys
 from pathlib import Path
 
 import pytest
 
+from basstler.exit_codes import SizeLimitExitCode
 from basstler.plan.dependencies import DependencyReference
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
@@ -27,10 +29,12 @@ from basstler.plan.size_limits import (
     RoadmapEntryLocation,
     RoadmapFormatViolation,
     RoadmapLine,
+    SizeLimitCommand,
     SizeViolation,
     StagedPlan,
     Violation,
     WholePartLocation,
+    main,
 )
 
 from ..constants.paths import DatasetLocation
@@ -477,3 +481,58 @@ def test_progress_notes_over_the_limit_are_a_violation(tmp_path):
             )
         ],
     )
+
+
+# %% command line
+
+
+def run_check_progress(monkeypatch, progress_path: Path) -> int:
+    """
+    :param monkeypatch: pytest's monkeypatch fixture.
+    :param progress_path: The progress notes to check.
+    :return: The status the command line ends with.
+    """
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [Path(__file__).name, SizeLimitCommand.CHECK_PROGRESS, str(progress_path)],
+    )
+    return main()
+
+
+def test_the_command_line_accepts_progress_notes_within_the_limit(
+    monkeypatch, tmp_path
+):
+    """
+    Notes at the limit pass.
+    """
+    progress_path = tmp_path / "progress.md"
+    progress_path.write_text("x" * Measure.PROGRESS_LENGTH.maximum)
+    assert run_check_progress(monkeypatch, progress_path) == SizeLimitExitCode.SUCCESS
+
+
+def test_the_command_line_refuses_progress_notes_over_the_limit(
+    monkeypatch, tmp_path, capsys
+):
+    """
+    Notes over the limit end the command with its own status, naming the violation.
+    """
+    progress_path = tmp_path / "progress.md"
+    progress_path.write_text("x" * (Measure.PROGRESS_LENGTH.maximum + 1))
+    with pytest.raises(DocumentOverLimitError) as raised:
+        ProgressNotes.from_file(progress_path).check()
+
+    status = run_check_progress(monkeypatch, progress_path)
+
+    assert status == SizeLimitExitCode.OVER_LIMIT
+    assert str(raised.value) in capsys.readouterr().err
+
+
+def test_an_unknown_subcommand_is_a_usage_error(monkeypatch):
+    """
+    A subcommand the tool does not run ends it as a usage error.
+    """
+    monkeypatch.setattr(sys, "argv", [Path(__file__).name, "no-such-subcommand"])
+    with pytest.raises(SystemExit) as exited:
+        main()
+    assert exited.value.code == SizeLimitExitCode.USAGE

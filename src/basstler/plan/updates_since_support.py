@@ -8,21 +8,16 @@ shell script (mirrors plan/manifest_tools.py's own reasoning for save-plan.sh), 
 defined here exactly once so the shell script prints these strings by calling into
 this module instead of embedding its own copy, and the test suite imports the same
 constants instead of hardcoding a second copy of them.
-
-Usage:
-    python3 plan/updates_since_support.py print-comments < comments.json
-    python3 plan/updates_since_support.py print-no-changes-message
-    python3 plan/updates_since_support.py print-no-tracking-issue-message
-    python3 plan/updates_since_support.py print-no-default-repository-message \\
-        <plan-id> <tracking-issue-number>
 """
 
 from __future__ import annotations
 
-import argparse
 import json
 import sys
 from enum import StrEnum
+
+from cyclopts import App
+
 from basstler.github.issue import PostedIssueComment
 from basstler.standard_streams import StandardStreamHandler
 
@@ -97,42 +92,77 @@ def format_issue_comments(comments_json: str) -> str:
     return "\n---\n".join(comment.formatted() for comment in comments) + "\n---"
 
 
-def main() -> int:
+class PlanUpdatesSinceCommand(StrEnum):
     """
-    Parse arguments and dispatch to the requested subcommand.
+    The subcommands plan-updates-since.sh calls this module with.
     """
-    parser = argparse.ArgumentParser(
-        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-    )
-    subcommands = parser.add_subparsers(dest="subcommand", required=True)
 
-    subcommands.add_parser(
-        "print-comments",
-        help="Read a GitHub issue-comments JSON response from stdin and print it",
-    )
-    subcommands.add_parser("print-no-changes-message")
-    subcommands.add_parser("print-no-tracking-issue-message")
-    no_default_repository_parser = subcommands.add_parser(
-        "print-no-default-repository-message"
-    )
-    no_default_repository_parser.add_argument("plan_id")
-    no_default_repository_parser.add_argument("tracking_issue")
+    PRINT_COMMENTS = "print-comments"
+    """
+    Print the tracking issue's new comments, read from stdin.
+    """
 
-    arguments = parser.parse_args()
+    PRINT_NO_CHANGES_MESSAGE = "print-no-changes-message"
+    """
+    Print :attr:`PlanUpdatesSinceMessage.NO_CHANGES`.
+    """
 
-    if arguments.subcommand == "print-comments":
-        logger.info(format_issue_comments(sys.stdin.read()))
-    elif arguments.subcommand == "print-no-changes-message":
-        logger.info(PlanUpdatesSinceMessage.NO_CHANGES.value)
-    elif arguments.subcommand == "print-no-tracking-issue-message":
-        logger.info(PlanUpdatesSinceMessage.NO_TRACKING_ISSUE.value)
-    elif arguments.subcommand == "print-no-default-repository-message":
-        logger.error(
-            no_default_repository_message(arguments.plan_id, arguments.tracking_issue)
-        )
+    PRINT_NO_TRACKING_ISSUE_MESSAGE = "print-no-tracking-issue-message"
+    """
+    Print :attr:`PlanUpdatesSinceMessage.NO_TRACKING_ISSUE`.
+    """
 
-    return 0
+    PRINT_NO_DEFAULT_REPOSITORY_MESSAGE = "print-no-default-repository-message"
+    """
+    Print why the tracking issue cannot be read without a default repository.
+    """
+
+
+updates_since_app = App(
+    name="basstler.plan.updates_since_support",
+    help="The messages and comment rendering plan-updates-since.sh prints.",
+)
+"""
+This module's command line: one command per :class:`PlanUpdatesSinceCommand`.
+"""
+
+
+@updates_since_app.command(name=PlanUpdatesSinceCommand.PRINT_COMMENTS)
+def print_comments() -> None:
+    """
+    Read a GitHub issue-comments JSON response from stdin and print it.
+    """
+    logger.info(format_issue_comments(sys.stdin.read()))
+
+
+@updates_since_app.command(name=PlanUpdatesSinceCommand.PRINT_NO_CHANGES_MESSAGE)
+def print_no_changes_message() -> None:
+    """
+    Print that the plan has not changed since the baseline.
+    """
+    logger.info(PlanUpdatesSinceMessage.NO_CHANGES.value)
+
+
+@updates_since_app.command(name=PlanUpdatesSinceCommand.PRINT_NO_TRACKING_ISSUE_MESSAGE)
+def print_no_tracking_issue_message() -> None:
+    """
+    Print that the plan has no tracking issue to read.
+    """
+    logger.info(PlanUpdatesSinceMessage.NO_TRACKING_ISSUE.value)
+
+
+@updates_since_app.command(
+    name=PlanUpdatesSinceCommand.PRINT_NO_DEFAULT_REPOSITORY_MESSAGE
+)
+def print_no_default_repository_message(plan_id: str, tracking_issue: str, /) -> None:
+    """
+    Print why the tracking issue cannot be read without a default repository.
+
+    :param plan_id: The plan's id.
+    :param tracking_issue: The tracking issue's number.
+    """
+    logger.error(no_default_repository_message(plan_id, tracking_issue))
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    updates_since_app(sys.argv[1:])

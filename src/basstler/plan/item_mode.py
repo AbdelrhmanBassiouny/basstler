@@ -24,10 +24,6 @@ depart from the setting without changing it. What each mode obliges a skill to d
 ``plan-item-mode/execution-modes.md``'s to say; this module only answers which one is in
 force.
 
-Usage:
-    "${BASSTLER_PYTHON}" -m basstler.plan.item_mode resolve --skill <kickoff|resolve> [--requested <mode>]
-    "${BASSTLER_PYTHON}" -m basstler.plan.item_mode set --skill <kickoff|resolve> [--skill ...] --mode <mode>
-
 Prints a one-line JSON report led by ``status`` and ``exit_code``, so a caller acting on
 the document never has to decode an integer back into a meaning.
 
@@ -47,7 +43,6 @@ the document never has to decode an integer back into a meaning.
 
 from __future__ import annotations
 
-import argparse
 import json
 import os
 import subprocess
@@ -59,7 +54,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Annotated, Any
+
+from cyclopts import App, Parameter
 
 from basstler.bash import Bash
 from basstler.class_property import classproperty
@@ -174,13 +171,10 @@ class CommandLineOption(StrEnum):
 
 class PlanItemModeExitCode(ExitCode):
     """
-    The process statuses this tool exits with.
+    The process statuses this tool exits with, one per refusal.
 
-    A distinct status per refusal lets a caller act on *which* failure happened without
-    parsing stderr. The named refusals start at 3 because the two below them are already
-    spoken for: 2 is the usage error ``argparse`` exits with, and 1 is what Python exits
-    with on an uncaught exception, so leaving it free keeps a crash from reading as a
-    refusal this tool chose to make.
+    The refusals start at 3: 2 is the command line's usage error, and 1 is what Python
+    exits with on an uncaught exception, so a crash never reads as a refusal.
     """
 
     SUCCESS = 0
@@ -190,8 +184,8 @@ class PlanItemModeExitCode(ExitCode):
 
     USAGE = 2
     """
-    No such subcommand, or the wrong arguments. Exited with by ``argparse`` itself, and
-    named here so the value is reserved rather than merely unused.
+    No such subcommand, or the wrong arguments. Exited with by the command-line parser
+    itself, and named here so the value is reserved rather than merely unused.
     """
 
     UNKNOWN_MODE = 3
@@ -229,7 +223,8 @@ class ModeSetting:
 
     value: Any
     """
-    The value as it was read, which TOML and ``argparse`` are both free to make any type.
+    The value as it was read, which TOML and the command line are both free to make any
+    type.
     """
 
     def parse(self) -> ExecutionMode:
@@ -770,72 +765,71 @@ class Subcommand(StrEnum):
     """
 
 
-def build_parser() -> argparse.ArgumentParser:
+item_mode_app = App(
+    name="basstler.plan.item_mode",
+    help="Resolve or pin how a plan-item skill starts an item.",
+)
+"""
+This module's command line: one command per :class:`Subcommand`.
+"""
+
+
+def project_root() -> Path:
     """
-    :return: The command line this tool accepts, per the module docstring.
+    :return: The project the command acts on, as Claude Code names it, else the current
+        directory.
     """
-    parser = argparse.ArgumentParser(description=__doc__)
-    subcommands = parser.add_subparsers(dest="subcommand", required=True)
+    return Path(os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd()))
 
-    for name in Subcommand:
-        subcommands.add_parser(name)
 
-    # `resolve` answers for one skill; `set` takes --skill as often as there are skills
-    # to pin, because the settings file is rewritten whole and one push should not
-    # become several.
-    subcommands.choices[Subcommand.RESOLVE].add_argument(
-        CommandLineOption.SKILL,
-        dest="skill",
-        type=PlanItemSkill,
-        choices=list(PlanItemSkill),
-        required=True,
-    )
-    subcommands.choices[Subcommand.SET].add_argument(
-        CommandLineOption.SKILL,
-        dest="skills",
-        action="append",
-        type=PlanItemSkill,
-        choices=list(PlanItemSkill),
-        required=True,
-    )
+@item_mode_app.command(name=Subcommand.RESOLVE)
+def resolve(
+    *,
+    skill: Annotated[PlanItemSkill, Parameter(name=CommandLineOption.SKILL)],
+    requested: Annotated[
+        str | None, Parameter(name=CommandLineOption.REQUESTED)
+    ] = None,
+) -> Report:
+    """
+    Report which mode a skill runs in.
 
-    # Both mode options are plain strings, validated by ModeSetting rather than by
-    # argparse's own choices, so a mode the enum does not name refuses identically
-    # whether it came from the command line or from the settings file.
-    subcommands.choices[Subcommand.RESOLVE].add_argument(
-        CommandLineOption.REQUESTED, dest="requested", default=None
+    :param skill: The skill to answer for.
+    :param requested: The mode this one run asks for, overriding every setting.
+    """
+    return resolve_mode(skill, requested, project_root())
+
+
+@item_mode_app.command(name=Subcommand.SET)
+def pin(
+    *,
+    skills: Annotated[list[PlanItemSkill], Parameter(name=CommandLineOption.SKILL)],
+    mode: Annotated[str, Parameter(name=CommandLineOption.MODE)],
+) -> Report:
+    """
+    Pin each skill's mode in the personal settings file, in one push.
+
+    :param skills: A skill to pin; repeat per skill.
+    :param mode: The mode to pin.
+    """
+    return write_mode(
+        skills,
+        ModeSetting(key=CommandLineOption.MODE, value=mode).parse(),
+        project_root(),
     )
-    subcommands.choices[Subcommand.SET].add_argument(
-        CommandLineOption.MODE, dest="mode", required=True
-    )
-    return parser
 
 
 def main() -> int:
     """
-    Parse arguments, run the requested operation, and print its report.
-
-    See the module docstring for the command line contract.
+    Run the invoked command and print its report, or the refusal that stopped it.
     """
-    arguments = build_parser().parse_args()
-    project_root = Path(
-        os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
-    )
-
-    report: Report
     try:
-        if arguments.subcommand == Subcommand.RESOLVE:
-            report = resolve_mode(arguments.skill, arguments.requested, project_root)
-        else:
-            report = write_mode(
-                arguments.skills,
-                ModeSetting(key=CommandLineOption.MODE, value=arguments.mode).parse(),
-                project_root,
-            )
+        report = item_mode_app(sys.argv[1:], result_action="return_value")
     except ModeError as error:
         logger.error(f"{error.exit_code.name_for_a_caller}: {error}")
         return int(error.exit_code)
 
+    if report is None:
+        return PlanItemModeExitCode.SUCCESS
     logger.info(json.dumps(report.to_json()))
     return int(report.exit_code)
 

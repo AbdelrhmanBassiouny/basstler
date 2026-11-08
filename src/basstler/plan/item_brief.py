@@ -3,22 +3,22 @@ Print the brief a session reads before working one plan item: the plan's header,
 item's entry, whether each of its dependencies is ready to build on, and the plan's
 standing rules.
 
-Usage:
-    python -m basstler.plan.item_brief --plan <plan-id> (--item <item-id> | --branch <branch>)
-
 Run from the project, whose personal-notes branch it fetches. The dependencies' live
 state is read from GitHub with the token the environment carries. Prints YAML.
 """
 
 from __future__ import annotations
 
-import argparse
 import sys
 import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from enum import StrEnum
+from functools import cached_property
 from pathlib import Path
+from typing import Annotated
+
+from cyclopts import App, Parameter
 
 from basstler.plan_site.plan import Plan
 from basstler.plan.check_dependency_readiness import DependencyReadiness
@@ -30,6 +30,7 @@ from basstler.plan.repository_rules_store import RepositoryRulesStore
 from basstler.plan.size_limits import Roadmap
 from basstler.plan.validation import PlanValidator
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
+from basstler.command_line import plan_item_selection
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -230,58 +231,70 @@ class ItemBriefOption(StrEnum):
     """
 
 
+@dataclass
 class ItemBriefCommandLine:
     """
     The command a skill runs to brief an item.
     """
 
-    @classmethod
-    def parser(cls) -> argparse.ArgumentParser:
-        """
-        :return: The parser for the command's options.
-        """
-        parser = argparse.ArgumentParser(
-            description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter
-        )
-        parser.add_argument(ItemBriefOption.PLAN, dest="plan_identifier", required=True)
-        item = parser.add_mutually_exclusive_group(required=True)
-        item.add_argument(ItemBriefOption.ITEM, dest="item_identifier")
-        item.add_argument(ItemBriefOption.BRANCH, dest="branch")
-        return parser
+    pull_request_source: PullRequestSource
+    """
+    Where the dependencies' live state is read from.
+    """
 
-    @classmethod
-    def run(
-        cls,
-        arguments: argparse.Namespace,
-        pull_request_source: PullRequestSource,
-        project_root: Path,
+    project_root: Path
+    """
+    The repository whose notes branch holds the plan.
+    """
+
+    @cached_property
+    def app(self) -> App:
+        """
+        :return: The command line, briefing through :meth:`brief`.
+        """
+        app = App(
+            name="basstler.plan.item_brief",
+            help="Print the brief a session reads before working one plan item.",
+        )
+        app.default(self.brief)
+        return app
+
+    def brief(
+        self,
+        *,
+        plan_identifier: Annotated[str, Parameter(name=ItemBriefOption.PLAN)],
+        item_identifier: Annotated[
+            str | None, Parameter(name=ItemBriefOption.ITEM, group=plan_item_selection)
+        ] = None,
+        branch: Annotated[
+            str | None,
+            Parameter(name=ItemBriefOption.BRANCH, group=plan_item_selection),
+        ] = None,
     ) -> None:
         """
-        Print the brief *arguments* ask for.
+        Print the brief for one item of a plan, as YAML.
 
-        :param arguments: The parsed command line.
-        :param pull_request_source: Where the dependencies' live state is read from.
-        :param project_root: The repository whose notes branch holds the plan.
+        :param plan_identifier: The plan's id.
+        :param item_identifier: The item's id.
+        :param branch: The item's branch, in place of its id.
         """
         selection = (
-            ItemByBranch(arguments.branch)
-            if arguments.branch is not None
-            else ItemByIdentifier(arguments.item_identifier)
+            ItemByBranch(branch)
+            if branch is not None
+            else ItemByIdentifier(item_identifier)
         )
-        brief = ItemBrief.read(
-            project_root, arguments.plan_identifier, selection, pull_request_source
+        item_brief = ItemBrief.read(
+            self.project_root, plan_identifier, selection, self.pull_request_source
         )
-        logger.info(brief.render().rstrip("\n"))
+        logger.info(item_brief.render().rstrip("\n"))
 
 
 def main() -> int:
     """
     Print the brief the command line asks for, reading live state from GitHub.
     """
-    ItemBriefCommandLine.run(
-        ItemBriefCommandLine.parser().parse_args(),
-        GitHubPullRequestSource.from_environment(),
-        Path.cwd(),
+    ItemBriefCommandLine(GitHubPullRequestSource.from_environment(), Path.cwd()).app(
+        sys.argv[1:], result_action="return_value"
     )
     return 0
 
