@@ -27,7 +27,8 @@ conflicts, and never call the stack checked.
 ```
 
 It prints the plan's id, title and `tracking_issue`, the item's entry, each
-`depends_on` entry's live state with `is_ready`, and the plan's standing rules. Read
+`depends_on` entry's live state with `is_ready`, the repository's rules
+(`repository_rules`, binding every plan) and the plan's standing rules. Read
 nothing else of the plan: other items are other sessions' work.
 
 - Given a pull request number, read its head branch with

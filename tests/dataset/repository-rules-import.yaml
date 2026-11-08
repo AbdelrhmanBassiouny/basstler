@@ -1,0 +1,5 @@
+rules:
+- id: deterministic
+  text: The same inputs give the same output, run after run.
+- id: secure
+  text: Least privilege.

@@ -5,6 +5,7 @@ each plan's page.
 
 from __future__ import annotations
 
+import html
 import json
 from collections.abc import Mapping
 from http import HTTPStatus
@@ -29,6 +30,7 @@ from basstler.maintenance.github import (
 )
 from basstler.plan.dependencies import DependencyReference, DependencyResolver
 from basstler.plan.model import ItemStatus, PlanDocument
+from basstler.plan.repository_rules import RepositoryRules
 from basstler.plan.validation import PlanValidator
 from basstler.plan_site.__main__ import (
     HubSite,
@@ -194,6 +196,16 @@ def test_every_page_links_back_up_to_the_hub_and_its_index(
     assert link_to(SiteSampleText.SITE_URL) in page_of(tmp_path)
     assert link_to(SiteSampleText.SITE_URL) in plan_page
     assert link_to(REPOSITORY_URL) in plan_page
+
+
+def test_every_plan_page_shows_the_repositorys_rules(
+    site: RepositorySite, tmp_path: Path
+):
+    site.build(tmp_path)
+    rules = RepositoryRules.from_yaml(DatasetLocation.REPOSITORY_RULES.read_text())
+    for plan in PUBLISHED_PLANS:
+        page = page_of(tmp_path, plan)
+        assert all(html.escape(rule.text) in page for rule in rules.rules)
 
 
 def test_build_counts_done_items_from_the_manifest(

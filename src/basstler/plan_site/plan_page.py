@@ -12,6 +12,7 @@ from basstler.class_property import classproperty
 from basstler.locations import SiteTemplate
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
+from basstler.plan.repository_rules import RepositoryRules
 from basstler.maintenance.board import PullRequestField
 from basstler.plan_site.cards import (
     DraftRecheckAttribute,
@@ -81,6 +82,11 @@ class PlanPage(TemplatePage):
     pull_requests_by_repository: PullRequestsByRepository
     """
     Live pull request state for every repository referenced by the plan's items.
+    """
+
+    repository_rules: RepositoryRules = field(default_factory=RepositoryRules)
+    """
+    The rules every plan of the repository follows.
     """
 
     tracking_url: str | None = None
@@ -158,6 +164,7 @@ class PlanPage(TemplatePage):
             blocker_maybe_cleared=next_steps.blocker_maybe_cleared,
             ready_to_review=next_steps.ready_to_review,
             roadmap_html=render_markdown_to_html(self.roadmap_text),
+            repository_rules=self.repository_rules.rules,
             waves=self._wave_sections(),
             available_models=list(ModelOption),
         )

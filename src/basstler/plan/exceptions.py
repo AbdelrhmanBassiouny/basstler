@@ -113,3 +113,29 @@ class MergeDisagreesError(CommandFailure, DataclassException, RuntimeError):
             "Save from a fresh read of the plan, so there is nothing to merge, and "
             "report the manifest that failed to merge."
         )
+
+
+# %% the repository's rules
+
+
+@dataclass
+class UnknownRepositoryRuleError(DataclassException, LookupError):
+    """
+    Raised when a rule is asked for that the repository's rules do not hold.
+    """
+
+    identifier: str
+    """
+    The id that was asked for.
+    """
+
+    known_identifiers: tuple[str, ...]
+    """
+    The ids the repository's rules hold, in order.
+    """
+
+    def error_message(self) -> str:
+        return f"the repository's plan rules hold no rule {self.identifier!r}"
+
+    def suggest_correction(self) -> str:
+        return f"Use one of: {', '.join(self.known_identifiers) or 'none yet'}."
