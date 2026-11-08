@@ -1,6 +1,6 @@
 ---
 name: plan-item-kickoff
-description: Start one tracked plan item: gather its context, open its branch and draft PR, record it, then plan or implement per the execution mode. Invoke as "/plan-item-kickoff <plan-id> <item-id>". Use from a plan page's "Start now" link or when asked to start or kick off an item.
+description: Start one tracked plan item: gather its context, open its branch and draft PR, record it, then plan or implement per the execution mode. Invoke as "/plan-item-kickoff {plan-id} {item-id}". Use from a plan page's "Start now" link or when asked to start or kick off an item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__get_file_contents, mcp__github__create_pull_request, mcp__github__update_pull_request, mcp__claude-code-remote__subscribe_pr_activity, mcp__github__issue_read
 ---
 
