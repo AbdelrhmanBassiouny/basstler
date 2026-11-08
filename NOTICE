@@ -3,9 +3,9 @@ Copyright 2026 Abdelrhman Bassiouny and the basstler contributors
 
 basstler (https://github.com/KAOS-repositories/basstler) is licensed under the
 Apache License, Version 2.0 (see LICENSE). Abdelrhman Bassiouny wrote it
-independently of any employer or institution and maintains it in KAOS, which
-Abdelrhman Bassiouny co-founded; contributors keep the copyright on their
-contributions.
+independently of any employer or institution and maintains it in the
+KAOS-repositories organization on GitHub; contributors keep the copyright on
+their contributions.
 
 src/basstler/exceptions.py, src/basstler/class_property.py and
 src/basstler/code_rules/{rule,rule_module,instructions}.py contain code adapted
