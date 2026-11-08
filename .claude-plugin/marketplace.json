@@ -2,7 +2,7 @@
   "name": "basstler",
   "description": "Claude Code plugins by KAOS: personal notes, PR progress, live plan sites and stacked-PR maintenance.",
   "owner": {
-    "name": "Abdelrhman Bassiouny"
+    "name": "KAOS"
   },
   "plugins": [
     {
