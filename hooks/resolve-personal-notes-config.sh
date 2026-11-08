@@ -385,6 +385,9 @@ PLAN_MANIFEST_TOOLS_MODULE="basstler.plan.manifest_tools"
 # basstler.plan.size_limits: prunes landed items and refuses a plan or progress
 # notes over their limits - the gate save-plan.sh and save-pr-progress.sh run.
 PLAN_SIZE_LIMITS_MODULE="basstler.plan.size_limits"
+# basstler.document_references: names every module and skill a document cites
+# that this release no longer ships, and what replaced it.
+DOCUMENT_REFERENCES_MODULE="basstler.document_references"
 # basstler.personal_notes.progress_notes: deletes the progress notes of branches whose pull requests
 # have all merged or closed, or that are gone from the remote.
 PROGRESS_NOTES_MODULE="basstler.personal_notes.progress_notes"
@@ -418,6 +421,9 @@ UPSTREAM_REVIEWS_ACTION_BRANCH="basstler/upstream-reviews"
 # basstler.actions_usage: the last 24 hours of Actions runs and jobs per workflow against
 # the budget's daily ceilings - run by session-start.sh and by the test workflow.
 ACTIONS_USAGE_MODULE="basstler.actions_usage"
+# basstler.main_failure: the one issue open while the default branch's tests fail -
+# recorded by the test workflow, shown by session-start.sh.
+MAIN_FAILURE_MODULE="basstler.main_failure"
 # dependencies: prints the package's requirements an environment does not
 # have - what missing_dependencies below calls.
 BASSTLER_DEPENDENCIES_MODULE="basstler.setup.dependencies"
