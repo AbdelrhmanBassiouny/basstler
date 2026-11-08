@@ -23,7 +23,7 @@ from basstler.repository import Repository
 from basstler.stack.checkout import CurrentCheckout, LandedBranches
 from basstler.stack.exceptions import BaseBranchScopeError, BoardUnavailable
 from basstler.stack.settings import Configuration
-from basstler.github.states import RollupState
+from basstler.github.states import CombinedCheckState
 
 # %% domain model
 
@@ -122,7 +122,7 @@ class PullRequest:
     labels: list[str] = field(default_factory=list)
     """Labels currently on the pull request."""
 
-    check_state: RollupState = RollupState.NOT_REPORTED
+    check_state: CombinedCheckState = CombinedCheckState.NOT_REPORTED
     """The verdict over every check and commit status reported on the pull request's
     head."""
 
@@ -172,7 +172,9 @@ class PullRequest:
         """:param entry: One pull request as ``board.json`` holds it.
         :return: The pull request, its check state read back as its verdict."""
         pull_request = cls(**entry)
-        return replace(pull_request, check_state=RollupState(pull_request.check_state))
+        return replace(
+            pull_request, check_state=CombinedCheckState(pull_request.check_state)
+        )
 
 
 @dataclass(frozen=True)
@@ -199,7 +201,7 @@ class StackBranch(Branch):
     """The pull request in its role as one the pass leaves out, ``None`` when the branch
     is on the fork."""
 
-    check_state: RollupState = RollupState.NOT_REPORTED
+    check_state: CombinedCheckState = CombinedCheckState.NOT_REPORTED
     """The verdict over the checks reported on the pull request head."""
 
     upstream_pull_request: int | None = None

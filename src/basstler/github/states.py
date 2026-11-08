@@ -103,7 +103,7 @@ class Conclusion(RawValueReader):
 
 class CheckOutcome(NamedAsGitHub):
     """
-    Where one check stands, over both shapes a rollup can hold.
+    Where one check stands, over check runs and commit statuses alike.
 
     A check run that has not finished reports no conclusion at all, which reads here as
     :attr:`PENDING` so an unfinished check is never mistaken for a passing one.
@@ -177,17 +177,17 @@ class CheckOutcome(NamedAsGitHub):
     """
 
     @property
-    def rolls_up_to(self) -> RollupState:
+    def combined_state(self) -> CombinedCheckState:
         """
-        :return: The verdict this outcome alone would give the whole rollup, the way
+        :return: The verdict this outcome alone would give the combined state, the way
             GitHub counts it: a neutral or skipped check does not hold a pull request
             back, and everything that ended without passing fails it.
         """
         if self in {CheckOutcome.SUCCESS, CheckOutcome.NEUTRAL, CheckOutcome.SKIPPED}:
-            return RollupState.SUCCESS
+            return CombinedCheckState.SUCCESS
         if self in {CheckOutcome.ERROR, CheckOutcome.PENDING, CheckOutcome.EXPECTED}:
-            return RollupState[self.name]
-        return RollupState.FAILURE
+            return CombinedCheckState[self.name]
+        return CombinedCheckState.FAILURE
 
 
 ConclusionOutcome = Annotated[CheckOutcome, Conclusion()]
@@ -196,7 +196,7 @@ A check's outcome, read from the conclusion GitHub gives a check run or workflow
 """
 
 
-class RollupState(NamedAsGitHub):
+class CombinedCheckState(NamedAsGitHub):
     """
     The verdict GitHub itself computes over all of a pull request's checks, or that
     nothing has reported one yet.
@@ -235,10 +235,10 @@ class RollupState(NamedAsGitHub):
     @property
     def failed(self) -> bool:
         """:return: Whether at least one check failed or reported an error."""
-        return self in {RollupState.FAILURE, RollupState.ERROR}
+        return self in {CombinedCheckState.FAILURE, CombinedCheckState.ERROR}
 
     @classmethod
-    def over(cls, outcomes: list[CheckOutcome]) -> RollupState:
+    def over(cls, outcomes: list[CheckOutcome]) -> CombinedCheckState:
         """
         Compute the verdict GitHub would over a set of checks, for a source that does
         not report one: the worst any single check would give.
@@ -246,11 +246,11 @@ class RollupState(NamedAsGitHub):
         :param outcomes: Every check's outcome, at least one.
         :return: The verdict.
         """
-        reached = {outcome.rolls_up_to for outcome in outcomes}
+        reached = {outcome.combined_state for outcome in outcomes}
         return next(state for state in cls.severity_order() if state in reached)
 
     @classmethod
-    def severity_order(cls) -> list[RollupState]:
+    def severity_order(cls) -> list[CombinedCheckState]:
         """
         :return: Every verdict a reported check can give, worst first.
         """

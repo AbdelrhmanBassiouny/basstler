@@ -10,7 +10,7 @@ import pytest
 
 from basstler.maintenance.check_overview import CheckOverview
 from basstler.maintenance.commands import ChecksCommand
-from basstler.github.states import RollupState
+from basstler.github.states import CombinedCheckState
 
 from ..constants.stack import StackBranch
 
@@ -33,13 +33,13 @@ def test_every_verdict_is_counted_and_every_one_but_success_named():
 
     assert lines[0] == (
         f"checks on {len(overview.open_branches())} open branches: "
-        f"{len(overview.branches_in(RollupState.SUCCESS))} {RollupState.SUCCESS}, "
-        f"{board.failing_checks} {RollupState.FAILURE}, "
-        f"{board.pushed} {RollupState.PENDING}"
+        f"{len(overview.branches_in(CombinedCheckState.SUCCESS))} {CombinedCheckState.SUCCESS}, "
+        f"{board.failing_checks} {CombinedCheckState.FAILURE}, "
+        f"{board.pushed} {CombinedCheckState.PENDING}"
     )
     assert lines[1:] == [
-        f"{RollupState.FAILURE}: {overview.named(RollupState.FAILURE)}",
-        f"{RollupState.PENDING}: {overview.named(RollupState.PENDING)}",
+        f"{CombinedCheckState.FAILURE}: {overview.named(CombinedCheckState.FAILURE)}",
+        f"{CombinedCheckState.PENDING}: {overview.named(CombinedCheckState.PENDING)}",
     ]
 
 
@@ -47,9 +47,9 @@ def test_a_verdict_names_its_first_branches_and_counts_the_rest():
     board = LargeBoard()
     overview = CheckOverview(board.stack())
 
-    named = overview.named(RollupState.FAILURE)
+    named = overview.named(CombinedCheckState.FAILURE)
 
-    first = overview.branches_in(RollupState.FAILURE)[0]
+    first = overview.branches_in(CombinedCheckState.FAILURE)[0]
     assert named.startswith(f"#{first.pull_request_number} `{first.name}`")
     assert named.endswith(
         f" and {board.failing_checks - overview.entries_per_state} more"
@@ -76,7 +76,7 @@ def test_the_command_names_a_branch_nothing_has_reported_checks_on(
                 StackPullRequestNumber.PARENT,
                 StackBranch.PARENT,
                 UPSTREAM_BASE,
-                check_state=RollupState.SUCCESS,
+                check_state=CombinedCheckState.SUCCESS,
             ),
             a_board_entry(
                 StackPullRequestNumber.CHILD, StackBranch.CHILD, StackBranch.PARENT
@@ -88,6 +88,6 @@ def test_the_command_names_a_branch_nothing_has_reported_checks_on(
 
     printed = capsys.readouterr().out.splitlines()
     assert printed[-1] == (
-        f"{RollupState.NOT_REPORTED}: "
+        f"{CombinedCheckState.NOT_REPORTED}: "
         f"#{StackPullRequestNumber.CHILD} `{StackBranch.CHILD}`"
     )

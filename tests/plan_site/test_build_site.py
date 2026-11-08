@@ -44,7 +44,7 @@ from basstler.plan_site.plan import Plan
 from basstler.pull_request_source import GitHubPullRequestSource
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.repository import PullRequestReference, Repository
-from basstler.github.states import RollupState
+from basstler.github.states import CombinedCheckState
 
 from ..constants.paths import DatasetLocation, RecordedCommitChecks
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
@@ -309,7 +309,7 @@ def test_every_page_links_the_site_stylesheet(site: RepositorySite, tmp_path: Pa
 def test_a_plan_page_shows_the_ci_and_assignees_of_an_open_pull_request(
     tmp_path: Path,
 ):
-    check_state = RollupState.FAILURE
+    check_state = CombinedCheckState.FAILURE
     open_pull_request = PullRequestRecord(
         state=PullRequestState.OPEN,
         check_state=check_state,
@@ -644,7 +644,9 @@ def test_github_source_reads_the_checks_of_an_open_pull_request():
             }
         )
     )
-    assert source.pull_request(OPEN_PULL_REQUEST).check_state is RollupState.FAILURE
+    assert (
+        source.pull_request(OPEN_PULL_REQUEST).check_state is CombinedCheckState.FAILURE
+    )
 
 
 def test_github_source_leaves_the_checks_of_a_closed_pull_request_unread():

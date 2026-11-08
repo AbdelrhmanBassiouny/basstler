@@ -20,7 +20,7 @@ from basstler.stack.report import StackReport, StatusColumn
 from basstler.stack.settings import PrintedConfiguration
 
 from basstler.locations import ProjectLocation
-from basstler.github.states import RollupState
+from basstler.github.states import CombinedCheckState
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName, StackBranch, StackLabel
@@ -278,7 +278,7 @@ def a_ready_branch_whose_checks_failed() -> PullRequest:
         StackBranch.FEATURE,
         StackBranch.BASE,
         draft=False,
-        check_state=RollupState.FAILURE,
+        check_state=CombinedCheckState.FAILURE,
         head_repository=StackRepository.FORK.value.full_name,
     )
 
@@ -294,7 +294,10 @@ def test_the_status_table_shows_the_verdict_over_each_branch_s_checks(
         for line in capsys.readouterr().out.splitlines()
         if line.startswith(StackBranch.FEATURE)
     )
-    assert row[heading.index(StatusColumn.CHECKS) :].split()[0] == RollupState.FAILURE
+    assert (
+        row[heading.index(StatusColumn.CHECKS) :].split()[0]
+        == CombinedCheckState.FAILURE
+    )
 
 
 # %% the next branches to promote
@@ -306,4 +309,4 @@ def test_a_branch_withheld_for_its_checks_is_named_with_their_verdict(
     StackReport(build([a_ready_branch_whose_checks_failed()])).print_next()
 
     printed = capsys.readouterr().out
-    assert f"{StackBranch.FEATURE} ({RollupState.FAILURE})" in printed
+    assert f"{StackBranch.FEATURE} ({CombinedCheckState.FAILURE})" in printed

@@ -8,7 +8,7 @@ from enum import StrEnum
 
 from basstler.plan.model import ItemStatus
 from basstler.pull_request_state import LiveState
-from basstler.github.states import RollupState
+from basstler.github.states import CombinedCheckState
 
 # %% chip colours
 
@@ -84,7 +84,7 @@ class ChipTone(StrEnum):
                 return cls.IDLE
 
     @classmethod
-    def of_check_state(cls, check_state: RollupState) -> ChipTone:
+    def of_check_state(cls, check_state: CombinedCheckState) -> ChipTone:
         """
         :param check_state: The verdict over a pull request's checks.
         :return: The tone its CI chip carries.
@@ -92,9 +92,9 @@ class ChipTone(StrEnum):
         if check_state.failed:
             return cls.BAD
         match check_state:
-            case RollupState.SUCCESS:
+            case CombinedCheckState.SUCCESS:
                 return cls.GOOD
-            case RollupState.PENDING | RollupState.EXPECTED:
+            case CombinedCheckState.PENDING | CombinedCheckState.EXPECTED:
                 return cls.WARNING
             case _:
                 return cls.IDLE

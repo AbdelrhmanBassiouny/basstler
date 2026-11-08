@@ -21,7 +21,7 @@ from basstler.upstream_reviews.review_models import (
     ReviewThreadPage,
 )
 from basstler.github.graphql import GraphQLConnection
-from basstler.github.states import CheckOutcome, ConclusionOutcome, RollupState
+from basstler.github.states import CheckOutcome, ConclusionOutcome, CombinedCheckState
 from basstler.github.web_page import AbsentAsEmpty
 from basstler.json_model import ValidatedJSONModel
 
@@ -59,12 +59,12 @@ class CheckResult(ValidatedJSONModel):
 
 class GraphQLCheckRun(CheckResult):
     """
-    A check run, as a GraphQL rollup lists it.
+    A check run, as GraphQL lists it among a commit's checks.
     """
 
     kind: Annotated[Literal["CheckRun"], Field(alias="__typename")]
     """
-    The GraphQL type a rollup context of this shape carries.
+    The GraphQL type a check of this shape carries.
     """
 
     outcome: Annotated[ConclusionOutcome, Field(alias="conclusion")]
@@ -80,12 +80,12 @@ class GraphQLCheckRun(CheckResult):
 
 class GraphQLStatusContext(CheckResult):
     """
-    A commit status, as a GraphQL rollup lists it.
+    A commit status, as GraphQL lists it among a commit's checks.
     """
 
     kind: Annotated[Literal["StatusContext"], Field(alias="__typename")]
     """
-    The GraphQL type a rollup context of this shape carries.
+    The GraphQL type a check of this shape carries.
     """
 
     name: Annotated[str, Field(alias="context")]
@@ -104,11 +104,11 @@ class GraphQLStatusContext(CheckResult):
     """
 
 
-RollupContext = Annotated[
+GraphQLCheck = Annotated[
     GraphQLCheckRun | GraphQLStatusContext, Field(discriminator="kind")
 ]
 """
-One entry of a GraphQL rollup, read as the shape its GraphQL type names.
+One of a commit's checks in GraphQL, read as the shape its GraphQL type names.
 """
 
 
@@ -117,7 +117,7 @@ class CheckStatus(ValidatedJSONModel):
     Every check reported against the pull request, with GitHub's verdict over them.
     """
 
-    state: RollupState
+    state: CombinedCheckState
     """
     The verdict GitHub computed over all of them.
     """
@@ -138,7 +138,7 @@ class CheckStatus(ValidatedJSONModel):
         if not results:
             return None
         return cls(
-            state=RollupState.over([result.outcome for result in results]),
+            state=CombinedCheckState.over([result.outcome for result in results]),
             results=results,
         )
 
@@ -148,12 +148,12 @@ class CheckStatus(ValidatedJSONModel):
         return [result for result in self.results if not result.succeeded]
 
 
-class CheckRollup(CheckStatus):
+class GraphQLCheckStatus(CheckStatus):
     """
     The checks of a commit, as GitHub's GraphQL API rolls them up.
     """
 
-    results: Annotated[GraphQLConnection[RollupContext], Field(alias="contexts")]
+    results: Annotated[GraphQLConnection[GraphQLCheck], Field(alias="contexts")]
     """
     Every check, in the order GitHub returned them.
     """
@@ -164,7 +164,7 @@ class Commit(ValidatedJSONModel):
     A commit, carrying the checks reported against it.
     """
 
-    checks: Annotated[CheckRollup | None, Field(alias="statusCheckRollup")]
+    checks: Annotated[GraphQLCheckStatus | None, Field(alias="statusCheckRollup")]
     """
     The checks reported against this commit, absent when none have reported.
     """
@@ -221,7 +221,7 @@ class PullRequest(ValidatedJSONModel):
         """
         The checks reported against the head commit.
 
-        GitHub hangs the rollup off the commit rather than the pull request.
+        GitHub hangs the combined checks off the commit rather than the pull request.
 
         :return: The checks, or ``None`` when nothing has reported.
         """

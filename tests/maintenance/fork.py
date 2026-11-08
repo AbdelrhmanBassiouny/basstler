@@ -22,7 +22,7 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.settings import Configuration
-from basstler.github.states import RollupState
+from basstler.github.states import CombinedCheckState
 
 import basstler.maintenance.__main__
 import basstler.maintenance.restack_procedure
@@ -463,13 +463,15 @@ class ChecksReportedOn(CommitChecks):
     Answers each commit's check verdict from a fixed table rather than from GitHub.
     """
 
-    state_by_commit: Mapping[str, RollupState] = dataclasses_field(default_factory=dict)
+    state_by_commit: Mapping[str, CombinedCheckState] = dataclasses_field(
+        default_factory=dict
+    )
     """
     The verdict over each commit's checks; a commit absent here has no checks.
     """
 
-    def check_state(self, commit: str) -> RollupState:
-        return self.state_by_commit.get(commit, RollupState.NOT_REPORTED)
+    def check_state(self, commit: str) -> CombinedCheckState:
+        return self.state_by_commit.get(commit, CombinedCheckState.NOT_REPORTED)
 
 
 def an_export(
@@ -557,7 +559,7 @@ def a_board_entry(
     session: str | None = None,
     description: str | None = None,
     upstream_pull_request: int | None = None,
-    check_state: RollupState = RollupState.NOT_REPORTED,
+    check_state: CombinedCheckState = CombinedCheckState.NOT_REPORTED,
 ) -> PullRequest:
     """
     :param number: The pull request number.
