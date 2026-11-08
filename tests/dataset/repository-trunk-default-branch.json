@@ -1,5 +1,6 @@
 {
   "full_name": "an-owner/plans",
   "fork": false,
-  "default_branch": "trunk"
+  "default_branch": "trunk",
+  "private": false
 }

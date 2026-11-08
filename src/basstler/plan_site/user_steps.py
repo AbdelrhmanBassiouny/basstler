@@ -22,6 +22,7 @@ from basstler.github.pull_request import NewPullRequest
 from basstler.github.client import (
     GitHubClient,
 )
+from basstler.github.exceptions import GitHubCallFailed
 from basstler.upstream_reviews.rest_models import RestPullRequestSummary
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -57,6 +58,14 @@ class UserStep(StrEnum):
     """
     No dispatch from the notes branch has succeeded yet. Actions secrets belong to one
     repository, so each repository the site publishes needs its own copy.
+    """
+
+    GIVE_BUILD_NOTES_ACCESS = (
+        "let the build read the private notes repositories, or make them public"
+    )
+    """
+    A notes repository the site publishes is private, and the build's own credential
+    cannot read a private repository outside the site repository.
     """
 
     ADD_MERGE_WORKFLOW = "merge the workflow that starts the build on every merge"
@@ -213,6 +222,69 @@ class UserSteps:
             ),
         }
         return steps[step]
+
+
+@dataclass(frozen=True)
+class PrivateNotesAccess:
+    """
+    The private notes repositories the site's build needs a read-only token for.
+    """
+
+    site: SiteRepository
+    """
+    The site repository, which stores the token for its build.
+    """
+
+    private_repositories: tuple[Repository, ...]
+    """
+    The private notes repositories, which the token has to read.
+    """
+
+    secret_refusal: GitHubCallFailed | None = None
+    """
+    Why it could not be read whether the site repository stores the token, ``None``
+    when it is known not to.
+    """
+
+    @property
+    def pending(self) -> PendingStep:
+        """:return: The step storing the token, or making the repositories public."""
+        site = self.site.repository
+        names = ", ".join(
+            repository.full_name for repository in self.private_repositories
+        )
+        owners = ", ".join(
+            dict.fromkeys(repository.owner for repository in self.private_repositories)
+        )
+        return PendingStep(
+            UserStep.GIVE_BUILD_NOTES_ACCESS,
+            f'read -rsp "Token: " token; printf %s "$token" | gh secret set '
+            f"{PlanSiteSecret.NOTES_TOKEN} --repo {site.full_name}",
+            (
+                f"Open {UserSteps.token_page}.",
+                f"Name the token and set Resource owner to {owners}.",
+                "Under Repository access, choose Only select repositories and "
+                f"select {names}.",
+                "Under Permissions, open Repository permissions and set Contents "
+                "and Pull requests to Read-only.",
+                "Click Generate token and copy the token now; GitHub shows it once.",
+                f"Open {site.url}/settings/secrets/actions/new, set the name to "
+                f"{PlanSiteSecret.NOTES_TOKEN}, paste the token as the secret, then "
+                "click Add secret.",
+                "Or, instead of the token, make each of them public: open "
+                + ", ".join(
+                    f"{repository.url}/settings"
+                    for repository in self.private_repositories
+                )
+                + ", and under Danger Zone click Change visibility.",
+            ),
+            failure=(
+                None
+                if self.secret_refusal is None
+                else f"whether {site.full_name} stores {PlanSiteSecret.NOTES_TOKEN} "
+                f"could not be read: {self.secret_refusal}"
+            ),
+        )
 
 
 @dataclass(frozen=True)

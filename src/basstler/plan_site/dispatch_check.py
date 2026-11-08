@@ -138,7 +138,7 @@ class TokenSecret(JSONModel):
         :param repository: The repository.
         :return: The REST path of its token secret.
         """
-        return f"{repository.api_path}/actions/secrets/{PlanSiteSecret.TOKEN}"
+        return PlanSiteSecret.TOKEN.path_on(repository)
 
     @classmethod
     def read(cls, client: GitHubAttemptReader, repository: Repository) -> TokenSecret:

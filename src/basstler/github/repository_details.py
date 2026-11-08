@@ -27,3 +27,8 @@ class RepositoryDetails(ValidatedJSONModel):
     """
     Whether it is a fork, whose default branch follows its upstream's.
     """
+
+    is_private: Annotated[bool, Field(alias="private")]
+    """
+    Whether only the people and tokens granted access can read it.
+    """

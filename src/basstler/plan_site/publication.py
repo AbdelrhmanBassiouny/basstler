@@ -13,6 +13,7 @@ import os
 import re
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
+from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated
 
@@ -28,6 +29,7 @@ from basstler.github.run_listing import RunListing
 from basstler.plan_site.user_steps import (
     MergeWorkflowProposal,
     PendingStep,
+    PrivateNotesAccess,
     UserStep,
     UserSteps,
 )
@@ -37,6 +39,7 @@ from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     DispatchWorkflow,
     MergeWorkflow,
+    PlanSiteSecret,
     PlanSiteWorkflow,
     SiteWorkflow,
 )
@@ -44,9 +47,10 @@ from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting, resolve_repository
 from basstler.standard_streams import StandardStreamHandler
 from basstler.github.client import (
-    GitHubClient,
+    GitHubFullClient,
     GitHubRestClient,
 )
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.upstream_reviews.action.branch import BasstlerSource
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -130,10 +134,10 @@ class PlanSitePublication:
     The site repository's workflow, whose registry an existing one's replaces.
     """
 
-    github: GitHubClient
+    github: GitHubFullClient
     """
-    What reads repositories and their workflow runs from GitHub, and opens the pull
-    request proposing the merge workflow.
+    What reads repositories, their workflow runs and the site's secrets from GitHub, and
+    opens the pull request proposing the merge workflow.
     """
 
     remote_root: str = GitHubAddress.WEB
@@ -219,6 +223,14 @@ class PlanSitePublication:
             if existing
             else self.site_workflow
         )
+        notes_details = RepositoryDetails.from_json(
+            self.github.get(notes_repository.api_path)
+        )
+        notes_access = self.private_notes_access(site_workflow.registry, notes_details)
+        # The token is known to be missing, so nothing written now could build.
+        if notes_access is not None and notes_access.secret_refusal is None:
+            report.pending.append(notes_access.pending)
+            return report
         self.write(
             site_branch,
             site_workflow,
@@ -232,8 +244,10 @@ class PlanSitePublication:
             f"Start the plan site build in {site.repository.full_name} on every push",
             report,
         )
-        proposal = self.write_merge_workflow(report)
+        proposal = self.write_merge_workflow(notes_details, report)
         user_steps = UserSteps(notes_repository, site, hub.repositories)
+        if notes_access is not None:
+            report.pending.append(notes_access.pending)
         if not site_runs.succeeded(SiteWorkflow.location):
             report.pending.append(
                 user_steps.pending(
@@ -286,22 +300,56 @@ class PlanSitePublication:
         branch.write({workflow.location.as_posix(): workflow.text}, message)
         report.written.append(f"{workflow.location} on {branch.description}")
 
+    def private_notes_access(
+        self, registry: Repository, notes_details: RepositoryDetails
+    ) -> PrivateNotesAccess | None:
+        """
+        :param registry: The repository whose notes hold the complete hub file.
+        :param notes_details: The notes repository's details.
+        :return: The private ones of the registry and the notes repository, unless
+            there are none or the site repository stores the token that reads them.
+        """
+        notes_repository = self.dispatch_workflow.notes_repository
+        details = {notes_repository: notes_details}
+        if registry != notes_repository:
+            details[registry] = RepositoryDetails.from_json(
+                self.github.get(registry.api_path)
+            )
+        private = tuple(
+            repository
+            for repository, repository_details in details.items()
+            if repository_details.is_private
+        )
+        if not private:
+            return None
+        site = self.dispatch_workflow.site
+        secret = self.github.attempt_get(
+            PlanSiteSecret.NOTES_TOKEN.path_on(site.repository)
+        )
+        if secret.failure is None:
+            return None
+        if (
+            isinstance(secret.failure, GitHubRequestFailed)
+            and secret.failure.status == HTTPStatus.NOT_FOUND
+        ):
+            return PrivateNotesAccess(site, private)
+        return PrivateNotesAccess(site, private, secret.failure)
+
     def write_merge_workflow(
-        self, report: PublicationReport
+        self, notes_details: RepositoryDetails, report: PublicationReport
     ) -> MergeWorkflowProposal | None:
         """
         Write the merge workflow onto :attr:`merge_workflow_branch` for a pull request
         into the notes repository's default branch, so it reaches that branch through
         the repository's own checks.
 
+        :param notes_details: The notes repository's details.
         :param report: Where to record the writes.
         :return: The workflow left for the user to merge, or ``None`` when the default
             branch holds it or, for a fork, is left without it.
         """
         notes_repository = self.dispatch_workflow.notes_repository
-        if RepositoryDetails.from_json(
-            self.github.get(notes_repository.api_path)
-        ).is_fork:
+        if notes_details.is_fork:
             report.skipped.append(self.fork_skip_reason)
             return None
         workflow = MergeWorkflow(self.dispatch_workflow)
