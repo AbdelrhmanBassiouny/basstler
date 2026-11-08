@@ -1,6 +1,6 @@
 ---
 name: plan-create
-description: Create a multi-PR plan on the personal-notes branch, or migrate a roadmap doc into one, which publishes its page on the plan site. Invoke as "/plan-create <plan-id>". Use when asked to start tracking work as a plan.
+description: Create a multi-PR plan on the personal-notes branch, or migrate a roadmap doc into one, which publishes its page on the plan site. Invoke as "/plan-create {plan-id}". Use when asked to start tracking work as a plan.
 allowed-tools: Bash, Read, Write, Grep, Glob, AskUserQuestion, Skill, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_write, mcp__github__create_pull_request, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
@@ -113,6 +113,14 @@ work that has landed are left out: they live in git and on the pull requests.
 (items per plan, characters per note and blocker, roadmap entries), so a
 source doc that does not fit is condensed now, or split into more than one
 plan, rather than migrated whole.
+
+A rule that holds for every plan of the repository is not a roadmap entry: it is
+a repository rule, shown in every item brief and on every plan page of the
+repository. List them with `basstler repository-rules show`, and add or reword
+one with `basstler repository-rules set <id> <text>`. To set several at once,
+write them to a YAML file in the rules file's own format (`rules:`, each entry an
+`id` and `text`) and run `basstler repository-rules import <file>`: the file is
+validated before anything is pushed, and its rules land in one commit.
 
 ## 4. Cross-check every named branch/PR against live GitHub state
 
