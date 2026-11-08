@@ -8,9 +8,10 @@ from __future__ import annotations
 from pathlib import Path
 
 from cyclopts import App
+from cyclopts.types import ExistingFile
 
 from basstler.exit_codes import ExitCode
-from basstler.plan.repository_rules import RepositoryRule
+from basstler.plan.repository_rules import RepositoryRule, RepositoryRules
 from basstler.plan.repository_rules_store import RepositoryRulesStore
 from basstler.standard_streams import StandardStreamHandler
 
@@ -68,6 +69,24 @@ def set_rule(identifier: str, text: str) -> RepositoryRulesExitCode:
     store.write(
         store.read().with_rule(RepositoryRule(identifier=identifier, text=text)),
         f"Set repository rule {identifier}",
+    )
+    return RepositoryRulesExitCode.SUCCESS
+
+
+@repository_rules_app.command(name="import")
+def import_rules(file: ExistingFile) -> RepositoryRulesExitCode:
+    """
+    Set every rule a rules file holds, as :func:`set_rule` sets one, in a single push.
+
+    :param file: A YAML file in the rules file's own format.
+    :raises pydantic.ValidationError: If the file does not hold valid rules; nothing is
+        pushed.
+    """
+    imported = RepositoryRules.from_file(file)
+    store = RepositoryRulesStore.from_project_root(Path.cwd())
+    store.write(
+        store.read().with_rules(imported),
+        f"Set repository rules {', '.join(imported.identifiers)}",
     )
     return RepositoryRulesExitCode.SUCCESS
 

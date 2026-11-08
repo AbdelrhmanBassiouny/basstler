@@ -343,6 +343,12 @@ class DatasetLocation(PathEnumeration):
     A repository's plan rules file holding two rules.
     """
 
+    REPOSITORY_RULES_IMPORT = DIRECTORY / "repository-rules-import.yaml"
+    """
+    Rules to import into :attr:`REPOSITORY_RULES`: one rewording a rule it holds, one
+    new.
+    """
+
     REPOSITORY_RULES_DUPLICATE_IDENTIFIER = (
         DIRECTORY / "repository-rules-duplicate-identifier.yaml"
     )

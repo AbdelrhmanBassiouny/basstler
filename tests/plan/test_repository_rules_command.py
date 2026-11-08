@@ -7,12 +7,14 @@ from __future__ import annotations
 
 from pathlib import PurePosixPath
 
+import pydantic
 import pytest
 
 from basstler.locations import ProjectLocation
 from basstler.plan.repository_rules import RepositoryRule, RepositoryRules
 from basstler.plan.repository_rules_command import (
     RepositoryRulesExitCode,
+    import_rules,
     remove_rule,
     set_rule,
     show_rules,
@@ -64,6 +66,10 @@ def published_rules(repository: ScratchRepository) -> RepositoryRules:
 
 
 class TestEditingRulesOnTheNotesBranch:
+    """
+    Each editing command pushes the rules it leaves to the notes remote.
+    """
+
     def test_a_new_rule_is_pushed(self, rules_repository: ScratchRepository):
         added = RepositoryRule(identifier="secure", text="Least privilege.")
 
@@ -93,6 +99,30 @@ class TestEditingRulesOnTheNotesBranch:
             RepositoryRulesExitCode.UNKNOWN_RULE,
             STARTING_RULES,
         )
+
+    def test_imported_rules_are_pushed(self, rules_repository: ScratchRepository):
+        """
+        Every rule of the imported file is set on the notes remote.
+        """
+        imported = RepositoryRules.from_file(DatasetLocation.REPOSITORY_RULES_IMPORT)
+
+        status = import_rules(DatasetLocation.REPOSITORY_RULES_IMPORT)
+
+        assert (status, published_rules(rules_repository)) == (
+            RepositoryRulesExitCode.SUCCESS,
+            STARTING_RULES.with_rules(imported),
+        )
+
+    def test_an_invalid_import_changes_nothing(
+        self, rules_repository: ScratchRepository
+    ):
+        """
+        A file that does not hold valid rules is refused before anything is pushed.
+        """
+        with pytest.raises(pydantic.ValidationError):
+            import_rules(DatasetLocation.REPOSITORY_RULES_DUPLICATE_IDENTIFIER)
+
+        assert published_rules(rules_repository) == STARTING_RULES
 
 
 # %% showing

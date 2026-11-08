@@ -4,6 +4,7 @@ The rules every plan of a repository follows, kept on the repository's notes bra
 
 from __future__ import annotations
 
+from functools import reduce
 from pathlib import Path
 from typing import Annotated
 
@@ -107,6 +108,13 @@ class RepositoryRules(ValidatedJSONModel):
                 for held in self.rules
             ]
         )
+
+    def with_rules(self, rules: RepositoryRules) -> RepositoryRules:
+        """
+        :param rules: The rules to set, each as :meth:`with_rule` sets one.
+        :return: These rules with all of them, in their order.
+        """
+        return reduce(RepositoryRules.with_rule, rules.rules, self)
 
     def without(self, identifier: str) -> RepositoryRules:
         """

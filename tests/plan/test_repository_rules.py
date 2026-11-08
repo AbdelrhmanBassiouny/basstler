@@ -65,6 +65,10 @@ class TestReadingRules:
 
 
 class TestEditingRules:
+    """
+    Adding, rewording and removing rules returns new rules and keeps their order.
+    """
+
     def test_a_new_rule_is_appended(self, rules: RepositoryRules):
         added = RepositoryRule(identifier="secure", text="Least privilege.")
 
@@ -81,3 +85,11 @@ class TestEditingRules:
     def test_removing_an_unknown_rule_is_refused(self, rules: RepositoryRules):
         with pytest.raises(UnknownRepositoryRuleError):
             rules.without("missing")
+
+    def test_every_imported_rule_is_set_in_its_order(self, rules: RepositoryRules):
+        """
+        Importing rewords the rules it shares an id with and appends the rest.
+        """
+        imported = RepositoryRules.from_file(DatasetLocation.REPOSITORY_RULES_IMPORT)
+
+        assert rules.with_rules(imported).rules == [FIRST_RULE, *imported.rules]
