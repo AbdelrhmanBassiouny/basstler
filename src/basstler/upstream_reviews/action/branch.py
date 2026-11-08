@@ -64,9 +64,10 @@ class BasstlerSource(StrEnum):
 
     REPOSITORY = "KAOS-repositories/basstler"
     REUSABLE_WORKFLOW = ".github/workflows/upstream-reviews-action.yml"
-    LATEST_RELEASE = "main"
+    LATEST_RELEASE = "release"
     """
-    The branch every release is tagged on, so it always holds the latest one.
+    The branch the release workflow moves to each release's tag, so it always holds the
+    latest one.
     """
 
 
