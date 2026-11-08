@@ -181,8 +181,20 @@ items:
   session: https://claude.ai/code/session_018wfiv5aUKe85gftP8o1U1C
   depends_on: []
   status: in progress
-  notes: 'External report #152 (tomsch420). Draft bug PR #170 off main, proposal posted on #152
-    2026-11-08 and implemented at once: the build takes an optional notes_token secret (site repository''s
-    PLAN_SITE_NOTES_TOKEN) for GH_TOKEN and git; publication writes nothing for a private registry or notes
-    repository when that secret is known missing. Open: replies on #152 and review.'
+  notes: 'External report #152 (tomsch420), and #153''s private work repository of another owner. Draft
+    bug PR #170 off main: the build takes an optional read_token secret (site repository''s PLAN_SITE_READ_TOKEN)
+    for GH_TOKEN and git; publication checks the registry, the hub''s repositories and every repository their
+    plans name, and writes nothing when one is private and the secret is known missing. Rendering unreadable
+    items without failing the site is unreadable-repository-items. Open: review.'
+
+- id: unreadable-repository-items
+  title: Plan site renders items whose repository it cannot read, instead of failing the whole site
+  track: status
+  depends_on:
+  - basstler-packages/uv-workspace
+  status: not started
+  notes: 'From #153 (tomsch420) and #170''s review: one repository the build cannot read (a 404 listing
+    a private repository''s pull requests) fails every plan on the site. Render those items without live
+    state, with a visible note naming the repository and the PLAN_SITE_READ_TOKEN fix, so the rest of the
+    site still builds. Depends on uv-workspace for its freeze on new plan_site branches.'
 tracking_issue: 135
