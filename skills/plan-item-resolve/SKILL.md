@@ -1,6 +1,6 @@
 ---
 name: plan-item-resolve
-description: Resolve what stalls an underway plan item - conflicts, CI, review threads, tracking-issue discussion - on its existing branch, per the execution mode. Invoke as "/plan-item-resolve <plan-id> <item-id>" or "/plan-item-resolve <pull-request-number>". Use from a plan page's Resolve/Resume/Reconsider link or when asked to resolve, unblock or resume an item.
+description: Resolve what stalls an underway plan item - conflicts, CI, review threads, tracking-issue discussion - on its existing branch, per the execution mode. Invoke as "/plan-item-resolve {plan-id} {item-id}" or "/plan-item-resolve {pull-request-number}". Use from a plan page's Resolve/Resume/Reconsider link or when asked to resolve, unblock or resume an item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__update_pull_request, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
