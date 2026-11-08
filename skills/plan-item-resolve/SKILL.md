@@ -187,6 +187,11 @@ item is already underway rather than being started:
     pushing anything; never flip it back on a guess.
   - **Draft** — keep it a draft, per the user's own convention.
 
+Push the item's branch, from its checkout, only with
+`"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" maintenance push`: it checks the move
+against a board it exports now and pushes only when that is clear. Any status
+but 0 means nothing was pushed - never follow it with a `git push` of your own.
+
 Once the fix is pushed, carry it into the pull requests stacked on this item's
 branch, which a resolve otherwise leaves holding the state it replaced — follow
 [`propagating-a-fix.md`](./propagating-a-fix.md).
