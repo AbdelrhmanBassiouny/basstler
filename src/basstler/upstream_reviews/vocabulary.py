@@ -8,9 +8,18 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any, Self, TypeVar
+from typing import Annotated, Any, Self, TypeVar, get_args
 
-from pydantic import BeforeValidator, ConfigDict, GetCoreSchemaHandler, TypeAdapter
+from pydantic import (
+    AliasChoices,
+    AliasPath,
+    ConfigDict,
+    Field,
+    GetCoreSchemaHandler,
+    TypeAdapter,
+)
+from pydantic.dataclasses import dataclass
+from pydantic.fields import FieldInfo
 from pydantic_core import core_schema
 
 from basstler.class_property import classproperty
@@ -55,18 +64,106 @@ class ValidatedJSONModel(JSONModel):
         """
         return TypeAdapter(cls).validate_python(data)
 
+    def to_json(self) -> dict[str, Any]:
+        """
+        :return: The object, each field written under its alias where it has one.
+        """
+        return TypeAdapter(type(self)).dump_python(self, mode="json", by_alias=True)
+
     @classproperty
     def read_keys(cls) -> frozenset[str]:
         """
         Every key the model reads out of its object, at any depth.
         """
-        schema = TypeAdapter(cls).json_schema(by_alias=True)
-        definitions = [schema, *schema.get("$defs", {}).values()]
-        return frozenset(
-            key
-            for definition in definitions
-            for key in definition.get("properties", {})
-        )
+        keys: set[str] = set()
+        for name, field_info in cls.__pydantic_fields__.items():
+            keys |= cls.field_keys(name, field_info)
+            for model in cls.nested_models(field_info.annotation):
+                keys |= model.read_keys
+        return frozenset(keys)
+
+    @staticmethod
+    def field_keys(name: str, field_info: FieldInfo) -> set[str]:
+        """
+        :param name: The field's name.
+        :param field_info: The field.
+        :return: Every key the field is read from, each step of a nested key path
+            included.
+        """
+        alias = field_info.validation_alias or field_info.alias or name
+        choices = alias.choices if isinstance(alias, AliasChoices) else [alias]
+        paths = [
+            choice.path if isinstance(choice, AliasPath) else [choice]
+            for choice in choices
+        ]
+        return {step for path in paths for step in path if isinstance(step, str)}
+
+    @staticmethod
+    def nested_models(annotation: Any) -> list[type[ValidatedJSONModel]]:
+        """
+        :param annotation: A field's type.
+        :return: Every model the type holds, at any depth of its type arguments.
+        """
+        if isinstance(annotation, type) and issubclass(annotation, ValidatedJSONModel):
+            return [annotation]
+        return [
+            model
+            for argument in get_args(annotation)
+            for model in ValidatedJSONModel.nested_models(argument)
+        ]
+
+
+class RawValueReader(ABC):
+    """
+    A field annotation that turns the value GitHub sent into the one the field's type
+    validates.
+    """
+
+    @abstractmethod
+    def read(self, value: Any) -> Any:
+        """
+        :param value: The value as GitHub sent it.
+        :return: The value the field's type validates.
+        """
+
+    def __get_pydantic_core_schema__(
+        self, source: type[Any], handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        """
+        :return: How pydantic reads the field: :meth:`read`, then the field's type.
+        """
+        return core_schema.no_info_before_validator_function(self.read, handler(source))
+
+
+class GraphQLNodes(RawValueReader):
+    """
+    Reads a GraphQL connection, which holds a list-valued field's entries under
+    ``nodes``, as those entries.
+    """
+
+    def read(self, value: dict[str, Any] | list[Any]) -> list[Any]:
+        if isinstance(value, list):
+            return value
+        return value["nodes"]
+
+
+class AbsentAsEmpty(RawValueReader):
+    """
+    Reads a text GitHub reports as null as empty text.
+    """
+
+    def read(self, value: str | None) -> str:
+        return value or ""
+
+
+class Conclusion(RawValueReader):
+    """
+    Reads the conclusion GitHub gives a check run or workflow run, null while it runs,
+    as its :class:`CheckOutcome`.
+    """
+
+    def read(self, value: str | None) -> CheckOutcome:
+        return CheckOutcome.from_conclusion(value)
 
 
 Node = TypeVar("Node")
@@ -75,21 +172,22 @@ Whatever model the entries of a connection are parsed into.
 """
 
 
-def connection_nodes(connection: dict[str, Any] | list[Any]) -> list[Any]:
-    """
-    :param connection: A GraphQL connection object, or its entries already listed.
-    :return: The connection's entries.
-    """
-    if isinstance(connection, list):
-        return connection
-    return connection["nodes"]
+GraphQLConnection = Annotated[list[Node], GraphQLNodes()]
+"""
+A list-valued GraphQL field, which GitHub returns as a connection.
+"""
 
 
-Connection = Annotated[list[Node], BeforeValidator(connection_nodes)]
-"""
-A list-valued GraphQL field, which GitHub returns as an object holding the entries
-under ``nodes``.
-"""
+@dataclass(frozen=True)
+class WebPage(ValidatedJSONModel):
+    """
+    A REST resource that has a page of its own on github.com.
+    """
+
+    url: Annotated[str, Field(alias="html_url")]
+    """
+    The address of its page.
+    """
 
 
 # %% wire vocabulary
@@ -191,26 +289,6 @@ class PullRequestState(StrEnum):
     MERGED = "MERGED"
 
 
-class CheckContextType(StrEnum):
-    """
-    The two shapes GitHub returns inside a status check rollup.
-
-    A pull request can carry both at once: Actions jobs arrive as check runs, while
-    anything reporting through the older commit-status API arrives as a status
-    context, and each spells its outcome with its own field.
-    """
-
-    CHECK_RUN = "CheckRun"
-    """
-    A check run, such as a GitHub Actions job, whose outcome is its conclusion.
-    """
-
-    STATUS_CONTEXT = "StatusContext"
-    """
-    A commit status posted through the commit-status API, whose outcome is its state.
-    """
-
-
 class CheckOutcome(NamedAsGitHub):
     """
     Where one check stands, over both shapes a rollup can hold.
@@ -302,9 +380,7 @@ class CheckOutcome(NamedAsGitHub):
         return RollupState.FAILURE
 
 
-ConclusionOutcome = Annotated[
-    CheckOutcome, BeforeValidator(CheckOutcome.from_conclusion)
-]
+ConclusionOutcome = Annotated[CheckOutcome, Conclusion()]
 """
 A check's outcome, read from the conclusion GitHub gives a check run or workflow run.
 """

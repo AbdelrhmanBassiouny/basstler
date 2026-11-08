@@ -18,10 +18,11 @@ from basstler.standard_streams import StandardStreamHandler
 from basstler.github.client import (
     GitHubReader,
 )
+from basstler.github.workflow_run import WorkflowRun
 from basstler.upstream_reviews.vocabulary import (
     CheckOutcome,
-    ConclusionOutcome,
     ValidatedJSONModel,
+    WebPage,
 )
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -38,24 +39,14 @@ The most runs GitHub lists on one page.
 
 
 @validated_dataclass(frozen=True)
-class ListedRun(ValidatedJSONModel):
+class ListedRun(WorkflowRun, WebPage):
     """
-    One run in a repository's run listing.
+    One run, as a repository's run listing describes it.
     """
 
-    workflow: Annotated[Path, Field(alias="path")]
+    workflow_file_path: Annotated[Path, Field(alias="path")]
     """
     The workflow file it ran, relative to its repository's root.
-    """
-
-    outcome: Annotated[ConclusionOutcome, Field(alias="conclusion")]
-    """
-    How it ended, :attr:`CheckOutcome.PENDING` while it runs.
-    """
-
-    url: Annotated[str, Field(alias="html_url")]
-    """
-    The address of the run's page on github.com, where its log is.
     """
 
     created_at: datetime
@@ -70,7 +61,7 @@ class RunListing(ValidatedJSONModel):
     The latest runs on one branch of a repository, newest first.
     """
 
-    runs: Annotated[list[ListedRun], Field(alias="workflow_runs")]
+    workflow_runs: list[ListedRun]
     """
     The runs.
     """
@@ -110,21 +101,26 @@ class RunListing(ValidatedJSONModel):
         :param workflow: The workflow.
         :return: The listing of its runs alone.
         """
-        return RunListing([run for run in self.runs if run.workflow == workflow])
+        return RunListing(
+            [run for run in self.workflow_runs if run.workflow_file_path == workflow]
+        )
 
     def count(self, outcome: CheckOutcome) -> int:
         """
         :param outcome: How a run ended.
         :return: How many listed runs ended so.
         """
-        return sum(run.outcome is outcome for run in self.runs)
+        return sum(run.outcome is outcome for run in self.workflow_runs)
 
     def latest(self, workflow: WorkflowLocation) -> ListedRun | None:
         """
         :param workflow: The workflow.
         :return: Its latest run, ``None`` when the listing holds none.
         """
-        return next((run for run in self.runs if run.workflow == workflow), None)
+        return next(
+            (run for run in self.workflow_runs if run.workflow_file_path == workflow),
+            None,
+        )
 
     def latest_success(self, workflow: WorkflowLocation) -> ListedRun | None:
         """
@@ -134,8 +130,9 @@ class RunListing(ValidatedJSONModel):
         return next(
             (
                 run
-                for run in self.runs
-                if run.workflow == workflow and run.outcome is CheckOutcome.SUCCESS
+                for run in self.workflow_runs
+                if run.workflow_file_path == workflow
+                and run.outcome is CheckOutcome.SUCCESS
             ),
             None,
         )

@@ -402,7 +402,7 @@ class RepositoryDispatch(DispatchReading):
         if self.latest_run is None:
             return f"it has no dispatch run on '{self.notes_branch}'"
         return (
-            f"{self.runs.count(CheckOutcome.FAILURE)} of its {len(self.runs.runs)} "
+            f"{self.runs.count(CheckOutcome.FAILURE)} of its {len(self.runs.workflow_runs)} "
             f"latest dispatch runs failed, the latest is {self.latest_run.outcome} "
             f"({self.latest_run.url})"
         )

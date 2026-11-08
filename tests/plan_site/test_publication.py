@@ -1050,10 +1050,12 @@ def test_a_failed_dispatch_run_is_linked_from_the_step_it_leaves_to_the_user(
 
     latest_run = pending_step(report, UserStep.STORE_TOKEN).latest_run
     assert latest_run == ListedRun(
-        Path(DispatchWorkflow.location),
-        CheckOutcome.FAILURE,
-        "https://github.com/an-owner/a-repository/actions/runs/4004",
-        datetime(2026, 10, 2, 10, tzinfo=UTC),
+        url="https://github.com/an-owner/a-repository/actions/runs/4004",
+        identifier=4004,
+        commit="4004" * 10,
+        outcome=CheckOutcome.FAILURE,
+        workflow_file_path=Path(DispatchWorkflow.location),
+        created_at=datetime(2026, 10, 2, 10, tzinfo=UTC),
     )
 
 

@@ -310,14 +310,14 @@ class GitHubRepository(
 
     def check_state(self, commit: str) -> RollupState:
         runs = [
-            run.result
+            run
             for page in self.client.get_pages(
                 self._listing(self._commit_report(commit, CommitReport.CHECK_RUNS), {})
             )
             for run in RestCheckRunPage.from_json(page).check_runs
         ]
         statuses = [
-            status.result
+            status
             for page in self.client.get_pages(
                 self._listing(self._commit_report(commit, CommitReport.STATUS), {})
             )

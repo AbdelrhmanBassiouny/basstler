@@ -272,7 +272,7 @@ def test_every_failed_run_is_counted():
 
     dispatch = dispatch_of(listing, TOKEN_BEFORE_FAILURE)
 
-    assert dispatch.runs.count(CheckOutcome.FAILURE) == len(recorded.runs)
+    assert dispatch.runs.count(CheckOutcome.FAILURE) == len(recorded.workflow_runs)
 
 
 def test_a_failed_run_reports_the_dispatch_run_history():

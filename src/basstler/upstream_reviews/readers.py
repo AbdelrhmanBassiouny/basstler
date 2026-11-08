@@ -369,12 +369,12 @@ class RestPullRequestReader(PullRequestSource):
         :return: The checks, or ``None`` when nothing has reported.
         """
         runs = [
-            run.result
+            run
             for page in self.client.get_pages(self.route.check_runs(sha))
             for run in RestCheckRunPage.from_json(page).check_runs
         ]
         statuses = [
-            status.result
+            status
             for page in self.client.get_pages(self.route.commit_status(sha))
             for status in RestCombinedStatusPage.from_json(page).statuses
         ]

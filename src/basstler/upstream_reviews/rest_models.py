@@ -22,14 +22,19 @@ from basstler.upstream_reviews.review_models import (
     ThreadComment,
 )
 from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-    ConclusionOutcome,
     PullRequestState,
     ReviewState,
     ValidatedJSONModel,
+    WebPage,
 )
 
 # %% models mirroring the REST data
+
+
+class RestResponse:
+    """
+    A model of one whole response a REST read parses, not of an object nested in one.
+    """
 
 
 class RestPullRequestState(StrEnum):
@@ -59,7 +64,7 @@ class RestPullRequestHead(ValidatedJSONModel):
 
 
 @dataclass(frozen=True)
-class RestPullRequestSummary(ValidatedJSONModel):
+class RestPullRequestSummary(RestResponse, WebPage):
     """
     One pull request as REST describes it, whether listed or read on its own.
     """
@@ -72,11 +77,6 @@ class RestPullRequestSummary(ValidatedJSONModel):
     title: str
     """
     Its title.
-    """
-
-    url: Annotated[str, Field(alias="html_url")]
-    """
-    Its web URL.
     """
 
     state: RestPullRequestState
@@ -114,7 +114,7 @@ class RestPullRequestSummary(ValidatedJSONModel):
 
 
 @dataclass(frozen=True)
-class RestReview(ValidatedJSONModel):
+class RestReview(RestResponse, ValidatedJSONModel):
     """
     One review, as REST lists it, whose body and submission time are null until it is
     submitted.
@@ -152,7 +152,7 @@ class RestReview(ValidatedJSONModel):
 
 
 @dataclass(frozen=True)
-class RestReviewComment(ValidatedJSONModel):
+class RestReviewComment(RestResponse, WebPage):
     """
     One review comment, as REST lists every comment on a pull request.
     """
@@ -177,11 +177,6 @@ class RestReviewComment(ValidatedJSONModel):
     When the comment was posted, as an ISO 8601 timestamp.
     """
 
-    url: Annotated[str, Field(alias="html_url")]
-    """
-    The permalink to this comment.
-    """
-
     @property
     def comment(self) -> ThreadComment:
         """:return: The comment, as the report reads it."""
@@ -195,7 +190,7 @@ class RestReviewComment(ValidatedJSONModel):
 
 
 @dataclass(frozen=True)
-class RestReviewThread(ValidatedJSONModel):
+class RestReviewThread(RestResponse, ValidatedJSONModel):
     """
     One review thread, as a Claude Code session's proxy reports it: its state and
     location, and the comments in it named by identifier only.
@@ -252,74 +247,19 @@ class RestReviewThread(ValidatedJSONModel):
 
 
 @dataclass(frozen=True)
-class RestCheckRun(ValidatedJSONModel):
-    """
-    One check run, such as a GitHub Actions job, whose conclusion is null until it
-    finishes.
-    """
-
-    name: str
-    """
-    What the check calls itself.
-    """
-
-    outcome: Annotated[ConclusionOutcome, Field(alias="conclusion")]
-    """
-    Where the check stands.
-    """
-
-    url: Annotated[str | None, Field(alias="details_url")]
-    """
-    Where the check's own output is.
-    """
-
-    @property
-    def result(self) -> CheckResult:
-        """:return: The check, as the report reads it."""
-        return CheckResult(name=self.name, outcome=self.outcome, url=self.url or "")
-
-
-@dataclass(frozen=True)
-class RestCheckRunPage(ValidatedJSONModel):
+class RestCheckRunPage(RestResponse, ValidatedJSONModel):
     """
     One page of the check runs reported against a commit.
     """
 
-    check_runs: list[RestCheckRun]
+    check_runs: list[CheckResult]
     """
     The check runs on this page.
     """
 
 
 @dataclass(frozen=True)
-class RestCommitStatus(ValidatedJSONModel):
-    """
-    One status posted through the commit-status API.
-    """
-
-    name: Annotated[str, Field(alias="context")]
-    """
-    What the status calls itself.
-    """
-
-    outcome: Annotated[CheckOutcome, Field(alias="state")]
-    """
-    Where the status stands.
-    """
-
-    url: Annotated[str | None, Field(alias="target_url")]
-    """
-    Where the status's own output is.
-    """
-
-    @property
-    def result(self) -> CheckResult:
-        """:return: The check, as the report reads it."""
-        return CheckResult(name=self.name, outcome=self.outcome, url=self.url or "")
-
-
-@dataclass(frozen=True)
-class RestCombinedStatusPage(ValidatedJSONModel):
+class RestCombinedStatusPage(RestResponse, ValidatedJSONModel):
     """
     One page of the statuses posted against a commit.
 
@@ -327,7 +267,7 @@ class RestCombinedStatusPage(ValidatedJSONModel):
     posted at all, which would misreport a commit no status applies to.
     """
 
-    statuses: list[RestCommitStatus]
+    statuses: list[CheckResult]
     """
     The statuses on this page.
     """

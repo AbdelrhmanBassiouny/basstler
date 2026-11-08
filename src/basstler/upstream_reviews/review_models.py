@@ -12,7 +12,7 @@ from pydantic.dataclasses import dataclass
 
 from basstler.class_property import classproperty
 from basstler.upstream_reviews.vocabulary import (
-    Connection,
+    GraphQLConnection,
     PullRequestState,
     ReviewState,
     ThreadMarker,
@@ -116,7 +116,7 @@ class ReviewThread(ValidatedJSONModel):
     The line the thread is attached to, absent once the hunk is outdated.
     """
 
-    comments: Connection[ThreadComment]
+    comments: GraphQLConnection[ThreadComment]
     """
     Every comment in the thread, oldest first.
     """

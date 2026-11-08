@@ -104,7 +104,7 @@ class UpstreamPullRequestReport:
             "",
         ]
         for result in unsuccessful:
-            location = f" <{result.url}>" if result.url else ""
+            location = f" <{result.target_url}>" if result.target_url else ""
             lines.append(f"- **{result.name}** — {result.outcome}{location}")
         lines.append("")
         return lines

@@ -9,7 +9,7 @@ import json
 from dataclasses import asdict, dataclass, field
 from typing import Annotated, Any
 
-from pydantic import AliasPath, Field, model_validator
+from pydantic import AliasChoices, AliasPath, Field
 from pydantic.dataclasses import dataclass as validated_dataclass
 
 from basstler.upstream_reviews.exceptions import (
@@ -22,9 +22,10 @@ from basstler.upstream_reviews.review_models import (
     ReviewThreadPage,
 )
 from basstler.upstream_reviews.vocabulary import (
-    CheckContextType,
+    AbsentAsEmpty,
     CheckOutcome,
-    Connection,
+    ConclusionOutcome,
+    GraphQLConnection,
     RollupState,
     ValidatedJSONModel,
 )
@@ -35,46 +36,34 @@ from basstler.upstream_reviews.vocabulary import (
 @validated_dataclass(frozen=True)
 class CheckResult(ValidatedJSONModel):
     """
-    One check reported against the pull request's head commit.
+    One check reported against the pull request's head commit: a check run, such as a
+    GitHub Actions job, or a status posted through the commit-status API.
     """
 
-    name: str
+    name: Annotated[str, Field(validation_alias=AliasChoices("name", "context"))]
     """
     What the check calls itself.
     """
 
-    outcome: CheckOutcome
+    outcome: Annotated[
+        ConclusionOutcome, Field(validation_alias=AliasChoices("conclusion", "state"))
+    ]
     """
     Where the check stands.
     """
 
-    url: str
+    target_url: Annotated[
+        str,
+        AbsentAsEmpty(),
+        Field(
+            validation_alias=AliasChoices(
+                "detailsUrl", "targetUrl", "details_url", "target_url"
+            )
+        ),
+    ]
     """
     Where the check's own output is, empty when it reported none.
     """
-
-    @model_validator(mode="before")
-    @classmethod
-    def read_rollup_context(cls, data: Any) -> Any:
-        """
-        :param data: A rollup context node, in either shape a rollup can hold, or the
-            arguments the check is constructed with.
-        :return: The check's own fields.
-        :raises ValueError: If the node is neither shape a rollup can hold.
-        """
-        if not isinstance(data, dict):
-            return data
-        if CheckContextType(data["__typename"]) is CheckContextType.CHECK_RUN:
-            return {
-                "name": data["name"],
-                "outcome": CheckOutcome.from_conclusion(data["conclusion"]),
-                "url": data["detailsUrl"] or "",
-            }
-        return {
-            "name": data["context"],
-            "outcome": data["state"],
-            "url": data["targetUrl"] or "",
-        }
 
     @property
     def succeeded(self) -> bool:
@@ -93,7 +82,7 @@ class CheckStatus(ValidatedJSONModel):
     The verdict GitHub computed over all of them.
     """
 
-    results: Annotated[Connection[CheckResult], Field(alias="contexts")]
+    results: Annotated[GraphQLConnection[CheckResult], Field(alias="contexts")]
     """
     Every check, in the order GitHub returned them.
     """
@@ -164,12 +153,12 @@ class PullRequest(ValidatedJSONModel):
     Its web URL.
     """
 
-    commits: Connection[PullRequestCommit]
+    commits: GraphQLConnection[PullRequestCommit]
     """
     The commits the query selected, which is the head commit alone.
     """
 
-    reviews: Connection[Review]
+    reviews: GraphQLConnection[Review]
     """
     Every submitted review, oldest first.
     """
@@ -275,7 +264,7 @@ class PullRequestForBranchResult(ValidatedJSONModel):
     """
 
     pull_requests: Annotated[
-        Connection[BranchPullRequest],
+        GraphQLConnection[BranchPullRequest],
         Field(validation_alias=AliasPath("repository", "pullRequests")),
     ]
     """

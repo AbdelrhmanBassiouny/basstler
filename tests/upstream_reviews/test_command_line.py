@@ -354,7 +354,7 @@ def test_a_check_run_links_to_its_own_output(current_checks):
         if result.name == RecordedCheck.FAILING
     ]
 
-    assert failed.url == RecordedCheckOutput.FAILING
+    assert failed.target_url == RecordedCheckOutput.FAILING
 
 
 def test_an_unfinished_check_run_reads_as_pending(current_checks):
@@ -895,7 +895,7 @@ def test_a_check_link_names_the_job_behind_it():
     failing = recorded_check(RecordedCheck.FAILING)
 
     assert FailedJob.behind(failing) == FailedJob(
-        int(failing.url.rsplit("/", maxsplit=1)[-1])
+        int(failing.target_url.rsplit("/", maxsplit=1)[-1])
     )
 
 

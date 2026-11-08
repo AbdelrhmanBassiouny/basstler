@@ -16,7 +16,6 @@ query ReviewThreadsPage(
               state
               contexts(first: 100) {
                 nodes {
-                  __typename
                   ... on CheckRun {
                     name
                     conclusion

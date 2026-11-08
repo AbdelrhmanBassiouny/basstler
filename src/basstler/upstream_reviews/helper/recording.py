@@ -29,14 +29,7 @@ from basstler.upstream_reviews.request import (
     HelperJSONKey,
     UpstreamReadRequest,
 )
-from basstler.upstream_reviews.rest_models import (
-    RestCheckRunPage,
-    RestCombinedStatusPage,
-    RestPullRequestSummary,
-    RestReview,
-    RestReviewComment,
-    RestReviewThread,
-)
+from basstler.upstream_reviews.rest_models import RestResponse
 from basstler.upstream_reviews.vocabulary import (
     JSONModel,
 )
@@ -52,17 +45,11 @@ class RecordedFields:
     @classproperty
     def names(cls) -> frozenset[str]:
         """
-        Every field name a REST model reads, at any depth.
+        Every field name a :class:`RestResponse` reads, at any depth.
         """
-        responses = [
-            RestPullRequestSummary,
-            RestReview,
-            RestReviewComment,
-            RestReviewThread,
-            RestCheckRunPage,
-            RestCombinedStatusPage,
-        ]
-        return frozenset().union(*(response.read_keys for response in responses))
+        return frozenset().union(
+            *(response.read_keys for response in RestResponse.__subclasses__())
+        )
 
 
 @dataclass(frozen=True)
