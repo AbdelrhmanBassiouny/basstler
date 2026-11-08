@@ -31,11 +31,12 @@ items:
 
 - id: separate-notes-remote-save
   title: save-plan.sh saves when the notes remote is a separate repository
-  branch: null
-  pull_request_number: null
+  branch: claude/funny-hypatia-rvov5e
+  pull_request_number: 169
   track: fixes
+  session: https://claude.ai/code/session_018wfiv7igVSUpe8ZQWR6Fyq
   depends_on: []
-  status: not started
+  status: in progress
   notes: 'External report #153 (tomsch420), placed 2026-11-07: no item covers it. A regression of #138
     (0f1f5ece): PlanValidator.repository_problems compares default_repository with the notes remote, so
     a separate notes repository never passes. Discuss and reproduce on the issue, then a failing test,
