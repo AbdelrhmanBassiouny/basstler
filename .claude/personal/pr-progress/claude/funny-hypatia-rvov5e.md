@@ -1,11 +1,12 @@
 ## Plan
-- Failing test: save with notes remote in a separate repository, origin naming the plan's repository
-- Validate default_repository against the clone's origin, fail closed on an origin naming no repository
-- Rename --notes-remote-url / notes_repository to --origin-url / checkout_repository
-- Update plan-create checklist and plan-schema.md
+- Validate default_repository against the checkout's origin, failing closed (done)
 
 ## Done
-- Branch, draft PR #169, item recorded in progress
+- Failing test reproducing #153, then the fix: origin replaces the notes remote in the check
+- Renamed --notes-remote-url/notes_repository to --origin-url/checkout_repository; docs updated
+- #138's tests moved to the origin contract (owner-approved); suite green apart from 4 Playwright errors from the environment
+- Reproduction and fix posted on #153; PR #169 labelled bug, still a draft
 
 ## Next
-- Ask the owner before rewriting the tests that encode the notes-remote comparison
+- Owner review of #169
+- Owner to place the plan-site private-repository token problem from #153's comments
