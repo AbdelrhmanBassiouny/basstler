@@ -18,7 +18,7 @@ from typing import Any
 
 import pytest
 
-from basstler.github.label import RepositoryLabel
+from basstler.github.label import NewLabel, RepositoryLabel
 from basstler.exceptions import MalformedEmailAddressError
 from basstler.exit_codes import PersonalNotesSetupExitCode
 from basstler.github_labels import GitHubLabel
@@ -28,7 +28,7 @@ from basstler.locations import (
     PluginSkillLocation,
     ProjectLocation,
 )
-from basstler.github.client import GitHubClient, GitHubResponse, HttpMethod, RequestBody
+from basstler.github.client import GitHubClient, GitHubResponse, GitHubWrite
 from basstler.maintenance.board import AccountField
 from basstler.maintenance.github import (
     GitHubPath,
@@ -99,9 +99,9 @@ class GitHubAnsweringFromMemory(GitHubClient):
     The labels the repository carries.
     """
 
-    created_labels: list[RequestBody] = field(default_factory=list)
+    created_labels: list[GitHubWrite] = field(default_factory=list)
     """
-    Every label-creation payload sent, in order.
+    Every label creation sent, in order.
     """
 
     def get(self, path: str) -> Any:
@@ -113,12 +113,10 @@ class GitHubAnsweringFromMemory(GitHubClient):
             [RepositoryLabel(label).to_json() for label in sorted(self.present_labels)]
         ]
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, body: RequestBody
-    ) -> GitHubResponse:
-        self.created_labels.append(body)
-        self.present_labels.add(RepositoryLabel.from_json(body.to_json()).name)
-        return GitHubResponse(body.to_json())
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        self.created_labels.append(write)
+        self.present_labels.add(RepositoryLabel.from_json(write.to_json()).name)
+        return GitHubResponse(write.to_json())
 
     def as_repository(self) -> GitHubRepository:
         """
@@ -466,7 +464,10 @@ def test_creates_only_the_missing_labels_when_asked():
     labels_setup(SetupOption.CREATE_LABELS, github=github).check_labels()
 
     assert github.created_labels == [
-        RepositoryLabel(GitHubLabel.IN_REVIEW, GitHubLabel.IN_REVIEW.purpose)
+        NewLabel(
+            github.repository,
+            RepositoryLabel(GitHubLabel.IN_REVIEW, GitHubLabel.IN_REVIEW.purpose),
+        )
     ]
 
 

@@ -47,7 +47,7 @@ from basstler.github.client import (
     GitHubClient,
     GitHubRestClient,
 )
-from basstler.upstream_reviews.vocabulary import BasstlerSource
+from basstler.upstream_reviews.action.branch import BasstlerSource
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

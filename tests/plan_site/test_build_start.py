@@ -17,7 +17,7 @@ from basstler.github.client import (
     GitHubAttemptClient,
     GitHubResponse,
     HttpMethod,
-    RequestBody,
+    GitHubWrite,
 )
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
@@ -36,7 +36,6 @@ from basstler.plan_site.site_repository import SiteRepository
 from basstler.repository import Repository
 
 from ..constants.paths import DatasetLocation
-from ..github.recorded_client import SentWrite
 
 SITE = SiteRepository(Repository.parse("an-owner/plans"))
 """
@@ -63,7 +62,7 @@ class SiteAnsweringClient(GitHubAttemptClient):
     The status reading the site repository is refused with, ``None`` to answer it.
     """
 
-    writes: list[SentWrite] = field(default_factory=list)
+    writes: list[GitHubWrite] = field(default_factory=list)
     """
     Every write sent, oldest first.
     """
@@ -82,10 +81,8 @@ class SiteAnsweringClient(GitHubAttemptClient):
             ),
         )
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, body: RequestBody
-    ) -> GitHubResponse:
-        self.writes.append(SentWrite(method, path, body))
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        self.writes.append(write)
         return GitHubResponse(None)
 
 
@@ -102,10 +99,10 @@ def test_the_build_is_dispatched_on_the_site_s_default_branch():
 
     assert attempt.started
     assert client.writes == [
-        SentWrite(
-            HttpMethod.POST,
-            SITE.repository.workflow_dispatch_path(WorkflowLocation.PLAN_SITE),
-            WorkflowDispatch(RepositoryDetails.from_json(SITE_DETAILS).default_branch),
+        WorkflowDispatch(
+            SITE.repository,
+            WorkflowLocation.PLAN_SITE,
+            RepositoryDetails.from_json(SITE_DETAILS).default_branch,
         )
     ]
 

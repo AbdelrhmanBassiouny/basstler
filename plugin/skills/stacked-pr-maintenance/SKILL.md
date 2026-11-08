@@ -1,6 +1,6 @@
 ---
 name: stacked-pr-maintenance
-description: Run one maintenance pass over a fork's stacked pull requests, or over one branch's stack: reparent, restack, and promote approved branches upstream. Invoke as "/stacked-pr-maintenance [fork=<owner/repo>] [upstream=<owner/repo>] [stacked-on=<branch>]". Use when asked to restack or promote the stack, and as the first step of plan-item-kickoff and plan-item-resolve.
+description: Run one maintenance pass over a fork's stacked pull requests, or over one branch's stack: reparent, restack, and promote approved branches upstream. Invoke as "/stacked-pr-maintenance [fork={owner/repo}] [upstream={owner/repo}] [stacked-on={branch}]". Use when asked to restack or promote the stack, and as the first step of plan-item-kickoff and plan-item-resolve.
 allowed-tools: Bash, Read, Write, AskUserQuestion, mcp__github__update_pull_request
 ---
 

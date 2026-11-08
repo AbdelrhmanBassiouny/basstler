@@ -22,10 +22,14 @@ from functools import cached_property
 from enum import StrEnum
 from http import HTTPStatus
 from http.client import HTTPResponse
-from typing import Any
+from typing import Annotated, Any
 
+from pydantic import Field
+
+from basstler.class_property import classproperty
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.credential import CredentialProvider, GitHubCredential
+from basstler.json_model import ValidatedJSONModel
 from basstler.github.exceptions import (
     GitHubCredentialUnavailableError,
     GitHubCallFailed,
@@ -33,7 +37,7 @@ from basstler.github.exceptions import (
     GitHubUnreachableError,
 )
 from basstler.maintenance.constants import GitHubExecutable
-from basstler.repository import GitHubAddress
+from basstler.repository import GitHubAddress, Repository
 
 # %% the interface
 
@@ -85,16 +89,37 @@ class GitHubAttemptReader(ABC):
         """
 
 
-class RequestBody(ABC):
+class GitHubWrite(ValidatedJSONModel, ABC):
     """
-    The JSON body a write sends to the REST API.
+    A change sent to the REST API, carrying the resource it changes.
+
+    Its body is its fields, except those that only name the resource.
     """
 
+    @classproperty
     @abstractmethod
-    def to_json(self) -> dict[str, Any]:
+    def method(cls) -> HttpMethod:
         """
-        :return: The body as the API reads it.
+        How the resource is written.
         """
+
+    @property
+    @abstractmethod
+    def path(self) -> str:
+        """
+        The resource's path.
+        """
+
+
+class RepositoryWrite(GitHubWrite, ABC):
+    """
+    A change to a resource of one repository.
+    """
+
+    repository: Annotated[Repository, Field(exclude=True)]
+    """
+    The repository the resource belongs to.
+    """
 
 
 class GitHubWriter(ABC):
@@ -103,24 +128,20 @@ class GitHubWriter(ABC):
     """
 
     @abstractmethod
-    def attempt_send(
-        self, method: HttpMethod, path: str, body: RequestBody
-    ) -> GitHubResponse:
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
         """
         Like :meth:`send`, but a refusal or a call that got no answer is returned on the
         answer instead of raised.
         """
 
-    def send(self, method: HttpMethod, path: str, body: RequestBody) -> Any:
+    def send(self, write: GitHubWrite) -> Any:
         """
-        :param method: How the resource is written.
-        :param path: The resource's path.
-        :param body: What the write sends.
+        :param write: The change to send.
         :return: The parsed response, ``None`` when it has no body.
         :raises GitHubRequestFailed: If the API refuses the write.
         :raises GitHubUnreachableError: If the write gets no answer.
         """
-        return self.attempt_send(method, path, body).raise_if_failed()
+        return self.attempt_send(write).raise_if_failed()
 
 
 class GitHubAttemptClient(GitHubAttemptReader, GitHubWriter, ABC):
@@ -323,10 +344,8 @@ class GitHubRestClient(GitHubClient, GitHubAttemptClient):
                 break
         return pages
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, body: RequestBody
-    ) -> GitHubResponse:
-        return self._exchange(method, path, body.to_json())
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        return self._exchange(write.method, write.path, write.to_json())
 
     @staticmethod
     def _page_path(path: str, page_number: int) -> str:

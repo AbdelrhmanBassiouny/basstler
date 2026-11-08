@@ -11,10 +11,7 @@ from dataclasses import dataclass
 
 from basstler.github.run_listing import RunListing
 from basstler.maintenance.remote_branch import RemoteBranch
-from basstler.upstream_reviews.vocabulary import (
-    ActionBranch,
-    ActionFile,
-)
+from basstler.upstream_reviews.action.branch import ActionBranch, ActionFile
 from basstler.upstream_reviews.action.exchange import (
     ActionAnswer,
     ActionRequest,
@@ -142,7 +139,7 @@ class ActionRead[AnswerType: ActionAnswer]:
             listing = RunListing.read(self.runs, fork, ActionBranch.NAME)
         except GitHubRequestFailed:
             return
-        run = listing.run_for(commit)
+        run = listing.run_for_commit(commit)
         if run is None:
             raise ActionRunNotStarted(fork, elapsed)
         if run.failed and self.collect() is None:

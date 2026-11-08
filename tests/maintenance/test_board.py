@@ -22,7 +22,7 @@ from basstler.maintenance.board import (
     PullRequestField,
     PullRequestHeadKey,
 )
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
 from basstler.maintenance.commands import BoardCommand, MaintenancePass
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
 from basstler.github.credential import CredentialProvider
@@ -303,12 +303,12 @@ def test_the_export_records_the_verdict_over_the_head_commit_s_checks():
             an_api_record(head_commit=HeadCommit.CHECKED),
             an_api_record(head_commit=HeadCommit.UNCHECKED),
         ],
-        checks=ChecksReportedOn({HeadCommit.CHECKED: RollupState.FAILURE}),
+        checks=ChecksReportedOn({HeadCommit.CHECKED: CombinedCheckState.FAILURE}),
     )
 
     assert [entry.check_state for entry in export.pull_requests] == [
-        RollupState.FAILURE,
-        RollupState.NOT_REPORTED,
+        CombinedCheckState.FAILURE,
+        CombinedCheckState.NOT_REPORTED,
     ]
 
 
@@ -410,7 +410,7 @@ def a_pass_over(
         git=fork_checkout.git,
         board=fork_checkout.project_root / RepositoryStateLocation.BOARD.name,
         listed_fork=ListedRepository(
-            {HeadCommit.CHECKED: RollupState.FAILURE},
+            {HeadCommit.CHECKED: CombinedCheckState.FAILURE},
             records=(
                 an_api_record(
                     number=StackPullRequestNumber.PARENT,
@@ -439,7 +439,7 @@ def test_the_written_board_carries_each_branch_s_upstream_review_and_checks(
 
     [exported] = PullRequest.read_board(maintenance.board)
     assert exported.upstream_pull_request == StackPullRequestNumber.UPSTREAM
-    assert exported.check_state is RollupState.FAILURE
+    assert exported.check_state is CombinedCheckState.FAILURE
 
 
 def test_an_upstream_that_cannot_be_read_stops_the_export_instead_of_guessing(

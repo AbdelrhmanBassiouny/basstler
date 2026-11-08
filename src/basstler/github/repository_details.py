@@ -8,7 +8,7 @@ from typing import Annotated
 
 from pydantic import Field
 
-from basstler.upstream_reviews.vocabulary import ValidatedJSONModel
+from basstler.json_model import ValidatedJSONModel
 
 # %% the repository resource
 

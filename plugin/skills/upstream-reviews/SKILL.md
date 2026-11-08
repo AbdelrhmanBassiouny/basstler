@@ -1,6 +1,6 @@
 ---
 name: upstream-reviews
-description: Report a fork branch's upstream pull request: its CI checks, failure logs and unresolved review threads. Invoke as "/upstream-reviews [<pull-request-number>|<branch>]". Use when asked what upstream reviewers or CI said about a promoted branch.
+description: Report a fork branch's upstream pull request: its CI checks, failure logs and unresolved review threads. Invoke as "/upstream-reviews [{pull-request-number}|{branch}]". Use when asked what upstream reviewers or CI said about a promoted branch.
 allowed-tools: Bash, Read, Skill, mcp__claude-code-remote__add_repo, mcp__claude-code-remote__create_session, mcp__claude-code-remote__get_session, mcp__claude-code-remote__list_events, mcp__claude-code-remote__archive_session
 ---
 

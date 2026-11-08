@@ -198,12 +198,27 @@ class Repository:
         """
         return f"{self.issues_path}/{number}"
 
+    def issue_labels_path(self, number: int) -> str:
+        """
+        :param number: The issue's or pull request's number.
+        :return: The REST path that sets that issue's labels.
+        """
+        return f"{self.issue_path(number)}/labels"
+
     def issue_comments_path(self, number: int) -> str:
         """
         :param number: The issue's number.
         :return: The REST path that lists and posts that issue's comments.
         """
         return f"{self.issue_path(number)}/comments"
+
+    @property
+    def labels_path(self) -> str:
+        """
+        The REST path of the labels defined on the repository, which lists and creates
+        them.
+        """
+        return f"{self.api_path}/labels"
 
     @property
     def pull_requests_path(self) -> str:

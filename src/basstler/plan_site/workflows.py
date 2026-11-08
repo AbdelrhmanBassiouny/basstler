@@ -17,7 +17,8 @@ from basstler.environment import GitHubCredentialVariable
 from basstler.locations import WorkflowLocation
 from basstler.render_common import create_template_environment
 from basstler.repository import Repository
-from basstler.upstream_reviews.vocabulary import BasstlerSource, JSONModel
+from basstler.json_model import JSONModel
+from basstler.upstream_reviews.action.branch import BasstlerSource
 
 if TYPE_CHECKING:
     from basstler.plan_site.site_repository import SiteRepository

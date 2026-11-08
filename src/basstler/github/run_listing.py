@@ -18,11 +18,9 @@ from basstler.github.client import (
     GitHubReader,
 )
 from basstler.github.workflow_run import WorkflowRun
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-    ValidatedJSONModel,
-    WebPage,
-)
+from basstler.github.states import CheckOutcome
+from basstler.github.web_page import WebPage
+from basstler.json_model import ValidatedJSONModel
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -93,7 +91,7 @@ class RunListing(ValidatedJSONModel):
         """
         return cls.from_json(client.get(cls.path(repository, branch)))
 
-    def run_for(self, commit: str) -> ListedRun | None:
+    def run_for_commit(self, commit: str) -> ListedRun | None:
         """
         :param commit: The commit a run was started for.
         :return: The latest run started for it, ``None`` when none was.

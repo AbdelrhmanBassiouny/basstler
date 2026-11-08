@@ -13,7 +13,8 @@ from pydantic import Field
 from basstler.upstream_reviews.pull_request_models import (
     CheckResult,
 )
-from basstler.upstream_reviews.vocabulary import AbsentAsEmpty, ConclusionOutcome
+from basstler.github.states import ConclusionOutcome
+from basstler.github.web_page import AbsentAsEmpty
 from basstler.upstream_reviews.review_models import (
     Author,
     BranchPullRequest,
@@ -21,12 +22,9 @@ from basstler.upstream_reviews.review_models import (
     ReviewThread,
     ThreadComment,
 )
-from basstler.upstream_reviews.vocabulary import (
-    PullRequestState,
-    ReviewState,
-    ValidatedJSONModel,
-    WebPage,
-)
+from basstler.github.states import PullRequestState, ReviewState
+from basstler.github.web_page import WebPage
+from basstler.json_model import ValidatedJSONModel
 
 # %% models mirroring the REST data
 

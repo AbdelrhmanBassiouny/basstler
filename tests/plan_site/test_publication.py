@@ -23,7 +23,7 @@ from basstler.github.client import (
     GitHubResponse,
     GitHubWriter,
     HttpMethod,
-    RequestBody,
+    GitHubWrite,
 )
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import (
@@ -53,12 +53,12 @@ from basstler.plan_site.workflows import (
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.upstream_reviews.rest_models import RestPullRequestSummary
-from basstler.upstream_reviews.vocabulary import BasstlerSource, CheckOutcome
+from basstler.github.states import CheckOutcome
+from basstler.upstream_reviews.action.branch import BasstlerSource
 from basstler.workflows import ActivityType, TriggerEvent, Workflow
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName
-from ..github.recorded_client import SentWrite
 from ..maintenance.fork import UPSTREAM_BASE, ForkCheckout
 from ..upstream_reviews.replay import ReplayingRestClient
 
@@ -97,15 +97,13 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     Why every write fails, ``None`` when none does.
     """
 
-    writes: list[SentWrite] = field(default_factory=list)
+    writes: list[GitHubWrite] = field(default_factory=list)
     """
     Every write sent, oldest first.
     """
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, body: RequestBody
-    ) -> GitHubResponse:
-        self.writes.append(SentWrite(method, path, body))
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        self.writes.append(write)
         if self.failure is not None:
             return GitHubResponse(None, failure=self.failure)
         return GitHubResponse(self.opened)
@@ -579,9 +577,7 @@ def test_the_merge_workflow_follows_the_notes_repository_s_default_branch(
 
     publishing.publication(client).publish()
 
-    assert client.writes == [
-        pull_request_opening(publishing.merge_workflow_proposal_into("trunk"))
-    ]
+    assert client.writes == [publishing.merge_workflow_proposal_into("trunk").opening]
 
 
 def test_the_merge_workflow_runs_when_a_pull_request_closes(tmp_path):
@@ -727,7 +723,7 @@ def test_a_refused_default_branch_opens_a_pull_request_from_the_workflow_s_branc
 
     protected.publication(client).publish()
 
-    assert client.writes == [pull_request_opening(protected.merge_workflow_proposal)]
+    assert client.writes == [protected.merge_workflow_proposal.opening]
 
 
 def test_an_open_pull_request_for_the_workflow_is_not_opened_again(protected):
@@ -750,18 +746,6 @@ def test_merging_the_workflow_merges_its_pull_request(protected):
 
     assert pending_step(report, UserStep.ADD_MERGE_WORKFLOW) == (
         MergeWorkflowProposal.merging(pull_request)
-    )
-
-
-def pull_request_opening(proposal: MergeWorkflowProposal) -> SentWrite:
-    """
-    :param proposal: The workflow's proposal.
-    :return: The request opening its pull request from its branch into its base.
-    """
-    return SentWrite(
-        HttpMethod.POST,
-        proposal.repository.pull_requests_path,
-        proposal.opening,
     )
 
 

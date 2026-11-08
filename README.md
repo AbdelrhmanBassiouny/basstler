@@ -36,7 +36,8 @@ stale.
 - **A release is only a tag on the merge commit.** No file names the version - the build
   reads it from the tag (`hatch-vcs`), and `plugin/.claude-plugin/plugin.json` names none -
   so nothing is pushed to `main` after a merge.
-- **The plugin is served from the `release` branch,** which the same atomic push moves to
+- **The plugin is served from the `plugin-release` branch,** which the same atomic push
+  moves to the tag's `plugin/` directory alone, alongside the `release` branch it moves to
   the tag (`.claude-plugin/marketplace.json` names it as the plugin's `ref`). A synced
   plugin is therefore always a release, and its session start installs that same release:
   a merge whose tests fail, or are still running, reaches no install at all.

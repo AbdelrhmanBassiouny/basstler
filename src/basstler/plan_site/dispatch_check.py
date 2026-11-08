@@ -41,7 +41,8 @@ from basstler.repository import GitHubAddress, Repository
 from basstler.setup.report import CheckResult, CheckStatus
 from basstler.setup.steps import resolve_repository
 from basstler.standard_streams import StandardStreamHandler
-from basstler.upstream_reviews.vocabulary import CheckOutcome, JSONModel
+from basstler.github.states import CheckOutcome
+from basstler.json_model import JSONModel
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
