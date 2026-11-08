@@ -11,6 +11,7 @@ from cyclopts import App
 
 from basstler.code_rules.command_line import code_rules_app
 from basstler.locations import PackageLocation
+from basstler.plan.repository_rules_command import repository_rules_app
 
 app = App(
     name=PackageLocation.DIRECTORY.name,
@@ -22,6 +23,7 @@ The command tree; a v3 command is added with ``@app.command``.
 """
 
 app.command(code_rules_app)
+app.command(repository_rules_app)
 
 if __name__ == "__main__":
     app()

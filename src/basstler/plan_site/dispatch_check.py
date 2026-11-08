@@ -1,6 +1,6 @@
 """
-Print check-setup.sh's plan site status and detail: whether every repository the plan
-site publishes stores the token and starts the site's build from its notes branch.
+Print check-setup.sh's plan site rows: whether the clone's own repository stores the
+token and starts the site's build, then what each other published repository reports.
 
 Usage:
     "${BASSTLER_PYTHON}" -m basstler.plan_site.dispatch_check
@@ -34,13 +34,20 @@ from basstler.personal_notes.branch import PersonalNotesLocation
 from basstler.plan_site import publication
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import published_repositories
-from basstler.plan_site.run_listing import ListedRun, RunListing
+from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
 from basstler.repository import Repository
 from basstler.setup.report import CheckResult, CheckStatus
 from basstler.setup.steps import resolve_repository
-from basstler.upstream_reviews.vocabulary import CheckOutcome, JSONModel
+from basstler.standard_streams import StandardStreamHandler
+from basstler.github.states import CheckOutcome
+from basstler.json_model import JSONModel
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which is also what its command prints through.
+"""
 
 # %% a read GitHub refused
 
@@ -73,17 +80,6 @@ class ReadRefusal:
 
 
 # %% the token each repository stores
-
-
-class SecretKey(StrEnum):
-    """
-    Every field read out of a repository secret's REST response.
-    """
-
-    UPDATED_AT = "updated_at"
-    """
-    When the secret's value was last set.
-    """
 
 
 class SecretState(StrEnum):
@@ -134,9 +130,7 @@ class TokenSecret(JSONModel):
         :param data: A repository secret's REST response.
         :return: The stored secret.
         """
-        return cls(
-            SecretState.STORED, datetime.fromisoformat(data[SecretKey.UPDATED_AT])
-        )
+        return cls(SecretState.STORED, datetime.fromisoformat(data["updated_at"]))
 
     @staticmethod
     def path(repository: Repository) -> str:
@@ -409,9 +403,9 @@ class RepositoryDispatch(DispatchReading):
         if self.latest_run is None:
             return f"it has no dispatch run on '{self.notes_branch}'"
         return (
-            f"{self.runs.count(CheckOutcome.FAILURE)} of its {len(self.runs.runs)} "
+            f"{self.runs.count(CheckOutcome.FAILURE)} of its {len(self.runs.workflow_runs)} "
             f"latest dispatch runs failed, the latest is {self.latest_run.outcome} "
-            f"({self.latest_run.url})"
+            f"({self.latest_run.page_url})"
         )
 
     def describe(self) -> str:
@@ -431,14 +425,14 @@ class RepositoryDispatch(DispatchReading):
             case DispatchState.TOKEN_STORED_AFTER_FAILURE:
                 return (
                     f"{name}'s {PlanSiteSecret.TOKEN} was set after its latest "
-                    f"dispatch run ({self.latest_run.url}), and takes effect at the "
+                    f"dispatch run ({self.latest_run.page_url}), and takes effect at the "
                     f"next push to '{self.notes_branch}'; {self.run_history}"
                 )
             case DispatchState.STOPPED_STARTING_BUILD:
                 causes = "; or ".join(FailureAfterSuccessCause)
                 return (
                     f"{name}'s latest dispatch run is {self.latest_run.outcome} "
-                    f"({self.latest_run.url}), though {self.latest_success.url} "
+                    f"({self.latest_run.page_url}), though {self.latest_success.page_url} "
                     f"succeeded on {self.latest_success.created_at:%Y-%m-%d}; "
                     f"{self.run_history}; {self.token.describe(self.repository)}. "
                     f"Open the failed run's log to see which happened: {causes}"
@@ -446,7 +440,7 @@ class RepositoryDispatch(DispatchReading):
             case DispatchState.RUN_FAILED:
                 return (
                     f"{name}'s latest dispatch run is {self.latest_run.outcome} "
-                    f"({self.latest_run.url}); {self.run_history}; "
+                    f"({self.latest_run.page_url}); {self.run_history}; "
                     f"{self.token.describe(self.repository)}"
                 )
             case DispatchState.STARTS_BUILD:
@@ -465,12 +459,18 @@ What the detail of an unverified plan site check opens with.
 @dataclass(frozen=True)
 class DispatchCheck:
     """
-    Whether every repository the plan site publishes starts its build.
+    Whether the clone's own repository starts the plan site's build, and what the other
+    repositories the site publishes report.
     """
 
-    dispatches: list[DispatchReading]
+    own_repository_dispatch_reading: DispatchReading
     """
-    What was read of each published repository's dispatch.
+    What was read of the clone's own repository's dispatch, the only one judged.
+    """
+
+    other_repositories_dispatch_readings: list[DispatchReading]
+    """
+    What was read of each other published repository's dispatch, reported as context.
     """
 
     site: SiteRepository | None = None
@@ -493,34 +493,35 @@ class DispatchCheck:
 
     def result(self) -> CheckResult:
         """
-        :return: :attr:`CheckStatus.OK` only when every repository's latest dispatch
-            run succeeded with its token stored; :attr:`CheckStatus.UNVERIFIED` when no
-            run shows whether a repository starts its build and none needs setup.
+        :return: The own repository's status and what was found of it, with the command
+            for what is left unless it starts its build; unverified when its runs could
+            not be read.
         """
-        statuses = {dispatch.status for dispatch in self.dispatches}
-        if statuses <= {CheckStatus.OK}:
+        if self.own_repository_dispatch_reading.status is CheckStatus.OK:
             return CheckResult(
-                CheckStatus.OK,
-                "every repository on the plan site starts its build on every push",
+                CheckStatus.OK, self.own_repository_dispatch_reading.describe()
             )
-        status = next(
-            status
-            for status in (
-                CheckStatus.NEEDS_SETUP,
-                CheckStatus.UNVERIFIED,
-                CheckStatus.INFORMATIONAL,
-            )
-            if status in statuses
-        )
-        unfinished = "; ".join(
-            dispatch.describe()
-            for dispatch in self.dispatches
-            if dispatch.status is not CheckStatus.OK
-        )
-        detail = f"{unfinished} - for what is left, run: {self.publication_command}"
-        if status is CheckStatus.UNVERIFIED:
+        detail = f"{self.own_repository_dispatch_reading.describe()} - for what is left, run: {self.publication_command}"
+        if self.own_repository_dispatch_reading.status is CheckStatus.UNVERIFIED:
             detail = f"{UNVERIFIED_PREFIX} - {detail}"
-        return CheckResult(status, detail)
+        return CheckResult(self.own_repository_dispatch_reading.status, detail)
+
+    def other_results(self) -> list[CheckResult]:
+        """
+        :return: One informational result for each other repository, naming it and what
+            was found, whatever that is.
+        """
+        return [
+            CheckResult(CheckStatus.INFORMATIONAL, other.describe())
+            for other in self.other_repositories_dispatch_readings
+        ]
+
+    def rows(self) -> list[CheckResult]:
+        """
+        :return: :meth:`result`, then :meth:`other_results`, in the order they are
+            printed.
+        """
+        return [self.result(), *self.other_results()]
 
 
 # %% the command
@@ -535,7 +536,8 @@ The command, which takes no arguments.
 @app.default
 def report_dispatch() -> int:
     """
-    Print this clone's dispatch check. See the module docstring.
+    Print this clone's dispatch check, one row per published repository. See the module
+    docstring.
 
     :return: 0 once printed.
     :raises NotesRepositoryUnresolvedError: If the notes remote is not on GitHub.
@@ -549,11 +551,13 @@ def report_dispatch() -> int:
         raise NotesRepositoryUnresolvedError(location.remote)
     client = GitHubRestClient()
     check = DispatchCheck(
+        DispatchReading.read(client, client, notes_repository, location.branch),
         [
             DispatchReading.read(client, client, repository, location.branch)
             for repository in published_repositories(
                 project_root, location, notes_repository
             )
+            if repository != notes_repository
         ],
         SiteRepository.recorded_on(
             RemoteBranch(
@@ -561,7 +565,8 @@ def report_dispatch() -> int:
             )
         ),
     )
-    print(check.result().fields)
+    for row in check.rows():
+        logger.info(row.fields)
     return 0
 
 

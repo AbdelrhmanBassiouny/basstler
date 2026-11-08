@@ -30,7 +30,7 @@ jobs:
       - name: Install basstler
         run: |
           set -euo pipefail
-          pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_branch_or_tag }}"
+          pip install "basstler @ git+https://github.com/KAOS-repositories/basstler@${{ inputs.basstler_branch_or_tag }}"
 
       - name: Read the upstream pull request
         env:

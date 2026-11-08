@@ -9,7 +9,6 @@ import json
 import shutil
 import subprocess
 import sys
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -25,6 +24,7 @@ from basstler.github.client import (
     GitHubResponse,
     GitHubWriter,
     HttpMethod,
+    GitHubWrite,
 )
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import (
@@ -39,7 +39,7 @@ from basstler.plan_site import token_storage
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import PlanSitePublication, PublicationOption
 from basstler.plan_site.publication import app as publication_app
-from basstler.plan_site.run_listing import ListedRun, RunListing
+from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
@@ -55,12 +55,12 @@ from basstler.plan_site.workflows import (
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.upstream_reviews.rest_models import RestPullRequestSummary
-from basstler.upstream_reviews.vocabulary import BasstlerSource, CheckOutcome
+from basstler.github.states import CheckOutcome
+from basstler.upstream_reviews.action.branch import BasstlerSource
 from basstler.workflows import ActivityType, TriggerEvent, Workflow
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName
-from ..github.recorded_client import SentWrite
 from ..maintenance.fork import UPSTREAM_BASE, ForkCheckout
 from ..upstream_reviews.replay import ReplayingRestClient
 
@@ -99,15 +99,13 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     Why every write fails, ``None`` when none does.
     """
 
-    writes: list[SentWrite] = field(default_factory=list)
+    writes: list[GitHubWrite] = field(default_factory=list)
     """
     Every write sent, oldest first.
     """
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
-    ) -> GitHubResponse:
-        self.writes.append(SentWrite(method, path, payload))
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        self.writes.append(write)
         if self.failure is not None:
             return GitHubResponse(None, failure=self.failure)
         return GitHubResponse(self.opened)
@@ -210,10 +208,12 @@ class Publishing:
         site_branch: str = "main",
         notes_details: DatasetLocation = DatasetLocation.REPOSITORY_NOT_FORK,
         open_pull_requests: tuple[DatasetLocation, ...] = (),
+        notes_default_branch: str = UPSTREAM_BASE,
     ) -> PullRequestOpeningClient:
         """:return: A client answering both run listings, the notes repository's
         details and its open merge workflow pull requests from recordings, and opening
         :attr:`DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST`."""
+        proposal = self.merge_workflow_proposal_into(notes_default_branch)
         return PullRequestOpeningClient(
             {
                 RunListing.path(self.site.repository, site_branch): json.loads(
@@ -223,19 +223,36 @@ class Publishing:
                     notes_listing.read_text()
                 ),
                 self.notes_repository.api_path: json.loads(notes_details.read_text()),
-                self.merge_workflow_proposal.open_pull_requests_path: [
+                proposal.open_pull_requests_path: [
                     json.loads(listed.read_text()) for listed in open_pull_requests
                 ],
             },
             opened=json.loads(DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST.read_text()),
         )
 
+    def merge_workflow_proposal_into(self, base: str) -> MergeWorkflowProposal:
+        """
+        :param base: The notes repository's default branch.
+        :return: The merge workflow as publishing proposes it into *base*.
+        """
+        return MergeWorkflowProposal(
+            self.notes_repository, base, PlanSitePublication.merge_workflow_branch
+        )
+
     @property
     def merge_workflow_proposal(self) -> MergeWorkflowProposal:
-        """:return: The merge workflow as publishing proposes it when the default
-        branch refuses it."""
-        return MergeWorkflowProposal(
-            self.notes_repository,
+        """:return: The merge workflow as publishing proposes it into ``main``."""
+        return self.merge_workflow_proposal_into(UPSTREAM_BASE)
+
+    def merge_the_workflow(self) -> None:
+        """
+        Merge the merge workflow's branch into the notes repository's default branch, as
+        merging its pull request does.
+        """
+        self.git(
+            self.checkout.fork_path,
+            "branch",
+            "--force",
             UPSTREAM_BASE,
             PlanSitePublication.merge_workflow_branch,
         )
@@ -546,18 +563,29 @@ def a_dispatch_workflow() -> DispatchWorkflow:
     )
 
 
-def test_the_notes_repository_s_default_branch_gets_the_merge_workflow(published):
+def test_the_merge_workflow_reaches_the_default_branch_only_through_its_branch(
+    published,
+):
+    """
+    The default branch gets the workflow by merging a pull request, so it passes the
+    repository's checks like any other change.
+    """
     dispatch = DispatchWorkflow(
         published.notes_repository, NOTES_BRANCH, published.site
     )
 
+    assert published.file(
+        published.notes_repository,
+        PlanSitePublication.merge_workflow_branch,
+        MergeWorkflow.location.as_posix(),
+    ) == (MergeWorkflow(dispatch).text)
     assert (
         published.file(
             published.notes_repository,
             UPSTREAM_BASE,
             MergeWorkflow.location.as_posix(),
         )
-        == MergeWorkflow(dispatch).text
+        is None
     )
 
 
@@ -568,16 +596,15 @@ def test_the_merge_workflow_follows_the_notes_repository_s_default_branch(
     notes_path = publishing.checkout.fork_path
     publishing.git(notes_path, "branch", "trunk", UPSTREAM_BASE)
     publishing.git(notes_path, "symbolic-ref", "HEAD", "refs/heads/trunk")
-
-    publishing.publication(publishing.runs_none()).publish()
-
-    assert publishing.file(
-        publishing.notes_repository, "trunk", MergeWorkflow.location.as_posix()
-    ) == (
-        MergeWorkflow(
-            DispatchWorkflow(publishing.notes_repository, NOTES_BRANCH, publishing.site)
-        ).text
+    client = publishing.runs(
+        DatasetLocation.WORKFLOW_RUNS_NONE,
+        DatasetLocation.WORKFLOW_RUNS_NONE,
+        notes_default_branch="trunk",
     )
+
+    publishing.publication(client).publish()
+
+    assert client.writes == [publishing.merge_workflow_proposal_into("trunk").opening]
 
 
 def test_the_merge_workflow_runs_when_a_pull_request_closes(tmp_path):
@@ -720,21 +747,10 @@ def test_a_refused_default_branch_opens_a_pull_request_from_the_workflow_s_branc
     protected,
 ):
     client = protected.runs_none()
-    proposal = protected.merge_workflow_proposal
 
     protected.publication(client).publish()
 
-    assert client.writes == [
-        SentWrite(
-            HttpMethod.POST,
-            f"{protected.notes_repository.api_path}/pulls",
-            {
-                "title": proposal.title,
-                "head": proposal.head,
-                "base": proposal.base,
-            },
-        )
-    ]
+    assert client.writes == [protected.merge_workflow_proposal.opening]
 
 
 def test_an_open_pull_request_for_the_workflow_is_not_opened_again(protected):
@@ -765,7 +781,7 @@ def pull_request_failures(
 ) -> list[GitHubCallFailed]:
     """:return: GitHub refusing to open the pull request, and the request getting no
     answer."""
-    path = f"{notes.api_path}/pulls"
+    path = notes.pull_requests_path
     return [
         GitHubRequestFailed(
             status=HTTPStatus.FORBIDDEN,
@@ -822,16 +838,9 @@ def test_an_unopened_pull_request_s_reason_is_printed_with_its_step(
 
 def test_once_the_workflow_is_merged_nothing_about_it_is_left(protected):
     (protected.checkout.fork_path / "hooks" / "pre-receive").unlink()
-    publication = protected.publication(protected.runs_none())
-    protected.git(
-        protected.checkout.fork_path,
-        "branch",
-        "--force",
-        UPSTREAM_BASE,
-        publication.merge_workflow_branch,
-    )
+    protected.merge_the_workflow()
 
-    report = publication.publish()
+    report = protected.publication(protected.runs_none()).publish()
 
     assert UserStep.ADD_MERGE_WORKFLOW not in [
         pending.step for pending in report.pending
@@ -854,10 +863,14 @@ def test_without_successful_runs_pages_and_the_token_are_left_to_the_user(publis
         UserStep.TURN_ON_PAGES,
         UserStep.CREATE_TOKEN,
         UserStep.STORE_TOKEN,
+        UserStep.ADD_MERGE_WORKFLOW,
     ]
 
 
-def test_once_both_workflows_succeeded_nothing_is_left(published):
+def test_once_both_workflows_succeeded_and_the_merge_workflow_merged_nothing_is_left(
+    published,
+):
+    published.merge_the_workflow()
     runs = published.runs(
         DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
         DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED,
@@ -867,6 +880,7 @@ def test_once_both_workflows_succeeded_nothing_is_left(published):
 
 
 def test_a_failed_latest_dispatch_leaves_the_token_to_the_user(published):
+    published.merge_the_workflow()
     runs = published.runs(
         DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
         DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
@@ -943,6 +957,7 @@ def test_a_command_with_steps_left_ends_with_the_incomplete_exit_status(publishe
 
 
 def test_a_command_with_nothing_left_ends_successfully(published):
+    published.merge_the_workflow()
     runs = published.runs(
         DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
         DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED,
@@ -1025,6 +1040,9 @@ def test_storing_the_token_in_the_browser_opens_each_registered_repository_s_sec
 def test_a_failed_dispatch_run_is_linked_from_the_step_it_leaves_to_the_user(
     published,
 ):
+    """
+    The step left to the user carries the failed dispatch run that made it necessary.
+    """
     runs = published.runs(
         DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
         DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
@@ -1034,10 +1052,12 @@ def test_a_failed_dispatch_run_is_linked_from_the_step_it_leaves_to_the_user(
 
     latest_run = pending_step(report, UserStep.STORE_TOKEN).latest_run
     assert latest_run == ListedRun(
-        Path(DispatchWorkflow.location),
-        CheckOutcome.FAILURE,
-        "https://github.com/an-owner/a-repository/actions/runs/4004",
-        datetime(2026, 10, 2, 10, tzinfo=UTC),
+        page_url="https://github.com/an-owner/a-repository/actions/runs/4004",
+        identifier=4004,
+        commit="4004" * 10,
+        outcome=CheckOutcome.FAILURE,
+        workflow_file_path=Path(DispatchWorkflow.location),
+        created_at=datetime(2026, 10, 2, 10, tzinfo=UTC),
     )
 
 
@@ -1070,6 +1090,9 @@ def test_a_rendered_step_without_a_command_says_so_before_the_browser_steps(publ
 
 
 def test_a_rendered_step_links_the_latest_run_that_made_it_necessary(published):
+    """
+    The rendered step links the page of the run that made it necessary.
+    """
     runs = published.runs(
         DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
         DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
@@ -1077,7 +1100,7 @@ def test_a_rendered_step_links_the_latest_run_that_made_it_necessary(published):
     pending = pending_step(published.publication(runs).publish(), UserStep.STORE_TOKEN)
 
     assert pending.render().splitlines()[1] == (
-        f"  Latest run, {pending.latest_run.outcome}: {pending.latest_run.url}"
+        f"  Latest run, {pending.latest_run.outcome}: {pending.latest_run.page_url}"
     )
 
 

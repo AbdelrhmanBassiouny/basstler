@@ -10,9 +10,9 @@ set -euo pipefail
 #   "${BASSTLER_PLUGIN_ROOT}"/hooks/check-setup.sh [--require-upstream]
 #
 # --require-upstream makes a project naming no upstream a needs-setup row
-# rather than info. Only /upstream-reviews and /stacked-pr-maintenance need
-# one, so they pass it; any other caller would otherwise fail every project
-# that simply has no upstream.
+# rather than info. Only /upstream-reviews needs one, so only it passes it;
+# /stacked-pr-maintenance follows the clone's own remote in a project that is
+# not a fork.
 #
 # --only <check>, repeatable, reports only the named checks, and the exit code
 # covers only them: a step gated on one check is never closed by an unrelated
@@ -79,7 +79,10 @@ done
 # requested: succeeds when the check $1 is to be reported - every check, unless
 # --only named some.
 requested() {
-  [ -z "${REQUESTED_CHECKS}" ] || [[ "${REQUESTED_CHECKS}" == *" $1 "* ]]
+  local check="$1"
+  # One row per repository belongs to the plan site check.
+  [ "${check}" != plan_site_repository ] || check=plan_site
+  [ -z "${REQUESTED_CHECKS}" ] || [[ "${REQUESTED_CHECKS}" == *" ${check} "* ]]
 }
 
 # names_upstream: succeeds when the stack.toml text on stdin names an
@@ -105,10 +108,10 @@ report_upstream() {
     report stack_upstream ok "named in ${PERSONAL_STACK_CONFIGURATION_PATH} on '${NOTES_BRANCH}'"
   elif [ "${REQUIRE_UPSTREAM}" = true ]; then
     report stack_upstream needs-setup \
-      "no upstream named, which /upstream-reviews and /stacked-pr-maintenance need - run: ${configure_command}"
+      "no upstream named, which /upstream-reviews needs - run: ${configure_command}"
   else
     report stack_upstream info \
-      "no upstream named - only /upstream-reviews and /stacked-pr-maintenance need one, set with: ${configure_command}"
+      "no upstream named - the stack pass follows the clone's own remote; only /upstream-reviews needs one, set with: ${configure_command}"
   fi
 }
 
@@ -149,23 +152,27 @@ report_upstream_reviews_action() {
   esac
 }
 
-# report_plan_site: whether every repository on the plan site starts its build, as
+# report_plan_site: whether this clone's own repository starts the plan site's build,
+# then one informational row for each other repository on the site, as
 # PLAN_SITE_DISPATCH_CHECK_MODULE reads their tokens and dispatch runs from GitHub;
 # unverified, with the check's own error, when it cannot read GitHub at all.
 report_plan_site() {
   local publish_command="${BASSTLER_PYTHON} -m ${PLAN_SITE_PUBLICATION_MODULE}"
-  local site_url dispatch_fields dispatch_status dispatch_detail dispatch_error
+  local site_url dispatch_rows dispatch_status dispatch_detail dispatch_error row_check
   if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${PLAN_SITE_DISPATCH_WORKFLOW_PATH}" 2>/dev/null; then
     dispatch_error="$(mktemp)"
-    if ! dispatch_fields="$("${BASSTLER_PYTHON}" -m "${PLAN_SITE_DISPATCH_CHECK_MODULE}" 2>"${dispatch_error}")"; then
+    if ! dispatch_rows="$("${BASSTLER_PYTHON}" -m "${PLAN_SITE_DISPATCH_CHECK_MODULE}" 2>"${dispatch_error}")"; then
       report plan_site unverified \
         "not verified - '${NOTES_BRANCH}' has the dispatch workflow, but its runs could not be read from GitHub ($(grep -v '^Suggestion: ' "${dispatch_error}" | tail -n 1)) - read them with the session's GitHub tools, or run: ${publish_command}"
       rm -f "${dispatch_error}"
       return 0
     fi
     rm -f "${dispatch_error}"
-    IFS=$'\t' read -r dispatch_status dispatch_detail <<< "${dispatch_fields}"
-    report plan_site "${dispatch_status}" "${dispatch_detail}"
+    row_check=plan_site
+    while IFS=$'\t' read -r dispatch_status dispatch_detail; do
+      report "${row_check}" "${dispatch_status}" "${dispatch_detail}"
+      row_check=plan_site_repository
+    done <<< "${dispatch_rows}"
     return 0
   fi
   site_url="$(recorded_site_url || true)"

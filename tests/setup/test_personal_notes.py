@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from basstler.github.label import NewLabel, RepositoryLabel
 from basstler.exceptions import MalformedEmailAddressError
 from basstler.exit_codes import PersonalNotesSetupExitCode
 from basstler.github_labels import GitHubLabel
@@ -27,12 +28,11 @@ from basstler.locations import (
     PluginSkillLocation,
     ProjectLocation,
 )
-from basstler.github.client import GitHubClient, GitHubResponse, HttpMethod
+from basstler.github.client import GitHubClient, GitHubResponse, GitHubWrite
 from basstler.maintenance.board import AccountField
 from basstler.maintenance.github import (
     GitHubPath,
     GitHubRepository,
-    LabelField,
 )
 from basstler.plugin_root import PluginRoot
 from basstler.repository import Repository
@@ -99,9 +99,9 @@ class GitHubAnsweringFromMemory(GitHubClient):
     The labels the repository carries.
     """
 
-    created_labels: list[Mapping[str, Any]] = field(default_factory=list)
+    created_labels: list[GitHubWrite] = field(default_factory=list)
     """
-    Every label-creation payload sent, in order.
+    Every label creation sent, in order.
     """
 
     def get(self, path: str) -> Any:
@@ -109,14 +109,14 @@ class GitHubAnsweringFromMemory(GitHubClient):
         return {AccountField.LOGIN: self.login}
 
     def get_pages(self, path: str) -> list[Any]:
-        return [[{LabelField.NAME: label} for label in sorted(self.present_labels)]]
+        return [
+            [RepositoryLabel(label).to_json() for label in sorted(self.present_labels)]
+        ]
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
-    ) -> GitHubResponse:
-        self.created_labels.append(payload)
-        self.present_labels.add(payload[LabelField.NAME])
-        return GitHubResponse(payload)
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        self.created_labels.append(write)
+        self.present_labels.add(RepositoryLabel.from_json(write.to_json()).name)
+        return GitHubResponse(write.to_json())
 
     def as_repository(self) -> GitHubRepository:
         """
@@ -454,6 +454,9 @@ def test_reports_missing_labels_without_creating_them():
 
 
 def test_creates_only_the_missing_labels_when_asked():
+    """
+    Setup creates the labels the repository lacks, and only those.
+    """
     github = GitHubAnsweringFromMemory(
         CREDENTIAL_OWNER, present_labels=set(GitHubLabel) - {GitHubLabel.IN_REVIEW}
     )
@@ -461,10 +464,10 @@ def test_creates_only_the_missing_labels_when_asked():
     labels_setup(SetupOption.CREATE_LABELS, github=github).check_labels()
 
     assert github.created_labels == [
-        {
-            LabelField.NAME: GitHubLabel.IN_REVIEW,
-            LabelField.DESCRIPTION: GitHubLabel.IN_REVIEW.purpose,
-        }
+        NewLabel(
+            github.repository,
+            RepositoryLabel(GitHubLabel.IN_REVIEW, GitHubLabel.IN_REVIEW.purpose),
+        )
     ]
 
 

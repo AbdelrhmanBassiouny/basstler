@@ -17,6 +17,7 @@ from basstler.stack.configuration import StackSetting
 from basstler.stack.exceptions import (
     AmbiguousForkRemoteError,
     ForkRemoteNotFoundError,
+    OwnRemoteNotFoundError,
 )
 from basstler.stack.settings import (
     Configuration,
@@ -365,6 +366,54 @@ def test_a_project_committing_no_stack_file_takes_its_upstream_from_personal_not
     configuration = Configuration.load(configuration_path)
 
     assert configuration.upstream_repository == StackRepository.DIFFERENT_UPSTREAM.value
+
+
+# %% a project naming no upstream
+
+
+def _shipped_configuration_path(scratch_repository: ScratchRepository) -> Path:
+    """
+    :param scratch_repository: The scratch repository to write into.
+    :return: The shipped defaults, which name no upstream, installed into it.
+    """
+    return scratch_repository.install_stack_configuration(
+        PackageLocation.STACK_CONFIGURATION.value.read_text()
+    )
+
+
+def test_a_project_naming_no_upstream_follows_its_own_remote(
+    scratch_repository: ScratchRepository, monkeypatch
+):
+    """
+    A repository that is not a fork is its own base: its own remote stands where the
+    upstream would, and nothing names an upstream.
+    """
+    configuration_path = _shipped_configuration_path(scratch_repository)
+    scratch_repository.add_remote(
+        RemoteName.ORIGIN, StackRepository.FORK.value.clone_url
+    )
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+
+    configuration = Configuration.load(configuration_path)
+
+    assert configuration.upstream_repository is None
+    assert configuration.fork_repository == StackRepository.FORK.value
+    assert configuration.fork_remote == RemoteName.ORIGIN
+    assert configuration.upstream_remote == RemoteName.ORIGIN
+    assert configuration.upstream_location == RemoteName.ORIGIN
+
+
+def test_a_project_naming_no_upstream_and_lacking_its_own_remote_is_refused(
+    scratch_repository: ScratchRepository, monkeypatch
+):
+    configuration_path = _shipped_configuration_path(scratch_repository)
+    scratch_repository.add_remote(RemoteName.MINE, StackRepository.FORK.value.clone_url)
+    scratch_repository.resolve_notes_remote_to()
+    monkeypatch.chdir(scratch_repository.project_root)
+
+    with pytest.raises(OwnRemoteNotFoundError):
+        Configuration.load(configuration_path)
 
 
 def test_a_named_upstream_replaces_the_committed_default(

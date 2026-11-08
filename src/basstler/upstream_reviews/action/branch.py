@@ -7,16 +7,69 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 from typing import Any
 
 from basstler.class_property import classproperty
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.render_common import create_template_environment
-from basstler.upstream_reviews.vocabulary import (
-    ActionBranch,
-    ActionFile,
-    BasstlerSource,
-)
+
+
+# %% the Action branch's names
+
+
+class ActionBranch(StrEnum):
+    """
+    Where the Action lives in the fork.
+    """
+
+    NAME = "basstler/upstream-reviews"
+    """
+    The branch, outside both the fork's default branch and the ``claude/`` branches
+    stack maintenance owns.
+    """
+
+    @classproperty
+    def install_command(cls) -> str:
+        """
+        How a reader is told to install the branch or bring it up to date.
+        """
+        return (
+            '"${BASSTLER_PYTHON}" -m basstler.setup.steps install-upstream-reviews-action '
+            "--branch-or-tag <the basstler release the session runs> "
+            "(/setup-personal-notes runs it)"
+        )
+
+
+class ActionFile(StrEnum):
+    """
+    Every file on the branch.
+    """
+
+    WORKFLOW = ".github/workflows/upstream-reviews.yml"
+    README = "README.md"
+    REQUEST = "request.json"
+    RESULT = "result.json"
+
+    @property
+    def file_name(self) -> str:
+        """:return: The file's own name, without its directory."""
+        return Path(self.value).name
+
+
+class BasstlerSource(StrEnum):
+    """
+    Where the reusable workflow and the package a run installs come from.
+    """
+
+    REPOSITORY = "KAOS-repositories/basstler"
+    REUSABLE_WORKFLOW = ".github/workflows/upstream-reviews-action.yml"
+    LATEST_RELEASE = "release"
+    """
+    The branch the release workflow moves to each release's tag, so it always holds the
+    latest one.
+    """
+
 
 # %% installing
 

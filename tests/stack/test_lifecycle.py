@@ -44,19 +44,17 @@ def test_approving_a_root_promotes_it_and_nothing_above_it():
     assert [branch.name for branch in stack.promotion_order()] == [StackBranch.ENGINE]
 
 
-def test_promoting_a_parent_unblocks_the_child_behind_it():
+def test_a_parent_in_review_keeps_the_child_behind_it_waiting():
     """
-    A child may follow its parent upstream once the parent is in review - it does not
-    wait for the parent to merge.
+    A child waits for its parent to merge, because the upstream pull request would
+    otherwise carry the parent's commits too.
     """
     stack = a_deep_stack_beside_an_independent_branch(
         approved={StackBranch.ENGINE, StackBranch.ENGINE_UI},
         promoted={StackBranch.ENGINE},
     )
 
-    assert [branch.name for branch in stack.promotion_order()] == [
-        StackBranch.ENGINE_UI
-    ]
+    assert stack.promotion_order() == []
 
 
 def test_both_stacks_promote_together_since_they_do_not_depend_on_each_other():

@@ -27,7 +27,7 @@ from basstler.upstream_reviews.action.exchange import (
 )
 from basstler.upstream_reviews.action.read import ActionRead
 from basstler.upstream_reviews.exceptions import ActionNotInstalled
-from basstler.upstream_reviews.vocabulary import ActionFile
+from basstler.upstream_reviews.action.branch import ActionFile
 
 from ..maintenance.fork import (
     PullRequestHeadRepository,

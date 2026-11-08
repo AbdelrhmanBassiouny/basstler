@@ -18,10 +18,8 @@ from basstler.upstream_reviews.exceptions import (
     GitHubCommandFailed,
 )
 from basstler.upstream_reviews.pull_request_models import (
+    GraphQLRequest,
     GraphQLResponse,
-)
-from basstler.upstream_reviews.vocabulary import (
-    PullRequestJSONKey,
 )
 
 # %% client
@@ -93,9 +91,7 @@ class GitHubCommandLineClient(GraphQLClient, JobLogReader):
         :raises GitHubCommandFailed: If ``gh`` exits non-zero.
         :raises GraphQLErrorsReturned: If GitHub answers with errors.
         """
-        request = json.dumps(
-            {PullRequestJSONKey.QUERY: query, PullRequestJSONKey.VARIABLES: variables}
-        )
+        request = json.dumps(GraphQLRequest(query, variables).to_json())
         return GraphQLResponse.from_json(
             self._run(["api", "graphql", "--input", "-"], request)
         ).result()

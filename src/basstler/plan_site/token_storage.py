@@ -25,22 +25,22 @@ from pathlib import Path
 
 from cyclopts import App
 
-from basstler.github.client import GitHubClient, GitHubRestClient, HttpMethod
+from basstler.github.client import GitHubClient, GitHubRestClient
 from basstler.locations import ClaudeCodeVariable, WorkflowLocation
 from basstler.maintenance.constants import GitHubExecutable
 from basstler.personal_notes.branch import PersonalNotesLocation
-from basstler.plan_site.build_start import DispatchKey
 from basstler.plan_site.exceptions import (
     NotesRepositoryUnresolvedError,
     PlanSiteTokenEmptyError,
 )
 from basstler.plan_site.hub import published_repositories
-from basstler.plan_site.run_listing import ListedRun, RunListing
+from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.workflows import GitHubCommandLineOption, PlanSiteSecret
 from basstler.repository import Repository
 from basstler.setup.steps import resolve_repository
 from basstler.standard_streams import StandardStreamHandler
-from basstler.upstream_reviews.vocabulary import CheckOutcome
+from basstler.github.states import CheckOutcome
+from basstler.github.workflow_run import WorkflowDispatch
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -142,10 +142,10 @@ class StorageResult:
                 f"{self.repository.url}/actions"
             )
         if self.proven:
-            return f"{name}: done - {self.run.url} started the plan site build"
+            return f"{name}: done - {self.run.page_url} started the plan site build"
         return (
             f"{name}: stored, but the dispatch run is {self.run.outcome} - its log "
-            f"says why: {self.run.url}"
+            f"says why: {self.run.page_url}"
         )
 
 
@@ -215,11 +215,12 @@ class TokenStorage:
         :return: The result, with the run once it finished.
         """
         workflow = WorkflowLocation.PLAN_SITE_DISPATCH
-        earlier = {run.url for run in self.listing(repository).select(workflow).runs}
+        earlier = {
+            run.page_url
+            for run in self.listing(repository).select(workflow).workflow_runs
+        }
         dispatch = self.github.attempt_send(
-            HttpMethod.POST,
-            repository.workflow_dispatch_path(workflow),
-            {DispatchKey.REF: self.notes_branch},
+            WorkflowDispatch(repository, workflow, self.notes_branch)
         )
         if dispatch.failure is not None:
             return StorageResult(repository, dispatch.failure.error_message())
@@ -228,8 +229,8 @@ class TokenStorage:
             started = next(
                 (
                     run
-                    for run in self.listing(repository).select(workflow).runs
-                    if run.url not in earlier
+                    for run in self.listing(repository).select(workflow).workflow_runs
+                    if run.page_url not in earlier
                 ),
                 None,
             )

@@ -716,3 +716,23 @@ def test_the_restack_command_passes_the_subtree_it_was_given(
 
     assert status == StackExitCode.SUCCESS
     assert fork_checkout.published_commit("origin", StackBranch.OFF_THE_CHAIN) == before
+
+
+def test_naming_a_branch_nothing_is_stacked_on_says_there_is_nothing_to_carry(
+    fork_checkout: ForkCheckout, capsys: pytest.CaptureFixture[str]
+):
+    """
+    Carrying a fix is run after every resolve, so a branch with no descendants is an
+    answer the caller reads rather than silence.
+    """
+    a_parent_and_child(fork_checkout)
+
+    status = RestackCommand().run(
+        AlreadyResolvedPass.over(fork_checkout, the_board()),
+        argparse.Namespace(stacked_on=StackBranch.CHILD),
+    )
+
+    assert status == StackExitCode.SUCCESS
+    assert capsys.readouterr().out.splitlines() == [
+        RestackCommand.nothing_to_restack(StackBranch.CHILD)
+    ]

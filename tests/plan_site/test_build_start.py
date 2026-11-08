@@ -5,40 +5,46 @@ session's own credential.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+import json
 from dataclasses import dataclass, field
 from http import HTTPStatus
-from typing import Any
+
+import pytest
+
+import basstler.plan_site.build_start
 
 from basstler.github.client import (
     GitHubAttemptClient,
     GitHubResponse,
     HttpMethod,
+    GitHubWrite,
 )
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
+from basstler.github.repository_details import RepositoryDetails
+from basstler.github.workflow_run import WorkflowDispatch
 from basstler.locations import WorkflowLocation
 from basstler.plan_site.build_start import (
+    BUILD_START_COMMAND,
     BuildStart,
     CodeFence,
-    DispatchKey,
     GitHubCommand,
-    RepositoryKey,
     SessionTool,
+    SiteAccess,
 )
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.repository import Repository
 
-from ..github.recorded_client import SentWrite
+from ..constants.paths import DatasetLocation
 
 SITE = SiteRepository(Repository.parse("an-owner/plans"))
 """
 The site repository whose build is started.
 """
 
-SITE_DEFAULT_BRANCH = "trunk"
+SITE_DETAILS = json.loads(DatasetLocation.REPOSITORY_TRUNK_DEFAULT_BRANCH.read_text())
 """
-The default branch the stand-in site repository reports, deliberately not ``main``.
+The resource the stand-in site repository answers with.
 """
 
 # %% a site repository answering from memory
@@ -56,14 +62,14 @@ class SiteAnsweringClient(GitHubAttemptClient):
     The status reading the site repository is refused with, ``None`` to answer it.
     """
 
-    writes: list[SentWrite] = field(default_factory=list)
+    writes: list[GitHubWrite] = field(default_factory=list)
     """
     Every write sent, oldest first.
     """
 
     def attempt_get(self, path: str) -> GitHubResponse:
         if self.refusal is None:
-            return GitHubResponse({RepositoryKey.DEFAULT_BRANCH: SITE_DEFAULT_BRANCH})
+            return GitHubResponse(SITE_DETAILS)
         return GitHubResponse(
             None,
             failure=GitHubRequestFailed(
@@ -75,10 +81,8 @@ class SiteAnsweringClient(GitHubAttemptClient):
             ),
         )
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
-    ) -> GitHubResponse:
-        self.writes.append(SentWrite(method, path, payload))
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        self.writes.append(write)
         return GitHubResponse(None)
 
 
@@ -95,10 +99,10 @@ def test_the_build_is_dispatched_on_the_site_s_default_branch():
 
     assert attempt.started
     assert client.writes == [
-        SentWrite(
-            HttpMethod.POST,
-            SITE.repository.workflow_dispatch_path(WorkflowLocation.PLAN_SITE),
-            {DispatchKey.REF: SITE_DEFAULT_BRANCH},
+        WorkflowDispatch(
+            SITE.repository,
+            WorkflowLocation.PLAN_SITE,
+            RepositoryDetails.from_json(SITE_DETAILS).default_branch,
         )
     ]
 
@@ -165,3 +169,37 @@ def test_a_local_session_is_shown_the_command_in_a_bash_block_of_its_own():
     assert description.endswith(
         "\n".join(["", CodeFence.BASH, GitHubCommand.LOG_IN, CodeFence.CLOSE])
     )
+
+
+@pytest.mark.parametrize("in_cloud_session", [True, False])
+def test_a_build_that_did_not_start_names_the_command_that_starts_it_again(
+    in_cloud_session: bool,
+):
+    """
+    Saving the plan again changes nothing and so starts no build: the retry has to be
+    this command itself.
+    """
+    client = SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
+
+    description = BuildStart.attempt(SITE, client).describe(in_cloud_session)
+
+    assert BUILD_START_COMMAND in description
+
+
+def test_the_retry_command_runs_this_module():
+    assert BUILD_START_COMMAND.endswith(f"-m {basstler.plan_site.build_start.__name__}")
+
+
+# %% checking the access before any save
+
+
+def test_a_session_that_can_read_the_site_repository_is_told_nothing():
+    assert SiteAccess(SITE).missing_access(SiteAnsweringClient(), True) is None
+
+
+def test_a_cloud_session_that_cannot_read_the_site_repository_is_told_to_attach_it():
+    client = SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
+
+    missing = SiteAccess(SITE).missing_access(client, in_cloud_session=True)
+
+    assert missing.endswith(SiteAccess(SITE).remedy(in_cloud_session=True))

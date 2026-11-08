@@ -179,7 +179,7 @@ def test_prepare_lists_the_reparents_and_every_summary_to_write(
 
     maintenance, document = a_prepared_pass(fork_checkout, capsys)
 
-    stack = maintenance.stack()
+    stack = maintenance.fresh_stack()
     assert document[PreparationKey.REPARENTS] == [
         asdict(reparent) for reparent in stack.reparents()
     ]
@@ -255,7 +255,7 @@ def test_prepare_scoped_to_a_branch_lists_only_its_own_stack_s_summaries(
     PrepareCommand().run(maintenance, argparse.Namespace(stacked_on=StackBranch.CHILD))
 
     document = json.loads(capsys.readouterr().out)
-    scoped = maintenance.stack().scoped_to(StackBranch.CHILD)
+    scoped = maintenance.fresh_stack().scoped_to(StackBranch.CHILD)
     assert [
         context[PromotionContextKey.PULL_REQUEST_NUMBER]
         for context in document[PreparationKey.TO_SUMMARIZE]

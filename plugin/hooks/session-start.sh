@@ -49,6 +49,7 @@ fi
 
 # SUMMARY_* lines are printed at the end; the rest are set on every path below.
 SUMMARY_NOTES="not found"
+SUMMARY_CITED_NAMES="$(cited_names_line_no_notes)"
 SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
 
 # Installs the package environment only where something is missing; never
@@ -111,6 +112,21 @@ HEADER
   echo "<!-- END-PERSONAL-NOTES -->" >> "${OUTPUT_FILE}"
   WROTE_ANYTHING=1
   SUMMARY_NOTES="loaded from '${NOTES_BRANCH}' (${NOTES_PATH}) on '${ACTIVE_NOTES_REMOTE}'"
+  # Notes outlive the release they were written against: name what moved or went.
+  SUMMARY_CITED_NAMES="$(cited_names_line_not_checked "${DOCUMENT_REFERENCES_MODULE}")"
+  NOTES_COPY="$(mktemp)"
+  git show "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" > "${NOTES_COPY}"
+  if STALE_NAMES="$("${BASSTLER_PYTHON}" -m "${DOCUMENT_REFERENCES_MODULE}" \
+      "${NOTES_COPY}" 2>/dev/null)"; then
+    if [ -z "${STALE_NAMES}" ]; then
+      SUMMARY_CITED_NAMES="$(cited_names_line_current)"
+    else
+      SUMMARY_CITED_NAMES="$(printf '%s\n%s' \
+        "$(cited_names_line_stale "$(printf '%s\n' "${STALE_NAMES}" | wc -l | tr -d ' ')")" \
+        "$(printf '%s\n' "${STALE_NAMES}" | sed 's/^/    /')")"
+    fi
+  fi
+  rm -f "${NOTES_COPY}"
 fi
 
 PROGRESS_PATH="$(pr_progress_path || true)"
@@ -220,6 +236,11 @@ if SITE_URL="$(recorded_site_url)"; then
   [ -n "${PLAN_ID}" ] && ITEM_ID="$(item_id_for_branch "${PLAN_ID}" "${CURRENT_BRANCH}")"
   HUB_POSITION="$(plan_site_page_url "${PLAN_ID}" "${ITEM_ID}")" || HUB_POSITION="${SITE_URL}"
   SUMMARY_HUB="$(hub_line_registered "${SITE_URL}" "${HUB_POSITION}")"
+  # Said now, so the access a plan save's build needs is in place before the first save.
+  if SITE_ACCESS="$("${BASSTLER_PYTHON}" -m "${PLAN_SITE_BUILD_START_MODULE}" \
+      check-access 2>/dev/null)" && [ -n "${SITE_ACCESS}" ]; then
+    SUMMARY_HUB="$(printf '%s\n    %s' "${SUMMARY_HUB}" "${SITE_ACCESS}")"
+  fi
 fi
 
 if [ "${WROTE_ANYTHING}" = "1" ]; then
@@ -310,6 +331,18 @@ if ACTIONS_USAGE_REPORT="$("${BASSTLER_PYTHON}" -m "${ACTIONS_USAGE_MODULE}" \
   fi
 fi
 
+# Main's tests: the issue the test workflow keeps open while they fail, so a failing
+# default branch is seen at the start of a session. Never fatal.
+SUMMARY_MAIN_TESTS="$(main_tests_line_not_checked)"
+if MAIN_FAILURE_ISSUE="$("${BASSTLER_PYTHON}" -m "${MAIN_FAILURE_MODULE}" show \
+    --repository "$(repository_name)" 2>/dev/null)"; then
+  if [ -z "${MAIN_FAILURE_ISSUE}" ]; then
+    SUMMARY_MAIN_TESTS="$(main_tests_line_passing)"
+  else
+    SUMMARY_MAIN_TESTS="$(main_tests_line_failing "${MAIN_FAILURE_ISSUE}")"
+  fi
+fi
+
 # Setup verdict from check-setup.sh, run last so it sees what this run wrote.
 SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
 if [ -f "${CHECK_SETUP_SCRIPT}" ]; then
@@ -328,6 +361,7 @@ fi
 cat <<SUMMARY
 session-start.sh summary:
   personal notes:  ${SUMMARY_NOTES}
+  cited names:     ${SUMMARY_CITED_NAMES}
   local settings:  ${SUMMARY_SETTINGS}
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
@@ -337,6 +371,7 @@ session-start.sh summary:
   dependencies:    ${SUMMARY_DEPENDENCIES}
   reviews Action:  ${SUMMARY_UPSTREAM_REVIEWS_ACTION}
   Actions usage:   ${SUMMARY_ACTIONS_USAGE}
+  main tests:      ${SUMMARY_MAIN_TESTS}
   setup:           ${SUMMARY_SETUP}
   plan state SHA:  $(last_recorded_plan_state_sha) (run plan-updates-since.sh <plan-id> to recheck from here later)
 SUMMARY

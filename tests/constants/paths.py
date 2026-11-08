@@ -25,6 +25,11 @@ class RepositoryLocation(PathEnumeration):
     The repository root.
     """
 
+    MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
+    """
+    The marketplace that lists the plugin and says where it is served from.
+    """
+
     PLUGIN = ROOT / "plugin"
     """
     The Claude Code plugin: its manifest, hooks and skills.
@@ -50,9 +55,19 @@ class RepositoryLocation(PathEnumeration):
     The workflow that tags a merge commit as a release.
     """
 
+    TESTS_WORKFLOW = WORKFLOWS / "tests.yml"
+    """
+    The workflow that lints and tests every pull request and every push to main.
+    """
+
     PLAN_SITE_BUILD_WORKFLOW = WORKFLOWS / "plan-site-build.yml"
     """
     The reusable workflow that builds the plan site and deploys a changed one.
+    """
+
+    MAIN_FAILURE_WORKFLOW = WORKFLOWS / "main-failure.yml"
+    """
+    The workflow that records each run of the tests on main in its failure issue.
     """
 
 
@@ -64,6 +79,36 @@ class DatasetLocation(PathEnumeration):
     DIRECTORY = Path(__file__).parents[1] / "dataset"
     """
     The dataset directory itself.
+    """
+
+    NOTES_CITING_RETIRED_NAMES = (
+        DIRECTORY / "document-references" / "notes-citing-retired-names.md"
+    )
+    """
+    Personal notes written against an older release: moved modules, a source file
+    that moved with one, a retired skill and a module that never existed.
+    """
+
+    NOTES_CITING_SHIPPED_NAMES = (
+        DIRECTORY / "document-references" / "notes-citing-shipped-names.md"
+    )
+    """
+    Personal notes citing only what this release ships, beside names that merely look
+    like the package's: a branch, a file under the git directory, another skill.
+    """
+
+    WORKFLOW_NAMING_THE_REPOSITORY = (
+        DIRECTORY / "package-contract" / "names-the-repository.yml"
+    )
+    """
+    A workflow that names this repository and the package but runs none of its modules.
+    """
+
+    WORKFLOW_RUNNING_THE_PACKAGE = (
+        DIRECTORY / "package-contract" / "runs-the-package.yml"
+    )
+    """
+    A workflow that runs the package's own entry point.
     """
 
     BOOTSTRAP_PLAN = DIRECTORY / "bootstrap-plan.yaml"
@@ -135,6 +180,11 @@ class DatasetLocation(PathEnumeration):
     A notes repository's run listing whose latest dispatch run succeeded.
     """
 
+    PLAN_SITE_DISPATCH_RUNS_PENDING = DIRECTORY / "plan-site-dispatch-runs-pending.json"
+    """
+    :attr:`PLAN_SITE_DISPATCH_RUNS_SUCCEEDED` while its latest dispatch run still runs.
+    """
+
     PLAN_SITE_DISPATCH_RUNS_FAILED = DIRECTORY / "plan-site-dispatch-runs-failed.json"
     """
     A notes repository's run listing whose latest dispatch run failed after an earlier
@@ -175,6 +225,26 @@ class DatasetLocation(PathEnumeration):
     REPOSITORY_NOT_FORK = DIRECTORY / "repository-not-fork.json"
     """
     A repository's REST response for a repository that is not a fork.
+    """
+
+    REPOSITORY_TRUNK_DEFAULT_BRANCH = DIRECTORY / "repository-trunk-default-branch.json"
+    """
+    A repository's REST response for one whose default branch is not ``main``.
+    """
+
+    MAIN_FAILURE_OPEN_ISSUE = DIRECTORY / "main-failure" / "open-issue.json"
+    """
+    The open issue reporting main's failing tests, as the issues API lists it.
+    """
+
+    MAIN_FAILURE_OPENED_ISSUE = DIRECTORY / "main-failure" / "opened-issue.json"
+    """
+    The issue reporting main's failing tests, as GitHub answers its opening.
+    """
+
+    MAIN_FAILURE_RUN_JOBS = DIRECTORY / "main-failure" / "failed-run-jobs.json"
+    """
+    The jobs of a failed run of the tests: one failed, one timed out, two passed.
     """
 
     MERGE_WORKFLOW_PULL_REQUEST = DIRECTORY / "merge-workflow-pull-request.json"
@@ -244,6 +314,14 @@ class DatasetLocation(PathEnumeration):
     dispatch that needs setup.
     """
 
+    DISPATCH_CHECK_WITH_OTHER_REPOSITORY_STUB = (
+        STUBS / "dispatch_check_with_other_repository.py"
+    )
+    """
+    A module standing in for :mod:`basstler.plan_site.dispatch_check`, reporting a
+    dispatch that starts the build and a second repository that does not.
+    """
+
     BUILD_START_STUB = STUBS / "build_start_prints_its_name.py"
     """
     A module standing in for :mod:`basstler.plan_site.build_start`, printing its name.
@@ -263,6 +341,24 @@ class DatasetLocation(PathEnumeration):
     BRIEF_ROADMAP = DIRECTORY / "brief-roadmap.md"
     """
     The standing rules of :attr:`BRIEF_PLAN`, one of them wrapped across two lines.
+    """
+
+    REPOSITORY_RULES = DIRECTORY / "repository-rules.yaml"
+    """
+    A repository's plan rules file holding two rules.
+    """
+
+    REPOSITORY_RULES_IMPORT = DIRECTORY / "repository-rules-import.yaml"
+    """
+    Rules to import into :attr:`REPOSITORY_RULES`: one rewording a rule it holds, one
+    new.
+    """
+
+    REPOSITORY_RULES_DUPLICATE_IDENTIFIER = (
+        DIRECTORY / "repository-rules-duplicate-identifier.yaml"
+    )
+    """
+    A rules file in which two rules share an id.
     """
 
     SITE_PLANS = DIRECTORY / "site-plans"

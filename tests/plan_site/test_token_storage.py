@@ -15,14 +15,14 @@ from typing import Any
 
 import pytest
 
-from basstler.github.client import GitHubResponse, HttpMethod
+from basstler.github.client import GitHubResponse, GitHubWrite
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.locations import WorkflowLocation
 from basstler.plan_site import token_storage
-from basstler.plan_site.build_start import DispatchKey
 from basstler.plan_site.exceptions import PlanSiteTokenEmptyError
-from basstler.plan_site.run_listing import RunListing, WorkflowRunKey
+from basstler.github.run_listing import RunListing
+from basstler.github.workflow_run import WorkflowDispatch
 from basstler.plan_site.token_storage import (
     GitHubCommandLineSecretStore,
     SecretStore,
@@ -34,7 +34,7 @@ from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.repository import Repository
 
 from ..constants.paths import DatasetLocation
-from ..github.recorded_client import RecordedGitHubClient, SentWrite
+from ..github.recorded_client import RecordedGitHubClient
 
 NOTES_BRANCH = "claude/personal-notes"
 """
@@ -106,23 +106,29 @@ class RunStartingClient(RecordedGitHubClient):
 
     pending_reads: int = 0
     """
-    How many reads after the dispatch list its runs as still running.
+    How many reads after the dispatch list
+    :attr:`DatasetLocation.PLAN_SITE_DISPATCH_RUNS_PENDING` before :attr:`listing_after`.
     """
 
     def get(self, path: str) -> Any:
+        """
+        Unlike :meth:`RecordedGitHubClient.get`, answer every path with a run listing.
+        """
         if not self.writes:
             return json.loads(self.listing_before.read_text())
-        listing = json.loads(self.listing_after.read_text())
         if self.pending_reads:
             self.pending_reads -= 1
-            for run in listing[WorkflowRunKey.WORKFLOW_RUNS]:
-                run[WorkflowRunKey.CONCLUSION] = None
-        return listing
+            return json.loads(
+                DatasetLocation.PLAN_SITE_DISPATCH_RUNS_PENDING.read_text()
+            )
+        return json.loads(self.listing_after.read_text())
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
-    ) -> GitHubResponse:
-        self.writes.append(SentWrite(method, path, payload))
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        """
+        Unlike :meth:`RecordedGitHubClient.attempt_send`, refuse the write with
+        :attr:`dispatch_refusal` when it is set.
+        """
+        self.writes.append(write)
         if self.dispatch_refusal is None:
             return GitHubResponse(None)
         return GitHubResponse(
@@ -130,8 +136,8 @@ class RunStartingClient(RecordedGitHubClient):
             failure=GitHubRequestFailed(
                 status=self.dispatch_refusal,
                 detail="",
-                method=method,
-                path=path,
+                method=write.method,
+                path=write.path,
                 credential_origin=CredentialProvider.CALLER,
             ),
         )
@@ -222,11 +228,7 @@ def test_a_stored_token_starts_the_dispatch_workflow_on_the_notes_branch():
     storage_with(client).store([FIRST], TOKEN)
 
     assert client.writes == [
-        SentWrite(
-            HttpMethod.POST,
-            FIRST.workflow_dispatch_path(WorkflowLocation.PLAN_SITE_DISPATCH),
-            {DispatchKey.REF: NOTES_BRANCH},
-        )
+        WorkflowDispatch(FIRST, WorkflowLocation.PLAN_SITE_DISPATCH, NOTES_BRANCH)
     ]
 
 
@@ -241,6 +243,9 @@ def test_a_succeeded_dispatch_run_proves_the_token():
 
 
 def test_a_failed_dispatch_run_is_linked_and_proves_nothing():
+    """
+    A dispatch run that failed leaves the token unproven and links the run's page.
+    """
     listing = DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED
 
     (result,) = storage_with(RunStartingClient(listing_after=listing)).store(
@@ -249,7 +254,7 @@ def test_a_failed_dispatch_run_is_linked_and_proves_nothing():
 
     run = latest_dispatch_run(listing)
     assert (result.run, result.proven) == (run, False)
-    assert run.url in result.describe(timedelta())
+    assert run.page_url in result.describe(timedelta())
 
 
 def test_a_run_listed_before_the_dispatch_is_not_taken_for_the_one_it_started():
