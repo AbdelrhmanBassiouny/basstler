@@ -43,6 +43,7 @@ from basstler.upstream_reviews.failure_logs import (
 )
 from basstler.upstream_reviews.pull_request_models import (
     CheckResult,
+    CheckRollup,
     CheckStatus,
     GraphQLRequest,
     UpstreamPullRequestSnapshot,
@@ -386,12 +387,39 @@ def test_only_the_checks_that_did_not_pass_are_unsuccessful(current_checks):
     ]
 
 
-def test_a_check_holding_none_of_the_keys_a_check_is_read_from_is_rejected():
+def test_a_rollup_context_of_a_graphql_type_no_model_reads_is_rejected():
     """
-    A rollup context in neither shape a rollup can hold is refused.
+    A rollup context whose GraphQL type names neither shape a rollup can hold is
+    refused.
     """
+    context_of_a_new_type = {
+        "__typename": "NewShape",
+        "name": "lint",
+        "conclusion": "SUCCESS",
+        "detailsUrl": "https://example.org/lint",
+    }
+
     with pytest.raises(ValidationError):
-        CheckResult.from_json({})
+        CheckRollup.from_json(
+            {"state": "SUCCESS", "contexts": {"nodes": [context_of_a_new_type]}}
+        )
+
+
+def test_a_check_run_is_read_only_from_a_check_run_s_keys():
+    """
+    A rollup context tagged as a check run that carries a status's keys is refused.
+    """
+    check_run_with_status_keys = {
+        "__typename": "CheckRun",
+        "name": "lint",
+        "state": "SUCCESS",
+        "targetUrl": "https://example.org/lint",
+    }
+
+    with pytest.raises(ValidationError):
+        CheckRollup.from_json(
+            {"state": "SUCCESS", "contexts": {"nodes": [check_run_with_status_keys]}}
+        )
 
 
 def test_a_head_commit_nothing_reported_against_has_no_checks():

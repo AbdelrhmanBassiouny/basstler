@@ -7,9 +7,9 @@ from __future__ import annotations
 
 import json
 from dataclasses import asdict, dataclass, field
-from typing import Annotated, Any
+from typing import Annotated, Any, Literal
 
-from pydantic import AliasChoices, AliasPath, Field
+from pydantic import AliasPath, Field
 
 from basstler.upstream_reviews.exceptions import (
     GraphQLErrorsReturned,
@@ -36,29 +36,21 @@ class CheckResult(ValidatedJSONModel):
     """
     One check reported against the pull request's head commit: a check run, such as a
     GitHub Actions job, or a status posted through the commit-status API.
+
+    Each shape GitHub reports a check in is a subclass naming its own keys.
     """
 
-    name: Annotated[str, Field(validation_alias=AliasChoices("name", "context"))]
+    name: str
     """
     What the check calls itself.
     """
 
-    outcome: Annotated[
-        ConclusionOutcome, Field(validation_alias=AliasChoices("conclusion", "state"))
-    ]
+    outcome: ConclusionOutcome
     """
     Where the check stands.
     """
 
-    target_url: Annotated[
-        str,
-        AbsentAsEmpty(),
-        Field(
-            validation_alias=AliasChoices(
-                "detailsUrl", "targetUrl", "details_url", "target_url"
-            )
-        ),
-    ]
+    target_url: Annotated[str, AbsentAsEmpty()]
     """
     Where the check's own output is, empty when it reported none.
     """
@@ -67,6 +59,61 @@ class CheckResult(ValidatedJSONModel):
     def succeeded(self) -> bool:
         """:return: Whether this check reported success."""
         return self.outcome is CheckOutcome.SUCCESS
+
+
+class GraphQLCheckRun(CheckResult):
+    """
+    A check run, as a GraphQL rollup lists it.
+    """
+
+    kind: Annotated[Literal["CheckRun"], Field(alias="__typename")]
+    """
+    The GraphQL type a rollup context of this shape carries.
+    """
+
+    outcome: Annotated[ConclusionOutcome, Field(alias="conclusion")]
+    """
+    Where the run stands, pending while it has no conclusion.
+    """
+
+    target_url: Annotated[str, AbsentAsEmpty(), Field(alias="detailsUrl")]
+    """
+    The run's page, empty when it has none.
+    """
+
+
+class GraphQLStatusContext(CheckResult):
+    """
+    A commit status, as a GraphQL rollup lists it.
+    """
+
+    kind: Annotated[Literal["StatusContext"], Field(alias="__typename")]
+    """
+    The GraphQL type a rollup context of this shape carries.
+    """
+
+    name: Annotated[str, Field(alias="context")]
+    """
+    The context the status was posted under, which names it.
+    """
+
+    outcome: Annotated[ConclusionOutcome, Field(alias="state")]
+    """
+    The state the status was posted with.
+    """
+
+    target_url: Annotated[str, AbsentAsEmpty(), Field(alias="targetUrl")]
+    """
+    The link the status was posted with, empty when it has none.
+    """
+
+
+RollupContext = Annotated[
+    GraphQLCheckRun | GraphQLStatusContext, Field(discriminator="kind")
+]
+"""
+One entry of a GraphQL rollup, read as the shape its GraphQL type names.
+"""
 
 
 class CheckStatus(ValidatedJSONModel):
@@ -79,7 +126,7 @@ class CheckStatus(ValidatedJSONModel):
     The verdict GitHub computed over all of them.
     """
 
-    results: Annotated[GraphQLConnection[CheckResult], Field(alias="contexts")]
+    results: list[CheckResult]
     """
     Every check, in the order GitHub returned them.
     """
@@ -105,12 +152,23 @@ class CheckStatus(ValidatedJSONModel):
         return [result for result in self.results if not result.succeeded]
 
 
+class CheckRollup(CheckStatus):
+    """
+    The checks of a commit, as GitHub's GraphQL API rolls them up.
+    """
+
+    results: Annotated[GraphQLConnection[RollupContext], Field(alias="contexts")]
+    """
+    Every check, in the order GitHub returned them.
+    """
+
+
 class Commit(ValidatedJSONModel):
     """
     A commit, carrying the checks reported against it.
     """
 
-    checks: Annotated[CheckStatus | None, Field(alias="statusCheckRollup")]
+    checks: Annotated[CheckRollup | None, Field(alias="statusCheckRollup")]
     """
     The checks reported against this commit, absent when none have reported.
     """

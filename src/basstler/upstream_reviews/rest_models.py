@@ -13,6 +13,7 @@ from pydantic import Field
 from basstler.upstream_reviews.pull_request_models import (
     CheckResult,
 )
+from basstler.upstream_reviews.vocabulary import AbsentAsEmpty, ConclusionOutcome
 from basstler.upstream_reviews.review_models import (
     Author,
     BranchPullRequest,
@@ -240,12 +241,44 @@ class RestReviewThread(RestResponse, ValidatedJSONModel):
         )
 
 
+class RestCheckRun(CheckResult):
+    """
+    A check run, as the REST check-runs listing returns it.
+    """
+
+    outcome: Annotated[ConclusionOutcome, Field(alias="conclusion")]
+    """
+    Where the run stands, pending while it has no conclusion.
+    """
+
+    target_url: Annotated[str, AbsentAsEmpty(), Field(alias="details_url")]
+    """
+    The run's page, empty when it has none.
+    """
+
+
+class RestCommitStatus(CheckResult):
+    """
+    A commit status, as the REST combined-status response lists it.
+    """
+
+    name: Annotated[str, Field(alias="context")]
+    """
+    The context the status was posted under, which names it.
+    """
+
+    outcome: Annotated[ConclusionOutcome, Field(alias="state")]
+    """
+    The state the status was posted with.
+    """
+
+
 class RestCheckRunPage(RestResponse, ValidatedJSONModel):
     """
     One page of the check runs reported against a commit.
     """
 
-    check_runs: list[CheckResult]
+    check_runs: list[RestCheckRun]
     """
     The check runs on this page.
     """
@@ -259,7 +292,7 @@ class RestCombinedStatusPage(RestResponse, ValidatedJSONModel):
     posted at all, which would misreport a commit no status applies to.
     """
 
-    statuses: list[CheckResult]
+    statuses: list[RestCommitStatus]
     """
     The statuses on this page.
     """
