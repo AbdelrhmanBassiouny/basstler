@@ -1,12 +1,10 @@
 ## Plan
-- Validate default_repository against the checkout's origin, failing closed (done)
+- Settle the owner's two naming/design questions on the review (origin vs notes remote, checkout_repository)
 
 ## Done
-- Failing test reproducing #153, then the fix: origin replaces the notes remote in the check
-- Renamed --notes-remote-url/notes_repository to --origin-url/checkout_repository; docs updated
-- #138's tests moved to the origin contract (owner-approved); suite green apart from 4 Playwright errors from the environment
-- Reproduction and fix posted on #153; PR #169 labelled bug, still a draft
+- Validation checks default_repository against the checkout's origin; tests rewritten; draft PR #169
+- Review: notes-repository attach moved to basstler-v2-fixes/separate-notes-repository-attach; session-action research to interaction-model/session-actions
+- Merge probe CLEAN at e127584 against main 82cd7ab; CI not re-read this run
 
 ## Next
-- Owner review of #169
-- Owner to place the plan-site private-repository token problem from #153's comments
+- Apply whatever the owner decides on the open threads (a rename, or a different repository source)
