@@ -9,7 +9,7 @@ description: 'One explicit model for how basstler interacts with the session and
   :147).
 
   '
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 148
 waves:
 - id: core

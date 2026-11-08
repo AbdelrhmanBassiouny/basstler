@@ -8,7 +8,7 @@ description: 'Plans and branches collide in two ways nothing catches early: an i
   a branch exists and definitions derived once one does; reports every collision as a typed
   finding with enumerated resolutions; and draws the graph on the plan site. Absorbs design-overlap
   (retired 2026-10-20; #35 carries this plan).'
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 35
 waves:
 - id: foundation

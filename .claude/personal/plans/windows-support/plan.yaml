@@ -5,7 +5,7 @@ description: Fix what stopped /setup-personal-notes on Windows (Git Bash, python
   WSL with no usable distribution) - bare bash resolving to WSL's launcher, the environment
   interpreter path, crashes on a failed check-setup.sh, an unset plugin root, a partial setup
   after a failed run - then keep it fixed with a Windows CI job.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 70
 waves:
 - id: fixes

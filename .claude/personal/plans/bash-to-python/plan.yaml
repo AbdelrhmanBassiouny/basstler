@@ -4,7 +4,7 @@ title: The bash layer becomes thin shims over the basstler package
 description: Every process and GitHub API call modelled as typed values first, then each bash entry point's
   body moves onto the package and its script becomes a shim, one layer at a time in dependency order off
   the core modules. Split out of basstler-package on 2026-10-20.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 4
 waves:
 - id: conversion

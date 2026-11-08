@@ -5,7 +5,7 @@ description: 'The workflow tooling lives in this repository as one importable pa
   Code plugin, and CRAM uses it as a per-user plugin (CRAM #523, merged 2026-10-20). What remains is the
   plugin working with no committed project files, the carried krrood branch, and a shared, published development
   tooling package. Converting the bash layer into shims is the bash-to-python plan.'
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 4
 waves:
 - id: extraction
@@ -46,7 +46,7 @@ items:
   notes: 'Once krrood-core is on PyPI: basstler-core depends on krrood-core>=X,<next-major (a range, never ==) instead of
     copying its code; the copied class_property, exceptions and PathEnumeration are deleted, and AGENTS.md''s copy-never-import
     rule changes in the same PR. basstler-rules keeps the rule engine and imports patterns from krrood-core. SiteRepository
-    becomes a Role[Repository] (https://github.com/AbdelrhmanBassiouny/basstler/pull/105#discussion_r4436512955). #12 predates
+    becomes a Role[Repository] (https://github.com/KAOS-repositories/basstler/pull/105#discussion_r4436512955). #12 predates
     this and is reworked on v3''s code.'
   blockers:
   - Waits on krrood-light-core/krrood-distributions being released on PyPI (CRAM notes).

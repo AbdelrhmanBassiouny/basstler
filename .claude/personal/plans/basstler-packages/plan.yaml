@@ -6,7 +6,7 @@ description: Split basstler into acyclic basstler-* PyPI distributions under the
   report sections and an item lifecycle set up through a guided init, lets anyone depend on basstler and compose
   their own workflow on top of a default one, and code_rules catches up with krrood's development tools. The reorganization
   goes first.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 151
 waves:
 - id: reorganization

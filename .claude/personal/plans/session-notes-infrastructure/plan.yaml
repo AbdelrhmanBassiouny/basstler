@@ -6,7 +6,7 @@ description: The personal-notes branch and the SessionStart hook that reads it. 
   is given at start - a fresh base, the right git identity, the local settings, the plan its
   branch belongs to, and a setup verdict - and the conventions those carry, each made a mechanism
   rather than a line of prose someone has to remember.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 39
 waves:
 - id: slimming

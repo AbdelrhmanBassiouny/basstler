@@ -3,7 +3,7 @@ id: core-robustness
 title: 'Core robustness: concurrent-safe saves, lean kickoffs and typed plan models'
 description: Plan saves survive concurrent writers, a kickoff loads little text, and the plan
   model and reports are typed. Split out of team-basstler.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 62
 waves:
 - id: foundations

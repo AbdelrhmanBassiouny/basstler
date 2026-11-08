@@ -4,7 +4,7 @@ title: 'Team repository: shared plans, item issues, a board and /malloche'
 description: A team repository in an organisation holds the shared plans, one issue per item, a Project
   board, and each member's own notes; /malloche picks and starts the next ready item. Pilot - cram2 with
   the domain-models plan. Split out of team-basstler.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 62
 waves:
 - id: team

@@ -6,7 +6,7 @@ description: The setup session for a fork asked many questions and ended with pl
   site as one row, cannot tell an unreadable repository from a fault, and leaves steps to
   the user that the tooling could do. This plan makes the status per repository, treats a
   successful run as proof, and removes avoidable questions and steps.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 waves:
 - id: reporting
   name: Report status truthfully
@@ -85,7 +85,7 @@ items:
     degrades to unknown instead of failing the build. Cause: one 5xx among the many commit-status
     reads failed builds 107-109 and 112-113 of stack-board.'
   branch: fix-retry-transient-github-errors
-  repository: AbdelrhmanBassiouny/basstler
+  repository: KAOS-repositories/basstler
   pull_request_number: 136
   session: https://claude.ai/code/session_01JxHGiLLiodxFsvyywDM1YS
 - id: retry-dispatch-step
@@ -147,7 +147,7 @@ items:
   track: setup-flow
   status: in progress
   branch: plan-site-token-fast-path
-  repository: AbdelrhmanBassiouny/basstler
+  repository: KAOS-repositories/basstler
   pull_request_number: 140
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on: []

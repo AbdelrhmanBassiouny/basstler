@@ -4,7 +4,7 @@ title: 'Plan site you can act from: commands, promotion, activity order and a re
 description: Buttons on the plan site defer, restore and delete items and plans, refresh the
   site and promote an item upstream; plans are ordered by recent activity; and the site gets a
   polished, easy-to-navigate design with the same progress statistics on every plan.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 134
 waves:
 - id: actionable-site

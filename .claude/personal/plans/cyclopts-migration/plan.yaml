@@ -5,7 +5,7 @@ description: >
   Ports the argparse command lines left after basstler.stack (#131) and basstler.plan
   (#142) to cyclopts, one package per pull request, keeping every command, option and
   exit status.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 147
 waves:
 - id: port

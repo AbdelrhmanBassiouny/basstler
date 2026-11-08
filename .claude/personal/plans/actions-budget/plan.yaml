@@ -5,7 +5,7 @@ description: GitHub once disabled Actions on the CRAM fork for wasted compute. b
   every workflow file against a tested budget, narrows pull request CI to the libraries a
   change touches, and warns before a run rate is exceeded. Moved from the CRAM fork's notes
   on 2026-10-20; the CRAM-side ci.yml half is changed-library-matrix's.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 4
 waves:
 - id: budget

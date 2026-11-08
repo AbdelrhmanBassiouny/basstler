@@ -5,7 +5,7 @@ description: 'The hub page recommends what to do next across all plans and repos
   then cleanup and duplication removal, then features, with PhD work (EQL, KRROOD, robotics) kept ahead
   of side work. basstler fixes rank high because they keep the workflow running; basstler features rank
   by how much they help the PhD work.'
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 58
 waves:
 - id: recommender

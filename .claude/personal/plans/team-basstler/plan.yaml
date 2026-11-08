@@ -4,7 +4,7 @@ title: 'Plan site: a published, live, optionally private view of every plan'
 description: The plan site publishes every plan from setup, rebuilds on each plan save and merge,
   re-checks pull requests from the browser and can be private. Its core-robustness half and
   its team half (team-repository) were split out of it.
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 62
 waves:
 - id: foundations
@@ -116,7 +116,7 @@ items:
   track: site
   branch: plan-site-live-states
   pull_request_number: 141
-  repository: AbdelrhmanBassiouny/basstler
+  repository: KAOS-repositories/basstler
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on:
   - page-draft-recheck
@@ -172,7 +172,7 @@ items:
   track: site
   branch: plan-site-live-states
   pull_request_number: 141
-  repository: AbdelrhmanBassiouny/basstler
+  repository: KAOS-repositories/basstler
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on:
   - site-rebuild-on-merge
@@ -187,7 +187,7 @@ items:
   track: site
   branch: plan-site-live-states
   pull_request_number: 141
-  repository: AbdelrhmanBassiouny/basstler
+  repository: KAOS-repositories/basstler
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on: []
   notes: >

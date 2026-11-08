@@ -5,7 +5,7 @@ description: 'Plans move from plan.yaml on the notes branch to a tracking issue 
   by one brief command and by the plan site. Split from basstler-v3 on 2026-11-04.
 
   '
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 99
 waves:
 - id: core

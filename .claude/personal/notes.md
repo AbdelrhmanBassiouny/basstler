@@ -61,7 +61,7 @@ session by `session-start.sh`. Never merge this file into `main`.
 - Parse external data (API responses, JSON, files) into explicit dataclass models at the
   boundary; every decision and query afterwards runs on the models, never on raw dicts.
   Each model reads only its own object's fields and hands nested objects to their own
-  models. Agreed at https://github.com/AbdelrhmanBassiouny/basstler/pull/13#discussion_r4316972597.
+  models. Agreed at https://github.com/KAOS-repositories/basstler/pull/13#discussion_r4316972597.
 
 ## PR progress notes
 

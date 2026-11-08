@@ -8,7 +8,7 @@ description: 'Rebuild basstler next to v2 so code does the mechanics and Claude 
   basstler-v3-stacks.
 
   '
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 99
 waves:
 - id: foundation

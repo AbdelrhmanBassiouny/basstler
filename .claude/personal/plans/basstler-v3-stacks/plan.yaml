@@ -5,7 +5,7 @@ description: 'Stacks are read from pull request bases, promoted upstream with a 
   by an Action; a fork Action mirrors upstream reviews. Split from basstler-v3 on 2026-11-04.
 
   '
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 99
 waves:
 - id: core

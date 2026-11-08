@@ -5,7 +5,7 @@ description: 'Each fix is one bug pull request off main with one root cause, so 
   while basstler-v3 replaces it. Moving the sync stamp files out of the working tree is session-notes-infrastructure/stamps-in-git-directory.
 
   '
-default_repository: AbdelrhmanBassiouny/basstler
+default_repository: KAOS-repositories/basstler
 tracking_issue: 99
 waves:
 - id: fixes
