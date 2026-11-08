@@ -22,7 +22,11 @@ from basstler.locations import RepositoryStateLocation
 from basstler.maintenance.board import BoardExport, UpstreamPullRequests
 from basstler.maintenance.fast_forward import fast_forward
 from basstler.maintenance.finish_summary import FinishSummary
-from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.git_commands import (
+    BranchAncestry,
+    GitCommandRunner,
+    ProposedPush,
+)
 from basstler.maintenance.github import GitHubRepository, PullRequestReader
 from basstler.maintenance.promotion import (
     PromotionSummaries,
@@ -41,6 +45,11 @@ from basstler.maintenance.upstream_action import (
 )
 from basstler.maintenance.upstream_pull_request_synchronization import (
     UpstreamPullRequestSynchronization,
+)
+from basstler.stack.commit_move import (
+    CommitMoveAction,
+    CommitMoveChecks,
+    ProposedCommitMove,
 )
 from basstler.stack.model import Stack
 from basstler.stack.settings import Configuration
@@ -61,9 +70,8 @@ class MaintenancePass:
     """
     What one run has resolved so far, built lazily as a command asks for it.
 
-    The board is derived before the credential is resolved, so a caller missing both is
-    sent after the board - the thing the previous command produces - rather than after a
-    token that would not help them yet.
+    Every command that needs the stack derives it from a board it exports itself, so no
+    command depends on a file an earlier one wrote or a later one discarded.
     """
 
     configuration: Configuration
@@ -78,7 +86,8 @@ class MaintenancePass:
 
     board: Path
     """
-    The exported board this run writes, derives its stack from and discards at its end.
+    Where :class:`BoardCommand` writes the board for a person to read; no command derives
+    its stack from it, and a whole pass discards it.
     """
 
     upstream_read: UpstreamReadRoute = UpstreamReadRoute.DIRECT
@@ -128,10 +137,6 @@ class MaintenancePass:
         )
         return read.wait(self.action_timeout, read.send()).upstream_pull_requests
 
-    def stack(self) -> Stack:
-        """:return: The derived stack, read from the exported board."""
-        return Stack.load(self.board)
-
     def export_board(self) -> BoardExport:
         """:return: The fork's open pull requests, each with the upstream pull request
         reviewing it and the verdict over its head's checks."""
@@ -142,9 +147,9 @@ class MaintenancePass:
         )
 
     def fresh_stack(self) -> Stack:
-        """:return: The stack derived from a board exported and written just now."""
-        self.export_board().write(self.board)
-        return self.stack()
+        """:return: The stack derived from a board exported just now, never from a file
+        an earlier command left behind."""
+        return Stack.from_pull_requests(list(self.export_board().pull_requests))
 
 
 class PreparationKey(StrEnum):
@@ -330,7 +335,7 @@ class RestackCommand(MaintenanceCommand):
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
-        stack = maintenance.stack()
+        stack = maintenance.fresh_stack()
         report = MaintenanceReport(
             restacked=tuple(
                 restack(
@@ -338,8 +343,71 @@ class RestackCommand(MaintenanceCommand):
                 )
             )
         )
+        if not report.restacked:
+            logger.info(RestackCommand.nothing_to_restack(arguments.stacked_on))
         report.print_summary()
         return report.exit_code
+
+    @staticmethod
+    def nothing_to_restack(stacked_on: str | None) -> str:
+        """
+        :param stacked_on: The branch whose stack was asked for, ``None`` for every
+            branch.
+        :return: The line saying the restack had no branch to carry anything into.
+        """
+        if stacked_on is None:
+            return "no open pull request needs restacking"
+        return f"no open pull request is stacked on {stacked_on}; nothing to carry"
+
+
+@dataclass(frozen=True)
+class PushCommand(MaintenanceCommand):
+    """
+    Publishes the checked-out branch to the same branch on the fork, only once the move
+    checks a restack's push is put through find it clear.
+    """
+
+    @classproperty
+    def description(cls) -> str:
+        """
+        What it does, as ``--help`` puts it.
+        """
+        return (
+            "publish the checked-out branch to the fork, unless the move checks "
+            "refuse it"
+        )
+
+    def run(
+        self, maintenance: MaintenancePass, arguments: argparse.Namespace
+    ) -> StackExitCode:
+        """:param maintenance: What this run has resolved.
+        :param arguments: The parsed command line.
+        :return: The process exit code: success only when the branch was published.
+        :raises GitCommandFailed: If the fork rejects the push."""
+        git = maintenance.git
+        stack = maintenance.fresh_stack()
+        branch = git.checked_out_branch()
+        fork_remote = stack.configuration.fork_remote
+        checks = CommitMoveChecks(
+            stack=stack,
+            checked_out_branch=branch,
+            is_ancestor=BranchAncestry(stack.configuration, git).is_ancestor,
+        )
+        verdict = checks.print_verdict(
+            ProposedCommitMove(
+                action=CommitMoveAction.PUSH,
+                source=branch,
+                destination=branch,
+                destination_remote=fork_remote,
+            )
+        )
+        if verdict is not StackExitCode.SUCCESS:
+            return verdict
+        git.push(
+            ProposedPush(remote=fork_remote, refspec=f"{branch}:{branch}")
+        ).raise_if_failed()
+        logger.info(f"pushed {branch} to {fork_remote}/{branch}")
+        return StackExitCode.SUCCESS
 
 
 @dataclass(frozen=True)
@@ -374,7 +442,7 @@ class PromoteCommand(MaintenanceCommand):
         """:param maintenance: What this run has resolved.
         :param arguments: The parsed command line.
         :return: The process exit code."""
-        stack = maintenance.stack()
+        stack = maintenance.fresh_stack()
         fork = maintenance.fork()
         report = MaintenanceReport(
             promoted=tuple(

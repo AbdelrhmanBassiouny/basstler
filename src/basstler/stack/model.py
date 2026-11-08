@@ -398,9 +398,17 @@ class Stack:
     def load(cls, board: Path) -> Stack:
         """:param board: The exported board to derive the stack from.
         :return: The full live stack: configuration + board export + git merged-detection.
+        :raises BoardUnavailable: If *board* does not exist.
+        """
+        return cls.from_pull_requests(PullRequest.read_board(board))
+
+    @classmethod
+    def from_pull_requests(cls, pull_requests: list[PullRequest]) -> Stack:
+        """:param pull_requests: The fork's open pull requests, as a board holds them.
+        :return: The full live stack: configuration + those pull requests + git
+            merged-detection.
         """
         configuration = Configuration.load()
-        pull_requests = PullRequest.read_board(board)
         heads_on_fork = {
             pull_request.head
             for pull_request in pull_requests

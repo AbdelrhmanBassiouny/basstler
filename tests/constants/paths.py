@@ -65,6 +65,11 @@ class RepositoryLocation(PathEnumeration):
     The reusable workflow that builds the plan site and deploys a changed one.
     """
 
+    MAIN_FAILURE_WORKFLOW = WORKFLOWS / "main-failure.yml"
+    """
+    The workflow that records each run of the tests on main in its failure issue.
+    """
+
 
 class DatasetLocation(PathEnumeration):
     """
@@ -74,6 +79,22 @@ class DatasetLocation(PathEnumeration):
     DIRECTORY = Path(__file__).parents[1] / "dataset"
     """
     The dataset directory itself.
+    """
+
+    NOTES_CITING_RETIRED_NAMES = (
+        DIRECTORY / "document-references" / "notes-citing-retired-names.md"
+    )
+    """
+    Personal notes written against an older release: moved modules, a source file
+    that moved with one, a retired skill and a module that never existed.
+    """
+
+    NOTES_CITING_SHIPPED_NAMES = (
+        DIRECTORY / "document-references" / "notes-citing-shipped-names.md"
+    )
+    """
+    Personal notes citing only what this release ships, beside names that merely look
+    like the package's: a branch, a file under the git directory, another skill.
     """
 
     WORKFLOW_NAMING_THE_REPOSITORY = (
@@ -199,6 +220,21 @@ class DatasetLocation(PathEnumeration):
     REPOSITORY_NOT_FORK = DIRECTORY / "repository-not-fork.json"
     """
     A repository's REST response for a repository that is not a fork.
+    """
+
+    MAIN_FAILURE_OPEN_ISSUE = DIRECTORY / "main-failure" / "open-issue.json"
+    """
+    The open issue reporting main's failing tests, as the issues API lists it.
+    """
+
+    MAIN_FAILURE_OPENED_ISSUE = DIRECTORY / "main-failure" / "opened-issue.json"
+    """
+    The issue reporting main's failing tests, as GitHub answers its opening.
+    """
+
+    MAIN_FAILURE_RUN_JOBS = DIRECTORY / "main-failure" / "failed-run-jobs.json"
+    """
+    The jobs of a failed run of the tests: one failed, one timed out, two passed.
     """
 
     MERGE_WORKFLOW_PULL_REQUEST = DIRECTORY / "merge-workflow-pull-request.json"

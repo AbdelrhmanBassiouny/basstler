@@ -38,6 +38,11 @@ class SummaryLine(StrEnum):
     Whether the personal notes were loaded, and from where.
     """
 
+    CITED_NAMES = "cited names"
+    """
+    Whether every module and skill the personal notes name is still shipped.
+    """
+
     PLAN = "plan"
     """
     Which plan, if any, tracks the current branch.
@@ -76,6 +81,11 @@ class SummaryLine(StrEnum):
     ACTIONS_USAGE = "Actions usage"
     """
     How near the workflows' runs and jobs are to the budget's daily ceilings.
+    """
+
+    MAIN_TESTS = "main tests"
+    """
+    Whether an issue reports the default branch's tests failing.
     """
 
     PLAN_STATE_SHA = "plan state SHA"
@@ -117,6 +127,27 @@ class SummaryMessage(StrEnum):
     BRANCH_TRACKED_IN_PLAN = "plan_line_tracked"
     """
     The branch is a tracked item of a plan that resolved.
+    """
+
+    CITED_NAMES_CURRENT = "cited_names_line_current"
+    """
+    Every module and skill the notes name is shipped.
+    """
+
+    CITED_NAMES_STALE = "cited_names_line_stale"
+    """
+    The heading above the indented rows naming each name the notes cite that is no
+    longer shipped.
+    """
+
+    CITED_NAMES_NOT_CHECKED = "cited_names_line_not_checked"
+    """
+    The module reading the notes did not run.
+    """
+
+    NO_NOTES_TO_CITE_NAMES = "cited_names_line_no_notes"
+    """
+    There are no personal notes to read names from.
     """
 
     HUB_NOT_REGISTERED = "hub_line_not_registered"
@@ -235,6 +266,21 @@ class SummaryMessage(StrEnum):
     ACTIONS_USAGE_WITHIN_BUDGET = "actions_usage_line_within_budget"
     """
     No workflow is near a daily ceiling.
+    """
+
+    MAIN_TESTS_NOT_CHECKED = "main_tests_line_not_checked"
+    """
+    The repository's issues could not be read.
+    """
+
+    MAIN_TESTS_PASSING = "main_tests_line_passing"
+    """
+    No issue reports the default branch's tests failing.
+    """
+
+    MAIN_TESTS_FAILING = "main_tests_line_failing"
+    """
+    An open issue reports the default branch's tests failing.
     """
 
 

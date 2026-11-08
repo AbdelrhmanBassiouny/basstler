@@ -7,23 +7,24 @@ stale, and the next person to touch one of them re-hits what was just fixed.
 
 ## When this applies
 
-After the item's branch has been pushed, and only then — there is nothing to
-carry before that. Skip it when no open pull request is based on this item's
-branch; the pass below reports exactly that, so running it is the cheapest way
-to find out.
+Always, once the item's branch has been pushed - never before, since there is nothing to carry
+yet. Do not decide from the change itself (a docstring, a rename) or from an earlier pass's report
+whether anything is stacked on the branch: the command below answers that, and prints
+`no open pull request is stacked on <branch>; nothing to carry` when there is nothing.
 
 ## Carrying it
 
 ```bash
-"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance board --write
 "${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance restack --stacked-on <this item's branch>
 ```
+
+It exports the board it plans from itself, so no `board --write` comes first.
 
 It pushes to every descendant, which is what a permission classifier is most likely
 to stop. A denial here is a question, asked at once with `AskUserQuestion`, not an
 item for the closing report - see [`session-rules.md`](../../hooks/session-rules.md).
 
-The second command plans only the branches stacked on the named one — directly
+It plans only the branches stacked on the named one — directly
 or through the branches between them — and puts each through the same steps a
 whole-board pass uses, parent before child. It prints one line per branch:
 `pushed` (it took the fix and was published), `up-to-date` (it already had it),

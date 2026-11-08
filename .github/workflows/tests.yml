@@ -86,7 +86,10 @@ jobs:
       matrix:
         python-version: ["3.12", "3.13"]
     steps:
+      # The tags give the installed package its release version, which the tests read.
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Set up Python
         uses: actions/setup-python@v5

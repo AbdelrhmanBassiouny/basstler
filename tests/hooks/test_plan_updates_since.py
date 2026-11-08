@@ -31,9 +31,9 @@ from ..executable_stubs import (
     path_hiding_executables,
 )
 
+from basstler.github.issue import PostedIssueComment
 from basstler.plan.updates_since_support import (
     PlanUpdatesSinceMessage,
-    IssueComment,
     PlanUpdatesSinceOption,
     no_default_repository_message,
 )
@@ -359,10 +359,10 @@ def test_prints_tracking_issue_comments_via_the_gh_backend(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
     call_log = tmp_path / "gh-calls.txt"
-    comment = IssueComment(
+    comment = PostedIssueComment(
         author_login="octocat", created_at="2026-08-01T00:00:00Z", body="Looks good"
     )
-    comments_json = json.dumps([comment.to_api_response()])
+    comments_json = json.dumps([comment.to_json()])
 
     result = run_plan_updates_since(
         scratch_repo,
@@ -394,10 +394,10 @@ def test_prints_tracking_issue_comments_via_the_curl_fallback(
         scratch_repo, PLAN_ID, PLAN_MANIFEST_WITH_TRACKING_ISSUE, PLAN_ROADMAP, "v1"
     )
     call_log = tmp_path / "curl-calls.txt"
-    comment = IssueComment(
+    comment = PostedIssueComment(
         author_login="hubot", created_at="2026-08-01T01:00:00Z", body="Ship it"
     )
-    comments_json = json.dumps([comment.to_api_response()])
+    comments_json = json.dumps([comment.to_json()])
     hidden_gh_path = path_hiding_executables(tmp_path, GitHubExecutable.COMMAND_LINE)
 
     result = run_plan_updates_since(

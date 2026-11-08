@@ -419,6 +419,12 @@ class DesignPrinciplesRules(Section):
         "SOLID and the domain's semantics"
     )
 
+    ASSOCIATE_OR_SUBCLASS_FIRST = (
+        "Before writing a new class, look for an existing class it can hold as a "
+        "field or subclass, and use it; when related classes share fields or "
+        "behaviour, give them a common base"
+    )
+
 
 class MethodsRules(Section):
     """
@@ -561,10 +567,18 @@ class StructuredDataRules(Section):
     )
 
     FIXED_NAMES_AS_STRING_ENUMS = (
-        "A string that names a fixed thing - a payload key, a state, a label, a "
-        "filename, an environment variable, a command flag, a status - is a "
-        "`StrEnum` member. A value spelled in two places has no single source to "
-        "rename, and nothing fails when the two drift apart"
+        "A string that names a fixed thing - a state, a label, a filename, an "
+        "environment variable, a command flag, a status - is a `StrEnum` member. A "
+        "value spelled in two places has no single source to rename, and nothing "
+        "fails when the two drift apart"
+    )
+
+    PAYLOAD_KEYS_ONLY_IN_THE_MODEL = (
+        "A payload is a dataclass, and its keys are spelled only inside that "
+        "dataclass: as its field names where they match the payload, otherwise "
+        "inside the method that parses or writes it. Never declare an enum of "
+        "payload keys for other code to read, and never declare one key in two "
+        "places"
     )
 
     TYPED_ENUM_VALUES = (
