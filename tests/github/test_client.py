@@ -23,6 +23,7 @@ from basstler.github.label import LabelReplacement
 from basstler.github.exceptions import (
     GitHubCredentialRejected,
     GitHubCredentialUnavailableError,
+    GitHubRepositoryMoved,
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
@@ -43,6 +44,16 @@ LISTING = RequestLine.get(f"/{REPOSITORY.api_path}/pulls?state=open&per_page=2")
 USER = RequestLine.get("/user")
 MISSING_PULL_REQUEST_PATH = f"/{REPOSITORY.pull_request_path(404)}"
 COMMENTS = RequestLine.post(f"/{REPOSITORY.api_path}/issues/1/comments")
+MOVED = CannedResponse(
+    {
+        "message": "Moved Permanently",
+        "url": "https://api.github.com/repositories/1/pulls",
+    },
+    HTTPStatus.MOVED_PERMANENTLY,
+)
+"""
+What GitHub answers a path naming a repository by the name it had before it moved.
+"""
 
 
 class StubEnvironmentVariable(StrEnum):
@@ -243,6 +254,20 @@ def test_a_rejected_credential_is_its_own_failure(api_server, client):
 
     with pytest.raises(GitHubCredentialRejected):
         client.get("/user")
+
+
+def test_a_read_of_a_moved_repository_raises_that_it_moved(api_server, client):
+    api_server.responses[str(LISTING)] = MOVED
+
+    with pytest.raises(GitHubRepositoryMoved):
+        client.get(LISTING.target)
+
+
+def test_a_listing_of_a_moved_repository_raises_that_it_moved(api_server, client):
+    api_server.responses[str(LISTING.page(1))] = MOVED
+
+    with pytest.raises(GitHubRepositoryMoved):
+        client.get_pages(LISTING.target)
 
 
 def test_a_refusal_names_a_given_credential(client):

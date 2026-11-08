@@ -391,7 +391,7 @@ class GitHubRestClient(GitHubClient, GitHubAttemptClient):
             return GitHubResponse(
                 None, failure=GitHubUnreachableError(method, path, str(error))
             )
-        if status >= HTTPStatus.BAD_REQUEST:
+        if status >= HTTPStatus.MULTIPLE_CHOICES:
             return GitHubResponse(
                 None,
                 failure=GitHubRequestFailed.for_status(
