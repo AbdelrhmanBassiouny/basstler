@@ -41,3 +41,15 @@ items:
     (0f1f5ece): PlanValidator.repository_problems compares default_repository with the notes remote, so
     a separate notes repository never passes. Discuss and reproduce on the issue, then a failing test,
     then one bug PR off main closing #153.'
+
+- id: separate-notes-repository-attach
+  title: A cloud session attaches a separate notes repository before it reads or saves notes
+  track: fixes
+  depends_on: []
+  status: not started
+  notes: 'From the review of #169 (manifest_tools.py, discussion_r4508198236). When the notes
+    remote names another repository than the clone, a cloud session cannot fetch or push
+    notes until that repository is attached. Session start and save-plan.sh report it, and
+    the session calls add_repo with push access; if refused, it asks the user with "Attach
+    it (Recommended)" first, as for the plan site repository. Own bug PR off main, failing
+    test first. The first case interaction-model/session-actions ports.'
