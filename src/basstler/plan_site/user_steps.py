@@ -194,7 +194,7 @@ class UserSteps:
                 step,
                 f"{sys.executable} -m {token_storage.__name__}",
                 tuple(
-                    f"Open {GitHubAddress.WEB}/{repository}/settings/secrets/actions/new, "
+                    f"Open {Repository.parse(repository).new_actions_secret_url}, "
                     f"set the name to {PlanSiteSecret.TOKEN}, paste the token as the "
                     "secret, then click Add secret."
                     for repository in self.registered

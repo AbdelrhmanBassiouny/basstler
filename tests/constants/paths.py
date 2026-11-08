@@ -180,11 +180,6 @@ class DatasetLocation(PathEnumeration):
     A notes repository's run listing whose latest dispatch run succeeded.
     """
 
-    PLAN_SITE_DISPATCH_RUNS_PENDING = DIRECTORY / "plan-site-dispatch-runs-pending.json"
-    """
-    :attr:`PLAN_SITE_DISPATCH_RUNS_SUCCEEDED` while its latest dispatch run still runs.
-    """
-
     PLAN_SITE_DISPATCH_RUNS_FAILED = DIRECTORY / "plan-site-dispatch-runs-failed.json"
     """
     A notes repository's run listing whose latest dispatch run failed after an earlier

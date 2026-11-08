@@ -5,22 +5,12 @@ session's own credential.
 
 from __future__ import annotations
 
-import json
-from dataclasses import dataclass, field
 from http import HTTPStatus
 
 import pytest
 
 import basstler.plan_site.build_start
 
-from basstler.github.client import (
-    GitHubAttemptClient,
-    GitHubResponse,
-    HttpMethod,
-    GitHubWrite,
-)
-from basstler.github.credential import CredentialProvider
-from basstler.github.exceptions import GitHubRequestFailed
 from basstler.github.repository_details import RepositoryDetails
 from basstler.github.workflow_run import WorkflowDispatch
 from basstler.locations import WorkflowLocation
@@ -35,56 +25,12 @@ from basstler.plan_site.build_start import (
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.repository import Repository
 
-from ..constants.paths import DatasetLocation
+from .site_answering_client import SITE_DETAILS, SiteAnsweringClient
 
 SITE = SiteRepository(Repository.parse("an-owner/plans"))
 """
 The site repository whose build is started.
 """
-
-SITE_DETAILS = json.loads(DatasetLocation.REPOSITORY_TRUNK_DEFAULT_BRANCH.read_text())
-"""
-The resource the stand-in site repository answers with.
-"""
-
-# %% a site repository answering from memory
-
-
-@dataclass
-class SiteAnsweringClient(GitHubAttemptClient):
-    """
-    Answers the site repository's resource, or refuses it with :attr:`refusal`, and
-    accepts and records every write.
-    """
-
-    refusal: HTTPStatus | None = None
-    """
-    The status reading the site repository is refused with, ``None`` to answer it.
-    """
-
-    writes: list[GitHubWrite] = field(default_factory=list)
-    """
-    Every write sent, oldest first.
-    """
-
-    def attempt_get(self, path: str) -> GitHubResponse:
-        if self.refusal is None:
-            return GitHubResponse(SITE_DETAILS)
-        return GitHubResponse(
-            None,
-            failure=GitHubRequestFailed(
-                status=self.refusal,
-                detail="",
-                method=HttpMethod.GET,
-                path=path,
-                credential_origin=CredentialProvider.CALLER,
-            ),
-        )
-
-    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
-        self.writes.append(write)
-        return GitHubResponse(None)
-
 
 # %% starting the build
 

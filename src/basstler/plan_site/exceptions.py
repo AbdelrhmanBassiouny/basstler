@@ -67,9 +67,27 @@ class RegistryUnreadableError(DataclassException):
 
 
 @dataclass
-class PlanSiteTokenEmptyError(DataclassException, ValueError):
+class PlanSiteUnrecordedError(DataclassException, LookupError):
     """
-    Raised when no token was given to store.
+    Raised when the notes branch records no plan site, so a token has no build to start.
+    """
+
+    notes_branch: str
+    """
+    The notes branch that was read.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.notes_branch} records no plan site"
+
+    def suggest_correction(self) -> str:
+        return "set the plan site up with /setup-personal-notes"
+
+
+@dataclass
+class PlanSiteTokenNotEnteredError(DataclassException, ValueError):
+    """
+    Raised when no token was typed at the hidden terminal prompt that asks for it.
     """
 
     secret: str
@@ -77,8 +95,21 @@ class PlanSiteTokenEmptyError(DataclassException, ValueError):
     The secret the token was to be stored as.
     """
 
+    terminal: bool
+    """
+    Whether a terminal was attached to ask on.
+    """
+
     def error_message(self) -> str:
-        return f"no token was given to store as {self.secret}"
+        if not self.terminal:
+            return (
+                f"{self.secret} is asked for only at a hidden terminal prompt, and no "
+                "terminal is attached"
+            )
+        return f"no token was entered for {self.secret}"
 
     def suggest_correction(self) -> str:
-        return "paste the token at the prompt, or pipe it to the command"
+        return (
+            "run the command in your own terminal and paste the token at its hidden "
+            "prompt; never paste it into a chat, a command line or a file"
+        )

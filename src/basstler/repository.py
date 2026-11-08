@@ -177,6 +177,13 @@ class Repository:
         return f"{self.url}/actions/runs/{run}"
 
     @property
+    def new_actions_secret_url(self) -> str:
+        """
+        The form on GitHub that adds an Actions secret to the repository.
+        """
+        return f"{self.url}/settings/secrets/actions/new"
+
+    @property
     def api_path(self) -> str:
         """
         The repository's REST path, relative to :attr:`GitHubAddress.API`, which is also
