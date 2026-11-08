@@ -1,46 +1,42 @@
 """
-Store the plan site's token in every repository the site publishes, then start each
-one's dispatch workflow and report whether it started the site's build.
+Prove the plan site's token by starting the site's build with it, then store it in every
+repository the site publishes.
 
 Usage:
     "${BASSTLER_PYTHON}" -m basstler.plan_site.token_storage
 
-It asks for the token, or reads it from standard input when that is not a terminal.
-Storing a secret needs the user's own ``gh`` login.
+It asks for the token at a hidden terminal prompt and stores it with the user's ``gh``.
 """
 
 from __future__ import annotations
 
-import getpass
 import os
 import shutil
 import subprocess
-import sys
-import time
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from datetime import timedelta
 from pathlib import Path
 
 from cyclopts import App
 
-from basstler.github.client import GitHubClient, GitHubRestClient
-from basstler.locations import ClaudeCodeVariable, WorkflowLocation
+from basstler.github.client import GitHubAttemptClient, GitHubRestClient
+from basstler.locations import ClaudeCodeVariable
 from basstler.maintenance.constants import GitHubExecutable
+from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.personal_notes.branch import PersonalNotesLocation
+from basstler.plan_site.build_start import BuildStart
 from basstler.plan_site.exceptions import (
     NotesRepositoryUnresolvedError,
-    PlanSiteTokenEmptyError,
+    PlanSiteUnrecordedError,
 )
-from basstler.plan_site.hub import published_repositories
-from basstler.github.run_listing import ListedRun, RunListing
+from basstler.plan_site.hub import PlanHub
+from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import GitHubCommandLineOption, PlanSiteSecret
 from basstler.repository import Repository
 from basstler.setup.steps import resolve_repository
 from basstler.standard_streams import StandardStreamHandler
-from basstler.github.states import CheckOutcome
-from basstler.github.workflow_run import WorkflowDispatch
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -104,7 +100,7 @@ class GitHubCommandLineSecretStore(SecretStore):
 @dataclass(frozen=True)
 class StorageResult:
     """
-    What storing the token in one repository, and proving it, came to.
+    What storing the token in one repository came to.
     """
 
     repository: Repository
@@ -114,155 +110,111 @@ class StorageResult:
 
     refusal: str = ""
     """
-    Why storing the token or starting the dispatch workflow was refused, empty when
-    neither was.
+    Why storing the token was refused, empty once it was stored.
     """
 
-    run: ListedRun | None = None
-    """
-    The dispatch run that was started, ``None`` when none finished in time.
-    """
-
-    @property
-    def proven(self) -> bool:
-        """:return: Whether the dispatch run started the site's build."""
-        return self.run is not None and self.run.outcome is CheckOutcome.SUCCESS
-
-    def describe(self, wait: timedelta) -> str:
+    def describe(self) -> str:
         """
-        :param wait: How long the run was waited for.
         :return: One line saying what happened.
         """
         name = self.repository.full_name
         if self.refusal:
-            return f"{name}: not done - {self.refusal}"
-        if self.run is None:
-            return (
-                f"{name}: stored, but no dispatch run finished within {wait}; see "
-                f"{self.repository.url}/actions"
-            )
-        if self.proven:
-            return f"{name}: done - {self.run.page_url} started the plan site build"
-        return (
-            f"{name}: stored, but the dispatch run is {self.run.outcome} - its log "
-            f"says why: {self.run.page_url}"
+            return f"{name}: not stored - {self.refusal}"
+        return f"{name}: stored"
+
+
+# %% proving and storing
+
+
+@dataclass(frozen=True)
+class StorageReport:
+    """
+    What proving the token and storing it in every repository came to.
+    """
+
+    build_start: BuildStart
+    """
+    The build the token was proven by starting.
+    """
+
+    results: list[StorageResult] = field(default_factory=list)
+    """
+    The result in each repository, empty when the token was not stored anywhere.
+    """
+
+    @property
+    def succeeded(self) -> bool:
+        """:return: Whether the token started the build and every repository stores it."""
+        return self.build_start.started and not any(
+            result.refusal for result in self.results
         )
 
-
-# %% storing and proving
+    def describe(self) -> list[str]:
+        """
+        :return: One line for the build, then one for each repository.
+        """
+        site = self.build_start.site
+        if not self.build_start.started:
+            return [
+                f"{PlanSiteSecret.TOKEN} was stored nowhere: it could not start the plan "
+                f"site build in {site.repository.full_name} "
+                f"({self.build_start.response.failure.error_message()}). Create it again "
+                f"at {site.token_form_url()} with access to "
+                f"{site.repository.full_name} alone."
+            ]
+        return [
+            f"The token started the plan site build in {site.repository.full_name}.",
+            *(result.describe() for result in self.results),
+        ]
 
 
 @dataclass(frozen=True)
 class TokenStorage:
     """
-    Stores the plan site's token in repositories and proves each copy by starting that
-    repository's dispatch workflow.
+    Proves the plan site's token by starting the site's build with it, then stores it in
+    repositories.
     """
 
-    notes_branch: str
+    token: str = field(repr=False)
     """
-    The branch every repository's dispatch workflow runs on.
+    The token.
     """
 
-    secrets: SecretStore
+    site: SiteRepository
+    """
+    The repository whose build the token starts.
+    """
+
+    secrets: SecretStore = field(default_factory=GitHubCommandLineSecretStore)
     """
     Where the token is stored.
     """
 
-    github: GitHubClient
-    """
-    Starts the dispatch workflows and reads their runs.
-    """
-
-    wait: timedelta = timedelta(minutes=5)
-    """
-    How long to wait for each dispatch run to finish.
-    """
-
-    interval: timedelta = timedelta(seconds=5)
-    """
-    How long to wait between two reads of a repository's runs.
-    """
-
-    pause: Callable[[float], None] = field(default=time.sleep)
-    """
-    Waits the given number of seconds.
-    """
-
     def store(
-        self, repositories: Sequence[Repository], token: str
-    ) -> list[StorageResult]:
+        self, repositories: Sequence[Repository], client: GitHubAttemptClient
+    ) -> StorageReport:
         """
         :param repositories: The repositories to store the token in.
-        :param token: The token.
-        :return: The result in each repository, in the same order.
+        :param client: Sends GitHub requests authenticated with :attr:`token`.
+        :return: The build started, and the result in each repository in the same
+            order, none when the build did not start.
         """
-        results = []
-        for repository in repositories:
-            refusal = self.secrets.store(repository, PlanSiteSecret.TOKEN, token)
-            results.append(
-                StorageResult(repository, refusal)
-                if refusal
-                else self.prove(repository)
-            )
-        return results
-
-    def prove(self, repository: Repository) -> StorageResult:
-        """
-        Start the repository's dispatch workflow and wait for the run it started.
-
-        :param repository: A repository storing the token.
-        :return: The result, with the run once it finished.
-        """
-        workflow = WorkflowLocation.PLAN_SITE_DISPATCH
-        earlier = {
-            run.page_url
-            for run in self.listing(repository).select(workflow).workflow_runs
-        }
-        dispatch = self.github.attempt_send(
-            WorkflowDispatch(repository, workflow, self.notes_branch)
+        build_start = BuildStart.attempt(self.site, client)
+        if not build_start.started:
+            return StorageReport(build_start)
+        return StorageReport(
+            build_start,
+            [
+                StorageResult(
+                    repository,
+                    self.secrets.store(repository, PlanSiteSecret.TOKEN, self.token),
+                )
+                for repository in repositories
+            ],
         )
-        if dispatch.failure is not None:
-            return StorageResult(repository, dispatch.failure.error_message())
-        for _ in range(int(self.wait / self.interval)):
-            self.pause(self.interval.total_seconds())
-            started = next(
-                (
-                    run
-                    for run in self.listing(repository).select(workflow).workflow_runs
-                    if run.page_url not in earlier
-                ),
-                None,
-            )
-            if started is not None and started.outcome is not CheckOutcome.PENDING:
-                return StorageResult(repository, run=started)
-        return StorageResult(repository)
-
-    def listing(self, repository: Repository) -> RunListing:
-        """
-        :param repository: A repository.
-        :return: Its latest runs on :attr:`notes_branch`.
-        """
-        return RunListing.read(self.github, repository, self.notes_branch)
 
 
 # %% the command line
-
-
-def read_token() -> str:
-    """
-    :return: The token, asked for without echo on a terminal, else read from standard
-        input.
-    :raises PlanSiteTokenEmptyError: If none was given.
-    """
-    token = (
-        getpass.getpass(f"{PlanSiteSecret.TOKEN}: ")
-        if sys.stdin.isatty()
-        else sys.stdin.read()
-    ).strip()
-    if not token:
-        raise PlanSiteTokenEmptyError(PlanSiteSecret.TOKEN)
-    return token
 
 
 app = App(help=__doc__)
@@ -274,10 +226,12 @@ The command, which takes no arguments.
 @app.default
 def store_token() -> int:
     """
-    Store the token in every repository the site publishes and print each result.
+    Prove the token, store it in every repository the site publishes and print each
+    result.
 
-    :return: 0 once every repository's dispatch run started the build, else 1.
+    :return: 0 once the token started the build and every repository stores it, else 1.
     :raises NotesRepositoryUnresolvedError: If the notes remote is not on GitHub.
+    :raises PlanSiteUnrecordedError: If the notes branch records no plan site.
     """
     project_root = Path(
         os.environ.get(ClaudeCodeVariable.PROJECT_DIRECTORY, Path.cwd())
@@ -286,15 +240,20 @@ def store_token() -> int:
     notes_repository = resolve_repository(project_root, location.remote)
     if notes_repository is None:
         raise NotesRepositoryUnresolvedError(location.remote)
-    repositories = published_repositories(project_root, location, notes_repository)
-    token = read_token()
-    storage = TokenStorage(
-        location.branch, GitHubCommandLineSecretStore(), GitHubRestClient()
+    notes_branch = RemoteBranch(
+        location.branch, GitCommandRunner(project_root), location.remote
     )
-    results = storage.store(repositories, token)
-    for result in results:
-        logger.info(result.describe(storage.wait))
-    return 0 if all(result.proven for result in results) else 1
+    site = SiteRepository.recorded_on(notes_branch)
+    if site is None:
+        raise PlanSiteUnrecordedError(location.branch)
+    repositories = PlanHub.published_repositories(notes_branch, notes_repository)
+    token = PlanSiteSecret.TOKEN.read_value()
+    report = TokenStorage(token, site).store(
+        repositories, GitHubRestClient(token=token)
+    )
+    for line in report.describe():
+        logger.info(line)
+    return 0 if report.succeeded else 1
 
 
 if __name__ == "__main__":

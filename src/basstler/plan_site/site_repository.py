@@ -111,7 +111,7 @@ class SiteRepository:
         :param workflow_text: A dispatch workflow as written on a notes branch.
         :return: The site repository it starts the build in.
         """
-        (step,) = WorkflowFile.from_text(workflow_text).jobs[PlanSiteJob.DISPATCH].steps
+        (step,) = WorkflowFile.from_yaml(workflow_text).jobs[PlanSiteJob.DISPATCH].steps
         words = shlex.split(step.command)
         site = words[words.index(GitHubCommandLineOption.REPOSITORY) + 1]
         return cls(Repository.parse(site))
@@ -126,7 +126,7 @@ class SiteRepository:
         dispatch_text = notes_branch.read_latest(WorkflowLocation.PLAN_SITE_DISPATCH)
         if dispatch_text is not None:
             return cls.from_dispatch_workflow(dispatch_text)
-        hub = PlanHub.from_text(notes_branch.read_latest(ProjectLocation.PLAN_HUB))
+        hub = PlanHub.from_yaml(notes_branch.read_latest(ProjectLocation.PLAN_HUB))
         if hub is None or hub.site_url is None:
             return None
         return cls.from_site_url(hub.site_url)

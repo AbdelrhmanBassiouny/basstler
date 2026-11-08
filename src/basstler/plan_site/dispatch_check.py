@@ -33,7 +33,7 @@ from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.personal_notes.branch import PersonalNotesLocation
 from basstler.plan_site import publication
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
-from basstler.plan_site.hub import published_repositories
+from basstler.plan_site.hub import PlanHub
 from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
@@ -550,20 +550,19 @@ def report_dispatch() -> int:
     if notes_repository is None:
         raise NotesRepositoryUnresolvedError(location.remote)
     client = GitHubRestClient()
+    notes_branch = RemoteBranch(
+        location.branch, GitCommandRunner(project_root), location.remote
+    )
     check = DispatchCheck(
         DispatchReading.read(client, client, notes_repository, location.branch),
         [
             DispatchReading.read(client, client, repository, location.branch)
-            for repository in published_repositories(
-                project_root, location, notes_repository
+            for repository in PlanHub.published_repositories(
+                notes_branch, notes_repository
             )
             if repository != notes_repository
         ],
-        SiteRepository.recorded_on(
-            RemoteBranch(
-                location.branch, GitCommandRunner(project_root), location.remote
-            )
-        ),
+        SiteRepository.recorded_on(notes_branch),
     )
     for row in check.rows():
         logger.info(row.fields)

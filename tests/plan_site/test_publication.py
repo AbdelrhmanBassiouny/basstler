@@ -197,7 +197,7 @@ class Publishing:
 
     def hub_on(self, repository: Repository) -> PlanHub | None:
         """:return: The hub file on *repository*'s notes branch."""
-        return PlanHub.from_text(
+        return PlanHub.from_yaml(
             self.file(repository, NOTES_BRANCH, ProjectLocation.PLAN_HUB.as_posix())
         )
 
@@ -331,9 +331,12 @@ def test_the_workflow_goes_on_the_site_repository_s_default_branch(publishing):
 
 
 def test_the_site_workflow_calls_basstler_s_build_at_its_branch_or_tag():
+    """
+    The site workflow's build job calls basstler's build at the source it names.
+    """
     workflow = SiteWorkflow(BRANCH_OR_TAG, Repository("an-owner", "a-registry"))
 
-    job = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.BUILD]
+    job = WorkflowFile.from_yaml(workflow.text).jobs[PlanSiteJob.BUILD]
 
     assert job.called_workflow == (
         f"{BasstlerSource.REPOSITORY}/{WorkflowLocation.PLAN_SITE_BUILD.as_posix()}"
@@ -342,9 +345,12 @@ def test_the_site_workflow_calls_basstler_s_build_at_its_branch_or_tag():
 
 
 def test_a_written_site_workflow_reads_back_as_the_same_workflow():
+    """
+    A site workflow's text parses back into an equal workflow.
+    """
     workflow = SiteWorkflow(BRANCH_OR_TAG, Repository("an-owner", "a-registry"))
 
-    assert SiteWorkflow.from_text(workflow.text) == workflow
+    assert SiteWorkflow.from_yaml(workflow.text) == workflow
 
 
 @pytest.mark.parametrize(
@@ -477,6 +483,9 @@ def test_a_second_repository_is_listed_in_the_registry_named_by_the_site_workflo
 
 
 def test_the_notes_branch_gets_the_dispatch_workflow(published):
+    """
+    The notes branch carries the dispatch workflow written for it.
+    """
     assert published.file(
         published.notes_repository,
         NOTES_BRANCH,
@@ -487,29 +496,35 @@ def test_the_notes_branch_gets_the_dispatch_workflow(published):
 
 
 def test_the_dispatch_workflow_runs_on_every_push_to_the_notes_branch():
+    """
+    The dispatch workflow is triggered by pushes to the notes branch alone.
+    """
     workflow = DispatchWorkflow(
         Repository("an-owner", "a-project"),
         NOTES_BRANCH,
         SiteRepository(Repository("an-owner", "plans")),
     )
 
-    assert WorkflowFile.from_text(workflow.text).pushed_branches == [NOTES_BRANCH]
+    assert WorkflowFile.from_yaml(workflow.text).pushed_branches == [NOTES_BRANCH]
 
 
 def test_the_dispatch_workflow_runs_only_in_the_notes_repository():
+    """
+    The dispatch job is limited to the notes repository, so forks never run it.
+    """
     notes_repository = Repository("an-owner", "a-project")
     workflow = DispatchWorkflow(
         notes_repository, NOTES_BRANCH, SiteRepository(Repository("an-owner", "plans"))
     )
 
-    job = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.DISPATCH]
+    job = WorkflowFile.from_yaml(workflow.text).jobs[PlanSiteJob.DISPATCH]
 
     assert job.condition == f"github.repository == '{notes_repository.full_name}'"
 
 
 def dispatch_step_of(workflow: DispatchWorkflow) -> WorkflowStep:
     """:return: The one step of *workflow*'s job."""
-    (step,) = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.DISPATCH].steps
+    (step,) = WorkflowFile.from_yaml(workflow.text).jobs[PlanSiteJob.DISPATCH].steps
     return step
 
 
@@ -621,9 +636,12 @@ def test_the_merge_workflow_runs_when_a_pull_request_closes(tmp_path):
 
 
 def test_the_merge_workflow_runs_for_any_merge_in_the_notes_repository():
+    """
+    The merge workflow's job runs for merges in the notes repository alone.
+    """
     dispatch = a_dispatch_workflow()
 
-    job = WorkflowFile.from_text(MergeWorkflow(dispatch).text).jobs[
+    job = WorkflowFile.from_yaml(MergeWorkflow(dispatch).text).jobs[
         PlanSiteJob.DISPATCH
     ]
 
@@ -634,12 +652,15 @@ def test_the_merge_workflow_runs_for_any_merge_in_the_notes_repository():
 
 
 def test_the_merge_workflow_starts_the_build_as_the_dispatch_workflow_does():
+    """
+    The merge workflow's job starts the build with the dispatch workflow's steps.
+    """
     dispatch = a_dispatch_workflow()
 
-    merge_job = WorkflowFile.from_text(MergeWorkflow(dispatch).text).jobs[
+    merge_job = WorkflowFile.from_yaml(MergeWorkflow(dispatch).text).jobs[
         PlanSiteJob.DISPATCH
     ]
-    dispatch_job = WorkflowFile.from_text(dispatch.text).jobs[PlanSiteJob.DISPATCH]
+    dispatch_job = WorkflowFile.from_yaml(dispatch.text).jobs[PlanSiteJob.DISPATCH]
 
     assert merge_job.steps == dispatch_job.steps
 

@@ -1,44 +1,35 @@
 """
-Tests for :mod:`basstler.plan_site.token_storage`: storing the plan site's token in
-every repository and proving each copy with the dispatch run it starts.
+Tests for :mod:`basstler.plan_site.token_storage`: proving the plan site's token by
+starting the site's build with it, then storing it in every repository.
 """
 
 from __future__ import annotations
 
 import io
-import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
-from datetime import timedelta
 from http import HTTPStatus
-from typing import Any
 
 import pytest
 
-from basstler.github.client import GitHubResponse, GitHubWrite
-from basstler.github.credential import CredentialProvider
-from basstler.github.exceptions import GitHubRequestFailed
-from basstler.locations import WorkflowLocation
-from basstler.plan_site import token_storage
-from basstler.plan_site.exceptions import PlanSiteTokenEmptyError
-from basstler.github.run_listing import RunListing
-from basstler.github.workflow_run import WorkflowDispatch
+from basstler.plan_site.build_start import BuildStart
+from basstler.plan_site.exceptions import PlanSiteTokenNotEnteredError
+from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.token_storage import (
     GitHubCommandLineSecretStore,
     SecretStore,
+    StorageReport,
     StorageResult,
     TokenStorage,
-    read_token,
 )
 from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.repository import Repository
 
-from ..constants.paths import DatasetLocation
-from ..github.recorded_client import RecordedGitHubClient
+from .site_answering_client import SiteAnsweringClient
 
-NOTES_BRANCH = "claude/personal-notes"
+SITE = SiteRepository(Repository("an-owner", "plans"))
 """
-The branch every repository's dispatch workflow runs on.
+The site repository whose build the token starts.
 """
 
 FIRST = Repository("an-owner", "a-repository")
@@ -83,111 +74,81 @@ class RecordingSecretStore(SecretStore):
 
 
 @dataclass
-class RunStartingClient(RecordedGitHubClient):
+class TerminalInput(io.StringIO):
     """
-    Lists :attr:`listing_before` until a dispatch is sent, then :attr:`listing_after`,
-    for every repository.
-    """
-
-    listing_before: DatasetLocation = DatasetLocation.WORKFLOW_RUNS_NONE
-    """
-    The run listing before the dispatch.
+    Standard input that reports whether a terminal is attached.
     """
 
-    listing_after: DatasetLocation = DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED
+    attached: bool = True
     """
-    The run listing once the dispatch was sent.
-    """
-
-    dispatch_refusal: HTTPStatus | None = None
-    """
-    The status the dispatch is refused with, ``None`` to accept it.
+    Whether a terminal is attached.
     """
 
-    pending_reads: int = 0
-    """
-    How many reads after the dispatch list
-    :attr:`DatasetLocation.PLAN_SITE_DISPATCH_RUNS_PENDING` before :attr:`listing_after`.
-    """
-
-    def get(self, path: str) -> Any:
+    def __post_init__(self) -> None:
         """
-        Unlike :meth:`RecordedGitHubClient.get`, answer every path with a run listing.
+        Start with nothing to read.
         """
-        if not self.writes:
-            return json.loads(self.listing_before.read_text())
-        if self.pending_reads:
-            self.pending_reads -= 1
-            return json.loads(
-                DatasetLocation.PLAN_SITE_DISPATCH_RUNS_PENDING.read_text()
-            )
-        return json.loads(self.listing_after.read_text())
+        super().__init__()
 
-    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+    def isatty(self) -> bool:
         """
-        Unlike :meth:`RecordedGitHubClient.attempt_send`, refuse the write with
-        :attr:`dispatch_refusal` when it is set.
+        Unlike :meth:`io.StringIO.isatty`, report :attr:`attached`.
         """
-        self.writes.append(write)
-        if self.dispatch_refusal is None:
-            return GitHubResponse(None)
-        return GitHubResponse(
-            None,
-            failure=GitHubRequestFailed(
-                status=self.dispatch_refusal,
-                detail="",
-                method=write.method,
-                path=write.path,
-                credential_origin=CredentialProvider.CALLER,
-            ),
-        )
+        return self.attached
 
 
-@dataclass
-class PauseCounter:
-    """
-    Counts the waits asked for instead of waiting.
-    """
-
-    pauses: list[float] = field(default_factory=list)
-    """
-    Every wait asked for, in seconds.
-    """
-
-    def __call__(self, seconds: float) -> None:
-        self.pauses.append(seconds)
+# %% proving
 
 
-def storage_with(
-    client: RunStartingClient, secrets: SecretStore | None = None
-) -> TokenStorage:
+def test_the_token_is_proven_by_starting_the_site_s_build_with_it():
     """
-    :param client: Starts the dispatch workflows and lists their runs.
-    :param secrets: Where the token is stored, a recording store when not given.
-    :return: A storage that never waits.
+    The build start the token proves itself with is the one a dispatch workflow makes.
     """
-    return TokenStorage(
-        NOTES_BRANCH,
-        secrets or RecordingSecretStore(),
-        client,
-        pause=PauseCounter(),
+    client = SiteAnsweringClient()
+
+    report = TokenStorage(TOKEN, SITE, RecordingSecretStore()).store([FIRST], client)
+
+    reference_client = SiteAnsweringClient()
+    expected = BuildStart.attempt(SITE, reference_client)
+    assert (report.build_start, client.writes) == (expected, reference_client.writes)
+    assert report.build_start.started
+
+
+def test_a_token_that_cannot_start_the_build_is_stored_nowhere():
+    """
+    A token GitHub refuses to start the build with is stored in no repository.
+    """
+    secrets = RecordingSecretStore()
+
+    report = TokenStorage(TOKEN, SITE, secrets).store(
+        [FIRST, SECOND], SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
     )
 
+    assert (secrets.stored, report.results, report.succeeded) == ([], [], False)
 
-def latest_dispatch_run(listing: DatasetLocation):
-    """:return: The latest dispatch run in *listing*."""
-    return RunListing.from_json(json.loads(listing.read_text())).latest(
-        WorkflowLocation.PLAN_SITE_DISPATCH
+
+def test_a_token_that_cannot_start_the_build_links_the_token_form():
+    """
+    A refused token's report links the form that creates it again.
+    """
+    report = TokenStorage(TOKEN, SITE, RecordingSecretStore()).store(
+        [FIRST], SiteAnsweringClient(refusal=HTTPStatus.FORBIDDEN)
     )
+
+    (line,) = report.describe()
+    assert SITE.token_form_url() in line
 
 
 # %% storing
 
 
-def test_the_token_is_stored_in_every_repository_given():
+def test_a_proven_token_is_stored_in_every_repository_given():
+    """
+    A proven token is stored, as its secret, in every repository in order.
+    """
     secrets = RecordingSecretStore()
 
-    storage_with(RunStartingClient(), secrets).store([FIRST, SECOND], TOKEN)
+    TokenStorage(TOKEN, SITE, secrets).store([FIRST, SECOND], SiteAnsweringClient())
 
     assert secrets.stored == [
         (FIRST, PlanSiteSecret.TOKEN, TOKEN),
@@ -195,18 +156,45 @@ def test_the_token_is_stored_in_every_repository_given():
     ]
 
 
-def test_a_refused_store_starts_no_dispatch_and_says_why():
-    client = RunStartingClient()
+def test_a_refused_store_is_reported_and_fails_the_report():
+    """
+    A repository refusing the secret is reported, and the others are still stored.
+    """
     refusal = "HTTP 403"
 
-    (result,) = storage_with(client, RecordingSecretStore({FIRST: refusal})).store(
-        [FIRST], TOKEN
+    report = TokenStorage(TOKEN, SITE, RecordingSecretStore({FIRST: refusal})).store(
+        [FIRST, SECOND], SiteAnsweringClient()
     )
 
-    assert (client.writes, result) == ([], StorageResult(FIRST, refusal))
+    assert (report.results, report.succeeded) == (
+        [StorageResult(FIRST, refusal), StorageResult(SECOND)],
+        False,
+    )
+
+
+def test_a_proven_token_stored_everywhere_succeeds():
+    """
+    A proven token every repository stores makes the report succeed.
+    """
+    report = TokenStorage(TOKEN, SITE, RecordingSecretStore()).store(
+        [FIRST], SiteAnsweringClient()
+    )
+
+    assert report == StorageReport(report.build_start, [StorageResult(FIRST)])
+    assert report.succeeded
+
+
+def test_the_token_is_kept_out_of_the_storage_s_representation():
+    """
+    The token never shows in a traceback or log line that prints the storage.
+    """
+    assert TOKEN not in repr(TokenStorage(TOKEN, SITE, RecordingSecretStore()))
 
 
 def test_a_missing_command_line_client_is_reported_as_the_refusal():
+    """
+    Without ``gh`` installed, the store refuses and names the missing executable.
+    """
     executable = "no-such-github-command-line"
 
     refusal = GitHubCommandLineSecretStore(executable).store(
@@ -216,107 +204,44 @@ def test_a_missing_command_line_client_is_reported_as_the_refusal():
     assert refusal == f"{executable} is not installed"
 
 
-# %% proving
-
-
-def test_a_stored_token_starts_the_dispatch_workflow_on_the_notes_branch():
-    """
-    A stored token is proven by dispatching the workflow on the notes branch.
-    """
-    client = RunStartingClient()
-
-    storage_with(client).store([FIRST], TOKEN)
-
-    assert client.writes == [
-        WorkflowDispatch(FIRST, WorkflowLocation.PLAN_SITE_DISPATCH, NOTES_BRANCH)
-    ]
-
-
-def test_a_succeeded_dispatch_run_proves_the_token():
-    (result,) = storage_with(RunStartingClient()).store([FIRST], TOKEN)
-
-    assert result == StorageResult(
-        FIRST,
-        run=latest_dispatch_run(DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED),
-    )
-    assert result.proven
-
-
-def test_a_failed_dispatch_run_is_linked_and_proves_nothing():
-    """
-    A dispatch run that failed leaves the token unproven and links the run's page.
-    """
-    listing = DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED
-
-    (result,) = storage_with(RunStartingClient(listing_after=listing)).store(
-        [FIRST], TOKEN
-    )
-
-    run = latest_dispatch_run(listing)
-    assert (result.run, result.proven) == (run, False)
-    assert run.page_url in result.describe(timedelta())
-
-
-def test_a_run_listed_before_the_dispatch_is_not_taken_for_the_one_it_started():
-    listing = DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED
-    client = RunStartingClient(listing_before=listing, listing_after=listing)
-
-    (result,) = storage_with(client).store([FIRST], TOKEN)
-
-    assert result == StorageResult(FIRST)
-
-
-def test_waiting_for_the_run_stops_after_the_wait():
-    client = RunStartingClient(listing_after=DatasetLocation.WORKFLOW_RUNS_NONE)
-    pause = PauseCounter()
-    storage = TokenStorage(
-        NOTES_BRANCH,
-        RecordingSecretStore(),
-        client,
-        wait=timedelta(seconds=30),
-        interval=timedelta(seconds=10),
-        pause=pause,
-    )
-
-    storage.store([FIRST], TOKEN)
-
-    assert pause.pauses == [storage.interval.total_seconds()] * int(
-        storage.wait / storage.interval
-    )
-
-
-def test_a_refused_dispatch_is_reported_without_waiting():
-    storage = storage_with(RunStartingClient(dispatch_refusal=HTTPStatus.FORBIDDEN))
-
-    (result,) = storage.store([FIRST], TOKEN)
-
-    assert result.refusal
-    assert result.run is None
-    assert storage.pause.pauses == []
-
-
-def test_a_running_dispatch_run_is_waited_for_until_it_finishes():
-    storage = storage_with(RunStartingClient(pending_reads=1))
-
-    (result,) = storage.store([FIRST], TOKEN)
-
-    assert result.run == latest_dispatch_run(
-        DatasetLocation.PLAN_SITE_DISPATCH_RUNS_SUCCEEDED
-    )
-    assert len(storage.pause.pauses) == 2
-
-
 # %% reading the token
 
 
+def test_the_token_is_not_read_without_a_terminal(monkeypatch):
+    """
+    Without a terminal the token would have to come through a pipe or a chat, so it is
+    refused instead.
+    """
+    monkeypatch.setattr("sys.stdin", TerminalInput(attached=False))
+
+    with pytest.raises(PlanSiteTokenNotEnteredError) as raised:
+        PlanSiteSecret.TOKEN.read_value()
+
+    assert raised.value == PlanSiteTokenNotEnteredError(
+        PlanSiteSecret.TOKEN, terminal=False
+    )
+
+
 def test_an_empty_token_is_refused(monkeypatch):
-    monkeypatch.setattr(token_storage.sys, "stdin", io.StringIO("\n"))
+    """
+    Nothing typed at the prompt is refused as no token entered.
+    """
+    monkeypatch.setattr("sys.stdin", TerminalInput())
+    monkeypatch.setattr("getpass.getpass", lambda prompt: "\n")
 
-    with pytest.raises(PlanSiteTokenEmptyError):
-        read_token()
+    with pytest.raises(PlanSiteTokenNotEnteredError) as raised:
+        PlanSiteSecret.TOKEN.read_value()
+
+    assert raised.value == PlanSiteTokenNotEnteredError(
+        PlanSiteSecret.TOKEN, terminal=True
+    )
 
 
-def test_a_piped_token_is_read_without_its_line_break(monkeypatch):
-    monkeypatch.setattr(token_storage.sys, "stdin", io.StringIO(f"{TOKEN}\n"))
+def test_a_typed_token_is_read_without_surrounding_whitespace(monkeypatch):
+    """
+    The token typed at the prompt is read without its surrounding whitespace.
+    """
+    monkeypatch.setattr("sys.stdin", TerminalInput())
+    monkeypatch.setattr("getpass.getpass", lambda prompt: f" {TOKEN}\n")
 
-    assert read_token() == TOKEN
+    assert PlanSiteSecret.TOKEN.read_value() == TOKEN

@@ -39,7 +39,6 @@ from basstler.plan_site.plan import Item
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
-from basstler.personal_notes.branch import PersonalNotesLocation
 from basstler.plan_site.exceptions import RegistryUnreadableError
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
@@ -198,7 +197,7 @@ class PlanHub:
         )
 
     @classmethod
-    def from_text(cls, text: str | None) -> PlanHub | None:
+    def from_yaml(cls, text: str | None) -> PlanHub | None:
         """
         :param text: The hub file's content, which may be absent.
         :return: The hub, or ``None`` when there is no file or it is empty.
@@ -212,7 +211,7 @@ class PlanHub:
         :param path: The hub file, which may not exist.
         :return: The hub, or ``None`` when the file is absent or empty.
         """
-        return cls.from_text(path.read_text()) if path.is_file() else None
+        return cls.from_yaml(path.read_text()) if path.is_file() else None
 
     @classmethod
     def from_registry(
@@ -236,7 +235,7 @@ class PlanHub:
             if notes is None:
                 raise RegistryUnreadableError(registry, notes_branch)
             text = notes.read(ProjectLocation.PLAN_HUB)
-        return cls.from_text(text)
+        return cls.from_yaml(text)
 
     def to_text(self) -> str:
         """
@@ -249,6 +248,32 @@ class PlanHub:
             HubFileKey.REPOSITORIES.value: self.repositories,
         }
         return self.file_header + yaml.safe_dump(data, sort_keys=False)
+
+    @classmethod
+    def published_repositories(
+        cls,
+        notes_branch: RemoteBranch,
+        notes_repository: Repository,
+        remote_root: str = GitHubAddress.WEB,
+    ) -> list[Repository]:
+        """
+        :param notes_branch: The notes branch of *notes_repository*.
+        :param notes_repository: The repository whose notes name the registry.
+        :param remote_root: Where the registry is fetched from, as
+            :meth:`Repository.clone_url_under` takes it.
+        :return: *notes_repository*, then every other repository the registry's hub
+            file lists.
+        """
+        # Only the registry's copy lists every repository; this one names the registry.
+        own_copy = cls.from_yaml(notes_branch.read_latest(ProjectLocation.PLAN_HUB))
+        if own_copy is None:
+            return [notes_repository]
+        hub = (
+            cls.from_registry(Repository.parse(own_copy.registry), remote_root)
+            or own_copy
+        )
+        listed = [Repository.parse(name) for name in hub.repositories]
+        return list(dict.fromkeys([notes_repository, *listed]))
 
     def register(self, repository: str) -> bool:
         """
@@ -324,40 +349,6 @@ class NotesBranch:
         plans_directory = self.git.working_directory / ProjectLocation.PLANS
         plans_directory.mkdir(parents=True, exist_ok=True)
         return plans_directory
-
-
-# %% the repositories a site publishes
-
-
-def published_repositories(
-    project_root: Path,
-    location: PersonalNotesLocation,
-    notes_repository: Repository,
-    remote_root: str = GitHubAddress.WEB,
-) -> list[Repository]:
-    """
-    :param project_root: The clone to read the notes branch from.
-    :param location: Where its notes are kept.
-    :param notes_repository: The repository its notes branch is on.
-    :param remote_root: Where the registry is fetched from, as
-        :meth:`Repository.clone_url_under` takes it.
-    :return: The notes repository, then every other repository the registry's hub file
-        lists.
-    """
-    # Only the registry's copy lists every repository; this one names the registry.
-    own_copy = PlanHub.from_text(
-        RemoteBranch(
-            location.branch, GitCommandRunner(project_root), location.remote
-        ).read_latest(ProjectLocation.PLAN_HUB)
-    )
-    if own_copy is None:
-        return [notes_repository]
-    hub = (
-        PlanHub.from_registry(Repository.parse(own_copy.registry), remote_root)
-        or own_copy
-    )
-    listed = [Repository.parse(name) for name in hub.repositories]
-    return list(dict.fromkeys([notes_repository, *listed]))
 
 
 def main() -> int:

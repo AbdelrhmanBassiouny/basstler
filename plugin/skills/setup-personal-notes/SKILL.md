@@ -275,10 +275,12 @@ ones, so the token is stored in every repository the site publishes. The create
 step's link opens GitHub's token form with the name, owner and Actions write
 access filled in; only the site repository is picked by hand. The token reaches
 the site repository alone, so it never changes when a repository joins. The store
-step is one command, run on the user's machine with their own `gh` login: it
-asks for the token once, stores it in every repository, starts each one's
-dispatch workflow and prints, per repository, *done* or the failed run's
-address. To add a repository later, the user clicks Regenerate token on the
+step is one command the user runs in their own terminal, with their own `gh`
+login: it asks for the token once at a hidden prompt, starts the site's build
+with it - which proves the token and stores nothing when GitHub refuses it - then
+stores it in every repository and prints one line per repository. Never ask for
+the token in the chat, and never run the command for the user: it reads the token
+only from a terminal. To add a repository later, the user clicks Regenerate token on the
 existing token and runs the store command again; no new token is needed. A step
 that follows a run shows that run's address, so the log says why it failed. Pass
 the lines and the browser steps on exactly as printed, never shortened to one of
