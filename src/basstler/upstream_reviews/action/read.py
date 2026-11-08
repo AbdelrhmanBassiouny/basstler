@@ -139,7 +139,7 @@ class ActionRead[AnswerType: ActionAnswer]:
             listing = RunListing.read(self.runs, fork, ActionBranch.NAME)
         except GitHubRequestFailed:
             return
-        run = listing.run_for(commit)
+        run = listing.run_for_commit(commit)
         if run is None:
             raise ActionRunNotStarted(fork, elapsed)
         if run.failed and self.collect() is None:
