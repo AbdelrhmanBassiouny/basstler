@@ -2,9 +2,9 @@ Plan
 - PR 158: GitHub API payload keys spelled only inside validated models.
 
 Done
-- Review round 3 at aaa54f54; round 4: run_for_commit at 85d657c8.
+- Review rounds 3-4; rollup names renamed (CombinedCheckState...) at c64bacab.
 
 Next
-- Owner decides Rollup renames and the RequestBody name.
-- Resolve finished threads from a session on KAOS-repositories/basstler.
+- Owner reviews. Resolve finished threads from a session on
+  KAOS-repositories/basstler. Writes redesign is PR 165 (stacked on 164).
 - Plan save of vocabulary-split item blocked: notes push to KAOS refused.
