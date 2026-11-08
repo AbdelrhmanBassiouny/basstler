@@ -23,7 +23,7 @@ from basstler.repository import Repository
 from basstler.stack.checkout import CurrentCheckout, LandedBranches
 from basstler.stack.exceptions import BaseBranchScopeError, BoardUnavailable
 from basstler.stack.settings import Configuration
-from basstler.upstream_reviews.vocabulary import CombinedCheckState
+from basstler.github.states import CombinedCheckState
 
 # %% domain model
 

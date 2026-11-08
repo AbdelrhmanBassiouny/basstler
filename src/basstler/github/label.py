@@ -10,7 +10,7 @@ from typing import Any
 
 
 from basstler.github.client import RequestBody
-from basstler.upstream_reviews.vocabulary import ValidatedJSONModel
+from basstler.json_model import ValidatedJSONModel
 
 # %% a label
 

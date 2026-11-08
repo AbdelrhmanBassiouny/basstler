@@ -5,18 +5,29 @@ them.
 
 from __future__ import annotations
 
+from enum import StrEnum
+
 from typing import Annotated, Any
 
 from pydantic import Field, model_validator
 
 from basstler.class_property import classproperty
-from basstler.upstream_reviews.vocabulary import (
-    GraphQLConnection,
-    PullRequestState,
-    ReviewState,
-    ThreadMarker,
-    ValidatedJSONModel,
-)
+from basstler.github.graphql import GraphQLConnection
+from basstler.github.states import PullRequestState, ReviewState
+from basstler.json_model import ValidatedJSONModel
+
+
+# %% the report's thread markers
+
+
+class ThreadMarker(StrEnum):
+    """
+    The annotations a thread can carry in the report.
+    """
+
+    RESOLVED = "resolved"
+    OUTDATED = "outdated"
+
 
 # %% models mirroring the data
 

@@ -22,7 +22,7 @@ from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.standard_streams import StandardStreamHandler
-from basstler.upstream_reviews.vocabulary import ValidatedJSONModel
+from basstler.json_model import ValidatedJSONModel
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

@@ -27,7 +27,7 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.promotion_link import PromotionLink
-from basstler.upstream_reviews.vocabulary import CombinedCheckState
+from basstler.github.states import CombinedCheckState
 
 from .fork import (
     A_SESSION_LINK,

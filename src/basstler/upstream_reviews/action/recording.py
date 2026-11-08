@@ -32,9 +32,7 @@ from basstler.upstream_reviews.readers import (
 from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
-from basstler.upstream_reviews.vocabulary import (
-    JSONModel,
-)
+from basstler.json_model import JSONModel
 
 # %% the recording
 

@@ -18,9 +18,7 @@ from basstler.upstream_reviews.pull_request_models import (
     CheckResult,
     CheckStatus,
 )
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-)
+from basstler.github.states import CheckOutcome
 
 # %% the log behind a failed check
 

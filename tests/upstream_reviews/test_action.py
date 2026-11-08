@@ -62,7 +62,7 @@ from basstler.upstream_reviews.readers import UpstreamPullRequestReader
 from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
-from basstler.upstream_reviews.vocabulary import (
+from basstler.upstream_reviews.action.branch import (
     ActionBranch,
     ActionFile,
     BasstlerSource,

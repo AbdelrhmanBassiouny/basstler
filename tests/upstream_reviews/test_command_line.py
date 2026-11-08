@@ -60,14 +60,10 @@ from basstler.upstream_reviews.review_models import (
     PageInfo,
     ReviewThread,
 )
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-    JSONModel,
-    QueryVariable,
-    ReviewState,
-    CombinedCheckState,
-    ThreadMarker,
-)
+from basstler.github.states import CheckOutcome, ReviewState, CombinedCheckState
+from basstler.json_model import JSONModel
+from basstler.upstream_reviews.query_documents import QueryVariable
+from basstler.upstream_reviews.review_models import ThreadMarker
 
 from ..constants.paths import DatasetLocation
 from .replay import (

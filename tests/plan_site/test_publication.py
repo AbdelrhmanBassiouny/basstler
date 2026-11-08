@@ -53,7 +53,8 @@ from basstler.plan_site.workflows import (
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.upstream_reviews.rest_models import RestPullRequestSummary
-from basstler.upstream_reviews.vocabulary import BasstlerSource, CheckOutcome
+from basstler.github.states import CheckOutcome
+from basstler.upstream_reviews.action.branch import BasstlerSource
 from basstler.workflows import ActivityType, TriggerEvent, Workflow
 
 from ..constants.paths import DatasetLocation

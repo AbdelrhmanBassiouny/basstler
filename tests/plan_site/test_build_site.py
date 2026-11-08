@@ -44,7 +44,7 @@ from basstler.plan_site.plan import Plan
 from basstler.pull_request_source import GitHubPullRequestSource
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.repository import PullRequestReference, Repository
-from basstler.upstream_reviews.vocabulary import CombinedCheckState
+from basstler.github.states import CombinedCheckState
 
 from ..constants.paths import DatasetLocation, RecordedCommitChecks
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText

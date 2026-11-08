@@ -9,7 +9,7 @@ import pytest
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.chip_tone import ChipTone
 from basstler.pull_request_state import LiveState
-from basstler.upstream_reviews.vocabulary import CombinedCheckState
+from basstler.github.states import CombinedCheckState
 
 # %% chip tones
 

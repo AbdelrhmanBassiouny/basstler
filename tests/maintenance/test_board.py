@@ -22,7 +22,7 @@ from basstler.maintenance.board import (
     PullRequestField,
     PullRequestHeadKey,
 )
-from basstler.upstream_reviews.vocabulary import CombinedCheckState
+from basstler.github.states import CombinedCheckState
 from basstler.maintenance.commands import BoardCommand, MaintenancePass
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandRunner
 from basstler.github.credential import CredentialProvider

@@ -22,7 +22,7 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.settings import Configuration
-from basstler.upstream_reviews.vocabulary import CombinedCheckState
+from basstler.github.states import CombinedCheckState
 
 import basstler.maintenance.__main__
 import basstler.maintenance.restack_procedure

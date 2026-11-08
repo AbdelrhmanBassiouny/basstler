@@ -35,7 +35,7 @@ from basstler.stack.model import (
     SkipReason,
     Stack,
 )
-from basstler.upstream_reviews.vocabulary import CombinedCheckState
+from basstler.github.states import CombinedCheckState
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch

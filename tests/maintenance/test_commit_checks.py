@@ -11,7 +11,7 @@ from basstler.maintenance.github import (
     ListingParameter,
     RepositoryPath,
 )
-from basstler.upstream_reviews.vocabulary import CombinedCheckState
+from basstler.github.states import CombinedCheckState
 
 from ..github.recorded_client import RecordedGitHubClient
 from ..upstream_reviews.replay import RecordedRestResponse

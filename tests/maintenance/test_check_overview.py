@@ -10,7 +10,7 @@ import pytest
 
 from basstler.maintenance.check_overview import CheckOverview
 from basstler.maintenance.commands import ChecksCommand
-from basstler.upstream_reviews.vocabulary import CombinedCheckState
+from basstler.github.states import CombinedCheckState
 
 from ..constants.stack import StackBranch
 

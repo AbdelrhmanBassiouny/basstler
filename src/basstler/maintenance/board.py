@@ -22,7 +22,7 @@ from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance.description import PullRequestDescription
 from basstler.repository import Repository
 from basstler.stack.model import BoardKey, PullRequest
-from basstler.upstream_reviews.vocabulary import CombinedCheckState
+from basstler.github.states import CombinedCheckState
 
 PullRequestRecord = Mapping[str, Any]
 """

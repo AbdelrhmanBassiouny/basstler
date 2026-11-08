@@ -52,10 +52,7 @@ from basstler.upstream_reviews.exceptions import (
 from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
-from basstler.upstream_reviews.vocabulary import (
-    ActionBranch,
-    ActionFile,
-)
+from basstler.upstream_reviews.action.branch import ActionBranch, ActionFile
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
