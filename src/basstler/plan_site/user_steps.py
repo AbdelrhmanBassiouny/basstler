@@ -21,7 +21,6 @@ from basstler.standard_streams import StandardStreamHandler
 from basstler.github.pull_request import NewPullRequest
 from basstler.github.client import (
     GitHubClient,
-    HttpMethod,
 )
 from basstler.upstream_reviews.rest_models import RestPullRequestSummary
 
@@ -274,11 +273,7 @@ class MergeWorkflowProposal:
         listed = github.get(self.open_pull_requests_path)
         if listed:
             return self.merging(RestPullRequestSummary.from_json(listed[0]))
-        opened = github.attempt_send(
-            HttpMethod.POST,
-            self.repository.pull_requests_path,
-            self.opening,
-        )
+        opened = github.attempt_send(self.opening)
         if opened.failure is not None:
             return PendingStep(
                 UserStep.ADD_MERGE_WORKFLOW,

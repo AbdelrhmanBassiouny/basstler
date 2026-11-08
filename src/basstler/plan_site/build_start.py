@@ -21,7 +21,6 @@ from basstler.github.client import (
     GitHubAttemptClient,
     GitHubResponse,
     GitHubRestClient,
-    HttpMethod,
 )
 from basstler.github.repository_details import RepositoryDetails
 from basstler.github.workflow_run import WorkflowDispatch
@@ -181,9 +180,11 @@ class BuildStart:
         if read.failure is not None:
             return cls(site, read)
         dispatch = client.attempt_send(
-            HttpMethod.POST,
-            site.repository.workflow_dispatch_path(WorkflowLocation.PLAN_SITE),
-            WorkflowDispatch(RepositoryDetails.from_json(read.body).default_branch),
+            WorkflowDispatch(
+                site.repository,
+                WorkflowLocation.PLAN_SITE,
+                RepositoryDetails.from_json(read.body).default_branch,
+            )
         )
         return cls(site, dispatch)
 

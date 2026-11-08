@@ -13,34 +13,12 @@ from basstler.github.client import (
     GitHubClient,
     GitHubResponse,
     HttpMethod,
-    RequestBody,
+    GitHubWrite,
 )
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
 
 # %% the client
-
-
-@dataclass(frozen=True)
-class SentWrite:
-    """
-    One write a client was asked to send.
-    """
-
-    method: HttpMethod
-    """
-    How the resource is written.
-    """
-
-    path: str
-    """
-    The resource's path.
-    """
-
-    body: RequestBody
-    """
-    What the write sends.
-    """
 
 
 @dataclass
@@ -65,7 +43,7 @@ class RecordedGitHubClient(GitHubClient):
     The status a path with no recording is refused with.
     """
 
-    writes: list[SentWrite] = field(default_factory=list)
+    writes: list[GitHubWrite] = field(default_factory=list)
     """
     Every write sent, oldest first.
     """
@@ -80,11 +58,9 @@ class RecordedGitHubClient(GitHubClient):
             self._refuse(HttpMethod.GET, path)
         return self.pages[path]
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, body: RequestBody
-    ) -> GitHubResponse:
-        self.writes.append(SentWrite(method, path, body))
-        return GitHubResponse(body.to_json())
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        self.writes.append(write)
+        return GitHubResponse(write.to_json())
 
     def _refuse(self, method: HttpMethod, path: str) -> None:
         """

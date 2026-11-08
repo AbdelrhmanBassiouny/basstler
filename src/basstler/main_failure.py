@@ -18,7 +18,6 @@ from basstler.github.client import (
     GitHubClient,
     GitHubReader,
     GitHubRestClient,
-    HttpMethod,
 )
 from basstler.github.issue import (
     ClosingReason,
@@ -221,11 +220,12 @@ class MainFailureTracker:
             self.comment(issue, run, github)
             return issue
         opened = github.send(
-            HttpMethod.POST,
-            self.repository.issues_path,
             NewIssue(
-                self.title, run.describe(), [GitHubLabel.BUG, GitHubLabel.MAIN_RED]
-            ),
+                self.repository,
+                self.title,
+                run.describe(),
+                [GitHubLabel.BUG, GitHubLabel.MAIN_RED],
+            )
         )
         return Issue.from_json(opened)
 
@@ -239,9 +239,7 @@ class MainFailureTracker:
         """
         self.comment(issue, run, github)
         github.send(
-            HttpMethod.PATCH,
-            self.repository.issue_path(issue.number),
-            IssueClosing(ClosingReason.COMPLETED),
+            IssueClosing(self.repository, issue.number, ClosingReason.COMPLETED)
         )
 
     def comment(self, issue: Issue, run: FinishedRun, github: GitHubClient) -> None:
@@ -252,11 +250,7 @@ class MainFailureTracker:
         :param run: The run the comment describes.
         :param github: What writes the comment.
         """
-        github.send(
-            HttpMethod.POST,
-            self.repository.issue_comments_path(issue.number),
-            IssueComment(run.describe()),
-        )
+        github.send(IssueComment(self.repository, issue.number, run.describe()))
 
 
 # %% the command line

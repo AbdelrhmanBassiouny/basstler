@@ -5,12 +5,16 @@ list issues.
 
 from __future__ import annotations
 
+from abc import ABC
 from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any, Literal
 from urllib.parse import urlencode
 
-from basstler.github.client import RequestBody
+from pydantic import Field
+
+from basstler.class_property import classproperty
+from basstler.github.client import HttpMethod, RepositoryWrite
 from basstler.json_model import JSONModel
 
 # %% the values an issue's state is written in
@@ -63,21 +67,7 @@ class Issue(JSONModel):
 # %% what is sent to GitHub
 
 
-@dataclass(frozen=True)
-class IssueRequest:
-    """
-    A request to the issues API, whose fields are named as the API names them.
-    """
-
-    def to_json(self) -> dict[str, Any]:
-        """
-        :return: The request as the API reads it.
-        """
-        return asdict(self)
-
-
-@dataclass(frozen=True)
-class NewIssue(IssueRequest, RequestBody):
+class NewIssue(RepositoryWrite):
     """
     An issue to open.
     """
@@ -97,9 +87,27 @@ class NewIssue(IssueRequest, RequestBody):
     The names of the labels it is opened with.
     """
 
+    @classproperty
+    def method(cls) -> HttpMethod:
+        return HttpMethod.POST
 
-@dataclass(frozen=True)
-class IssueComment(IssueRequest, RequestBody):
+    @property
+    def path(self) -> str:
+        return self.repository.issues_path
+
+
+class IssueWrite(RepositoryWrite, ABC):
+    """
+    A change to one issue or pull request, which GitHub numbers alike.
+    """
+
+    number: Annotated[int, Field(exclude=True)]
+    """
+    The issue's or pull request's number in the repository.
+    """
+
+
+class IssueComment(IssueWrite):
     """
     A comment on an issue or pull request, as it is posted.
     """
@@ -109,11 +117,24 @@ class IssueComment(IssueRequest, RequestBody):
     The comment's Markdown.
     """
 
+    @classproperty
+    def method(cls) -> HttpMethod:
+        return HttpMethod.POST
+
+    @property
+    def path(self) -> str:
+        return self.repository.issue_comments_path(self.number)
+
 
 @dataclass(frozen=True)
-class PostedIssueComment(IssueComment, JSONModel):
+class PostedIssueComment(JSONModel):
     """
     A comment GitHub has recorded, with who posted it and when.
+    """
+
+    body: str
+    """
+    The comment's Markdown.
     """
 
     author_login: str
@@ -147,23 +168,32 @@ class PostedIssueComment(IssueComment, JSONModel):
         return f"[{self.author_login} @ {self.created_at}]\n{self.body}"
 
 
-@dataclass(frozen=True)
-class IssueClosing(IssueRequest, RequestBody):
+class IssueClosing(IssueWrite):
     """
     The closing of an issue.
     """
 
-    closing_reason: ClosingReason | None = None
+    closing_reason: Annotated[ClosingReason | None, Field(alias="state_reason")] = None
     """
     Why it is closed, or ``None`` to leave the reason unset.
     """
 
-    def to_json(self) -> dict[str, Any]:
-        return {"state": IssueState.CLOSED, "state_reason": self.closing_reason}
+    state: Literal[IssueState.CLOSED] = IssueState.CLOSED
+    """
+    The state the issue is set to.
+    """
+
+    @classproperty
+    def method(cls) -> HttpMethod:
+        return HttpMethod.PATCH
+
+    @property
+    def path(self) -> str:
+        return self.repository.issue_path(self.number)
 
 
 @dataclass(frozen=True)
-class IssueListing(IssueRequest):
+class IssueListing:
     """
     The query narrowing a listing of a repository's issues.
     """
@@ -188,4 +218,4 @@ class IssueListing(IssueRequest):
         """
         The listing's query string.
         """
-        return urlencode(self.to_json())
+        return urlencode(asdict(self))
