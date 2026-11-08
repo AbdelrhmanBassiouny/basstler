@@ -77,9 +77,9 @@ class MarketplaceKey(StrEnum):
     Where a listed plugin is served from.
     """
 
-    PATH = "path"
+    REPOSITORY = "repo"
     """
-    The plugin's directory within the repository its source names.
+    The GitHub repository, as ``owner/name``, the plugin is served from.
     """
 
     REF = "ref"
@@ -91,12 +91,12 @@ class MarketplaceKey(StrEnum):
 @dataclass(frozen=True)
 class PluginSource:
     """
-    Where a marketplace serves its one plugin from: a directory of a repository at a ref.
+    Where a marketplace serves its one plugin from: a GitHub repository at a ref.
     """
 
-    path: str
+    repository: str
     """
-    The plugin's directory, relative to the repository root.
+    The repository, as ``owner/name``.
     """
 
     ref: str
@@ -112,4 +112,6 @@ class PluginSource:
         marketplace = json.loads(RepositoryLocation.MARKETPLACE.read_text())
         (plugin,) = marketplace[MarketplaceKey.PLUGINS]
         source = plugin[MarketplaceKey.SOURCE]
-        return cls(path=source[MarketplaceKey.PATH], ref=source[MarketplaceKey.REF])
+        return cls(
+            repository=source[MarketplaceKey.REPOSITORY], ref=source[MarketplaceKey.REF]
+        )

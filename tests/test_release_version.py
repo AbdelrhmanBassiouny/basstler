@@ -455,7 +455,12 @@ class ReleaseWorkflowVariable(StrEnum):
 
     RELEASE_BRANCH = "RELEASE_BRANCH"
     """
-    The branch the release moves to its tag, which the marketplace serves the plugin from.
+    The branch the release moves to its tag.
+    """
+
+    PLUGIN_RELEASE_BRANCH = "PLUGIN_RELEASE_BRANCH"
+    """
+    The branch holding only the plugin at the latest release, at the branch's root.
     """
 
 
@@ -511,12 +516,20 @@ def release_branch() -> str:
     ]
 
 
-def test_the_marketplace_serves_the_plugin_from_the_release_branch():
+def plugin_release_branch() -> str:
+    """
+    :return: The branch the release workflow moves to each release's plugin.
+    """
+    return release_workflow_file()[WorkflowFileKey.ENVIRONMENT][
+        ReleaseWorkflowVariable.PLUGIN_RELEASE_BRANCH
+    ]
+
+
+def test_the_marketplace_serves_the_plugin_from_the_plugin_release_branch():
     source = PluginSource.of_this_marketplace()
 
     assert source == PluginSource(
-        path=RepositoryLocation.PLUGIN.relative_to(RepositoryLocation.ROOT).as_posix(),
-        ref=release_branch(),
+        repository=BasstlerSource.REPOSITORY, ref=plugin_release_branch()
     )
 
 
@@ -601,6 +614,7 @@ def run_release_step(
             GitHubActionsVariable.OUTPUT: str(files.output),
             GitHubActionsVariable.RUNNER_TEMPORARY_DIRECTORY: str(files.directory),
             ReleaseWorkflowVariable.RELEASE_BRANCH: release_branch(),
+            ReleaseWorkflowVariable.PLUGIN_RELEASE_BRANCH: plugin_release_branch(),
         }
     )
 
@@ -673,7 +687,7 @@ def test_the_release_step_tags_the_merge_commit_and_moves_the_release_branch_to_
 ):
     """
     The merge commit is the release: ``main`` is left where the merge put it, and the
-    branch the plugin is served from moves to the tag.
+    release branch moves to the tag.
     """
     merge_commit = published_checkout.merge()
 
@@ -692,6 +706,27 @@ def test_the_release_step_tags_the_merge_commit_and_moves_the_release_branch_to_
         == merge_commit
     )
     assert release_step_files.output.read_text() == f"tag={tag}\n"
+
+
+def test_the_release_step_moves_the_plugin_release_branch_to_the_released_plugin(
+    published_checkout, release_step_files
+):
+    merge_commit = published_checkout.merge()
+
+    result = run_release_step(
+        published_checkout.runner.working_directory, release_step_files
+    )
+
+    assert result.returncode == 0, result.stderr
+    plugin_commit = published_checkout.remote_commit(
+        Branch(plugin_release_branch()).reference
+    )
+    plugin_directory = RepositoryLocation.PLUGIN.relative_to(RepositoryLocation.ROOT)
+    assert published_checkout.runner.run(
+        "rev-parse", f"{plugin_commit}^{{tree}}"
+    ) == published_checkout.runner.run(
+        "rev-parse", f"{merge_commit}:{plugin_directory.as_posix()}"
+    )
 
 
 def test_the_release_step_does_nothing_when_nothing_changed(

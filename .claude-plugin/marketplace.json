@@ -1,16 +1,16 @@
 {
   "name": "basstler",
+  "description": "Claude Code plugins by KAOS: personal notes, PR progress, live plan sites and stacked-PR maintenance.",
   "owner": {
-    "name": "Abdelrhman Bassiouny"
+    "name": "KAOS"
   },
   "plugins": [
     {
       "name": "basstler",
       "source": {
-        "source": "git-subdir",
-        "url": "KAOS-repositories/basstler",
-        "path": "plugin",
-        "ref": "release"
+        "source": "github",
+        "repo": "KAOS-repositories/basstler",
+        "ref": "plugin-release"
       },
       "description": "Personal notes, PR progress, multi-PR plans on a live plan site, and stacked-PR maintenance for Claude Code sessions."
     }
