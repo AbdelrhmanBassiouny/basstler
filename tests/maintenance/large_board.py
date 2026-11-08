@@ -27,7 +27,7 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.promotion_link import PromotionLink
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import RollupState
 
 from .fork import (
     A_SESSION_LINK,

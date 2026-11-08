@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from basstler.stack.model import StackBranch, BranchStatus, Stack
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import RollupState
 
 # %% the overview
 

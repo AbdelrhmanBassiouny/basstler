@@ -18,11 +18,9 @@ from basstler.github.client import (
     GitHubReader,
 )
 from basstler.github.workflow_run import WorkflowRun
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-    ValidatedJSONModel,
-    WebPage,
-)
+from basstler.github.states import CheckOutcome
+from basstler.github.web_page import WebPage
+from basstler.json_model import ValidatedJSONModel
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

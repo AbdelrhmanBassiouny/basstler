@@ -42,7 +42,7 @@ from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
 from basstler.repository import Repository
 from basstler.setup.report import CheckResult, CheckStatus
 from basstler.setup.steps import PersonalNotesSetting
-from basstler.upstream_reviews.vocabulary import CheckOutcome
+from basstler.github.states import CheckOutcome
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName

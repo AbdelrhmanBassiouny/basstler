@@ -14,7 +14,8 @@ from basstler.exceptions import DuplicateKeyError
 
 from basstler.upstream_reviews.review_models import Author, PageInfo, ReviewThread
 from basstler.upstream_reviews.rest_models import RestReview
-from basstler.upstream_reviews.vocabulary import ReviewState, ValidatedJSONModel
+from basstler.github.states import ReviewState
+from basstler.json_model import ValidatedJSONModel
 
 from .replay import RecordedResponse
 

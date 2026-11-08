@@ -11,7 +11,7 @@ from typing import Any
 from urllib.parse import urlencode
 
 from basstler.github.client import RequestBody
-from basstler.upstream_reviews.vocabulary import JSONModel
+from basstler.json_model import JSONModel
 
 # %% the values an issue's state is written in
 

@@ -26,7 +26,7 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.exceptions import BaseBranchScopeError
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import RollupState
 
 from ..constants.stack import StackBranch, StackLabel
 

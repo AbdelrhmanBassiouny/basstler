@@ -31,11 +31,7 @@ from basstler.upstream_reviews.report import (
 from basstler.upstream_reviews.rest_models import (
     RestPullRequestSummary,
 )
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-    PullRequestState,
-    RollupState,
-)
+from basstler.github.states import CheckOutcome, PullRequestState, RollupState
 
 from .replay import (
     RecordedResponse,

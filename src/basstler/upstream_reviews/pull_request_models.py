@@ -20,14 +20,10 @@ from basstler.upstream_reviews.review_models import (
     ReviewThread,
     ReviewThreadPage,
 )
-from basstler.upstream_reviews.vocabulary import (
-    AbsentAsEmpty,
-    CheckOutcome,
-    ConclusionOutcome,
-    GraphQLConnection,
-    RollupState,
-    ValidatedJSONModel,
-)
+from basstler.github.graphql import GraphQLConnection
+from basstler.github.states import CheckOutcome, ConclusionOutcome, RollupState
+from basstler.github.web_page import AbsentAsEmpty
+from basstler.json_model import ValidatedJSONModel
 
 # %% models mirroring the pull request
 

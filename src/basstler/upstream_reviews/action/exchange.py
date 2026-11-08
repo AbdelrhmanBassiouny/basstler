@@ -10,7 +10,7 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.class_property import classproperty
-from basstler.upstream_reviews.vocabulary import JSONModel
+from basstler.json_model import JSONModel
 
 # %% vocabulary
 

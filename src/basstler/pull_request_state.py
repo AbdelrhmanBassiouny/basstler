@@ -22,7 +22,7 @@ from basstler.maintenance.board import PullRequestField, PullRequestHead
 from basstler.maintenance.board import PullRequestRecord as PullRequestAPIRecord
 from basstler.maintenance.description import PullRequestDescription
 from basstler.repository import Repository
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import RollupState
 
 
 # %% classified state

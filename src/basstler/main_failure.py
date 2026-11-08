@@ -33,7 +33,7 @@ from basstler.github.workflow_run import RunJobPage, WorkflowRun
 from basstler.github_labels import GitHubLabel
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
-from basstler.upstream_reviews.vocabulary import CheckOutcome
+from basstler.github.states import CheckOutcome
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

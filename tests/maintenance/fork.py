@@ -22,7 +22,7 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.settings import Configuration
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import RollupState
 
 import basstler.maintenance.__main__
 import basstler.maintenance.restack_procedure

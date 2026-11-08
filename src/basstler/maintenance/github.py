@@ -36,7 +36,8 @@ from basstler.upstream_reviews.rest_models import (
     RestCheckRunPage,
     RestCombinedStatusPage,
 )
-from basstler.upstream_reviews.vocabulary import RollupState, WebPage
+from basstler.github.states import RollupState
+from basstler.github.web_page import WebPage
 
 
 # %% what a pass reads and writes

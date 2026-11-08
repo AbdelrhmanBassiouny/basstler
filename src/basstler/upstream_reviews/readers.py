@@ -40,11 +40,8 @@ from basstler.upstream_reviews.review_models import (
     Review,
     ReviewThread,
 )
-from basstler.upstream_reviews.vocabulary import (
-    GraphQLDocument,
-    PullRequestState,
-    QueryVariable,
-)
+from basstler.github.states import PullRequestState
+from basstler.upstream_reviews.query_documents import GraphQLDocument, QueryVariable
 
 # %% reading
 

@@ -55,7 +55,7 @@ from basstler.stack.model import Stack
 from basstler.stack.settings import Configuration
 from basstler.standard_streams import StandardStreamHandler
 from basstler.maintenance.remote_branch import RemoteBranch
-from basstler.upstream_reviews.vocabulary import ActionBranch
+from basstler.upstream_reviews.action.branch import ActionBranch
 from basstler.upstream_reviews.action.read import ActionRead
 from basstler.github.client import GitHubRestClient
 

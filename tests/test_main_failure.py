@@ -24,7 +24,7 @@ from basstler.github_labels import GitHubLabel
 from basstler import main_failure
 from basstler.main_failure import FinishedRun, MainFailureTracker
 from basstler.repository import Repository
-from basstler.upstream_reviews.vocabulary import CheckOutcome
+from basstler.github.states import CheckOutcome
 
 from .constants.paths import DatasetLocation, RepositoryLocation
 from .github.recorded_client import RecordedGitHubClient, SentWrite

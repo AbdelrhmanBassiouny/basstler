@@ -11,10 +11,7 @@ from dataclasses import dataclass
 
 from basstler.github.run_listing import RunListing
 from basstler.maintenance.remote_branch import RemoteBranch
-from basstler.upstream_reviews.vocabulary import (
-    ActionBranch,
-    ActionFile,
-)
+from basstler.upstream_reviews.action.branch import ActionBranch, ActionFile
 from basstler.upstream_reviews.action.exchange import (
     ActionAnswer,
     ActionRequest,

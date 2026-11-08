@@ -20,7 +20,7 @@ from basstler.stack.report import StackReport, StatusColumn
 from basstler.stack.settings import PrintedConfiguration
 
 from basstler.locations import ProjectLocation
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import RollupState
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName, StackBranch, StackLabel

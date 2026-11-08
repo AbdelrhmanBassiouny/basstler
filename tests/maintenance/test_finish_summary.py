@@ -35,7 +35,7 @@ from basstler.stack.model import (
     SkipReason,
     Stack,
 )
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import RollupState
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch

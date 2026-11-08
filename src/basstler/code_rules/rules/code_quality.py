@@ -605,7 +605,7 @@ class StructuredDataRules(Section):
     PARSE_EXTERNAL_DATA_AT_THE_BOUNDARY = (
         "Data whose shape someone else controls - an API response, a configuration "
         "file - is parsed at the boundary into subclasses of "
-        "`basstler.upstream_reviews.vocabulary.ValidatedJSONModel`, so it is "
+        "`basstler.json_model.ValidatedJSONModel`, so it is "
         "validated once and the field names and the access path into the payload "
         "are written once. A subclass is a frozen pydantic dataclass already: give "
         "it no dataclass decorator, and pass the pydantic settings it needs as the "

@@ -12,12 +12,8 @@ from pydantic import Field
 from basstler.class_property import classproperty
 from basstler.github.client import RequestBody
 from basstler.repository import Repository
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-    ConclusionOutcome,
-    JSONModel,
-    ValidatedJSONModel,
-)
+from basstler.github.states import CheckOutcome, ConclusionOutcome
+from basstler.json_model import JSONModel, ValidatedJSONModel
 
 # %% a run
 
