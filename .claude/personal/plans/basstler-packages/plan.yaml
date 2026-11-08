@@ -47,9 +47,10 @@ items:
   status: not started
   notes: 'GitCommandRunner, GitCommandFailed, branch, remote_branch, commit_move into basstler.git. Into
     basstler.github: repository, github_labels, pull_request_state, pull_request_source, maintenance github/board
-    record/description/constants, ExternalCallFailed, upstream_reviews REST/GraphQL models, vocabulary
-    and queries, actions usage/budget, workflows, release_version. Removes github->maintenance and environment->github.
-    Pure moves. GitHubClient (#123, merged) is already in github/client.py.'
+    record/description/constants, ExternalCallFailed, upstream_reviews REST/GraphQL models and
+    queries, actions usage/budget, workflows, release_version. Removes github->maintenance and environment->github.
+    Pure moves. upstream_reviews/vocabulary.py was
+    already split by #164 (merged): basstler.json_model, github.graphql, github.web_page, github.states, upstream_reviews.query_documents.'
 - id: break-remaining-cycles
   title: Break the remaining cycles and give each distribution its own locations, environment and exceptions
   track: package-split
