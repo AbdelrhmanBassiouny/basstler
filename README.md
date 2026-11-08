@@ -55,7 +55,7 @@ its own.
 
 What it installs from depends on where the plugin is:
 
-- **A plugin installed on its own** installs `basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@<tag>`,
+- **A plugin installed on its own** installs `basstler @ git+https://github.com/KAOS-repositories/basstler@<tag>`,
   the tag being the latest release, read once per session start and again when a hook
   finds the plugin synced at another commit since the install; offline, it keeps the one
   it last read.

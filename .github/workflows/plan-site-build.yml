@@ -43,7 +43,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install basstler
-        run: pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_branch_or_tag }}"
+        run: pip install "basstler @ git+https://github.com/KAOS-repositories/basstler@${{ inputs.basstler_branch_or_tag }}"
 
       - name: Configure Pages
         id: pages

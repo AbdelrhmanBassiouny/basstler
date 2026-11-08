@@ -18,12 +18,14 @@ from basstler.maintenance.upstream_action import UpstreamReadRoute
 from basstler.exit_codes import StackExitCode
 
 from basstler.locations import RepositoryStateLocation
-from basstler.maintenance.board import BoardExport
+from basstler.maintenance.board import BoardExport, UpstreamPullRequests
+from basstler.maintenance.constants import MaintenanceNotice
 from basstler.maintenance.commands import (
     BoardCommand,
     MaintenanceCommand,
     MaintenancePass,
     PrepareCommand,
+    RestackCommand,
     RunReportCommand,
 )
 from basstler.pull_request_state import PullRequestState
@@ -33,7 +35,13 @@ from basstler.maintenance.restack_steps import RestackStep
 
 from ..constants.stack import RemoteName, StackBranch
 
-from .fork import ForkCheckout, a_parent_and_child, make_configuration, the_board
+from .fork import (
+    ForkCheckout,
+    a_parent_and_child,
+    make_configuration,
+    make_own_remote_configuration,
+    the_board,
+)
 from .recorded_fork import (
     maintenance_runner,
     run_maintenance,
@@ -262,3 +270,55 @@ def test_a_board_whose_upstream_the_fork_s_action_cannot_read_is_its_own_exit_st
     )
 
     assert basstler.maintenance.__main__.main() is StackExitCode.UPSTREAM_UNREADABLE
+
+
+# %% a repository naming no upstream
+
+
+def a_checkout_naming_no_upstream(fork_checkout: ForkCheckout) -> ForkCheckout:
+    """
+    :param fork_checkout: The checkout to strip of its upstream.
+    :return: The same checkout, with no upstream remote and no settings naming one, as a
+        repository that is not a fork is.
+    """
+    fork_checkout.run_git("remote", "remove", RemoteName.UPSTREAM)
+    return fork_checkout
+
+
+@pytest.mark.parametrize("command", [BoardCommand, RestackCommand])
+def test_a_command_in_a_repository_naming_no_upstream_runs_on_its_own_remote(
+    fork_checkout: ForkCheckout,
+    command: type[MaintenanceCommand],
+):
+    """
+    No upstream is a supported setup, so each command goes on to ask for the credential
+    it needs next rather than stopping for the upstream.
+    """
+    a_checkout_naming_no_upstream(fork_checkout)
+
+    result = maintenance_runner(fork_checkout).run(command.invoked_as)
+
+    assert result.returncode == StackExitCode.CREDENTIAL_UNAVAILABLE, result.stderr
+
+
+def test_a_board_in_a_repository_naming_no_upstream_reads_no_upstream(
+    fork_checkout: ForkCheckout, capsys: pytest.CaptureFixture[str]
+):
+    """
+    The read would go through the fork's Action, which this fork has not got - so the
+    board is only exported because nothing upstream is read.
+    """
+    configuration = make_own_remote_configuration()
+    maintenance = MaintenancePass(
+        configuration=configuration,
+        git=fork_checkout.git,
+        board=fork_checkout.project_root / RepositoryStateLocation.BOARD.name,
+        upstream_read=UpstreamReadRoute.ACTION,
+    )
+
+    upstream_pull_requests = maintenance.upstream_pull_requests()
+
+    assert upstream_pull_requests == UpstreamPullRequests(
+        configuration.fork_repository, {}
+    )
+    assert MaintenanceNotice.NO_UPSTREAM in capsys.readouterr().err

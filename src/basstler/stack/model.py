@@ -611,10 +611,12 @@ class Stack:
         A branch is a candidate when it is approved (``ready``), its parent has landed, it
         has not been withheld pending conflict resolution, and its checks have not failed.
         Every such branch promotes together - there is no admission cap or per-stack slot
-        limit.
+        limit. A project with no upstream promotes nothing.
 
         :return: The promotable branches, in dependency order.
         """
+        if not self.configuration.has_upstream:
+            return []
         return [
             branch
             for branch in self.maintained_branches()
@@ -627,8 +629,10 @@ class Stack:
     def withheld_by_failing_checks(self) -> list[StackBranch]:
         """
         :return: Every approved branch whose parent has landed but whose checks failed,
-            in dependency order.
+            in dependency order; none for a project with no upstream to promote to.
         """
+        if not self.configuration.has_upstream:
+            return []
         return [
             branch
             for branch in self.maintained_branches()

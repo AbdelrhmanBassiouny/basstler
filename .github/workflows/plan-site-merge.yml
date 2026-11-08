@@ -19,7 +19,7 @@ concurrency:
 jobs:
   dispatch:
     name: Start the plan site build
-    if: github.repository == 'AbdelrhmanBassiouny/basstler' && github.event.pull_request.merged
+    if: github.repository == 'KAOS-repositories/basstler' && github.event.pull_request.merged
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

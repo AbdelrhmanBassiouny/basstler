@@ -47,8 +47,8 @@ dynamic = ["version"]
 basstler = "basstler.__main__:app"
 
 [project.urls]
-"Source" = "https://github.com/AbdelrhmanBassiouny/basstler"
-"Bug Tracker" = "https://github.com/AbdelrhmanBassiouny/basstler/issues"
+"Source" = "https://github.com/KAOS-repositories/basstler"
+"Bug Tracker" = "https://github.com/KAOS-repositories/basstler/issues"
 
 # One release for the package and the plugin: the tag the release workflow puts on a merge
 # commit. The build reads the version from that tag, so no file names it and nothing is

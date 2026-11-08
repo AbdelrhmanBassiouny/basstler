@@ -509,7 +509,7 @@ class BasstlerSource(StrEnum):
     Where the reusable workflow and the package a run installs come from.
     """
 
-    REPOSITORY = "AbdelrhmanBassiouny/basstler"
+    REPOSITORY = "KAOS-repositories/basstler"
     REUSABLE_WORKFLOW = ".github/workflows/upstream-reviews-action.yml"
     LATEST_RELEASE = "main"
     """

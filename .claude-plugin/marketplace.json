@@ -8,7 +8,7 @@
       "name": "basstler",
       "source": {
         "source": "git-subdir",
-        "url": "AbdelrhmanBassiouny/basstler",
+        "url": "KAOS-repositories/basstler",
         "path": "plugin",
         "ref": "release"
       },
