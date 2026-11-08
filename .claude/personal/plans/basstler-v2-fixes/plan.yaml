@@ -18,8 +18,11 @@ items:
 - id: separate-notes-repository-attach
   title: A cloud session attaches a separate notes repository before it reads or saves notes
   track: fixes
+  branch: claude/sleepy-einstein-ip14kg
+  pull_request_number: 171
+  session: https://claude.ai/code/session_018wfiv8QQAnDiW5XQNttfWZ
   depends_on: []
-  status: not started
+  status: in progress
   notes: 'From the review of #169 (manifest_tools.py, discussion_r4508198236). When the notes
     remote names another repository than the clone, a cloud session cannot fetch or push notes
     until that repository is attached. Session start and save-plan.sh report it, and the session
