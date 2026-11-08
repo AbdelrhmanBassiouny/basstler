@@ -28,7 +28,6 @@ items:
     item changes onto the fresh manifest, refuse when the same item changed since the session
     read it, push, and on a rejected push repeat a bounded number of times. Needed only until
     basstler-v3 plan-store-issues; v2-removal deletes it.'
-
 - id: lean-kickoff
   title: A kickoff loads one compact item brief instead of about 55 KB of skill documents
   branch: ccr-1516c899-kd5dl7
@@ -43,7 +42,6 @@ items:
     steps; maintenance runs only when an upstream is named; the schema is read only for structural
     edits. A test caps skill document sizes like plan_size_limits. Target under 5k tokens
     of tooling text.
-
 - id: plan-model-typed-accessors
   title: PlanManifest and PlanItem expose every manifest field as a typed read-only accessor;
     consumers stop indexing raw dicts
@@ -62,7 +60,6 @@ items:
     '
   depends_on: []
   status: in progress
-
 - id: report-keys-in-tests
   title: Tests read command reports through the existing report key enums, not bare strings
   branch: claude/magical-maxwell-grvwey
@@ -75,54 +72,31 @@ items:
     '
   depends_on: []
   status: in progress
-
-- id: payload-key-models
-  title: "GitHub API payload keys spelled only inside their models"
-  branch: claude/vigilant-maxwell-mh2eey
-  track: core
-  pull_request_number: 158
-  session: https://claude.ai/code/session_018wfiv7qJrDyBzHF15bMU9k
-  depends_on: []
-  status: in progress
-  notes: >-
-    First slice (owner, at kickoff). Adds pydantic: GitHub API responses become
-    pydantic dataclasses validated by a shared ValidatedJSONModel.from_json, keys
-    spelled once as field names or aliases. Removes the key enums in upstream_reviews
-    (GraphQL, REST), github/pull_request, plan_site (build_start, publication,
-    dispatch_check, run_listing), release_version and maintenance labels. The
-    maintenance pull-request record moved to pull-request-record-model (owner).
-
 - id: file-key-models
-  title: "Workflow, pyproject, hub, board and exchange-file keys spelled only inside their models"
+  title: Workflow, pyproject, hub, board and exchange-file keys spelled only inside their
+    models
   track: core
-  depends_on: [payload-key-models]
+  depends_on: []
   status: not started
-  notes: >-
-    Second slice of payload-key-models: WorkflowKey (workflows, plan_site/workflows),
-    PyprojectKey, HubFileKey, BoardKey and the upstream_reviews action/helper exchange
-    keys become the dataclasses that read and write those files, on the pydantic base
-    payload-key-models adds.
-
+  notes: 'Second slice of payload-key-models: WorkflowKey (workflows, plan_site/workflows),
+    PyprojectKey, HubFileKey, BoardKey and the upstream_reviews action/helper exchange keys
+    become the dataclasses that read and write those files, on the pydantic base payload-key-models
+    adds.'
 - id: report-key-models
-  title: "Command reports are dataclasses, and tests read them through those"
+  title: Command reports are dataclasses, and tests read them through those
   track: core
-  depends_on: [payload-key-models]
+  depends_on: []
   status: not started
-  notes: >-
-    Third slice of payload-key-models: the command-report key enums (ReportKey,
-    MaintenanceReportKey, ItemBriefKey, ReadinessField, UsageOutputKey, ...) become
-    report dataclasses with to_json, and tests read reports through them, reversing
-    report-keys-in-tests (#145).
-
+  notes: 'Third slice of payload-key-models: the command-report key enums (ReportKey, MaintenanceReportKey,
+    ItemBriefKey, ReadinessField, UsageOutputKey, ...) become report dataclasses with to_json,
+    and tests read reports through them, reversing report-keys-in-tests (#145).'
 - id: pull-request-record-model
-  title: "Fork pull requests are a pydantic model, not a dict read through PullRequestField"
+  title: Fork pull requests are a pydantic model, not a dict read through PullRequestField
   track: core
-  depends_on: [payload-key-models]
+  depends_on: []
   status: not started
-  notes: >-
-    Split from payload-key-models (owner). Replace PullRequestRecord and the
-    PullRequestField, PullRequestHeadKey, AccountField and PullRequestFieldShape enums
-    in maintenance/board.py with a pydantic pull request model; ~30 modules read the
-    record, the plan site's live state and pull_request_state among them. Runs after
-    or before basstler-packages/git-and-github-domain, never alongside (it moves the
-    board record).
+  notes: Split from payload-key-models (owner). Replace PullRequestRecord and the PullRequestField,
+    PullRequestHeadKey, AccountField and PullRequestFieldShape enums in maintenance/board.py
+    with a pydantic pull request model; ~30 modules read the record, the plan site's live
+    state and pull_request_state among them. Runs after or before basstler-packages/git-and-github-domain,
+    never alongside (it moves the board record).
