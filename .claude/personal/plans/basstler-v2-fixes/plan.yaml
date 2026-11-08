@@ -23,33 +23,20 @@ items:
   session: https://claude.ai/code/session_018wfiv76b5y8sk4AkE4DwbU
   depends_on: []
   status: in progress
-  notes: 'Also covers check-setup reporting stack_upstream needs-setup (and exiting 1) in a repository
-    that is not a fork: no upstream is a supported setup. Folded in from #155. Own bug PR off main
-    after #155. Decide with the user whether the stack pass merges or rebases a branch based on main,
-    so plan-item-resolve keeps it current (PR #145 sat 17 commits behind). Session start stays
-    report-only: at most it prints how far behind the branch is.'
-
-- id: separate-notes-remote-save
-  title: save-plan.sh saves when the notes remote is a separate repository
-  branch: claude/funny-hypatia-rvov5e
-  pull_request_number: 169
-  track: fixes
-  session: https://claude.ai/code/session_018wfiv7igVSUpe8ZQWR6Fyq
-  depends_on: []
-  status: in progress
-  notes: 'External report #153 (tomsch420), placed 2026-11-07: no item covers it. A regression of #138
-    (0f1f5ece): PlanValidator.repository_problems compares default_repository with the notes remote, so
-    a separate notes repository never passes. Discuss and reproduce on the issue, then a failing test,
-    then one bug PR off main closing #153.'
-
+  notes: 'Also covers check-setup reporting stack_upstream needs-setup (and exiting 1) in
+    a repository that is not a fork: no upstream is a supported setup. Folded in from #155.
+    Own bug PR off main after #155. Decide with the user whether the stack pass merges or
+    rebases a branch based on main, so plan-item-resolve keeps it current (PR #145 sat 17
+    commits behind). Session start stays report-only: at most it prints how far behind the
+    branch is.'
 - id: separate-notes-repository-attach
   title: A cloud session attaches a separate notes repository before it reads or saves notes
   track: fixes
   depends_on: []
   status: not started
   notes: 'From the review of #169 (manifest_tools.py, discussion_r4508198236). When the notes
-    remote names another repository than the clone, a cloud session cannot fetch or push
-    notes until that repository is attached. Session start and save-plan.sh report it, and
-    the session calls add_repo with push access; if refused, it asks the user with "Attach
-    it (Recommended)" first, as for the plan site repository. Own bug PR off main, failing
-    test first. The first case interaction-model/session-actions ports.'
+    remote names another repository than the clone, a cloud session cannot fetch or push notes
+    until that repository is attached. Session start and save-plan.sh report it, and the session
+    calls add_repo with push access; if refused, it asks the user with "Attach it (Recommended)"
+    first, as for the plan site repository. Own bug PR off main, failing test first. The first
+    case interaction-model/session-actions ports.'
