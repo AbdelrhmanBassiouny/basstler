@@ -61,7 +61,7 @@ class UpstreamPullRequestReport:
         lines = [
             f"# Upstream pull request: #{self.snapshot.number} {self.snapshot.title}",
             "",
-            self.snapshot.url,
+            self.snapshot.page_url,
             "",
         ]
         lines.extend(self._render_checks())
@@ -104,7 +104,7 @@ class UpstreamPullRequestReport:
             "",
         ]
         for result in unsuccessful:
-            location = f" <{result.url}>" if result.url else ""
+            location = f" <{result.target_url}>" if result.target_url else ""
             lines.append(f"- **{result.name}** — {result.outcome}{location}")
         lines.append("")
         return lines
@@ -158,5 +158,5 @@ class UpstreamPullRequestReport:
         for comment in thread.comments:
             lines.append(f"- **{comment.author.login}**: {comment.body.strip()}")
         if thread.comments:
-            lines.extend(["", f"<{thread.comments[0].url}>", ""])
+            lines.extend(["", f"<{thread.comments[0].page_url}>", ""])
         return lines

@@ -26,7 +26,7 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.exceptions import BaseBranchScopeError
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.upstream_reviews.vocabulary import CombinedCheckState
 
 from ..constants.stack import StackBranch, StackLabel
 
@@ -330,17 +330,17 @@ def test_check_state_and_session_carried_onto_branch():
                 StackBranch.FEATURE,
                 StackBranch.BASE,
                 draft=False,
-                check_state=RollupState.FAILURE,
+                check_state=CombinedCheckState.FAILURE,
                 session=StackSampleText.SESSION_LINK,
                 head_repository=StackRepository.FORK.value.full_name,
             )
         ]
     )
-    assert stack.branches[0].check_state is RollupState.FAILURE
+    assert stack.branches[0].check_state is CombinedCheckState.FAILURE
     assert stack.branches[0].session == StackSampleText.SESSION_LINK
 
 
-def a_ready_branch_whose_checks_reached(check_state: RollupState) -> PullRequest:
+def a_ready_branch_whose_checks_reached(check_state: CombinedCheckState) -> PullRequest:
     """
     :param check_state: The verdict over the branch's checks.
     :return: An approved branch on the base, otherwise promotable.
@@ -359,7 +359,7 @@ def test_failing_checks_withhold_a_branch_from_promotion():
     stack = build(
         [
             a_ready_branch_whose_checks_reached(state)
-            for state in (RollupState.FAILURE, RollupState.ERROR)
+            for state in (CombinedCheckState.FAILURE, CombinedCheckState.ERROR)
         ]
     )
     assert stack.promotion_order() == []
@@ -367,10 +367,10 @@ def test_failing_checks_withhold_a_branch_from_promotion():
 
 def test_checks_that_have_not_failed_leave_a_branch_promotable():
     for state in (
-        RollupState.NOT_REPORTED,
-        RollupState.SUCCESS,
-        RollupState.PENDING,
-        RollupState.EXPECTED,
+        CombinedCheckState.NOT_REPORTED,
+        CombinedCheckState.SUCCESS,
+        CombinedCheckState.PENDING,
+        CombinedCheckState.EXPECTED,
     ):
         stack = build([a_ready_branch_whose_checks_reached(state)])
         assert [branch.name for branch in stack.promotion_order()] == [
@@ -381,13 +381,13 @@ def test_checks_that_have_not_failed_leave_a_branch_promotable():
 def test_only_branches_promotion_would_otherwise_take_count_as_held_by_their_checks():
     stack = build(
         [
-            a_ready_branch_whose_checks_reached(RollupState.FAILURE),
+            a_ready_branch_whose_checks_reached(CombinedCheckState.FAILURE),
             PullRequest(
                 2,
                 StackBranch.CHILD,
                 StackBranch.FEATURE,
                 draft=False,
-                check_state=RollupState.FAILURE,
+                check_state=CombinedCheckState.FAILURE,
                 head_repository=StackRepository.FORK.value.full_name,
             ),
             PullRequest(
@@ -395,7 +395,7 @@ def test_only_branches_promotion_would_otherwise_take_count_as_held_by_their_che
                 StackBranch.PARSER,
                 StackBranch.BASE,
                 draft=True,
-                check_state=RollupState.FAILURE,
+                check_state=CombinedCheckState.FAILURE,
                 head_repository=StackRepository.FORK.value.full_name,
             ),
         ]
@@ -406,9 +406,11 @@ def test_only_branches_promotion_would_otherwise_take_count_as_held_by_their_che
     ]
 
 
-@pytest.mark.parametrize("state", [RollupState.PENDING, RollupState.NOT_REPORTED])
+@pytest.mark.parametrize(
+    "state", [CombinedCheckState.PENDING, CombinedCheckState.NOT_REPORTED]
+)
 def test_the_board_reads_the_check_state_back_as_its_verdict(
-    tmp_path: Path, state: RollupState
+    tmp_path: Path, state: CombinedCheckState
 ):
     written = a_ready_branch_whose_checks_reached(state)
     board = tmp_path / RepositoryStateLocation.BOARD.name

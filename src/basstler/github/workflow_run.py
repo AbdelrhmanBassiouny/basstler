@@ -5,43 +5,42 @@ One run of a GitHub Actions workflow, and the jobs it ran.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import Field
 
 from basstler.class_property import classproperty
+from basstler.github.client import RequestBody
 from basstler.repository import Repository
-from basstler.upstream_reviews.vocabulary import CheckOutcome, JSONModel
+from basstler.upstream_reviews.vocabulary import (
+    CheckOutcome,
+    ConclusionOutcome,
+    JSONModel,
+    ValidatedJSONModel,
+)
 
 # %% a run
 
 
-@dataclass(frozen=True)
-class WorkflowRun(JSONModel):
+class WorkflowRun(ValidatedJSONModel):
     """
     One run of a workflow.
     """
 
-    identifier: int
+    identifier: Annotated[int, Field(alias="id")]
     """
     The run's own number, which its page is addressed by.
     """
 
-    commit: str
+    commit: Annotated[str, Field(alias="head_sha")]
     """
     The commit it ran on.
     """
 
-    outcome: CheckOutcome
+    outcome: Annotated[ConclusionOutcome, Field(alias="conclusion")]
     """
     How it ended, :attr:`CheckOutcome.PENDING` while it runs.
     """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> WorkflowRun:
-        return cls(
-            data["id"],
-            data["head_sha"],
-            CheckOutcome.from_conclusion(data["conclusion"]),
-        )
 
     @property
     def failed(self) -> bool:
@@ -106,3 +105,17 @@ class RunJobPage(JSONModel):
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> RunJobPage:
         return cls([RunJob.from_json(job) for job in data["jobs"]])
+
+
+# %% starting a run
+
+
+class WorkflowDispatch(ValidatedJSONModel, RequestBody):
+    """
+    The body of a request to run a workflow.
+    """
+
+    branch: Annotated[str, Field(alias="ref")]
+    """
+    The branch the workflow runs on.
+    """

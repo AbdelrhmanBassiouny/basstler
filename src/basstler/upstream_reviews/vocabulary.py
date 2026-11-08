@@ -8,9 +8,22 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, TypeVar
+from typing import Annotated, Any, Self, TypeVar, get_args
+
+from pydantic import (
+    AliasChoices,
+    AliasPath,
+    ConfigDict,
+    Field,
+    GetCoreSchemaHandler,
+    TypeAdapter,
+)
+from pydantic.dataclasses import dataclass as pydantic_dataclass
+from pydantic.fields import FieldInfo
+from pydantic_core import core_schema
 
 from basstler.class_property import classproperty
+from basstler.exceptions import DuplicateKeyError
 from basstler.locations import PackageLocation
 
 # %% the reading contract
@@ -19,11 +32,6 @@ from basstler.locations import PackageLocation
 class JSONModel(ABC):
     """
     A dataclass mirroring one object GitHub returns, able to read itself from it.
-
-    Declaring the reader here is what lets :meth:`PullRequestJSONKey.read_list` call
-    it on any model. Without it the shared name would be a convention every model
-    is trusted to have followed, and a model that spelled it differently would fail
-    only when something happened to parse that field.
 
     Every response is parsed into these models as soon as it arrives, and every
     decision after that is made on their attributes, never on the raw object. A
@@ -42,81 +50,229 @@ class JSONModel(ABC):
         """
 
 
-ParsedItem = TypeVar("ParsedItem", bound=JSONModel)
+class ValidatedJSONModel(JSONModel):
+    """
+    A frozen pydantic dataclass by subclassing alone, whose fields are the object's keys,
+    each spelled as its field name or, where GitHub names it differently, as its alias.
+
+    Copied from krrood's ``ValidatedDataclass`` :cite:`krrood` until krrood's light core
+    is released.
+    """
+
+    __pydantic_config__ = ConfigDict(validate_by_name=True, validate_by_alias=True)
+    """
+    The pydantic settings every subclass starts from.
+    """
+
+    def __init_subclass__(cls, config: ConfigDict | None = None, **kwargs: Any) -> None:
+        """
+        Make the subclass a frozen pydantic dataclass.
+
+        :param config: Pydantic settings added to those the subclass inherits.
+        :param kwargs: Passed on to the next base.
+        :raises DuplicateKeyError: If two of its fields read the same key.
+        """
+        super().__init_subclass__(**kwargs)
+        cls.__pydantic_config__ = ConfigDict(
+            **cls.__pydantic_config__, **(config or {})
+        )
+        pydantic_dataclass(cls, frozen=True)
+        readers: dict[str, str] = {}
+        for name, field_info in cls.__pydantic_fields__.items():
+            for key in cls.entry_keys(name, field_info):
+                if key in readers:
+                    raise DuplicateKeyError(cls.__name__, key, (readers[key], name))
+                readers[key] = name
+
+    @classmethod
+    def from_json(cls, data: dict[str, Any]) -> Self:
+        """
+        :raises pydantic.ValidationError: If the object does not have the model's shape.
+        """
+        return TypeAdapter(cls).validate_python(data)
+
+    def to_json(self) -> dict[str, Any]:
+        """
+        :return: The object, each field written under its alias where it has one.
+        """
+        return TypeAdapter(type(self)).dump_python(self, mode="json", by_alias=True)
+
+    @classproperty
+    def read_keys(cls) -> frozenset[str]:
+        """
+        Every key the model reads out of its object, at any depth.
+        """
+        keys: set[str] = set()
+        for name, field_info in cls.__pydantic_fields__.items():
+            keys |= cls.field_keys(name, field_info)
+            for model in cls.nested_models(field_info.annotation):
+                keys |= model.read_keys
+        return frozenset(keys)
+
+    @staticmethod
+    def field_keys(name: str, field_info: FieldInfo) -> set[str]:
+        """
+        :param name: The field's name.
+        :param field_info: The field.
+        :return: Every key the field is read from, each step of a nested key path
+            included.
+        """
+        return {
+            step
+            for path in ValidatedJSONModel.key_paths(name, field_info)
+            for step in path
+            if isinstance(step, str)
+        }
+
+    @staticmethod
+    def entry_keys(name: str, field_info: FieldInfo) -> set[str]:
+        """
+        :param name: The field's name.
+        :param field_info: The field.
+        :return: The keys of the model's own object the field is read from.
+        """
+        return {path[0] for path in ValidatedJSONModel.key_paths(name, field_info)}
+
+    @staticmethod
+    def key_paths(name: str, field_info: FieldInfo) -> list[list[str | int]]:
+        """
+        :param name: The field's name.
+        :param field_info: The field.
+        :return: Each path of keys the field can be read from, outermost key first.
+        """
+        alias = field_info.validation_alias or field_info.alias or name
+        choices = alias.choices if isinstance(alias, AliasChoices) else [alias]
+        return [
+            list(choice.path) if isinstance(choice, AliasPath) else [choice]
+            for choice in choices
+        ]
+
+    @staticmethod
+    def nested_models(annotation: Any) -> list[type[ValidatedJSONModel]]:
+        """
+        :param annotation: A field's type.
+        :return: Every model the type holds, at any depth of its type arguments.
+        """
+        if isinstance(annotation, type) and issubclass(annotation, ValidatedJSONModel):
+            return [annotation]
+        return [
+            model
+            for argument in get_args(annotation)
+            for model in ValidatedJSONModel.nested_models(argument)
+        ]
+
+
+class RawValueReader(ABC):
+    """
+    A field annotation that turns the value GitHub sent into the one the field's type
+    validates.
+    """
+
+    @abstractmethod
+    def read(self, value: Any) -> Any:
+        """
+        :param value: The value as GitHub sent it.
+        :return: The value the field's type validates.
+        """
+
+    def __get_pydantic_core_schema__(
+        self, source: type[Any], handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        """
+        :param source: The field's type.
+        :param handler: Builds pydantic's own schema for a type.
+        :return: How pydantic reads the field: :meth:`read`, then the field's type.
+        """
+        return core_schema.no_info_before_validator_function(self.read, handler(source))
+
+
+class GraphQLNodes(RawValueReader):
+    """
+    Reads a GraphQL connection, which holds a list-valued field's entries under
+    ``nodes``, as those entries.
+    """
+
+    def read(self, value: dict[str, Any] | list[Any]) -> list[Any]:
+        if isinstance(value, list):
+            return value
+        return value["nodes"]
+
+
+class AbsentAsEmpty(RawValueReader):
+    """
+    Reads a text GitHub reports as null as empty text.
+    """
+
+    def read(self, value: str | None) -> str:
+        return value or ""
+
+
+class Conclusion(RawValueReader):
+    """
+    Reads the conclusion GitHub gives a check run or workflow run, null while it runs,
+    as its :class:`CheckOutcome`.
+    """
+
+    def read(self, value: str | None) -> CheckOutcome:
+        return CheckOutcome.from_conclusion(value)
+
+
+Node = TypeVar("Node")
 """
-Whatever model a list-valued field is being parsed into.
+Whatever model the entries of a connection are parsed into.
 """
+
+
+GraphQLConnection = Annotated[list[Node], GraphQLNodes()]
+"""
+A list-valued GraphQL field, which GitHub returns as a connection.
+"""
+
+
+class WebPage(ValidatedJSONModel):
+    """
+    A REST resource that has a page of its own on github.com.
+    """
+
+    page_url: Annotated[str, Field(alias="html_url")]
+    """
+    The address of its own page on GitHub.
+    """
 
 
 # %% wire vocabulary
 
 
-class PullRequestJSONKey(StrEnum):
+class NamedAsGitHub(StrEnum):
     """
-    Every field name this script reads out of a GraphQL response.
-
-    Named once here so a key is never spelled twice, and so a rename in the query
-    document has exactly one place to follow.
+    An enum whose members are named as GitHub spells its values, in any letter case,
+    while each member's value is how it reads in the report.
     """
 
-    DATA = "data"
-    ERRORS = "errors"
-    MESSAGE = "message"
-    REPOSITORY = "repository"
-    PULL_REQUEST = "pullRequest"
-    PULL_REQUESTS = "pullRequests"
-    NODES = "nodes"
-    PAGE_INFO = "pageInfo"
-    HAS_NEXT_PAGE = "hasNextPage"
-    END_CURSOR = "endCursor"
-    IDENTIFIER = "id"
-    IS_RESOLVED = "isResolved"
-    IS_OUTDATED = "isOutdated"
-    PATH = "path"
-    LINE = "line"
-    COMMENTS = "comments"
-    DATABASE_IDENTIFIER = "databaseId"
-    AUTHOR = "author"
-    LOGIN = "login"
-    BODY = "body"
-    CREATED_AT = "createdAt"
-    URL = "url"
-    REVIEWS = "reviews"
-    REVIEW_THREADS = "reviewThreads"
-    STATE = "state"
-    SUBMITTED_AT = "submittedAt"
-    NUMBER = "number"
-    TITLE = "title"
-    HEAD_REPOSITORY_OWNER = "headRepositoryOwner"
-    COMMITS = "commits"
-    COMMIT = "commit"
-    STATUS_CHECK_ROLLUP = "statusCheckRollup"
-    CONTEXTS = "contexts"
-    TYPE_NAME = "__typename"
-    NAME = "name"
-    CONCLUSION = "conclusion"
-    DETAILS_URL = "detailsUrl"
-    CONTEXT = "context"
-    TARGET_URL = "targetUrl"
-    QUERY = "query"
-    VARIABLES = "variables"
-
-    def read_list(
-        self, data: dict[str, Any], model: type[ParsedItem]
-    ) -> list[ParsedItem]:
+    @classmethod
+    def from_github_name(cls, spelling: str) -> Self:
         """
-        Parse every entry of the list-valued field this key names.
-
-        GitHub returns a list-valued field as an object holding the array under
-        ``nodes`` rather than as the array itself, so that step happens here rather
-        than at each call site.
-
-        :param data: The object the field belongs to.
-        :param model: The model to parse each entry into.
-        :return: The parsed entries, in the order GitHub returned them.
+        :param spelling: A value as GitHub spells it, or a member already.
+        :return: The member it names.
+        :raises KeyError: If no member has that name.
         """
-        entries = data[self][PullRequestJSONKey.NODES]
-        return [model.from_json(entry) for entry in entries]
+        if isinstance(spelling, cls):
+            return spelling
+        return cls[spelling.upper()]
+
+    @classmethod
+    def __get_pydantic_core_schema__(
+        cls, source: type[Any], handler: GetCoreSchemaHandler
+    ) -> core_schema.CoreSchema:
+        """
+        :param source: The enum.
+        :param handler: Builds pydantic's own schema for a type, unused since the enum
+            replaces it.
+        :return: How pydantic reads a field of this enum: by :meth:`from_github_name`.
+        """
+        return core_schema.no_info_plain_validator_function(
+            cls.from_github_name, json_schema_input_schema=core_schema.str_schema()
+        )
 
 
 class QueryVariable(StrEnum):
@@ -144,12 +300,10 @@ class GraphQLDocument(StrEnum):
         return (PackageLocation.QUERIES / f"{self}.graphql").read_text()
 
 
-class ReviewState(StrEnum):
+class ReviewState(NamedAsGitHub):
     """
     The verdict a reviewer submitted with a review.
 
-    Members are named as GitHub spells them, so a payload's value is looked up by
-    name, and each member's value is how the verdict reads in the report.
     """
 
     APPROVED = "approved"
@@ -188,34 +342,12 @@ class PullRequestState(StrEnum):
     MERGED = "MERGED"
 
 
-class CheckContextType(StrEnum):
+class CheckOutcome(NamedAsGitHub):
     """
-    The two shapes GitHub returns inside a status check rollup.
+    Where one check stands, over check runs and commit statuses alike.
 
-    A pull request can carry both at once: Actions jobs arrive as check runs, while
-    anything reporting through the older commit-status API arrives as a status
-    context, and each spells its outcome with its own field.
-    """
-
-    CHECK_RUN = "CheckRun"
-    """
-    A check run, such as a GitHub Actions job, whose outcome is its conclusion.
-    """
-
-    STATUS_CONTEXT = "StatusContext"
-    """
-    A commit status posted through the commit-status API, whose outcome is its state.
-    """
-
-
-class CheckOutcome(StrEnum):
-    """
-    Where one check stands, over both shapes a rollup can hold.
-
-    Members are named as GitHub spells them, so a payload's value is looked up by
-    name, and each member's value is how the outcome reads in the report. A check run
-    that has not finished reports no conclusion at all, which reads here as
-    :attr:`PENDING` so an unfinished check is never mistaken for a passing one.
+    A check run that has not finished reports no conclusion at all, which reads here
+    as :attr:`PENDING` so an unfinished check is never mistaken for a passing one.
     """
 
     SUCCESS = "success"
@@ -270,7 +402,7 @@ class CheckOutcome(StrEnum):
             it, ``None`` while it runs.
         :return: The outcome it reads as.
         """
-        return cls[conclusion.upper()] if conclusion else cls.PENDING
+        return cls.from_github_name(conclusion) if conclusion else cls.PENDING
 
     STARTUP_FAILURE = "startup failure"
     """
@@ -288,26 +420,30 @@ class CheckOutcome(StrEnum):
     """
 
     @property
-    def rolls_up_to(self) -> RollupState:
+    def combined_state(self) -> CombinedCheckState:
         """
-        :return: The verdict this outcome alone would give the whole rollup, the way
+        :return: The verdict this outcome alone would give the combined state, the way
             GitHub counts it: a neutral or skipped check does not hold a pull request
             back, and everything that ended without passing fails it.
         """
         if self in {CheckOutcome.SUCCESS, CheckOutcome.NEUTRAL, CheckOutcome.SKIPPED}:
-            return RollupState.SUCCESS
+            return CombinedCheckState.SUCCESS
         if self in {CheckOutcome.ERROR, CheckOutcome.PENDING, CheckOutcome.EXPECTED}:
-            return RollupState[self.name]
-        return RollupState.FAILURE
+            return CombinedCheckState[self.name]
+        return CombinedCheckState.FAILURE
 
 
-class RollupState(StrEnum):
+ConclusionOutcome = Annotated[CheckOutcome, Conclusion()]
+"""
+A check's outcome, read from the conclusion GitHub gives a check run or workflow run.
+"""
+
+
+class CombinedCheckState(NamedAsGitHub):
     """
     The verdict GitHub itself computes over all of a pull request's checks, or that
     nothing has reported one yet.
 
-    Members are named as GitHub spells them, so a payload's value is looked up by
-    name, and each member's value is how the verdict reads in the report.
     """
 
     SUCCESS = "success"
@@ -343,10 +479,10 @@ class RollupState(StrEnum):
     @property
     def failed(self) -> bool:
         """:return: Whether at least one check failed or reported an error."""
-        return self in {RollupState.FAILURE, RollupState.ERROR}
+        return self in {CombinedCheckState.FAILURE, CombinedCheckState.ERROR}
 
     @classmethod
-    def over(cls, outcomes: list[CheckOutcome]) -> RollupState:
+    def over(cls, outcomes: list[CheckOutcome]) -> CombinedCheckState:
         """
         Compute the verdict GitHub would over a set of checks, for a source that does
         not report one: the worst any single check would give.
@@ -354,11 +490,11 @@ class RollupState(StrEnum):
         :param outcomes: Every check's outcome, at least one.
         :return: The verdict.
         """
-        reached = {outcome.rolls_up_to for outcome in outcomes}
+        reached = {outcome.combined_state for outcome in outcomes}
         return next(state for state in cls.severity_order() if state in reached)
 
     @classmethod
-    def severity_order(cls) -> list[RollupState]:
+    def severity_order(cls) -> list[CombinedCheckState]:
         """
         :return: Every verdict a reported check can give, worst first.
         """

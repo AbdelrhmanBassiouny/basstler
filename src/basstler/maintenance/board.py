@@ -22,7 +22,7 @@ from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.maintenance.description import PullRequestDescription
 from basstler.repository import Repository
 from basstler.stack.model import BoardKey, PullRequest
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.upstream_reviews.vocabulary import CombinedCheckState
 
 PullRequestRecord = Mapping[str, Any]
 """
@@ -351,7 +351,7 @@ class CommitChecks(ABC):
     """
 
     @abstractmethod
-    def check_state(self, commit: str) -> RollupState:
+    def check_state(self, commit: str) -> CombinedCheckState:
         """:param commit: The commit the checks ran on.
         :return: The verdict over every check run and commit status reported on it."""
 

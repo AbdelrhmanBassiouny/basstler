@@ -35,7 +35,7 @@ from basstler.stack.model import (
     SkipReason,
     Stack,
 )
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.upstream_reviews.vocabulary import CombinedCheckState
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import StackBranch
@@ -320,7 +320,7 @@ def test_a_branch_whose_checks_failed_is_listed_as_withheld_from_promotion():
                 StackPullRequestNumber.PARENT,
                 StackBranch.PARENT,
                 UPSTREAM_BASE,
-                check_state=RollupState.FAILURE,
+                check_state=CombinedCheckState.FAILURE,
             )
         ],
         lambda branch: False,
@@ -331,7 +331,7 @@ def test_a_branch_whose_checks_failed_is_listed_as_withheld_from_promotion():
     section = section_of(summary.as_markdown(), FinishSummaryHeading.FAILING_CHECKS)
 
     assert section == [
-        f"{summary.branch_line(stack.branches[0])}: {RollupState.FAILURE}"
+        f"{summary.branch_line(stack.branches[0])}: {CombinedCheckState.FAILURE}"
     ]
 
 

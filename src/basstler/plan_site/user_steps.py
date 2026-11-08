@@ -11,14 +11,14 @@ from enum import StrEnum
 from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
-from basstler.plan_site.run_listing import ListedRun
+from basstler.github.run_listing import ListedRun
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     PlanSiteSecret,
 )
 from basstler.repository import GitHubAddress, Repository
 from basstler.standard_streams import StandardStreamHandler
-from basstler.github.pull_request import NewPullRequestField
+from basstler.github.pull_request import NewPullRequest
 from basstler.github.client import (
     GitHubClient,
     HttpMethod,
@@ -114,7 +114,7 @@ class PendingStep:
             )
         if self.latest_run is not None:
             lines.append(
-                f"  Latest run, {self.latest_run.outcome}: {self.latest_run.url}"
+                f"  Latest run, {self.latest_run.outcome}: {self.latest_run.page_url}"
             )
         if self.line is None:
             lines.append("  GitHub offers no command for this; in the browser:")
@@ -244,6 +244,13 @@ class MergeWorkflowProposal:
     """
 
     @property
+    def opening(self) -> NewPullRequest:
+        """:return: The pull request proposing the workflow, opened ready to merge."""
+        return NewPullRequest(
+            self.repository, self.title, self.head, self.base, draft=False
+        )
+
+    @property
     def open_pull_requests_path(self) -> str:
         """:return: The listing of the open pull requests from :attr:`head` into
         :attr:`base`."""
@@ -270,11 +277,7 @@ class MergeWorkflowProposal:
         opened = github.attempt_send(
             HttpMethod.POST,
             self.repository.pull_requests_path,
-            {
-                NewPullRequestField.TITLE: self.title,
-                NewPullRequestField.HEAD: self.head,
-                NewPullRequestField.BASE: self.base,
-            },
+            self.opening,
         )
         if opened.failure is not None:
             return PendingStep(
@@ -299,6 +302,6 @@ class MergeWorkflowProposal:
         """
         return PendingStep(
             UserStep.ADD_MERGE_WORKFLOW,
-            f"gh pr merge {pull_request.url} --merge",
-            (f"Open {pull_request.url}.", "Click Merge pull request."),
+            f"gh pr merge {pull_request.page_url} --merge",
+            (f"Open {pull_request.page_url}.", "Click Merge pull request."),
         )

@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -24,6 +23,7 @@ from basstler.github.client import (
     GitHubResponse,
     GitHubWriter,
     HttpMethod,
+    RequestBody,
 )
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import (
@@ -31,14 +31,13 @@ from basstler.github.exceptions import (
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
-from basstler.github.pull_request import NewPullRequestField
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import PlanSitePublication, PublicationOption
 from basstler.plan_site.publication import app as publication_app
-from basstler.plan_site.run_listing import ListedRun, RunListing
+from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep, UserSteps
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
@@ -104,9 +103,9 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     """
 
     def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+        self, method: HttpMethod, path: str, body: RequestBody
     ) -> GitHubResponse:
-        self.writes.append(SentWrite(method, path, payload))
+        self.writes.append(SentWrite(method, path, body))
         if self.failure is not None:
             return GitHubResponse(None, failure=self.failure)
         return GitHubResponse(self.opened)
@@ -762,11 +761,7 @@ def pull_request_opening(proposal: MergeWorkflowProposal) -> SentWrite:
     return SentWrite(
         HttpMethod.POST,
         proposal.repository.pull_requests_path,
-        {
-            NewPullRequestField.TITLE: proposal.title,
-            NewPullRequestField.HEAD: proposal.head,
-            NewPullRequestField.BASE: proposal.base,
-        },
+        proposal.opening,
     )
 
 
@@ -1046,6 +1041,9 @@ def test_storing_the_token_in_the_browser_opens_each_registered_repository_s_sec
 def test_a_failed_dispatch_run_is_linked_from_the_step_it_leaves_to_the_user(
     published,
 ):
+    """
+    The step left to the user carries the failed dispatch run that made it necessary.
+    """
     runs = published.runs(
         DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
         DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
@@ -1055,10 +1053,12 @@ def test_a_failed_dispatch_run_is_linked_from_the_step_it_leaves_to_the_user(
 
     latest_run = pending_step(report, UserStep.STORE_TOKEN).latest_run
     assert latest_run == ListedRun(
-        Path(DispatchWorkflow.location),
-        CheckOutcome.FAILURE,
-        "https://github.com/an-owner/a-repository/actions/runs/4004",
-        datetime(2026, 10, 2, 10, tzinfo=UTC),
+        page_url="https://github.com/an-owner/a-repository/actions/runs/4004",
+        identifier=4004,
+        commit="4004" * 10,
+        outcome=CheckOutcome.FAILURE,
+        workflow_file_path=Path(DispatchWorkflow.location),
+        created_at=datetime(2026, 10, 2, 10, tzinfo=UTC),
     )
 
 
@@ -1091,6 +1091,9 @@ def test_a_rendered_step_without_a_command_says_so_before_the_browser_steps(publ
 
 
 def test_a_rendered_step_links_the_latest_run_that_made_it_necessary(published):
+    """
+    The rendered step links the page of the run that made it necessary.
+    """
     runs = published.runs(
         DatasetLocation.PLAN_SITE_RUNS_SUCCEEDED,
         DatasetLocation.PLAN_SITE_DISPATCH_RUNS_FAILED,
@@ -1098,7 +1101,7 @@ def test_a_rendered_step_links_the_latest_run_that_made_it_necessary(published):
     pending = pending_step(published.publication(runs).publish(), UserStep.STORE_TOKEN)
 
     assert pending.render().splitlines()[1] == (
-        f"  Latest run, {pending.latest_run.outcome}: {pending.latest_run.url}"
+        f"  Latest run, {pending.latest_run.outcome}: {pending.latest_run.page_url}"
     )
 
 

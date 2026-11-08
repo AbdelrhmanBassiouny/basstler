@@ -117,7 +117,8 @@ The hook tests run `python3`, so the environment has to be first on the path, an
 page's script is tested in the headless Chromium Playwright installs. `ruff check`
 enforces the mechanical code rules, configured in `pyproject.toml`. Python is formatted
 by `python scripts/format_docstrings.py <files>` (ruff format, then docformatter where ruff
-keeps its result), also run as a pre-commit hook. To try a
+keeps its result), also run as a pre-commit hook. The rule-check and AGENTS.md hooks
+run `.venv/bin/python`, so they need the environment set up above. To try a
 change in a real session, start Claude Code with `--plugin-dir plugin`: the plugin then
 sits in this clone, and installs the clone editable.
 

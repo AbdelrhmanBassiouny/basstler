@@ -14,16 +14,17 @@ import re
 from dataclasses import dataclass, field, replace
 from enum import StrEnum
 from pathlib import Path
-from typing import Annotated, Any
+from typing import Annotated
 
 from cyclopts import App, Parameter
 
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure
+from basstler.github.repository_details import RepositoryDetails
 from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
-from basstler.plan_site.run_listing import RunListing
+from basstler.github.run_listing import RunListing
 from basstler.plan_site.user_steps import (
     MergeWorkflowProposal,
     PendingStep,
@@ -46,7 +47,7 @@ from basstler.github.client import (
     GitHubClient,
     GitHubRestClient,
 )
-from basstler.upstream_reviews.vocabulary import BasstlerSource, JSONModel
+from basstler.upstream_reviews.vocabulary import BasstlerSource
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -54,37 +55,6 @@ This module's logger, which is also what its command prints through.
 """
 
 # %% the notes repository on GitHub
-
-
-class RepositoryKey(StrEnum):
-    """
-    Every field read out of a repository's REST response.
-    """
-
-    FORK = "fork"
-    """
-    Whether the repository is a fork.
-    """
-
-
-@dataclass(frozen=True)
-class RepositoryDetails(JSONModel):
-    """
-    What publishing reads about a repository from GitHub.
-    """
-
-    is_fork: bool
-    """
-    Whether it is a fork, whose default branch follows its upstream's.
-    """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RepositoryDetails:
-        """
-        :param data: A repository's REST response.
-        :return: The parsed details.
-        """
-        return cls(data[RepositoryKey.FORK])
 
 
 # %% publishing

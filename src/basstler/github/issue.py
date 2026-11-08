@@ -10,6 +10,7 @@ from enum import StrEnum
 from typing import Any
 from urllib.parse import urlencode
 
+from basstler.github.client import RequestBody
 from basstler.upstream_reviews.vocabulary import JSONModel
 
 # %% the values an issue's state is written in
@@ -76,7 +77,7 @@ class IssueRequest:
 
 
 @dataclass(frozen=True)
-class NewIssue(IssueRequest):
+class NewIssue(IssueRequest, RequestBody):
     """
     An issue to open.
     """
@@ -98,7 +99,7 @@ class NewIssue(IssueRequest):
 
 
 @dataclass(frozen=True)
-class IssueComment(IssueRequest):
+class IssueComment(IssueRequest, RequestBody):
     """
     A comment on an issue or pull request, as it is posted.
     """
@@ -147,7 +148,7 @@ class PostedIssueComment(IssueComment, JSONModel):
 
 
 @dataclass(frozen=True)
-class IssueClosing(IssueRequest):
+class IssueClosing(IssueRequest, RequestBody):
     """
     The closing of an issue.
     """

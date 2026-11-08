@@ -15,13 +15,14 @@ import sys
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+
 
 from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.standard_streams import StandardStreamHandler
+from basstler.upstream_reviews.vocabulary import ValidatedJSONModel
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -117,18 +118,7 @@ class ReleaseOutputKey(StrEnum):
     """
 
 
-class PullRequestJSONKey(StrEnum):
-    """
-    The fields read out of GitHub's ``commits/<sha>/pulls`` response.
-    """
-
-    NUMBER = "number"
-    LABELS = "labels"
-    NAME = "name"
-
-
-@dataclass(frozen=True)
-class PullRequestLabel:
+class PullRequestLabel(ValidatedJSONModel):
     """
     One label on a merged pull request.
     """
@@ -138,22 +128,13 @@ class PullRequestLabel:
     The label's name.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> PullRequestLabel:
-        """
-        :param data: A label object GitHub returned.
-        :return: The parsed label.
-        """
-        return cls(name=data[PullRequestJSONKey.NAME])
-
     @property
     def part(self) -> VersionPart:
         """:return: The part it asks a release to increment."""
         return VersionPart.labelled(self.name)
 
 
-@dataclass(frozen=True)
-class MergedPullRequest:
+class MergedPullRequest(ValidatedJSONModel):
     """
     A pull request merged since the latest release, and the labels it carries.
     """
@@ -167,20 +148,6 @@ class MergedPullRequest:
     """
     Its labels.
     """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> MergedPullRequest:
-        """
-        :param data: A pull request object GitHub returned.
-        :return: The parsed pull request.
-        """
-        return cls(
-            number=data[PullRequestJSONKey.NUMBER],
-            labels=tuple(
-                PullRequestLabel.from_json(label)
-                for label in data[PullRequestJSONKey.LABELS]
-            ),
-        )
 
     @classmethod
     def read_all(cls, path: Path) -> tuple[MergedPullRequest, ...]:

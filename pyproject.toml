@@ -38,6 +38,7 @@ dependencies = [
     "nh3>=0.2",
     "rustworkx>=0.15",
     "cyclopts>=5.3",
+    "pydantic>=2.11",
 ]
 dynamic = ["version"]
 
