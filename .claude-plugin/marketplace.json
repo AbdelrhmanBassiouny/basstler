@@ -1,5 +1,6 @@
 {
   "name": "basstler",
+  "description": "Claude Code plugins by Abdelrhman Bassiouny: personal notes, PR progress, live plan sites and stacked-PR maintenance.",
   "owner": {
     "name": "Abdelrhman Bassiouny"
   },
