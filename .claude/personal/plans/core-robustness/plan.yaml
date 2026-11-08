@@ -100,3 +100,17 @@ items:
     with a pydantic pull request model; ~30 modules read the record, the plan site's live
     state and pull_request_state among them. Runs after or before basstler-packages/git-and-github-domain,
     never alongside (it moves the board record).
+
+- id: workflow-template-values
+  title: Each plan-site workflow's template values are a dataclass, not a dict of placeholder
+    names
+  track: core
+  depends_on: []
+  status: not started
+  notes: 'From KAOS-repositories/basstler#140 review (workflows.py template_values). PlanSiteWorkflow.template_values
+    returns a dict[str, Any] whose keys repeat each Jinja placeholder by hand in SiteWorkflow,
+    DispatchWorkflow and MergeWorkflow (and UserSteps.store_token_command once #140 lands).
+    Give each template a frozen dataclass of its values, rendered with dataclasses.asdict,
+    so a placeholder is spelled once in its dataclass and the template. Not ValidatedJSONModel:
+    the values are produced here, not parsed from outside. Changes main''s workflows only;
+    rendered files stay byte-identical.'
