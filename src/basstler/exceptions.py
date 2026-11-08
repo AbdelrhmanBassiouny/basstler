@@ -883,3 +883,32 @@ class MissingBudgetFunction(DataclassException, LookupError):
 
     def suggest_correction(self) -> str:
         return f"define {self.function}() returning its ActionsBudget"
+
+
+@dataclass
+class DuplicateKeyError(DataclassException, TypeError):
+    """
+    Raised when two fields of a model read the same key of the object it mirrors.
+    """
+
+    model: str
+    """
+    The model's name.
+    """
+
+    key: str
+    """
+    The key both fields read.
+    """
+
+    fields: tuple[str, str]
+    """
+    The two fields reading it.
+    """
+
+    def error_message(self) -> str:
+        first, second = self.fields
+        return f"{self.model}.{first} and {self.model}.{second} both read {self.key!r}"
+
+    def suggest_correction(self) -> str:
+        return "Give one of the fields the key it should read instead as its alias."

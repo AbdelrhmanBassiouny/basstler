@@ -11,7 +11,7 @@ from basstler.maintenance.github import (
     ListingParameter,
     RepositoryPath,
 )
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
 
 from ..github.recorded_client import RecordedGitHubClient
 from ..upstream_reviews.replay import RecordedRestResponse
@@ -73,4 +73,4 @@ def test_a_commit_nothing_reported_on_is_not_reported():
         RecordedRestResponse.CHECK_RUNS_NONE, RecordedRestResponse.STATUS_NONE
     )
 
-    assert repository.check_state(HEAD_SHA) is RollupState.NOT_REPORTED
+    assert repository.check_state(HEAD_SHA) is CombinedCheckState.NOT_REPORTED

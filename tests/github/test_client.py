@@ -18,9 +18,12 @@ from basstler.github.credential import (
     CredentialProvider,
     GitHubCredential,
 )
+from basstler.github.issue import IssueComment
+from basstler.github.label import LabelReplacement
 from basstler.github.exceptions import (
     GitHubCredentialRejected,
     GitHubCredentialUnavailableError,
+    GitHubRepositoryMoved,
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
@@ -40,7 +43,18 @@ REPOSITORY = Repository("example-owner", "example-repo")
 LISTING = RequestLine.get(f"/{REPOSITORY.api_path}/pulls?state=open&per_page=2")
 USER = RequestLine.get("/user")
 MISSING_PULL_REQUEST_PATH = f"/{REPOSITORY.pull_request_path(404)}"
-COMMENTS = RequestLine.post(f"/{REPOSITORY.api_path}/issues/1/comments")
+COMMENT = IssueComment(REPOSITORY, 1, "a comment")
+COMMENTS = RequestLine(COMMENT.method, f"/{COMMENT.path}")
+MOVED = CannedResponse(
+    {
+        "message": "Moved Permanently",
+        "url": "https://api.github.com/repositories/1/pulls",
+    },
+    HTTPStatus.MOVED_PERMANENTLY,
+)
+"""
+What GitHub answers a path naming a repository by the name it had before it moved.
+"""
 
 
 class StubEnvironmentVariable(StrEnum):
@@ -118,24 +132,32 @@ def test_paging_a_path_with_no_query_adds_the_page_as_the_only_parameter(
 
 
 def test_a_write_sends_its_payload_and_returns_the_body(api_server, client):
-    payload = {"body": "a comment"}
     created = {"html_url": "https://github.com/o/r/pull/1#issuecomment-1"}
-    api_server.responses["POST /repos/o/r/issues/1/comments"] = CannedResponse(
-        created, HTTPStatus.CREATED
-    )
+    api_server.responses[str(COMMENTS)] = CannedResponse(created, HTTPStatus.CREATED)
 
-    assert client.send(HttpMethod.POST, "/repos/o/r/issues/1/comments", payload) == (
-        created
-    )
-    assert api_server.requests[0].body == payload
+    assert client.send(COMMENT) == created
+    assert api_server.requests[0].body == COMMENT.to_json()
+
+
+def test_a_write_is_sent_with_its_own_method_to_its_own_path(api_server, client):
+    """
+    The write alone decides where it goes and how.
+    """
+    api_server.responses[str(COMMENTS)] = CannedResponse({}, HTTPStatus.CREATED)
+
+    client.send(COMMENT)
+
+    received = api_server.requests[0]
+    assert (received.method, received.target) == (COMMENTS.method, COMMENTS.target)
 
 
 def test_a_write_answered_with_no_content_returns_none(api_server, client):
-    api_server.responses["PUT /repos/o/r/labels"] = CannedResponse(
+    replacement = LabelReplacement(REPOSITORY, 1, [])
+    api_server.responses[f"{replacement.method} /{replacement.path}"] = CannedResponse(
         None, HTTPStatus.NO_CONTENT
     )
 
-    assert client.send(HttpMethod.PUT, "/repos/o/r/labels", {}) is None
+    assert client.send(replacement) is None
 
 
 # %% asking again after a server error
@@ -197,9 +219,7 @@ def test_a_write_answered_with_a_server_error_is_not_sent_again(
 ):
     api_server.responses[str(COMMENTS)] = CannedResponse.bad_gateway()
 
-    response = quick_client.attempt_send(
-        COMMENTS.method, COMMENTS.target, {"body": "a comment"}
-    )
+    response = quick_client.attempt_send(COMMENT)
 
     assert response.failure.status == HTTPStatus.BAD_GATEWAY
     assert len(api_server.requests) == 1
@@ -239,6 +259,20 @@ def test_a_rejected_credential_is_its_own_failure(api_server, client):
 
     with pytest.raises(GitHubCredentialRejected):
         client.get("/user")
+
+
+def test_a_read_of_a_moved_repository_raises_that_it_moved(api_server, client):
+    api_server.responses[str(LISTING)] = MOVED
+
+    with pytest.raises(GitHubRepositoryMoved):
+        client.get(LISTING.target)
+
+
+def test_a_listing_of_a_moved_repository_raises_that_it_moved(api_server, client):
+    api_server.responses[str(LISTING.page(1))] = MOVED
+
+    with pytest.raises(GitHubRepositoryMoved):
+        client.get_pages(LISTING.target)
 
 
 def test_a_refusal_names_a_given_credential(client):
@@ -299,12 +333,12 @@ def test_a_write_that_gets_no_answer_carries_why_instead_of_raising():
         root = stopped_server.root
     client = GitHubRestClient(TOKEN, api_root=root)
 
-    response = client.attempt_send(HttpMethod.POST, "/user", {})
+    response = client.attempt_send(COMMENT)
 
     assert type(response.failure) is GitHubUnreachableError
     assert (response.failure.method, response.failure.path) == (
-        HttpMethod.POST,
-        "/user",
+        COMMENT.method,
+        COMMENT.path,
     )
 
 

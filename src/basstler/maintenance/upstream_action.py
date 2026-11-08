@@ -51,7 +51,7 @@ class UpstreamReadRoute(StrEnum):
         :return: :attr:`ACTION` in a Claude Code cloud session, whose proxy refuses the
             upstream's API until the upstream is attached; :attr:`DIRECT` elsewhere.
         """
-        if ClaudeCodeVariable.REMOTE.read() == "true":
+        if ClaudeCodeVariable.REMOTE.is_true():
             return cls.ACTION
         return cls.DIRECT
 

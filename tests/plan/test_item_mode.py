@@ -26,6 +26,7 @@ from basstler.plan.item_mode import (
     ModeSetting,
     ModeSource,
     PlanItemSkill,
+    ReportKey,
     Subcommand,
     UnknownModeError,
 )
@@ -132,10 +133,10 @@ def test_a_clone_with_no_personal_settings_runs_on_its_own(
     The zero-configuration default is to implement without asking, for every skill.
     """
     report = resolve(mode_repository, skill)
-    assert report["mode"] == ExecutionMode.AUTO
-    assert report["source"] == ModeSource.COMMITTED_DEFAULT
-    assert report["skill"] == skill
-    assert report["setting_key"] == skill.setting_key
+    assert report[ReportKey.MODE] == ExecutionMode.AUTO
+    assert report[ReportKey.SOURCE] == ModeSource.COMMITTED_DEFAULT
+    assert report[ReportKey.SKILL] == skill
+    assert report[ReportKey.SETTING_KEY] == skill.setting_key
 
 
 def test_the_report_names_where_a_personal_setting_would_go(
@@ -146,7 +147,7 @@ def test_the_report_names_where_a_personal_setting_would_go(
     where to put one without deriving the path itself.
     """
     report = resolve(mode_repository, PlanItemSkill.KICKOFF)
-    assert report["personal_setting_path"] == str(
+    assert report[ReportKey.PERSONAL_SETTING_PATH] == str(
         ProjectLocation.PERSONAL_PLAN_ITEM_MODES
     )
 
@@ -164,8 +165,8 @@ def test_an_unreachable_notes_branch_still_resolves_to_the_default(
     scratch_repository.commit_everything("initial commit")
 
     report = resolve(scratch_repository, PlanItemSkill.KICKOFF)
-    assert report["mode"] == ExecutionMode.AUTO
-    assert report["source"] == ModeSource.COMMITTED_DEFAULT
+    assert report[ReportKey.MODE] == ExecutionMode.AUTO
+    assert report[ReportKey.SOURCE] == ModeSource.COMMITTED_DEFAULT
 
 
 # %% resolving with a personal setting
@@ -186,12 +187,12 @@ def test_a_personal_setting_overrides_the_committed_default(
     )
 
     kickoff = resolve(mode_repository, PlanItemSkill.KICKOFF)
-    assert kickoff["mode"] == ExecutionMode.PLAN
-    assert kickoff["source"] == ModeSource.PERSONAL_SETTING
+    assert kickoff[ReportKey.MODE] == ExecutionMode.PLAN
+    assert kickoff[ReportKey.SOURCE] == ModeSource.PERSONAL_SETTING
 
     resolve_skill = resolve(mode_repository, PlanItemSkill.RESOLVE)
-    assert resolve_skill["mode"] == ExecutionMode.AUTO
-    assert resolve_skill["source"] == ModeSource.COMMITTED_DEFAULT
+    assert resolve_skill[ReportKey.MODE] == ExecutionMode.AUTO
+    assert resolve_skill[ReportKey.SOURCE] == ModeSource.COMMITTED_DEFAULT
 
 
 def test_the_invocation_argument_beats_the_personal_setting(
@@ -211,8 +212,8 @@ def test_the_invocation_argument_beats_the_personal_setting(
         CommandLineOption.REQUESTED,
         ExecutionMode.ASK,
     )
-    assert report["mode"] == ExecutionMode.ASK
-    assert report["source"] == ModeSource.INVOCATION_ARGUMENT
+    assert report[ReportKey.MODE] == ExecutionMode.ASK
+    assert report[ReportKey.SOURCE] == ModeSource.INVOCATION_ARGUMENT
 
 
 # %% refusals
@@ -416,7 +417,7 @@ def test_one_run_can_set_every_skill_at_once(
     assert published_settings(mode_repository, tmp_path) == {
         skill.setting_key: ExecutionMode.PLAN for skill in PlanItemSkill
     }
-    assert json.loads(finished.stdout)["skills"] == [
+    assert json.loads(finished.stdout)[ReportKey.SKILLS] == [
         PlanItemSkill.KICKOFF,
         PlanItemSkill.RESOLVE,
     ]
@@ -439,8 +440,8 @@ def test_a_written_setting_is_what_the_next_resolve_reads(
     )
 
     report = resolve(mode_repository, PlanItemSkill.KICKOFF)
-    assert report["mode"] == ExecutionMode.PLAN
-    assert report["source"] == ModeSource.PERSONAL_SETTING
+    assert report[ReportKey.MODE] == ExecutionMode.PLAN
+    assert report[ReportKey.SOURCE] == ModeSource.PERSONAL_SETTING
 
 
 # %% the committed defaults

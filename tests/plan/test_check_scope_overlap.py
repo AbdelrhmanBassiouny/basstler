@@ -47,6 +47,11 @@ NEW_SKILL_PATH = str(
 A path no branch but ``overlapping`` introduces - the fold test's positive case.
 """
 
+EXISTING_DIRECTORY = "package"
+"""
+A directory the base gains a file in - a requested path that names a directory.
+"""
+
 EXISTING_PATH = "already-on-base.md"
 """
 A path that exists on the base already - the fold test's negative case.
@@ -130,6 +135,21 @@ def test_path_missing_from_base_is_reported_and_present_one_is_not(
     assert report.paths_absent_from_base == [NEW_SKILL_PATH]
 
 
+def test_directory_on_base_is_not_reported_absent(
+    candidate_repository: CandidateScratchRepository,
+) -> None:
+    candidate_repository.commit_to_base(f"{EXISTING_DIRECTORY}/module.py")
+
+    report = build_scope_report(
+        candidate_repository.project_root,
+        BASE_BRANCH,
+        [EXISTING_DIRECTORY],
+        [],
+    )
+
+    assert report.paths_absent_from_base == []
+
+
 # %% candidate overlap - which unlanded branches already touch them?
 
 
@@ -140,6 +160,19 @@ def test_candidate_touching_a_requested_path_reports_it_as_shared(
         candidate_repository.project_root,
         BASE_BRANCH,
         [NEW_SKILL_PATH],
+        [Candidate("the parent", "overlapping")],
+    )
+
+    assert [overlap.shared_paths for overlap in report.candidates] == [[NEW_SKILL_PATH]]
+
+
+def test_candidate_changing_a_file_in_a_requested_directory_reports_it_as_shared(
+    candidate_repository: CandidateScratchRepository,
+) -> None:
+    report = build_scope_report(
+        candidate_repository.project_root,
+        BASE_BRANCH,
+        [str(Path(NEW_SKILL_PATH).parent)],
         [Candidate("the parent", "overlapping")],
     )
 

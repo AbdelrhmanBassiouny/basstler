@@ -7,6 +7,7 @@ network.
 
 from __future__ import annotations
 
+import dataclasses
 import shutil
 import subprocess
 from dataclasses import dataclass
@@ -21,7 +22,7 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.settings import Configuration
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
 
 import basstler.maintenance.__main__
 import basstler.maintenance.restack_procedure
@@ -201,6 +202,19 @@ def make_configuration() -> Configuration:
         upstream_remote=RemoteName.UPSTREAM,
         upstream_base=UPSTREAM_BASE,
         upstream_location=RemoteName.UPSTREAM,
+    )
+
+
+def make_own_remote_configuration() -> Configuration:
+    """
+    :return: The configuration a scratch checkout naming no upstream resolves to, its own
+        remote standing where the upstream would.
+    """
+    return dataclasses.replace(
+        make_configuration(),
+        upstream_repository=None,
+        upstream_remote=RemoteName.ORIGIN,
+        upstream_location=RemoteName.ORIGIN,
     )
 
 
@@ -395,15 +409,21 @@ class ForkCheckout:
         return GitCommandRunner(working_directory=self.project_root)
 
 
-def a_stack(checkout: ForkCheckout, pull_requests: list[PullRequest]):
+def a_stack(
+    checkout: ForkCheckout,
+    pull_requests: list[PullRequest],
+    configuration: Configuration | None = None,
+):
     """
     Build the derived stack the executor consumes, with landedness read from real git.
 
     :param checkout: The checkout to answer ancestry questions from.
     :param pull_requests: The board entries.
+    :param configuration: The configuration the stack runs on, by default
+        :func:`make_configuration`'s.
     :return: The derived stack.
     """
-    configuration = make_configuration()
+    configuration = configuration or make_configuration()
     upstream = f"{configuration.upstream_remote}/{configuration.upstream_base}"
     ancestry = BranchAncestry(configuration, checkout.git)
 
@@ -443,13 +463,15 @@ class ChecksReportedOn(CommitChecks):
     Answers each commit's check verdict from a fixed table rather than from GitHub.
     """
 
-    state_by_commit: Mapping[str, RollupState] = dataclasses_field(default_factory=dict)
+    state_by_commit: Mapping[str, CombinedCheckState] = dataclasses_field(
+        default_factory=dict
+    )
     """
     The verdict over each commit's checks; a commit absent here has no checks.
     """
 
-    def check_state(self, commit: str) -> RollupState:
-        return self.state_by_commit.get(commit, RollupState.NOT_REPORTED)
+    def check_state(self, commit: str) -> CombinedCheckState:
+        return self.state_by_commit.get(commit, CombinedCheckState.NOT_REPORTED)
 
 
 def an_export(
@@ -537,7 +559,7 @@ def a_board_entry(
     session: str | None = None,
     description: str | None = None,
     upstream_pull_request: int | None = None,
-    check_state: RollupState = RollupState.NOT_REPORTED,
+    check_state: CombinedCheckState = CombinedCheckState.NOT_REPORTED,
 ) -> PullRequest:
     """
     :param number: The pull request number.

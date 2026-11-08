@@ -8,20 +8,17 @@ decided about the item, before either acts.
 Run [`prerequisite-check.md`](../setup-personal-notes/prerequisite-check.md)'s check
 first.
 
-## 2. The stack, only when an upstream is named
+## 2. The stack
 
-```bash
-"${BASSTLER_PLUGIN_ROOT}/hooks/check-setup.sh" --require-upstream --only stack_upstream; echo "exit status: $?"
-```
-
-When it exits 0, run
-`/stacked-pr-maintenance stacked-on=<branch>` before reading anything below,
-naming the item's branch, or for an item not started yet the branch it will be cut from, then fix any conflict on the item's branch or a branch
-it is stacked on (on that branch's own pull request) and run the pass again. When
-that branch is the fork's base itself, there is no stack to pass over: run only
-`"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance fast-forward`. Any other
-exit status means the pass does not run: say so, with the row's detail, wherever you
-report on the stack or the item's conflicts, and never call the stack checked.
+Run `/stacked-pr-maintenance stacked-on=<branch>` before reading anything below,
+naming the item's branch, or for an item not started yet the branch it will be cut
+from. Then fix any conflict on the item's branch or a branch it is stacked on (on that
+branch's own pull request) and run the pass again. A project that names no upstream
+is caught up with its own remote, and nothing is promoted. When that branch is the
+base itself, there is no stack to pass over: run only
+`"${BASSTLER_PLUGIN_ROOT}/hooks/basstler.sh" maintenance fast-forward`. If the pass
+stops, say so, with what it printed, wherever you report on the stack or the item's
+conflicts, and never call the stack checked.
 
 ## 3. The brief
 
@@ -30,7 +27,8 @@ report on the stack or the item's conflicts, and never call the stack checked.
 ```
 
 It prints the plan's id, title and `tracking_issue`, the item's entry, each
-`depends_on` entry's live state with `is_ready`, and the plan's standing rules. Read
+`depends_on` entry's live state with `is_ready`, the repository's rules
+(`repository_rules`, binding every plan) and the plan's standing rules. Read
 nothing else of the plan: other items are other sessions' work.
 
 - Given a pull request number, read its head branch with

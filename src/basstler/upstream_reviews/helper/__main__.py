@@ -56,9 +56,7 @@ from basstler.upstream_reviews.readers import (
 from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-)
+from basstler.github.states import CheckOutcome
 
 logger = StandardStreamHandler.logger_for(__name__)
 """

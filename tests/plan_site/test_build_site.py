@@ -5,6 +5,7 @@ each plan's page.
 
 from __future__ import annotations
 
+import html
 import json
 from collections.abc import Mapping
 from http import HTTPStatus
@@ -29,6 +30,7 @@ from basstler.maintenance.github import (
 )
 from basstler.plan.dependencies import DependencyReference, DependencyResolver
 from basstler.plan.model import ItemStatus, PlanDocument
+from basstler.plan.repository_rules import RepositoryRules
 from basstler.plan.validation import PlanValidator
 from basstler.plan_site.__main__ import (
     HubSite,
@@ -44,7 +46,7 @@ from basstler.plan_site.plan import Plan
 from basstler.pull_request_source import GitHubPullRequestSource
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.repository import PullRequestReference, Repository
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
 
 from ..constants.paths import DatasetLocation, RecordedCommitChecks
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
@@ -196,6 +198,16 @@ def test_every_page_links_back_up_to_the_hub_and_its_index(
     assert link_to(REPOSITORY_URL) in plan_page
 
 
+def test_every_plan_page_shows_the_repositorys_rules(
+    site: RepositorySite, tmp_path: Path
+):
+    site.build(tmp_path)
+    rules = RepositoryRules.from_yaml(DatasetLocation.REPOSITORY_RULES.read_text())
+    for plan in PUBLISHED_PLANS:
+        page = page_of(tmp_path, plan)
+        assert all(html.escape(rule.text) in page for rule in rules.rules)
+
+
 def test_build_counts_done_items_from_the_manifest(
     site: RepositorySite, tmp_path: Path
 ):
@@ -309,7 +321,7 @@ def test_every_page_links_the_site_stylesheet(site: RepositorySite, tmp_path: Pa
 def test_a_plan_page_shows_the_ci_and_assignees_of_an_open_pull_request(
     tmp_path: Path,
 ):
-    check_state = RollupState.FAILURE
+    check_state = CombinedCheckState.FAILURE
     open_pull_request = PullRequestRecord(
         state=PullRequestState.OPEN,
         check_state=check_state,
@@ -644,7 +656,9 @@ def test_github_source_reads_the_checks_of_an_open_pull_request():
             }
         )
     )
-    assert source.pull_request(OPEN_PULL_REQUEST).check_state is RollupState.FAILURE
+    assert (
+        source.pull_request(OPEN_PULL_REQUEST).check_state is CombinedCheckState.FAILURE
+    )
 
 
 def test_github_source_leaves_the_checks_of_a_closed_pull_request_unread():

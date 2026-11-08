@@ -12,6 +12,7 @@ import pytest
 import basstler.stack.__main__
 from basstler.exit_codes import StackExitCode
 from basstler.stack.configuration import StackSetting
+from basstler.stack.exceptions import OwnRemoteNotFoundError
 from basstler.stack.__main__ import Command, CommandOption
 from basstler.stack.promotion_link import PromotionLink
 from basstler.stack.model import PullRequest
@@ -19,7 +20,7 @@ from basstler.stack.report import StackReport, StatusColumn
 from basstler.stack.settings import PrintedConfiguration
 
 from basstler.locations import ProjectLocation
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
 
 from ..constants.paths import DatasetLocation
 from ..constants.stack import RemoteName, StackBranch, StackLabel
@@ -134,23 +135,42 @@ def test_a_checkout_whose_fork_cannot_be_identified_says_so_by_status(
     assert result.returncode == StackExitCode.REMOTES_UNRESOLVED
 
 
-def test_a_project_naming_no_upstream_says_so_by_status(
+def a_checkout_naming_no_upstream(checkout: ScratchRepository) -> ScratchRepository:
+    """
+    :param checkout: The checkout to strip of the settings naming its upstream.
+    :return: The same checkout, naming no upstream, as a repository that is not a fork.
+    """
+    (checkout.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION).unlink()
+    return checkout
+
+
+def test_a_project_naming_no_upstream_resolves_its_own_remote(
     offline_checkout: ScratchRepository,
 ):
     """
-    The upstream is the one setting only the project knows, and its absence is a setup
-    step a caller can name, not a failure to read the checkout.
+    No upstream is a supported setup: the clone's own remote stands where it would.
     """
-    (
-        offline_checkout.project_root / ProjectLocation.PROJECT_STACK_CONFIGURATION
-    ).unlink()
+    a_checkout_naming_no_upstream(offline_checkout)
+    offline_checkout.add_remote(RemoteName.ORIGIN, StackRepository.FORK.value.clone_url)
+
+    result = run_stack(offline_checkout, Command.CONFIGURATION)
+
+    assert result.returncode == StackExitCode.SUCCESS, result.stderr
+    printed = PrintedConfiguration.read(result.stdout)
+    assert printed[StackSetting.FORK_REMOTE] == RemoteName.ORIGIN
+    assert printed[StackSetting.UPSTREAM_LOCATION] == RemoteName.ORIGIN
+    assert StackSetting.UPSTREAM_REPOSITORY not in printed
+
+
+def test_a_project_naming_no_upstream_without_its_own_remote_says_so_by_status(
+    offline_checkout: ScratchRepository,
+):
+    a_checkout_naming_no_upstream(offline_checkout)
     offline_checkout.add_remote(RemoteName.MINE, StackRepository.FORK.value.clone_url)
 
     result = run_stack(offline_checkout, Command.CONFIGURATION)
 
-    assert result.returncode == StackExitCode.UPSTREAM_UNCONFIGURED
-    assert str(ProjectLocation.PROJECT_STACK_CONFIGURATION) in result.stderr
-    assert str(ProjectLocation.PERSONAL_STACK_CONFIGURATION) in result.stderr
+    assert result.returncode == OwnRemoteNotFoundError.exit_code
 
 
 def test_a_readable_checkout_with_no_board_reports_the_missing_board_instead(
@@ -258,7 +278,7 @@ def a_ready_branch_whose_checks_failed() -> PullRequest:
         StackBranch.FEATURE,
         StackBranch.BASE,
         draft=False,
-        check_state=RollupState.FAILURE,
+        check_state=CombinedCheckState.FAILURE,
         head_repository=StackRepository.FORK.value.full_name,
     )
 
@@ -274,7 +294,10 @@ def test_the_status_table_shows_the_verdict_over_each_branch_s_checks(
         for line in capsys.readouterr().out.splitlines()
         if line.startswith(StackBranch.FEATURE)
     )
-    assert row[heading.index(StatusColumn.CHECKS) :].split()[0] == RollupState.FAILURE
+    assert (
+        row[heading.index(StatusColumn.CHECKS) :].split()[0]
+        == CombinedCheckState.FAILURE
+    )
 
 
 # %% the next branches to promote
@@ -286,4 +309,4 @@ def test_a_branch_withheld_for_its_checks_is_named_with_their_verdict(
     StackReport(build([a_ready_branch_whose_checks_failed()])).print_next()
 
     printed = capsys.readouterr().out
-    assert f"{StackBranch.FEATURE} ({RollupState.FAILURE})" in printed
+    assert f"{StackBranch.FEATURE} ({CombinedCheckState.FAILURE})" in printed

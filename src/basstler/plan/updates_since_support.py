@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 Shared support for plan-updates-since.sh: the CLI option name, every user-facing message
-string, and the tracking-issue-comment JSON shape.
+string, and how tracking-issue comments are printed.
 
 Kept as a real, testable module rather than inline ``python3 -c`` snippets in the
 shell script (mirrors plan/manifest_tools.py's own reasoning for save-plan.sh), and
@@ -14,11 +14,11 @@ from __future__ import annotations
 
 import json
 import sys
-from dataclasses import dataclass
 from enum import StrEnum
 
 from cyclopts import App
 
+from basstler.github.issue import PostedIssueComment
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -36,17 +36,6 @@ class PlanUpdatesSinceOption(StrEnum):
     """
     Overrides the recorded stamp with an explicit baseline commit SHA.
     """
-
-
-class IssueCommentField(StrEnum):
-    """
-    Field names read from one element of GitHub's issue-comments API response.
-    """
-
-    USER = "user"
-    LOGIN = "login"
-    CREATED_AT = "created_at"
-    BODY = "body"
 
 
 class PlanUpdatesSinceMessage(StrEnum):
@@ -87,66 +76,6 @@ def no_default_repository_message(plan_id: str, tracking_issue: str) -> str:
     )
 
 
-@dataclass
-class IssueComment:
-    """
-    One comment on a GitHub issue or pull request.
-    """
-
-    author_login: str
-    """
-    The GitHub login of whoever posted the comment.
-    """
-
-    created_at: str
-    """
-    The comment's creation timestamp, as GitHub's API returns it.
-    """
-
-    body: str
-    """
-    The comment's raw text body.
-    """
-
-    @classmethod
-    def from_api_response(cls, comment: dict) -> IssueComment:
-        """
-        Build an IssueComment from one element of the GitHub issue-comments API
-        response.
-
-        :param comment: One comment object as returned by GitHub's REST API.
-        :return: The parsed comment.
-        """
-        return cls(
-            author_login=comment[IssueCommentField.USER][IssueCommentField.LOGIN],
-            created_at=comment[IssueCommentField.CREATED_AT],
-            body=comment[IssueCommentField.BODY],
-        )
-
-    def to_api_response(self) -> dict:
-        """
-        Render this comment back into the shape GitHub's issue-comments API returns.
-
-        The inverse of from_api_response - used by tests to build stub API responses
-        from the same field names, instead of a hand-typed second copy of them.
-
-        :return: The API-shaped comment object.
-        """
-        return {
-            IssueCommentField.USER: {IssueCommentField.LOGIN: self.author_login},
-            IssueCommentField.CREATED_AT: self.created_at,
-            IssueCommentField.BODY: self.body,
-        }
-
-    def formatted(self) -> str:
-        """
-        Render this comment as a "[<login> @ <created_at>]"-then-body block.
-
-        :return: The formatted text, without a trailing separator.
-        """
-        return f"[{self.author_login} @ {self.created_at}]\n{self.body}"
-
-
 def format_issue_comments(comments_json: str) -> str:
     """
     Render a GitHub issue-comments API response as human-readable text.
@@ -156,7 +85,7 @@ def format_issue_comments(comments_json: str) -> str:
         :attr:`PlanUpdatesSinceMessage.NO_NEW_COMMENTS` if the array is empty.
     """
     comments = [
-        IssueComment.from_api_response(comment) for comment in json.loads(comments_json)
+        PostedIssueComment.from_json(comment) for comment in json.loads(comments_json)
     ]
     if not comments:
         return PlanUpdatesSinceMessage.NO_NEW_COMMENTS.value

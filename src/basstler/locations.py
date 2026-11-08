@@ -294,6 +294,11 @@ class PluginLocation(PathEnumeration):
     Pushes an edited plan manifest and roadmap to the personal-notes branch.
     """
 
+    PULL_REQUEST_PROGRESS_SAVING_SCRIPT = HOOKS / "save-pr-progress.sh"
+    """
+    Saves a branch's pull-request progress notes to the personal-notes branch.
+    """
+
     PLAN_UPDATES_SINCE_SCRIPT = HOOKS / "plan-updates-since.sh"
     """
     Reports what changed in the plans since this clone last read them.
@@ -316,6 +321,29 @@ class PluginLocation(PathEnumeration):
         message that names it without knowing the root.
         """
         return f"${BasstlerVariable.PLUGIN_ROOT}/{self}"
+
+
+class BasstlerRepositoryLocation(PathEnumeration):
+    """
+    The directories of basstler's own repository a release reads, relative to its root.
+    """
+
+    PLUGIN = Path("plugin")
+    """
+    The Claude Code plugin.
+    """
+
+    PLUGIN_MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
+    """
+    The plugin's manifest: its name, description and, once released, version.
+    """
+
+    @property
+    def path_in_plugin(self) -> Path:
+        """
+        :return: This file's path from the plugin's root, as the released plugin holds it.
+        """
+        return self.relative_to(BasstlerRepositoryLocation.PLUGIN)
 
 
 class PluginSkillLocation(PathEnumeration):
@@ -376,6 +404,11 @@ class ProjectLocation(PathEnumeration):
     The plan hub file: the site's address and every repository it publishes.
 
     Mirrors ``PLAN_HUB_PATH`` in ``resolve-personal-notes-config.sh``.
+    """
+
+    PLAN_RULES = PLANS / "_rules.yaml"
+    """
+    The rules every plan of the repository follows, one entry per rule.
     """
 
     PERSONAL_STACK_CONFIGURATION = PERSONAL_NOTES / "stack.toml"
@@ -455,7 +488,7 @@ class ClaudeCodeVariable(EnvironmentVariable):
 
     REMOTE = "CLAUDE_CODE_REMOTE"
     """
-    ``true`` in a Claude Code cloud session, whose proxy answers GitHub's REST API but
+    :attr:`~basstler.environment.EnvironmentFlag.TRUE` in a Claude Code cloud session, whose proxy answers GitHub's REST API but
     not its GraphQL API.
     """
 

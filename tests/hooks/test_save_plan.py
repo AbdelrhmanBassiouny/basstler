@@ -15,6 +15,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+import basstler
 from basstler.exceptions import PlanInAnotherRepository
 from basstler.exit_codes import ManifestToolsExitCode
 from basstler.locations import PluginLocation, ProjectLocation
@@ -22,6 +23,7 @@ from basstler.plan.item_bootstrap.vocabulary import PlanSavingOption
 from basstler.plan.merge import PlanVersion
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ManifestKey, PlanManifest
+from basstler.plan_site import build_start
 from basstler.repository import Repository
 from basstler.plan_site.hub import HubFileKey, PlanHub, SiteAddress
 from basstler.shell_configuration import ShellConfigurationFunction
@@ -76,7 +78,7 @@ def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     """
     A scratch repository carrying the real save-plan.sh, resolve-personal-notes-
     config.sh and plan/manifest_tools.py, with a notes branch already published to its
-    notes remote.
+    notes remote, and a stand-in for :mod:`basstler.plan_site.build_start`.
 
     :param scratch_repository: The initialized scratch repository and notes remote.
     :return: The same repository, ready to run save-plan.sh against.
@@ -86,6 +88,13 @@ def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchReposi
         PluginLocation.PLAN_SAVING_SCRIPT.name,
     )
     scratch_repository.install_package()
+    package_root = Path(basstler.__file__).parent.parent
+    shutil.copy(
+        DatasetLocation.BUILD_START_STUB,
+        scratch_repository.checkout_root
+        / PackageSourceFile.SOURCE
+        / Path(build_start.__file__).relative_to(package_root),
+    )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
     scratch_repository.publish_notes_branch(
@@ -496,6 +505,28 @@ def test_a_save_prints_the_plan_s_page_on_the_plan_site(
         repository, DatasetPlan.IDENTIFIER
     )
     assert result.stdout.splitlines()[-1].endswith(page_url)
+
+
+def test_a_save_starts_the_plan_site_build(save_plan_repository: ScratchRepository):
+    """
+    A save to a repository the plan site lists starts the site's build itself.
+    """
+    save_plan_repository.update_notes_branch_file(
+        ProjectLocation.PLAN_HUB,
+        PlanHub(
+            registry=str(SiteRepository.NOTES.value),
+            site_url=SiteSampleText.SITE_URL.value,
+        ).to_text(),
+    )
+
+    result = save_from_files(
+        save_plan_repository,
+        DatasetLocation.PLAN,
+        DatasetLocation.ROADMAP_OF_STANDING_RULES,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert build_start.__name__ in result.stdout.splitlines()
 
 
 def test_a_save_reports_a_failed_page_lookup_as_a_failure_not_as_no_site(

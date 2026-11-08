@@ -9,11 +9,10 @@ import urllib.error
 import urllib.request
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from enum import StrEnum
 from pathlib import Path
-from typing import Any
 
 from basstler.environment import GitHubCredentialVariable
+from basstler.github.pull_request import NewPullRequest
 from basstler.maintenance.board import PullRequestField
 from basstler.plan.item_bootstrap.documents import PlanDocuments, ProjectCheckout
 from basstler.plan.item_bootstrap.exceptions import (
@@ -27,90 +26,9 @@ from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
 )
-from basstler.repository import GitHubAddress, PullRequestReference, Repository
+from basstler.repository import GitHubAddress, PullRequestReference
 
 # %% opening the work
-
-
-class NewPullRequestField(StrEnum):
-    """
-    The fields GitHub's create-pull-request endpoint reads from its JSON body.
-    """
-
-    TITLE = "title"
-    """
-    The pull request's title.
-    """
-
-    BODY = "body"
-    """
-    The pull request's description.
-    """
-
-    HEAD = "head"
-    """
-    The branch carrying the changes.
-    """
-
-    BASE = "base"
-    """
-    The branch to merge into.
-    """
-
-    DRAFT = "draft"
-    """
-    Whether it opens as a draft.
-    """
-
-
-@dataclass(frozen=True)
-class NewPullRequest:
-    """
-    A pull request that does not exist yet.
-    """
-
-    repository: Repository
-    """
-    The repository to open it on.
-    """
-
-    title: str
-    """
-    The pull request's title.
-    """
-
-    body: str
-    """
-    The pull request's description.
-    """
-
-    head: str
-    """
-    The branch carrying the changes.
-    """
-
-    base: str
-    """
-    The branch to merge into.
-    """
-
-    draft: bool = True
-    """
-    Always a draft: this repository's convention is that a pull request stays a draft
-    until its author has reviewed it themselves, and at creation time nobody has.
-    """
-
-    def to_json(self) -> dict[NewPullRequestField, Any]:
-        """
-        :return: The body GitHub's create-pull-request endpoint reads.
-        """
-        return {
-            NewPullRequestField.TITLE: self.title,
-            NewPullRequestField.BODY: self.body,
-            NewPullRequestField.HEAD: self.head,
-            NewPullRequestField.BASE: self.base,
-            NewPullRequestField.DRAFT: self.draft,
-        }
 
 
 class PullRequestOpener(ABC):
@@ -146,7 +64,7 @@ class GitHubPullRequestOpener(PullRequestOpener):
 
     def open_pull_request(self, pull_request: NewPullRequest) -> PullRequestReference:
         http_request = urllib.request.Request(
-            f"{self.api_root}/{pull_request.repository.api_path}/pulls",
+            f"{self.api_root}/{pull_request.repository.pull_requests_path}",
             data=json.dumps(pull_request.to_json()).encode(),
             method="POST",
             headers={

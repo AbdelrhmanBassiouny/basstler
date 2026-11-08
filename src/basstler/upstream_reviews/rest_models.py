@@ -5,13 +5,16 @@ read builds.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Annotated
+
+from pydantic import Field
 
 from basstler.upstream_reviews.pull_request_models import (
     CheckResult,
 )
+from basstler.github.states import ConclusionOutcome
+from basstler.github.web_page import AbsentAsEmpty
 from basstler.upstream_reviews.review_models import (
     Author,
     BranchPullRequest,
@@ -19,48 +22,17 @@ from basstler.upstream_reviews.review_models import (
     ReviewThread,
     ThreadComment,
 )
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-    JSONModel,
-    PullRequestState,
-    ReviewState,
-)
+from basstler.github.states import PullRequestState, ReviewState
+from basstler.github.web_page import WebPage
+from basstler.json_model import ValidatedJSONModel
 
 # %% models mirroring the REST data
 
 
-class RestJSONKey(StrEnum):
+class RestResponse:
     """
-    Every field name this script reads out of a REST response.
-
-    REST spells its fields apart from GraphQL, so they are named here rather than shared
-    with :class:`PullRequestJSONKey`.
+    A model of one whole response a REST read parses, not of an object nested in one.
     """
-
-    NUMBER = "number"
-    TITLE = "title"
-    HTML_URL = "html_url"
-    STATE = "state"
-    MERGED_AT = "merged_at"
-    HEAD = "head"
-    SHA = "sha"
-    USER = "user"
-    BODY = "body"
-    SUBMITTED_AT = "submitted_at"
-    IDENTIFIER = "id"
-    CREATED_AT = "created_at"
-    RESOLVED = "resolved"
-    OUTDATED = "outdated"
-    PATH = "path"
-    LINE = "line"
-    COMMENT_IDENTIFIERS = "comment_ids"
-    CHECK_RUNS = "check_runs"
-    NAME = "name"
-    CONCLUSION = "conclusion"
-    DETAILS_URL = "details_url"
-    STATUSES = "statuses"
-    CONTEXT = "context"
-    TARGET_URL = "target_url"
 
 
 class RestPullRequestState(StrEnum):
@@ -72,8 +44,7 @@ class RestPullRequestState(StrEnum):
     CLOSED = "closed"
 
 
-@dataclass(frozen=True)
-class RestPullRequestHead(JSONModel):
+class RestPullRequestHead(ValidatedJSONModel):
     """
     The branch a pull request was opened from.
     """
@@ -83,27 +54,13 @@ class RestPullRequestHead(JSONModel):
     The commit the branch points at, which the checks are reported against.
     """
 
-    owner: Author
+    owner: Annotated[Author, Field(alias="user")]
     """
     Whoever owns the branch.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RestPullRequestHead:
-        """
-        Read a ``head`` object.
 
-        :param data: The object to read.
-        :return: The parsed head.
-        """
-        return cls(
-            sha=data[RestJSONKey.SHA],
-            owner=Author.from_json(data[RestJSONKey.USER]),
-        )
-
-
-@dataclass(frozen=True)
-class RestPullRequestSummary(JSONModel):
+class RestPullRequestSummary(RestResponse, WebPage):
     """
     One pull request as REST describes it, whether listed or read on its own.
     """
@@ -118,19 +75,14 @@ class RestPullRequestSummary(JSONModel):
     Its title.
     """
 
-    url: str
-    """
-    Its web URL.
-    """
-
     state: RestPullRequestState
     """
     Whether it is open or closed.
     """
 
-    merged: bool
+    merged_at: str | None
     """
-    Whether it closed by merging.
+    When it merged, as an ISO 8601 timestamp, absent unless it closed by merging.
     """
 
     head: RestPullRequestHead
@@ -138,22 +90,10 @@ class RestPullRequestSummary(JSONModel):
     The branch it was opened from.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RestPullRequestSummary:
-        """
-        Read a pull request object.
-
-        :param data: The object to read.
-        :return: The parsed summary.
-        """
-        return cls(
-            number=data[RestJSONKey.NUMBER],
-            title=data[RestJSONKey.TITLE],
-            url=data[RestJSONKey.HTML_URL],
-            state=RestPullRequestState(data[RestJSONKey.STATE]),
-            merged=data[RestJSONKey.MERGED_AT] is not None,
-            head=RestPullRequestHead.from_json(data[RestJSONKey.HEAD]),
-        )
+    @property
+    def merged(self) -> bool:
+        """:return: Whether it closed by merging."""
+        return self.merged_at is not None
 
     @property
     def branch_pull_request(self) -> BranchPullRequest:
@@ -169,78 +109,92 @@ class RestPullRequestSummary(JSONModel):
         )
 
 
-@dataclass(frozen=True)
-class RestReview(JSONModel):
+class RestReview(RestResponse, ValidatedJSONModel):
     """
-    One submitted review, as REST lists it.
-    """
-
-    review: Review
-    """
-    The review it describes.
+    One review, as REST lists it, whose body and submission time are null until it is
+    submitted.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RestReview:
-        """
-        Read a review object, whose body and submission time are null until submitted.
+    author: Annotated[Author, Field(alias="user")]
+    """
+    Whoever submitted the review.
+    """
 
-        :param data: The object to read.
-        :return: The parsed review.
-        """
-        return cls(
-            Review(
-                author=Author.from_json(data[RestJSONKey.USER]),
-                state=ReviewState[data[RestJSONKey.STATE]],
-                body=data[RestJSONKey.BODY] or "",
-                submitted_at=data[RestJSONKey.SUBMITTED_AT] or "",
-            )
+    state: ReviewState
+    """
+    The verdict the reviewer submitted.
+    """
+
+    body: str | None
+    """
+    The review's summary text.
+    """
+
+    submitted_at: str | None
+    """
+    When the review was submitted, as an ISO 8601 timestamp.
+    """
+
+    @property
+    def review(self) -> Review:
+        """:return: The review, as the report reads it."""
+        return Review(
+            author=self.author,
+            state=self.state,
+            body=self.body or "",
+            submitted_at=self.submitted_at or "",
         )
 
 
-@dataclass(frozen=True)
-class RestReviewComment(JSONModel):
+class RestReviewComment(RestResponse, WebPage):
     """
     One review comment, as REST lists every comment on a pull request.
     """
 
-    comment: ThreadComment
+    identifier: Annotated[int, Field(alias="id")]
     """
-    The comment it describes.
+    GitHub's numeric identifier, the one that appears in comment permalinks.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RestReviewComment:
-        """
-        Read a review comment object.
+    author: Annotated[Author, Field(alias="user")]
+    """
+    Whoever wrote the comment.
+    """
 
-        :param data: The object to read.
-        :return: The parsed comment.
-        """
-        return cls(
-            ThreadComment(
-                database_identifier=data[RestJSONKey.IDENTIFIER],
-                author=Author.from_json(data[RestJSONKey.USER]),
-                body=data[RestJSONKey.BODY],
-                created_at=data[RestJSONKey.CREATED_AT],
-                url=data[RestJSONKey.HTML_URL],
-            )
+    body: str
+    """
+    The comment text, exactly as written.
+    """
+
+    created_at: str
+    """
+    When the comment was posted, as an ISO 8601 timestamp.
+    """
+
+    @property
+    def comment(self) -> ThreadComment:
+        """:return: The comment, as the report reads it."""
+        return ThreadComment(
+            database_identifier=self.identifier,
+            author=self.author,
+            body=self.body,
+            created_at=self.created_at,
+            page_url=self.page_url,
         )
 
 
-@dataclass(frozen=True)
-class RestReviewThread(JSONModel):
+class RestReviewThread(RestResponse, ValidatedJSONModel):
     """
     One review thread, as a Claude Code session's proxy reports it: its state and
     location, and the comments in it named by identifier only.
     """
 
-    is_resolved: bool
+    is_resolved: Annotated[bool, Field(alias="resolved")]
     """
     Whether a reviewer has marked the thread resolved.
     """
 
-    is_outdated: bool
+    is_outdated: Annotated[bool, Field(alias="outdated")]
     """
     Whether the diff hunk the thread was anchored to has since changed.
     """
@@ -255,26 +209,10 @@ class RestReviewThread(JSONModel):
     The line the thread is attached to, absent once the hunk is outdated.
     """
 
-    comment_identifiers: list[int]
+    comment_identifiers: Annotated[list[int], Field(alias="comment_ids")]
     """
     The comments in the thread, oldest first.
     """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RestReviewThread:
-        """
-        Read a review thread object.
-
-        :param data: The object to read.
-        :return: The parsed thread.
-        """
-        return cls(
-            is_resolved=data[RestJSONKey.RESOLVED],
-            is_outdated=data[RestJSONKey.OUTDATED],
-            path=data[RestJSONKey.PATH],
-            line=data[RestJSONKey.LINE],
-            comment_identifiers=list(data[RestJSONKey.COMMENT_IDENTIFIERS]),
-        )
 
     def thread(self, comments: dict[int, ThreadComment]) -> ReviewThread:
         """
@@ -301,41 +239,39 @@ class RestReviewThread(JSONModel):
         )
 
 
-@dataclass(frozen=True)
-class RestCheckRun(JSONModel):
+class RestCheckRun(CheckResult):
     """
-    One check run, such as a GitHub Actions job.
-    """
-
-    result: CheckResult
-    """
-    The check it describes.
+    A check run, as the REST check-runs listing returns it.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RestCheckRun:
-        """
-        Read a check run object, whose conclusion is null until it finishes.
+    outcome: Annotated[ConclusionOutcome, Field(alias="conclusion")]
+    """
+    Where the run stands, pending while it has no conclusion.
+    """
 
-        :param data: The object to read.
-        :return: The parsed check run.
-        """
-        conclusion = data[RestJSONKey.CONCLUSION]
-        return cls(
-            CheckResult(
-                name=data[RestJSONKey.NAME],
-                outcome=(
-                    CheckOutcome[conclusion.upper()]
-                    if conclusion
-                    else CheckOutcome.PENDING
-                ),
-                url=data[RestJSONKey.DETAILS_URL] or "",
-            )
-        )
+    target_url: Annotated[str, AbsentAsEmpty(), Field(alias="details_url")]
+    """
+    The run's page, empty when it has none.
+    """
 
 
-@dataclass(frozen=True)
-class RestCheckRunPage(JSONModel):
+class RestCommitStatus(CheckResult):
+    """
+    A commit status, as the REST combined-status response lists it.
+    """
+
+    name: Annotated[str, Field(alias="context")]
+    """
+    The context the status was posted under, which names it.
+    """
+
+    outcome: Annotated[ConclusionOutcome, Field(alias="state")]
+    """
+    The state the status was posted with.
+    """
+
+
+class RestCheckRunPage(RestResponse, ValidatedJSONModel):
     """
     One page of the check runs reported against a commit.
     """
@@ -345,49 +281,8 @@ class RestCheckRunPage(JSONModel):
     The check runs on this page.
     """
 
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RestCheckRunPage:
-        """
-        Read one page of the check-runs listing.
 
-        :param data: The page to read.
-        :return: The parsed page.
-        """
-        return cls(
-            [RestCheckRun.from_json(run) for run in data[RestJSONKey.CHECK_RUNS]]
-        )
-
-
-@dataclass(frozen=True)
-class RestCommitStatus(JSONModel):
-    """
-    One status posted through the commit-status API.
-    """
-
-    result: CheckResult
-    """
-    The check it describes.
-    """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RestCommitStatus:
-        """
-        Read a commit status object.
-
-        :param data: The object to read.
-        :return: The parsed status.
-        """
-        return cls(
-            CheckResult(
-                name=data[RestJSONKey.CONTEXT],
-                outcome=CheckOutcome[data[RestJSONKey.STATE].upper()],
-                url=data[RestJSONKey.TARGET_URL] or "",
-            )
-        )
-
-
-@dataclass(frozen=True)
-class RestCombinedStatusPage(JSONModel):
+class RestCombinedStatusPage(RestResponse, ValidatedJSONModel):
     """
     One page of the statuses posted against a commit.
 
@@ -399,18 +294,3 @@ class RestCombinedStatusPage(JSONModel):
     """
     The statuses on this page.
     """
-
-    @classmethod
-    def from_json(cls, data: dict[str, Any]) -> RestCombinedStatusPage:
-        """
-        Read one page of the combined status.
-
-        :param data: The page to read.
-        :return: The parsed page.
-        """
-        return cls(
-            [
-                RestCommitStatus.from_json(status)
-                for status in data[RestJSONKey.STATUSES]
-            ]
-        )

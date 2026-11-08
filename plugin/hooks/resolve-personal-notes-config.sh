@@ -365,6 +365,9 @@ PLAN_SITE_PUBLICATION_MODULE="basstler.plan_site.publication"
 # basstler.plan_site.dispatch_check: prints check-setup.sh's plan site status and
 # detail, from the notes branch's latest dispatch run.
 PLAN_SITE_DISPATCH_CHECK_MODULE="basstler.plan_site.dispatch_check"
+# basstler.plan_site.build_start: starts the plan site's build with this session's own
+# GitHub credential, after a push to the notes branch.
+PLAN_SITE_BUILD_START_MODULE="basstler.plan_site.build_start"
 # basstler.plan.item_brief: prints one plan item's brief - the plan header, the item,
 # its dependencies' live readiness and the plan's standing rules.
 ITEM_BRIEF_MODULE="basstler.plan.item_brief"
@@ -382,6 +385,9 @@ PLAN_MANIFEST_TOOLS_MODULE="basstler.plan.manifest_tools"
 # basstler.plan.size_limits: prunes landed items and refuses a plan or progress
 # notes over their limits - the gate save-plan.sh and save-pr-progress.sh run.
 PLAN_SIZE_LIMITS_MODULE="basstler.plan.size_limits"
+# basstler.document_references: names every module and skill a document cites
+# that this release no longer ships, and what replaced it.
+DOCUMENT_REFERENCES_MODULE="basstler.document_references"
 # basstler.personal_notes.progress_notes: deletes the progress notes of branches whose pull requests
 # have all merged or closed, or that are gone from the remote.
 PROGRESS_NOTES_MODULE="basstler.personal_notes.progress_notes"
@@ -415,6 +421,9 @@ UPSTREAM_REVIEWS_ACTION_BRANCH="basstler/upstream-reviews"
 # basstler.actions_usage: the last 24 hours of Actions runs and jobs per workflow against
 # the budget's daily ceilings - run by session-start.sh and by the test workflow.
 ACTIONS_USAGE_MODULE="basstler.actions_usage"
+# basstler.main_failure: the one issue open while the default branch's tests fail -
+# recorded by the test workflow, shown by session-start.sh.
+MAIN_FAILURE_MODULE="basstler.main_failure"
 # dependencies: prints the package's requirements an environment does not
 # have - what missing_dependencies below calls.
 BASSTLER_DEPENDENCIES_MODULE="basstler.setup.dependencies"
@@ -664,10 +673,10 @@ BASSTLER_UV_DIRECTORY="${BASSTLER_HOME}/uv"
 BASSTLER_INSTALLED_UV="${BASSTLER_UV_DIRECTORY}/bin/uv"
 # BASSTLER_REPOSITORY_URL: where an installed plugin's package comes from, at
 # its latest release.
-BASSTLER_REPOSITORY_URL="${BASSTLER_REPOSITORY_URL:-https://github.com/AbdelrhmanBassiouny/basstler}"
+BASSTLER_REPOSITORY_URL="${BASSTLER_REPOSITORY_URL:-https://github.com/KAOS-repositories/basstler}"
 # PLUGIN_MANIFEST: the plugin's manifest, which names no version: a release is
-# only a tag on its merge commit, so the plugin a session syncs from that merge
-# is already the release, with nothing committed after it to miss.
+# only a tag on its merge commit, and the marketplace serves the plugin from the
+# plugin release branch at that tag, with nothing committed after it to miss.
 PLUGIN_MANIFEST="${PLUGIN_ROOT}/.claude-plugin/plugin.json"
 # BASSTLER_RELEASE_FILE: the latest release tag last read from
 # BASSTLER_REPOSITORY_URL - the one the package is installed at, read once per

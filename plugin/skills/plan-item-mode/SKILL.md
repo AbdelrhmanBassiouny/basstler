@@ -1,6 +1,6 @@
 ---
 name: plan-item-mode
-description: Pin whether kickoff and resolve implement directly (auto), present a plan first (plan), or ask each time (ask). Invoke as "/plan-item-mode <auto|plan|ask> [kickoff|resolve|both]". Use when the user states a standing preference about being asked.
+description: Pin whether kickoff and resolve implement directly (auto), present a plan first (plan), or ask each time (ask). Invoke as "/plan-item-mode {auto|plan|ask} [kickoff|resolve|both]". Use when the user states a standing preference about being asked.
 allowed-tools: Bash, Read
 ---
 

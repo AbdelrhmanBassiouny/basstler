@@ -9,6 +9,8 @@ fork - so installing, requesting and collecting a result are exercised as git co
 
 from __future__ import annotations
 
+from urllib.parse import parse_qs, urlsplit
+
 import json
 from http import HTTPStatus
 import subprocess
@@ -34,10 +36,8 @@ from basstler.upstream_reviews.action.branch import (
     ActionInstallation,
     InstallationState,
 )
-from basstler.upstream_reviews.action.read import (
-    ActionRead,
-    WorkflowRunPage,
-)
+from basstler.github.run_listing import RunListing
+from basstler.upstream_reviews.action.read import ActionRead
 from basstler.upstream_reviews.action.recording import (
     ActionResult,
     RecordedGraphQLResponse,
@@ -62,7 +62,7 @@ from basstler.upstream_reviews.readers import UpstreamPullRequestReader
 from basstler.upstream_reviews.request import (
     UpstreamReadRequest,
 )
-from basstler.upstream_reviews.vocabulary import (
+from basstler.upstream_reviews.action.branch import (
     ActionBranch,
     ActionFile,
     BasstlerSource,
@@ -487,7 +487,14 @@ class ListedRuns(GitHubReader):
 
 def run(commit: str, conclusion: str | None) -> dict[str, Any]:
     """:return: One listed run of the fork's workflow."""
-    return {"id": 7, "head_sha": commit, "conclusion": conclusion}
+    return {
+        "id": 7,
+        "head_sha": commit,
+        "conclusion": conclusion,
+        "html_url": FORK.workflow_run_url(7),
+        "path": ActionFile.WORKFLOW,
+        "created_at": "2026-11-08T00:00:00Z",
+    }
 
 
 def waiting(fork: Fork, runs: ListedRuns) -> tuple[ActionRead, str]:
@@ -542,14 +549,17 @@ def test_a_request_no_run_started_for_is_given_up_on_after_twenty_seconds(
 
 
 def test_the_runs_are_listed_on_the_action_branch_alone(fork):
+    """
+    Looking for a request's run lists the fork's runs on the Action branch only.
+    """
     runs = ListedRuns([])
     read, commit = waiting(fork, runs)
 
     with pytest.raises(ActionRunNotStarted):
         read.wait(timeout=60, commit=commit)
 
-    assert runs.paths == [WorkflowRunPage.path(FORK)]
-    assert f"branch={ActionBranch.NAME}" in runs.paths[0]
+    assert runs.paths == [RunListing.path(FORK, ActionBranch.NAME)]
+    assert parse_qs(urlsplit(runs.paths[0]).query)["branch"] == [ActionBranch.NAME]
 
 
 def test_a_run_that_failed_without_a_result_is_reported_with_its_page(fork):

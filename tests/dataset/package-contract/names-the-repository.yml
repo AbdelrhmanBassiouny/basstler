@@ -1,0 +1,13 @@
+# Written by basstler's /setup-personal-notes; it runs no module of the package.
+name: Names the repository
+
+on:
+  pull_request_target:
+    types: [closed]
+
+jobs:
+  dispatch:
+    if: github.repository == 'KAOS-repositories/basstler'
+    runs-on: ubuntu-latest
+    steps:
+      - run: gh workflow run plan-site.yml --repo AbdelrhmanBassiouny/stack-board
