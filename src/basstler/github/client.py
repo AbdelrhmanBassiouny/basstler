@@ -22,11 +22,14 @@ from functools import cached_property
 from enum import StrEnum
 from http import HTTPStatus
 from http.client import HTTPResponse
-from typing import Any
+from typing import Annotated, Any
+
+from pydantic import Field
 
 from basstler.class_property import classproperty
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.credential import CredentialProvider, GitHubCredential
+from basstler.json_model import ValidatedJSONModel
 from basstler.github.exceptions import (
     GitHubCredentialUnavailableError,
     GitHubCallFailed,
@@ -86,9 +89,11 @@ class GitHubAttemptReader(ABC):
         """
 
 
-class GitHubWrite(ABC):
+class GitHubWrite(ValidatedJSONModel, ABC):
     """
     A change sent to the REST API, carrying the resource it changes.
+
+    Its body is its fields, except those that only name the resource.
     """
 
     @classproperty
@@ -105,20 +110,13 @@ class GitHubWrite(ABC):
         The resource's path.
         """
 
-    @abstractmethod
-    def to_json(self) -> dict[str, Any]:
-        """
-        :return: The body as the API reads it.
-        """
 
-
-@dataclass(frozen=True)
 class RepositoryWrite(GitHubWrite, ABC):
     """
     A change to a resource of one repository.
     """
 
-    repository: Repository
+    repository: Annotated[Repository, Field(exclude=True)]
     """
     The repository the resource belongs to.
     """

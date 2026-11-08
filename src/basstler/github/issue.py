@@ -8,8 +8,10 @@ from __future__ import annotations
 from abc import ABC
 from dataclasses import asdict, dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Annotated, Any, Literal
 from urllib.parse import urlencode
+
+from pydantic import Field
 
 from basstler.class_property import classproperty
 from basstler.github.client import HttpMethod, RepositoryWrite
@@ -65,7 +67,6 @@ class Issue(JSONModel):
 # %% what is sent to GitHub
 
 
-@dataclass(frozen=True)
 class NewIssue(RepositoryWrite):
     """
     An issue to open.
@@ -94,23 +95,18 @@ class NewIssue(RepositoryWrite):
     def path(self) -> str:
         return self.repository.issues_path
 
-    def to_json(self) -> dict[str, Any]:
-        return {"title": self.title, "body": self.body, "labels": self.labels}
 
-
-@dataclass(frozen=True)
 class IssueWrite(RepositoryWrite, ABC):
     """
     A change to one issue or pull request, which GitHub numbers alike.
     """
 
-    number: int
+    number: Annotated[int, Field(exclude=True)]
     """
     The issue's or pull request's number in the repository.
     """
 
 
-@dataclass(frozen=True)
 class IssueComment(IssueWrite):
     """
     A comment on an issue or pull request, as it is posted.
@@ -128,9 +124,6 @@ class IssueComment(IssueWrite):
     @property
     def path(self) -> str:
         return self.repository.issue_comments_path(self.number)
-
-    def to_json(self) -> dict[str, Any]:
-        return {"body": self.body}
 
 
 @dataclass(frozen=True)
@@ -175,15 +168,19 @@ class PostedIssueComment(JSONModel):
         return f"[{self.author_login} @ {self.created_at}]\n{self.body}"
 
 
-@dataclass(frozen=True)
 class IssueClosing(IssueWrite):
     """
     The closing of an issue.
     """
 
-    closing_reason: ClosingReason | None = None
+    closing_reason: Annotated[ClosingReason | None, Field(alias="state_reason")] = None
     """
     Why it is closed, or ``None`` to leave the reason unset.
+    """
+
+    state: Literal[IssueState.CLOSED] = IssueState.CLOSED
+    """
+    The state the issue is set to.
     """
 
     @classproperty
@@ -193,9 +190,6 @@ class IssueClosing(IssueWrite):
     @property
     def path(self) -> str:
         return self.repository.issue_path(self.number)
-
-    def to_json(self) -> dict[str, Any]:
-        return {"state": IssueState.CLOSED, "state_reason": self.closing_reason}
 
 
 @dataclass(frozen=True)

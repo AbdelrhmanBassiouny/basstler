@@ -107,7 +107,7 @@ class RunJobPage(JSONModel):
 # %% starting a run
 
 
-class WorkflowDispatch(ValidatedJSONModel, GitHubWrite):
+class WorkflowDispatch(GitHubWrite):
     """
     A request to run a workflow.
     """
