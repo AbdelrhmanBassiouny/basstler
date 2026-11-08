@@ -28,7 +28,7 @@ from basstler.locations import (
     PluginSkillLocation,
     ProjectLocation,
 )
-from basstler.github.client import GitHubClient, GitHubResponse, HttpMethod
+from basstler.github.client import GitHubClient, GitHubResponse, HttpMethod, RequestBody
 from basstler.maintenance.board import AccountField
 from basstler.maintenance.github import (
     GitHubPath,
@@ -99,7 +99,7 @@ class GitHubAnsweringFromMemory(GitHubClient):
     The labels the repository carries.
     """
 
-    created_labels: list[Mapping[str, Any]] = field(default_factory=list)
+    created_labels: list[RequestBody] = field(default_factory=list)
     """
     Every label-creation payload sent, in order.
     """
@@ -114,11 +114,11 @@ class GitHubAnsweringFromMemory(GitHubClient):
         ]
 
     def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+        self, method: HttpMethod, path: str, body: RequestBody
     ) -> GitHubResponse:
-        self.created_labels.append(payload)
-        self.present_labels.add(RepositoryLabel.from_json(payload).name)
-        return GitHubResponse(payload)
+        self.created_labels.append(body)
+        self.present_labels.add(RepositoryLabel.from_json(body.to_json()).name)
+        return GitHubResponse(body.to_json())
 
     def as_repository(self) -> GitHubRepository:
         """
@@ -466,7 +466,7 @@ def test_creates_only_the_missing_labels_when_asked():
     labels_setup(SetupOption.CREATE_LABELS, github=github).check_labels()
 
     assert github.created_labels == [
-        RepositoryLabel(GitHubLabel.IN_REVIEW, GitHubLabel.IN_REVIEW.purpose).to_json()
+        RepositoryLabel(GitHubLabel.IN_REVIEW, GitHubLabel.IN_REVIEW.purpose)
     ]
 
 

@@ -5,14 +5,13 @@ The one issue that stays open while the tests on the default branch fail.
 from __future__ import annotations
 
 import json
-from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
 
 import pytest
 import yaml
 
-from basstler.github.client import GitHubResponse, HttpMethod
+from basstler.github.client import GitHubResponse, HttpMethod, RequestBody
 from basstler.github.issue import (
     ClosingReason,
     Issue,
@@ -53,12 +52,12 @@ class IssueOpeningClient(RecordedGitHubClient):
     """
 
     def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+        self, method: HttpMethod, path: str, body: RequestBody
     ) -> GitHubResponse:
-        super().attempt_send(method, path, payload)
+        super().attempt_send(method, path, body)
         if method is HttpMethod.POST and path == REPOSITORY.issues_path:
             return GitHubResponse(recorded(DatasetLocation.MAIN_FAILURE_OPENED_ISSUE))
-        return GitHubResponse(payload)
+        return GitHubResponse(body.to_json())
 
 
 def client_listing(*issues: DatasetLocation) -> IssueOpeningClient:
@@ -104,7 +103,7 @@ def comment_on(issue: Issue, run: FinishedRun) -> SentWrite:
     return SentWrite(
         HttpMethod.POST,
         REPOSITORY.issue_comments_path(issue.number),
-        IssueComment(run.describe()).to_json(),
+        IssueComment(run.describe()),
     )
 
 
@@ -148,6 +147,9 @@ def test_a_passed_run_reads_no_jobs():
 
 
 def test_the_first_failure_opens_the_issue():
+    """
+    With no issue open, a failed run opens one labelled as a red main branch.
+    """
     client = client_listing()
     run = finished_run(CheckOutcome.FAILURE)
     issue = MainFailureTracker(REPOSITORY)
@@ -163,7 +165,7 @@ def test_the_first_failure_opens_the_issue():
             REPOSITORY.issues_path,
             NewIssue(
                 issue.title, run.describe(), [GitHubLabel.BUG, GitHubLabel.MAIN_RED]
-            ).to_json(),
+            ),
         )
     ]
 
@@ -179,6 +181,9 @@ def test_a_later_failure_comments_on_the_open_issue():
 
 
 def test_a_pass_closes_the_open_issue():
+    """
+    A passing run closes the open issue as completed.
+    """
     client = client_listing(DatasetLocation.MAIN_FAILURE_OPEN_ISSUE)
 
     MainFailureTracker(REPOSITORY).record(finished_run(CheckOutcome.SUCCESS), client)
@@ -186,7 +191,7 @@ def test_a_pass_closes_the_open_issue():
     assert client.writes[-1] == SentWrite(
         HttpMethod.PATCH,
         REPOSITORY.issue_path(open_issue().number),
-        IssueClosing(ClosingReason.COMPLETED).to_json(),
+        IssueClosing(ClosingReason.COMPLETED),
     )
 
 

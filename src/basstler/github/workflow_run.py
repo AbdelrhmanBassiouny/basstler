@@ -11,6 +11,7 @@ from pydantic import Field
 from pydantic.dataclasses import dataclass as validated_dataclass
 
 from basstler.class_property import classproperty
+from basstler.github.client import RequestBody
 from basstler.repository import Repository
 from basstler.upstream_reviews.vocabulary import (
     CheckOutcome,
@@ -112,7 +113,7 @@ class RunJobPage(JSONModel):
 
 
 @validated_dataclass(frozen=True)
-class WorkflowDispatch(ValidatedJSONModel):
+class WorkflowDispatch(ValidatedJSONModel, RequestBody):
     """
     The body of a request to run a workflow.
     """

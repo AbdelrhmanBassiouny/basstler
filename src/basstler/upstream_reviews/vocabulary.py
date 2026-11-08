@@ -130,6 +130,8 @@ class RawValueReader(ABC):
         self, source: type[Any], handler: GetCoreSchemaHandler
     ) -> core_schema.CoreSchema:
         """
+        :param source: The field's type.
+        :param handler: Builds pydantic's own schema for a type.
         :return: How pydantic reads the field: :meth:`read`, then the field's type.
         """
         return core_schema.no_info_before_validator_function(self.read, handler(source))
@@ -215,6 +217,9 @@ class NamedAsGitHub(StrEnum):
         cls, source: type[Any], handler: GetCoreSchemaHandler
     ) -> core_schema.CoreSchema:
         """
+        :param source: The enum.
+        :param handler: Builds pydantic's own schema for a type, unused since the enum
+            replaces it.
         :return: How pydantic reads a field of this enum: by :meth:`from_github_name`.
         """
         return core_schema.no_info_plain_validator_function(

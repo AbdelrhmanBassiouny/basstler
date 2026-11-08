@@ -277,7 +277,7 @@ class MergeWorkflowProposal:
         opened = github.attempt_send(
             HttpMethod.POST,
             self.repository.pull_requests_path,
-            self.opening.to_json(),
+            self.opening,
         )
         if opened.failure is not None:
             return PendingStep(

@@ -183,9 +183,7 @@ class BuildStart:
         dispatch = client.attempt_send(
             HttpMethod.POST,
             site.repository.workflow_dispatch_path(WorkflowLocation.PLAN_SITE),
-            WorkflowDispatch(
-                RepositoryDetails.from_json(read.body).default_branch
-            ).to_json(),
+            WorkflowDispatch(RepositoryDetails.from_json(read.body).default_branch),
         )
         return cls(site, dispatch)
 

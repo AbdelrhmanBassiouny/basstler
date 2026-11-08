@@ -225,7 +225,7 @@ class MainFailureTracker:
             self.repository.issues_path,
             NewIssue(
                 self.title, run.describe(), [GitHubLabel.BUG, GitHubLabel.MAIN_RED]
-            ).to_json(),
+            ),
         )
         return Issue.from_json(opened)
 
@@ -241,7 +241,7 @@ class MainFailureTracker:
         github.send(
             HttpMethod.PATCH,
             self.repository.issue_path(issue.number),
-            IssueClosing(ClosingReason.COMPLETED).to_json(),
+            IssueClosing(ClosingReason.COMPLETED),
         )
 
     def comment(self, issue: Issue, run: FinishedRun, github: GitHubClient) -> None:
@@ -255,7 +255,7 @@ class MainFailureTracker:
         github.send(
             HttpMethod.POST,
             self.repository.issue_comments_path(issue.number),
-            IssueComment(run.describe()).to_json(),
+            IssueComment(run.describe()),
         )
 
 

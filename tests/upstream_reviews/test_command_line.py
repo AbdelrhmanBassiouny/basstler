@@ -15,6 +15,7 @@ from enum import StrEnum
 from pathlib import Path
 
 import pytest
+from pydantic import ValidationError
 
 from basstler.exceptions import DataclassException
 from basstler.locations import ProjectLocation
@@ -385,12 +386,12 @@ def test_only_the_checks_that_did_not_pass_are_unsuccessful(current_checks):
     ]
 
 
-def test_a_rollup_shape_this_script_cannot_read_is_rejected():
+def test_a_check_holding_none_of_the_keys_a_check_is_read_from_is_rejected():
     """
     A rollup context in neither shape a rollup can hold is refused.
     """
-    with pytest.raises(ValueError):
-        CheckResult.from_json({"__typename": "SomeNewContextShape"})
+    with pytest.raises(ValidationError):
+        CheckResult.from_json({})
 
 
 def test_a_head_commit_nothing_reported_against_has_no_checks():

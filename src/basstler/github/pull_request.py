@@ -4,16 +4,17 @@ The requests GitHub's pull request endpoints read.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from typing import Any
 
+from basstler.github.client import RequestBody
 from basstler.repository import Repository
 
 # %% opening a pull request
 
 
 @dataclass(frozen=True)
-class NewPullRequest:
+class NewPullRequest(RequestBody):
     """
     A pull request that does not exist yet.
     """
@@ -50,9 +51,6 @@ class NewPullRequest:
     """
 
     def to_json(self) -> dict[str, Any]:
-        """
-        :return: The body GitHub's create-pull-request endpoint reads.
-        """
         return {
             "title": self.title,
             "body": self.body,
@@ -60,3 +58,21 @@ class NewPullRequest:
             "base": self.base,
             "draft": self.draft,
         }
+
+
+# %% editing a pull request
+
+
+@dataclass(frozen=True)
+class PullRequestDescription(RequestBody):
+    """
+    A pull request's new description, leaving everything else about it unchanged.
+    """
+
+    body: str
+    """
+    The description, in Markdown.
+    """
+
+    def to_json(self) -> dict[str, Any]:
+        return asdict(self)

@@ -18,6 +18,8 @@ from basstler.github.credential import (
     CredentialProvider,
     GitHubCredential,
 )
+from basstler.github.issue import IssueComment
+from basstler.github.label import LabelReplacement
 from basstler.github.exceptions import (
     GitHubCredentialRejected,
     GitHubCredentialUnavailableError,
@@ -118,16 +120,16 @@ def test_paging_a_path_with_no_query_adds_the_page_as_the_only_parameter(
 
 
 def test_a_write_sends_its_payload_and_returns_the_body(api_server, client):
-    payload = {"body": "a comment"}
+    comment = IssueComment("a comment")
     created = {"html_url": "https://github.com/o/r/pull/1#issuecomment-1"}
     api_server.responses["POST /repos/o/r/issues/1/comments"] = CannedResponse(
         created, HTTPStatus.CREATED
     )
 
-    assert client.send(HttpMethod.POST, "/repos/o/r/issues/1/comments", payload) == (
+    assert client.send(HttpMethod.POST, "/repos/o/r/issues/1/comments", comment) == (
         created
     )
-    assert api_server.requests[0].body == payload
+    assert api_server.requests[0].body == comment.to_json()
 
 
 def test_a_write_answered_with_no_content_returns_none(api_server, client):
@@ -135,7 +137,9 @@ def test_a_write_answered_with_no_content_returns_none(api_server, client):
         None, HTTPStatus.NO_CONTENT
     )
 
-    assert client.send(HttpMethod.PUT, "/repos/o/r/labels", {}) is None
+    assert (
+        client.send(HttpMethod.PUT, "/repos/o/r/labels", LabelReplacement([])) is None
+    )
 
 
 # %% asking again after a server error
@@ -198,7 +202,7 @@ def test_a_write_answered_with_a_server_error_is_not_sent_again(
     api_server.responses[str(COMMENTS)] = CannedResponse.bad_gateway()
 
     response = quick_client.attempt_send(
-        COMMENTS.method, COMMENTS.target, {"body": "a comment"}
+        COMMENTS.method, COMMENTS.target, IssueComment("a comment")
     )
 
     assert response.failure.status == HTTPStatus.BAD_GATEWAY
@@ -299,7 +303,7 @@ def test_a_write_that_gets_no_answer_carries_why_instead_of_raising():
         root = stopped_server.root
     client = GitHubRestClient(TOKEN, api_root=root)
 
-    response = client.attempt_send(HttpMethod.POST, "/user", {})
+    response = client.attempt_send(HttpMethod.POST, "/user", IssueComment("a comment"))
 
     assert type(response.failure) is GitHubUnreachableError
     assert (response.failure.method, response.failure.path) == (

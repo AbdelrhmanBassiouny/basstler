@@ -8,7 +8,6 @@ from __future__ import annotations
 import json
 import shutil
 import subprocess
-from collections.abc import Mapping
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from http import HTTPStatus
@@ -24,6 +23,7 @@ from basstler.github.client import (
     GitHubResponse,
     GitHubWriter,
     HttpMethod,
+    RequestBody,
 )
 from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import (
@@ -103,9 +103,9 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     """
 
     def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
+        self, method: HttpMethod, path: str, body: RequestBody
     ) -> GitHubResponse:
-        self.writes.append(SentWrite(method, path, payload))
+        self.writes.append(SentWrite(method, path, body))
         if self.failure is not None:
             return GitHubResponse(None, failure=self.failure)
         return GitHubResponse(self.opened)
@@ -761,7 +761,7 @@ def pull_request_opening(proposal: MergeWorkflowProposal) -> SentWrite:
     return SentWrite(
         HttpMethod.POST,
         proposal.repository.pull_requests_path,
-        proposal.opening.to_json(),
+        proposal.opening,
     )
 
 

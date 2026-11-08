@@ -18,7 +18,9 @@ from enum import Enum, StrEnum
 from pathlib import Path
 from typing import Any
 
-from basstler.github.label import RepositoryLabel
+from basstler.github.issue import IssueComment
+from basstler.github.label import LabelReplacement, RepositoryLabel
+from basstler.github.pull_request import PullRequestDescription
 from basstler.pull_request_state import PullRequestState
 from basstler.github_labels import GitHubLabel
 from basstler.locations import PathEnumeration
@@ -34,7 +36,7 @@ from basstler.upstream_reviews.rest_models import (
     RestCheckRunPage,
     RestCombinedStatusPage,
 )
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.upstream_reviews.vocabulary import RollupState, WebPage
 
 
 # %% what a pass reads and writes
@@ -305,7 +307,7 @@ class GitHubRepository(
         self.client.send(
             HttpMethod.POST,
             self._path(str(RepositoryPath.LABELS)),
-            RepositoryLabel(label, label.purpose).to_json(),
+            RepositoryLabel(label, label.purpose),
         )
 
     def check_state(self, commit: str) -> RollupState:
@@ -387,7 +389,7 @@ class GitHubRepository(
         self.client.send(
             HttpMethod.PUT,
             self._path(f"/issues/{number}/labels"),
-            {"labels": list(labels)},
+            LabelReplacement(list(labels)),
         )
 
     def add_comment(self, number: int, body: str) -> str:
@@ -395,9 +397,11 @@ class GitHubRepository(
         :param body: The comment.
         :return: The comment's URL."""
         created = self.client.send(
-            HttpMethod.POST, self._path(f"/issues/{number}/comments"), {"body": body}
+            HttpMethod.POST,
+            self._path(f"/issues/{number}/comments"),
+            IssueComment(body),
         )
-        return str(created["html_url"])
+        return WebPage.from_json(created).url
 
     def set_description(self, number: int, body: str) -> None:
         """
@@ -409,5 +413,5 @@ class GitHubRepository(
         self.client.send(
             HttpMethod.PATCH,
             self._path(f"{RepositoryPath.PULL_REQUESTS}/{number}"),
-            {"body": body},
+            PullRequestDescription(body),
         )

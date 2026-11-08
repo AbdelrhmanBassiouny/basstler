@@ -13,7 +13,6 @@
                 "contexts": {
                   "nodes": [
                     {
-                      "__typename": "CheckRun",
                       "name": "test (krrood)",
                       "conclusion": null,
                       "detailsUrl": "https://github.com/example-upstream/example-repo/actions/runs/1/job/11"
