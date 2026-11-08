@@ -21,6 +21,7 @@ from basstler.branch import Branch
 from basstler.environment import GitHubActionsVariable
 from basstler.locations import PathEnumeration
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.upstream_reviews.action.branch import BasstlerSource
 from basstler.workflows import ActivityType, Trigger, TriggerEvent, WorkflowKey
 from basstler.workflows import Workflow as DeclaredWorkflow
 from basstler.release_version import (
@@ -517,6 +518,10 @@ def test_the_marketplace_serves_the_plugin_from_the_release_branch():
         path=RepositoryLocation.PLUGIN.relative_to(RepositoryLocation.ROOT).as_posix(),
         ref=release_branch(),
     )
+
+
+def test_the_latest_release_is_read_from_the_release_branch():
+    assert BasstlerSource.LATEST_RELEASE == release_branch()
 
 
 def test_a_push_runs_the_tests_whatever_the_budget():
