@@ -441,7 +441,8 @@ class UnknownWave(ValidationProblem):
 @dataclass
 class PlanInAnotherRepository(ValidationProblem):
     """
-    The plan is saved to the notes of a repository other than the one its work is for.
+    The plan is saved from a checkout of a repository other than the one its work is
+    for.
     """
 
     plan_identifier: Any
@@ -454,15 +455,15 @@ class PlanInAnotherRepository(ValidationProblem):
     The repository the plan's work is for, its ``default_repository``.
     """
 
-    notes_repository: Repository
+    checkout_repository: Repository
     """
-    The repository whose notes branch the plan was to be saved to.
+    The repository the ``origin`` of the checkout saving the plan names.
     """
 
     def error_message(self) -> str:
         return (
             f"plan {self.plan_identifier!r} is for {self.default_repository} but was "
-            f"to be saved to the notes of {self.notes_repository}"
+            f"to be saved from a checkout of {self.checkout_repository}"
         )
 
     def suggest_correction(self) -> str:
@@ -470,34 +471,31 @@ class PlanInAnotherRepository(ValidationProblem):
         Unlike :meth:`ValidationProblem.suggest_correction`, names the checkout to save
         from.
         """
-        return (
-            f"Save the plan from a checkout of {self.default_repository}, so it lives "
-            "in that repository's notes."
-        )
+        return f"Save the plan from a checkout of {self.default_repository}."
 
 
 @dataclass
-class NotesRemoteNamesNoRepository(ValidationProblem):
+class OriginNamesNoRepository(ValidationProblem):
     """
-    The notes remote the plan is saved to names no ``owner/name``, so the repository it
-    is for cannot be compared against it.
+    The ``origin`` of the checkout saving the plan names no ``owner/name``, so the
+    repository the plan is for cannot be compared against it.
     """
 
-    notes_remote_url: str
+    origin_url: str
     """
-    The URL of the notes remote, as configured.
+    The URL of ``origin``, as configured; empty when the checkout has no ``origin``.
     """
 
     def error_message(self) -> str:
         return (
-            f"the notes remote {self.notes_remote_url!r} names no owner/name repository"
+            f"this checkout's origin {self.origin_url!r} names no owner/name repository"
         )
 
     def suggest_correction(self) -> str:
         """
         Unlike :meth:`ValidationProblem.suggest_correction`, names the remote to set.
         """
-        return "Set the notes remote to the GitHub URL of the plan's repository."
+        return "Set origin to the GitHub URL of the plan's repository."
 
 
 @dataclass
