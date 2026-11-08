@@ -1,10 +1,9 @@
 """
 Releases: every change merged to ``main`` is one once its tests pass, tagged on the
-merge commit itself.
+merge commit itself as the latest release with its patch, or the part a merged pull
+request's ``release:minor`` or ``release:major`` label names, incremented.
 
-No file names the version, so nothing is committed after a merge: the release is the
-latest release tag with one part incremented - the patch, unless a merged pull request is
-labelled ``release:minor`` or ``release:major``.
+Only the released plugin's manifest names the version.
 """
 
 from __future__ import annotations
@@ -23,6 +22,7 @@ from basstler.exit_codes import CommandFailure, ExitCode
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.standard_streams import StandardStreamHandler
 from basstler.json_model import ValidatedJSONModel
+from basstler.locations import BasstlerRepositoryLocation
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -59,6 +59,11 @@ class ReleaseCommand(StrEnum):
     RELEASE = "release"
     """
     Decide the release of everything since the latest one, for the workflow to tag.
+    """
+
+    PLUGIN = "plugin"
+    """
+    Print the commit the plugin release branch moves to for a release.
     """
 
 
@@ -368,6 +373,53 @@ class Release:
         return PlannedRelease(latest.bumped(part))
 
 
+@dataclass(frozen=True)
+class PluginRelease:
+    """
+    The checked-out commit's plugin, alone at the root of a commit whose manifest names
+    the release's version.
+    """
+
+    release: Release
+    """
+    The checkout whose plugin is released.
+    """
+
+    version: ReleaseVersion
+    """
+    The version the release tags.
+    """
+
+    previous: str
+    """
+    The plugin release branch, which the commit descends from so the branch only moves
+    forward; it need not exist yet.
+    """
+
+    def commit(self) -> str:
+        """
+        :return: The new commit, its first parent the plugin's own history.
+        """
+        git = self.release.git
+        plugin = git.run(
+            "subtree",
+            "split",
+            "--quiet",
+            f"--prefix={BasstlerRepositoryLocation.PLUGIN}",
+            "HEAD",
+        )
+        manifest_path = BasstlerRepositoryLocation.PLUGIN_MANIFEST.path_in_plugin
+        manifest = json.loads(git.file_at(plugin, manifest_path))
+        manifest["version"] = str(self.version)
+        previous = git.commit_or_none(self.previous)
+        return git.commit_files(
+            plugin,
+            {manifest_path.as_posix(): json.dumps(manifest, indent=2)},
+            f"Release the plugin at {self.version.tag}",
+            merged_parents=(previous,) if previous else (),
+        )
+
+
 class ReleaseCommandLine:
     """
     The command line: its arguments, and the subcommand they name.
@@ -396,7 +448,20 @@ class ReleaseCommandLine:
             help="A JSON array of the pull requests GitHub associates with the "
             "unreleased commits (default: none, so a patch release)",
         )
-        for subcommand_parser in (unreleased_parser, release_parser):
+        plugin_parser = subcommands.add_parser(
+            ReleaseCommand.PLUGIN,
+            help="Print the commit the plugin release branch moves to for a release",
+        )
+        plugin_parser.add_argument(
+            "--tag", required=True, help="The tag the release carries, e.g. v1.2.3"
+        )
+        plugin_parser.add_argument(
+            "--previous",
+            required=True,
+            help="The plugin release branch as the checkout names it, which need not "
+            "exist yet",
+        )
+        for subcommand_parser in (unreleased_parser, release_parser, plugin_parser):
             subcommand_parser.add_argument(
                 "--checkout",
                 type=Path,
@@ -430,6 +495,12 @@ class ReleaseCommandLine:
                         logger.warning("Nothing changed since the latest release.")
                     else:
                         logger.info(planned.output_lines())
+                case ReleaseCommand.PLUGIN:
+                    released = ReleaseVersion.parse(
+                        arguments.tag.removeprefix(ReleaseVersion.tag_prefix)
+                    )
+                    plugin = PluginRelease(release, released, arguments.previous)
+                    logger.info(plugin.commit())
         except MalformedVersion as error:
             logger.error(str(error))
             return error.exit_code

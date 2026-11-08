@@ -33,14 +33,16 @@ some installs and not others: a plugin's hooks would call a package that predate
 Every change counts, not only those to the package, since a list of shipped paths would go
 stale.
 
-- **A release is only a tag on the merge commit.** No file names the version - the build
-  reads it from the tag (`hatch-vcs`), and `plugin/.claude-plugin/plugin.json` names none -
-  so nothing is pushed to `main` after a merge.
+- **A release is only a tag on the merge commit.** No file on `main` names the version -
+  the build reads it from the tag (`hatch-vcs`), and `plugin/.claude-plugin/plugin.json`
+  names none - so nothing is pushed to `main` after a merge.
 - **The plugin is served from the `plugin-release` branch,** which the same atomic push
   moves to the tag's `plugin/` directory alone, alongside the `release` branch it moves to
-  the tag (`.claude-plugin/marketplace.json` names it as the plugin's `ref`). A synced
-  plugin is therefore always a release, and its session start installs that same release:
-  a merge whose tests fail, or are still running, reaches no install at all.
+  the tag (`.claude-plugin/marketplace.json` names it as the plugin's `ref`). Its
+  `plugin.json` gains the release's `version`, so claude.ai and Claude Code show which
+  release a synced plugin is. A synced plugin is therefore always a release, and its
+  session start installs that same release: a merge whose tests fail, or are still
+  running, reaches no install at all.
 - **The workflow increments the latest release's patch,** or its minor or major part when a
   pull request merged since is labelled `release:minor` or `release:major`. It then
   publishes a GitHub release with generated notes.

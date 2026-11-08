@@ -7,8 +7,9 @@ name: Release
 # release that passed; the next commit that passes releases everything merged since.
 #
 # The same push moves the release branch to the tag, and the plugin release branch to the
-# tag's plugin directory alone. The marketplace serves the plugin from that branch, so a
-# synced plugin and the package it installs are one release.
+# tag's plugin directory alone, its manifest naming the version. The marketplace serves
+# the plugin from that branch, so a synced plugin and the package it installs are one
+# release, and the plugin shows which.
 
 on:
   workflow_run:
@@ -80,7 +81,10 @@ jobs:
             exit 0
           fi
           git tag "${tag}"
-          plugin="$(git subtree split --quiet --prefix=plugin HEAD)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          plugin="$(python -m basstler.release_version plugin --checkout . --tag "${tag}" \
+            --previous "refs/remotes/origin/${PLUGIN_RELEASE_BRANCH}")"
           # One atomic push: the plugin never syncs a release the tag does not name yet,
           # and a release behind the branches moves none of them.
           git push --atomic --quiet origin "refs/tags/${tag}" \
