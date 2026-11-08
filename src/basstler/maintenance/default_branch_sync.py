@@ -240,7 +240,7 @@ class BaseSource:
     """
 
     @classmethod
-    def of(cls, configuration: Configuration) -> BaseSource:
+    def from_configuration(cls, configuration: Configuration) -> BaseSource:
         """
         :param configuration: The resolved stacked-PR configuration.
         :return: The upstream it names, published to the fork after; or, for a project
@@ -285,7 +285,7 @@ class DefaultBranchSync:
         :return: What was done.
         """
         try:
-            source = BaseSource.of(Configuration.load())
+            source = BaseSource.from_configuration(Configuration.load())
             return cls(source, GitCommandRunner(project_root)).run()
         except (CommandFailure, MalformedRepositoryError) as refusal:
             return DefaultBranchReport(BaseOutcome.NOT_SYNCED, reason=str(refusal))
