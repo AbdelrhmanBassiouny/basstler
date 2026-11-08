@@ -55,12 +55,9 @@ items:
   session: https://claude.ai/code/session_01JxHGiP6JUBGGaMwQ6FF7vB
   blockers:
     - >-
-      Waiting on the owner: the review thread on plugin/skills/plan-create/SKILL.md asks for
-      `repository-rules set` to take several rules in one call, and no syntax is chosen yet
-      (repeated `--rule id=text`, a YAML file to import, or pairs of positionals).
-    - >-
-      Waiting on the owner: the pydantic design thread on src/basstler/plan/repository_rules.py is
-      answered and left open for the owner to close or ask for a different design.
+      Waiting on the owner's review of `basstler repository-rules import <file>` (75c1f44), the
+      answer to the thread on plugin/skills/plan-create/SKILL.md asking to set several rules in one
+      command.
   depends_on: []
   notes: >
     The user's design priorities for every plan of a repository are prose in the personal notes'
