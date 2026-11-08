@@ -8,7 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from basstler.stack.model import StackBranch, BranchStatus, Stack
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
 
 # %% the overview
 
@@ -40,7 +40,7 @@ class CheckOverview:
             if branch.status is not BranchStatus.MERGED
         ]
 
-    def branches_in(self, state: RollupState) -> list[StackBranch]:
+    def branches_in(self, state: CombinedCheckState) -> list[StackBranch]:
         """
         :param state: A verdict.
         :return: The open branches whose checks have that verdict.
@@ -54,18 +54,18 @@ class CheckOverview:
         :return: One line counting every verdict, then one line per verdict other than
             success naming its branches.
         """
-        counted = {state: len(self.branches_in(state)) for state in RollupState}
+        counted = {state: len(self.branches_in(state)) for state in CombinedCheckState}
         counts = ", ".join(
             f"{count} {state}" for state, count in counted.items() if count
         )
         lines = [f"checks on {len(self.open_branches())} open branches: {counts}"]
-        for state in RollupState:
-            if state is RollupState.SUCCESS or not counted[state]:
+        for state in CombinedCheckState:
+            if state is CombinedCheckState.SUCCESS or not counted[state]:
                 continue
             lines.append(f"{state}: {self.named(state)}")
         return lines
 
-    def named(self, state: RollupState) -> str:
+    def named(self, state: CombinedCheckState) -> str:
         """
         :param state: A verdict.
         :return: The first :attr:`entries_per_state` branches with it, by pull request

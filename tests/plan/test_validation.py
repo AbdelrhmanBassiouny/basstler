@@ -17,6 +17,7 @@ from basstler.exceptions import (
     InvalidSchemaVersion,
     MalformedDependencyReference,
     MissingPlanDirectory,
+    PlanInAnotherRepository,
     PlanValidationError,
     SelfPlanReference,
     UnknownDependency,
@@ -31,6 +32,7 @@ from basstler.plan.dependencies import (
 )
 from basstler.plan.model import ItemStatus, ManifestKey
 from basstler.plan.validation import PlanValidator
+from basstler.repository import Repository
 
 from ..constants.paths import DatasetLocation
 from ..fixture_plans import (
@@ -322,3 +324,34 @@ def test_validation_rejects_a_cycle_that_runs_through_another_plan():
             PlanDirectory(DatasetLocation.PLANS),
         ).validate()
     assert error.value.problems == [DependencyCycle(["a", reference, "a"])]
+
+
+# %% the repository whose notes hold the plan
+
+
+def test_validation_rejects_a_plan_saved_to_another_repositorys_notes():
+    """
+    A plan lives in the notes of the repository its work is for.
+    """
+    plan = minimal_plan()
+    notes_repository = Repository("another-owner", "another-repository")
+    with pytest.raises(PlanValidationError) as error:
+        PlanValidator(plan, notes_repository=notes_repository).validate()
+    assert error.value.problems == [
+        PlanInAnotherRepository(
+            PLAN_UNDER_TEST_ID,
+            Repository.parse(plan[ManifestKey.DEFAULT_REPOSITORY.key]),
+            notes_repository,
+        )
+    ]
+
+
+def test_validation_accepts_a_plan_saved_to_its_own_repository_in_any_letter_case():
+    """
+    GitHub resolves a repository's name in any letter case.
+    """
+    plan = minimal_plan()
+    notes_repository = Repository.parse(
+        plan[ManifestKey.DEFAULT_REPOSITORY.key].upper()
+    )
+    PlanValidator(plan, notes_repository=notes_repository).validate()

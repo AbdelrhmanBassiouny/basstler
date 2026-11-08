@@ -6,9 +6,10 @@ against.
 from __future__ import annotations
 
 import pytest
+import yaml
 
 from basstler.locations import PluginLocation
-from basstler.plan.model import PlanDocument
+from basstler.plan.model import PlanDocument, PlanManifest
 
 from ...scratch_repository import ScratchRepository
 from .bootstrap_scenario import (
@@ -46,7 +47,9 @@ def repository_publishing(
             ),
         }
     )
-    scratch_repository.resolve_notes_remote_to()
+    scratch_repository.serve_notes_remote_as(
+        PlanManifest(yaml.safe_load(manifest)).default_repository
+    )
     scratch_repository.add_work_remote()
     return scratch_repository
 

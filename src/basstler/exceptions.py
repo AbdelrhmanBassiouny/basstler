@@ -15,6 +15,7 @@ from typing import Any
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.locations import BasstlerVariable, ClaudeCodeVariable, PluginLocation
+from basstler.repository import Repository
 
 
 class DataclassException(Exception, ABC):
@@ -438,6 +439,68 @@ class UnknownWave(ValidationProblem):
 
 
 @dataclass
+class PlanInAnotherRepository(ValidationProblem):
+    """
+    The plan is saved to the notes of a repository other than the one its work is for.
+    """
+
+    plan_identifier: Any
+    """
+    The plan's id.
+    """
+
+    default_repository: Repository
+    """
+    The repository the plan's work is for, its ``default_repository``.
+    """
+
+    notes_repository: Repository
+    """
+    The repository whose notes branch the plan was to be saved to.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"plan {self.plan_identifier!r} is for {self.default_repository} but was "
+            f"to be saved to the notes of {self.notes_repository}"
+        )
+
+    def suggest_correction(self) -> str:
+        """
+        Unlike :meth:`ValidationProblem.suggest_correction`, names the checkout to save
+        from.
+        """
+        return (
+            f"Save the plan from a checkout of {self.default_repository}, so it lives "
+            "in that repository's notes."
+        )
+
+
+@dataclass
+class NotesRemoteNamesNoRepository(ValidationProblem):
+    """
+    The notes remote the plan is saved to names no ``owner/name``, so the repository it
+    is for cannot be compared against it.
+    """
+
+    notes_remote_url: str
+    """
+    The URL of the notes remote, as configured.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"the notes remote {self.notes_remote_url!r} names no owner/name repository"
+        )
+
+    def suggest_correction(self) -> str:
+        """
+        Unlike :meth:`ValidationProblem.suggest_correction`, names the remote to set.
+        """
+        return "Set the notes remote to the GitHub URL of the plan's repository."
+
+
+@dataclass
 class DependencyCycle(ValidationProblem):
     """
     A ``depends_on`` chain loops back on itself.
@@ -811,3 +874,32 @@ class MissingBudgetFunction(DataclassException, LookupError):
 
     def suggest_correction(self) -> str:
         return f"define {self.function}() returning its ActionsBudget"
+
+
+@dataclass
+class DuplicateKeyError(DataclassException, TypeError):
+    """
+    Raised when two fields of a model read the same key of the object it mirrors.
+    """
+
+    model: str
+    """
+    The model's name.
+    """
+
+    key: str
+    """
+    The key both fields read.
+    """
+
+    fields: tuple[str, str]
+    """
+    The two fields reading it.
+    """
+
+    def error_message(self) -> str:
+        first, second = self.fields
+        return f"{self.model}.{first} and {self.model}.{second} both read {self.key!r}"
+
+    def suggest_correction(self) -> str:
+        return "Give one of the fields the key it should read instead as its alias."

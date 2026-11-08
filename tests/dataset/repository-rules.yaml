@@ -1,0 +1,5 @@
+rules:
+- id: reliable
+  text: A failure is reported where the user sees it, never silent.
+- id: deterministic
+  text: The same inputs give the same result.

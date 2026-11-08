@@ -9,7 +9,7 @@ hold only what a future session needs to act - see "Size limits" below.
 This document lives on `main`, alongside the tooling that reads it — it is
 generic, plan-agnostic reference material, so every clone has it with no
 setup. The **plan data it describes** is the opposite: it is never merged
-into `main`, living only on the personal-notes branch (`claude/personal-notes`
+into `main`, living only on the personal-notes branch (`${NOTES_BRANCH}`, `claude/personal-notes`
 by default — see [`resolve-personal-notes-config.sh`](../../hooks/resolve-personal-notes-config.sh)
 for how that's resolved), exactly like the personal notes and `pr-progress/*.md`.
 
@@ -46,6 +46,7 @@ title: "Human-readable title"
 description: >
   One short paragraph.
 default_repository: <owner>/<repo>   # used by every item unless it sets its own `repository`
+                                     # and the repository whose notes hold the plan
                                        # (roadmap.md is a fixed sibling filename, not configurable)
 tracking_issue: <int, optional> # see "Proposing structural changes" below
 

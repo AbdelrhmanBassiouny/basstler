@@ -246,7 +246,7 @@ class CodeStyleRules(Section):
     )
 
     USE_DATACLASSES = (
-        "Use dataclasses: pydantic dataclasses for data parsed from outside the "
+        "Use dataclasses: a `ValidatedJSONModel` for data parsed from outside the "
         "program (an API response, a configuration file, a command's input), plain "
         "dataclasses everywhere else"
     )
@@ -419,6 +419,12 @@ class DesignPrinciplesRules(Section):
         "SOLID and the domain's semantics"
     )
 
+    ASSOCIATE_OR_SUBCLASS_FIRST = (
+        "Before writing a new class, look for an existing class it can hold as a "
+        "field or subclass, and use it; when related classes share fields or "
+        "behaviour, give them a common base"
+    )
+
 
 class MethodsRules(Section):
     """
@@ -561,10 +567,28 @@ class StructuredDataRules(Section):
     )
 
     FIXED_NAMES_AS_STRING_ENUMS = (
-        "A string that names a fixed thing - a payload key, a state, a label, a "
-        "filename, an environment variable, a command flag, a status - is a "
-        "`StrEnum` member. A value spelled in two places has no single source to "
-        "rename, and nothing fails when the two drift apart"
+        "A string that names a fixed thing - a state, a label, a filename, an "
+        "environment variable, a command flag, a status - is a `StrEnum` member. A "
+        "value spelled in two places has no single source to rename, and nothing "
+        "fails when the two drift apart"
+    )
+
+    PAYLOAD_KEYS_ONLY_IN_THE_MODEL = (
+        "A payload is a dataclass, and its keys are spelled only inside that "
+        "dataclass: as its field names where they match the payload, otherwise "
+        "as a field's alias or inside the method that parses or writes it. Never "
+        "declare an enum of payload keys, or of the values a payload tags its "
+        "shapes with, that nothing beyond the parser reads, and never declare one "
+        "key in two places"
+    )
+
+    ONE_MODEL_PER_PAYLOAD_SHAPE = (
+        "When the same thing arrives in several shapes - a check run and a commit "
+        "status, a GraphQL node and its REST resource - each shape is a model of "
+        "its own subclassing a common base that declares the shared fields, and "
+        'the payload\'s tag (`kind: Annotated[Literal["CheckRun"], '
+        'Field(alias="__typename")]`) or the endpoint picks the model. Never one '
+        "model listing every shape's keys as alias choices"
     )
 
     TYPED_ENUM_VALUES = (
@@ -580,9 +604,12 @@ class StructuredDataRules(Section):
 
     PARSE_EXTERNAL_DATA_AT_THE_BOUNDARY = (
         "Data whose shape someone else controls - an API response, a configuration "
-        "file - is parsed into pydantic dataclasses at the boundary, so it is "
+        "file - is parsed at the boundary into subclasses of "
+        "`basstler.json_model.ValidatedJSONModel`, so it is "
         "validated once and the field names and the access path into the payload "
-        "are written once"
+        "are written once. A subclass is a frozen pydantic dataclass already: give "
+        "it no dataclass decorator, and pass the pydantic settings it needs as the "
+        "class keyword `config`"
     )
 
     NO_POSITIONAL_TUPLES = (

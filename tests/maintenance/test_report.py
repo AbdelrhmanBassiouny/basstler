@@ -433,8 +433,8 @@ def test_a_non_zero_status_says_what_it_means_on_the_way_out(
 
     result = run_maintenance(fork_checkout, RestackCommand())
 
-    assert result.returncode == StackExitCode.BOARD_UNAVAILABLE
-    assert "board-unavailable" in result.stderr
+    assert result.returncode == StackExitCode.CREDENTIAL_UNAVAILABLE
+    assert StackExitCode.CREDENTIAL_UNAVAILABLE.name_for_a_caller in result.stderr
 
 
 def test_a_clean_run_says_nothing_about_its_status(fork_checkout: ForkCheckout):

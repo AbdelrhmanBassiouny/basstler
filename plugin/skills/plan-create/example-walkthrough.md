@@ -46,7 +46,7 @@ this need multiple tracks? waves?), drafts a schema-conformant
 one — optionally creates a **tracking issue** as a shared mailbox for later
 structural changes (skipped in this example, since it's small enough for one
 session to own end to end). Finally it pushes both files to the
-`claude/personal-notes` branch; that push builds the plan's page on the plan site.
+personal-notes branch (`${NOTES_BRANCH}`); that push builds the plan's page on the plan site.
 
 ## 3. The resulting plan.yaml and roadmap.md
 

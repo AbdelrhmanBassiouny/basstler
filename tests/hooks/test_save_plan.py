@@ -16,6 +16,7 @@ import pytest
 import yaml
 
 import basstler
+from basstler.exceptions import PlanInAnotherRepository
 from basstler.exit_codes import ManifestToolsExitCode
 from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan.item_bootstrap.vocabulary import PlanSavingOption
@@ -23,16 +24,23 @@ from basstler.plan.merge import PlanVersion
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ManifestKey, PlanManifest
 from basstler.plan_site import build_start
+from basstler.repository import Repository
 from basstler.plan_site.hub import HubFileKey, PlanHub, SiteAddress
 from basstler.shell_configuration import ShellConfigurationFunction
 
 from ..constants.notes import ScratchBranch
 from ..constants.paths import DatasetLocation, PersonalNotesPath
 from ..constants.site import SiteRepository, SiteSampleText
-from ..fixture_plans import FixturePlanId, ForeignItemId, foreign_reference
+from ..fixture_plans import (
+    FixturePlanId,
+    ForeignItemId,
+    dataset_plan_repository,
+    foreign_reference,
+)
 from ..plan.concurrent_edits import (
     FIRST_ITEM,
     PLAN_IDENTIFIER,
+    PLAN_REPOSITORY,
     SECOND_ITEM,
     blocked,
     deferred,
@@ -92,7 +100,7 @@ def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     scratch_repository.publish_notes_branch(
         {ProjectLocation.PERSONAL_NOTES / "placeholder.md": "notes\n"}
     )
-    scratch_repository.resolve_notes_remote_to()
+    scratch_repository.serve_notes_remote_as(dataset_plan_repository())
     return scratch_repository
 
 
@@ -199,6 +207,90 @@ def test_refuses_a_manifest_the_plan_site_would_reject(
     )
     assert not (
         verify_checkout / ProjectLocation.PLANS / DatasetPlan.IDENTIFIER
+    ).exists()
+
+
+def save_through_notes_remote(
+    repository: ScratchRepository, notes_repository: Repository
+) -> subprocess.CompletedProcess[str]:
+    """
+    Save the dataset plan to the notes branch of *notes_repository*, served by the
+    scratch notes remote.
+
+    :param repository: A fixture-built scratch repository.
+    :param notes_repository: The repository the notes remote names.
+    :return: The finished save-plan.sh.
+    """
+    repository.serve_notes_remote_as(notes_repository)
+    return run_save_plan(
+        repository,
+        DatasetPlan.IDENTIFIER,
+        PlanSavingOption.MANIFEST,
+        str(DatasetLocation.PLAN.value),
+        PlanSavingOption.ROADMAP,
+        str(DatasetLocation.ROADMAP.value),
+    )
+
+
+def test_refuses_a_plan_for_another_repository(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    A plan lives in the notes of the repository its work is for, so a save to any
+    other repository's notes is refused before anything is pushed.
+    """
+    notes_repository = Repository("another-owner", "another-repository")
+
+    result = save_through_notes_remote(save_plan_repository, notes_repository)
+
+    assert result.returncode == 1
+    assert (
+        PlanInAnotherRepository(
+            DatasetPlan.IDENTIFIER.value, dataset_plan_repository(), notes_repository
+        ).error_message()
+        in result.stderr
+    )
+    assert not saved_plan_directory(
+        save_plan_repository, DatasetPlan.IDENTIFIER
+    ).exists()
+
+
+def test_refuses_a_notes_remote_naming_no_repository(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    A notes remote that is a bare path names no repository to compare the plan against,
+    so nothing is saved.
+    """
+    save_plan_repository.resolve_notes_remote_to()
+
+    result = run_save_plan(
+        save_plan_repository,
+        DatasetPlan.IDENTIFIER,
+        PlanSavingOption.MANIFEST,
+        str(DatasetLocation.PLAN.value),
+        PlanSavingOption.ROADMAP,
+        str(DatasetLocation.ROADMAP.value),
+    )
+
+    assert result.returncode == 1
+    assert not saved_plan_directory(
+        save_plan_repository, DatasetPlan.IDENTIFIER
+    ).exists()
+
+
+def test_saves_a_plan_to_its_own_repositorys_notes(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    The plan's own repository's notes take the save.
+    """
+    result = save_through_notes_remote(save_plan_repository, dataset_plan_repository())
+
+    assert result.returncode == 0, result.stderr
+    assert (
+        saved_plan_directory(save_plan_repository, DatasetPlan.IDENTIFIER)
+        / PlanDocument.MANIFEST
     ).exists()
 
 
@@ -315,7 +407,7 @@ def test_saves_the_manifest_and_roadmap_extracted_from_claude_local_md_markers(
     result = run_save_plan(save_plan_repository, DatasetPlan.IDENTIFIER)
     assert result.returncode == 0, result.stderr
     assert f"Saved plan '{DatasetPlan.IDENTIFIER}'" in result.stdout
-    assert str(save_plan_repository.notes_remote_path) in result.stdout
+    assert dataset_plan_repository().clone_url in result.stdout
 
     verify_checkout = save_plan_repository.clone_notes_branch(
         save_plan_repository.project_root.parent / "verify-checkout"
@@ -543,13 +635,15 @@ def save_arguments(
     repository: ScratchRepository, version: PlanVersion, *options: str
 ) -> tuple[str, ...]:
     """
-    Write *version* of the fixture plan to files for save-plan.sh to read.
+    Write *version* of the fixture plan to files for save-plan.sh to read, with the
+    notes remote naming the repository the plan is for.
 
     :param repository: A fixture-built scratch repository.
     :param version: The plan as the session wrote it.
     :param options: Further options to pass.
     :return: The arguments that save it.
     """
+    repository.serve_notes_remote_as(PLAN_REPOSITORY)
     directory = repository.project_root / "session-plan"
     version.write(directory)
     return (

@@ -40,11 +40,8 @@ from basstler.upstream_reviews.review_models import (
     Review,
     ReviewThread,
 )
-from basstler.upstream_reviews.vocabulary import (
-    GraphQLDocument,
-    PullRequestState,
-    QueryVariable,
-)
+from basstler.github.states import PullRequestState
+from basstler.upstream_reviews.query_documents import GraphQLDocument, QueryVariable
 
 # %% reading
 
@@ -213,7 +210,7 @@ class UpstreamRestRoute:
             {"head": f"{owner}:{branch}", "state": "all", "per_page": self.page_size},
             safe=":",
         )
-        return f"{self.repository.api_path}/pulls?{query}"
+        return f"{self.repository.pull_requests_path}?{query}"
 
     def pull_request(self, number: int) -> str:
         """
@@ -322,7 +319,7 @@ class RestPullRequestReader(PullRequestSource):
         return UpstreamPullRequestSnapshot(
             number=pull_request.number,
             title=pull_request.title,
-            url=pull_request.url,
+            page_url=pull_request.page_url,
             reviews=self._reviews(pull_request_number),
             threads=self._threads(pull_request_number),
             checks=self._checks(pull_request.head.sha),
@@ -369,12 +366,12 @@ class RestPullRequestReader(PullRequestSource):
         :return: The checks, or ``None`` when nothing has reported.
         """
         runs = [
-            run.result
+            run
             for page in self.client.get_pages(self.route.check_runs(sha))
             for run in RestCheckRunPage.from_json(page).check_runs
         ]
         statuses = [
-            status.result
+            status
             for page in self.client.get_pages(self.route.commit_status(sha))
             for status in RestCombinedStatusPage.from_json(page).statuses
         ]
@@ -401,7 +398,7 @@ class ReadSource(StrEnum):
         """
         :return: The API the place this runs in can reach.
         """
-        if ClaudeCodeVariable.REMOTE.read() == "true":
+        if ClaudeCodeVariable.REMOTE.is_true():
             return cls.REST
         return cls.GRAPHQL
 

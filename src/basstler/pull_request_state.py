@@ -22,7 +22,7 @@ from basstler.maintenance.board import PullRequestField, PullRequestHead
 from basstler.maintenance.board import PullRequestRecord as PullRequestAPIRecord
 from basstler.maintenance.description import PullRequestDescription
 from basstler.repository import Repository
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
 
 
 # %% classified state
@@ -173,7 +173,7 @@ class PullRequestRecord:
     The logins of the accounts the pull request is assigned to.
     """
 
-    check_state: RollupState | None = None
+    check_state: CombinedCheckState | None = None
     """
     The verdict over the checks reported on :attr:`head_commit`, ``None`` while they
     were not read.

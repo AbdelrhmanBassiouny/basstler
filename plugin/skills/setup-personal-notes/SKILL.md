@@ -224,11 +224,15 @@ the upstream from the session instead.
 
 ## 8. `plan_site` — publish this repository's plans on the user's plan site
 
-Unless the row is `ok`, which it is only once every repository on the site stores
+Unless the row is `ok`, which it is only once this clone's own repository stores
 `PLAN_SITE_TOKEN` and its notes branch's latest dispatch run succeeded. Where the
 credential may not read secrets, the row says so and judges by the runs alone.
-Pass on what the row says about each repository: whether it stores the token,
-how many of its dispatch runs failed, and the command it gives to store the token.
+Pass on what the row says: whether the repository stores the token, how many of its
+dispatch runs failed, and the command it gives to store the token.
+
+Every other repository on the site has a `plan_site_repository` row of its own,
+always informational: mention one that stores no token, failed its latest run or
+could not be read, but never judge the clone by it nor run step 8 for it.
 
 The plan site builds in a repository the user owns, never in the project, and
 which one is the user's to choose. When the notes branch already records one,
@@ -255,7 +259,8 @@ build: the notes branch's dispatch workflow, on every push to the notes branch,
 and the default branch's merge workflow, on every pull request in this
 repository opened, reopened, marked ready, turned back into a draft, merged or
 closed. Plan pages also read every pull request's state live in the browser. A fork gets no merge workflow, so its default branch stays as its
-upstream's; a default branch that refuses the push gets it on
+upstream's. The merge workflow never goes onto the default branch directly, so it
+passes the repository's checks like any other change: it goes on
 `basstler/plan-site-merge`, with a pull request opened for it and a step to
 merge that pull request; when GitHub refuses to open it, the step says why and
 gives the line that opens it.

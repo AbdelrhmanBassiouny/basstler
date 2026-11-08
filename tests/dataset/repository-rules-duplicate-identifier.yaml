@@ -1,0 +1,5 @@
+rules:
+- id: reliable
+  text: A failure is reported where the user sees it, never silent.
+- id: reliable
+  text: Said twice.

@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from pathlib import Path
 
 
 class GitHubAddress(StrEnum):
@@ -183,12 +184,62 @@ class Repository:
         """
         return f"repos/{self.full_name}"
 
+    @property
+    def issues_path(self) -> str:
+        """
+        The REST path of the repository's issues, which lists and opens them.
+        """
+        return f"{self.api_path}/issues"
+
+    def issue_path(self, number: int) -> str:
+        """
+        :param number: The issue's number.
+        :return: The REST path of that issue.
+        """
+        return f"{self.issues_path}/{number}"
+
+    def issue_labels_path(self, number: int) -> str:
+        """
+        :param number: The issue's or pull request's number.
+        :return: The REST path that sets that issue's labels.
+        """
+        return f"{self.issue_path(number)}/labels"
+
+    def issue_comments_path(self, number: int) -> str:
+        """
+        :param number: The issue's number.
+        :return: The REST path that lists and posts that issue's comments.
+        """
+        return f"{self.issue_path(number)}/comments"
+
+    @property
+    def labels_path(self) -> str:
+        """
+        The REST path of the labels defined on the repository, which lists and creates
+        them.
+        """
+        return f"{self.api_path}/labels"
+
+    @property
+    def pull_requests_path(self) -> str:
+        """
+        The REST path of the repository's pull requests, which lists and opens them.
+        """
+        return f"{self.api_path}/pulls"
+
     def pull_request_path(self, number: int) -> str:
         """
         :param number: The pull request's number.
         :return: The REST path of that pull request.
         """
-        return f"{self.api_path}/pulls/{number}"
+        return f"{self.pull_requests_path}/{number}"
+
+    def workflow_run_path(self, run: int) -> str:
+        """
+        :param run: The Actions workflow run's own number.
+        :return: The REST path of that run.
+        """
+        return f"{self.api_path}/actions/runs/{run}"
 
     def job_log_path(self, job: int) -> str:
         """
@@ -196,6 +247,13 @@ class Repository:
         :return: The REST path of that job's whole recorded log.
         """
         return f"{self.api_path}/actions/jobs/{job}/logs"
+
+    def workflow_dispatch_path(self, workflow: Path) -> str:
+        """
+        :param workflow: The workflow's file in the repository.
+        :return: The REST path that starts a run of that workflow.
+        """
+        return f"{self.api_path}/actions/workflows/{workflow.name}/dispatches"
 
     def git_requirement(self, distribution: str, reference: str) -> str:
         """

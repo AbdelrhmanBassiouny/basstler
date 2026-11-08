@@ -96,6 +96,18 @@
       <span class="stat"><strong {{ live_state_attribute.STATUS_COUNT }}="{{ status.value }}">{{ status_counts[status] }}</strong>{{ status.value | capitalize }}</span>
       {% endfor %}
     </div>
+    {% if repository_rules %}
+    <details class="roadmap">
+      <summary>Repository rules</summary>
+      <div class="roadmap-body">
+        <ul>
+        {% for rule in repository_rules %}
+          <li id="rule-{{ rule.identifier }}">{{ rule.text }}</li>
+        {% endfor %}
+        </ul>
+      </div>
+    </details>
+    {% endif %}
     {% if roadmap_html %}
     <details class="roadmap">
       <summary>Standing rules (roadmap.md)</summary>

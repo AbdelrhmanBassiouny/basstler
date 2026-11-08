@@ -13,8 +13,8 @@ import yaml
 import basstler.plan.item_bootstrap
 from basstler.plan.item_bootstrap.exceptions import PullRequestRefusedError
 from basstler.plan.item_bootstrap.manifest_text import ManifestText
+from basstler.github.pull_request import NewPullRequest
 from basstler.plan.item_bootstrap.opening import (
-    NewPullRequest,
     PullRequestOpener,
     WorkOpenRequest,
 )
