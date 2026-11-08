@@ -676,7 +676,7 @@ BASSTLER_INSTALLED_UV="${BASSTLER_UV_DIRECTORY}/bin/uv"
 BASSTLER_REPOSITORY_URL="${BASSTLER_REPOSITORY_URL:-https://github.com/KAOS-repositories/basstler}"
 # PLUGIN_MANIFEST: the plugin's manifest, which names no version: a release is
 # only a tag on its merge commit, and the marketplace serves the plugin from the
-# release branch at that tag, with nothing committed after it to miss.
+# plugin release branch at that tag, with nothing committed after it to miss.
 PLUGIN_MANIFEST="${PLUGIN_ROOT}/.claude-plugin/plugin.json"
 # BASSTLER_RELEASE_FILE: the latest release tag last read from
 # BASSTLER_REPOSITORY_URL - the one the package is installed at, read once per

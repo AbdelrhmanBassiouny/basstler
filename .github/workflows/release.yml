@@ -6,8 +6,9 @@ name: Release
 # release:major. A commit whose tests fail is never tagged, so installs stay on the latest
 # release that passed; the next commit that passes releases everything merged since.
 #
-# The same push moves the release branch to the tag. The marketplace serves the plugin
-# from that branch, so a synced plugin and the package it installs are one release.
+# The same push moves the release branch to the tag, and the plugin release branch to the
+# tag's plugin directory alone. The marketplace serves the plugin from that branch, so a
+# synced plugin and the package it installs are one release.
 
 on:
   workflow_run:
@@ -24,8 +25,11 @@ permissions:
   pull-requests: read
 
 env:
-  # The branch the marketplace serves the plugin from, always at the latest release.
+  # The branch always at the latest release.
   RELEASE_BRANCH: release
+  # The branch the marketplace serves the plugin from: the latest release's plugin
+  # directory at its root, since claude.ai syncs no plugin from a subdirectory.
+  PLUGIN_RELEASE_BRANCH: plugin-release
 
 jobs:
   release:
@@ -76,9 +80,11 @@ jobs:
             exit 0
           fi
           git tag "${tag}"
+          plugin="$(git subtree split --quiet --prefix=plugin HEAD)"
           # One atomic push: the plugin never syncs a release the tag does not name yet,
-          # and a release behind the branch moves neither.
-          git push --atomic --quiet origin "refs/tags/${tag}" "HEAD:refs/heads/${RELEASE_BRANCH}"
+          # and a release behind the branches moves none of them.
+          git push --atomic --quiet origin "refs/tags/${tag}" \
+            "HEAD:refs/heads/${RELEASE_BRANCH}" "${plugin}:refs/heads/${PLUGIN_RELEASE_BRANCH}"
           echo "Released ${tag} at $(git rev-parse HEAD)." >> "${GITHUB_STEP_SUMMARY}"
           echo "tag=${tag}" >> "${GITHUB_OUTPUT}"
 
