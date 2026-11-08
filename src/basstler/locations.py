@@ -323,6 +323,29 @@ class PluginLocation(PathEnumeration):
         return f"${BasstlerVariable.PLUGIN_ROOT}/{self}"
 
 
+class BasstlerRepositoryLocation(PathEnumeration):
+    """
+    The directories of basstler's own repository a release reads, relative to its root.
+    """
+
+    PLUGIN = Path("plugin")
+    """
+    The Claude Code plugin.
+    """
+
+    PLUGIN_MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
+    """
+    The plugin's manifest: its name, description and, once released, version.
+    """
+
+    @property
+    def path_in_plugin(self) -> Path:
+        """
+        :return: This file's path from the plugin's root, as the released plugin holds it.
+        """
+        return self.relative_to(BasstlerRepositoryLocation.PLUGIN)
+
+
 class PluginSkillLocation(PathEnumeration):
     """
     The files of the plugin's skills this package reads, relative to the plugin's root.

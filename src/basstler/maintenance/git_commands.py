@@ -265,7 +265,11 @@ class GitCommandRunner:
         return shown.output if shown.succeeded else None
 
     def commit_files(
-        self, parent: str | None, files: Mapping[str, str], message: str
+        self,
+        parent: str | None,
+        files: Mapping[str, str],
+        message: str,
+        merged_parents: tuple[str, ...] = (),
     ) -> str:
         """
         Commit files on top of a commit without touching the working tree or the index,
@@ -274,6 +278,8 @@ class GitCommandRunner:
         :param parent: The commit to build on, ``None`` for a commit with no parent.
         :param files: What to write, by path, each without its final newline.
         :param message: The commit message.
+        :param merged_parents: Further parents after *parent*, whose files the commit
+            does not keep.
         :return: The new commit.
         """
         with tempfile.TemporaryDirectory() as scratch:
@@ -293,7 +299,12 @@ class GitCommandRunner:
                     environment=index,
                 )
             tree = self.run("write-tree", environment=index)
-        parents = ["-p", parent] if parent else []
+        parents = [
+            argument
+            for commit in (parent, *merged_parents)
+            if commit
+            for argument in ("-p", commit)
+        ]
         return self.run("commit-tree", tree, *parents, "-m", message)
 
     def parents_of(self, commit: str) -> tuple[str, ...]:

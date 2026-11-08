@@ -19,7 +19,7 @@ import yaml
 
 from basstler.branch import Branch
 from basstler.environment import GitHubActionsVariable
-from basstler.locations import PathEnumeration
+from basstler.locations import BasstlerRepositoryLocation, PathEnumeration
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.upstream_reviews.action.branch import BasstlerSource
 from basstler.workflows import ActivityType, Trigger, TriggerEvent, WorkflowKey
@@ -137,6 +137,11 @@ class ReleaseSampleFile(PathEnumeration):
     Documentation, which no install runs but which still makes a new release.
     """
 
+    PLUGIN_MANIFEST = BasstlerRepositoryLocation.PLUGIN_MANIFEST.value
+    """
+    The scratch checkout's plugin manifest, a copy of this repository's.
+    """
+
 
 CHANGE = "changed = True\n"
 """
@@ -190,6 +195,10 @@ def released_checkout(tmp_path) -> ScratchRepository:
     repository = ScratchRepository.create(tmp_path)
     for path in ReleaseSampleFile:
         repository.write(path, "")
+    repository.write(
+        ReleaseSampleFile.PLUGIN_MANIFEST,
+        RepositoryLocation.PLUGIN_MANIFEST.read_text(),
+    )
     repository.commit_everything("Release")
     repository.git.run("tag", version(ReleaseSampleVersion.RELEASED).tag)
     return repository
@@ -643,14 +652,15 @@ class PublishedCheckout:
         """
         return self.runner.run("ls-remote", "origin", reference).split("\t", 1)[0]
 
-    def merge(self) -> str:
+    def merge(self, changed: Path = ReleaseSampleFile.PACKAGE_MODULE) -> str:
         """
         Push a change to the remote's ``main``, and check it out in the runner as the
         workflow's checkout does.
 
+        :param changed: The file the change writes to.
         :return: The merged commit.
         """
-        change_and_commit(self.repository, ReleaseSampleFile.PACKAGE_MODULE)
+        change_and_commit(self.repository, changed)
         self.repository.git.run("push", "--quiet", "origin", "HEAD:main")
         self.runner.run("fetch", "--quiet", "--tags", "origin")
         self.runner.run("checkout", "--quiet", "--detach", "origin/main")
@@ -711,6 +721,10 @@ def test_the_release_step_tags_the_merge_commit_and_moves_the_release_branch_to_
 def test_the_release_step_moves_the_plugin_release_branch_to_the_released_plugin(
     published_checkout, release_step_files
 ):
+    """
+    The branch holds the merge commit's plugin directory at its root, every file as
+    merged but the manifest.
+    """
     merge_commit = published_checkout.merge()
 
     result = run_release_step(
@@ -721,11 +735,76 @@ def test_the_release_step_moves_the_plugin_release_branch_to_the_released_plugin
     plugin_commit = published_checkout.remote_commit(
         Branch(plugin_release_branch()).reference
     )
-    plugin_directory = RepositoryLocation.PLUGIN.relative_to(RepositoryLocation.ROOT)
-    assert published_checkout.runner.run(
-        "rev-parse", f"{plugin_commit}^{{tree}}"
-    ) == published_checkout.runner.run(
-        "rev-parse", f"{merge_commit}:{plugin_directory.as_posix()}"
+    changed = published_checkout.runner.run(
+        "diff",
+        "--name-only",
+        f"{merge_commit}:{BasstlerRepositoryLocation.PLUGIN}",
+        plugin_commit,
+    )
+    assert (
+        changed == BasstlerRepositoryLocation.PLUGIN_MANIFEST.path_in_plugin.as_posix()
+    )
+
+
+def released_manifest(checkout: PublishedCheckout, commit: str) -> dict[str, Any]:
+    """
+    :param checkout: The published checkout.
+    :param commit: A commit of the plugin release branch.
+    :return: The plugin manifest it holds.
+    """
+    return json.loads(
+        checkout.runner.file_at(
+            commit, BasstlerRepositoryLocation.PLUGIN_MANIFEST.path_in_plugin
+        )
+    )
+
+
+def test_the_released_plugin_s_manifest_names_the_release_s_version(
+    published_checkout, release_step_files
+):
+    """
+    The manifest is the merged one with the release's version added.
+    """
+    merge_commit = published_checkout.merge()
+
+    run_release_step(published_checkout.runner.working_directory, release_step_files)
+
+    plugin_commit = published_checkout.remote_commit(
+        Branch(plugin_release_branch()).reference
+    )
+    merged_manifest = json.loads(
+        published_checkout.runner.file_at(
+            merge_commit, ReleaseSampleFile.PLUGIN_MANIFEST
+        )
+    )
+    assert released_manifest(published_checkout, plugin_commit) == {
+        **merged_manifest,
+        "version": str(version(ReleaseSampleVersion.NEXT_PATCH)),
+    }
+
+
+def test_a_later_release_moves_the_plugin_release_branch_forward(
+    published_checkout, release_step_files
+):
+    """
+    The push moves the branch without forcing it, so each release's plugin commit
+    descends from the one before.
+    """
+    published_checkout.merge()
+    run_release_step(published_checkout.runner.working_directory, release_step_files)
+    branch = Branch(plugin_release_branch()).reference
+    first = published_checkout.remote_commit(branch)
+    published_checkout.merge(ReleaseSampleFile.SKILL)
+
+    result = run_release_step(
+        published_checkout.runner.working_directory, release_step_files
+    )
+
+    assert result.returncode == 0, result.stderr
+    latest = published_checkout.remote_commit(branch)
+    assert published_checkout.runner.contains(first, latest)
+    assert released_manifest(published_checkout, latest)["version"] == str(
+        version(ReleaseSampleVersion.NEXT_PATCH).bumped(VersionPart.PATCH)
     )
 
 
