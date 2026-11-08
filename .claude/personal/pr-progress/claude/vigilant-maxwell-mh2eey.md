@@ -1,11 +1,11 @@
-## Plan
-- Spell GitHub API payload keys only inside their pydantic models (first slice of payload-key-models).
+Plan
+- PR 158: GitHub API payload keys spelled only inside pydantic models.
 
-## Done
-- Models, key enums removed, PR opened (draft).
-- Review round 1 (21 threads): 9 changed and resolved at 96a7af7f; 12 answered and left open.
-- Merged main at 9fac9c74; merge-probe clean against b0e77020.
+Done
+- Validated models, aliases, RawValueReader, WebPage, RequestBody writers.
+- Review rounds 1-2 answered; main merged at c205b46c.
 
-## Next
-- Owner's answers on the open threads: writers taking body models, WorkflowRunPage into RunListing, target_url everywhere, pre-commit language: system, one dataclass import name, the __typename test input.
-- CI on 96a7af7f not yet read.
+Next
+- Owner decides: dataclass import name, vocabulary.py split, alias reasons and
+  conflicts, WorkflowRunPage fold, target_url everywhere, pre-commit system hooks.
+- 3 finished threads need resolving from a session on KAOS-repositories/basstler.
