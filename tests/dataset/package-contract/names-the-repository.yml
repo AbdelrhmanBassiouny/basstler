@@ -7,7 +7,7 @@ on:
 
 jobs:
   dispatch:
-    if: github.repository == 'AbdelrhmanBassiouny/basstler'
+    if: github.repository == 'KAOS-repositories/basstler'
     runs-on: ubuntu-latest
     steps:
       - run: gh workflow run plan-site.yml --repo AbdelrhmanBassiouny/stack-board

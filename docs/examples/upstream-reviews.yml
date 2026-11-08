@@ -31,7 +31,7 @@ permissions:
 
 jobs:
   report:
-    uses: AbdelrhmanBassiouny/basstler/.github/workflows/upstream-reviews.yml@main
+    uses: KAOS-repositories/basstler/.github/workflows/upstream-reviews.yml@main
     with:
       basstler_branch_or_tag: main
       pull_request: ${{ inputs.pull_request }}

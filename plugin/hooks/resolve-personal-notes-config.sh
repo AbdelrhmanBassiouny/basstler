@@ -673,7 +673,7 @@ BASSTLER_UV_DIRECTORY="${BASSTLER_HOME}/uv"
 BASSTLER_INSTALLED_UV="${BASSTLER_UV_DIRECTORY}/bin/uv"
 # BASSTLER_REPOSITORY_URL: where an installed plugin's package comes from, at
 # its latest release.
-BASSTLER_REPOSITORY_URL="${BASSTLER_REPOSITORY_URL:-https://github.com/AbdelrhmanBassiouny/basstler}"
+BASSTLER_REPOSITORY_URL="${BASSTLER_REPOSITORY_URL:-https://github.com/KAOS-repositories/basstler}"
 # PLUGIN_MANIFEST: the plugin's manifest, which names no version: a release is
 # only a tag on its merge commit, and the marketplace serves the plugin from the
 # release branch at that tag, with nothing committed after it to miss.

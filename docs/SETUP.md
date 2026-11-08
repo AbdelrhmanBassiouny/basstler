@@ -10,9 +10,9 @@ Details of everything below: [`hooks/README.md`](../plugin/hooks/README.md).
 basstler is a Claude Code plugin, and this repository is its marketplace.
 
 - **Cloud sessions (claude.ai):** add it under Customize > Plugins, from the marketplace
-  `AbdelrhmanBassiouny/basstler` - or have an organization Owner install it for members.
+  `KAOS-repositories/basstler` - or have an organization Owner install it for members.
   Plugins a repository names in its own settings do not load in cloud sessions.
-- **Local sessions and CI:** `/plugin marketplace add AbdelrhmanBassiouny/basstler`, then
+- **Local sessions and CI:** `/plugin marketplace add KAOS-repositories/basstler`, then
   `/plugin install basstler@basstler` - or enable it for everyone working on a project in
   its committed `.claude/settings.json` (`extraKnownMarketplaces` and `enabledPlugins`).
 
