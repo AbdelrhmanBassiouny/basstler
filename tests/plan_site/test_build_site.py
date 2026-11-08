@@ -202,7 +202,7 @@ def test_every_plan_page_shows_the_repositorys_rules(
     site: RepositorySite, tmp_path: Path
 ):
     site.build(tmp_path)
-    rules = RepositoryRules.from_text(DatasetLocation.REPOSITORY_RULES.read_text())
+    rules = RepositoryRules.from_yaml(DatasetLocation.REPOSITORY_RULES.read_text())
     for plan in PUBLISHED_PLANS:
         page = page_of(tmp_path, plan)
         assert all(html.escape(rule.text) in page for rule in rules.rules)

@@ -8,6 +8,7 @@ import os
 from dataclasses import dataclass
 from pathlib import Path, PurePosixPath
 
+from basstler.class_property import classproperty
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.personal_notes.branch import (
@@ -18,11 +19,6 @@ from basstler.personal_notes.branch import (
 )
 from basstler.plan.repository_rules import RepositoryRules
 from basstler.shell_configuration import FetchedBranchReference
-
-RULES_PATH = PurePosixPath(ProjectLocation.PLAN_RULES)
-"""
-The rules file's path, relative to the notes branch's root.
-"""
 
 
 @dataclass(frozen=True)
@@ -36,8 +32,15 @@ class RepositoryRulesStore:
     The notes branch holding the rules.
     """
 
+    @classproperty
+    def rules_path(cls) -> PurePosixPath:
+        """
+        The rules file's path, relative to the notes branch's root.
+        """
+        return PurePosixPath(ProjectLocation.PLAN_RULES)
+
     @classmethod
-    def of_project(cls, project_root: Path) -> RepositoryRulesStore:
+    def from_project_root(cls, project_root: Path) -> RepositoryRulesStore:
         """
         :param project_root: The clone whose settings say where the notes are.
         :return: The store over that clone's notes branch.
@@ -54,10 +57,10 @@ class RepositoryRulesStore:
         :return: The rules on the notes branch as last fetched; none if it holds no
             rules file.
         """
-        file = FetchedBranchReference.PERSONAL_NOTES.file_at(RULES_PATH)
+        file = FetchedBranchReference.PERSONAL_NOTES.file_at(self.rules_path)
         if not self.branch.git.attempt("cat-file", "-e", file).succeeded:
             return RepositoryRules()
-        return RepositoryRules.from_text(self.branch.git.run("show", file))
+        return RepositoryRules.from_yaml(self.branch.git.run("show", file))
 
     def read(self) -> RepositoryRules:
         """
@@ -78,5 +81,5 @@ class RepositoryRulesStore:
         :return: Whether anything was pushed.
         """
         return NotesBranchWriter(self.branch).write(
-            {RULES_PATH: rules.render()}, message
+            {self.rules_path: rules.render()}, message
         )

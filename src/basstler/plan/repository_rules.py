@@ -5,28 +5,23 @@ The rules every plan of a repository follows, kept on the repository's notes bra
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Any
+from typing import Annotated
 
 import pydantic
 import yaml
-from pydantic.dataclasses import dataclass
 
 from basstler.plan.exceptions import UnknownRepositoryRuleError
+from basstler.upstream_reviews.vocabulary import ValidatedJSONModel
 
 # %% rules
 
 
-@dataclass(
-    frozen=True,
-    kw_only=True,
-    config=pydantic.ConfigDict(validate_by_name=True, validate_by_alias=True),
-)
-class RepositoryRule:
+class RepositoryRule(ValidatedJSONModel):
     """
     One rule every plan of the repository follows.
     """
 
-    identifier: str = pydantic.Field(alias="id")
+    identifier: Annotated[str, pydantic.Field(alias="id")]
     """
     The rule's short name, unique among the repository's rules.
     """
@@ -36,15 +31,8 @@ class RepositoryRule:
     What the rule says.
     """
 
-    def to_mapping(self) -> dict[str, str]:
-        """
-        :return: The rule as the file and the brief spell it.
-        """
-        return {"id": self.identifier, "text": self.text}
 
-
-@dataclass(frozen=True)
-class RepositoryRules:
+class RepositoryRules(ValidatedJSONModel):
     """
     The rules of one repository, in the order its owner wrote them.
     """
@@ -71,14 +59,13 @@ class RepositoryRules:
         return rules
 
     @classmethod
-    def from_text(cls, text: str) -> RepositoryRules:
+    def from_yaml(cls, text: str) -> RepositoryRules:
         """
-        :param text: The rules file's content; empty when the repository has none.
-        :raises pydantic.ValidationError: If the file does not hold valid rules.
+        :param text: The rules file's YAML; empty when the repository has none.
+        :raises pydantic.ValidationError: If the YAML does not hold valid rules.
         :return: The rules it holds.
         """
-        document: dict[str, Any] = yaml.safe_load(text) or {}
-        return pydantic.TypeAdapter(cls).validate_python(document)
+        return cls.from_json(yaml.safe_load(text) or {})
 
     @classmethod
     def from_file(cls, path: Path) -> RepositoryRules:
@@ -87,7 +74,7 @@ class RepositoryRules:
         :raises pydantic.ValidationError: If the file does not hold valid rules.
         :return: The rules it holds; none if there is no such file.
         """
-        return cls.from_text(path.read_text() if path.exists() else "")
+        return cls.from_yaml(path.read_text() if path.exists() else "")
 
     @property
     def identifiers(self) -> tuple[str, ...]:
@@ -98,10 +85,10 @@ class RepositoryRules:
 
     def render(self) -> str:
         """
-        :return: The rules file's content.
+        :return: The rules file's YAML.
         """
         return yaml.safe_dump(
-            {"rules": [rule.to_mapping() for rule in self.rules]},
+            self.to_json(),
             sort_keys=False,
             allow_unicode=True,
             width=92,

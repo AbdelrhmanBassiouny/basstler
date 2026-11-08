@@ -38,7 +38,7 @@ def rules() -> RepositoryRules:
     """
     :return: The rules the dataset's file holds.
     """
-    return RepositoryRules.from_text(DatasetLocation.REPOSITORY_RULES.read_text())
+    return RepositoryRules.from_yaml(DatasetLocation.REPOSITORY_RULES.read_text())
 
 
 # %% reading
@@ -49,16 +49,16 @@ class TestReadingRules:
         assert rules.rules == [FIRST_RULE, SECOND_RULE]
 
     def test_no_file_means_no_rules(self):
-        assert RepositoryRules.from_text("") == RepositoryRules()
+        assert RepositoryRules.from_yaml("") == RepositoryRules()
 
     def test_two_rules_with_one_id_are_refused(self):
         with pytest.raises(pydantic.ValidationError):
-            RepositoryRules.from_text(
+            RepositoryRules.from_yaml(
                 DatasetLocation.REPOSITORY_RULES_DUPLICATE_IDENTIFIER.read_text()
             )
 
     def test_rendered_rules_read_back_the_same(self, rules: RepositoryRules):
-        assert RepositoryRules.from_text(rules.render()) == rules
+        assert RepositoryRules.from_yaml(rules.render()) == rules
 
 
 # %% editing

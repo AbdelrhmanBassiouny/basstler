@@ -215,7 +215,7 @@ def test_the_brief_holds_the_repositorys_rules(
 
     assert brief[ItemBriefKey.REPOSITORY_RULES] == [
         {"id": rule.identifier, "text": rule.text}
-        for rule in RepositoryRules.from_text(
+        for rule in RepositoryRules.from_yaml(
             DatasetLocation.REPOSITORY_RULES.read_text()
         ).rules
     ]

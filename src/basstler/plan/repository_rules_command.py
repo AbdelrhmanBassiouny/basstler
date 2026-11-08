@@ -51,7 +51,7 @@ def show_rules() -> RepositoryRulesExitCode:
     Print the repository's rules as the rules file holds them.
     """
     logger.info(
-        RepositoryRulesStore.of_project(Path.cwd()).read().render().rstrip("\n")
+        RepositoryRulesStore.from_project_root(Path.cwd()).read().render().rstrip("\n")
     )
     return RepositoryRulesExitCode.SUCCESS
 
@@ -64,7 +64,7 @@ def set_rule(identifier: str, text: str) -> RepositoryRulesExitCode:
     :param identifier: The rule's short name.
     :param text: What the rule says.
     """
-    store = RepositoryRulesStore.of_project(Path.cwd())
+    store = RepositoryRulesStore.from_project_root(Path.cwd())
     store.write(
         store.read().with_rule(RepositoryRule(identifier=identifier, text=text)),
         f"Set repository rule {identifier}",
@@ -79,7 +79,7 @@ def remove_rule(identifier: str) -> RepositoryRulesExitCode:
 
     :param identifier: The id of the rule to remove.
     """
-    store = RepositoryRulesStore.of_project(Path.cwd())
+    store = RepositoryRulesStore.from_project_root(Path.cwd())
     rules = store.read()
     if identifier not in rules.identifiers:
         logger.error(f"the repository has no rule {identifier!r}")

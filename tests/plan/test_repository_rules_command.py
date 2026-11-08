@@ -29,7 +29,7 @@ RULES_FILE = PurePosixPath(ProjectLocation.PLAN_RULES)
 Where the rules file sits on the notes branch.
 """
 
-STARTING_RULES = RepositoryRules.from_text(DatasetLocation.REPOSITORY_RULES.read_text())
+STARTING_RULES = RepositoryRules.from_yaml(DatasetLocation.REPOSITORY_RULES.read_text())
 """
 The rules the notes branch starts with.
 """
@@ -57,7 +57,7 @@ def published_rules(repository: ScratchRepository) -> RepositoryRules:
     """
     :return: The rules the notes remote carries now.
     """
-    return RepositoryRules.from_text(published_file(repository, RULES_FILE) or "")
+    return RepositoryRules.from_yaml(published_file(repository, RULES_FILE) or "")
 
 
 # %% editing

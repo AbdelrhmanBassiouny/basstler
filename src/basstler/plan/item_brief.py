@@ -182,7 +182,7 @@ class ItemBrief:
             item=item,
             dependencies=dependencies,
             standing_rules=Roadmap.from_text(documents.roadmap_text).entries,
-            repository_rules=RepositoryRulesStore.of_project(
+            repository_rules=RepositoryRulesStore.from_project_root(
                 project_root
             ).read_fetched(),
         )
@@ -199,7 +199,7 @@ class ItemBrief:
                     dependency.to_json() for dependency in self.dependencies
                 ],
                 ItemBriefKey.REPOSITORY_RULES.value: [
-                    rule.to_mapping() for rule in self.repository_rules.rules
+                    rule.to_json() for rule in self.repository_rules.rules
                 ],
                 ItemBriefKey.STANDING_RULES.value: self.standing_rules,
             }
