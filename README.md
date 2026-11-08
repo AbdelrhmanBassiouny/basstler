@@ -7,7 +7,8 @@ maintenance and an upstream review reader.
 The name is the German word for someone who builds things themselves, and shares its
 first letters with the surname of the person who wrote it, Bassiouny.
 
-Setting it up: [`docs/SETUP.md`](docs/SETUP.md).
+basstler is maintained in the [KAOS-repositories](https://github.com/KAOS-repositories)
+organization on GitHub. Setting it up: [`docs/SETUP.md`](docs/SETUP.md).
 
 ## What is in this repository
 
@@ -122,8 +123,11 @@ sits in this clone, and installs the clone editable.
 
 ## Licence
 
-basstler is a personal project by Abdelrhman Bassiouny (<bido.bassuny@gmail.com>), developed
-independently of any employer or institution. It is licensed under the
-[Apache License 2.0](LICENSE); see [NOTICE](NOTICE) for attribution.
+basstler was written by Abdelrhman Bassiouny (<bido.bassuny@gmail.com>), independently of any
+employer or institution, and is maintained in the
+[KAOS-repositories](https://github.com/KAOS-repositories) organization. It is licensed under
+the [Apache License 2.0](LICENSE). The few modules adapted from
+[krrood](https://github.com/cram2/cognitive_robot_abstract_machine/tree/main/krrood) keep
+krrood's licence, the LGPL-3.0; [NOTICE](NOTICE) names them.
 
 Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).
