@@ -1,9 +1,9 @@
 **Plan**
-- Failing test: a rejecting pre-commit hook in the clone; a notes write must still push
-- Commit in NotesBranchWriter.write with `-c core.hooksPath=/dev/null`
+- Failing test first, then `-c core.hooksPath=/dev/null` on the one notes commit
 
 **Done**
-- Branch, draft PR #177, item recorded
+- Draft PR #177; test (rejecting pre-commit hook) failed, now passes
+- Fix in `NotesBranchWriter.write`; ruff and format clean; no new suite failures (38 environment failures exist on main too)
 
 **Next**
-- Test, fix, ruff, full suite
+- Review; patch release (no label)
