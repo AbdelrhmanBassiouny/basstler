@@ -348,7 +348,7 @@ class NotesBranch:
         git.run("init", "--quiet")
         git.run("remote", "add", remote, repository.clone_url_under(remote_root))
         # The whole history without old file contents dates each plan; checking a file
-        # out fetches its content from the promisor remote.
+        # out downloads its content from the remote when it is needed.
         fetched = git.attempt("fetch", "--quiet", "--filter=blob:none", remote, branch)
         if not fetched.succeeded:
             logger.warning(

@@ -1,6 +1,6 @@
-var planPageLiveStates = {{ live_states | tojson }};
-var planPageDoneStatus = {{ done_status | tojson }};
-var planPageChipTones = {{ chip_tones | tojson }};
+var planPageLiveStates = {{ live_state_display.state_chips | tojson }};
+var planPageDoneStatus = {{ live_state_display.done_status | tojson }};
+var planPageChipTones = {{ live_state_display.chip_tones | tojson }};
 var planPageMinimumRecheckMilliseconds = 60000;
 var planPageRelativeTimeMilliseconds = 30000;
 var planPageLastRecheck = 0;
@@ -15,7 +15,7 @@ function planPageLiveStateOf(pullRequest) {
   var labels = (pullRequest["{{ pull_request_field.LABELS.key }}"] || []).map(function (label) {
     return typeof label === "string" ? label : label.name;
   });
-  if (pullRequest["{{ pull_request_field.MERGED_AT.key }}"] || labels.indexOf("{{ merged_label }}") !== -1) {
+  if (pullRequest["{{ pull_request_field.MERGED_AT.key }}"] || labels.indexOf("{{ github_label.MERGED }}") !== -1) {
     return "{{ live_state.MERGED.name }}";
   }
   if (pullRequest["{{ pull_request_field.STATE.key }}"] !== "{{ pull_request_state.OPEN.value }}") {

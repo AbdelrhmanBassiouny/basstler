@@ -27,6 +27,7 @@ from basstler.plan_site.cards import (
 )
 from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.item_classifier import ItemClassifier
+from basstler.plan_site.live_state_display import LiveStateDisplay
 from basstler.plan_site.hub import PlanHistory
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.plan_overview import NextSteps, PlanOverview
@@ -172,21 +173,8 @@ class PlanPage(TemplatePage):
             plan_time_attribute=PlanTimeAttribute,
             refresh_source=RefreshSource,
             live_state=LiveState,
-            chip_tones=[tone.value for tone in ChipTone],
-            live_states={
-                state.name: {
-                    "label": state.display_label,
-                    "tone": ChipTone.of_live_state(state).value,
-                }
-                for state in LiveState
-            },
-            merged_label=GitHubLabel.MERGED.value,
-            done_status={
-                "status": ItemStatus.DONE.value,
-                "label": ItemStatus.DONE.value.capitalize(),
-                "tone": ChipTone.of_status(ItemStatus.DONE).value,
-                "css_class": Item.status_css_class(ItemStatus.DONE),
-            },
+            live_state_display=LiveStateDisplay(),
+            github_label=GitHubLabel,
             history=self.history,
             built_at=self.built_at,
             pull_request_field=PullRequestField,

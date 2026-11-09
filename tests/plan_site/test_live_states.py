@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -187,15 +188,16 @@ def test_a_page_github_answered_in_full_says_it_is_live(
 ):
     site.build(tmp_path)
     draft = api_pull_request(OPEN_PULL_REQUEST, {PullRequestField.DRAFT: True})
+    opened_at = datetime(2031, 2, 3, 4, 5, 6, tzinfo=UTC)
+    browser_page.clock.set_fixed_time(opened_at)
 
     open_first_plan_page(browser_page, tmp_path, answers_with((HTTPStatus.OK, draft)))
 
     expect(browser_page.locator(f"[{PlanTimeAttribute.REFRESH_SOURCE}]")).to_have_text(
         RefreshSource.LIVE
     )
-    expect(
-        browser_page.locator(f"[{PlanTimeAttribute.REFRESHED}]")
-    ).not_to_have_attribute("datetime", site.built_at.isoformat())
+    refreshed = browser_page.locator(f"[{PlanTimeAttribute.REFRESHED}]")
+    assert datetime.fromisoformat(refreshed.get_attribute("datetime")) == opened_at
 
 
 def test_a_page_github_refused_says_it_shows_the_build(

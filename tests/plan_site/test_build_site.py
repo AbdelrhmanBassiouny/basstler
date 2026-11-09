@@ -55,7 +55,6 @@ from ..constants.paths import DatasetLocation, RecordedCommitChecks
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
 from ..recorded_pull_requests import RecordedPullRequestSource
 from ..github.recorded_client import RecordedGitHubClient
-from .test_hub import publish_notes
 
 NOTES_REPOSITORY = SiteRepository.NOTES.value
 """
@@ -322,7 +321,7 @@ def test_every_page_links_the_site_stylesheet(site: RepositorySite, tmp_path: Pa
 
 
 def test_a_plan_page_shows_the_ci_and_assignees_of_an_open_pull_request(
-    tmp_path: Path,
+    dataset_notes: NotesBranch, tmp_path: Path
 ):
     check_state = CombinedCheckState.FAILURE
     open_pull_request = PullRequestRecord(
@@ -335,8 +334,7 @@ def test_a_plan_page_shows_the_ci_and_assignees_of_an_open_pull_request(
         pull_request_source=RecordedPullRequestSource(
             records={OPEN_PULL_REQUEST: open_pull_request}
         ),
-        repository=NOTES_REPOSITORY,
-        plans_directory=DatasetLocation.SITE_PLANS.value,
+        notes=dataset_notes,
     )
     site.build(tmp_path)
     page = page_of(tmp_path, SitePlan.FIRST)
@@ -356,21 +354,13 @@ def test_build_links_the_tracking_issue_on_the_plan_page(
 
 
 @pytest.fixture
-def hub_site(pull_request_source: RecordedPullRequestSource, tmp_path: Path) -> HubSite:
+def hub_site(
+    pull_request_source: RecordedPullRequestSource, dataset_remotes: Path
+) -> HubSite:
     """
     A site whose hub lists the notes repository, published from the dataset's plans, and
     a repository with no notes branch.
     """
-    remotes = tmp_path / "remotes"
-    publish_notes(
-        remotes,
-        NOTES_REPOSITORY,
-        {
-            path.relative_to(DatasetLocation.SITE_PLANS.value): path.read_text()
-            for path in DatasetLocation.SITE_PLANS.value.rglob("*")
-            if path.is_file()
-        },
-    )
     listed = (SiteRepository.NOTES.value, SiteRepository.MISSING.value)
     hub = PlanHub(
         registry=str(NOTES_REPOSITORY),
@@ -380,7 +370,7 @@ def hub_site(pull_request_source: RecordedPullRequestSource, tmp_path: Path) -> 
         address=SiteAddress(SiteSampleText.SITE_URL),
         pull_request_source=pull_request_source,
         hub=hub,
-        remote_root=str(remotes),
+        remote_root=str(dataset_remotes),
     )
 
 
