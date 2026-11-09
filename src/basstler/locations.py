@@ -412,6 +412,13 @@ class ProjectLocation(PathEnumeration):
     Mirrors ``PLAN_HUB_PATH`` in ``resolve-personal-notes-config.sh``.
     """
 
+    PLAN_BRANCH_INDEX = PLANS / "_generated" / "branch-index.tsv"
+    """
+    The generated index naming the plan each item branch belongs to.
+
+    Mirrors ``PLAN_BRANCH_INDEX_PATH`` in ``resolve-personal-notes-config.sh``.
+    """
+
     PLAN_RULES = PLANS / "_rules.yaml"
     """
     The rules every plan of the repository follows, one entry per rule.
@@ -473,6 +480,12 @@ class WorkflowLocation(PathEnumeration):
     """
     The workflow on a notes repository's default branch that starts :attr:`PLAN_SITE`
     whenever a pull request merges.
+    """
+
+    PLAN_MERGED_ITEMS = DIRECTORY / "plan-merged-items.yml"
+    """
+    basstler's reusable workflow that records the items of a notes branch's plans whose
+    pull requests merged, which :attr:`PLAN_SITE_MERGE` calls on every merge.
     """
 
 

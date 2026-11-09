@@ -94,6 +94,11 @@ class PlanSiteJob(StrEnum):
     The dispatch workflow's job, which starts the site workflow.
     """
 
+    RECORD_MERGED_ITEMS = "record"
+    """
+    The merge workflow's job on a merge, which calls basstler's merged-items recording.
+    """
+
 
 class GitHubCommandLineOption(StrEnum):
     """
@@ -119,6 +124,23 @@ class BuildInput(StrEnum):
     REGISTRY = "registry"
     """
     The ``owner/name`` repository whose notes hold the complete hub file.
+    """
+
+
+class MergedItemsInput(StrEnum):
+    """
+    The inputs of basstler's reusable merged-items recording,
+    :attr:`WorkflowLocation.PLAN_MERGED_ITEMS`.
+    """
+
+    BRANCH_OR_TAG = BuildInput.BRANCH_OR_TAG.value
+    """
+    The basstler branch or release tag the recording runs.
+    """
+
+    NOTES_BRANCH = "notes_branch"
+    """
+    The notes branch whose plans are recorded.
     """
 
 
@@ -233,6 +255,11 @@ class WorkflowKey(StrEnum):
     The shell command a step runs.
     """
 
+    PERMISSIONS = "permissions"
+    """
+    The access a job's token is granted, by scope.
+    """
+
 
 @dataclass(frozen=True)
 class WorkflowStep(JSONModel):
@@ -290,6 +317,11 @@ class WorkflowJob(JSONModel):
     The secrets it passes to :attr:`called_workflow`, by secret.
     """
 
+    permissions: dict[str, str] = field(default_factory=dict)
+    """
+    The access its token is granted, by scope; empty when the workflow's own applies.
+    """
+
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> WorkflowJob:
         """
@@ -302,6 +334,7 @@ class WorkflowJob(JSONModel):
             data.get(WorkflowKey.INPUTS, {}),
             [WorkflowStep.from_json(step) for step in data.get(WorkflowKey.STEPS, [])],
             data.get(WorkflowKey.SECRETS, {}),
+            data.get(WorkflowKey.PERMISSIONS, {}),
         )
 
 
@@ -522,4 +555,13 @@ class MergeWorkflow(PlanSiteWorkflow):
             "pull_request_activities": [
                 activity.value for activity in self.pull_request_activities
             ],
+            "record_job": PlanSiteJob.RECORD_MERGED_ITEMS,
+            "merged_items_workflow": (
+                f"{BasstlerSource.REPOSITORY}/"
+                f"{WorkflowLocation.PLAN_MERGED_ITEMS.as_posix()}@{BasstlerSource.LATEST_RELEASE}"
+            ),
+            "merged_items_inputs": {
+                MergedItemsInput.BRANCH_OR_TAG: BasstlerSource.LATEST_RELEASE.value,
+                MergedItemsInput.NOTES_BRANCH: self.dispatch.notes_branch,
+            },
         }

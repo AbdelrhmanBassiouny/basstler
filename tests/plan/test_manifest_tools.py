@@ -151,6 +151,16 @@ def test_warns_on_stderr_when_a_duplicate_branch_is_dropped(tmp_path, capsys):
     )
 
 
+def test_indexes_a_branch_once_when_items_of_one_plan_repeat_it(tmp_path, capsys):
+    """
+    Repeats within one plan leave no doubt which plan the branch belongs to.
+    """
+    plans_directory = tmp_path / "plans"
+    _write_plan(plans_directory, "plan-a", "  - branch: shared\n  - branch: shared\n")
+    content = BranchIndex(tmp_path, Path("plans"), PlanDocument.MANIFEST).render()
+    assert (content, capsys.readouterr().err) == ("shared\tplan-a\n", "")
+
+
 def test_raises_when_plan_id_is_coerced_to_a_boolean(tmp_path):
     plans_directory = tmp_path / "plans"
     _write_plan(plans_directory, "no", "  - branch: branch-1\n")

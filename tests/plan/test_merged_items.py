@@ -14,7 +14,8 @@ import pytest
 from basstler.exit_codes import ManifestToolsExitCode
 from basstler.github.client import HttpMethod
 from basstler.github.exceptions import GitHubUnreachableError
-from basstler.plan.merged_items import MergedItems
+from basstler.locations import ProjectLocation
+from basstler.plan.merged_items import MergedItems, MergedItemsInEveryPlan
 from basstler.plan.model import ItemStatus, PlanDocument, PlanManifest
 from basstler.pull_request_source import PullRequestSource
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
@@ -157,3 +158,87 @@ def test_a_failed_read_ends_with_its_own_status_and_changes_nothing(
 
     assert status == failure.exit_code
     assert manifest_path.read_text() == written
+
+
+# %% every plan on a notes branch
+
+
+def notes_root_holding(plan: LandedItemsPlan, root: Path) -> Path:
+    """
+    :param plan: The dataset plan.
+    :param root: An empty directory standing in for a checkout of the notes branch.
+    :return: The plan's manifest there, written with an empty branch index beside it.
+    """
+    manifest_path = (
+        root / ProjectLocation.PLANS / plan.manifest.identifier / PlanDocument.MANIFEST
+    )
+    manifest_path.parent.mkdir(parents=True)
+    plan.manifest.write(manifest_path)
+    (root / ProjectLocation.PLAN_BRANCH_INDEX).parent.mkdir(parents=True)
+    (root / ProjectLocation.PLAN_BRANCH_INDEX).write_text("")
+    return manifest_path
+
+
+def test_every_plan_drops_its_merged_items_as_a_save_would(
+    plan: LandedItemsPlan, tmp_path: Path
+):
+    manifest_path = notes_root_holding(plan, tmp_path)
+    in_progress = plan.item_with_status(ItemStatus.IN_PROGRESS)
+    source = RecordedPullRequestSource(
+        records={reference_of(plan, ItemStatus.IN_PROGRESS): MERGED}
+    )
+
+    MergedItemsInEveryPlan(source).apply(tmp_path)
+
+    assert (
+        PlanManifest.from_file(manifest_path)
+        == plan.manifest.with_items_done(
+            {in_progress.identifier}
+        ).without_landed_items()
+    )
+
+
+def test_every_plan_whose_items_all_merged_is_removed(
+    plan: LandedItemsPlan, tmp_path: Path
+):
+    manifest_path = notes_root_holding(plan, tmp_path)
+    plan.manifest.with_items_done(
+        {item.identifier for item in plan.manifest.items}
+    ).write(manifest_path)
+
+    MergedItemsInEveryPlan(RecordedPullRequestSource()).apply(tmp_path)
+
+    assert not manifest_path.parent.exists()
+
+
+def test_every_plan_regenerates_the_branch_index(plan: LandedItemsPlan, tmp_path: Path):
+    """
+    The index names the branches of the items left, and no longer the landed one's.
+    """
+    notes_root_holding(plan, tmp_path)
+    in_progress = plan.item_with_status(ItemStatus.IN_PROGRESS)
+    source = RecordedPullRequestSource(
+        records={reference_of(plan, ItemStatus.IN_PROGRESS): OPEN}
+    )
+
+    MergedItemsInEveryPlan(source).apply(tmp_path)
+
+    assert (tmp_path / ProjectLocation.PLAN_BRANCH_INDEX).read_text() == (
+        f"{in_progress.branch}\t{plan.manifest.identifier}\n"
+    )
+
+
+def test_every_plan_leaves_a_plan_it_could_not_read_as_it_was(
+    plan: LandedItemsPlan, tmp_path: Path
+):
+    manifest_path = notes_root_holding(plan, tmp_path)
+    written = manifest_path.read_text()
+    failure = GitHubUnreachableError(HttpMethod.GET, "repos/owner/repo/pulls", "down")
+    recording = MergedItemsInEveryPlan(UnreachablePullRequestSource(failure))
+
+    recording.apply(tmp_path)
+
+    assert (manifest_path.read_text(), recording.unread_plans) == (
+        written,
+        {plan.manifest.identifier: failure.exit_code},
+    )

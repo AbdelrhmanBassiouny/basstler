@@ -20,6 +20,8 @@ from typing import Any
 import pytest
 import yaml
 
+import basstler.plan.merged_items.__main__
+
 from basstler.actions_budget import ActionsBudget
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.client import (
@@ -35,13 +37,14 @@ from basstler.github.exceptions import (
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
-from basstler.locations import ProjectLocation, WorkflowLocation
+from basstler.locations import PackageLocation, ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import (
     GitCommandFailed,
     GitCommandResult,
     GitCommandRunner,
 )
 from basstler.maintenance.remote_branch import RemoteBranch
+from basstler.plan.merged_items.__main__ import MergedItemsCommand
 from basstler.plan.model import PlanDocument
 from basstler.plan_site import token_storage
 from basstler.plan_site.build_start import CodeFence
@@ -61,12 +64,14 @@ from basstler.plan_site.workflows import (
     BuildSecret,
     DispatchWorkflow,
     GitHubCommandLineOption,
+    MergedItemsInput,
     MergeWorkflow,
     PlanSiteJob,
     PlanSiteSecret,
     PlanSiteWorkflow,
     SiteWorkflow,
     WorkflowFile,
+    WorkflowJob,
     WorkflowStep,
 )
 from basstler.repository import GitHubAddress, Repository
@@ -709,6 +714,44 @@ def test_the_merge_workflow_starts_the_build_as_the_dispatch_workflow_does():
     dispatch_job = WorkflowFile.from_yaml(dispatch.text).jobs[PlanSiteJob.DISPATCH]
 
     assert merge_job.steps == dispatch_job.steps
+
+
+def test_a_merge_records_the_merged_plan_items_with_write_access_to_contents_only():
+    dispatch = a_dispatch_workflow()
+
+    job = WorkflowFile.from_yaml(MergeWorkflow(dispatch).text).jobs[
+        PlanSiteJob.RECORD_MERGED_ITEMS
+    ]
+
+    assert job == WorkflowJob(
+        condition=(
+            f"github.repository == '{dispatch.notes_repository.full_name}' "
+            "&& github.event.pull_request.merged"
+        ),
+        called_workflow=(
+            f"{BasstlerSource.REPOSITORY}/"
+            f"{WorkflowLocation.PLAN_MERGED_ITEMS.as_posix()}"
+            f"@{BasstlerSource.LATEST_RELEASE}"
+        ),
+        inputs={
+            MergedItemsInput.BRANCH_OR_TAG: BasstlerSource.LATEST_RELEASE,
+            MergedItemsInput.NOTES_BRANCH: dispatch.notes_branch,
+        },
+        permissions={"contents": "write"},
+    )
+
+
+def test_the_merged_items_workflow_records_every_plan_on_the_notes_branch_it_is_given():
+    reusable = (
+        PackageLocation.SOURCE_TREE / WorkflowLocation.PLAN_MERGED_ITEMS
+    ).read_text()
+
+    command_path = basstler.plan.merged_items.__main__.__package__
+    assert f"python -m {command_path} {MergedItemsCommand.EVERY_PLAN}" in reusable
+    assert (
+        f"{PersonalNotesSetting.BRANCH.environment_variable}: "
+        f"${{{{ inputs.{MergedItemsInput.NOTES_BRANCH} }}}}"
+    ) in reusable
 
 
 @pytest.mark.parametrize(
