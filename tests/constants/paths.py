@@ -149,6 +149,12 @@ class DatasetLocation(PathEnumeration):
     the push it runs for.
     """
 
+    REJECTING_PRE_COMMIT_HOOK = DIRECTORY / "rejecting-pre-commit.sh"
+    """
+    A pre-commit hook that rejects every commit, as a project's checks do on a branch
+    that does not carry their configuration.
+    """
+
     RECORDING_GH = DIRECTORY / "recording-gh.sh"
     """
     A ``gh`` that records each call's arguments, ``GH_TOKEN`` and standard input, and

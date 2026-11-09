@@ -5,6 +5,7 @@ branch.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import PurePosixPath
 
 import pytest
@@ -20,6 +21,7 @@ from basstler.personal_notes.branch import (
 from basstler.setup.steps import PersonalNotesSetting
 
 from ..constants.notes import ScratchBranch
+from ..constants.paths import DatasetLocation
 from ..scratch_repository import ScratchRepository, initialize_bare_repository
 
 NOTES_FILE = PurePosixPath(".claude/personal/cram-notes.md")
@@ -122,6 +124,16 @@ def test_fetching_a_missing_branch_names_every_remote_tried(notes_repository):
 
 
 def test_writing_pushes_the_file(notes_repository):
+    path = PurePosixPath(".claude/personal/pr-progress/work.md")
+    writer = NotesBranchWriter(notes_branch(notes_repository))
+    outcome = writer.write({path: "- Next: a step.\n"}, "Save progress")
+    assert outcome == NotesWriteOutcome.PUSHED
+    assert published_file(notes_repository, path) == "- Next: a step.\n"
+
+
+def test_writing_ignores_the_projects_commit_hooks(notes_repository):
+    hook = notes_repository.project_root / ".git" / "hooks" / "pre-commit"
+    shutil.copy(DatasetLocation.REJECTING_PRE_COMMIT_HOOK, hook)
     path = PurePosixPath(".claude/personal/pr-progress/work.md")
     writer = NotesBranchWriter(notes_branch(notes_repository))
     outcome = writer.write({path: "- Next: a step.\n"}, "Save progress")
