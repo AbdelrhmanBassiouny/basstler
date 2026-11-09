@@ -1,11 +1,11 @@
 schema_version: 1
 id: basstler-v3
 title: 'basstler v3: light, reliable and easy for anyone to use and extend'
-description: 'Rebuild basstler next to v2 so code does the mechanics and Claude only judges: each skill
-  runs one command that prints a brief, makes its judgment, and records the result with one command. GitHub
-  is the only state store: plans as issues, stacks from pull request bases, upstream reviews mirrored
-  by an Action. v2 areas are deleted as v3 covers them. Plans are basstler-v3-plans and stacks and reviews
-  basstler-v3-stacks.
+description: 'Rebuild basstler next to v2 so code does the mechanics and Claude only judges:
+  each skill runs one command that prints a brief, makes its judgment, and records the result
+  with one command. GitHub is the only state store: plans as issues, stacks from pull request
+  bases, upstream reviews mirrored by an Action. v2 areas are deleted as v3 covers them. Plans
+  are basstler-v3-plans and stacks and reviews basstler-v3-stacks.
 
   '
 default_repository: KAOS-repositories/basstler
@@ -25,34 +25,6 @@ tracks:
   name: Cutover
   wave: cutover
 items:
-- id: code-rules-light
-  title: Lighter code rules, enforced by ruff and pydantic dataclasses
-  branch: claude/tender-fermat-wh5gsi
-  pull_request_number: 104
-  track: foundation
-  session: https://claude.ai/code/session_018wfiv8brzdj7psZCmLEaFt
-  depends_on: []
-  status: in progress
-  notes: 'Approved 2026-11-01: pydantic dataclasses at the external-data boundary; ruff as
-    a dev dependency enforcing the mechanical rules (their prose leaves AGENTS.md); docstrings
-    only where they add meaning; plain constants for true constants; a few exception types
-    per kind of failure. Ruff also replaces black as the formatter (owner, 2026-11-01), with
-    docformatter on top. Implemented in PR 104, awaiting owner review.'
-- id: cli-launcher
-  title: One basstler CLI behind a bin/ launcher, configured through userConfig
-  branch: ccr-403b6e8b-xk6nor
-  pull_request_number: 123
-  track: foundation
-  session: https://claude.ai/code/session_018wfiv8YJg9T2FGsvbQZdWk
-  depends_on:
-  - code-rules-light
-  status: in progress
-  notes: 'Narrowed 2026-11-02 (owner): no bin/ and no userConfig here (moved to plugin-bin-probe);
-    v2 modules keep python -m until the v3 item replacing each deletes it. Delivers the cyclopts
-    basstler console script, which v3 items mount their commands on, and one owned REST client
-    behind a GitHubClient interface (reading and writing halves), merging the urllib client
-    and gh''s REST half; page=N on repos/<owner>/<repo>/ paths, stopping when Link has no
-    next page. githubkit stays a fallback behind that interface (decided 2026-11-01).'
 - id: short-skills
   title: Short skills, one per job, each with a plugin eval token and time budget
   branch: null
@@ -65,12 +37,12 @@ items:
   - mcp-server
   - basstler-packages/playbook-model
   status: not started
-  notes: 'Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode replaces
-    the auto/plan/ask execution modes. claude plugin eval cases fail CI when a skill run exceeds its token
-    or wall-time budget.
+  notes: 'Each SKILL.md at most about 2 KB; no reference documents to read. Native plan mode
+    replaces the auto/plan/ask execution modes. claude plugin eval cases fail CI when a skill
+    run exceeds its token or wall-time budget.
 
-    Eval cases replay the basstler-reliability report: wrong working directory, mergeable_state unknown,
-    plan_site failing while stack_upstream is ok.
+    Eval cases replay the basstler-reliability report: wrong working directory, mergeable_state
+    unknown, plan_site failing while stack_upstream is ok.
 
     '
 - id: mcp-server
@@ -82,12 +54,13 @@ items:
   - basstler-v3-plans/item-brief
   - basstler-packages/playbook-model
   status: not started
-  notes: 'A FastMCP server (the official mcp SDK) in the plugin''s .mcp.json, used by every client: 5
-    to 8 tools with output schemas, each returning a brief or recording a result, so a skill never composes
-    a shell command. The CLI stays for scripts and Actions. Never thin API wrappers. A decision only the
-    user makes is asked through MCP elicitation. Adds the mcp dependency (approved 2026-11-01); tool definitions
-    count against eval budgets. Made the main path 2026-11-03 (owner). Ships as the basstler-mcp distribution,
-    serving the playbook''s McpTool components.'
+  notes: 'A FastMCP server (the official mcp SDK) in the plugin''s .mcp.json, used by every
+    client: 5 to 8 tools with output schemas, each returning a brief or recording a result,
+    so a skill never composes a shell command. The CLI stays for scripts and Actions. Never
+    thin API wrappers. A decision only the user makes is asked through MCP elicitation. Adds
+    the mcp dependency (approved 2026-11-01); tool definitions count against eval budgets.
+    Made the main path 2026-11-03 (owner). Ships as the basstler-mcp distribution, serving
+    the playbook''s McpTool components.'
 - id: slim-session-start
   title: Session start only writes the session's context
   branch: null
@@ -111,7 +84,7 @@ items:
   - basstler-v3-plans/plan-site-from-issues
   - basstler-v3-stacks/maintenance-action
   status: not started
-  notes: 'Major release: removed commands, files and settings. Release notes list each removed command
-    with its replacement.
+  notes: 'Major release: removed commands, files and settings. Release notes list each removed
+    command with its replacement.
 
     '

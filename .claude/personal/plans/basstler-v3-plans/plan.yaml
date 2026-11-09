@@ -1,8 +1,8 @@
 schema_version: 1
 id: basstler-v3-plans
 title: 'basstler v3 plans: plans as GitHub issues'
-description: 'Plans move from plan.yaml on the notes branch to a tracking issue with sub-issues, read
-  by one brief command and by the plan site. Split from basstler-v3 on 2026-11-04.
+description: 'Plans move from plan.yaml on the notes branch to a tracking issue with sub-issues,
+  read by one brief command and by the plan site. Split from basstler-v3 on 2026-11-04.
 
   '
 default_repository: KAOS-repositories/basstler
@@ -22,14 +22,14 @@ items:
   pull_request_number: 144
   track: plans
   session: https://claude.ai/code/session_01JxHGiLu4ECfftbCNUxKfbH
-  depends_on:
-  - basstler-v3/cli-launcher
+  depends_on: []
   status: in progress
-  notes: REST only (no Projects v2, no GraphQL), through cli-launcher's GitHubClient and pydantic models
-    of the responses. Item scope in the issue body, dependencies as issue references in it, a pull request
-    closes its item; labels only for blocked and deferred. Also adds IssuePlanStore.adopt_issue, listing
-    an existing issue as a sub-issue without copying it, for external-issue-intake. The PR reports how
-    many endpoint models were hand-written and their line count, to judge the githubkit fallback.
+  notes: REST only (no Projects v2, no GraphQL), through cli-launcher's GitHubClient and pydantic
+    models of the responses. Item scope in the issue body, dependencies as issue references
+    in it, a pull request closes its item; labels only for blocked and deferred. Also adds
+    IssuePlanStore.adopt_issue, listing an existing issue as a sub-issue without copying it,
+    for external-issue-intake. The PR reports how many endpoint models were hand-written and
+    their line count, to judge the githubkit fallback.
 - id: item-brief
   title: One command prints an item's whole brief in at most 3 KB
   branch: null
@@ -39,13 +39,13 @@ items:
   - plan-store-issues
   - core-robustness/lean-kickoff
   status: not started
-  notes: 'Item scope, dependency readiness, its pull request''s checks, unresolved threads, the mirrored
-    upstream state and tracking-issue comments naming it, built by code so a skill never fetches or reads
-    reference docs to assemble context. Builds on core-robustness/lean-kickoff (#97): reuse its brief
-    command and skill-size test, re-sourced from issues.
+  notes: 'Item scope, dependency readiness, its pull request''s checks, unresolved threads,
+    the mirrored upstream state and tracking-issue comments naming it, built by code so a
+    skill never fetches or reads reference docs to assemble context. Builds on core-robustness/lean-kickoff
+    (#97): reuse its brief command and skill-size test, re-sourced from issues.
 
-    From basstler-reliability: conflicts come from stack merge-probe; anything unread is listed as not
-    checked with its reason, and the brief never says clean while one is.
+    From basstler-reliability: conflicts come from stack merge-probe; anything unread is listed
+    as not checked with its reason, and the brief never says clean while one is.
 
     '
 - id: plan-import
@@ -56,8 +56,8 @@ items:
   depends_on:
   - plan-store-issues
   status: not started
-  notes: 'Idempotent: rerunning finds the issues already made. Landed items are not imported. Moves this
-    plan onto the issue store too.
+  notes: 'Idempotent: rerunning finds the issues already made. Landed items are not imported.
+    Moves this plan onto the issue store too.
 
     '
 - id: plan-site-from-issues
@@ -68,14 +68,13 @@ items:
   depends_on:
   - plan-store-issues
   status: not started
-  notes: 'Point the existing Pages build at the issue store instead of plan.yaml. Retiring the Artifact
-    dashboard and its URL cache is team-basstler/artifact-path-retirement.
+  notes: 'Point the existing Pages build at the issue store instead of plan.yaml. Retiring
+    the Artifact dashboard and its URL cache is team-basstler/artifact-path-retirement.
 
     Renders the External issues plan from external-issue-intake: each card shows its ExternalIssueStage
     chip and its reporter.
 
     '
-
 - id: external-issue-intake
   title: Issues opened by external users become plan items automatically
   branch: null
@@ -84,9 +83,10 @@ items:
   depends_on:
   - plan-store-issues
   status: not started
-  notes: 'A workflow on issues opened/reopened and workflow_dispatch runs basstler issues intake (GITHUB_TOKEN,
-    issues: write). Each run adopts every open non-collaborator issue in no plan into the inbox plan labelled
-    external-issues. Stages, read from GitHub: place while in the inbox (a session runs /add-plan-item:
-    fold into an item, join a plan, or start one), then discuss, verify (confirmed label), test (draft
-    PR), implement, done. No schedule, no LLM in the Action; one concurrency group, a job-level filter
-    and a 3-minute timeout bound spam.'
+  notes: 'A workflow on issues opened/reopened and workflow_dispatch runs basstler issues
+    intake (GITHUB_TOKEN, issues: write). Each run adopts every open non-collaborator issue
+    in no plan into the inbox plan labelled external-issues. Stages, read from GitHub: place
+    while in the inbox (a session runs /add-plan-item: fold into an item, join a plan, or
+    start one), then discuss, verify (confirmed label), test (draft PR), implement, done.
+    No schedule, no LLM in the Action; one concurrency group, a job-level filter and a 3-minute
+    timeout bound spam.'
