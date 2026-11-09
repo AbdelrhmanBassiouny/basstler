@@ -368,6 +368,9 @@ PLAN_SITE_DISPATCH_CHECK_MODULE="basstler.plan_site.dispatch_check"
 # basstler.plan_site.build_start: starts the plan site's build with this session's own
 # GitHub credential, after a push to the notes branch.
 PLAN_SITE_BUILD_START_MODULE="basstler.plan_site.build_start"
+# basstler.personal_notes.access: in a cloud session, prints how to attach a notes
+# repository other than the checkout's own when the session cannot reach it.
+NOTES_ACCESS_MODULE="basstler.personal_notes.access"
 # basstler.plan.item_brief: prints one plan item's brief - the plan header, the item,
 # its dependencies' live readiness and the plan's standing rules.
 ITEM_BRIEF_MODULE="basstler.plan.item_brief"

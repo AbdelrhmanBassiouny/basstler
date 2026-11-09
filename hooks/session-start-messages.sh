@@ -13,6 +13,14 @@
 # Deliberately holds no logic. Deciding *which* message applies is
 # session-start.sh's business; this file only says how each one reads.
 
+# %% the personal notes line
+
+# notes_line_not_reached: the notes branch could not be fetched, and its
+# repository is one this session cannot reach; the next lines say how to attach it.
+notes_line_not_reached() {
+  printf 'not loaded - this session cannot reach the notes repository yet'
+}
+
 # %% the plan line
 
 # plan_line_not_applicable: for a branch no plan item could ever track - the
