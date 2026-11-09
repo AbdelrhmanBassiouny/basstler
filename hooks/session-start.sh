@@ -190,6 +190,43 @@ SCAFFOLD
   WROTE_ANYTHING=1
 fi
 
+# record_merged_items: records the items of plan $1 done whose pull requests GitHub
+# reports merged, and saves the plan so the save drops them. Sets SUMMARY_MERGED_ITEMS.
+record_merged_items() {
+  local plan_id="$1"
+  local plan_directory read_at recorded
+  plan_directory="$(mktemp -d)"
+  read_at="$(git rev-parse "${PERSONAL_NOTES_REFERENCE}")"
+  git show "${read_at}:$(plan_manifest_path "${plan_id}")" > "${plan_directory}/${PLAN_MANIFEST_FILENAME}"
+  git show "${read_at}:$(plan_roadmap_path "${plan_id}")" > "${plan_directory}/${PLAN_ROADMAP_FILENAME}" 2>/dev/null \
+    || : > "${plan_directory}/${PLAN_ROADMAP_FILENAME}"
+  if ! recorded="$("${BASSTLER_PYTHON}" -m "${PLAN_MERGED_ITEMS_MODULE}" \
+      "${plan_directory}/${PLAN_MANIFEST_FILENAME}")"; then
+    SUMMARY_MERGED_ITEMS="$(merged_items_line_not_checked)"
+  elif [ -z "${recorded}" ]; then
+    SUMMARY_MERGED_ITEMS="$(merged_items_line_none)"
+  elif bash "${SAVE_PLAN_SCRIPT}" "${plan_id}" \
+      --manifest "${plan_directory}/${PLAN_MANIFEST_FILENAME}" \
+      --roadmap "${plan_directory}/${PLAN_ROADMAP_FILENAME}" \
+      --read-at "${read_at}" >&2 \
+      && fetch_personal_notes_branch; then
+    record_plan_state_sync_stamp
+    SUMMARY_MERGED_ITEMS="$(merged_items_line_recorded \
+      "$(printf '%s\n' "${recorded}" | cut -d: -f1 | paste -sd, - | sed 's/,/, /g')")"
+  else
+    SUMMARY_MERGED_ITEMS="$(merged_items_line_save_failed)"
+  fi
+  rm -rf "${plan_directory}"
+}
+
+# The plan tracking this branch drops its merged items before its item is read.
+SUMMARY_MERGED_ITEMS="$(merged_items_line_not_applicable)"
+PLAN_ID="$(plan_id_for_branch "${CURRENT_BRANCH}" || true)"
+if [ -n "${PLAN_ID}" ] \
+    && git cat-file -e "${PERSONAL_NOTES_REFERENCE}:$(plan_manifest_path "${PLAN_ID}")" 2>/dev/null; then
+  record_merged_items "${PLAN_ID}"
+fi
+
 PLAN_ID="$(plan_id_for_branch "${CURRENT_BRANCH}" || true)"
 
 # No plan item: say which case (untrackable branch, no item here, no plans).
@@ -400,6 +437,7 @@ session-start.sh summary:
   local settings:  ${SUMMARY_SETTINGS}
   PR progress:     ${SUMMARY_PROGRESS}
   plan:            ${SUMMARY_PLAN}
+  merged items:    ${SUMMARY_MERGED_ITEMS}
   plan site:       ${SUMMARY_HUB}
   default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
