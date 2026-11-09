@@ -2,8 +2,9 @@
 - Fix #152: the plan site build reads private repositories through an optional PLAN_SITE_READ_TOKEN; publication checks every repository the build reads and says so before writing.
 
 ## Done
-- Build secret, publication check, step text, corrections and skill docs (3f859ad); review comment's four gaps answered (gap 3 is item unreadable-repository-items).
-- Resolve read at 3f859ad: CI green (ruff, pytest 3.12/3.13, Actions usage), merge probe CLEAN against main 8681585, no review threads, no new comments. No separate upstream is configured, so upstream reviews do not apply.
+- Build secret, publication check, step text, corrections, skill docs; first review's four gaps (gap 3 is unreadable-repository-items).
+- Second review (7e4f244): PlanManifest.from_yaml, Repository.settings_url, initial_branch in tests; four threads resolved. Merged main with #140 (3e6140b); pushed.
 
 ## Next
-- Owner review; PR stays draft.
+- Owner's decision on two open threads: duplicates guard (no change made), and the public site publishing private data / classic token breadth.
+- CI at 3e6140b not yet read. PR stays draft.
