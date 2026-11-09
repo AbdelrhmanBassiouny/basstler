@@ -955,6 +955,28 @@ def test_private_repositories_of_several_owners_need_a_classic_token():
     )
 
 
+def test_a_classic_token_is_asked_for_with_a_warning_that_it_can_also_write():
+    """
+    A classic token has no read-only repository scope, so the step says what it allows.
+    """
+    site = SiteRepository(Repository("an-owner", "plans"))
+    access = PrivateRepositoryAccess(
+        site, (Repository("an-owner", "notes"), WORK_REPOSITORY)
+    )
+
+    assert PrivateRepositoryAccess.classic_token_warning in access.pending.warning
+
+
+def test_a_fine_grained_token_is_asked_for_without_the_classic_token_warning():
+    """
+    Private repositories of one owner get a read-only token, which writes nothing.
+    """
+    site = SiteRepository(Repository("an-owner", "plans"))
+    access = PrivateRepositoryAccess(site, (Repository("an-owner", "notes"),))
+
+    assert PrivateRepositoryAccess.classic_token_warning not in access.pending.warning
+
+
 def test_the_read_access_step_warns_that_the_public_site_shows_those_repositories():
     """
     The token lets the build put what it reads from the private repositories on a

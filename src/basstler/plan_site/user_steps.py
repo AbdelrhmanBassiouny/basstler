@@ -11,6 +11,7 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from urllib.parse import urlencode
 
+from basstler.class_property import classproperty
 from basstler.environment import GitHubCredentialVariable
 from basstler.plan_site import token_storage
 from basstler.plan_site.build_start import CodeFence
@@ -279,6 +280,17 @@ class PrivateRepositoryAccess:
     The repositories the build reads whose visibility could not be read, with why.
     """
 
+    @classproperty
+    def classic_token_warning(cls) -> str:
+        """
+        What a classic token allows beyond what the build needs.
+        """
+        return (
+            "A classic token's repo scope has no read-only form: it can also write to "
+            "every private repository you can reach, and lasts until it expires or is "
+            "revoked. Give it an expiry and revoke it once the build no longer needs it."
+        )
+
     @property
     def holds_back_publication(self) -> bool:
         """
@@ -336,11 +348,14 @@ class PrivateRepositoryAccess:
                 + ", and under Danger Zone click Change visibility.",
             ),
             failure="; ".join(failures) or None,
-            warning=(
-                f"the plan site at {self.site.site_url} is public, so with the token "
-                f"it shows what the build reads from {names}: plan and item titles, "
-                "notes, and their pull requests' titles and state. Store it only if "
-                "that may be public."
+            warning=" ".join(
+                [
+                    f"the plan site at {self.site.site_url} is public, so with the "
+                    f"token it shows what the build reads from {names}: plan and item "
+                    "titles, notes, and their pull requests' titles and state. Store "
+                    "it only if that may be public.",
+                    *([self.classic_token_warning] if len(owners) > 1 else []),
+                ]
             ),
         )
 
