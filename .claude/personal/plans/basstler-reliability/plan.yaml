@@ -164,10 +164,11 @@ items:
 
 - id: publication-transport
   title: Plan site publication pushes over the transport the notes remote uses, and a refused push names its fix
-  branch: null
-  pull_request_number: null
-  status: not started
+  branch: claude/clever-cray-u2g5jy
+  pull_request_number: 179
+  status: in progress
   track: guards
+  session: https://claude.ai/code/session_018wfiv5ZynxeNkiyRGDcHj6
   depends_on: []
   notes: 'From #175 (ichumuh); belongs to basstler-setup-ux, which is full. publication.py pushes
     every repository over GitHubAddress.WEB, so an SSH-only machine fails with no hint. Derive
