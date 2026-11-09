@@ -81,6 +81,12 @@ class SetupCheck(StrEnum):
     Every repository on the plan site storing its token and starting the site's build.
     """
 
+    PLAN_SITE_ACCESS = "plan_site_access"
+    """
+    A cloud session reaching the plan site's repository, so a plan save can start the
+    build.
+    """
+
     GIT_IDENTITY = "git_identity"
     """
     The identity commits are authored with, against the recorded one.

@@ -344,6 +344,18 @@ class DatasetLocation(PathEnumeration):
     A module standing in for :mod:`basstler.plan_site.build_start`, printing its name.
     """
 
+    BUILD_START_NEEDS_ACCESS_STUB = STUBS / "build_start_needs_access.py"
+    """
+    A module standing in for :mod:`basstler.plan_site.build_start`, saying this session
+    cannot start the build yet.
+    """
+
+    BUILD_START_HAS_ACCESS_STUB = STUBS / "build_start_has_access.py"
+    """
+    A module standing in for :mod:`basstler.plan_site.build_start`, saying nothing: the
+    session can start the build.
+    """
+
     NOTES_ACCESS_STUB = STUBS / "notes_access_prints_its_name.py"
     """
     A module standing in for :mod:`basstler.personal_notes.access`, printing its name as

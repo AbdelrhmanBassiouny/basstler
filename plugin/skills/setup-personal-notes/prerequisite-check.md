@@ -42,6 +42,10 @@ depend on, such as whether the plan site's dispatch starts its build. Tell the u
 which row is not verified, with its detail, and carry on with the skill; the
 row is `/setup-personal-notes`'s to resolve.
 
+**A `plan_site_access` row that is `needs-setup`** is not setup's: attach
+the repository it names with `mcp__claude-code-remote__add_repo` (`access: "push"`),
+run its command, check again.
+
 **Non-zero — something is missing.** Do not start the skill's real work, and do
 not attempt the individual fixes inline: `/setup-personal-notes` exists to do
 exactly that, and duplicating a piece of it here is how the two drift apart.

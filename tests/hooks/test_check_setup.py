@@ -18,13 +18,15 @@ import pytest
 
 import basstler
 from basstler.locations import (
+    ClaudeCodeVariable,
     PackageLocation,
     PluginLocation,
     ProjectLocation,
     WorkflowLocation,
 )
+from basstler.environment import EnvironmentFlag
 from basstler.exit_codes import SetupCheckExitCode
-from basstler.plan_site import dispatch_check, publication
+from basstler.plan_site import build_start, dispatch_check, publication
 from basstler.plan_site.dispatch_check import UNVERIFIED_PREFIX
 from basstler.plan_site.hub import HubFileKey
 from basstler.setup.report import CheckResult, CheckStatus, SetupCheck, SetupReport
@@ -220,6 +222,89 @@ def test_a_dispatch_workflow_whose_runs_cannot_be_read_is_not_verified(
     assert plan_site.status == CheckStatus.UNVERIFIED
     assert plan_site.detail.startswith(UNVERIFIED_PREFIX)
     assert publication.__name__ in plan_site.detail
+
+
+def with_build_start_stub(
+    repository: ScratchRepository, stub: DatasetLocation
+) -> ScratchRepository:
+    """
+    Make the scratch repository's build start command print what a stand-in prints,
+    and record a plan site for it.
+
+    :param repository: The scratch repository, fully set up.
+    :param stub: The module whose output replaces the build start command's.
+    :return: The same repository.
+    """
+    repository.update_notes_branch_file(
+        ProjectLocation.PLAN_HUB,
+        f"{HubFileKey.SITE_URL}: https://an-owner.github.io/plans/\n",
+    )
+    package_root = Path(basstler.__file__).parent.parent
+    shutil.copy(
+        stub,
+        repository.checkout_root
+        / PackageSourceFile.SOURCE
+        / Path(build_start.__file__).relative_to(package_root),
+    )
+    return repository
+
+
+def test_a_cloud_session_that_cannot_start_the_build_needs_setup(
+    check_setup_repository: ScratchRepository,
+):
+    with_build_start_stub(
+        check_setup_repository, DatasetLocation.BUILD_START_NEEDS_ACCESS_STUB
+    )
+
+    report = run_check_setup(
+        check_setup_repository, **{ClaudeCodeVariable.REMOTE: EnvironmentFlag.TRUE}
+    )
+
+    access = report.results[SetupCheck.PLAN_SITE_ACCESS]
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+    assert access.status == CheckStatus.NEEDS_SETUP
+    assert "\n" not in access.detail
+    assert "an-owner/the-site" in access.detail
+
+
+def test_a_cloud_session_that_can_start_the_build_passes(
+    check_setup_repository: ScratchRepository,
+):
+    with_build_start_stub(
+        check_setup_repository, DatasetLocation.BUILD_START_HAS_ACCESS_STUB
+    )
+
+    report = run_check_setup(
+        check_setup_repository, **{ClaudeCodeVariable.REMOTE: EnvironmentFlag.TRUE}
+    )
+
+    assert report.results[SetupCheck.PLAN_SITE_ACCESS].status == CheckStatus.OK
+
+
+def test_a_local_session_that_cannot_start_the_build_is_only_told(
+    check_setup_repository: ScratchRepository,
+):
+    with_build_start_stub(
+        check_setup_repository, DatasetLocation.BUILD_START_NEEDS_ACCESS_STUB
+    )
+
+    report = run_check_setup(check_setup_repository)
+
+    access = report.results[SetupCheck.PLAN_SITE_ACCESS]
+    assert access.status == CheckStatus.INFORMATIONAL
+    assert "an-owner/the-site" in access.detail
+
+
+def test_a_clone_on_no_plan_site_has_no_access_to_need(
+    check_setup_repository: ScratchRepository,
+):
+    report = run_check_setup(
+        check_setup_repository, **{ClaudeCodeVariable.REMOTE: EnvironmentFlag.TRUE}
+    )
+
+    assert (
+        report.results[SetupCheck.PLAN_SITE_ACCESS].status == CheckStatus.INFORMATIONAL
+    )
 
 
 def with_dispatch_check_stub(
