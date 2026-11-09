@@ -118,8 +118,22 @@ case "${BASSTLER_RELEASE_STATE}" in
 esac
 
 # After the install, so it names the environment's interpreter once one exists.
+# The environment's directory too, so a command run in another repository the
+# session has attached runs this one rather than creating its own.
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
-  printf 'export BASSTLER_PYTHON=%q\n' "${BASSTLER_PYTHON}" >> "${CLAUDE_ENV_FILE}"
+  {
+    printf 'export BASSTLER_PYTHON=%q\n' "${BASSTLER_PYTHON}"
+    printf 'export BASSTLER_ENVIRONMENT_DIRECTORY=%q\n' "${BASSTLER_ENVIRONMENT_DIRECTORY}"
+  } >> "${CLAUDE_ENV_FILE}"
+fi
+
+# Environments whose project is gone are never used again.
+REMOVED_ENVIRONMENTS="$(remove_abandoned_basstler_environments)"
+if [ -z "${REMOVED_ENVIRONMENTS}" ]; then
+  SUMMARY_ENVIRONMENTS="$(environments_line_none_removed)"
+else
+  SUMMARY_ENVIRONMENTS="$(environments_line_removed \
+    "$(printf '%s' "${REMOVED_ENVIRONMENTS}" | paste -s -d ' ' -)")"
 fi
 
 if git cat-file -e "${PERSONAL_NOTES_REFERENCE}:${NOTES_PATH}" 2>/dev/null; then
@@ -443,6 +457,7 @@ session-start.sh summary:
   git identity:    ${SUMMARY_GIT_IDENTITY}
   dependencies:    ${SUMMARY_DEPENDENCIES}
   release:         ${SUMMARY_RELEASE}
+  environments:    ${SUMMARY_ENVIRONMENTS}
   reviews Action:  ${SUMMARY_UPSTREAM_REVIEWS_ACTION}
   Actions usage:   ${SUMMARY_ACTIONS_USAGE}
   main tests:      ${SUMMARY_MAIN_TESTS}

@@ -640,23 +640,66 @@ tracked_plan_count() {
 
 # %% the package's own environment
 
-# BASSTLER_HOME: where the package's environment and anything installed for it
-# live - one per user rather than one per clone, so every project the plugin
-# serves shares one environment, and a fresh clone of any of them needs no
-# install of its own.
+# BASSTLER_HOME: where the package's environments and anything installed for
+# them live - one per user rather than one per clone.
 BASSTLER_HOME="${BASSTLER_HOME:-${XDG_DATA_HOME:-${HOME}/.local/share}/basstler}"
-# BASSTLER_ENVIRONMENT_DIRECTORY: the package's own virtual environment, which
-# session-start.sh creates where it is missing and installs the package into.
-BASSTLER_ENVIRONMENT_DIRECTORY="${BASSTLER_HOME}/venv"
-# BASSTLER_INSTALL_LOCK: a directory held while the package's environment is
-# created or installed into, holding the holder's process id, so a caller that
-# finds the package missing waits for an install already running - typically a
-# session start's - rather than racing it.
-BASSTLER_INSTALL_LOCK="${BASSTLER_HOME}/install.lock"
+# BASSTLER_ENVIRONMENTS_DIRECTORY: holds one package environment per project,
+# so projects on different plugin releases never install over each other.
+BASSTLER_ENVIRONMENTS_DIRECTORY="${BASSTLER_HOME}/environments"
+# BASSTLER_INSTALL_LOCKS_DIRECTORY: holds the install lock of each environment,
+# under the environment's own name.
+BASSTLER_INSTALL_LOCKS_DIRECTORY="${BASSTLER_HOME}/install-locks"
+
+# basstler_project_directory: prints the main working tree of PROJECT_ROOT's
+# repository, so every worktree of a project names the same one.
+basstler_project_directory() {
+  local common_directory
+  common_directory="$(git -C "${PROJECT_ROOT}" rev-parse --path-format=absolute \
+    --git-common-dir)"
+  if [ "$(basename "${common_directory}")" = .git ]; then
+    dirname "${common_directory}"
+  else
+    printf '%s\n' "${common_directory}"
+  fi
+}
+
+# basstler_environment_name: prints the name of the environment of the project
+# directory $1 - its last component, then a checksum of the whole path, so two
+# projects of one name keep apart.
+basstler_environment_name() {
+  printf '%s-%s\n' "$(basename "$1")" "$(printf '%s' "$1" | cksum | cut -d ' ' -f 1)"
+}
+
+# BASSTLER_ENVIRONMENT_DIRECTORY: the package's virtual environment of the
+# session's project, which session-start.sh creates where it is missing and
+# installs the package into, and exports so every command of the session runs
+# it, whichever repository it runs in.
+BASSTLER_ENVIRONMENT_DIRECTORY="${BASSTLER_ENVIRONMENT_DIRECTORY:-${BASSTLER_ENVIRONMENTS_DIRECTORY}/$(basstler_environment_name "$(basstler_project_directory)")}"
+# BASSTLER_PROJECT_FILE_NAME: the file in an environment naming the project
+# directory it belongs to, so a session start can remove the environment once
+# that directory is gone.
+BASSTLER_PROJECT_FILE_NAME="basstler-project"
+BASSTLER_PROJECT_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/${BASSTLER_PROJECT_FILE_NAME}"
+
+# basstler_install_lock_of: prints the install lock of the environment $1 - a
+# directory held while it is created or installed into, holding the holder's
+# process id, so a caller that finds the package missing waits for an install
+# already running - typically a session start's - rather than racing it.
+basstler_install_lock_of() {
+  printf '%s/%s\n' "${BASSTLER_INSTALL_LOCKS_DIRECTORY}" "$(basename "$1")"
+}
+
+# basstler_install_marker_of: prints the file holding the process id of whoever
+# holds the install lock $1.
+basstler_install_marker_of() {
+  printf '%s/pid\n' "$1"
+}
+
+BASSTLER_INSTALL_LOCK="$(basstler_install_lock_of "${BASSTLER_ENVIRONMENT_DIRECTORY}")"
 # BASSTLER_INSTALL_MARKER: the process id of whoever holds BASSTLER_INSTALL_LOCK,
 # so a check run meanwhile can tell "being installed" from "missing" - see
 # basstler_install_in_progress.
-BASSTLER_INSTALL_MARKER="${BASSTLER_INSTALL_LOCK}/pid"
+BASSTLER_INSTALL_MARKER="$(basstler_install_marker_of "${BASSTLER_INSTALL_LOCK}")"
 # BASSTLER_INSTALLED_SOURCE_FILE: what the environment's package was last
 # installed from, so a plugin update - which names a new source - reinstalls it.
 BASSTLER_INSTALLED_SOURCE_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-source"
@@ -732,8 +775,16 @@ basstler_branch_or_tag() {
 # BASSTLER_INSTALL_MARKER. A marker whose process has ended - a session start
 # that was killed - is not an install in progress.
 basstler_install_in_progress() {
-  [ -f "${BASSTLER_INSTALL_MARKER}" ] || return 1
-  kill -0 "$(cat "${BASSTLER_INSTALL_MARKER}")" 2>/dev/null
+  install_held_by_live_process "${BASSTLER_INSTALL_LOCK}"
+}
+
+# install_held_by_live_process: succeeds while a running process holds the
+# install lock $1.
+install_held_by_live_process() {
+  local marker
+  marker="$(basstler_install_marker_of "$1")"
+  [ -f "${marker}" ] || return 1
+  kill -0 "$(cat "${marker}")" 2>/dev/null
 }
 
 # wait_for_basstler_install: waits up to $1 seconds (300 by default) for an
@@ -836,7 +887,7 @@ BASSTLER_INSTALL_WAIT_SECONDS="${BASSTLER_INSTALL_WAIT_SECONDS:-600}"
 # live process holds it and taking it over from one that died holding it.
 # Returns 1 when it is still held after BASSTLER_INSTALL_WAIT_SECONDS.
 acquire_basstler_install_lock() {
-  mkdir -p "${BASSTLER_HOME}"
+  mkdir -p "${BASSTLER_INSTALL_LOCKS_DIRECTORY}"
   local waited=0 holder
   until mkdir "${BASSTLER_INSTALL_LOCK}" 2>/dev/null; do
     holder="$(cat "${BASSTLER_INSTALL_MARKER}" 2>/dev/null || true)"
@@ -896,6 +947,7 @@ install_basstler_package_where_needed() {
       return 1
     fi
     resolve_basstler_python
+    record_basstler_project
     install_basstler_package_or_fail created
     return
   fi
@@ -925,6 +977,29 @@ install_basstler_package_or_fail() {
     return 1
   fi
   BASSTLER_PACKAGE_STATE="${state_when_installed}"
+}
+
+# record_basstler_project: writes basstler_project_directory to
+# BASSTLER_PROJECT_FILE.
+record_basstler_project() {
+  basstler_project_directory > "${BASSTLER_PROJECT_FILE}"
+}
+
+# remove_abandoned_basstler_environments: removes every environment whose
+# recorded project directory no longer exists, printing each one removed. Never
+# the session's own, one with no record, or one a live install holds.
+remove_abandoned_basstler_environments() {
+  local environment lock
+  for environment in "${BASSTLER_ENVIRONMENTS_DIRECTORY}"/*/; do
+    environment="${environment%/}"
+    [ "${environment}" = "${BASSTLER_ENVIRONMENT_DIRECTORY}" ] && continue
+    [ -f "${environment}/${BASSTLER_PROJECT_FILE_NAME}" ] || continue
+    [ -d "$(cat "${environment}/${BASSTLER_PROJECT_FILE_NAME}")" ] && continue
+    lock="$(basstler_install_lock_of "${environment}")"
+    install_held_by_live_process "${lock}" && continue
+    rm -rf "${environment}" "${lock}"
+    printf '%s\n' "${environment}"
+  done
 }
 
 # basstler_package_failure_line: prints, on one line, why the package cannot be
@@ -1020,7 +1095,7 @@ compare_plugin_and_package_releases() {
 # None of them installs pip into the environment:
 # install_basstler_into_environment runs the pip on PATH against it instead.
 create_basstler_environment() {
-  mkdir -p "${BASSTLER_HOME}"
+  mkdir -p "${BASSTLER_ENVIRONMENTS_DIRECTORY}"
   local uv
   if uv="$(available_uv)"; then
     create_basstler_environment_with "${uv}"
