@@ -172,7 +172,7 @@ class ItemBrief:
             dependencies = DependencyReadiness.of_item(
                 plan,
                 item.identifier,
-                pull_request_source.pull_requests_of(
+                pull_request_source.live_pull_requests_of(
                     DependencyResolver(plan, plan_directory)
                 ),
                 plan_directory,

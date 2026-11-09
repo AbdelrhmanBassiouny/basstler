@@ -17,11 +17,12 @@ from basstler.github.exceptions import GitHubUnreachableError
 from basstler.locations import ProjectLocation
 from basstler.plan.merged_items import MergedItems, MergedItemsInEveryPlan
 from basstler.plan.model import ItemStatus, PlanDocument, PlanManifest
-from basstler.pull_request_source import PullRequestSource
+from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.repository import PullRequestReference, Repository
 
 from ..plan_dataset import LandedItemsPlan
+from ..github.recorded_client import RecordedGitHubClient
 from ..recorded_pull_requests import RecordedPullRequestSource
 
 # %% the pull requests GitHub reports
@@ -158,6 +159,19 @@ def test_a_failed_read_ends_with_its_own_status_and_changes_nothing(
 
     assert status == failure.exit_code
     assert manifest_path.read_text() == written
+
+
+def test_recording_reports_a_repository_it_cannot_read(
+    plan: LandedItemsPlan, tmp_path: Path, capsys: pytest.CaptureFixture
+):
+    manifest_path = tmp_path / PlanDocument.MANIFEST
+    plan.manifest.write(manifest_path)
+    source = GitHubPullRequestSource(RecordedGitHubClient())
+
+    MergedItems.record(manifest_path, source)
+
+    repository = reference_of(plan, ItemStatus.IN_PROGRESS).repository
+    assert source.read_failure_of(repository).error_message() in capsys.readouterr().err
 
 
 # %% every plan on a notes branch

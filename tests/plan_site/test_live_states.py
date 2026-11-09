@@ -29,14 +29,14 @@ from basstler.pull_request_state import LiveState, PullRequestState
 from basstler.repository import PullRequestReference
 
 from ..constants.site import SitePlan, SiteSampleText
-from .test_build_site import (
+from ..github.pull_request_api import api_pull_request
+from .first_plan import (
     ELSEWHERE_PULL_REQUEST,
     FIRST_PLAN,
     MERGED_PULL_REQUEST,
-    NOTES_REPOSITORY,
     OPEN_PULL_REQUEST,
-    api_pull_request,
 )
+from .test_build_site import NOTES_REPOSITORY
 
 _, OPEN_ITEM, _ = FIRST_PLAN.items
 """

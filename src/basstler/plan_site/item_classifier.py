@@ -7,14 +7,16 @@ from __future__ import annotations
 from collections.abc import Callable
 from dataclasses import dataclass
 
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.plan.dependencies import DependencyResolver
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.cards import ItemAction, ResolveAction, StartNowAction
 from basstler.plan_site.plan import Item, Plan
+from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.pull_request_state import (
     LiveState,
     PullRequestRecord,
-    PullRequestsByRepository,
+    LivePullRequests,
 )
 from basstler.repository import PullRequestReference, Repository
 
@@ -33,9 +35,9 @@ class ItemClassifier:
     The plan whose items are classified.
     """
 
-    pull_requests_by_repository: PullRequestsByRepository
+    live_pull_requests: LivePullRequests
     """
-    Live pull request state for every repository the plan's items name.
+    What was read of every repository the plan's items name.
     """
 
     dependencies: DependencyResolver
@@ -53,7 +55,7 @@ class ItemClassifier:
         """
         Fill in every item of :attr:`plan` in place.
         """
-        self.dependencies.classify_live_states(self.pull_requests_by_repository)
+        self.dependencies.classify_live_states(self.live_pull_requests)
         for item in self.plan.items:
             self._classify_pull_request(item)
         for item in self.plan.items:
@@ -80,6 +82,11 @@ class ItemClassifier:
         if item.pull_request_record is not None:
             item.upstream_pull_request_url = item.pull_request_record.upstream_link
         item.drift_description = self._drift_description_of(item)
+        if item.live_state is LiveState.REPOSITORY_UNREADABLE:
+            repository = Repository.parse(self._repository_of(item))
+            item.access_warning = self.access_warning_of(
+                repository, self.live_pull_requests.read_failures[repository]
+            )
         item.needs_review = (
             item.live_state is LiveState.OPEN_DRAFT
             and item.status is not ItemStatus.DEFERRED
@@ -98,8 +105,10 @@ class ItemClassifier:
         """
         if item.pull_request_number is None:
             return None
-        repository_pull_requests = self.pull_requests_by_repository.get(
-            self._repository_of(item), {}
+        repository_pull_requests = (
+            self.live_pull_requests.pull_requests_by_repository.get(
+                self._repository_of(item), {}
+            )
         )
         return repository_pull_requests.get(str(item.pull_request_number))
 
@@ -152,6 +161,19 @@ class ItemClassifier:
         ):
             return None
         return self._start_action_for(item)
+
+    @staticmethod
+    def access_warning_of(repository: Repository, refusal: GitHubRequestFailed) -> str:
+        """
+        :param repository: The repository the token is not granted.
+        :param refusal: GitHub's refusal of its read.
+        :return: What an item on it shows: that its live state is missing, why, and how
+            to grant the build's read token access.
+        """
+        return (
+            f"the build cannot read {repository}, so this item shows no live state: "
+            f"{refusal.error_message()}; {PlanSiteSecret.private_repository_correction}"
+        )
 
     @staticmethod
     def _drift_description_of(item: Item) -> str | None:

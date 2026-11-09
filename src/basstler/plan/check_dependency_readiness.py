@@ -11,7 +11,7 @@ from typing import Any
 
 from basstler.plan_site.plan import Plan
 from basstler.plan.dependencies import Dependency, DependencyResolver, PlanDirectory
-from basstler.pull_request_state import PullRequestsByRepository
+from basstler.pull_request_state import LivePullRequests
 
 
 class UnknownItemError(ValueError):
@@ -61,7 +61,7 @@ class DependencyReadiness:
         cls,
         plan: Plan,
         item_identifier: str,
-        pull_requests_by_repository: PullRequestsByRepository,
+        live_pull_requests: LivePullRequests,
         plan_directory: PlanDirectory | None = None,
     ) -> list[DependencyReadiness]:
         """
@@ -70,8 +70,8 @@ class DependencyReadiness:
         :param plan: The already-validated plan.
         :param item_identifier: The effective identifier (``id`` or ``branch``) of the
             item whose dependencies should be checked.
-        :param pull_requests_by_repository: Live pull request state for every repository
-            referenced by the plan's items, and by any plan they depend on.
+        :param live_pull_requests: What was read of every repository referenced by the
+            plan's items, and by any plan they depend on.
         :param plan_directory: The other plans a ``<plan-id>/<item-id>`` dependency
             resolves against, or ``None`` when only this plan's own items are available.
         :raises UnknownItemError: If ``item_identifier`` isn't in the plan.
@@ -82,5 +82,5 @@ class DependencyReadiness:
             raise UnknownItemError(f"no item {item_identifier!r} in plan {plan.id!r}")
 
         resolver = DependencyResolver(plan=plan, plan_directory=plan_directory)
-        resolver.classify_live_states(pull_requests_by_repository)
+        resolver.classify_live_states(live_pull_requests)
         return [cls(dependency) for dependency in resolver.dependencies_of(item)]

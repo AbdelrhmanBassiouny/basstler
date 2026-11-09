@@ -17,6 +17,7 @@ from basstler.pull_request_state import (
     PullRequestsByRepository,
     PullRequestState,
 )
+from basstler.pull_request_state import LivePullRequests
 
 from ..constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
 from ..fixture_plans import (
@@ -70,7 +71,7 @@ def make_renderer(
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository=pull_requests_by_repository or {},
+        live_pull_requests=LivePullRequests(pull_requests_by_repository or {}),
         plan_directory=plan_directory,
         locate_plan_page=locate_plan_page,
     )
@@ -115,7 +116,7 @@ def a_renderer_carding_one_item(record: PullRequestRecord) -> PlanPage:
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={"owner/repo": {"1": record}},
+        live_pull_requests=LivePullRequests({"owner/repo": {"1": record}}),
     )
 
 
@@ -190,7 +191,7 @@ def renderer_with_cards(
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
+        live_pull_requests=LivePullRequests(),
         plan_directory=PlanDirectory(DatasetLocation.PLANS),
         locate_plan_page=locate_plan_page,
     )
