@@ -326,32 +326,32 @@ def test_validation_rejects_a_cycle_that_runs_through_another_plan():
     assert error.value.problems == [DependencyCycle(["a", reference, "a"])]
 
 
-# %% the repository whose notes hold the plan
+# %% the repository whose checkout saves the plan
 
 
-def test_validation_rejects_a_plan_saved_to_another_repositorys_notes():
+def test_validation_rejects_a_plan_saved_from_another_repositorys_checkout():
     """
-    A plan lives in the notes of the repository its work is for.
+    A plan is saved only from a checkout of the repository its work is for.
     """
     plan = minimal_plan()
-    notes_repository = Repository("another-owner", "another-repository")
+    checkout_repository = Repository("another-owner", "another-repository")
     with pytest.raises(PlanValidationError) as error:
-        PlanValidator(plan, notes_repository=notes_repository).validate()
+        PlanValidator(plan, checkout_repository=checkout_repository).validate()
     assert error.value.problems == [
         PlanInAnotherRepository(
             PLAN_UNDER_TEST_ID,
             Repository.parse(plan[ManifestKey.DEFAULT_REPOSITORY.key]),
-            notes_repository,
+            checkout_repository,
         )
     ]
 
 
-def test_validation_accepts_a_plan_saved_to_its_own_repository_in_any_letter_case():
+def test_validation_accepts_a_plan_saved_from_its_own_repository_in_any_letter_case():
     """
     GitHub resolves a repository's name in any letter case.
     """
     plan = minimal_plan()
-    notes_repository = Repository.parse(
+    checkout_repository = Repository.parse(
         plan[ManifestKey.DEFAULT_REPOSITORY.key].upper()
     )
-    PlanValidator(plan, notes_repository=notes_repository).validate()
+    PlanValidator(plan, checkout_repository=checkout_repository).validate()

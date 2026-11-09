@@ -7,6 +7,7 @@ from __future__ import annotations
 from enum import IntEnum, StrEnum
 
 from basstler.environment import EnvironmentVariable
+from basstler.locations import ClaudeCodeVariable
 
 
 class ScrubbedEnvironmentPrefix(StrEnum):
@@ -31,6 +32,11 @@ class ScrubbedEnvironmentPrefix(StrEnum):
     ENVIRONMENT_FILE = "CLAUDE_ENV_FILE"
     """
     The file a SessionStart hook exports variables to the session through.
+    """
+
+    CLOUD_SESSION = ClaudeCodeVariable.REMOTE.value
+    """
+    Whether the run is in a Claude Code cloud session, which makes the hooks read GitHub.
     """
 
     BASSTLER = "BASSTLER_"
@@ -108,11 +114,6 @@ class ConfigurationVariable(StrEnum):
     REPOSITORY_URL = "BASSTLER_REPOSITORY_URL"
     """
     The repository an installed plugin's package is installed from.
-    """
-
-    RELEASE_FILE = "BASSTLER_RELEASE_FILE"
-    """
-    The file recording the latest release a session start read from that repository.
     """
 
     UV_DIRECTORY = "BASSTLER_UV_DIRECTORY"

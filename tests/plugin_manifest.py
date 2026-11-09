@@ -28,7 +28,7 @@ class PluginManifestKey(StrEnum):
 
     VERSION = "version"
     """
-    The key a manifest would pin a release with, which this plugin's leaves out.
+    The release a manifest names: only the released plugin's names one.
     """
 
 

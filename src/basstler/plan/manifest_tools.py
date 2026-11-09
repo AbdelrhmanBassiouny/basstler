@@ -29,7 +29,7 @@ from typing import Any
 
 import yaml
 
-from basstler.exceptions import NotesRemoteNamesNoRepository, PlanValidationError
+from basstler.exceptions import OriginNamesNoRepository, PlanValidationError
 from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.merge import PlanMerge, PlanVersion
 from basstler.plan.validation import PlanValidator
@@ -126,9 +126,9 @@ class ManifestToolsOption(StrEnum):
     The branch whose item to print.
     """
 
-    NOTES_REMOTE_URL = "--notes-remote-url"
+    ORIGIN_URL = "--origin-url"
     """
-    The URL of the remote whose notes branch the manifest is saved to.
+    The URL of the ``origin`` of the checkout saving the manifest.
     """
 
 
@@ -191,21 +191,21 @@ class PlanManifest:
     def validate(
         self,
         plan_directory: PlanDirectory | None = None,
-        notes_repository: Repository | None = None,
+        checkout_repository: Repository | None = None,
     ) -> None:
         """
         Check the manifest against the same rules a plan page is built under, so nothing
-        is saved that no page could then be built from, nor to another repository's
-        notes than the one its work is for.
+        is saved that no page could then be built from, nor from a checkout of another
+        repository than the one its work is for.
 
         :param plan_directory: The plans a ``<plan-id>/<item-id>`` entry resolves
             against; without one, such an entry is refused.
-        :param notes_repository: The repository whose notes the manifest is saved to, or
-            ``None`` when it is not known.
+        :param checkout_repository: The repository the ``origin`` of the checkout saving
+            the manifest names, or ``None`` when no save is being checked.
         :raises PlanValidationError: If it breaks any rule, carrying every problem
             found.
         """
-        PlanValidator(self.content, plan_directory, notes_repository).validate()
+        PlanValidator(self.content, plan_directory, checkout_repository).validate()
 
     def string_field(self, value: object, field_name: str) -> str:
         """
@@ -324,10 +324,10 @@ class ManifestToolsCommandLine:
             help="The plans a <plan-id>/<item-id> depends_on entry resolves against",
         )
         validate_parser.add_argument(
-            ManifestToolsOption.NOTES_REMOTE_URL,
-            dest="notes_remote_url",
+            ManifestToolsOption.ORIGIN_URL,
+            dest="origin_url",
             default=None,
-            help="The remote the manifest is saved to; a plan for another repository, or a remote naming none, is refused",
+            help="The origin of the checkout saving the manifest; a plan for another repository, or an origin naming none, is refused",
         )
 
         regenerate_parser = subcommands.add_parser(
@@ -375,18 +375,18 @@ class ManifestToolsCommandLine:
         return parser
 
     @staticmethod
-    def notes_repository(notes_remote_url: str | None) -> Repository | None:
+    def checkout_repository(origin_url: str | None) -> Repository | None:
         """
-        :param notes_remote_url: The notes remote's URL, or ``None`` when no save is
-            being checked.
+        :param origin_url: The URL of the saving checkout's ``origin``, or ``None`` when
+            no save is being checked.
         :return: The repository that URL names, or ``None`` for no URL.
         :raises PlanValidationError: If the URL names no repository.
         """
-        if notes_remote_url is None:
+        if origin_url is None:
             return None
-        if not Repository.names_a_repository(notes_remote_url):
-            raise PlanValidationError([NotesRemoteNamesNoRepository(notes_remote_url)])
-        return Repository.from_remote_url(notes_remote_url)
+        if not Repository.names_a_repository(origin_url):
+            raise PlanValidationError([OriginNamesNoRepository(origin_url)])
+        return Repository.from_remote_url(origin_url)
 
     @classmethod
     def run(cls, arguments: argparse.Namespace) -> ManifestToolsExitCode:
@@ -402,7 +402,7 @@ class ManifestToolsCommandLine:
             try:
                 PlanManifest(arguments.manifest_path).validate(
                     PlanDirectory(arguments.plans_dir) if arguments.plans_dir else None,
-                    cls.notes_repository(arguments.notes_remote_url),
+                    cls.checkout_repository(arguments.origin_url),
                 )
             except PlanValidationError as error:
                 logger.error(f"{arguments.manifest_path} failed validation: {error}")

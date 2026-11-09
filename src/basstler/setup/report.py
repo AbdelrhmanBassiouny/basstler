@@ -93,7 +93,7 @@ class SetupCheck(StrEnum):
 
     BASSTLER_VERSION = "basstler_version"
     """
-    The installed package's version, against basstler's latest release.
+    The installed package's version, against the plugin's own release.
     """
 
     CLAUDE_LOCAL_MD = "claude_local_md"
@@ -137,6 +137,11 @@ class CheckStatus(StrEnum):
     UNVERIFIED = "unverified"
     """
     Nothing the check could read decides it yet, so it is neither passed nor failed.
+    """
+
+    MISMATCHED = "mismatched"
+    """
+    The plugin's hooks and the package they call are not one release.
     """
 
     INFORMATIONAL = "info"

@@ -11,12 +11,18 @@ import os
 import shutil
 import subprocess
 from enum import StrEnum
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
 
 import basstler
-from basstler.locations import PluginLocation, ProjectLocation, WorkflowLocation
+from basstler.locations import (
+    PackageLocation,
+    PluginLocation,
+    ProjectLocation,
+    WorkflowLocation,
+)
 from basstler.exit_codes import SetupCheckExitCode
 from basstler.plan_site import dispatch_check, publication
 from basstler.plan_site.dispatch_check import UNVERIFIED_PREFIX
@@ -341,6 +347,64 @@ def test_a_latest_release_that_cannot_be_read_says_where_it_was_looked_for(
     version = report.results[SetupCheck.BASSTLER_VERSION]
     assert version.status == CheckStatus.INFORMATIONAL
     assert str(check_setup_repository.project_root) in version.detail
+
+
+def remove_checkout_around_plugin(repository: ScratchRepository) -> None:
+    """
+    Make the scratch plugin one installed on its own, outside a checkout.
+
+    :param repository: A fixture-built scratch repository.
+    """
+    (repository.checkout_root / PackageSourceFile.METADATA).unlink()
+
+
+def test_a_package_of_another_release_than_the_plugin_s_is_mismatched(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    Hooks of one release calling the package of another can pass options it no longer
+    accepts, so the pair being two releases is a status of its own, failing the run.
+    """
+    remove_checkout_around_plugin(check_setup_repository)
+    check_setup_repository.release_plugin_as("0.0.1")
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.results[SetupCheck.BASSTLER_VERSION].status == CheckStatus.MISMATCHED
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+
+
+def test_a_plugin_naming_no_release_outside_a_checkout_is_mismatched(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    Nothing pins the package to a plugin that names no release, so the pair cannot be
+    told apart from two releases.
+    """
+    remove_checkout_around_plugin(check_setup_repository)
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.results[SetupCheck.BASSTLER_VERSION].status == CheckStatus.MISMATCHED
+
+
+def test_a_package_of_the_plugin_s_release_passes(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    The package installed at the plugin's own release is what every hook expects.
+    """
+    remove_checkout_around_plugin(check_setup_repository)
+    check_setup_repository.release_plugin_as(
+        version(PackageLocation.DIRECTORY.value.name)
+    )
+
+    report = run_check_setup(
+        check_setup_repository, OnlyFlag.ONLY, SetupCheck.BASSTLER_VERSION
+    )
+
+    assert report.results[SetupCheck.BASSTLER_VERSION].status == CheckStatus.OK
+    assert report.exit_code is SetupCheckExitCode.SUCCESS
 
 
 # %% who commits here would be authored as

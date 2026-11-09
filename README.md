@@ -28,10 +28,9 @@ package at the plugin's own version, so the two are always one release.
 Every push to `main` that changes anything is a release once its Tests run passes, made by
 `release.yml`. A commit whose tests fail is never tagged, so installs stay on the latest
 release that passed, and the next passing commit releases everything merged since. An install
-takes the package from the latest release tag, so a change merged without one would reach
-some installs and not others: a plugin's hooks would call a package that predates them.
-Every change counts, not only those to the package, since a list of shipped paths would go
-stale.
+takes the package from its plugin's release tag, so a change merged without one would reach
+no install at all. Every change counts, not only those to the package, since a list of
+shipped paths would go stale.
 
 - **A release is only a tag on the merge commit.** No file on `main` names the version -
   the build reads it from the tag (`hatch-vcs`), and `plugin/.claude-plugin/plugin.json`
@@ -46,8 +45,10 @@ stale.
 - **The workflow increments the latest release's patch,** or its minor or major part when a
   pull request merged since is labelled `release:minor` or `release:major`. It then
   publishes a GitHub release with generated notes.
-- **A session start installs the highest `v<major>.<minor>.<patch>` tag** of this
-  repository, and a hook reads it again once the plugin syncs to a newer release.
+- **A session start installs the tag its plugin's `plugin.json` names,** and a hook
+  installs again once the plugin syncs to another release. Where the two still differ, as
+  after an install that failed, the session start's `release:` line and check-setup's
+  `basstler_version` row say so, the row with the status `mismatched`.
 
 ## The package's own environment
 
@@ -60,9 +61,10 @@ its own.
 What it installs from depends on where the plugin is:
 
 - **A plugin installed on its own** installs `basstler @ git+https://github.com/KAOS-repositories/basstler@<tag>`,
-  the tag being the latest release, read once per session start and again when a hook
-  finds the plugin synced at another commit since the install; offline, it keeps the one
-  it last read.
+  the tag being the release its `plugin.json` names. A plugin naming none - a copy of the
+  source tree outside a clone - installs nothing: session start says so on its
+  `dependencies:` line, every hook stops with the same reason, and setup reports it as
+  `mismatched`. Reinstall the plugin from the marketplace.
 - **A plugin run from a clone of this repository** installs that clone editable, so
   `import basstler` is the clone's own source.
 

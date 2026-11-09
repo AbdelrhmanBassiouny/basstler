@@ -20,6 +20,11 @@ from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.shell_configuration import FetchedBranchReference
 
+NO_HOOKS_DIRECTORY = "/dev/null"
+"""
+A hooks directory holding no hooks, so git runs none.
+"""
+
 # %% where the notes live
 
 
@@ -195,7 +200,8 @@ class NotesBranchWriter:
     ) -> NotesWriteOutcome:
         """
         Apply *changes* to the latest notes branch in one commit, and push it to the
-        remote it was fetched from.
+        remote it was fetched from. The project's commit hooks do not run: the notes
+        branch carries none of the project's files they check.
 
         :param changes: Each path relative to the branch's root, with its new content,
             or ``None`` to remove the file or directory there.
@@ -223,7 +229,14 @@ class NotesBranchWriter:
             worktree.run("add", "--all")
             if worktree.attempt("diff", "--cached", "--quiet").succeeded:
                 return NotesWriteOutcome.UNCHANGED
-            worktree.run("commit", "--quiet", "-m", message)
+            worktree.run(
+                "-c",
+                f"core.hooksPath={NO_HOOKS_DIRECTORY}",
+                "commit",
+                "--quiet",
+                "-m",
+                message,
+            )
             worktree.run(
                 "push", "--quiet", remote, f"HEAD:{self.branch.location.branch}"
             )

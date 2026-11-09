@@ -53,13 +53,20 @@ class RegistryUnreadableError(DataclassException):
     The branch the hub file was looked for on.
     """
 
+    private_repository_correction: str
+    """
+    How the build comes to read the registry should it be private, as a clause of the
+    correction.
+    """
+
     def error_message(self) -> str:
         return f"cannot fetch {self.notes_branch} from the registry {self.registry}"
 
     def suggest_correction(self) -> str:
         return (
             f"Check that {self.registry} exists, that it has a {self.notes_branch} "
-            f"branch, and that the build's credential can read it."
+            "branch, and that the build's credential can read it: "
+            f"{self.private_repository_correction}."
         )
 
 
