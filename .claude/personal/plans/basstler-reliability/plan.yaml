@@ -161,3 +161,16 @@ items:
     start for the loaded plan, read each item''s pull_request_number, mark a merged one done and
     so drop it. A read that fails is reported and changes nothing. Bug PR off main, failing test
     first.'
+
+- id: publication-transport
+  title: Plan site publication pushes over the transport the notes remote uses, and a refused push names its fix
+  branch: null
+  pull_request_number: null
+  status: not started
+  track: guards
+  depends_on: []
+  notes: 'From #175 (ichumuh); belongs to basstler-setup-ux, which is full. publication.py pushes
+    every repository over GitHubAddress.WEB, so an SSH-only machine fails with no hint. Derive
+    remote_root from the notes remote''s scheme (git@github.com: or https), and turn a refused
+    push into an explanation naming gh auth setup-git, gh auth refresh -s workflow, or SSH. Bug
+    PR off main, failing test first.'
