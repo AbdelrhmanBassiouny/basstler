@@ -6,10 +6,13 @@ site, against bare repositories standing in for GitHub and recorded run listings
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
+import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
+from enum import StrEnum
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -34,14 +37,17 @@ from basstler.github.exceptions import (
 from basstler.locations import ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
+from basstler.plan_site import token_storage
+from basstler.plan_site.build_start import CodeFence
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import PlanSitePublication, PublicationOption
 from basstler.plan_site.publication import app as publication_app
 from basstler.github.run_listing import ListedRun, RunListing
-from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep, UserSteps
+from basstler.plan_site.user_steps import MergeWorkflowProposal, UserStep
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
     DispatchWorkflow,
+    GitHubCommandLineOption,
     MergeWorkflow,
     PlanSiteJob,
     PlanSiteSecret,
@@ -170,7 +176,9 @@ class Publishing:
             "push", "--quiet", path.as_uri(), f"HEAD:refs/heads/{branch}"
         )
 
-    def publication(self, runs: PullRequestOpeningClient) -> PlanSitePublication:
+    def publication(
+        self, runs: PullRequestOpeningClient, in_cloud_session: bool = False
+    ) -> PlanSitePublication:
         """:return: Publishing the notes repository on its site."""
         return PlanSitePublication(
             GitCommandRunner(self.checkout.project_root),
@@ -179,6 +187,7 @@ class Publishing:
             SiteWorkflow(BRANCH_OR_TAG, self.notes_repository),
             runs,
             remote_root=self.root.as_uri(),
+            in_cloud_session=in_cloud_session,
         )
 
     @staticmethod
@@ -195,7 +204,7 @@ class Publishing:
 
     def hub_on(self, repository: Repository) -> PlanHub | None:
         """:return: The hub file on *repository*'s notes branch."""
-        return PlanHub.from_text(
+        return PlanHub.from_yaml(
             self.file(repository, NOTES_BRANCH, ProjectLocation.PLAN_HUB.as_posix())
         )
 
@@ -329,9 +338,12 @@ def test_the_workflow_goes_on_the_site_repository_s_default_branch(publishing):
 
 
 def test_the_site_workflow_calls_basstler_s_build_at_its_branch_or_tag():
+    """
+    The site workflow's build job calls basstler's build at the source it names.
+    """
     workflow = SiteWorkflow(BRANCH_OR_TAG, Repository("an-owner", "a-registry"))
 
-    job = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.BUILD]
+    job = WorkflowFile.from_yaml(workflow.text).jobs[PlanSiteJob.BUILD]
 
     assert job.called_workflow == (
         f"{BasstlerSource.REPOSITORY}/{WorkflowLocation.PLAN_SITE_BUILD.as_posix()}"
@@ -340,9 +352,12 @@ def test_the_site_workflow_calls_basstler_s_build_at_its_branch_or_tag():
 
 
 def test_a_written_site_workflow_reads_back_as_the_same_workflow():
+    """
+    A site workflow's text parses back into an equal workflow.
+    """
     workflow = SiteWorkflow(BRANCH_OR_TAG, Repository("an-owner", "a-registry"))
 
-    assert SiteWorkflow.from_text(workflow.text) == workflow
+    assert SiteWorkflow.from_yaml(workflow.text) == workflow
 
 
 @pytest.mark.parametrize(
@@ -475,6 +490,9 @@ def test_a_second_repository_is_listed_in_the_registry_named_by_the_site_workflo
 
 
 def test_the_notes_branch_gets_the_dispatch_workflow(published):
+    """
+    The notes branch carries the dispatch workflow written for it.
+    """
     assert published.file(
         published.notes_repository,
         NOTES_BRANCH,
@@ -485,43 +503,74 @@ def test_the_notes_branch_gets_the_dispatch_workflow(published):
 
 
 def test_the_dispatch_workflow_runs_on_every_push_to_the_notes_branch():
+    """
+    The dispatch workflow is triggered by pushes to the notes branch alone.
+    """
     workflow = DispatchWorkflow(
         Repository("an-owner", "a-project"),
         NOTES_BRANCH,
         SiteRepository(Repository("an-owner", "plans")),
     )
 
-    assert WorkflowFile.from_text(workflow.text).pushed_branches == [NOTES_BRANCH]
+    assert WorkflowFile.from_yaml(workflow.text).pushed_branches == [NOTES_BRANCH]
 
 
 def test_the_dispatch_workflow_runs_only_in_the_notes_repository():
+    """
+    The dispatch job is limited to the notes repository, so forks never run it.
+    """
     notes_repository = Repository("an-owner", "a-project")
     workflow = DispatchWorkflow(
         notes_repository, NOTES_BRANCH, SiteRepository(Repository("an-owner", "plans"))
     )
 
-    job = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.DISPATCH]
+    job = WorkflowFile.from_yaml(workflow.text).jobs[PlanSiteJob.DISPATCH]
 
     assert job.condition == f"github.repository == '{notes_repository.full_name}'"
+
+
+def dispatch_step_of(workflow: DispatchWorkflow) -> WorkflowStep:
+    """:return: The one step of *workflow*'s job."""
+    (step,) = WorkflowFile.from_yaml(workflow.text).jobs[PlanSiteJob.DISPATCH].steps
+    return step
 
 
 def test_the_dispatch_workflow_starts_the_site_workflow_with_the_token():
     site = SiteRepository(Repository("an-owner", "plans"))
     workflow = DispatchWorkflow(Repository("an-owner", "a-project"), NOTES_BRANCH, site)
 
-    job = WorkflowFile.from_text(workflow.text).jobs[PlanSiteJob.DISPATCH]
+    step = dispatch_step_of(workflow)
 
-    assert job.steps == [
-        WorkflowStep(
-            f"gh workflow run {SiteWorkflow.location.name} "
-            f"--repo {site.repository.full_name}",
-            {
-                GitHubCredentialVariable.GH_TOKEN: (
-                    f"${{{{ secrets.{PlanSiteSecret.TOKEN} }}}}"
-                )
-            },
-        )
-    ]
+    assert step.environment == {
+        GitHubCredentialVariable.GH_TOKEN: f"${{{{ secrets.{PlanSiteSecret.TOKEN} }}}}"
+    }
+    assert step.command.splitlines()[-1] == (
+        f"gh workflow run {SiteWorkflow.location.name} "
+        f"--repo {site.repository.full_name}"
+    )
+
+
+def test_a_dispatch_without_the_stored_token_fails_with_an_error_saying_how_to_store_it():
+    """
+    A missing secret leaves the token empty, which used to fail inside ``gh`` without
+    naming the secret.
+    """
+    workflow = a_dispatch_workflow()
+    step = dispatch_step_of(workflow)
+
+    finished = subprocess.run(
+        ["bash", "-c", step.command],
+        env={GitHubCredentialVariable.GH_TOKEN: ""},
+        capture_output=True,
+        text=True,
+    )
+
+    assert finished.returncode == 1
+    assert finished.stdout.startswith(f"::error title={PlanSiteSecret.TOKEN} ")
+    assert workflow.site.token_form_url() in finished.stdout
+    assert f"{workflow.notes_repository.url}/settings/secrets/actions/new" in (
+        finished.stdout
+    )
 
 
 # %% the merge workflow
@@ -594,9 +643,12 @@ def test_the_merge_workflow_runs_when_a_pull_request_closes(tmp_path):
 
 
 def test_the_merge_workflow_runs_for_any_merge_in_the_notes_repository():
+    """
+    The merge workflow's job runs for merges in the notes repository alone.
+    """
     dispatch = a_dispatch_workflow()
 
-    job = WorkflowFile.from_text(MergeWorkflow(dispatch).text).jobs[
+    job = WorkflowFile.from_yaml(MergeWorkflow(dispatch).text).jobs[
         PlanSiteJob.DISPATCH
     ]
 
@@ -607,12 +659,15 @@ def test_the_merge_workflow_runs_for_any_merge_in_the_notes_repository():
 
 
 def test_the_merge_workflow_starts_the_build_as_the_dispatch_workflow_does():
+    """
+    The merge workflow's job starts the build with the dispatch workflow's steps.
+    """
     dispatch = a_dispatch_workflow()
 
-    merge_job = WorkflowFile.from_text(MergeWorkflow(dispatch).text).jobs[
+    merge_job = WorkflowFile.from_yaml(MergeWorkflow(dispatch).text).jobs[
         PlanSiteJob.DISPATCH
     ]
-    dispatch_job = WorkflowFile.from_text(dispatch.text).jobs[PlanSiteJob.DISPATCH]
+    dispatch_job = WorkflowFile.from_yaml(dispatch.text).jobs[PlanSiteJob.DISPATCH]
 
     assert merge_job.steps == dispatch_job.steps
 
@@ -978,7 +1033,7 @@ def test_creating_the_token_walks_through_scoping_it_to_the_site_repository_only
     browser_steps = pending_step(report, UserStep.CREATE_TOKEN).browser_steps
 
     text = "\n".join(browser_steps)
-    assert UserSteps.token_page in text
+    assert published.site.token_form_url() in text
     assert published.site.repository.full_name in text
     assert published.notes_repository.full_name not in text
 
@@ -989,26 +1044,14 @@ def test_creating_a_token_has_no_command_line_because_github_offers_none(publish
     assert pending_step(report, UserStep.CREATE_TOKEN).line is None
 
 
-def test_storing_the_token_is_one_command_that_sets_the_secret_in_every_registered_repository(
-    published, tmp_path
+def test_storing_the_token_is_the_command_that_stores_and_proves_it_everywhere(
+    published,
 ):
-    second_repository = Repository(published.notes_repository.owner, "another")
-    published.create(second_repository)
-    second = ForkCheckout.create(tmp_path / "second")
-    second.run_git(
-        "remote",
-        "set-url",
-        RemoteName.ORIGIN,
-        published.path_of(second_repository).as_uri(),
-    )
-    second_publishing = Publishing(second, published.root)
-
-    report = second_publishing.publication(second_publishing.runs_none()).publish()
+    report = published.publication(published.runs_none()).publish()
 
     line = pending_step(report, UserStep.STORE_TOKEN).line
-    assert line.count(f"gh secret set {PlanSiteSecret.TOKEN}") == 1
-    assert published.notes_repository.full_name in line
-    assert second_repository.full_name in line
+
+    assert line == f"{sys.executable} -m {token_storage.__name__}"
 
 
 def test_storing_the_token_in_the_browser_opens_each_registered_repository_s_secret_page(
@@ -1020,6 +1063,113 @@ def test_storing_the_token_in_the_browser_opens_each_registered_repository_s_sec
 
     assert f"{published.notes_repository.url}/settings/secrets/actions/new" in text
     assert PlanSiteSecret.TOKEN in text
+
+
+# %% storing the token from a cloud session
+
+TYPED_TOKEN = "github_pat_typed"
+"""
+The token typed at the store command's hidden prompt.
+"""
+
+
+class RecordingGitHubVariable(StrEnum):
+    """
+    The environment variables :attr:`DatasetLocation.RECORDING_GH` reads.
+    """
+
+    CALLS = "GH_CALLS"
+    """
+    The file each call is appended to.
+    """
+
+    WORKFLOW_RUN_STATUS = "GH_WORKFLOW_RUN_STATUS"
+    """
+    The status a workflow run exits with.
+    """
+
+
+def run_cloud_store_command(
+    published, tmp_path: Path, monkeypatch, workflow_run_status: int = 0
+) -> list[str]:
+    """
+    Run the store step's command of a cloud session's publication with a recording
+    ``gh``, typing :data:`TYPED_TOKEN` at its prompt.
+
+    :return: The recorded ``gh`` calls, one ``GH_TOKEN|arguments|standard input`` each.
+    """
+    report = published.publication(
+        published.runs_none(), in_cloud_session=True
+    ).publish()
+    command = pending_step(report, UserStep.STORE_TOKEN).line
+    executables = tmp_path / "bin"
+    executables.mkdir()
+    (executables / "gh").symlink_to(DatasetLocation.RECORDING_GH)
+    calls = tmp_path / "gh-calls"
+    monkeypatch.delenv(GitHubCredentialVariable.GH_TOKEN, raising=False)
+    monkeypatch.setenv("PATH", f"{executables}{os.pathsep}{os.environ['PATH']}")
+    monkeypatch.setenv(RecordingGitHubVariable.CALLS, str(calls))
+    monkeypatch.setenv(
+        RecordingGitHubVariable.WORKFLOW_RUN_STATUS, str(workflow_run_status)
+    )
+    subprocess.run(["sh", "-c", command], input=f"{TYPED_TOKEN}\n", text=True)
+    return calls.read_text().splitlines()
+
+
+def test_a_cloud_session_s_store_command_runs_without_this_session_s_python(published):
+    """
+    A cloud session's user runs the command on their own computer, where this session's
+    interpreter does not exist.
+    """
+    report = published.publication(
+        published.runs_none(), in_cloud_session=True
+    ).publish()
+
+    assert sys.executable not in pending_step(report, UserStep.STORE_TOKEN).line
+
+
+def test_a_cloud_session_s_store_command_proves_the_token_by_starting_the_build(
+    published, tmp_path, monkeypatch
+):
+    """
+    The typed token starts the site's build first, as the dispatch workflow does.
+    """
+    calls = run_cloud_store_command(published, tmp_path, monkeypatch)
+
+    assert calls[0] == (
+        f"{TYPED_TOKEN}|workflow run {SiteWorkflow.location.name} "
+        f"{GitHubCommandLineOption.REPOSITORY} {published.site.repository.full_name}|"
+    )
+
+
+def test_a_cloud_session_s_store_command_stores_the_token_in_every_registered_repository(
+    published, tmp_path, monkeypatch
+):
+    """
+    Once the build started, the token is stored in every registered repository with the
+    user's own login.
+    """
+    calls = run_cloud_store_command(published, tmp_path, monkeypatch)
+
+    registered = published.hub_on(published.notes_repository).repositories
+    assert calls[1:] == [
+        f"|secret set {PlanSiteSecret.TOKEN} {GitHubCommandLineOption.REPOSITORY} "
+        f"{repository}|{TYPED_TOKEN}"
+        for repository in registered
+    ]
+
+
+def test_a_cloud_session_s_store_command_stores_nothing_when_the_build_is_refused(
+    published, tmp_path, monkeypatch
+):
+    """
+    A token GitHub refuses to start the build with is stored nowhere.
+    """
+    calls = run_cloud_store_command(
+        published, tmp_path, monkeypatch, workflow_run_status=1
+    )
+
+    assert len(calls) == 1
 
 
 def test_a_failed_dispatch_run_is_linked_from_the_step_it_leaves_to_the_user(
@@ -1053,11 +1203,15 @@ def test_without_a_run_no_run_is_linked(published):
 
 
 def test_a_rendered_step_shows_the_command_and_then_the_browser_steps(published):
+    """
+    The command is set in a bash block, so it is copied whole, before the browser steps.
+    """
     report = published.publication(published.runs_none()).publish()
     pending = pending_step(report, UserStep.TURN_ON_PAGES)
 
     assert pending.render() == (
-        f"- {pending.step}:\n    {pending.line}\n  Or in the browser:\n"
+        f"- {pending.step}:\n    {CodeFence.BASH}\n    {pending.line}\n"
+        f"    {CodeFence.CLOSE}\n  Or in the browser:\n"
         + "\n".join(
             f"    {number}. {step}"
             for number, step in enumerate(pending.browser_steps, start=1)

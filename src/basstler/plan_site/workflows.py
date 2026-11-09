@@ -5,6 +5,8 @@ written one.
 
 from __future__ import annotations
 
+import getpass
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -15,6 +17,7 @@ import yaml
 from basstler.class_property import classproperty
 from basstler.environment import GitHubCredentialVariable
 from basstler.locations import WorkflowLocation
+from basstler.plan_site.exceptions import PlanSiteTokenNotEnteredError
 from basstler.render_common import create_template_environment
 from basstler.repository import Repository
 from basstler.json_model import JSONModel
@@ -36,6 +39,19 @@ class PlanSiteSecret(StrEnum):
     The user's fine-grained token, stored on each notes repository, that lets its
     dispatch workflow start the build in the site repository.
     """
+
+    def read_value(self) -> str:
+        """
+        :return: The secret's value, typed at a hidden terminal prompt.
+        :raises PlanSiteTokenNotEnteredError: If no terminal is attached or nothing was
+            typed.
+        """
+        if not sys.stdin.isatty():
+            raise PlanSiteTokenNotEnteredError(self, terminal=False)
+        value = getpass.getpass(f"{self}: ").strip()
+        if not value:
+            raise PlanSiteTokenNotEnteredError(self, terminal=True)
+        return value
 
 
 class PlanSiteJob(StrEnum):
@@ -83,8 +99,8 @@ class BuildInput(StrEnum):
 
 class PlanSiteTemplate(StrEnum):
     """
-    The templates in :attr:`PackageLocation.TEMPLATES` the site's workflows are rendered
-    from.
+    The templates in :attr:`PackageLocation.TEMPLATES` the site's workflows and the
+    token's store command are rendered from.
     """
 
     SITE_WORKFLOW = "plan_site_workflow.yml"
@@ -100,6 +116,12 @@ class PlanSiteTemplate(StrEnum):
     MERGE_WORKFLOW = "plan_site_merge_workflow.yml"
     """
     The workflow on a notes repository's default branch.
+    """
+
+    STORE_TOKEN_COMMAND = "plan_site_store_token_command.sh"
+    """
+    The command a user runs on their own computer to prove the token by starting the
+    site's build with it, then store it in every repository the site publishes.
     """
 
     def render(self, **context: Any) -> str:
@@ -252,7 +274,7 @@ class WorkflowFile(JSONModel):
     """
 
     @classmethod
-    def from_text(cls, workflow_text: str) -> WorkflowFile:
+    def from_yaml(cls, workflow_text: str) -> WorkflowFile:
         """
         :param workflow_text: The workflow file's text.
         :return: The parsed workflow, every value read as text.
@@ -336,12 +358,12 @@ class SiteWorkflow(PlanSiteWorkflow):
         return PlanSiteTemplate.SITE_WORKFLOW
 
     @classmethod
-    def from_text(cls, workflow_text: str) -> SiteWorkflow:
+    def from_yaml(cls, workflow_text: str) -> SiteWorkflow:
         """
         :param workflow_text: A site workflow as written on the site repository.
         :return: The workflow it is.
         """
-        inputs = WorkflowFile.from_text(workflow_text).jobs[PlanSiteJob.BUILD].inputs
+        inputs = WorkflowFile.from_yaml(workflow_text).jobs[PlanSiteJob.BUILD].inputs
         return cls(
             inputs[BuildInput.BRANCH_OR_TAG],
             Repository.parse(inputs[BuildInput.REGISTRY]),
@@ -402,6 +424,8 @@ class DispatchWorkflow(PlanSiteWorkflow):
             "site_workflow_name": SiteWorkflow.location.name,
             "token_variable": GitHubCredentialVariable.GH_TOKEN,
             "token_secret": PlanSiteSecret.TOKEN,
+            "token_form_url": self.site.token_form_url(),
+            "secrets_page": self.notes_repository.new_actions_secret_url,
         }
 
 

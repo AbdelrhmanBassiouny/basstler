@@ -27,7 +27,7 @@ from basstler.github.exceptions import (
     GitHubCredentialRejected,
     GitHubRequestFailed,
 )
-from basstler.locations import ClaudeCodeVariable, ProjectLocation
+from basstler.locations import ClaudeCodeVariable
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.personal_notes.branch import PersonalNotesLocation
@@ -37,7 +37,7 @@ from basstler.plan_site.hub import PlanHub
 from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
-from basstler.repository import GitHubAddress, Repository
+from basstler.repository import Repository
 from basstler.setup.report import CheckResult, CheckStatus
 from basstler.setup.steps import resolve_repository
 from basstler.standard_streams import StandardStreamHandler
@@ -527,37 +527,6 @@ class DispatchCheck:
 # %% the command
 
 
-def published_repositories(
-    project_root: Path,
-    location: PersonalNotesLocation,
-    notes_repository: Repository,
-    remote_root: str = GitHubAddress.WEB,
-) -> list[Repository]:
-    """
-    :param project_root: The clone to read the notes branch from.
-    :param location: Where its notes are kept.
-    :param notes_repository: The repository its notes branch is on.
-    :param remote_root: Where the registry is fetched from, as
-        :meth:`Repository.clone_url_under` takes it.
-    :return: The notes repository, then every other repository the registry's hub file
-        lists.
-    """
-    # Only the registry's copy lists every repository; this one names the registry.
-    own_copy = PlanHub.from_text(
-        RemoteBranch(
-            location.branch, GitCommandRunner(project_root), location.remote
-        ).read_latest(ProjectLocation.PLAN_HUB)
-    )
-    if own_copy is None:
-        return [notes_repository]
-    hub = (
-        PlanHub.from_registry(Repository.parse(own_copy.registry), remote_root)
-        or own_copy
-    )
-    listed = [Repository.parse(name) for name in hub.repositories]
-    return list(dict.fromkeys([notes_repository, *listed]))
-
-
 app = App(help=__doc__)
 """
 The command, which takes no arguments.
@@ -581,20 +550,19 @@ def report_dispatch() -> int:
     if notes_repository is None:
         raise NotesRepositoryUnresolvedError(location.remote)
     client = GitHubRestClient()
+    notes_branch = RemoteBranch(
+        location.branch, GitCommandRunner(project_root), location.remote
+    )
     check = DispatchCheck(
         DispatchReading.read(client, client, notes_repository, location.branch),
         [
             DispatchReading.read(client, client, repository, location.branch)
-            for repository in published_repositories(
-                project_root, location, notes_repository
+            for repository in PlanHub.published_repositories(
+                notes_branch, notes_repository
             )
             if repository != notes_repository
         ],
-        SiteRepository.recorded_on(
-            RemoteBranch(
-                location.branch, GitCommandRunner(project_root), location.remote
-            )
-        ),
+        SiteRepository.recorded_on(notes_branch),
     )
     for row in check.rows():
         logger.info(row.fields)
