@@ -22,10 +22,7 @@ items:
   track: guards
   depends_on: []
   status: not started
-  notes: prerequisite-check.md runs check-setup.sh bare, so a plan_site row needing setup
-    sends every skill into /setup-personal-notes. Each skill names its rows with --only (in
-    code, as a mapping from skill to checks, not prose), and an unrelated row is reported
-    in one line, never a stop.
+  notes: 'prerequisite-check.md runs check-setup.sh bare, so a plan_site row needing setup sends every skill into /setup-personal-notes. Each skill names its rows with --only (in code, as a mapping from skill to checks, not prose), and an unrelated row is reported in one line, never a stop. From Hesham87/Platform_maintainer: kickoff''s check-setup.sh --require-upstream exits 1 on a repository that is neither a fork nor has an upstream; skip the stack pass there instead.'
 - id: conflict-audit
   title: Every step that acts on mergeability or check state reads it deterministically
   track: guards
