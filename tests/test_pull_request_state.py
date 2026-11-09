@@ -50,6 +50,14 @@ def test_classified_live_state_is_closed_unmerged_for_a_closed_unlabeled_pull_re
     )
 
 
+def test_classified_live_state_is_repository_unreadable_on_a_repository_not_read():
+    repository = Repository("owner", "repo")
+    assert (
+        LiveState.classify(1, str(repository), {}, frozenset({repository}))
+        is LiveState.REPOSITORY_UNREADABLE
+    )
+
+
 # %% PullRequestRecord.was_merged
 
 

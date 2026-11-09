@@ -45,9 +45,11 @@ from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.cards import LiveStateAttribute, PlanTimeAttribute
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan_site.hub_page import PlanSummary, SiteStylesheet, SkippedPage
-from basstler.plan_site.plan import Plan
+from basstler.plan_site.item_classifier import ItemClassifier
+from basstler.plan_site.plan import Item, Plan
+from basstler.plan_site.plan_page import PlanPage
 from basstler.pull_request_source import GitHubPullRequestSource
-from basstler.pull_request_state import PullRequestRecord, PullRequestState
+from basstler.pull_request_state import LiveState, PullRequestRecord, PullRequestState
 from basstler.repository import PullRequestReference, Repository
 from basstler.github.states import CombinedCheckState
 
@@ -562,6 +564,18 @@ def listing_path(repository: Repository) -> str:
     )
 
 
+def details_of(repository: Repository) -> dict[str, Any]:
+    """
+    :param repository: A repository the source can read.
+    :return: The recorded response to the read of its details.
+    """
+    return {
+        f"/{repository.api_path}": json.loads(
+            DatasetLocation.REPOSITORY_NOT_FORK.read_text()
+        )
+    }
+
+
 def pull_request_path(reference: PullRequestReference) -> str:
     """
     :param reference: The pull request to read.
@@ -574,7 +588,8 @@ def test_github_source_answers_a_listed_pull_request_from_the_listing():
     listed = api_pull_request(OPEN_PULL_REQUEST, {PullRequestField.DRAFT: True})
     source = GitHubPullRequestSource(
         RecordedGitHubClient(
-            pages={listing_path(OPEN_PULL_REQUEST.repository): [[listed]]}
+            responses=details_of(OPEN_PULL_REQUEST.repository),
+            pages={listing_path(OPEN_PULL_REQUEST.repository): [[listed]]},
         )
     )
     record = source.pull_request(OPEN_PULL_REQUEST)
@@ -585,7 +600,10 @@ def test_github_source_reads_an_unlisted_pull_request_on_its_own():
     unlisted = api_pull_request(OPEN_PULL_REQUEST, {PullRequestField.DRAFT: True})
     source = GitHubPullRequestSource(
         RecordedGitHubClient(
-            responses={pull_request_path(OPEN_PULL_REQUEST): unlisted},
+            responses={
+                **details_of(OPEN_PULL_REQUEST.repository),
+                pull_request_path(OPEN_PULL_REQUEST): unlisted,
+            },
             pages={listing_path(OPEN_PULL_REQUEST.repository): [[]]},
         )
     )
@@ -596,10 +614,95 @@ def test_github_source_reads_an_unlisted_pull_request_on_its_own():
 def test_github_source_answers_none_for_a_pull_request_that_does_not_exist():
     source = GitHubPullRequestSource(
         RecordedGitHubClient(
-            pages={listing_path(ELSEWHERE_PULL_REQUEST.repository): [[]]}
+            responses=details_of(ELSEWHERE_PULL_REQUEST.repository),
+            pages={listing_path(ELSEWHERE_PULL_REQUEST.repository): [[]]},
         )
     )
     assert source.pull_request(ELSEWHERE_PULL_REQUEST) is None
+
+
+# %% a repository the build cannot read
+
+
+def test_github_source_answers_none_for_a_pull_request_on_a_repository_it_cannot_read():
+    source = GitHubPullRequestSource(RecordedGitHubClient())
+    assert source.pull_request(ELSEWHERE_PULL_REQUEST) is None
+
+
+def test_github_source_finds_a_repository_whose_details_are_refused_unreadable():
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(responses=details_of(PLAN_REPOSITORY))
+    )
+    assert source.unreadable_repositories_of(DependencyResolver(FIRST_PLAN)) == {
+        ELSEWHERE_PULL_REQUEST.repository
+    }
+
+
+def test_github_source_answers_no_issue_url_on_a_repository_it_cannot_read():
+    source = GitHubPullRequestSource(RecordedGitHubClient(refusal=HTTPStatus.FORBIDDEN))
+    assert source.issue_url(PLAN_REPOSITORY, FIRST_PLAN.tracking_issue) is None
+
+
+def unreadable_elsewhere_site(dataset_notes: NotesBranch) -> RepositorySite:
+    """
+    :param dataset_notes: The dataset's notes branch.
+    :return: A site over it whose pull request source reads the first plan's default
+        repository, which has no pull requests, and is refused the other repository.
+    """
+    return RepositorySite(
+        address=SiteAddress(SiteSampleText.SITE_URL),
+        pull_request_source=GitHubPullRequestSource(
+            RecordedGitHubClient(
+                responses=details_of(PLAN_REPOSITORY),
+                pages={listing_path(PLAN_REPOSITORY): [[]]},
+            )
+        ),
+        notes=dataset_notes,
+    )
+
+
+def test_build_publishes_a_plan_whose_item_is_on_a_repository_it_cannot_read(
+    dataset_notes: NotesBranch, tmp_path: Path
+):
+    unreadable_elsewhere_site(dataset_notes).build(tmp_path)
+    assert (tmp_path / str(NOTES_REPOSITORY) / SitePlan.FIRST / SiteFile.PAGE).exists()
+
+
+def test_an_item_on_a_repository_the_build_cannot_read_shows_how_to_let_it(
+    dataset_notes: NotesBranch, tmp_path: Path
+):
+    unreadable_elsewhere_site(dataset_notes).build(tmp_path)
+    warning = ItemClassifier.access_warning_of(str(ELSEWHERE_PULL_REQUEST.repository))
+    assert html.escape(warning) in page_of(tmp_path, SitePlan.FIRST)
+
+
+def item_on_an_unreadable_repository() -> Item:
+    """
+    :return: The first plan's item on a repository other than its default, after its
+        page is rendered with that repository unreadable.
+    """
+    plan = Plan.from_mapping(
+        PlanSource.from_directory(SitePlan.FIRST.directory).manifest
+    )
+    PlanPage(
+        stylesheet_url=SiteSampleText.SITE_URL,
+        plan=plan,
+        roadmap_text="",
+        pull_requests_by_repository={},
+        unreadable_repositories=frozenset({ELSEWHERE_PULL_REQUEST.repository}),
+    ).render()
+    return next(item for item in plan.items if item.repository is not None)
+
+
+def test_an_item_on_a_repository_the_build_cannot_read_is_classified_so():
+    assert (
+        item_on_an_unreadable_repository().live_state
+        is LiveState.REPOSITORY_UNREADABLE
+    )
+
+
+def test_an_item_on_a_repository_the_build_cannot_read_is_not_reported_as_drift():
+    assert item_on_an_unreadable_repository().drift_description is None
 
 
 def commit_report_path(report: CommitReport) -> str:
@@ -634,6 +737,7 @@ def api_pull_request_at_head(state: PullRequestState) -> dict[str, Any]:
 def test_github_source_reads_the_checks_of_an_open_pull_request():
     source = GitHubPullRequestSource(
         RecordedGitHubClient(
+            responses=details_of(OPEN_PULL_REQUEST.repository),
             pages={
                 listing_path(OPEN_PULL_REQUEST.repository): [
                     [api_pull_request_at_head(PullRequestState.OPEN)]
@@ -657,6 +761,7 @@ def test_github_source_reads_the_checks_of_an_open_pull_request():
 def test_github_source_leaves_the_checks_of_a_closed_pull_request_unread():
     source = GitHubPullRequestSource(
         RecordedGitHubClient(
+            responses=details_of(OPEN_PULL_REQUEST.repository),
             pages={
                 listing_path(OPEN_PULL_REQUEST.repository): [
                     [api_pull_request_at_head(PullRequestState.CLOSED)]
@@ -672,6 +777,7 @@ def test_github_source_reads_an_issue_url():
     source = GitHubPullRequestSource(
         RecordedGitHubClient(
             responses={
+                **details_of(PLAN_REPOSITORY),
                 f"/{PLAN_REPOSITORY.api_path}/issues/{FIRST_PLAN.tracking_issue}": {
                     PullRequestField.HTML_URL.key: issue_url
                 }
@@ -684,7 +790,9 @@ def test_github_source_reads_an_issue_url():
 def test_github_source_reraises_a_refusal_other_than_not_found():
     with pytest.raises(GitHubRequestFailed) as refused:
         GitHubPullRequestSource(
-            RecordedGitHubClient(refusal=HTTPStatus.FORBIDDEN)
+            RecordedGitHubClient(
+                responses=details_of(PLAN_REPOSITORY), refusal=HTTPStatus.FORBIDDEN
+            )
         ).issue_url(PLAN_REPOSITORY, FIRST_PLAN.tracking_issue)
     assert refused.value.status == HTTPStatus.FORBIDDEN
 

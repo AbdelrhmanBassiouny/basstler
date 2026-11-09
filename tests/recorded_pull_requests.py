@@ -30,6 +30,11 @@ class RecordedPullRequestSource(PullRequestSource):
     The issue pages that exist, by repository and number.
     """
 
+    unreadable_repositories: set[Repository] = field(default_factory=set)
+    """
+    The repositories whose pull requests cannot be read.
+    """
+
     looked_up: list[PullRequestReference] = field(default_factory=list)
     """
     Every pull request asked for, in order.
@@ -41,3 +46,6 @@ class RecordedPullRequestSource(PullRequestSource):
 
     def issue_url(self, repository: Repository, number: int) -> str | None:
         return self.issue_urls.get(PullRequestReference(repository, number))
+
+    def is_readable(self, repository: Repository) -> bool:
+        return repository not in self.unreadable_repositories
