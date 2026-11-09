@@ -1,16 +1,16 @@
 schema_version: 1
 id: team-basstler
 title: 'Plan site: a published, live, optionally private view of every plan'
-description: The plan site publishes every plan from setup, rebuilds on each plan save and merge,
-  re-checks pull requests from the browser and can be private. Its core-robustness half and
-  its team half (team-repository) were split out of it.
+description: The plan site publishes every plan from setup, rebuilds on each plan save and
+  merge, re-checks pull requests from the browser and can be private. Its core-robustness
+  half and its team half (team-repository) were split out of it.
 default_repository: KAOS-repositories/basstler
 tracking_issue: 62
 waves:
 - id: foundations
   name: 'Wave 1: Site live'
-  description: The site deploys itself, looks finished, stays current between builds and can be
-    private.
+  description: The site deploys itself, looks finished, stays current between builds and can
+    be private.
 tracks:
 - id: site
   name: Plan site
@@ -57,42 +57,44 @@ items:
   session: https://claude.ai/code/session_018wfiv6ZDBwZvHTLeeG7b7k
   depends_on:
   - site-for-every-repository
-  notes: 'Implemented in #116 (ready for review, ported onto the plan site code after the dashboard was retired): a chip held back by a draft carries its pull request''s
-    REST address, and the site page''s script reveals a hidden Start now button once no draft
-    holds the item back (public repositories only, unauthenticated). Playwright, approved
-    by the owner, tests it in headless Chromium, which CI installs.'
+  notes: 'Implemented in #116 (ready for review, ported onto the plan site code after the
+    dashboard was retired): a chip held back by a draft carries its pull request''s REST address,
+    and the site page''s script reveals a hidden Start now button once no draft holds the
+    item back (public repositories only, unauthenticated). Playwright, approved by the owner,
+    tests it in headless Chromium, which CI installs.'
 - id: stalled-dependency-drift
   title: Flag an item stacked on a deferred or closed dependency on the plan site
   status: not started
   track: site
   depends_on: []
-  notes: >
-    Replaces plan-dashboards/deferred-dependency-drift-check (draft #47, closed: it edited the Artifact
-    dashboard that #115 removed). Build it in plan_site: flag an item whose dependency is deferred or
-    closed unmerged, suggesting a base to reparent onto. Reference design on branch
-    claude/deferred-dependency-drift-pr-qxpfsm (StallReason, StalledDependencyDrift).
+  notes: 'Replaces plan-dashboards/deferred-dependency-drift-check (draft #47, closed: it
+    edited the Artifact dashboard that #115 removed). Build it in plan_site: flag an item
+    whose dependency is deferred or closed unmerged, suggesting a base to reparent onto. Reference
+    design on branch claude/deferred-dependency-drift-pr-qxpfsm (StallReason, StalledDependencyDrift).
 
+    '
 - id: untracked-pull-requests
   title: List each repository's open pull requests that no plan item tracks
   status: not started
   track: site
   depends_on: []
-  notes: >
-    From plan-dashboards. On 2026-10-21 a cleanup found basstler #9, #32 and #33 open with no item.
-    Each repository page on the site lists open pull requests whose number and branch match no item
-    in any plan, each with an /add-plan-item link. Under basstler-v3 this becomes the pull requests
-    that close no item issue.
+  notes: 'From plan-dashboards. On 2026-10-21 a cleanup found basstler #9, #32 and #33 open
+    with no item. Each repository page on the site lists open pull requests whose number and
+    branch match no item in any plan, each with an /add-plan-item link. Under basstler-v3
+    this becomes the pull requests that close no item issue.
 
+    '
 - id: pull-request-size-and-conflict-chips
   title: Show lines changed and a merge-conflict chip on plan page items
   status: not started
   track: site
   depends_on: []
-  notes: >
-    From plan-dashboards/shared-pr-state-chips. The site already shows CI chips; add lines changed and
-    whether the pull request merges cleanly. Reuse the pull request state the stack tooling reads
-    instead of a second probe. Reference: the last commit of CRAM #52.
+  notes: 'From plan-dashboards/shared-pr-state-chips. The site already shows CI chips; add
+    lines changed and whether the pull request merges cleanly. Reuse the pull request state
+    the stack tooling reads instead of a second probe. Reference: the last commit of CRAM
+    #52.
 
+    '
 - id: site-rebuild-on-merge
   title: A merged pull request in a tracked repository starts the plan site's build
   status: in progress
@@ -102,14 +104,15 @@ items:
   session: https://claude.ai/code/session_018wfiv6b8ng2PD9TV1MhDw3
   depends_on:
   - site-for-every-repository
-  notes: >
-    Agreed on #115 instead of a browser merge re-check. basstler.plan_site.publication commits
-    plan-site-merge.yml straight onto the notes repository's default branch: on pull_request_target
-    closed and merged it starts the site build with PLAN_SITE_TOKEN, a fork's pull requests included.
-    A default branch that refuses the push gets it on basstler/plan-site-merge, with a one-line step
-    to merge it. A fork gets none, so its main stays identical to upstream (agreed on #122); its
-    merges reach the page through page-merge-recheck. Awaiting review on #122.
+  notes: 'Agreed on #115 instead of a browser merge re-check. basstler.plan_site.publication
+    commits plan-site-merge.yml straight onto the notes repository''s default branch: on pull_request_target
+    closed and merged it starts the site build with PLAN_SITE_TOKEN, a fork''s pull requests
+    included. A default branch that refuses the push gets it on basstler/plan-site-merge,
+    with a one-line step to merge it. A fork gets none, so its main stays identical to upstream
+    (agreed on #122); its merges reach the page through page-merge-recheck. Awaiting review
+    on #122.
 
+    '
 - id: page-merge-recheck
   title: The plan page shows every pull request's live state - draft, open, merged or closed
   status: in progress
@@ -120,52 +123,53 @@ items:
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on:
   - page-draft-recheck
-  notes: >
-    Widened from merges alone (user, 2026-11-05: most up to date draft/open/merged states). Extend
-    site_plan_draft_recheck.js: on load and when the tab regains focus, each pull request chip shows
-    GitHub's live state, and an item whose pull request merged shows as done, with the counts
-    updated. One request per pull request (60 an hour per viewer without page-viewer-token). When
-    GitHub refuses, the page says it shows the build's state and when that build ran.
+  notes: 'Widened from merges alone (user, 2026-11-05: most up to date draft/open/merged states).
+    Extend site_plan_draft_recheck.js: on load and when the tab regains focus, each pull request
+    chip shows GitHub''s live state, and an item whose pull request merged shows as done,
+    with the counts updated. One request per pull request (60 an hour per viewer without page-viewer-token).
+    When GitHub refuses, the page says it shows the build''s state and when that build ran.
 
+    '
 - id: page-viewer-token
   title: A viewer's own token lets the plan page's re-checks read private repositories
   status: not started
   track: site
   depends_on:
   - page-merge-recheck
-  notes: >
-    Agreed on #122. The page takes a fine-grained token with Pull requests read-only on chosen
-    repositories, keeps it only in the viewer's localStorage and sends it only to api.github.com;
-    both the draft and the merge re-check use it, and without one they stay public-only. A
-    Content-Security-Policy limits connections to api.github.com. Setup prints the token's
-    creation as one copyable line with browser steps; pasting it into the page is the viewer's step.
+  notes: 'Agreed on #122. The page takes a fine-grained token with Pull requests read-only
+    on chosen repositories, keeps it only in the viewer''s localStorage and sends it only
+    to api.github.com; both the draft and the merge re-check use it, and without one they
+    stay public-only. A Content-Security-Policy limits connections to api.github.com. Setup
+    prints the token''s creation as one copyable line with browser steps; pasting it into
+    the page is the viewer''s step.
 
+    '
 - id: private-site
   title: The plan site can be private, readable only by the people who can read its repository
   status: not started
   track: site
   depends_on:
   - page-viewer-token
-  notes: >
-    Agreed on #122; no Enterprise. Setup creates the site repository private. The build commits the
-    rendered pages to it instead of deploying them; the Pages site is only a page that fetches them
-    through the API with the viewer's token from page-viewer-token. Sharing is adding a collaborator.
-    The token stays per browser; setup prints a one-time https://<site>/#token=... link for a new
-    device, which the page stores and strips from the address bar.
+  notes: 'Agreed on #122; no Enterprise. Setup creates the site repository private. The build
+    commits the rendered pages to it instead of deploying them; the Pages site is only a page
+    that fetches them through the API with the viewer''s token from page-viewer-token. Sharing
+    is adding a collaborator. The token stays per browser; setup prints a one-time https://<site>/#token=...
+    link for a new device, which the page stores and strips from the address bar.
 
+    '
 - id: page-github-sign-in
   title: Sign in with GitHub on the plan page instead of pasting a token
   status: not started
   track: site
   depends_on:
   - page-viewer-token
-  notes: >
-    Agreed on #122 as a later step: the pasted token stays the base. A static page cannot trade
-    GitHub's sign-in code for a token itself, so setup deploys a small per-user helper (a
-    Cloudflare Worker, free tier) holding the secret of an OAuth App the user registers by hand;
-    the page's "Sign in with GitHub" then stores the token as page-viewer-token does. Never a
-    helper basstler runs for everyone.
+  notes: 'Agreed on #122 as a later step: the pasted token stays the base. A static page cannot
+    trade GitHub''s sign-in code for a token itself, so setup deploys a small per-user helper
+    (a Cloudflare Worker, free tier) holding the secret of an OAuth App the user registers
+    by hand; the page''s "Sign in with GitHub" then stores the token as page-viewer-token
+    does. Never a helper basstler runs for everyone.
 
+    '
 - id: rebuild-on-pull-request-state
   title: Every pull request state change in a tracked repository rebuilds the plan site
   status: in progress
@@ -176,11 +180,12 @@ items:
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on:
   - site-rebuild-on-merge
-  notes: >
-    The merge workflow also runs on opened, reopened, ready_for_review and converted_to_draft, and
-    on a pull request closed unmerged, so the built hub, overview and counts follow draft and open
-    changes within a minute, not only merges. Each run follows a real change; no schedule.
+  notes: 'The merge workflow also runs on opened, reopened, ready_for_review and converted_to_draft,
+    and on a pull request closed unmerged, so the built hub, overview and counts follow draft
+    and open changes within a minute, not only merges. Each run follows a real change; no
+    schedule.
 
+    '
 - id: plan-timestamps
   title: Plan pages show when the plan was created, last modified and last refreshed
   status: in progress
@@ -190,23 +195,24 @@ items:
   repository: KAOS-repositories/basstler
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
   depends_on: []
-  notes: >
-    Created and last modified come from the notes branch's git history of the plan's directory (the
-    build fetches it without file contents). Last refreshed is the build time, replaced by the time
-    of the page's live pull request check once that succeeds. The build time is left out of the
-    site digest, so a build with nothing new still skips the deploy.
+  notes: 'Created and last modified come from the notes branch''s git history of the plan''s
+    directory (the build fetches it without file contents). Last refreshed is the build time,
+    replaced by the time of the page''s live pull request check once that succeeds. The build
+    time is left out of the site digest, so a build with nothing new still skips the deploy.
 
+    '
 - id: per-owner-read-tokens
   title: The plan site build reads private repositories of several owners with read-only tokens
   track: site
   depends_on:
-  - basstler-setup-ux/private-notes-site-build
   - basstler-packages/uv-workspace
   status: not started
-  notes: >
-    From #170's review: several owners now need a classic token, which can also write. Ask for one
-    read-only fine-grained token per owner instead, as owner and token lines in PLAN_SITE_READ_TOKEN;
-    the build masks each and picks one per owner, for API calls and git fetches. A token reaches only
-    its maker's and their organizations' repositories, so a teammate's private fork is out of reach:
-    team sites read the organization's repository (team-repository). The step names the owners and
-    warns that an organization may block or require approval of such tokens. Waits for uv-workspace.
+  notes: 'From #170''s review: several owners now need a classic token, which can also write.
+    Ask for one read-only fine-grained token per owner instead, as owner and token lines in
+    PLAN_SITE_READ_TOKEN; the build masks each and picks one per owner, for API calls and
+    git fetches. A token reaches only its maker''s and their organizations'' repositories,
+    so a teammate''s private fork is out of reach: team sites read the organization''s repository
+    (team-repository). The step names the owners and warns that an organization may block
+    or require approval of such tokens. Waits for uv-workspace.
+
+    '
