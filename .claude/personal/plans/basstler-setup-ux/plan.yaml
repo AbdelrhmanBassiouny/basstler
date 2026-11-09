@@ -155,9 +155,10 @@ items:
     Based on main. Dispatch step stops with an ::error:: naming the secret and how to store it.
     basstler.plan_site.token_storage reads the token at a hidden terminal prompt, proves it by
     starting the site build with it (stores nothing if refused), then stores it in every published
-    repository; no run is waited for (replaces the gh secret set loop; covers the done half of
-    trigger-and-done). The create step links the pre-filled token form. One secret copy per
-    repository stays. Open: make the token optional (F plus page-merge-recheck).
+    repository; no run is waited for. In a cloud session the store step prints a bash -c command
+    needing only gh that does the same on the user's computer. The create step links the pre-filled
+    token form. One secret copy per repository stays. Open: make the token optional (F plus
+    page-merge-recheck).
 
 - id: build-failure-report
   title: Report the plan site's failed builds, with GitHub's reason, where the user sees them
