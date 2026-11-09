@@ -342,7 +342,7 @@ def test_a_local_session_that_cannot_start_the_build_gets_the_issue_and_the_fix(
     assert "Attach it" in access.detail
 
 
-def test_a_clone_on_no_plan_site_has_no_access_to_need(
+def test_a_clone_no_plan_site_lists_reports_the_access_check_as_context(
     check_setup_repository: ScratchRepository,
 ):
     report = run_check_setup(
