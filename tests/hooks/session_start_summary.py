@@ -150,6 +150,11 @@ class SummaryMessage(StrEnum):
     There are no personal notes to read names from.
     """
 
+    NOTES_NOT_REACHED = "notes_line_not_reached"
+    """
+    The notes branch could not be fetched from a repository this session cannot reach.
+    """
+
     HUB_NOT_REGISTERED = "hub_line_not_registered"
     """
     The notes branch has no hub file.

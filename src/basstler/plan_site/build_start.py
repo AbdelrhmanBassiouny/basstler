@@ -30,6 +30,7 @@ from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.personal_notes.branch import PersonalNotesLocation
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import PlanSiteSecret
+from basstler.repository_attachment import RepositoryAttachment
 from basstler.standard_streams import StandardStreamHandler
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -43,23 +44,6 @@ BUILD_START_COMMAND = f'"${{{BasstlerVariable.PYTHON}}}" -m {__spec__.name}'
 """
 The command line that starts the build again, once this session can.
 """
-
-
-class SessionTool(StrEnum):
-    """
-    The Claude Code tools a session is told to call when the build did not start.
-    """
-
-    ATTACH_REPOSITORY = "mcp__claude-code-remote__add_repo"
-    """
-    Attaches a repository to a cloud session, which lets its proxy answer that
-    repository's API.
-    """
-
-    ASK_USER = "AskUserQuestion"
-    """
-    Asks the user to choose between options.
-    """
 
 
 class GitHubCommand(StrEnum):
@@ -142,14 +126,12 @@ class SiteAccess:
                     CodeFence.CLOSE,
                 ]
             )
-        return (
-            f"Attach the site repository to this session: call "
-            f"{SessionTool.ATTACH_REPOSITORY} with owner {repository.owner}, repo "
-            f"{repository.name} and access push, then run {BUILD_START_COMMAND}. If the "
-            f"attach is refused, ask the user with {SessionTool.ASK_USER} to allow it, with "
-            '"Attach it (Recommended)" as the first option: every plan save then '
-            "updates the plan site within a minute, without a stored token."
-        )
+        return RepositoryAttachment(
+            repository,
+            retry_command=BUILD_START_COMMAND,
+            benefit="every plan save then updates the plan site within a minute, "
+            "without a stored token",
+        ).instruction()
 
 
 @dataclass(frozen=True)

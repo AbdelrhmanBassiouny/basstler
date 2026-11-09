@@ -322,6 +322,12 @@ class DatasetLocation(PathEnumeration):
     A module standing in for :mod:`basstler.plan_site.build_start`, printing its name.
     """
 
+    NOTES_ACCESS_STUB = STUBS / "notes_access_prints_its_name.py"
+    """
+    A module standing in for :mod:`basstler.personal_notes.access`, printing its name as
+    the missing access.
+    """
+
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"
     """
     The recorded GraphQL responses the upstream review reader is replayed against.

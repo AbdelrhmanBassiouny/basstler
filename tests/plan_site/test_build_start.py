@@ -29,11 +29,11 @@ from basstler.plan_site.build_start import (
     BuildStart,
     CodeFence,
     GitHubCommand,
-    SessionTool,
     SiteAccess,
 )
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.repository import Repository
+from basstler.repository_attachment import SessionTool
 
 from ..constants.paths import DatasetLocation
 

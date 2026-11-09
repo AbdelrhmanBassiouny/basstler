@@ -7,6 +7,7 @@ from __future__ import annotations
 from enum import IntEnum, StrEnum
 
 from basstler.environment import EnvironmentVariable
+from basstler.locations import ClaudeCodeVariable
 
 
 class ScrubbedEnvironmentPrefix(StrEnum):
@@ -31,6 +32,11 @@ class ScrubbedEnvironmentPrefix(StrEnum):
     ENVIRONMENT_FILE = "CLAUDE_ENV_FILE"
     """
     The file a SessionStart hook exports variables to the session through.
+    """
+
+    CLOUD_SESSION = ClaudeCodeVariable.REMOTE.value
+    """
+    Whether the run is in a Claude Code cloud session, which makes the hooks read GitHub.
     """
 
     BASSTLER = "BASSTLER_"
