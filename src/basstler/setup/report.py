@@ -56,6 +56,11 @@ class SetupCheck(StrEnum):
     The notes file's path on that branch, and where that came from.
     """
 
+    NOTES_REPOSITORY_ACCESS = "notes_repository_access"
+    """
+    A cloud session reaching the repository the notes are kept in.
+    """
+
     NOTES_BRANCH = "notes_branch"
     """
     The notes branch existing on its remote.

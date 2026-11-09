@@ -26,6 +26,7 @@ from basstler.locations import (
 )
 from basstler.environment import EnvironmentFlag
 from basstler.exit_codes import SetupCheckExitCode
+from basstler.personal_notes import access
 from basstler.plan_site import build_start, dispatch_check, publication
 from basstler.plan_site.dispatch_check import UNVERIFIED_PREFIX
 from basstler.plan_site.hub import HubFileKey
@@ -222,6 +223,51 @@ def test_a_dispatch_workflow_whose_runs_cannot_be_read_is_not_verified(
     assert plan_site.status == CheckStatus.UNVERIFIED
     assert plan_site.detail.startswith(UNVERIFIED_PREFIX)
     assert publication.__name__ in plan_site.detail
+
+
+# %% the notes repository
+
+
+def with_notes_access_stub(
+    repository: ScratchRepository, stub: DatasetLocation
+) -> ScratchRepository:
+    """
+    Make the scratch repository's notes access command print what a stand-in prints.
+
+    :param repository: The scratch repository, fully set up.
+    :param stub: The module whose output replaces the notes access command's.
+    :return: The same repository.
+    """
+    repository.replace_package_module(access, stub)
+    return repository
+
+
+def test_a_notes_repository_the_session_cannot_reach_needs_setup(
+    check_setup_repository: ScratchRepository,
+):
+    with_notes_access_stub(check_setup_repository, DatasetLocation.NOTES_ACCESS_STUB)
+
+    report = run_check_setup(check_setup_repository)
+
+    reached = report.results[SetupCheck.NOTES_REPOSITORY_ACCESS]
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+    assert reached.status == CheckStatus.NEEDS_SETUP
+    assert reached.detail == access.__name__
+
+
+def test_a_notes_repository_the_session_reaches_passes(
+    check_setup_repository: ScratchRepository,
+):
+    with_notes_access_stub(
+        check_setup_repository, DatasetLocation.NOTES_ACCESS_REACHED_STUB
+    )
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.results[SetupCheck.NOTES_REPOSITORY_ACCESS].status == CheckStatus.OK
+
+
+# %% the plan site access
 
 
 def with_build_start_stub(

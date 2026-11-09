@@ -362,6 +362,12 @@ class DatasetLocation(PathEnumeration):
     the missing access.
     """
 
+    NOTES_ACCESS_REACHED_STUB = STUBS / "notes_access_has_access.py"
+    """
+    A module standing in for :mod:`basstler.personal_notes.access`, saying nothing: the
+    session reaches the notes repository.
+    """
+
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"
     """
     The recorded GraphQL responses the upstream review reader is replayed against.

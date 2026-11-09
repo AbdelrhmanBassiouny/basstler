@@ -61,7 +61,7 @@ EXIT_CODE=0
 
 # Every check this script reports, in the order it reports them; equal to
 # basstler.setup.report.SetupCheck.
-KNOWN_CHECKS=" tooling_files session_start_hook claude_local_md_ignored notes_remote notes_remote_url notes_branch_name notes_path notes_branch notes_file stack_upstream upstream_reviews_action plan_site plan_site_access git_identity package_dependencies basstler_version claude_local_md "
+KNOWN_CHECKS=" tooling_files session_start_hook claude_local_md_ignored notes_remote notes_remote_url notes_branch_name notes_path notes_repository_access notes_branch notes_file stack_upstream upstream_reviews_action plan_site plan_site_access git_identity package_dependencies basstler_version claude_local_md "
 
 REQUIRE_UPSTREAM=false
 REQUESTED_CHECKS=""
@@ -294,6 +294,17 @@ report notes_remote info "${NOTES_REMOTE} (from $(resolution_source claude.perso
 report notes_remote_url info "$(git remote get-url "${NOTES_REMOTE}" 2>/dev/null || printf '%s\n' "${NOTES_REMOTE}")"
 report notes_branch_name info "${NOTES_BRANCH} (from $(resolution_source claude.personalNotesBranch CLAUDE_PERSONAL_NOTES_BRANCH))"
 report notes_path info "${NOTES_PATH} (from $(resolution_source claude.personalNotesPath CLAUDE_PERSONAL_NOTES_PATH))"
+
+# In a cloud session, a separate notes repository is reached only once it is attached;
+# the module prints how, and nothing when there is nothing to attach.
+NOTES_REPOSITORY_ACCESS="$("${BASSTLER_PYTHON}" -m "${NOTES_ACCESS_MODULE}" \
+  --retry "\"\${BASSTLER_PLUGIN_ROOT}/hooks/check-setup.sh\"" 2>/dev/null | tr '\n' ' ' || true)"
+NOTES_REPOSITORY_ACCESS="${NOTES_REPOSITORY_ACCESS% }"
+if [ -z "${NOTES_REPOSITORY_ACCESS}" ]; then
+  report notes_repository_access ok "the notes repository is the checkout's own, or this session reaches it"
+else
+  report notes_repository_access needs-setup "${NOTES_REPOSITORY_ACCESS}"
+fi
 
 # %% the personal-notes branch and its contents
 
