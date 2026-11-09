@@ -48,6 +48,12 @@ class SummaryLine(StrEnum):
     Which plan, if any, tracks the current branch.
     """
 
+    MERGED_ITEMS = "merged items"
+    """
+    Which items of the loaded plan were recorded done because their pull requests
+    merged.
+    """
+
     PLAN_SITE = "plan site"
     """
     The plan site, and where this session's work sits on it.
@@ -127,6 +133,31 @@ class SummaryMessage(StrEnum):
     BRANCH_TRACKED_IN_PLAN = "plan_line_tracked"
     """
     The branch is a tracked item of a plan that resolved.
+    """
+
+    MERGED_ITEMS_NOT_APPLICABLE = "merged_items_line_not_applicable"
+    """
+    No plan was loaded, so there were no items to look up.
+    """
+
+    MERGED_ITEMS_NONE = "merged_items_line_none"
+    """
+    No item of the loaded plan has a merged pull request it does not record done.
+    """
+
+    MERGED_ITEMS_RECORDED = "merged_items_line_recorded"
+    """
+    Items were recorded done and the plan was saved without them.
+    """
+
+    MERGED_ITEMS_SAVE_FAILED = "merged_items_line_save_failed"
+    """
+    Items were found merged, but the plan save refused or failed.
+    """
+
+    MERGED_ITEMS_NOT_CHECKED = "merged_items_line_not_checked"
+    """
+    The plan's pull requests could not be read.
     """
 
     CITED_NAMES_CURRENT = "cited_names_line_current"

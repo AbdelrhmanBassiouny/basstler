@@ -322,6 +322,17 @@ class DatasetLocation(PathEnumeration):
     A module standing in for :mod:`basstler.plan_site.build_start`, printing its name.
     """
 
+    MERGED_ITEMS_STUB = STUBS / "merged_items_from_recording.py"
+    """
+    A module standing in for :mod:`basstler.plan.merged_items`'s command, reading the
+    pull requests from a recording.
+    """
+
+    IN_PROGRESS_ITEM_MERGED = DIRECTORY / "pull-requests-in-progress-item-merged.json"
+    """
+    A recording in which the in-progress item of :attr:`PLAN_WITH_LANDED_ITEMS` has merged.
+    """
+
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"
     """
     The recorded GraphQL responses the upstream review reader is replayed against.

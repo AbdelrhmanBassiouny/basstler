@@ -771,6 +771,25 @@ class PlanManifest:
             }
         )
 
+    def with_items_done(self, identifiers: set[str]) -> PlanManifest:
+        """
+        :param identifiers: The ids of the items whose work has landed.
+        :return: This manifest with each of those items' status set to done.
+        """
+        return PlanManifest(
+            {
+                **self.content,
+                ManifestKey.ITEMS.key: [
+                    (
+                        {**item.content, ManifestKey.STATUS.key: ItemStatus.DONE.value}
+                        if item.identifier in identifiers
+                        else item.content
+                    )
+                    for item in self.items
+                ],
+            }
+        )
+
     def without_landed_items(self) -> PlanManifest:
         """
         A landed item tells a future session nothing it needs: its work is in the code

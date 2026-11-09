@@ -19,6 +19,9 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from types import ModuleType
+
+import basstler
 
 from .script_runner import BashScriptRunner
 from basstler.locations import PackageLocation, PluginLocation
@@ -379,6 +382,21 @@ class ScratchRepository:
         Copy the real :mod:`basstler` package into the scratch checkout.
         """
         install_package_into(self.checkout_root)
+
+    def replace_module(self, module: ModuleType, stand_in: Path) -> None:
+        """
+        Replace one module of the package :meth:`install_package` copied.
+
+        :param module: The module to replace.
+        :param stand_in: The source run in its place.
+        """
+        package_root = Path(basstler.__file__).parent.parent
+        shutil.copy(
+            stand_in,
+            self.checkout_root
+            / PackageSourceFile.SOURCE
+            / Path(module.__file__).relative_to(package_root),
+        )
 
     def configuration_value(self, variable_name: str) -> str:
         """
