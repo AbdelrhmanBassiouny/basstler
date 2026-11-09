@@ -7,10 +7,12 @@ from __future__ import annotations
 
 import json
 from datetime import datetime
+from http import HTTPStatus
 
 import pytest
 
 from basstler.pull_request_state import (
+    LivePullRequests,
     LiveState,
     MalformedPullRequestDataError,
     MissingMergeTimestampError,
@@ -18,7 +20,11 @@ from basstler.pull_request_state import (
     PullRequestState,
 )
 from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import PullRequestField
+from basstler.maintenance.board import (
+    AccountField,
+    PullRequestField,
+    PullRequestHeadKey,
+)
 from basstler.maintenance.description import (
     PullRequestDescription,
     UpstreamPullRequestLink,
@@ -26,6 +32,9 @@ from basstler.maintenance.description import (
 from basstler.repository import Repository
 
 from .constants.paths import DatasetLocation
+from .constants.site import SiteSampleText
+from .github.pull_request_api import api_pull_request, refusal
+from .plan_site.first_plan import MERGED_PULL_REQUEST, OPEN_PULL_REQUEST
 from .constants.stack import StackLabel
 
 
@@ -45,15 +54,20 @@ def test_classified_live_state_is_closed_unmerged_for_a_closed_unlabeled_pull_re
         "owner/repo": {"1": PullRequestRecord(state=PullRequestState.CLOSED)}
     }
     assert (
-        LiveState.classify(1, "owner/repo", pull_requests_by_repository)
+        LiveState.classify(
+            1, "owner/repo", LivePullRequests(pull_requests_by_repository)
+        )
         is LiveState.CLOSED_UNMERGED
     )
 
 
 def test_classified_live_state_is_repository_unreadable_on_a_repository_not_read():
     repository = Repository("owner", "repo")
+    live_pull_requests = LivePullRequests(
+        read_failures={repository: refusal(repository, HTTPStatus.NOT_FOUND)}
+    )
     assert (
-        LiveState.classify(1, str(repository), {}, frozenset({repository}))
+        LiveState.classify(1, str(repository), live_pull_requests)
         is LiveState.REPOSITORY_UNREADABLE
     )
 
@@ -206,3 +220,65 @@ def test_pull_request_data_parsing_rejects_data_without_its_repository_level():
 def test_pull_request_data_parsing_rejects_an_entry_that_is_not_a_mapping():
     with pytest.raises(MalformedPullRequestDataError, match="owner/repo#1"):
         PullRequestRecord.parse_by_repository({"owner/repo": {"1": "open"}})
+
+
+# %% reading a pull request from the GitHub API
+
+
+def test_from_api_reads_label_names():
+    labels = [GitHubLabel.BUG.value, GitHubLabel.MERGED.value]
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            MERGED_PULL_REQUEST,
+            {PullRequestField.LABELS: [{"name": label} for label in labels]},
+        )
+    )
+    assert record.labels == labels
+
+
+def test_from_api_reads_a_merge():
+    merged_at = "2026-10-01T12:00:00+00:00"
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            MERGED_PULL_REQUEST,
+            {
+                PullRequestField.STATE: PullRequestState.CLOSED.value,
+                PullRequestField.MERGED_AT: merged_at,
+            },
+        )
+    )
+    assert record.was_merged
+    assert record.merged_at.isoformat() == merged_at
+
+
+def test_from_api_reads_the_head_commit():
+    commit = SiteSampleText.HEAD_COMMIT.value
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            OPEN_PULL_REQUEST,
+            {PullRequestField.HEAD: {PullRequestHeadKey.COMMIT: commit}},
+        )
+    )
+    assert record.head_commit == commit
+
+
+def test_from_api_without_a_head_reads_no_head_commit():
+    assert (
+        PullRequestRecord.from_api(api_pull_request(OPEN_PULL_REQUEST)).head_commit
+        is None
+    )
+
+
+def test_from_api_reads_the_assignee_logins():
+    logins = [SiteSampleText.ASSIGNEE.value]
+    record = PullRequestRecord.from_api(
+        api_pull_request(
+            OPEN_PULL_REQUEST,
+            {
+                PullRequestField.ASSIGNEES: [
+                    {AccountField.LOGIN: login} for login in logins
+                ]
+            },
+        )
+    )
+    assert record.assignees == logins

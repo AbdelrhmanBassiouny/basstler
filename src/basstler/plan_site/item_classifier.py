@@ -4,8 +4,8 @@ Fill in what each item of a plan shows on its page, from live pull request data.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
-from dataclasses import dataclass, field
+from collections.abc import Callable
+from dataclasses import dataclass
 from http import HTTPStatus
 
 from basstler.github.exceptions import GitHubCallFailed, GitHubRequestFailed
@@ -17,7 +17,7 @@ from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.pull_request_state import (
     LiveState,
     PullRequestRecord,
-    PullRequestsByRepository,
+    LivePullRequests,
 )
 from basstler.repository import PullRequestReference, Repository
 
@@ -41,19 +41,14 @@ class ItemClassifier:
     The plan whose items are classified.
     """
 
-    pull_requests_by_repository: PullRequestsByRepository
+    live_pull_requests: LivePullRequests
     """
-    Live pull request state for every repository the plan's items name.
+    What was read of every repository the plan's items name.
     """
 
     dependencies: DependencyResolver
     """
     The resolver of the plan's dependencies.
-    """
-
-    read_failures: Mapping[Repository, GitHubCallFailed] = field(default_factory=dict)
-    """
-    Why each repository whose pull requests could not be read could not be.
     """
 
     locate_plan_page: Callable[[str], str] | None = None
@@ -66,9 +61,7 @@ class ItemClassifier:
         """
         Fill in every item of :attr:`plan` in place.
         """
-        self.dependencies.classify_live_states(
-            self.pull_requests_by_repository, frozenset(self.read_failures)
-        )
+        self.dependencies.classify_live_states(self.live_pull_requests)
         for item in self.plan.items:
             self._classify_pull_request(item)
         for item in self.plan.items:
@@ -98,7 +91,7 @@ class ItemClassifier:
         if item.live_state is LiveState.REPOSITORY_UNREADABLE:
             repository = Repository.parse(self._repository_of(item))
             item.access_warning = self.access_warning_of(
-                repository, self.read_failures[repository]
+                repository, self.live_pull_requests.read_failures[repository]
             )
         item.needs_review = (
             item.live_state is LiveState.OPEN_DRAFT
@@ -118,8 +111,10 @@ class ItemClassifier:
         """
         if item.pull_request_number is None:
             return None
-        repository_pull_requests = self.pull_requests_by_repository.get(
-            self._repository_of(item), {}
+        repository_pull_requests = (
+            self.live_pull_requests.pull_requests_by_repository.get(
+                self._repository_of(item), {}
+            )
         )
         return repository_pull_requests.get(str(item.pull_request_number))
 

@@ -7,31 +7,12 @@ from __future__ import annotations
 
 import dataclasses
 import html
-import json
-from collections.abc import Mapping
 from datetime import UTC, datetime
-from http import HTTPStatus
 from pathlib import Path
-from typing import Any
 
 import pytest
 
 from basstler.exceptions import PlanValidationError
-from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import (
-    AccountField,
-    PullRequestField,
-    PullRequestHeadKey,
-)
-from basstler.github.client import HttpMethod
-from basstler.github.credential import CredentialProvider
-from basstler.github.exceptions import GitHubRequestFailed
-from basstler.maintenance.github import (
-    CommitReport,
-    GitHubRepository,
-    PullRequestListState,
-    RepositoryPath,
-)
 from basstler.plan.dependencies import DependencyReference, DependencyResolver
 from basstler.plan.model import ItemStatus, PlanDocument
 from basstler.plan.repository_rules import RepositoryRules
@@ -47,18 +28,23 @@ from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.cards import LiveStateAttribute, PlanTimeAttribute
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan_site.hub_page import PlanSummary, SiteStylesheet, SkippedPage
-from basstler.plan_site.item_classifier import READ_ACCESS_STATUSES, ItemClassifier
-from basstler.plan_site.workflows import PlanSiteSecret
-from basstler.plan_site.plan import Item, Plan
-from basstler.plan_site.plan_page import PlanPage
+from basstler.plan_site.item_classifier import ItemClassifier
+from basstler.plan_site.plan import Plan
 from basstler.pull_request_source import GitHubPullRequestSource
-from basstler.pull_request_state import LiveState, PullRequestRecord, PullRequestState
-from basstler.repository import PullRequestReference, Repository
+from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.github.states import CombinedCheckState
 
-from ..constants.paths import DatasetLocation, RecordedCommitChecks
+from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
+from ..github.pull_request_api import details_of, listing_path
 from ..recorded_pull_requests import RecordedPullRequestSource
+from .first_plan import (
+    ELSEWHERE_PULL_REQUEST,
+    FIRST_PLAN,
+    MERGED_PULL_REQUEST,
+    OPEN_PULL_REQUEST,
+    PLAN_REPOSITORY,
+)
 from ..github.recorded_client import RecordedGitHubClient
 
 NOTES_REPOSITORY = SiteRepository.NOTES.value
@@ -69,31 +55,6 @@ The repository whose notes the dataset's plans stand in for.
 REPOSITORY_URL = f"{SiteSampleText.SITE_URL}{NOTES_REPOSITORY}/"
 """
 Where that repository's index is served from.
-"""
-
-FIRST_PLAN = Plan.from_mapping(
-    PlanSource.from_directory(SitePlan.FIRST.directory).manifest
-)
-"""
-The dataset's first plan, whose items' pull requests and tracking issue the tests look
-up.
-"""
-
-PLAN_REPOSITORY = Repository.parse(FIRST_PLAN.default_repository)
-"""
-The repository the first plan's items are opened on unless they name another.
-"""
-
-MERGED_PULL_REQUEST, OPEN_PULL_REQUEST, ELSEWHERE_PULL_REQUEST = (
-    PullRequestReference(
-        Repository.parse(item.repository or FIRST_PLAN.default_repository),
-        item.pull_request_number,
-    )
-    for item in FIRST_PLAN.items
-)
-"""
-The first plan's pull requests, in item order: a merged one, an open one, and one on a
-repository other than the plan's default.
 """
 
 PUBLISHED_PLANS = (SitePlan.FIRST, SitePlan.SECOND)
@@ -284,10 +245,13 @@ def test_build_looks_up_every_referenced_pull_request_in_its_own_repository(
     ]
 
 
-def test_pull_requests_of_leaves_out_a_number_the_repository_does_not_have(
+def test_live_pull_requests_leave_out_a_number_the_repository_does_not_have(
     pull_request_source: RecordedPullRequestSource,
 ):
-    assert pull_request_source.pull_requests_of(DependencyResolver(FIRST_PLAN)) == {
+    live_pull_requests = pull_request_source.live_pull_requests_of(
+        DependencyResolver(FIRST_PLAN)
+    )
+    assert live_pull_requests.pull_requests_by_repository == {
         str(PLAN_REPOSITORY): {
             str(reference.number): pull_request_source.records[reference]
             for reference in (MERGED_PULL_REQUEST, OPEN_PULL_REQUEST)
@@ -470,240 +434,7 @@ def test_the_digest_leaves_out_its_own_file(site: RepositorySite, tmp_path: Path
     assert SiteDigest(tmp_path).value == published
 
 
-# %% reading pull requests from the GitHub API
-
-
-def api_pull_request(
-    reference: PullRequestReference,
-    overrides: Mapping[PullRequestField, Any] | None = None,
-) -> dict[str, Any]:
-    """
-    Build one pull request object shaped like the pulls API's.
-
-    :param reference: The pull request to describe.
-    :param overrides: Fields to replace.
-    """
-    record = {
-        PullRequestField.NUMBER: reference.number,
-        PullRequestField.STATE: PullRequestState.OPEN.value,
-        PullRequestField.DRAFT: False,
-        PullRequestField.MERGED_AT: None,
-        PullRequestField.LABELS: [],
-        PullRequestField.HTML_URL: reference.url,
-    }
-    record.update(overrides or {})
-    return {
-        pull_request_field.key: value for pull_request_field, value in record.items()
-    }
-
-
-def test_from_api_reads_label_names():
-    labels = [GitHubLabel.BUG.value, GitHubLabel.MERGED.value]
-    record = PullRequestRecord.from_api(
-        api_pull_request(
-            MERGED_PULL_REQUEST,
-            {PullRequestField.LABELS: [{"name": label} for label in labels]},
-        )
-    )
-    assert record.labels == labels
-
-
-def test_from_api_reads_a_merge():
-    merged_at = "2026-10-01T12:00:00+00:00"
-    record = PullRequestRecord.from_api(
-        api_pull_request(
-            MERGED_PULL_REQUEST,
-            {
-                PullRequestField.STATE: PullRequestState.CLOSED.value,
-                PullRequestField.MERGED_AT: merged_at,
-            },
-        )
-    )
-    assert record.was_merged
-    assert record.merged_at.isoformat() == merged_at
-
-
-def test_from_api_reads_the_head_commit():
-    commit = SiteSampleText.HEAD_COMMIT.value
-    record = PullRequestRecord.from_api(
-        api_pull_request(
-            OPEN_PULL_REQUEST,
-            {PullRequestField.HEAD: {PullRequestHeadKey.COMMIT: commit}},
-        )
-    )
-    assert record.head_commit == commit
-
-
-def test_from_api_without_a_head_reads_no_head_commit():
-    assert (
-        PullRequestRecord.from_api(api_pull_request(OPEN_PULL_REQUEST)).head_commit
-        is None
-    )
-
-
-def test_from_api_reads_the_assignee_logins():
-    logins = [SiteSampleText.ASSIGNEE.value]
-    record = PullRequestRecord.from_api(
-        api_pull_request(
-            OPEN_PULL_REQUEST,
-            {
-                PullRequestField.ASSIGNEES: [
-                    {AccountField.LOGIN: login} for login in logins
-                ]
-            },
-        )
-    )
-    assert record.assignees == logins
-
-
-def listing_path(repository: Repository) -> str:
-    """
-    :param repository: The repository whose pull requests are listed.
-    :return: The path every pull request of it is listed from.
-    """
-    return (
-        f"/{repository.api_path}/pulls?state={PullRequestListState.ALL.query}"
-        f"&per_page={GitHubRepository.page_size}"
-    )
-
-
-def details_of(repository: Repository) -> dict[str, Any]:
-    """
-    :param repository: A repository the source can read.
-    :return: The recorded response to the read of its details.
-    """
-    return {
-        f"/{repository.api_path}": json.loads(
-            DatasetLocation.REPOSITORY_NOT_FORK.read_text()
-        )
-    }
-
-
-def pull_request_path(reference: PullRequestReference) -> str:
-    """
-    :param reference: The pull request to read.
-    :return: The path it is read from on its own.
-    """
-    return f"/{reference.repository.pull_request_path(reference.number)}"
-
-
-def test_github_source_answers_a_listed_pull_request_from_the_listing():
-    listed = api_pull_request(OPEN_PULL_REQUEST, {PullRequestField.DRAFT: True})
-    source = GitHubPullRequestSource(
-        RecordedGitHubClient(
-            responses=details_of(OPEN_PULL_REQUEST.repository),
-            pages={listing_path(OPEN_PULL_REQUEST.repository): [[listed]]},
-        )
-    )
-    record = source.pull_request(OPEN_PULL_REQUEST)
-    assert record == PullRequestRecord.from_api(listed)
-
-
-def test_github_source_reads_an_unlisted_pull_request_on_its_own():
-    unlisted = api_pull_request(OPEN_PULL_REQUEST, {PullRequestField.DRAFT: True})
-    source = GitHubPullRequestSource(
-        RecordedGitHubClient(
-            responses={
-                **details_of(OPEN_PULL_REQUEST.repository),
-                pull_request_path(OPEN_PULL_REQUEST): unlisted,
-            },
-            pages={listing_path(OPEN_PULL_REQUEST.repository): [[]]},
-        )
-    )
-    record = source.pull_request(OPEN_PULL_REQUEST)
-    assert record == PullRequestRecord.from_api(unlisted)
-
-
-def test_github_source_answers_none_for_a_pull_request_that_does_not_exist():
-    source = GitHubPullRequestSource(
-        RecordedGitHubClient(
-            responses=details_of(ELSEWHERE_PULL_REQUEST.repository),
-            pages={listing_path(ELSEWHERE_PULL_REQUEST.repository): [[]]},
-        )
-    )
-    assert source.pull_request(ELSEWHERE_PULL_REQUEST) is None
-
-
 # %% a repository the build cannot read
-
-
-def test_github_source_answers_none_for_a_pull_request_on_a_repository_it_cannot_read():
-    source = GitHubPullRequestSource(RecordedGitHubClient())
-    assert source.pull_request(ELSEWHERE_PULL_REQUEST) is None
-
-
-def test_github_source_finds_a_repository_whose_details_are_refused_unreadable():
-    source = GitHubPullRequestSource(
-        RecordedGitHubClient(responses=details_of(PLAN_REPOSITORY))
-    )
-    failures = source.read_failures_of(DependencyResolver(FIRST_PLAN))
-    assert list(failures) == [ELSEWHERE_PULL_REQUEST.repository]
-
-
-def test_github_source_keeps_why_a_repository_cannot_be_read():
-    client = RecordedGitHubClient(refusal=HTTPStatus.FORBIDDEN)
-    failure = GitHubPullRequestSource(client).read_failure_of(PLAN_REPOSITORY)
-    assert failure.status == client.refusal
-
-
-def test_github_source_reports_a_repository_it_cannot_read(
-    capsys: pytest.CaptureFixture,
-):
-    source = GitHubPullRequestSource(RecordedGitHubClient())
-    failure = source.read_failure_of(PLAN_REPOSITORY)
-    assert failure.error_message() in capsys.readouterr().err
-
-
-def refusal(status: HTTPStatus) -> GitHubRequestFailed:
-    """
-    :param status: The status GitHub answers with.
-    :return: A refused read of the first plan's other repository.
-    """
-    return GitHubRequestFailed.for_status(
-        status=status,
-        detail="",
-        method=HttpMethod.GET,
-        path=f"/{ELSEWHERE_PULL_REQUEST.repository.api_path}",
-        credential_origin=CredentialProvider.CALLER,
-    )
-
-
-@pytest.mark.parametrize("status", sorted(READ_ACCESS_STATUSES))
-def test_an_access_warning_for_a_repository_not_granted_names_the_read_token(
-    status: HTTPStatus,
-):
-    warning = ItemClassifier.access_warning_of(
-        ELSEWHERE_PULL_REQUEST.repository, refusal(status)
-    )
-    assert PlanSiteSecret.private_repository_correction in warning
-
-
-def test_an_access_warning_for_another_failure_gives_that_failure_s_own_fix():
-    failure = refusal(HTTPStatus.UNAUTHORIZED)
-    warning = ItemClassifier.access_warning_of(
-        ELSEWHERE_PULL_REQUEST.repository, failure
-    )
-    assert warning.endswith(failure.suggest_correction())
-
-
-def test_an_access_warning_for_another_failure_does_not_name_the_read_token():
-    warning = ItemClassifier.access_warning_of(
-        ELSEWHERE_PULL_REQUEST.repository, refusal(HTTPStatus.UNAUTHORIZED)
-    )
-    assert PlanSiteSecret.private_repository_correction not in warning
-
-
-def test_an_access_warning_says_why_the_repository_cannot_be_read():
-    failure = refusal(HTTPStatus.NOT_FOUND)
-    warning = ItemClassifier.access_warning_of(
-        ELSEWHERE_PULL_REQUEST.repository, failure
-    )
-    assert failure.error_message() in warning
-
-
-def test_github_source_answers_no_issue_url_on_a_repository_it_cannot_read():
-    source = GitHubPullRequestSource(RecordedGitHubClient(refusal=HTTPStatus.FORBIDDEN))
-    assert source.issue_url(PLAN_REPOSITORY, FIRST_PLAN.tracking_issue) is None
 
 
 def unreadable_elsewhere_site(dataset_notes: NotesBranch) -> RepositorySite:
@@ -759,128 +490,6 @@ def test_build_reports_a_repository_it_cannot_read(
         f"{NOTES_REPOSITORY}/{SitePlan.FIRST}: {access_warning_on(site)}"
         in capsys.readouterr().err
     )
-
-
-def item_on_an_unreadable_repository() -> Item:
-    """
-    :return: The first plan's item on a repository other than its default, after its
-        page is rendered with that repository unreadable.
-    """
-    plan = Plan.from_mapping(
-        PlanSource.from_directory(SitePlan.FIRST.directory).manifest
-    )
-    PlanPage(
-        stylesheet_url=SiteSampleText.SITE_URL,
-        plan=plan,
-        roadmap_text="",
-        pull_requests_by_repository={},
-        read_failures={
-            ELSEWHERE_PULL_REQUEST.repository: refusal(HTTPStatus.NOT_FOUND)
-        },
-    ).render()
-    return next(item for item in plan.items if item.repository is not None)
-
-
-def test_an_item_on_a_repository_the_build_cannot_read_is_classified_so():
-    assert (
-        item_on_an_unreadable_repository().live_state is LiveState.REPOSITORY_UNREADABLE
-    )
-
-
-def test_an_item_on_a_repository_the_build_cannot_read_is_not_reported_as_drift():
-    assert item_on_an_unreadable_repository().drift_description is None
-
-
-def commit_report_path(report: CommitReport) -> str:
-    """
-    :param report: Which listing reported against :attr:`SiteSampleText.HEAD_COMMIT`
-        to read.
-    :return: The path it is listed from.
-    """
-    return (
-        f"/{OPEN_PULL_REQUEST.repository.api_path}{RepositoryPath.COMMITS}/"
-        f"{SiteSampleText.HEAD_COMMIT}/{report}?per_page={GitHubRepository.page_size}"
-    )
-
-
-def api_pull_request_at_head(state: PullRequestState) -> dict[str, Any]:
-    """
-    :param state: Whether the pull request is open or closed.
-    :return: The open pull request of the first plan, in that state, with its head at
-        :attr:`SiteSampleText.HEAD_COMMIT`.
-    """
-    return api_pull_request(
-        OPEN_PULL_REQUEST,
-        {
-            PullRequestField.STATE: state.value,
-            PullRequestField.HEAD: {
-                PullRequestHeadKey.COMMIT: SiteSampleText.HEAD_COMMIT.value
-            },
-        },
-    )
-
-
-def test_github_source_reads_the_checks_of_an_open_pull_request():
-    source = GitHubPullRequestSource(
-        RecordedGitHubClient(
-            responses=details_of(OPEN_PULL_REQUEST.repository),
-            pages={
-                listing_path(OPEN_PULL_REQUEST.repository): [
-                    [api_pull_request_at_head(PullRequestState.OPEN)]
-                ],
-                commit_report_path(CommitReport.CHECK_RUNS): [
-                    json.loads(
-                        RecordedCommitChecks.ONE_CHECK_RUN_FAILING.value.read_text()
-                    )
-                ],
-                commit_report_path(CommitReport.STATUS): [
-                    json.loads(RecordedCommitChecks.NO_STATUSES.value.read_text())
-                ],
-            },
-        )
-    )
-    assert (
-        source.pull_request(OPEN_PULL_REQUEST).check_state is CombinedCheckState.FAILURE
-    )
-
-
-def test_github_source_leaves_the_checks_of_a_closed_pull_request_unread():
-    source = GitHubPullRequestSource(
-        RecordedGitHubClient(
-            responses=details_of(OPEN_PULL_REQUEST.repository),
-            pages={
-                listing_path(OPEN_PULL_REQUEST.repository): [
-                    [api_pull_request_at_head(PullRequestState.CLOSED)]
-                ]
-            },
-        )
-    )
-    assert source.pull_request(OPEN_PULL_REQUEST).check_state is None
-
-
-def test_github_source_reads_an_issue_url():
-    issue_url = PLAN_REPOSITORY.issue_url(FIRST_PLAN.tracking_issue)
-    source = GitHubPullRequestSource(
-        RecordedGitHubClient(
-            responses={
-                **details_of(PLAN_REPOSITORY),
-                f"/{PLAN_REPOSITORY.api_path}/issues/{FIRST_PLAN.tracking_issue}": {
-                    PullRequestField.HTML_URL.key: issue_url
-                },
-            }
-        )
-    )
-    assert source.issue_url(PLAN_REPOSITORY, FIRST_PLAN.tracking_issue) == issue_url
-
-
-def test_github_source_reraises_a_refusal_other_than_not_found():
-    with pytest.raises(GitHubRequestFailed) as refused:
-        GitHubPullRequestSource(
-            RecordedGitHubClient(
-                responses=details_of(PLAN_REPOSITORY), refusal=HTTPStatus.FORBIDDEN
-            )
-        ).issue_url(PLAN_REPOSITORY, FIRST_PLAN.tracking_issue)
-    assert refused.value.status == HTTPStatus.FORBIDDEN
 
 
 # %% when a plan page says its plan was created, changed and refreshed

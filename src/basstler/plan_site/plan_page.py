@@ -5,11 +5,10 @@ next steps its live pull-request state calls for.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 from basstler.class_property import classproperty
-from basstler.github.exceptions import GitHubCallFailed
 from basstler.locations import SiteTemplate
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
@@ -20,9 +19,8 @@ from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.plan_overview import NextSteps, PlanOverview
 from basstler.plan_site.plan_page_header import PlanPageHeader
 from basstler.plan_site.plan_page_vocabulary import PlanPageVocabulary
-from basstler.pull_request_state import PullRequestsByRepository
+from basstler.pull_request_state import LivePullRequests
 from basstler.render_common import TemplatePage, render_markdown_to_html
-from basstler.repository import Repository
 
 # %% the rendered page
 
@@ -72,14 +70,9 @@ class PlanPage(TemplatePage):
     The plan's ``roadmap.md`` narrative content.
     """
 
-    pull_requests_by_repository: PullRequestsByRepository
+    live_pull_requests: LivePullRequests
     """
-    Live pull request state for every repository referenced by the plan's items.
-    """
-
-    read_failures: Mapping[Repository, GitHubCallFailed] = field(default_factory=dict)
-    """
-    Why each repository whose pull requests could not be read could not be.
+    What was read of every repository referenced by the plan's items.
     """
 
     repository_rules: RepositoryRules = field(default_factory=RepositoryRules)
@@ -123,8 +116,7 @@ class PlanPage(TemplatePage):
         """
         ItemClassifier(
             plan=self.plan,
-            pull_requests_by_repository=self.pull_requests_by_repository,
-            read_failures=self.read_failures,
+            live_pull_requests=self.live_pull_requests,
             dependencies=self.dependencies,
             locate_plan_page=self.locate_plan_page,
         ).classify()

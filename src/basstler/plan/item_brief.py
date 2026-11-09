@@ -169,13 +169,13 @@ class ItemBrief:
             )
             PlanValidator(manifest.content, plan_directory).validate()
             plan = Plan.from_mapping(manifest.content)
-            resolver = DependencyResolver(plan, plan_directory)
             dependencies = DependencyReadiness.of_item(
                 plan,
                 item.identifier,
-                pull_request_source.pull_requests_of(resolver),
+                pull_request_source.live_pull_requests_of(
+                    DependencyResolver(plan, plan_directory)
+                ),
                 plan_directory,
-                frozenset(pull_request_source.read_failures_of(resolver)),
             )
         return cls(
             manifest=manifest,

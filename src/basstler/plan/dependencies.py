@@ -16,7 +16,7 @@ from basstler.class_property import classproperty
 from basstler.plan_site.cards import DependencyChip
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan.model import PlanDocument
-from basstler.pull_request_state import LiveState, PullRequestsByRepository
+from basstler.pull_request_state import LivePullRequests, LiveState
 from basstler.repository import PullRequestReference, Repository
 
 
@@ -163,17 +163,13 @@ class Dependency(ABC):
     @abstractmethod
     def classify_live_state(
         self,
-        pull_requests_by_repository: PullRequestsByRepository,
-        unreadable_repositories: frozenset[Repository],
+        live_pull_requests: LivePullRequests,
     ) -> None:
         """
         Fill in the live GitHub state of the item this dependency names, against the
         repository that item's own plan uses.
 
-        :param pull_requests_by_repository: Live pull request state, keyed by
-            repository.
-        :param unreadable_repositories: The repositories whose pull requests could not
-            be read.
+        :param live_pull_requests: What was read of the plans' repositories.
         """
 
 
@@ -245,14 +241,10 @@ class ResolvedDependency(Dependency):
 
     def classify_live_state(
         self,
-        pull_requests_by_repository: PullRequestsByRepository,
-        unreadable_repositories: frozenset[Repository],
+        live_pull_requests: LivePullRequests,
     ) -> None:
         self.item.live_state = LiveState.classify(
-            self.item.pull_request_number,
-            self.repository,
-            pull_requests_by_repository,
-            unreadable_repositories,
+            self.item.pull_request_number, self.repository, live_pull_requests
         )
 
 
@@ -295,8 +287,7 @@ class UnresolvedDependency(Dependency):
 
     def classify_live_state(
         self,
-        pull_requests_by_repository: PullRequestsByRepository,
-        unreadable_repositories: frozenset[Repository],
+        live_pull_requests: LivePullRequests,
     ) -> None:
         """See :meth:`Dependency.classify_live_state` - nothing to classify,
         since this entry named no item."""
@@ -454,19 +445,13 @@ class DependencyResolver:
 
     def classify_live_states(
         self,
-        pull_requests_by_repository: PullRequestsByRepository,
-        unreadable_repositories: frozenset[Repository] = frozenset(),
+        live_pull_requests: LivePullRequests,
     ) -> None:
         """
         Fill in the live GitHub state of every item some entry here names, each against
         its own plan's repository.
 
-        :param pull_requests_by_repository: Live pull request state, keyed by
-            repository.
-        :param unreadable_repositories: The repositories whose pull requests could not
-            be read.
+        :param live_pull_requests: What was read of the plans' repositories.
         """
         for dependency in self.dependencies_by_reference.values():
-            dependency.classify_live_state(
-                pull_requests_by_repository, unreadable_repositories
-            )
+            dependency.classify_live_state(live_pull_requests)

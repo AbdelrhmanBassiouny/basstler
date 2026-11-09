@@ -367,8 +367,10 @@ class RepositorySite(SiteSection[RepositorySummary]):
         """
         plan = Plan.from_mapping(source.manifest)
         dependencies = DependencyResolver(plan, self.plan_directory)
-        read_failures = self.pull_request_source.read_failures_of(dependencies)
-        for repository, failure in read_failures.items():
+        live_pull_requests = self.pull_request_source.live_pull_requests_of(
+            dependencies
+        )
+        for repository, failure in live_pull_requests.read_failures.items():
             logger.warning(
                 f"{self.notes.repository}/{source.directory_name}: "
                 f"{ItemClassifier.access_warning_of(repository, failure)}"
@@ -378,10 +380,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
             plan=plan,
             roadmap_text=source.roadmap_text,
             repository_rules=self.repository_rules,
-            pull_requests_by_repository=self.pull_request_source.pull_requests_of(
-                dependencies
-            ),
-            read_failures=read_failures,
+            live_pull_requests=live_pull_requests,
             header=PlanPageHeader(
                 tracking_url=self.tracking_url_of(plan),
                 hub_url=self.address.hub_url,

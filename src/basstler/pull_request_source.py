@@ -11,11 +11,15 @@ from http import HTTPStatus
 from typing import Any
 
 from basstler.maintenance.board import PullRequestField
-from basstler.github.client import GitHubFullClient, GitHubRestClient
+from basstler.github.client import (
+    GitHubFullClient,
+    GitHubResponse,
+    GitHubRestClient,
+)
 from basstler.github.exceptions import GitHubCallFailed, GitHubRequestFailed
 from basstler.maintenance.github import GitHubRepository
 from basstler.plan.dependencies import DependencyResolver
-from basstler.pull_request_state import PullRequestRecord, PullRequestsByRepository
+from basstler.pull_request_state import LivePullRequests, PullRequestRecord
 from basstler.repository import PullRequestReference, Repository
 from basstler.standard_streams import StandardStreamHandler
 
@@ -55,36 +59,17 @@ class PullRequestSource(ABC):
         """
         return None
 
-    def read_failures_of(
+    def live_pull_requests_of(
         self, dependencies: DependencyResolver
-    ) -> dict[Repository, GitHubCallFailed]:
+    ) -> LivePullRequests:
         """
         :param dependencies: A plan's items, plus the items of other plans it depends
             on.
-        :return: Why each repository of those items' pull requests that cannot be read
-            cannot be, in the order the items name them.
+        :return: The live state of every pull request those items name, and why each
+            repository that cannot be read cannot be; a number the repository does not
+            have is left out.
         """
-        failures = {}
-        for dependency in dependencies.resolved_dependencies:
-            if dependency.item.pull_request_number is None:
-                continue
-            repository = Repository.parse(dependency.repository)
-            failure = self.read_failure_of(repository)
-            if failure is not None:
-                failures[repository] = failure
-        return failures
-
-    def pull_requests_of(
-        self, dependencies: DependencyResolver
-    ) -> PullRequestsByRepository:
-        """
-        :param dependencies: A plan's items, plus the items of other plans it depends
-            on.
-        :return: The live state of every pull request those items name, in the shape
-            the plan site renders from; a number the repository does not have is left
-            out.
-        """
-        pull_requests: PullRequestsByRepository = {}
+        live_pull_requests = LivePullRequests()
         for dependency in dependencies.resolved_dependencies:
             if dependency.item.pull_request_number is None:
                 continue
@@ -92,12 +77,16 @@ class PullRequestSource(ABC):
                 Repository.parse(dependency.repository),
                 dependency.item.pull_request_number,
             )
+            failure = self.read_failure_of(reference.repository)
+            if failure is not None:
+                live_pull_requests.read_failures[reference.repository] = failure
+                continue
             record = self.pull_request(reference)
             if record is not None:
-                pull_requests.setdefault(str(reference.repository), {})[
-                    str(reference.number)
-                ] = record
-        return pull_requests
+                live_pull_requests.pull_requests_by_repository.setdefault(
+                    str(reference.repository), {}
+                )[str(reference.number)] = record
+        return live_pull_requests
 
 
 @dataclass
@@ -116,11 +105,9 @@ class GitHubPullRequestSource(PullRequestSource):
     How the requests reach GitHub.
     """
 
-    read_failures: dict[Repository, GitHubCallFailed | None] = field(
-        default_factory=dict
-    )
+    repository_details: dict[Repository, GitHubResponse] = field(default_factory=dict)
     """
-    Why each repository asked about so far cannot be read, ``None`` for one that can.
+    The answer to the read of each repository's details asked about so far.
     """
 
     listed_repositories: set[Repository] = field(default_factory=set)
@@ -155,16 +142,16 @@ class GitHubPullRequestSource(PullRequestSource):
         See :meth:`PullRequestSource.read_failure_of`: why the repository's details
         cannot be read, asked once and reported when they cannot.
         """
-        if repository in self.read_failures:
-            return self.read_failures[repository]
-        failure = self.client.attempt_get(f"/{repository.api_path}").failure
-        self.read_failures[repository] = failure
-        if failure is not None:
+        if repository in self.repository_details:
+            return self.repository_details[repository].failure
+        details = self.client.attempt_get(f"/{repository.api_path}")
+        self.repository_details[repository] = details
+        if details.failure is not None:
             logger.warning(
                 f"cannot read {repository}, so its pull requests are left out: "
-                f"{failure.error_message()}"
+                f"{details.failure.error_message()}"
             )
-        return failure
+        return details.failure
 
     def pull_request(self, reference: PullRequestReference) -> PullRequestRecord | None:
         record = self.listed_or_read(reference)

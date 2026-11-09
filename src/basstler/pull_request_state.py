@@ -17,6 +17,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+from basstler.github.exceptions import GitHubCallFailed
 from basstler.github_labels import GitHubLabel
 from basstler.maintenance.board import PullRequestField, PullRequestHead
 from basstler.maintenance.board import PullRequestRecord as PullRequestAPIRecord
@@ -72,8 +73,7 @@ class LiveState(StrEnum):
         cls,
         pull_request_number: int | None,
         repository: str,
-        pull_requests_by_repository: PullRequestsByRepository,
-        unreadable_repositories: frozenset[Repository] = frozenset(),
+        live_pull_requests: LivePullRequests,
     ) -> LiveState:
         """
         Classify one item's live GitHub state from its pull request number and
@@ -82,17 +82,17 @@ class LiveState(StrEnum):
         :param pull_request_number: The item's tracked pull request number, or ``None``
             if it has no pull request yet.
         :param repository: The ``"owner/repo"`` to look the pull request up under.
-        :param pull_requests_by_repository: Live pull request state for every repository
-            referenced by the plan's items.
-        :param unreadable_repositories: The repositories whose pull requests could not
-            be read.
+        :param live_pull_requests: What was read of every repository referenced by the
+            plan's items.
         :return: The classified state.
         """
         if pull_request_number is None:
             return LiveState.NO_PULL_REQUEST
-        if Repository.parse(repository) in unreadable_repositories:
+        if Repository.parse(repository) in live_pull_requests.read_failures:
             return LiveState.REPOSITORY_UNREADABLE
-        repository_pull_requests = pull_requests_by_repository.get(repository, {})
+        repository_pull_requests = live_pull_requests.pull_requests_by_repository.get(
+            repository, {}
+        )
         pull_request = repository_pull_requests.get(str(pull_request_number))
         if pull_request is None:
             return LiveState.NOT_FOUND
@@ -330,3 +330,24 @@ class MalformedPullRequestDataError(ValueError):
 
 
 PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
+
+
+# %% what was read of a plan's repositories
+
+
+@dataclass
+class LivePullRequests:
+    """
+    The live state of a plan's pull requests, and why any repository holding them could
+    not be read.
+    """
+
+    pull_requests_by_repository: PullRequestsByRepository = field(default_factory=dict)
+    """
+    Live pull request state for every repository that could be read.
+    """
+
+    read_failures: dict[Repository, GitHubCallFailed] = field(default_factory=dict)
+    """
+    Why each repository whose pull requests could not be read could not be.
+    """
