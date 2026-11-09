@@ -60,6 +60,10 @@ session runs its project's environment in every repository it has attached; the 
 exports it as `$BASSTLER_ENVIRONMENT_DIRECTORY` and its interpreter as `$BASSTLER_PYTHON`. Its
 `environments:` line names any environment it removed because its project directory is gone.
 
+Releases before per-project environments shared one at `~/.local/share/basstler/venv`. Nothing
+here uses it or removes it, since a project still on an older plugin runs it: delete it once
+every project has updated its plugin.
+
 What it installs from depends on where the plugin is:
 
 - **A plugin installed on its own** installs `basstler @ git+https://github.com/KAOS-repositories/basstler@<tag>`,
