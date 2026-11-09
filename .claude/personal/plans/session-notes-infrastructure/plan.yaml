@@ -31,38 +31,35 @@ tracks:
   name: Conventions made mechanical
   wave: conventions
 items:
-- id: stamps-in-git-directory
-  title: The plugin keeps its per-clone stamp files where git never tracks them
-  branch: ccr-3de36b30-i2enxe
-  status: in progress
+- id: session-start-tests-split
+  title: Split the session-start hook tests into modules by concern
+  branch: null
+  pull_request_number: null
+  status: not started
   track: handover
-  session: https://claude.ai/code/session_018wfiv7sbWFZXYHbQEc77i3
-  depends_on: []
-  pull_request_number: 118
-  notes: 'CRAM #523 dropped the .gitignore entries for .claude/.plan-state-sync-sha and .claude/.personal-settings-sync-hash,
-    so the stop hook flags both as untracked in CRAM every session. Session-start must keep
-    them out of the working tree and never add a tracked change to the host project. Options:
-    write them under $(git rev-parse --git-dir)/basstler/ (preferred, no exclude bookkeeping),
-    or add them to .git/info/exclude and verify with git check-ignore in check-setup.sh. The
-    user has not picked yet.'
+  depends_on:
+  - basstler-reliability/merged-items-recorded
+  notes: 'From the review of #173 (https://github.com/KAOS-repositories/basstler/pull/173#discussion_r4511800322):
+    tests/hooks/test_session_start.py is about 2,000 lines. Move its tests unchanged into
+    a tests/hooks/session_start/ package, one module per concern: environment and install,
+    release pinning, notes sync and summary, plan state, default-branch sync, upstream-reviews
+    Action, git identity and settings. Shared fixtures and helpers go to that package''s conftest.py
+    or session_start_summary.py. No assertion changes; the suite''s test count stays the same.
+    Waits for #172, which edits the same file.
 
-- id: repository-rules
-  title: Per-repository plan rules as structured data, shown in item briefs and on the plan site
-  branch: claude/dazzling-newton-zig14e
-  status: in progress
-  track: conventions
-  pull_request_number: 143
-  session: https://claude.ai/code/session_01JxHGiP6JUBGGaMwQ6FF7vB
-  blockers:
-    - >-
-      Waiting on the owner's review of `basstler repository-rules import <file>` (75c1f44), the
-      answer to the thread on plugin/skills/plan-create/SKILL.md asking to set several rules in one
-      command.
-  depends_on: []
-  notes: >
-    The user's design priorities for every plan of a repository are prose in the personal notes'
-    "Design priorities for every basstler plan" section; only sessions read them. Store them as
-    a structured per-repository rules file on the notes branch (one entry per rule: id, text), edited
-    by one command; plan.item_brief prints them with every item brief, the plan site shows them on
-    each plan page of that repository, and plan-create links them. roadmap.md keeps plan-specific
-    rules only. The personal-notes section is replaced by the file once it lands.
+    '
+- id: session-start-source-split
+  title: Split and clean up the session-start hook source by concern
+  branch: null
+  pull_request_number: null
+  status: not started
+  track: handover
+  depends_on:
+  - session-start-tests-split
+  notes: 'From #173''s review: split resolve-personal-notes-config.sh (about 1,100 lines)
+    into sourced files by concern (install, release pinning, notes branch, plan state, stamps)
+    and make session-start.sh a list of named steps. Ask whether the plugin-content digest
+    can go: since #173 the install source names the release. First check basstler-v3/slim-session-start
+    and v2-removal, which delete this layer; if they are close, drop this item.
+
+    '
