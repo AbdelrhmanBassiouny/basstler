@@ -152,8 +152,8 @@ items:
   depends_on:
   - playbook-settings
   - extension-points
-  status: not started
-  notes: 'New opt-in distribution basstler-guard (git, github), in DefaultPlaybook. Every CommandGroup command declares
+  status: deferred
+  notes: 'Folded into rule-enforcement/playbook-guard (2026-11-09, owner''s decision). Was: new opt-in distribution basstler-guard (git, github), in DefaultPlaybook. Every CommandGroup command declares
     who may run it: the session alone, the session when told, or only the person. Generates a PreToolUse guard denying
     direct git and GitHub writes (falling back to the standard library when the runtime is broken), a pre-push hook,
     and auto-approval of the commands a session may run alone. release:minor.'
@@ -185,7 +185,7 @@ items:
   track: playbook
   depends_on:
   - playbook-settings
-  - write-guard
+  - rule-enforcement/playbook-guard
   - session-report-sections
   status: not started
   notes: 'A few questions, the recommended choice first, each answer becoming a playbook setting; writes the repository''s
