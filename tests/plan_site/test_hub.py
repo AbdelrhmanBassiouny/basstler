@@ -14,6 +14,7 @@ from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.plan.model import PlanDocument
 from basstler.plan_site.exceptions import RegistryUnreadableError
+from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.plan_site.hub import HubCommand, NotesBranch, PlanHub, SiteAddress, main
 from basstler.plan_site.plan import Item
 from basstler.repository import Repository
@@ -117,6 +118,19 @@ def test_a_registry_whose_notes_cannot_be_fetched_is_refused(tmp_path: Path):
     with pytest.raises(RegistryUnreadableError) as refused:
         PlanHub.from_registry(SiteRepository.MISSING.value, str(tmp_path))
     assert refused.value.registry == SiteRepository.MISSING.value
+
+
+def test_an_unreadable_registry_says_how_the_build_reads_a_private_one(
+    tmp_path: Path,
+):
+    """
+    A private registry fails the same way, so the correction names the read token.
+    """
+    with pytest.raises(RegistryUnreadableError) as refused:
+        PlanHub.from_registry(SiteRepository.MISSING.value, str(tmp_path))
+    assert PlanSiteSecret.private_repository_correction in (
+        refused.value.suggest_correction()
+    )
 
 
 # %% a listed repository's notes

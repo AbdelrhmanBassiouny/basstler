@@ -138,6 +138,14 @@ class SiteRepository:
         """
         return f"{GitHubAddress.WEB}/settings/personal-access-tokens/new"
 
+    @classproperty
+    def classic_token_page(cls) -> str:
+        """
+        Where a classic token, which may read the repositories of several owners, is
+        created.
+        """
+        return f"{GitHubAddress.WEB}/settings/tokens/new"
+
     def token_form_url(self, token_name: str = "basstler plan site") -> str:
         """
         :param token_name: The name the form fills in.

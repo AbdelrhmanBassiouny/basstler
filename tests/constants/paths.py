@@ -213,6 +213,11 @@ class DatasetLocation(PathEnumeration):
     A notes repository's token secret, set after its recorded failed dispatch run.
     """
 
+    PLAN_SITE_READ_TOKEN_STORED = DIRECTORY / "plan-site-read-token-stored.json"
+    """
+    A site repository's notes token secret, as stored.
+    """
+
     WORKFLOW_RUNS_NONE = DIRECTORY / "workflow-runs-none.json"
     """
     A run listing with no runs at all.
@@ -225,7 +230,12 @@ class DatasetLocation(PathEnumeration):
 
     REPOSITORY_NOT_FORK = DIRECTORY / "repository-not-fork.json"
     """
-    A repository's REST response for a repository that is not a fork.
+    A repository's REST response for a public repository that is not a fork.
+    """
+
+    REPOSITORY_PRIVATE = DIRECTORY / "repository-private.json"
+    """
+    A repository's REST response for a private repository that is not a fork.
     """
 
     REPOSITORY_TRUNK_DEFAULT_BRANCH = DIRECTORY / "repository-trunk-default-branch.json"

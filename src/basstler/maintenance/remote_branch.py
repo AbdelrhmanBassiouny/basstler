@@ -98,6 +98,26 @@ class RemoteBranch(Branch):
         tip = self.fetch()
         return self.git.file_at(tip, path) if tip else None
 
+    def read_every_latest(self, directory: str | Path, file_name: str) -> list[str]:
+        """
+        :param directory: A directory from the branch's root.
+        :param file_name: The name of the files to read.
+        :return: The text of every file of that name anywhere under the directory at
+            the branch's current tip, in path order; empty when the remote has no such
+            branch.
+        """
+        tip = self.fetch()
+        if tip is None:
+            return []
+        listed = self.git.run(
+            "ls-tree", "-r", "--name-only", tip, "--", Path(directory).as_posix()
+        )
+        return [
+            self.git.file_at(tip, path)
+            for path in sorted(listed.splitlines())
+            if Path(path).name == file_name
+        ]
+
     def attempt_write(
         self, files: dict[str, str], message: str, attempts: int = 3
     ) -> FileWrite:

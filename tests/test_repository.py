@@ -70,12 +70,19 @@ def test_a_workflow_run_url_is_the_run_s_page_under_the_repository_s_actions():
     assert REPOSITORY.workflow_run_url(7) == f"{REPOSITORY.url}/actions/runs/7"
 
 
+def test_the_settings_url_is_the_settings_page_under_the_repository():
+    """
+    The settings page is under the repository's page.
+    """
+    assert REPOSITORY.settings_url == f"{REPOSITORY.url}/settings"
+
+
 def test_the_new_actions_secret_form_is_under_the_repository_s_settings():
     """
     The new Actions secret form is the repository's secrets settings page.
     """
     assert REPOSITORY.new_actions_secret_url == (
-        f"{REPOSITORY.url}/settings/secrets/actions/new"
+        f"{REPOSITORY.settings_url}/secrets/actions/new"
     )
 
 

@@ -18,3 +18,7 @@ jobs:
 {% for input, value in inputs.items() %}
       {{ input }}: {{ value }}
 {% endfor %}
+    secrets:
+{% for secret, value in secrets.items() %}
+      {{ secret }}: {{ value }}
+{% endfor %}

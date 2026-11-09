@@ -252,6 +252,18 @@ writes nothing until it can. It authenticates with `GH_TOKEN` or
 repository is refused (403) until it is attached: attach it with `add_repo`
 (access `push`) and run the command again.
 
+The build reads the registry, every repository it lists, and every repository
+their plans' pull requests are on. If any of them is private, the build needs a
+read-only token, stored on the site repository as `PLAN_SITE_READ_TOKEN`. Without
+that secret, publication writes nothing and prints one step: store such a token,
+or make those repositories public. The step warns that the site is public, so with
+the token it shows what the build reads from them. Relay that warning and ask the
+user which they want. When GitHub does
+not say whether a repository is private or whether the secret is stored,
+publication writes the files anyway and prints the same step, so the user can
+check. A site published before basstler knew this secret passes no token: re-run
+publication once the token is stored.
+
 It then writes the site repository's workflow onto its default branch, lists
 this repository in the hub file of the registry that workflow names (this
 repository itself, the first time), and commits two workflows that start the

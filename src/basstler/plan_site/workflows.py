@@ -40,6 +40,30 @@ class PlanSiteSecret(StrEnum):
     dispatch workflow start the build in the site repository.
     """
 
+    READ_TOKEN = "PLAN_SITE_READ_TOKEN"
+    """
+    The user's read-only token, stored on the site repository, that lets the build
+    read private repositories.
+    """
+
+    @classproperty
+    def private_repository_correction(cls) -> str:
+        """
+        How the build comes to read a private repository, as a clause of a correction.
+        """
+        return (
+            f"for a private repository, store a read-only token as {cls.READ_TOKEN} on "
+            "the site repository and re-run plan_site.publication "
+            "(/setup-personal-notes), so the site workflow passes it to the build"
+        )
+
+    def path_on(self, repository: Repository) -> str:
+        """
+        :param repository: The repository that stores it.
+        :return: The REST path of its metadata there.
+        """
+        return f"{repository.api_path}/actions/secrets/{self}"
+
     def read_value(self) -> str:
         """
         :return: The secret's value, typed at a hidden terminal prompt.
@@ -94,6 +118,18 @@ class BuildInput(StrEnum):
     REGISTRY = "registry"
     """
     The ``owner/name`` repository whose notes hold the complete hub file.
+    """
+
+
+class BuildSecret(StrEnum):
+    """
+    The secrets basstler's reusable build, :attr:`WorkflowLocation.PLAN_SITE_BUILD`,
+    accepts.
+    """
+
+    READ_TOKEN = "read_token"
+    """
+    The token that reads the notes repositories in place of the site repository's own.
     """
 
 
@@ -176,6 +212,11 @@ class WorkflowKey(StrEnum):
     The inputs a job passes to its called workflow, by input.
     """
 
+    SECRETS = "secrets"
+    """
+    The secrets a job passes to its called workflow, by secret.
+    """
+
     STEPS = "steps"
     """
     A job's steps, in order.
@@ -243,6 +284,11 @@ class WorkflowJob(JSONModel):
     The steps it runs, in order.
     """
 
+    secrets: dict[str, str] = field(default_factory=dict)
+    """
+    The secrets it passes to :attr:`called_workflow`, by secret.
+    """
+
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> WorkflowJob:
         """
@@ -254,6 +300,7 @@ class WorkflowJob(JSONModel):
             data.get(WorkflowKey.CALLED_WORKFLOW),
             data.get(WorkflowKey.INPUTS, {}),
             [WorkflowStep.from_json(step) for step in data.get(WorkflowKey.STEPS, [])],
+            data.get(WorkflowKey.SECRETS, {}),
         )
 
 
@@ -380,6 +427,9 @@ class SiteWorkflow(PlanSiteWorkflow):
             "inputs": {
                 BuildInput.BRANCH_OR_TAG: self.branch_or_tag,
                 BuildInput.REGISTRY: self.registry.full_name,
+            },
+            "secrets": {
+                BuildSecret.READ_TOKEN: f"${{{{ secrets.{PlanSiteSecret.READ_TOKEN} }}}}"
             },
         }
 
