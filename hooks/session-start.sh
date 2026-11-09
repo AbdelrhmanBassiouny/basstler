@@ -24,7 +24,18 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   printf 'export BASSTLER_PLUGIN_ROOT=%q\n' "${PLUGIN_ROOT}" >> "${CLAUDE_ENV_FILE}"
 fi
 
-fetch_personal_notes_branch || exit 0
+# In a cloud session, how to attach a notes repository it cannot reach; empty otherwise.
+NOTES_ACCESS="$("${BASSTLER_PYTHON}" -m "${NOTES_ACCESS_MODULE}" \
+  --retry "\"\${BASSTLER_PLUGIN_ROOT}/hooks/session-start.sh\"" 2>/dev/null || true)"
+
+if ! fetch_personal_notes_branch; then
+  # Said, so a session never starts without its notes and no word why.
+  if [ -n "${NOTES_ACCESS}" ]; then
+    printf 'session-start.sh summary:\n  personal notes:  %s\n    %s\n' \
+      "$(notes_line_not_reached)" "${NOTES_ACCESS}"
+  fi
+  exit 0
+fi
 
 # Reads below use PERSONAL_NOTES_REFERENCE, which later fetches leave alone.
 record_plan_state_sync_stamp
@@ -112,6 +123,10 @@ HEADER
   echo "<!-- END-PERSONAL-NOTES -->" >> "${OUTPUT_FILE}"
   WROTE_ANYTHING=1
   SUMMARY_NOTES="loaded from '${NOTES_BRANCH}' (${NOTES_PATH}) on '${ACTIVE_NOTES_REMOTE}'"
+  # A notes repository read without being attached still refuses this session's saves.
+  if [ -n "${NOTES_ACCESS}" ]; then
+    SUMMARY_NOTES="$(printf '%s\n    %s' "${SUMMARY_NOTES}" "${NOTES_ACCESS}")"
+  fi
   # Notes outlive the release they were written against: name what moved or went.
   SUMMARY_CITED_NAMES="$(cited_names_line_not_checked "${DOCUMENT_REFERENCES_MODULE}")"
   NOTES_COPY="$(mktemp)"

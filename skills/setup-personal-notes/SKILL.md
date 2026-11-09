@@ -280,14 +280,24 @@ the site repository, turning on Pages, creating - or reusing - the fine-grained
 token, storing it as the `PLAN_SITE_TOKEN` secret, and merging the merge
 workflow. It exits 1 while any is left.
 
-Actions secrets belong to one repository, so the token has to be stored in
-every repository the site publishes; the store step is one command that does
-that for all of them. A token the user already has works if it lists every one
-of those repositories - say so before they create a new one. A step that
-follows a run shows that run's address, so the log says why it failed. Pass the
-lines and the browser steps on exactly as printed, never shortened to one of the
-two; once the user has done them, run the command again: it counts a step done
-when a run that needs it succeeded.
+Actions secrets belong to one repository, and a user account has no shared
+ones, so the token is stored in every repository the site publishes. The create
+step's link opens GitHub's token form with the name, owner and Actions write
+access filled in; only the site repository is picked by hand. The token reaches
+the site repository alone, so it never changes when a repository joins. The store
+step is one command the user runs in their own terminal, with their own `gh`
+login: it asks for the token once at a hidden prompt, starts the site's build
+with it - which proves the token and stores nothing when GitHub refuses it - then
+stores it in every repository. In a cloud session the user has no terminal on the
+session's machine, so the command printed there needs only `gh` and bash on the
+user's own computer; the browser steps beside it need neither. Pass the command on
+in its bash block, so it is copied whole. Never ask for the token in the chat, and
+never run the command for the user: it reads the token only from a terminal. To add a repository later, the user clicks Regenerate token on the
+existing token and runs the store command again; no new token is needed. A step
+that follows a run shows that run's address, so the log says why it failed. Pass
+the lines and the browser steps on exactly as printed, never shortened to one of
+the two; once the user has done them, run the command again: it counts a step
+done when a run that needs it succeeded.
 
 ## 9. Confirm, by re-running the check
 

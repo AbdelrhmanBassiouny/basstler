@@ -25,6 +25,9 @@ source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
 require_basstler_python
 
+# The arguments as given, so a refused save names the command that repeats it.
+SAVE_ARGUMENTS=""
+[ $# -eq 0 ] || SAVE_ARGUMENTS="$(printf ' %q' "$@")"
 PLAN_ID=""
 MANIFEST_SOURCE_FILE=""
 ROADMAP_SOURCE_FILE=""
@@ -94,6 +97,19 @@ if [ "${BOOTSTRAP_FROM_FILES}" = "0" ]; then
     echo "--manifest/--roadmap file paths instead." >&2
     exit 1
   fi
+fi
+
+# In a cloud session, a notes repository it cannot reach refuses the push: say how to
+# attach it before anything is merged.
+NOTES_ACCESS="$("${BASSTLER_PYTHON}" -m "${NOTES_ACCESS_MODULE}" \
+  --retry "\"\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh\"${SAVE_ARGUMENTS}")" || {
+  echo "Checking that this session reaches the notes repository failed; the error is above. Nothing was saved." >&2
+  exit 1
+}
+if [ -n "${NOTES_ACCESS}" ]; then
+  echo "${NOTES_ACCESS}" >&2
+  echo "Nothing was saved." >&2
+  exit 1
 fi
 
 if ! fetch_personal_notes_branch; then
@@ -176,8 +192,8 @@ for document_path in "${MANIFEST_PATH}" "${ROADMAP_PATH}"; do
   fi
 done
 
-# A remote's name or a raw URL; its configured URL, not git's insteadOf rewrite of it.
-NOTES_REMOTE_URL="$(git config --get "remote.${ACTIVE_NOTES_REMOTE}.url" || printf '%s' "${ACTIVE_NOTES_REMOTE}")"
+# origin's configured URL, not git's insteadOf rewrite of it; empty without an origin.
+ORIGIN_URL="$(git config --get remote.origin.url || true)"
 
 ATTEMPT=1
 while :; do
@@ -193,11 +209,11 @@ while :; do
     --output "${MERGED_PLAN_DIR}" || exit
 
   # Validated against the fetched notes branch, so a <plan-id>/<item-id> entry resolves,
-  # and against the notes remote, so a plan is saved only to its own repository's notes.
+  # and against origin, so a plan is saved only from a checkout of its own repository.
   if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate \
     "${MERGED_PLAN_DIR}/${PLAN_MANIFEST_FILENAME}" \
     --plans-dir "${SCRATCH_DIR}/${PLANS_DIR}" \
-    --notes-remote-url "${NOTES_REMOTE_URL}"; then
+    --origin-url "${ORIGIN_URL}"; then
     echo "Nothing was saved - fix the manifest and save again." >&2
     exit 1
   fi
