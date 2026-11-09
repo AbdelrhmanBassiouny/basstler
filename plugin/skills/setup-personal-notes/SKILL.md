@@ -279,9 +279,11 @@ the site repository alone, so it never changes when a repository joins. The stor
 step is one command the user runs in their own terminal, with their own `gh`
 login: it asks for the token once at a hidden prompt, starts the site's build
 with it - which proves the token and stores nothing when GitHub refuses it - then
-stores it in every repository and prints one line per repository. Never ask for
-the token in the chat, and never run the command for the user: it reads the token
-only from a terminal. To add a repository later, the user clicks Regenerate token on the
+stores it in every repository. In a cloud session the user has no terminal on the
+session's machine, so the command printed there needs only `gh` and bash on the
+user's own computer; the browser steps beside it need neither. Pass the command on
+in its bash block, so it is copied whole. Never ask for the token in the chat, and
+never run the command for the user: it reads the token only from a terminal. To add a repository later, the user clicks Regenerate token on the
 existing token and runs the store command again; no new token is needed. A step
 that follows a run shows that run's address, so the log says why it failed. Pass
 the lines and the browser steps on exactly as printed, never shortened to one of
