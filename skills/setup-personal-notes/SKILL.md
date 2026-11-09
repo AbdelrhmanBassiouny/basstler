@@ -41,8 +41,8 @@ when a skill needing the stacked-PR workflow's upstream ran it, nothing
 otherwise. Pass the same to every run of the check below.
 
 The script prints one tab-separated `<check>` / `<status>` / `<detail>` row per
-check and exits non-zero if any row is `needs-setup`, `in-progress` or
-`unverified` (`|| true` above keeps a non-zero exit from ending the block early
+check and exits non-zero if any row is `needs-setup`, `in-progress`,
+`unverified` or `mismatched` (`|| true` above keeps a non-zero exit from ending the block early
 — the rows are the point, not the status). Read its own header comment for
 what each check means.
 
@@ -51,13 +51,18 @@ On the first run of a session, `package_dependencies` can be `in-progress` and
 installing the package. Tell the user so, wait as the `in-progress` paragraph
 below says, and run the check once more before reading either row as a fault.
 
-**If it exited 0:** no row is `needs-setup`, `in-progress` or `unverified`.
+**If it exited 0:** no row is `needs-setup`, `in-progress`, `unverified` or
+`mismatched`.
 List what was found (the remote, branch and path in play, that dependencies
 and `CLAUDE.local.md` are in place, and the `basstler_version` row), then check
 the labels as step 5 describes. If the `plan_site` row is `ok`, tell the user
 everything is set up and stop. Otherwise the plan site is not publishing: say
 so, run step 8, and never call the clone fully set up. Do not ask anything
 else. Do not re-verify by hand what the script just verified.
+
+**A `mismatched` row** means the plugin's hooks and the package they call are
+not one release, so a hook can pass an option the package does not accept. Tell
+the user, and follow the row's own detail to bring them together.
 
 **An `in-progress` row** means a session start is installing that part right
 now. Never install it yourself, and never run a `pip` command for it: wait with
