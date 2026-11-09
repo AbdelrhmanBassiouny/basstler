@@ -66,10 +66,11 @@ items:
 
 - id: notes-commits-skip-project-hooks
   title: Commits to the personal-notes branch skip the project's git hooks
-  branch: null
-  pull_request_number: null
-  status: not started
+  branch: claude/bold-planck-n5pe6t
+  pull_request_number: 177
+  status: in progress
   track: handover
+  session: https://claude.ai/code/session_018wfiv97YvijVFSctKuHgkm
   depends_on: []
   notes: 'From #174 (ichumuh): with pre-commit installed in the clone, every notes save fails,
     because the scratch checkout runs the project''s hooks and the notes branch has no .pre-commit-config.yaml.
