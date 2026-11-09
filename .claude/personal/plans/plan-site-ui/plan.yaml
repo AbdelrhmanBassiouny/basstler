@@ -146,4 +146,4 @@ items:
   - local-site-open
   status: not started
   session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
-  notes: 'Setup installs a launcher that runs plan-site open: a .desktop entry on Linux, an app in ~/Applications on macOS, a Start-menu and desktop shortcut on Windows (windows-support). It runs the latest release through uvx, so it needs no update; removing it is one command. A phone cannot run it: phone access is a separate decision.'
+  notes: 'Setup installs a launcher that runs plan-site open: a .desktop entry on Linux, an app in ~/Applications on macOS, a Start-menu and desktop shortcut on Windows (windows-support). It runs the latest release through uvx, so it needs no update; removing it is one command. No phone access (owner, 2026-11-09): phones cannot run it, and private hosting waits until phone access matters.'
