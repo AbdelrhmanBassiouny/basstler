@@ -76,3 +76,16 @@ items:
     cache hardlinks packages. A session runs one environment in every repository it has attached.
     Session start removes environments whose project directory is gone, never the current one
     or one a live install holds; no retention period. Needs nothing from basstler-packages/uv-workspace.'
+
+- id: starter-notes-scope
+  title: The starter notes' pull request rules apply only while a basstler skill runs
+  branch: null
+  pull_request_number: null
+  status: not started
+  track: conventions
+  depends_on: []
+  notes: 'From #182 (ichumuh): setup-personal-notes/starter-notes.md seeds "convert a PR back
+    to draft after any push", and session-start.sh writes the notes into CLAUDE.local.md for every
+    session, so a plain commit and push outside basstler is turned to draft. Move the PR-workflow
+    rules into the skills that act on pull requests, or scope them like the session rules; ask
+    the owner which at kickoff. Bug PR off main, failing test first.'
