@@ -162,13 +162,6 @@ class Repository:
         """
         return f"{self.url}/settings"
 
-    @property
-    def new_actions_secret_url(self) -> str:
-        """
-        The page that adds an Actions secret to the repository.
-        """
-        return f"{self.settings_url}/secrets/actions/new"
-
     def pull_request_url(self, number: int) -> str:
         """
         :param number: The pull request's number.
@@ -189,6 +182,13 @@ class Repository:
         :return: The run's page on GitHub.
         """
         return f"{self.url}/actions/runs/{run}"
+
+    @property
+    def new_actions_secret_url(self) -> str:
+        """
+        The form on GitHub that adds an Actions secret to the repository.
+        """
+        return f"{self.settings_url}/secrets/actions/new"
 
     @property
     def api_path(self) -> str:

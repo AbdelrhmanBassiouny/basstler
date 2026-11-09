@@ -299,13 +299,13 @@ def test_validate_refuses_a_reference_to_a_plan_the_directory_lacks(
     ) == (ManifestToolsExitCode.INVALID_MANIFEST)
 
 
-# %% main - validating a manifest against the repository its notes are saved to
+# %% main - validating a manifest against the repository whose checkout saves it
 
 
-def run_validate_for_notes_remote(monkeypatch, notes_remote_url: str) -> int:
+def run_validate_for_origin(monkeypatch, origin_url: str) -> int:
     """
     :param monkeypatch: pytest's monkeypatch fixture.
-    :param notes_remote_url: The URL of the remote the manifest would be saved to.
+    :param origin_url: The URL of the ``origin`` of the checkout saving the manifest.
     :return: The exit status the command line returns for the dataset plan.
     """
     monkeypatch.setattr(
@@ -315,8 +315,8 @@ def run_validate_for_notes_remote(monkeypatch, notes_remote_url: str) -> int:
             SCRIPT_NAME,
             ManifestToolsCommand.VALIDATE,
             str(DatasetLocation.PLAN.value),
-            ManifestToolsOption.NOTES_REMOTE_URL,
-            notes_remote_url,
+            ManifestToolsOption.ORIGIN_URL,
+            origin_url,
         ],
     )
     return main()
@@ -327,33 +327,33 @@ def test_validate_refuses_a_plan_for_another_repository(monkeypatch):
     The command line refuses what the validator refuses.
     """
     another_repository = Repository("another-owner", "another-repository")
-    assert run_validate_for_notes_remote(monkeypatch, another_repository.url) == (
+    assert run_validate_for_origin(monkeypatch, another_repository.url) == (
         ManifestToolsExitCode.INVALID_MANIFEST
     )
 
 
-def test_validate_accepts_a_plan_saved_to_its_own_repository(monkeypatch):
+def test_validate_accepts_a_plan_saved_from_its_own_repository(monkeypatch):
     """
     A clone URL names the same repository as the plan's ``owner/name``.
     """
-    assert run_validate_for_notes_remote(
+    assert run_validate_for_origin(
         monkeypatch, dataset_plan_repository().clone_url
     ) == (ManifestToolsExitCode.SUCCESS)
 
 
-def test_validate_refuses_a_notes_remote_naming_no_repository(monkeypatch, tmp_path):
+def test_validate_refuses_an_origin_naming_no_repository(monkeypatch, tmp_path):
     """
-    A remote with no ``owner/name``, such as a local path, leaves nothing to compare the
-    plan's repository against, so the plan is not saved.
+    An ``origin`` with no ``owner/name``, such as a local path, leaves nothing to
+    compare the plan's repository against, so the plan is not saved.
     """
-    assert run_validate_for_notes_remote(monkeypatch, str(tmp_path)) == (
+    assert run_validate_for_origin(monkeypatch, str(tmp_path)) == (
         ManifestToolsExitCode.INVALID_MANIFEST
     )
 
 
-def test_validate_without_a_notes_remote_checks_no_repository(monkeypatch):
+def test_validate_without_an_origin_checks_no_repository(monkeypatch):
     """
-    A manifest validated with no save in mind has no notes remote to compare against.
+    A manifest validated with no save in mind has no ``origin`` to compare against.
     """
     monkeypatch.setattr(
         sys,

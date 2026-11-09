@@ -23,6 +23,7 @@ from pathlib import Path
 import pytest
 
 from basstler.document_references import CitedNames, ShippedModules
+from basstler.personal_notes import access
 from basstler.locations import (
     BasstlerVariable,
     PluginLocation,
@@ -370,6 +371,63 @@ def test_reports_nothing_when_no_notes_branch_exists(
     assert not (
         session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
     ).exists()
+
+
+# %% a notes repository the session cannot reach
+
+
+@pytest.fixture
+def unreachable_notes_repository(
+    session_start_repository: ScratchRepository,
+) -> ScratchRepository:
+    """
+    The scratch repository, with the access check reporting its notes repository as one
+    this session cannot reach.
+
+    :param session_start_repository: The scratch repository and notes remote.
+    :return: The same repository.
+    """
+    session_start_repository.replace_package_module(
+        access, DatasetLocation.NOTES_ACCESS_STUB
+    )
+    return session_start_repository
+
+
+def test_a_notes_repository_it_cannot_reach_is_reported_under_the_notes_line(
+    unreachable_notes_repository: ScratchRepository,
+):
+    result = publish_and_run(unreachable_notes_repository)
+
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    notes_line = lines.index(
+        next(
+            line
+            for line in lines
+            if line.startswith(f"  {SummaryLine.PERSONAL_NOTES}:")
+        )
+    )
+    assert lines[notes_line + 1] == f"    {access.__name__}"
+
+
+def test_a_notes_branch_it_cannot_fetch_from_an_unreachable_repository_is_reported(
+    unreachable_notes_repository: ScratchRepository,
+):
+    """
+    A notes branch that could not be fetched because its repository is not attached is
+    said, instead of the session starting with no word about its notes.
+    """
+    unreachable_notes_repository.run_git(
+        "checkout", "--quiet", "-b", ScratchBranch.WORK
+    )
+
+    result = run_session_start(unreachable_notes_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.PERSONAL_NOTES) == summary_message(
+        SummaryMessage.NOTES_NOT_REACHED
+    )
+    assert f"    {access.__name__}" in result.stdout.splitlines()
 
 
 # %% the plan line

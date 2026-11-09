@@ -149,6 +149,12 @@ class DatasetLocation(PathEnumeration):
     the push it runs for.
     """
 
+    RECORDING_GH = DIRECTORY / "recording-gh.sh"
+    """
+    A ``gh`` that records each call's arguments, ``GH_TOKEN`` and standard input, and
+    fails a workflow run when ``GH_WORKFLOW_RUN_STATUS`` is non-zero.
+    """
+
     PROTECTED_MAIN_HOOK = DIRECTORY / "refuse-main-pre-receive.sh"
     """
     A pre-receive hook that refuses every push updating ``main``, as a protected default
@@ -330,6 +336,12 @@ class DatasetLocation(PathEnumeration):
     BUILD_START_STUB = STUBS / "build_start_prints_its_name.py"
     """
     A module standing in for :mod:`basstler.plan_site.build_start`, printing its name.
+    """
+
+    NOTES_ACCESS_STUB = STUBS / "notes_access_prints_its_name.py"
+    """
+    A module standing in for :mod:`basstler.personal_notes.access`, printing its name as
+    the missing access.
     """
 
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"

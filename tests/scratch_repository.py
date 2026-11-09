@@ -19,8 +19,10 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from types import ModuleType
 
 from .script_runner import BashScriptRunner
+import basstler
 from basstler.locations import PackageLocation, PluginLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.repository import Repository
@@ -227,8 +229,7 @@ class ScratchRepository:
     work_remote_path: Path | None = None
     """
     The bare repository standing in for the project's own remote, created only by
-    :meth:`add_work_remote` so a test that never publishes a work branch has no
-    ``origin`` it did not ask for.
+    :meth:`serve_origin_as`, so a test that names no ``origin`` has none.
     """
 
     @property
@@ -380,6 +381,21 @@ class ScratchRepository:
         Copy the real :mod:`basstler` package into the scratch checkout.
         """
         install_package_into(self.checkout_root)
+
+    def replace_package_module(self, module: ModuleType, stand_in: Path) -> None:
+        """
+        Put *stand_in* in place of *module* in the scratch checkout's package.
+
+        :param module: The real module, whose file is replaced.
+        :param stand_in: The module to run in its place.
+        """
+        package_root = Path(basstler.__file__).parent.parent
+        shutil.copy(
+            stand_in,
+            self.checkout_root
+            / PackageSourceFile.SOURCE
+            / Path(module.__file__).relative_to(package_root),
+        )
 
     def configuration_value(self, variable_name: str) -> str:
         """
@@ -620,18 +636,25 @@ class ScratchRepository:
         )
         shutil.rmtree(checkout)
 
-    def add_work_remote(self) -> Path:
+    def serve_origin_as(self, repository: Repository) -> None:
         """
-        Create a bare repository standing in for the project's own remote and register
-        it as ``origin``, for a hook that publishes a work branch rather than notes.
+        Name ``origin`` by *repository*'s clone URL, which git serves from a bare
+        repository standing in for the project's own remote.
 
-        :return: The work remote's path.
+        :param repository: The repository ``origin`` is to name.
         """
-        self.work_remote_path = initialize_bare_repository(
-            self.project_root.parent / "work-remote.git"
+        if self.work_remote_path is None:
+            self.work_remote_path = initialize_bare_repository(
+                self.project_root.parent / "work-remote.git"
+            )
+            self.run_git("remote", "add", "origin", repository.clone_url)
+        else:
+            self.run_git("remote", "set-url", "origin", repository.clone_url)
+        self.run_git(
+            "config",
+            self.url_rewriting_key(str(self.work_remote_path)),
+            repository.clone_url,
         )
-        self.run_git("remote", "add", "origin", str(self.work_remote_path))
-        return self.work_remote_path
 
     def serve_notes_remote_as(self, repository: Repository) -> None:
         """

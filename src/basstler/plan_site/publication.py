@@ -157,6 +157,11 @@ class PlanSitePublication:
     The branch the merge workflow waits on until its pull request merges.
     """
 
+    in_cloud_session: bool = False
+    """
+    Whether this runs in a Claude Code cloud session, whose user has no terminal on it.
+    """
+
     @classproperty
     def fork_skip_reason(cls) -> str:
         """
@@ -219,7 +224,7 @@ class PlanSitePublication:
         existing = site_branch.read_latest(SiteWorkflow.location)
         site_workflow = (
             replace(
-                self.site_workflow, registry=SiteWorkflow.from_text(existing).registry
+                self.site_workflow, registry=SiteWorkflow.from_yaml(existing).registry
             )
             if existing
             else self.site_workflow
@@ -247,7 +252,9 @@ class PlanSitePublication:
             report,
         )
         proposal = self.write_merge_workflow(notes_details, report)
-        user_steps = UserSteps(notes_repository, site, hub.repositories)
+        user_steps = UserSteps(
+            notes_repository, site, hub.repositories, self.in_cloud_session
+        )
         if access is not None:
             report.pending.append(access.pending)
         if not site_runs.succeeded(SiteWorkflow.location):
@@ -309,7 +316,7 @@ class PlanSitePublication:
             repository, and every repository their plans' pull requests are on, each
             once.
         """
-        hub = PlanHub.from_text(
+        hub = PlanHub.from_yaml(
             self.notes_branch_of(registry).read_latest(ProjectLocation.PLAN_HUB)
         )
         notes_repositories = dict.fromkeys(
@@ -416,7 +423,7 @@ class PlanSitePublication:
         """
         notes_repository = self.dispatch_workflow.notes_repository
         path = ProjectLocation.PLAN_HUB.as_posix()
-        hub = PlanHub.from_text(self.notes_branch_of(registry).read_latest(path))
+        hub = PlanHub.from_yaml(self.notes_branch_of(registry).read_latest(path))
         if hub is None:
             hub = PlanHub(registry=registry.full_name)
         hub.register(notes_repository.full_name)
@@ -499,6 +506,7 @@ def publish(
         DispatchWorkflow(notes_repository, notes_branch, site),
         SiteWorkflow(branch_or_tag, notes_repository),
         GitHubRestClient(),
+        in_cloud_session=ClaudeCodeVariable.REMOTE.is_true(),
     ).run()
 
 

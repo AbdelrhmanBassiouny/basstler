@@ -77,9 +77,9 @@ def test_the_settings_url_is_the_settings_page_under_the_repository():
     assert REPOSITORY.settings_url == f"{REPOSITORY.url}/settings"
 
 
-def test_the_new_actions_secret_url_is_under_the_repository_s_settings():
+def test_the_new_actions_secret_form_is_under_the_repository_s_settings():
     """
-    The page adding an Actions secret is under the repository's settings.
+    The new Actions secret form is the repository's secrets settings page.
     """
     assert REPOSITORY.new_actions_secret_url == (
         f"{REPOSITORY.settings_url}/secrets/actions/new"

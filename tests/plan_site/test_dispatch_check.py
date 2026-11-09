@@ -31,7 +31,6 @@ from basstler.plan_site.dispatch_check import (
     RepositoryDispatch,
     TokenSecret,
     UnreadableDispatch,
-    published_repositories,
 )
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import PlanHub
@@ -498,11 +497,25 @@ def notes_location() -> PersonalNotesLocation:
     )
 
 
+def notes_branch_of(
+    fork_checkout: ForkCheckout, notes_location: PersonalNotesLocation
+) -> RemoteBranch:
+    """:return: The notes branch *notes_location* names, in the fork checkout."""
+    return RemoteBranch(
+        notes_location.branch,
+        GitCommandRunner(fork_checkout.project_root),
+        notes_location.remote,
+    )
+
+
 def test_without_a_hub_only_the_notes_repository_is_published(
     fork_checkout: ForkCheckout, notes_location: PersonalNotesLocation
 ):
-    assert published_repositories(
-        fork_checkout.project_root, notes_location, NOTES_REPOSITORY
+    """
+    A notes branch with no hub file publishes its own repository alone.
+    """
+    assert PlanHub.published_repositories(
+        notes_branch_of(fork_checkout, notes_location), NOTES_REPOSITORY
     ) == [NOTES_REPOSITORY]
 
 
@@ -511,6 +524,9 @@ def test_every_repository_the_registry_s_hub_lists_is_published(
     notes_location: PersonalNotesLocation,
     tmp_path: Path,
 ):
+    """
+    The registry's hub file, not the notes' own copy, lists what is published.
+    """
     own_copy = PlanHub(
         registry=OTHER_REPOSITORY.full_name, repositories=[NOTES_REPOSITORY.full_name]
     )
@@ -527,8 +543,10 @@ def test_every_repository_the_registry_s_hub_lists_is_published(
         {Path(ProjectLocation.PLAN_HUB.name): registry_copy.to_text()},
     )
 
-    assert published_repositories(
-        fork_checkout.project_root, notes_location, NOTES_REPOSITORY, str(tmp_path)
+    assert PlanHub.published_repositories(
+        notes_branch_of(fork_checkout, notes_location),
+        NOTES_REPOSITORY,
+        str(tmp_path),
     ) == [NOTES_REPOSITORY, OTHER_REPOSITORY]
 
 
