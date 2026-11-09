@@ -1,6 +1,7 @@
 Plan
-- #140: token fast path - fail-loudly dispatch, token_storage prove-then-store command, pre-filled token form.
+- #140 (based on main): token fast path - fail-loudly dispatch, token_storage prove-then-store command, cloud-session gh command, pre-filled token form.
 Done
-- Review of 2026-11-08 answered at 16a0f61: token proven by starting the build, no waiting; hidden prompt only; moves/renames. 6 threads resolved, 3 open. Merges cleanly into main (82cd7ab); #141 carried (52863bf).
+- Reviews of 2026-11-08 answered (16a0f61, dcb1afd); dcb1afd merges clean into main 8681585; #141 restacked at be9f3e3.
+- Template values dataclass split out as core-robustness/workflow-template-values.
 Next
-- User: per-repository proof, Branch thread, template-values dataclasses; CI on 16a0f61 not read; token-optional decision.
+- User: 3 open threads (per-repository proof, Branch, "token in the prompt"); whether the token becomes optional. CI on dcb1afd not read.
