@@ -1,0 +1,202 @@
+schema_version: 1
+id: rule-enforcement
+title: 'Rule enforcement: rules a session follows, checked on every git and GitHub call'
+description: Every rule a session follows is one declarative model with a scope and an enforcement
+  level - guidance, allow, ask or block. A PreToolUse guard and git hooks apply it to each git and
+  GitHub call deterministically, naming the rule that decided and what to do instead. Users add and
+  refine rules with /add-rule, which grows an EQL ripple-down rule tree whose expert can be the
+  session's LLM and reports conflicts with a recommendation, and they see the active rules and
+  their decisions on the plan site.
+default_repository: KAOS-repositories/basstler
+tracking_issue: 186
+waves:
+- id: model
+  name: One rule model
+  description: Rules, the actions they judge, and the layers they come from, as data.
+- id: enforcement
+  name: Enforcement
+  description: The guard and git hooks that apply the rules, and the log of what they decided.
+- id: authoring
+  name: Authoring
+  description: Inspecting, adding and refining rules, up to /add-rule on an EQL ripple-down rule tree.
+- id: visibility
+  name: Visibility
+  description: Seeing the active rules and their decisions, and a guide to trusting them.
+tracks:
+- id: model
+  name: Rule and action model
+  wave: model
+- id: guard
+  name: Guard and hooks
+  wave: enforcement
+- id: authoring
+  name: Rule authoring
+  wave: authoring
+- id: visibility
+  name: Rule views
+  wave: visibility
+items:
+- id: rule-model
+  title: One declarative Rule model behind every rule a session follows
+  track: model
+  depends_on: []
+  status: not started
+  notes: 'Rule: id, statement, scope (every session, while a named skill runs, or on an action
+    kind), a condition over an Action, enforcement (guidance, allow, ask, block) and a correction
+    message. code_rules AgentRule, session-rules.md, pull-request-rules.md and repository rules
+    become instances, and AGENTS.md and the skills'' rule documents are rendered from them. A
+    RuleEngine interface decides a verdict for an action; the first engine evaluates the declared
+    conditions. release:minor.'
+- id: session-actions
+  title: A typed model of the git and GitHub actions a session takes
+  track: model
+  depends_on: []
+  status: not started
+  notes: 'Parse a Bash command (git push, commit, reset, branch -D, checkout; gh pr ...) and a
+    mcp__github__* tool call into Action dataclasses: Push (remote, branch, force), OpenPullRequest
+    (draft), MarkReady, ResolveThread, Comment and so on. A git or gh command it cannot parse is an
+    UnparsedAction, which rules ask about and never silently allow. Tests use recorded PreToolUse
+    payloads. Reuse basstler.maintenance.git_commands and the basstler.github models.'
+- id: rule-layers
+  title: Shipped, repository and personal rules layered with one precedence
+  track: model
+  depends_on:
+  - rule-model
+  status: not started
+  notes: 'Rules come from basstler itself, from the repository (repository-rules, gaining scope
+    and enforcement) and from the personal-notes branch. A later layer may tighten (guidance, then
+    ask, then block) freely. Loosening a shipped or repository rule needs an explicit override
+    with a reason, shown wherever the rule is. The skill-scoped pull-request rules from #184 become
+    rules scoped to their skill.'
+- id: action-guard
+  title: A PreToolUse guard allows, asks or blocks each git and GitHub call by the rules
+  track: guard
+  depends_on:
+  - rule-model
+  - session-actions
+  - rule-layers
+  status: not started
+  notes: 'hooks.json registers PreToolUse on Bash and mcp__github__*. The guard evaluates the
+    matching rules and answers permissionDecision allow, ask or deny, with the rule id, the reason
+    and what to run instead. When basstler cannot load, it falls back to the standard library and
+    asks. Absorbs basstler-reliability/hook-enforcement: a configuration name used without sourcing
+    it, or a command run outside the project. release:minor.'
+- id: git-hooks
+  title: Git hooks enforce the same rules on commits and pushes made outside Claude
+  track: guard
+  depends_on:
+  - action-guard
+  status: not started
+  notes: 'pre-commit, commit-msg and pre-push hooks are generated from the rules whose action
+    kinds git sees, for example no assistant author or co-author trailer, and no push to the
+    upstream from a fork. Installing them is an opt-in setup step. They share the guard''s
+    evaluation, so a verdict never differs between a session and a terminal; ask becomes a
+    terminal prompt.'
+- id: decision-log
+  title: Every guard decision is logged, and an answered ask can become a personal rule
+  track: guard
+  depends_on:
+  - action-guard
+  status: not started
+  notes: 'One JSON line per decision in the repository state directory: the action, the matching
+    rules, the verdict, and the user''s answer to an ask. After an ask, the session offers to keep
+    the answer as a personal rule through rule-layers, and writes it only when the user accepts.
+    Logged cases are the cornerstone cases rdr-engine replays. Command text is stored with
+    secrets redacted.'
+- id: ported-rules
+  title: The pull-request and session rules that are prose today are enforced rules
+  track: guard
+  depends_on:
+  - action-guard
+  status: not started
+  notes: 'Draft on open, back to draft after a push while a skill linking them runs, the bug
+    label on a bug fix, reply before resolving a thread, conflicts decided by merge-probe and not
+    mergeable_state. Each rule has a test replaying its payload. A part no script can check stays
+    guidance, split per the Rule modelling rule. The record-claim rule from hook-enforcement waits
+    for interaction-model/attempts.'
+- id: playbook-guard
+  title: Each playbook command declares who may run it, and the guard enforces it
+  track: guard
+  depends_on:
+  - action-guard
+  - basstler-packages/playbook-settings
+  - basstler-packages/extension-points
+  status: not started
+  notes: 'Absorbs basstler-packages/write-guard. Every CommandGroup command declares who may
+    run it: the session alone, the session when told, or only the person. These become rules the
+    guard and git-hooks enforce, together with auto-approval of the commands a session may run
+    alone. Ships as the opt-in basstler-guard distribution in DefaultPlaybook. release:minor.'
+- id: rules-cli
+  title: 'basstler rules: list the rules, show one, and explain which decide an action'
+  track: authoring
+  depends_on:
+  - rule-layers
+  - action-guard
+  status: not started
+  notes: '`basstler rules list` (by layer, scope and enforcement), `show <id>`, and `explain
+    <command>`, which dry-runs the guard and prints each matching rule and the verdict. `check`
+    validates every layer. An /edit-rule skill tightens, loosens or rewords a rule through
+    rule-layers, and previews the explain output before and after.'
+- id: rdr-engine
+  title: An EQL ripple-down rule tree is a RuleEngine for session actions
+  track: authoring
+  depends_on:
+  - rule-model
+  - session-actions
+  - decision-log
+  status: not started
+  notes: 'Wraps krrood''s EQL-RDR (single-class over an Action, concluding a verdict) behind
+    RuleEngine. The declared rules seed the tree, and logged decisions are its cornerstone cases.
+    Backward inference answers why and when an action is blocked. Adds krrood as a dependency once
+    its light core ships with EQLSingleClassRDR; the owner approved this on 2026-11-09 instead of
+    copying the code.'
+  blockers:
+  - krrood's light core is not released, and EQLSingleClassRDR and rdr.interface are not on
+    krrood main yet.
+- id: session-expert
+  title: 'The session is the RDR''s expert: its LLM proposes conditions and the user confirms them'
+  track: authoring
+  depends_on:
+  - rdr-engine
+  status: not started
+  notes: 'Implement krrood''s expert interface (Expert, ConclusionSuggester, ConclusionSupportPresenter)
+    so the session turns a described rule into EQL conditions over an Action and a verdict, and
+    shows the corner case it differs from. The user confirms with AskUserQuestion. A ConditionResolver
+    in HINT mode pre-seeds the proposal. Interface gaps go upstream to krrood rather than diverging
+    here.'
+- id: add-rule-skill
+  title: /add-rule fits a described rule and reports conflicts with a recommended fix
+  track: authoring
+  depends_on:
+  - session-expert
+  - rules-cli
+  status: not started
+  notes: '/add-rule <description> builds the case and conclusion and fits them. The RDR reports
+    each conflict: cornerstone cases whose verdict would change, and existing rules that conclude
+    otherwise. The session shows each conflict with a recommended resolution (an exception, a
+    narrower condition, an alternative) and asks the user. Changing a rule adds a refinement and
+    never edits the rule in place. A rule with no checkable part is added as guidance.
+    release:minor.'
+- id: rules-page
+  title: A rules page on the plan site and a rules line in the session start
+  track: visibility
+  depends_on:
+  - rule-layers
+  - decision-log
+  status: not started
+  notes: 'A plan-site page per repository lists each rule with its layer, scope and enforcement,
+    plus recent decisions with allow, ask and block counts. Once rdr-engine lands it also shows the
+    rule tree, with refinements drawn as exceptions under the rule they correct. The session-start
+    summary names the rules active in that session. Personal rules appear only on their owner''s
+    page.'
+- id: rules-guide
+  title: A guide to adding, changing and trusting rules
+  track: visibility
+  depends_on:
+  - add-rule-skill
+  - rules-page
+  - ported-rules
+  status: not started
+  notes: 'A README section and a docs page on writing a rule, choosing its enforcement, overriding
+    it personally, reading a decision and its log line, and a /add-rule walk-through that resolves
+    a conflict.'
