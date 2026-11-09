@@ -63,3 +63,31 @@ items:
     and v2-removal, which delete this layer; if they are close, drop this item.
 
     '
+
+- id: notes-commits-skip-project-hooks
+  title: Commits to the personal-notes branch skip the project's git hooks
+  branch: null
+  pull_request_number: null
+  status: not started
+  track: handover
+  depends_on: []
+  notes: 'From #174 (ichumuh): with pre-commit installed in the clone, every notes save fails,
+    because the scratch checkout runs the project''s hooks and the notes branch has no .pre-commit-config.yaml.
+    Commit there with -c core.hooksPath=/dev/null (covers husky and custom hooks too) in save-plan.sh,
+    save-pr-progress.sh, save-personal-notes.sh, write-personal-notes-file.sh, create-personal-notes-branch.sh
+    and basstler.personal_notes.branch, through one shared commit step. Bug PR off main, failing
+    test first.'
+
+- id: per-release-environments
+  title: Each plugin release runs its own package environment, and unused ones are removed
+  branch: null
+  pull_request_number: null
+  status: not started
+  track: handover
+  depends_on:
+  - basstler-packages/uv-workspace
+  notes: 'From #176 (ichumuh). #173 pins the package to the plugin''s release and reports a mismatch;
+    still, projects on different plugin releases share ~/.local/share/basstler/venv and reinstall
+    over each other. Key the environment by release, created through uv so its cache hardlinks
+    packages. Session start stamps its last use and removes environments unused for a retention
+    period (ask the owner its length), never the current one, so they cannot pile up.'
