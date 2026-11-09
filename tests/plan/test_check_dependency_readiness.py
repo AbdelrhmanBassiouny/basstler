@@ -5,6 +5,7 @@ ready or not-ready to build on, via the plan site's own live-state rule.
 
 from __future__ import annotations
 
+from http import HTTPStatus
 from typing import Any
 
 import pytest
@@ -12,7 +13,13 @@ import pytest
 from basstler.plan_site.plan import Item, Plan, Track, Wave
 from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.model import ItemStatus, ManifestKey
-from basstler.pull_request_state import LiveState, PullRequestRecord, PullRequestState
+from basstler.pull_request_state import (
+    LivePullRequests,
+    LiveState,
+    PullRequestRecord,
+    PullRequestState,
+)
+from basstler.repository import Repository
 from basstler.plan.check_dependency_readiness import (
     DependencyReadiness,
     ReadinessField,
@@ -20,6 +27,7 @@ from basstler.plan.check_dependency_readiness import (
 )
 
 from ..constants.paths import DatasetLocation
+from ..github.pull_request_api import refusal
 from ..fixture_plans import (
     FixturePlanId,
     ForeignItemId,
@@ -91,12 +99,12 @@ def reported(
 def test_raises_for_an_unknown_item():
     plan = make_plan([item("a", ItemStatus.NOT_STARTED)])
     with pytest.raises(UnknownItemError, match="ghost"):
-        DependencyReadiness.of_item(plan, "ghost", {})
+        DependencyReadiness.of_item(plan, "ghost", LivePullRequests())
 
 
 def test_empty_list_for_an_item_with_no_dependencies():
     plan = make_plan([item("a", ItemStatus.NOT_STARTED)])
-    assert DependencyReadiness.of_item(plan, "a", {}) == []
+    assert DependencyReadiness.of_item(plan, "a", LivePullRequests()) == []
 
 
 def test_done_dependency_is_ready():
@@ -106,7 +114,7 @@ def test_done_dependency_is_ready():
             item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
         ]
     )
-    results = DependencyReadiness.of_item(plan, "b", {})
+    results = DependencyReadiness.of_item(plan, "b", LivePullRequests())
     assert [readiness.to_json() for readiness in results] == [
         reported(
             identifier="a",
@@ -127,13 +135,40 @@ def test_open_ready_dependency_is_ready():
             item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
         ]
     )
-    results = DependencyReadiness.of_item(plan, "b", pull_requests_by_repository)
+    results = DependencyReadiness.of_item(
+        plan, "b", LivePullRequests(pull_requests_by_repository)
+    )
     assert [readiness.to_json() for readiness in results] == [
         reported(
             identifier="a",
             title="a",
             live_state=LiveState.OPEN_READY,
             is_ready=True,
+        )
+    ]
+
+
+def test_dependency_on_a_repository_not_read_is_reported_unreadable_and_not_ready():
+    plan = make_plan(
+        [
+            item("a", ItemStatus.IN_PROGRESS, pull_request_number=1),
+            item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+        ]
+    )
+    repository = Repository.parse(plan.default_repository)
+    results = DependencyReadiness.of_item(
+        plan,
+        "b",
+        LivePullRequests(
+            read_failures={repository: refusal(repository, HTTPStatus.NOT_FOUND)}
+        ),
+    )
+    assert [readiness.to_json() for readiness in results] == [
+        reported(
+            identifier="a",
+            title="a",
+            live_state=LiveState.REPOSITORY_UNREADABLE,
+            is_ready=False,
         )
     ]
 
@@ -148,7 +183,9 @@ def test_open_draft_dependency_is_not_ready():
             item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
         ]
     )
-    results = DependencyReadiness.of_item(plan, "b", pull_requests_by_repository)
+    results = DependencyReadiness.of_item(
+        plan, "b", LivePullRequests(pull_requests_by_repository)
+    )
     assert [readiness.to_json() for readiness in results] == [
         reported(
             identifier="a",
@@ -161,7 +198,7 @@ def test_open_draft_dependency_is_not_ready():
 
 def test_unresolvable_dependency_identifier_is_reported_not_ready():
     plan = make_plan([item("b", ItemStatus.NOT_STARTED, depends_on=["ghost"])])
-    results = DependencyReadiness.of_item(plan, "b", {})
+    results = DependencyReadiness.of_item(plan, "b", LivePullRequests())
     assert [readiness.to_json() for readiness in results] == [
         reported(identifier="ghost", title=None, live_state=None, is_ready=False)
     ]
@@ -175,7 +212,7 @@ def test_multiple_dependencies_reported_in_order():
             item("c", ItemStatus.NOT_STARTED, depends_on=["b", "a"]),
         ]
     )
-    results = DependencyReadiness.of_item(plan, "c", {})
+    results = DependencyReadiness.of_item(plan, "c", LivePullRequests())
     assert [readiness.dependency.reference.text for readiness in results] == ["b", "a"]
     assert [
         readiness.dependency.is_ready_to_unblock_dependents() for readiness in results
@@ -194,13 +231,15 @@ def test_foreign_dependency_is_read_against_its_own_plans_repository():
     results = DependencyReadiness.of_item(
         plan,
         "b",
-        {
-            fixture_repository(FixturePlanId.OTHER): {
-                fixture_pull_request_number(
-                    FixturePlanId.OTHER, ForeignItemId.READY
-                ): PullRequestRecord(state=PullRequestState.OPEN, draft=False)
+        LivePullRequests(
+            {
+                fixture_repository(FixturePlanId.OTHER): {
+                    fixture_pull_request_number(
+                        FixturePlanId.OTHER, ForeignItemId.READY
+                    ): PullRequestRecord(state=PullRequestState.OPEN, draft=False)
+                }
             }
-        },
+        ),
         PlanDirectory(DatasetLocation.PLANS),
     )
     assert [readiness.to_json() for readiness in results] == [
@@ -219,7 +258,7 @@ def test_foreign_dependency_is_not_ready_without_a_plans_directory():
     # Nothing can resolve it, and an unresolvable dependency is never ready.
     reference = foreign_reference(ForeignItemId.READY)
     plan = make_plan([item("b", ItemStatus.NOT_STARTED, depends_on=[reference])])
-    results = DependencyReadiness.of_item(plan, "b", {})
+    results = DependencyReadiness.of_item(plan, "b", LivePullRequests())
     assert [readiness.to_json() for readiness in results] == [
         reported(identifier=reference, title=None, live_state=None, is_ready=False)
     ]

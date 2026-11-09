@@ -163,6 +163,12 @@ class Item:
     Why :attr:`status` disagrees with :attr:`live_state`, if it does.
     """
 
+    access_warning: str | None = field(default=None, init=False)
+    """
+    Why the build could not read this item's pull request, and how to let it, if it
+    could not.
+    """
+
     pull_request_url: str | None = field(default=None, init=False)
     """
     This item's pull request on GitHub, if it has one.

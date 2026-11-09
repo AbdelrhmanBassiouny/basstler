@@ -17,6 +17,7 @@ from basstler.pull_request_state import (
     PullRequestState,
 )
 from basstler.repository import Repository
+from basstler.pull_request_state import LivePullRequests
 
 from ..fixture_plans import (
     PLAN_UNDER_TEST_ID,
@@ -45,7 +46,7 @@ def test_render_wires_an_item_into_its_wave_and_track_sections():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert "Wave One" in output
@@ -74,7 +75,7 @@ def test_render_shows_placeholder_for_a_track_with_no_items():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert "Nothing here yet." in output
@@ -121,7 +122,7 @@ def test_render_shows_pull_request_link_when_item_has_one():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository=pull_requests_by_repository,
+        live_pull_requests=LivePullRequests(pull_requests_by_repository),
     )
     output = renderer.render().html
     assert 'href="https://github.com/owner/repo/pull/5"' in output
@@ -149,7 +150,7 @@ def test_render_shows_ready_to_review_section_last_in_the_sidebar():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository=pull_requests_by_repository,
+        live_pull_requests=LivePullRequests(pull_requests_by_repository),
     )
     output = renderer.render().html
     assert output.index("Ready to review") > output.index("Ready to start")
@@ -169,7 +170,7 @@ def test_render_hides_done_items_by_default_with_a_sidebar_toggle():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert 'id="plan-page"' in output
@@ -194,7 +195,7 @@ def test_render_gives_each_item_card_a_stable_id_anchor():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert 'id="item-a"' in output
@@ -217,7 +218,7 @@ def test_render_links_a_ready_to_start_sidebar_entry_to_its_item_card():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert 'href="#item-b"' in output
@@ -242,7 +243,7 @@ def test_render_links_a_drift_sidebar_entry_to_its_item_card():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository=pull_requests_by_repository,
+        live_pull_requests=LivePullRequests(pull_requests_by_repository),
     )
     output = renderer.render().html
     assert 'href="#item-a"' in output

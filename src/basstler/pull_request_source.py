@@ -5,18 +5,33 @@ Where the live state of the pull requests a plan references is read from.
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from http import HTTPStatus
 from typing import Any
 
 from basstler.maintenance.board import PullRequestField
-from basstler.github.client import GitHubClient, GitHubRestClient
+from basstler.github.client import (
+    GitHubFullClient,
+    GitHubResponse,
+    GitHubRestClient,
+)
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.maintenance.github import GitHubRepository
 from basstler.plan.dependencies import DependencyResolver
-from basstler.pull_request_state import PullRequestRecord, PullRequestsByRepository
+from basstler.pull_request_state import LivePullRequests, PullRequestRecord
 from basstler.repository import PullRequestReference, Repository
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which reports a repository that cannot be read.
+"""
+
+READ_ACCESS_STATUSES = frozenset({HTTPStatus.NOT_FOUND, HTTPStatus.FORBIDDEN})
+"""
+What GitHub answers a token that is not granted a repository.
+"""
 
 # %% live pull request state
 
@@ -41,17 +56,25 @@ class PullRequestSource(ABC):
         :return: Its web page, or ``None`` if the repository has no such number.
         """
 
-    def pull_requests_of(
+    def read_failure_of(self, repository: Repository) -> GitHubRequestFailed | None:
+        """
+        :param repository: A repository a plan's items name.
+        :return: The refusal of the token's access to it, or ``None`` if it can be read;
+            ``None`` unless the source finds otherwise.
+        """
+        return None
+
+    def live_pull_requests_of(
         self, dependencies: DependencyResolver
-    ) -> PullRequestsByRepository:
+    ) -> LivePullRequests:
         """
         :param dependencies: A plan's items, plus the items of other plans it depends
             on.
-        :return: The live state of every pull request those items name, in the shape
-            the plan site renders from; a number the repository does not have is left
-            out.
+        :return: The live state of every pull request those items name, and why each
+            repository that cannot be read cannot be; a number the repository does not
+            have is left out.
         """
-        pull_requests: PullRequestsByRepository = {}
+        live_pull_requests = LivePullRequests()
         for dependency in dependencies.resolved_dependencies:
             if dependency.item.pull_request_number is None:
                 continue
@@ -59,12 +82,16 @@ class PullRequestSource(ABC):
                 Repository.parse(dependency.repository),
                 dependency.item.pull_request_number,
             )
+            failure = self.read_failure_of(reference.repository)
+            if failure is not None:
+                live_pull_requests.read_failures[reference.repository] = failure
+                continue
             record = self.pull_request(reference)
             if record is not None:
-                pull_requests.setdefault(str(reference.repository), {})[
-                    str(reference.number)
-                ] = record
-        return pull_requests
+                live_pull_requests.pull_requests_by_repository.setdefault(
+                    str(reference.repository), {}
+                )[str(reference.number)] = record
+        return live_pull_requests
 
 
 @dataclass
@@ -74,12 +101,18 @@ class GitHubPullRequestSource(PullRequestSource):
 
     A repository's pull requests are listed in bulk on first use and kept, so a site
     covering many plans costs a handful of requests rather than one per item. A number
-    the listing missed is read on its own.
+    the listing missed is read on its own. A repository whose details cannot be read is
+    not listed.
     """
 
-    client: GitHubClient
+    client: GitHubFullClient
     """
     How the requests reach GitHub.
+    """
+
+    repository_details: dict[Repository, GitHubResponse] = field(default_factory=dict)
+    """
+    The answer to the read of each repository's details asked about so far.
     """
 
     listed_repositories: set[Repository] = field(default_factory=set)
@@ -109,6 +142,30 @@ class GitHubPullRequestSource(PullRequestSource):
         """
         return GitHubRepository(repository, self.client)
 
+    def read_failure_of(self, repository: Repository) -> GitHubRequestFailed | None:
+        """
+        See :meth:`PullRequestSource.read_failure_of`: the refusal of the repository's
+        details, asked once and reported when refused.
+
+        :raises GitHubCallFailed: If the read fails other than by a refused access.
+        """
+        if repository in self.repository_details:
+            return self.repository_details[repository].failure
+        details = self.client.attempt_get(f"/{repository.api_path}")
+        failure = details.failure
+        if failure is not None and not (
+            isinstance(failure, GitHubRequestFailed)
+            and failure.status in READ_ACCESS_STATUSES
+        ):
+            raise failure
+        self.repository_details[repository] = details
+        if failure is not None:
+            logger.warning(
+                f"cannot read {repository}, so its pull requests are left out: "
+                f"{failure.error_message()}"
+            )
+        return failure
+
     def pull_request(self, reference: PullRequestReference) -> PullRequestRecord | None:
         record = self.listed_or_read(reference)
         if record is None or not record.has_unread_checks:
@@ -124,13 +181,15 @@ class GitHubPullRequestSource(PullRequestSource):
         """
         :param reference: The pull request to look up.
         :return: Its state as its repository's listing gave it, read on its own when the
-            listing missed it, or ``None`` if the repository has no such pull request.
+            listing missed it, or ``None`` if the repository has no such pull request or
+            cannot be read.
         """
+        if self.read_failure_of(reference.repository) is not None:
+            return None
         self.list_pull_requests_of(reference.repository)
         if reference not in self.pull_requests:
             api_record = self.read_if_present(
-                lambda client: client.pull_request(reference.number),
-                reference.repository,
+                f"/{reference.repository.pull_request_path(reference.number)}"
             )
             if api_record is None:
                 return None
@@ -138,9 +197,13 @@ class GitHubPullRequestSource(PullRequestSource):
         return self.pull_requests[reference]
 
     def issue_url(self, repository: Repository, number: int) -> str | None:
-        api_record = self.read_if_present(
-            lambda client: client.issue(number), repository
-        )
+        """
+        See :meth:`PullRequestSource.issue_url`; ``None`` also when the repository
+        cannot be read.
+        """
+        if self.read_failure_of(repository) is not None:
+            return None
+        api_record = self.read_if_present(f"/{repository.issue_path(number)}")
         if api_record is None:
             return None
         return PullRequestField.HTML_URL.read(api_record, number)
@@ -160,22 +223,18 @@ class GitHubPullRequestSource(PullRequestSource):
             )
         self.listed_repositories.add(repository)
 
-    def read_if_present(
-        self,
-        read: Callable[[GitHubRepository], Mapping[str, Any]],
-        repository: Repository,
-    ) -> Mapping[str, Any] | None:
+    def read_if_present(self, path: str) -> Mapping[str, Any] | None:
         """
-        Make one read, treating an absent number as an answer rather than a failure.
+        Make one read, treating an absent resource as an answer rather than a failure.
 
-        :param read: The call to make, given the repository's client.
-        :param repository: The repository to call.
+        :param path: The resource's REST path.
         :return: The response, or ``None`` if the API answered that it does not exist.
         :raises GitHubRequestFailed: If the API refused the read for any other reason.
         """
-        try:
-            return read(self.client_for(repository))
-        except GitHubRequestFailed as refused:
-            if refused.status != HTTPStatus.NOT_FOUND:
-                raise
+        answer = self.client.attempt_get(path)
+        if (
+            isinstance(answer.failure, GitHubRequestFailed)
+            and answer.failure.status == HTTPStatus.NOT_FOUND
+        ):
             return None
+        return answer.raise_if_failed()

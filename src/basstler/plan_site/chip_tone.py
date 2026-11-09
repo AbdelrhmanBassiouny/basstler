@@ -82,6 +82,8 @@ class ChipTone(StrEnum):
                 return cls.BAD
             case LiveState.NO_PULL_REQUEST:
                 return cls.IDLE
+            case LiveState.REPOSITORY_UNREADABLE:
+                return cls.WARNING
 
     @classmethod
     def of_check_state(cls, check_state: CombinedCheckState) -> ChipTone:
