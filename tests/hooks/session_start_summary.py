@@ -63,6 +63,11 @@ class SummaryLine(StrEnum):
     Whether the package's environment exists and holds everything the package requires.
     """
 
+    RELEASE = "release"
+    """
+    Whether the plugin and the installed package are one release.
+    """
+
     SETUP = "setup"
     """
     check-setup.sh's verdict.
@@ -236,6 +241,31 @@ class SummaryMessage(StrEnum):
     DEPENDENCIES_INSTALL_FAILED = "dependencies_line_install_failed"
     """
     The install did not work, and the run carried on regardless.
+    """
+
+    RELEASE_MATCHING = "release_line_matching"
+    """
+    The installed package is the plugin's own release.
+    """
+
+    RELEASE_MISMATCHED = "release_line_mismatched"
+    """
+    The installed package is another release than the plugin's.
+    """
+
+    RELEASE_NOT_NAMED = "release_line_not_named"
+    """
+    The plugin names no release, so nothing pins the package to it.
+    """
+
+    RELEASE_FROM_CHECKOUT = "release_line_checkout"
+    """
+    The plugin and the package both run from the checkout the plugin sits in.
+    """
+
+    RELEASE_NOT_READ = "release_line_package_not_read"
+    """
+    The installed package's version could not be read.
     """
 
     ACTION_NOT_READ = "upstream_reviews_action_line_not_read"

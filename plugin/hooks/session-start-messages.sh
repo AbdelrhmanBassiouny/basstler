@@ -234,6 +234,45 @@ dependencies_line_environment_not_created() {
     "${environment_directory}"
 }
 
+# %% the release line
+
+# release_line_checkout: the plugin and the package are both the source of the
+# checkout the plugin sits in.
+release_line_checkout() {
+  local checkout="$1"
+  printf 'plugin and package both run from the checkout %s' "${checkout}"
+}
+
+# release_line_matching: the package is the plugin's own release.
+release_line_matching() {
+  local release="$1"
+  printf 'plugin and package both at %s' "${release}"
+}
+
+# release_line_mismatched: the package is another release than the plugin's,
+# so a hook may pass it what it does not accept.
+release_line_mismatched() {
+  local plugin_release="$1"
+  local package_version="$2"
+  local package_source="$3"
+  printf "the plugin is %s but the package is %s - its hooks may pass what this package does not accept; start a new session, or install '%s'" \
+    "${plugin_release}" "${package_version}" "${package_source}"
+}
+
+# release_line_not_named: the plugin names no release, so nothing pins the
+# package to it.
+release_line_not_named() {
+  local package_version="$1"
+  printf 'the plugin names no release, so nothing pins package %s to it - reinstall the plugin from the marketplace' \
+    "${package_version}"
+}
+
+# release_line_package_not_read: the installed package's version could not be
+# read, as when it is not installed.
+release_line_package_not_read() {
+  printf "could not read the installed package's version - see the dependencies line"
+}
+
 # %% the Actions usage line
 
 # actions_usage_line_not_checked: the usage could not be measured.
