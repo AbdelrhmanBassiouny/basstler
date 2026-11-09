@@ -4,9 +4,11 @@ Fill in what each item of a plan shows on its page, from live pull request data.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from dataclasses import dataclass
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, field
+from http import HTTPStatus
 
+from basstler.github.exceptions import GitHubCallFailed, GitHubRequestFailed
 from basstler.plan.dependencies import DependencyResolver
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.cards import ItemAction, ResolveAction, StartNowAction
@@ -20,6 +22,11 @@ from basstler.pull_request_state import (
 from basstler.repository import PullRequestReference, Repository
 
 # %% the classifier
+
+READ_ACCESS_STATUSES = frozenset({HTTPStatus.NOT_FOUND, HTTPStatus.FORBIDDEN})
+"""
+The statuses GitHub answers a token with for a repository it is not granted.
+"""
 
 
 @dataclass
@@ -44,9 +51,9 @@ class ItemClassifier:
     The resolver of the plan's dependencies.
     """
 
-    unreadable_repositories: frozenset[Repository] = frozenset()
+    read_failures: Mapping[Repository, GitHubCallFailed] = field(default_factory=dict)
     """
-    The repositories whose pull requests could not be read.
+    Why each repository whose pull requests could not be read could not be.
     """
 
     locate_plan_page: Callable[[str], str] | None = None
@@ -60,7 +67,7 @@ class ItemClassifier:
         Fill in every item of :attr:`plan` in place.
         """
         self.dependencies.classify_live_states(
-            self.pull_requests_by_repository, self.unreadable_repositories
+            self.pull_requests_by_repository, frozenset(self.read_failures)
         )
         for item in self.plan.items:
             self._classify_pull_request(item)
@@ -89,7 +96,10 @@ class ItemClassifier:
             item.upstream_pull_request_url = item.pull_request_record.upstream_link
         item.drift_description = self._drift_description_of(item)
         if item.live_state is LiveState.REPOSITORY_UNREADABLE:
-            item.access_warning = self.access_warning_of(self._repository_of(item))
+            repository = Repository.parse(self._repository_of(item))
+            item.access_warning = self.access_warning_of(
+                repository, self.read_failures[repository]
+            )
         item.needs_review = (
             item.live_state is LiveState.OPEN_DRAFT
             and item.status is not ItemStatus.DEFERRED
@@ -164,15 +174,26 @@ class ItemClassifier:
         return self._start_action_for(item)
 
     @staticmethod
-    def access_warning_of(repository: str) -> str:
+    def access_warning_of(repository: Repository, failure: GitHubCallFailed) -> str:
         """
-        :param repository: The ``"owner/repo"`` whose pull requests could not be read.
-        :return: What an item on it shows: that its live state is missing, and the fix.
+        :param repository: The repository whose pull requests could not be read.
+        :param failure: Why they could not be.
+        :return: What an item on it shows: that its live state is missing, why, and the
+            fix; the read token's for a repository the token is not granted.
         """
-        return (
-            f"the build cannot read {repository}, so this item shows no live state; "
-            f"{PlanSiteSecret.private_repository_correction}"
+        correction = failure.suggest_correction()
+        if (
+            isinstance(failure, GitHubRequestFailed)
+            and failure.status in READ_ACCESS_STATUSES
+        ):
+            correction = PlanSiteSecret.private_repository_correction
+        warning = (
+            f"the build cannot read {repository}, so this item shows no live state: "
+            f"{failure.error_message()}"
         )
+        if not correction:
+            return warning
+        return f"{warning}; {correction}"
 
     @staticmethod
     def _drift_description_of(item: Item) -> str | None:

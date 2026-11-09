@@ -7,6 +7,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
+from basstler.github.exceptions import GitHubCallFailed
 from basstler.pull_request_source import PullRequestSource
 from basstler.pull_request_state import PullRequestRecord
 from basstler.repository import PullRequestReference, Repository
@@ -30,9 +31,9 @@ class RecordedPullRequestSource(PullRequestSource):
     The issue pages that exist, by repository and number.
     """
 
-    unreadable_repositories: set[Repository] = field(default_factory=set)
+    read_failures: dict[Repository, GitHubCallFailed] = field(default_factory=dict)
     """
-    The repositories whose pull requests cannot be read.
+    Why each repository whose pull requests cannot be read cannot be.
     """
 
     looked_up: list[PullRequestReference] = field(default_factory=list)
@@ -47,5 +48,5 @@ class RecordedPullRequestSource(PullRequestSource):
     def issue_url(self, repository: Repository, number: int) -> str | None:
         return self.issue_urls.get(PullRequestReference(repository, number))
 
-    def is_readable(self, repository: Repository) -> bool:
-        return repository not in self.unreadable_repositories
+    def read_failure_of(self, repository: Repository) -> GitHubCallFailed | None:
+        return self.read_failures.get(repository)

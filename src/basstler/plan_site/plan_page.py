@@ -5,10 +5,11 @@ next steps its live pull-request state calls for.
 
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 from basstler.class_property import classproperty
+from basstler.github.exceptions import GitHubCallFailed
 from basstler.locations import SiteTemplate
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
@@ -76,9 +77,9 @@ class PlanPage(TemplatePage):
     Live pull request state for every repository referenced by the plan's items.
     """
 
-    unreadable_repositories: frozenset[Repository] = frozenset()
+    read_failures: Mapping[Repository, GitHubCallFailed] = field(default_factory=dict)
     """
-    The repositories whose pull requests could not be read.
+    Why each repository whose pull requests could not be read could not be.
     """
 
     repository_rules: RepositoryRules = field(default_factory=RepositoryRules)
@@ -123,7 +124,7 @@ class PlanPage(TemplatePage):
         ItemClassifier(
             plan=self.plan,
             pull_requests_by_repository=self.pull_requests_by_repository,
-            unreadable_repositories=self.unreadable_repositories,
+            read_failures=self.read_failures,
             dependencies=self.dependencies,
             locate_plan_page=self.locate_plan_page,
         ).classify()

@@ -12,11 +12,17 @@ from typing import Any
 
 from basstler.maintenance.board import PullRequestField
 from basstler.github.client import GitHubFullClient, GitHubRestClient
-from basstler.github.exceptions import GitHubRequestFailed
+from basstler.github.exceptions import GitHubCallFailed, GitHubRequestFailed
 from basstler.maintenance.github import GitHubRepository
 from basstler.plan.dependencies import DependencyResolver
 from basstler.pull_request_state import PullRequestRecord, PullRequestsByRepository
 from basstler.repository import PullRequestReference, Repository
+from basstler.standard_streams import StandardStreamHandler
+
+logger = StandardStreamHandler.logger_for(__name__)
+"""
+This module's logger, which reports a repository that cannot be read.
+"""
 
 # %% live pull request state
 
@@ -41,30 +47,32 @@ class PullRequestSource(ABC):
         :return: Its web page, or ``None`` if the repository has no such number.
         """
 
-    def is_readable(self, repository: Repository) -> bool:
+    def read_failure_of(self, repository: Repository) -> GitHubCallFailed | None:
         """
         :param repository: A repository a plan's items name.
-        :return: Whether its pull requests can be read; true unless the source finds
-            otherwise.
+        :return: Why its pull requests cannot be read, or ``None`` if they can; ``None``
+            unless the source finds otherwise.
         """
-        return True
+        return None
 
-    def unreadable_repositories_of(
+    def read_failures_of(
         self, dependencies: DependencyResolver
-    ) -> frozenset[Repository]:
+    ) -> dict[Repository, GitHubCallFailed]:
         """
         :param dependencies: A plan's items, plus the items of other plans it depends
             on.
-        :return: The repositories of those items' pull requests that cannot be read.
+        :return: Why each repository of those items' pull requests that cannot be read
+            cannot be, in the order the items name them.
         """
-        return frozenset(
-            repository
-            for dependency in dependencies.resolved_dependencies
-            if dependency.item.pull_request_number is not None
-            and not self.is_readable(
-                repository := Repository.parse(dependency.repository)
-            )
-        )
+        failures = {}
+        for dependency in dependencies.resolved_dependencies:
+            if dependency.item.pull_request_number is None:
+                continue
+            repository = Repository.parse(dependency.repository)
+            failure = self.read_failure_of(repository)
+            if failure is not None:
+                failures[repository] = failure
+        return failures
 
     def pull_requests_of(
         self, dependencies: DependencyResolver
@@ -108,9 +116,11 @@ class GitHubPullRequestSource(PullRequestSource):
     How the requests reach GitHub.
     """
 
-    readability: dict[Repository, bool] = field(default_factory=dict)
+    read_failures: dict[Repository, GitHubCallFailed | None] = field(
+        default_factory=dict
+    )
     """
-    Whether each repository asked about so far can be read.
+    Why each repository asked about so far cannot be read, ``None`` for one that can.
     """
 
     listed_repositories: set[Repository] = field(default_factory=set)
@@ -140,15 +150,21 @@ class GitHubPullRequestSource(PullRequestSource):
         """
         return GitHubRepository(repository, self.client)
 
-    def is_readable(self, repository: Repository) -> bool:
+    def read_failure_of(self, repository: Repository) -> GitHubCallFailed | None:
         """
-        See :meth:`PullRequestSource.is_readable`: whether the repository's details can
-        be read, asked once.
+        See :meth:`PullRequestSource.read_failure_of`: why the repository's details
+        cannot be read, asked once and reported when they cannot.
         """
-        if repository not in self.readability:
-            answer = self.client.attempt_get(f"/{repository.api_path}")
-            self.readability[repository] = answer.failure is None
-        return self.readability[repository]
+        if repository in self.read_failures:
+            return self.read_failures[repository]
+        failure = self.client.attempt_get(f"/{repository.api_path}").failure
+        self.read_failures[repository] = failure
+        if failure is not None:
+            logger.warning(
+                f"cannot read {repository}, so its pull requests are left out: "
+                f"{failure.error_message()}"
+            )
+        return failure
 
     def pull_request(self, reference: PullRequestReference) -> PullRequestRecord | None:
         record = self.listed_or_read(reference)
@@ -168,7 +184,7 @@ class GitHubPullRequestSource(PullRequestSource):
             listing missed it, or ``None`` if the repository has no such pull request or
             cannot be read.
         """
-        if not self.is_readable(reference.repository):
+        if self.read_failure_of(reference.repository) is not None:
             return None
         self.list_pull_requests_of(reference.repository)
         if reference not in self.pull_requests:
@@ -185,7 +201,7 @@ class GitHubPullRequestSource(PullRequestSource):
         See :meth:`PullRequestSource.issue_url`; ``None`` also when the repository
         cannot be read.
         """
-        if not self.is_readable(repository):
+        if self.read_failure_of(repository) is not None:
             return None
         api_record = self.read_if_present(f"/{repository.issue_path(number)}")
         if api_record is None:

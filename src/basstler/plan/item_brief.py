@@ -175,7 +175,7 @@ class ItemBrief:
                 item.identifier,
                 pull_request_source.pull_requests_of(resolver),
                 plan_directory,
-                pull_request_source.unreadable_repositories_of(resolver),
+                frozenset(pull_request_source.read_failures_of(resolver)),
             )
         return cls(
             manifest=manifest,

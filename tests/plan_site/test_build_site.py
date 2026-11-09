@@ -23,6 +23,8 @@ from basstler.maintenance.board import (
     PullRequestField,
     PullRequestHeadKey,
 )
+from basstler.github.client import HttpMethod
+from basstler.github.credential import CredentialProvider
 from basstler.github.exceptions import GitHubRequestFailed
 from basstler.maintenance.github import (
     CommitReport,
@@ -45,7 +47,8 @@ from basstler.plan_site.chip_tone import ChipTone
 from basstler.plan_site.cards import LiveStateAttribute, PlanTimeAttribute
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan_site.hub_page import PlanSummary, SiteStylesheet, SkippedPage
-from basstler.plan_site.item_classifier import ItemClassifier
+from basstler.plan_site.item_classifier import READ_ACCESS_STATUSES, ItemClassifier
+from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.plan_page import PlanPage
 from basstler.pull_request_source import GitHubPullRequestSource
@@ -633,9 +636,69 @@ def test_github_source_finds_a_repository_whose_details_are_refused_unreadable()
     source = GitHubPullRequestSource(
         RecordedGitHubClient(responses=details_of(PLAN_REPOSITORY))
     )
-    assert source.unreadable_repositories_of(DependencyResolver(FIRST_PLAN)) == {
-        ELSEWHERE_PULL_REQUEST.repository
-    }
+    failures = source.read_failures_of(DependencyResolver(FIRST_PLAN))
+    assert list(failures) == [ELSEWHERE_PULL_REQUEST.repository]
+
+
+def test_github_source_keeps_why_a_repository_cannot_be_read():
+    client = RecordedGitHubClient(refusal=HTTPStatus.FORBIDDEN)
+    failure = GitHubPullRequestSource(client).read_failure_of(PLAN_REPOSITORY)
+    assert failure.status == client.refusal
+
+
+def test_github_source_reports_a_repository_it_cannot_read(
+    capsys: pytest.CaptureFixture,
+):
+    source = GitHubPullRequestSource(RecordedGitHubClient())
+    failure = source.read_failure_of(PLAN_REPOSITORY)
+    assert failure.error_message() in capsys.readouterr().err
+
+
+def refusal(status: HTTPStatus) -> GitHubRequestFailed:
+    """
+    :param status: The status GitHub answers with.
+    :return: A refused read of the first plan's other repository.
+    """
+    return GitHubRequestFailed.for_status(
+        status=status,
+        detail="",
+        method=HttpMethod.GET,
+        path=f"/{ELSEWHERE_PULL_REQUEST.repository.api_path}",
+        credential_origin=CredentialProvider.CALLER,
+    )
+
+
+@pytest.mark.parametrize("status", sorted(READ_ACCESS_STATUSES))
+def test_an_access_warning_for_a_repository_not_granted_names_the_read_token(
+    status: HTTPStatus,
+):
+    warning = ItemClassifier.access_warning_of(
+        ELSEWHERE_PULL_REQUEST.repository, refusal(status)
+    )
+    assert PlanSiteSecret.private_repository_correction in warning
+
+
+def test_an_access_warning_for_another_failure_gives_that_failure_s_own_fix():
+    failure = refusal(HTTPStatus.UNAUTHORIZED)
+    warning = ItemClassifier.access_warning_of(
+        ELSEWHERE_PULL_REQUEST.repository, failure
+    )
+    assert warning.endswith(failure.suggest_correction())
+
+
+def test_an_access_warning_for_another_failure_does_not_name_the_read_token():
+    warning = ItemClassifier.access_warning_of(
+        ELSEWHERE_PULL_REQUEST.repository, refusal(HTTPStatus.UNAUTHORIZED)
+    )
+    assert PlanSiteSecret.private_repository_correction not in warning
+
+
+def test_an_access_warning_says_why_the_repository_cannot_be_read():
+    failure = refusal(HTTPStatus.NOT_FOUND)
+    warning = ItemClassifier.access_warning_of(
+        ELSEWHERE_PULL_REQUEST.repository, failure
+    )
+    assert failure.error_message() in warning
 
 
 def test_github_source_answers_no_issue_url_on_a_repository_it_cannot_read():
@@ -668,20 +731,34 @@ def test_build_publishes_a_plan_whose_item_is_on_a_repository_it_cannot_read(
     assert (tmp_path / str(NOTES_REPOSITORY) / SitePlan.FIRST / SiteFile.PAGE).exists()
 
 
+def access_warning_on(site: RepositorySite) -> str:
+    """
+    :param site: A site built by :func:`unreadable_elsewhere_site`.
+    :return: The warning an item on the repository it was refused shows.
+    """
+    repository = ELSEWHERE_PULL_REQUEST.repository
+    return ItemClassifier.access_warning_of(
+        repository, site.pull_request_source.read_failure_of(repository)
+    )
+
+
 def test_an_item_on_a_repository_the_build_cannot_read_shows_how_to_let_it(
     dataset_notes: NotesBranch, tmp_path: Path
 ):
-    unreadable_elsewhere_site(dataset_notes).build(tmp_path)
-    warning = ItemClassifier.access_warning_of(str(ELSEWHERE_PULL_REQUEST.repository))
-    assert html.escape(warning) in page_of(tmp_path, SitePlan.FIRST)
+    site = unreadable_elsewhere_site(dataset_notes)
+    site.build(tmp_path)
+    assert html.escape(access_warning_on(site)) in page_of(tmp_path, SitePlan.FIRST)
 
 
 def test_build_reports_a_repository_it_cannot_read(
     dataset_notes: NotesBranch, tmp_path: Path, capsys: pytest.CaptureFixture
 ):
-    unreadable_elsewhere_site(dataset_notes).build(tmp_path)
-    warning = ItemClassifier.access_warning_of(str(ELSEWHERE_PULL_REQUEST.repository))
-    assert f"{NOTES_REPOSITORY}/{SitePlan.FIRST}: {warning}" in capsys.readouterr().err
+    site = unreadable_elsewhere_site(dataset_notes)
+    site.build(tmp_path)
+    assert (
+        f"{NOTES_REPOSITORY}/{SitePlan.FIRST}: {access_warning_on(site)}"
+        in capsys.readouterr().err
+    )
 
 
 def item_on_an_unreadable_repository() -> Item:
@@ -697,7 +774,9 @@ def item_on_an_unreadable_repository() -> Item:
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={},
-        unreadable_repositories=frozenset({ELSEWHERE_PULL_REQUEST.repository}),
+        read_failures={
+            ELSEWHERE_PULL_REQUEST.repository: refusal(HTTPStatus.NOT_FOUND)
+        },
     ).render()
     return next(item for item in plan.items if item.repository is not None)
 

@@ -367,13 +367,11 @@ class RepositorySite(SiteSection[RepositorySummary]):
         """
         plan = Plan.from_mapping(source.manifest)
         dependencies = DependencyResolver(plan, self.plan_directory)
-        unreadable_repositories = self.pull_request_source.unreadable_repositories_of(
-            dependencies
-        )
-        for repository in sorted(map(str, unreadable_repositories)):
+        read_failures = self.pull_request_source.read_failures_of(dependencies)
+        for repository, failure in read_failures.items():
             logger.warning(
                 f"{self.notes.repository}/{source.directory_name}: "
-                f"{ItemClassifier.access_warning_of(repository)}"
+                f"{ItemClassifier.access_warning_of(repository, failure)}"
             )
         renderer = PlanPage(
             stylesheet_url=self.stylesheet_url,
@@ -383,7 +381,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
             pull_requests_by_repository=self.pull_request_source.pull_requests_of(
                 dependencies
             ),
-            unreadable_repositories=unreadable_repositories,
+            read_failures=read_failures,
             header=PlanPageHeader(
                 tracking_url=self.tracking_url_of(plan),
                 hub_url=self.address.hub_url,
