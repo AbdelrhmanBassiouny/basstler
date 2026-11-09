@@ -192,10 +192,11 @@ items:
   title: Plan site renders items whose repository it cannot read, instead of failing the whole site
   track: status
   depends_on:
-  - basstler-packages/uv-workspace
+  - private-notes-site-build
   status: not started
   notes: 'From #153 (tomsch420) and #170''s review: one repository the build cannot read (a 404 listing
     a private repository''s pull requests) fails every plan on the site. Render those items without live
     state, with a visible note naming the repository and the PLAN_SITE_READ_TOKEN fix, so the rest of the
-    site still builds. Depends on uv-workspace for its freeze on new plan_site branches.'
+    site still builds. A bug fix, so the uv-workspace freeze exempts it; stacked on #170, whose
+    PLAN_SITE_READ_TOKEN the note names.'
 tracking_issue: 135
