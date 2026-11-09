@@ -19,6 +19,10 @@ tracks:
   name: Display and design
   wave: actionable-site
   description: What the site shows and how it looks; no writes.
+- id: lifecycle
+  name: Site setup and removal
+  wave: actionable-site
+  description: Commands that set the site up for a repository or take it away again.
 items:
 - id: command-issues
   title: Site buttons open a prefilled command issue in the site repository, which an owner-only workflow runs and closes
@@ -118,3 +122,11 @@ items:
     chip linking to its card, beside its pull request number linking to the pull request; otherwise the
     branch''s open pull request, or the branch page. A base that is another item missing from the item''s
     depends_on is flagged as drift.'
+
+- id: remove-site
+  title: 'One command removes a repository from the plan site'
+  track: lifecycle
+  depends_on: []
+  status: not started
+  session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
+  notes: 'From Hesham87/Platform_maintainer: taking the site away was manual: the dispatch workflow, the hub entry and the merge workflow branch and pull request by hand, then the secrets, the token and the site repository in the browser. One command removes what it can and prints only the steps left to a person, as publication does.'
