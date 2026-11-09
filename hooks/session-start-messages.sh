@@ -54,6 +54,36 @@ plan_line_tracked() {
   printf "'%s' (tracking issue: %s)" "${plan_id}" "${tracking_issue}"
 }
 
+# %% the merged items line
+
+# merged_items_line_not_applicable: no plan tracks this branch, so none was looked up.
+merged_items_line_not_applicable() {
+  printf 'not applicable (no plan tracks this branch)'
+}
+
+# merged_items_line_none: GitHub reports no pull request merged that the plan does
+# not already record done.
+merged_items_line_none() {
+  printf 'none - the plan records every merged pull request done'
+}
+
+# merged_items_line_recorded: $1 names the items recorded done, which the save
+# dropped from the plan.
+merged_items_line_recorded() {
+  printf 'recorded done and dropped from the plan: %s' "$1"
+}
+
+# merged_items_line_save_failed: items were found merged, but the plan save that
+# would record them did not go through.
+merged_items_line_save_failed() {
+  printf 'found merged items, but the plan save failed - the error is above; save the plan again'
+}
+
+# merged_items_line_not_checked: the plan's pull requests could not be read.
+merged_items_line_not_checked() {
+  printf 'not checked - could not read the plan'"'"'s pull requests from GitHub; the error is above'
+}
+
 # %% the hub line
 
 # hub_line_not_registered: the notes branch has no hub file.
