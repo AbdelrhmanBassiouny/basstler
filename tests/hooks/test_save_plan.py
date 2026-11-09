@@ -21,13 +21,15 @@ from basstler.locations import PluginLocation, ProjectLocation
 from basstler.plan.item_bootstrap.vocabulary import PlanSavingOption
 from basstler.plan.merge import PlanVersion
 from basstler.plan.model import PlanDocument
-from basstler.plan.model import ManifestKey, PlanManifest
+from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
 from basstler.personal_notes import access
 from basstler.plan_site import build_start
+from basstler.plan.merged_items import __main__ as merged_items_command
 from basstler.repository import Repository
 from basstler.plan_site.hub import HubFileKey, PlanHub, SiteAddress
 from basstler.shell_configuration import ShellConfigurationFunction
 
+from ..constants.environment import PullRequestStubVariable
 from ..constants.notes import ScratchBranch
 from ..constants.paths import DatasetLocation, PersonalNotesPath
 from ..constants.site import SiteRepository, SiteSampleText
@@ -46,6 +48,7 @@ from ..plan.concurrent_edits import (
     deferred,
     read_version,
 )
+from ..plan_dataset import LandedItemsPlan
 from ..project_declaration import ProjectDeclaration
 from ..scratch_repository import PackageSourceFile, ScratchRepository
 
@@ -76,10 +79,10 @@ class ConcurrentWriterVariable(StrEnum):
 @pytest.fixture
 def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchRepository:
     """
-    A scratch repository carrying the real save-plan.sh, resolve-personal-notes-
-    config.sh and plan/manifest_tools.py, with a notes branch already published to its
-    notes remote, an ``origin`` naming the dataset plan's repository, and a stand-in
-    for :mod:`basstler.plan_site.build_start`.
+    A scratch repository carrying the real save-plan.sh and package, a published notes
+    branch, an ``origin`` naming the dataset plan's repository, and stand-ins for
+    :mod:`basstler.plan_site.build_start` and :mod:`basstler.plan.merged_items`'s
+    command, which finds no pull request merged.
 
     :param scratch_repository: The initialized scratch repository and notes remote.
     :return: The same repository, ready to run save-plan.sh against.
@@ -91,6 +94,9 @@ def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchReposi
     scratch_repository.install_package()
     scratch_repository.replace_package_module(
         build_start, DatasetLocation.BUILD_START_STUB
+    )
+    scratch_repository.replace_package_module(
+        merged_items_command, DatasetLocation.MERGED_ITEMS_STUB
     )
     scratch_repository.write("README.md", "scratch repo\n")
     scratch_repository.commit_everything("initial commit")
@@ -472,15 +478,20 @@ def save_from_files(
 
     :return: The finished hook.
     """
-    plan_identifier = PlanManifest.from_file(manifest).identifier
-    return run_save_plan(
-        repository,
-        plan_identifier,
+    return run_save_plan(repository, *save_from_files_arguments(manifest, roadmap))
+
+
+def save_from_files_arguments(manifest: Path, roadmap: Path) -> list[str]:
+    """
+    :return: The arguments saving a manifest and roadmap read from files.
+    """
+    return [
+        PlanManifest.from_file(manifest).identifier,
         PlanSavingOption.MANIFEST,
         str(manifest),
         PlanSavingOption.ROADMAP,
         str(roadmap),
-    )
+    ]
 
 
 def saved_plan_directory(repository: ScratchRepository, plan_identifier: str) -> Path:
@@ -504,6 +515,66 @@ def test_a_save_drops_the_landed_items(save_plan_repository: ScratchRepository):
         / PlanDocument.MANIFEST
     )
     assert saved == manifest.without_landed_items()
+
+
+def test_a_save_drops_an_item_github_reports_merged(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    A save records an item done whose pull request merged, and so drops it.
+    """
+    plan = LandedItemsPlan.read()
+    in_progress = plan.item_with_status(ItemStatus.IN_PROGRESS)
+
+    result = save_plan_repository.run_hook_script(
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
+        *save_from_files_arguments(
+            DatasetLocation.PLAN_WITH_LANDED_ITEMS,
+            DatasetLocation.ROADMAP_OF_STANDING_RULES,
+        ),
+        **{
+            PullRequestStubVariable.RECORDING: str(
+                DatasetLocation.IN_PROGRESS_ITEM_MERGED
+            )
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    saved = PlanManifest.from_file(
+        saved_plan_directory(save_plan_repository, plan.manifest.identifier)
+        / PlanDocument.MANIFEST
+    )
+    assert (
+        saved
+        == plan.manifest.with_items_done(
+            {in_progress.identifier}
+        ).without_landed_items()
+    )
+
+
+def test_a_save_whose_pull_requests_could_not_be_read_saves_the_plan_unchanged(
+    save_plan_repository: ScratchRepository, tmp_path: Path
+):
+    """
+    A save whose pull requests cannot be read still saves what the session wrote.
+    """
+    plan = LandedItemsPlan.read()
+
+    result = save_plan_repository.run_hook_script(
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
+        *save_from_files_arguments(
+            DatasetLocation.PLAN_WITH_LANDED_ITEMS,
+            DatasetLocation.ROADMAP_OF_STANDING_RULES,
+        ),
+        **{PullRequestStubVariable.RECORDING: str(tmp_path / "no-recording.json")},
+    )
+
+    assert result.returncode == 0, result.stderr
+    saved = PlanManifest.from_file(
+        saved_plan_directory(save_plan_repository, plan.manifest.identifier)
+        / PlanDocument.MANIFEST
+    )
+    assert saved == plan.manifest.without_landed_items()
 
 
 def test_a_save_prints_the_plan_s_page_on_the_plan_site(
