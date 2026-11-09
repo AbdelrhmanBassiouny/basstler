@@ -1,12 +1,11 @@
-PR #173 - install the package at the plugin's own release (bug, patch).
+PR #173 - install the package at the plugin's own release (bug, patch). Merged.
 
 Plan
-- Keep the PR to the release-pinning fix; split of session-start tests/source is follow-up work.
+- Nothing more on this branch; the split is tracked as plan items.
 
 Done
-- Pinned the package to plugin.json's version; `release:` line and `mismatched` status (a5241ccb).
-- Review: a plugin naming no release now installs nothing and every hook stops (fd0cf854); thread resolved.
+- #173 merged with the review fix (a plugin naming no release installs nothing).
+- Split planned: session-notes-infrastructure/session-start-tests-split and session-start-source-split; both review threads replied to and resolved.
 
 Next
-- Propose the split (test module, then hook source) via /add-plan-item once #173 lands; then resolve the split thread.
-- Ask whether the plugin-content digest can go, now that the source changes with every release.
+- None here. The digest question is in session-start-source-split's notes.
