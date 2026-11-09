@@ -153,8 +153,11 @@ items:
 - id: merged-items-recorded
   title: A plan records an item as done once GitHub reports its pull request merged
   track: guards
+  branch: claude/modest-clarke-indd9p
+  pull_request_number: 172
+  session: https://claude.ai/code/session_018wfiv61RkUR2pdEBVxHyWf
   depends_on: []
-  status: not started
+  status: in progress
   notes: 'basstler-v2-fixes/restack-without-upstream stayed in progress after #157 merged, through
     three saves: a save drops only items whose status is done (PlanManifest.landed_identifiers)
     and never asks GitHub, and the page shows done without writing it. save-plan.sh, and session
