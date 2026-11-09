@@ -1,11 +1,9 @@
 ## Plan
-- Failing tests first: unit test of recording merged items; save-plan.sh test that a merged item is dropped; session-start test.
-- `basstler.plan.merged_items`: mark each item whose pull request GitHub reports merged as done; a failed read changes nothing and exits with its own status.
-- save-plan.sh records merged items on the merged manifest before staging; a failed read is reported and the save goes on.
-- session-start.sh records them for the loaded plan and saves it when any changed.
+- Record items done whose pull requests GitHub reports merged, in save-plan.sh and at session start; a failed read changes nothing.
 
 ## Done
-- Branch, draft PR #172, item recorded in progress.
+- `basstler.plan.merged_items` with unit tests; save-plan.sh records before staging; session-start.sh records and saves the loaded plan, with a `merged items` summary line.
+- Tests written first; full suite green apart from 4 local Playwright browser errors. Pushed; PR #172 is a draft labelled `bug`.
 
 ## Next
-- Write the failing tests.
+- Wait for CI and review on #172.
