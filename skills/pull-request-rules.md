@@ -14,8 +14,6 @@ such a skill, the session's own instructions decide.
 - Bug-fix PRs must always carry the **`bug`** label.
 - Keep bug-fix PRs focused: one root cause per PR, based off the default
   branch, no unrelated cleanup bundled in.
-- Always include a link to the session that created the PR in the PR
-  description.
 - Keep the PR description up to date: after pushing any change that alters
   what the PR does, update the description to match. Never leave it
   describing an earlier state of the PR.
