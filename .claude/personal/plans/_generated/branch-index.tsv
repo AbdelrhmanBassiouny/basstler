@@ -5,7 +5,6 @@ claude/magical-albattani-9fbkd5	basstler-package
 claude/loving-gauss-7g1xt6	basstler-packages
 claude/zen-edison-fwzug6	basstler-reliability
 claude/modest-clarke-indd9p	basstler-reliability
-claude/clever-cray-u2g5jy	basstler-reliability
 claude/tender-fermat-wh5gsi	basstler-v3
 ccr-403b6e8b-xk6nor	basstler-v3
 claude/nifty-turing-qshanp	basstler-v3-plans
@@ -13,6 +12,7 @@ claude/plan-item-kickoff-concurrent-safe-x35oyo	core-robustness
 ccr-1516c899-kd5dl7	core-robustness
 claude/sleepy-mendel-xpls25	core-robustness
 claude/magical-maxwell-grvwey	core-robustness
+claude/clever-cray-u2g5jy	plan-site-publication-fixes
 claude/bold-planck-n5pe6t	session-notes-infrastructure
 claude/awesome-lovelace-netst8	team-basstler
 claude/magical-darwin-dydsmk	team-basstler
