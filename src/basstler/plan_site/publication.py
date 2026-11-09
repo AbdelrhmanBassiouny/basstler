@@ -23,7 +23,10 @@ from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure
 from basstler.github.repository_details import RepositoryDetails
 from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
-from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.git_commands import (
+    GitCommandRunner,
+    GitHubLoginLendingRunner,
+)
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.github.run_listing import RunListing
 from basstler.plan_site.user_steps import (
@@ -519,7 +522,7 @@ def publish(
     notes_repository = resolve_repository(project_root, notes_remote)
     if notes_repository is None:
         raise NotesRepositoryUnresolvedError(notes_remote)
-    git = GitCommandRunner(project_root)
+    git = GitHubLoginLendingRunner(project_root)
     notes_branch = RemoteBranch(
         PersonalNotesSetting.BRANCH.resolve(project_root, os.environ), git, notes_remote
     )

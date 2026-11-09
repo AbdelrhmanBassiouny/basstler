@@ -21,11 +21,6 @@ class GitHubCommand(StrEnum):
     Logs ``gh`` in, which gives this package its credential.
     """
 
-    SETUP_GIT = "gh auth setup-git"
-    """
-    Lends git ``gh``'s login for pushes over HTTPS.
-    """
-
     REFRESH_WORKFLOW_SCOPE = "gh auth refresh -s workflow"
     """
     Adds the ``workflow`` scope to ``gh``'s login, which pushing a workflow file needs.

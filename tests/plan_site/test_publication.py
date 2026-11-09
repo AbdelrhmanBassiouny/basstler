@@ -1669,13 +1669,13 @@ def test_a_push_without_a_credential_is_read_as_that_refusal():
     assert refused.refusal is PushRefusal.NO_CREDENTIAL
 
 
-def test_a_push_without_a_credential_suggests_lending_git_the_gh_login():
+def test_a_push_without_a_credential_suggests_logging_gh_in():
     """
-    The suggestion names the command that lends git ``gh``'s login.
+    Git is lent ``gh``'s login, so a missing credential means ``gh`` is logged out.
     """
     refused = refused_push(DatasetLocation.PUSH_REFUSED_WITHOUT_CREDENTIAL)
 
-    assert GitHubCommand.SETUP_GIT in refused.suggest_correction()
+    assert GitHubCommand.LOG_IN in refused.suggest_correction()
 
 
 def test_a_push_declined_for_a_reason_git_does_not_name_is_no_known_refusal():

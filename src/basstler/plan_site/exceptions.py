@@ -66,7 +66,7 @@ class PushRefusal(StrEnum):
         """
         match self:
             case PushRefusal.NO_CREDENTIAL:
-                return GitHubCommand.SETUP_GIT
+                return GitHubCommand.LOG_IN
             case PushRefusal.MISSING_WORKFLOW_SCOPE:
                 return GitHubCommand.REFRESH_WORKFLOW_SCOPE
 

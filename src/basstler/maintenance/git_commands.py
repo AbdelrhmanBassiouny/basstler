@@ -22,6 +22,7 @@ from basstler.environment import GitVariable
 from basstler.locations import CommitScratchFile, RepositoryStateLocation
 from basstler.maintenance.constants import CommitTrailer
 from basstler.maintenance.exceptions import ExternalCallFailed
+from basstler.repository import GitHubAddress
 from basstler.stack.model import IntegrationStrategy
 from basstler.stack.settings import Configuration
 
@@ -432,6 +433,38 @@ class GitCommandRunner:
         return self.attempt(
             "merge-base", "--is-ancestor", candidate, descendant
         ).succeeded
+
+
+@dataclass(frozen=True)
+class GitHubLoginLendingRunner(GitCommandRunner):
+    """
+    Runs git in one checkout, answering its request for a GitHub credential over HTTPS
+    with ``gh``'s login, without changing any git configuration.
+    """
+
+    @classproperty
+    def credential_helper(cls) -> str:
+        """
+        The credential helper that answers with ``gh``'s login.
+        """
+        return "!gh auth git-credential"
+
+    def attempt(
+        self, *arguments: str, environment: Mapping[str, str] | None = None
+    ) -> GitCommandResult:
+        """
+        :meth:`GitCommandRunner.attempt`, with :attr:`credential_helper` consulted for
+        GitHub after every helper git is already configured with.
+        """
+        index = int(GitVariable.CONFIGURATION_COUNT.read() or 0)
+        lent = {
+            GitVariable.CONFIGURATION_COUNT: str(index + 1),
+            f"{GitVariable.CONFIGURATION_KEY_PREFIX}{index}": (
+                f"credential.{GitHubAddress.WEB}.helper"
+            ),
+            f"{GitVariable.CONFIGURATION_VALUE_PREFIX}{index}": self.credential_helper,
+        }
+        return super().attempt(*arguments, environment={**lent, **(environment or {})})
 
 
 # %% asking git what contains what

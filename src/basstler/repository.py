@@ -39,8 +39,10 @@ class GitHubAddress(StrEnum):
             :attr:`SSH` for an SSH remote, :attr:`WEB` for any other.
         """
         before_path, colon, _ = remote_url.partition(":")
-        is_scp_form = bool(colon) and "/" not in before_path and "@" in before_path
-        if is_scp_form or urlsplit(remote_url).scheme == urlsplit(cls.SSH).scheme:
+        is_short_ssh_form = (
+            bool(colon) and "/" not in before_path and "@" in before_path
+        )
+        if is_short_ssh_form or urlsplit(remote_url).scheme == urlsplit(cls.SSH).scheme:
             return cls.SSH
         return cls.WEB
 
