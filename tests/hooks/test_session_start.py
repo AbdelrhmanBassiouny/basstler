@@ -33,7 +33,6 @@ from basstler.locations import (
     WorkflowLocation,
 )
 from basstler.release_version import ReleaseVersion
-from basstler.repository import Repository
 from basstler.setup.report import CheckStatus, SetupCheck
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.upstream_reviews.action.branch import InstallationState
@@ -1141,7 +1140,7 @@ class BasstlerBranch(StrEnum):
 
     MAIN = "main"
     """
-    The default branch, which a plugin naming no release installs.
+    The default branch, whose workflows a checkout runs.
     """
 
 
@@ -1180,24 +1179,19 @@ def test_a_released_plugin_installs_the_package_at_its_own_release(
     )
 
 
-def test_a_plugin_naming_no_release_installs_the_default_branch(
+def test_a_plugin_naming_no_release_has_no_package_to_install(
     session_start_repository: ScratchRepository,
 ):
     """
-    A plugin that is not a release, as one copied from the source tree, has no release
-    to pin, so its package comes from the repository's default branch.
+    A plugin that is not a release, as one copied from the source tree, names no package
+    of its own release, so nothing is guessed in its place.
     """
     declaration_file(session_start_repository).unlink()
-    manifest = PluginManifest.of_this_plugin()
-    repository = Repository.from_remote_url(
-        session_start_repository.configuration_value(
-            ConfigurationVariable.REPOSITORY_URL
-        )
-    )
 
-    assert package_source(session_start_repository) == (
-        f"{manifest.name} @ git+{repository.url}"
-    )
+    with pytest.raises(subprocess.CalledProcessError):
+        session_start_repository.configuration_output(
+            ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE
+        )
 
 
 def test_a_workflow_runs_the_plugin_s_release(
@@ -1217,20 +1211,62 @@ def test_a_workflow_runs_the_plugin_s_release(
     assert branch_or_tag == SampleReleaseTag.OLDER
 
 
-def test_a_workflow_runs_the_default_branch_for_a_plugin_naming_no_release(
+def test_a_workflow_runs_the_default_branch_for_a_checkout(
     session_start_repository: ScratchRepository,
 ):
     """
-    With no release named, the package comes from the default branch, and so does the
-    workflow.
+    A checkout's plugin names no release, and runs the default branch's workflows.
     """
-    declaration_file(session_start_repository).unlink()
-
     branch_or_tag = session_start_repository.configuration_output(
         ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG
     ).strip()
 
     assert branch_or_tag == BasstlerBranch.MAIN
+
+
+def test_a_workflow_has_no_release_to_run_for_a_plugin_naming_none(
+    session_start_repository: ScratchRepository,
+):
+    """
+    Outside a checkout, a plugin naming no release has no package for a workflow to run.
+    """
+    declaration_file(session_start_repository).unlink()
+
+    with pytest.raises(subprocess.CalledProcessError):
+        session_start_repository.configuration_output(
+            ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG
+        )
+
+
+def test_a_session_start_installs_nothing_for_a_plugin_naming_no_release(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    Session start says the plugin names no release instead of installing a package of
+    some other release for it.
+    """
+    declaration_file(session_start_repository).unlink()
+    stub_bin.install(PackageManager.PIP)
+    call_log = tmp_path / "pip-calls"
+
+    result = publish_and_run(
+        session_start_repository,
+        environment={
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+            StubVariable.PIP_CALL_LOG: str(call_log),
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
+        SummaryMessage.DEPENDENCIES_RELEASE_NOT_NAMED,
+        str(session_start_repository.plugin_root),
+    )
+    assert not call_log.exists()
 
 
 # %% a plugin of another release than the installed package
@@ -1336,6 +1372,29 @@ def test_an_unchanged_plugin_keeps_the_package_installed_for_it(
     )
 
     assert not call_log.exists()
+
+
+def test_a_hook_of_a_plugin_naming_no_release_stops(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
+):
+    """
+    A hook readying the package for a plugin naming no release stops rather than running
+    against a package of some other release.
+    """
+    session_start_repository.install_package_environment()
+    declaration_file(session_start_repository).unlink()
+
+    with pytest.raises(subprocess.CalledProcessError):
+        ready_package(
+            session_start_repository,
+            session_start_repository.configuration_value(
+                ConfigurationVariable.REPOSITORY_URL
+            ),
+            stub_bin,
+            tmp_path,
+        )
 
 
 def test_a_package_of_another_release_is_named_on_the_release_line(

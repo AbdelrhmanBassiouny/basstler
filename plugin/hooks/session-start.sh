@@ -91,6 +91,8 @@ ensure_basstler_environment() {
     locked)
       SUMMARY_DEPENDENCIES="$(dependencies_line_install_running \
         "${BASSTLER_INSTALL_LOCK}")" ;;
+    release-not-named)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_release_not_named "${PLUGIN_ROOT}")" ;;
     *)
       SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)" ;;
   esac
@@ -327,8 +329,9 @@ fi
 # release would otherwise leave it stale. Only a branch already there is
 # touched - installing one is setup's decision. Never fatal.
 SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_not_read "${NOTES_REMOTE}")"
-SESSION_RELEASE="$(basstler_branch_or_tag)"
-if ACTION_STATE="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+if ! SESSION_RELEASE="$(basstler_branch_or_tag)"; then
+  SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_release_not_named)"
+elif ACTION_STATE="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
     --remote "${NOTES_REMOTE}" status --branch-or-tag "${SESSION_RELEASE}" 2>/dev/null)"; then
   case "${ACTION_STATE}" in
     missing*)

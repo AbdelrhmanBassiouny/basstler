@@ -61,8 +61,10 @@ its own.
 What it installs from depends on where the plugin is:
 
 - **A plugin installed on its own** installs `basstler @ git+https://github.com/KAOS-repositories/basstler@<tag>`,
-  the tag being the release its `plugin.json` names. A plugin naming none installs the
-  default branch, and setup reports it as `mismatched`.
+  the tag being the release its `plugin.json` names. A plugin naming none - a copy of the
+  source tree outside a clone - installs nothing: session start says so on its
+  `dependencies:` line, every hook stops with the same reason, and setup reports it as
+  `mismatched`. Reinstall the plugin from the marketplace.
 - **A plugin run from a clone of this repository** installs that clone editable, so
   `import basstler` is the clone's own source.
 

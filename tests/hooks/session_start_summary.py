@@ -243,6 +243,11 @@ class SummaryMessage(StrEnum):
     The install did not work, and the run carried on regardless.
     """
 
+    DEPENDENCIES_RELEASE_NOT_NAMED = "dependencies_line_release_not_named"
+    """
+    The plugin names no release, so there is no package of its release to install.
+    """
+
     RELEASE_MATCHING = "release_line_matching"
     """
     The installed package is the plugin's own release.

@@ -658,8 +658,8 @@ BASSTLER_INSTALL_MARKER="${BASSTLER_INSTALL_LOCK}/pid"
 # installed from, so a plugin update - which names a new source - reinstalls it.
 BASSTLER_INSTALLED_SOURCE_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-source"
 # BASSTLER_INSTALLED_PLUGIN_DIGEST_FILE: plugin_content_digest of the plugin the
-# environment's package was last installed for. A plugin naming no release names
-# the same source at every commit; this is how a hook still notices it changed.
+# environment's package was last installed for, so a hook running another copy
+# of the plugin readies the package for it again.
 BASSTLER_INSTALLED_PLUGIN_DIGEST_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-plugin-digest"
 # BASSTLER_PYTHON_REQUIREMENT: the interpreters the package supports - the
 # requires-python of the package's pyproject.toml, which a test holds this
@@ -704,23 +704,25 @@ plugin_release() {
 }
 
 # basstler_package_source: prints what to install the package from - the
-# checkout this plugin sits in, else its repository at the plugin's release, or
-# at its default branch for a plugin naming none.
+# checkout this plugin sits in, else its repository at the plugin's release.
+# Fails for a plugin outside a checkout that names no release.
 basstler_package_source() {
   if [ -n "${BASSTLER_CHECKOUT}" ]; then
     printf '%s\n' "${BASSTLER_CHECKOUT}"
     return
   fi
-  local reference="" release
-  release="$(plugin_release)" && reference="@${release}"
-  printf 'basstler @ git+%s%s\n' "${BASSTLER_REPOSITORY_URL}" "${reference}"
+  local release
+  release="$(plugin_release)" || return 1
+  printf 'basstler @ git+%s@%s\n' "${BASSTLER_REPOSITORY_URL}" "${release}"
 }
 
-# basstler_branch_or_tag: prints the basstler branch or tag the package is
-# installed at outside a checkout - the plugin's release, or main for a plugin
-# naming none - for a workflow that has to run the same package as the session.
+# basstler_branch_or_tag: prints the basstler branch or tag a workflow runs to
+# match the session's package - the plugin's release, or main in a checkout.
+# Fails for a plugin outside a checkout that names no release.
 basstler_branch_or_tag() {
-  plugin_release || printf 'main\n'
+  plugin_release && return
+  [ -n "${BASSTLER_CHECKOUT}" ] || return 1
+  printf 'main\n'
 }
 
 # basstler_install_in_progress: succeeds while a running process holds
@@ -861,7 +863,9 @@ release_basstler_install_lock() {
 #   locked              - another process held the lock past the wait
 #   environment-failed  - no environment could be created
 #   install-failed      - installing BASSTLER_PACKAGE_REQUIREMENTS failed
-# and returns 1 for the last four, when the package cannot be run.
+#   release-not-named   - outside a checkout, the plugin names no release to
+#                         install the package at
+# and returns 1 for the last five, when the package cannot be run.
 ensure_basstler_package() {
   BASSTLER_PACKAGE_REQUIREMENTS=""
   if ! acquire_basstler_install_lock; then
@@ -878,6 +882,10 @@ ensure_basstler_package() {
 # install_basstler_package_where_needed: ensure_basstler_package's work, run
 # while it holds the lock.
 install_basstler_package_where_needed() {
+  if ! basstler_package_source > /dev/null; then
+    BASSTLER_PACKAGE_STATE=release-not-named
+    return 1
+  fi
   if [ ! -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
     BASSTLER_PACKAGE_REQUIREMENTS="$(basstler_package_source)"
     if ! create_basstler_environment; then
@@ -931,6 +939,9 @@ basstler_package_failure_line() {
       printf 'could not install %s: %s - run: %s\n' "${BASSTLER_PACKAGE_REQUIREMENTS}" \
         "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
         "${BASSTLER_INSTALL_COMMAND[*]}" ;;
+    release-not-named)
+      printf 'the plugin at %s names no release in its plugin.json, so there is no basstler package of its release to run - reinstall the plugin from the marketplace\n' \
+        "${PLUGIN_ROOT}" ;;
     *)
       printf 'could not read what the basstler package requires for %s - run: pip --python %s install '"'"'%s'"'"'\n' \
         "${BASSTLER_PYTHON}" "${BASSTLER_PYTHON}" "$(basstler_package_source)" ;;
