@@ -1,12 +1,12 @@
 ## Plan
 - `GitHubAddress.SSH` and `clone_root_for(remote_url)`; `RemoteBranch.url`
 - Publication command derives `remote_root` from the notes remote
-- `PublicationPushRefusedError` with `PushRefusal`, naming `gh auth setup-git`, `gh auth refresh -s workflow` or SSH
+- `PublicationPushRefusedError` with `PushRefusal`, naming `gh auth login`, `gh auth refresh -s workflow` or SSH
+- Review: git is lent `gh`'s login (`GitHubLoginLendingRunner`) instead of telling the user to run `gh auth setup-git`
 
 ## Done
-- Implemented all three, test-first (4d77ebd); `GitHubCommand` moved to `github/credential.py` to avoid an import cycle
-- Full suite: only the 38 environmental failures `main` also has; ruff, format and code-rules pass
-- Overlaps probed: #141, #144, #154 and #172 share files that merge cleanly
+- All of the above, test-first (4d77ebd, 11a5d67); CI green on 4d77ebd; merge probe CLEAN against main 48ca1ab
+- Review threads: rename resolved; "do it deterministically" answered, left open for the workflow-scope question
 
 ## Next
-- Read CI on 4d77ebd; owner review of the draft
+- CI on 11a5d67; owner's answer on whether the workflow scope should be checked before the first push
