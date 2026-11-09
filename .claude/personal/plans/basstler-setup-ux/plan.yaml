@@ -185,8 +185,9 @@ items:
   notes: 'External report #152 (tomsch420), and #153''s private work repository of another owner. Draft
     bug PR #170 off main: the build takes an optional read_token secret (site repository''s PLAN_SITE_READ_TOKEN)
     for GH_TOKEN and git; publication checks the registry, the hub''s repositories and every repository their
-    plans name, and writes nothing when one is private and the secret is known missing. Rendering unreadable
-    items without failing the site is unreadable-repository-items. Open: review.'
+    plans name, and writes nothing when one is private and the secret is known missing; the step warns
+    that the site is public and that a classic token can write. Follow-ups: unreadable-repository-items,
+    team-basstler/per-owner-read-tokens. Open: review.'
 
 - id: unreadable-repository-items
   title: Plan site renders items whose repository it cannot read, instead of failing the whole site
