@@ -307,6 +307,26 @@ def test_every_skill_links_how_to_run_commands_with_its_plugin_root(
     assert len(mapping_paragraphs) == 1
 
 
+# %% rules scoped to a skill run
+
+
+def test_the_resolve_skill_links_the_pull_request_rules() -> None:
+    """
+    The pull-request rules hold only while a skill linking them runs.
+    """
+    document = (
+        RepositoryLocation.PLUGIN
+        / SkillDirectory.PLAN_ITEM_RESOLVE
+        / SkillDocumentName.SKILL
+    )
+    pull_request_rules = os.path.relpath(
+        RepositoryLocation.PLUGIN / SkillDirectory.PULL_REQUEST_RULES_DOCUMENT,
+        document.parent,
+    )
+
+    assert pull_request_rules in linked_files(document.read_text())
+
+
 # %% the interpreter a module is run with
 
 BARE_INTERPRETER_RUN = re.compile(r"(?<![\w/$\"{}-])python3? -m basstler\b")
