@@ -356,6 +356,17 @@ class DatasetLocation(PathEnumeration):
     session can start the build.
     """
 
+    MERGED_ITEMS_STUB = STUBS / "merged_items_from_recording.py"
+    """
+    A module standing in for :mod:`basstler.plan.merged_items`'s command, reading the
+    pull requests from a recording.
+    """
+
+    IN_PROGRESS_ITEM_MERGED = DIRECTORY / "pull-requests-in-progress-item-merged.json"
+    """
+    A recording in which the in-progress item of :attr:`PLAN_WITH_LANDED_ITEMS` has merged.
+    """
+
     NOTES_ACCESS_STUB = STUBS / "notes_access_prints_its_name.py"
     """
     A module standing in for :mod:`basstler.personal_notes.access`, printing its name as

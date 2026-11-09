@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # Saves a plan's plan.yaml and roadmap.md to the personal-notes branch and
-# regenerates the branch index in the same commit. Landed items are pruned, an
-# emptied plan is removed, and a plan over basstler.plan.size_limits is refused.
+# regenerates the branch index in the same commit. Items GitHub reports merged are
+# recorded done, landed items are pruned, an emptied plan is removed, and a plan
+# over basstler.plan.size_limits is refused.
 #
 # The save carries only what the session changed since it read the plan: each
 # top-level field, item and the roadmap the session changed is applied onto the
@@ -207,6 +208,12 @@ while :; do
     --session "${SESSION_PLAN_DIR}" \
     --latest "${SCRATCH_DIR}/${PLAN_DIRECTORY_PATH}" \
     --output "${MERGED_PLAN_DIR}" || exit
+
+  # Recorded done here, so the staging below drops them; a failed read changes nothing.
+  if ! "${BASSTLER_PYTHON}" -m "${PLAN_MERGED_ITEMS_MODULE}" \
+    "${MERGED_PLAN_DIR}/${PLAN_MANIFEST_FILENAME}"; then
+    echo "Saving without recording merged items; the save records them once GitHub can be read." >&2
+  fi
 
   # Validated against the fetched notes branch, so a <plan-id>/<item-id> entry resolves,
   # and against origin, so a plan is saved only from a checkout of its own repository.

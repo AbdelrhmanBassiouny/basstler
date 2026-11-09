@@ -169,3 +169,15 @@ class BashStubVariable(StrEnum):
     """
     The file every script the stub is asked to run is recorded in, one per line.
     """
+
+
+class PullRequestStubVariable(StrEnum):
+    """
+    The variables ``dataset/stubs/merged_items_from_recording.py`` reads.
+    """
+
+    RECORDING = "STUB_PULL_REQUESTS"
+    """
+    The ``pr_data.json``-shaped file the pull requests are read from; unset, none exists,
+    and naming a missing file, every read gets no answer.
+    """

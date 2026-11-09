@@ -37,11 +37,13 @@ from basstler.setup.report import CheckStatus, SetupCheck
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.upstream_reviews.action.branch import InstallationState
 from basstler.plan.model import PlanDocument
+from basstler.plan.merged_items import __main__ as merged_items_command
 from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
 
 from ..constants.environment import (
     ConfigurationVariable,
     FileMode,
+    PullRequestStubVariable,
     ScrubbedEnvironmentPrefix,
     SearchPathVariable,
 )
@@ -191,7 +193,8 @@ def session_start_repository(
 ) -> ScratchRepository:
     """
     A scratch repository carrying the real session-start.sh and everything else a set up
-    clone has, with nothing published to the notes remote yet.
+    clone has, with nothing published to the notes remote yet, and a stand-in for
+    :mod:`basstler.plan.merged_items`'s command that finds no pull request merged.
 
     :param scratch_repository: The initialized scratch repository and notes remote.
     :return: The same repository, ready to publish a notes branch and run the hook.
@@ -202,8 +205,12 @@ def session_start_repository(
         PluginLocation.SESSION_START_SCRIPT.name,
         PluginLocation.SESSION_RULES.name,
         PluginLocation.SETUP_CHECK_SCRIPT.name,
+        PluginLocation.PLAN_SAVING_SCRIPT.name,
     )
     scratch_repository.install_package()
+    scratch_repository.replace_package_module(
+        merged_items_command, DatasetLocation.MERGED_ITEMS_STUB
+    )
     scratch_repository.install_package_environment()
     scratch_repository.write_setup_prerequisites()
     scratch_repository.commit_everything("initial commit")
@@ -550,19 +557,23 @@ def tracked_plan() -> LandedItemsPlan:
     )
 
 
-def run_on_tracked_branch(
-    repository: ScratchRepository, manifest: PlanManifest, scratch_directory: Path
-) -> str:
+def publish_tracked_plan_and_run(
+    repository: ScratchRepository,
+    manifest: PlanManifest,
+    scratch_directory: Path,
+    environment: Mapping[str, str] | None = None,
+) -> subprocess.CompletedProcess[str]:
     """
-    Publish *manifest* as the plan tracking the work branch, run session-start.sh, and
-    return the CLAUDE.local.md it wrote.
+    Publish *manifest* as the plan tracking the work branch and run session-start.sh.
 
     :param scratch_directory: Where the manifest is written before it is published.
+    :param environment: Variables to set for the hook's run.
+    :return: The finished session-start.sh process.
     """
     manifest_path = scratch_directory / PlanDocument.MANIFEST
     manifest.write(manifest_path)
     plan_directory = ProjectLocation.PLANS / manifest.identifier
-    result = publish_and_run(
+    return publish_and_run(
         repository,
         {
             PersonalNotesPath.BRANCH_INDEX: branch_index(
@@ -572,9 +583,30 @@ def run_on_tracked_branch(
             plan_directory
             / PlanDocument.ROADMAP: DatasetLocation.ROADMAP_OF_STANDING_RULES.read_text(),
         },
+        environment,
     )
+
+
+def run_on_tracked_branch(
+    repository: ScratchRepository, manifest: PlanManifest, scratch_directory: Path
+) -> str:
+    """
+    Publish *manifest* as the plan tracking the work branch, run session-start.sh, and
+    return the CLAUDE.local.md it wrote.
+
+    :param scratch_directory: Where the manifest is written before it is published.
+    """
+    result = publish_tracked_plan_and_run(repository, manifest, scratch_directory)
     assert result.returncode == 0, result.stderr
     return (repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS).read_text()
+
+
+def published_manifest(repository: ScratchRepository, plan_identifier: str) -> Path:
+    """
+    :return: The plan's manifest in a fresh clone of the notes branch.
+    """
+    checkout = repository.clone_notes_branch(repository.project_root.parent / "verify")
+    return checkout / ProjectLocation.PLANS / plan_identifier / PlanDocument.MANIFEST
 
 
 def test_a_tracked_branch_loads_only_its_own_item(
@@ -605,6 +637,136 @@ def test_a_tracked_branch_loads_the_plan_s_standing_rules(
 
 
 # %% branches no plan item can ever track
+
+
+# %% the loaded plan's merged items
+
+
+def test_a_merged_item_of_the_loaded_plan_is_recorded_done_and_dropped(
+    session_start_repository: ScratchRepository,
+    tracked_plan: LandedItemsPlan,
+    tmp_path: Path,
+):
+    """
+    The plan tracking the branch is saved without the item whose pull request merged.
+    """
+    in_progress = tracked_plan.item_with_status(ItemStatus.IN_PROGRESS)
+    session_start_repository.serve_origin_as(tracked_plan.manifest.default_repository)
+
+    result = publish_tracked_plan_and_run(
+        session_start_repository,
+        tracked_plan.manifest,
+        tmp_path,
+        {
+            PullRequestStubVariable.RECORDING: str(
+                DatasetLocation.IN_PROGRESS_ITEM_MERGED
+            )
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.MERGED_ITEMS) == summary_message(
+        SummaryMessage.MERGED_ITEMS_RECORDED, in_progress.identifier
+    )
+    saved = PlanManifest.from_file(
+        published_manifest(session_start_repository, tracked_plan.manifest.identifier)
+    )
+    assert (
+        saved
+        == tracked_plan.manifest.with_items_done(
+            {in_progress.identifier}
+        ).without_landed_items()
+    )
+
+
+def test_a_refused_save_of_the_merged_items_is_reported_and_changes_nothing(
+    session_start_repository: ScratchRepository,
+    tracked_plan: LandedItemsPlan,
+    tmp_path: Path,
+):
+    """
+    The scratch checkout has no ``origin``, so the plan save refuses it.
+    """
+    result = publish_tracked_plan_and_run(
+        session_start_repository,
+        tracked_plan.manifest,
+        tmp_path,
+        {
+            PullRequestStubVariable.RECORDING: str(
+                DatasetLocation.IN_PROGRESS_ITEM_MERGED
+            )
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.MERGED_ITEMS) == summary_message(
+        SummaryMessage.MERGED_ITEMS_SAVE_FAILED
+    )
+    saved = PlanManifest.from_file(
+        published_manifest(session_start_repository, tracked_plan.manifest.identifier)
+    )
+    assert saved == tracked_plan.manifest
+
+
+def test_a_loaded_plan_with_no_merged_item_is_left_as_it_was(
+    session_start_repository: ScratchRepository,
+    tracked_plan: LandedItemsPlan,
+    tmp_path: Path,
+):
+    """
+    A plan with no merged item is not saved.
+    """
+    result = publish_tracked_plan_and_run(
+        session_start_repository, tracked_plan.manifest, tmp_path
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.MERGED_ITEMS) == summary_message(
+        SummaryMessage.MERGED_ITEMS_NONE
+    )
+    saved = PlanManifest.from_file(
+        published_manifest(session_start_repository, tracked_plan.manifest.identifier)
+    )
+    assert saved == tracked_plan.manifest
+
+
+def test_unread_pull_requests_are_reported_and_leave_the_plan_as_it_was(
+    session_start_repository: ScratchRepository,
+    tracked_plan: LandedItemsPlan,
+    tmp_path: Path,
+):
+    """
+    Pull requests that cannot be read are reported as not checked.
+    """
+    result = publish_tracked_plan_and_run(
+        session_start_repository,
+        tracked_plan.manifest,
+        tmp_path,
+        {PullRequestStubVariable.RECORDING: str(tmp_path / "no-recording.json")},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.MERGED_ITEMS) == summary_message(
+        SummaryMessage.MERGED_ITEMS_NOT_CHECKED
+    )
+    saved = PlanManifest.from_file(
+        published_manifest(session_start_repository, tracked_plan.manifest.identifier)
+    )
+    assert saved == tracked_plan.manifest
+
+
+def test_reports_merged_items_as_not_applicable_without_a_loaded_plan(
+    session_start_repository: ScratchRepository,
+):
+    """
+    A branch no plan tracks has no merged items to look up.
+    """
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.MERGED_ITEMS) == summary_message(
+        SummaryMessage.MERGED_ITEMS_NOT_APPLICABLE
+    )
 
 
 def test_reports_plan_as_not_applicable_on_the_default_branch(
