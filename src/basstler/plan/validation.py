@@ -346,28 +346,28 @@ class PlanValidator:
 
     def shared_branch_problems(self) -> list[ValidationProblem]:
         """
-        One problem per branch that more than one item names, in this plan or, when the
-        other plans are available, in another.
+        One problem per branch an item of this plan names that an item of another plan
+        names too, when the other plans are available.
         """
-        claiming_items: dict[str, list[str]] = {}
+        if self.plan_directory is None:
+            return []
+        problems: list[ValidationProblem] = []
         for item in self.items:
             branch = item.get(ManifestKey.BRANCH.key)
-            if isinstance(branch, str) and branch:
-                claiming_items.setdefault(branch, []).append(self.identifier_of(item))
-        if self.plan_directory is not None:
-            for branch, items in claiming_items.items():
-                items.extend(
-                    reference.text
-                    for reference in self.plan_directory.references_by_branch.get(
-                        branch, []
-                    )
-                    if reference.plan_id != self.plan_id
+            if not isinstance(branch, str) or not branch:
+                continue
+            other_plans_items = [
+                reference.text
+                for reference in self.plan_directory.references_by_branch.get(
+                    branch, []
                 )
-        return [
-            SharedBranch(branch, items)
-            for branch, items in claiming_items.items()
-            if len(items) > 1
-        ]
+                if reference.plan_id != self.plan_id
+            ]
+            if other_plans_items:
+                problems.append(
+                    SharedBranch(branch, [self.identifier_of(item), *other_plans_items])
+                )
+        return problems
 
     def item_problems(self, item: dict[str, Any]) -> list[ValidationProblem]:
         """
