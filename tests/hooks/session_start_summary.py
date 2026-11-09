@@ -84,6 +84,11 @@ class SummaryLine(StrEnum):
     What became of the default branch every session starts from.
     """
 
+    ENVIRONMENTS = "environments"
+    """
+    Which package environments of projects that are gone were removed.
+    """
+
     UPSTREAM_REVIEWS_ACTION = "reviews Action"
     """
     What became of the fork's upstream-reviews Action branch.
@@ -245,6 +250,16 @@ class SummaryMessage(StrEnum):
     """
     Nothing could be looked up, because the interpreter or the package metadata is
     missing.
+    """
+
+    ENVIRONMENTS_NONE_REMOVED = "environments_line_none_removed"
+    """
+    Every other package environment still has its project.
+    """
+
+    ENVIRONMENTS_REMOVED = "environments_line_removed"
+    """
+    Package environments whose project directory is gone were removed.
     """
 
     DEPENDENCIES_ALREADY_INSTALLED = "dependencies_line_already_installed"

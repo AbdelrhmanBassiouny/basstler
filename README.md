@@ -52,11 +52,17 @@ shipped paths would go stale.
 
 ## The package's own environment
 
-**Every session start gives `basstler` an environment of its own, without asking:**
-`~/.local/share/basstler/venv` - `$BASSTLER_HOME/venv` when `BASSTLER_HOME` is set - from an
-interpreter the package supports, with the package installed into it. One per user rather
-than one per clone, so a fresh clone of any project the plugin serves needs no install of
-its own.
+**Every session start gives `basstler` an environment of its own, without asking:** one per
+project, under `~/.local/share/basstler/environments` (`$BASSTLER_HOME/environments` when
+`BASSTLER_HOME` is set), from an interpreter the package supports, with the package installed
+into it at that project's plugin release. Worktrees of a project share its environment, and a
+session runs its project's environment in every repository it has attached; the session start
+exports it as `$BASSTLER_ENVIRONMENT_DIRECTORY` and its interpreter as `$BASSTLER_PYTHON`. Its
+`environments:` line names any environment it removed because its project directory is gone.
+
+Releases before per-project environments shared one at `~/.local/share/basstler/venv`. Nothing
+here uses it or removes it, since a project still on an older plugin runs it: delete it once
+every project has updated its plugin.
 
 What it installs from depends on where the plugin is:
 
@@ -98,9 +104,9 @@ it does.
 Every entry point is run as a module, by the package's own interpreter:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.stack configuration
-~/.local/share/basstler/venv/bin/python -m basstler.maintenance run-report --json
-~/.local/share/basstler/venv/bin/python -m basstler.plan_site --help
+"$BASSTLER_PYTHON" -m basstler.stack configuration
+"$BASSTLER_PYTHON" -m basstler.maintenance run-report --json
+"$BASSTLER_PYTHON" -m basstler.plan_site --help
 ```
 
 The hooks and the skills that call them all use `"${BASSTLER_PYTHON}" -m "${SOME_MODULE}"`,

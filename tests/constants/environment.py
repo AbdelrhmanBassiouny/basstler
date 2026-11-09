@@ -60,11 +60,6 @@ class ConfigurationVariable(StrEnum):
     The variables of the shell configuration the tests read back, named once.
     """
 
-    ENVIRONMENT_DIRECTORY = "BASSTLER_ENVIRONMENT_DIRECTORY"
-    """
-    The package's own environment.
-    """
-
     ENVIRONMENT_INTERPRETER = "BASSTLER_ENVIRONMENT_INTERPRETER"
     """
     The interpreter of the package's own environment.

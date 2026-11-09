@@ -66,6 +66,11 @@ class ShellConfigurationFunction(StrEnum):
     nothing when no plan does.
     """
 
+    RECORD_BASSTLER_PROJECT = "record_basstler_project"
+    """
+    Records, in the package's environment, the project directory it belongs to.
+    """
+
     REPOSITORY_NAME = "repository_name"
     """
     Prints the project's ``origin`` as ``owner/repo``.
