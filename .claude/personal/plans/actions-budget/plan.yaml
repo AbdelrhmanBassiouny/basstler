@@ -25,26 +25,11 @@ tracks:
   name: Stale branches
   wave: hygiene
 items:
-- id: budget-manifest
-  title: Check every workflow against a tested Actions budget
-  branch: claude/inspiring-pascal-u7ruus
-  track: manifest
-  depends_on: []
-  status: in progress
-  session: https://claude.ai/code/session_01RiyB21wDi8SaFucjBG6K3Y
-  pull_request_number: 10
-  notes: 'Draft #10 (carried from CRAM #503). No per-workflow manifest: basstler checks every
-    workflow file against generic rules (no schedule, cancel on every pull-request push, job
-    timeouts, fork-push skip, label check, at most jobs_per_push_run jobs per push run). A
-    project''s `.github/actions_budget.py` holds only limits and per-workflow overrides; `python
-    -m basstler.actions_budget` writes its first version. Open design call: a project-root
-    argument, so it checks a plugin user''s project. #10 has a merge conflict with main.'
 - id: changed-library-matrix
   title: Pull request CI tests the libraries a change touches and their dependents
   branch: claude/changed-library-matrix
   track: manifest
-  depends_on:
-  - budget-manifest
+  depends_on: []
   status: in progress
   pull_request_number: 55
   session: https://claude.ai/code/session_015LhBh1bQL2RDTPBjwCgtpQ
@@ -57,18 +42,3 @@ items:
   - 'The CRAM ci.yml half: CRAM #523 (merged 2026-10-20) removed basstler from CRAM, so first
     decide how CRAM''s CI gets the plugin; then it needs a real run to confirm the run-time
     exclude and the all-excluded skip on GitHub.'
-- id: usage-monitor
-  title: Measure run volume against the budget and warn before it is exceeded
-  branch: ccr-efe139af-nejczo
-  track: monitor
-  pull_request_number: 120
-  session: https://claude.ai/code/session_018wfiv9MdWYLRNixDsZ2RPF
-  depends_on:
-  - budget-manifest
-  status: in progress
-  notes: 'A basstler module counts the last 24 hours of runs and jobs per workflow from the
-    Actions API against daily ceilings added to `WorkflowLimits`. Three surfaces, none on
-    a timer: a session-start warning at 80% and over-budget line at 100%; ci.yml''s first
-    job writes the comparison as a `::warning::` and step summary, and past the hard limit
-    skips the heavy matrix unless the pull request carries `budget-override`; and an on-demand
-    report command.'
