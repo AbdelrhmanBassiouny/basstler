@@ -1,11 +1,10 @@
 ## Plan
-- Failing tests: starter notes carry no pull-request rule section; PR skills link pull-request-rules.md
-- Move PR and review-comment rules into plugin/skills/pull-request-rules.md
-- Link it from plan-item-kickoff, plan-item-resolve, stacked-pr-maintenance; update setup skill wording
+- PR rules move out of the starter notes into skills/pull-request-rules.md, linked by plan-item-resolve only (owner's choice; kickoff is at its reading cap)
 
 ## Done
-- Owner chose the skill-scoped rule file; draft PR #184 opened, item recorded in progress
+- Rule file, starter notes trimmed, setup skill wording, tests (starter notes carry no rule section; resolve links the file)
+- Pushed 44c6a17; PR #184 description updated, `bug` label, still draft
 
 ## Next
-- Write the failing tests
+- CI on #184; owner review
 - After merge: /plan-create for the rule-enforcement plan (hooks on git/GitHub calls)
