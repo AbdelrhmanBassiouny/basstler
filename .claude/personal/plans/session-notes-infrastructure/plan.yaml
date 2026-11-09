@@ -62,16 +62,3 @@ items:
     and v2-removal, which delete this layer; if they are close, drop this item.
 
     '
-- id: starter-notes-scope
-  title: The starter notes' pull request rules apply only while a basstler skill runs
-  branch: claude/exciting-davinci-50paie
-  pull_request_number: 184
-  status: in progress
-  track: conventions
-  session: https://claude.ai/code/session_018wfiv9XTr5LGuDw67XDX5C
-  depends_on: []
-  notes: 'From #182 (ichumuh): setup-personal-notes/starter-notes.md seeds "convert a PR back
-    to draft after any push", and session-start.sh writes the notes into CLAUDE.local.md for
-    every session, so a plain commit and push outside basstler is turned to draft. Move the
-    PR-workflow rules into the skills that act on pull requests, or scope them like the session
-    rules; ask the owner which at kickoff. Bug PR off main, failing test first.'
