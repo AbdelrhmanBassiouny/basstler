@@ -16,52 +16,6 @@ tracks:
   name: Plan site
   wave: foundations
 items:
-- id: site-design
-  title: An elegant, robust site - one stylesheet, light and dark, waves as columns, live
-    chips, build health
-  branch: claude/awesome-lovelace-netst8
-  status: in progress
-  track: site
-  pull_request_number: 106
-  session: https://claude.ai/code/session_018wfiv6n4re5AG1zHWxm621
-  depends_on: []
-  notes: One static stylesheet with design tokens, light and dark, phone width; plan page
-    as wave columns of item cards with status, pull request, CI and assignee chips and dependency
-    hints; hub and repository pages as cards with progress. A health banner names every plan
-    or repository the build skipped, and the build fails when the registry cannot be read.
-    A CI test builds the site from the test dataset. Stays on the current templates; the htpy
-    rewrite (workflow-cutover/site-pages-in-python) is not needed for this.
-- id: site-for-every-repository
-  title: Setup publishes the plan site for any repository and user; every plan save starts
-    its build
-  branch: claude/magical-darwin-dydsmk
-  status: in progress
-  track: site
-  pull_request_number: 105
-  session: https://claude.ai/code/session_018wfiv82HPZmBYgkZEvxaeX
-  depends_on: []
-  notes: 'basstler.plan_site.publication writes the site repository''s caller of plan-site-build.yml,
-    registers the notes repository in the registry''s hub, and commits a dispatch workflow
-    to the notes branch that starts the build on every push with the PLAN_SITE_TOKEN secret;
-    repository creation, Pages and the token are one copyable line each, re-checked from run
-    listings. check-setup gains a plan_site row and /setup-personal-notes step 8 runs it.
-    The owner''s site is stack-board (stack-board#8 replaces board.yml and supersedes #7).
-    The browser re-check of draft state moved to page-draft-recheck.'
-- id: page-draft-recheck
-  title: The plan page re-checks blocking pull requests' draft state from the browser between
-    builds
-  branch: claude/plan-item-kickoff-basstler-draft-ankppa
-  status: in progress
-  track: site
-  pull_request_number: 116
-  session: https://claude.ai/code/session_018wfiv6ZDBwZvHTLeeG7b7k
-  depends_on:
-  - site-for-every-repository
-  notes: 'Implemented in #116 (ready for review, ported onto the plan site code after the
-    dashboard was retired): a chip held back by a draft carries its pull request''s REST address,
-    and the site page''s script reveals a hidden Start now button once no draft holds the
-    item back (public repositories only, unauthenticated). Playwright, approved by the owner,
-    tests it in headless Chromium, which CI installs.'
 - id: stalled-dependency-drift
   title: Flag an item stacked on a deferred or closed dependency on the plan site
   status: not started
@@ -95,24 +49,6 @@ items:
     #52.
 
     '
-- id: site-rebuild-on-merge
-  title: A merged pull request in a tracked repository starts the plan site's build
-  status: in progress
-  track: site
-  branch: ccr-c9742a1d-ep3pmj
-  pull_request_number: 122
-  session: https://claude.ai/code/session_018wfiv6b8ng2PD9TV1MhDw3
-  depends_on:
-  - site-for-every-repository
-  notes: 'Agreed on #115 instead of a browser merge re-check. basstler.plan_site.publication
-    commits plan-site-merge.yml straight onto the notes repository''s default branch: on pull_request_target
-    closed and merged it starts the site build with PLAN_SITE_TOKEN, a fork''s pull requests
-    included. A default branch that refuses the push gets it on basstler/plan-site-merge,
-    with a one-line step to merge it. A fork gets none, so its main stays identical to upstream
-    (agreed on #122); its merges reach the page through page-merge-recheck. Awaiting review
-    on #122.
-
-    '
 - id: page-merge-recheck
   title: The plan page shows every pull request's live state - draft, open, merged or closed
   status: in progress
@@ -121,8 +57,7 @@ items:
   pull_request_number: 141
   repository: KAOS-repositories/basstler
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
-  depends_on:
-  - page-draft-recheck
+  depends_on: []
   notes: 'Widened from merges alone (user, 2026-11-05: most up to date draft/open/merged states).
     Extend site_plan_draft_recheck.js: on load and when the tab regains focus, each pull request
     chip shows GitHub''s live state, and an item whose pull request merged shows as done,
@@ -178,8 +113,7 @@ items:
   pull_request_number: 141
   repository: KAOS-repositories/basstler
   session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
-  depends_on:
-  - site-rebuild-on-merge
+  depends_on: []
   notes: 'The merge workflow also runs on opened, reopened, ready_for_review and converted_to_draft,
     and on a pull request closed unmerged, so the built hub, overview and counts follow draft
     and open changes within a minute, not only merges. Each run follows a real change; no
