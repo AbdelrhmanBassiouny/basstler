@@ -17,7 +17,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
-from basstler.github.exceptions import GitHubCallFailed
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.github_labels import GitHubLabel
 from basstler.maintenance.board import PullRequestField, PullRequestHead
 from basstler.maintenance.board import PullRequestRecord as PullRequestAPIRecord
@@ -338,8 +338,8 @@ PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
 @dataclass
 class LivePullRequests:
     """
-    The live state of a plan's pull requests, and why any repository holding them could
-    not be read.
+    The live state of a plan's pull requests, and the refusal of each repository holding
+    them that the token is not granted.
     """
 
     pull_requests_by_repository: PullRequestsByRepository = field(default_factory=dict)
@@ -347,7 +347,8 @@ class LivePullRequests:
     Live pull request state for every repository that could be read.
     """
 
-    read_failures: dict[Repository, GitHubCallFailed] = field(default_factory=dict)
+    read_failures: dict[Repository, GitHubRequestFailed] = field(default_factory=dict)
     """
-    Why each repository whose pull requests could not be read could not be.
+    The refusal of the token's access to each repository whose pull requests could not
+    be read.
     """

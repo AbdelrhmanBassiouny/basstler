@@ -16,7 +16,7 @@ from basstler.github.client import (
     GitHubResponse,
     GitHubRestClient,
 )
-from basstler.github.exceptions import GitHubCallFailed, GitHubRequestFailed
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.maintenance.github import GitHubRepository
 from basstler.plan.dependencies import DependencyResolver
 from basstler.pull_request_state import LivePullRequests, PullRequestRecord
@@ -26,6 +26,11 @@ from basstler.standard_streams import StandardStreamHandler
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which reports a repository that cannot be read.
+"""
+
+READ_ACCESS_STATUSES = frozenset({HTTPStatus.NOT_FOUND, HTTPStatus.FORBIDDEN})
+"""
+What GitHub answers a token that is not granted a repository.
 """
 
 # %% live pull request state
@@ -51,11 +56,11 @@ class PullRequestSource(ABC):
         :return: Its web page, or ``None`` if the repository has no such number.
         """
 
-    def read_failure_of(self, repository: Repository) -> GitHubCallFailed | None:
+    def read_failure_of(self, repository: Repository) -> GitHubRequestFailed | None:
         """
         :param repository: A repository a plan's items name.
-        :return: Why its pull requests cannot be read, or ``None`` if they can; ``None``
-            unless the source finds otherwise.
+        :return: The refusal of the token's access to it, or ``None`` if it can be read;
+            ``None`` unless the source finds otherwise.
         """
         return None
 
@@ -137,21 +142,29 @@ class GitHubPullRequestSource(PullRequestSource):
         """
         return GitHubRepository(repository, self.client)
 
-    def read_failure_of(self, repository: Repository) -> GitHubCallFailed | None:
+    def read_failure_of(self, repository: Repository) -> GitHubRequestFailed | None:
         """
-        See :meth:`PullRequestSource.read_failure_of`: why the repository's details
-        cannot be read, asked once and reported when they cannot.
+        See :meth:`PullRequestSource.read_failure_of`: the refusal of the repository's
+        details, asked once and reported when refused.
+
+        :raises GitHubCallFailed: If the read fails other than by a refused access.
         """
         if repository in self.repository_details:
             return self.repository_details[repository].failure
         details = self.client.attempt_get(f"/{repository.api_path}")
+        failure = details.failure
+        if failure is not None and not (
+            isinstance(failure, GitHubRequestFailed)
+            and failure.status in READ_ACCESS_STATUSES
+        ):
+            raise failure
         self.repository_details[repository] = details
-        if details.failure is not None:
+        if failure is not None:
             logger.warning(
                 f"cannot read {repository}, so its pull requests are left out: "
-                f"{details.failure.error_message()}"
+                f"{failure.error_message()}"
             )
-        return details.failure
+        return failure
 
     def pull_request(self, reference: PullRequestReference) -> PullRequestRecord | None:
         record = self.listed_or_read(reference)

@@ -6,9 +6,8 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass
-from http import HTTPStatus
 
-from basstler.github.exceptions import GitHubCallFailed, GitHubRequestFailed
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.plan.dependencies import DependencyResolver
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.cards import ItemAction, ResolveAction, StartNowAction
@@ -22,11 +21,6 @@ from basstler.pull_request_state import (
 from basstler.repository import PullRequestReference, Repository
 
 # %% the classifier
-
-READ_ACCESS_STATUSES = frozenset({HTTPStatus.NOT_FOUND, HTTPStatus.FORBIDDEN})
-"""
-The statuses GitHub answers a token with for a repository it is not granted.
-"""
 
 
 @dataclass
@@ -169,26 +163,17 @@ class ItemClassifier:
         return self._start_action_for(item)
 
     @staticmethod
-    def access_warning_of(repository: Repository, failure: GitHubCallFailed) -> str:
+    def access_warning_of(repository: Repository, refusal: GitHubRequestFailed) -> str:
         """
-        :param repository: The repository whose pull requests could not be read.
-        :param failure: Why they could not be.
-        :return: What an item on it shows: that its live state is missing, why, and the
-            fix; the read token's for a repository the token is not granted.
+        :param repository: The repository the token is not granted.
+        :param refusal: GitHub's refusal of its read.
+        :return: What an item on it shows: that its live state is missing, why, and how
+            to grant the build's read token access.
         """
-        correction = failure.suggest_correction()
-        if (
-            isinstance(failure, GitHubRequestFailed)
-            and failure.status in READ_ACCESS_STATUSES
-        ):
-            correction = PlanSiteSecret.private_repository_correction
-        warning = (
+        return (
             f"the build cannot read {repository}, so this item shows no live state: "
-            f"{failure.error_message()}"
+            f"{refusal.error_message()}; {PlanSiteSecret.private_repository_correction}"
         )
-        if not correction:
-            return warning
-        return f"{warning}; {correction}"
 
     @staticmethod
     def _drift_description_of(item: Item) -> str | None:

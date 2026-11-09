@@ -10,10 +10,11 @@ from http import HTTPStatus
 import pytest
 
 from basstler.plan_site.__main__ import PlanSource
-from basstler.plan_site.item_classifier import READ_ACCESS_STATUSES, ItemClassifier
+from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.plan_page import PlanPage
 from basstler.plan_site.workflows import PlanSiteSecret
+from basstler.pull_request_source import READ_ACCESS_STATUSES
 from basstler.pull_request_state import LivePullRequests, LiveState
 
 from ..constants.site import SitePlan, SiteSampleText
@@ -32,22 +33,6 @@ def test_an_access_warning_for_a_repository_not_granted_names_the_read_token(
         refusal(ELSEWHERE_PULL_REQUEST.repository, status),
     )
     assert PlanSiteSecret.private_repository_correction in warning
-
-
-def test_an_access_warning_for_another_failure_gives_that_failure_s_own_fix():
-    failure = refusal(ELSEWHERE_PULL_REQUEST.repository, HTTPStatus.UNAUTHORIZED)
-    warning = ItemClassifier.access_warning_of(
-        ELSEWHERE_PULL_REQUEST.repository, failure
-    )
-    assert warning.endswith(failure.suggest_correction())
-
-
-def test_an_access_warning_for_another_failure_does_not_name_the_read_token():
-    warning = ItemClassifier.access_warning_of(
-        ELSEWHERE_PULL_REQUEST.repository,
-        refusal(ELSEWHERE_PULL_REQUEST.repository, HTTPStatus.UNAUTHORIZED),
-    )
-    assert PlanSiteSecret.private_repository_correction not in warning
 
 
 def test_an_access_warning_says_why_the_repository_cannot_be_read():
