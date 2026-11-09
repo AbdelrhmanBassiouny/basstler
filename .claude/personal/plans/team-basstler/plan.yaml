@@ -49,28 +49,11 @@ items:
     #52.
 
     '
-- id: page-merge-recheck
-  title: The plan page shows every pull request's live state - draft, open, merged or closed
-  status: in progress
-  track: site
-  branch: plan-site-live-states
-  pull_request_number: 141
-  repository: KAOS-repositories/basstler
-  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
-  depends_on: []
-  notes: 'Widened from merges alone (user, 2026-11-05: most up to date draft/open/merged states).
-    Extend site_plan_draft_recheck.js: on load and when the tab regains focus, each pull request
-    chip shows GitHub''s live state, and an item whose pull request merged shows as done,
-    with the counts updated. One request per pull request (60 an hour per viewer without page-viewer-token).
-    When GitHub refuses, the page says it shows the build''s state and when that build ran.
-
-    '
 - id: page-viewer-token
   title: A viewer's own token lets the plan page's re-checks read private repositories
   status: not started
   track: site
-  depends_on:
-  - page-merge-recheck
+  depends_on: []
   notes: 'Agreed on #122. The page takes a fine-grained token with Pull requests read-only
     on chosen repositories, keeps it only in the viewer''s localStorage and sends it only
     to api.github.com; both the draft and the merge re-check use it, and without one they
@@ -103,36 +86,6 @@ items:
     (a Cloudflare Worker, free tier) holding the secret of an OAuth App the user registers
     by hand; the page''s "Sign in with GitHub" then stores the token as page-viewer-token
     does. Never a helper basstler runs for everyone.
-
-    '
-- id: rebuild-on-pull-request-state
-  title: Every pull request state change in a tracked repository rebuilds the plan site
-  status: in progress
-  track: site
-  branch: plan-site-live-states
-  pull_request_number: 141
-  repository: KAOS-repositories/basstler
-  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
-  depends_on: []
-  notes: 'The merge workflow also runs on opened, reopened, ready_for_review and converted_to_draft,
-    and on a pull request closed unmerged, so the built hub, overview and counts follow draft
-    and open changes within a minute, not only merges. Each run follows a real change; no
-    schedule.
-
-    '
-- id: plan-timestamps
-  title: Plan pages show when the plan was created, last modified and last refreshed
-  status: in progress
-  track: site
-  branch: plan-site-live-states
-  pull_request_number: 141
-  repository: KAOS-repositories/basstler
-  session: https://claude.ai/code/session_01JxHGiMpEninHM6aZ3mXF6G
-  depends_on: []
-  notes: 'Created and last modified come from the notes branch''s git history of the plan''s
-    directory (the build fetches it without file contents). Last refreshed is the build time,
-    replaced by the time of the page''s live pull request check once that succeeds. The build
-    time is left out of the site digest, so a build with nothing new still skips the deploy.
 
     '
 - id: per-owner-read-tokens
