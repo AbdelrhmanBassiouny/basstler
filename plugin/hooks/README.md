@@ -65,9 +65,10 @@ are the hook scripts here, which also work one at a time:
 
 Every session start also gives the `basstler` package its own environment,
 `~/.local/share/basstler/venv` (under `$BASSTLER_HOME` when set), with the package and its
-dependencies installed into it wherever any of that is missing or the plugin names a newer
+dependencies installed into it wherever any of that is missing or the plugin names another
 release, for a project whose personal-notes branch resolves — reported on its `dependencies:`
-line, never fatal, and described in the repository's `README.md`.
+line, never fatal, and described in the repository's `README.md`. Its `release:` line says
+whether the plugin and the package are one release.
 
 Every session start prints its own summary, so none of the three things below has to be
 remembered. Its `setup:` line runs `check-setup.sh` and names any check that still needs setup;

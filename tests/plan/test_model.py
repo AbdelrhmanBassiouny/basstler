@@ -54,6 +54,21 @@ def other_plan() -> PlanManifest:
     )
 
 
+def test_a_manifest_read_from_yaml_text_equals_the_one_read_from_its_file(other_plan):
+    """
+    Parsing a manifest's text gives what reading its file gives.
+    """
+    path = DatasetLocation.PLANS / FixturePlanId.OTHER / PlanDocument.MANIFEST
+    assert PlanManifest.from_yaml(path.read_text()) == other_plan
+
+
+def test_an_empty_yaml_text_is_an_empty_manifest():
+    """
+    An empty ``plan.yaml`` parses to a manifest with no keys.
+    """
+    assert PlanManifest.from_yaml("") == PlanManifest({})
+
+
 def test_the_default_repository_is_parsed_into_a_repository(other_plan):
     declared = fixture_manifest(FixturePlanId.OTHER)[ManifestKey.DEFAULT_REPOSITORY.key]
     assert other_plan.default_repository == Repository.parse(declared)

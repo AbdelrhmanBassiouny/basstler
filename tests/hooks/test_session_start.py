@@ -18,18 +18,21 @@ import subprocess
 import sys
 from collections.abc import Mapping
 from enum import StrEnum
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
 
 from basstler.document_references import CitedNames, ShippedModules
+from basstler.personal_notes import access
 from basstler.locations import (
     BasstlerVariable,
+    PackageLocation,
     PluginLocation,
     ProjectLocation,
     WorkflowLocation,
 )
-from basstler.repository import Repository
+from basstler.release_version import ReleaseVersion
 from basstler.setup.report import CheckStatus, SetupCheck
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.upstream_reviews.action.branch import InstallationState
@@ -205,7 +208,7 @@ def session_start_repository(
         PluginLocation.PLAN_SAVING_SCRIPT.name,
     )
     scratch_repository.install_package()
-    scratch_repository.replace_module(
+    scratch_repository.replace_package_module(
         merged_items_command, DatasetLocation.MERGED_ITEMS_STUB
     )
     scratch_repository.install_package_environment()
@@ -377,6 +380,63 @@ def test_reports_nothing_when_no_notes_branch_exists(
     assert not (
         session_start_repository.project_root / PersonalNotesPath.LOCAL_INSTRUCTIONS
     ).exists()
+
+
+# %% a notes repository the session cannot reach
+
+
+@pytest.fixture
+def unreachable_notes_repository(
+    session_start_repository: ScratchRepository,
+) -> ScratchRepository:
+    """
+    The scratch repository, with the access check reporting its notes repository as one
+    this session cannot reach.
+
+    :param session_start_repository: The scratch repository and notes remote.
+    :return: The same repository.
+    """
+    session_start_repository.replace_package_module(
+        access, DatasetLocation.NOTES_ACCESS_STUB
+    )
+    return session_start_repository
+
+
+def test_a_notes_repository_it_cannot_reach_is_reported_under_the_notes_line(
+    unreachable_notes_repository: ScratchRepository,
+):
+    result = publish_and_run(unreachable_notes_repository)
+
+    assert result.returncode == 0, result.stderr
+    lines = result.stdout.splitlines()
+    notes_line = lines.index(
+        next(
+            line
+            for line in lines
+            if line.startswith(f"  {SummaryLine.PERSONAL_NOTES}:")
+        )
+    )
+    assert lines[notes_line + 1] == f"    {access.__name__}"
+
+
+def test_a_notes_branch_it_cannot_fetch_from_an_unreachable_repository_is_reported(
+    unreachable_notes_repository: ScratchRepository,
+):
+    """
+    A notes branch that could not be fetched because its repository is not attached is
+    said, instead of the session starting with no word about its notes.
+    """
+    unreachable_notes_repository.run_git(
+        "checkout", "--quiet", "-b", ScratchBranch.WORK
+    )
+
+    result = run_session_start(unreachable_notes_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.PERSONAL_NOTES) == summary_message(
+        SummaryMessage.NOTES_NOT_REACHED
+    )
+    assert f"    {access.__name__}" in result.stdout.splitlines()
 
 
 # %% the plan line
@@ -1211,7 +1271,7 @@ class SampleReleaseTag(StrEnum):
 
     OLDER = "v0.2.0"
     """
-    A release whose minor part sorts after :attr:`LATEST`'s as text, not as a number.
+    A release before :attr:`LATEST`, whose minor part sorts after its as text.
     """
 
     LATEST = "v0.10.0"
@@ -1229,6 +1289,11 @@ class SampleReleaseTag(StrEnum):
     A tag that names no version.
     """
 
+    @property
+    def version(self) -> str:
+        """:return: The version a released plugin's manifest names for this tag."""
+        return self.removeprefix(ReleaseVersion.tag_prefix)
+
 
 class BasstlerBranch(StrEnum):
     """
@@ -1237,90 +1302,156 @@ class BasstlerBranch(StrEnum):
 
     MAIN = "main"
     """
-    The default branch, which a workflow runs before any release is recorded.
+    The default branch, whose workflows a checkout runs.
     """
-
-
-def record_latest_release(repository: ScratchRepository, url: str) -> str:
-    """
-    Record the latest release of *url* as a session start does, then read the package
-    source back.
-
-    :param repository: The fixture-built scratch repository.
-    :param url: The repository standing in for the package's own.
-    :return: What the package would be installed from.
-    """
-    return repository.configuration_output(
-        f"{ShellConfigurationFunction.RECORD_LATEST_BASSTLER_RELEASE} && "
-        f"{ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE}",
-        **{ConfigurationVariable.REPOSITORY_URL: url},
-    ).strip()
 
 
 @pytest.fixture
 def tagged_release_repository(session_start_repository: ScratchRepository) -> str:
     """
-    :return: The scratch project, tagged with every :class:`SampleReleaseTag`, as a
-        repository URL a session start reads releases from.
+    :return: The scratch project, tagged with every :class:`SampleReleaseTag`, as the
+        repository URL a released plugin installs its package from.
     """
     for tag in SampleReleaseTag:
         session_start_repository.run_git("tag", tag)
     return str(session_start_repository.project_root)
 
 
-def test_a_plugin_outside_a_checkout_installs_the_latest_release_of_the_package(
+# %% the release the package is installed at
+
+
+def test_a_released_plugin_installs_the_package_at_its_own_release(
     session_start_repository: ScratchRepository, tagged_release_repository: str
 ):
     """
-    A release is only a tag on its merge commit, so an installed plugin installs the
-    highest one: a pre-release and a tag naming no version are not releases.
+    The package comes from the plugin's own release, never the latest one, so the hooks
+    never call the package with options from another release.
     """
     declaration_file(session_start_repository).unlink()
-    manifest = PluginManifest.of_this_plugin()
+    session_start_repository.release_plugin_as(SampleReleaseTag.OLDER.version)
 
-    source = record_latest_release(session_start_repository, tagged_release_repository)
+    source = session_start_repository.configuration_output(
+        ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE,
+        **{ConfigurationVariable.REPOSITORY_URL: tagged_release_repository},
+    ).strip()
 
     assert source == (
-        f"{manifest.name} @ git+{tagged_release_repository}@{SampleReleaseTag.LATEST}"
+        f"{PluginManifest.of_this_plugin().name} @ "
+        f"git+{tagged_release_repository}@{SampleReleaseTag.OLDER}"
     )
 
 
-def test_an_unreadable_repository_keeps_the_release_last_recorded(
+def test_a_plugin_naming_no_release_has_no_package_to_install(
     session_start_repository: ScratchRepository,
-    tagged_release_repository: str,
+):
+    """
+    A plugin that is not a release, as one copied from the source tree, names no package
+    of its own release, so nothing is guessed in its place.
+    """
+    declaration_file(session_start_repository).unlink()
+
+    with pytest.raises(subprocess.CalledProcessError):
+        session_start_repository.configuration_output(
+            ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE
+        )
+
+
+def test_a_workflow_runs_the_plugin_s_release(
+    session_start_repository: ScratchRepository,
+):
+    """
+    A workflow replaying for the session runs the same package, so it follows the
+    plugin's release.
+    """
+    declaration_file(session_start_repository).unlink()
+    session_start_repository.release_plugin_as(SampleReleaseTag.OLDER.version)
+
+    branch_or_tag = session_start_repository.configuration_output(
+        ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG
+    ).strip()
+
+    assert branch_or_tag == SampleReleaseTag.OLDER
+
+
+def test_a_workflow_runs_the_default_branch_for_a_checkout(
+    session_start_repository: ScratchRepository,
+):
+    """
+    A checkout's plugin names no release, and runs the default branch's workflows.
+    """
+    branch_or_tag = session_start_repository.configuration_output(
+        ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG
+    ).strip()
+
+    assert branch_or_tag == BasstlerBranch.MAIN
+
+
+def test_a_workflow_has_no_release_to_run_for_a_plugin_naming_none(
+    session_start_repository: ScratchRepository,
+):
+    """
+    Outside a checkout, a plugin naming no release has no package for a workflow to run.
+    """
+    declaration_file(session_start_repository).unlink()
+
+    with pytest.raises(subprocess.CalledProcessError):
+        session_start_repository.configuration_output(
+            ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG
+        )
+
+
+def test_a_session_start_installs_nothing_for_a_plugin_naming_no_release(
+    session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
     tmp_path: Path,
 ):
     """
-    A session start offline keeps the package it has rather than reinstalling.
+    Session start says the plugin names no release instead of installing a package of
+    some other release for it.
     """
     declaration_file(session_start_repository).unlink()
-    record_latest_release(session_start_repository, tagged_release_repository)
+    stub_bin.install(PackageManager.PIP)
+    call_log = tmp_path / "pip-calls"
 
-    source = record_latest_release(session_start_repository, str(tmp_path / "missing"))
+    result = publish_and_run(
+        session_start_repository,
+        environment={
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: stub_bin.ahead_of(
+                path_hiding_executables(tmp_path, PackageManager.UV)
+            ),
+            StubVariable.PIP_CALL_LOG: str(call_log),
+        },
+    )
 
-    assert source.endswith(f"@{SampleReleaseTag.LATEST}")
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.DEPENDENCIES) == summary_message(
+        SummaryMessage.DEPENDENCIES_RELEASE_NOT_NAMED,
+        str(session_start_repository.plugin_root),
+    )
+    assert not call_log.exists()
 
 
-# %% a plugin updated after the session start
+# %% a plugin of another release than the installed package
 
 
-def install_older_release_for_this_plugin(
+def install_latest_release_for_another_plugin(
     repository: ScratchRepository, release_repository: str
 ) -> None:
     """
-    Install the package, outside a checkout, at :attr:`SampleReleaseTag.OLDER`, as a
-    session start before :attr:`SampleReleaseTag.LATEST` was tagged did, then tag it.
+    Install the package, outside a checkout, at :attr:`SampleReleaseTag.LATEST` for a
+    plugin of that release, then make the plugin running now one of
+    :attr:`SampleReleaseTag.OLDER`, as when a sync leaves an older copy that the session
+    still runs.
 
     :param repository: The fixture-built scratch repository.
     :param release_repository: The repository standing in for the package's own.
     """
     declaration_file(repository).unlink()
-    repository.run_git("tag", SampleReleaseTag.OLDER)
-    record_latest_release(repository, release_repository)
+    repository.release_plugin_as(SampleReleaseTag.LATEST.version)
     repository.install_package_environment(
         **{ConfigurationVariable.REPOSITORY_URL: release_repository}
     )
-    repository.run_git("tag", SampleReleaseTag.LATEST)
+    repository.release_plugin_as(SampleReleaseTag.OLDER.version)
 
 
 def ready_package(
@@ -1353,118 +1484,134 @@ def ready_package(
     return call_log
 
 
-def test_a_plugin_updated_after_the_install_reinstalls_the_latest_release(
+def test_a_hook_of_an_older_release_reinstalls_the_package_at_that_release(
     session_start_repository: ScratchRepository,
+    tagged_release_repository: str,
     stub_bin: ExecutableStubDirectory,
     tmp_path: Path,
 ):
     """
-    A plugin synced during a session can call what only a later release has, so a hook
-    finding the plugin changed since the install reads the latest release again and
-    installs it, rather than running the package the session start installed.
+    The reported case: an older plugin copy ran against the latest release's package,
+    which no longer accepted an option its hooks pass. A hook readies the package at
+    its own plugin's release instead.
     """
-    release_repository = str(session_start_repository.project_root)
-    install_older_release_for_this_plugin(session_start_repository, release_repository)
+    install_latest_release_for_another_plugin(
+        session_start_repository, tagged_release_repository
+    )
     session_start_repository.install_hook_scripts(
         PluginLocation.ENTRY_POINT_SCRIPT.name
     )
 
     call_log = ready_package(
-        session_start_repository, release_repository, stub_bin, tmp_path
+        session_start_repository, tagged_release_repository, stub_bin, tmp_path
     )
 
     manifest = PluginManifest.of_this_plugin()
     assert call_log.read_text().splitlines() == [
         f"--python {environment_interpreter(session_start_repository)} install "
-        f"{manifest.name} @ git+{release_repository}@{SampleReleaseTag.LATEST}"
+        f"{manifest.name} @ git+{tagged_release_repository}@{SampleReleaseTag.OLDER}"
     ]
 
 
-def test_an_unchanged_plugin_keeps_the_release_its_package_was_installed_at(
+def test_an_unchanged_plugin_keeps_the_package_installed_for_it(
     session_start_repository: ScratchRepository,
+    tagged_release_repository: str,
     stub_bin: ExecutableStubDirectory,
     tmp_path: Path,
 ):
     """
-    The latest release is read once per session start: a hook running with the plugin
-    the package was installed for installs nothing, whatever was released since.
+    A hook running with the plugin the package was installed for installs nothing,
+    whatever was released since.
     """
-    release_repository = str(session_start_repository.project_root)
-    install_older_release_for_this_plugin(session_start_repository, release_repository)
+    declaration_file(session_start_repository).unlink()
+    session_start_repository.release_plugin_as(SampleReleaseTag.OLDER.version)
+    session_start_repository.install_package_environment(
+        **{ConfigurationVariable.REPOSITORY_URL: tagged_release_repository}
+    )
 
     call_log = ready_package(
-        session_start_repository, release_repository, stub_bin, tmp_path
+        session_start_repository, tagged_release_repository, stub_bin, tmp_path
     )
 
     assert not call_log.exists()
 
 
-def test_a_plugin_outside_a_checkout_installs_the_default_branch_before_any_release(
+def test_a_hook_of_a_plugin_naming_no_release_stops(
     session_start_repository: ScratchRepository,
+    stub_bin: ExecutableStubDirectory,
+    tmp_path: Path,
 ):
     """
-    With no release recorded yet, as on a first session start offline, the package
-    still comes from its repository.
+    A hook readying the package for a plugin naming no release stops rather than running
+    against a package of some other release.
     """
+    session_start_repository.install_package_environment()
     declaration_file(session_start_repository).unlink()
-    manifest = PluginManifest.of_this_plugin()
-    repository = Repository.from_remote_url(
-        session_start_repository.configuration_value(
-            ConfigurationVariable.REPOSITORY_URL
+
+    with pytest.raises(subprocess.CalledProcessError):
+        ready_package(
+            session_start_repository,
+            session_start_repository.configuration_value(
+                ConfigurationVariable.REPOSITORY_URL
+            ),
+            stub_bin,
+            tmp_path,
         )
-    )
-
-    assert package_source(session_start_repository) == (
-        f"{manifest.name} @ git+{repository.url}"
-    )
 
 
-def test_a_workflow_runs_the_release_the_package_is_installed_at(
-    session_start_repository: ScratchRepository, tagged_release_repository: str
+def test_a_package_of_another_release_is_named_on_the_release_line(
+    session_start_repository: ScratchRepository,
+    tagged_release_repository: str,
+    tmp_path: Path,
 ):
     """
-    A workflow replaying for the session runs the same package, so it follows the
-    release recorded for the install.
+    When the install fails, the package left in place is another release than the
+    plugin's, and the summary says so rather than leaving the hooks to fail on it.
     """
-    declaration_file(session_start_repository).unlink()
+    install_latest_release_for_another_plugin(
+        session_start_repository, tagged_release_repository
+    )
 
-    branch_or_tag = session_start_repository.configuration_output(
-        f"{ShellConfigurationFunction.RECORD_LATEST_BASSTLER_RELEASE} && "
-        f"{ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG}",
-        **{ConfigurationVariable.REPOSITORY_URL: tagged_release_repository},
-    ).strip()
+    result = publish_and_run(
+        session_start_repository,
+        environment={
+            ConfigurationVariable.REPOSITORY_URL: tagged_release_repository,
+            SearchPathVariable.EXECUTABLE_SEARCH_PATH: path_hiding_executables(
+                tmp_path, PackageManager.PIP, PackageManager.UV
+            ),
+        },
+    )
 
-    assert branch_or_tag == SampleReleaseTag.LATEST
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.RELEASE) == summary_message(
+        SummaryMessage.RELEASE_MISMATCHED,
+        SampleReleaseTag.OLDER,
+        version(PackageLocation.DIRECTORY.value.name),
+        session_start_repository.configuration_output(
+            ShellConfigurationFunction.BASSTLER_PACKAGE_SOURCE,
+            **{ConfigurationVariable.REPOSITORY_URL: tagged_release_repository},
+        ).strip(),
+    )
 
 
-def test_a_workflow_runs_the_default_branch_before_any_release(
+def test_a_package_of_the_plugin_s_release_is_named_on_the_release_line(
     session_start_repository: ScratchRepository,
 ):
     """
-    With no release recorded, the package comes from the default branch, and so does
-    the workflow.
+    The plugin and the package being one release is said too, naming that release.
     """
     declaration_file(session_start_repository).unlink()
+    installed_version = version(PackageLocation.DIRECTORY.value.name)
+    session_start_repository.release_plugin_as(installed_version)
+    session_start_repository.install_package_environment()
 
-    branch_or_tag = session_start_repository.configuration_output(
-        ShellConfigurationFunction.BASSTLER_BRANCH_OR_TAG
-    ).strip()
+    result = publish_and_run(session_start_repository)
 
-    assert branch_or_tag == BasstlerBranch.MAIN
-
-
-def test_a_plugin_in_a_checkout_records_no_release(
-    session_start_repository: ScratchRepository, tagged_release_repository: str
-):
-    """
-    A checkout installs itself, so a session start there reads no release.
-    """
-    record_latest_release(session_start_repository, tagged_release_repository)
-
-    release_file = Path(
-        session_start_repository.configuration_value(ConfigurationVariable.RELEASE_FILE)
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.RELEASE) == summary_message(
+        SummaryMessage.RELEASE_MATCHING,
+        f"{ReleaseVersion.tag_prefix}{installed_version}",
     )
-    assert not release_file.exists()
 
 
 def test_tells_the_session_where_the_plugin_is(

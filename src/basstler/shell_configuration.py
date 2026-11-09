@@ -81,20 +81,13 @@ class ShellConfigurationFunction(StrEnum):
     BASSTLER_PACKAGE_SOURCE = "basstler_package_source"
     """
     Prints what the package is installed from: the checkout the plugin sits in, else its
-    repository at the latest release a session start recorded.
+    repository at the plugin's own release.
     """
 
     BASSTLER_BRANCH_OR_TAG = "basstler_branch_or_tag"
     """
     Prints the basstler branch or tag the package is installed at outside a checkout:
-    the latest release a session start recorded, else ``main``.
-    """
-
-    RECORD_LATEST_BASSTLER_RELEASE = "record_latest_basstler_release"
-    """
-    Records the highest release tag of the package's repository, for a plugin outside a
-    checkout, which :attr:`BASSTLER_PACKAGE_SOURCE` then installs: at a session start,
-    and when a hook finds the plugin changed since the install.
+    the plugin's own release, else ``main``.
     """
 
     PLUGIN_CONTENT_DIGEST = "plugin_content_digest"

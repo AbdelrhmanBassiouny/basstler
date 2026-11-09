@@ -26,6 +26,9 @@ source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
 require_basstler_python
 
+# The arguments as given, so a refused save names the command that repeats it.
+SAVE_ARGUMENTS=""
+[ $# -eq 0 ] || SAVE_ARGUMENTS="$(printf ' %q' "$@")"
 PLAN_ID=""
 MANIFEST_SOURCE_FILE=""
 ROADMAP_SOURCE_FILE=""
@@ -95,6 +98,19 @@ if [ "${BOOTSTRAP_FROM_FILES}" = "0" ]; then
     echo "--manifest/--roadmap file paths instead." >&2
     exit 1
   fi
+fi
+
+# In a cloud session, a notes repository it cannot reach refuses the push: say how to
+# attach it before anything is merged.
+NOTES_ACCESS="$("${BASSTLER_PYTHON}" -m "${NOTES_ACCESS_MODULE}" \
+  --retry "\"\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh\"${SAVE_ARGUMENTS}")" || {
+  echo "Checking that this session reaches the notes repository failed; the error is above. Nothing was saved." >&2
+  exit 1
+}
+if [ -n "${NOTES_ACCESS}" ]; then
+  echo "${NOTES_ACCESS}" >&2
+  echo "Nothing was saved." >&2
+  exit 1
 fi
 
 if ! fetch_personal_notes_branch; then

@@ -156,6 +156,13 @@ class GitHubClient(GitHubReader, GitHubWriter, ABC):
     """
 
 
+class GitHubFullClient(GitHubClient, GitHubAttemptClient, ABC):
+    """
+    Reading and writing REST resources, with a refusal raised or returned on the answer
+    as the caller chooses.
+    """
+
+
 # %% the implementation
 
 
@@ -280,7 +287,7 @@ class GitHubResponse:
 
 
 @dataclass(frozen=True)
-class GitHubRestClient(GitHubClient, GitHubAttemptClient):
+class GitHubRestClient(GitHubFullClient):
     """
     Plain authenticated HTTPS requests, through the proxy the environment names.
 

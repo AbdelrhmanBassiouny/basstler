@@ -632,7 +632,15 @@ class PlanManifest:
         :param path: A ``plan.yaml`` file.
         :return: The manifest it holds.
         """
-        return cls(yaml.safe_load(path.read_text()) or {})
+        return cls.from_yaml(path.read_text())
+
+    @classmethod
+    def from_yaml(cls, text: str) -> PlanManifest:
+        """
+        :param text: The YAML text of a ``plan.yaml``.
+        :return: The manifest it holds, empty for an empty text.
+        """
+        return cls(yaml.safe_load(text) or {})
 
     def write(self, path: Path) -> None:
         """
@@ -668,6 +676,18 @@ class PlanManifest:
         if not own_repository:
             return self.default_repository
         return Repository.parse(own_repository)
+
+    @property
+    def repositories(self) -> list[Repository]:
+        """
+        :return: Every repository the plan's pull requests are on, each once, the
+            default first.
+        """
+        return list(
+            dict.fromkeys(
+                [self.default_repository, *map(self.repository_of, self.items)]
+            )
+        )
 
     @property
     def description(self) -> str:

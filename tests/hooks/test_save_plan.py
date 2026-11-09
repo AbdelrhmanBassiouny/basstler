@@ -22,6 +22,7 @@ from basstler.plan.item_bootstrap.vocabulary import PlanSavingOption
 from basstler.plan.merge import PlanVersion
 from basstler.plan.model import PlanDocument
 from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
+from basstler.personal_notes import access
 from basstler.plan_site import build_start
 from basstler.plan.merged_items import __main__ as merged_items_command
 from basstler.repository import Repository
@@ -91,8 +92,10 @@ def save_plan_repository(scratch_repository: ScratchRepository) -> ScratchReposi
         PluginLocation.PLAN_SAVING_SCRIPT.name,
     )
     scratch_repository.install_package()
-    scratch_repository.replace_module(build_start, DatasetLocation.BUILD_START_STUB)
-    scratch_repository.replace_module(
+    scratch_repository.replace_package_module(
+        build_start, DatasetLocation.BUILD_START_STUB
+    )
+    scratch_repository.replace_package_module(
         merged_items_command, DatasetLocation.MERGED_ITEMS_STUB
     )
     scratch_repository.write("README.md", "scratch repo\n")
@@ -240,6 +243,26 @@ def test_saves_a_plan_to_notes_in_a_separate_repository(
     assert (
         saved_plan_directory(save_plan_repository, DatasetPlan.IDENTIFIER)
         / PlanDocument.MANIFEST
+    ).exists()
+
+
+def test_refuses_to_save_to_a_notes_repository_this_session_cannot_reach(
+    save_plan_repository: ScratchRepository,
+):
+    """
+    A notes repository the session cannot reach is reported, with how to attach it,
+    before anything is pushed.
+    """
+    save_plan_repository.replace_package_module(
+        access, DatasetLocation.NOTES_ACCESS_STUB
+    )
+
+    result = save_dataset_plan(save_plan_repository)
+
+    assert result.returncode == 1
+    assert access.__name__ in result.stderr.splitlines()
+    assert not saved_plan_directory(
+        save_plan_repository, DatasetPlan.IDENTIFIER
     ).exists()
 
 

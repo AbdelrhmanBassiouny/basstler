@@ -11,6 +11,7 @@ project it serves.
 
 from __future__ import annotations
 
+import json
 import os
 import shutil
 import subprocess
@@ -21,9 +22,8 @@ from enum import StrEnum
 from pathlib import Path
 from types import ModuleType
 
-import basstler
-
 from .script_runner import BashScriptRunner
+import basstler
 from basstler.locations import PackageLocation, PluginLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.repository import Repository
@@ -37,6 +37,7 @@ from .constants.environment import (
 )
 from .constants.notes import ScratchBranch
 from .constants.paths import DatasetLocation, RepositoryLocation, SkillDirectory
+from .plugin_manifest import PluginManifest, PluginManifestKey
 
 
 class PackageSourceFile(StrEnum):
@@ -121,7 +122,7 @@ class SetupPrerequisiteFile(StrEnum):
 
     PLUGIN_MANIFEST = ".claude-plugin/plugin.json"
     """
-    The plugin's manifest, naming its version.
+    The plugin's manifest, which names a version only once the plugin is released.
     """
 
     PLAN_SCHEMA = str(SkillDirectory.PLAN_CREATE / "plan-schema.md")
@@ -383,12 +384,12 @@ class ScratchRepository:
         """
         install_package_into(self.checkout_root)
 
-    def replace_module(self, module: ModuleType, stand_in: Path) -> None:
+    def replace_package_module(self, module: ModuleType, stand_in: Path) -> None:
         """
-        Replace one module of the package :meth:`install_package` copied.
+        Put *stand_in* in place of *module* in the scratch checkout's package.
 
-        :param module: The module to replace.
-        :param stand_in: The source run in its place.
+        :param module: The real module, whose file is replaced.
+        :param stand_in: The module to run in its place.
         """
         package_root = Path(basstler.__file__).parent.parent
         shutil.copy(
@@ -475,6 +476,21 @@ class ScratchRepository:
         shutil.copytree(
             DatasetLocation.SET_UP_PROJECT, self.project_root, dirs_exist_ok=True
         )
+
+    def release_plugin_as(self, version: str) -> None:
+        """
+        Make the scratch plugin a released one, its manifest naming *version* as the
+        release workflow's does.
+
+        :param version: The version the manifest names, without the tag's ``v``.
+        """
+        manifest = {
+            PluginManifestKey.NAME: PluginManifest.of_this_plugin().name,
+            PluginManifestKey.VERSION: version,
+        }
+        manifest_path = self.plugin_root / SetupPrerequisiteFile.PLUGIN_MANIFEST
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        manifest_path.write_text(json.dumps(manifest, indent=2))
 
     def runner_environment(self, **overrides: str) -> dict[str, str]:
         """

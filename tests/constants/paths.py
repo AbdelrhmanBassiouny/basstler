@@ -149,6 +149,18 @@ class DatasetLocation(PathEnumeration):
     the push it runs for.
     """
 
+    REJECTING_PRE_COMMIT_HOOK = DIRECTORY / "rejecting-pre-commit.sh"
+    """
+    A pre-commit hook that rejects every commit, as a project's checks do on a branch
+    that does not carry their configuration.
+    """
+
+    RECORDING_GH = DIRECTORY / "recording-gh.sh"
+    """
+    A ``gh`` that records each call's arguments, ``GH_TOKEN`` and standard input, and
+    fails a workflow run when ``GH_WORKFLOW_RUN_STATUS`` is non-zero.
+    """
+
     PROTECTED_MAIN_HOOK = DIRECTORY / "refuse-main-pre-receive.sh"
     """
     A pre-receive hook that refuses every push updating ``main``, as a protected default
@@ -207,6 +219,11 @@ class DatasetLocation(PathEnumeration):
     A notes repository's token secret, set after its recorded failed dispatch run.
     """
 
+    PLAN_SITE_READ_TOKEN_STORED = DIRECTORY / "plan-site-read-token-stored.json"
+    """
+    A site repository's notes token secret, as stored.
+    """
+
     WORKFLOW_RUNS_NONE = DIRECTORY / "workflow-runs-none.json"
     """
     A run listing with no runs at all.
@@ -219,7 +236,12 @@ class DatasetLocation(PathEnumeration):
 
     REPOSITORY_NOT_FORK = DIRECTORY / "repository-not-fork.json"
     """
-    A repository's REST response for a repository that is not a fork.
+    A repository's REST response for a public repository that is not a fork.
+    """
+
+    REPOSITORY_PRIVATE = DIRECTORY / "repository-private.json"
+    """
+    A repository's REST response for a private repository that is not a fork.
     """
 
     REPOSITORY_TRUNK_DEFAULT_BRANCH = DIRECTORY / "repository-trunk-default-branch.json"
@@ -331,6 +353,12 @@ class DatasetLocation(PathEnumeration):
     IN_PROGRESS_ITEM_MERGED = DIRECTORY / "pull-requests-in-progress-item-merged.json"
     """
     A recording in which the in-progress item of :attr:`PLAN_WITH_LANDED_ITEMS` has merged.
+    """
+
+    NOTES_ACCESS_STUB = STUBS / "notes_access_prints_its_name.py"
+    """
+    A module standing in for :mod:`basstler.personal_notes.access`, printing its name as
+    the missing access.
     """
 
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"

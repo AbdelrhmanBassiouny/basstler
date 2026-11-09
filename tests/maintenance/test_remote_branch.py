@@ -104,3 +104,35 @@ def test_a_missing_branch_reads_no_latest_file(fork_checkout):
     assert (
         branch_on_fork(fork_checkout, "notes/someone").read_latest("file.txt") is None
     )
+
+
+def test_every_latest_file_of_a_name_under_a_directory_is_read_in_path_order(
+    fork_checkout,
+):
+    """
+    Files of that name at any depth under the directory are read; others are not.
+    """
+    branch = branch_on_fork(fork_checkout, "notes/someone")
+    branch.write(
+        {
+            "plans/b/plan.yaml": "b",
+            "plans/a/plan.yaml": "a",
+            "plans/a/roadmap.md": "roadmap",
+            "other/plan.yaml": "other",
+        },
+        "Write plans",
+    )
+
+    assert branch.read_every_latest("plans", "plan.yaml") == ["a", "b"]
+
+
+def test_a_missing_branch_reads_no_files_under_a_directory(fork_checkout):
+    """
+    A branch the remote lacks has nothing under any directory.
+    """
+    assert (
+        branch_on_fork(fork_checkout, "notes/someone").read_every_latest(
+            "plans", "plan.yaml"
+        )
+        == []
+    )

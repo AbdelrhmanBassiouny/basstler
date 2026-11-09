@@ -4,17 +4,24 @@ The steps of publishing that only the user can take, and the lines and browser s
 
 from __future__ import annotations
 
+import sys
 import textwrap
 from collections.abc import Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
+from basstler.environment import GitHubCredentialVariable
+from basstler.plan_site import token_storage
+from basstler.plan_site.build_start import CodeFence
 from basstler.github.run_listing import ListedRun
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import (
+    GitHubCommandLineOption,
     PlanSiteSecret,
+    PlanSiteTemplate,
+    SiteWorkflow,
 )
 from basstler.repository import GitHubAddress, Repository
 from basstler.standard_streams import StandardStreamHandler
@@ -22,6 +29,7 @@ from basstler.github.pull_request import NewPullRequest
 from basstler.github.client import (
     GitHubClient,
 )
+from basstler.github.exceptions import GitHubCallFailed
 from basstler.upstream_reviews.rest_models import RestPullRequestSummary
 
 logger = StandardStreamHandler.logger_for(__name__)
@@ -47,7 +55,7 @@ class UserStep(StrEnum):
     No build in the site repository has succeeded yet.
     """
 
-    CREATE_TOKEN = "create, or reuse, the token that starts the build"
+    CREATE_TOKEN = "create, or regenerate, the token that starts the build"
     """
     No dispatch from the notes branch has succeeded yet, so the token it needs may not
     exist.
@@ -57,6 +65,14 @@ class UserStep(StrEnum):
     """
     No dispatch from the notes branch has succeeded yet. Actions secrets belong to one
     repository, so each repository the site publishes needs its own copy.
+    """
+
+    GIVE_BUILD_READ_ACCESS = (
+        "let the build read the private repositories, or make them public"
+    )
+    """
+    A repository the build reads - a notes repository or one a plan's pull requests
+    are on - is private, and the build's own credential cannot read it.
     """
 
     ADD_MERGE_WORKFLOW = "merge the workflow that starts the build on every merge"
@@ -79,7 +95,7 @@ class PendingStep:
 
     line: str | None
     """
-    The one copyable line that takes it, ``None`` when GitHub offers no command for it.
+    The copyable command that takes it, ``None`` when GitHub offers no command for it.
     """
 
     browser_steps: tuple[str, ...]
@@ -98,6 +114,11 @@ class PendingStep:
     Why publishing could not take the step itself, ``None`` when it does not try.
     """
 
+    warning: str | None = None
+    """
+    What taking the step exposes or risks, read before the command that takes it.
+    """
+
     def render(self) -> str:
         """:return: The step as it is printed."""
         numbered = "\n".join(
@@ -105,6 +126,8 @@ class PendingStep:
             for number, text in enumerate(self.browser_steps, start=1)
         )
         lines = [f"- {self.step}:"]
+        if self.warning:
+            lines.append(textwrap.indent(f"Warning: {self.warning}", "    "))
         if self.failure:
             lines.append(
                 textwrap.indent(
@@ -118,7 +141,8 @@ class PendingStep:
         if self.line is None:
             lines.append("  GitHub offers no command for this; in the browser:")
         else:
-            lines.extend([f"    {self.line}", "  Or in the browser:"])
+            command = "\n".join([CodeFence.BASH, self.line, CodeFence.CLOSE])
+            lines.extend([textwrap.indent(command, "    "), "  Or in the browser:"])
         lines.append(numbered)
         return "\n".join(lines)
 
@@ -144,12 +168,10 @@ class UserSteps:
     Every ``owner/name`` the site publishes, which the token has to read.
     """
 
-    @classproperty
-    def token_page(cls) -> str:
-        """
-        Where a fine-grained token is created.
-        """
-        return f"{GitHubAddress.WEB}/settings/personal-access-tokens/new"
+    in_cloud_session: bool = False
+    """
+    Whether this runs in a Claude Code cloud session, whose user has no terminal on it.
+    """
 
     def pending(
         self, step: UserStep, latest_run: ListedRun | None = None
@@ -161,7 +183,6 @@ class UserSteps:
         :return: The step with its line and its browser steps.
         """
         site = self.site.repository
-        repositories = ", ".join(self.registered)
         steps = {
             UserStep.CREATE_SITE_REPOSITORY: PendingStep(
                 step,
@@ -177,7 +198,7 @@ class UserSteps:
                 step,
                 f"gh api -X POST {site.api_path}/pages -f build_type=workflow",
                 (
-                    f"Open {site.url}/settings/pages.",
+                    f"Open {site.settings_url}/pages.",
                     "Under Build and deployment, set Source to GitHub Actions.",
                 ),
                 latest_run,
@@ -186,13 +207,12 @@ class UserSteps:
                 step,
                 None,
                 (
-                    f"Open {self.token_page}, or open the token you already use for "
-                    "the plan site.",
-                    f"Name the token and set Resource owner to {site.owner}.",
+                    f"Open {self.site.token_form_url()} - its name, owner "
+                    "and Actions write access are filled in. To reuse the token you "
+                    "already have for the plan site, open it instead and click "
+                    "Regenerate token.",
                     "Under Repository access, choose Only select repositories and "
                     f"select {site.full_name} alone.",
-                    "Under Permissions, open Repository permissions and set Actions "
-                    "to Read and write.",
                     "Click Generate token and copy the token now; GitHub shows it "
                     "once.",
                 ),
@@ -200,11 +220,9 @@ class UserSteps:
             ),
             UserStep.STORE_TOKEN: PendingStep(
                 step,
-                f'read -rsp "Token: " token; for repository in {repositories}; do '
-                f'printf %s "$token" | gh secret set {PlanSiteSecret.TOKEN} '
-                '--repo "$repository"; done',
+                self.store_token_command,
                 tuple(
-                    f"Open {GitHubAddress.WEB}/{repository}/settings/secrets/actions/new, "
+                    f"Open {Repository.parse(repository).new_actions_secret_url}, "
                     f"set the name to {PlanSiteSecret.TOKEN}, paste the token as the "
                     "secret, then click Add secret."
                     for repository in self.registered
@@ -213,6 +231,133 @@ class UserSteps:
             ),
         }
         return steps[step]
+
+    @property
+    def store_token_command(self) -> str:
+        """
+        :return: The command that proves the token by starting the site's build with
+            it, then stores it in every registered repository; in a cloud session, one
+            the user runs on their own computer with only ``gh``.
+        """
+        if not self.in_cloud_session:
+            return f"{sys.executable} -m {token_storage.__name__}"
+        return PlanSiteTemplate.STORE_TOKEN_COMMAND.render(
+            token_secret=PlanSiteSecret.TOKEN,
+            token_variable=GitHubCredentialVariable.GH_TOKEN,
+            site_workflow_name=SiteWorkflow.location.name,
+            repository_option=GitHubCommandLineOption.REPOSITORY,
+            site_repository=self.site.repository.full_name,
+            repositories=" ".join(self.registered),
+        )
+
+
+@dataclass(frozen=True)
+class PrivateRepositoryAccess:
+    """
+    The repositories the site's build reads that it may need a read-only token for.
+    """
+
+    site: SiteRepository
+    """
+    The site repository, which stores the token for its build.
+    """
+
+    private_repositories: tuple[Repository, ...]
+    """
+    The private repositories the build reads, which the token has to read.
+    """
+
+    secret_refusal: GitHubCallFailed | None = None
+    """
+    Why it could not be read whether the site repository stores the token, ``None``
+    when it is known not to.
+    """
+
+    unreadable_repositories: dict[Repository, GitHubCallFailed] = field(
+        default_factory=dict
+    )
+    """
+    The repositories the build reads whose visibility could not be read, with why.
+    """
+
+    @classproperty
+    def classic_token_warning(cls) -> str:
+        """
+        What a classic token allows beyond what the build needs.
+        """
+        return (
+            "A classic token's repo scope has no read-only form: it can also write to "
+            "every private repository you can reach, and lasts until it expires or is "
+            "revoked. Give it an expiry and revoke it once the build no longer needs it."
+        )
+
+    @property
+    def holds_back_publication(self) -> bool:
+        """
+        :return: Whether a repository is known to be private and the token known to be
+            missing, so nothing written now could build.
+        """
+        return bool(self.private_repositories) and self.secret_refusal is None
+
+    @property
+    def pending(self) -> PendingStep:
+        """:return: The step storing the token, or making the repositories public."""
+        site = self.site.repository
+        repositories = [*self.private_repositories, *self.unreadable_repositories]
+        names = ", ".join(repository.full_name for repository in repositories)
+        owners = list(dict.fromkeys(repository.owner for repository in repositories))
+        token_steps = (
+            (
+                f"Open {SiteRepository.classic_token_page}.",
+                "A fine-grained token reads the repositories of one owner only, and "
+                f"these belong to {', '.join(owners)}: name the token and select "
+                "the repo scope.",
+                "Click Generate token and copy the token now; GitHub shows it once.",
+            )
+            if len(owners) > 1
+            else (
+                f"Open {SiteRepository.token_page}.",
+                f"Name the token and set Resource owner to {owners[0]}.",
+                "Under Repository access, choose Only select repositories and "
+                f"select {names}.",
+                "Under Permissions, open Repository permissions and set Contents, "
+                "Issues, Pull requests, Commit statuses and Checks to Read-only.",
+                "Click Generate token and copy the token now; GitHub shows it once.",
+            )
+        )
+        failures = [
+            f"whether {repository.full_name} is private could not be read: {refusal}"
+            for repository, refusal in self.unreadable_repositories.items()
+        ]
+        if self.secret_refusal is not None:
+            failures.append(
+                f"whether {site.full_name} stores {PlanSiteSecret.READ_TOKEN} could "
+                f"not be read: {self.secret_refusal}"
+            )
+        return PendingStep(
+            UserStep.GIVE_BUILD_READ_ACCESS,
+            f'read -rsp "Token: " token; printf %s "$token" | gh secret set '
+            f"{PlanSiteSecret.READ_TOKEN} --repo {site.full_name}",
+            (
+                *token_steps,
+                f"Open {site.new_actions_secret_url}, set the name to "
+                f"{PlanSiteSecret.READ_TOKEN}, paste the token as the secret, then "
+                "click Add secret.",
+                "Or, instead of the token, make each of them public: open "
+                + ", ".join(repository.settings_url for repository in repositories)
+                + ", and under Danger Zone click Change visibility.",
+            ),
+            failure="; ".join(failures) or None,
+            warning=" ".join(
+                [
+                    f"the plan site at {self.site.site_url} is public, so with the "
+                    f"token it shows what the build reads from {names}: plan and item "
+                    "titles, notes, and their pull requests' titles and state. Store "
+                    "it only if that may be public.",
+                    *([self.classic_token_warning] if len(owners) > 1 else []),
+                ]
+            ),
+        )
 
 
 @dataclass(frozen=True)
