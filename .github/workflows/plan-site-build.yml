@@ -19,7 +19,7 @@ on:
         default: ""
     secrets:
       read_token:
-        description: "A read-only token for private notes repositories; the site repository's own token when not passed"
+        description: "A read-only token for the private repositories the build reads; the site repository's own token when not passed"
         required: false
 
 # One build runs at a time and is never cancelled; of the builds started meanwhile, only

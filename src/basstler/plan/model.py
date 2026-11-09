@@ -632,7 +632,15 @@ class PlanManifest:
         :param path: A ``plan.yaml`` file.
         :return: The manifest it holds.
         """
-        return cls(yaml.safe_load(path.read_text()) or {})
+        return cls.from_yaml(path.read_text())
+
+    @classmethod
+    def from_yaml(cls, text: str) -> PlanManifest:
+        """
+        :param text: The YAML text of a ``plan.yaml``.
+        :return: The manifest it holds, empty for an empty text.
+        """
+        return cls(yaml.safe_load(text) or {})
 
     def write(self, path: Path) -> None:
         """

@@ -17,7 +17,6 @@ from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated
 
-import yaml
 from cyclopts import App, Parameter
 
 from basstler.class_property import classproperty
@@ -321,7 +320,7 @@ class PlanSitePublication:
             ]
         )
         manifests = [
-            PlanManifest(yaml.safe_load(text) or {})
+            PlanManifest.from_yaml(text)
             for repository in notes_repositories
             for text in self.notes_branch_of(repository).read_every_latest(
                 ProjectLocation.PLANS, PlanDocument.MANIFEST

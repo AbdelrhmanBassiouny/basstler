@@ -155,6 +155,20 @@ class Repository:
         """
         return f"{root}/{self.full_name}.git"
 
+    @property
+    def settings_url(self) -> str:
+        """
+        The repository's settings page, where its visibility is changed.
+        """
+        return f"{self.url}/settings"
+
+    @property
+    def new_actions_secret_url(self) -> str:
+        """
+        The page that adds an Actions secret to the repository.
+        """
+        return f"{self.settings_url}/secrets/actions/new"
+
     def pull_request_url(self, number: int) -> str:
         """
         :param number: The pull request's number.

@@ -39,8 +39,8 @@ class PlanSiteSecret(StrEnum):
 
     READ_TOKEN = "PLAN_SITE_READ_TOKEN"
     """
-    The user's read-only fine-grained token, stored on the site repository, that lets
-    the build read private notes repositories.
+    The user's read-only token, stored on the site repository, that lets the build
+    read private repositories.
     """
 
     @classproperty

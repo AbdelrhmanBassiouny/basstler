@@ -127,7 +127,9 @@ class PendingStep:
         if self.line is None:
             lines.append("  GitHub offers no command for this; in the browser:")
         else:
-            lines.extend([f"    {self.line}", "  Or in the browser:"])
+            lines.extend(
+                ["    ```bash", f"    {self.line}", "    ```", "  Or in the browser:"]
+            )
         lines.append(numbered)
         return "\n".join(lines)
 
@@ -186,7 +188,7 @@ class UserSteps:
                 step,
                 f"gh api -X POST {site.api_path}/pages -f build_type=workflow",
                 (
-                    f"Open {site.url}/settings/pages.",
+                    f"Open {site.settings_url}/pages.",
                     "Under Build and deployment, set Source to GitHub Actions.",
                 ),
                 latest_run,
@@ -213,7 +215,7 @@ class UserSteps:
                 f'printf %s "$token" | gh secret set {PlanSiteSecret.TOKEN} '
                 '--repo "$repository"; done',
                 tuple(
-                    f"Open {GitHubAddress.WEB}/{repository}/settings/secrets/actions/new, "
+                    f"Open {Repository.parse(repository).new_actions_secret_url}, "
                     f"set the name to {PlanSiteSecret.TOKEN}, paste the token as the "
                     "secret, then click Add secret."
                     for repository in self.registered
@@ -309,11 +311,11 @@ class PrivateRepositoryAccess:
             f"{PlanSiteSecret.READ_TOKEN} --repo {site.full_name}",
             (
                 *token_steps,
-                f"Open {site.url}/settings/secrets/actions/new, set the name to "
+                f"Open {site.new_actions_secret_url}, set the name to "
                 f"{PlanSiteSecret.READ_TOKEN}, paste the token as the secret, then "
                 "click Add secret.",
                 "Or, instead of the token, make each of them public: open "
-                + ", ".join(f"{repository.url}/settings" for repository in repositories)
+                + ", ".join(repository.settings_url for repository in repositories)
                 + ", and under Danger Zone click Change visibility.",
             ),
             failure="; ".join(failures) or None,

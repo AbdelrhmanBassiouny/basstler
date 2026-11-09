@@ -226,7 +226,7 @@ class Publishing:
         self,
         site_listing: DatasetLocation,
         notes_listing: DatasetLocation,
-        site_branch: str = "main",
+        site_branch: str = PlanSitePublication.initial_branch,
         notes_details: DatasetLocation = DatasetLocation.REPOSITORY_NOT_FORK,
         open_pull_requests: tuple[DatasetLocation, ...] = (),
         notes_default_branch: str = UPSTREAM_BASE,
@@ -332,9 +332,14 @@ def test_a_missing_site_repository_is_left_to_the_user_and_nothing_is_written(
 def test_an_empty_site_repository_gets_the_workflow_naming_the_notes_repository(
     published,
 ):
+    """
+    The site workflow goes on the initial branch of a site repository that has none.
+    """
     assert (
         published.file(
-            published.site.repository, "main", SiteWorkflow.location.as_posix()
+            published.site.repository,
+            PlanSitePublication.initial_branch,
+            SiteWorkflow.location.as_posix(),
         )
         == SiteWorkflow(BRANCH_OR_TAG, published.notes_repository).text
     )
@@ -743,7 +748,7 @@ def test_a_private_notes_repository_with_a_read_token_is_published(
     assert (
         private_publishing.file(
             private_publishing.site.repository,
-            "main",
+            PlanSitePublication.initial_branch,
             SiteWorkflow.location.as_posix(),
         )
         == SiteWorkflow(BRANCH_OR_TAG, private_publishing.notes_repository).text
@@ -767,7 +772,7 @@ def test_an_unreadable_read_token_is_published_and_left_to_the_user_to_check(
     assert (
         private_publishing.file(
             private_publishing.site.repository,
-            "main",
+            PlanSitePublication.initial_branch,
             SiteWorkflow.location.as_posix(),
         )
         == SiteWorkflow(BRANCH_OR_TAG, private_publishing.notes_repository).text
@@ -866,7 +871,7 @@ def test_a_repository_whose_details_are_refused_is_published_and_left_to_check(
     assert (
         private_publishing.file(
             private_publishing.site.repository,
-            "main",
+            PlanSitePublication.initial_branch,
             SiteWorkflow.location.as_posix(),
         )
         == SiteWorkflow(BRANCH_OR_TAG, private_publishing.notes_repository).text
@@ -1173,6 +1178,9 @@ class RefusingRestClient(GitHubReader):
 def test_runs_that_cannot_be_read_stop_the_publication_before_anything_is_written(
     publishing,
 ):
+    """
+    Unreadable run listings stop publication before any file is written.
+    """
     publishing.create(publishing.site.repository)
 
     with pytest.raises(GitHubRequestFailed):
@@ -1188,7 +1196,9 @@ def test_runs_that_cannot_be_read_stop_the_publication_before_anything_is_writte
     )
     assert (
         publishing.file(
-            publishing.site.repository, "main", SiteWorkflow.location.as_posix()
+            publishing.site.repository,
+            PlanSitePublication.initial_branch,
+            SiteWorkflow.location.as_posix(),
         )
         is None
     )
@@ -1324,17 +1334,26 @@ def test_a_failed_dispatch_run_is_linked_from_the_step_it_leaves_to_the_user(
 
 
 def test_without_a_run_no_run_is_linked(published):
+    """
+    A step whose workflow has not run links no run.
+    """
     report = published.publication(published.runs_none()).publish()
 
     assert pending_step(report, UserStep.STORE_TOKEN).latest_run is None
 
 
-def test_a_rendered_step_shows_the_command_and_then_the_browser_steps(published):
+def test_a_rendered_step_shows_the_command_in_a_bash_block_then_the_browser_steps(
+    published,
+):
+    """
+    The command is printed alone in a bash block, before the browser steps.
+    """
     report = published.publication(published.runs_none()).publish()
     pending = pending_step(report, UserStep.TURN_ON_PAGES)
 
     assert pending.render() == (
-        f"- {pending.step}:\n    {pending.line}\n  Or in the browser:\n"
+        f"- {pending.step}:\n    ```bash\n    {pending.line}\n    ```\n"
+        "  Or in the browser:\n"
         + "\n".join(
             f"    {number}. {step}"
             for number, step in enumerate(pending.browser_steps, start=1)
