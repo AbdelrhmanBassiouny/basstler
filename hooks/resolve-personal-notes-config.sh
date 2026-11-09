@@ -341,7 +341,7 @@ PLAN_SITE_DISPATCH_WORKFLOW_PATH=".github/workflows/plan-site-dispatch.yml"
 # BASSTLER_CHECKOUT: the basstler source checkout this plugin sits in, when it
 # sits in one - a development clone, or a plugin run straight from a clone of
 # its repository. Empty for a plugin installed on its own, whose package comes
-# from its repository at the latest release instead (see
+# from its repository at the plugin's own release instead (see
 # basstler_package_source below).
 BASSTLER_CHECKOUT=""
 if [ -f "${PLUGIN_ROOT}/../pyproject.toml" ] && [ -d "${PLUGIN_ROOT}/../src/basstler" ]; then
@@ -368,6 +368,9 @@ PLAN_SITE_DISPATCH_CHECK_MODULE="basstler.plan_site.dispatch_check"
 # basstler.plan_site.build_start: starts the plan site's build with this session's own
 # GitHub credential, after a push to the notes branch.
 PLAN_SITE_BUILD_START_MODULE="basstler.plan_site.build_start"
+# basstler.personal_notes.access: in a cloud session, prints how to attach a notes
+# repository other than the checkout's own when the session cannot reach it.
+NOTES_ACCESS_MODULE="basstler.personal_notes.access"
 # basstler.plan.item_brief: prints one plan item's brief - the plan header, the item,
 # its dependencies' live readiness and the plan's standing rules.
 ITEM_BRIEF_MODULE="basstler.plan.item_brief"
@@ -655,9 +658,8 @@ BASSTLER_INSTALL_MARKER="${BASSTLER_INSTALL_LOCK}/pid"
 # installed from, so a plugin update - which names a new source - reinstalls it.
 BASSTLER_INSTALLED_SOURCE_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-source"
 # BASSTLER_INSTALLED_PLUGIN_DIGEST_FILE: plugin_content_digest of the plugin the
-# environment's package was last installed for. Outside a checkout the source
-# names the release recorded at session start, so a plugin synced later in the
-# session names no new source; this is how a hook still notices it.
+# environment's package was last installed for, so a hook running another copy
+# of the plugin readies the package for it again.
 BASSTLER_INSTALLED_PLUGIN_DIGEST_FILE="${BASSTLER_ENVIRONMENT_DIRECTORY}/basstler-plugin-digest"
 # BASSTLER_PYTHON_REQUIREMENT: the interpreters the package supports - the
 # requires-python of the package's pyproject.toml, which a test holds this
@@ -672,17 +674,12 @@ BASSTLER_INTERPRETER_CANDIDATES="python3.14 python3.13 python3.12"
 BASSTLER_UV_DIRECTORY="${BASSTLER_HOME}/uv"
 BASSTLER_INSTALLED_UV="${BASSTLER_UV_DIRECTORY}/bin/uv"
 # BASSTLER_REPOSITORY_URL: where an installed plugin's package comes from, at
-# its latest release.
+# the plugin's own release.
 BASSTLER_REPOSITORY_URL="${BASSTLER_REPOSITORY_URL:-https://github.com/KAOS-repositories/basstler}"
-# PLUGIN_MANIFEST: the plugin's manifest, which names no version: a release is
-# only a tag on its merge commit, and the marketplace serves the plugin from the
-# plugin release branch at that tag, with nothing committed after it to miss.
+# PLUGIN_MANIFEST: the plugin's manifest. The source tree's names no version;
+# the release workflow writes the release's into the plugin it serves, which is
+# how a plugin and its package are kept one release.
 PLUGIN_MANIFEST="${PLUGIN_ROOT}/.claude-plugin/plugin.json"
-# BASSTLER_RELEASE_FILE: the latest release tag last read from
-# BASSTLER_REPOSITORY_URL - the one the package is installed at, read once per
-# session start, and again by a hook running a plugin synced since the install,
-# rather than by every caller.
-BASSTLER_RELEASE_FILE="${BASSTLER_HOME}/release"
 
 # latest_basstler_release: prints the highest v<major>.<minor>.<patch> tag
 # BASSTLER_REPOSITORY_URL has; fails when it cannot be read or has none.
@@ -695,40 +692,37 @@ latest_basstler_release() {
     | sort -t . -k 1,1n -k 2,2n -k 3,3n | tail -1 | sed 's/^/v/' | grep .
 }
 
-# record_latest_basstler_release: records latest_basstler_release in
-# BASSTLER_RELEASE_FILE for a plugin outside a checkout. Keeps the last one
-# recorded when the repository cannot be read, so a session offline keeps the
-# package it has rather than reinstalling.
-record_latest_basstler_release() {
-  [ -z "${BASSTLER_CHECKOUT}" ] || return 0
-  local release
-  release="$(latest_basstler_release)" || return 0
-  mkdir -p "$(dirname "${BASSTLER_RELEASE_FILE}")"
-  printf '%s\n' "${release}" > "${BASSTLER_RELEASE_FILE}"
+# plugin_release: prints the tag of the release PLUGIN_MANIFEST names; fails
+# when it names none, as outside a released plugin.
+plugin_release() {
+  [ -f "${PLUGIN_MANIFEST}" ] || return 1
+  local version
+  version="$(sed -n 's/^[[:space:]]*"version"[[:space:]]*:[[:space:]]*"\([^"]*\)".*$/\1/p' \
+    "${PLUGIN_MANIFEST}")"
+  [ -n "${version}" ] || return 1
+  printf 'v%s\n' "${version}"
 }
 
 # basstler_package_source: prints what to install the package from - the
-# checkout this plugin sits in, else its repository at the latest release
-# recorded, or at its default branch before any was.
+# checkout this plugin sits in, else its repository at the plugin's release.
+# Fails for a plugin outside a checkout that names no release.
 basstler_package_source() {
   if [ -n "${BASSTLER_CHECKOUT}" ]; then
     printf '%s\n' "${BASSTLER_CHECKOUT}"
     return
   fi
-  local reference=""
-  [ -s "${BASSTLER_RELEASE_FILE}" ] && reference="@$(cat "${BASSTLER_RELEASE_FILE}")"
-  printf 'basstler @ git+%s%s\n' "${BASSTLER_REPOSITORY_URL}" "${reference}"
+  local release
+  release="$(plugin_release)" || return 1
+  printf 'basstler @ git+%s@%s\n' "${BASSTLER_REPOSITORY_URL}" "${release}"
 }
 
-# basstler_branch_or_tag: prints the basstler branch or tag the package is
-# installed at outside a checkout - the latest release recorded, or main before
-# any was - for a workflow that has to run the same package as the session.
+# basstler_branch_or_tag: prints the basstler branch or tag a workflow runs to
+# match the session's package - the plugin's release, or main in a checkout.
+# Fails for a plugin outside a checkout that names no release.
 basstler_branch_or_tag() {
-  if [ -s "${BASSTLER_RELEASE_FILE}" ]; then
-    cat "${BASSTLER_RELEASE_FILE}"
-  else
-    printf 'main\n'
-  fi
+  plugin_release && return
+  [ -n "${BASSTLER_CHECKOUT}" ] || return 1
+  printf 'main\n'
 }
 
 # basstler_install_in_progress: succeeds while a running process holds
@@ -869,7 +863,9 @@ release_basstler_install_lock() {
 #   locked              - another process held the lock past the wait
 #   environment-failed  - no environment could be created
 #   install-failed      - installing BASSTLER_PACKAGE_REQUIREMENTS failed
-# and returns 1 for the last four, when the package cannot be run.
+#   release-not-named   - outside a checkout, the plugin names no release to
+#                         install the package at
+# and returns 1 for the last five, when the package cannot be run.
 ensure_basstler_package() {
   BASSTLER_PACKAGE_REQUIREMENTS=""
   if ! acquire_basstler_install_lock; then
@@ -886,6 +882,10 @@ ensure_basstler_package() {
 # install_basstler_package_where_needed: ensure_basstler_package's work, run
 # while it holds the lock.
 install_basstler_package_where_needed() {
+  if ! basstler_package_source > /dev/null; then
+    BASSTLER_PACKAGE_STATE=release-not-named
+    return 1
+  fi
   if [ ! -x "${BASSTLER_ENVIRONMENT_INTERPRETER}" ]; then
     BASSTLER_PACKAGE_REQUIREMENTS="$(basstler_package_source)"
     if ! create_basstler_environment; then
@@ -897,8 +897,6 @@ install_basstler_package_where_needed() {
     return
   fi
   if ! installed_package_is_current; then
-    # A plugin synced since the install may call what only a later release has.
-    installed_for_this_plugin || record_latest_basstler_release
     BASSTLER_PACKAGE_REQUIREMENTS="$(basstler_package_source)"
     install_basstler_package_or_fail installed
     return
@@ -941,6 +939,9 @@ basstler_package_failure_line() {
       printf 'could not install %s: %s - run: %s\n' "${BASSTLER_PACKAGE_REQUIREMENTS}" \
         "$(printf '%s' "${BASSTLER_INSTALL_OUTPUT}" | tail -1)" \
         "${BASSTLER_INSTALL_COMMAND[*]}" ;;
+    release-not-named)
+      printf 'the plugin at %s names no release in its plugin.json, so there is no basstler package of its release to run - reinstall the plugin from the marketplace\n' \
+        "${PLUGIN_ROOT}" ;;
     *)
       printf 'could not read what the basstler package requires for %s - run: pip --python %s install '"'"'%s'"'"'\n' \
         "${BASSTLER_PYTHON}" "${BASSTLER_PYTHON}" "$(basstler_package_source)" ;;
@@ -978,6 +979,31 @@ require_basstler_python() {
     echo "The basstler package's requirements are not installed for ${BASSTLER_PYTHON}: ${missing}" >&2
     echo "Start a new session, or run: pip --python ${BASSTLER_PYTHON} install '$(basstler_package_source)'" >&2
     exit 1
+  fi
+}
+
+# compare_plugin_and_package_releases: sets BASSTLER_INSTALLED_VERSION to the
+# version of the package BASSTLER_PYTHON imports, BASSTLER_PLUGIN_RELEASE to
+# plugin_release, and BASSTLER_RELEASE_STATE to one of
+#   checkout    - both are the source of the checkout the plugin sits in
+#   matching    - the package is the plugin's own release
+#   mismatched  - the package is another release than the plugin's
+#   not-named   - the plugin names no release, so nothing pins the package to it
+#   not-read    - the package's version could not be read
+compare_plugin_and_package_releases() {
+  BASSTLER_PLUGIN_RELEASE="$(plugin_release)" || BASSTLER_PLUGIN_RELEASE=""
+  if ! BASSTLER_INSTALLED_VERSION="$("${BASSTLER_PYTHON}" \
+      -m "${BASSTLER_COMMAND_MODULE}" --version 2>/dev/null)"; then
+    BASSTLER_INSTALLED_VERSION=""
+    BASSTLER_RELEASE_STATE=not-read
+  elif [ -n "${BASSTLER_CHECKOUT}" ]; then
+    BASSTLER_RELEASE_STATE=checkout
+  elif [ -z "${BASSTLER_PLUGIN_RELEASE}" ]; then
+    BASSTLER_RELEASE_STATE=not-named
+  elif [ "${BASSTLER_PLUGIN_RELEASE}" = "v${BASSTLER_INSTALLED_VERSION}" ]; then
+    BASSTLER_RELEASE_STATE=matching
+  else
+    BASSTLER_RELEASE_STATE=mismatched
   fi
 }
 
