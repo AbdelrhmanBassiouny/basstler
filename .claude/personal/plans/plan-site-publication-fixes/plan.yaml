@@ -1,0 +1,76 @@
+schema_version: 1
+id: plan-site-publication-fixes
+title: Plan site publication works on the first try, for private repositories too
+description: Setting up the plan site for a private repository on a personal account
+  (Hesham87/Platform_maintainer) failed only at the first build, after every manual step,
+  and left a merge workflow pull request GitHub refused. These fixes report each problem
+  before the user acts, and keep one unreadable repository from failing the whole site.
+default_repository: KAOS-repositories/basstler
+tracking_issue: 178
+waves:
+- id: fixes
+  name: Fixes
+  description: One bug pull request off main per root cause.
+tracks:
+- id: publication
+  name: Publication
+  wave: fixes
+- id: rendering
+  name: Site rendering
+  wave: fixes
+items:
+- id: visibility-before-site-repository
+  title: Publication checks private repositories before asking for the site repository
+  track: publication
+  depends_on: []
+  status: not started
+  session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
+  notes: 'From Hesham87/Platform_maintainer: publish() asks to create the site repository
+    before its private-repository check, so a private repository learns about PLAN_SITE_READ_TOKEN
+    and the public site only after creating it, making it public and installing the App. Run
+    the check, and its public-site warning, before CREATE_SITE_REPOSITORY. Own bug PR off
+    main, failing test first.'
+
+- id: unreachable-site-repository
+  title: Publication tells an unreachable site repository from a missing one
+  track: publication
+  depends_on: []
+  status: not started
+  session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
+  notes: 'From Hesham87/Platform_maintainer: default_branch_of() returns None whenever git
+    ls-remote fails, and publish() reads that as missing, so a private or unattached site
+    repository got create-the-repository again. Read the repository through the API (404 vs
+    refused) and name the reason: private, not attached, App not installed. Own bug PR off
+    main, failing test first.'
+
+- id: merge-workflow-branch-history
+  title: The merge workflow branch starts from the default branch, so its pull request can
+    open
+  track: publication
+  depends_on: []
+  status: not started
+  session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
+  notes: 'From Hesham87/Platform_maintainer: write_merge_workflow writes basstler/plan-site-merge
+    as a new RemoteBranch with no parent, so GitHub refused the pull request (422, no history
+    in common with main) and the printed gh pr create fallback fails the same way. Branch
+    from the default branch''s head. Own bug PR off main, failing test first.'
+
+- id: merge-workflow-draft
+  title: The merge workflow pull request opens as a draft
+  track: publication
+  depends_on: []
+  status: not started
+  session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
+  notes: 'Open the merge workflow pull request as a draft: MergeWorkflowProposal passes draft=False (user_steps.py). Decided (owner, 2026-11-09): once #141 shows live pull request states on the page, publication stops installing the merge workflow by default and offers it only on request, so a product''s main gets no pull_request_target workflow, no zizmor exception and no docs change unless asked. Own bug PR off main for the draft fix.'
+
+- id: unreadable-repository-items
+  title: Plan site renders items whose repository it cannot read, instead of failing the whole
+    site
+  track: rendering
+  depends_on: []
+  status: not started
+  notes: 'From #153 (tomsch420) and #170''s review: one repository the build cannot read (a
+    404 listing a private repository''s pull requests) fails every plan on the site. Render
+    those items without live state, with a visible note naming the repository and the PLAN_SITE_READ_TOKEN
+    fix, so the rest of the site still builds. A bug fix, so the uv-workspace freeze exempts
+    it; stacked on #170, whose PLAN_SITE_READ_TOKEN the note names.'
