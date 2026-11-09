@@ -74,3 +74,17 @@ items:
     those items without live state, with a visible note naming the repository and the PLAN_SITE_READ_TOKEN
     fix, so the rest of the site still builds. A bug fix, so the uv-workspace freeze exempts
     it; stacked on #170, whose PLAN_SITE_READ_TOKEN the note names.'
+
+- id: publication-transport
+  title: Plan site publication pushes over the transport the notes remote uses, and a refused
+    push names its fix
+  branch: claude/clever-cray-u2g5jy
+  pull_request_number: 179
+  status: in progress
+  track: publication
+  session: https://claude.ai/code/session_018wfiv5ZynxeNkiyRGDcHj6
+  depends_on: []
+  notes: 'From #175 (ichumuh). publication.py pushes every repository over GitHubAddress.WEB,
+    so an SSH-only machine fails with no hint. Derive remote_root from the notes remote''s scheme
+    (git@github.com: or https), and turn a refused push into an explanation naming gh auth setup-git,
+    gh auth refresh -s workflow, or SSH. Bug PR off main, failing test first.'
