@@ -7,4 +7,4 @@
 - ruff, docformatter, code-rules pass; full suite green apart from 4 local Playwright browser errors
 
 ## Next
-- Owner review of draft PR #171
+- Owner decides on the exit-0 question in both test_session_start.py threads (answered, left open)
