@@ -23,12 +23,12 @@ items:
   depends_on:
   - basstler-packages/uv-workspace
   pull_request_number: null
-  notes: 'Re-check once basstler-packages/uv-workspace (uv sync --frozen at session start) lands: if every
-    install runs through uv, drop this. BASSTLER_INTERPRETER_CANDIDATES names python3.14/3.13/3.12, which
-    Windows does not install, so without uv on PATH create_basstler_environment always falls back to installing
-    uv with pip. Also try py -3.14/-3.13/-3.12 (and a python on PATH checked against BASSTLER_PYTHON_REQUIREMENT),
-    each resolved to a full path before it runs. Split out of windows-environment-interpreter as its own
-    root cause.'
+  notes: 'Re-check once basstler-packages/uv-workspace (uv sync --frozen at session start)
+    lands: if every install runs through uv, drop this. BASSTLER_INTERPRETER_CANDIDATES names
+    python3.14/3.13/3.12, which Windows does not install, so without uv on PATH create_basstler_environment
+    always falls back to installing uv with pip. Also try py -3.14/-3.13/-3.12 (and a python
+    on PATH checked against BASSTLER_PYTHON_REQUIREMENT), each resolved to a full path before
+    it runs. Split out of windows-environment-interpreter as its own root cause.'
 - id: setup-report-strict-parsing
   title: Refuse an incomplete or failed check-setup.sh report with its stderr
   branch: null
@@ -39,18 +39,6 @@ items:
   notes: SetupReport.from_completed_process raises a custom CheckSetupFailedError carrying
     exit code and stderr when a row is missing or the exit code is neither 0 nor 1, instead
     of KeyError/ValueError; the setup command exits with a documented code for it.
-- id: plugin-root-required
-  title: Refuse a missing plugin root instead of guessing one
-  branch: claude/exciting-mayer-qsgl9w
-  status: in progress
-  track: fixes
-  session: https://claude.ai/code/session_01LTrTZ659gSv9PFHUgVAmdS
-  depends_on: []
-  pull_request_number: 76
-  notes: PluginLocation.ROOT's fallback to <source tree>/plugin is wrong for an installed
-    package; raise when BASSTLER_PLUGIN_ROOT is unset or not a directory. Find out from the
-    reporter why session-start.sh's CLAUDE_ENV_FILE export did not reach the session, and
-    have skills export the root on the same line if it cannot.
 - id: setup-no-partial-writes
   title: Check setup before writing the notes remote to git config
   branch: null
@@ -78,8 +66,7 @@ items:
   branch: null
   status: not started
   track: fixes
-  depends_on:
-  - plugin-root-required
+  depends_on: []
   pull_request_number: null
   notes: A windows-latest job runs check-setup.sh through python -m basstler.setup.personal_notes.
     Costs Actions minutes, so needs the owner's decision against actions-budget before starting.
