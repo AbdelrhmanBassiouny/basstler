@@ -360,6 +360,18 @@ class DatasetLocation(PathEnumeration):
     A module standing in for :mod:`basstler.plan_site.build_start`, printing its name.
     """
 
+    BUILD_START_NEEDS_ACCESS_STUB = STUBS / "build_start_needs_access.py"
+    """
+    A module standing in for :mod:`basstler.plan_site.build_start`, saying this session
+    cannot start the build yet.
+    """
+
+    BUILD_START_HAS_ACCESS_STUB = STUBS / "build_start_has_access.py"
+    """
+    A module standing in for :mod:`basstler.plan_site.build_start`, saying nothing: the
+    session can start the build.
+    """
+
     MERGED_ITEMS_STUB = STUBS / "merged_items_from_recording.py"
     """
     A module standing in for :mod:`basstler.plan.merged_items`'s command, reading the
@@ -375,6 +387,12 @@ class DatasetLocation(PathEnumeration):
     """
     A module standing in for :mod:`basstler.personal_notes.access`, printing its name as
     the missing access.
+    """
+
+    NOTES_ACCESS_REACHED_STUB = STUBS / "notes_access_has_access.py"
+    """
+    A module standing in for :mod:`basstler.personal_notes.access`, saying nothing: the
+    session reaches the notes repository.
     """
 
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"

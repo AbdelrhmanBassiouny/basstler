@@ -56,6 +56,11 @@ class SetupCheck(StrEnum):
     The notes file's path on that branch, and where that came from.
     """
 
+    NOTES_REPOSITORY_ACCESS = "notes_repository_access"
+    """
+    A cloud session reaching the repository the notes are kept in.
+    """
+
     NOTES_BRANCH = "notes_branch"
     """
     The notes branch existing on its remote.
@@ -79,6 +84,12 @@ class SetupCheck(StrEnum):
     PLAN_SITE = "plan_site"
     """
     Every repository on the plan site storing its token and starting the site's build.
+    """
+
+    PLAN_SITE_ACCESS = "plan_site_access"
+    """
+    A cloud session reaching the plan site's repository, so a plan save can start the
+    build.
     """
 
     GIT_IDENTITY = "git_identity"
