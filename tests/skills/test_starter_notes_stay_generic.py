@@ -28,6 +28,18 @@ STARTER_NOTES = (
 The starter notes as shipped.
 """
 
+PULL_REQUEST_RULES = (
+    RepositoryLocation.PLUGIN / SkillDirectory.PULL_REQUEST_RULES_DOCUMENT
+).read_text()
+"""
+The pull-request rules as shipped, which hold only while a skill linking them runs.
+"""
+
+SECTION_HEADING = re.compile(r"^## (.+)$", re.MULTILINE)
+"""
+Matches a second-level markdown heading, capturing its title.
+"""
+
 HOOK_SCRIPT_NAMES = sorted(
     script.name for script in RepositoryLocation.HOOKS.glob("*.sh")
 )
@@ -83,3 +95,15 @@ def test_the_session_rules_carry_the_instruction_that_names_each_script(
     rules = (RepositoryLocation.PLUGIN / PluginLocation.SESSION_RULES).read_text()
 
     assert script.name in rules
+
+
+def test_the_starter_notes_carry_no_section_of_the_pull_request_rules():
+    """
+    Notes reach every session, so a pull-request rule seeded into them would bind
+    sessions that run no skill acting on pull requests.
+    """
+    assert (
+        set(SECTION_HEADING.findall(STARTER_NOTES))
+        & set(SECTION_HEADING.findall(PULL_REQUEST_RULES))
+        == set()
+    )
