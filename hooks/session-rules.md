@@ -25,6 +25,13 @@ A plan save starts the plan site's build itself, with this session's credential 
 - When a save prints that the build did not start, attach it the same way, then run the command the save names, `"${BASSTLER_PYTHON}" -m basstler.plan_site.build_start`. Saving again does not retry it: a save with no changes starts no build.
 - If the attach is refused, ask the user with `AskUserQuestion` to allow it, with "Attach it (Recommended)" first, saying why: every plan save then updates the plan site within a minute, without a stored token.
 
+## A separate notes repository is attached in a cloud session
+
+When the notes live in another repository than the checkout's, a cloud session reads and saves them only once that repository is attached (`basstler.personal_notes.access`):
+
+- When the session-start summary's `personal notes` line, or a refused save, says this session cannot reach the notes repository, call `mcp__claude-code-remote__add_repo` with the repository it names and `access: "push"`, then run the command it names.
+- If the attach is refused, ask the user with `AskUserQuestion` to allow it, with "Attach it (Recommended)" first, saying why: the session then reads and saves the notes, plans and PR progress kept there.
+
 ## Every pull request keeps a plan, what is done and what is next
 
 - For every pull request you create, keep the PR-progress section of `CLAUDE.local.md` (the block between the `BEGIN-PR-PROGRESS` and `END-PR-PROGRESS` markers, which the session start fills) current as three short lists - Plan, Done, Next. Start it with a short plan as soon as real work on the pull request begins, replace finished steps rather than accumulating them, and update it whenever the plan or your task list changes and before ending a turn that changed either.

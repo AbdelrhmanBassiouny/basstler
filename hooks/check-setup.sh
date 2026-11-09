@@ -27,15 +27,18 @@ set -euo pipefail
 #
 # Output is one tab-separated "<check>\t<status>\t<detail>" row per check, in
 # the order the checks have to be fixed in (a later one can depend on an
-# earlier one being satisfied). Five statuses:
+# earlier one being satisfied). Six statuses:
 #   ok           - nothing to do
 #   needs-setup  - something is missing; <detail> says what
 #   in-progress  - another process is setting it up right now; wait for it
 #                  rather than doing it again
 #   unverified   - nothing the check could read decides it yet; <detail> says
 #                  why and how to settle it. Never a pass
+#   mismatched   - the plugin's hooks and the package they call are not one
+#                  release; <detail> says which and how to bring them together
 #   info         - context for whoever is reading, never a pass/fail
-# Exit code is 0 when no row is needs-setup, in-progress or unverified, 1
+# Exit code is 0 when no row is needs-setup, in-progress, unverified or
+# mismatched, 1
 # otherwise - so a caller can take the fast path ("everything is already fine")
 # on the exit code alone, without parsing anything.
 #
@@ -116,7 +119,7 @@ report_upstream() {
 }
 
 # report: prints one TSV row, and remembers that the overall run failed if the
-# status is needs-setup, in-progress or unverified, so the exit code never has to be
+# status is needs-setup, in-progress, unverified or mismatched, so the exit code never has to be
 # tracked by hand at each call site.
 # report_upstream_reviews_action: prints the upstream_reviews_action row,
 # checked only once an upstream is named, since only /upstream-reviews runs the
@@ -130,7 +133,10 @@ report_upstream_reviews_action() {
     return 0
   fi
   local branch_or_tag
-  branch_or_tag="$(basstler_branch_or_tag)"
+  if ! branch_or_tag="$(basstler_branch_or_tag)"; then
+    report upstream_reviews_action info "not checked - the plugin names no release for it to run; see basstler_version"
+    return 0
+  fi
   local install_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --branch-or-tag ${branch_or_tag}"
   local state
   if ! state="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
@@ -189,7 +195,7 @@ report() {
   local check="$1" status="$2" detail="$3"
   requested "${check}" || return 0
   case "${status}" in
-    needs-setup|in-progress|unverified) EXIT_CODE=1 ;;
+    needs-setup|in-progress|unverified|mismatched) EXIT_CODE=1 ;;
   esac
   printf '%s\t%s\t%s\n' "${check}" "${status}" "${detail}"
 }
@@ -349,27 +355,40 @@ fi
 
 # %% the package's version
 
-# Context, never a verdict: a session start installs the latest release by
-# itself, so this only answers which basstler the session runs.
+# latest_release_note: prints, after the installed version $1, how it stands
+# against basstler's latest release - context, never a verdict.
+latest_release_note() {
+  local installed_version="$1" latest_release
+  if ! latest_release="$(latest_basstler_release)"; then
+    printf '; the latest release could not be read from %s' "${BASSTLER_REPOSITORY_URL}"
+  elif [ "v${installed_version}" = "${latest_release}" ]; then
+    printf ', the latest release'
+  else
+    printf '; the latest release is %s' "${latest_release}"
+  fi
+}
+
+# The hooks and the package they call must be one release: a hook passing an
+# option another release renamed fails every time it runs.
 if requested basstler_version; then
-  if ! INSTALLED_VERSION="$("${BASSTLER_PYTHON}" -m "${BASSTLER_COMMAND_MODULE}" --version 2>/dev/null)"; then
-    INSTALLED_VERSION="of unknown version"
-  fi
-  if [ -n "${BASSTLER_CHECKOUT}" ]; then
-    INSTALLED_SOURCE="run from the checkout ${BASSTLER_CHECKOUT}"
-  else
-    INSTALLED_SOURCE="installed at $(basstler_branch_or_tag)"
-  fi
-  if ! LATEST_RELEASE="$(latest_basstler_release)"; then
-    report basstler_version info \
-      "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}); the latest release could not be read from ${BASSTLER_REPOSITORY_URL}"
-  elif [ "v${INSTALLED_VERSION}" = "${LATEST_RELEASE}" ]; then
-    report basstler_version info \
-      "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}), the latest release"
-  else
-    report basstler_version info \
-      "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}); the latest release is ${LATEST_RELEASE}"
-  fi
+  compare_plugin_and_package_releases
+  case "${BASSTLER_RELEASE_STATE}" in
+    checkout)
+      report basstler_version info \
+        "basstler ${BASSTLER_INSTALLED_VERSION} (run from the checkout ${BASSTLER_CHECKOUT})$(latest_release_note "${BASSTLER_INSTALLED_VERSION}")" ;;
+    matching)
+      report basstler_version ok \
+        "basstler ${BASSTLER_INSTALLED_VERSION}, the plugin's own release$(latest_release_note "${BASSTLER_INSTALLED_VERSION}")" ;;
+    mismatched)
+      report basstler_version mismatched \
+        "the plugin at ${PLUGIN_ROOT} is ${BASSTLER_PLUGIN_RELEASE} but the package is basstler ${BASSTLER_INSTALLED_VERSION} - start a new session, or run: pip --python ${BASSTLER_PYTHON} install '$(basstler_package_source)'" ;;
+    not-named)
+      report basstler_version mismatched \
+        "the plugin at ${PLUGIN_ROOT} names no release, so nothing pins basstler ${BASSTLER_INSTALLED_VERSION} to it - reinstall the plugin from the marketplace" ;;
+    *)
+      report basstler_version info \
+        "the installed package's version could not be read - see package_dependencies" ;;
+  esac
 fi
 
 # %% the result of it all working

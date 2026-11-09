@@ -24,7 +24,18 @@ if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
   printf 'export BASSTLER_PLUGIN_ROOT=%q\n' "${PLUGIN_ROOT}" >> "${CLAUDE_ENV_FILE}"
 fi
 
-fetch_personal_notes_branch || exit 0
+# In a cloud session, how to attach a notes repository it cannot reach; empty otherwise.
+NOTES_ACCESS="$("${BASSTLER_PYTHON}" -m "${NOTES_ACCESS_MODULE}" \
+  --retry "\"\${BASSTLER_PLUGIN_ROOT}/hooks/session-start.sh\"" 2>/dev/null || true)"
+
+if ! fetch_personal_notes_branch; then
+  # Said, so a session never starts without its notes and no word why.
+  if [ -n "${NOTES_ACCESS}" ]; then
+    printf 'session-start.sh summary:\n  personal notes:  %s\n    %s\n' \
+      "$(notes_line_not_reached)" "${NOTES_ACCESS}"
+  fi
+  exit 0
+fi
 
 # Reads below use PERSONAL_NOTES_REFERENCE, which later fetches leave alone.
 record_plan_state_sync_stamp
@@ -56,7 +67,6 @@ SUMMARY_PROGRESS="not applicable (no current PR on this branch)"
 # fatal. Runs before the plan section and the setup check, which rely on it.
 # Holds the install lock, so a skill started while this runs waits for it.
 ensure_basstler_environment() {
-  record_latest_basstler_release
   ensure_basstler_package || true
   case "${BASSTLER_PACKAGE_STATE}" in
     current)
@@ -81,12 +91,31 @@ ensure_basstler_environment() {
     locked)
       SUMMARY_DEPENDENCIES="$(dependencies_line_install_running \
         "${BASSTLER_INSTALL_LOCK}")" ;;
+    release-not-named)
+      SUMMARY_DEPENDENCIES="$(dependencies_line_release_not_named "${PLUGIN_ROOT}")" ;;
     *)
       SUMMARY_DEPENDENCIES="$(dependencies_line_not_checked)" ;;
   esac
 }
 
 ensure_basstler_environment
+
+# Whether the hooks and the package they call are one release: an install that
+# failed leaves another release's package in place, which must not go unsaid.
+compare_plugin_and_package_releases
+case "${BASSTLER_RELEASE_STATE}" in
+  checkout)
+    SUMMARY_RELEASE="$(release_line_checkout "${BASSTLER_CHECKOUT}")" ;;
+  matching)
+    SUMMARY_RELEASE="$(release_line_matching "${BASSTLER_PLUGIN_RELEASE}")" ;;
+  mismatched)
+    SUMMARY_RELEASE="$(release_line_mismatched "${BASSTLER_PLUGIN_RELEASE}" \
+      "${BASSTLER_INSTALLED_VERSION}" "$(basstler_package_source)")" ;;
+  not-named)
+    SUMMARY_RELEASE="$(release_line_not_named "${BASSTLER_INSTALLED_VERSION}")" ;;
+  *)
+    SUMMARY_RELEASE="$(release_line_package_not_read)" ;;
+esac
 
 # After the install, so it names the environment's interpreter once one exists.
 if [ -n "${CLAUDE_ENV_FILE:-}" ]; then
@@ -112,6 +141,10 @@ HEADER
   echo "<!-- END-PERSONAL-NOTES -->" >> "${OUTPUT_FILE}"
   WROTE_ANYTHING=1
   SUMMARY_NOTES="loaded from '${NOTES_BRANCH}' (${NOTES_PATH}) on '${ACTIVE_NOTES_REMOTE}'"
+  # A notes repository read without being attached still refuses this session's saves.
+  if [ -n "${NOTES_ACCESS}" ]; then
+    SUMMARY_NOTES="$(printf '%s\n    %s' "${SUMMARY_NOTES}" "${NOTES_ACCESS}")"
+  fi
   # Notes outlive the release they were written against: name what moved or went.
   SUMMARY_CITED_NAMES="$(cited_names_line_not_checked "${DOCUMENT_REFERENCES_MODULE}")"
   NOTES_COPY="$(mktemp)"
@@ -333,8 +366,9 @@ fi
 # release would otherwise leave it stale. Only a branch already there is
 # touched - installing one is setup's decision. Never fatal.
 SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_not_read "${NOTES_REMOTE}")"
-SESSION_RELEASE="$(basstler_branch_or_tag)"
-if ACTION_STATE="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
+if ! SESSION_RELEASE="$(basstler_branch_or_tag)"; then
+  SUMMARY_UPSTREAM_REVIEWS_ACTION="$(upstream_reviews_action_line_release_not_named)"
+elif ACTION_STATE="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
     --remote "${NOTES_REMOTE}" status --branch-or-tag "${SESSION_RELEASE}" 2>/dev/null)"; then
   case "${ACTION_STATE}" in
     missing*)
@@ -385,7 +419,8 @@ SUMMARY_SETUP="$(setup_line_not_checked "${CHECK_SETUP_SCRIPT}")"
 if [ -f "${CHECK_SETUP_SCRIPT}" ]; then
   NEEDS_SETUP_ROWS="$(bash "${CHECK_SETUP_SCRIPT}" 2>/dev/null \
     | awk -F'\t' '$2 == "needs-setup" { printf "    %s: %s\n", $1, $3 }
-                  $2 == "unverified" { printf "    %s (unverified): %s\n", $1, $3 }' || true)"
+                  $2 == "unverified" { printf "    %s (unverified): %s\n", $1, $3 }
+                  $2 == "mismatched" { printf "    %s (mismatched): %s\n", $1, $3 }' || true)"
   if [ -z "${NEEDS_SETUP_ROWS}" ]; then
     SUMMARY_SETUP="$(setup_line_ok)"
   else
@@ -407,6 +442,7 @@ session-start.sh summary:
   default branch:  ${SUMMARY_DEFAULT_BRANCH}
   git identity:    ${SUMMARY_GIT_IDENTITY}
   dependencies:    ${SUMMARY_DEPENDENCIES}
+  release:         ${SUMMARY_RELEASE}
   reviews Action:  ${SUMMARY_UPSTREAM_REVIEWS_ACTION}
   Actions usage:   ${SUMMARY_ACTIONS_USAGE}
   main tests:      ${SUMMARY_MAIN_TESTS}
