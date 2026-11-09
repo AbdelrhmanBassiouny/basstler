@@ -22,7 +22,12 @@ items:
   track: guards
   depends_on: []
   status: not started
-  notes: 'prerequisite-check.md runs check-setup.sh bare, so a plan_site row needing setup sends every skill into /setup-personal-notes. Each skill names its rows with --only (in code, as a mapping from skill to checks, not prose), and an unrelated row is reported in one line, never a stop. From Hesham87/Platform_maintainer: kickoff''s check-setup.sh --require-upstream exits 1 on a repository that is neither a fork nor has an upstream; skip the stack pass there instead.'
+  notes: 'prerequisite-check.md runs check-setup.sh bare, so a plan_site row needing setup
+    sends every skill into /setup-personal-notes. Each skill names its rows with --only (in
+    code, as a mapping from skill to checks, not prose), and an unrelated row is reported
+    in one line, never a stop. From Hesham87/Platform_maintainer: kickoff''s check-setup.sh
+    --require-upstream exits 1 on a repository that is neither a fork nor has an upstream;
+    skip the stack pass there instead.'
 - id: conflict-audit
   title: Every step that acts on mergeability or check state reads it deterministically
   track: guards
@@ -67,7 +72,7 @@ items:
   - conflict-audit
   - verified-records
   - session-start-marker
-  - hook-enforcement
+  - rule-enforcement/action-guard
   status: not started
   notes: 'One test per report failure through the real scripts: run from the plugin directory,
     a fresh shell with no variables, mergeable_state unknown on a conflicting branch, plan_site
@@ -80,11 +85,12 @@ items:
   track: guards
   depends_on:
   - interaction-model/attempts
-  status: not started
-  notes: The plugin's hooks.json registers a PreToolUse hook on Bash that denies a command
-    using a configuration name it does not source, or run outside the project, and one on
-    the record commands that denies a claim the ledger does not back. Each denial says what
-    to run instead.
+  status: deferred
+  notes: 'Folded into rule-enforcement/action-guard and rule-enforcement/ported-rules (2026-11-09,
+    owner''s decision). Was: the plugin''s hooks.json registers a PreToolUse hook on Bash
+    that denies a command using a configuration name it does not source, or run outside the
+    project, and one on the record commands that denies a claim the ledger does not back.
+    Each denial says what to run instead.'
 - id: locked-install
   title: Every session installs identical dependencies from uv.lock
   branch: null
@@ -93,9 +99,10 @@ items:
   depends_on:
   - basstler-packages/uv-workspace
   status: deferred
-  notes: 'Folded into basstler-packages/uv-workspace (2026-11-07): that item commits uv.lock and makes
-    the session start install with uv sync --frozen. uv approved by the owner 2026-11-03. basstler-v3/plugin-bin-probe
-    (PR 133) found no bin/ allowed, and CLAUDE_PLUGIN_DATA reaches hooks and MCP servers, not Bash commands.'
+  notes: 'Folded into basstler-packages/uv-workspace (2026-11-07): that item commits uv.lock
+    and makes the session start install with uv sync --frozen. uv approved by the owner 2026-11-03.
+    basstler-v3/plugin-bin-probe (PR 133) found no bin/ allowed, and CLAUDE_PLUGIN_DATA reaches
+    hooks and MCP servers, not Bash commands.'
 - id: repeat-run-evals
   title: Evals run each case several times and fail on differing verdicts
   branch: null
@@ -146,18 +153,3 @@ items:
     schema the record commands export and validate their input against, size limits included.
     A Claude run in an Action uses claude -p --bare --output-format json --json-schema with
     that schema and records only structured_output, failing when it is absent.
-
-- id: merged-items-recorded
-  title: A plan records an item as done once GitHub reports its pull request merged
-  track: guards
-  branch: claude/modest-clarke-indd9p
-  pull_request_number: 172
-  session: https://claude.ai/code/session_018wfiv61RkUR2pdEBVxHyWf
-  depends_on: []
-  status: in progress
-  notes: 'basstler-v2-fixes/restack-without-upstream stayed in progress after #157 merged, through
-    three saves: a save drops only items whose status is done (PlanManifest.landed_identifiers)
-    and never asks GitHub, and the page shows done without writing it. save-plan.sh, and session
-    start for the loaded plan, read each item''s pull_request_number, mark a merged one done and
-    so drop it. A read that fails is reported and changes nothing. Bug PR off main, failing test
-    first.'

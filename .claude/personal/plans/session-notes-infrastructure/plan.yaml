@@ -37,8 +37,7 @@ items:
   pull_request_number: null
   status: not started
   track: handover
-  depends_on:
-  - basstler-reliability/merged-items-recorded
+  depends_on: []
   notes: 'From the review of #173 (https://github.com/KAOS-repositories/basstler/pull/173#discussion_r4511800322):
     tests/hooks/test_session_start.py is about 2,000 lines. Move its tests unchanged into
     a tests/hooks/session_start/ package, one module per concern: environment and install,
