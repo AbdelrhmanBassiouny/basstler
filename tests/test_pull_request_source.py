@@ -186,6 +186,18 @@ def test_github_source_finds_a_repository_whose_details_are_refused_unreadable()
     assert list(live_pull_requests.read_failures) == [ELSEWHERE_PULL_REQUEST.repository]
 
 
+@pytest.mark.parametrize(
+    "status", [HTTPStatus.UNAUTHORIZED, HTTPStatus.INTERNAL_SERVER_ERROR]
+)
+def test_github_source_raises_a_failure_that_is_not_a_refused_repository(
+    status: HTTPStatus,
+):
+    source = GitHubPullRequestSource(RecordedGitHubClient(refusal=status))
+    with pytest.raises(GitHubRequestFailed) as failed:
+        source.read_failure_of(PLAN_REPOSITORY)
+    assert failed.value.status == status
+
+
 def test_github_source_keeps_why_a_repository_cannot_be_read():
     client = RecordedGitHubClient(refusal=HTTPStatus.FORBIDDEN)
     failure = GitHubPullRequestSource(client).read_failure_of(PLAN_REPOSITORY)

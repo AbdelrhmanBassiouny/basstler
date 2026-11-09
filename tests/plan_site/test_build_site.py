@@ -8,11 +8,14 @@ from __future__ import annotations
 import dataclasses
 import html
 from datetime import UTC, datetime
+from http import HTTPStatus
 from pathlib import Path
 
 import pytest
 
 from basstler.exceptions import PlanValidationError
+from basstler.github.exceptions import GitHubRequestFailed
+from basstler.maintenance.board import PullRequestField
 from basstler.plan.dependencies import DependencyReference, DependencyResolver
 from basstler.plan.model import ItemStatus, PlanDocument
 from basstler.plan.repository_rules import RepositoryRules
@@ -36,7 +39,7 @@ from basstler.github.states import CombinedCheckState
 
 from ..constants.paths import DatasetLocation
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
-from ..github.pull_request_api import details_of, listing_path
+from ..github.pull_request_api import api_pull_request, details_of, listing_path
 from ..recorded_pull_requests import RecordedPullRequestSource
 from .first_plan import (
     ELSEWHERE_PULL_REQUEST,
@@ -437,18 +440,37 @@ def test_the_digest_leaves_out_its_own_file(site: RepositorySite, tmp_path: Path
 # %% a repository the build cannot read
 
 
-def unreadable_elsewhere_site(dataset_notes: NotesBranch) -> RepositorySite:
+def unreadable_elsewhere_site(
+    dataset_notes: NotesBranch, refusal: HTTPStatus = HTTPStatus.NOT_FOUND
+) -> RepositorySite:
     """
     :param dataset_notes: The dataset's notes branch.
+    :param refusal: The status the read of the other repository is refused with.
     :return: A site over it whose pull request source reads the first plan's default
-        repository, which has no pull requests, and is refused the other repository.
+        repository, its pull requests and its tracking issue, and is refused the other
+        repository.
     """
     return RepositorySite(
         address=SiteAddress(SiteSampleText.SITE_URL),
         pull_request_source=GitHubPullRequestSource(
             RecordedGitHubClient(
-                responses=details_of(PLAN_REPOSITORY),
-                pages={listing_path(PLAN_REPOSITORY): [[]]},
+                responses={
+                    **details_of(PLAN_REPOSITORY),
+                    f"/{PLAN_REPOSITORY.issue_path(FIRST_PLAN.tracking_issue)}": {
+                        PullRequestField.HTML_URL.key: PLAN_REPOSITORY.issue_url(
+                            FIRST_PLAN.tracking_issue
+                        )
+                    },
+                },
+                pages={
+                    listing_path(PLAN_REPOSITORY): [
+                        [
+                            api_pull_request(reference)
+                            for reference in (MERGED_PULL_REQUEST, OPEN_PULL_REQUEST)
+                        ]
+                    ]
+                },
+                refusal=refusal,
             )
         ),
         notes=dataset_notes,
@@ -460,6 +482,16 @@ def test_build_publishes_a_plan_whose_item_is_on_a_repository_it_cannot_read(
 ):
     unreadable_elsewhere_site(dataset_notes).build(tmp_path)
     assert (tmp_path / str(NOTES_REPOSITORY) / SitePlan.FIRST / SiteFile.PAGE).exists()
+
+
+def test_build_fails_when_a_repository_s_read_fails_other_than_by_refused_access(
+    dataset_notes: NotesBranch, tmp_path: Path
+):
+    with pytest.raises(GitHubRequestFailed) as failed:
+        unreadable_elsewhere_site(dataset_notes, HTTPStatus.UNAUTHORIZED).build(
+            tmp_path
+        )
+    assert failed.value.path == f"/{ELSEWHERE_PULL_REQUEST.repository.api_path}"
 
 
 def access_warning_on(site: RepositorySite) -> str:
