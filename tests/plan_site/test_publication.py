@@ -47,6 +47,7 @@ from basstler.plan_site.publication import app as publication_app
 from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.user_steps import (
     MergeWorkflowProposal,
+    PendingStep,
     PrivateRepositoryAccess,
     UserStep,
 )
@@ -954,6 +955,23 @@ def test_private_repositories_of_several_owners_need_a_classic_token():
     )
 
 
+def test_the_read_access_step_warns_that_the_public_site_shows_those_repositories():
+    """
+    The token lets the build put what it reads from the private repositories on a
+    public site, so the step names the site and every repository it would expose.
+    """
+    site = SiteRepository(Repository("an-owner", "plans"))
+    notes = Repository("an-owner", "notes")
+    access = PrivateRepositoryAccess(site, (notes, WORK_REPOSITORY))
+
+    warning = access.pending.warning
+
+    assert all(
+        name in warning
+        for name in (site.site_url, notes.full_name, WORK_REPOSITORY.full_name)
+    )
+
+
 def test_the_site_workflow_passes_the_read_token_to_the_build():
     """
     The site repository's secret reaches the build under the name the build accepts.
@@ -1515,6 +1533,17 @@ def test_a_rendered_step_without_a_command_says_so_before_the_browser_steps(publ
     assert pending.render().startswith(
         f"- {pending.step}:\n  GitHub offers no command for this; in the browser:\n"
     )
+
+
+def test_a_rendered_step_shows_its_warning_right_under_its_heading():
+    """
+    A warning is read before the command that would act on it.
+    """
+    pending = PendingStep(
+        UserStep.GIVE_BUILD_READ_ACCESS, "true", ("Open a page.",), warning="Careful."
+    )
+
+    assert pending.render().splitlines()[1] == f"    Warning: {pending.warning}"
 
 
 def test_a_rendered_step_links_the_latest_run_that_made_it_necessary(published):

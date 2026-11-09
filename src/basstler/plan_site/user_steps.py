@@ -113,6 +113,11 @@ class PendingStep:
     Why publishing could not take the step itself, ``None`` when it does not try.
     """
 
+    warning: str | None = None
+    """
+    What taking the step exposes or risks, read before the command that takes it.
+    """
+
     def render(self) -> str:
         """:return: The step as it is printed."""
         numbered = "\n".join(
@@ -120,6 +125,8 @@ class PendingStep:
             for number, text in enumerate(self.browser_steps, start=1)
         )
         lines = [f"- {self.step}:"]
+        if self.warning:
+            lines.append(textwrap.indent(f"Warning: {self.warning}", "    "))
         if self.failure:
             lines.append(
                 textwrap.indent(
@@ -329,6 +336,12 @@ class PrivateRepositoryAccess:
                 + ", and under Danger Zone click Change visibility.",
             ),
             failure="; ".join(failures) or None,
+            warning=(
+                f"the plan site at {self.site.site_url} is public, so with the token "
+                f"it shows what the build reads from {names}: plan and item titles, "
+                "notes, and their pull requests' titles and state. Store it only if "
+                "that may be public."
+            ),
         )
 
 
