@@ -29,18 +29,23 @@ from basstler.github.client import (
     HttpMethod,
     GitHubWrite,
 )
-from basstler.github.credential import CredentialProvider
+from basstler.github.credential import CredentialProvider, GitHubCommand
 from basstler.github.exceptions import (
     GitHubCallFailed,
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
 from basstler.locations import ProjectLocation, WorkflowLocation
-from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.git_commands import (
+    GitCommandFailed,
+    GitCommandResult,
+    GitCommandRunner,
+)
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan.model import PlanDocument
 from basstler.plan_site import token_storage
 from basstler.plan_site.build_start import CodeFence
+from basstler.plan_site.exceptions import PublicationPushRefusedError, PushRefusal
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import PlanSitePublication, PublicationOption
 from basstler.plan_site.publication import app as publication_app
@@ -1581,6 +1586,128 @@ def test_a_rendered_step_links_the_latest_run_that_made_it_necessary(published):
     assert pending.render().splitlines()[1] == (
         f"  Latest run, {pending.latest_run.outcome}: {pending.latest_run.page_url}"
     )
+
+
+# %% a refused push
+
+REFUSED_NOTES_REPOSITORY = Repository("an-owner", "notes")
+"""
+The notes repository of a publication whose push was refused.
+"""
+
+
+@pytest.fixture
+def scope_refused(publishing: Publishing) -> Publishing:
+    """:return: A notes repository whose site repository refuses every push, as GitHub
+    refuses a token without the ``workflow`` scope."""
+    publishing.create(publishing.site.repository)
+    shutil.copy(
+        DatasetLocation.WORKFLOW_SCOPE_REFUSING_HOOK,
+        publishing.path_of(publishing.site.repository) / "hooks" / "pre-receive",
+    )
+    return publishing
+
+
+def refused_push(error_output: DatasetLocation) -> PublicationPushRefusedError:
+    """
+    :param error_output: What git printed refusing the push.
+    :return: The error a publication raises for that refusal.
+    """
+    return PublicationPushRefusedError.from_push(
+        GitCommandResult(
+            arguments=("push",),
+            exit_status=1,
+            output="",
+            error_output=error_output.read_text().strip(),
+        ),
+        notes_remote=RemoteName.ORIGIN,
+        notes_repository=REFUSED_NOTES_REPOSITORY,
+    )
+
+
+def test_a_push_refused_for_the_workflow_scope_is_read_as_that_refusal(
+    scope_refused,
+):
+    """
+    The site repository's refusal stops publication with the refusal it reports.
+    """
+    with pytest.raises(PublicationPushRefusedError) as raised:
+        scope_refused.publication(scope_refused.runs_none()).publish()
+
+    assert raised.value.refusal is PushRefusal.MISSING_WORKFLOW_SCOPE
+
+
+def test_a_push_refused_for_the_workflow_scope_suggests_adding_the_scope(
+    scope_refused,
+):
+    """
+    The suggestion names the command that gives ``gh``'s login the scope.
+    """
+    with pytest.raises(PublicationPushRefusedError) as raised:
+        scope_refused.publication(scope_refused.runs_none()).publish()
+
+    assert GitHubCommand.REFRESH_WORKFLOW_SCOPE in raised.value.suggest_correction()
+
+
+def test_a_refused_push_ends_the_command_with_a_failed_git_command_s_exit_status(
+    scope_refused,
+):
+    """
+    Naming the fix keeps the status any failed git command ends with.
+    """
+    exit_status = scope_refused.publication(scope_refused.runs_none()).run()
+
+    assert exit_status == GitCommandFailed.exit_code
+
+
+def test_a_push_without_a_credential_is_read_as_that_refusal():
+    """
+    Git's prompt for a username it cannot ask for means it has no credential.
+    """
+    refused = refused_push(DatasetLocation.PUSH_REFUSED_WITHOUT_CREDENTIAL)
+
+    assert refused.refusal is PushRefusal.NO_CREDENTIAL
+
+
+def test_a_push_without_a_credential_suggests_logging_gh_in():
+    """
+    Git is lent ``gh``'s login, so a missing credential means ``gh`` is logged out.
+    """
+    refused = refused_push(DatasetLocation.PUSH_REFUSED_WITHOUT_CREDENTIAL)
+
+    assert GitHubCommand.LOG_IN in refused.suggest_correction()
+
+
+def test_a_push_declined_for_a_reason_git_does_not_name_is_no_known_refusal():
+    """
+    A refusal is read only from the text that reports it.
+    """
+    assert refused_push(DatasetLocation.PUSH_DECLINED).refusal is None
+
+
+def test_a_push_declined_for_a_reason_git_does_not_name_suggests_every_fix():
+    """
+    Without a known refusal, the user is given every fix to choose from.
+    """
+    correction = refused_push(DatasetLocation.PUSH_DECLINED).suggest_correction()
+
+    assert [refusal.fix for refusal in PushRefusal if refusal.fix in correction] == [
+        refusal.fix for refusal in PushRefusal
+    ]
+
+
+@pytest.mark.parametrize(
+    "error_output",
+    [DatasetLocation.PUSH_REFUSED_WITHOUT_CREDENTIAL, DatasetLocation.PUSH_DECLINED],
+)
+def test_a_refused_push_suggests_reaching_github_over_ssh(error_output):
+    """
+    Every refusal names the notes repository's SSH address, which publication then
+    pushes every repository over.
+    """
+    correction = refused_push(error_output).suggest_correction()
+
+    assert REFUSED_NOTES_REPOSITORY.clone_url_under(GitHubAddress.SSH) in correction
 
 
 # %% the command line

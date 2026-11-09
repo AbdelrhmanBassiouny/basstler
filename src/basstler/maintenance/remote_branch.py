@@ -51,12 +51,19 @@ class RemoteBranch(Branch):
         return f"{self.local_reference_prefix}/{self.name}"
 
     @property
+    def url(self) -> str:
+        """
+        :return: The URL the remote points at.
+        """
+        return self.git.attempt("remote", "get-url", self.remote).output or self.remote
+
+    @property
     def repository(self) -> Repository | None:
         """
         :return: The repository the remote points at, ``None`` when it names none - a
             remote given as a local path.
         """
-        url = self.git.attempt("remote", "get-url", self.remote).output or self.remote
+        url = self.url
         if not Repository.names_a_repository(url):
             return None
         return Repository.from_remote_url(url)

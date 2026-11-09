@@ -5,9 +5,12 @@ The errors publishing and building the plan site raise.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import StrEnum
 
 from basstler.exceptions import DataclassException
-from basstler.repository import Repository
+from basstler.github.credential import GitHubCommand
+from basstler.maintenance.git_commands import GitCommandFailed, GitCommandResult
+from basstler.repository import GitHubAddress, Repository
 
 # %% publishing the site
 
@@ -30,6 +33,97 @@ class NotesRepositoryUnresolvedError(DataclassException, LookupError):
     def suggest_correction(self) -> str:
         return (
             "point the notes remote at a GitHub repository with /setup-personal-notes"
+        )
+
+
+class PushRefusal(StrEnum):
+    """
+    Why GitHub refused a push, each member's value the text git reports it with.
+    """
+
+    NO_CREDENTIAL = "could not read Username"
+    """
+    Git has no credential to push to GitHub over HTTPS.
+    """
+
+    MISSING_WORKFLOW_SCOPE = "without `workflow` scope"
+    """
+    The credential's OAuth token may not write workflow files.
+    """
+
+    @classmethod
+    def read_from(cls, error_output: str) -> PushRefusal | None:
+        """
+        :param error_output: What git printed refusing a push.
+        :return: The refusal it reports, ``None`` when it reports none of these.
+        """
+        return next((refusal for refusal in cls if refusal in error_output), None)
+
+    @property
+    def fix(self) -> GitHubCommand:
+        """
+        The command that lifts the refusal.
+        """
+        match self:
+            case PushRefusal.NO_CREDENTIAL:
+                return GitHubCommand.LOG_IN
+            case PushRefusal.MISSING_WORKFLOW_SCOPE:
+                return GitHubCommand.REFRESH_WORKFLOW_SCOPE
+
+
+@dataclass(kw_only=True)
+class PublicationPushRefusedError(GitCommandFailed):
+    """
+    Raised when a repository refuses a push publishing the plan site.
+    """
+
+    notes_remote: str
+    """
+    The notes remote, whose transport publication reaches every repository over.
+    """
+
+    notes_repository: Repository
+    """
+    The repository :attr:`notes_remote` points at.
+    """
+
+    @classmethod
+    def from_push(
+        cls, push: GitCommandResult, notes_remote: str, notes_repository: Repository
+    ) -> PublicationPushRefusedError:
+        """
+        :param push: The refused push.
+        :param notes_remote: The notes remote.
+        :param notes_repository: The repository the notes remote points at.
+        :return: The error reporting it.
+        """
+        return cls(
+            status=push.exit_status,
+            detail=push.error_output,
+            arguments=push.arguments,
+            notes_remote=notes_remote,
+            notes_repository=notes_repository,
+        )
+
+    @property
+    def refusal(self) -> PushRefusal | None:
+        """
+        Why the push was refused, ``None`` when git does not say.
+        """
+        return PushRefusal.read_from(self.detail)
+
+    def suggest_correction(self) -> str:
+        """
+        :return: Unlike :meth:`ExternalCallFailed.suggest_correction`, the fix for
+            :attr:`refusal`, every fix when git names none, and reaching GitHub over SSH.
+        """
+        refusals = [self.refusal] if self.refusal else list(PushRefusal)
+        fixes = " or ".join(f"`{refusal.fix}`" for refusal in refusals)
+        ssh_url = self.notes_repository.clone_url_under(GitHubAddress.SSH)
+        return (
+            f"run {fixes}, or reach GitHub over SSH: point the notes remote "
+            f"'{self.notes_remote}' at {ssh_url}, and publication pushes every "
+            "repository over SSH"
         )
 
 

@@ -1,0 +1,2 @@
+! [remote rejected] main -> main (pre-receive hook declined)
+error: failed to push some refs to 'https://github.com/an-owner/plans.git'
