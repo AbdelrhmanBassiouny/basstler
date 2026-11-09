@@ -217,6 +217,12 @@ class BasstlerVariable(EnvironmentVariable):
     The interpreter whose environment holds this package, for running its modules.
     """
 
+    ENVIRONMENT_DIRECTORY = "BASSTLER_ENVIRONMENT_DIRECTORY"
+    """
+    The package's environment of the session's project, which every command of the
+    session runs, whichever repository it runs in.
+    """
+
 
 class InstructionsTemplate(PathEnumeration):
     """

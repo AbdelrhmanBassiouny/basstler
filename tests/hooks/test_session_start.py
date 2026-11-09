@@ -13,6 +13,7 @@ personal-notes remote - no network access or real personal-notes branch involved
 
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import sys
@@ -915,7 +916,7 @@ def environment_directory(repository: ScratchRepository) -> str:
     :param repository: The fixture-built scratch repository.
     :return: The package's own environment, as the summary line names it.
     """
-    return repository.configuration_value(ConfigurationVariable.ENVIRONMENT_DIRECTORY)
+    return repository.configuration_value(BasstlerVariable.ENVIRONMENT_DIRECTORY)
 
 
 def package_source(repository: ScratchRepository) -> str:
@@ -2154,6 +2155,205 @@ def test_reports_main_s_tests_as_not_checked_where_the_repository_is_unknown(
     assert summary_value(result.stdout, SummaryLine.MAIN_TESTS) == summary_message(
         SummaryMessage.MAIN_TESTS_NOT_CHECKED
     )
+
+
+# %% one environment per project
+
+
+def other_project(repository: ScratchRepository) -> Path:
+    """
+    :param repository: The fixture-built scratch repository.
+    :return: A second git repository beside its project, sharing its package home.
+    """
+    project = repository.project_root.parent / "other-project"
+    project.mkdir()
+    repository.run_git("init", "--quiet", cwd=project)
+    return project
+
+
+def configuration_value_in(
+    repository: ScratchRepository, project: Path, variable_name: str, **overrides: str
+) -> str:
+    """
+    :param repository: The fixture-built scratch repository, whose plugin is sourced.
+    :param project: The project the session names as its own.
+    :param variable_name: A variable the shell configuration assigns.
+    :param overrides: Further variables the run sets.
+    :return: Its value once the configuration is sourced for *project*.
+    """
+    return repository.configuration_output(
+        f'printf "%s" "${{{variable_name}}}"',
+        **{ScrubbedEnvironmentPrefix.PROJECT_DIRECTORY: str(project), **overrides},
+    )
+
+
+def environment_of(repository: ScratchRepository, project: Path) -> Path:
+    """
+    Stand in for the environment a session start in *project* created, recording the
+    project it belongs to.
+
+    :param repository: The fixture-built scratch repository.
+    :param project: The project the environment belongs to.
+    :return: The environment's directory.
+    """
+    directory = Path(
+        configuration_value_in(
+            repository, project, BasstlerVariable.ENVIRONMENT_DIRECTORY
+        )
+    )
+    directory.mkdir(parents=True)
+    repository.configuration_output(
+        ShellConfigurationFunction.RECORD_BASSTLER_PROJECT,
+        **{ScrubbedEnvironmentPrefix.PROJECT_DIRECTORY: str(project)},
+    )
+    return directory
+
+
+def test_each_project_has_an_environment_of_its_own(
+    session_start_repository: ScratchRepository,
+):
+    """
+    Projects on different plugin releases no longer install over each other's package.
+    """
+    own = Path(environment_directory(session_start_repository))
+    other = Path(
+        configuration_value_in(
+            session_start_repository,
+            other_project(session_start_repository),
+            BasstlerVariable.ENVIRONMENT_DIRECTORY,
+        )
+    )
+
+    assert own != other
+    assert own.parent == other.parent
+
+
+def test_worktrees_of_one_project_share_its_environment(
+    session_start_repository: ScratchRepository,
+):
+    worktree = session_start_repository.project_root.parent / "worktree"
+    session_start_repository.run_git("worktree", "add", "--quiet", str(worktree))
+
+    assert configuration_value_in(
+        session_start_repository, worktree, BasstlerVariable.ENVIRONMENT_DIRECTORY
+    ) == environment_directory(session_start_repository)
+
+
+def test_a_session_keeps_its_environment_in_another_repository(
+    session_start_repository: ScratchRepository,
+):
+    """
+    A session with several repositories attached runs one plugin, so a command run in
+    any of them uses the environment the session start exported.
+    """
+    session_environment = environment_directory(session_start_repository)
+
+    assert (
+        configuration_value_in(
+            session_start_repository,
+            other_project(session_start_repository),
+            BasstlerVariable.ENVIRONMENT_DIRECTORY,
+            **{BasstlerVariable.ENVIRONMENT_DIRECTORY: session_environment},
+        )
+        == session_environment
+    )
+
+
+def test_tells_the_session_which_environment_runs_the_package(
+    session_start_repository: ScratchRepository, tmp_path: Path
+):
+    environment_file = tmp_path / "session-environment"
+
+    publish_and_run(
+        session_start_repository,
+        environment={ScrubbedEnvironmentPrefix.ENVIRONMENT_FILE: str(environment_file)},
+    )
+
+    exported = subprocess.run(
+        [
+            "bash",
+            "-c",
+            'source "$0" && printf "%s" "${!1}"',
+            environment_file,
+            BasstlerVariable.ENVIRONMENT_DIRECTORY,
+        ],
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout
+    assert exported == environment_directory(session_start_repository)
+
+
+def test_removes_the_environment_of_a_project_that_is_gone(
+    session_start_repository: ScratchRepository,
+):
+    project = other_project(session_start_repository)
+    abandoned = environment_of(session_start_repository, project)
+    shutil.rmtree(project)
+
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert not abandoned.exists()
+    assert summary_value(result.stdout, SummaryLine.ENVIRONMENTS) == summary_message(
+        SummaryMessage.ENVIRONMENTS_REMOVED, str(abandoned)
+    )
+
+
+def test_keeps_the_environment_of_a_project_that_still_exists(
+    session_start_repository: ScratchRepository,
+):
+    kept = environment_of(
+        session_start_repository, other_project(session_start_repository)
+    )
+
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert kept.is_dir()
+    assert Path(environment_directory(session_start_repository)).is_dir()
+    assert summary_value(result.stdout, SummaryLine.ENVIRONMENTS) == summary_message(
+        SummaryMessage.ENVIRONMENTS_NONE_REMOVED
+    )
+
+
+def test_keeps_the_environment_a_live_install_holds(
+    session_start_repository: ScratchRepository,
+):
+    project = other_project(session_start_repository)
+    installing = environment_of(session_start_repository, project)
+    marker = Path(
+        configuration_value_in(
+            session_start_repository, project, ConfigurationVariable.INSTALL_MARKER
+        )
+    )
+    marker.parent.mkdir(parents=True)
+    marker.write_text(f"{os.getpid()}\n")
+    shutil.rmtree(project)
+
+    result = publish_and_run(session_start_repository)
+
+    assert result.returncode == 0, result.stderr
+    assert installing.is_dir()
+
+
+def test_never_removes_the_environment_the_session_runs(
+    session_start_repository: ScratchRepository,
+):
+    """
+    A session exported an environment whose project has since gone; it still runs it.
+    """
+    project = other_project(session_start_repository)
+    running = environment_of(session_start_repository, project)
+    shutil.rmtree(project)
+
+    result = publish_and_run(
+        session_start_repository,
+        environment={BasstlerVariable.ENVIRONMENT_DIRECTORY: str(running)},
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert running.is_dir()
 
 
 # %% every message renders

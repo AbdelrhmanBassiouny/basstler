@@ -311,6 +311,21 @@ release_line_package_not_read() {
   printf "could not read the installed package's version - see the dependencies line"
 }
 
+# %% the environments line
+
+# environments_line_none_removed: every other package environment still has
+# its project.
+environments_line_none_removed() {
+  printf 'none removed'
+}
+
+# environments_line_removed: the package environments of projects that are gone
+# were removed.
+environments_line_removed() {
+  local removed="$1"
+  printf 'removed %s - their projects are gone' "${removed}"
+}
+
 # %% the Actions usage line
 
 # actions_usage_line_not_checked: the usage could not be measured.

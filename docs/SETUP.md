@@ -16,8 +16,9 @@ basstler is a Claude Code plugin, and this repository is its marketplace.
   `/plugin install basstler@basstler` - or enable it for everyone working on a project in
   its committed `.claude/settings.json` (`extraKnownMarketplaces` and `enabledPlugins`).
 
-The plugin's session start installs the package at the plugin's own version into
-`~/.local/share/basstler/venv` (`$BASSTLER_HOME/venv` when set) - nothing to install by hand.
+The plugin's session start installs the package at the plugin's own version into an
+environment of the project's own under `~/.local/share/basstler/environments`
+(`$BASSTLER_HOME/environments` when set) - nothing to install by hand.
 
 ## 1. Run the setup
 
@@ -34,7 +35,7 @@ are genuinely yours. Re-running it on a set-up project changes nothing.
 Without a session, the same setup is one command, once the package's environment exists:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.setup.personal_notes \
+"$BASSTLER_PYTHON" -m basstler.setup.personal_notes \
   --remote <your-fork-remote-or-url> --name "Your Name" --email "you@example.com"
 ```
 
@@ -44,7 +45,7 @@ labels your fork lacks.
 ## 2. Do the steps no script can do
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.setup.steps
+"$BASSTLER_PYTHON" -m basstler.setup.steps
 ```
 
 The session start created that environment; see the repository's [`README.md`](../README.md).
@@ -67,7 +68,7 @@ on to `.claude/personal/stack.toml` on your personal-notes branch, so the projec
 nothing of basstler's:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.setup.steps configure-upstream --repository <owner>/<name>
+"$BASSTLER_PYTHON" -m basstler.setup.steps configure-upstream --repository <owner>/<name>
 ```
 
 A project that wants every contributor to share the answer commits
@@ -81,7 +82,7 @@ fork's default branch carries a basstler file. `/setup-personal-notes` installs 
 an upstream is named; to do it yourself, or to bring it to a new release:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.setup.steps install-upstream-reviews-action --branch-or-tag <a basstler release tag, or main>
+"$BASSTLER_PYTHON" -m basstler.setup.steps install-upstream-reviews-action --branch-or-tag <a basstler release tag, or main>
 ```
 
 That writes `basstler/upstream-reviews` on your fork: a workflow calling basstler's
