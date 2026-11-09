@@ -388,6 +388,9 @@ PLAN_MANIFEST_TOOLS_MODULE="basstler.plan.manifest_tools"
 # basstler.plan.size_limits: prunes landed items and refuses a plan or progress
 # notes over their limits - the gate save-plan.sh and save-pr-progress.sh run.
 PLAN_SIZE_LIMITS_MODULE="basstler.plan.size_limits"
+# basstler.plan.merged_items: records a plan's items done whose pull requests GitHub
+# reports merged, so a save drops them - run by save-plan.sh and session-start.sh.
+PLAN_MERGED_ITEMS_MODULE="basstler.plan.merged_items"
 # basstler.document_references: names every module and skill a document cites
 # that this release no longer ships, and what replaced it.
 DOCUMENT_REFERENCES_MODULE="basstler.document_references"
