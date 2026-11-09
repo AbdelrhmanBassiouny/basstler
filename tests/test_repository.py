@@ -7,6 +7,7 @@ from __future__ import annotations
 import pytest
 
 from basstler.repository import (
+    GitHubAddress,
     MalformedRepositoryError,
     PullRequestReference,
     Repository,
@@ -61,6 +62,37 @@ def test_repository_reads_the_owner_and_name_from_a_remote_url(url: str):
 def test_repository_rejects_a_remote_url_naming_no_repository(malformed: str):
     with pytest.raises(MalformedRepositoryError):
         Repository.from_remote_url(malformed)
+
+
+# %% clone roots
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"git@{Host.GITHUB}:{REPOSITORY.full_name}.git",
+        REPOSITORY.clone_url_under(GitHubAddress.SSH),
+    ],
+)
+def test_an_ssh_remote_s_repositories_are_reached_over_ssh(url: str):
+    """
+    Both ways git writes an SSH address keep other repositories on SSH.
+    """
+    assert GitHubAddress.clone_root_for(url) is GitHubAddress.SSH
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        REPOSITORY.clone_url,
+        f"http://127.0.0.1:41729/git/{REPOSITORY.full_name}",
+    ],
+)
+def test_any_other_remote_s_repositories_are_reached_over_https(url: str):
+    """
+    A cloud session's local proxy keeps reaching other repositories over HTTPS.
+    """
+    assert GitHubAddress.clone_root_for(url) is GitHubAddress.WEB
 
 
 # %% pages

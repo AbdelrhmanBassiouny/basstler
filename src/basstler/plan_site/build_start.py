@@ -17,6 +17,7 @@ from pathlib import Path
 from cyclopts import App
 
 from basstler.exit_codes import StackExitCode
+from basstler.github.credential import GitHubCommand
 from basstler.github.client import (
     GitHubAttemptClient,
     GitHubResponse,
@@ -44,17 +45,6 @@ BUILD_START_COMMAND = f'"${{{BasstlerVariable.PYTHON}}}" -m {__spec__.name}'
 """
 The command line that starts the build again, once this session can.
 """
-
-
-class GitHubCommand(StrEnum):
-    """
-    The ``gh`` command lines a local session is told to run when the build did not start.
-    """
-
-    LOG_IN = "gh auth login"
-    """
-    Logs ``gh`` in, which gives this command its credential.
-    """
 
 
 class CodeFence(StrEnum):

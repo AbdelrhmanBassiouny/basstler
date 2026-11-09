@@ -71,6 +71,21 @@ class GitVariable(EnvironmentVariable):
     The index git stages into, in place of the clone's own.
     """
 
+    CONFIGURATION_COUNT = "GIT_CONFIG_COUNT"
+    """
+    How many configuration entries the environment passes to git.
+    """
+
+    CONFIGURATION_KEY_PREFIX = "GIT_CONFIG_KEY_"
+    """
+    Followed by an entry's index, names the variable holding that entry's key.
+    """
+
+    CONFIGURATION_VALUE_PREFIX = "GIT_CONFIG_VALUE_"
+    """
+    Followed by an entry's index, names the variable holding that entry's value.
+    """
+
 
 class GitHubCredentialVariable(CredentialOrigin, EnvironmentVariable):
     """

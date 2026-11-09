@@ -2,11 +2,9 @@
 
 Every skill that reads or writes the personal-notes branch — `plan-create`,
 `plan-item-kickoff`, `plan-item-resolve`, `add-plan-item` —
-depends on a one-time setup the user may simply not have done yet. Without this check, that
-shows up as a confusing mid-task failure (a fetch of a branch that doesn't
-exist, a missing `plan.yaml`, an `ImportError` from a missing dependency)
-somewhere deep in the skill, long after the user asked for something else
-entirely.
+depends on a one-time setup the user may not have done yet. Without this check, that
+shows up as a confusing mid-task failure (a missing branch, a missing `plan.yaml`, an
+`ImportError`) deep in the skill.
 
 Instead: check first, and fix it. The procedure is here, once, so each skill
 references it in a line rather than restating it.
@@ -41,6 +39,11 @@ install it yourself.
 depend on, such as whether the plan site's dispatch starts its build. Tell the user in one line
 which row is not verified, with its detail, and carry on with the skill; the
 row is `/setup-personal-notes`'s to resolve.
+
+**A `*_access` row that is `needs-setup`** is not setup's: attach the repository it
+names with `mcp__claude-code-remote__add_repo` (`access: "push"`), run its command, check
+again. If the attach is refused, ask with `AskUserQuestion`, "Attach it (Recommended)"
+first, saying why: saves then reach the site and the notes.
 
 **Non-zero — something is missing.** Do not start the skill's real work, and do
 not attempt the individual fixes inline: `/setup-personal-notes` exists to do

@@ -8,6 +8,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 class GitHubAddress(StrEnum):
@@ -17,13 +18,33 @@ class GitHubAddress(StrEnum):
 
     WEB = "https://github.com"
     """
-    The root of every web and clone URL.
+    The root of every web URL and of every clone URL reached over HTTPS.
     """
 
     API = "https://api.github.com"
     """
     The root of every REST call.
     """
+
+    SSH = "ssh://git@github.com"
+    """
+    The root of every clone URL reached over SSH.
+    """
+
+    @classmethod
+    def clone_root_for(cls, remote_url: str) -> GitHubAddress:
+        """
+        :param remote_url: A git remote URL.
+        :return: The root other repositories are reached under over the same transport:
+            :attr:`SSH` for an SSH remote, :attr:`WEB` for any other.
+        """
+        before_path, colon, _ = remote_url.partition(":")
+        is_short_ssh_form = (
+            bool(colon) and "/" not in before_path and "@" in before_path
+        )
+        if is_short_ssh_form or urlsplit(remote_url).scheme == urlsplit(cls.SSH).scheme:
+            return cls.SSH
+        return cls.WEB
 
 
 @dataclass

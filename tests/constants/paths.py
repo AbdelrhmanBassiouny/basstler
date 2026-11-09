@@ -167,6 +167,22 @@ class DatasetLocation(PathEnumeration):
     branch does.
     """
 
+    WORKFLOW_SCOPE_REFUSING_HOOK = DIRECTORY / "refuse-workflow-scope-pre-receive.sh"
+    """
+    A pre-receive hook that refuses every push as GitHub refuses a token without the
+    ``workflow`` scope.
+    """
+
+    PUSH_REFUSED_WITHOUT_CREDENTIAL = DIRECTORY / "push-refusals" / "no-credential.txt"
+    """
+    What git prints when it has no credential to push to GitHub over HTTPS.
+    """
+
+    PUSH_DECLINED = DIRECTORY / "push-refusals" / "declined.txt"
+    """
+    What git prints when a push is declined for a reason it does not name.
+    """
+
     PULL_REQUEST_DATA_KEYED_BY_NUMBER = DIRECTORY / "pr-data-keyed-by-number.json"
     """
     A ``pr_data.json`` missing its repository level: one pull request keyed by its
@@ -344,6 +360,18 @@ class DatasetLocation(PathEnumeration):
     A module standing in for :mod:`basstler.plan_site.build_start`, printing its name.
     """
 
+    BUILD_START_NEEDS_ACCESS_STUB = STUBS / "build_start_needs_access.py"
+    """
+    A module standing in for :mod:`basstler.plan_site.build_start`, saying this session
+    cannot start the build yet.
+    """
+
+    BUILD_START_HAS_ACCESS_STUB = STUBS / "build_start_has_access.py"
+    """
+    A module standing in for :mod:`basstler.plan_site.build_start`, saying nothing: the
+    session can start the build.
+    """
+
     MERGED_ITEMS_STUB = STUBS / "merged_items_from_recording.py"
     """
     A module standing in for :mod:`basstler.plan.merged_items`'s command, reading the
@@ -359,6 +387,12 @@ class DatasetLocation(PathEnumeration):
     """
     A module standing in for :mod:`basstler.personal_notes.access`, printing its name as
     the missing access.
+    """
+
+    NOTES_ACCESS_REACHED_STUB = STUBS / "notes_access_has_access.py"
+    """
+    A module standing in for :mod:`basstler.personal_notes.access`, saying nothing: the
+    session reaches the notes repository.
     """
 
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"
