@@ -92,6 +92,15 @@ def test_the_branch_names_the_repository_its_remote_points_at(fork_checkout):
     )
 
 
+def test_the_branch_s_url_is_its_remote_s_url(fork_checkout):
+    """
+    A branch named by its remote's name reads the URL that name stands for.
+    """
+    branch = branch_on_fork(fork_checkout, "first")
+
+    assert branch.url == fork_checkout.fork_path.as_uri()
+
+
 def test_the_latest_file_is_read_from_the_remote_s_current_tip(fork_checkout):
     branch = branch_on_fork(fork_checkout, "notes/someone")
     branch.write({"file.txt": "first"}, "First")

@@ -14,11 +14,11 @@ import basstler.plan_site.build_start
 from basstler.github.repository_details import RepositoryDetails
 from basstler.github.workflow_run import WorkflowDispatch
 from basstler.locations import WorkflowLocation
+from basstler.github.credential import GitHubCommand
 from basstler.plan_site.build_start import (
     BUILD_START_COMMAND,
     BuildStart,
     CodeFence,
-    GitHubCommand,
     SiteAccess,
 )
 from basstler.plan_site.site_repository import SiteRepository

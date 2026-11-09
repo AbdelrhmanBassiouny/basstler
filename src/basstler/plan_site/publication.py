@@ -33,7 +33,10 @@ from basstler.plan_site.user_steps import (
     UserStep,
     UserSteps,
 )
-from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
+from basstler.plan_site.exceptions import (
+    NotesRepositoryUnresolvedError,
+    PublicationPushRefusedError,
+)
 from basstler.plan.model import PlanDocument, PlanManifest
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.site_repository import SiteRepository
@@ -288,8 +291,8 @@ class PlanSitePublication:
         logger.info(report.render())
         return 0 if report.complete else 1
 
-    @staticmethod
     def write(
+        self,
         branch: RemoteBranch,
         workflow: PlanSiteWorkflow,
         message: str,
@@ -302,12 +305,32 @@ class PlanSitePublication:
         :param workflow: The workflow.
         :param message: The commit message.
         :param report: Where to record the write.
-        :raises GitCommandFailed: If the branch refuses the workflow.
+        :raises PublicationPushRefusedError: If the branch refuses the workflow.
         """
         if branch.read_latest(workflow.location) == workflow.text:
             return
-        branch.write({workflow.location.as_posix(): workflow.text}, message)
+        self.write_file(branch, workflow.location.as_posix(), workflow.text, message)
         report.written.append(f"{workflow.location} on {branch.description}")
+
+    def write_file(
+        self, branch: RemoteBranch, path: str, text: str, message: str
+    ) -> None:
+        """
+        Commit one file onto a branch and push it.
+
+        :param branch: The branch to write onto.
+        :param path: The file's path from the branch's root.
+        :param text: The file's text, without its final newline.
+        :param message: The commit message.
+        :raises PublicationPushRefusedError: If the branch refuses the push.
+        """
+        written = branch.attempt_write({path: text}, message)
+        if not written.push.succeeded:
+            raise PublicationPushRefusedError.from_push(
+                written.push,
+                self.notes_remote,
+                self.dispatch_workflow.notes_repository,
+            )
 
     def repositories_read_by_build(self, registry: Repository) -> list[Repository]:
         """
@@ -433,8 +456,11 @@ class PlanSitePublication:
             branch = self.notes_branch_of(repository)
             if branch.read_latest(path) == text:
                 continue
-            branch.write(
-                {path: text}, f"List {notes_repository.full_name} on the plan site"
+            self.write_file(
+                branch,
+                path,
+                text,
+                f"List {notes_repository.full_name} on the plan site",
             )
             report.written.append(f"{path} on {branch.description}")
         return hub
@@ -494,18 +520,21 @@ def publish(
     if notes_repository is None:
         raise NotesRepositoryUnresolvedError(notes_remote)
     git = GitCommandRunner(project_root)
-    notes_branch = PersonalNotesSetting.BRANCH.resolve(project_root, os.environ)
+    notes_branch = RemoteBranch(
+        PersonalNotesSetting.BRANCH.resolve(project_root, os.environ), git, notes_remote
+    )
     site = (
-        SiteRepository.recorded_on(RemoteBranch(notes_branch, git, notes_remote))
+        SiteRepository.recorded_on(notes_branch)
         if site_repository is None
         else SiteRepository(Repository.parse(site_repository))
     ) or SiteRepository.default_for(notes_repository)
     return PlanSitePublication(
         git,
         notes_remote,
-        DispatchWorkflow(notes_repository, notes_branch, site),
+        DispatchWorkflow(notes_repository, notes_branch.name, site),
         SiteWorkflow(branch_or_tag, notes_repository),
         GitHubRestClient(),
+        remote_root=GitHubAddress.clone_root_for(notes_branch.url),
         in_cloud_session=ClaudeCodeVariable.REMOTE.is_true(),
     ).run()
 
