@@ -133,7 +133,10 @@ report_upstream_reviews_action() {
     return 0
   fi
   local branch_or_tag
-  branch_or_tag="$(basstler_branch_or_tag)"
+  if ! branch_or_tag="$(basstler_branch_or_tag)"; then
+    report upstream_reviews_action info "not checked - the plugin names no release for it to run; see basstler_version"
+    return 0
+  fi
   local install_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --branch-or-tag ${branch_or_tag}"
   local state
   if ! state="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \

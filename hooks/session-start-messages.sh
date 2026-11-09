@@ -234,6 +234,14 @@ dependencies_line_environment_not_created() {
     "${environment_directory}"
 }
 
+# dependencies_line_release_not_named: outside a checkout, the plugin names no
+# release, so no package was installed for it.
+dependencies_line_release_not_named() {
+  local plugin_root="$1"
+  printf 'not installed - the plugin at %s names no release in its plugin.json, so there is no package of its release to install; reinstall the plugin from the marketplace' \
+    "${plugin_root}"
+}
+
 # %% the release line
 
 # release_line_checkout: the plugin and the package are both the source of the
@@ -316,6 +324,12 @@ main_tests_line_failing() {
 upstream_reviews_action_line_not_read() {
   local remote="$1"
   printf "not checked - could not read the fork's branches on '%s'" "${remote}"
+}
+
+# upstream_reviews_action_line_release_not_named: the plugin names no release
+# for the Action to run, so it was not checked.
+upstream_reviews_action_line_release_not_named() {
+  printf 'not checked - the plugin names no release for it to run; see the dependencies line'
 }
 
 # upstream_reviews_action_line_not_installed: the fork has no Action branch.
