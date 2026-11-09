@@ -1,12 +1,11 @@
 ## Plan
-- Answer the review on #185: one object for live pull request state and read failures; split the site build's test file by module.
-- Decide with the user whether a failure that is not about access (401, unreachable, 5xx) should fail the build instead of becoming a warning.
+- Keep #185 to one root cause: a repository the token is not granted shows a warning; any other failed read fails the build.
 
 ## Done
-- 16942d9: `LivePullRequests` replaces the parallel `pull_requests_by_repository` / `read_failures` fields; the GitHub source caches each repository's details answer.
-- Tests split into `tests/test_pull_request_source.py`, `tests/plan_site/test_item_classifier.py`, `tests/test_pull_request_state.py`, with `first_plan.py` and `github/pull_request_api.py` shared.
-- Merged `main` (0ef3e50).
+- 16942d9: `LivePullRequests` replaces the parallel pull-request and read-failure fields; tests split by module.
+- ad6dbef (failing tests) and f6b542c: only a 404 or 403 becomes a warning, which always names `PLAN_SITE_READ_TOKEN`; a 401, 5xx or no answer is raised and fails the build.
+- Two field threads replied to and resolved; full suite at f6b542c: 2506 passed, 1 skipped.
 
 ## Next
-- Reply on and resolve the two field threads; leave the file-size thread open on whether to split `plan_site/__main__.py` and `publication.py` in a separate item.
-- User's answer on failing the build for a non-access failure.
+- User's answer on the open file-size thread: split `plan_site/__main__.py`, `publication.py` and `dispatch_check.py` as a separate plan item or not.
+- Read CI at f6b542c.
