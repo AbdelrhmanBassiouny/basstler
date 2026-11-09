@@ -327,7 +327,7 @@ def test_a_cloud_session_that_can_start_the_build_passes(
     assert report.results[SetupCheck.PLAN_SITE_ACCESS].status == CheckStatus.OK
 
 
-def test_a_local_session_that_cannot_start_the_build_is_only_told(
+def test_a_local_session_that_cannot_start_the_build_gets_the_issue_and_the_fix(
     check_setup_repository: ScratchRepository,
 ):
     with_build_start_stub(
@@ -338,7 +338,8 @@ def test_a_local_session_that_cannot_start_the_build_is_only_told(
 
     access = report.results[SetupCheck.PLAN_SITE_ACCESS]
     assert access.status == CheckStatus.INFORMATIONAL
-    assert "an-owner/the-site" in access.detail
+    assert "cannot start the build in an-owner/the-site" in access.detail
+    assert "Attach it" in access.detail
 
 
 def test_a_clone_on_no_plan_site_has_no_access_to_need(
