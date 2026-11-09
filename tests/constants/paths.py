@@ -596,6 +596,11 @@ class SkillDirectory(PathEnumeration):
     How every skill runs its commands, which each skill's instructions link.
     """
 
+    PULL_REQUEST_RULES_DOCUMENT = DIRECTORY / "pull-request-rules.md"
+    """
+    The rules a skill acting on pull requests links, so they hold only while it runs.
+    """
+
     MANIFEST_STALENESS_DOCUMENT = PLAN_CREATE / "manifest-staleness.md"
     """
     The rule every skill that writes plan data cites: when to write the manifest.

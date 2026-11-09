@@ -9,6 +9,9 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, Ente
 Run commands as [`running-commands.md`](../running-commands.md) says, with
 `${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
 
+Follow [`pull-request-rules.md`](../pull-request-rules.md) for every pull request it opens,
+pushes to or answers reviews on.
+
 Generic, plan-agnostic — nothing here may hardcode a specific plan id,
 item, or branch. Unlike `plan-item-kickoff` (for an item that hasn't
 started), this skill is for an item that already has real state - a
@@ -185,7 +188,7 @@ item is already underway rather than being started:
   - **Ready, and not promoted** — nothing recorded says who marked it ready.
     Leave it as it is and ask the user whether the item is finished before
     pushing anything; never flip it back on a guess.
-  - **Draft** — keep it a draft, per the user's own convention.
+  - **Draft** — keep it a draft.
 
 Push the item's branch, from its checkout, only with
 `"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" maintenance push`: it checks the move

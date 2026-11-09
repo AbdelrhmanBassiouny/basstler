@@ -114,9 +114,10 @@ each question only when its row is `needs-setup`.
   `https://github.com/<their-login>/<repo>` as the default, and note that a
   remote name already in the clone works too.
 - **Starter notes** (`notes_file`). Offer to seed the new notes from
-  [`starter-notes.md`](./starter-notes.md): conventions for pull requests,
-  review comments and progress tracking, which they own and can edit. Default
-  to yes. An empty file is fine too.
+  [`starter-notes.md`](./starter-notes.md): conventions every session in the
+  repository follows, which they own and can edit. Default to yes. An empty
+  file is fine too. The pull-request rules are not among them: they hold only
+  while a skill that links [`pull-request-rules.md`](../pull-request-rules.md) runs.
 - **Their git identity** (`git_identity`). Ask for the name and email their
   commits should carry. Never take them from this clone's git config, which
   in a fresh session is the agent's own identity.
