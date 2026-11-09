@@ -64,17 +64,15 @@ items:
 
     '
 - id: per-release-environments
-  title: Each plugin release runs its own package environment, and unused ones are removed
+  title: Each project runs its own package environment, and those of projects that are gone are removed
   branch: claude/upbeat-turing-e8viim
   pull_request_number: 181
   status: in progress
   track: handover
   session: https://claude.ai/code/session_018wfiv7KKZ1BTnmzY7Dx55j
-  depends_on:
-  - basstler-packages/uv-workspace
-  notes: 'From #176 (ichumuh). #173 pins the package to the plugin''s release and reports
-    a mismatch; still, projects on different plugin releases share ~/.local/share/basstler/venv
-    and reinstall over each other. Key the environment by release, created through uv so its
-    cache hardlinks packages. Session start stamps its last use and removes environments unused
-    for a retention period (ask the owner its length), never the current one, so they cannot
-    pile up.'
+  notes: 'From #176 (ichumuh): projects on different plugin releases share
+    ~/.local/share/basstler/venv and reinstall over each other. Owner''s decision at kickoff: key the environment by project
+    (its main working tree, so worktrees share it), not by release, created through uv so its
+    cache hardlinks packages. A session runs one environment in every repository it has attached.
+    Session start removes environments whose project directory is gone, never the current one
+    or one a live install holds; no retention period. Needs nothing from basstler-packages/uv-workspace.'
