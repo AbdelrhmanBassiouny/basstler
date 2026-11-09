@@ -37,7 +37,6 @@ items:
   track: plans
   depends_on:
   - plan-store-issues
-  - core-robustness/lean-kickoff
   status: not started
   notes: 'Item scope, dependency readiness, its pull request''s checks, unresolved threads,
     the mirrored upstream state and tracking-issue comments naming it, built by code so a
