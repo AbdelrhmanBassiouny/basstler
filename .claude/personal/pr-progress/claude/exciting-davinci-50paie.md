@@ -2,8 +2,8 @@
 - PR rules move out of the starter notes into skills/pull-request-rules.md, linked by plan-item-resolve only (owner's choice; kickoff is at its reading cap)
 
 ## Done
-- Rule file, starter notes trimmed, setup skill wording, tests (starter notes carry no rule section; resolve links the file)
-- Pushed 44c6a17; PR #184 description updated, `bug` label, still draft
+- Rule file, starter notes trimmed, setup skill wording, tests
+- Review: dropped the session-link rule (b8cd2c0), thread answered and resolved
 
 ## Next
 - CI on #184; owner review
