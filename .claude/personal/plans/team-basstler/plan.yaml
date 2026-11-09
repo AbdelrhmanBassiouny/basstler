@@ -204,9 +204,9 @@ items:
   - basstler-packages/uv-workspace
   status: not started
   notes: >
-    From #170's review: for private repositories of several owners, the read-access step asks for
-    a classic token, which can also write to every private repository; #170 only warns. Ask for one
-    read-only fine-grained token per owner, stored together in PLAN_SITE_READ_TOKEN as owner and
-    token lines. The build masks each and picks one per repository owner, for API calls and git
-    fetches. The step names the owners and says an organization may block or require approval of
-    fine-grained tokens. Not a bug fix, so it waits for the uv-workspace freeze.
+    From #170's review: several owners now need a classic token, which can also write. Ask for one
+    read-only fine-grained token per owner instead, as owner and token lines in PLAN_SITE_READ_TOKEN;
+    the build masks each and picks one per owner, for API calls and git fetches. A token reaches only
+    its maker's and their organizations' repositories, so a teammate's private fork is out of reach:
+    team sites read the organization's repository (team-repository). The step names the owners and
+    warns that an organization may block or require approval of such tokens. Waits for uv-workspace.
