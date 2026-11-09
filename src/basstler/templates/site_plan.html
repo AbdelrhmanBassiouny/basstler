@@ -31,6 +31,9 @@
           {% endfor %}
         </div>
         {% endif %}
+        {% if item.access_warning %}
+        <div class="access-warning">⚠ {{ item.access_warning }}</div>
+        {% endif %}
         {% if item.drift_description %}
         <div class="drift">⚠ {{ item.drift_description }}</div>
         {% endif %}

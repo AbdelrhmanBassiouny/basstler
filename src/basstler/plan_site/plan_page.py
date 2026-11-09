@@ -21,6 +21,7 @@ from basstler.plan_site.plan_page_header import PlanPageHeader
 from basstler.plan_site.plan_page_vocabulary import PlanPageVocabulary
 from basstler.pull_request_state import PullRequestsByRepository
 from basstler.render_common import TemplatePage, render_markdown_to_html
+from basstler.repository import Repository
 
 # %% the rendered page
 
@@ -75,6 +76,11 @@ class PlanPage(TemplatePage):
     Live pull request state for every repository referenced by the plan's items.
     """
 
+    unreadable_repositories: frozenset[Repository] = frozenset()
+    """
+    The repositories whose pull requests could not be read.
+    """
+
     repository_rules: RepositoryRules = field(default_factory=RepositoryRules)
     """
     The rules every plan of the repository follows.
@@ -117,6 +123,7 @@ class PlanPage(TemplatePage):
         ItemClassifier(
             plan=self.plan,
             pull_requests_by_repository=self.pull_requests_by_repository,
+            unreadable_repositories=self.unreadable_repositories,
             dependencies=self.dependencies,
             locate_plan_page=self.locate_plan_page,
         ).classify()

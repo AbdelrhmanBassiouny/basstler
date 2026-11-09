@@ -53,6 +53,7 @@ from basstler.plan_site.hub_page import (
 )
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
 from basstler.plan_site.cards import PlanTimeAttribute
+from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.locations import ProjectLocation
 from basstler.plan.model import PlanDocument
@@ -366,6 +367,14 @@ class RepositorySite(SiteSection[RepositorySummary]):
         """
         plan = Plan.from_mapping(source.manifest)
         dependencies = DependencyResolver(plan, self.plan_directory)
+        unreadable_repositories = self.pull_request_source.unreadable_repositories_of(
+            dependencies
+        )
+        for repository in sorted(map(str, unreadable_repositories)):
+            logger.warning(
+                f"{self.notes.repository}/{source.directory_name}: "
+                f"{ItemClassifier.access_warning_of(repository)}"
+            )
         renderer = PlanPage(
             stylesheet_url=self.stylesheet_url,
             plan=plan,
@@ -374,6 +383,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
             pull_requests_by_repository=self.pull_request_source.pull_requests_of(
                 dependencies
             ),
+            unreadable_repositories=unreadable_repositories,
             header=PlanPageHeader(
                 tracking_url=self.tracking_url_of(plan),
                 hub_url=self.address.hub_url,

@@ -222,7 +222,7 @@ a.chip:hover { border-color: currentColor; }
 .item-identifier { font-family: var(--font-mono); font-size: 0.72rem; color: var(--text-muted); overflow-wrap: anywhere; }
 .item-links { display: flex; flex-wrap: wrap; gap: var(--space-3); font-size: 0.78rem; }
 .dependencies { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); font-size: 0.75rem; color: var(--text-muted); }
-.drift { color: var(--warn); font-size: 0.8rem; }
+.drift, .access-warning { color: var(--warn); font-size: 0.8rem; }
 .blocker { color: var(--bad); font-size: 0.8rem; }
 .notes { font-size: 0.82rem; color: var(--text-muted); white-space: pre-wrap; margin-top: var(--space-1); }
 

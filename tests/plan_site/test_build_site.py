@@ -676,6 +676,14 @@ def test_an_item_on_a_repository_the_build_cannot_read_shows_how_to_let_it(
     assert html.escape(warning) in page_of(tmp_path, SitePlan.FIRST)
 
 
+def test_build_reports_a_repository_it_cannot_read(
+    dataset_notes: NotesBranch, tmp_path: Path, capsys: pytest.CaptureFixture
+):
+    unreadable_elsewhere_site(dataset_notes).build(tmp_path)
+    warning = ItemClassifier.access_warning_of(str(ELSEWHERE_PULL_REQUEST.repository))
+    assert f"{NOTES_REPOSITORY}/{SitePlan.FIRST}: {warning}" in capsys.readouterr().err
+
+
 def item_on_an_unreadable_repository() -> Item:
     """
     :return: The first plan's item on a repository other than its default, after its
@@ -696,8 +704,7 @@ def item_on_an_unreadable_repository() -> Item:
 
 def test_an_item_on_a_repository_the_build_cannot_read_is_classified_so():
     assert (
-        item_on_an_unreadable_repository().live_state
-        is LiveState.REPOSITORY_UNREADABLE
+        item_on_an_unreadable_repository().live_state is LiveState.REPOSITORY_UNREADABLE
     )
 
 
@@ -750,7 +757,7 @@ def test_github_source_reads_the_checks_of_an_open_pull_request():
                 commit_report_path(CommitReport.STATUS): [
                     json.loads(RecordedCommitChecks.NO_STATUSES.value.read_text())
                 ],
-            }
+            },
         )
     )
     assert (
@@ -766,7 +773,7 @@ def test_github_source_leaves_the_checks_of_a_closed_pull_request_unread():
                 listing_path(OPEN_PULL_REQUEST.repository): [
                     [api_pull_request_at_head(PullRequestState.CLOSED)]
                 ]
-            }
+            },
         )
     )
     assert source.pull_request(OPEN_PULL_REQUEST).check_state is None
@@ -780,7 +787,7 @@ def test_github_source_reads_an_issue_url():
                 **details_of(PLAN_REPOSITORY),
                 f"/{PLAN_REPOSITORY.api_path}/issues/{FIRST_PLAN.tracking_issue}": {
                     PullRequestField.HTML_URL.key: issue_url
-                }
+                },
             }
         )
     )

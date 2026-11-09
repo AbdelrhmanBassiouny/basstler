@@ -13,6 +13,7 @@ from basstler.plan_site.plan import Item, Plan, Track, Wave
 from basstler.plan.dependencies import PlanDirectory
 from basstler.plan.model import ItemStatus, ManifestKey
 from basstler.pull_request_state import LiveState, PullRequestRecord, PullRequestState
+from basstler.repository import Repository
 from basstler.plan.check_dependency_readiness import (
     DependencyReadiness,
     ReadinessField,
@@ -134,6 +135,26 @@ def test_open_ready_dependency_is_ready():
             title="a",
             live_state=LiveState.OPEN_READY,
             is_ready=True,
+        )
+    ]
+
+
+def test_dependency_on_a_repository_not_read_is_reported_unreadable_and_not_ready():
+    plan = make_plan(
+        [
+            item("a", ItemStatus.IN_PROGRESS, pull_request_number=1),
+            item("b", ItemStatus.NOT_STARTED, depends_on=["a"]),
+        ]
+    )
+    results = DependencyReadiness.of_item(
+        plan, "b", {}, None, frozenset({Repository.parse(plan.default_repository)})
+    )
+    assert [readiness.to_json() for readiness in results] == [
+        reported(
+            identifier="a",
+            title="a",
+            live_state=LiveState.REPOSITORY_UNREADABLE,
+            is_ready=False,
         )
     ]
 

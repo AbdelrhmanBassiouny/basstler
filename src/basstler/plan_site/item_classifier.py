@@ -11,6 +11,7 @@ from basstler.plan.dependencies import DependencyResolver
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.cards import ItemAction, ResolveAction, StartNowAction
 from basstler.plan_site.plan import Item, Plan
+from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.pull_request_state import (
     LiveState,
     PullRequestRecord,
@@ -43,6 +44,11 @@ class ItemClassifier:
     The resolver of the plan's dependencies.
     """
 
+    unreadable_repositories: frozenset[Repository] = frozenset()
+    """
+    The repositories whose pull requests could not be read.
+    """
+
     locate_plan_page: Callable[[str], str] | None = None
     """
     Where another plan's page is published, given its id, or ``None`` when plan pages
@@ -53,7 +59,9 @@ class ItemClassifier:
         """
         Fill in every item of :attr:`plan` in place.
         """
-        self.dependencies.classify_live_states(self.pull_requests_by_repository)
+        self.dependencies.classify_live_states(
+            self.pull_requests_by_repository, self.unreadable_repositories
+        )
         for item in self.plan.items:
             self._classify_pull_request(item)
         for item in self.plan.items:
@@ -80,6 +88,8 @@ class ItemClassifier:
         if item.pull_request_record is not None:
             item.upstream_pull_request_url = item.pull_request_record.upstream_link
         item.drift_description = self._drift_description_of(item)
+        if item.live_state is LiveState.REPOSITORY_UNREADABLE:
+            item.access_warning = self.access_warning_of(self._repository_of(item))
         item.needs_review = (
             item.live_state is LiveState.OPEN_DRAFT
             and item.status is not ItemStatus.DEFERRED
@@ -152,6 +162,17 @@ class ItemClassifier:
         ):
             return None
         return self._start_action_for(item)
+
+    @staticmethod
+    def access_warning_of(repository: str) -> str:
+        """
+        :param repository: The ``"owner/repo"`` whose pull requests could not be read.
+        :return: What an item on it shows: that its live state is missing, and the fix.
+        """
+        return (
+            f"the build cannot read {repository}, so this item shows no live state; "
+            f"{PlanSiteSecret.private_repository_correction}"
+        )
 
     @staticmethod
     def _drift_description_of(item: Item) -> str | None:

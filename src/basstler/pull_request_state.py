@@ -44,6 +44,7 @@ class LiveState(StrEnum):
     OPEN_READY = "open_ready"
     CLOSED_UNMERGED = "closed_unmerged"
     NOT_FOUND = "not_found"
+    REPOSITORY_UNREADABLE = "repository_unreadable"
 
     @property
     def display_label(self) -> str:
@@ -63,6 +64,8 @@ class LiveState(StrEnum):
                 return "Closed (unmerged)"
             case LiveState.NOT_FOUND:
                 return "Not found on GitHub"
+            case LiveState.REPOSITORY_UNREADABLE:
+                return "Repository unreadable"
 
     @classmethod
     def classify(
@@ -70,6 +73,7 @@ class LiveState(StrEnum):
         pull_request_number: int | None,
         repository: str,
         pull_requests_by_repository: PullRequestsByRepository,
+        unreadable_repositories: frozenset[Repository] = frozenset(),
     ) -> LiveState:
         """
         Classify one item's live GitHub state from its pull request number and
@@ -80,10 +84,14 @@ class LiveState(StrEnum):
         :param repository: The ``"owner/repo"`` to look the pull request up under.
         :param pull_requests_by_repository: Live pull request state for every repository
             referenced by the plan's items.
+        :param unreadable_repositories: The repositories whose pull requests could not
+            be read.
         :return: The classified state.
         """
         if pull_request_number is None:
             return LiveState.NO_PULL_REQUEST
+        if Repository.parse(repository) in unreadable_repositories:
+            return LiveState.REPOSITORY_UNREADABLE
         repository_pull_requests = pull_requests_by_repository.get(repository, {})
         pull_request = repository_pull_requests.get(str(pull_request_number))
         if pull_request is None:
