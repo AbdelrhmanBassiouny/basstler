@@ -71,7 +71,6 @@ def make_renderer(
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository=pull_requests_by_repository or {},
-        tracking_url=None,
         plan_directory=plan_directory,
         locate_plan_page=locate_plan_page,
     )
@@ -117,7 +116,6 @@ def a_renderer_carding_one_item(record: PullRequestRecord) -> PlanPage:
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={"owner/repo": {"1": record}},
-        tracking_url=None,
     )
 
 
@@ -193,7 +191,6 @@ def renderer_with_cards(
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={},
-        tracking_url=None,
         plan_directory=PlanDirectory(DatasetLocation.PLANS),
         locate_plan_page=locate_plan_page,
     )

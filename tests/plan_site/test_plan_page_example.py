@@ -37,7 +37,6 @@ def _render_example_plan() -> RenderedPlanPage:
         plan=plan,
         roadmap_text=(EXAMPLE_DIRECTORY / "roadmap.md").read_text(),
         pull_requests_by_repository=pull_requests_by_repository,
-        tracking_url=None,
     )
     return renderer.render()
 

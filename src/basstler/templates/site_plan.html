@@ -1,20 +1,20 @@
 {% extends "site_layout.html" %}
 {% from "site_parts.html" import dependency_chip, action_button with context %}
-{% block title %}{{ title }}{% endblock %}
+{% block title %}{{ plan.title }}{% endblock %}
 {% block page_class %}hide-done{% endblock %}
 {% block page_id %}plan-page{% endblock %}
 
 {% macro item_card(item) %}
 {% set record = item.pull_request_record %}
-      <article id="{{ item.anchor }}" class="item {{ item.status_and_drift_css_class }}" {{ live_state_attribute.ITEM_STATUS }}="{{ item.status.value }}">
+      <article id="{{ item.anchor }}" class="item {{ item.status_and_drift_css_class }}" {{ vocabulary.live_state_attribute.ITEM_STATUS }}="{{ item.status.value }}">
         <h3>{{ item.title }}</h3>
         <div class="chips">
-          <span class="chip {{ chip_tone.of_status(item.status) }}" {{ live_state_attribute.STATUS_CHIP }}>{{ item.status.value | capitalize }}</span>
+          <span class="chip {{ vocabulary.chip_tone.of_status(item.status) }}" {{ vocabulary.live_state_attribute.STATUS_CHIP }}>{{ item.status.value | capitalize }}</span>
           {% if item.pull_request_url %}
-          <a class="chip {{ chip_tone.of_live_state(item.live_state) }}" href="{{ item.pull_request_url }}" {{ live_state_attribute.PULL_REQUEST }}="{{ item.pull_request_api_url }}">#{{ item.pull_request_number }} · {{ item.live_state.display_label }}</a>
+          <a class="chip {{ vocabulary.chip_tone.of_live_state(item.live_state) }}" href="{{ item.pull_request_url }}" {{ vocabulary.live_state_attribute.PULL_REQUEST }}="{{ item.pull_request_api_url }}">#{{ item.pull_request_number }} · {{ item.live_state.display_label }}</a>
           {% endif %}
           {% if record and record.check_state %}
-          <span class="chip {{ chip_tone.of_check_state(record.check_state) }}">CI {{ record.check_state.value }}</span>
+          <span class="chip {{ vocabulary.chip_tone.of_check_state(record.check_state) }}">CI {{ record.check_state.value }}</span>
           {% endif %}
           {% if record %}
           {% for login in record.assignees %}
@@ -66,34 +66,34 @@
 {% endmacro %}
 
 {% macro plan_time(moment, marker=None) -%}
-<time {{ plan_time_attribute.RELATIVE }}{% if marker %} {{ marker }}{% endif %} datetime="{{ moment.isoformat() }}">{{ moment.strftime("%Y-%m-%d %H:%M %Z") }}</time>
+<time {{ vocabulary.plan_time_attribute.RELATIVE }}{% if marker %} {{ marker }}{% endif %} datetime="{{ moment.isoformat() }}">{{ moment.strftime("%Y-%m-%d %H:%M %Z") }}</time>
 {%- endmacro %}
 
 {% block content %}
   <header class="masthead">
-    <p class="crumbs">{% if hub_url %}<a href="{{ hub_url }}">All repositories</a> › {% endif %}{% if index_url %}<a href="{{ index_url }}">{{ repository }}</a>{% else %}{{ repository }}{% endif %} › {{ title }}</p>
+    <p class="crumbs">{% if header.hub_url %}<a href="{{ header.hub_url }}">All repositories</a> › {% endif %}{% if header.index_url %}<a href="{{ header.index_url }}">{{ plan.default_repository }}</a>{% else %}{{ plan.default_repository }}{% endif %} › {{ plan.title }}</p>
     <p class="eyebrow">Plan</p>
-    <h1>{{ title }}</h1>
-    <p class="lede">{{ description }}</p>
+    <h1>{{ plan.title }}</h1>
+    <p class="lede">{{ plan.description }}</p>
     <p class="meta-line">
-      <span>{{ total_items }} tracked items</span>
-      <a href="{{ repository_url }}">{{ repository }}</a>
-      {% if tracking_url %}<a href="{{ tracking_url }}">Propose a structural change →</a>{% endif %}
+      <span>{{ plan.items | length }} tracked items</span>
+      <a href="{{ plan.repository_url }}">{{ plan.default_repository }}</a>
+      {% if header.tracking_url %}<a href="{{ header.tracking_url }}">Propose a structural change →</a>{% endif %}
     </p>
-    {% if history or built_at %}
+    {% if header.history or header.built_at %}
     <p class="meta-line plan-times">
-      {% if history %}
-      <span>Created {{ plan_time(history.created_at) }}</span>
-      <span>Last modified {{ plan_time(history.modified_at) }}</span>
+      {% if header.history %}
+      <span>Created {{ plan_time(header.history.created_at) }}</span>
+      <span>Last modified {{ plan_time(header.history.modified_at) }}</span>
       {% endif %}
-      {% if built_at %}
-      <span>Refreshed {{ plan_time(built_at, plan_time_attribute.REFRESHED) }} <span {{ plan_time_attribute.REFRESH_SOURCE }}>{{ refresh_source.BUILD }}</span></span>
+      {% if header.built_at %}
+      <span>Refreshed {{ plan_time(header.built_at, vocabulary.plan_time_attribute.REFRESHED) }} <span {{ vocabulary.plan_time_attribute.REFRESH_SOURCE }}>{{ vocabulary.refresh_source.BUILD }}</span></span>
       {% endif %}
     </p>
     {% endif %}
     <div class="status-strip">
       {% for status in item_statuses %}
-      <span class="stat"><strong {{ live_state_attribute.STATUS_COUNT }}="{{ status.value }}">{{ status_counts[status] }}</strong>{{ status.value | capitalize }}</span>
+      <span class="stat"><strong {{ vocabulary.live_state_attribute.STATUS_COUNT }}="{{ status.value }}">{{ status_counts[status] }}</strong>{{ status.value | capitalize }}</span>
       {% endfor %}
     </div>
     {% if repository_rules %}

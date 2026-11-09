@@ -51,7 +51,6 @@ def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={},
-        tracking_url=None,
     )
     output = renderer.render().html
     assert 'title="Item A"' in output
@@ -114,7 +113,6 @@ def test_render_marks_an_unmet_dependency_chip_with_the_chip_unmet_class():
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={},
-        tracking_url=None,
     )
     output = renderer.render().html
     assert 'class="chip chip-unmet"' in output
@@ -138,7 +136,6 @@ def test_render_does_not_mark_a_ready_dependency_chip_as_unmet():
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={},
-        tracking_url=None,
     )
     output = renderer.render().html
     assert 'class="chip"' in output
