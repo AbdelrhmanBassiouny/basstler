@@ -1,10 +1,10 @@
 ## Plan
-- Failing tests first: notes-repository access check, session start and save-plan reporting it
-- Extract the plan site's attach-or-ask instruction into a shared class; reuse it for the notes repository
-- New `basstler.personal_notes.access` check, wired into session-start.sh and save-plan.sh
+- Notes-repository access check (`basstler.personal_notes.access`), reported by session-start.sh and save-plan.sh
+- Shared attach-or-ask instruction (`basstler.repository_attachment`), used by the plan site too
 
 ## Done
-- Bootstrap: branch, draft PR #171, item recorded in progress
+- Tests first (failing on old scripts), implementation, session rule; pushed b31b6bf; PR #171 description current, labelled bug
+- ruff, docformatter, code-rules pass; full suite green apart from 4 local Playwright browser errors
 
 ## Next
-- Write the failing tests
+- Owner review of draft PR #171
