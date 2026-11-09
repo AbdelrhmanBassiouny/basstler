@@ -37,6 +37,7 @@ import yaml
 
 from basstler.plan_site.plan import Plan
 from basstler.plan_site.plan_page import PlanPage, RenderedPlanPage
+from basstler.plan_site.plan_page_header import PlanPageHeader
 from basstler.exceptions import PlanValidationError
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.validation import PlanValidator
@@ -373,13 +374,15 @@ class RepositorySite(SiteSection[RepositorySummary]):
             pull_requests_by_repository=self.pull_request_source.pull_requests_of(
                 dependencies
             ),
-            tracking_url=self.tracking_url_of(plan),
-            hub_url=self.address.hub_url,
-            index_url=self.address.repository_url(self.notes.repository),
+            header=PlanPageHeader(
+                tracking_url=self.tracking_url_of(plan),
+                hub_url=self.address.hub_url,
+                index_url=self.address.repository_url(self.notes.repository),
+                history=self.notes.history_of(source.directory_name),
+                built_at=self.built_at,
+            ),
             plan_directory=self.plan_directory,
             locate_plan_page=self.plan_url,
-            history=self.notes.history_of(source.directory_name),
-            built_at=self.built_at,
         )
         page = renderer.render()
         summary = PlanSummary(

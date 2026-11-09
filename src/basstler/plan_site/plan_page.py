@@ -7,40 +7,20 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
-from datetime import datetime
 
 from basstler.class_property import classproperty
 from basstler.locations import SiteTemplate
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.model import ItemStatus
 from basstler.plan.repository_rules import RepositoryRules
-from basstler.maintenance.board import PullRequestField
-from basstler.github_labels import GitHubLabel
-from basstler.plan_site.cards import (
-    DraftRecheckAttribute,
-    LiveStateAttribute,
-    ModelOption,
-    PlanTimeAttribute,
-    RefreshSource,
-    TrackSection,
-    WaveSection,
-)
-from basstler.plan_site.chip_tone import ChipTone
+from basstler.plan_site.cards import ModelOption, TrackSection, WaveSection
 from basstler.plan_site.item_classifier import ItemClassifier
-from basstler.plan_site.live_state_display import LiveStateDisplay
-from basstler.plan_site.hub import PlanHistory
 from basstler.plan_site.plan import Item, Plan
 from basstler.plan_site.plan_overview import NextSteps, PlanOverview
-from basstler.pull_request_state import (
-    LiveState,
-    PullRequestsByRepository,
-    PullRequestState,
-)
-from basstler.render_common import (
-    TemplatePage,
-    render_markdown_to_html,
-    sanitize_http_url,
-)
+from basstler.plan_site.plan_page_header import PlanPageHeader
+from basstler.plan_site.plan_page_vocabulary import PlanPageVocabulary
+from basstler.pull_request_state import PullRequestsByRepository
+from basstler.render_common import TemplatePage, render_markdown_to_html
 
 # %% the rendered page
 
@@ -100,19 +80,9 @@ class PlanPage(TemplatePage):
     The rules every plan of the repository follows.
     """
 
-    tracking_url: str | None = None
+    header: PlanPageHeader = field(default_factory=PlanPageHeader)
     """
-    The tracking issue's or pull request's ``html_url``, if the plan has one.
-    """
-
-    hub_url: str | None = None
-    """
-    The plan hub's URL, the first link of the page's breadcrumb.
-    """
-
-    index_url: str | None = None
-    """
-    The repository's own index page, the breadcrumb's second link.
+    The links and dates the top of the page shows.
     """
 
     plan_directory: PlanDirectory | None = None
@@ -124,17 +94,6 @@ class PlanPage(TemplatePage):
     """
     Where another plan's page is published, given its id, or ``None`` when plan pages
     have no known address.
-    """
-
-    history: PlanHistory | None = None
-    """
-    When the plan was created and last changed, ``None`` when its history is unknown.
-    """
-
-    built_at: datetime | None = None
-    """
-    When the site was built, which the page shows as its refresh time until the browser
-    reads GitHub itself; ``None`` to leave it out.
     """
 
     dependencies: DependencyResolver = field(init=False)
@@ -165,28 +124,11 @@ class PlanPage(TemplatePage):
         overview = PlanOverview.of_plan(self.plan, next_steps)
         html = self.render_template(
             stylesheet_url=self.stylesheet_url,
-            chip_tone=ChipTone,
             script_template=SiteTemplate.PLAN_SCRIPT.name,
             recheck_script_template=SiteTemplate.PLAN_PULL_REQUEST_RECHECK_SCRIPT.name,
-            draft_recheck_attribute=DraftRecheckAttribute,
-            live_state_attribute=LiveStateAttribute,
-            plan_time_attribute=PlanTimeAttribute,
-            refresh_source=RefreshSource,
-            live_state=LiveState,
-            live_state_display=LiveStateDisplay(),
-            github_label=GitHubLabel,
-            history=self.history,
-            built_at=self.built_at,
-            pull_request_field=PullRequestField,
-            pull_request_state=PullRequestState,
-            title=self.plan.title,
-            description=self.plan.description,
-            repository=self.plan.default_repository,
-            repository_url=self.plan.repository_url,
-            total_items=len(self.plan.items),
-            tracking_url=self.tracking_url,
-            hub_url=sanitize_http_url(self.hub_url),
-            index_url=sanitize_http_url(self.index_url),
+            vocabulary=PlanPageVocabulary(),
+            plan=self.plan,
+            header=self.header,
             item_statuses=list(ItemStatus),
             status_counts=overview.status_counts,
             drift_items=self.plan.drifted_items,

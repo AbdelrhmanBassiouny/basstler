@@ -1,53 +1,53 @@
-var planPageLiveStates = {{ live_state_display.state_chips | tojson }};
-var planPageDoneStatus = {{ live_state_display.done_status | tojson }};
-var planPageChipTones = {{ live_state_display.chip_tones | tojson }};
+var planPageLiveStates = {{ vocabulary.live_state_display.state_chips | tojson }};
+var planPageDoneStatus = {{ vocabulary.live_state_display.done_status | tojson }};
+var planPageChipTones = {{ vocabulary.live_state_display.chip_tones | tojson }};
 var planPageMinimumRecheckMilliseconds = 60000;
 var planPageRelativeTimeMilliseconds = 30000;
 var planPageLastRecheck = 0;
 
 function planPageUnblocksDependents(pullRequest) {
-  return pullRequest["{{ pull_request_field.MERGED_AT.key }}"] !== null
-    || (pullRequest["{{ pull_request_field.STATE.key }}"] === "{{ pull_request_state.OPEN.value }}"
-      && !pullRequest["{{ pull_request_field.DRAFT.key }}"]);
+  return pullRequest["{{ vocabulary.pull_request_field.MERGED_AT.key }}"] !== null
+    || (pullRequest["{{ vocabulary.pull_request_field.STATE.key }}"] === "{{ vocabulary.pull_request_state.OPEN.value }}"
+      && !pullRequest["{{ vocabulary.pull_request_field.DRAFT.key }}"]);
 }
 
 function planPageLiveStateOf(pullRequest) {
-  var labels = (pullRequest["{{ pull_request_field.LABELS.key }}"] || []).map(function (label) {
+  var labels = (pullRequest["{{ vocabulary.pull_request_field.LABELS.key }}"] || []).map(function (label) {
     return typeof label === "string" ? label : label.name;
   });
-  if (pullRequest["{{ pull_request_field.MERGED_AT.key }}"] || labels.indexOf("{{ github_label.MERGED }}") !== -1) {
-    return "{{ live_state.MERGED.name }}";
+  if (pullRequest["{{ vocabulary.pull_request_field.MERGED_AT.key }}"] || labels.indexOf("{{ vocabulary.github_label.MERGED }}") !== -1) {
+    return "{{ vocabulary.live_state.MERGED.name }}";
   }
-  if (pullRequest["{{ pull_request_field.STATE.key }}"] !== "{{ pull_request_state.OPEN.value }}") {
-    return "{{ live_state.CLOSED_UNMERGED.name }}";
+  if (pullRequest["{{ vocabulary.pull_request_field.STATE.key }}"] !== "{{ vocabulary.pull_request_state.OPEN.value }}") {
+    return "{{ vocabulary.live_state.CLOSED_UNMERGED.name }}";
   }
-  return pullRequest["{{ pull_request_field.DRAFT.key }}"]
-    ? "{{ live_state.OPEN_DRAFT.name }}"
-    : "{{ live_state.OPEN_READY.name }}";
+  return pullRequest["{{ vocabulary.pull_request_field.DRAFT.key }}"]
+    ? "{{ vocabulary.live_state.OPEN_DRAFT.name }}"
+    : "{{ vocabulary.live_state.OPEN_READY.name }}";
 }
 
 function planPageMarkDependencyReady(chip) {
   chip.classList.remove("chip-unmet");
-  chip.title = chip.getAttribute("{{ draft_recheck_attribute.READY_TITLE }}");
+  chip.title = chip.getAttribute("{{ vocabulary.draft_recheck_attribute.READY_TITLE }}");
   var card = chip.closest(".item");
   if (card.querySelector(".chip-unmet")) {
     return;
   }
-  var startAction = card.querySelector("[{{ draft_recheck_attribute.START_ACTION }}]");
+  var startAction = card.querySelector("[{{ vocabulary.draft_recheck_attribute.START_ACTION }}]");
   if (startAction) {
     startAction.hidden = false;
   }
 }
 
 function planPageChangeCount(status, change) {
-  var count = document.querySelector("[{{ live_state_attribute.STATUS_COUNT }}=\"" + status + "\"]");
+  var count = document.querySelector("[{{ vocabulary.live_state_attribute.STATUS_COUNT }}=\"" + status + "\"]");
   if (count) {
     count.textContent = String(Number(count.textContent) + change);
   }
 }
 
 function planPageMarkItemDone(card) {
-  var status = card.getAttribute("{{ live_state_attribute.ITEM_STATUS }}");
+  var status = card.getAttribute("{{ vocabulary.live_state_attribute.ITEM_STATUS }}");
   if (status === planPageDoneStatus.status) {
     return;
   }
@@ -57,8 +57,8 @@ function planPageMarkItemDone(card) {
     }
   });
   card.classList.add(planPageDoneStatus.css_class);
-  card.setAttribute("{{ live_state_attribute.ITEM_STATUS }}", planPageDoneStatus.status);
-  var statusChip = card.querySelector("[{{ live_state_attribute.STATUS_CHIP }}]");
+  card.setAttribute("{{ vocabulary.live_state_attribute.ITEM_STATUS }}", planPageDoneStatus.status);
+  var statusChip = card.querySelector("[{{ vocabulary.live_state_attribute.STATUS_CHIP }}]");
   statusChip.className = "chip " + planPageDoneStatus.tone;
   statusChip.textContent = planPageDoneStatus.label;
   planPageChangeCount(status, -1);
@@ -72,7 +72,7 @@ function planPageShowLiveState(chip, stateName) {
   });
   chip.classList.add(shown.tone);
   chip.textContent = chip.textContent.split(" · ")[0] + " · " + shown.label;
-  if (stateName === "{{ live_state.MERGED.name }}") {
+  if (stateName === "{{ vocabulary.live_state.MERGED.name }}") {
     planPageMarkItemDone(chip.closest(".item"));
   }
 }
@@ -94,7 +94,7 @@ function planPageDescribeAge(milliseconds) {
 }
 
 function planPageShowRelativeTimes() {
-  document.querySelectorAll("[{{ plan_time_attribute.RELATIVE }}]").forEach(function (time) {
+  document.querySelectorAll("[{{ vocabulary.plan_time_attribute.RELATIVE }}]").forEach(function (time) {
     var moment = new Date(time.getAttribute("datetime"));
     time.title = moment.toLocaleString();
     time.textContent = planPageDescribeAge(Date.now() - moment.getTime());
@@ -102,17 +102,17 @@ function planPageShowRelativeTimes() {
 }
 
 function planPageShowRefresh(refused) {
-  var refreshed = document.querySelector("[{{ plan_time_attribute.REFRESHED }}]");
-  var source = document.querySelector("[{{ plan_time_attribute.REFRESH_SOURCE }}]");
+  var refreshed = document.querySelector("[{{ vocabulary.plan_time_attribute.REFRESHED }}]");
+  var source = document.querySelector("[{{ vocabulary.plan_time_attribute.REFRESH_SOURCE }}]");
   if (!refreshed || !source) {
     return;
   }
   if (refused) {
-    source.textContent = "{{ refresh_source.REFUSED }}";
+    source.textContent = "{{ vocabulary.refresh_source.REFUSED }}";
     return;
   }
   refreshed.setAttribute("datetime", new Date().toISOString());
-  source.textContent = "{{ refresh_source.LIVE }}";
+  source.textContent = "{{ vocabulary.refresh_source.LIVE }}";
   planPageShowRelativeTimes();
 }
 
@@ -122,11 +122,11 @@ function planPageRecheckPullRequests() {
   function chipsOf(address) {
     return chipsByAddress[address] = chipsByAddress[address] || { dependencies: [], items: [] };
   }
-  document.querySelectorAll("[{{ draft_recheck_attribute.PULL_REQUEST }}]").forEach(function (chip) {
-    chipsOf(chip.getAttribute("{{ draft_recheck_attribute.PULL_REQUEST }}")).dependencies.push(chip);
+  document.querySelectorAll("[{{ vocabulary.draft_recheck_attribute.PULL_REQUEST }}]").forEach(function (chip) {
+    chipsOf(chip.getAttribute("{{ vocabulary.draft_recheck_attribute.PULL_REQUEST }}")).dependencies.push(chip);
   });
-  document.querySelectorAll("[{{ live_state_attribute.PULL_REQUEST }}]").forEach(function (chip) {
-    chipsOf(chip.getAttribute("{{ live_state_attribute.PULL_REQUEST }}")).items.push(chip);
+  document.querySelectorAll("[{{ vocabulary.live_state_attribute.PULL_REQUEST }}]").forEach(function (chip) {
+    chipsOf(chip.getAttribute("{{ vocabulary.live_state_attribute.PULL_REQUEST }}")).items.push(chip);
   });
   var addresses = Object.keys(chipsByAddress);
   var refused = false;
@@ -163,7 +163,7 @@ function planPageRecheckPullRequests() {
       planPageShowRefresh(refused);
     }
     document.getElementById("plan-page")
-      .setAttribute("{{ draft_recheck_attribute.FINISHED }}", "");
+      .setAttribute("{{ vocabulary.draft_recheck_attribute.FINISHED }}", "");
   });
 }
 

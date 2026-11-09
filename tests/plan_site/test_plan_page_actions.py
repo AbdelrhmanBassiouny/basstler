@@ -151,7 +151,6 @@ def test_render_shows_start_now_button_for_a_not_started_item():
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={},
-        tracking_url=None,
     )
     output = renderer.render().html
     assert 'data-action-command="/plan-item-kickoff test-plan a"' in output
@@ -177,7 +176,6 @@ def test_render_shows_resolve_resume_reconsider_buttons_for_underway_items():
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={},
-        tracking_url=None,
     )
     output = renderer.render().html
     assert 'data-action-command="/plan-item-resolve test-plan a"' in output
@@ -203,7 +201,6 @@ def test_render_omits_action_button_for_a_done_item():
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={},
-        tracking_url=None,
     )
     output = renderer.render().html
     assert 'data-action-command="' not in output
@@ -224,7 +221,6 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
         plan=plan,
         roadmap_text="",
         pull_requests_by_repository={},
-        tracking_url=None,
     )
     output = renderer.render().html
     for model in ModelOption:

@@ -27,7 +27,7 @@
 {% endmacro %}
 
 {# What a chip held back by a draft pull request carries for the page's script to re-check it. #}
-{% macro draft_recheck_attributes(chip) %}{% if chip.draft_pull_request %} {{ draft_recheck_attribute.PULL_REQUEST }}="{{ chip.draft_pull_request.api_url }}" {{ draft_recheck_attribute.READY_TITLE }}="{{ chip.tooltip }}"{% endif %}{% endmacro %}
+{% macro draft_recheck_attributes(chip) %}{% if chip.draft_pull_request %} {{ vocabulary.draft_recheck_attribute.PULL_REQUEST }}="{{ chip.draft_pull_request.api_url }}" {{ vocabulary.draft_recheck_attribute.READY_TITLE }}="{{ chip.tooltip }}"{% endif %}{% endmacro %}
 
 {# A chip links to its dependency's card: on this page it scrolls there and
    highlights it, and on another plan's page it opens that page in a new
@@ -43,7 +43,7 @@
 {# The action group is hidden, marked for the page's script to reveal, when hidden is true. #}
 {% macro action_button(action, hidden=False) %}
 {% if action %}
-<span class="action-group"{% if hidden %} hidden {{ draft_recheck_attribute.START_ACTION }}{% endif %}>
+<span class="action-group"{% if hidden %} hidden {{ vocabulary.draft_recheck_attribute.START_ACTION }}{% endif %}>
   <span class="model-picker" data-model="" aria-label="Model for {{ action.label }}">
     <button type="button" class="model-picker-toggle" onclick="planPageToggleModelPicker(event, this)">{{ available_models[0].label }} ▾</button>
     <ul class="model-picker-list" role="listbox">
