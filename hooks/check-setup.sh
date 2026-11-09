@@ -61,7 +61,7 @@ EXIT_CODE=0
 
 # Every check this script reports, in the order it reports them; equal to
 # basstler.setup.report.SetupCheck.
-KNOWN_CHECKS=" tooling_files session_start_hook claude_local_md_ignored notes_remote notes_remote_url notes_branch_name notes_path notes_branch notes_file stack_upstream upstream_reviews_action plan_site git_identity package_dependencies basstler_version claude_local_md "
+KNOWN_CHECKS=" tooling_files session_start_hook claude_local_md_ignored notes_remote notes_remote_url notes_branch_name notes_path notes_branch notes_file stack_upstream upstream_reviews_action plan_site plan_site_access git_identity package_dependencies basstler_version claude_local_md "
 
 REQUIRE_UPSTREAM=false
 REQUESTED_CHECKS=""
@@ -191,6 +191,28 @@ report_plan_site() {
     "'${NOTES_BRANCH}' does not start a plan site build - to publish this repository's plans, run: ${publish_command}"
 }
 
+# report_plan_site_access: whether this session reaches the plan site's repository, so a
+# plan save can start the build. Only a cloud session can fix it itself, by attaching the
+# repository, so only there is a gap setup that is needed; elsewhere it is context.
+# Context when no plan site lists this repository.
+report_plan_site_access() {
+  local access
+  if ! recorded_site_url >/dev/null 2>&1; then
+    report plan_site_access info "no plan site lists this repository, so no build is started"
+    return 0
+  fi
+  access="$("${BASSTLER_PYTHON}" -m "${PLAN_SITE_BUILD_START_MODULE}" check-access 2>/dev/null | tr '\n' ' ')" \
+    || access=""
+  access="${access% }"
+  if [ -z "${access}" ]; then
+    report plan_site_access ok "this session can start the plan site's build"
+  elif [ "${CLAUDE_CODE_REMOTE:-}" = true ]; then
+    report plan_site_access needs-setup "${access}"
+  else
+    report plan_site_access info "${access}"
+  fi
+}
+
 report() {
   local check="$1" status="$2" detail="$3"
   requested "${check}" || return 0
@@ -288,6 +310,7 @@ if fetch_personal_notes_branch; then
   report_upstream true
   if requested upstream_reviews_action; then report_upstream_reviews_action; fi
   if requested plan_site; then report_plan_site; fi
+  if requested plan_site_access; then report_plan_site_access; fi
 
   # %% who commits here would be authored as
 
