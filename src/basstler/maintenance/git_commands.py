@@ -243,6 +243,15 @@ class GitCommandRunner:
             f"+refs/heads/{branch}:refs/remotes/{tracking_remote}/{branch}",
         )
 
+    def configured_remote_url(self, remote: str) -> str | None:
+        """
+        :param remote: A remote's name.
+        :return: The URL the clone configures for it, not git's rewrite of it, ``None``
+            for no such remote.
+        """
+        read = self.attempt("config", "--get", f"remote.{remote}.url")
+        return read.output if read.succeeded else None
+
     def commit_or_none(self, reference: str) -> str | None:
         """:param reference: A ref that may not exist.
         :return: The commit it names, or ``None`` if it does not exist."""
