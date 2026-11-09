@@ -1,6 +1,6 @@
 """
 Publish a repository's plans on the user's plan site, and start the site's build on every
-push to its notes branch and every merged pull request.
+push to its notes branch and every change of a pull request's state.
 
 Usage:
     "${BASSTLER_PYTHON}" -m basstler.plan_site.publication \\

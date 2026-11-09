@@ -22,6 +22,7 @@ from basstler.render_common import create_template_environment
 from basstler.repository import Repository
 from basstler.json_model import JSONModel
 from basstler.upstream_reviews.action.branch import BasstlerSource
+from basstler.workflows import ActivityType
 
 if TYPE_CHECKING:
     from basstler.plan_site.site_repository import SiteRepository
@@ -483,7 +484,7 @@ class DispatchWorkflow(PlanSiteWorkflow):
 class MergeWorkflow(PlanSiteWorkflow):
     """
     The notes repository's default-branch workflow that starts the site workflow
-    whenever a pull request merges into it.
+    whenever one of its pull requests changes state.
     """
 
     dispatch: DispatchWorkflow
@@ -500,6 +501,25 @@ class MergeWorkflow(PlanSiteWorkflow):
     def template(cls) -> PlanSiteTemplate:
         return PlanSiteTemplate.MERGE_WORKFLOW
 
+    @classproperty
+    def pull_request_activities(cls) -> tuple[ActivityType, ...]:
+        """
+        The pull request changes that start the build: every change of its draft, open,
+        merged or closed state.
+        """
+        return (
+            ActivityType.OPENED,
+            ActivityType.REOPENED,
+            ActivityType.READY_FOR_REVIEW,
+            ActivityType.CONVERTED_TO_DRAFT,
+            ActivityType.CLOSED,
+        )
+
     @property
     def template_values(self) -> dict[str, Any]:
-        return self.dispatch.template_values
+        return {
+            **self.dispatch.template_values,
+            "pull_request_activities": [
+                activity.value for activity in self.pull_request_activities
+            ],
+        }

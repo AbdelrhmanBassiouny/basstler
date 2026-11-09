@@ -28,6 +28,7 @@ import json
 import sys
 import tempfile
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -292,6 +293,23 @@ class PlanHub:
 
 
 @dataclass(frozen=True)
+class PlanHistory:
+    """
+    When a plan was created and last changed on its notes branch.
+    """
+
+    created_at: datetime
+    """
+    The commit time of the first commit that wrote the plan.
+    """
+
+    modified_at: datetime
+    """
+    The commit time of the latest commit that changed it.
+    """
+
+
+@dataclass(frozen=True)
 class NotesBranch:
     """
     One listed repository's notes branch, fetched into a scratch repository.
@@ -309,7 +327,12 @@ class NotesBranch:
 
     @classmethod
     def fetch(
-        cls, repository: Repository, branch: str, remote_root: str, scratch: Path
+        cls,
+        repository: Repository,
+        branch: str,
+        remote_root: str,
+        scratch: Path,
+        remote: str = "origin",
     ) -> NotesBranch | None:
         """
         :param repository: The repository to fetch from.
@@ -317,19 +340,16 @@ class NotesBranch:
         :param remote_root: Where repositories are fetched from, as
             :meth:`Repository.clone_url_under` takes it.
         :param scratch: An empty directory of its own to fetch into.
+        :param remote: The name the scratch repository gives the repository.
         :return: The fetched branch, or ``None`` when it cannot be fetched.
         """
         scratch.mkdir(parents=True, exist_ok=True)
         git = GitCommandRunner(scratch)
         git.run("init", "--quiet")
-        fetched = git.attempt(
-            "fetch",
-            "--quiet",
-            "--depth",
-            "1",
-            repository.clone_url_under(remote_root),
-            branch,
-        )
+        git.run("remote", "add", remote, repository.clone_url_under(remote_root))
+        # The whole history without old file contents dates each plan; checking a file
+        # out downloads its content from the remote when it is needed.
+        fetched = git.attempt("fetch", "--quiet", "--filter=blob:none", remote, branch)
         if not fetched.succeeded:
             logger.warning(
                 f"{repository}: cannot fetch {branch}: {fetched.error_output}; "
@@ -344,6 +364,24 @@ class NotesBranch:
         :return: The file's content, or ``None`` when the branch has no such file.
         """
         return self.git.file_at("FETCH_HEAD", path)
+
+    def history_of(self, plan_directory_name: str) -> PlanHistory | None:
+        """
+        :param plan_directory_name: A plan's directory under the plans directory.
+        :return: When the branch first and last changed it, ``None`` when it never did.
+        """
+        dates = self.git.run(
+            "log",
+            "--format=%cI",
+            "FETCH_HEAD",
+            "--",
+            str(ProjectLocation.PLANS / plan_directory_name),
+        ).splitlines()
+        if not dates:
+            return None
+        return PlanHistory(
+            datetime.fromisoformat(dates[-1]), datetime.fromisoformat(dates[0])
+        )
 
     def check_out_plans(self) -> Path:
         """

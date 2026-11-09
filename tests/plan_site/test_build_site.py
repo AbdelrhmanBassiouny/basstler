@@ -5,9 +5,11 @@ each plan's page.
 
 from __future__ import annotations
 
+import dataclasses
 import html
 import json
 from collections.abc import Mapping
+from datetime import UTC, datetime
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -40,7 +42,8 @@ from basstler.plan_site.__main__ import (
     SiteFile,
 )
 from basstler.plan_site.chip_tone import ChipTone
-from basstler.plan_site.hub import PlanHub, SiteAddress
+from basstler.plan_site.cards import LiveStateAttribute, PlanTimeAttribute
+from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.plan_site.hub_page import PlanSummary, SiteStylesheet, SkippedPage
 from basstler.plan_site.plan import Plan
 from basstler.pull_request_source import GitHubPullRequestSource
@@ -52,7 +55,6 @@ from ..constants.paths import DatasetLocation, RecordedCommitChecks
 from ..constants.site import SitePlan, SiteRepository, SiteSampleText
 from ..recorded_pull_requests import RecordedPullRequestSource
 from ..github.recorded_client import RecordedGitHubClient
-from .test_hub import publish_notes
 
 NOTES_REPOSITORY = SiteRepository.NOTES.value
 """
@@ -319,7 +321,7 @@ def test_every_page_links_the_site_stylesheet(site: RepositorySite, tmp_path: Pa
 
 
 def test_a_plan_page_shows_the_ci_and_assignees_of_an_open_pull_request(
-    tmp_path: Path,
+    dataset_notes: NotesBranch, tmp_path: Path
 ):
     check_state = CombinedCheckState.FAILURE
     open_pull_request = PullRequestRecord(
@@ -332,8 +334,7 @@ def test_a_plan_page_shows_the_ci_and_assignees_of_an_open_pull_request(
         pull_request_source=RecordedPullRequestSource(
             records={OPEN_PULL_REQUEST: open_pull_request}
         ),
-        repository=NOTES_REPOSITORY,
-        plans_directory=DatasetLocation.SITE_PLANS.value,
+        notes=dataset_notes,
     )
     site.build(tmp_path)
     page = page_of(tmp_path, SitePlan.FIRST)
@@ -353,21 +354,13 @@ def test_build_links_the_tracking_issue_on_the_plan_page(
 
 
 @pytest.fixture
-def hub_site(pull_request_source: RecordedPullRequestSource, tmp_path: Path) -> HubSite:
+def hub_site(
+    pull_request_source: RecordedPullRequestSource, dataset_remotes: Path
+) -> HubSite:
     """
     A site whose hub lists the notes repository, published from the dataset's plans, and
     a repository with no notes branch.
     """
-    remotes = tmp_path / "remotes"
-    publish_notes(
-        remotes,
-        NOTES_REPOSITORY,
-        {
-            path.relative_to(DatasetLocation.SITE_PLANS.value): path.read_text()
-            for path in DatasetLocation.SITE_PLANS.value.rglob("*")
-            if path.is_file()
-        },
-    )
     listed = (SiteRepository.NOTES.value, SiteRepository.MISSING.value)
     hub = PlanHub(
         registry=str(NOTES_REPOSITORY),
@@ -377,7 +370,7 @@ def hub_site(pull_request_source: RecordedPullRequestSource, tmp_path: Path) -> 
         address=SiteAddress(SiteSampleText.SITE_URL),
         pull_request_source=pull_request_source,
         hub=hub,
-        remote_root=str(remotes),
+        remote_root=str(dataset_remotes),
     )
 
 
@@ -694,3 +687,57 @@ def test_github_source_reraises_a_refusal_other_than_not_found():
             RecordedGitHubClient(refusal=HTTPStatus.FORBIDDEN)
         ).issue_url(PLAN_REPOSITORY, FIRST_PLAN.tracking_issue)
     assert refused.value.status == HTTPStatus.FORBIDDEN
+
+
+# %% when a plan page says its plan was created, changed and refreshed
+
+
+def test_a_plan_page_shows_when_its_plan_was_created_and_last_modified(
+    hub_site: HubSite, tmp_path: Path
+):
+    output = tmp_path / "site"
+    hub_site.build(output)
+
+    notes = NotesBranch.fetch(
+        NOTES_REPOSITORY,
+        hub_site.hub.notes_branch,
+        hub_site.remote_root,
+        tmp_path / "scratch",
+    )
+    history = notes.history_of(SitePlan.FIRST)
+    page = page_of(output, SitePlan.FIRST)
+    assert f'datetime="{history.created_at.isoformat()}"' in page
+    assert f'datetime="{history.modified_at.isoformat()}"' in page
+
+
+def test_a_plan_page_shows_the_build_time_as_its_last_refresh(
+    site: RepositorySite, tmp_path: Path
+):
+    site.build(tmp_path)
+
+    assert (
+        f'{PlanTimeAttribute.REFRESHED} datetime="{site.built_at.isoformat()}"'
+        in page_of(tmp_path, SitePlan.FIRST)
+    )
+
+
+def test_builds_at_different_times_of_the_same_plans_have_the_same_digest(
+    site: RepositorySite, tmp_path: Path
+):
+    later = dataclasses.replace(site, built_at=datetime(2030, 1, 1, tzinfo=UTC))
+
+    site.build(tmp_path / "first")
+    later.build(tmp_path / "second")
+
+    assert SiteDigest(tmp_path / "first").value == SiteDigest(tmp_path / "second").value
+
+
+def test_an_item_s_pull_request_chip_names_its_api_address(
+    site: RepositorySite, tmp_path: Path
+):
+    site.build(tmp_path)
+
+    assert (
+        f'{LiveStateAttribute.PULL_REQUEST}="{OPEN_PULL_REQUEST.api_url}"'
+        in page_of(tmp_path, SitePlan.FIRST)
+    )

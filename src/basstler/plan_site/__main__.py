@@ -23,10 +23,12 @@ from __future__ import annotations
 
 import argparse
 import hashlib
+import re
 import sys
 import tempfile
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -49,6 +51,7 @@ from basstler.plan_site.hub_page import (
     SkippedPage,
 )
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
+from basstler.plan_site.cards import PlanTimeAttribute
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.locations import ProjectLocation
 from basstler.plan.model import PlanDocument
@@ -89,11 +92,19 @@ class SiteFile(StrEnum):
     """
 
 
+BUILD_TIME_PATTERN = re.compile(
+    rf"<time [^>]*{PlanTimeAttribute.REFRESHED}[^>]*>[^<]*</time>".encode()
+)
+"""
+The element a plan page shows the build time in.
+"""
+
+
 @dataclass(frozen=True)
 class SiteDigest:
     """
     A fingerprint of a built site's pages: two builds have the same digest exactly when
-    they publish the same files with the same content.
+    they publish the same files with the same content, apart from the build time.
     """
 
     site_directory: Path
@@ -112,8 +123,17 @@ class SiteDigest:
             if not path.is_file() or relative_path == Path(SiteFile.DIGEST):
                 continue
             digest.update(relative_path.as_posix().encode())
-            digest.update(hashlib.sha256(path.read_bytes()).digest())
+            digest.update(hashlib.sha256(self.content_of(path)).digest())
         return digest.hexdigest()
+
+    @staticmethod
+    def content_of(path: Path) -> bytes:
+        """
+        :param path: A built file.
+        :return: Its content without the build time, so a build that changed nothing
+            else has the published digest and skips the deploy.
+        """
+        return BUILD_TIME_PATTERN.sub(b"", path.read_bytes())
 
     def write(self) -> None:
         """
@@ -212,6 +232,11 @@ class SiteSection[SectionCard: ProgressCard](ABC):
     Where the live pull request state comes from.
     """
 
+    built_at: datetime = field(default_factory=lambda: datetime.now(UTC), kw_only=True)
+    """
+    When the site is built, which every plan page shows as its last refresh.
+    """
+
     @property
     def stylesheet_url(self) -> str:
         """
@@ -244,14 +269,14 @@ class RepositorySite(SiteSection[RepositorySummary]):
     One repository's plans: their pages plus the index linking them.
     """
 
-    repository: Repository
+    notes: NotesBranch
     """
-    The repository whose notes the plans come from.
+    The repository's notes branch, which holds and dates its plans.
     """
 
-    plans_directory: Path
+    plans_directory: Path = field(init=False)
     """
-    That repository's ``plans`` directory, holding one subdirectory per plan.
+    The notes branch's ``plans`` directory, checked out with one subdirectory per plan.
     """
 
     plan_directory: PlanDirectory = field(init=False)
@@ -267,8 +292,9 @@ class RepositorySite(SiteSection[RepositorySummary]):
 
     def __post_init__(self) -> None:
         """
-        Load the plans' directory and the repository's rules from the notes checkout.
+        Check the plans out of the notes branch and load them and the repository's rules.
         """
+        self.plans_directory = self.notes.check_out_plans()
         self.plan_directory = PlanDirectory(self.plans_directory)
         self.repository_rules = RepositoryRules.from_file(
             self.plans_directory / ProjectLocation.PLAN_RULES.name
@@ -279,7 +305,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
         :param directory_name: The plan's directory name.
         :return: The address its page is served from.
         """
-        return self.address.plan_url(self.repository, directory_name)
+        return self.address.plan_url(self.notes.repository, directory_name)
 
     def build(self, output: Path) -> RepositorySummary:
         """
@@ -299,12 +325,12 @@ class RepositorySite(SiteSection[RepositorySummary]):
             for source in sources
             if source.directory_name not in skipped
         }
-        repository_directory = output / str(self.repository)
+        repository_directory = output / str(self.notes.repository)
         for directory_name, plan in published.items():
             self.write_page(repository_directory / directory_name, plan.page.html)
         repository = RepositorySummary.over_plans(
-            str(self.repository),
-            self.address.repository_url(self.repository),
+            str(self.notes.repository),
+            self.address.repository_url(self.notes.repository),
             [plan.summary for plan in published.values()],
             list(skipped.values()),
         )
@@ -324,7 +350,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
         if not problems:
             return None
         page = SkippedPage(
-            site_path=f"{self.repository}/{source.directory_name}",
+            site_path=f"{self.notes.repository}/{source.directory_name}",
             reason=PlanValidationError(problems).error_message(),
         )
         logger.warning(f"{page.site_path} is not published: {page.reason}")
@@ -349,9 +375,11 @@ class RepositorySite(SiteSection[RepositorySummary]):
             ),
             tracking_url=self.tracking_url_of(plan),
             hub_url=self.address.hub_url,
-            index_url=self.address.repository_url(self.repository),
+            index_url=self.address.repository_url(self.notes.repository),
             plan_directory=self.plan_directory,
             locate_plan_page=self.plan_url,
+            history=self.notes.history_of(source.directory_name),
+            built_at=self.built_at,
         )
         page = renderer.render()
         summary = PlanSummary(
@@ -437,8 +465,8 @@ class HubSite(SiteSection[SiteSummary]):
         site = RepositorySite(
             address=self.address,
             pull_request_source=self.pull_request_source,
-            repository=repository,
-            plans_directory=notes.check_out_plans(),
+            notes=notes,
+            built_at=self.built_at,
         )
         return site.build(output)
 
