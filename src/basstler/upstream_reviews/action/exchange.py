@@ -10,7 +10,7 @@ from enum import StrEnum
 from typing import Any
 
 from basstler.class_property import classproperty
-from basstler.json_model import JSONModel, JSONSerializable
+from basstler.json_model import JSONModel
 
 # %% vocabulary
 
@@ -43,7 +43,7 @@ class ActionRequestKey(StrEnum):
 
 
 @dataclass(frozen=True)
-class ActionAnswer(JSONModel, JSONSerializable, ABC):
+class ActionAnswer(JSONModel, ABC):
     """
     What the Action commits for one request.
     """
@@ -52,6 +52,10 @@ class ActionAnswer(JSONModel, JSONSerializable, ABC):
     """
     The request it answers.
     """
+
+    @abstractmethod
+    def to_json(self) -> dict[str, Any]:
+        """:return: The answer as committed."""
 
 
 @dataclass(frozen=True)

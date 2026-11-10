@@ -6,10 +6,8 @@ from __future__ import annotations
 
 import json
 import subprocess
-from dataclasses import dataclass
-from typing import Any
 
-from basstler.json_model import JSONSerializable
+from basstler.json_model import ValidatedJSONModel
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.repository import Repository
@@ -41,19 +39,15 @@ def file_on_remote(checkout: ForkCheckout, branch: str, path: str) -> str:
     ).stdout.strip()
 
 
-@dataclass(frozen=True)
-class CountedApples(JSONSerializable):
+class CountedApples(ValidatedJSONModel):
     """
-    A value that writes itself out as a JSON object.
+    A model written out as the JSON object of its fields.
     """
 
     apples: int
     """
     How many apples there are.
     """
-
-    def to_json(self) -> dict[str, Any]:
-        return {"apples": self.apples}
 
 
 # %% writing and reading a named branch
@@ -85,27 +79,27 @@ def test_a_json_object_is_written_as_its_json_text(fork_checkout):
     ) == {"apples": 3}
 
 
-def test_a_value_convertible_to_json_is_written_as_its_json_text(fork_checkout):
+def test_a_model_is_written_as_its_json_text(fork_checkout):
     branch = branch_on_fork(fork_checkout, "notes/someone")
 
-    branch.write({"counted.json": CountedApples(3)}, "Write a value")
+    branch.write({"counted.json": CountedApples(apples=3)}, "Write a value")
 
     assert (
         json.loads(file_on_remote(fork_checkout, "notes/someone", "counted.json"))
-        == CountedApples(3).to_json()
+        == CountedApples(apples=3).to_json()
     )
 
 
-def test_a_branch_created_on_a_commit_holds_a_value_convertible_to_json(fork_checkout):
+def test_a_branch_created_on_a_commit_holds_a_model_as_its_json_text(fork_checkout):
     parent = branch_on_fork(fork_checkout, "notes/parent")
     parent.write({"first.txt": "one"}, "First")
     branch = branch_on_fork(fork_checkout, "notes/someone")
 
-    branch.create(parent.fetch(), {"counted.json": CountedApples(3)}, "Create")
+    branch.create(parent.fetch(), {"counted.json": CountedApples(apples=3)}, "Create")
 
     assert (
         json.loads(file_on_remote(fork_checkout, "notes/someone", "counted.json"))
-        == CountedApples(3).to_json()
+        == CountedApples(apples=3).to_json()
     )
 
 

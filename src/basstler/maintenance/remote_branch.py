@@ -12,7 +12,7 @@ from typing import Any
 
 from basstler.branch import Branch
 from basstler.class_property import classproperty
-from basstler.json_model import JSONSerializable
+from basstler.json_model import ValidatedJSONModel
 from basstler.maintenance.git_commands import (
     GitCommandResult,
     GitCommandRunner,
@@ -22,9 +22,9 @@ from basstler.repository import Repository
 
 # %% the branch
 
-FileContent = str | dict[str, Any] | JSONSerializable
+FileContent = str | dict[str, Any] | ValidatedJSONModel
 """
-What a file is written from: its text, or a JSON object or a value written as one.
+What a file is written from: its text, a JSON object, or a model written as its object.
 """
 
 
@@ -199,7 +199,7 @@ class RemoteBranch(Branch):
         """
         texts = {}
         for path, content in files.items():
-            if isinstance(content, JSONSerializable):
+            if isinstance(content, ValidatedJSONModel):
                 content = content.to_json()
             if isinstance(content, dict):
                 content = json.dumps(content, indent=2)
