@@ -173,13 +173,10 @@ items:
   track: playbook
   depends_on:
   - playbook-model
-  - basstler-v3-plans/plan-store-issues
   status: not started
-  notes: 'An ItemLifecycle model: stages, allowed transitions and whether a session or only the person makes each,
-    with labels from extension-points. Default lifecycle equals today''s item statuses; an issue-backed one reads
-    stages from labels through the PlanStore. Item priority and a proof (a failing test the code runs itself) as
-    ItemAttribute components. release:minor.'
-
+  notes: 'An ItemLifecycle model: stages, allowed transitions and whether a session or only the person
+    makes each, with labels from extension-points. Default lifecycle equals today''s item statuses. Item
+    priority and a proof (a failing test the code runs itself) as ItemAttribute components. release:minor.'
 - id: playbook-setup-wizard
   title: 'basstler init: guided setup with recommended choices that writes the user''s playbook'
   track: playbook
