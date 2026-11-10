@@ -160,3 +160,10 @@ items:
   track: guards
   depends_on: []
   status: not started
+
+- id: action-exchange-models
+  title: "The upstream-reviews Action's requests and answers are ValidatedJSONModel subclasses"
+  branch: null
+  track: guards
+  depends_on: []
+  status: not started

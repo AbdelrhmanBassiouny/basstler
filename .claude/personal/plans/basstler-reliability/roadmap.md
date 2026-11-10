@@ -6,3 +6,4 @@
 - Every skill command is one self-contained Bash call; tests/skills enforces it for every document.
 - This plan fixes today's skills; the one-command brief and skill evals belong to basstler-v3.
 - ListedRuns (tests/upstream_reviews/test_action.py) records raw GET paths. Model the listing request (repository, branch, runs per page) beside RunListing.path, record it in the double, assert listing.branch instead of parse_qs. Check the other run-listing test doubles. Start after PR #191 lands (shares test_action.py).
+- Replace the hand-written from_json/to_json and key enums of ActionRequest, OpenPullRequestsRequest, UpstreamReadRequest, ActionAnswer, ActionResult, OpenPullRequestsAnswer and RecordedGraphQLResponse with ValidatedJSONModel fields; kind becomes a Literal tag; keys on the wire stay. Branch writes then pass the model. Start after PR #191 lands.
