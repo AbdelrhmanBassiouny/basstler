@@ -59,18 +59,20 @@ items:
   title: Defer, restore and delete an item from its card's menu
   track: commands
   status: not started
-  depends_on: [command-issues, basstler-v3-plans/plan-site-from-issues]
-  notes: Built on v3's issue store, not plan.yaml (decided when this plan was created). A card's menu
-    sends defer, restore or delete as command issues; delete asks to confirm first and is refused
+  depends_on:
+  - command-issues
+  notes: Edits plan.yaml on the notes branch through the plan save (the issue store is deferred). A card's
+    menu sends defer, restore or delete as command issues; delete asks to confirm first and is refused
     for an item other items depend on or one with an open pull request, suggesting defer instead.
 - id: plan-commands
   title: Defer, restore and delete a whole plan from its card; deferred plans sink to a collapsed section
   track: commands
   status: not started
-  depends_on: [item-commands]
-  notes: Same command path as item-commands, acting on the plan's tracking issue in v3's store. Deferred
-    plans are listed last on the repository index in a collapsed section; delete asks to confirm and
-    stays recoverable from history.
+  depends_on:
+  - item-commands
+  notes: Same command path as item-commands, acting on the plan's plan.yaml. Deferred plans are listed
+    last on the repository index in a collapsed section; delete asks to confirm and stays recoverable
+    from history.
 - id: promote-button
   title: A Promote button on each promotable item opens the prefilled upstream compare-and-create page
   track: display
