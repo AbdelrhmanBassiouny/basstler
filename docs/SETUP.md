@@ -86,8 +86,9 @@ an upstream is named; to do it yourself, or to bring it to a new release:
 ```
 
 That writes `basstler/upstream-reviews` on your fork: a workflow calling basstler's
-reusable one, and a README. Each read pushes a request there, and the run commits what
-it read back to the same branch. The one step left to you: GitHub starts every fork with
+reusable one, and a README. Each read pushes a branch of its own from it under
+`basstler/upstream-reviews-requests/`, the run commits what it read onto that branch,
+and the session deletes it once read - so any number of sessions can read at once. The one step left to you: GitHub starts every fork with
 Actions off, so enable them once at `https://github.com/<your fork>/actions`.
 
 Until then, or wherever the Action cannot answer, the skill reads the upstream from the

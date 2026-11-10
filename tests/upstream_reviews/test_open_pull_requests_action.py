@@ -93,32 +93,34 @@ def test_a_committed_answer_reads_back_as_itself():
 # %% the run
 
 
-def test_the_run_answers_an_open_pull_requests_request_from_the_upstream(
-    tmp_path, monkeypatch
+def test_the_run_commits_its_answer_onto_the_request_s_branch(
+    fork: Fork, tmp_path, monkeypatch
 ):
     monkeypatch.setattr(
         GitHubRepository,
         "from_environment",
         classmethod(lambda cls, repository: an_upstream()),
     )
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    read = ActionRead(fork.branch, a_request(), answer_type=OpenPullRequestsAnswer)
+    read.send()
     request_file = tmp_path / ActionFile.REQUEST
-    result_file = tmp_path / ActionFile.RESULT
     request_file.write_text(json.dumps(a_request().as_sent()))
 
     status = basstler.upstream_reviews.action.__main__.main(
         [
+            "--project-root",
+            str(fork.clone),
             ActionCommand.RUN,
             "--request",
             str(request_file),
-            "--result",
-            str(result_file),
         ]
     )
 
     assert status == 0
-    assert OpenPullRequestsAnswer.from_json(
-        json.loads(result_file.read_text())
-    ) == OpenPullRequestsAnswer.answering(a_request(), an_upstream())
+    assert read.collect() == OpenPullRequestsAnswer.answering(
+        a_request(), an_upstream()
+    )
 
 
 # %% the session's side
@@ -129,7 +131,7 @@ def test_the_answer_committed_for_the_request_is_collected(fork: Fork):
     read = ActionRead(fork.branch, a_request(), answer_type=OpenPullRequestsAnswer)
     read.send()
     answer = OpenPullRequestsAnswer.answering(a_request(), an_upstream())
-    fork.branch.write({ActionFile.RESULT: json.dumps(answer.to_json())}, "Answer")
+    fork.answer(answer)
 
     assert read.wait(timeout=0) == answer
 

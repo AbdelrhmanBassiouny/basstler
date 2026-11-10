@@ -1,8 +1,10 @@
 # basstler upstream reviews
 
-Kept by basstler's `/upstream-reviews` skill. Pushing a new `{{ request }}` runs
-`{{ workflow }}`, which reads the upstream pull request it names and commits
-`{{ result }}`. Nothing on this branch is ever merged anywhere.
+Kept by basstler's `/upstream-reviews` skill. Each read pushes a branch of its own under
+`{{ requests }}/`, starting from this one, with a `{{ request }}`. That push runs
+`{{ workflow }}`, which reads the upstream as the request asks and commits `{{ result }}`
+onto the same branch; the session reads it and deletes the branch. Nothing here is ever
+merged anywhere.
 
 Install or update it with `/setup-personal-notes`, which runs
 `python -m basstler.setup.steps install-upstream-reviews-action`.

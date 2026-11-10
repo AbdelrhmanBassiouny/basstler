@@ -3,14 +3,11 @@
 Read the upstream through the fork's own Actions, from a branch of its own: one pull
 request's report, or the open pull requests opened from the fork's branches.
 
-The fork carries one branch, :attr:`ActionBranch.NAME`, sharing no history with its
-other branches and holding nothing but a workflow calling basstler's reusable one, a
-short README, the latest request and the latest result. Pushing a new request is what
-starts a run - a push runs the workflow file on the pushed branch, so the fork's default
-branch never carries a basstler file, and nothing needs a dispatch permission. The run
-reads the upstream over GraphQL, records every response, and commits the recording back
-to the same branch; the session fetches it and replays it through
-:class:`UpstreamPullRequestReader`, so the report is exactly what a direct read renders.
+The fork carries :attr:`ActionBranch.NAME`, sharing no history with its other branches
+and holding only a workflow calling basstler's reusable one and a README. Each read
+pushes a branch of its own from it, under :attr:`ActionBranch.REQUESTS`, carrying the
+request; the push starts a run, which commits its recording onto that branch. The
+session replays it through :class:`UpstreamPullRequestReader` and deletes the branch.
 
 Commands::
 
@@ -21,7 +18,7 @@ Commands::
     # request a read, wait for the run, print the report
     python -m basstler.upstream_reviews.action read --upstream O/N --fork-owner F \\
         (--pull-request N | --branch B) [--failure-logs] [--include-resolved]
-    # on the runner: answer the branch's request
+    # on the runner: answer the request and commit the result onto its branch
     python -m basstler.upstream_reviews.action run
 """
 
@@ -114,7 +111,7 @@ class ActionCommand(StrEnum):
 
     RUN = "run"
     """
-    On the runner: answer the branch's request.
+    On the runner: answer the request and commit the result onto its branch.
     """
 
 
@@ -149,7 +146,6 @@ def _parse_arguments(argv: list[str] | None) -> argparse.Namespace:
     )
     run = commands.add_parser(ActionCommand.RUN)
     run.add_argument("--request", type=Path, default=Path(ActionFile.REQUEST))
-    run.add_argument("--result", type=Path, default=Path(ActionFile.RESULT))
     return parser.parse_args(argv)
 
 
@@ -162,14 +158,11 @@ def main(argv: list[str] | None = None) -> int:
     """
     arguments = _parse_arguments(argv)
     try:
+        git = GitCommandRunner(arguments.project_root)
         if arguments.command == ActionCommand.RUN:
-            ActionRun(arguments.request, arguments.result).write_answer()
+            ActionRun(arguments.request, git, arguments.remote).publish_answer()
             return 0
-        branch = RemoteBranch(
-            ActionBranch.NAME,
-            GitCommandRunner(arguments.project_root),
-            arguments.remote,
-        )
+        branch = RemoteBranch(ActionBranch.NAME, git, arguments.remote)
         if arguments.command == ActionCommand.INSTALL:
             installation = ActionInstallation(arguments.branch_or_tag)
             changed = installation.install(branch)

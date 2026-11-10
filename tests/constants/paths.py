@@ -189,13 +189,6 @@ class DatasetLocation(PathEnumeration):
     number alone.
     """
 
-    ACTION_RESULT_WITHOUT_REQUEST_IDENTIFIER = (
-        DIRECTORY / "action-result-without-request-identifier.json"
-    )
-    """
-    A result an Action release from before results named their request committed.
-    """
-
     PLAN_SITE_RUNS_SUCCEEDED = DIRECTORY / "plan-site-runs-succeeded.json"
     """
     A site repository's run listing whose latest plan-site run succeeded.

@@ -157,6 +157,30 @@ class RemoteBranch(Branch):
         written.push.raise_if_failed()
         return written.commit
 
+    def create(self, parent: str, files: dict[str, str], message: str) -> str:
+        """
+        Commit files on top of another branch's commit and push them as this branch.
+
+        :param parent: The commit to build on.
+        :param files: What to write, by path, each without its final newline.
+        :param message: The commit message.
+        :return: The pushed commit.
+        :raises GitCommandFailed: If the remote refuses the push.
+        """
+        commit = self.git.commit_files(parent, files, message)
+        self.git.push(
+            ProposedPush(self.remote, f"{commit}:{self.reference}")
+        ).raise_if_failed()
+        return commit
+
+    def delete(self) -> GitCommandResult:
+        """
+        Delete the branch from the remote.
+
+        :return: The push deleting it, failed when the remote refused it.
+        """
+        return self.git.push(ProposedPush(self.remote, f":{self.reference}"))
+
 
 @dataclass(frozen=True)
 class FileWrite:

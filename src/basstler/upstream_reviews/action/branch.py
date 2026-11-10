@@ -29,6 +29,20 @@ class ActionBranch(StrEnum):
     stack maintenance owns.
     """
 
+    REQUESTS = "basstler/upstream-reviews-requests"
+    """
+    Where each request gets a branch of its own, holding the request and then its
+    result, so no two reads ever write the same branch.
+    """
+
+    @classmethod
+    def for_request(cls, identifier: str) -> str:
+        """
+        :param identifier: A request's identifier.
+        :return: The branch carrying that request and its result.
+        """
+        return f"{cls.REQUESTS}/{identifier}"
+
     @classproperty
     def install_command(cls) -> str:
         """
@@ -43,7 +57,7 @@ class ActionBranch(StrEnum):
 
 class ActionFile(StrEnum):
     """
-    Every file on the branch.
+    Every file on the Action branch and on a request's branch.
     """
 
     WORKFLOW = ".github/workflows/upstream-reviews.yml"
@@ -132,8 +146,7 @@ class ActionInstallation:
     def workflow(self) -> str:
         """:return: The caller workflow."""
         return ActionTemplate.WORKFLOW.render(
-            branch=ActionBranch.NAME,
-            request=ActionFile.REQUEST,
+            requests=ActionBranch.REQUESTS,
             repository=BasstlerSource.REPOSITORY,
             reusable_workflow=BasstlerSource.REUSABLE_WORKFLOW,
             branch_or_tag=self.branch_or_tag,
@@ -145,6 +158,7 @@ class ActionInstallation:
         return {
             ActionFile.WORKFLOW: self.workflow,
             ActionFile.README: ActionTemplate.README.render(
+                requests=ActionBranch.REQUESTS,
                 request=ActionFile.REQUEST,
                 workflow=ActionFile.WORKFLOW,
                 result=ActionFile.RESULT,
