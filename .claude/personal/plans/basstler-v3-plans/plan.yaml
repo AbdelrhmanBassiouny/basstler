@@ -25,10 +25,11 @@ items:
   depends_on: []
   status: deferred
   notes: 'Deferred 2026-11-10 (owner): plans as issues is not needed yet, so plans stay in plan.yaml;
-    PR 144 keeps the work so far. Resume when several people share plans or external intake is needed,
-    built on the roadmap''s split rule. REST only (no Projects, no GraphQL), through cli-launcher''s GitHubClient
-    and pydantic models; labels only for blocked and deferred; adds IssuePlanStore.adopt_issue for external-issue-intake.
-    The CRAM fork''s github-native sandbox showed Projects are not worth it as a view.'
+    PR 144 was closed and its branch keeps the work so far. Resume when several people share plans or
+    external intake is needed, built on the roadmap''s split rule. REST only (no Projects, no GraphQL),
+    through cli-launcher''s GitHubClient and pydantic models; labels only for blocked and deferred; adds
+    IssuePlanStore.adopt_issue for external-issue-intake. The CRAM fork''s github-native sandbox showed
+    Projects are not worth it as a view.'
 - id: item-brief
   title: One command prints an item's whole brief in at most 3 KB
   branch: null
