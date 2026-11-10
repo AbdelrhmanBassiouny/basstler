@@ -27,12 +27,11 @@ items:
     deferral on #58, this item is rebuilt on v3''s issue-backed plans once those land.'
   depends_on:
   - basstler-packages/playbook-model
-  status: deferred
-  notes: 'Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on
-    v3 (see roadmap). Was: Items gain kind (bug, cleanup, feature), defaulting from the bug label on the
-    PR; plans gain focus (phd for EQL, KRROOD and robotics work; tooling for basstler; side), items may
-    override it, and a tooling feature carries leverage (high or low: how much it speeds up PhD work).
-    Validated on save as enums in plan_model; the existing plans are backfilled.'
+  status: not started
+  notes: 'Items gain kind (bug, cleanup, feature), defaulting from the bug label on the PR; plans gain
+    focus (phd for EQL, KRROOD and robotics work; tooling for basstler; side), items may override it,
+    and a tooling feature carries leverage (high or low: how much it speeds up PhD work). Validated on
+    save as enums in plan_model; the existing plans are backfilled.'
 - id: priority-policy
   title: Keep the owner's priorities in one policy file on the registry's notes
   branch: null
@@ -40,8 +39,12 @@ items:
   track: recommender
   depends_on:
   - item-kind-and-focus
-  status: deferred
-  notes: 'Deferred until basstler-v3 lands (see roadmap). A priorities.yaml beside _hub.yaml, parsed into pydantic dataclasses: kind order (bug, cleanup, feature); daily queue shape (10 slots: 3 external reviews, 5 PR stages, 1 reading, 1 writing) and a daily point budget; weekly targets (PhD at least 50% of points); size buckets by changed lines (S=1, M=2, L=4, XL=8); topics mapping repositories, paths, labels and keywords to thesis chapters; the thesis repository, its 150-page target and the .bib sources.'
+  status: not started
+  notes: 'A priorities.yaml beside _hub.yaml, parsed into pydantic dataclasses: kind order (bug, cleanup,
+    feature); daily queue shape (10 slots: 3 external reviews, 5 PR stages, 1 reading, 1 writing) and
+    a daily point budget; weekly targets (PhD at least 50% of points); size buckets by changed lines (S=1,
+    M=2, L=4, XL=8); topics mapping repositories, paths, labels and keywords to thesis chapters; the thesis
+    repository, its 150-page target and the .bib sources.'
 - id: ranked-work-list
   title: Rank every actionable item across all hub repositories
   branch: null
@@ -49,13 +52,13 @@ items:
   track: recommender
   depends_on:
   - priority-policy
-  status: deferred
-  notes: 'Deferred until basstler-v3 lands (see roadmap). Ranks deterministically by the policy what is
-    actionable now across hub repositories: startable items, each open PR''s next stage that needs the
-    owner (self-review, review threads, CI, conflicts), and each external issue''s next stage that needs
-    the owner, ranked as a bug, with placing it first. Each stage is its own task, sized by what it acts
-    on; waiting on someone else is shown, never queued. Each entry gives its reason, size and a kickoff
-    or resolve link; untracked open PRs join as ''track this''.'
+  status: not started
+  notes: 'Ranks deterministically by the policy what is actionable now across hub repositories: startable
+    items, each open PR''s next stage that needs the owner (self-review, review threads, CI, conflicts),
+    and each external issue''s next stage that needs the owner, ranked as a bug, with placing it first.
+    Each stage is its own task, sized by what it acts on; waiting on someone else is shown, never queued.
+    Each entry gives its reason, size and a kickoff or resolve link; untracked open PRs join as ''track
+    this''.'
 - id: hub-recommendation-panel
   title: Show the ranked list on the hub page as a sidebar and a full tab
   branch: null
@@ -64,12 +67,11 @@ items:
   depends_on:
   - ranked-work-list
   - basstler-packages/playbook-model
-  status: deferred
-  notes: Deferred until basstler-v3 plan-store-issues and plan-site-from-issues land, then rebuilt on v3 (see roadmap).
-    The hub page carries a 'Today' sidebar with the daily queue of ten and a 'Recommended' tab with the whole ranked
-    list, grouped by kind with the reasons. The panel reads one published recommendations.json, fetched without
-    cache on page load, and shows when it was built. Refresh shows the build's run until a newer file is published,
-    then reloads it. Rebuilt per daily-queue-refresh; no Artifact version.
+  status: not started
+  notes: The hub page carries a 'Today' sidebar with the daily queue of ten and a 'Recommended' tab with
+    the whole ranked list, grouped by kind with the reasons. The panel reads one published recommendations.json,
+    fetched without cache on page load, and shows when it was built. Refresh shows the build's run until
+    a newer file is published, then reloads it. Rebuilt per daily-queue-refresh; no Artifact version.
 - id: external-review-candidates
   title: Recommend other people's open PRs to review, related and small first
   branch: null
@@ -77,9 +79,12 @@ items:
   track: recommender
   depends_on:
   - ranked-work-list
-  status: deferred
-  notes: 'Deferred like the rest of the plan. Fetches open PRs not authored by the owner and not yet reviewed by them, on every repository the owner works on or has a fork of (the fork''s upstream included). Ranked deterministically by topic relatedness to the owner''s queued PR stages (shared changed paths first, then repository, linked issues, labels, keyword overlap with priorities.yaml topics), then by size, smaller first. Fills the queue''s three review slots.'
-
+  status: not started
+  notes: Fetches open PRs not authored by the owner and not yet reviewed by them, on every repository
+    the owner works on or has a fork of (the fork's upstream included). Ranked deterministically by topic
+    relatedness to the owner's queued PR stages (shared changed paths first, then repository, linked issues,
+    labels, keyword overlap with priorities.yaml topics), then by size, smaller first. Fills the queue's
+    three review slots.
 - id: daily-queue-refresh
   title: Refresh the recommendations on every change, on Refresh and each morning
   branch: null
@@ -87,13 +92,13 @@ items:
   track: recommender
   depends_on:
   - external-review-candidates
-  status: deferred
-  notes: 'Deferred like the rest of the plan. Ranking runs once, in the plan site build; the page never ranks. Every
-    trigger starts that one build: a plan save (build_start), a merge, an issue or PR opened, closed or labelled
-    in a hub repository (the merge dispatch workflow extended to those events), the Refresh button (plan-site-ui/command-issues),
-    and one morning cron for the new day''s queue, the approved exception to no-schedule. No interval polling. A
-    concurrency group folds a burst into one run, and ETag requests keep refetching cheap. A failed fetch is shown,
-    never dropped.'
+  status: not started
+  notes: 'Ranking runs once, in the plan site build; the page never ranks. Every trigger starts that one
+    build: a plan save (build_start), a merge, an issue or PR opened, closed or labelled in a hub repository
+    (the merge dispatch workflow extended to those events), the Refresh button (plan-site-ui/command-issues),
+    and one morning cron for the new day''s queue, the approved exception to no-schedule. No interval
+    polling. A concurrency group folds a burst into one run, and ETag requests keep refetching cheap.
+    A failed fetch is shown, never dropped.'
 - id: progress-meters
   title: Show weekly meters and a thesis meter toward 150 pages
   branch: null
@@ -101,9 +106,13 @@ items:
   track: recommender
   depends_on:
   - daily-queue-refresh
-  status: deferred
-  notes: 'Deferred like the rest of the plan. Weekly meters in points: PhD share, review share, writing sessions, points finished against recent weeks; done stages and reviews come from GitHub, reading and writing are logged. Thesis meter from the LaTeX repository: compiled pages against 150, words / 250 beside it, trend and projected finish. The reading slot picks related .bib entries from the repositories'' notes; the writing slot names the thesis chapter of finished PRs. /plan-create and /add-plan-item offer related .bib entries as reading items, added only if accepted.'
-
+  status: not started
+  notes: 'Weekly meters in points: PhD share, review share, writing sessions, points finished against
+    recent weeks; done stages and reviews come from GitHub, reading and writing are logged. Thesis meter
+    from the LaTeX repository: compiled pages against 150, words / 250 beside it, trend and projected
+    finish. The reading slot picks related .bib entries from the repositories'' notes; the writing slot
+    names the thesis chapter of finished PRs. /plan-create and /add-plan-item offer related .bib entries
+    as reading items, added only if accepted.'
 - id: settings-and-log-pages
   title: Edit priorities and log reading and writing from the site, with a live preview
   branch: null
@@ -112,5 +121,10 @@ items:
   depends_on:
   - progress-meters
   - plan-site-ui/command-issues
-  status: deferred
-  notes: 'Deferred like the rest of the plan. A Settings tab edits every priorities.yaml field as a form (sliders for shares and budgets, drag to reorder kinds, topic and chapter pickers) and a Log button records reading done, writing sessions and accepted .bib suggestions. Saving sends a plan-site-ui command issue, which validates the change into the policy dataclasses, commits it and rebuilds the site; a refused change is reported on the page. Charts and filters run in the browser on the published data. Open: a live re-rank preview needs the Python ranker in the browser (Pyodide); decide at kickoff.'
+  status: not started
+  notes: 'A Settings tab edits every priorities.yaml field as a form (sliders for shares and budgets,
+    drag to reorder kinds, topic and chapter pickers) and a Log button records reading done, writing sessions
+    and accepted .bib suggestions. Saving sends a plan-site-ui command issue, which validates the change
+    into the policy dataclasses, commits it and rebuilds the site; a refused change is reported on the
+    page. Charts and filters run in the browser on the published data. Open: a live re-rank preview needs
+    the Python ranker in the browser (Pyodide); decide at kickoff.'
