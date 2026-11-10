@@ -5,7 +5,8 @@ Plan:
 
 Done:
 - Per-request branches, no concurrency group, run commits in Python, trailer-marked pruning.
-- Review round 1 (1d21d74): timedelta, required remote, RemoteBranch writes JSON values, test fixes; 5 threads resolved.
+- Review rounds 1-2 (1d21d74, bfe7516): timedelta, required remote, RemoteBranch writes dicts and ValidatedJSONModel, test fixes.
+- Follow-up plan items recorded: basstler-reliability/action-exchange-models, structured-run-listing-requests.
 
 Next:
-- Reviewer to decide: Path keys for branch files (this PR or separate); structured run-listing test double (separate PR / issue?).
+- Two threads left open on purpose (read.py:98, test_action listing) until those follow-ups land; await review.
