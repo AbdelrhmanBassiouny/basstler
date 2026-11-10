@@ -6,8 +6,9 @@ request's report, or the open pull requests opened from the fork's branches.
 The fork carries :attr:`ActionBranch.NAME`, sharing no history with its other branches
 and holding only a workflow calling basstler's reusable one and a README. Each read
 pushes a branch of its own from it, under :attr:`ActionBranch.REQUESTS`, carrying the
-request; the push starts a run, which commits its recording onto that branch. The
-session replays it through :class:`UpstreamPullRequestReader` and deletes the branch.
+request; the push starts a run, which commits its recording onto that branch and
+deletes requests no read waits for any more. The session replays the recording through
+:class:`UpstreamPullRequestReader` and deletes its branch.
 
 Commands::
 
@@ -18,7 +19,7 @@ Commands::
     # request a read, wait for the run, print the report
     python -m basstler.upstream_reviews.action read --upstream O/N --fork-owner F \\
         (--pull-request N | --branch B) [--failure-logs] [--include-resolved]
-    # on the runner: answer the request and commit the result onto its branch
+    # on the runner: answer the request onto its branch, then prune abandoned ones
     python -m basstler.upstream_reviews.action run
 """
 
@@ -35,6 +36,7 @@ from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.repository import Repository
 from basstler.standard_streams import StandardStreamHandler
 from basstler.upstream_reviews.action.branch import (
+    AbandonedRequests,
     ActionInstallation,
 )
 from basstler.upstream_reviews.action.read import (
@@ -111,7 +113,7 @@ class ActionCommand(StrEnum):
 
     RUN = "run"
     """
-    On the runner: answer the request and commit the result onto its branch.
+    On the runner: answer the request onto its branch, then delete abandoned requests.
     """
 
 
@@ -161,6 +163,7 @@ def main(argv: list[str] | None = None) -> int:
         git = GitCommandRunner(arguments.project_root)
         if arguments.command == ActionCommand.RUN:
             ActionRun(arguments.request, git, arguments.remote).publish_answer()
+            AbandonedRequests(git, arguments.remote).delete()
             return 0
         branch = RemoteBranch(ActionBranch.NAME, git, arguments.remote)
         if arguments.command == ActionCommand.INSTALL:

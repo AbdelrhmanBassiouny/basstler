@@ -5,12 +5,15 @@ Installing the upstream-reviews Action on the fork's own branch.
 from __future__ import annotations
 
 import re
+import time
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
+from basstler.branch import Branch
 from basstler.class_property import classproperty
+from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.render_common import create_template_environment
 
@@ -192,3 +195,64 @@ class ActionInstallation:
             self.files, f"Run basstler {self.branch_or_tag}'s upstream-reviews Action"
         )
         return True
+
+
+# %% pruning
+
+
+@dataclass(frozen=True)
+class AbandonedRequests:
+    """
+    The request branches on the fork that no read waits for any more.
+    """
+
+    git: GitCommandRunner
+    """
+    The clone to work in.
+    """
+
+    remote: str
+    """
+    The fork's remote.
+    """
+
+    abandoned_after: float = 3600.0
+    """
+    How many seconds after its last commit a request branch is abandoned; longer than
+    any read waits for its result.
+    """
+
+    def names(self) -> list[str]:
+        """
+        :return: Every request branch whose last commit is older than
+            :attr:`abandoned_after`.
+        """
+        local = f"{RemoteBranch.local_reference_prefix}/{ActionBranch.REQUESTS}"
+        self.git.fetch(
+            self.remote,
+            "--no-tags",
+            "--no-write-fetch-head",
+            "--prune",
+            f"+{Branch.namespace}/{ActionBranch.REQUESTS}/*:{local}/*",
+        )
+        listed = self.git.run(
+            "for-each-ref", "--format=%(committerdate:unix) %(refname)", local
+        )
+        oldest_waited_for = time.time() - self.abandoned_after
+        return [
+            reference.removeprefix(f"{RemoteBranch.local_reference_prefix}/")
+            for committed, reference in (line.split() for line in listed.splitlines())
+            if int(committed) < oldest_waited_for
+        ]
+
+    def delete(self) -> list[str]:
+        """
+        Delete every abandoned request branch from the fork.
+
+        :return: The deleted branches.
+        :raises GitCommandFailed: If the fork refuses a deletion.
+        """
+        names = self.names()
+        for name in names:
+            RemoteBranch(name, self.git, self.remote).delete().raise_if_failed()
+        return names

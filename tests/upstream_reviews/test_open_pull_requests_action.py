@@ -37,7 +37,14 @@ from ..maintenance.fork import (
     make_configuration,
 )
 from ..maintenance.test_board import ListedRepository
-from .test_action import BRANCH_OR_TAG, REQUEST_IDENTIFIER, UPSTREAM, Fork, fork
+from .test_action import (
+    BRANCH_OR_TAG,
+    REQUEST_IDENTIFIER,
+    UPSTREAM,
+    Fork,
+    fork,
+    sent_long_ago,
+)
 
 # %% the request and its answer
 
@@ -121,6 +128,35 @@ def test_the_run_commits_its_answer_onto_the_request_s_branch(
     assert read.collect() == OpenPullRequestsAnswer.answering(
         a_request(), an_upstream()
     )
+
+
+def test_the_run_deletes_abandoned_requests_after_answering(
+    fork: Fork, tmp_path, monkeypatch
+):
+    monkeypatch.setattr(
+        GitHubRepository,
+        "from_environment",
+        classmethod(lambda cls, repository: an_upstream()),
+    )
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    abandoned = sent_long_ago(fork, monkeypatch)
+    read = ActionRead(fork.branch, a_request(), answer_type=OpenPullRequestsAnswer)
+    read.send()
+    request_file = tmp_path / ActionFile.REQUEST
+    request_file.write_text(json.dumps(a_request().as_sent()))
+
+    basstler.upstream_reviews.action.__main__.main(
+        [
+            "--project-root",
+            str(fork.clone),
+            ActionCommand.RUN,
+            "--request",
+            str(request_file),
+        ]
+    )
+
+    assert abandoned.request_branch.name not in fork.branches()
+    assert read.request_branch.name in fork.branches()
 
 
 # %% the session's side

@@ -23,6 +23,7 @@ import pytest
 import basstler.upstream_reviews.action.__main__
 import basstler.upstream_reviews.action.read
 import basstler.upstream_reviews.action.run
+from basstler.environment import GitVariable
 from basstler.locations import PackageLocation
 from basstler.repository import Repository
 from basstler.upstream_reviews.action.__main__ import (
@@ -33,6 +34,7 @@ from basstler.upstream_reviews.action.__main__ import (
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.action.branch import (
+    AbandonedRequests,
     ActionInstallation,
     InstallationState,
 )
@@ -485,6 +487,38 @@ def test_concurrent_requests_each_collect_their_own_result(fork):
     collected = [read.wait(timeout=0).request_identifier for read in reads]
 
     assert collected == [REQUEST_IDENTIFIER, OTHER_REQUEST_IDENTIFIER]
+
+
+def sent_long_ago(fork: Fork, monkeypatch) -> ActionRead:
+    """:return: A read whose request was pushed long before any read still waits."""
+    monkeypatch.setenv(GitVariable.COMMITTER_DATE, "2000-01-01T00:00:00Z")
+    read = ActionRead(
+        fork.branch, replace(request(), identifier=OTHER_REQUEST_IDENTIFIER)
+    )
+    read.send()
+    monkeypatch.delenv(GitVariable.COMMITTER_DATE)
+    return read
+
+
+def test_only_requests_older_than_the_longest_wait_are_deleted(fork, monkeypatch):
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    sent_long_ago(fork, monkeypatch)
+    waiting_read = ActionRead(fork.branch, request())
+    waiting_read.send()
+
+    AbandonedRequests(GitCommandRunner(fork.clone), "origin").delete()
+
+    assert set(fork.branches()) == {
+        "main",
+        ActionBranch.NAME,
+        waiting_read.request_branch.name,
+    }
+
+
+def test_deleting_with_no_abandoned_requests_pushes_nothing(fork):
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+
+    assert AbandonedRequests(GitCommandRunner(fork.clone), "origin").delete() == []
 
 
 def test_a_result_answering_another_request_is_not_collected(fork):
