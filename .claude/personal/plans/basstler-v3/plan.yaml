@@ -1,10 +1,10 @@
 schema_version: 1
 id: basstler-v3
 title: 'basstler v3: light, reliable and easy for anyone to use and extend'
-description: 'Rebuild basstler next to v2 so code does the mechanics and Claude only judges:
-  each skill runs one command that prints a brief, makes its judgment, and records the result
-  with one command. GitHub is the only state store: plans as issues, stacks from pull request
-  bases, upstream reviews mirrored by an Action. v2 areas are deleted as v3 covers them. Plans
+description: 'Rebuild basstler next to v2 so code does the mechanics and Claude only judges: each skill
+  runs one command that prints a brief, makes its judgment, and records the result with one command. Stacks
+  come from pull request bases and upstream reviews are mirrored by an Action; plans stay in plan.yaml
+  while basstler-v3-plans/plan-store-issues is deferred. v2 areas are deleted as v3 covers them. Plans
   are basstler-v3-plans and stacks and reviews basstler-v3-stacks.
 
   '
@@ -80,11 +80,10 @@ items:
   track: cutover
   depends_on:
   - slim-session-start
-  - basstler-v3-plans/plan-import
-  - basstler-v3-plans/plan-site-from-issues
   - basstler-v3-stacks/maintenance-action
   status: not started
-  notes: 'Major release: removed commands, files and settings. Release notes list each removed
-    command with its replacement.
+  notes: 'Removes the bash layer, the dashboards and the old maintenance; plan.yaml and its tooling stay
+    while basstler-v3-plans is deferred. Major release: removed commands, files and settings. Release
+    notes list each removed command with its replacement.
 
     '
