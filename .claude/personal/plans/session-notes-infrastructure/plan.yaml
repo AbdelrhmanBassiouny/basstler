@@ -67,5 +67,12 @@ items:
   title: "Personal notes that apply to every repository, beside each repository's own, each edited by one command"
   branch: null
   track: handover
+  notes: >
+    A user-level notes source for every repository: one notes repository and branch named once, in
+    basstler.environment and basstler.locations, set up by /setup-personal-notes. session-start.sh
+    writes a global block, then the repository block, which wins on conflict. Saving takes an
+    explicit scope (global or repository), writes only that source, and refuses without one; one
+    command adds, replaces or removes a named note in a scope. Coordinate with
+    rule-enforcement/rule-layers. release:minor.
   depends_on: []
   status: not started
