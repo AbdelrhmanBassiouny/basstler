@@ -96,7 +96,9 @@ class ActionRead[AnswerType: ActionAnswer]:
         return self.request_branch.create(
             installed,
             {ActionFile.REQUEST: json.dumps(self.request.as_sent(), indent=2)},
-            f"Request {self.request.kind} {self.request.identifier}",
+            ActionBranch.request_commit_message(
+                f"Request {self.request.kind}", self.request.identifier
+            ),
         )
 
     def wait(self, timeout: float, commit: str | None = None) -> AnswerType:

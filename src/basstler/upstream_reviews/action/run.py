@@ -76,5 +76,5 @@ class ActionRun:
             ActionBranch.for_request(answer.request_identifier), self.git, self.remote
         ).write(
             {ActionFile.RESULT: json.dumps(answer.to_json())},
-            f"Answer {answer.request_identifier}",
+            ActionBranch.request_commit_message("Answer", answer.request_identifier),
         )

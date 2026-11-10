@@ -13,6 +13,7 @@ from typing import Any
 
 from basstler.branch import Branch
 from basstler.class_property import classproperty
+from basstler.maintenance.constants import CommitTrailer
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.render_common import create_template_environment
@@ -45,6 +46,15 @@ class ActionBranch(StrEnum):
         :return: The branch carrying that request and its result.
         """
         return f"{cls.REQUESTS}/{identifier}"
+
+    @staticmethod
+    def request_commit_message(subject: str, identifier: str) -> str:
+        """
+        :param subject: What the commit does.
+        :param identifier: The request whose branch the commit is on.
+        :return: The message, whose trailer marks the branch as basstler's own.
+        """
+        return f"{subject}\n\n{CommitTrailer.ACTION_REQUEST}: {identifier}"
 
     @classproperty
     def install_command(cls) -> str:
@@ -222,10 +232,11 @@ class AbandonedRequests:
     any read waits for its result.
     """
 
-    def names(self) -> list[str]:
+    def identifiers(self) -> list[str]:
         """
-        :return: Every request branch whose last commit is older than
-            :attr:`abandoned_after`.
+        :return: The request of every branch basstler made whose last commit is older
+            than :attr:`abandoned_after`; a branch whose last commit's request trailer
+            does not name its own request is a person's, and never listed.
         """
         local = f"{RemoteBranch.local_reference_prefix}/{ActionBranch.REQUESTS}"
         self.git.fetch(
@@ -239,20 +250,30 @@ class AbandonedRequests:
             "for-each-ref", "--format=%(committerdate:unix) %(refname)", local
         )
         oldest_waited_for = time.time() - self.abandoned_after
-        return [
-            reference.removeprefix(f"{RemoteBranch.local_reference_prefix}/")
+        old = [
+            reference.removeprefix(f"{local}/")
             for committed, reference in (line.split() for line in listed.splitlines())
             if int(committed) < oldest_waited_for
+        ]
+        return [
+            identifier
+            for identifier in old
+            if self.git.trailer_value(
+                f"{local}/{identifier}", CommitTrailer.ACTION_REQUEST
+            )
+            == identifier
         ]
 
     def delete(self) -> list[str]:
         """
         Delete every abandoned request branch from the fork.
 
-        :return: The deleted branches.
+        :return: The identifiers of the deleted requests.
         :raises GitCommandFailed: If the fork refuses a deletion.
         """
-        names = self.names()
-        for name in names:
-            RemoteBranch(name, self.git, self.remote).delete().raise_if_failed()
-        return names
+        identifiers = self.identifiers()
+        for identifier in identifiers:
+            RemoteBranch(
+                ActionBranch.for_request(identifier), self.git, self.remote
+            ).delete().raise_if_failed()
+        return identifiers

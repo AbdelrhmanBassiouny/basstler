@@ -365,7 +365,8 @@ class Fork:
     def answer(self, result: ActionAnswer) -> None:
         """Commit a result onto its request's branch, as the run does."""
         self.request_branch(result.request_identifier).write(
-            {ActionFile.RESULT: json.dumps(result.to_json())}, "Answer"
+            {ActionFile.RESULT: json.dumps(result.to_json())},
+            ActionBranch.request_commit_message("Answer", result.request_identifier),
         )
 
 
@@ -513,6 +514,21 @@ def test_only_requests_older_than_the_longest_wait_are_deleted(fork, monkeypatch
         ActionBranch.NAME,
         waiting_read.request_branch.name,
     }
+
+
+def test_an_old_branch_basstler_did_not_make_is_never_deleted(fork, monkeypatch):
+    """
+    A branch a person made under the request branches' prefix carries no request
+    trailer naming it, so pruning leaves it however old it is.
+    """
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    monkeypatch.setenv(GitVariable.COMMITTER_DATE, "2000-01-01T00:00:00Z")
+    handmade = fork.request_branch(OTHER_REQUEST_IDENTIFIER)
+    handmade.write({"notes.md": "mine"}, "My own notes")
+
+    AbandonedRequests(GitCommandRunner(fork.clone), "origin").delete()
+
+    assert handmade.name in fork.branches()
 
 
 def test_deleting_with_no_abandoned_requests_pushes_nothing(fork):
