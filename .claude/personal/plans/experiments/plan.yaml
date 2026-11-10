@@ -1,0 +1,87 @@
+schema_version: 1
+id: experiments
+title: 'Experiments: build an idea end to end, then choose how it lands'
+description: 'Build an idea end to end in a sandbox and iterate until it is liked; at every stage the
+  user picks the next move: keep iterating, drop it, split it into a plan the same session implements,
+  or open it upstream as one pull request. Experiments are listed on the hub with their next moves.
+
+  '
+default_repository: KAOS-repositories/basstler
+tracking_issue: 192
+waves:
+- id: experiments
+  name: Experiments
+  description: Experiment entries, the skill, the hub listing and the two finishing paths
+tracks:
+- id: record
+  name: Record and skill
+  wave: experiments
+- id: hub
+  name: Hub
+  wave: experiments
+- id: finishing
+  name: Finishing
+  wave: experiments
+items:
+- id: experiment-record
+  title: An experiment is a recorded entry with its stage and the moves open from it
+  branch: null
+  pull_request_number: null
+  track: record
+  depends_on: []
+  status: not started
+  notes: 'A validated model on the notes branch beside the hub: goal, sandbox (fork, scratch repository
+    or branch), stage, verdict and session. Stages: described, running, accepted, dropped, split, upstream.
+    Each stage declares its allowed moves once (described: plan first, experiment first, one PR; running:
+    keep iterating, accept, drop, switch to plan first; accepted: split into a plan and implement it,
+    open upstream as one PR, keep as a fork-only PR), so the session''s prompt and the hub''s links read
+    one source.'
+- id: experiment-skill
+  title: The session offers the moves at each stage, and /experiment runs one
+  branch: null
+  pull_request_number: null
+  track: record
+  depends_on:
+  - experiment-record
+  status: not started
+  notes: 'When a task is described, a rule in plugin/hooks/session-rules.md offers the described stage''s
+    moves with a recommended one, before the persistent-plan rule. /experiment (plugin/skills/experiment/SKILL.md)
+    opens the sandbox, records the entry and iterates until the user picks a move; at every stage it offers
+    that stage''s moves. Drop records the verdict and lists the sandbox''s cleanup steps. Worked example:
+    the github-native sandbox in the CRAM fork.'
+- id: hub-experiments
+  title: The hub lists experiments with their stage and next moves
+  branch: null
+  pull_request_number: null
+  track: hub
+  depends_on:
+  - experiment-record
+  status: not started
+  notes: The hub page lists running and accepted experiments, each with its goal, sandbox link, stage,
+    verdict and one link per allowed move (Split into a plan, Open upstream, Drop, ...), read from the
+    same model as the session's prompt. Dropped and finished experiments sink into a collapsed section.
+- id: experiment-split
+  title: One session splits an accepted experiment into a plan and implements it
+  branch: null
+  pull_request_number: null
+  track: finishing
+  depends_on:
+  - experiment-skill
+  status: not started
+  notes: From an accepted experiment, one session drafts a plan of independently testable items with tracks
+    and waves (through /plan-create, sandbox diff and conversation as source), then implements each item
+    from the sandbox's diff, opens the stacked draft PRs and records each one through plan.item_bootstrap
+    and the stack tooling. The entry moves to split and links the plan. Switch to plan first on a running
+    experiment uses the same path on what exists so far.
+- id: experiment-upstream
+  title: An accepted experiment opens upstream as one pull request
+  branch: null
+  pull_request_number: null
+  track: finishing
+  depends_on:
+  - experiment-skill
+  status: not started
+  notes: Opens the working result as one draft pull request from the fork to the upstream, never pushing
+    to the upstream, and records it on the entry, which moves to upstream. Keep as a fork-only PR opens
+    it on the fork instead. Shares the promotion path with basstler-v3-stacks/upstream-promotion once
+    that lands.
