@@ -165,5 +165,9 @@ items:
   title: "The upstream-reviews Action's requests and answers are ValidatedJSONModel subclasses"
   branch: null
   track: guards
+  notes: >
+    Also convert the nested RecordedJobLog (upstream_reviews/helper/recording.py) and
+    UpstreamPullRequests (maintenance/board.py), with their key enums. Each model then is a
+    JSONSerializable through ValidatedJSONModel, and branch writes pass it directly.
   depends_on: []
   status: not started
