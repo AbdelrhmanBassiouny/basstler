@@ -153,3 +153,10 @@ items:
     schema the record commands export and validate their input against, size limits included.
     A Claude run in an Action uses claude -p --bare --output-format json --json-schema with
     that schema and records only structured_output, failing when it is absent.
+
+- id: structured-run-listing-requests
+  title: "Tests read the run listings they asked for as models, not as parsed REST paths"
+  branch: null
+  track: guards
+  depends_on: []
+  status: not started
