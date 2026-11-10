@@ -364,7 +364,7 @@ class Fork:
     def answer(self, result: ActionAnswer) -> None:
         """Commit a result onto its request's branch, as the run does."""
         self.request_branch(result.request_identifier).write(
-            {ActionFile.RESULT: result.to_json()},
+            {ActionFile.RESULT: result},
             ActionBranch.request_commit_message("Answer", result.request_identifier),
         )
 

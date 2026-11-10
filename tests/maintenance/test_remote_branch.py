@@ -6,8 +6,10 @@ from __future__ import annotations
 
 import json
 import subprocess
+from dataclasses import dataclass
+from typing import Any
 
-from basstler.json_model import ValidatedJSONModel
+from basstler.json_model import JSONSerializable, ValidatedJSONModel
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.repository import Repository
@@ -50,6 +52,21 @@ class CountedApples(ValidatedJSONModel):
     """
 
 
+@dataclass(frozen=True)
+class CountedPears(JSONSerializable):
+    """
+    A value that writes its own JSON object.
+    """
+
+    pears: int
+    """
+    How many pears there are.
+    """
+
+    def to_json(self) -> dict[str, Any]:
+        return {"pears": self.pears}
+
+
 # %% writing and reading a named branch
 
 
@@ -77,6 +94,17 @@ def test_a_json_object_is_written_as_its_json_text(fork_checkout):
     assert json.loads(
         file_on_remote(fork_checkout, "notes/someone", "counted.json")
     ) == {"apples": 3}
+
+
+def test_a_value_convertible_to_json_is_written_as_its_json_text(fork_checkout):
+    branch = branch_on_fork(fork_checkout, "notes/someone")
+
+    branch.write({"counted.json": CountedPears(2)}, "Write a value")
+
+    assert (
+        json.loads(file_on_remote(fork_checkout, "notes/someone", "counted.json"))
+        == CountedPears(2).to_json()
+    )
 
 
 def test_a_model_is_written_as_its_json_text(fork_checkout):
