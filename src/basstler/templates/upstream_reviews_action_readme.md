@@ -4,8 +4,8 @@ Kept by basstler's `/upstream-reviews` skill. Each read pushes a branch of its o
 `{{ requests }}/`, starting from this one, with a `{{ request }}`. That push runs
 `{{ workflow }}`, which reads the upstream as the request asks and commits `{{ result }}`
 onto the same branch; the session reads it and deletes the branch. Each run also
-deletes request branches left for over an hour by a read that gave up. Nothing here is ever
-merged anywhere.
+deletes the request branches it made, by their `Basstler-request` trailer, that a read
+gave up on over an hour ago. Nothing here is ever merged anywhere.
 
 Install or update it with `/setup-personal-notes`, which runs
 `python -m basstler.setup.steps install-upstream-reviews-action`.
