@@ -62,3 +62,10 @@ items:
     and v2-removal, which delete this layer; if they are close, drop this item.
 
     '
+
+- id: global-personal-notes
+  title: "Personal notes that apply to every repository, beside each repository's own, each edited by one command"
+  branch: null
+  track: handover
+  depends_on: []
+  status: not started
