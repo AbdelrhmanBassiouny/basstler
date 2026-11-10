@@ -112,8 +112,8 @@ class MaintenanceNotice(StrEnum):
 
 class CommitTrailer(StrEnum):
     """
-    The trailer keys a maintenance pass writes into the commits it makes, and later
-    recognises those commits by.
+    The trailer keys basstler writes into the commits it makes, and later recognises
+    those commits by.
     """
 
     RESTACKED_PARENT = "Restacked-parent"
@@ -126,6 +126,12 @@ class CommitTrailer(StrEnum):
     """
     The commit of the parent a restack merged in, which a restack's own merge records as
     its second parent.
+    """
+
+    ACTION_REQUEST = "Basstler-request"
+    """
+    The identifier of the upstream-reviews request whose branch the commit is on,
+    marking the branch as basstler's own rather than one a person made.
     """
 
 

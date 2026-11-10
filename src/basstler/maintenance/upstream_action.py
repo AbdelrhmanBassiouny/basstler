@@ -2,10 +2,10 @@
 Reading the upstream's open pull requests through the fork's own Action, for a session
 whose credential cannot reach the upstream's API.
 
-The session pushes an :class:`OpenPullRequestsRequest` to the fork's Action branch; the
-run reads the upstream with the runner's own token and commits an
-:class:`OpenPullRequestsAnswer`; the session fetches it. Nothing is ever written to the
-upstream.
+The session pushes an :class:`OpenPullRequestsRequest` on a branch of its own; the run
+reads the upstream with the runner's own token and commits an
+:class:`OpenPullRequestsAnswer` onto that branch; the session fetches it. Nothing is
+ever written to the upstream.
 """
 
 from __future__ import annotations

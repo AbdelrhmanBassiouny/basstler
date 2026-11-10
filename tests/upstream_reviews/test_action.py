@@ -9,12 +9,11 @@ fork - so installing, requesting and collecting a result are exercised as git co
 
 from __future__ import annotations
 
-from urllib.parse import parse_qs, urlsplit
 
 import json
 from http import HTTPStatus
 import subprocess
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +22,7 @@ import pytest
 import basstler.upstream_reviews.action.__main__
 import basstler.upstream_reviews.action.read
 import basstler.upstream_reviews.action.run
+from basstler.environment import GitVariable
 from basstler.locations import PackageLocation
 from basstler.repository import Repository
 from basstler.upstream_reviews.action.__main__ import (
@@ -33,10 +33,12 @@ from basstler.upstream_reviews.action.__main__ import (
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.action.branch import (
+    AbandonedRequests,
     ActionInstallation,
     InstallationState,
 )
 from basstler.github.run_listing import RunListing
+from basstler.upstream_reviews.action.exchange import ActionAnswer
 from basstler.upstream_reviews.action.read import ActionRead
 from basstler.upstream_reviews.action.recording import (
     ActionResult,
@@ -68,7 +70,7 @@ from basstler.upstream_reviews.action.branch import (
     BasstlerSource,
 )
 
-from ..constants.paths import DatasetLocation, RepositoryLocation
+from ..constants.paths import RepositoryLocation
 from .test_command_line import (
     RECORDED_PULL_REQUEST_NUMBER,
     UPSTREAM,
@@ -85,6 +87,11 @@ The release the tests install.
 REQUEST_IDENTIFIER = "0123456789abcdef"
 """
 The request every read here makes.
+"""
+
+OTHER_REQUEST_IDENTIFIER = "fedcba9876543210"
+"""
+A second request, made at the same time as the first.
 """
 
 FORK = Repository(Example.FORK_OWNER, Example.UPSTREAM_NAME)
@@ -254,7 +261,7 @@ def test_the_run_answers_a_pull_request_report_request_with_its_recording(
     request_file = tmp_path / ActionFile.REQUEST
     request_file.write_text(json.dumps(request().as_sent()))
 
-    answer = ActionRun(request_file, tmp_path / ActionFile.RESULT).answer()
+    answer = ActionRun(request_file, GitCommandRunner(tmp_path), "origin").answer()
 
     assert answer == ActionResult.answering(request(), github())
 
@@ -273,8 +280,20 @@ def test_the_caller_runs_the_release_it_names_on_pushes_of_a_request():
         ActionInstallation.branch_or_tag_line.search(workflow)["branch_or_tag"]
         == BRANCH_OR_TAG
     )
-    assert f"branches: [{ActionBranch.NAME}]" in workflow
-    assert f"paths: [{ActionFile.REQUEST}]" in workflow
+    assert f'branches: ["{ActionBranch.REQUESTS}/**"]' in workflow
+
+
+def test_concurrent_requests_are_never_queued_behind_or_cancelled_by_each_other():
+    """
+    A concurrency group keeps one pending run and cancels the rest, so neither the
+    caller nor the reusable workflow may declare one.
+    """
+    reusable = (
+        PackageLocation.SOURCE_TREE / BasstlerSource.REUSABLE_WORKFLOW
+    ).read_text()
+
+    assert "concurrency" not in ActionInstallation(BRANCH_OR_TAG).workflow
+    assert "concurrency" not in reusable
 
 
 def test_the_caller_workflow_is_rendered_without_html_escaping():
@@ -286,14 +305,13 @@ def test_the_caller_workflow_is_rendered_without_html_escaping():
     )
 
 
-def test_the_reusable_workflow_runs_this_module_and_commits_its_result():
+def test_the_reusable_workflow_runs_this_module():
     reusable = (
         PackageLocation.SOURCE_TREE / BasstlerSource.REUSABLE_WORKFLOW
     ).read_text()
 
     command_path = basstler.upstream_reviews.action.__main__.__package__
     assert f"python -m {command_path} {ActionCommand.RUN}" in reusable
-    assert f"git add {ActionFile.RESULT}" in reusable
     assert "workflow_call" in reusable
 
 
@@ -325,9 +343,30 @@ class Fork:
             for name in names
         }
 
-    def answer(self, result: ActionResult) -> None:
-        """Commit a result onto the branch, as the run does."""
-        self.branch.write({ActionFile.RESULT: json.dumps(result.to_json())}, "Answer")
+    def request_branch(self, identifier: str = REQUEST_IDENTIFIER) -> RemoteBranch:
+        """:return: The branch of the request with *identifier*."""
+        return RemoteBranch(
+            ActionBranch.for_request(identifier), GitCommandRunner(self.clone), "origin"
+        )
+
+    def request_files(self, identifier: str = REQUEST_IDENTIFIER) -> dict[str, str]:
+        """:return: Every file on the request's branch, by path."""
+        branch = ActionBranch.for_request(identifier)
+        names = git(self.remote, "ls-tree", "-r", "--name-only", branch).split()
+        return {name: git(self.remote, "show", f"{branch}:{name}") for name in names}
+
+    def branches(self) -> list[str]:
+        """:return: Every branch on the remote."""
+        return git(
+            self.remote, "for-each-ref", "--format=%(refname:short)", "refs/heads"
+        ).split()
+
+    def answer(self, result: ActionAnswer) -> None:
+        """Commit a result onto its request's branch, as the run does."""
+        self.request_branch(result.request_identifier).write(
+            {ActionFile.RESULT: result},
+            ActionBranch.request_commit_message("Answer", result.request_identifier),
+        )
 
 
 def git(directory: Path, *arguments: str) -> str:
@@ -390,26 +429,24 @@ def test_the_state_is_missing_then_current_then_stale(fork):
     )
 
 
-def test_upgrading_keeps_the_last_request_and_result(fork):
+def test_a_request_leaves_the_action_branch_as_installed(fork):
     ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    installed = git(fork.remote, "rev-parse", ActionBranch.NAME)
+
     ActionRead(fork.branch, request()).send()
 
-    ActionInstallation("v10.0.0").install(fork.branch)
-
-    assert ActionFile.REQUEST in fork.files()
-    assert "v10.0.0" in fork.files()[ActionFile.WORKFLOW]
+    assert git(fork.remote, "rev-parse", ActionBranch.NAME) == installed
 
 
-def test_a_request_is_pushed_beside_the_workflow(fork):
+def test_a_request_is_pushed_on_its_own_branch_beside_the_workflow(fork):
     ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
 
     ActionRead(fork.branch, request(failure_logs=True)).send()
 
-    sent = UpstreamReadRequest.from_json(json.loads(fork.files()[ActionFile.REQUEST]))
+    files = fork.request_files()
+    sent = UpstreamReadRequest.from_json(json.loads(files[ActionFile.REQUEST]))
     assert sent == request(failure_logs=True)
-    assert (
-        fork.files()[ActionFile.WORKFLOW] == ActionInstallation(BRANCH_OR_TAG).workflow
-    )
+    assert files[ActionFile.WORKFLOW] == ActionInstallation(BRANCH_OR_TAG).workflow
 
 
 def test_a_request_to_a_fork_without_the_action_is_refused(fork):
@@ -427,28 +464,88 @@ def test_the_result_answering_the_request_is_collected(fork):
     assert result == committed(ActionResult.answering(request(), github()))
 
 
+def test_the_request_s_branch_is_deleted_once_its_result_is_collected(fork):
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    read = ActionRead(fork.branch, request())
+    read.send()
+    fork.answer(ActionResult.answering(request(), github()))
+    assert read.request_branch.name in fork.branches()
+
+    read.wait(timeout=0)
+
+    assert read.request_branch.name not in fork.branches()
+
+
+def test_concurrent_requests_each_collect_their_own_result(fork):
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    other_request = replace(request(), identifier=OTHER_REQUEST_IDENTIFIER)
+    reads = [ActionRead(fork.branch, read) for read in (request(), other_request)]
+    for read in reads:
+        read.send()
+    for read in reversed(reads):
+        fork.answer(ActionResult.answering(read.request, github()))
+
+    collected = [read.wait(timeout=0).request_identifier for read in reads]
+
+    assert collected == [REQUEST_IDENTIFIER, OTHER_REQUEST_IDENTIFIER]
+
+
+def sent_long_ago(fork: Fork, monkeypatch) -> ActionRead:
+    """:return: A read whose request was pushed long before any read still waits."""
+    monkeypatch.setenv(GitVariable.COMMITTER_DATE, "2000-01-01T00:00:00Z")
+    read = ActionRead(
+        fork.branch, replace(request(), identifier=OTHER_REQUEST_IDENTIFIER)
+    )
+    read.send()
+    monkeypatch.delenv(GitVariable.COMMITTER_DATE)
+    return read
+
+
+def test_only_requests_older_than_the_longest_wait_are_deleted(fork, monkeypatch):
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    sent_long_ago(fork, monkeypatch)
+    waiting_read = ActionRead(fork.branch, request())
+    waiting_read.send()
+
+    AbandonedRequests(GitCommandRunner(fork.clone), "origin").delete()
+
+    assert set(fork.branches()) == {
+        "main",
+        ActionBranch.NAME,
+        waiting_read.request_branch.name,
+    }
+
+
+def test_an_old_branch_basstler_did_not_make_is_never_deleted(fork, monkeypatch):
+    """
+    A branch a person made under the request branches' prefix carries no request
+    trailer naming it, so pruning leaves it however old it is.
+    """
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+    monkeypatch.setenv(GitVariable.COMMITTER_DATE, "2000-01-01T00:00:00Z")
+    handmade = fork.request_branch(OTHER_REQUEST_IDENTIFIER)
+    handmade.write({"notes.md": "mine"}, "My own notes")
+
+    AbandonedRequests(GitCommandRunner(fork.clone), "origin").delete()
+
+    assert handmade.name in fork.branches()
+
+
+def test_deleting_with_no_abandoned_requests_pushes_nothing(fork):
+    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
+
+    assert AbandonedRequests(GitCommandRunner(fork.clone), "origin").delete() == []
+
+
 def test_a_result_answering_another_request_is_not_collected(fork):
     ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
-    fork.answer(ActionResult("fedcba9876543210"))
+    fork.answer(ActionResult(OTHER_REQUEST_IDENTIFIER))
 
     with pytest.raises(ActionResultMissing) as raised:
         ActionRead(fork.branch, request()).wait(timeout=0)
 
     assert f"{FORK.url}/actions" in str(raised.value)
     assert "disabled" in str(raised.value)
-
-
-def test_a_result_from_a_release_that_named_no_request_is_not_collected(fork):
-    ActionInstallation(BRANCH_OR_TAG).install(fork.branch)
-    fork.branch.write(
-        {
-            ActionFile.RESULT: DatasetLocation.ACTION_RESULT_WITHOUT_REQUEST_IDENTIFIER.value.read_text()
-        },
-        "Answer",
-    )
-
-    with pytest.raises(ActionResultMissing):
-        ActionRead(fork.branch, request()).wait(timeout=0)
 
 
 @dataclass
@@ -548,9 +645,9 @@ def test_a_request_no_run_started_for_is_given_up_on_after_twenty_seconds(
     assert raised.value.waited == 20
 
 
-def test_the_runs_are_listed_on_the_action_branch_alone(fork):
+def test_the_runs_are_listed_on_the_request_s_branch_alone(fork):
     """
-    Looking for a request's run lists the fork's runs on the Action branch only.
+    Looking for a request's run lists the fork's runs on the request's branch only.
     """
     runs = ListedRuns([])
     read, commit = waiting(fork, runs)
@@ -558,8 +655,8 @@ def test_the_runs_are_listed_on_the_action_branch_alone(fork):
     with pytest.raises(ActionRunNotStarted):
         read.wait(timeout=60, commit=commit)
 
-    assert runs.paths == [RunListing.path(FORK, ActionBranch.NAME)]
-    assert parse_qs(urlsplit(runs.paths[0]).query)["branch"] == [ActionBranch.NAME]
+    request_branch = ActionBranch.for_request(REQUEST_IDENTIFIER)
+    assert runs.paths == [RunListing.path(FORK, request_branch)]
 
 
 def test_a_run_that_failed_without_a_result_is_reported_with_its_page(fork):
