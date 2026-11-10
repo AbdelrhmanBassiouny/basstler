@@ -45,7 +45,7 @@ class ActionRun:
     The checkout of the request's branch.
     """
 
-    remote: str = "origin"
+    remote: str
     """
     The fork's remote in :attr:`git`.
     """
@@ -75,6 +75,6 @@ class ActionRun:
         return RemoteBranch(
             ActionBranch.for_request(answer.request_identifier), self.git, self.remote
         ).write(
-            {ActionFile.RESULT: json.dumps(answer.to_json())},
+            {ActionFile.RESULT: answer},
             ActionBranch.request_commit_message("Answer", answer.request_identifier),
         )

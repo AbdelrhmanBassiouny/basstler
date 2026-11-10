@@ -8,7 +8,6 @@ import json
 
 import pytest
 
-import basstler.upstream_reviews.action.__main__
 from basstler.locations import ClaudeCodeVariable
 from basstler.maintenance.board import UpstreamPullRequests
 from basstler.maintenance.commands import MaintenancePass
@@ -19,7 +18,7 @@ from basstler.maintenance.upstream_action import (
     OpenPullRequestsRequest,
     UpstreamReadRoute,
 )
-from basstler.upstream_reviews.action.__main__ import ActionCommand
+from basstler.upstream_reviews.action.__main__ import ActionCommand, main
 from basstler.upstream_reviews.action.branch import ActionInstallation
 from basstler.upstream_reviews.action.exchange import (
     ActionRequest,
@@ -114,7 +113,7 @@ def test_the_run_commits_its_answer_onto_the_request_s_branch(
     request_file = tmp_path / ActionFile.REQUEST
     request_file.write_text(json.dumps(a_request().as_sent()))
 
-    status = basstler.upstream_reviews.action.__main__.main(
+    status = main(
         [
             "--project-root",
             str(fork.clone),
@@ -145,7 +144,7 @@ def test_the_run_deletes_abandoned_requests_after_answering(
     request_file = tmp_path / ActionFile.REQUEST
     request_file.write_text(json.dumps(a_request().as_sent()))
 
-    basstler.upstream_reviews.action.__main__.main(
+    main(
         [
             "--project-root",
             str(fork.clone),

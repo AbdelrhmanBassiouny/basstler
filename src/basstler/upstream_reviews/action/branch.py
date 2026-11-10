@@ -7,6 +7,7 @@ from __future__ import annotations
 import re
 import time
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -226,10 +227,10 @@ class AbandonedRequests:
     The fork's remote.
     """
 
-    abandoned_after: float = 3600.0
+    abandoned_after: timedelta = timedelta(hours=1)
     """
-    How many seconds after its last commit a request branch is abandoned; longer than
-    any read waits for its result.
+    How long after its last commit a request branch is abandoned; longer than any read
+    waits for its result.
     """
 
     def identifiers(self) -> list[str]:
@@ -249,7 +250,7 @@ class AbandonedRequests:
         listed = self.git.run(
             "for-each-ref", "--format=%(committerdate:unix) %(refname)", local
         )
-        oldest_waited_for = time.time() - self.abandoned_after
+        oldest_waited_for = time.time() - self.abandoned_after.total_seconds()
         old = [
             reference.removeprefix(f"{local}/")
             for committed, reference in (line.split() for line in listed.splitlines())

@@ -1,6 +1,6 @@
 """
-The contract every model of data the program reads from outside keeps, and the base that
-validates such data as pydantic dataclasses.
+The contracts of values read from and written as JSON, and the base that validates data
+read from outside as pydantic dataclasses.
 """
 
 from __future__ import annotations
@@ -155,6 +155,19 @@ class ValidatedJSONModel(JSONModel):
             for argument in get_args(annotation)
             for model in ValidatedJSONModel.nested_models(argument)
         ]
+
+
+# %% the writing contract
+
+
+class JSONSerializable(ABC):
+    """
+    A value written out as one JSON object.
+    """
+
+    @abstractmethod
+    def to_json(self) -> dict[str, Any]:
+        """:return: The object written for it."""
 
 
 # %% reading a raw value

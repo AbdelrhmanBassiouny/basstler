@@ -4,8 +4,12 @@ Tests for reading and writing any named branch of a remote without a checkout.
 
 from __future__ import annotations
 
+import json
 import subprocess
+from dataclasses import dataclass
+from typing import Any
 
+from basstler.json_model import JSONSerializable
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.repository import Repository
@@ -37,6 +41,21 @@ def file_on_remote(checkout: ForkCheckout, branch: str, path: str) -> str:
     ).stdout.strip()
 
 
+@dataclass(frozen=True)
+class CountedApples(JSONSerializable):
+    """
+    A value that writes itself out as a JSON object.
+    """
+
+    apples: int
+    """
+    How many apples there are.
+    """
+
+    def to_json(self) -> dict[str, Any]:
+        return {"apples": self.apples}
+
+
 # %% writing and reading a named branch
 
 
@@ -54,6 +73,40 @@ def test_writing_creates_the_named_branch_with_the_given_file(fork_checkout):
 
     assert branch.exists()
     assert file_on_remote(fork_checkout, "notes/someone", "a/file.txt") == "content"
+
+
+def test_a_json_object_is_written_as_its_json_text(fork_checkout):
+    branch = branch_on_fork(fork_checkout, "notes/someone")
+
+    branch.write({"counted.json": {"apples": 3}}, "Write a JSON object")
+
+    assert json.loads(
+        file_on_remote(fork_checkout, "notes/someone", "counted.json")
+    ) == {"apples": 3}
+
+
+def test_a_value_convertible_to_json_is_written_as_its_json_text(fork_checkout):
+    branch = branch_on_fork(fork_checkout, "notes/someone")
+
+    branch.write({"counted.json": CountedApples(3)}, "Write a value")
+
+    assert (
+        json.loads(file_on_remote(fork_checkout, "notes/someone", "counted.json"))
+        == CountedApples(3).to_json()
+    )
+
+
+def test_a_branch_created_on_a_commit_holds_a_value_convertible_to_json(fork_checkout):
+    parent = branch_on_fork(fork_checkout, "notes/parent")
+    parent.write({"first.txt": "one"}, "First")
+    branch = branch_on_fork(fork_checkout, "notes/someone")
+
+    branch.create(parent.fetch(), {"counted.json": CountedApples(3)}, "Create")
+
+    assert (
+        json.loads(file_on_remote(fork_checkout, "notes/someone", "counted.json"))
+        == CountedApples(3).to_json()
+    )
 
 
 def test_writing_keeps_the_files_already_on_the_branch(fork_checkout):

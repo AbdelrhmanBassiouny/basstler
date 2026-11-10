@@ -4,11 +4,15 @@ One branch of a remote, read and written without touching the working tree.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from basstler.branch import Branch
 from basstler.class_property import classproperty
+from basstler.json_model import JSONSerializable
 from basstler.maintenance.git_commands import (
     GitCommandResult,
     GitCommandRunner,
@@ -17,6 +21,11 @@ from basstler.maintenance.git_commands import (
 from basstler.repository import Repository
 
 # %% the branch
+
+FileContent = str | dict[str, Any] | JSONSerializable
+"""
+What a file is written from: its text, or a JSON object or a value written as one.
+"""
 
 
 @dataclass(frozen=True)
@@ -126,7 +135,7 @@ class RemoteBranch(Branch):
         ]
 
     def attempt_write(
-        self, files: dict[str, str], message: str, attempts: int = 3
+        self, files: Mapping[str, FileContent], message: str, attempts: int = 3
     ) -> FileWrite:
         """
         Commit files onto the branch's latest tip and push them, again on top of another
@@ -138,7 +147,7 @@ class RemoteBranch(Branch):
         :return: The last commit and its push, failed when every attempt was refused.
         """
         for _ in range(attempts):
-            commit = self.git.commit_files(self.fetch(), files, message)
+            commit = self.commit_on(self.fetch(), files, message)
             pushed = self.git.push(
                 ProposedPush(self.remote, f"{commit}:{self.reference}")
             )
@@ -146,7 +155,9 @@ class RemoteBranch(Branch):
                 break
         return FileWrite(commit, pushed)
 
-    def write(self, files: dict[str, str], message: str, attempts: int = 3) -> str:
+    def write(
+        self, files: Mapping[str, FileContent], message: str, attempts: int = 3
+    ) -> str:
         """
         Like :meth:`attempt_write`, but a refused push is an error.
 
@@ -157,7 +168,9 @@ class RemoteBranch(Branch):
         written.push.raise_if_failed()
         return written.commit
 
-    def create(self, parent: str, files: dict[str, str], message: str) -> str:
+    def create(
+        self, parent: str, files: Mapping[str, FileContent], message: str
+    ) -> str:
         """
         Commit files on top of another branch's commit and push them as this branch.
 
@@ -167,11 +180,31 @@ class RemoteBranch(Branch):
         :return: The pushed commit.
         :raises GitCommandFailed: If the remote refuses the push.
         """
-        commit = self.git.commit_files(parent, files, message)
+        commit = self.commit_on(parent, files, message)
         self.git.push(
             ProposedPush(self.remote, f"{commit}:{self.reference}")
         ).raise_if_failed()
         return commit
+
+    def commit_on(
+        self, parent: str | None, files: Mapping[str, FileContent], message: str
+    ) -> str:
+        """
+        Commit files on top of a commit, a JSON object as its indented JSON text.
+
+        :param parent: The commit to build on, ``None`` for a commit with no parent.
+        :param files: What to write, by path, each without its final newline.
+        :param message: The commit message.
+        :return: The new commit.
+        """
+        texts = {}
+        for path, content in files.items():
+            if isinstance(content, JSONSerializable):
+                content = content.to_json()
+            if isinstance(content, dict):
+                content = json.dumps(content, indent=2)
+            texts[path] = content
+        return self.git.commit_files(parent, texts, message)
 
     def delete(self) -> GitCommandResult:
         """

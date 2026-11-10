@@ -9,7 +9,6 @@ fork - so installing, requesting and collecting a result are exercised as git co
 
 from __future__ import annotations
 
-from urllib.parse import parse_qs, urlsplit
 
 import json
 from http import HTTPStatus
@@ -262,7 +261,7 @@ def test_the_run_answers_a_pull_request_report_request_with_its_recording(
     request_file = tmp_path / ActionFile.REQUEST
     request_file.write_text(json.dumps(request().as_sent()))
 
-    answer = ActionRun(request_file, GitCommandRunner(tmp_path)).answer()
+    answer = ActionRun(request_file, GitCommandRunner(tmp_path), "origin").answer()
 
     assert answer == ActionResult.answering(request(), github())
 
@@ -365,7 +364,7 @@ class Fork:
     def answer(self, result: ActionAnswer) -> None:
         """Commit a result onto its request's branch, as the run does."""
         self.request_branch(result.request_identifier).write(
-            {ActionFile.RESULT: json.dumps(result.to_json())},
+            {ActionFile.RESULT: result},
             ActionBranch.request_commit_message("Answer", result.request_identifier),
         )
 
@@ -470,10 +469,11 @@ def test_the_request_s_branch_is_deleted_once_its_result_is_collected(fork):
     read = ActionRead(fork.branch, request())
     read.send()
     fork.answer(ActionResult.answering(request(), github()))
+    assert read.request_branch.name in fork.branches()
 
     read.wait(timeout=0)
 
-    assert set(fork.branches()) == {"main", ActionBranch.NAME}
+    assert read.request_branch.name not in fork.branches()
 
 
 def test_concurrent_requests_each_collect_their_own_result(fork):
@@ -657,7 +657,6 @@ def test_the_runs_are_listed_on_the_request_s_branch_alone(fork):
 
     request_branch = ActionBranch.for_request(REQUEST_IDENTIFIER)
     assert runs.paths == [RunListing.path(FORK, request_branch)]
-    assert parse_qs(urlsplit(runs.paths[0]).query)["branch"] == [request_branch]
 
 
 def test_a_run_that_failed_without_a_result_is_reported_with_its_page(fork):

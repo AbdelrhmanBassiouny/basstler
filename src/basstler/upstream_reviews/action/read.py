@@ -95,7 +95,7 @@ class ActionRead[AnswerType: ActionAnswer]:
             raise ActionNotInstalled(self.branch.remote)
         return self.request_branch.create(
             installed,
-            {ActionFile.REQUEST: json.dumps(self.request.as_sent(), indent=2)},
+            {ActionFile.REQUEST: self.request.as_sent()},
             ActionBranch.request_commit_message(
                 f"Request {self.request.kind}", self.request.identifier
             ),
