@@ -42,6 +42,7 @@ from basstler.plan_site.user_steps import (
     UserSteps,
 )
 from basstler.plan_site.build_start import SiteAccess
+from basstler.plan_site.site_read import SiteReadFix
 from basstler.plan_site.exceptions import (
     NotesRepositoryUnresolvedError,
     PublicationPushRefusedError,
@@ -250,9 +251,7 @@ class PlanSitePublication:
             raise SiteRepositoryUnreachableError(
                 site.repository,
                 read.failure,
-                access.remedy(self.in_cloud_session),
-                PUBLICATION_COMMAND,
-                read.waits,
+                SiteReadFix.for_failed_read(read, access, self.in_cloud_session),
             )
         return self.default_branch_of(site.repository.clone_url_under(self.remote_root))
 
