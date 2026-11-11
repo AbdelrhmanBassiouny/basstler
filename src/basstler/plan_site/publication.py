@@ -219,15 +219,9 @@ class PlanSitePublication:
         site_branch = self.default_branch_of(
             site.repository.clone_url_under(self.remote_root)
         )
-        if site_branch is None:
-            user_steps = UserSteps(notes_repository, site, [])
-            report.pending.append(user_steps.pending(UserStep.CREATE_SITE_REPOSITORY))
-            return report
-        site_runs = RunListing.read(self.github, site.repository, site_branch.name)
-        notes_runs = RunListing.read(
-            self.github, notes_repository, self.dispatch_workflow.notes_branch
+        existing = (
+            site_branch.read_latest(SiteWorkflow.location) if site_branch else None
         )
-        existing = site_branch.read_latest(SiteWorkflow.location)
         site_workflow = (
             replace(
                 self.site_workflow, registry=SiteWorkflow.from_yaml(existing).registry
@@ -240,6 +234,13 @@ class PlanSitePublication:
         )
         access = self.private_repository_access(
             self.repositories_read_by_build(site_workflow.registry), notes_details
+        )
+        if site_branch is None:
+            report.pending.extend(self.site_repository_creation(access))
+            return report
+        site_runs = RunListing.read(self.github, site.repository, site_branch.name)
+        notes_runs = RunListing.read(
+            self.github, notes_repository, self.dispatch_workflow.notes_branch
         )
         if access is not None and access.holds_back_publication:
             report.pending.append(access.pending)
@@ -278,6 +279,23 @@ class PlanSitePublication:
         if proposal is not None:
             report.pending.append(proposal.pending(self.github))
         return report
+
+    def site_repository_creation(
+        self, access: PrivateRepositoryAccess | None
+    ) -> list[PendingStep]:
+        """
+        :param access: The private repositories the build reads, ``None`` when it needs
+            no token for them.
+        :return: The step creating the site repository, carrying the warning of the
+            read access step that follows it when the build needs one.
+        """
+        creation = UserSteps(
+            self.dispatch_workflow.notes_repository, self.dispatch_workflow.site, []
+        ).pending(UserStep.CREATE_SITE_REPOSITORY)
+        if access is None:
+            return [creation]
+        read_access = access.pending
+        return [replace(creation, warning=read_access.warning), read_access]
 
     def run(self) -> int:
         """

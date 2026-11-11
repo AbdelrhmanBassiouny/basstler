@@ -343,6 +343,43 @@ def test_a_missing_site_repository_is_left_to_the_user_and_nothing_is_written(
     assert report.written == []
 
 
+def test_a_missing_site_repository_is_reported_with_the_private_notes_read_access(
+    publishing,
+):
+    """
+    The read access a private notes repository needs is reported before the user
+    creates the site repository, not only once it exists.
+    """
+    runs = private_runs(publishing, secret_refused(publishing, HTTPStatus.NOT_FOUND))
+
+    report = publishing.publication(runs).publish()
+
+    assert [pending.step for pending in report.pending] == [
+        UserStep.CREATE_SITE_REPOSITORY,
+        UserStep.GIVE_BUILD_READ_ACCESS,
+    ]
+    assert report.written == []
+
+
+def test_creating_the_site_repository_warns_what_the_public_site_shows_of_private_notes(
+    publishing,
+):
+    """
+    The site repository is created public, so the warning that the site shows the
+    private notes is read before it is created.
+    """
+    runs = private_runs(publishing, secret_refused(publishing, HTTPStatus.NOT_FOUND))
+
+    report = publishing.publication(runs).publish()
+
+    assert (
+        pending_step(report, UserStep.CREATE_SITE_REPOSITORY).warning
+        == PrivateRepositoryAccess(
+            publishing.site, (publishing.notes_repository,)
+        ).pending.warning
+    )
+
+
 def test_an_empty_site_repository_gets_the_workflow_naming_the_notes_repository(
     published,
 ):
