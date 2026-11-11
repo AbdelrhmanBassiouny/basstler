@@ -3,6 +3,7 @@
   "title": "Start the plan site build on every merge",
   "html_url": "https://github.com/a-fork-owner/a-fork/pull/7",
   "state": "open",
+  "draft": true,
   "merged_at": null,
   "head": {
     "sha": "0123456789abcdef0123456789abcdef01234567",

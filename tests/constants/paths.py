@@ -278,6 +278,13 @@ class DatasetLocation(PathEnumeration):
     The REST response for the pull request proposing the plan site's merge workflow.
     """
 
+    MERGE_WORKFLOW_READY_PULL_REQUEST = (
+        DIRECTORY / "merge-workflow-ready-pull-request.json"
+    )
+    """
+    The REST response for the pull request proposing the merge workflow, out of draft.
+    """
+
     PULL_REQUEST_REFUSED = DIRECTORY / "pull-request-refused.json"
     """
     GitHub's answer refusing to open a pull request for a token without the right.

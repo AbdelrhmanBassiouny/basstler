@@ -1166,6 +1166,51 @@ def test_merging_the_workflow_merges_its_pull_request(protected):
     )
 
 
+def test_the_workflow_s_pull_request_opens_as_a_draft(protected):
+    client = protected.runs_none()
+
+    protected.publication(client).publish()
+
+    assert [write.draft for write in client.writes] == [True]
+
+
+def recorded_page_url(recording: DatasetLocation) -> str:
+    """:return: The page of the pull request *recording* holds."""
+    return RestPullRequestSummary.from_json(json.loads(recording.read_text())).page_url
+
+
+def test_merging_a_draft_workflow_pull_request_marks_it_ready_first(protected):
+    url = recorded_page_url(DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST)
+
+    pending = pending_step(
+        protected.publication(protected.runs_none()).publish(),
+        UserStep.ADD_MERGE_WORKFLOW,
+    )
+
+    assert pending.line == f"gh pr ready {url} && gh pr merge {url} --merge"
+    assert pending.browser_steps == (
+        f"Open {url}.",
+        "Click Ready for review.",
+        "Click Merge pull request.",
+    )
+
+
+def test_merging_a_workflow_pull_request_out_of_draft_only_merges_it(protected):
+    url = recorded_page_url(DatasetLocation.MERGE_WORKFLOW_READY_PULL_REQUEST)
+    client = protected.runs(
+        DatasetLocation.WORKFLOW_RUNS_NONE,
+        DatasetLocation.WORKFLOW_RUNS_NONE,
+        open_pull_requests=(DatasetLocation.MERGE_WORKFLOW_READY_PULL_REQUEST,),
+    )
+
+    pending = pending_step(
+        protected.publication(client).publish(), UserStep.ADD_MERGE_WORKFLOW
+    )
+
+    assert pending.line == f"gh pr merge {url} --merge"
+    assert pending.browser_steps == (f"Open {url}.", "Click Merge pull request.")
+
+
 def pull_request_failures(
     notes: Repository,
 ) -> list[GitHubCallFailed]:
