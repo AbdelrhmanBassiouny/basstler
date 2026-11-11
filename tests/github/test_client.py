@@ -249,6 +249,29 @@ def test_a_refused_call_raises_with_its_status_and_request_line(api_server, clie
     )
 
 
+def test_an_attempt_at_a_missing_resource_reads_as_not_found(api_server, client):
+    """
+    A 404 answer reads as not found.
+    """
+    assert client.attempt_get(MISSING_PULL_REQUEST_PATH).is_not_found
+
+
+@pytest.mark.parametrize(
+    "status", [HTTPStatus.FORBIDDEN, HTTPStatus.INTERNAL_SERVER_ERROR]
+)
+def test_an_attempt_refused_otherwise_does_not_read_as_not_found(
+    api_server, quick_client, status
+):
+    """
+    A refusal other than 404 says nothing about whether the resource exists.
+    """
+    api_server.responses[f"GET /{REPOSITORY.api_path}"] = CannedResponse(
+        None, status=status
+    )
+
+    assert not quick_client.attempt_get(REPOSITORY.api_path).is_not_found
+
+
 def test_a_rejected_credential_is_its_own_failure(api_server, client):
     """
     A 401 is a :class:`GitHubCredentialRejected`, not only a refused call.

@@ -276,6 +276,17 @@ class GitHubResponse:
             and self.failure.status in SERVER_ERROR_STATUSES
         )
 
+    @property
+    def is_not_found(self) -> bool:
+        """
+        :return: Whether GitHub answered 404: no such resource, or none this credential
+            may see.
+        """
+        return (
+            isinstance(self.failure, GitHubRequestFailed)
+            and self.failure.status == HTTPStatus.NOT_FOUND
+        )
+
     def raise_if_failed(self) -> Any:
         """
         :return: :attr:`body`.

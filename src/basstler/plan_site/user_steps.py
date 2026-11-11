@@ -47,7 +47,7 @@ class UserStep(StrEnum):
 
     CREATE_SITE_REPOSITORY = "create the site repository"
     """
-    The site repository does not exist, or cannot be reached.
+    GitHub has no site repository, or none this credential may see.
     """
 
     TURN_ON_PAGES = "turn on GitHub Pages for the site repository"
