@@ -168,23 +168,35 @@ class RemoteBranch(Branch):
         written.push.raise_if_failed()
         return written.commit
 
-    def create(
+    def attempt_create(
         self, parent: str, files: Mapping[str, FileContent], message: str
-    ) -> str:
+    ) -> FileWrite:
         """
         Commit files on top of another branch's commit and push them as this branch.
 
         :param parent: The commit to build on.
         :param files: What to write, by path, each without its final newline.
         :param message: The commit message.
+        :return: The commit and its push, failed when the remote refused it.
+        """
+        commit = self.commit_on(parent, files, message)
+        return FileWrite(
+            commit,
+            self.git.push(ProposedPush(self.remote, f"{commit}:{self.reference}")),
+        )
+
+    def create(
+        self, parent: str, files: Mapping[str, FileContent], message: str
+    ) -> str:
+        """
+        Like :meth:`attempt_create`, but a refused push is an error.
+
         :return: The pushed commit.
         :raises GitCommandFailed: If the remote refuses the push.
         """
-        commit = self.commit_on(parent, files, message)
-        self.git.push(
-            ProposedPush(self.remote, f"{commit}:{self.reference}")
-        ).raise_if_failed()
-        return commit
+        written = self.attempt_create(parent, files, message)
+        written.push.raise_if_failed()
+        return written.commit
 
     def commit_on(
         self, parent: str | None, files: Mapping[str, FileContent], message: str

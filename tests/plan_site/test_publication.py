@@ -277,6 +277,18 @@ class Publishing:
         shown = self.git(self.path_of(repository), "show", f"{branch}:{path}")
         return shown.stdout.rstrip("\n") if shown.returncode == 0 else None
 
+    def tip_on_notes(self, branch: str) -> str:
+        """:return: The tip commit of *branch* on the notes repository."""
+        return self.git(
+            self.checkout.fork_path, "rev-parse", f"refs/heads/{branch}"
+        ).stdout.strip()
+
+    def parents_on_notes(self, branch: str) -> tuple[str, ...]:
+        """:return: The parents of *branch*'s tip on the notes repository."""
+        return GitCommandRunner(self.checkout.fork_path).parents_of(
+            self.tip_on_notes(branch)
+        )
+
     def hub_on(self, repository: Repository) -> PlanHub | None:
         """:return: The hub file on *repository*'s notes branch."""
         return PlanHub.from_yaml(
@@ -954,6 +966,42 @@ def test_the_merge_workflow_reaches_the_default_branch_only_through_its_branch(
             MergeWorkflow.location.as_posix(),
         )
         is None
+    )
+
+
+def test_the_merge_workflow_s_branch_starts_from_the_default_branch_s_tip(published):
+    """
+    GitHub opens no pull request between branches with no history in common.
+    """
+    assert published.parents_on_notes(PlanSitePublication.merge_workflow_branch) == (
+        published.tip_on_notes(UPSTREAM_BASE),
+    )
+
+
+def test_a_merge_workflow_branch_without_the_default_branch_s_history_is_rebuilt_on_it(
+    publishing,
+):
+    """
+    An affected release wrote the branch with no parent, and no pull request could be
+    opened from it.
+    """
+    publishing.create(publishing.site.repository)
+    publication = publishing.publication(publishing.runs_none())
+    RemoteBranch(
+        publication.merge_workflow_branch, publication.git, RemoteName.ORIGIN
+    ).write(
+        {
+            MergeWorkflow.location.as_posix(): MergeWorkflow(
+                publication.dispatch_workflow
+            ).text
+        },
+        "Start the plan site build on every merge",
+    )
+
+    publication.publish()
+
+    assert publishing.parents_on_notes(publication.merge_workflow_branch) == (
+        publishing.tip_on_notes(UPSTREAM_BASE),
     )
 
 
