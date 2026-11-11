@@ -1,9 +1,10 @@
 Plan:
-- Failing session-start test: the plan site line names the notes repository, not origin
-- `repository_name [<remote>]`; `plan_site_page_url` passes the notes remote
+- Page addresses name the notes repository the hub lists (#190)
 
 Done:
-- Branch, draft PR #198 (bug), item recorded in progress
+- Failing session-start test (28196a3), then fix (cda11e2): `repository_name [<remote>]` reads the configured URL; `plan_site_page_url` passes the notes remote
+- save-plan page test corrected with the user's agreement (it encoded the bug)
+- 2509 passed locally; ruff and pre-commit pass; draft PR #198 updated
 
 Next:
-- Write the failing test, then the fix; ruff, formatter, test suite
+- CI on #198 (Playwright suites couldn't run locally); review
