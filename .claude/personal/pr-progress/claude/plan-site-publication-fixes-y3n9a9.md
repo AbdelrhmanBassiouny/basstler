@@ -1,8 +1,9 @@
-Plan:
-- Await CI on 475c924 and review.
-Done:
-- Per-cause fixes as types (SiteReadFix.for_failed_read: attachment, credential access, GitHub outage, refusal's own correction); publication's longer retry reported with attempts, waits and githubstatus.com.
-- Review 5864695703: all five threads answered and resolved.
-- CI green on 40040b0.
-Next:
-- Read CI on 475c924.
+Plan
+- Await CI on 39153b9 and further review on PR #194.
+
+Done
+- Typed SiteReadFix model, tests assert by equality (475c924).
+- Test cases take one FailedSiteRead value instead of three arguments (39153b9); all review threads resolved.
+
+Next
+- Read CI on 39153b9 when prompted.
