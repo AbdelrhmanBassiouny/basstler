@@ -42,6 +42,7 @@ from basstler.exceptions import PlanValidationError
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.validation import PlanValidator
 from basstler.plan_site.hub_page import (
+    CountedItem,
     HubPage,
     PlanSummary,
     ProgressCard,
@@ -401,6 +402,7 @@ class RepositorySite(SiteSection[RepositorySummary]):
             reviewed=page.overview.reviewed_item_count,
             total=len(plan.items),
             page_url=self.plan_url(source.directory_name),
+            counted_items=[CountedItem.of_item(item) for item in plan.items],
         )
         return PublishedPlan(page=page, summary=summary)
 

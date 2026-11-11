@@ -7,8 +7,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 
-from basstler.github_labels import GitHubLabel
-from basstler.maintenance.board import PullRequestField
 from basstler.plan_site.cards import (
     DraftRecheckAttribute,
     LiveStateAttribute,
@@ -16,14 +14,13 @@ from basstler.plan_site.cards import (
     RefreshSource,
 )
 from basstler.plan_site.chip_tone import ChipTone
-from basstler.plan_site.live_state_display import LiveStateDisplay
-from basstler.pull_request_state import LiveState, PullRequestState
+from basstler.plan_site.site_vocabulary import LiveStateVocabulary
 
 # %% the vocabulary
 
 
 @dataclass(frozen=True)
-class PlanPageVocabulary:
+class PlanPageVocabulary(LiveStateVocabulary):
     """
     The enumerations a plan page's HTML and its script share, so the page the build
     writes and the page the browser updates use the same attributes, states and labels.
@@ -59,35 +56,4 @@ class PlanPageVocabulary:
     refresh_source: type[RefreshSource] = field(default=RefreshSource, init=False)
     """
     Where the page's refresh time came from.
-    """
-
-    live_state: type[LiveState] = field(default=LiveState, init=False)
-    """
-    The states a pull request chip shows.
-    """
-
-    live_state_display: LiveStateDisplay = field(
-        default_factory=LiveStateDisplay, init=False
-    )
-    """
-    How the script shows each live state.
-    """
-
-    github_label: type[GitHubLabel] = field(default=GitHubLabel, init=False)
-    """
-    The labels the script reads off a pull request.
-    """
-
-    pull_request_field: type[PullRequestField] = field(
-        default=PullRequestField, init=False
-    )
-    """
-    The fields the script reads off GitHub's pull request.
-    """
-
-    pull_request_state: type[PullRequestState] = field(
-        default=PullRequestState, init=False
-    )
-    """
-    The states GitHub gives a pull request.
     """

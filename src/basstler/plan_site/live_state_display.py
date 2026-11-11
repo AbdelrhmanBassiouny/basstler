@@ -1,5 +1,5 @@
 """
-How the plan page's script shows a pull request's live state once GitHub answers.
+How the site's scripts show and count a pull request's live state once GitHub answers.
 """
 
 from __future__ import annotations
@@ -45,6 +45,23 @@ class LiveStateDisplay:
             "tone": ChipTone.of_status(ItemStatus.DONE).value,
             "css_class": Item.status_css_class(ItemStatus.DONE),
         }
+
+    @property
+    def reached_stages(self) -> dict[str, dict[str, list[str]]]:
+        """
+        :return: The :class:`ProgressStage` values an item reaches, keyed by its status's
+            value and then its live state's name.
+        """
+        reached: dict[str, dict[str, list[str]]] = {}
+        for status in ItemStatus:
+            reached[status.value] = {}
+            for state in LiveState:
+                item = Item(title="", branch=None, track="", status=status)
+                item.live_state = state
+                reached[status.value][state.name] = [
+                    stage.value for stage in item.reached_stages
+                ]
+        return reached
 
     @property
     def chip_tones(self) -> list[str]:

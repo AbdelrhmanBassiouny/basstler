@@ -1,5 +1,5 @@
 {% extends "site_layout.html" %}
-{% from "site_parts.html" import health_banner, progress_card %}
+{% from "site_parts.html" import health_banner, progress_card, progress_line, live_progress_scripts with context %}
 {% block title %}{{ repository.name }} plans{% endblock %}
 {% block content %}
   <header class="masthead">
@@ -7,7 +7,7 @@
     <p class="eyebrow">{{ repository.name }}</p>
     <h1>Plans</h1>
     <p class="lede">Initiatives spanning several pull requests and sessions, each with its own page.</p>
-    <p class="meta-line mono">{{ repository.progress_label }}{% if repository.stage_shares_label %} · {{ repository.stage_shares_label }}{% endif %}</p>
+{{ progress_line(repository) }}
   </header>
 
   {{ health_banner(repository.skipped_pages) }}
@@ -19,4 +19,8 @@
     <p class="empty">No plans published for this repository.</p>
   {% endfor %}
   </div>
+{% endblock %}
+
+{% block scripts %}
+{{ live_progress_scripts() }}
 {% endblock %}

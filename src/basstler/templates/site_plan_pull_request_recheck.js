@@ -1,29 +1,12 @@
 var planPageLiveStates = {{ vocabulary.live_state_display.state_chips | tojson }};
 var planPageDoneStatus = {{ vocabulary.live_state_display.done_status | tojson }};
 var planPageChipTones = {{ vocabulary.live_state_display.chip_tones | tojson }};
-var planPageMinimumRecheckMilliseconds = 60000;
 var planPageRelativeTimeMilliseconds = 30000;
-var planPageLastRecheck = 0;
 
 function planPageUnblocksDependents(pullRequest) {
   return pullRequest["{{ vocabulary.pull_request_field.MERGED_AT.key }}"] !== null
     || (pullRequest["{{ vocabulary.pull_request_field.STATE.key }}"] === "{{ vocabulary.pull_request_state.OPEN.value }}"
       && !pullRequest["{{ vocabulary.pull_request_field.DRAFT.key }}"]);
-}
-
-function planPageLiveStateOf(pullRequest) {
-  var labels = (pullRequest["{{ vocabulary.pull_request_field.LABELS.key }}"] || []).map(function (label) {
-    return typeof label === "string" ? label : label.name;
-  });
-  if (pullRequest["{{ vocabulary.pull_request_field.MERGED_AT.key }}"] || labels.indexOf("{{ vocabulary.github_label.MERGED }}") !== -1) {
-    return "{{ vocabulary.live_state.MERGED.name }}";
-  }
-  if (pullRequest["{{ vocabulary.pull_request_field.STATE.key }}"] !== "{{ vocabulary.pull_request_state.OPEN.value }}") {
-    return "{{ vocabulary.live_state.CLOSED_UNMERGED.name }}";
-  }
-  return pullRequest["{{ vocabulary.pull_request_field.DRAFT.key }}"]
-    ? "{{ vocabulary.live_state.OPEN_DRAFT.name }}"
-    : "{{ vocabulary.live_state.OPEN_READY.name }}";
 }
 
 function planPageMarkDependencyReady(chip) {
@@ -117,7 +100,6 @@ function planPageShowRefresh(refused) {
 }
 
 function planPageRecheckPullRequests() {
-  planPageLastRecheck = Date.now();
   var chipsByAddress = {};
   function chipsOf(address) {
     return chipsByAddress[address] = chipsByAddress[address] || { dependencies: [], items: [] };
@@ -149,7 +131,7 @@ function planPageRecheckPullRequests() {
         if (planPageUnblocksDependents(pullRequest)) {
           chips.dependencies.forEach(planPageMarkDependencyReady);
         }
-        var stateName = planPageLiveStateOf(pullRequest);
+        var stateName = siteLiveStateOf(pullRequest);
         chips.items.forEach(function (chip) {
           planPageShowLiveState(chip, stateName);
         });
@@ -169,12 +151,6 @@ function planPageRecheckPullRequests() {
 
 function planPageStartRechecks() {
   planPageShowRelativeTimes();
-  planPageRecheckPullRequests();
+  siteRecheckWhenShown(planPageRecheckPullRequests);
   setInterval(planPageShowRelativeTimes, planPageRelativeTimeMilliseconds);
-  document.addEventListener("visibilitychange", function () {
-    if (document.visibilityState === "visible"
-      && Date.now() - planPageLastRecheck > planPageMinimumRecheckMilliseconds) {
-      planPageRecheckPullRequests();
-    }
-  });
 }

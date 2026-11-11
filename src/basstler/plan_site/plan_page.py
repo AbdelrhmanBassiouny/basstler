@@ -125,6 +125,7 @@ class PlanPage(TemplatePage):
         html = self.render_template(
             stylesheet_url=self.stylesheet_url,
             script_template=SiteTemplate.PLAN_SCRIPT.name,
+            live_state_script_template=SiteTemplate.LIVE_STATE_SCRIPT.name,
             recheck_script_template=SiteTemplate.PLAN_PULL_REQUEST_RECHECK_SCRIPT.name,
             vocabulary=PlanPageVocabulary(),
             plan=self.plan,

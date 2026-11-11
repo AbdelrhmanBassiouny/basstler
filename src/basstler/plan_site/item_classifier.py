@@ -77,6 +77,7 @@ class ItemClassifier:
             reference = PullRequestReference(
                 Repository.parse(self._repository_of(item)), item.pull_request_number
             )
+            item.pull_request_reference = reference
             item.pull_request_url = reference.url
             item.pull_request_api_url = reference.api_url
         if item.pull_request_record is not None:
