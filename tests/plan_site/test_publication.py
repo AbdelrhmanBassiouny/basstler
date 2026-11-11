@@ -44,10 +44,18 @@ from basstler.maintenance.git_commands import (
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan.model import PlanDocument
 from basstler.plan_site import token_storage
-from basstler.plan_site.build_start import CodeFence
-from basstler.plan_site.exceptions import PublicationPushRefusedError, PushRefusal
+from basstler.plan_site.build_start import CodeFence, SiteAccess
+from basstler.plan_site.exceptions import (
+    PublicationPushRefusedError,
+    PushRefusal,
+    SiteRepositoryUnreachableError,
+)
 from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.publication import PlanSitePublication, PublicationOption
+from basstler.plan_site.publication import (
+    PUBLICATION_COMMAND,
+    PlanSitePublication,
+    PublicationOption,
+)
 from basstler.plan_site.publication import app as publication_app
 from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.user_steps import (
@@ -141,6 +149,21 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
         if self.failure is not None:
             return GitHubResponse(None, failure=self.failure)
         return GitHubResponse(self.opened)
+
+
+def refusal_of(path: str, status: HTTPStatus) -> GitHubRequestFailed:
+    """
+    :param path: The API path GitHub refuses.
+    :param status: The status it refuses it with.
+    :return: The refusal.
+    """
+    return GitHubRequestFailed(
+        status=status,
+        detail="",
+        method=HttpMethod.GET,
+        path=path,
+        credential_origin=CredentialProvider.CALLER,
+    )
 
 
 def bare_repository(path: Path) -> Path:
@@ -247,9 +270,18 @@ class Publishing:
     ) -> PullRequestOpeningClient:
         """:return: A client answering both run listings, the details of every
         repository under :attr:`root`, the notes repository's open merge workflow pull
-        requests from recordings, and opening
-        :attr:`DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST`."""
+        requests from recordings, a missing site repository as GitHub refuses it, and
+        opening :attr:`DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST`."""
         proposal = self.merge_workflow_proposal_into(notes_default_branch)
+        site_refusals = (
+            {}
+            if self.path_of(self.site.repository).exists()
+            else {
+                self.site.repository.api_path: refusal_of(
+                    self.site.repository.api_path, HTTPStatus.NOT_FOUND
+                )
+            }
+        )
         return PullRequestOpeningClient(
             {
                 **{
@@ -270,6 +302,7 @@ class Publishing:
                 ],
             },
             opened=json.loads(DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST.read_text()),
+            refusals=site_refusals,
         )
 
     def merge_workflow_proposal_into(self, base: str) -> MergeWorkflowProposal:
@@ -378,6 +411,84 @@ def test_creating_the_site_repository_warns_what_the_public_site_shows_of_privat
             publishing.site, (publishing.notes_repository,)
         ).pending.warning
     )
+
+
+def site_refused(publishing: Publishing) -> PullRequestOpeningClient:
+    """
+    :param publishing: A notes repository whose site repository git cannot reach.
+    :return: A client that refuses reading the site repository, as GitHub does for one
+        not attached to a cloud session.
+    """
+    runs = publishing.runs_none()
+    path = publishing.site.repository.api_path
+    runs.refusals[path] = refusal_of(path, HTTPStatus.FORBIDDEN)
+    return runs
+
+
+def test_a_refused_site_repository_is_not_left_to_the_user_to_create(publishing):
+    """
+    A site repository GitHub refuses to show may exist, so publication stops instead
+    of asking for it to be created.
+    """
+    with pytest.raises(SiteRepositoryUnreachableError):
+        publishing.publication(site_refused(publishing)).publish()
+
+
+def test_a_refused_site_repository_is_reported_with_github_s_refusal(publishing):
+    """
+    The refusal that left the site repository unread is the one the error carries.
+    """
+    runs = site_refused(publishing)
+
+    with pytest.raises(SiteRepositoryUnreachableError) as raised:
+        publishing.publication(runs).publish()
+
+    assert raised.value.refusal == runs.refusals[publishing.site.repository.api_path]
+
+
+@pytest.mark.parametrize("in_cloud_session", [True, False])
+def test_a_refused_site_repository_is_fixed_by_reaching_it_and_publishing_again(
+    publishing, in_cloud_session
+):
+    """
+    The correction is the one that reaches the site repository, followed by this
+    command.
+    """
+    publication = publishing.publication(site_refused(publishing), in_cloud_session)
+
+    with pytest.raises(SiteRepositoryUnreachableError) as raised:
+        publication.publish()
+
+    assert raised.value.remedy == SiteAccess(
+        publishing.site,
+        PUBLICATION_COMMAND,
+        PlanSitePublication.site_attachment_benefit,
+    ).remedy(in_cloud_session)
+
+
+def test_a_refused_site_repository_ends_the_command_with_its_exit_status(publishing):
+    """
+    The command ends with the status of the error that stopped it.
+    """
+    exit_status = publishing.publication(site_refused(publishing)).run()
+
+    assert exit_status == SiteRepositoryUnreachableError.exit_code
+
+
+def test_a_site_repository_git_cannot_reach_is_not_left_to_the_user_to_create(
+    publishing,
+):
+    """
+    GitHub shows the site repository, but git cannot fetch from it: git's failure is
+    reported instead of asking for the repository to be created.
+    """
+    runs = publishing.runs_none()
+    path = publishing.site.repository.api_path
+    del runs.refusals[path]
+    runs.responses[path] = json.loads(DatasetLocation.REPOSITORY_NOT_FORK.read_text())
+
+    with pytest.raises(GitCommandFailed):
+        publishing.publication(runs).publish()
 
 
 def test_an_empty_site_repository_gets_the_workflow_naming_the_notes_repository(
@@ -804,12 +915,8 @@ def secret_refused(publishing: Publishing, status: HTTPStatus) -> GitHubRequestF
     :param status: The status GitHub refuses the site repository's read token with.
     :return: The refusal.
     """
-    return GitHubRequestFailed(
-        status=status,
-        detail="",
-        method=HttpMethod.GET,
-        path=PlanSiteSecret.READ_TOKEN.path_on(publishing.site.repository),
-        credential_origin=CredentialProvider.CALLER,
+    return refusal_of(
+        PlanSiteSecret.READ_TOKEN.path_on(publishing.site.repository), status
     )
 
 

@@ -7,8 +7,11 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 
+from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.github.credential import GitHubCommand
+from basstler.github.exceptions import GitHubCallFailed
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandResult
 from basstler.repository import GitHubAddress, Repository
 
@@ -34,6 +37,53 @@ class NotesRepositoryUnresolvedError(DataclassException, LookupError):
         return (
             "point the notes remote at a GitHub repository with /setup-personal-notes"
         )
+
+
+@dataclass
+class SiteRepositoryUnreachableError(CommandFailure, DataclassException):
+    """
+    Raised when GitHub refuses to show the site repository, so whether it exists, and
+    whether creating it would help, is not known.
+    """
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.GITHUB_REQUEST_FAILED
+
+    site_repository: Repository
+    """
+    The repository that builds and serves the plan site.
+    """
+
+    refusal: GitHubCallFailed
+    """
+    Why GitHub would not show it.
+    """
+    in_cloud_session: bool
+    """
+    Whether this runs in a Claude Code cloud session.
+    """
+
+    remedy: str
+    """
+    How this session comes to read the site repository, and the command to run then.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"cannot read the site repository {self.site_repository.full_name}, "
+            f"so whether it exists is not known: {self.refusal.error_message()}"
+        )
+
+    def suggest_correction(self) -> str:
+        reasons = (
+            "it is not attached to this session, or the Claude GitHub App is not "
+            "installed on it"
+            if self.in_cloud_session
+            else "it is private, and gh's account cannot read it"
+        )
+        return f"do not create it again: it may exist, but {reasons}. {self.remedy}"
 
 
 class PushRefusal(StrEnum):

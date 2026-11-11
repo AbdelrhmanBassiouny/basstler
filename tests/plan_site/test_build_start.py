@@ -32,6 +32,11 @@ SITE = SiteRepository(Repository.parse("an-owner/plans"))
 The site repository whose build is started.
 """
 
+ANOTHER_COMMAND = "python -m another.command"
+"""
+A command other than the build start to run once the site repository is reached.
+"""
+
 # %% starting the build
 
 
@@ -130,6 +135,18 @@ def test_a_build_that_did_not_start_names_the_command_that_starts_it_again(
     description = BuildStart.attempt(SITE, client).describe(in_cloud_session)
 
     assert BUILD_START_COMMAND in description
+
+
+@pytest.mark.parametrize("in_cloud_session", [True, False])
+def test_the_remedy_names_the_command_to_run_once_the_site_is_reached(
+    in_cloud_session: bool,
+):
+    """
+    The remedy ends with the command it was given, not always the build start.
+    """
+    access = SiteAccess(SITE, retry_command=ANOTHER_COMMAND)
+
+    assert ANOTHER_COMMAND in access.remedy(in_cloud_session)
 
 
 def test_the_retry_command_runs_this_module():

@@ -22,7 +22,12 @@ from cyclopts import App, Parameter
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure
 from basstler.github.repository_details import RepositoryDetails
-from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
+from basstler.locations import (
+    BasstlerVariable,
+    ClaudeCodeVariable,
+    ProjectLocation,
+    WorkflowLocation,
+)
 from basstler.maintenance.git_commands import (
     GitCommandRunner,
     GitHubLoginLendingRunner,
@@ -63,6 +68,11 @@ from basstler.upstream_reviews.action.branch import BasstlerSource
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
+"""
+
+PUBLICATION_COMMAND = f'"${{{BasstlerVariable.PYTHON}}}" -m {__spec__.name}'
+"""
+The command line that publishes again, once this session reaches the site repository.
 """
 
 # %% the notes repository on GitHub
