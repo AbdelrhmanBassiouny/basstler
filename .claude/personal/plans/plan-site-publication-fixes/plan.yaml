@@ -48,10 +48,14 @@ items:
   depends_on: []
   status: not started
   session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
-  notes: 'From Hesham87/Platform_maintainer: write_merge_workflow writes basstler/plan-site-merge
-    as a new RemoteBranch with no parent, so GitHub refused the pull request (422, no history
-    in common with main) and the printed gh pr create fallback fails the same way. Branch
-    from the default branch''s head. Own bug PR off main, failing test first.'
+  notes: >
+    From Hesham87/Platform_maintainer: write_merge_workflow writes basstler/plan-site-merge as a new
+    RemoteBranch with no parent, so GitHub refused the pull request (422, no history in common with
+    main) and the printed gh pr create fallback fails the same way. Branch from the default branch's
+    head. Own bug PR off main, failing test first.
+
+    Reported again in #189 (tomsch420, tomsch420/law_as_code_benchmarks, basstler 3.15.1, worked
+    around by cherry-picking onto main); this item's PR closes #189.
 - id: merge-workflow-draft
   title: The merge workflow pull request opens as a draft
   track: publication
