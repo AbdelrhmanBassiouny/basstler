@@ -1,10 +1,10 @@
 Plan:
-- Failing tests: a refused site repository read raises instead of asking to create it; 404 still asks; git failure after a successful read raises git's error
-- Read the site repository through the API in publish(); add SiteRepositoryUnreachableError; SiteAccess takes the retry command
-- default_branch_of raises instead of returning None
+- Await CI and review on draft PR #194
 
 Done:
-- Branch, draft PR #194 (bug), item recorded in progress
+- Failing tests first (2e65b4e), then the fix (27600d8): the site repository is read through the API; 404 means create, other refusals raise SiteRepositoryUnreachableError with the reason and SiteAccess.remedy; git failure raises GitCommandFailed
+- SiteAccess takes retry_command and attachment_benefit; GitHubResponse.is_not_found
+- Full suite green except the 10 Playwright tests the container's Chromium cannot run
 
 Next:
-- Write the failing tests
+- Check CI (Playwright page tests run there)
