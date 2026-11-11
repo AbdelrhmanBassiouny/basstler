@@ -12,8 +12,8 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field, replace
+from datetime import timedelta
 from enum import StrEnum
-from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated
 
@@ -22,7 +22,12 @@ from cyclopts import App, Parameter
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure
 from basstler.github.repository_details import RepositoryDetails
-from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
+from basstler.locations import (
+    BasstlerVariable,
+    ClaudeCodeVariable,
+    ProjectLocation,
+    WorkflowLocation,
+)
 from basstler.maintenance.git_commands import (
     GitCommandRunner,
     GitHubLoginLendingRunner,
@@ -36,9 +41,12 @@ from basstler.plan_site.user_steps import (
     UserStep,
     UserSteps,
 )
+from basstler.plan_site.build_start import SiteAccess
+from basstler.plan_site.site_read import SiteReadFix
 from basstler.plan_site.exceptions import (
     NotesRepositoryUnresolvedError,
     PublicationPushRefusedError,
+    SiteRepositoryUnreachableError,
 )
 from basstler.plan.model import PlanDocument, PlanManifest
 from basstler.plan_site.hub import PlanHub
@@ -56,13 +64,18 @@ from basstler.standard_streams import StandardStreamHandler
 from basstler.github.client import (
     GitHubFullClient,
     GitHubRestClient,
+    RetryPolicy,
 )
-from basstler.github.exceptions import GitHubRequestFailed
 from basstler.upstream_reviews.action.branch import BasstlerSource
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
+"""
+
+PUBLICATION_COMMAND = f'"${{{BasstlerVariable.PYTHON}}}" -m {__spec__.name}'
+"""
+The command line that publishes again, once this session reaches the site repository.
 """
 
 # %% the notes repository on GitHub
@@ -168,6 +181,23 @@ class PlanSitePublication:
     Whether this runs in a Claude Code cloud session, whose user has no terminal on it.
     """
 
+    github_retry_policy: RetryPolicy = RetryPolicy(
+        retries=4, first_delay=timedelta(seconds=2)
+    )
+    """
+    How the command's GitHub client asks a read again after a server error: it runs
+    once, by hand, so it waits longer for GitHub to recover than the client's default.
+    """
+
+    site_attachment_benefit: str = (
+        "publication then tells whether the site repository exists and writes its "
+        "workflow"
+    )
+    """
+    What attaching the site repository to a cloud session gives the user, said when
+    asking them to allow it.
+    """
+
     @classproperty
     def fork_skip_reason(cls) -> str:
         """
@@ -191,21 +221,39 @@ class PlanSitePublication:
         )
         return RemoteBranch(self.dispatch_workflow.notes_branch, self.git, remote)
 
-    def default_branch_of(self, remote: str) -> RemoteBranch | None:
+    def default_branch_of(self, remote: str) -> RemoteBranch:
         """
         :param remote: A remote, as a remote name or a URL.
-        :return: Its default branch, :attr:`initial_branch` when it has none yet, or
-            ``None`` when it cannot be reached.
+        :return: Its default branch, :attr:`initial_branch` when it has none yet.
+        :raises GitCommandFailed: If git cannot reach it.
         """
-        listed = self.git.attempt("ls-remote", "--symref", remote, "HEAD")
-        if not listed.succeeded:
-            return None
+        listed = self.git.run("ls-remote", "--symref", remote, "HEAD")
         match = re.search(
-            r"^ref: refs/heads/(?P<branch>\S+)\s+HEAD$", listed.output, re.MULTILINE
+            r"^ref: refs/heads/(?P<branch>\S+)\s+HEAD$", listed, re.MULTILINE
         )
         return RemoteBranch(
             match["branch"] if match else self.initial_branch, self.git, remote
         )
+
+    def site_branch(self) -> RemoteBranch | None:
+        """
+        :return: The site repository's default branch, ``None`` when GitHub has no such
+            repository.
+        :raises SiteRepositoryUnreachableError: If GitHub refuses to show it.
+        :raises GitCommandFailed: If git cannot reach it.
+        """
+        site = self.dispatch_workflow.site
+        access = SiteAccess(site, PUBLICATION_COMMAND, self.site_attachment_benefit)
+        read = access.read(self.github)
+        if read.is_not_found:
+            return None
+        if read.failure is not None:
+            raise SiteRepositoryUnreachableError(
+                site.repository,
+                read.failure,
+                SiteReadFix.for_failed_read(read, access, self.in_cloud_session),
+            )
+        return self.default_branch_of(site.repository.clone_url_under(self.remote_root))
 
     def publish(self) -> PublicationReport:
         """
@@ -216,9 +264,10 @@ class PlanSitePublication:
         notes_repository = self.dispatch_workflow.notes_repository
         site = self.dispatch_workflow.site
         report = PublicationReport(site.site_url)
-        site_branch = self.default_branch_of(
-            site.repository.clone_url_under(self.remote_root)
+        notes_details = RepositoryDetails.from_json(
+            self.github.get(notes_repository.api_path)
         )
+        site_branch = self.site_branch()
         existing = (
             site_branch.read_latest(SiteWorkflow.location) if site_branch else None
         )
@@ -228,9 +277,6 @@ class PlanSitePublication:
             )
             if existing
             else self.site_workflow
-        )
-        notes_details = RepositoryDetails.from_json(
-            self.github.get(notes_repository.api_path)
         )
         registered = self.repositories_with_plans_of([notes_repository])
         access = self.private_repository_access(
@@ -436,10 +482,7 @@ class PlanSitePublication:
         )
         if secret.failure is None:
             return None
-        if (
-            isinstance(secret.failure, GitHubRequestFailed)
-            and secret.failure.status == HTTPStatus.NOT_FOUND
-        ):
+        if secret.is_not_found:
             return PrivateRepositoryAccess(
                 site, tuple(private), unreadable_repositories=unreadable
             )
@@ -572,7 +615,7 @@ def publish(
         notes_remote,
         DispatchWorkflow(notes_repository, notes_branch.name, site),
         SiteWorkflow(branch_or_tag, notes_repository),
-        GitHubRestClient(),
+        GitHubRestClient(retry_policy=PlanSitePublication.github_retry_policy),
         remote_root=GitHubAddress.clone_root_for(notes_branch.url),
         in_cloud_session=ClaudeCodeVariable.REMOTE.is_true(),
     ).run()

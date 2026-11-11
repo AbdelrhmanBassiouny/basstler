@@ -11,8 +11,9 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
-from enum import StrEnum
+from datetime import UTC, datetime, timedelta
+from collections.abc import Callable
+from enum import Enum, StrEnum
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -32,6 +33,8 @@ from basstler.github.client import (
 from basstler.github.credential import CredentialProvider, GitHubCommand
 from basstler.github.exceptions import (
     GitHubCallFailed,
+    GitHubCredentialRejected,
+    GitHubRepositoryMoved,
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
@@ -44,10 +47,25 @@ from basstler.maintenance.git_commands import (
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan.model import PlanDocument
 from basstler.plan_site import token_storage
-from basstler.plan_site.build_start import CodeFence
-from basstler.plan_site.exceptions import PublicationPushRefusedError, PushRefusal
+from basstler.plan_site.build_start import CodeFence, SiteAccess
+from basstler.plan_site.exceptions import (
+    PublicationPushRefusedError,
+    PushRefusal,
+    SiteRepositoryUnreachableError,
+)
+from basstler.plan_site.site_read import (
+    CredentialAccessFix,
+    GitHubOutageFix,
+    RefusalCorrectionFix,
+    RepositoryAttachmentFix,
+    SiteReadFix,
+)
 from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.publication import PlanSitePublication, PublicationOption
+from basstler.plan_site.publication import (
+    PUBLICATION_COMMAND,
+    PlanSitePublication,
+    PublicationOption,
+)
 from basstler.plan_site.publication import app as publication_app
 from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.user_steps import (
@@ -126,6 +144,11 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     Why each path that is refused is refused, by path.
     """
 
+    refusal_waits: tuple[timedelta, ...] = ()
+    """
+    The waits every refused read reports it was asked again after.
+    """
+
     def attempt_get(self, path: str) -> GitHubResponse:
         """
         Like :meth:`ReplayingRestClient.attempt_get`, but a path in :attr:`refusals` is
@@ -133,7 +156,9 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
         """
         if path in self.refusals:
             self.calls.append(path)
-            return GitHubResponse(None, failure=self.refusals[path])
+            return GitHubResponse(
+                None, failure=self.refusals[path], waits=self.refusal_waits
+            )
         return super().attempt_get(path)
 
     def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
@@ -141,6 +166,28 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
         if self.failure is not None:
             return GitHubResponse(None, failure=self.failure)
         return GitHubResponse(self.opened)
+
+
+def refusal_of(
+    path: str,
+    status: HTTPStatus,
+    detail: str = "",
+    kind: type[GitHubRequestFailed] = GitHubRequestFailed,
+) -> GitHubRequestFailed:
+    """
+    :param path: The API path GitHub refuses.
+    :param status: The status it refuses it with.
+    :param detail: The body the refusal comes with.
+    :param kind: The refusal's type.
+    :return: The refusal.
+    """
+    return kind(
+        status=status,
+        detail=detail,
+        method=HttpMethod.GET,
+        path=path,
+        credential_origin=CredentialProvider.CALLER,
+    )
 
 
 def bare_repository(path: Path) -> Path:
@@ -247,9 +294,18 @@ class Publishing:
     ) -> PullRequestOpeningClient:
         """:return: A client answering both run listings, the details of every
         repository under :attr:`root`, the notes repository's open merge workflow pull
-        requests from recordings, and opening
-        :attr:`DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST`."""
+        requests from recordings, a missing site repository as GitHub refuses it, and
+        opening :attr:`DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST`."""
         proposal = self.merge_workflow_proposal_into(notes_default_branch)
+        site_refusals = (
+            {}
+            if self.path_of(self.site.repository).exists()
+            else {
+                self.site.repository.api_path: refusal_of(
+                    self.site.repository.api_path, HTTPStatus.NOT_FOUND
+                )
+            }
+        )
         return PullRequestOpeningClient(
             {
                 **{
@@ -270,6 +326,7 @@ class Publishing:
                 ],
             },
             opened=json.loads(DatasetLocation.MERGE_WORKFLOW_PULL_REQUEST.read_text()),
+            refusals=site_refusals,
         )
 
     def merge_workflow_proposal_into(self, base: str) -> MergeWorkflowProposal:
@@ -378,6 +435,218 @@ def test_creating_the_site_repository_warns_what_the_public_site_shows_of_privat
             publishing.site, (publishing.notes_repository,)
         ).pending.warning
     )
+
+
+def site_refused(publishing: Publishing) -> PullRequestOpeningClient:
+    """
+    :param publishing: A notes repository whose site repository git cannot reach.
+    :return: A client that refuses reading the site repository, as GitHub does for one
+        not attached to a cloud session.
+    """
+    runs = publishing.runs_none()
+    path = publishing.site.repository.api_path
+    runs.refusals[path] = refusal_of(path, HTTPStatus.FORBIDDEN)
+    return runs
+
+
+def test_a_refused_site_repository_is_not_left_to_the_user_to_create(publishing):
+    """
+    A site repository GitHub refuses to show may exist, so publication stops instead
+    of asking for it to be created.
+    """
+    with pytest.raises(SiteRepositoryUnreachableError):
+        publishing.publication(site_refused(publishing)).publish()
+
+
+def test_a_refused_site_repository_is_reported_with_github_s_refusal(publishing):
+    """
+    The refusal that left the site repository unread is the one the error carries.
+    """
+    runs = site_refused(publishing)
+
+    with pytest.raises(SiteRepositoryUnreachableError) as raised:
+        publishing.publication(runs).publish()
+
+    assert raised.value.refusal == runs.refusals[publishing.site.repository.api_path]
+
+
+def test_a_refused_site_repository_ends_the_command_with_its_exit_status(publishing):
+    """
+    The command ends with the status of the error that stopped it.
+    """
+    exit_status = publishing.publication(site_refused(publishing)).run()
+
+    assert exit_status == SiteRepositoryUnreachableError.exit_code
+
+
+# %% why the site repository could not be read
+
+
+def publication_access(publishing: Publishing) -> SiteAccess:
+    """
+    :param publishing: A notes repository and its site repository.
+    :return: How publication reaches the site repository, and what it runs then.
+    """
+    return SiteAccess(
+        publishing.site,
+        PUBLICATION_COMMAND,
+        PlanSitePublication.site_attachment_benefit,
+    )
+
+
+@dataclass(frozen=True)
+class FailedSiteRead:
+    """
+    A failed read of the site repository, as publication met it.
+    """
+
+    refusal: GitHubCallFailed
+    """
+    Why GitHub's answer, or the lack of one, failed the read.
+    """
+
+    access: SiteAccess
+    """
+    Publication's access to the site repository, and what it runs then.
+    """
+
+    in_cloud_session: bool
+    """
+    Whether publication runs in a Claude Code cloud session.
+    """
+
+
+@dataclass(frozen=True)
+class SiteReadAttempt:
+    """
+    One way reading the site repository fails, and the fix publication should give.
+    """
+
+    refusal_for: Callable[[str], GitHubCallFailed]
+    """
+    Builds the failure for the site repository's API path.
+    """
+
+    fix_for: Callable[[FailedSiteRead], SiteReadFix]
+    """
+    Builds the fix publication should give for the failed read.
+    """
+
+
+class SiteReadCase(Enum):
+    """
+    Each way reading the site repository fails.
+    """
+
+    SESSION_PROXY = SiteReadAttempt(
+        lambda path: refusal_of(
+            path,
+            HTTPStatus.FORBIDDEN,
+            DatasetLocation.SESSION_PROXY_REFUSAL.read_text(),
+        ),
+        lambda read: RepositoryAttachmentFix(read.access),
+    )
+    """
+    The cloud session's proxy refuses it in GitHub's place.
+    """
+
+    GITHUB_FORBIDS = SiteReadAttempt(
+        lambda path: refusal_of(path, HTTPStatus.FORBIDDEN),
+        lambda read: CredentialAccessFix(read.access, read.in_cloud_session),
+    )
+    """
+    GitHub itself refuses the credential.
+    """
+
+    SERVER_ERROR = SiteReadAttempt(
+        lambda path: refusal_of(path, HTTPStatus.BAD_GATEWAY),
+        lambda read: GitHubOutageFix((), PUBLICATION_COMMAND),
+    )
+    """
+    GitHub answers with a server error.
+    """
+
+    NO_ANSWER = SiteReadAttempt(
+        lambda path: GitHubUnreachableError(HttpMethod.GET, path, "timed out"),
+        lambda read: GitHubOutageFix((), PUBLICATION_COMMAND),
+    )
+    """
+    GitHub does not answer.
+    """
+
+    CREDENTIAL_REJECTED = SiteReadAttempt(
+        lambda path: refusal_of(
+            path, HTTPStatus.UNAUTHORIZED, kind=GitHubCredentialRejected
+        ),
+        lambda read: RefusalCorrectionFix(read.refusal, PUBLICATION_COMMAND),
+    )
+    """
+    GitHub rejects the token as invalid or expired.
+    """
+
+    REPOSITORY_MOVED = SiteReadAttempt(
+        lambda path: refusal_of(
+            path, HTTPStatus.MOVED_PERMANENTLY, kind=GitHubRepositoryMoved
+        ),
+        lambda read: RefusalCorrectionFix(read.refusal, PUBLICATION_COMMAND),
+    )
+    """
+    GitHub redirects to the repository's new name.
+    """
+
+
+@pytest.mark.parametrize("case", SiteReadCase)
+@pytest.mark.parametrize("in_cloud_session", [True, False])
+def test_each_failed_read_of_the_site_repository_gets_the_fix_for_its_cause(
+    publishing, case, in_cloud_session
+):
+    """
+    The proxy's own refusal, GitHub's refusal of the credential, GitHub being
+    unavailable and a refusal that names its own fix each get their own fix.
+    """
+    runs = publishing.runs_none()
+    path = publishing.site.repository.api_path
+    runs.refusals[path] = case.value.refusal_for(path)
+
+    with pytest.raises(SiteRepositoryUnreachableError) as raised:
+        publishing.publication(runs, in_cloud_session).publish()
+
+    assert raised.value.fix == case.value.fix_for(
+        FailedSiteRead(
+            runs.refusals[path], publication_access(publishing), in_cloud_session
+        )
+    )
+
+
+def test_an_unavailable_github_is_fixed_with_the_waits_already_made(publishing):
+    """
+    The fix for an unavailable GitHub carries how long it was already waited for.
+    """
+    runs = publishing.runs_none()
+    path = publishing.site.repository.api_path
+    runs.refusals[path] = refusal_of(path, HTTPStatus.BAD_GATEWAY)
+    runs.refusal_waits = tuple(PlanSitePublication.github_retry_policy.delays())
+
+    with pytest.raises(SiteRepositoryUnreachableError) as raised:
+        publishing.publication(runs).publish()
+
+    assert raised.value.fix == GitHubOutageFix(runs.refusal_waits, PUBLICATION_COMMAND)
+
+
+def test_a_site_repository_git_cannot_reach_is_not_left_to_the_user_to_create(
+    publishing,
+):
+    """
+    GitHub shows the site repository, but git cannot fetch from it: git's failure is
+    reported instead of asking for the repository to be created.
+    """
+    runs = publishing.runs_none()
+    path = publishing.site.repository.api_path
+    del runs.refusals[path]
+    runs.responses[path] = json.loads(DatasetLocation.REPOSITORY_NOT_FORK.read_text())
+
+    with pytest.raises(GitCommandFailed):
+        publishing.publication(runs).publish()
 
 
 def test_an_empty_site_repository_gets_the_workflow_naming_the_notes_repository(
@@ -804,12 +1073,8 @@ def secret_refused(publishing: Publishing, status: HTTPStatus) -> GitHubRequestF
     :param status: The status GitHub refuses the site repository's read token with.
     :return: The refusal.
     """
-    return GitHubRequestFailed(
-        status=status,
-        detail="",
-        method=HttpMethod.GET,
-        path=PlanSiteSecret.READ_TOKEN.path_on(publishing.site.repository),
-        credential_origin=CredentialProvider.CALLER,
+    return refusal_of(
+        PlanSiteSecret.READ_TOKEN.path_on(publishing.site.repository), status
     )
 
 

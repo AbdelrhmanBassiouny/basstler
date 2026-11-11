@@ -74,6 +74,19 @@ class SiteAccess:
     The repository whose build a plan save starts.
     """
 
+    retry_command: str = BUILD_START_COMMAND
+    """
+    The command that does what failed, once this session reaches :attr:`site`.
+    """
+
+    attachment_benefit: str = (
+        "every plan save then updates the plan site within a minute, without a stored "
+        "token"
+    )
+    """
+    What attaching :attr:`site` gives the user, said when asking them to allow it.
+    """
+
     def read(self, client: GitHubAttemptClient) -> GitHubResponse:
         """
         :param client: Reads the site repository.
@@ -101,15 +114,15 @@ class SiteAccess:
     def remedy(self, in_cloud_session: bool) -> str:
         """
         :param in_cloud_session: Whether this runs in a Claude Code cloud session.
-        :return: How this session gets the access, and the command that then starts the
-            build.
+        :return: How this session gets the access, and :attr:`retry_command` to run
+            then.
         """
         repository = self.site.repository
         if not in_cloud_session:
             return "\n".join(
                 [
                     f"Log gh in with an account that can run workflows in "
-                    f"{repository.full_name}, then run {BUILD_START_COMMAND}:",
+                    f"{repository.full_name}, then run {self.retry_command}:",
                     "",
                     CodeFence.BASH,
                     GitHubCommand.LOG_IN,
@@ -118,9 +131,8 @@ class SiteAccess:
             )
         return RepositoryAttachment(
             repository,
-            retry_command=BUILD_START_COMMAND,
-            benefit="every plan save then updates the plan site within a minute, "
-            "without a stored token",
+            retry_command=self.retry_command,
+            benefit=self.attachment_benefit,
         ).instruction()
 
 
