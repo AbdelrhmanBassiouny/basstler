@@ -32,6 +32,8 @@ from basstler.github.client import (
 from basstler.github.credential import CredentialProvider, GitHubCommand
 from basstler.github.exceptions import (
     GitHubCallFailed,
+    GitHubCredentialRejected,
+    GitHubRepositoryMoved,
     GitHubRequestFailed,
     GitHubUnreachableError,
 )
@@ -48,6 +50,7 @@ from basstler.plan_site.build_start import CodeFence, SiteAccess
 from basstler.plan_site.exceptions import (
     PublicationPushRefusedError,
     PushRefusal,
+    SiteReadFailure,
     SiteRepositoryUnreachableError,
 )
 from basstler.plan_site.hub import PlanHub
@@ -151,15 +154,22 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
         return GitHubResponse(self.opened)
 
 
-def refusal_of(path: str, status: HTTPStatus) -> GitHubRequestFailed:
+def refusal_of(
+    path: str,
+    status: HTTPStatus,
+    detail: str = "",
+    kind: type[GitHubRequestFailed] = GitHubRequestFailed,
+) -> GitHubRequestFailed:
     """
     :param path: The API path GitHub refuses.
     :param status: The status it refuses it with.
+    :param detail: The body the refusal comes with.
+    :param kind: The refusal's type.
     :return: The refusal.
     """
-    return GitHubRequestFailed(
+    return kind(
         status=status,
-        detail="",
+        detail=detail,
         method=HttpMethod.GET,
         path=path,
         credential_origin=CredentialProvider.CALLER,
@@ -473,6 +483,121 @@ def test_a_refused_site_repository_ends_the_command_with_its_exit_status(publish
     exit_status = publishing.publication(site_refused(publishing)).run()
 
     assert exit_status == SiteRepositoryUnreachableError.exit_code
+
+
+# %% why the site repository could not be read
+
+
+SITE_READ_FAILURES = {
+    "session proxy": (
+        lambda path: refusal_of(
+            path,
+            HTTPStatus.FORBIDDEN,
+            DatasetLocation.SESSION_PROXY_REFUSAL.read_text(),
+        ),
+        SiteReadFailure.REPOSITORY_NOT_ATTACHED,
+    ),
+    "GitHub forbids": (
+        lambda path: refusal_of(path, HTTPStatus.FORBIDDEN),
+        SiteReadFailure.CREDENTIAL_REFUSED,
+    ),
+    "server error": (
+        lambda path: refusal_of(path, HTTPStatus.BAD_GATEWAY),
+        SiteReadFailure.GITHUB_UNAVAILABLE,
+    ),
+    "no answer": (
+        lambda path: GitHubUnreachableError(HttpMethod.GET, path, "timed out"),
+        SiteReadFailure.GITHUB_UNAVAILABLE,
+    ),
+    "credential rejected": (
+        lambda path: refusal_of(
+            path, HTTPStatus.UNAUTHORIZED, kind=GitHubCredentialRejected
+        ),
+        SiteReadFailure.REFUSAL_WITH_ITS_OWN_FIX,
+    ),
+    "repository moved": (
+        lambda path: refusal_of(
+            path, HTTPStatus.MOVED_PERMANENTLY, kind=GitHubRepositoryMoved
+        ),
+        SiteReadFailure.REFUSAL_WITH_ITS_OWN_FIX,
+    ),
+}
+"""
+Each way reading the site repository fails, by name: how to build the failure for an
+API path, and what it means.
+"""
+
+
+def site_read_failed(
+    publishing: Publishing, failure_name: str, in_cloud_session: bool = True
+) -> SiteRepositoryUnreachableError:
+    """
+    :param publishing: A notes repository whose site repository cannot be read.
+    :param failure_name: The key in :data:`SITE_READ_FAILURES` it fails with.
+    :param in_cloud_session: Whether publication runs in a cloud session.
+    :return: What publication raises.
+    """
+    runs = publishing.runs_none()
+    path = publishing.site.repository.api_path
+    runs.refusals[path] = SITE_READ_FAILURES[failure_name][0](path)
+    with pytest.raises(SiteRepositoryUnreachableError) as raised:
+        publishing.publication(runs, in_cloud_session).publish()
+    return raised.value
+
+
+@pytest.mark.parametrize("failure_name", SITE_READ_FAILURES)
+def test_why_the_site_repository_could_not_be_read_is_told_apart(
+    publishing, failure_name
+):
+    """
+    The proxy's own refusal, GitHub's refusal of the credential, GitHub being
+    unavailable and a refusal that names its own fix are each recognised.
+    """
+    failure = site_read_failed(publishing, failure_name)
+
+    assert failure.cause == SITE_READ_FAILURES[failure_name][1]
+
+
+@pytest.mark.parametrize("failure_name", ["session proxy", "GitHub forbids"])
+@pytest.mark.parametrize("in_cloud_session", [True, False])
+def test_a_refusal_of_this_session_is_fixed_by_reaching_the_site_repository(
+    publishing, failure_name, in_cloud_session
+):
+    """
+    When this session may not read the site repository, the fix is the one that gives
+    it access.
+    """
+    failure = site_read_failed(publishing, failure_name, in_cloud_session)
+
+    assert failure.suggest_correction().endswith(failure.remedy)
+
+
+@pytest.mark.parametrize("failure_name", ["server error", "no answer"])
+def test_an_unavailable_github_is_fixed_by_publishing_again_later(
+    publishing, failure_name
+):
+    """
+    GitHub being unavailable clears on its own: the fix is to run publication again,
+    not to change the session's access.
+    """
+    failure = site_read_failed(publishing, failure_name)
+
+    correction = failure.suggest_correction()
+    assert PUBLICATION_COMMAND in correction
+    assert failure.remedy not in correction
+
+
+@pytest.mark.parametrize("failure_name", ["credential rejected", "repository moved"])
+def test_a_refusal_naming_its_own_fix_is_fixed_as_it_says(publishing, failure_name):
+    """
+    A rejected credential or a moved repository is fixed the way the refusal says,
+    then by publishing again.
+    """
+    failure = site_read_failed(publishing, failure_name)
+
+    correction = failure.suggest_correction()
+    assert failure.refusal.suggest_correction() in correction
+    assert PUBLICATION_COMMAND in correction
 
 
 def test_a_site_repository_git_cannot_reach_is_not_left_to_the_user_to_create(
