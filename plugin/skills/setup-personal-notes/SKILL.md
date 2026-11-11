@@ -279,8 +279,8 @@ repository opened, reopened, marked ready, turned back into a draft, merged or
 closed. Plan pages also read every pull request's state live in the browser. A fork gets no merge workflow, so its default branch stays as its
 upstream's. The merge workflow never goes onto the default branch directly, so it
 passes the repository's checks like any other change: it goes on
-`basstler/plan-site-merge`, with a pull request opened for it and a step to
-merge that pull request; when GitHub refuses to open it, the step says why and
+`basstler/plan-site-merge`, with a draft pull request opened for it and a step
+to mark that pull request ready and merge it; when GitHub refuses to open it, the step says why and
 gives the line that opens it.
 
 It then prints the steps only the user can take, each with its copyable command

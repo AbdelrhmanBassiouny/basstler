@@ -80,6 +80,11 @@ class RestPullRequestSummary(RestResponse, WebPage):
     Whether it is open or closed.
     """
 
+    draft: bool
+    """
+    Whether it is a draft, which its author has not marked ready for review.
+    """
+
     merged_at: str | None
     """
     When it merged, as an ISO 8601 timestamp, absent unless it closed by merging.

@@ -389,10 +389,8 @@ class MergeWorkflowProposal:
 
     @property
     def opening(self) -> NewPullRequest:
-        """:return: The pull request proposing the workflow, opened ready to merge."""
-        return NewPullRequest(
-            self.repository, self.title, self.head, self.base, draft=False
-        )
+        """:return: The pull request proposing the workflow."""
+        return NewPullRequest(self.repository, self.title, self.head, self.base)
 
     @property
     def open_pull_requests_path(self) -> str:
@@ -438,10 +436,19 @@ class MergeWorkflowProposal:
     def merging(pull_request: RestPullRequestSummary) -> PendingStep:
         """
         :param pull_request: The pull request proposing the workflow.
-        :return: The step that merges it.
+        :return: The step that merges it, marking it ready for review first while it
+            is a draft, which GitHub does not merge.
         """
+        url = pull_request.page_url
+        merge = f"gh pr merge {url} --merge"
+        if not pull_request.draft:
+            return PendingStep(
+                UserStep.ADD_MERGE_WORKFLOW,
+                merge,
+                (f"Open {url}.", "Click Merge pull request."),
+            )
         return PendingStep(
             UserStep.ADD_MERGE_WORKFLOW,
-            f"gh pr merge {pull_request.page_url} --merge",
-            (f"Open {pull_request.page_url}.", "Click Merge pull request."),
+            f"gh pr ready {url} && {merge}",
+            (f"Open {url}.", "Click Ready for review.", "Click Merge pull request."),
         )

@@ -5,6 +5,7 @@
       "title": "t",
       "html_url": "https://github.com/example-upstream/example-repo/pull/480",
       "state": "closed",
+      "draft": false,
       "merged_at": "2026-07-01T00:00:00Z",
       "head": {
         "sha": "0123456789abcdef0123456789abcdef01234567",
@@ -19,6 +20,7 @@
       "title": "t",
       "html_url": "https://github.com/example-upstream/example-repo/pull/513",
       "state": "open",
+      "draft": false,
       "merged_at": null,
       "head": {
         "sha": "0123456789abcdef0123456789abcdef01234567",

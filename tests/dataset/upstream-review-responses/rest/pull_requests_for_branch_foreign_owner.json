@@ -5,6 +5,7 @@
       "title": "t",
       "html_url": "https://github.com/example-upstream/example-repo/pull/400",
       "state": "open",
+      "draft": false,
       "merged_at": null,
       "head": {
         "sha": "0123456789abcdef0123456789abcdef01234567",
