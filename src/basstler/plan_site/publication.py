@@ -12,6 +12,7 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field, replace
+from datetime import timedelta
 from enum import StrEnum
 from pathlib import Path
 from typing import Annotated
@@ -62,6 +63,7 @@ from basstler.standard_streams import StandardStreamHandler
 from basstler.github.client import (
     GitHubFullClient,
     GitHubRestClient,
+    RetryPolicy,
 )
 from basstler.upstream_reviews.action.branch import BasstlerSource
 
@@ -73,6 +75,12 @@ This module's logger, which is also what its command prints through.
 PUBLICATION_COMMAND = f'"${{{BasstlerVariable.PYTHON}}}" -m {__spec__.name}'
 """
 The command line that publishes again, once this session reaches the site repository.
+"""
+
+PUBLICATION_RETRY_POLICY = RetryPolicy(retries=4, first_delay=timedelta(seconds=2))
+"""
+How publication's reads are asked again: it runs once, by hand, so it waits longer
+for GitHub to recover than a command that runs on every session.
 """
 
 # %% the notes repository on GitHub
@@ -242,6 +250,7 @@ class PlanSitePublication:
                 read.failure,
                 access.remedy(self.in_cloud_session),
                 PUBLICATION_COMMAND,
+                read.waits,
             )
         return self.default_branch_of(site.repository.clone_url_under(self.remote_root))
 
@@ -587,7 +596,7 @@ def publish(
         notes_remote,
         DispatchWorkflow(notes_repository, notes_branch.name, site),
         SiteWorkflow(branch_or_tag, notes_repository),
-        GitHubRestClient(),
+        GitHubRestClient(retry_policy=PUBLICATION_RETRY_POLICY),
         remote_root=GitHubAddress.clone_root_for(notes_branch.url),
         in_cloud_session=ClaudeCodeVariable.REMOTE.is_true(),
     ).run()

@@ -5,6 +5,7 @@ The errors publishing and building the plan site raise.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from datetime import timedelta
 from enum import Enum, StrEnum
 
 from basstler.class_property import classproperty
@@ -124,6 +125,11 @@ class SiteRepositoryUnreachableError(CommandFailure, DataclassException):
     The command that publishes again.
     """
 
+    waits: tuple[timedelta, ...]
+    """
+    The wait before each time the read was asked again, first first.
+    """
+
     @property
     def cause(self) -> SiteReadFailure:
         """:return: Why the site repository could not be read."""
@@ -138,9 +144,12 @@ class SiteRepositoryUnreachableError(CommandFailure, DataclassException):
     def suggest_correction(self) -> str:
         explained = f"Do not create it again: it may exist, but {self.cause.value}."
         if self.cause is SiteReadFailure.GITHUB_UNAVAILABLE:
+            waited = sum(self.waits, timedelta()).total_seconds()
             return (
-                f"{explained} Reads are already asked again on a server error, so "
-                f"wait a few minutes, then run {self.retry_command}."
+                f"{explained} Attempts made: {len(self.waits) + 1}, with {waited:g} "
+                f"seconds of waiting between them. {GitHubAddress.STATUS} shows "
+                f"whether GitHub has an incident; if it has none, this session's "
+                f"network may be failing. Run {self.retry_command} once it recovers."
             )
         if self.cause is SiteReadFailure.REFUSAL_WITH_ITS_OWN_FIX:
             return (

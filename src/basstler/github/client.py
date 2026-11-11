@@ -16,7 +16,7 @@ import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from functools import cached_property
 from enum import StrEnum
@@ -266,6 +266,11 @@ class GitHubResponse:
     Why the call failed, ``None`` when it succeeded.
     """
 
+    waits: tuple[timedelta, ...] = ()
+    """
+    The wait before each time the call was asked again, first first.
+    """
+
     @property
     def is_server_error(self) -> bool:
         """
@@ -385,15 +390,17 @@ class GitHubRestClient(GitHubFullClient):
         with a server error.
 
         :param path: The path below :attr:`api_root`.
-        :return: The last answer.
+        :return: The last answer, with the waits made before it.
         """
         response = self._exchange(HttpMethod.GET, path, None)
+        waits: list[timedelta] = []
         for delay in self.retry_policy.delays():
             if not response.is_server_error:
-                return response
+                break
             time.sleep(delay.total_seconds())
+            waits.append(delay)
             response = self._exchange(HttpMethod.GET, path, None)
-        return response
+        return replace(response, waits=tuple(waits))
 
     def _exchange(
         self, method: HttpMethod, path: str, payload: Mapping[str, Any] | None

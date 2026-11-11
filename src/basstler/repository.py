@@ -13,7 +13,7 @@ from urllib.parse import urlsplit
 
 class GitHubAddress(StrEnum):
     """
-    The base URLs every GitHub address this package builds is built on.
+    The GitHub URLs this package builds addresses on or points the user to.
     """
 
     WEB = "https://github.com"
@@ -29,6 +29,11 @@ class GitHubAddress(StrEnum):
     SSH = "ssh://git@github.com"
     """
     The root of every clone URL reached over SSH.
+    """
+
+    STATUS = "https://www.githubstatus.com"
+    """
+    The page where GitHub reports its incidents.
     """
 
     @classmethod
