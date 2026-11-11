@@ -6,11 +6,18 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import TYPE_CHECKING
 
+from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
+from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.github.credential import GitHubCommand
+from basstler.github.exceptions import GitHubCallFailed
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandResult
 from basstler.repository import GitHubAddress, Repository
+
+if TYPE_CHECKING:
+    from basstler.plan_site.site_read import SiteReadFix
 
 # %% publishing the site
 
@@ -34,6 +41,42 @@ class NotesRepositoryUnresolvedError(DataclassException, LookupError):
         return (
             "point the notes remote at a GitHub repository with /setup-personal-notes"
         )
+
+
+@dataclass
+class SiteRepositoryUnreachableError(CommandFailure, DataclassException):
+    """
+    Raised when GitHub refuses to show the site repository, so whether it exists, and
+    whether creating it would help, is not known.
+    """
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.GITHUB_REQUEST_FAILED
+
+    site_repository: Repository
+    """
+    The repository that builds and serves the plan site.
+    """
+
+    refusal: GitHubCallFailed
+    """
+    Why GitHub would not show it.
+    """
+    fix: SiteReadFix
+    """
+    What makes it readable again, chosen by why it could not be read.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"cannot read the site repository {self.site_repository.full_name}, "
+            f"so whether it exists is not known: {self.refusal.error_message()}"
+        )
+
+    def suggest_correction(self) -> str:
+        return f"Do not create it again: it may exist. {self.fix.describe()}"
 
 
 class PushRefusal(StrEnum):

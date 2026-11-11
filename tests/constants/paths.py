@@ -248,6 +248,12 @@ class DatasetLocation(PathEnumeration):
     A repository's REST response for a public repository that is not a fork.
     """
 
+    SESSION_PROXY_REFUSAL = DIRECTORY / "session-proxy-refusal.json"
+    """
+    What a Claude Code cloud session's proxy answers, in GitHub's place, for a
+    repository not attached to the session.
+    """
+
     REPOSITORY_PRIVATE = DIRECTORY / "repository-private.json"
     """
     A repository's REST response for a private repository that is not a fork.
