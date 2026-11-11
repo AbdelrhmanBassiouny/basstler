@@ -107,8 +107,11 @@ items:
 - id: hub-live-states
   title: Hub and repository pages read pull request states live, as plan pages do
   track: site
+  branch: claude/tender-noether-tukuks
+  pull_request_number: 199
+  session: https://claude.ai/code/session_01JxHGiNe6swPYLvL9aCJvBU
   depends_on: []
-  status: not started
+  status: in progress
   notes: 'From merge-workflow-private-only (owner, 2026-11-11): #141 made plan pages read
     pull request states live; the hub and repository pages show the same progress counts
     only as of the last build. Give their progress cards the same live read and
