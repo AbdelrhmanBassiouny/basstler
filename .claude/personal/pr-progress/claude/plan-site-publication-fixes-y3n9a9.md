@@ -1,10 +1,8 @@
 Plan:
-- Await CI and review on draft PR #194
-
+- Await CI on 5737d30 and review of the per-cause fixes.
 Done:
-- Failing tests first (2e65b4e), then the fix (27600d8): the site repository is read through the API; 404 means create, other refusals raise SiteRepositoryUnreachableError with the reason and SiteAccess.remedy; git failure raises GitCommandFailed
-- SiteAccess takes retry_command and attachment_benefit; GitHubResponse.is_not_found
-- Full suite green except the 10 Playwright tests the container's Chromium cannot run
-
+- Tests and fix: unreadable site repository raises SiteRepositoryUnreachableError instead of "create it".
+- Review 5863831822: SiteReadFailure gives each cause its own fix (proxy not-attached, credential refused, GitHub unavailable, refusal with own fix); replied on the PR.
+- CI on 27600d8 failed in apt (DNS on the runner), no test ran.
 Next:
-- Check CI (Playwright page tests run there)
+- Read CI on 5737d30; a rate-limit-aware retry only if asked.
