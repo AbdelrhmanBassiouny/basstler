@@ -19,19 +19,6 @@ tracks:
   name: Site rendering
   wave: fixes
 items:
-- id: unreachable-site-repository
-  title: Publication tells an unreachable site repository from a missing one
-  track: publication
-  branch: claude/plan-site-publication-fixes-y3n9a9
-  pull_request_number: 194
-  depends_on: []
-  status: in progress
-  session: https://claude.ai/code/session_01JxHGiPFhGkJuDAaDLHYDfY
-  notes: 'From Hesham87/Platform_maintainer: default_branch_of() returns None whenever git
-    ls-remote fails, and publish() reads that as missing, so a private or unattached site
-    repository got create-the-repository again. Read the repository through the API (404 vs
-    refused) and name the reason: private, not attached, App not installed. Own bug PR off
-    main, failing test first.'
 - id: merge-workflow-branch-history
   title: The merge workflow branch starts from the default branch, so its pull request can
     open
@@ -56,13 +43,10 @@ items:
   branch: claude/loving-johnson-gb3ura
   pull_request_number: 196
   depends_on: []
-  status: in progress
+  status: deferred
   session: https://claude.ai/code/session_01JxHGiNFR7ot7gktfTzUrUg
-  notes: 'Open the merge workflow pull request as a draft: MergeWorkflowProposal passes draft=False
-    (user_steps.py). Decided (owner, 2026-11-09): once #141 shows live pull request states
-    on the page, publication stops installing the merge workflow by default and offers it
-    only on request, so a product''s main gets no pull_request_target workflow, no zizmor
-    exception and no docs change unless asked. Own bug PR off main for the draft fix.'
+  notes: 'Dropped (owner, 2026-11-11): the user merges this pull request right after setup,
+    so a draft only adds a Ready for review step. #196 closed unmerged; superseded by merge-workflow-private-only.'
 - id: registration-holds-back-only-its-own-repositories
   title: Publication holds back only for the private repositories its registration adds
   branch: claude/jolly-hamilton-fwd4cw
@@ -80,19 +64,14 @@ items:
     '
   depends_on: []
   status: in progress
-- id: page-url-names-notes-repository
-  title: Plan site page addresses name the notes repository the hub lists
-  branch: claude/youthful-fermi-9xzzzl
+- id: merge-workflow-private-only
+  title: Publication offers the merge workflow only for private repositories
   track: publication
-  pull_request_number: 198
-  session: https://claude.ai/code/session_01JxHGiNad1zWKurRqBbtmMC
-  notes: 'From #190 (tomsch420): plan_site_page_url (hooks/resolve-personal-notes-config.sh)
-    passes --repository "$(repository_name)", the clone''s origin, but the site files pages
-    under the notes repository the hub lists, so with notes in a separate repository every
-    address 404s - the session-start plan site line, plan-item-kickoff''s item page and every
-    link a session writes from them. Name the notes repository instead. Own bug PR off main,
-    failing test first, closes #190.
-
-    '
-  depends_on: []
-  status: in progress
+  depends_on:
+  - team-basstler/hub-live-states
+  status: not started
+  notes: 'Decided (owner, 2026-11-11): plan pages read pull request states live (#141), but
+    only for public repositories. Install plan-site-merge.yml, its pull request and step only
+    when the notes repository is private. Waits for hub-live-states so public hub and repository
+    pages stay current. Open: whether to remove a workflow installed earlier on a public repository.
+    Overlaps #195. A behaviour change: release:minor, not labelled bug.'
