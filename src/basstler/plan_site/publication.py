@@ -232,8 +232,10 @@ class PlanSitePublication:
         notes_details = RepositoryDetails.from_json(
             self.github.get(notes_repository.api_path)
         )
+        registered = self.repositories_with_plans_of([notes_repository])
         access = self.private_repository_access(
-            self.repositories_read_by_build(site_workflow.registry), notes_details
+            self.repositories_read_by_build(site_workflow.registry, registered),
+            notes_details,
         )
         if site_branch is None:
             report.pending.extend(self.site_repository_creation(access))
@@ -242,7 +244,7 @@ class PlanSitePublication:
         notes_runs = RunListing.read(
             self.github, notes_repository, self.dispatch_workflow.notes_branch
         )
-        if access is not None and access.holds_back_publication:
+        if access is not None and access.holds_back(registered):
             report.pending.append(access.pending)
             return report
         self.write(
@@ -353,23 +355,39 @@ class PlanSitePublication:
                 self.dispatch_workflow.notes_repository,
             )
 
-    def repositories_read_by_build(self, registry: Repository) -> list[Repository]:
+    def repositories_read_by_build(
+        self, registry: Repository, registered: list[Repository]
+    ) -> list[Repository]:
         """
         :param registry: The repository whose notes hold the complete hub file.
-        :return: The registry, every repository its hub file lists, the notes
-            repository, and every repository their plans' pull requests are on, each
-            once.
+        :param registered: The repositories the registration adds.
+        :return: Those, followed by every other repository the site's build reads,
+            each once.
         """
         hub = PlanHub.from_yaml(
             self.notes_branch_of(registry).read_latest(ProjectLocation.PLAN_HUB)
         )
-        notes_repositories = dict.fromkeys(
-            [
-                registry,
-                *map(Repository.parse, hub.repositories if hub else []),
-                self.dispatch_workflow.notes_repository,
-            ]
+        already_on_site = [
+            repository
+            for repository in dict.fromkeys(
+                [registry, *map(Repository.parse, hub.repositories if hub else [])]
+            )
+            if repository != self.dispatch_workflow.notes_repository
+        ]
+        return list(
+            dict.fromkeys(
+                [*registered, *self.repositories_with_plans_of(already_on_site)]
+            )
         )
+
+    def repositories_with_plans_of(
+        self, notes_repositories: list[Repository]
+    ) -> list[Repository]:
+        """
+        :param notes_repositories: The repositories whose notes branches hold plans.
+        :return: Those, and every repository their plans' pull requests are on, each
+            once.
+        """
         manifests = [
             PlanManifest.from_yaml(text)
             for repository in notes_repositories
