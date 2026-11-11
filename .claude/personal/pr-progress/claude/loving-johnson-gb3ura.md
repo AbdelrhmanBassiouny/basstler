@@ -1,11 +1,9 @@
 ## Plan
-- Failing test: the merge workflow's pull request opens as a draft
-- Drop `draft=False` from `MergeWorkflowProposal.opening`
-- Merge step marks a draft ready first (`draft` on `RestPullRequestSummary`, recordings gain `draft`)
-- Update `/setup-personal-notes` step description
+- Merge workflow's pull request opens as a draft; merge step marks a draft ready first
 
 ## Done
-- Branch, draft PR #196, item recorded in progress
+- Failing tests (f190233), fix (97afdf0): `draft=False` dropped, `RestPullRequestSummary.draft`, recordings carry `draft`, skill doc updated
+- Full suite green apart from 10 Playwright environment errors
 
 ## Next
-- Write the failing tests
+- Author review of draft PR #196
