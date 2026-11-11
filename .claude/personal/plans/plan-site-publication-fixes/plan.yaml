@@ -82,8 +82,10 @@ items:
   status: in progress
 - id: page-url-names-notes-repository
   title: Plan site page addresses name the notes repository the hub lists
-  branch: null
+  branch: claude/youthful-fermi-9xzzzl
   track: publication
+  pull_request_number: 198
+  session: https://claude.ai/code/session_01JxHGiNad1zWKurRqBbtmMC
   notes: 'From #190 (tomsch420): plan_site_page_url (hooks/resolve-personal-notes-config.sh)
     passes --repository "$(repository_name)", the clone''s origin, but the site files pages
     under the notes repository the hub lists, so with notes in a separate repository every
@@ -93,4 +95,4 @@ items:
 
     '
   depends_on: []
-  status: not started
+  status: in progress
