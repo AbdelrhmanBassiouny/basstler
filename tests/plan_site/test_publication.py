@@ -1255,6 +1255,67 @@ def test_a_private_repository_a_plan_names_without_a_read_token_writes_nothing(
     ]
 
 
+@pytest.fixture
+def registering_beside_private_work(
+    published: Publishing, tmp_path: Path
+) -> tuple[Publishing, PullRequestOpeningClient]:
+    """
+    :return: A public repository about to register on a site whose registry plans on
+        the private :data:`WORK_REPOSITORY`, without the read token, and the client it
+        publishes with.
+    """
+    plan_naming(published, WORK_REPOSITORY)
+    second = ForkCheckout.create(tmp_path / "second")
+    second_repository = Repository(published.notes_repository.owner, "another")
+    published.create(second_repository)
+    second.run_git(
+        "remote",
+        "set-url",
+        RemoteName.ORIGIN,
+        published.path_of(second_repository).as_uri(),
+    )
+    second_publishing = Publishing(second, published.root)
+    runs = second_publishing.runs_none()
+    runs.responses[WORK_REPOSITORY.api_path] = json.loads(
+        DatasetLocation.REPOSITORY_PRIVATE.read_text()
+    )
+    runs.refusals[
+        PlanSiteSecret.READ_TOKEN.path_on(second_publishing.site.repository)
+    ] = secret_refused(second_publishing, HTTPStatus.NOT_FOUND)
+    return second_publishing, runs
+
+
+def test_a_private_repository_already_on_the_site_does_not_hold_back_a_registration(
+    registering_beside_private_work,
+):
+    """
+    The build already reads the other repository's private work, so the new one is
+    registered anyway.
+    """
+    second_publishing, runs = registering_beside_private_work
+
+    second_publishing.publication(runs).publish()
+
+    hub = second_publishing.hub_on(second_publishing.notes_repository)
+    assert hub.repositories == [
+        hub.registry,
+        second_publishing.notes_repository.full_name,
+    ]
+
+
+def test_a_private_repository_already_on_the_site_is_left_as_the_read_access_step(
+    registering_beside_private_work,
+):
+    second_publishing, runs = registering_beside_private_work
+
+    report = second_publishing.publication(runs).publish()
+
+    assert (
+        PrivateRepositoryAccess(second_publishing.site, (WORK_REPOSITORY,)).pending
+        in report.pending
+    )
+
+
 def test_a_repository_whose_details_are_refused_is_published_and_left_to_check(
     private_publishing,
 ):
