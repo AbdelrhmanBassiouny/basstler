@@ -21,10 +21,6 @@ items:
   branch: null
   pull_request_number: null
   track: recommender
-  blockers:
-  - 'Waiting on basstler-v3 (#99): plan-store-issues and plan-site-from-issues are both not started, and
-    plan-store-issues waits on cli-launcher, also not started. Per the plan''s standing rule and the owner''s
-    deferral on #58, this item is rebuilt on v3''s issue-backed plans once those land.'
   depends_on:
   - basstler-packages/playbook-model
   status: not started
