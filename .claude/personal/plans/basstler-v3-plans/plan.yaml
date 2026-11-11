@@ -1,8 +1,8 @@
 schema_version: 1
 id: basstler-v3-plans
-title: 'basstler v3 plans: plans as GitHub issues'
-description: 'Plans move from plan.yaml on the notes branch to a tracking issue with sub-issues,
-  read by one brief command and by the plan site. Split from basstler-v3 on 2026-11-04.
+title: 'basstler v3 plans: one brief per item'
+description: 'Plans stay in plan.yaml on the notes branch, read by one brief command and by the plan
+  site. Split from basstler-v3 on 2026-11-04; plans as GitHub issues was deleted on 2026-11-11.
 
   '
 default_repository: KAOS-repositories/basstler
@@ -13,23 +13,9 @@ waves:
   description: Plans, stacks and upstream reviews rebuilt on GitHub state
 tracks:
 - id: plans
-  name: Plans as issues
+  name: Item briefs
   wave: core
 items:
-- id: plan-store-issues
-  title: Plans as a tracking issue with sub-issues, status labels and stated dependencies
-  branch: claude/nifty-turing-qshanp
-  pull_request_number: 144
-  track: plans
-  session: https://claude.ai/code/session_01JxHGiLu4ECfftbCNUxKfbH
-  depends_on: []
-  status: deferred
-  notes: 'Deferred 2026-11-10 (owner): plans as issues is not needed yet, so plans stay in plan.yaml;
-    PR 144 was closed and its branch keeps the work so far. Resume when several people share plans or
-    external intake is needed, built on the roadmap''s split rule. REST only (no Projects, no GraphQL),
-    through cli-launcher''s GitHubClient and pydantic models; labels only for blocked and deferred; adds
-    IssuePlanStore.adopt_issue for external-issue-intake. The CRAM fork''s github-native sandbox showed
-    Projects are not worth it as a view.'
 - id: item-brief
   title: One command prints an item's whole brief in at most 3 KB
   branch: null
@@ -40,50 +26,9 @@ items:
   notes: 'Item scope, dependency readiness, its pull request''s checks, unresolved threads, the mirrored
     upstream state and tracking-issue comments naming it, built by code so a skill never fetches or reads
     reference docs to assemble context. Builds on core-robustness/lean-kickoff (#97): reuse its brief
-    command and skill-size test, reading plan.yaml while plan-store-issues is deferred.
+    command and skill-size test, reading plan.yaml.
 
     From basstler-reliability: conflicts come from stack merge-probe; anything unread is listed as not
     checked with its reason, and the brief never says clean while one is.
 
     '
-- id: plan-import
-  title: Import every plan.yaml into issues, once
-  branch: null
-  pull_request_number: null
-  track: plans
-  depends_on:
-  - plan-store-issues
-  status: deferred
-  notes: 'Deferred with plan-store-issues. Idempotent: rerunning finds the issues already made. Landed
-    items are not imported. Moves this plan onto the issue store too.
-
-    '
-- id: plan-site-from-issues
-  title: The plan site reads plans from issues
-  branch: null
-  pull_request_number: null
-  track: plans
-  depends_on:
-  - plan-store-issues
-  status: deferred
-  notes: 'Deferred with plan-store-issues. Point the existing Pages build at the issue store instead of
-    plan.yaml. Retiring the Artifact dashboard and its URL cache is team-basstler/artifact-path-retirement.
-
-    Renders the External issues plan from external-issue-intake: each card shows its ExternalIssueStage
-    chip and its reporter.
-
-    '
-- id: external-issue-intake
-  title: Issues opened by external users become plan items automatically
-  branch: null
-  pull_request_number: null
-  track: plans
-  depends_on:
-  - plan-store-issues
-  status: deferred
-  notes: 'Deferred with plan-store-issues. A workflow on issues opened/reopened and workflow_dispatch
-    runs basstler issues intake (GITHUB_TOKEN, issues: write). Each run adopts every open non-collaborator
-    issue in no plan into the inbox plan labelled external-issues. Stages, read from GitHub: place while
-    in the inbox (a session runs /add-plan-item: fold into an item, join a plan, or start one), then discuss,
-    verify (confirmed label), test (draft PR), implement, done. No schedule, no LLM in the Action; one
-    concurrency group, a job-level filter and a 3-minute timeout bound spam.'
