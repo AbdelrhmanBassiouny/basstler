@@ -19,25 +19,14 @@ tracks:
   name: Site rendering
   wave: fixes
 items:
-- id: visibility-before-site-repository
-  title: Publication checks private repositories before asking for the site repository
-  track: publication
-  branch: claude/trusting-dirac-ul702x
-  pull_request_number: 193
-  depends_on: []
-  status: in progress
-  session: https://claude.ai/code/session_01JxHGiPiEgpe1iGNXeZfCD4
-  notes: 'From Hesham87/Platform_maintainer: publish() asks to create the site repository
-    before its private-repository check, so a private repository learns about PLAN_SITE_READ_TOKEN
-    and the public site only after creating it, making it public and installing the App. Run
-    the check, and its public-site warning, before CREATE_SITE_REPOSITORY. Own bug PR off
-    main, failing test first.'
 - id: unreachable-site-repository
   title: Publication tells an unreachable site repository from a missing one
   track: publication
+  branch: claude/plan-site-publication-fixes-y3n9a9
+  pull_request_number: 194
   depends_on: []
-  status: not started
-  session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
+  status: in progress
+  session: https://claude.ai/code/session_01JxHGiPFhGkJuDAaDLHYDfY
   notes: 'From Hesham87/Platform_maintainer: default_branch_of() returns None whenever git
     ls-remote fails, and publish() reads that as missing, so a private or unattached site
     repository got create-the-repository again. Read the repository through the API (404 vs
@@ -50,14 +39,15 @@ items:
   depends_on: []
   status: not started
   session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
-  notes: >
-    From Hesham87/Platform_maintainer: write_merge_workflow writes basstler/plan-site-merge as a new
-    RemoteBranch with no parent, so GitHub refused the pull request (422, no history in common with
-    main) and the printed gh pr create fallback fails the same way. Branch from the default branch's
-    head. Own bug PR off main, failing test first.
+  notes: 'From Hesham87/Platform_maintainer: write_merge_workflow writes basstler/plan-site-merge
+    as a new RemoteBranch with no parent, so GitHub refused the pull request (422, no history
+    in common with main) and the printed gh pr create fallback fails the same way. Branch
+    from the default branch''s head. Own bug PR off main, failing test first.
 
-    Reported again in #189 (tomsch420, tomsch420/law_as_code_benchmarks, basstler 3.15.1, worked
-    around by cherry-picking onto main); this item's PR closes #189.
+    Reported again in #189 (tomsch420, tomsch420/law_as_code_benchmarks, basstler 3.15.1,
+    worked around by cherry-picking onto main); this item''s PR closes #189.
+
+    '
 - id: merge-workflow-draft
   title: The merge workflow pull request opens as a draft
   track: publication
@@ -73,25 +63,28 @@ items:
   title: Publication holds back only for the private repositories its registration adds
   branch: null
   track: publication
-  notes: >
-    From #188 (tomsch420): publish() checks repositories_read_by_build(registry), the whole site, so
-    a private repository already on the site without PLAN_SITE_READ_TOKEN blocks registering an
-    unrelated public one: nothing is written, exit 1. Hold back only for what the registration adds
-    (the registered repository, its notes repository, its own plans' pull request repositories);
-    warn with the same token step for the rest. Own bug PR off main, failing test first, closes
-    #188; shares tests/plan_site/test_publication.py with #187.
+  notes: 'From #188 (tomsch420): publish() checks repositories_read_by_build(registry), the
+    whole site, so a private repository already on the site without PLAN_SITE_READ_TOKEN blocks
+    registering an unrelated public one: nothing is written, exit 1. Hold back only for what
+    the registration adds (the registered repository, its notes repository, its own plans''
+    pull request repositories); warn with the same token step for the rest. Own bug PR off
+    main, failing test first, closes #188; shares tests/plan_site/test_publication.py with
+    #187.
+
+    '
   depends_on: []
   status: not started
-
 - id: page-url-names-notes-repository
-  title: "Plan site page addresses name the notes repository the hub lists"
+  title: Plan site page addresses name the notes repository the hub lists
   branch: null
   track: publication
-  notes: >
-    From #190 (tomsch420): plan_site_page_url (hooks/resolve-personal-notes-config.sh) passes
-    --repository "$(repository_name)", the clone's origin, but the site files pages under the notes
-    repository the hub lists, so with notes in a separate repository every address 404s - the
-    session-start plan site line, plan-item-kickoff's item page and every link a session writes from
-    them. Name the notes repository instead. Own bug PR off main, failing test first, closes #190.
+  notes: 'From #190 (tomsch420): plan_site_page_url (hooks/resolve-personal-notes-config.sh)
+    passes --repository "$(repository_name)", the clone''s origin, but the site files pages
+    under the notes repository the hub lists, so with notes in a separate repository every
+    address 404s - the session-start plan site line, plan-item-kickoff''s item page and every
+    link a session writes from them. Name the notes repository instead. Own bug PR off main,
+    failing test first, closes #190.
+
+    '
   depends_on: []
   status: not started
