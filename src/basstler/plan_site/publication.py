@@ -24,6 +24,7 @@ from basstler.exit_codes import CommandFailure
 from basstler.github.repository_details import RepositoryDetails
 from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
 from basstler.maintenance.git_commands import (
+    GitCommandResult,
     GitCommandRunner,
     GitHubLoginLendingRunner,
 )
@@ -345,10 +346,43 @@ class PlanSitePublication:
         :param message: The commit message.
         :raises PublicationPushRefusedError: If the branch refuses the push.
         """
-        written = branch.attempt_write({path: text}, message)
-        if not written.push.succeeded:
+        self.raise_if_refused(branch.attempt_write({path: text}, message).push)
+
+    def rebuild(
+        self,
+        branch: RemoteBranch,
+        parent: str,
+        workflow: PlanSiteWorkflow,
+        message: str,
+        report: PublicationReport,
+    ) -> None:
+        """
+        Replace a branch with one commit adding a workflow on top of *parent*.
+
+        :param branch: The branch to replace, created when it does not exist.
+        :param parent: The commit the branch starts from.
+        :param workflow: The workflow.
+        :param message: The commit message.
+        :param report: Where to record the write.
+        :raises PublicationPushRefusedError: If the remote refuses a push.
+        """
+        if branch.exists():
+            self.raise_if_refused(branch.delete())
+        self.raise_if_refused(
+            branch.attempt_create(
+                parent, {workflow.location.as_posix(): workflow.text}, message
+            ).push
+        )
+        report.written.append(f"{workflow.location} on {branch.description}")
+
+    def raise_if_refused(self, push: GitCommandResult) -> None:
+        """
+        :param push: A push publishing the plan site.
+        :raises PublicationPushRefusedError: If the remote refused it.
+        """
+        if not push.succeeded:
             raise PublicationPushRefusedError.from_push(
-                written.push,
+                push,
                 self.notes_remote,
                 self.dispatch_workflow.notes_repository,
             )
@@ -433,7 +467,8 @@ class PlanSitePublication:
         """
         Write the merge workflow onto :attr:`merge_workflow_branch` for a pull request
         into the notes repository's default branch, so it reaches that branch through
-        the repository's own checks.
+        the repository's own checks. The branch is rebuilt on the default branch's tip
+        when it shares no history with it.
 
         :param notes_details: The notes repository's details.
         :param report: Where to record the writes.
@@ -450,10 +485,19 @@ class PlanSitePublication:
             f"{self.dispatch_workflow.site.repository.full_name} on every merge"
         )
         default_branch = self.default_branch_of(self.notes_remote)
-        if default_branch.read_latest(workflow.location) == workflow.text:
+        default_tip = default_branch.fetch()
+        if default_tip and self.git.file_at(default_tip, workflow.location) == (
+            workflow.text
+        ):
             return None
         head = RemoteBranch(self.merge_workflow_branch, self.git, self.notes_remote)
-        self.write(head, workflow, message, report)
+        head_tip = head.fetch()
+        if default_tip and not (
+            head_tip and self.git.share_history(head_tip, default_tip)
+        ):
+            self.rebuild(head, default_tip, workflow, message, report)
+        else:
+            self.write(head, workflow, message, report)
         return MergeWorkflowProposal(notes_repository, default_branch.name, head.name)
 
     def register(self, registry: Repository, report: PublicationReport) -> PlanHub:
