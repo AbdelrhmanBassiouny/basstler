@@ -76,3 +76,10 @@ items:
     #188; shares tests/plan_site/test_publication.py with #187.
   depends_on: []
   status: not started
+
+- id: page-url-names-notes-repository
+  title: "Plan site page addresses name the notes repository the hub lists"
+  branch: null
+  track: publication
+  depends_on: []
+  status: not started
