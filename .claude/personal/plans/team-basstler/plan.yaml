@@ -103,3 +103,16 @@ items:
     or require approval of such tokens. Waits for uv-workspace.
 
     '
+
+- id: hub-live-states
+  title: Hub and repository pages read pull request states live, as plan pages do
+  track: site
+  depends_on: []
+  status: not started
+  notes: 'From merge-workflow-private-only (owner, 2026-11-11): #141 made plan pages read
+    pull request states live; the hub and repository pages show the same progress counts
+    only as of the last build. Give their progress cards the same live read and
+    LiveStateDisplay. Read each repository''s pull requests with the list endpoint
+    (state=all, 100 per request) rather than one request per pull request: a hub covers
+    every plan, and an unauthenticated browser gets 60 requests an hour. Public repositories
+    only, until page-viewer-token.'
