@@ -36,9 +36,11 @@ items:
   title: The merge workflow branch starts from the default branch, so its pull request can
     open
   track: publication
+  branch: claude/site-publication-fixes-kickoff-osa630
+  pull_request_number: 195
   depends_on: []
-  status: not started
-  session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
+  status: in progress
+  session: https://claude.ai/code/session_01JxHGiMVhKt3odsx8SMY1TS
   notes: 'From Hesham87/Platform_maintainer: write_merge_workflow writes basstler/plan-site-merge
     as a new RemoteBranch with no parent, so GitHub refused the pull request (422, no history
     in common with main) and the printed gh pr create fallback fails the same way. Branch
