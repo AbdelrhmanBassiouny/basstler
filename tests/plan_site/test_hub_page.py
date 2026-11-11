@@ -6,7 +6,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from basstler.plan_site.hub_page import PlanSummary, ProgressStage, StageShare
+from basstler.plan_site.hub_page import PlanSummary, StageShare
+from basstler.plan_site.plan import ProgressStage
 
 
 def summary(**overrides: Any) -> PlanSummary:

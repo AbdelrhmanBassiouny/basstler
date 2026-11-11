@@ -14,6 +14,7 @@ from basstler.plan_site.cards import (
     RefreshSource,
 )
 from basstler.plan_site.chip_tone import ChipTone
+from basstler.plan_site.live_state_display import ChipDisplay, DoneStatusDisplay
 from basstler.plan_site.site_vocabulary import LiveStateVocabulary
 
 # %% the vocabulary
@@ -56,4 +57,16 @@ class PlanPageVocabulary(LiveStateVocabulary):
     refresh_source: type[RefreshSource] = field(default=RefreshSource, init=False)
     """
     Where the page's refresh time came from.
+    """
+
+    chip_display: type[ChipDisplay] = field(default=ChipDisplay, init=False)
+    """
+    The class whose fields the script reads a live state's chip by.
+    """
+
+    done_status_display: type[DoneStatusDisplay] = field(
+        default=DoneStatusDisplay, init=False
+    )
+    """
+    The class whose fields the script reads a done card's display by.
     """

@@ -7,10 +7,10 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from basstler.plan.model import ItemStatus, ManifestKey
-from basstler.plan_site.progress_stage import ProgressStage
 from basstler.pull_request_state import LiveState, PullRequestRecord
 from basstler.render_common import sanitize_http_url
 from basstler.repository import GitHubAddress, PullRequestReference
@@ -93,6 +93,28 @@ class Track:
 # %% items
 
 
+class ProgressStage(StrEnum):
+    """
+    The stages a card measures its items' progress by, earliest first; each value is the
+    word a card shows and the CSS class its bar segment carries.
+    """
+
+    STARTED = "started"
+    """
+    Work on the item has begun.
+    """
+
+    REVIEWED = "reviewed"
+    """
+    The item's pull request is past its author's review.
+    """
+
+    DONE = "done"
+    """
+    The item is done.
+    """
+
+
 @dataclass
 class Item:
     """
@@ -170,22 +192,11 @@ class Item:
     could not.
     """
 
-    pull_request_url: str | None = field(default=None, init=False)
-    """
-    This item's pull request on GitHub, if it has one.
-    """
-
     pull_request_reference: PullRequestReference | None = field(
         default=None, init=False
     )
     """
     This item's pull request, if it has one.
-    """
-
-    pull_request_api_url: str | None = field(default=None, init=False)
-    """
-    The same pull request's address in GitHub's REST pulls API, which the page re-reads
-    in the browser.
     """
 
     pull_request_record: PullRequestRecord | None = field(default=None, init=False)

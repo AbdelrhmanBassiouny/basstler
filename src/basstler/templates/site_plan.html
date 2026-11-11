@@ -10,8 +10,8 @@
         <h3>{{ item.title }}</h3>
         <div class="chips">
           <span class="chip {{ vocabulary.chip_tone.of_status(item.status) }}" {{ vocabulary.live_state_attribute.STATUS_CHIP }}>{{ item.status.value | capitalize }}</span>
-          {% if item.pull_request_url %}
-          <a class="chip {{ vocabulary.chip_tone.of_live_state(item.live_state) }}" href="{{ item.pull_request_url }}" {{ vocabulary.live_state_attribute.PULL_REQUEST }}="{{ item.pull_request_api_url }}">#{{ item.pull_request_number }} · {{ item.live_state.display_label }}</a>
+          {% if item.pull_request_reference %}
+          <a class="chip {{ vocabulary.chip_tone.of_live_state(item.live_state) }}" href="{{ item.pull_request_reference.url }}" {{ vocabulary.live_state_attribute.PULL_REQUEST }}="{{ item.pull_request_reference.api_url }}">#{{ item.pull_request_number }} · {{ item.live_state.display_label }}</a>
           {% endif %}
           {% if record and record.check_state %}
           <span class="chip {{ vocabulary.chip_tone.of_check_state(record.check_state) }}">CI {{ record.check_state.value }}</span>

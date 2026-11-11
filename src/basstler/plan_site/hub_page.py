@@ -9,7 +9,7 @@ from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any
+from typing import Any
 from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
@@ -17,14 +17,11 @@ from basstler.locations import SiteTemplate
 from basstler.maintenance.github import ListingParameter, PullRequestListState
 from basstler.github.client import PageParameter
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.progress_stage import ProgressStage
+from basstler.plan_site.plan import Item, ProgressStage
 from basstler.plan_site.site_vocabulary import LiveStateVocabulary
 from basstler.pull_request_state import LiveState
-from basstler.render_common import TemplatePage
-from basstler.repository import GitHubAddress, PullRequestReference
-
-if TYPE_CHECKING:
-    from basstler.plan_site.plan import Item
+from basstler.render_common import ScriptData, TemplatePage
+from basstler.repository import GitHubAddress
 
 MAXIMUM_PULL_REQUESTS_PER_PAGE = 100
 """
@@ -41,7 +38,7 @@ class ProgressCardAttribute(StrEnum):
 
     COUNTED_ITEMS = "data-counted-items"
     """
-    The items a card counts, as :attr:`CountedItem.script_data` entries.
+    The :class:`CountedItem` entries a card counts.
     """
 
     PROGRESS = "data-progress-label"
@@ -64,6 +61,12 @@ class ProgressCardAttribute(StrEnum):
     The label a count or share is written into, with a :class:`LabelPlaceholder`.
     """
 
+    WIDTH_FORMAT = "data-width-format"
+    """
+    The CSS width a bar segment's share is written into, with a
+    :class:`LabelPlaceholder`.
+    """
+
     FINISHED = "data-live-progress-finished"
     """
     Set on the page once every card is recounted.
@@ -82,14 +85,14 @@ class LabelPlaceholder(StrEnum):
 
     PERCENTAGE = "{percentage}"
     """
-    A stage's share of the items, as a whole percentage.
+    A stage's share of the items, as a percentage.
     """
 
 
 @dataclass(frozen=True)
-class CountedItem:
+class CountedItem(ScriptData):
     """
-    One item a card counts, with what its script needs to recount it live.
+    One item a card counts, as its script recounts it live.
     """
 
     status: ItemStatus
@@ -102,9 +105,15 @@ class CountedItem:
     The live state of the item's pull request as built.
     """
 
-    pull_request: PullRequestReference | None
+    listing_url: str | None
     """
-    The item's pull request, if it has one.
+    The first page of every pull request of the repository the item's pull request is
+    in, or ``None`` without a pull request.
+    """
+
+    number: int | None
+    """
+    The item's pull request number, or ``None`` without a pull request.
     """
 
     @classmethod
@@ -113,40 +122,28 @@ class CountedItem:
         :param item: A classified item.
         :return: What a card counts of it.
         """
-        return cls(
-            status=item.status,
-            live_state=item.live_state,
-            pull_request=item.pull_request_reference,
-        )
-
-    @property
-    def listing_url(self) -> str | None:
-        """
-        The address of the first page of every pull request of :attr:`pull_request`'s
-        repository, or ``None`` without a pull request.
-        """
-        if self.pull_request is None:
-            return None
+        reference = item.pull_request_reference
+        if reference is None:
+            return cls(
+                status=item.status,
+                live_state=item.live_state,
+                listing_url=None,
+                number=None,
+            )
         query = urlencode(
             {
                 ListingParameter.STATE: PullRequestListState.ALL.query,
                 ListingParameter.PAGE_SIZE: MAXIMUM_PULL_REQUESTS_PER_PAGE,
             }
         )
-        repository = self.pull_request.repository
-        return f"{GitHubAddress.API}/{repository.pull_requests_path}?{query}"
-
-    @property
-    def script_data(self) -> dict[str, str | int | None]:
-        """
-        The item as the card's script reads it.
-        """
-        return {
-            "status": self.status.value,
-            "live_state": self.live_state.name,
-            "listing_url": self.listing_url,
-            "number": None if self.pull_request is None else self.pull_request.number,
-        }
+        return cls(
+            status=item.status,
+            live_state=item.live_state,
+            listing_url=(
+                f"{GitHubAddress.API}/{reference.repository.pull_requests_path}?{query}"
+            ),
+            number=reference.number,
+        )
 
 
 # %% the cards a page lists
@@ -168,6 +165,20 @@ class StageShare:
     The share of items that reached :attr:`stage`, from 0 to 100.
     """
 
+    @classproperty
+    def label_decimal_places(cls) -> int:
+        """
+        How many decimal places :attr:`label` writes the percentage with.
+        """
+        return 0
+
+    @classproperty
+    def width_decimal_places(cls) -> int:
+        """
+        How many decimal places :attr:`width` writes the percentage with.
+        """
+        return 1
+
     @property
     def label_format(self) -> str:
         """
@@ -181,15 +192,26 @@ class StageShare:
         The share as text, such as ``40% started``.
         """
         return self.label_format.replace(
-            LabelPlaceholder.PERCENTAGE, f"{self.percentage:.0f}"
+            LabelPlaceholder.PERCENTAGE,
+            f"{self.percentage:.{self.label_decimal_places}f}",
         )
+
+    @classproperty
+    def width_format(cls) -> str:
+        """
+        :attr:`width` with :attr:`LabelPlaceholder.PERCENTAGE` for the percentage.
+        """
+        return f"{LabelPlaceholder.PERCENTAGE}%"
 
     @property
     def width(self) -> str:
         """
         The share as the CSS width of its bar segment.
         """
-        return f"{self.percentage:.1f}%"
+        return self.width_format.replace(
+            LabelPlaceholder.PERCENTAGE,
+            f"{self.percentage:.{self.width_decimal_places}f}",
+        )
 
 
 @dataclass(kw_only=True)
@@ -280,13 +302,6 @@ class ProgressCard(ABC):
         The human-readable progress shown on the card.
         """
         return self.progress_label_format.replace(LabelPlaceholder.DONE, str(self.done))
-
-    @property
-    def counted_item_data(self) -> list[dict[str, str | int | None]]:
-        """
-        :attr:`counted_items` as the page's script reads them.
-        """
-        return [item.script_data for item in self.counted_items]
 
     @property
     def is_complete(self) -> bool:
@@ -581,6 +596,16 @@ class HubPageVocabulary(LiveStateVocabulary):
     progress_card: type[ProgressCard] = field(default=ProgressCard, init=False)
     """
     The class whose CSS classes a card carries.
+    """
+
+    stage_share: type[StageShare] = field(default=StageShare, init=False)
+    """
+    The class whose decimal places a share is written with.
+    """
+
+    counted_item: type[CountedItem] = field(default=CountedItem, init=False)
+    """
+    The class whose fields the script reads each counted item by.
     """
 
     page_parameter: type[PageParameter] = field(default=PageParameter, init=False)

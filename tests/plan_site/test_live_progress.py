@@ -21,15 +21,19 @@ from basstler.maintenance.board import PullRequestField
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.__main__ import HubSite, SiteFile
 from basstler.plan_site.hub import PlanHub, SiteAddress
+from basstler.locations import SiteTemplate
 from basstler.plan_site.hub_page import (
     MAXIMUM_PULL_REQUESTS_PER_PAGE,
+    HubPageVocabulary,
     ProgressCard,
     ProgressCardAttribute,
-    ProgressStage,
     SiteSummary,
+    StageShare,
 )
 from basstler.plan_site.live_state_display import LiveStateDisplay
+from basstler.plan_site.plan import ProgressStage
 from basstler.pull_request_state import LiveState, PullRequestState
+from basstler.render_common import TemplatePage
 from basstler.repository import PullRequestReference, Repository
 
 from ..constants.site import SitePlan, SiteSampleText
@@ -331,18 +335,45 @@ def test_a_pull_request_on_a_later_page_is_read_from_it(
 
 def test_an_item_not_started_without_a_pull_request_reaches_no_stage():
     stages = LiveStateDisplay().reached_stages
-    assert stages[ItemStatus.NOT_STARTED.value][LiveState.NO_PULL_REQUEST.name] == []
+    assert stages[ItemStatus.NOT_STARTED][LiveState.NO_PULL_REQUEST] == []
 
 
 def test_an_item_with_a_draft_pull_request_is_only_started():
     stages = LiveStateDisplay().reached_stages
-    assert stages[ItemStatus.IN_PROGRESS.value][LiveState.OPEN_DRAFT.name] == [
-        ProgressStage.STARTED.value
+    assert stages[ItemStatus.IN_PROGRESS][LiveState.OPEN_DRAFT] == [
+        ProgressStage.STARTED
     ]
 
 
 def test_an_item_whose_pull_request_merged_reaches_every_stage():
     stages = LiveStateDisplay().reached_stages
-    assert stages[ItemStatus.IN_PROGRESS.value][LiveState.MERGED.name] == [
-        stage.value for stage in ProgressStage
-    ]
+    assert stages[ItemStatus.IN_PROGRESS][LiveState.MERGED] == list(ProgressStage)
+
+
+# %% how the script writes a share
+
+
+@pytest.mark.parametrize(
+    "percentage",
+    [12.5, 13.5, 12.25, 12.35, 4.45, 100 / 3, 0.0, 100.0],
+    ids=lambda percentage: f"{percentage:g}",
+)
+@pytest.mark.parametrize(
+    "decimal_places",
+    [StageShare.label_decimal_places, StageShare.width_decimal_places],
+    ids=["label", "width"],
+)
+def test_the_script_writes_a_share_as_the_build_does(
+    browser_page: Page, percentage: float, decimal_places: int
+):
+    script = TemplatePage.render_named_template(
+        SiteTemplate.LIVE_PROGRESS_SCRIPT.name, vocabulary=HubPageVocabulary()
+    )
+    browser_page.add_script_tag(content=script)
+
+    written = browser_page.evaluate(
+        "([value, places]) => siteFormatHalfToEven(value, places)",
+        [percentage, decimal_places],
+    )
+
+    assert written == f"{percentage:.{decimal_places}f}"

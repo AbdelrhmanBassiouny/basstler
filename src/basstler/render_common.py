@@ -5,6 +5,7 @@ page templates render through, and generic markdown turned into HTML.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from abc import ABC, abstractmethod
 from enum import IntEnum, StrEnum
@@ -105,7 +106,25 @@ def create_template_environment() -> jinja2.Environment:
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    environment.policies["json.dumps_kwargs"] = {
+        "sort_keys": True,
+        "default": dataclasses.asdict,
+    }
     return environment
+
+
+class ScriptData:
+    """
+    A dataclass a page's script reads as JSON: ``tojson`` writes it as its fields, and a
+    template spells each key the script reads through :attr:`field_names`.
+    """
+
+    @classproperty
+    def field_names(cls) -> dict[str, str]:
+        """
+        Each field's name, keyed by itself.
+        """
+        return {field.name: field.name for field in dataclasses.fields(cls)}
 
 
 class TemplatePage(ABC):

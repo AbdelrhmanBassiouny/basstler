@@ -14,7 +14,7 @@
 {% endmacro %}
 
 {# What marks an element whose card the page's script recounts. #}
-{% macro counted_items_attribute(card) %} {{ vocabulary.progress_card_attribute.COUNTED_ITEMS }}='{{ card.counted_item_data | tojson }}'{% endmacro %}
+{% macro counted_items_attribute(card) %} {{ vocabulary.progress_card_attribute.COUNTED_ITEMS }}='{{ card.counted_items | tojson }}'{% endmacro %}
 
 {# A card's progress label, marked for the page's script to rewrite. #}
 {% macro progress_text(card) %}<span {{ vocabulary.progress_card_attribute.PROGRESS }} {{ vocabulary.progress_card_attribute.LABEL_FORMAT }}="{{ card.progress_label_format }}">{{ card.progress_label }}</span>{% endmacro %}
@@ -31,7 +31,7 @@
     {% if card.labelled_stage_shares %}<p class="stage-label">{{ stage_text(card) }}</p>{% endif %}
     {% if description %}<p class="card-description">{{ description }}</p>{% endif %}
     {% if error %}<p class="card-error">{{ error }}</p>{% endif %}
-    <div class="bar">{% for share in card.stage_shares %}<div class="bar-fill bar-{{ share.stage }}" {{ vocabulary.progress_card_attribute.STAGE_BAR }}="{{ share.stage }}" {{ vocabulary.progress_card_attribute.LABEL_FORMAT }}="{{ share.label_format }}" style="width: {{ share.width }}" title="{{ share.label }}"></div>{% endfor %}</div>
+    <div class="bar">{% for share in card.stage_shares %}<div class="bar-fill bar-{{ share.stage }}" {{ vocabulary.progress_card_attribute.STAGE_BAR }}="{{ share.stage }}" {{ vocabulary.progress_card_attribute.LABEL_FORMAT }}="{{ share.label_format }}" {{ vocabulary.progress_card_attribute.WIDTH_FORMAT }}="{{ share.width_format }}" style="width: {{ share.width }}" title="{{ share.label }}"></div>{% endfor %}</div>
   {% if url %}</a>{% else %}</div>{% endif %}
 {% endmacro %}
 
