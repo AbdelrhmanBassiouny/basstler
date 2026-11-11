@@ -1,10 +1,10 @@
 ## Plan
-- Failing test: private notes + missing site repository reports the read-access step and the warning on the create step
-- Move the private-repository check ahead of the missing-site return in `PlanSitePublication.publish`
-- Format, ruff, code-rules check, full plan_site tests
+- Private-repository check runs before the missing-site-repository return; create step carries the public-site warning
 
 ## Done
-- Bootstrapped branch, draft PR #193 (label `bug`), item recorded in progress
+- Failing tests added, then fixed in `PlanSitePublication.publish` (a8da357)
+- Full suite green apart from 10 Playwright tests (local Chromium/Playwright version mismatch); ruff, format, code-rules pass
+- PR #193 description updated; still draft, labelled `bug`
 
 ## Next
-- Write the failing test
+- Wait for CI and review on PR #193
