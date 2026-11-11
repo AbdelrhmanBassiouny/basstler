@@ -65,8 +65,10 @@ items:
     exception and no docs change unless asked. Own bug PR off main for the draft fix.'
 - id: registration-holds-back-only-its-own-repositories
   title: Publication holds back only for the private repositories its registration adds
-  branch: null
+  branch: claude/jolly-hamilton-fwd4cw
   track: publication
+  pull_request_number: 197
+  session: https://claude.ai/code/session_01JxHGiMoKjdHbyGAJpDz3gY
   notes: 'From #188 (tomsch420): publish() checks repositories_read_by_build(registry), the
     whole site, so a private repository already on the site without PLAN_SITE_READ_TOKEN blocks
     registering an unrelated public one: nothing is written, exit 1. Hold back only for what
@@ -77,7 +79,7 @@ items:
 
     '
   depends_on: []
-  status: not started
+  status: in progress
 - id: page-url-names-notes-repository
   title: Plan site page addresses name the notes repository the hub lists
   branch: null
