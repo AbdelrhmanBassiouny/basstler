@@ -1,22 +1,18 @@
 schema_version: 1
 id: team-repository
-title: 'Team repository: shared plans, item issues, a board and /malloche'
-description: A team repository in an organisation holds the shared plans, one issue per item,
-  a Project board, and each member's own notes; /malloche picks and starts the next ready
+title: 'Team repository: shared plans and /malloche'
+description: A team repository in an organisation holds the shared plans and each member's
+  own notes; /malloche picks and starts the next ready
   item. Pilot - cram2 with the domain-models plan. Split out of team-basstler.
 default_repository: KAOS-repositories/basstler
 tracking_issue: 62
 waves:
 - id: team
   name: 'Wave 2: Team Basstler'
-  description: Shared plans in an organisation's team repository, items as issues on a board,
-    and /malloche.
+  description: Shared plans in an organisation's team repository and /malloche.
 tracks:
 - id: team-store
   name: Team repository and notes
-  wave: team
-- id: github
-  name: Issues, board and pull request links
   wave: team
 - id: picker
   name: /malloche
@@ -31,8 +27,7 @@ items:
   depends_on: []
   notes: 'Plans come from a configured plan store: the team repository''s default branch holds the shared
     plan.yaml files, and each member writes notes.md, git identity, settings and pr-progress to their
-    own notes/<login> branch of it, so no two people ever write one branch. Unfrozen 2026-11-10: plans
-    as issues is deferred.'
+    own notes/<login> branch of it, so no two people ever write one branch.'
 - id: team-repo-setup
   title: Set up a team repository in an organisation, and onboard a member with one command
   branch: null
@@ -57,53 +52,16 @@ items:
   notes: 'One home: copied to the team plan store and removed from the fork''s notes. default_repository
     becomes cram2/cognitive_robot_abstract_machine; items whose pull requests are on the fork set repository
     to it. A new tracking issue on the team repository replaces fork #525, which gets a pointer comment.'
-- id: item-issues
-  title: Every plan item has an issue, a sub-issue of its plan's tracking issue, kept in step by an Action
-  branch: null
-  status: not started
-  track: github
-  depends_on:
-  - team-repo-setup
-  notes: 'Unfrozen 2026-11-10: plan-store-issues is deferred, so issues are a one-way mirror of plan.yaml.
-    A sync command run by the team repository''s Action on every plan push: finds each item''s issue by
-    a marker (nothing written back to plan.yaml), creates missing ones as sub-issues of the tracking issue
-    with plan, wave and track labels, sets blocked-by from depends_on, and closes the issue when the item
-    is done. The issue assignee is the item''s responsible person, the one source; the site shows it.
-    GITHUB_TOKEN suffices, everything is in one repository.'
-- id: project-board
-  title: A Project board for the team, driven by GitHub's built-in automations
-  branch: null
-  status: not_started
-  track: github
-  depends_on:
-  - item-issues
-  notes: 'One-time manual setup documented in docs/team.md: an organisation Project, auto-add by label,
-    auto-add sub-issues, item closed and pull request merged move to Done, grouped by parent issue (the
-    plan), views by status, by assignee and my items. No API code: an Action''s GITHUB_TOKEN cannot write
-    Projects v2. Board drags do not change plan.yaml. From the CRAM fork''s github-native sandbox: views
-    work on desktop but are poor on phones, the views API cannot set slice-by or widths, and writing Projects
-    needs a long-lived token; keep it optional and manual.'
-- id: pr-issue-link
-  title: Kickoff links an item's pull requests to its issue
-  branch: null
-  status: not started
-  track: github
-  depends_on:
-  - item-issues
-  notes: Unfrozen 2026-11-10 with item-issues. The draft pull request body says Part of <team>#N; promotion
-    upstream writes Closes <team>#N, so the upstream merge closes the issue and the board moves the card.
 - id: malloche
   title: /malloche picks the next ready item, claims it, and starts it
   branch: null
   status: not_started
   track: picker
   depends_on:
-  - item-issues
   - work-recommender/ranked-work-list
   notes: 'Ranks with work-recommender/ranked-work-list''s policy: one ranking, not two. A python -m command
     ranks: the caller''s own in-progress items first (resume), then unassigned not-started items whose
     every dependency is merged or an open pull request ready for review (a draft dependency disqualifies),
     in wave order, skipping items with blockers. When nothing is ready because dependencies are drafts,
     it says so and suggests reviewing those draft pull requests instead, ranked by how many items each
-    would unblock. Claims by assigning the issue and re-reading it, backing off if someone else holds
-    it;'
+    would unblock. How it claims an item is still open.'
