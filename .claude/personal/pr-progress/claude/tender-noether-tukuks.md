@@ -1,12 +1,11 @@
 ## Plan
-- Cards carry the items they count (status, built live state, pull request)
-- Stage table derived from `Item` rules, passed through `LiveStateDisplay`
-- Shared live-state script; hub script lists each repository's pulls (state=all, 100/page)
-- Script rewrites marked count spans and bar widths only; refusal keeps the build
-- Browser tests for hub and repository index first, plus a stage-table unit test
+- Live recount of hub and repository cards from one pull request listing per repository
 
 ## Done
-- Branch, draft PR #199, item recorded in progress
+- Cards carry `counted_items`; stage table derived from `Item.reached_stages`
+- Shared `site_live_state.js`; `site_live_progress.js` recounts and rewrites marked spans and bars
+- 9 new tests; full suite 2569 passed at b130a2f; ruff and code-rules pass
 
 ## Next
-- Write the failing browser tests
+- Read CI on b130a2f
+- Owner review: script payload keys spelled in JS, URLs derivable from `pull_request_reference`
