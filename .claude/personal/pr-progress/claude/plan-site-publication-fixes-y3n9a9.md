@@ -1,8 +1,8 @@
 Plan:
-- Await CI on 40040b0 and review.
+- Await CI on 45f0a52 and the reviewer's call on the open access_remedy thread.
 Done:
-- Unreadable site repository raises SiteRepositoryUnreachableError with a per-cause fix (SiteReadFailure); replied to review 5863831822.
-- Publication's reads retry 4 times, 2 s doubling (30 s); an unavailable GitHub is reported with attempts, time waited and githubstatus.com.
-- CI on 27600d8 failed in apt (DNS on the runner), no test ran.
+- Per-cause fixes (SiteReadFailure) and publication's longer retry, reported with attempts, waits and githubstatus.com.
+- Review 5864695703: from_github_refusal, PlanSitePublication.github_retry_policy, SiteReadCase enum of SiteReadAttempt, access_remedy, constant-comparing test removed; 4 threads resolved.
+- CI green on 40040b0.
 Next:
-- Read CI on 40040b0.
+- Keep or drop the negative access_remedy assertion, as the reviewer decides.
