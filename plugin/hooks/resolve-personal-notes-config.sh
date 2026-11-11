@@ -566,7 +566,7 @@ recorded_site_url() {
     | awk '$1 == "site_url:" && $2 != "null" { print $2; exit }'
 }
 
-# plan_site_page_url: the address of this repository's page on the plan site,
+# plan_site_page_url: the address of the notes repository's page on the plan site,
 # of one of its plans ([<plan-id>]), or of one item's card ([<plan-id>
 # <item-id>]), from the fetched hub file. Fails when the notes branch has no
 # hub file, it names no site, or the package cannot run; the lookup's own error
@@ -581,18 +581,22 @@ plan_site_page_url() {
   hub_file="$(mktemp)"
   git show "${PERSONAL_NOTES_REFERENCE}:${PLAN_HUB_PATH}" > "${hub_file}"
   "${BASSTLER_PYTHON}" -m "${PLAN_HUB_MODULE}" page-url --hub "${hub_file}" \
-    --repository "$(repository_name)" \
+    --repository "$(repository_name "${ACTIVE_NOTES_REMOTE:-${NOTES_REMOTE}}")" \
     ${plan_id:+--plan "${plan_id}"} ${item_id:+--item "${item_id}"} \
     || status=$?
   rm -f "${hub_file}"
   return "${status}"
 }
 
-# repository_name: this clone's origin as owner/repo, whatever URL form the
-# remote takes, or "this repository" for a clone with no origin.
+# repository_name: the repository remote $1 (a name or a URL, default origin)
+# configures, as owner/repo whatever URL form it takes, or "this repository" for none.
 repository_name() {
+  local remote="${1:-origin}"
   local url
-  url="$(git remote get-url origin 2>/dev/null || true)"
+  case "${remote}" in
+    */*|*:*) url="${remote}" ;;
+    *) url="$(git config --get "remote.${remote}.url" 2>/dev/null || true)" ;;
+  esac
   if [ -z "${url}" ]; then
     printf 'this repository\n'
     return

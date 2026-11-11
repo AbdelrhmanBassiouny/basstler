@@ -38,6 +38,7 @@ from basstler.setup.report import CheckStatus, SetupCheck
 from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.upstream_reviews.action.branch import InstallationState
 from basstler.plan.model import PlanDocument
+from basstler.plan_site.hub import SiteAddress
 from basstler.plan.merged_items import __main__ as merged_items_command
 from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
 
@@ -49,6 +50,7 @@ from ..constants.environment import (
     SearchPathVariable,
 )
 from ..constants.notes import ClaudeLocalSection, ScratchBranch
+from ..constants.site import SiteRepository
 from ..constants.paths import (
     DatasetLocation,
     PersonalNotesPath,
@@ -2037,6 +2039,34 @@ def test_links_a_tracked_branch_to_its_plan_on_the_site(
     site_line = summary_value(result.stdout, SummaryLine.PLAN_SITE)
     assert site_line.startswith(SITE_URL)
     assert site_line.endswith(f"/{PLAN_IDENTIFIER}/")
+
+
+def test_links_the_plan_under_the_notes_repository_the_site_lists(
+    session_start_repository: ScratchRepository,
+):
+    """
+    The site files plans under the notes repository, which need not be the checkout's.
+    """
+    session_start_repository.serve_origin_as(SiteRepository.PROJECT.value)
+    session_start_repository.serve_notes_remote_as(SiteRepository.NOTES.value)
+
+    result = publish_and_run(
+        session_start_repository,
+        {
+            PersonalNotesPath.BRANCH_INDEX: branch_index(
+                {ScratchBranch.WORK: PLAN_IDENTIFIER}
+            ),
+            MANIFEST_PATH: PLAN_MANIFEST,
+            ProjectLocation.PLAN_HUB: HUB_FILE,
+        },
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert summary_value(result.stdout, SummaryLine.PLAN_SITE) == summary_message(
+        SummaryMessage.HUB_REGISTERED,
+        SITE_URL,
+        SiteAddress(SITE_URL).plan_url(SiteRepository.NOTES.value, PLAN_IDENTIFIER),
+    )
 
 
 # %% the upstream-reviews Action line
