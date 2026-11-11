@@ -63,17 +63,9 @@ items:
     on the page, publication stops installing the merge workflow by default and offers it
     only on request, so a product''s main gets no pull_request_target workflow, no zizmor
     exception and no docs change unless asked. Own bug PR off main for the draft fix.'
-- id: unreadable-repository-items
-  title: Plan site renders items whose repository it cannot read, instead of failing the whole
-    site
-  track: rendering
-  branch: claude/quirky-galileo-1cy15p
-  pull_request_number: 185
-  session: https://claude.ai/code/session_018wfiv6zvGHkEcZkr1zhxyk
+- id: registration-holds-back-only-its-own-repositories
+  title: Publication holds back only for the private repositories its registration adds
+  branch: null
+  track: publication
   depends_on: []
-  status: in progress
-  notes: 'From #153 (tomsch420) and #170''s review: one repository the build cannot read (a
-    404 listing a private repository''s pull requests) fails every plan on the site. Render
-    those items without live state, with a visible note naming the repository and the PLAN_SITE_READ_TOKEN
-    fix, so the rest of the site still builds. A bug fix, so the uv-workspace freeze exempts
-    it; stacked on #170, whose PLAN_SITE_READ_TOKEN the note names.'
+  status: not started
