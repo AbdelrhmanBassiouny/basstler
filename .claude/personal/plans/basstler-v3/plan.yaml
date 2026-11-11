@@ -3,8 +3,8 @@ id: basstler-v3
 title: 'basstler v3: light, reliable and easy for anyone to use and extend'
 description: 'Rebuild basstler next to v2 so code does the mechanics and Claude only judges: each skill
   runs one command that prints a brief, makes its judgment, and records the result with one command. Stacks
-  come from pull request bases and upstream reviews are mirrored by an Action; plans stay in plan.yaml
-  while basstler-v3-plans/plan-store-issues is deferred. v2 areas are deleted as v3 covers them. Plans
+  come from pull request bases and upstream reviews are mirrored by an Action; plans stay in plan.yaml.
+  v2 areas are deleted as v3 covers them. Plans
   are basstler-v3-plans and stacks and reviews basstler-v3-stacks.
 
   '

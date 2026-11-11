@@ -1,7 +1,7 @@
 # basstler-v3 — standing rules
 
 - Code does the mechanics and Claude only judges: a skill runs one command that prints a brief of at most 3 KB, decides, and records with one command.
-- GitHub is the only store of stacks, URLs and review state; nothing caches them anywhere else. Plans stay in plan.yaml on the notes branch while plan-store-issues is deferred.
+- GitHub is the only store of stacks, URLs and review state; nothing caches them anywhere else. Plans stay in plan.yaml on the notes branch.
 - Every command is scoped to the item, pull request or stack it was given; no whole-fork pass runs in a session.
 - No session polls or waits: background work runs in an Action and is read on the next call, and a request whose run did not start fails within about 20 seconds.
 - v3 lives next to v2 in the same distribution (see basstler-packages), and the pull request that makes a v2 area unnecessary deletes it.
