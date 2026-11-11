@@ -1,9 +1,10 @@
 ## Plan
-- Failing tests: a fresh merge workflow branch, and one left with no history by an affected release, both share history with the default branch
-- Fix `PlanSitePublication.write_merge_workflow` to build the branch on the default branch's tip
+- Build `basstler/plan-site-merge` on the default branch's tip; rebuild a copy with no shared history there
 
 ## Done
-- Bootstrapped branch and draft PR #195
+- Failing tests: a fresh branch and a parentless branch from an affected release (1b11cb9)
+- Fix in `PlanSitePublication.write_merge_workflow` via `rebuild`, `GitCommandRunner.share_history`, `RemoteBranch.attempt_create` (52698e9)
+- Full suite green except 10 browser tests that need a Chromium this environment lacks
 
 ## Next
-- Write the failing tests
+- Review; mark the PR ready
