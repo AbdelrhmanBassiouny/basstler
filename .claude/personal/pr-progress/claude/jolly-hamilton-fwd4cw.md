@@ -1,7 +1,7 @@
 ## Plan
-- Failing tests: a public repository registers on a site whose other notes repository plans on a private repository without the read token
 - Hold back only for the repositories the registration adds (notes repository + its plans' repositories); warn for the rest
 ## Done
-- Branch, draft PR #197 (label bug), item recorded in progress
+- Failing test proved #188; fix in publication.py (repositories_with_plans_of) and user_steps.py (holds_back(registered))
+- Full suite passes apart from Playwright browser launches in this container; ruff, code-rules, pre-commit pass
 ## Next
-- Write the failing tests, then the fix
+- CI on PR #197, then review
