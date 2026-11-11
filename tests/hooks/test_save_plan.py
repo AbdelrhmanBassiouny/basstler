@@ -580,6 +580,7 @@ def test_a_save_whose_pull_requests_could_not_be_read_saves_the_plan_unchanged(
 def test_a_save_prints_the_plan_s_page_on_the_plan_site(
     save_plan_repository: ScratchRepository,
 ):
+    save_plan_repository.serve_notes_remote_as(SiteRepository.NOTES.value)
     save_plan_repository.update_notes_branch_file(
         ProjectLocation.PLAN_HUB,
         PlanHub(
@@ -595,11 +596,8 @@ def test_a_save_prints_the_plan_s_page_on_the_plan_site(
     )
 
     assert result.returncode == 0, result.stderr
-    repository = save_plan_repository.configuration_output(
-        ShellConfigurationFunction.REPOSITORY_NAME
-    ).strip()
     page_url = SiteAddress(SiteSampleText.SITE_URL.value).plan_url(
-        repository, DatasetPlan.IDENTIFIER
+        SiteRepository.NOTES.value, DatasetPlan.IDENTIFIER
     )
     assert result.stdout.splitlines()[-1].endswith(page_url)
 
