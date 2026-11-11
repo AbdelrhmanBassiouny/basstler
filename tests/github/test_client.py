@@ -205,6 +205,26 @@ def test_a_read_that_keeps_failing_is_asked_again_only_as_often_as_the_policy_al
     assert len(api_server.requests) == 1 + quick_client.retry_policy.retries
 
 
+def test_a_read_asked_again_reports_each_wait(api_server, quick_client):
+    """
+    A read that kept failing reports the wait before each time it was asked again.
+    """
+    api_server.responses[str(USER)] = CannedResponse.bad_gateway()
+
+    response = quick_client.attempt_get(USER.target)
+
+    assert response.waits == tuple(quick_client.retry_policy.delays())
+
+
+def test_a_read_answered_at_once_reports_no_wait(api_server, quick_client):
+    """
+    A read GitHub answered the first time waited for nothing.
+    """
+    api_server.responses[str(USER)] = CannedResponse({"login": "someone"})
+
+    assert quick_client.attempt_get(USER.target).waits == ()
+
+
 def test_a_refusal_that_is_not_a_server_error_is_not_asked_again(
     api_server, quick_client
 ):

@@ -11,7 +11,7 @@ import shutil
 import subprocess
 import sys
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from http import HTTPStatus
 from pathlib import Path
@@ -28,6 +28,7 @@ from basstler.github.client import (
     GitHubWriter,
     HttpMethod,
     GitHubWrite,
+    RetryPolicy,
 )
 from basstler.github.credential import CredentialProvider, GitHubCommand
 from basstler.github.exceptions import (
@@ -56,6 +57,7 @@ from basstler.plan_site.exceptions import (
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import (
     PUBLICATION_COMMAND,
+    PUBLICATION_RETRY_POLICY,
     PlanSitePublication,
     PublicationOption,
 )
@@ -137,6 +139,11 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
     Why each path that is refused is refused, by path.
     """
 
+    refusal_waits: tuple[timedelta, ...] = ()
+    """
+    The waits every refused read reports it was asked again after.
+    """
+
     def attempt_get(self, path: str) -> GitHubResponse:
         """
         Like :meth:`ReplayingRestClient.attempt_get`, but a path in :attr:`refusals` is
@@ -144,7 +151,9 @@ class PullRequestOpeningClient(ReplayingRestClient, GitHubWriter):
         """
         if path in self.refusals:
             self.calls.append(path)
-            return GitHubResponse(None, failure=self.refusals[path])
+            return GitHubResponse(
+                None, failure=self.refusals[path], waits=self.refusal_waits
+            )
         return super().attempt_get(path)
 
     def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
@@ -585,6 +594,39 @@ def test_an_unavailable_github_is_fixed_by_publishing_again_later(
     correction = failure.suggest_correction()
     assert PUBLICATION_COMMAND in correction
     assert failure.remedy not in correction
+
+
+def test_an_unavailable_github_is_reported_with_the_waits_already_made(publishing):
+    """
+    The error tells how long GitHub was already waited for.
+    """
+    runs = publishing.runs_none()
+    path = publishing.site.repository.api_path
+    runs.refusals[path] = refusal_of(path, HTTPStatus.BAD_GATEWAY)
+    runs.refusal_waits = tuple(PUBLICATION_RETRY_POLICY.delays())
+
+    with pytest.raises(SiteRepositoryUnreachableError) as raised:
+        publishing.publication(runs).publish()
+
+    assert raised.value.waits == runs.refusal_waits
+
+
+def test_an_unavailable_github_points_to_github_s_status_page(publishing):
+    """
+    Whether GitHub has an incident is on its status page, which the fix names.
+    """
+    failure = site_read_failed(publishing, "server error")
+
+    assert GitHubAddress.STATUS in failure.suggest_correction()
+
+
+def test_publication_waits_longer_for_github_than_other_commands():
+    """
+    Publication runs once, by hand, so it waits longer for GitHub to recover.
+    """
+    assert sum(PUBLICATION_RETRY_POLICY.delays(), timedelta()) > sum(
+        RetryPolicy().delays(), timedelta()
+    )
 
 
 @pytest.mark.parametrize("failure_name", ["credential rejected", "repository moved"])
