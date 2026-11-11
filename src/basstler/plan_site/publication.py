@@ -77,12 +77,6 @@ PUBLICATION_COMMAND = f'"${{{BasstlerVariable.PYTHON}}}" -m {__spec__.name}'
 The command line that publishes again, once this session reaches the site repository.
 """
 
-PUBLICATION_RETRY_POLICY = RetryPolicy(retries=4, first_delay=timedelta(seconds=2))
-"""
-How publication's reads are asked again: it runs once, by hand, so it waits longer
-for GitHub to recover than a command that runs on every session.
-"""
-
 # %% the notes repository on GitHub
 
 
@@ -184,6 +178,14 @@ class PlanSitePublication:
     in_cloud_session: bool = False
     """
     Whether this runs in a Claude Code cloud session, whose user has no terminal on it.
+    """
+
+    github_retry_policy: RetryPolicy = RetryPolicy(
+        retries=4, first_delay=timedelta(seconds=2)
+    )
+    """
+    How the command's GitHub client asks a read again after a server error: it runs
+    once, by hand, so it waits longer for GitHub to recover than the client's default.
     """
 
     site_attachment_benefit: str = (
@@ -596,7 +598,7 @@ def publish(
         notes_remote,
         DispatchWorkflow(notes_repository, notes_branch.name, site),
         SiteWorkflow(branch_or_tag, notes_repository),
-        GitHubRestClient(retry_policy=PUBLICATION_RETRY_POLICY),
+        GitHubRestClient(retry_policy=PlanSitePublication.github_retry_policy),
         remote_root=GitHubAddress.clone_root_for(notes_branch.url),
         in_cloud_session=ClaudeCodeVariable.REMOTE.is_true(),
     ).run()

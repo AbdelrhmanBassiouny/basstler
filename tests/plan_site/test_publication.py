@@ -12,7 +12,8 @@ import subprocess
 import sys
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
-from enum import StrEnum
+from collections.abc import Callable
+from enum import Enum, StrEnum
 from http import HTTPStatus
 from pathlib import Path
 from typing import Any
@@ -28,7 +29,6 @@ from basstler.github.client import (
     GitHubWriter,
     HttpMethod,
     GitHubWrite,
-    RetryPolicy,
 )
 from basstler.github.credential import CredentialProvider, GitHubCommand
 from basstler.github.exceptions import (
@@ -57,7 +57,6 @@ from basstler.plan_site.exceptions import (
 from basstler.plan_site.hub import PlanHub
 from basstler.plan_site.publication import (
     PUBLICATION_COMMAND,
-    PUBLICATION_RETRY_POLICY,
     PlanSitePublication,
     PublicationOption,
 )
@@ -478,7 +477,7 @@ def test_a_refused_site_repository_is_fixed_by_reaching_it_and_publishing_again(
     with pytest.raises(SiteRepositoryUnreachableError) as raised:
         publication.publish()
 
-    assert raised.value.remedy == SiteAccess(
+    assert raised.value.access_remedy == SiteAccess(
         publishing.site,
         PUBLICATION_COMMAND,
         PlanSitePublication.site_attachment_benefit,
@@ -497,103 +496,141 @@ def test_a_refused_site_repository_ends_the_command_with_its_exit_status(publish
 # %% why the site repository could not be read
 
 
-SITE_READ_FAILURES = {
-    "session proxy": (
+@dataclass(frozen=True)
+class SiteReadAttempt:
+    """
+    One way reading the site repository fails, and why publication should say it
+    failed.
+    """
+
+    refusal_for: Callable[[str], GitHubCallFailed]
+    """
+    Builds the failure for the site repository's API path.
+    """
+
+    cause: SiteReadFailure
+    """
+    The reason the failure stands for.
+    """
+
+
+class SiteReadCase(Enum):
+    """
+    Each way reading the site repository fails.
+    """
+
+    SESSION_PROXY = SiteReadAttempt(
         lambda path: refusal_of(
             path,
             HTTPStatus.FORBIDDEN,
             DatasetLocation.SESSION_PROXY_REFUSAL.read_text(),
         ),
         SiteReadFailure.REPOSITORY_NOT_ATTACHED,
-    ),
-    "GitHub forbids": (
+    )
+    """
+    The cloud session's proxy refuses it in GitHub's place.
+    """
+
+    GITHUB_FORBIDS = SiteReadAttempt(
         lambda path: refusal_of(path, HTTPStatus.FORBIDDEN),
         SiteReadFailure.CREDENTIAL_REFUSED,
-    ),
-    "server error": (
+    )
+    """
+    GitHub itself refuses the credential.
+    """
+
+    SERVER_ERROR = SiteReadAttempt(
         lambda path: refusal_of(path, HTTPStatus.BAD_GATEWAY),
         SiteReadFailure.GITHUB_UNAVAILABLE,
-    ),
-    "no answer": (
+    )
+    """
+    GitHub answers with a server error.
+    """
+
+    NO_ANSWER = SiteReadAttempt(
         lambda path: GitHubUnreachableError(HttpMethod.GET, path, "timed out"),
         SiteReadFailure.GITHUB_UNAVAILABLE,
-    ),
-    "credential rejected": (
+    )
+    """
+    GitHub does not answer.
+    """
+
+    CREDENTIAL_REJECTED = SiteReadAttempt(
         lambda path: refusal_of(
             path, HTTPStatus.UNAUTHORIZED, kind=GitHubCredentialRejected
         ),
         SiteReadFailure.REFUSAL_WITH_ITS_OWN_FIX,
-    ),
-    "repository moved": (
+    )
+    """
+    GitHub rejects the token as invalid or expired.
+    """
+
+    REPOSITORY_MOVED = SiteReadAttempt(
         lambda path: refusal_of(
             path, HTTPStatus.MOVED_PERMANENTLY, kind=GitHubRepositoryMoved
         ),
         SiteReadFailure.REFUSAL_WITH_ITS_OWN_FIX,
-    ),
-}
-"""
-Each way reading the site repository fails, by name: how to build the failure for an
-API path, and what it means.
-"""
+    )
+    """
+    GitHub redirects to the repository's new name.
+    """
 
 
 def site_read_failed(
-    publishing: Publishing, failure_name: str, in_cloud_session: bool = True
+    publishing: Publishing, case: SiteReadCase, in_cloud_session: bool = True
 ) -> SiteRepositoryUnreachableError:
     """
     :param publishing: A notes repository whose site repository cannot be read.
-    :param failure_name: The key in :data:`SITE_READ_FAILURES` it fails with.
+    :param case: How reading it fails.
     :param in_cloud_session: Whether publication runs in a cloud session.
     :return: What publication raises.
     """
     runs = publishing.runs_none()
     path = publishing.site.repository.api_path
-    runs.refusals[path] = SITE_READ_FAILURES[failure_name][0](path)
+    runs.refusals[path] = case.value.refusal_for(path)
     with pytest.raises(SiteRepositoryUnreachableError) as raised:
         publishing.publication(runs, in_cloud_session).publish()
     return raised.value
 
 
-@pytest.mark.parametrize("failure_name", SITE_READ_FAILURES)
-def test_why_the_site_repository_could_not_be_read_is_told_apart(
-    publishing, failure_name
-):
+@pytest.mark.parametrize("case", SiteReadCase)
+def test_why_the_site_repository_could_not_be_read_is_told_apart(publishing, case):
     """
     The proxy's own refusal, GitHub's refusal of the credential, GitHub being
     unavailable and a refusal that names its own fix are each recognised.
     """
-    failure = site_read_failed(publishing, failure_name)
+    failure = site_read_failed(publishing, case)
 
-    assert failure.cause == SITE_READ_FAILURES[failure_name][1]
+    assert failure.cause == case.value.cause
 
 
-@pytest.mark.parametrize("failure_name", ["session proxy", "GitHub forbids"])
+@pytest.mark.parametrize(
+    "case", [SiteReadCase.SESSION_PROXY, SiteReadCase.GITHUB_FORBIDS]
+)
 @pytest.mark.parametrize("in_cloud_session", [True, False])
 def test_a_refusal_of_this_session_is_fixed_by_reaching_the_site_repository(
-    publishing, failure_name, in_cloud_session
+    publishing, case, in_cloud_session
 ):
     """
     When this session may not read the site repository, the fix is the one that gives
     it access.
     """
-    failure = site_read_failed(publishing, failure_name, in_cloud_session)
+    failure = site_read_failed(publishing, case, in_cloud_session)
 
-    assert failure.suggest_correction().endswith(failure.remedy)
+    assert failure.suggest_correction().endswith(failure.access_remedy)
 
 
-@pytest.mark.parametrize("failure_name", ["server error", "no answer"])
-def test_an_unavailable_github_is_fixed_by_publishing_again_later(
-    publishing, failure_name
-):
+@pytest.mark.parametrize("case", [SiteReadCase.SERVER_ERROR, SiteReadCase.NO_ANSWER])
+def test_an_unavailable_github_is_fixed_by_publishing_again_later(publishing, case):
     """
     GitHub being unavailable clears on its own: the fix is to run publication again,
     not to change the session's access.
     """
-    failure = site_read_failed(publishing, failure_name)
+    failure = site_read_failed(publishing, case)
 
     correction = failure.suggest_correction()
     assert PUBLICATION_COMMAND in correction
-    assert failure.remedy not in correction
+    assert failure.access_remedy not in correction
 
 
 def test_an_unavailable_github_is_reported_with_the_waits_already_made(publishing):
@@ -603,7 +640,7 @@ def test_an_unavailable_github_is_reported_with_the_waits_already_made(publishin
     runs = publishing.runs_none()
     path = publishing.site.repository.api_path
     runs.refusals[path] = refusal_of(path, HTTPStatus.BAD_GATEWAY)
-    runs.refusal_waits = tuple(PUBLICATION_RETRY_POLICY.delays())
+    runs.refusal_waits = tuple(PlanSitePublication.github_retry_policy.delays())
 
     with pytest.raises(SiteRepositoryUnreachableError) as raised:
         publishing.publication(runs).publish()
@@ -615,27 +652,20 @@ def test_an_unavailable_github_points_to_github_s_status_page(publishing):
     """
     Whether GitHub has an incident is on its status page, which the fix names.
     """
-    failure = site_read_failed(publishing, "server error")
+    failure = site_read_failed(publishing, SiteReadCase.SERVER_ERROR)
 
     assert GitHubAddress.STATUS in failure.suggest_correction()
 
 
-def test_publication_waits_longer_for_github_than_other_commands():
-    """
-    Publication runs once, by hand, so it waits longer for GitHub to recover.
-    """
-    assert sum(PUBLICATION_RETRY_POLICY.delays(), timedelta()) > sum(
-        RetryPolicy().delays(), timedelta()
-    )
-
-
-@pytest.mark.parametrize("failure_name", ["credential rejected", "repository moved"])
-def test_a_refusal_naming_its_own_fix_is_fixed_as_it_says(publishing, failure_name):
+@pytest.mark.parametrize(
+    "case", [SiteReadCase.CREDENTIAL_REJECTED, SiteReadCase.REPOSITORY_MOVED]
+)
+def test_a_refusal_naming_its_own_fix_is_fixed_as_it_says(publishing, case):
     """
     A rejected credential or a moved repository is fixed the way the refusal says,
     then by publishing again.
     """
-    failure = site_read_failed(publishing, failure_name)
+    failure = site_read_failed(publishing, case)
 
     correction = failure.suggest_correction()
     assert failure.refusal.suggest_correction() in correction

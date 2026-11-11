@@ -77,7 +77,7 @@ class SiteReadFailure(Enum):
     """
 
     @classmethod
-    def of(cls, refusal: GitHubCallFailed) -> SiteReadFailure:
+    def from_github_refusal(cls, refusal: GitHubCallFailed) -> SiteReadFailure:
         """
         :param refusal: Why reading the site repository failed.
         :return: The reason it stands for.
@@ -115,9 +115,9 @@ class SiteRepositoryUnreachableError(CommandFailure, DataclassException):
     Why GitHub would not show it.
     """
 
-    remedy: str
+    access_remedy: str
     """
-    How this session comes to read the site repository, and the command to run then.
+    How this session gets access to the site repository, and the command to run then.
     """
 
     retry_command: str
@@ -133,7 +133,7 @@ class SiteRepositoryUnreachableError(CommandFailure, DataclassException):
     @property
     def cause(self) -> SiteReadFailure:
         """:return: Why the site repository could not be read."""
-        return SiteReadFailure.of(self.refusal)
+        return SiteReadFailure.from_github_refusal(self.refusal)
 
     def error_message(self) -> str:
         return (
@@ -156,7 +156,7 @@ class SiteRepositoryUnreachableError(CommandFailure, DataclassException):
                 f"{explained} {self.refusal.suggest_correction()} Then run "
                 f"{self.retry_command}."
             )
-        return f"{explained} {self.remedy}"
+        return f"{explained} {self.access_remedy}"
 
 
 class PushRefusal(StrEnum):
