@@ -5,15 +5,22 @@ The errors publishing and building the plan site raise.
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import Enum, StrEnum
 
 from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, StackExitCode
 from basstler.github.credential import GitHubCommand
-from basstler.github.exceptions import GitHubCallFailed
+from basstler.github.client import SERVER_ERROR_STATUSES
+from basstler.github.exceptions import (
+    GitHubCallFailed,
+    GitHubCredentialRejected,
+    GitHubRepositoryMoved,
+    GitHubUnreachableError,
+)
 from basstler.maintenance.git_commands import GitCommandFailed, GitCommandResult
 from basstler.repository import GitHubAddress, Repository
+from basstler.repository_attachment import SessionProxyAnswer
 
 # %% publishing the site
 
@@ -39,6 +46,52 @@ class NotesRepositoryUnresolvedError(DataclassException, LookupError):
         )
 
 
+class SiteReadFailure(Enum):
+    """
+    Why the site repository could not be read, each with its own fix.
+    """
+
+    REPOSITORY_NOT_ATTACHED = "this session's proxy answers that it is not attached"
+    """
+    A cloud session's proxy refused it in GitHub's place.
+    """
+
+    CREDENTIAL_REFUSED = (
+        "GitHub refuses this session's credential, as it does for a private repository "
+        "its account cannot read, an organization that requires SSO, or a repository "
+        "the Claude GitHub App is not installed on"
+    )
+    """
+    GitHub itself refused the credential.
+    """
+
+    GITHUB_UNAVAILABLE = "GitHub did not answer, or answered with a server error"
+    """
+    The network or GitHub failed, which clears without any change here.
+    """
+
+    REFUSAL_WITH_ITS_OWN_FIX = "GitHub's refusal says how to fix it"
+    """
+    The credential is rejected, or the repository moved.
+    """
+
+    @classmethod
+    def of(cls, refusal: GitHubCallFailed) -> SiteReadFailure:
+        """
+        :param refusal: Why reading the site repository failed.
+        :return: The reason it stands for.
+        """
+        if isinstance(refusal, (GitHubCredentialRejected, GitHubRepositoryMoved)):
+            return cls.REFUSAL_WITH_ITS_OWN_FIX
+        if isinstance(refusal, GitHubUnreachableError):
+            return cls.GITHUB_UNAVAILABLE
+        if refusal.status in SERVER_ERROR_STATUSES:
+            return cls.GITHUB_UNAVAILABLE
+        if SessionProxyAnswer.REPOSITORY_NOT_ATTACHED in refusal.detail:
+            return cls.REPOSITORY_NOT_ATTACHED
+        return cls.CREDENTIAL_REFUSED
+
+
 @dataclass
 class SiteRepositoryUnreachableError(CommandFailure, DataclassException):
     """
@@ -60,15 +113,21 @@ class SiteRepositoryUnreachableError(CommandFailure, DataclassException):
     """
     Why GitHub would not show it.
     """
-    in_cloud_session: bool
-    """
-    Whether this runs in a Claude Code cloud session.
-    """
 
     remedy: str
     """
     How this session comes to read the site repository, and the command to run then.
     """
+
+    retry_command: str
+    """
+    The command that publishes again.
+    """
+
+    @property
+    def cause(self) -> SiteReadFailure:
+        """:return: Why the site repository could not be read."""
+        return SiteReadFailure.of(self.refusal)
 
     def error_message(self) -> str:
         return (
@@ -77,13 +136,18 @@ class SiteRepositoryUnreachableError(CommandFailure, DataclassException):
         )
 
     def suggest_correction(self) -> str:
-        reasons = (
-            "it is not attached to this session, or the Claude GitHub App is not "
-            "installed on it"
-            if self.in_cloud_session
-            else "it is private, and gh's account cannot read it"
-        )
-        return f"do not create it again: it may exist, but {reasons}. {self.remedy}"
+        explained = f"Do not create it again: it may exist, but {self.cause.value}."
+        if self.cause is SiteReadFailure.GITHUB_UNAVAILABLE:
+            return (
+                f"{explained} Reads are already asked again on a server error, so "
+                f"wait a few minutes, then run {self.retry_command}."
+            )
+        if self.cause is SiteReadFailure.REFUSAL_WITH_ITS_OWN_FIX:
+            return (
+                f"{explained} {self.refusal.suggest_correction()} Then run "
+                f"{self.retry_command}."
+            )
+        return f"{explained} {self.remedy}"
 
 
 class PushRefusal(StrEnum):

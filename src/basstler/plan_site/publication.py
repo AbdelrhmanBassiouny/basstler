@@ -240,8 +240,8 @@ class PlanSitePublication:
             raise SiteRepositoryUnreachableError(
                 site.repository,
                 read.failure,
-                self.in_cloud_session,
                 access.remedy(self.in_cloud_session),
+                PUBLICATION_COMMAND,
             )
         return self.default_branch_of(site.repository.clone_url_under(self.remote_root))
 
