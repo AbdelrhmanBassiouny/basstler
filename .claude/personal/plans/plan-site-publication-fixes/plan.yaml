@@ -81,5 +81,11 @@ items:
   title: "Plan site page addresses name the notes repository the hub lists"
   branch: null
   track: publication
+  notes: >
+    From #190 (tomsch420): plan_site_page_url (hooks/resolve-personal-notes-config.sh) passes
+    --repository "$(repository_name)", the clone's origin, but the site files pages under the notes
+    repository the hub lists, so with notes in a separate repository every address 404s - the
+    session-start plan site line, plan-item-kickoff's item page and every link a session writes from
+    them. Name the notes repository instead. Own bug PR off main, failing test first, closes #190.
   depends_on: []
   status: not started
