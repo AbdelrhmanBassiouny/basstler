@@ -63,7 +63,7 @@ class OperatingSystemVariable(EnvironmentVariable):
 
 class GitVariable(EnvironmentVariable):
     """
-    The variables git reads that this package sets for the commands it runs.
+    The variables git reads that this package, or its tests, set for the commands run.
     """
 
     INDEX_FILE = "GIT_INDEX_FILE"
@@ -84,6 +84,11 @@ class GitVariable(EnvironmentVariable):
     CONFIGURATION_VALUE_PREFIX = "GIT_CONFIG_VALUE_"
     """
     Followed by an entry's index, names the variable holding that entry's value.
+    """
+
+    COMMITTER_DATE = "GIT_COMMITTER_DATE"
+    """
+    The date git records as a new commit's committer date, in place of the clock's.
     """
 
 

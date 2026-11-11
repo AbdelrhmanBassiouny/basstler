@@ -12,8 +12,8 @@ from __future__ import annotations
 import os
 import re
 from dataclasses import dataclass, field, replace
+from datetime import timedelta
 from enum import StrEnum
-from http import HTTPStatus
 from pathlib import Path
 from typing import Annotated
 
@@ -22,8 +22,14 @@ from cyclopts import App, Parameter
 from basstler.class_property import classproperty
 from basstler.exit_codes import CommandFailure
 from basstler.github.repository_details import RepositoryDetails
-from basstler.locations import ClaudeCodeVariable, ProjectLocation, WorkflowLocation
+from basstler.locations import (
+    BasstlerVariable,
+    ClaudeCodeVariable,
+    ProjectLocation,
+    WorkflowLocation,
+)
 from basstler.maintenance.git_commands import (
+    GitCommandResult,
     GitCommandRunner,
     GitHubLoginLendingRunner,
 )
@@ -36,9 +42,12 @@ from basstler.plan_site.user_steps import (
     UserStep,
     UserSteps,
 )
+from basstler.plan_site.build_start import SiteAccess
+from basstler.plan_site.site_read import SiteReadFix
 from basstler.plan_site.exceptions import (
     NotesRepositoryUnresolvedError,
     PublicationPushRefusedError,
+    SiteRepositoryUnreachableError,
 )
 from basstler.plan.model import PlanDocument, PlanManifest
 from basstler.plan_site.hub import PlanHub
@@ -56,13 +65,18 @@ from basstler.standard_streams import StandardStreamHandler
 from basstler.github.client import (
     GitHubFullClient,
     GitHubRestClient,
+    RetryPolicy,
 )
-from basstler.github.exceptions import GitHubRequestFailed
 from basstler.upstream_reviews.action.branch import BasstlerSource
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
 This module's logger, which is also what its command prints through.
+"""
+
+PUBLICATION_COMMAND = f'"${{{BasstlerVariable.PYTHON}}}" -m {__spec__.name}'
+"""
+The command line that publishes again, once this session reaches the site repository.
 """
 
 # %% the notes repository on GitHub
@@ -168,6 +182,23 @@ class PlanSitePublication:
     Whether this runs in a Claude Code cloud session, whose user has no terminal on it.
     """
 
+    github_retry_policy: RetryPolicy = RetryPolicy(
+        retries=4, first_delay=timedelta(seconds=2)
+    )
+    """
+    How the command's GitHub client asks a read again after a server error: it runs
+    once, by hand, so it waits longer for GitHub to recover than the client's default.
+    """
+
+    site_attachment_benefit: str = (
+        "publication then tells whether the site repository exists and writes its "
+        "workflow"
+    )
+    """
+    What attaching the site repository to a cloud session gives the user, said when
+    asking them to allow it.
+    """
+
     @classproperty
     def fork_skip_reason(cls) -> str:
         """
@@ -191,21 +222,39 @@ class PlanSitePublication:
         )
         return RemoteBranch(self.dispatch_workflow.notes_branch, self.git, remote)
 
-    def default_branch_of(self, remote: str) -> RemoteBranch | None:
+    def default_branch_of(self, remote: str) -> RemoteBranch:
         """
         :param remote: A remote, as a remote name or a URL.
-        :return: Its default branch, :attr:`initial_branch` when it has none yet, or
-            ``None`` when it cannot be reached.
+        :return: Its default branch, :attr:`initial_branch` when it has none yet.
+        :raises GitCommandFailed: If git cannot reach it.
         """
-        listed = self.git.attempt("ls-remote", "--symref", remote, "HEAD")
-        if not listed.succeeded:
-            return None
+        listed = self.git.run("ls-remote", "--symref", remote, "HEAD")
         match = re.search(
-            r"^ref: refs/heads/(?P<branch>\S+)\s+HEAD$", listed.output, re.MULTILINE
+            r"^ref: refs/heads/(?P<branch>\S+)\s+HEAD$", listed, re.MULTILINE
         )
         return RemoteBranch(
             match["branch"] if match else self.initial_branch, self.git, remote
         )
+
+    def site_branch(self) -> RemoteBranch | None:
+        """
+        :return: The site repository's default branch, ``None`` when GitHub has no such
+            repository.
+        :raises SiteRepositoryUnreachableError: If GitHub refuses to show it.
+        :raises GitCommandFailed: If git cannot reach it.
+        """
+        site = self.dispatch_workflow.site
+        access = SiteAccess(site, PUBLICATION_COMMAND, self.site_attachment_benefit)
+        read = access.read(self.github)
+        if read.is_not_found:
+            return None
+        if read.failure is not None:
+            raise SiteRepositoryUnreachableError(
+                site.repository,
+                read.failure,
+                SiteReadFix.for_failed_read(read, access, self.in_cloud_session),
+            )
+        return self.default_branch_of(site.repository.clone_url_under(self.remote_root))
 
     def publish(self) -> PublicationReport:
         """
@@ -216,18 +265,13 @@ class PlanSitePublication:
         notes_repository = self.dispatch_workflow.notes_repository
         site = self.dispatch_workflow.site
         report = PublicationReport(site.site_url)
-        site_branch = self.default_branch_of(
-            site.repository.clone_url_under(self.remote_root)
+        notes_details = RepositoryDetails.from_json(
+            self.github.get(notes_repository.api_path)
         )
-        if site_branch is None:
-            user_steps = UserSteps(notes_repository, site, [])
-            report.pending.append(user_steps.pending(UserStep.CREATE_SITE_REPOSITORY))
-            return report
-        site_runs = RunListing.read(self.github, site.repository, site_branch.name)
-        notes_runs = RunListing.read(
-            self.github, notes_repository, self.dispatch_workflow.notes_branch
+        site_branch = self.site_branch()
+        existing = (
+            site_branch.read_latest(SiteWorkflow.location) if site_branch else None
         )
-        existing = site_branch.read_latest(SiteWorkflow.location)
         site_workflow = (
             replace(
                 self.site_workflow, registry=SiteWorkflow.from_yaml(existing).registry
@@ -235,13 +279,19 @@ class PlanSitePublication:
             if existing
             else self.site_workflow
         )
-        notes_details = RepositoryDetails.from_json(
-            self.github.get(notes_repository.api_path)
-        )
+        registered = self.repositories_with_plans_of([notes_repository])
         access = self.private_repository_access(
-            self.repositories_read_by_build(site_workflow.registry), notes_details
+            self.repositories_read_by_build(site_workflow.registry, registered),
+            notes_details,
         )
-        if access is not None and access.holds_back_publication:
+        if site_branch is None:
+            report.pending.extend(self.site_repository_creation(access))
+            return report
+        site_runs = RunListing.read(self.github, site.repository, site_branch.name)
+        notes_runs = RunListing.read(
+            self.github, notes_repository, self.dispatch_workflow.notes_branch
+        )
+        if access is not None and access.holds_back(registered):
             report.pending.append(access.pending)
             return report
         self.write(
@@ -278,6 +328,23 @@ class PlanSitePublication:
         if proposal is not None:
             report.pending.append(proposal.pending(self.github))
         return report
+
+    def site_repository_creation(
+        self, access: PrivateRepositoryAccess | None
+    ) -> list[PendingStep]:
+        """
+        :param access: The private repositories the build reads, ``None`` when it needs
+            no token for them.
+        :return: The step creating the site repository, carrying the warning of the
+            read access step that follows it when the build needs one.
+        """
+        creation = UserSteps(
+            self.dispatch_workflow.notes_repository, self.dispatch_workflow.site, []
+        ).pending(UserStep.CREATE_SITE_REPOSITORY)
+        if access is None:
+            return [creation]
+        read_access = access.pending
+        return [replace(creation, warning=read_access.warning), read_access]
 
     def run(self) -> int:
         """
@@ -327,31 +394,80 @@ class PlanSitePublication:
         :param message: The commit message.
         :raises PublicationPushRefusedError: If the branch refuses the push.
         """
-        written = branch.attempt_write({path: text}, message)
-        if not written.push.succeeded:
+        self.raise_if_refused(branch.attempt_write({path: text}, message).push)
+
+    def rebuild(
+        self,
+        branch: RemoteBranch,
+        parent: str,
+        workflow: PlanSiteWorkflow,
+        message: str,
+        report: PublicationReport,
+    ) -> None:
+        """
+        Replace a branch with one commit adding a workflow on top of *parent*.
+
+        :param branch: The branch to replace, created when it does not exist.
+        :param parent: The commit the branch starts from.
+        :param workflow: The workflow.
+        :param message: The commit message.
+        :param report: Where to record the write.
+        :raises PublicationPushRefusedError: If the remote refuses a push.
+        """
+        if branch.exists():
+            self.raise_if_refused(branch.delete())
+        self.raise_if_refused(
+            branch.attempt_create(
+                parent, {workflow.location.as_posix(): workflow.text}, message
+            ).push
+        )
+        report.written.append(f"{workflow.location} on {branch.description}")
+
+    def raise_if_refused(self, push: GitCommandResult) -> None:
+        """
+        :param push: A push publishing the plan site.
+        :raises PublicationPushRefusedError: If the remote refused it.
+        """
+        if not push.succeeded:
             raise PublicationPushRefusedError.from_push(
-                written.push,
+                push,
                 self.notes_remote,
                 self.dispatch_workflow.notes_repository,
             )
 
-    def repositories_read_by_build(self, registry: Repository) -> list[Repository]:
+    def repositories_read_by_build(
+        self, registry: Repository, registered: list[Repository]
+    ) -> list[Repository]:
         """
         :param registry: The repository whose notes hold the complete hub file.
-        :return: The registry, every repository its hub file lists, the notes
-            repository, and every repository their plans' pull requests are on, each
-            once.
+        :param registered: The repositories the registration adds.
+        :return: Those, followed by every other repository the site's build reads,
+            each once.
         """
         hub = PlanHub.from_yaml(
             self.notes_branch_of(registry).read_latest(ProjectLocation.PLAN_HUB)
         )
-        notes_repositories = dict.fromkeys(
-            [
-                registry,
-                *map(Repository.parse, hub.repositories if hub else []),
-                self.dispatch_workflow.notes_repository,
-            ]
+        already_on_site = [
+            repository
+            for repository in dict.fromkeys(
+                [registry, *map(Repository.parse, hub.repositories if hub else [])]
+            )
+            if repository != self.dispatch_workflow.notes_repository
+        ]
+        return list(
+            dict.fromkeys(
+                [*registered, *self.repositories_with_plans_of(already_on_site)]
+            )
         )
+
+    def repositories_with_plans_of(
+        self, notes_repositories: list[Repository]
+    ) -> list[Repository]:
+        """
+        :param notes_repositories: The repositories whose notes branches hold plans.
+        :return: Those, and every repository their plans' pull requests are on, each
+            once.
+        """
         manifests = [
             PlanManifest.from_yaml(text)
             for repository in notes_repositories
@@ -400,10 +516,7 @@ class PlanSitePublication:
         )
         if secret.failure is None:
             return None
-        if (
-            isinstance(secret.failure, GitHubRequestFailed)
-            and secret.failure.status == HTTPStatus.NOT_FOUND
-        ):
+        if secret.is_not_found:
             return PrivateRepositoryAccess(
                 site, tuple(private), unreadable_repositories=unreadable
             )
@@ -415,7 +528,8 @@ class PlanSitePublication:
         """
         Write the merge workflow onto :attr:`merge_workflow_branch` for a pull request
         into the notes repository's default branch, so it reaches that branch through
-        the repository's own checks.
+        the repository's own checks. The branch is rebuilt on the default branch's tip
+        when it shares no history with it.
 
         :param notes_details: The notes repository's details.
         :param report: Where to record the writes.
@@ -432,10 +546,19 @@ class PlanSitePublication:
             f"{self.dispatch_workflow.site.repository.full_name} on every merge"
         )
         default_branch = self.default_branch_of(self.notes_remote)
-        if default_branch.read_latest(workflow.location) == workflow.text:
+        default_tip = default_branch.fetch()
+        if default_tip and self.git.file_at(default_tip, workflow.location) == (
+            workflow.text
+        ):
             return None
         head = RemoteBranch(self.merge_workflow_branch, self.git, self.notes_remote)
-        self.write(head, workflow, message, report)
+        head_tip = head.fetch()
+        if default_tip and not (
+            head_tip and self.git.share_history(head_tip, default_tip)
+        ):
+            self.rebuild(head, default_tip, workflow, message, report)
+        else:
+            self.write(head, workflow, message, report)
         return MergeWorkflowProposal(notes_repository, default_branch.name, head.name)
 
     def register(self, registry: Repository, report: PublicationReport) -> PlanHub:
@@ -536,7 +659,7 @@ def publish(
         notes_remote,
         DispatchWorkflow(notes_repository, notes_branch.name, site),
         SiteWorkflow(branch_or_tag, notes_repository),
-        GitHubRestClient(),
+        GitHubRestClient(retry_policy=PlanSitePublication.github_retry_policy),
         remote_root=GitHubAddress.clone_root_for(notes_branch.url),
         in_cloud_session=ClaudeCodeVariable.REMOTE.is_true(),
     ).run()

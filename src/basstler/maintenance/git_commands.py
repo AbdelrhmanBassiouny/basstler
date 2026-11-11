@@ -434,6 +434,14 @@ class GitCommandRunner:
             "merge-base", "--is-ancestor", candidate, descendant
         ).succeeded
 
+    def share_history(self, first: str, second: str) -> bool:
+        """
+        :param first: Any reference git can resolve to a commit.
+        :param second: Another one.
+        :return: Whether the two commits have a common ancestor.
+        """
+        return self.attempt("merge-base", first, second).succeeded
+
 
 @dataclass(frozen=True)
 class GitHubLoginLendingRunner(GitCommandRunner):

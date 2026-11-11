@@ -189,13 +189,6 @@ class DatasetLocation(PathEnumeration):
     number alone.
     """
 
-    ACTION_RESULT_WITHOUT_REQUEST_IDENTIFIER = (
-        DIRECTORY / "action-result-without-request-identifier.json"
-    )
-    """
-    A result an Action release from before results named their request committed.
-    """
-
     PLAN_SITE_RUNS_SUCCEEDED = DIRECTORY / "plan-site-runs-succeeded.json"
     """
     A site repository's run listing whose latest plan-site run succeeded.
@@ -253,6 +246,12 @@ class DatasetLocation(PathEnumeration):
     REPOSITORY_NOT_FORK = DIRECTORY / "repository-not-fork.json"
     """
     A repository's REST response for a public repository that is not a fork.
+    """
+
+    SESSION_PROXY_REFUSAL = DIRECTORY / "session-proxy-refusal.json"
+    """
+    What a Claude Code cloud session's proxy answers, in GitHub's place, for a
+    repository not attached to the session.
     """
 
     REPOSITORY_PRIVATE = DIRECTORY / "repository-private.json"

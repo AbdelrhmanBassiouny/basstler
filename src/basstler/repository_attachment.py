@@ -30,6 +30,19 @@ class SessionTool(StrEnum):
     """
 
 
+class SessionProxyAnswer(StrEnum):
+    """
+    What a cloud session's proxy answers a GitHub request with, in GitHub's place.
+    """
+
+    REPOSITORY_NOT_ATTACHED = (
+        "GitHub access to this repository is not enabled for this session"
+    )
+    """
+    The repository is not attached to the session, whether or not it exists.
+    """
+
+
 # %% the instruction
 
 

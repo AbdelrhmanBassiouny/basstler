@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import sys
 import textwrap
-from collections.abc import Sequence
+from collections.abc import Collection, Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
 from urllib.parse import urlencode
@@ -47,7 +47,7 @@ class UserStep(StrEnum):
 
     CREATE_SITE_REPOSITORY = "create the site repository"
     """
-    The site repository does not exist, or cannot be reached.
+    GitHub has no site repository, or none this credential may see.
     """
 
     TURN_ON_PAGES = "turn on GitHub Pages for the site repository"
@@ -291,13 +291,15 @@ class PrivateRepositoryAccess:
             "revoked. Give it an expiry and revoke it once the build no longer needs it."
         )
 
-    @property
-    def holds_back_publication(self) -> bool:
+    def holds_back(self, registered: Collection[Repository]) -> bool:
         """
-        :return: Whether a repository is known to be private and the token known to be
-            missing, so nothing written now could build.
+        :param registered: The repositories a registration adds to the site.
+        :return: Whether one of them is known to be private and the token known to be
+            missing, so nothing written for it now could build.
         """
-        return bool(self.private_repositories) and self.secret_refusal is None
+        return self.secret_refusal is None and any(
+            repository in registered for repository in self.private_repositories
+        )
 
     @property
     def pending(self) -> PendingStep:
