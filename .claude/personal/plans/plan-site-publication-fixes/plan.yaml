@@ -22,9 +22,11 @@ items:
 - id: visibility-before-site-repository
   title: Publication checks private repositories before asking for the site repository
   track: publication
+  branch: claude/trusting-dirac-ul702x
+  pull_request_number: 193
   depends_on: []
-  status: not started
-  session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
+  status: in progress
+  session: https://claude.ai/code/session_01JxHGiPiEgpe1iGNXeZfCD4
   notes: 'From Hesham87/Platform_maintainer: publish() asks to create the site repository
     before its private-repository check, so a private repository learns about PLAN_SITE_READ_TOKEN
     and the public site only after creating it, making it public and installing the App. Run
