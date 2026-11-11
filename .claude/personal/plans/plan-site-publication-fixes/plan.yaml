@@ -53,9 +53,11 @@ items:
 - id: merge-workflow-draft
   title: The merge workflow pull request opens as a draft
   track: publication
+  branch: claude/loving-johnson-gb3ura
+  pull_request_number: 196
   depends_on: []
-  status: not started
-  session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
+  status: in progress
+  session: https://claude.ai/code/session_01JxHGiNFR7ot7gktfTzUrUg
   notes: 'Open the merge workflow pull request as a draft: MergeWorkflowProposal passes draft=False
     (user_steps.py). Decided (owner, 2026-11-09): once #141 shows live pull request states
     on the page, publication stops installing the merge workflow by default and offers it
