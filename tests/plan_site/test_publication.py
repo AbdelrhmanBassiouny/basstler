@@ -495,6 +495,28 @@ def publication_access(publishing: Publishing) -> SiteAccess:
 
 
 @dataclass(frozen=True)
+class FailedSiteRead:
+    """
+    A failed read of the site repository, as publication met it.
+    """
+
+    refusal: GitHubCallFailed
+    """
+    Why GitHub's answer, or the lack of one, failed the read.
+    """
+
+    access: SiteAccess
+    """
+    Publication's access to the site repository, and what it runs then.
+    """
+
+    in_cloud_session: bool
+    """
+    Whether publication runs in a Claude Code cloud session.
+    """
+
+
+@dataclass(frozen=True)
 class SiteReadAttempt:
     """
     One way reading the site repository fails, and the fix publication should give.
@@ -505,10 +527,9 @@ class SiteReadAttempt:
     Builds the failure for the site repository's API path.
     """
 
-    fix_for: Callable[[GitHubCallFailed, SiteAccess, bool], SiteReadFix]
+    fix_for: Callable[[FailedSiteRead], SiteReadFix]
     """
-    Builds the expected fix from the failure, publication's access to the site
-    repository and whether it runs in a cloud session.
+    Builds the fix publication should give for the failed read.
     """
 
 
@@ -523,7 +544,7 @@ class SiteReadCase(Enum):
             HTTPStatus.FORBIDDEN,
             DatasetLocation.SESSION_PROXY_REFUSAL.read_text(),
         ),
-        lambda refusal, access, in_cloud_session: RepositoryAttachmentFix(access),
+        lambda read: RepositoryAttachmentFix(read.access),
     )
     """
     The cloud session's proxy refuses it in GitHub's place.
@@ -531,9 +552,7 @@ class SiteReadCase(Enum):
 
     GITHUB_FORBIDS = SiteReadAttempt(
         lambda path: refusal_of(path, HTTPStatus.FORBIDDEN),
-        lambda refusal, access, in_cloud_session: CredentialAccessFix(
-            access, in_cloud_session
-        ),
+        lambda read: CredentialAccessFix(read.access, read.in_cloud_session),
     )
     """
     GitHub itself refuses the credential.
@@ -541,9 +560,7 @@ class SiteReadCase(Enum):
 
     SERVER_ERROR = SiteReadAttempt(
         lambda path: refusal_of(path, HTTPStatus.BAD_GATEWAY),
-        lambda refusal, access, in_cloud_session: GitHubOutageFix(
-            (), PUBLICATION_COMMAND
-        ),
+        lambda read: GitHubOutageFix((), PUBLICATION_COMMAND),
     )
     """
     GitHub answers with a server error.
@@ -551,9 +568,7 @@ class SiteReadCase(Enum):
 
     NO_ANSWER = SiteReadAttempt(
         lambda path: GitHubUnreachableError(HttpMethod.GET, path, "timed out"),
-        lambda refusal, access, in_cloud_session: GitHubOutageFix(
-            (), PUBLICATION_COMMAND
-        ),
+        lambda read: GitHubOutageFix((), PUBLICATION_COMMAND),
     )
     """
     GitHub does not answer.
@@ -563,9 +578,7 @@ class SiteReadCase(Enum):
         lambda path: refusal_of(
             path, HTTPStatus.UNAUTHORIZED, kind=GitHubCredentialRejected
         ),
-        lambda refusal, access, in_cloud_session: RefusalCorrectionFix(
-            refusal, PUBLICATION_COMMAND
-        ),
+        lambda read: RefusalCorrectionFix(read.refusal, PUBLICATION_COMMAND),
     )
     """
     GitHub rejects the token as invalid or expired.
@@ -575,9 +588,7 @@ class SiteReadCase(Enum):
         lambda path: refusal_of(
             path, HTTPStatus.MOVED_PERMANENTLY, kind=GitHubRepositoryMoved
         ),
-        lambda refusal, access, in_cloud_session: RefusalCorrectionFix(
-            refusal, PUBLICATION_COMMAND
-        ),
+        lambda read: RefusalCorrectionFix(read.refusal, PUBLICATION_COMMAND),
     )
     """
     GitHub redirects to the repository's new name.
@@ -601,7 +612,9 @@ def test_each_failed_read_of_the_site_repository_gets_the_fix_for_its_cause(
         publishing.publication(runs, in_cloud_session).publish()
 
     assert raised.value.fix == case.value.fix_for(
-        runs.refusals[path], publication_access(publishing), in_cloud_session
+        FailedSiteRead(
+            runs.refusals[path], publication_access(publishing), in_cloud_session
+        )
     )
 
 
