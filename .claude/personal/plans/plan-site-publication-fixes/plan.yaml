@@ -67,5 +67,12 @@ items:
   title: Publication holds back only for the private repositories its registration adds
   branch: null
   track: publication
+  notes: >
+    From #188 (tomsch420): publish() checks repositories_read_by_build(registry), the whole site, so
+    a private repository already on the site without PLAN_SITE_READ_TOKEN blocks registering an
+    unrelated public one: nothing is written, exit 1. Hold back only for what the registration adds
+    (the registered repository, its notes repository, its own plans' pull request repositories);
+    warn with the same token step for the rest. Own bug PR off main, failing test first, closes
+    #188; shares tests/plan_site/test_publication.py with #187.
   depends_on: []
   status: not started
