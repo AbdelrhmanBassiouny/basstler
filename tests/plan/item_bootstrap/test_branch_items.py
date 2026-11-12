@@ -1,10 +1,10 @@
 """
-Tests for resolving a branch to its items and writing one owner's blockers on them.
+Tests for resolving a branch to its item and writing one owner's blockers on it.
 """
 
 from __future__ import annotations
 
-from basstler.plan.item_bootstrap.blockers import BranchReport, OwnedBlocker
+from basstler.plan.item_bootstrap.blockers import BranchReport, ItemWrite, OwnedBlocker
 from basstler.plan.item_bootstrap.vocabulary import PlanItemBootstrapExitCode
 from basstler.plan.model import (
     ItemStatus,
@@ -29,7 +29,7 @@ from .bootstrap_scenario import (
     update_request,
 )
 
-# %% resolving a branch to the items it carries
+# %% resolving a branch to the item it carries
 
 
 def test_resolving_a_branch_names_the_plan_that_tracks_it(
@@ -42,10 +42,10 @@ def test_resolving_a_branch_names_the_plan_that_tracks_it(
     )
 
     assert resolution.plan_identifier == PLAN_IDENTIFIER
-    assert [item.item_identifier for item in resolution.items] == [SECOND_ITEM]
+    assert resolution.item.item_identifier == SECOND_ITEM
 
 
-def test_resolving_reports_the_status_and_blockers_each_item_records(
+def test_resolving_reports_the_status_and_blockers_the_item_records(
     bootstrap_repository: ScratchRepository,
 ):
     publish_the_branch_index(bootstrap_repository)
@@ -55,8 +55,8 @@ def test_resolving_reports_the_status_and_blockers_each_item_records(
     )
 
     recorded = item_named(PLAN_MANIFEST, SECOND_ITEM)
-    assert resolution.items[0].status is ItemStatus(recorded[ManifestKey.STATUS.key])
-    assert resolution.items[0].blockers == ()
+    assert resolution.item.status is ItemStatus(recorded[ManifestKey.STATUS.key])
+    assert resolution.item.blockers == ()
 
 
 def test_a_branch_no_plan_claims_is_reported_rather_than_refused(
@@ -69,11 +69,11 @@ def test_a_branch_no_plan_claims_is_reported_rather_than_refused(
     )
 
     assert resolution.plan_identifier is None
-    assert resolution.items == ()
+    assert resolution.item is None
     assert resolution.exit_code is PlanItemBootstrapExitCode.BRANCH_TRACKS_NO_ITEM
 
 
-# %% owning a blocker on every item a branch carries
+# %% owning a blocker on the item a branch carries
 
 
 def owned_blocker(reason: str = CONFLICT_REASON) -> str:
@@ -198,7 +198,7 @@ def test_withdrawing_a_blocker_an_item_never_carried_leaves_it_alone(
 
     report = unblock_branch(bootstrap_repository, second_item_branch())
 
-    assert [item.item_identifier for item in report.items] == [SECOND_ITEM]
+    assert report.item.item_identifier == SECOND_ITEM
     assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == before
 
 
@@ -212,3 +212,19 @@ def test_unblocking_a_branch_no_plan_claims_writes_nothing(
 
     assert report.exit_code is PlanItemBootstrapExitCode.BRANCH_TRACKS_NO_ITEM
     assert published_plan(bootstrap_repository)[PlanDocument.MANIFEST] == before
+
+
+def test_blocking_reports_the_item_as_written_beside_its_previous_status(
+    bootstrap_repository: ScratchRepository,
+):
+    publish_the_branch_index(bootstrap_repository)
+    recorded = item_named(PLAN_MANIFEST, SECOND_ITEM)
+
+    report = block_second_items_branch(bootstrap_repository)
+
+    assert report.item == ItemWrite(
+        item_identifier=SECOND_ITEM,
+        status=ItemStatus.BLOCKED,
+        blockers=(owned_blocker(),),
+        previous_status=ItemStatus(recorded[ManifestKey.STATUS.key]),
+    )

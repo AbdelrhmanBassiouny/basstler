@@ -181,7 +181,7 @@ def test_the_check_subcommand_exits_stale_and_names_the_field(
     ]
 
 
-def test_the_resolve_subcommand_names_the_plan_and_items_a_branch_carries(
+def test_the_resolve_subcommand_names_the_plan_and_item_a_branch_carries(
     bootstrap_repository: ScratchRepository,
 ):
     publish_the_branch_index(bootstrap_repository)
@@ -193,7 +193,7 @@ def test_the_resolve_subcommand_names_the_plan_and_items_a_branch_carries(
     assert result.returncode == PlanItemBootstrapExitCode.SUCCESS
     report = json.loads(result.stdout)
     assert report[ReportKey.PLAN] == PLAN_IDENTIFIER
-    assert [item[ReportKey.ITEM] for item in report[ReportKey.ITEMS]] == [SECOND_ITEM]
+    assert report[ReportKey.TRACKED_ITEM][ReportKey.ITEM] == SECOND_ITEM
 
 
 def test_the_block_subcommand_exits_on_a_branch_that_belongs_to_no_plan(
