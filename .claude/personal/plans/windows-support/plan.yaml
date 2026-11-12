@@ -70,3 +70,10 @@ items:
   pull_request_number: null
   notes: A windows-latest job runs check-setup.sh through python -m basstler.setup.personal_notes.
     Costs Actions minutes, so needs the owner's decision against actions-budget before starting.
+
+- id: github-api-posix-paths
+  title: "Build GitHub REST paths with / on every platform"
+  branch: null
+  track: fixes
+  depends_on: []
+  status: not started
