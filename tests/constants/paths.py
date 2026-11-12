@@ -595,6 +595,11 @@ class SkillDirectory(PathEnumeration):
     The instructions for reading a branch's upstream review threads.
     """
 
+    SETUP_PERSONAL_NOTES = DIRECTORY / "setup-personal-notes"
+    """
+    The one-time setup, which works through check-setup.sh's rows.
+    """
+
     RUNNING_COMMANDS_DOCUMENT = DIRECTORY / "running-commands.md"
     """
     How every skill runs its commands, which each skill's instructions link.
