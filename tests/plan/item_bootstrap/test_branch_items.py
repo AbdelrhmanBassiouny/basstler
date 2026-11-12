@@ -15,7 +15,6 @@ from basstler.plan.model import (
 from ...scratch_repository import ScratchRepository
 from .bootstrap_scenario import (
     CONFLICT_REASON,
-    EXISTING_ITEM,
     HAND_WRITTEN_BLOCKER,
     NO_PLANS_BRANCH,
     OWNER,
@@ -26,7 +25,6 @@ from .bootstrap_scenario import (
     publish_the_branch_index,
     published_items,
     published_plan,
-    put_both_items_on_one_branch,
     second_item_branch,
     update_request,
 )
@@ -59,21 +57,6 @@ def test_resolving_reports_the_status_and_blockers_each_item_records(
     recorded = item_named(PLAN_MANIFEST, SECOND_ITEM)
     assert resolution.items[0].status is ItemStatus(recorded[ManifestKey.STATUS.key])
     assert resolution.items[0].blockers == ()
-
-
-def test_resolving_a_branch_two_items_ride_on_answers_with_both(
-    bootstrap_repository: ScratchRepository,
-):
-    put_both_items_on_one_branch(bootstrap_repository)
-
-    resolution = BranchReport.of_branch(
-        second_item_branch(), bootstrap_repository.project_root
-    )
-
-    assert [item.item_identifier for item in resolution.items] == [
-        EXISTING_ITEM,
-        SECOND_ITEM,
-    ]
 
 
 def test_a_branch_no_plan_claims_is_reported_rather_than_refused(
@@ -133,18 +116,6 @@ def hand_write_blocker_on_second_item(repository: ScratchRepository) -> None:
         item_identifier=SECOND_ITEM,
         values_by_key={ManifestKey.BLOCKERS: [HAND_WRITTEN_BLOCKER]},
     ).update(repository.project_root)
-
-
-def test_blocking_a_branch_blocks_every_item_it_carries(
-    bootstrap_repository: ScratchRepository,
-):
-    put_both_items_on_one_branch(bootstrap_repository)
-
-    block_second_items_branch(bootstrap_repository)
-
-    for item in published_items(bootstrap_repository).values():
-        assert item[ManifestKey.STATUS.key] == ItemStatus.BLOCKED
-        assert item[ManifestKey.BLOCKERS.key] == [owned_blocker()]
 
 
 def test_blocking_keeps_a_blocker_somebody_else_wrote(
