@@ -91,7 +91,7 @@ items:
   status: not started
   notes: 'Ranking runs once, in the plan site build; the page never ranks. Every trigger starts that one
     build: a plan save (build_start), a merge, an issue or PR opened, closed or labelled in a hub repository
-    (the merge dispatch workflow extended to those events), the Refresh button (plan-site-ui/command-issues),
+    (the merge dispatch workflow extended to those events), the Refresh button (basstler-service/site-actions),
     and one morning cron for the new day''s queue, the approved exception to no-schedule. No interval
     polling. A concurrency group folds a burst into one run, and ETag requests keep refetching cheap.
     A failed fetch is shown, never dropped.'
@@ -116,11 +116,11 @@ items:
   track: recommender
   depends_on:
   - progress-meters
-  - plan-site-ui/command-issues
+  - basstler-service/site-actions
   status: not started
   notes: 'A Settings tab edits every priorities.yaml field as a form (sliders for shares and budgets,
     drag to reorder kinds, topic and chapter pickers) and a Log button records reading done, writing sessions
-    and accepted .bib suggestions. Saving sends a plan-site-ui command issue, which validates the change
-    into the policy dataclasses, commits it and rebuilds the site; a refused change is reported on the
-    page. Charts and filters run in the browser on the published data. Open: a live re-rank preview needs
-    the Python ranker in the browser (Pyodide); decide at kickoff.'
+    and accepted .bib suggestions. Saving sends a basstler-service/site-actions request, which validates
+    the change into the policy dataclasses, commits it and rebuilds the site; a refused change is reported
+    on the page. Charts and filters run in the browser on the published data. Open: a live re-rank preview
+    needs the Python ranker in the browser (Pyodide); decide at kickoff.'
