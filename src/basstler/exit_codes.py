@@ -178,6 +178,13 @@ class SetupCheckExitCode(ExitCode):
     It was run outside a git work tree, so it reported nothing.
     """
 
+    @classproperty
+    def reporting_statuses(cls) -> frozenset[SetupCheckExitCode]:
+        """
+        :return: The statuses the script exits with after printing its whole report.
+        """
+        return frozenset({cls.SUCCESS, cls.SETUP_INCOMPLETE})
+
 
 class PersonalNotesSetupExitCode(ExitCode):
     """
@@ -209,6 +216,12 @@ class PersonalNotesSetupExitCode(ExitCode):
     HOOK_SCRIPT_FAILED = 4
     """
     A hook script a step runs failed; its own output says why.
+    """
+
+    CHECK_SETUP_FAILED = 5
+    """
+    check-setup.sh failed, or printed a report missing a check or holding a row this
+    package cannot read; its standard error is in the setup's own.
     """
 
 

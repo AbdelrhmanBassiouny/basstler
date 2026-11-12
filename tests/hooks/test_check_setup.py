@@ -84,21 +84,39 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
 
 
 def run_check_setup(
-    repository: ScratchRepository, *arguments: str, **environment_overrides: str
+    repository: ScratchRepository,
+    *arguments: str,
+    requested_checks: frozenset[SetupCheck] = frozenset(SetupCheck),
+    **environment_overrides: str,
 ) -> SetupReport:
     """
     Run the scratch layout's check-setup.sh and parse its report.
 
     :param repository: A fixture-built scratch repository.
-    :param arguments: The flags to pass.
+    :param arguments: The flags to pass besides :attr:`OnlyFlag.ONLY`.
+    :param requested_checks: The checks to report on, each passed after
+        :attr:`OnlyFlag.ONLY` unless every check is requested.
     :param environment_overrides: Environment variables to set for this run, for the
         tests that exercise resolution from the environment.
     :return: The parsed report.
     """
+    only_arguments = (
+        []
+        if requested_checks == frozenset(SetupCheck)
+        else [
+            argument
+            for check in sorted(requested_checks)
+            for argument in (OnlyFlag.ONLY, check)
+        ]
+    )
     return SetupReport.from_completed_process(
         repository.run_hook_script(
-            PluginLocation.SETUP_CHECK_SCRIPT.name, *arguments, **environment_overrides
-        )
+            PluginLocation.SETUP_CHECK_SCRIPT.name,
+            *arguments,
+            *only_arguments,
+            **environment_overrides,
+        ),
+        requested_checks,
     )
 
 
@@ -136,6 +154,18 @@ def test_reports_no_work_needed_when_everything_is_in_place(
 
 def test_reports_every_check_it_documents(check_setup_repository: ScratchRepository):
     report = run_check_setup(check_setup_repository)
+    assert set(report.results) == set(SetupCheck)
+
+
+def test_reports_every_check_it_documents_when_the_notes_branch_is_missing(
+    check_setup_repository: ScratchRepository, tmp_path: Path
+):
+    check_setup_repository.resolve_notes_remote_to(
+        initialize_bare_repository(tmp_path / "empty-remote.git")
+    )
+
+    report = run_check_setup(check_setup_repository)
+
     assert set(report.results) == set(SetupCheck)
 
 
@@ -431,7 +461,8 @@ def test_a_repository_row_never_fails_the_run(
     dispatch_with_other_repository: ScratchRepository,
 ):
     report = run_check_setup(
-        dispatch_with_other_repository, OnlyFlag.ONLY, SetupCheck.PLAN_SITE
+        dispatch_with_other_repository,
+        requested_checks=frozenset({SetupCheck.PLAN_SITE}),
     )
 
     assert report.exit_code is SetupCheckExitCode.SUCCESS
@@ -441,7 +472,8 @@ def test_a_repository_row_is_not_printed_when_the_plan_site_is_not_requested(
     dispatch_with_other_repository: ScratchRepository,
 ):
     report = run_check_setup(
-        dispatch_with_other_repository, OnlyFlag.ONLY, SetupCheck.NOTES_FILE
+        dispatch_with_other_repository,
+        requested_checks=frozenset({SetupCheck.NOTES_FILE}),
     )
 
     assert report.repository_results == []
@@ -532,7 +564,8 @@ def test_a_package_of_the_plugin_s_release_passes(
     )
 
     report = run_check_setup(
-        check_setup_repository, OnlyFlag.ONLY, SetupCheck.BASSTLER_VERSION
+        check_setup_repository,
+        requested_checks=frozenset({SetupCheck.BASSTLER_VERSION}),
     )
 
     assert report.results[SetupCheck.BASSTLER_VERSION].status == CheckStatus.OK
@@ -876,10 +909,7 @@ def test_only_the_requested_checks_are_reported(
 ):
     report = run_check_setup(
         check_setup_repository,
-        OnlyFlag.ONLY,
-        SetupCheck.NOTES_BRANCH,
-        OnlyFlag.ONLY,
-        SetupCheck.NOTES_FILE,
+        requested_checks=frozenset({SetupCheck.NOTES_BRANCH, SetupCheck.NOTES_FILE}),
     )
 
     assert set(report.results) == {SetupCheck.NOTES_BRANCH, SetupCheck.NOTES_FILE}
@@ -896,8 +926,7 @@ def test_a_failing_unrequested_check_does_not_fail_the_requested_one(
     report = run_check_setup(
         dispatch_needing_setup,
         OnlyFlag.REQUIRE_UPSTREAM,
-        OnlyFlag.ONLY,
-        SetupCheck.STACK_UPSTREAM,
+        requested_checks=frozenset({SetupCheck.STACK_UPSTREAM}),
     )
 
     assert report.exit_code is SetupCheckExitCode.SUCCESS
@@ -908,7 +937,9 @@ def test_a_failing_unrequested_check_does_not_fail_the_requested_one(
 def test_every_documented_check_can_be_requested(
     check_setup_repository: ScratchRepository, check: SetupCheck
 ):
-    report = run_check_setup(check_setup_repository, OnlyFlag.ONLY, check)
+    report = run_check_setup(
+        check_setup_repository, requested_checks=frozenset({check})
+    )
 
     assert set(report.results) == {check}
 

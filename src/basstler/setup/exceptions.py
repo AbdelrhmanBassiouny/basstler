@@ -6,11 +6,15 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from basstler.class_property import classproperty
 from basstler.exceptions import DataclassException
 from basstler.exit_codes import CommandFailure, PersonalNotesSetupExitCode
 from basstler.repository import Repository
+
+if TYPE_CHECKING:
+    from basstler.setup.report import SetupCheck
 
 
 @dataclass
@@ -71,3 +75,49 @@ class HookScriptFailedError(CommandFailure, DataclassException, RuntimeError):
 
     def suggest_correction(self) -> str:
         return "its own output above says why; fix that and run the setup again"
+
+
+@dataclass
+class CheckSetupFailedError(CommandFailure, DataclassException, RuntimeError):
+    """
+    Raised when a check-setup.sh run exits with a status that carries no report, or its
+    report lacks a requested check or holds a row this package cannot read.
+    """
+
+    @classproperty
+    def exit_code(cls) -> PersonalNotesSetupExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return PersonalNotesSetupExitCode.CHECK_SETUP_FAILED
+
+    status: int
+    """
+    The status check-setup.sh exited with.
+    """
+
+    standard_error: str
+    """
+    What check-setup.sh printed to its standard error.
+    """
+    missing_checks: list[SetupCheck]
+    """
+    The requested checks the report has no row for.
+    """
+
+    unreadable_rows: list[str]
+    """
+    The rows naming a check or a status this package does not declare, or not holding a
+    check, a status and a detail.
+    """
+
+    def error_message(self) -> str:
+        problems = [f"check-setup.sh exited with status {self.status}"]
+        if self.missing_checks:
+            problems.append(f"reported no row for {', '.join(self.missing_checks)}")
+        if self.unreadable_rows:
+            problems.append(
+                f"printed rows this package cannot read: {self.unreadable_rows}"
+            )
+        return f"{'; '.join(problems)}\nIts standard error:\n{self.standard_error}"
+
+    def suggest_correction(self) -> str:
+        return "fix what its standard error names, then run the setup again"
