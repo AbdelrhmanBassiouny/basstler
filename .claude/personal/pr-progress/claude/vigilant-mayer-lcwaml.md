@@ -1,13 +1,11 @@
 ## Plan
-- PR #187 (draft, release:minor), reshaped after owner review 2026-11-11:
-  - session start records merged items of every plan (`merged_items every-plan`), replacing the one-plan recording;
-  - drop the merge-time workflow (reusable workflow, merge-template `record` job, their enums);
-  - one item per branch: validation refuses a branch named twice, within or across plans;
-  - answer the 4 inline threads and clarify that code.
+- PR #187 (draft, release:minor), reshaped after owner review 2026-11-11: session start records every plan's merged items; merge-time workflow removed; one item per branch.
 
 ## Done
-- Owner decisions taken in chat (session start over workflow; one item per branch).
-- Branch restacked onto main 53375b5 at d857175 by the maintenance pass.
+- Pushed 7483065: every-plan at session start (summary names dropped items and unreadable repositories), workflow removed, one-item-per-branch validation, check states skipped for merge detection.
+- domain-models in cognitive_robot_abstract_machine notes cleaned (2e974e3).
+- PR description updated.
 
 ## Next
-- Tests first, then the changes above; update PR description; reply to threads.
+- Owner: remove the 2 test_branch_items.py tests that save two items on one branch? Simplify BranchReport here or as a follow-up?
+- Reply to the review and the 4 inline threads; read CI on 7483065.
