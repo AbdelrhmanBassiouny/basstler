@@ -1,8 +1,7 @@
 Plan:
-- Failing tests: exit status other than 0/1, missing row, unreadable row each raise CheckSetupFailedError carrying status and stderr; the setup command exits CHECK_SETUP_FAILED
-- CheckSetupFailedError in setup/exceptions.py; SetupReport.from_completed_process takes the requested checks (all by default, --only tests pass theirs)
-- Document exit 5 in setup-personal-notes SKILL.md
+- Strict check-setup.sh report parsing: CheckSetupFailedError (status, stderr, missing checks, unreadable rows); setup exits 5
 Done:
-- Branch, draft PR #202, plan item recorded in progress
+- Tests first, then the fix, pushed in 7024e83; draft PR #202 labelled bug, description current
+- check-setup.sh now prints plan_site_access when the notes branch is missing
 Next:
-- Write the failing tests
+- Wait for CI and review; the plan-site Playwright tests only ran in CI
