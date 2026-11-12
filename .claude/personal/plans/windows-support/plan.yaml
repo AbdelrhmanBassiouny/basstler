@@ -31,11 +31,12 @@ items:
     it runs. Split out of windows-environment-interpreter as its own root cause.'
 - id: setup-report-strict-parsing
   title: Refuse an incomplete or failed check-setup.sh report with its stderr
-  branch: null
-  status: not started
+  branch: claude/windows-support-setup-report-7wq1u4
+  status: in progress
   track: fixes
+  session: https://claude.ai/code/session_01JxHGiPy8e8q3yBNcVhbpt3
   depends_on: []
-  pull_request_number: null
+  pull_request_number: 202
   notes: SetupReport.from_completed_process raises a custom CheckSetupFailedError carrying
     exit code and stderr when a row is missing or the exit code is neither 0 nor 1, instead
     of KeyError/ValueError; the setup command exits with a documented code for it.
