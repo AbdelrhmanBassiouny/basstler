@@ -135,7 +135,7 @@ class GitHubPath(StrEnum):
     """
 
 
-class RepositoryPath(StrEnum):
+class GitHubRepositoryPath(StrEnum):
     """
     The API routes below a repository, ``/``-separated on every platform.
     """
@@ -158,7 +158,7 @@ class RepositoryPath(StrEnum):
 
 class CommitReport(StrEnum):
     """
-    The listings reported against one commit, below :attr:`RepositoryPath.COMMITS`.
+    The listings reported against one commit, below :attr:`GitHubRepositoryPath.COMMITS`.
     """
 
     CHECK_RUNS = "check-runs"
@@ -293,13 +293,13 @@ class GitHubRepository(
         :return: Them, oldest page first.
         """
         return self._every_entry(
-            RepositoryPath.PULL_REQUESTS, {ListingParameter.STATE: state.query}
+            GitHubRepositoryPath.PULL_REQUESTS, {ListingParameter.STATE: state.query}
         )
 
     def labels(self) -> set[str]:
         return {
             RepositoryLabel.from_json(label).name
-            for label in self._every_entry(RepositoryPath.LABELS, {})
+            for label in self._every_entry(GitHubRepositoryPath.LABELS, {})
         }
 
     def create_label(self, label: GitHubLabel) -> None:
@@ -330,14 +330,14 @@ class GitHubRepository(
         """:param commit: The commit reported against.
         :param report: Which of its listings to read.
         :return: The listing's path below the repository."""
-        return f"{RepositoryPath.COMMITS}/{commit}/{report}"
+        return f"{GitHubRepositoryPath.COMMITS}/{commit}/{report}"
 
     def authenticated_login(self) -> str:
         account = self.client.get(str(GitHubPath.AUTHENTICATED_USER))
         return str(account[AccountField.LOGIN])
 
     def _every_entry(
-        self, path: RepositoryPath, filters: Mapping[ListingParameter, str]
+        self, path: GitHubRepositoryPath, filters: Mapping[ListingParameter, str]
     ) -> list[Any]:
         """
         Read a listing below the repository whose pages are lists, to its end.
@@ -373,7 +373,9 @@ class GitHubRepository(
     def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
         :return: That pull request."""
-        return self.client.get(self._path(f"{RepositoryPath.PULL_REQUESTS}/{number}"))
+        return self.client.get(
+            self._path(f"{GitHubRepositoryPath.PULL_REQUESTS}/{number}")
+        )
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
         """

@@ -14,7 +14,11 @@ import pytest
 from basstler.github.states import CombinedCheckState
 from basstler.maintenance.board import PullRequestField, PullRequestHeadKey
 from basstler.github.exceptions import GitHubRequestFailed
-from basstler.maintenance.github import CommitReport, GitHubRepository, RepositoryPath
+from basstler.maintenance.github import (
+    CommitReport,
+    GitHubRepository,
+    GitHubRepositoryPath,
+)
 from basstler.plan.dependencies import DependencyResolver
 from basstler.pull_request_source import GitHubPullRequestSource
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
@@ -82,7 +86,7 @@ def commit_report_path(report: CommitReport) -> str:
     :return: The path it is listed from.
     """
     return (
-        f"/{OPEN_PULL_REQUEST.repository.api_path}{RepositoryPath.COMMITS}/"
+        f"/{OPEN_PULL_REQUEST.repository.api_path}{GitHubRepositoryPath.COMMITS}/"
         f"{SiteSampleText.HEAD_COMMIT}/{report}?per_page={GitHubRepository.page_size}"
     )
 

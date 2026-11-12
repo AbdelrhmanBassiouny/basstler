@@ -14,7 +14,7 @@ from basstler.maintenance.github import (
     GitHubPath,
     GitHubRepository,
     ListingParameter,
-    RepositoryPath,
+    GitHubRepositoryPath,
 )
 from basstler.github.states import CombinedCheckState
 
@@ -38,7 +38,7 @@ def commit_report_path(repository: GitHubRepository, report: CommitReport) -> st
     :return: The path it is listed from.
     """
     return (
-        f"/{repository.repository.api_path}{RepositoryPath.COMMITS}/{HEAD_SHA}/{report}"
+        f"/{repository.repository.api_path}{GitHubRepositoryPath.COMMITS}/{HEAD_SHA}/{report}"
         f"?{ListingParameter.PAGE_SIZE}={repository.page_size}"
     )
 
@@ -84,8 +84,10 @@ def test_a_commit_nothing_reported_on_is_not_reported():
 # %% route types
 
 
-@pytest.mark.parametrize("route", [*GitHubPath, *RepositoryPath])
-def test_a_route_is_not_an_operating_system_path(route: GitHubPath | RepositoryPath):
+@pytest.mark.parametrize("route", [*GitHubPath, *GitHubRepositoryPath])
+def test_a_route_is_not_an_operating_system_path(
+    route: GitHubPath | GitHubRepositoryPath,
+):
     """
     An operating system path formats with the platform's separator, so a route built
     from one reaches GitHub as ``repos/<owner>/<repo>\\commits`` on Windows.
