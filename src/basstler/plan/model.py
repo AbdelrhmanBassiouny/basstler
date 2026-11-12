@@ -110,9 +110,10 @@ class PlanDocument(StrEnum):
         Where this document lives for one plan.
 
         :param plan_identifier: The plan's id.
-        :return: The path, relative to the personal-notes branch's root.
+        :return: The path, relative to the personal-notes branch's root and
+            ``/``-separated on every platform.
         """
-        return str(ProjectLocation.PLANS / plan_identifier / self.value)
+        return (ProjectLocation.PLANS / plan_identifier / self.value).as_posix()
 
 
 class ItemLayout(StrEnum):
