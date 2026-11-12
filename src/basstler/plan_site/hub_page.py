@@ -17,9 +17,8 @@ from basstler.locations import SiteTemplate
 from basstler.maintenance.github import ListingParameter, PullRequestListState
 from basstler.github.client import PageParameter
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.plan import Item, ProgressStage
+from basstler.plan_site.plan import Item, Plan, ProgressStage
 from basstler.plan_site.site_vocabulary import LiveStateVocabulary
-from basstler.pull_request_state import LiveState
 from basstler.render_common import ScriptData, TemplatePage
 from basstler.repository import GitHubAddress
 
@@ -100,9 +99,9 @@ class CountedItem(ScriptData):
     The item's status as built.
     """
 
-    live_state: LiveState
+    reached_stages: list[ProgressStage]
     """
-    The live state of the item's pull request as built.
+    The stages the item reached as built, earliest first.
     """
 
     listing_url: str | None
@@ -117,7 +116,7 @@ class CountedItem(ScriptData):
     """
 
     @classmethod
-    def of_item(cls, item: Item) -> CountedItem:
+    def from_item(cls, item: Item) -> CountedItem:
         """
         :param item: A classified item.
         :return: What a card counts of it.
@@ -126,7 +125,7 @@ class CountedItem(ScriptData):
         if reference is None:
             return cls(
                 status=item.status,
-                live_state=item.live_state,
+                reached_stages=item.reached_stages,
                 listing_url=None,
                 number=None,
             )
@@ -138,12 +137,30 @@ class CountedItem(ScriptData):
         )
         return cls(
             status=item.status,
-            live_state=item.live_state,
+            reached_stages=item.reached_stages,
             listing_url=(
                 f"{GitHubAddress.API}/{reference.repository.pull_requests_path}?{query}"
             ),
             number=reference.number,
         )
+
+    @classmethod
+    def from_plan(cls, plan: Plan) -> list[CountedItem]:
+        """
+        :param plan: A plan whose items are classified.
+        :return: What a card counts of the plan: every item it lists, and every item
+            that landed and was dropped from it, which reached every stage.
+        """
+        landed = cls(
+            status=ItemStatus.DONE,
+            reached_stages=list(ProgressStage),
+            listing_url=None,
+            number=None,
+        )
+        return [
+            *(cls.from_item(item) for item in plan.items),
+            *[landed] * plan.landed_item_count,
+        ]
 
 
 # %% the cards a page lists
@@ -225,48 +242,54 @@ class ProgressCard(ABC):
     shared here.
     """
 
-    done: int
-    """
-    How many items are done.
-    """
-
-    total: int
-    """
-    How many items there are.
-    """
-
-    started: int = 0
-    """
-    How many items have begun: see :attr:`Item.is_started`.
-    """
-
-    reviewed: int = 0
-    """
-    How many items' pull requests are past their author's review: see
-    :attr:`Item.is_reviewed`.
-    """
-
     counted_items: list[CountedItem] = field(default_factory=list)
     """
-    The items the counts are taken over, which the page's script recounts live.
+    The items the card counts, which the page's script recounts live.
     """
 
     @staticmethod
-    def counts_over(
-        cards: Sequence[ProgressCard],
-    ) -> dict[str, int | list[CountedItem]]:
+    def items_over(cards: Sequence[ProgressCard]) -> list[CountedItem]:
         """
         :param cards: The cards a larger card stands for.
-        :return: Every count and counted item a card carries, combined over *cards*, by
-            field name - ready to pass to the larger card's constructor.
+        :return: Every item they count, in their order.
         """
-        return {
-            "done": sum(card.done for card in cards),
-            "total": sum(card.total for card in cards),
-            "started": sum(card.started for card in cards),
-            "reviewed": sum(card.reviewed for card in cards),
-            "counted_items": [item for card in cards for item in card.counted_items],
-        }
+        return [item for card in cards for item in card.counted_items]
+
+    def count_reaching(self, stage: ProgressStage) -> int:
+        """
+        :param stage: A progress stage.
+        :return: How many of the card's items reached *stage*.
+        """
+        return sum(stage in item.reached_stages for item in self.counted_items)
+
+    @property
+    def total(self) -> int:
+        """
+        How many items the card counts.
+        """
+        return len(self.counted_items)
+
+    @property
+    def done(self) -> int:
+        """
+        How many items are done.
+        """
+        return self.count_reaching(ProgressStage.DONE)
+
+    @property
+    def started(self) -> int:
+        """
+        How many items have begun: see :attr:`Item.is_started`.
+        """
+        return self.count_reaching(ProgressStage.STARTED)
+
+    @property
+    def reviewed(self) -> int:
+        """
+        How many items' pull requests are past their author's review: see
+        :attr:`Item.is_reviewed`.
+        """
+        return self.count_reaching(ProgressStage.REVIEWED)
 
     @classproperty
     def card_css_class(cls) -> str:
@@ -323,13 +346,10 @@ class ProgressCard(ABC):
         The share of items that reached each :class:`ProgressStage`, earliest stage
         first.
         """
-        counts = {
-            ProgressStage.STARTED: self.started,
-            ProgressStage.REVIEWED: self.reviewed,
-            ProgressStage.DONE: self.done,
-        }
         return [
-            StageShare(stage=stage, percentage=self.percentage_of(counts[stage]))
+            StageShare(
+                stage=stage, percentage=self.percentage_of(self.count_reaching(stage))
+            )
             for stage in ProgressStage
         ]
 
@@ -476,7 +496,7 @@ class RepositorySummary(ProgressCard):
             index_url=index_url,
             plans=plans,
             skipped_plans=skipped_plans,
-            **cls.counts_over(plans),
+            counted_items=cls.items_over(plans),
         )
 
     @classmethod
@@ -486,7 +506,7 @@ class RepositorySummary(ProgressCard):
         :param error: Why its notes could not be read.
         :return: The repository's card, with no plans and no index to open.
         """
-        return cls(name=name, index_url=None, error=error, done=0, total=0)
+        return cls(name=name, index_url=None, error=error)
 
     @property
     def progress_label_format(self) -> str:
@@ -520,7 +540,9 @@ class SiteSummary(ProgressCard):
         :param repositories: Every repository on the site.
         :return: The site's summary, counting every repository's items.
         """
-        return cls(repositories=repositories, **cls.counts_over(repositories))
+        return cls(
+            repositories=repositories, counted_items=cls.items_over(repositories)
+        )
 
     @property
     def plan_count(self) -> int:

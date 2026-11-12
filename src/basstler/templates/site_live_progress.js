@@ -1,4 +1,4 @@
-{% set item_field = vocabulary.counted_item.field_names %}
+{% set item_field = vocabulary.counted_item.field_name %}
 var siteReachedStages = {{ vocabulary.live_state_display.reached_stages | tojson }};
 
 function siteListLiveStates(listingUrl, numbers) {
@@ -56,9 +56,12 @@ function siteShowProgress(card, items, statesByListing) {
     counts[stage] = 0;
   });
   items.forEach(function (item) {
-    var listingUrl = item["{{ item_field.listing_url }}"];
-    var listed = listingUrl ? statesByListing[listingUrl][item["{{ item_field.number }}"]] : undefined;
-    siteReachedStages[item["{{ item_field.status }}"]][listed || item["{{ item_field.live_state }}"]].forEach(function (stage) {
+    var listingUrl = item["{{ item_field.LISTING_URL }}"];
+    var listed = listingUrl ? statesByListing[listingUrl][item["{{ item_field.NUMBER }}"]] : undefined;
+    var reached = listed
+      ? siteReachedStages[item["{{ item_field.STATUS }}"]][listed]
+      : item["{{ item_field.REACHED_STAGES }}"];
+    reached.forEach(function (stage) {
       counts[stage] += 1;
     });
   });
@@ -95,9 +98,9 @@ function siteRecountProgress() {
   var numbersByListing = {};
   cards.forEach(function (card) {
     card.items.forEach(function (item) {
-      var listingUrl = item["{{ item_field.listing_url }}"];
+      var listingUrl = item["{{ item_field.LISTING_URL }}"];
       if (listingUrl) {
-        (numbersByListing[listingUrl] = numbersByListing[listingUrl] || []).push(item["{{ item_field.number }}"]);
+        (numbersByListing[listingUrl] = numbersByListing[listingUrl] || []).push(item["{{ item_field.NUMBER }}"]);
       }
     });
   });

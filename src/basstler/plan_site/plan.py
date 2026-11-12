@@ -410,6 +410,11 @@ class Plan:
     any.
     """
 
+    landed_item_count: int = 0
+    """
+    How many items landed and were dropped from the plan, which still count as done.
+    """
+
     @cached_property
     def items_by_identifier(self) -> dict[str, Item]:
         """
@@ -451,4 +456,5 @@ class Plan:
                 Item.from_mapping(item) for item in data.get(ManifestKey.ITEMS.key, [])
             ],
             tracking_issue=data.get(ManifestKey.TRACKING_ISSUE.key),
+            landed_item_count=data.get(ManifestKey.LANDED_ITEM_COUNT.key, 0),
         )

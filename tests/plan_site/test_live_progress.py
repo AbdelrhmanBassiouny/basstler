@@ -180,7 +180,17 @@ def merged_since_build(card: ProgressCard) -> ProgressCard:
     :param card: A card as built, counting the open item's draft pull request.
     :return: The same card once that pull request has merged.
     """
-    return dataclasses.replace(card, done=card.done + 1, reviewed=card.reviewed + 1)
+    return dataclasses.replace(
+        card,
+        counted_items=[
+            (
+                dataclasses.replace(item, reached_stages=list(ProgressStage))
+                if item.number == OPEN_PULL_REQUEST.number
+                else item
+            )
+            for item in card.counted_items
+        ],
+    )
 
 
 def hub_page(output: Path) -> Path:

@@ -380,6 +380,11 @@ class ManifestKey(KeySpecification, Enum):
     The issue structural changes to the plan are recorded on.
     """
 
+    LANDED_ITEM_COUNT = ("landed_item_count",)
+    """
+    How many items landed and were dropped from the plan.
+    """
+
     SCHEMA_VERSION = ("schema_version",)
     """
     The version of the schema the manifest is written against.
@@ -708,6 +713,13 @@ class PlanManifest:
         ]
 
     @property
+    def landed_item_count(self) -> int:
+        """
+        :return: How many items landed and were dropped from the plan by earlier saves.
+        """
+        return self.content.get(ManifestKey.LANDED_ITEM_COUNT.key, 0)
+
+    @property
     def landed_identifiers(self) -> set[str]:
         """
         :return: The ids of the items whose work has landed.
@@ -816,15 +828,24 @@ class PlanManifest:
         and its history in git. Dropping it also drops every dependency on it, since a
         dependency that has landed is already satisfied.
 
-        :return: This manifest with every landed item removed.
+        :return: This manifest with every landed item removed, and counted in
+            :attr:`landed_item_count`.
         """
         landed = self.landed_identifiers
+        if not landed:
+            return self
         remaining = [
             item.without_dependencies(landed).content
             for item in self.items
             if item.identifier not in landed
         ]
-        return PlanManifest({**self.content, ManifestKey.ITEMS.key: remaining})
+        return PlanManifest(
+            {
+                **self.content,
+                ManifestKey.LANDED_ITEM_COUNT.key: self.landed_item_count + len(landed),
+                ManifestKey.ITEMS.key: remaining,
+            }
+        )
 
 
 @dataclass

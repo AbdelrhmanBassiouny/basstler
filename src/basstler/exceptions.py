@@ -209,6 +209,24 @@ class InvalidSchemaVersion(ValidationProblem):
 
 
 @dataclass
+class InvalidLandedItemCount(ValidationProblem):
+    """
+    The manifest's ``landed_item_count`` is not a whole number of at least zero.
+    """
+
+    actual_value: Any
+    """
+    Whatever ``landed_item_count`` actually held.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"landed_item_count must be a whole number of at least 0, "
+            f"got {self.actual_value!r}"
+        )
+
+
+@dataclass
 class DuplicateItemId(ValidationProblem):
     """
     Two or more items resolve to the same effective id.

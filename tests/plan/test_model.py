@@ -4,6 +4,8 @@ Tests for plan/model.py: the statuses a plan's items carry.
 
 from __future__ import annotations
 
+from typing import Any
+
 import pytest
 
 from basstler.plan.model import ItemStatus, ManifestKey, PlanDocument, PlanManifest
@@ -11,6 +13,7 @@ from basstler.repository import Repository
 
 from ..constants.paths import DatasetLocation
 from ..fixture_plans import ForeignItemId, FixturePlanId, fixture_item, fixture_manifest
+from ..manifest_builders import manifest_item, minimal_plan
 
 # %% stored spelling
 
@@ -110,3 +113,44 @@ def test_an_item_naming_its_own_repository_uses_it(first_plan):
     item = first_plan.item_named("elsewhere-item")
     declared = item.content[ManifestKey.REPOSITORY.key]
     assert first_plan.repository_of(item) == Repository.parse(declared)
+
+
+# %% landed items
+
+
+def landed_plan(**overrides: Any) -> PlanManifest:
+    """
+    :param overrides: Top-level keys to replace in the plan.
+    :return: A plan with one landed item and one not started.
+    """
+    return PlanManifest(
+        minimal_plan(
+            items=[
+                manifest_item("landed", status=ItemStatus.DONE.value),
+                manifest_item("open"),
+            ],
+            **overrides,
+        )
+    )
+
+
+def test_dropping_landed_items_counts_them():
+    manifest = landed_plan()
+
+    assert manifest.without_landed_items().landed_item_count == len(
+        manifest.landed_identifiers
+    )
+
+
+def test_dropping_landed_items_adds_to_the_items_landed_before():
+    manifest = landed_plan(landed_item_count=3)
+
+    assert manifest.without_landed_items().landed_item_count == 3 + len(
+        manifest.landed_identifiers
+    )
+
+
+def test_a_plan_with_nothing_landed_is_left_as_it_is():
+    manifest = PlanManifest(minimal_plan())
+
+    assert manifest.without_landed_items() == manifest

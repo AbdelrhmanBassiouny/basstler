@@ -14,6 +14,7 @@ from basstler.exceptions import (
     InvalidBlockers,
     InvalidDependsOn,
     InvalidManifestRoot,
+    InvalidLandedItemCount,
     InvalidSchemaVersion,
     MalformedDependencyReference,
     MissingPlanDirectory,
@@ -56,6 +57,19 @@ def test_validation_rejects_wrong_schema_version():
         PlanValidator(minimal_plan(schema_version=2)).validate()
     assert isinstance(error.value.problems[0], InvalidSchemaVersion)
     assert error.value.problems[0].actual_value == 2
+
+
+@pytest.mark.parametrize("landed_item_count", [-1, "two", True, 1.5])
+def test_validation_rejects_a_landed_item_count_that_is_not_a_whole_number(
+    landed_item_count,
+):
+    with pytest.raises(PlanValidationError) as error:
+        PlanValidator(minimal_plan(landed_item_count=landed_item_count)).validate()
+    assert error.value.problems == [InvalidLandedItemCount(landed_item_count)]
+
+
+def test_validation_accepts_a_landed_item_count():
+    PlanValidator(minimal_plan(landed_item_count=2)).validate()  # must not raise
 
 
 def test_validation_rejects_duplicate_item_ids():

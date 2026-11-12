@@ -18,6 +18,7 @@ from basstler.exceptions import (
     InvalidBlockers,
     InvalidDependsOn,
     InvalidManifestRoot,
+    InvalidLandedItemCount,
     InvalidSchemaVersion,
     MalformedDependencyReference,
     MissingPlanDirectory,
@@ -264,6 +265,7 @@ class PlanValidator:
             return [InvalidManifestRoot(self.manifest)]
         return [
             *self.schema_version_problems(),
+            *self.landed_item_count_problems(),
             *self.duplicate_identifier_problems(),
             *(problem for item in self.items for problem in self.item_problems(item)),
             *self.cycle_problems(),
@@ -328,6 +330,19 @@ class PlanValidator:
         if schema_version == InvalidSchemaVersion.supported_version:
             return []
         return [InvalidSchemaVersion(schema_version)]
+
+    def landed_item_count_problems(self) -> list[ValidationProblem]:
+        """
+        The problem with the manifest's ``landed_item_count``, if any.
+        """
+        landed_item_count = self.manifest.get(ManifestKey.LANDED_ITEM_COUNT.key, 0)
+        if (
+            isinstance(landed_item_count, int)
+            and not isinstance(landed_item_count, bool)
+            and landed_item_count >= 0
+        ):
+            return []
+        return [InvalidLandedItemCount(landed_item_count)]
 
     def duplicate_identifier_problems(self) -> list[ValidationProblem]:
         """
