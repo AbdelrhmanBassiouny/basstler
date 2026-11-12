@@ -37,11 +37,11 @@ items:
   track: github-app
   status: not started
   depends_on: []
-  notes: A committed App manifest declares the fewest permissions the events need (metadata, contents,
-    pull requests, checks, statuses read-only) and the events push, pull_request, pull_request_review,
-    pull_request_review_thread, check_suite, status, issue_comment and installation_repositories. One
-    command runs GitHub's manifest flow for any owner and writes the returned key and secrets to the instance's
-    secret store, never the repository. Basstler's own App is registered under KAOS-repositories.
+  notes: A committed App manifest declares read-only metadata, contents, pull requests, checks and statuses,
+    and the events push, pull_request, pull_request_review, pull_request_review_thread, check_suite, status,
+    issue_comment and installation_repositories. One command runs GitHub's manifest flow for any owner,
+    installable only on that owner's account and named uniquely per owner, and writes the key and secrets
+    to the instance's secret store. The App named Basstler is basstler's own, under KAOS-repositories.
 - id: service-deploy
   title: The plan service is one container anyone can run, deployed in one command
   track: service
