@@ -87,11 +87,12 @@ items:
     once in resolve-personal-notes-config.sh, which every hook sources, and name it in basstler.environment.'
 - id: git-tree-posix-paths
   title: Read files off the notes branch with /-separated tree paths
-  branch: null
+  branch: claude/windows-git-tree-posix-paths-bngagw
   track: fixes
+  session: https://claude.ai/code/session_01JxHGiLRG9cqiFfr9qsuA8k
   depends_on: []
-  status: not started
-  pull_request_number: null
+  status: in progress
+  pull_request_number: 204
   notes: shell_configuration.FetchedBranchReference.file_at formats f"{self}:{path}"; ProjectLocation.PERSONAL_PLAN_ITEM_MODES
     is a Path, so on Windows the object name holds backslashes and plan/item_mode.personal_settings
     never finds the pinned execution mode. Use as_posix() as maintenance/git_commands.py file_at
