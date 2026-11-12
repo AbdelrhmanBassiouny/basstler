@@ -31,11 +31,12 @@ items:
     it runs. Split out of windows-environment-interpreter as its own root cause.'
 - id: setup-no-partial-writes
   title: Check setup before writing the notes remote to git config
-  branch: null
-  status: not started
+  branch: claude/windows-setup-no-partial-writes-bngagw
+  status: in progress
   track: fixes
+  session: https://claude.ai/code/session_01JxHGiLRG9cqiFfr9qsuA8k
   depends_on: []
-  pull_request_number: null
+  pull_request_number: 206
   notes: PersonalNotesSetup.run writes claude.personalNotesRemote before the first check,
     so every failed run leaves it set. Run and validate the first check before any write,
     or name what was changed in the failure.
