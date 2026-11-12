@@ -1,9 +1,9 @@
 **Plan**
-- windows-latest job running the setup end to end, only on PRs changing setup code (owner's choice)
+- windows-latest setup smoke job on setup changes
 
 **Done**
-- windows-setup.yml, Trigger.paths, tests for triggers and path filters
-- Draft PR #208
+- Workflow, Trigger.paths, tests, draft PR #208
+- Fixed Python 3.12 glob of ** in the path-filter test (53fcc4f7)
 
 **Next**
-- Expect the Windows job to fail until #204, #205 and #206 merge; rebase and read its run then
+- Windows job fails until #205 (and #204, #206) merge; then rebase and read its run
