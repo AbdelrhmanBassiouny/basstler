@@ -178,6 +178,13 @@ class SetupCheckExitCode(ExitCode):
     It was run outside a git work tree, so it reported nothing.
     """
 
+    @classproperty
+    def reporting_statuses(cls) -> frozenset[SetupCheckExitCode]:
+        """
+        :return: The statuses the script exits with after printing its whole report.
+        """
+        return frozenset({cls.SUCCESS, cls.SETUP_INCOMPLETE})
+
 
 class PersonalNotesSetupExitCode(ExitCode):
     """

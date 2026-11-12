@@ -194,14 +194,6 @@ class ReportRowPosition(IntEnum):
     """
 
 
-REPORTING_EXIT_CODES = frozenset(
-    {SetupCheckExitCode.SUCCESS, SetupCheckExitCode.SETUP_INCOMPLETE}
-)
-"""
-The statuses check-setup.sh exits with after printing its whole report.
-"""
-
-
 @dataclass(frozen=True)
 class CheckResult:
     """
@@ -283,7 +275,7 @@ class SetupReport:
             if check in requested_checks and check not in results
         ]
         if (
-            process.returncode not in REPORTING_EXIT_CODES
+            process.returncode not in SetupCheckExitCode.reporting_statuses
             or missing_checks
             or unreadable_rows
         ):
