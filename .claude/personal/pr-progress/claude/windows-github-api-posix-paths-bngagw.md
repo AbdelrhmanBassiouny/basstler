@@ -1,9 +1,9 @@
 **Plan**
-- GitHubPath/RepositoryPath as StrEnums of /-separated routes, tests first
+- GitHubPath/GitHubRepositoryPath as StrEnums of /-separated routes
 
 **Done**
-- Failing type test, fix, full suite (2566 passed; Playwright tests cannot start here)
-- Draft PR #203, bug label
+- Fix, tests, draft PR #203 with bug label
+- Review: renamed RepositoryPath to GitHubRepositoryPath (16050031), thread answered and resolved; merges cleanly into main 3d92faae
 
 **Next**
-- Wait for CI and review
+- CI on 16050031, then review
