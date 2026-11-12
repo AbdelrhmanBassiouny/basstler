@@ -5,8 +5,13 @@ maintenance pass calls GitHub with.
 
 from __future__ import annotations
 
+from pathlib import PurePath
+
+import pytest
+
 from basstler.maintenance.github import (
     CommitReport,
+    GitHubPath,
     GitHubRepository,
     ListingParameter,
     RepositoryPath,
@@ -74,3 +79,21 @@ def test_a_commit_nothing_reported_on_is_not_reported():
     )
 
     assert repository.check_state(HEAD_SHA) is CombinedCheckState.NOT_REPORTED
+
+
+# %% route types
+
+
+@pytest.mark.parametrize("route", [*GitHubPath, *RepositoryPath])
+def test_a_route_is_not_an_operating_system_path(route: GitHubPath | RepositoryPath):
+    """
+    An operating system path formats with the platform's separator, so a route built
+    from one reaches GitHub as ``repos/<owner>/<repo>\\commits`` on Windows.
+    """
+    assert not isinstance(route, PurePath)
+
+
+def test_a_commit_report_is_listed_below_the_commit_with_slashes():
+    assert GitHubRepository._commit_report(HEAD_SHA, CommitReport.CHECK_RUNS) == (
+        f"/commits/{HEAD_SHA}/check-runs"
+    )

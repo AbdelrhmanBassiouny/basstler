@@ -15,7 +15,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum, StrEnum
-from pathlib import Path
 from typing import Any
 
 from basstler.github.issue import IssueComment
@@ -23,7 +22,6 @@ from basstler.github.label import LabelReplacement, NewLabel, RepositoryLabel
 from basstler.github.pull_request import PullRequestDescription
 from basstler.pull_request_state import PullRequestState
 from basstler.github_labels import GitHubLabel
-from basstler.locations import PathEnumeration
 from basstler.maintenance.board import (
     AccountField,
     CommitChecks,
@@ -126,33 +124,33 @@ class CredentialHolder(ABC):
         """:return: The login of the account the credential belongs to."""
 
 
-class GitHubPath(PathEnumeration):
+class GitHubPath(StrEnum):
     """
-    The API paths that are not below a repository.
+    The API routes that are not below a repository, ``/``-separated on every platform.
     """
 
-    AUTHENTICATED_USER = Path("/user")
+    AUTHENTICATED_USER = "/user"
     """
     The account the request's credential belongs to.
     """
 
 
-class RepositoryPath(PathEnumeration):
+class RepositoryPath(StrEnum):
     """
-    The API paths below a repository.
+    The API routes below a repository, ``/``-separated on every platform.
     """
 
-    PULL_REQUESTS = Path("/pulls")
+    PULL_REQUESTS = "/pulls"
     """
     The repository's pull requests.
     """
 
-    LABELS = Path("/labels")
+    LABELS = "/labels"
     """
     The labels defined on the repository.
     """
 
-    COMMITS = Path("/commits")
+    COMMITS = "/commits"
     """
     The repository's commits.
     """
