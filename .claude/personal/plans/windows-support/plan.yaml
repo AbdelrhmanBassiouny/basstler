@@ -84,3 +84,10 @@ items:
   track: fixes
   depends_on: []
   status: not started
+
+- id: git-tree-posix-paths
+  title: "Read files off the notes branch with /-separated tree paths"
+  branch: null
+  track: fixes
+  depends_on: []
+  status: not started
