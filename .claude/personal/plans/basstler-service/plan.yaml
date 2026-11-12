@@ -88,7 +88,9 @@ items:
   notes: 'Server-sent events per page: when webhook-intake marks a page changed, the service re-renders
     it and pushes the changed cards; the browser reconnects after the host''s request timeout. Replaces
     plan-site-ui''s rebuild-indicator and the browser''s unauthenticated pull request recheck. A page
-    shows when it last heard from the service and says so when the stream is down.'
+    shows when it last heard from the service and says so when the stream is down. The stream closes while
+    the tab is hidden and the page re-reads live state when shown again, so an instance runs only while
+    someone is looking.'
 - id: github-sign-in
   title: Viewers sign in with GitHub and see only plans their account can read
   track: access
