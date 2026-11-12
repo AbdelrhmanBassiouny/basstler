@@ -50,11 +50,11 @@ items:
   status: not started
   depends_on:
   - basstler-packages/uv-workspace
-  notes: A Starlette app in a distribution of its own beside basstler-hub, after basstler-packages' freeze;
-    githubkit for App tokens. The release workflow publishes its image to GHCR. It reads its key and secrets
-    from environment variables or mounted files, so docker run or any container host works; one command
-    deploys to Cloud Run, the first target, with Secret Manager. Docs cover self-hosting and local webhooks
-    via gh webhook forward. One instance at first. Served by uvicorn (approved).
+  notes: A Starlette app in the basstler-hub-server distribution of this repository, beside basstler-hub;
+    githubkit for App tokens. The release workflow publishes its image to GHCR from the same tag. It reads
+    its key and secrets from environment variables or mounted files, so docker run or any container host
+    works; one command deploys to Cloud Run, the first target, with Secret Manager. Docs cover self-hosting
+    and local webhooks via gh webhook forward. One instance at first. Served by uvicorn (approved).
 - id: webhook-intake
   title: The service verifies GitHub's webhooks and maps each to the plans it changes
   track: github-app
@@ -153,3 +153,16 @@ items:
     writes a docker compose file with the service and Caddy for automatic HTTPS on a hostname the owner
     points at the server, and the secrets as mounted files, then prints the steps left to a person. Optional:
     no item depends on it, and basstler''s own instance stays on Cloud Run. Caddy is approved.'
+
+- id: own-instance
+  title: basstler's own BasstlerHub instance deploys every release from its own repository
+  track: service
+  status: not started
+  depends_on:
+  - service-deploy
+  - app-manifest
+  notes: 'KAOS-repositories/basstlerhub-instance holds only basstler''s own instance''s settings: the
+    Google Cloud project and region, the hub.basstler.com address and the BasstlerHub App''s id, and no
+    secret. Its workflow deploys each release''s image with service-deploy''s command, signing in to Google
+    Cloud through Workload Identity Federation, so no key is stored. The open-source repository names
+    none of these.'
