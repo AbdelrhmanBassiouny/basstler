@@ -54,11 +54,12 @@ items:
     owner when there is neither a token nor mcp__github__get_me.
 - id: windows-ci-smoke
   title: Windows CI job running the setup check end to end
-  branch: null
-  status: not started
+  branch: claude/windows-ci-smoke-bngagw
+  status: in progress
   track: fixes
+  session: https://claude.ai/code/session_01JxHGiLRG9cqiFfr9qsuA8k
   depends_on: []
-  pull_request_number: null
+  pull_request_number: 208
   notes: A windows-latest job runs check-setup.sh through python -m basstler.setup.personal_notes.
     Costs Actions minutes, so needs the owner's decision against actions-budget before starting.
 - id: github-api-posix-paths
