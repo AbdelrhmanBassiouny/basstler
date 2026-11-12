@@ -39,7 +39,11 @@ def test_every_path_filter_matches_a_file_in_the_repository(pattern: str):
     """
     A filter left naming a moved file would stop the workflow running for it, silently.
     """
-    assert any(path.is_file() for path in RepositoryLocation.ROOT.value.glob(pattern))
+    matched = list(RepositoryLocation.ROOT.value.glob(pattern))
+    # Before Python 3.13, a pattern ending in ``**`` matches only directories.
+    candidates = [path for match in matched for path in [match, *match.rglob("*")]]
+
+    assert any(path.is_file() for path in candidates)
 
 
 def test_the_workflow_runs_when_it_changes():
