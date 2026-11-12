@@ -356,6 +356,7 @@ else
   report_upstream false
   if requested upstream_reviews_action; then report_upstream_reviews_action; fi
   report plan_site info "not checked - the branch that would start the build doesn't exist yet"
+  report plan_site_access info "not checked - the branch that would list the plan site doesn't exist yet"
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 

@@ -166,7 +166,10 @@ dependencies and writes `CLAUDE.local.md`. Then it reports which labels this
 tooling uses are missing from the repository, and ends by printing
 `check-setup.sh`'s report. It exits with that report's status: 0 when
 nothing is left, 1 when something is or could not be verified.
-Exit 4 means a hook script failed; its own output above says why.
+Exit 4 means a hook script failed; its own output above says why. Exit 5
+means `check-setup.sh` itself failed, or printed a report missing a check or
+holding a row the package cannot read; the error names its status, the rows
+and its standard error.
 
 The owner check and the label check need a GitHub token (`GH_TOKEN` or
 `GITHUB_TOKEN`) and a notes remote on GitHub; without them the command says
