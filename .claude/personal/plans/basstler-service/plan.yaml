@@ -1,0 +1,146 @@
+schema_version: 1
+id: basstler-service
+title: 'Basstler plan service: the plan site served live by a GitHub App'
+description: >-
+  The Basstler GitHub App, owned by KAOS-repositories, and a plan service on Google Cloud Run
+  serve the plan site themselves: pages update from GitHub's webhook events within seconds,
+  viewers sign in with GitHub and see only what they can read, and the site's buttons edit
+  plans. Each team runs its own instance with its own App. No personal access token, site
+  repository or dispatch workflow remains. The team half is team-repository.
+default_repository: KAOS-repositories/basstler
+tracking_issue: 200
+waves:
+- id: service-live
+  name: 'Wave 1: Pages served live by the plan service'
+- id: private-and-writes
+  name: 'Wave 2: Private plans and edits from the site'
+- id: retire
+  name: 'Wave 3: Pages publication retired'
+tracks:
+- id: github-app
+  name: The Basstler GitHub App
+  wave: service-live
+- id: service
+  name: The plan service
+  wave: service-live
+- id: access
+  name: Sign-in and private plans
+  wave: private-and-writes
+- id: writes
+  name: Plan edits through the service
+  wave: private-and-writes
+- id: retirement
+  name: Removing the Pages publication
+  wave: retire
+items:
+- id: app-manifest
+  title: The Basstler GitHub App is registered from a committed App manifest in one command
+  track: github-app
+  status: not started
+  depends_on: []
+  notes: >-
+    A committed App manifest declares the fewest permissions the events need (metadata,
+    contents, pull requests, checks, statuses read-only) and the events push, pull_request,
+    pull_request_review, pull_request_review_thread, check_suite, status, issue_comment and
+    installation_repositories. One command runs GitHub's manifest flow for a given owner and
+    stores the returned key, webhook secret and client secret in Secret Manager, never on
+    disk. Basstler's own App is registered under KAOS-repositories by an organization owner.
+- id: service-deploy
+  title: One command deploys a plan service instance to Google Cloud Run
+  track: service
+  status: not started
+  depends_on: []
+  notes: >-
+    A Starlette app in the basstler package, behind an optional dependency group so the
+    plugin's install gains nothing; githubkit for App tokens. One container image; one
+    command builds it and deploys to a given Cloud Run project with secrets mounted from
+    Secret Manager, and prints the service's address. Starts with max-instances 1 so live
+    pages need no cross-instance fan-out. Health endpoint; failures reach Cloud Run logs and
+    the command's output. The ASGI server (uvicorn) still needs the owner's approval.
+- id: webhook-intake
+  title: The service verifies GitHub's webhooks and maps each to the plans it changes
+  track: github-app
+  status: not started
+  depends_on:
+  - app-manifest
+  - service-deploy
+  notes: >-
+    Verify the signature, answer within GitHub's 10-second timeout, then process. Each
+    delivery is applied once by its delivery id. A push to a notes branch marks that
+    repository's plans changed; a pull request, review, check or status event marks every
+    item tracking that pull request, across installations. A failed delivery is logged with
+    its id; a page open re-reads live state, so a missed delivery never leaves a page stale.
+- id: served-pages
+  title: The service renders the hub and plan pages on request from the notes branches
+  track: service
+  status: not started
+  depends_on:
+  - service-deploy
+  - app-manifest
+  notes: >-
+    Reuse basstler.plan_site's page models and templates; no second renderer. Read each
+    notes branch and pull request with the installation token of its owner, so repositories
+    of several owners and teammates' forks are readable once they install the App (replaces
+    team-basstler's per-owner-read-tokens). Cache rendered pages until an event marks them
+    changed. Until sign-in lands, serve only plans whose repositories are all public.
+- id: live-pages
+  title: An open page updates within seconds of the change GitHub reports
+  track: service
+  status: not started
+  depends_on:
+  - webhook-intake
+  - served-pages
+  notes: >-
+    Server-sent events per page: when webhook-intake marks a page changed, the service
+    re-renders it and pushes the changed cards; the browser reconnects after Cloud Run's
+    request timeout. Replaces plan-site-ui's rebuild-indicator and the browser's
+    unauthenticated pull request recheck. A page shows when it last heard from the service
+    and says so when the stream is down.
+- id: github-sign-in
+  title: Viewers sign in with GitHub and see only plans their account can read
+  track: access
+  status: not started
+  depends_on:
+  - served-pages
+  notes: >-
+    The App's user authorization signs a viewer in; the session cookie is HttpOnly, Secure
+    and SameSite. A plan is shown only when the viewer's own token can read its notes
+    repository and every repository it tracks; access answers are cached briefly per viewer.
+    Sharing a plan is granting repository access on GitHub. Replaces team-basstler's
+    page-viewer-token, private-site and page-github-sign-in.
+- id: plan-write-api
+  title: The service is the only writer of plans, and sessions edit through it
+  track: writes
+  status: not started
+  depends_on:
+  - github-sign-in
+  notes: >-
+    An HTTP API applies one plan edit per request as the signed-in user, after the same
+    validation and size limits save-plan.sh runs, and commits it to the notes branch in
+    order, so concurrent edits never race. A user may edit only plans whose notes repository
+    they can push to. save-plan.sh calls it when an instance is configured and keeps its own
+    push otherwise. A session reaches it through basstler-v3's MCP tools where they exist.
+- id: site-actions
+  title: Site buttons defer, restore, delete and start items as the signed-in viewer
+  track: writes
+  status: not started
+  depends_on:
+  - plan-write-api
+  notes: >-
+    Each button sends one plan-write-api request; the page shows the result through
+    live-pages, and a refused edit is shown with its reason. Request bodies are parsed into
+    models at the boundary. Replaces plan-site-ui's command-issues and command-token-setup;
+    plan-site-ui's item-commands and plan-commands build on this.
+- id: retire-pages-publication
+  title: Remove the Pages publication, its tokens and the site repository
+  track: retirement
+  status: not started
+  depends_on:
+  - live-pages
+  - github-sign-in
+  notes: >-
+    Delete the dispatch and merge workflows, PLAN_SITE_TOKEN and PLAN_SITE_READ_TOKEN, the
+    store-token command, build_start, dispatch_check, token_storage, the recheck script and
+    the site repository's attachment; setup and check-setup check the App's installation
+    and the instance's address instead. Moves every plan site address to the service with a
+    redirect page left on Pages. A release:major change.
