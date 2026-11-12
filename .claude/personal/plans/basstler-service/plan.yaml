@@ -1,11 +1,11 @@
 schema_version: 1
 id: basstler-service
-title: 'Basstler plan service: the plan site served live by a GitHub App, self-hostable by anyone'
-description: 'An open-source plan service, one container behind a GitHub App, serves the plan site itself:
-  pages update from GitHub''s webhook events within seconds, viewers sign in with GitHub and see only
-  what they can read, and the site''s buttons edit plans. Anyone runs their own instance with their own
-  App; basstler''s own is the Basstler App of KAOS-repositories on Cloud Run. No personal access token,
-  site repository or dispatch workflow remains. The team half is team-repository.'
+title: 'BasstlerHub: the plan site served live by a GitHub App, self-hostable by anyone'
+description: 'BasstlerHub, an open-source plan service of one container behind a GitHub App, serves the
+  plan site itself: pages update from GitHub''s webhook events within seconds, viewers sign in with GitHub
+  and see only what they can read, and the site''s buttons edit plans. Anyone runs their own instance
+  with their own App; basstler''s own is the BasstlerHub App of KAOS-repositories on Cloud Run. No personal
+  access token, site repository or dispatch workflow remains. The team half is team-repository.'
 default_repository: KAOS-repositories/basstler
 tracking_issue: 200
 waves:
@@ -42,7 +42,8 @@ items:
     and the events push, pull_request, pull_request_review, pull_request_review_thread, check_suite, status,
     issue_comment and installation_repositories. One command runs GitHub's manifest flow for any owner,
     installable only on that owner's account and named uniquely per owner, and writes the key and secrets
-    to the instance's secret store. The App named Basstler is basstler's own, under KAOS-repositories.
+    to the instance's secret store. The App named BasstlerHub is basstler's own, under KAOS-repositories;
+    the name Basstler is registered beside it, unused.
 - id: service-deploy
   title: The plan service is one container anyone can run, deployed in one command
   track: service
@@ -53,7 +54,7 @@ items:
     githubkit for App tokens. The release workflow publishes its image to GHCR. It reads its key and secrets
     from environment variables or mounted files, so docker run or any container host works; one command
     deploys to Cloud Run, the first target, with Secret Manager. Docs cover self-hosting and local webhooks
-    via gh webhook forward. One instance at first. uvicorn still needs the owner's approval.
+    via gh webhook forward. One instance at first. Served by uvicorn (approved).
 - id: webhook-intake
   title: The service verifies GitHub's webhooks and maps each to the plans it changes
   track: github-app
@@ -151,4 +152,4 @@ items:
   notes: 'A second deploy target beside Cloud Run, for a university, KAOS or rented server: one command
     writes a docker compose file with the service and Caddy for automatic HTTPS on a hostname the owner
     points at the server, and the secrets as mounted files, then prints the steps left to a person. Optional:
-    no item depends on it, and basstler''s own instance stays on Cloud Run. Caddy needs the owner''s approval.'
+    no item depends on it, and basstler''s own instance stays on Cloud Run. Caddy is approved.'
