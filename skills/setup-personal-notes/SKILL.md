@@ -113,6 +113,11 @@ each question only when its row is `needs-setup`.
   remote is the answer. Otherwise ask where their notes should live, offering
   `https://github.com/<their-login>/<repo>` as the default, and note that a
   remote name already in the clone works too.
+  Where `mcp__github__get_me` is not available and no `GH_TOKEN` or
+  `GITHUB_TOKEN` is set, nothing can check who owns the remote, and step 5 will
+  not either. Say so, and ask the user to name the remote's owner. Offer the
+  remote URL's owner as the default, and go on only with a remote they confirm
+  as their own.
 - **Starter notes** (`notes_file`). Offer to seed the new notes from
   [`starter-notes.md`](./starter-notes.md): conventions every session in the
   repository follows, which they own and can edit. Default to yes. An empty
@@ -153,10 +158,12 @@ ask only if they want something else.
   [--name "<name>" --email "<email>"] [--starter-notes]
 ```
 
-`wait_for_basstler_install` returns at once unless a session start is still
-installing the package this command runs, and waits for it otherwise; if it
-fails, the install is still running after five minutes, so report that and
-stop.
+`basstler.sh` installs the package before running the module when the
+`package_dependencies` row is `needs-setup`, and waits for an install a session
+start is still running. When the package still cannot run, it exits 1 with one
+line on standard error that says why and what to run, and prints no
+`check-setup.sh` report. That exit is not the setup's own status 1. Report the
+line, do once what it says, then run step 5 again.
 
 It refuses a remote GitHub says someone else owns (exit 3) before writing
 anything. It records the remote in git config, creates the notes branch if
