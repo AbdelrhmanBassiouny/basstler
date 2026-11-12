@@ -391,6 +391,8 @@ PLAN_SIZE_LIMITS_MODULE="basstler.plan.size_limits"
 # basstler.plan.merged_items: records a plan's items done whose pull requests GitHub
 # reports merged, so a save drops them - run by save-plan.sh and session-start.sh.
 PLAN_MERGED_ITEMS_MODULE="basstler.plan.merged_items"
+# Its subcommand recording every plan on the notes branch and pushing the result.
+PLAN_MERGED_ITEMS_EVERY_PLAN_COMMAND="every-plan"
 # basstler.document_references: names every module and skill a document cites
 # that this release no longer ships, and what replaced it.
 DOCUMENT_REFERENCES_MODULE="basstler.document_references"
