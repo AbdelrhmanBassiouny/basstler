@@ -16,12 +16,12 @@ from basstler.exit_codes import ManifestToolsExitCode
 from basstler.github.client import HttpMethod
 from basstler.github.exceptions import GitHubUnreachableError
 from basstler.locations import ProjectLocation
-from basstler.plan.merged_items import (
-    MergedItems,
+from basstler.plan.merged_items.every_plan import (
     MergedItemsInEveryPlan,
     MergedItemsLine,
     MergedItemsSummary,
 )
+from basstler.plan.merged_items.plan_items import MergedItems
 from basstler.plan.model import ItemStatus, ManifestKey, PlanDocument, PlanManifest
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
 from basstler.pull_request_state import PullRequestRecord, PullRequestState

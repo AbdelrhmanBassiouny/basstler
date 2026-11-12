@@ -39,7 +39,10 @@ from basstler.shell_configuration import ShellConfigurationFunction
 from basstler.upstream_reviews.action.branch import InstallationState
 from basstler.plan.model import PlanDocument
 from basstler.plan_site.hub import SiteAddress
-from basstler.plan.merged_items import MergedItemsCommand, MergedItemsSummary
+from basstler.plan.merged_items.every_plan import (
+    MergedItemsCommand,
+    MergedItemsSummary,
+)
 from basstler.plan.merged_items import __main__ as merged_items_command
 from basstler.plan.model import ItemStatus, ManifestKey, PlanManifest
 

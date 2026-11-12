@@ -17,12 +17,11 @@ from pathlib import Path
 
 from basstler.github.client import HttpMethod
 from basstler.github.exceptions import GitHubUnreachableError
-from basstler.plan.merged_items import (
-    MergedItems,
+from basstler.plan.merged_items.every_plan import (
     MergedItemsCommand,
     MergedItemsInEveryPlan,
-    logger,
 )
+from basstler.plan.merged_items.plan_items import MergedItems, logger
 from basstler.pull_request_source import PullRequestSource
 from basstler.pull_request_state import PullRequestRecord
 from basstler.repository import PullRequestReference, Repository
