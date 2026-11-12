@@ -1,7 +1,9 @@
 # basstler-service standing rules
 
-- The Basstler GitHub App is owned by KAOS-repositories; every team runs its own instance with its own App, and no instance holds another team's key or data.
-- The service runs on Google Cloud Run from one container image; the App's private key, webhook secret and client secret live only in Secret Manager.
+- basstler is open source and self-hostable: code and docs name no owner, instance or host, which are configuration; basstler's own instance is the Basstler App of KAOS-repositories on Cloud Run.
+- Every team runs its own instance with its own App; no instance holds another team's key or data.
+- The service is one container that runs on any container host; its key and secrets come from the environment or mounted files, never the repository, and Cloud Run is one deploy target, not a requirement.
+- Every dependency is open source under a licence compatible with Apache-2.0, and running an instance needs no proprietary service beyond GitHub.
 - Pages change from GitHub's webhook events and are re-read live when opened; nothing polls or runs on a schedule.
 - Every GitHub call uses an installation or viewer token minted for that request; no personal access token is stored anywhere.
 - A viewer sees a plan only if their own GitHub account can read its notes repository and every repository it tracks.

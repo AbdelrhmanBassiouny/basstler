@@ -1,12 +1,11 @@
 schema_version: 1
 id: basstler-service
-title: 'Basstler plan service: the plan site served live by a GitHub App'
-description: >-
-  The Basstler GitHub App, owned by KAOS-repositories, and a plan service on Google Cloud Run
-  serve the plan site themselves: pages update from GitHub's webhook events within seconds,
-  viewers sign in with GitHub and see only what they can read, and the site's buttons edit
-  plans. Each team runs its own instance with its own App. No personal access token, site
-  repository or dispatch workflow remains. The team half is team-repository.
+title: 'Basstler plan service: the plan site served live by a GitHub App, self-hostable by anyone'
+description: 'An open-source plan service, one container behind a GitHub App, serves the plan site itself:
+  pages update from GitHub''s webhook events within seconds, viewers sign in with GitHub and see only
+  what they can read, and the site''s buttons edit plans. Anyone runs their own instance with their own
+  App; basstler''s own is the Basstler App of KAOS-repositories on Cloud Run. No personal access token,
+  site repository or dispatch workflow remains. The team half is team-repository.'
 default_repository: KAOS-repositories/basstler
 tracking_issue: 200
 waves:
@@ -38,25 +37,21 @@ items:
   track: github-app
   status: not started
   depends_on: []
-  notes: >-
-    A committed App manifest declares the fewest permissions the events need (metadata,
-    contents, pull requests, checks, statuses read-only) and the events push, pull_request,
-    pull_request_review, pull_request_review_thread, check_suite, status, issue_comment and
-    installation_repositories. One command runs GitHub's manifest flow for a given owner and
-    stores the returned key, webhook secret and client secret in Secret Manager, never on
-    disk. Basstler's own App is registered under KAOS-repositories by an organization owner.
+  notes: A committed App manifest declares the fewest permissions the events need (metadata, contents,
+    pull requests, checks, statuses read-only) and the events push, pull_request, pull_request_review,
+    pull_request_review_thread, check_suite, status, issue_comment and installation_repositories. One
+    command runs GitHub's manifest flow for any owner and writes the returned key and secrets to the instance's
+    secret store, never the repository. Basstler's own App is registered under KAOS-repositories.
 - id: service-deploy
-  title: One command deploys a plan service instance to Google Cloud Run
+  title: The plan service is one container anyone can run, deployed in one command
   track: service
   status: not started
   depends_on: []
-  notes: >-
-    A Starlette app in the basstler package, behind an optional dependency group so the
-    plugin's install gains nothing; githubkit for App tokens. One container image; one
-    command builds it and deploys to a given Cloud Run project with secrets mounted from
-    Secret Manager, and prints the service's address. Starts with max-instances 1 so live
-    pages need no cross-instance fan-out. Health endpoint; failures reach Cloud Run logs and
-    the command's output. The ASGI server (uvicorn) still needs the owner's approval.
+  notes: A Starlette app in the basstler package, behind an optional dependency group; githubkit for App
+    tokens. The release workflow publishes its image to GHCR. It reads its key and secrets from environment
+    variables or mounted files, so docker run or any container host works; one command deploys to Cloud
+    Run, the first target, with Secret Manager. Docs cover self-hosting and local webhooks via gh webhook
+    forward. One instance at first. uvicorn still needs the owner's approval.
 - id: webhook-intake
   title: The service verifies GitHub's webhooks and maps each to the plans it changes
   track: github-app
@@ -90,12 +85,10 @@ items:
   depends_on:
   - webhook-intake
   - served-pages
-  notes: >-
-    Server-sent events per page: when webhook-intake marks a page changed, the service
-    re-renders it and pushes the changed cards; the browser reconnects after Cloud Run's
-    request timeout. Replaces plan-site-ui's rebuild-indicator and the browser's
-    unauthenticated pull request recheck. A page shows when it last heard from the service
-    and says so when the stream is down.
+  notes: 'Server-sent events per page: when webhook-intake marks a page changed, the service re-renders
+    it and pushes the changed cards; the browser reconnects after the host''s request timeout. Replaces
+    plan-site-ui''s rebuild-indicator and the browser''s unauthenticated pull request recheck. A page
+    shows when it last heard from the service and says so when the stream is down.'
 - id: github-sign-in
   title: Viewers sign in with GitHub and see only plans their account can read
   track: access
