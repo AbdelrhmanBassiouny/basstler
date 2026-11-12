@@ -444,6 +444,35 @@ def test_stops_with_check_setup_failed_when_check_setup_sh_reports_nothing(
     assert refusal.value.standard_error == f"{standard_error}\n"
 
 
+def test_a_failed_first_check_leaves_the_clone_s_git_config_unchanged(
+    setup_repository: ScratchRepository,
+):
+    """
+    The first check runs before any write, so a run it stops leaves nothing to undo.
+    """
+    setup = setup_for(
+        setup_repository,
+        environment=setup_repository.runner_environment(
+            **{
+                CheckSetupStubVariable.ERROR: "check-setup.sh: failed",
+                CheckSetupStubVariable.STATUS: str(ShellExitStatus.COMMAND_NOT_FOUND),
+            }
+        ),
+    )
+    shutil.copy(
+        DatasetLocation.FAILING_CHECK_SETUP_STUB,
+        setup.plugin_root.path_of(PluginLocation.SETUP_CHECK_SCRIPT),
+    )
+
+    with pytest.raises(CheckSetupFailedError):
+        setup.run()
+
+    unset = setup_repository.run_git_allowing_failure(
+        "config", "--get", PersonalNotesSetting.REMOTE.git_config_key
+    )
+    assert unset.returncode != 0
+
+
 # %% the remote's owner
 
 
