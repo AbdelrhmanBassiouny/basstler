@@ -29,24 +29,12 @@ items:
     always falls back to installing uv with pip. Also try py -3.14/-3.13/-3.12 (and a python
     on PATH checked against BASSTLER_PYTHON_REQUIREMENT), each resolved to a full path before
     it runs. Split out of windows-environment-interpreter as its own root cause.'
-- id: setup-report-strict-parsing
-  title: Refuse an incomplete or failed check-setup.sh report with its stderr
-  branch: claude/windows-support-setup-report-7wq1u4
-  status: in progress
-  track: fixes
-  session: https://claude.ai/code/session_01JxHGiPy8e8q3yBNcVhbpt3
-  depends_on: []
-  pull_request_number: 202
-  notes: SetupReport.from_completed_process raises a custom CheckSetupFailedError carrying
-    exit code and stderr when a row is missing or the exit code is neither 0 nor 1, instead
-    of KeyError/ValueError; the setup command exits with a documented code for it.
 - id: setup-no-partial-writes
   title: Check setup before writing the notes remote to git config
   branch: null
   status: not started
   track: fixes
-  depends_on:
-  - setup-report-strict-parsing
+  depends_on: []
   pull_request_number: null
   notes: PersonalNotesSetup.run writes claude.personalNotesRemote before the first check,
     so every failed run leaves it set. Run and validate the first check before any write,
@@ -71,35 +59,34 @@ items:
   pull_request_number: null
   notes: A windows-latest job runs check-setup.sh through python -m basstler.setup.personal_notes.
     Costs Actions minutes, so needs the owner's decision against actions-budget before starting.
-
 - id: github-api-posix-paths
-  title: "Build GitHub REST paths with / on every platform"
-  branch: null
+  title: Build GitHub REST paths with / on every platform
+  branch: claude/windows-github-api-posix-paths-bngagw
   track: fixes
+  session: https://claude.ai/code/session_01JxHGiLRG9cqiFfr9qsuA8k
   depends_on: []
-  status: not started
-  pull_request_number: null
-  notes: 'maintenance/github.py: GitHubPath and RepositoryPath are PathEnumeration members (Path("/commits")
-    ...), so on Windows _commit_report and _path build repos/<owner>/<repo>\commits/<sha>/check-runs;
-    GitHub answers 404, maintenance push exits 9 (github-request-failed) and nothing is pushed (reported
-    on basstler 3.15.2). REST paths are not filesystem paths: make them PurePosixPath or StrEnum values.
-    The test asserts the exact check-runs route and that the route types are not an OS Path.'
-
+  status: in progress
+  pull_request_number: 203
+  notes: 'maintenance/github.py: GitHubPath and RepositoryPath are PathEnumeration members
+    (Path("/commits") ...), so on Windows _commit_report and _path build repos/<owner>/<repo>\commits/<sha>/check-runs;
+    GitHub answers 404, maintenance push exits 9 (github-request-failed) and nothing is pushed
+    (reported on basstler 3.15.2). REST paths are not filesystem paths: make them PurePosixPath
+    or StrEnum values. The test asserts the exact check-runs route and that the route types
+    are not an OS Path.'
 - id: hooks-msys-argument-conversion
-  title: "Stop Git Bash rewriting refs/...:path arguments in the hooks"
+  title: Stop Git Bash rewriting refs/...:path arguments in the hooks
   branch: null
   track: fixes
   depends_on: []
   status: not started
   pull_request_number: null
-  notes: 'Git Bash (MSYS) rewrites git show "${PERSONAL_NOTES_REFERENCE}:<path>" and the fetch refspec
-    in resolve-personal-notes-config.sh as Windows paths before git sees them, so session-start.sh,
-    check-setup.sh, plan-updates-since.sh and resolve-personal-notes-config.sh pass git the wrong argument.
-    MSYS2_ARG_CONV_EXCL=''refs/'' works around it: export it once in resolve-personal-notes-config.sh,
-    which every hook sources, and name it in basstler.environment.'
-
+  notes: 'Git Bash (MSYS) rewrites git show "${PERSONAL_NOTES_REFERENCE}:<path>" and the fetch
+    refspec in resolve-personal-notes-config.sh as Windows paths before git sees them, so
+    session-start.sh, check-setup.sh, plan-updates-since.sh and resolve-personal-notes-config.sh
+    pass git the wrong argument. MSYS2_ARG_CONV_EXCL=''refs/'' works around it: export it
+    once in resolve-personal-notes-config.sh, which every hook sources, and name it in basstler.environment.'
 - id: git-tree-posix-paths
-  title: "Read files off the notes branch with /-separated tree paths"
+  title: Read files off the notes branch with /-separated tree paths
   branch: null
   track: fixes
   depends_on: []
@@ -107,5 +94,6 @@ items:
   pull_request_number: null
   notes: shell_configuration.FetchedBranchReference.file_at formats f"{self}:{path}"; ProjectLocation.PERSONAL_PLAN_ITEM_MODES
     is a Path, so on Windows the object name holds backslashes and plan/item_mode.personal_settings
-    never finds the pinned execution mode. Use as_posix() as maintenance/git_commands.py file_at already
-    does, audit every file_at( caller, and consider one tree-path type for both file_at methods.
+    never finds the pinned execution mode. Use as_posix() as maintenance/git_commands.py file_at
+    already does, audit every file_at( caller, and consider one tree-path type for both file_at
+    methods.
