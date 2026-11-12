@@ -1,0 +1,72 @@
+name: Windows setup
+
+# Runs the personal-notes setup end to end on a Windows runner, its hooks in Git Bash,
+# only for a pull request changing what the setup runs: a Windows runner costs twice
+# the minutes of a Linux one.
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/windows-setup.yml"
+      - "plugin/hooks/**"
+      - "src/basstler/setup/**"
+      - "src/basstler/bash.py"
+      - "src/basstler/plugin_root.py"
+      - "src/basstler/shell_configuration.py"
+      - "pyproject.toml"
+
+concurrency:
+  group: windows-setup-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  setup:
+    name: personal-notes setup on Windows
+    runs-on: windows-latest
+    timeout-minutes: 20
+    env:
+      CLAUDE_PROJECT_DIR: ${{ github.workspace }}\basstler
+      BASSTLER_PLUGIN_ROOT: ${{ github.workspace }}\basstler\plugin
+    steps:
+      # The tags give the installed package its release version, which check-setup.sh
+      # reads.
+      - uses: actions/checkout@v4
+        with:
+          path: basstler
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install basstler
+        run: pip install --editable basstler
+
+      - name: Give git an identity and the notes a remote
+        shell: bash
+        run: |
+          git config --global user.name "basstler CI"
+          git config --global user.email "ci@users.noreply.github.com"
+          git init --quiet --bare "${RUNNER_TEMP}/personal-notes.git"
+
+      # Started from PowerShell, as Claude Code starts it, so the setup finds bash
+      # itself. Status 1 means only that a row is left, such as the plan site, which
+      # needs GitHub; the next step checks the rows the setup itself writes.
+      - name: Run the setup
+        shell: pwsh
+        working-directory: basstler
+        run: |
+          python -m basstler.setup.personal_notes --remote "$env:RUNNER_TEMP\personal-notes.git" --name "basstler CI" --email "ci@users.noreply.github.com"
+          if ($LASTEXITCODE -gt 1) { exit $LASTEXITCODE }
+          exit 0
+
+      - name: Check the rows the setup writes
+        shell: bash
+        working-directory: basstler
+        run: >-
+          bash plugin/hooks/check-setup.sh
+          --only notes_branch --only notes_file --only git_identity
+          --only package_dependencies --only claude_local_md

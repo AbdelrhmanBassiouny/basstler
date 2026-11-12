@@ -65,6 +65,12 @@ class RepositoryLocation(PathEnumeration):
     The reusable workflow that builds the plan site and deploys a changed one.
     """
 
+    WINDOWS_SETUP_WORKFLOW = WORKFLOWS / "windows-setup.yml"
+    """
+    The workflow that runs the personal-notes setup on Windows for a pull request
+    changing what the setup runs.
+    """
+
     MAIN_FAILURE_WORKFLOW = WORKFLOWS / "main-failure.yml"
     """
     The workflow that records each run of the tests on main in its failure issue.
