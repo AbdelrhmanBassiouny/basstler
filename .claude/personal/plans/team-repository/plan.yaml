@@ -1,9 +1,10 @@
 schema_version: 1
 id: team-repository
-title: 'Team repository: shared plans and /malloche'
-description: A team repository in an organisation holds the shared plans and each member's
-  own notes; /malloche picks and starts the next ready
-  item. Pilot - cram2 with the domain-models plan. Split out of team-basstler.
+title: 'Teams on the plan service: shared plans and handing out work'
+description: A team repository in an organisation holds the shared plans and each member's own notes,
+  served by the team's own plan service instance (basstler-service); items are handed to teammates who
+  implement them on their forks, and /malloche picks and starts the next ready item. Pilot - cram2 with
+  the domain-models plan.
 default_repository: KAOS-repositories/basstler
 tracking_issue: 62
 waves:
@@ -31,21 +32,22 @@ items:
 - id: team-repo-setup
   title: Set up a team repository in an organisation, and onboard a member with one command
   branch: null
-  status: not_started
+  status: not started
   track: team-store
   depends_on:
   - team-notes-store
-  notes: Owner creates the repository in cram2 (name to confirm), enables Pages from Actions
-    and Issues, installs the Claude GitHub App. Setup writes the hub (registry, notes_branch
-    = default branch), site caller, labels and docs/team.md; a member runs setup with the
-    team repository to get their notes branch. Members collaborate on the owner's CRAM fork,
-    so stack tooling is unchanged. Conflict - basstler.setup.personal_notes refuses a notes
-    remote the token's login does not own, so a member is refused on the org repository; allow
-    the configured plan store, e.g. by checking push access.
+  - basstler-service/service-deploy
+  - basstler-service/app-manifest
+  notes: Owner creates the repository in cram2 (name to confirm), enables Issues, installs the Claude
+    GitHub App and the team's Basstler App, and deploys the team's instance (basstler-service/service-deploy).
+    Setup writes the hub (registry, notes_branch = default branch), labels and docs/team.md; a member
+    runs setup with the team repository to get their notes branch. Conflict - basstler.setup.personal_notes
+    refuses a notes remote the token's login does not own; allow the configured plan store, e.g. by push
+    access.
 - id: migrate-domain-models
   title: Move the domain-models plan from the CRAM fork's notes to the team repository
   branch: null
-  status: not_started
+  status: not started
   track: team-store
   depends_on:
   - team-repo-setup
@@ -55,13 +57,26 @@ items:
 - id: malloche
   title: /malloche picks the next ready item, claims it, and starts it
   branch: null
-  status: not_started
+  status: not started
   track: picker
   depends_on:
   - work-recommender/ranked-work-list
+  - task-handout
   notes: 'Ranks with work-recommender/ranked-work-list''s policy: one ranking, not two. A python -m command
     ranks: the caller''s own in-progress items first (resume), then unassigned not-started items whose
     every dependency is merged or an open pull request ready for review (a draft dependency disqualifies),
     in wave order, skipping items with blockers. When nothing is ready because dependencies are drafts,
     it says so and suggests reviewing those draft pull requests instead, ranked by how many items each
-    would unblock. How it claims an item is still open.'
+    would unblock. It claims an item by making the caller its assignee (task-handout).'
+
+- id: task-handout
+  title: Hand an item to a teammate, who implements it on their own fork
+  track: team-store
+  status: not started
+  depends_on:
+  - team-repo-setup
+  - basstler-service/plan-write-api
+  notes: An item records its assignee's GitHub login, set from its card or one command through basstler-service/plan-write-api.
+    The assignee's kickoff link starts the item on their fork; its pull request into the upstream reaches
+    the item through the App's events, and one still on their fork once they install the App there. Only
+    the assignee and the plan's writers change its status.
