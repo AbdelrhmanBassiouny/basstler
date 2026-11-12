@@ -166,6 +166,33 @@ class BashStubVariable(StrEnum):
     """
 
 
+class ShellExitStatus(IntEnum):
+    """
+    Statuses bash itself exits with, rather than a script it runs.
+    """
+
+    COMMAND_NOT_FOUND = 127
+    """
+    A command bash was asked to run does not exist.
+    """
+
+
+class CheckSetupStubVariable(StrEnum):
+    """
+    The variables ``dataset/stubs/check_setup_fails.sh`` reads.
+    """
+
+    ERROR = "STUB_CHECK_SETUP_ERROR"
+    """
+    What the stub prints to standard error.
+    """
+
+    STATUS = "STUB_CHECK_SETUP_STATUS"
+    """
+    The status the stub exits with.
+    """
+
+
 class PullRequestStubVariable(StrEnum):
     """
     The variables ``dataset/stubs/merged_items_from_recording.py`` reads.

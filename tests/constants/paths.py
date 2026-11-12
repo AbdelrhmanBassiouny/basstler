@@ -371,6 +371,11 @@ class DatasetLocation(PathEnumeration):
     session can start the build.
     """
 
+    FAILING_CHECK_SETUP_STUB = STUBS / "check_setup_fails.sh"
+    """
+    A script standing in for check-setup.sh, failing before it prints a report.
+    """
+
     MERGED_ITEMS_STUB = STUBS / "merged_items_from_recording.py"
     """
     A module standing in for :mod:`basstler.plan.merged_items`'s command, reading the

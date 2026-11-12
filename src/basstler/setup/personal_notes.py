@@ -253,6 +253,8 @@ class PersonalNotesSetup:
         :return: The status check-setup.sh finishes with.
         :raises ForeignNotesRemoteError: If the notes remote is somebody else's.
         :raises HookScriptFailedError: If a step's hook script fails.
+        :raises CheckSetupFailedError: If check-setup.sh fails or its report is
+            incomplete.
         :raises GitHubRequestFailed: If GitHub refuses a call a step depends on.
         """
         self.verify_notes_remote_owner()
