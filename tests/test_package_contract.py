@@ -28,12 +28,16 @@ from basstler.package_layout import (
     command_line_entry_points,
     package_modules,
 )
+from basstler.environment import GitBashVariable
+from basstler.locations import ProjectLocation
+from basstler.setup.steps import PersonalNotesSetting
 from basstler.shell_configuration import FetchedBranchReference
 
 from .constants.environment import ConfigurationVariable, SearchPathVariable
 from .constants.paths import DatasetLocation, RepositoryLocation
 from .plugin_manifest import PluginManifestKey
 from .project_declaration import HatchVersionSource, ProjectDeclaration
+from .scratch_repository import ScratchRepository
 from .script_runner import ScriptRunner, configuration_value
 
 WORKFLOWS_DIRECTORY = RepositoryLocation.WORKFLOWS
@@ -340,6 +344,29 @@ def test_the_shell_fetches_the_notes_branch_where_the_package_reads_it():
         configuration_value(ConfigurationVariable.PERSONAL_NOTES_REFERENCE)
         == FetchedBranchReference.PERSONAL_NOTES
     )
+
+
+@pytest.mark.parametrize(
+    "argument",
+    [
+        f"{FetchedBranchReference.PERSONAL_NOTES}:{ProjectLocation.PLAN_HUB.as_posix()}",
+        f"+refs/heads/{PersonalNotesSetting.BRANCH.default}:"
+        f"{FetchedBranchReference.PERSONAL_NOTES}",
+    ],
+)
+def test_git_bash_passes_a_notes_branch_argument_to_git_as_written(
+    argument: str, scratch_repository: ScratchRepository
+):
+    """
+    Git Bash rewrites an argument holding ``:`` and ``/`` as a Windows path unless it
+    starts with an excluded prefix, so the hooks' object names and fetch refspecs are
+    excluded for every program they run.
+    """
+    exclusions = scratch_repository.configuration_output(
+        f"printenv {GitBashVariable.ARGUMENT_CONVERSION_EXCLUSIONS}"
+    )
+
+    assert any(argument.startswith(prefix) for prefix in exclusions.strip().split(";"))
 
 
 # %% what the skill documents name
