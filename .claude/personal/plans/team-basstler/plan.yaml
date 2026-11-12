@@ -1,9 +1,9 @@
 schema_version: 1
 id: team-basstler
-title: 'Plan site: a published, live, optionally private view of every plan'
-description: The plan site publishes every plan from setup, rebuilds on each plan save and
-  merge, re-checks pull requests from the browser and can be private. Its core-robustness
-  half and its team half (team-repository) were split out of it.
+title: 'Plan site: drift, untracked work and live states on every page'
+description: 'Page features of the plan site: drift and size chips, untracked pull requests and live hub
+  states. Publishing, privacy, sign-in and reading several owners moved to basstler-service; the team
+  half is team-repository.'
 default_repository: KAOS-repositories/basstler
 tracking_issue: 62
 waves:
@@ -49,61 +49,6 @@ items:
     #52.
 
     '
-- id: page-viewer-token
-  title: A viewer's own token lets the plan page's re-checks read private repositories
-  status: not started
-  track: site
-  depends_on: []
-  notes: 'Agreed on #122. The page takes a fine-grained token with Pull requests read-only
-    on chosen repositories, keeps it only in the viewer''s localStorage and sends it only
-    to api.github.com; both the draft and the merge re-check use it, and without one they
-    stay public-only. A Content-Security-Policy limits connections to api.github.com. Setup
-    prints the token''s creation as one copyable line with browser steps; pasting it into
-    the page is the viewer''s step.
-
-    '
-- id: private-site
-  title: The plan site can be private, readable only by the people who can read its repository
-  status: not started
-  track: site
-  depends_on:
-  - page-viewer-token
-  notes: 'Agreed on #122; no Enterprise. Setup creates the site repository private. The build
-    commits the rendered pages to it instead of deploying them; the Pages site is only a page
-    that fetches them through the API with the viewer''s token from page-viewer-token. Sharing
-    is adding a collaborator. The token stays per browser; setup prints a one-time https://<site>/#token=...
-    link for a new device, which the page stores and strips from the address bar.
-
-    '
-- id: page-github-sign-in
-  title: Sign in with GitHub on the plan page instead of pasting a token
-  status: not started
-  track: site
-  depends_on:
-  - page-viewer-token
-  notes: 'Agreed on #122 as a later step: the pasted token stays the base. A static page cannot
-    trade GitHub''s sign-in code for a token itself, so setup deploys a small per-user helper
-    (a Cloudflare Worker, free tier) holding the secret of an OAuth App the user registers
-    by hand; the page''s "Sign in with GitHub" then stores the token as page-viewer-token
-    does. Never a helper basstler runs for everyone.
-
-    '
-- id: per-owner-read-tokens
-  title: The plan site build reads private repositories of several owners with read-only tokens
-  track: site
-  depends_on:
-  - basstler-packages/uv-workspace
-  status: not started
-  notes: 'From #170''s review: several owners now need a classic token, which can also write.
-    Ask for one read-only fine-grained token per owner instead, as owner and token lines in
-    PLAN_SITE_READ_TOKEN; the build masks each and picks one per owner, for API calls and
-    git fetches. A token reaches only its maker''s and their organizations'' repositories,
-    so a teammate''s private fork is out of reach: team sites read the organization''s repository
-    (team-repository). The step names the owners and warns that an organization may block
-    or require approval of such tokens. Waits for uv-workspace.
-
-    '
-
 - id: hub-live-states
   title: Hub and repository pages read pull request states live, as plan pages do
   track: site
@@ -112,10 +57,9 @@ items:
   session: https://claude.ai/code/session_01JxHGiNe6swPYLvL9aCJvBU
   depends_on: []
   status: in progress
-  notes: 'From merge-workflow-private-only (owner, 2026-11-11): #141 made plan pages read
-    pull request states live; the hub and repository pages show the same progress counts
-    only as of the last build. Give their progress cards the same live read and
-    LiveStateDisplay. Read each repository''s pull requests with the list endpoint
-    (state=all, 100 per request) rather than one request per pull request: a hub covers
-    every plan, and an unauthenticated browser gets 60 requests an hour. Public repositories
-    only, until page-viewer-token.'
+  notes: 'From merge-workflow-private-only (owner, 2026-11-11): #141 made plan pages read pull request
+    states live; the hub and repository pages show the same progress counts only as of the last build.
+    Give their progress cards the same live read and LiveStateDisplay. Read each repository''s pull requests
+    with the list endpoint (state=all, 100 per request) rather than one request per pull request: a hub
+    covers every plan, and an unauthenticated browser gets 60 requests an hour. Public repositories only,
+    until basstler-service/github-sign-in.'
