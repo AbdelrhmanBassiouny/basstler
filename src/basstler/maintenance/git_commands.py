@@ -444,6 +444,37 @@ class GitCommandRunner:
 
 
 @dataclass(frozen=True)
+class TransientGitSetting:
+    """
+    A git config setting in force for the processes given it, written to no config file
+    and taking precedence over every one.
+    """
+
+    key: str
+    """
+    The setting's key, such as ``user.name``.
+    """
+
+    value: str
+    """
+    The value it takes.
+    """
+
+    def variables(self, environment: Mapping[str, str]) -> dict[str, str]:
+        """
+        :param environment: The environment the setting is added to, whose own
+            transient settings stay in force.
+        :return: The variables that add it, to be merged over *environment*.
+        """
+        index = int(environment.get(GitVariable.CONFIGURATION_COUNT) or 0)
+        return {
+            GitVariable.CONFIGURATION_COUNT: str(index + 1),
+            f"{GitVariable.CONFIGURATION_KEY_PREFIX}{index}": self.key,
+            f"{GitVariable.CONFIGURATION_VALUE_PREFIX}{index}": self.value,
+        }
+
+
+@dataclass(frozen=True)
 class GitHubLoginLendingRunner(GitCommandRunner):
     """
     Runs git in one checkout, answering its request for a GitHub credential over HTTPS
@@ -464,14 +495,9 @@ class GitHubLoginLendingRunner(GitCommandRunner):
         :meth:`GitCommandRunner.attempt`, with :attr:`credential_helper` consulted for
         GitHub after every helper git is already configured with.
         """
-        index = int(GitVariable.CONFIGURATION_COUNT.read() or 0)
-        lent = {
-            GitVariable.CONFIGURATION_COUNT: str(index + 1),
-            f"{GitVariable.CONFIGURATION_KEY_PREFIX}{index}": (
-                f"credential.{GitHubAddress.WEB}.helper"
-            ),
-            f"{GitVariable.CONFIGURATION_VALUE_PREFIX}{index}": self.credential_helper,
-        }
+        lent = TransientGitSetting(
+            f"credential.{GitHubAddress.WEB}.helper", self.credential_helper
+        ).variables(os.environ)
         return super().attempt(*arguments, environment={**lent, **(environment or {})})
 
 
