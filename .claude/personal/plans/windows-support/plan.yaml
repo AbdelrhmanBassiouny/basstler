@@ -77,6 +77,12 @@ items:
   track: fixes
   depends_on: []
   status: not started
+  pull_request_number: null
+  notes: 'maintenance/github.py: GitHubPath and RepositoryPath are PathEnumeration members (Path("/commits")
+    ...), so on Windows _commit_report and _path build repos/<owner>/<repo>\commits/<sha>/check-runs;
+    GitHub answers 404, maintenance push exits 9 (github-request-failed) and nothing is pushed (reported
+    on basstler 3.15.2). REST paths are not filesystem paths: make them PurePosixPath or StrEnum values.
+    The test asserts the exact check-runs route and that the route types are not an OS Path.'
 
 - id: hooks-msys-argument-conversion
   title: "Stop Git Bash rewriting refs/...:path arguments in the hooks"
@@ -84,6 +90,12 @@ items:
   track: fixes
   depends_on: []
   status: not started
+  pull_request_number: null
+  notes: 'Git Bash (MSYS) rewrites git show "${PERSONAL_NOTES_REFERENCE}:<path>" and the fetch refspec
+    in resolve-personal-notes-config.sh as Windows paths before git sees them, so session-start.sh,
+    check-setup.sh, plan-updates-since.sh and resolve-personal-notes-config.sh pass git the wrong argument.
+    MSYS2_ARG_CONV_EXCL=''refs/'' works around it: export it once in resolve-personal-notes-config.sh,
+    which every hook sources, and name it in basstler.environment.'
 
 - id: git-tree-posix-paths
   title: "Read files off the notes branch with /-separated tree paths"
@@ -91,3 +103,8 @@ items:
   track: fixes
   depends_on: []
   status: not started
+  pull_request_number: null
+  notes: shell_configuration.FetchedBranchReference.file_at formats f"{self}:{path}"; ProjectLocation.PERSONAL_PLAN_ITEM_MODES
+    is a Path, so on Windows the object name holds backslashes and plan/item_mode.personal_settings
+    never finds the pinned execution mode. Use as_posix() as maintenance/git_commands.py file_at already
+    does, audit every file_at( caller, and consider one tree-path type for both file_at methods.
