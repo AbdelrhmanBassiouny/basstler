@@ -127,13 +127,21 @@ class GitHubPullRequestSource(PullRequestSource):
     Every pull request read so far, listed or read on its own.
     """
 
+    reads_check_states: bool = True
+    """
+    Whether the check state of an open pull request is read; off, it stays unknown.
+    """
+
     @classmethod
-    def from_environment(cls) -> GitHubPullRequestSource:
+    def from_environment(
+        cls, reads_check_states: bool = True
+    ) -> GitHubPullRequestSource:
         """
+        :param reads_check_states: Whether open pull requests' check states are read.
         :return: A source authenticating with whichever credential the environment
             carries.
         """
-        return cls(client=GitHubRestClient())
+        return cls(client=GitHubRestClient(), reads_check_states=reads_check_states)
 
     def client_for(self, repository: Repository) -> GitHubRepository:
         """
@@ -168,7 +176,11 @@ class GitHubPullRequestSource(PullRequestSource):
 
     def pull_request(self, reference: PullRequestReference) -> PullRequestRecord | None:
         record = self.listed_or_read(reference)
-        if record is None or not record.has_unread_checks:
+        if (
+            record is None
+            or not self.reads_check_states
+            or not record.has_unread_checks
+        ):
             return record
         record.check_state = self.client_for(reference.repository).check_state(
             record.head_commit

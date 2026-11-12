@@ -6,14 +6,21 @@ branch.
 from __future__ import annotations
 
 import shutil
-from pathlib import PurePosixPath
+from dataclasses import dataclass
+from pathlib import Path, PurePosixPath
 
 import pytest
 
-from basstler.exceptions import NotesBranchMissingError, UnsafeNotesPathError
+from basstler.exceptions import (
+    NotesBranchMissingError,
+    NotesPushRejectedError,
+    UnsafeNotesPathError,
+)
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.personal_notes.branch import (
     NotesBranchWriter,
+    NotesEdit,
+    NotesFileChanges,
     NotesWriteOutcome,
     PersonalNotesBranch,
     PersonalNotesLocation,
@@ -126,7 +133,9 @@ def test_fetching_a_missing_branch_names_every_remote_tried(notes_repository):
 def test_writing_pushes_the_file(notes_repository):
     path = PurePosixPath(".claude/personal/pr-progress/work.md")
     writer = NotesBranchWriter(notes_branch(notes_repository))
-    outcome = writer.write({path: "- Next: a step.\n"}, "Save progress")
+    outcome = writer.write(
+        NotesFileChanges({path: "- Next: a step.\n"}), "Save progress"
+    )
     assert outcome == NotesWriteOutcome.PUSHED
     assert published_file(notes_repository, path) == "- Next: a step.\n"
 
@@ -136,7 +145,9 @@ def test_writing_ignores_the_projects_commit_hooks(notes_repository):
     shutil.copy(DatasetLocation.REJECTING_PRE_COMMIT_HOOK, hook)
     path = PurePosixPath(".claude/personal/pr-progress/work.md")
     writer = NotesBranchWriter(notes_branch(notes_repository))
-    outcome = writer.write({path: "- Next: a step.\n"}, "Save progress")
+    outcome = writer.write(
+        NotesFileChanges({path: "- Next: a step.\n"}), "Save progress"
+    )
     assert outcome == NotesWriteOutcome.PUSHED
     assert published_file(notes_repository, path) == "- Next: a step.\n"
 
@@ -144,14 +155,14 @@ def test_writing_ignores_the_projects_commit_hooks(notes_repository):
 def test_writing_unchanged_content_pushes_nothing(notes_repository):
     commits_before = notes_commit_count(notes_repository)
     writer = NotesBranchWriter(notes_branch(notes_repository))
-    outcome = writer.write({NOTES_FILE: "- a rule\n"}, "Save notes")
+    outcome = writer.write(NotesFileChanges({NOTES_FILE: "- a rule\n"}), "Save notes")
     assert outcome == NotesWriteOutcome.UNCHANGED
     assert notes_commit_count(notes_repository) == commits_before
 
 
 def test_writing_none_removes_the_path(notes_repository):
     writer = NotesBranchWriter(notes_branch(notes_repository))
-    outcome = writer.write({NOTES_FILE: None}, "Remove notes")
+    outcome = writer.write(NotesFileChanges({NOTES_FILE: None}), "Remove notes")
     assert outcome == NotesWriteOutcome.PUSHED
     assert published_file(notes_repository, NOTES_FILE) is None
 
@@ -159,7 +170,7 @@ def test_writing_none_removes_the_path(notes_repository):
 def test_writing_leaves_no_worktree_behind(notes_repository):
     worktrees_before = notes_repository.run_git("worktree", "list").stdout
     NotesBranchWriter(notes_branch(notes_repository)).write(
-        {NOTES_FILE: "- another rule\n"}, "Save notes"
+        NotesFileChanges({NOTES_FILE: "- another rule\n"}), "Save notes"
     )
     assert notes_repository.run_git("worktree", "list").stdout == worktrees_before
 
@@ -171,5 +182,71 @@ def test_writing_outside_the_branch_is_refused(notes_repository, path):
     commits_before = notes_commit_count(notes_repository)
     writer = NotesBranchWriter(notes_branch(notes_repository))
     with pytest.raises(UnsafeNotesPathError):
-        writer.write({path: "x\n"}, "Escape")
+        writer.write(NotesFileChanges({path: "x\n"}), "Escape")
     assert notes_commit_count(notes_repository) == commits_before
+
+
+# %% a push another writer races
+
+
+RACING_FILE = PurePosixPath(".claude/personal/pr-progress/other.md")
+"""
+The file another writer changes while an edit is being applied.
+"""
+
+
+@dataclass
+class RacedEdit(NotesEdit):
+    """
+    An edit during whose first applications another writer pushes to the notes branch,
+    so the push following each of them is rejected.
+    """
+
+    repository: ScratchRepository
+    """
+    The repository whose notes remote the other writer pushes to.
+    """
+
+    raced_applications: int
+    """
+    How many applications another writer races.
+    """
+
+    applications: int = 0
+    """
+    How many times the edit has been applied.
+    """
+
+    def apply(self, root: Path) -> None:
+        self.applications += 1
+        if self.applications <= self.raced_applications:
+            self.repository.update_notes_branch_file(
+                RACING_FILE, f"- race {self.applications}\n"
+            )
+        NotesFileChanges({NOTES_FILE: "- the edit\n"}).apply(root)
+
+
+def test_a_rejected_push_is_applied_again_to_the_branch_it_lost_to(notes_repository):
+    edit = RacedEdit(notes_repository, raced_applications=1)
+    writer = NotesBranchWriter(notes_branch(notes_repository), push_attempts=2)
+
+    outcome = writer.write(edit, "Save notes")
+
+    checkout = notes_repository.clone_notes_branch(
+        notes_repository.project_root.parent / "verify"
+    )
+    assert outcome == NotesWriteOutcome.PUSHED
+    assert (
+        (checkout / NOTES_FILE).read_text(),
+        (checkout / RACING_FILE).read_text(),
+    ) == ("- the edit\n", "- race 1\n")
+
+
+def test_a_push_rejected_every_time_is_refused(notes_repository):
+    edit = RacedEdit(notes_repository, raced_applications=2)
+    writer = NotesBranchWriter(notes_branch(notes_repository), push_attempts=2)
+
+    with pytest.raises(NotesPushRejectedError) as raised:
+        writer.write(edit, "Save notes")
+
+    assert raised.value.attempts == writer.push_attempts

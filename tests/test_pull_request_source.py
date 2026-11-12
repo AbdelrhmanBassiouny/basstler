@@ -142,6 +142,21 @@ def test_github_source_leaves_the_checks_of_a_closed_pull_request_unread():
     assert source.pull_request(OPEN_PULL_REQUEST).check_state is None
 
 
+def test_github_source_reading_no_check_states_leaves_an_open_pull_requests_unread():
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(
+            responses=details_of(OPEN_PULL_REQUEST.repository),
+            pages={
+                listing_path(OPEN_PULL_REQUEST.repository): [
+                    [api_pull_request_at_head(PullRequestState.OPEN)]
+                ]
+            },
+        ),
+        reads_check_states=False,
+    )
+    assert source.pull_request(OPEN_PULL_REQUEST).check_state is None
+
+
 def test_github_source_reads_an_issue_url():
     issue_url = PLAN_REPOSITORY.issue_url(FIRST_PLAN.tracking_issue)
     source = GitHubPullRequestSource(

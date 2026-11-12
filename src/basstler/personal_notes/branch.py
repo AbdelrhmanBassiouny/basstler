@@ -10,12 +10,17 @@ from __future__ import annotations
 import shutil
 import tempfile
 from collections.abc import Mapping
+from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path, PurePosixPath
 from types import TracebackType
 
-from basstler.exceptions import NotesBranchMissingError, UnsafeNotesPathError
+from basstler.exceptions import (
+    NotesBranchMissingError,
+    NotesPushRejectedError,
+    UnsafeNotesPathError,
+)
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.shell_configuration import FetchedBranchReference
@@ -184,10 +189,57 @@ class ScratchWorktree:
         shutil.rmtree(self.directory, ignore_errors=True)
 
 
+class NotesEdit(ABC):
+    """
+    A change made to a checkout of the notes branch, which a writer commits and pushes.
+    """
+
+    @abstractmethod
+    def apply(self, root: Path) -> None:
+        """
+        Make the change.
+
+        :param root: The root of a checkout of the latest notes branch.
+        """
+
+
+@dataclass(frozen=True)
+class NotesFileChanges(NotesEdit):
+    """
+    New contents for files on the notes branch.
+    """
+
+    changes: Mapping[PurePosixPath, str | None]
+    """
+    Each path relative to the branch's root, with its new content, or ``None`` to remove
+    the file or directory there.
+    """
+
+    def __post_init__(self) -> None:
+        """
+        :raises UnsafeNotesPathError: If a path is absolute or contains ``..``.
+        """
+        for path in self.changes:
+            if path.is_absolute() or ".." in path.parts:
+                raise UnsafeNotesPathError(path)
+
+    def apply(self, root: Path) -> None:
+        for path, content in self.changes.items():
+            target = root / path
+            if content is None and target.is_dir():
+                shutil.rmtree(target)
+                continue
+            if content is None:
+                target.unlink(missing_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_text(content)
+
+
 @dataclass(frozen=True)
 class NotesBranchWriter:
     """
-    Writes files onto the personal-notes branch and pushes them.
+    Commits edits onto the personal-notes branch and pushes them.
     """
 
     branch: PersonalNotesBranch
@@ -195,49 +247,42 @@ class NotesBranchWriter:
     The branch written to.
     """
 
-    def write(
-        self, changes: Mapping[PurePosixPath, str | None], message: str
-    ) -> NotesWriteOutcome:
-        """
-        Apply *changes* to the latest notes branch in one commit, and push it to the
-        remote it was fetched from. The project's commit hooks do not run: the notes
-        branch carries none of the project's files they check.
+    push_attempts: int = 1
+    """
+    How many times an edit is applied to the latest branch and pushed before a push the
+    remote keeps rejecting is given up on.
+    """
 
-        :param changes: Each path relative to the branch's root, with its new content,
-            or ``None`` to remove the file or directory there.
+    def write(self, edit: NotesEdit, message: str) -> NotesWriteOutcome:
+        """
+        Apply *edit* to the latest notes branch in one commit, and push it to the remote
+        it was fetched from; a rejected push is retried from a fresh fetch. The
+        project's commit hooks do not run: the notes branch carries none of the
+        project's files they check.
+
+        :param edit: The change to make.
         :param message: The commit message.
-        :raises UnsafeNotesPathError: If a path is absolute or contains ``..``; nothing
-            is fetched or written then.
         :raises NotesBranchMissingError: If no remote has the branch.
+        :raises NotesPushRejectedError: If every push attempt was rejected.
         :return: Whether anything was pushed.
         """
-        for path in changes:
-            if path.is_absolute() or ".." in path.parts:
-                raise UnsafeNotesPathError(path)
-        remote = self.branch.fetch()
-        with ScratchWorktree(self.branch.git) as worktree:
-            for path, content in changes.items():
-                target = worktree.working_directory / path
-                if content is None and target.is_dir():
-                    shutil.rmtree(target)
-                    continue
-                if content is None:
-                    target.unlink(missing_ok=True)
-                    continue
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(content)
-            worktree.run("add", "--all")
-            if worktree.attempt("diff", "--cached", "--quiet").succeeded:
-                return NotesWriteOutcome.UNCHANGED
-            worktree.run(
-                "-c",
-                f"core.hooksPath={NO_HOOKS_DIRECTORY}",
-                "commit",
-                "--quiet",
-                "-m",
-                message,
-            )
-            worktree.run(
-                "push", "--quiet", remote, f"HEAD:{self.branch.location.branch}"
-            )
-        return NotesWriteOutcome.PUSHED
+        for _ in range(self.push_attempts):
+            remote = self.branch.fetch()
+            with ScratchWorktree(self.branch.git) as worktree:
+                edit.apply(worktree.working_directory)
+                worktree.run("add", "--all")
+                if worktree.attempt("diff", "--cached", "--quiet").succeeded:
+                    return NotesWriteOutcome.UNCHANGED
+                worktree.run(
+                    "-c",
+                    f"core.hooksPath={NO_HOOKS_DIRECTORY}",
+                    "commit",
+                    "--quiet",
+                    "-m",
+                    message,
+                )
+                if worktree.attempt(
+                    "push", "--quiet", remote, f"HEAD:{self.branch.location.branch}"
+                ).succeeded:
+                    return NotesWriteOutcome.PUSHED
+        raise NotesPushRejectedError(self.branch.location.branch, self.push_attempts)
