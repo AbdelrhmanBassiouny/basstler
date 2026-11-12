@@ -1,9 +1,9 @@
 **Plan**
-- Write git tree paths with / in both file_at methods and every caller that builds tree text
+- Git tree paths written with / on every platform
 
 **Done**
-- PureWindowsPath tests for file_at and path_within_notes_branch, fix, audit (default notes path, plans pathspecs)
-- Draft PR #204, bug label; related suites pass (676)
+- Fix, tests, draft PR #204 with bug label
+- Merged main, resolved the conflict in tests/plan/test_model.py (kept both sides) at 7f79b182; probe CLEAN against main 3d92faae
 
 **Next**
-- Wait for CI and review
+- CI on 7f79b182, then review
