@@ -77,3 +77,10 @@ items:
   track: fixes
   depends_on: []
   status: not started
+
+- id: hooks-msys-argument-conversion
+  title: "Stop Git Bash rewriting refs/...:path arguments in the hooks"
+  branch: null
+  track: fixes
+  depends_on: []
+  status: not started
