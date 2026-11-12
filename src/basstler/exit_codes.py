@@ -211,6 +211,12 @@ class PersonalNotesSetupExitCode(ExitCode):
     A hook script a step runs failed; its own output says why.
     """
 
+    CHECK_SETUP_FAILED = 5
+    """
+    check-setup.sh failed, or printed a report missing a check or holding a row this
+    package cannot read; its standard error is in the setup's own.
+    """
+
 
 class ManifestToolsExitCode(ExitCode):
     """

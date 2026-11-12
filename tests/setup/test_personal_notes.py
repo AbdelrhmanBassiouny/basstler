@@ -36,7 +36,7 @@ from basstler.maintenance.github import (
 )
 from basstler.plugin_root import PluginRoot
 from basstler.repository import Repository
-from basstler.setup.exceptions import ForeignNotesRemoteError
+from basstler.setup.exceptions import CheckSetupFailedError, ForeignNotesRemoteError
 from basstler.setup.personal_notes import (
     PersonalNotesSetup,
     SetupOption,
@@ -45,9 +45,13 @@ from basstler.setup.personal_notes import (
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 from basstler.setup.steps import PersonalNotesSetting
 
-from ..constants.environment import BashStubVariable
+from ..constants.environment import (
+    BashStubVariable,
+    CheckSetupStubVariable,
+    ShellExitStatus,
+)
 from ..constants.notes import ScratchBranch
-from ..constants.paths import PersonalNotesPath, RepositoryLocation
+from ..constants.paths import DatasetLocation, PersonalNotesPath, RepositoryLocation
 from ..executable_stubs import ExecutableStubDirectory
 from ..scratch_repository import SCRATCH_IDENTITY, GitIdentity, ScratchRepository
 
@@ -408,6 +412,36 @@ def test_finishes_everything_else_when_given_no_identity(
     report = check_setup_report(setup_repository)
     assert report.results[SetupCheck.GIT_IDENTITY].status is CheckStatus.NEEDS_SETUP
     assert report.results[SetupCheck.NOTES_FILE].status is CheckStatus.OK
+
+
+# %% a check-setup.sh run that fails
+
+
+def test_stops_with_check_setup_failed_when_check_setup_sh_reports_nothing(
+    setup_repository: ScratchRepository,
+):
+    standard_error = "check-setup.sh: a-missing-command: command not found"
+    status = ShellExitStatus.COMMAND_NOT_FOUND
+    setup = setup_for(
+        setup_repository,
+        environment=setup_repository.runner_environment(
+            **{
+                CheckSetupStubVariable.ERROR: standard_error,
+                CheckSetupStubVariable.STATUS: str(status),
+            }
+        ),
+    )
+    shutil.copy(
+        DatasetLocation.FAILING_CHECK_SETUP_STUB,
+        setup.plugin_root.path_of(PluginLocation.SETUP_CHECK_SCRIPT),
+    )
+
+    with pytest.raises(CheckSetupFailedError) as refusal:
+        setup.run()
+
+    assert refusal.value.exit_code is PersonalNotesSetupExitCode.CHECK_SETUP_FAILED
+    assert refusal.value.status == status
+    assert refusal.value.standard_error == f"{standard_error}\n"
 
 
 # %% the remote's owner
