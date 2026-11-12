@@ -39,7 +39,7 @@ items:
   - basstler-service/service-deploy
   - basstler-service/app-manifest
   notes: Owner creates the repository in cram2 (name to confirm), enables Issues, installs the Claude
-    GitHub App and the team's Basstler App, and deploys the team's instance (basstler-service/service-deploy).
+    GitHub App and the team's BasstlerHub App, and deploys the team's instance (basstler-service/service-deploy).
     Setup writes the hub (registry, notes_branch = default branch), labels and docs/team.md; a member
     runs setup with the team repository to get their notes branch. Conflict - basstler.setup.personal_notes
     refuses a notes remote the token's login does not own; allow the configured plan store, e.g. by push
