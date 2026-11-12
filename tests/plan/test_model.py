@@ -11,7 +11,13 @@ import pytest
 
 from basstler.locations import ProjectLocation
 from basstler.plan import model
-from basstler.plan.model import ItemStatus, ManifestKey, PlanDocument, PlanManifest
+from basstler.plan.model import (
+    ItemStatus,
+    ManifestKey,
+    PlanDocument,
+    PlanItem,
+    PlanManifest,
+)
 from basstler.repository import Repository
 
 from ..constants.paths import DatasetLocation
@@ -116,6 +122,15 @@ def test_an_item_naming_its_own_repository_uses_it(first_plan):
     item = first_plan.item_named("elsewhere-item")
     declared = item.content[ManifestKey.REPOSITORY.key]
     assert first_plan.repository_of(item) == Repository.parse(declared)
+
+
+def test_an_item_without_an_id_is_identified_by_its_branch():
+    """
+    ``plan-schema.md``: an item's id defaults to its branch.
+    """
+    item = PlanItem({ManifestKey.BRANCH.key: "a-branch"})
+
+    assert item.identifier == item.branch
 
 
 # %% paths on the notes branch

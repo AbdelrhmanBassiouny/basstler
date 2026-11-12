@@ -87,6 +87,29 @@ class NotesBranchMissingError(DataclassException, RuntimeError):
 
 
 @dataclass
+class NotesPushRejectedError(DataclassException, RuntimeError):
+    """
+    Raised when the remote rejected every push of a write to the personal-notes branch.
+    """
+
+    branch: str
+    """
+    The personal-notes branch pushed to.
+    """
+
+    attempts: int
+    """
+    How many pushes were made.
+    """
+
+    def error_message(self) -> str:
+        return f"every one of {self.attempts} pushes to '{self.branch}' was rejected"
+
+    def suggest_correction(self) -> str:
+        return "check that this credential may push to the branch, then run it again"
+
+
+@dataclass
 class UnsafeNotesPathError(DataclassException, ValueError):
     """
     Raised when a path to write on the personal-notes branch could leave it.
@@ -221,6 +244,37 @@ class DuplicateItemId(ValidationProblem):
 
     def error_message(self) -> str:
         return f"duplicate item id(s): {sorted(self.duplicate_identifiers)}"
+
+
+@dataclass
+class SharedBranch(ValidationProblem):
+    """
+    More than one item names the same branch, though a branch carries the work of
+    exactly one item.
+    """
+
+    branch: str
+    """
+    The branch named more than once.
+    """
+
+    claiming_items: list[str]
+    """
+    Every item naming it: a bare id for an item of the validated plan, a ``<plan-
+    id>/<item- id>`` reference for one in another plan.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"branch {self.branch!r} is named by several items: {self.claiming_items}"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Keep the branch on the one item that owns it; fold each other item into "
+            "it, or leave the branch off that item and say in its notes that it lands "
+            "there."
+        )
 
 
 @dataclass

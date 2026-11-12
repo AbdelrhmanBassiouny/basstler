@@ -186,6 +186,27 @@ def test_the_plans_directory_matches_the_shell_configuration_that_owns_it(
     )
 
 
+def test_the_branch_index_matches_the_shell_configuration_that_owns_it(
+    bootstrap_repository: ScratchRepository,
+):
+    """
+    ``ProjectLocation.PLAN_BRANCH_INDEX`` mirrors ``PLAN_BRANCH_INDEX_PATH``.
+    """
+    resolved = subprocess.run(
+        [
+            "bash",
+            "-c",
+            f'source "{RepositoryLocation.PLUGIN / PluginLocation.PERSONAL_NOTES_CONFIGURATION_SCRIPT}" && '
+            'printf "%s" "${PLAN_BRANCH_INDEX_PATH}"',
+        ],
+        cwd=bootstrap_repository.project_root,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    assert resolved.stdout == str(ProjectLocation.PLAN_BRANCH_INDEX)
+
+
 SCALAR_STYLED_KEYS = tuple(
     manifest_key for manifest_key in ManifestKey if not manifest_key.is_block_styled
 )

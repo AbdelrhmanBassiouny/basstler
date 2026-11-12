@@ -666,7 +666,7 @@ class PersonalNotesPath(PathEnumeration):
     and writes its own permission grants into.
     """
 
-    BRANCH_INDEX = ProjectLocation.PLANS / "_generated" / "branch-index.tsv"
+    BRANCH_INDEX = ProjectLocation.PLAN_BRANCH_INDEX
     """
     The generated reverse index mapping an item's branch to the plan tracking it.
     """

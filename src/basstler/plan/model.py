@@ -531,9 +531,9 @@ class PlanItem:
     @property
     def identifier(self) -> str:
         """
-        :return: The item's id.
+        :return: The item's id, which defaults to its branch.
         """
-        return str(self.content[ManifestKey.IDENTIFIER.key])
+        return str(self.content.get(ManifestKey.IDENTIFIER.key, self.branch))
 
     @property
     def status(self) -> ItemStatus:

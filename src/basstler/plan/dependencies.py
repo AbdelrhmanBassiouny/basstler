@@ -8,6 +8,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 
 import yaml
@@ -15,7 +16,7 @@ import yaml
 from basstler.class_property import classproperty
 from basstler.plan_site.cards import DependencyChip
 from basstler.plan_site.plan import Item, Plan
-from basstler.plan.model import PlanDocument
+from basstler.plan.model import PlanDocument, PlanManifest
 from basstler.pull_request_state import LivePullRequests, LiveState
 from basstler.repository import PullRequestReference, Repository
 
@@ -334,6 +335,27 @@ class PlanDirectory:
         plan = Plan.from_mapping(yaml.safe_load(manifest_path.read_text()))
         self.plans_by_id[plan_id] = plan
         return plan
+
+    @cached_property
+    def references_by_branch(self) -> dict[str, list[DependencyReference]]:
+        """
+        Every item of every plan in the directory that names a branch, keyed by that
+        branch; a manifest that is no mapping names none.
+        """
+        references: dict[str, list[DependencyReference]] = {}
+        for manifest_path in sorted(self.directory.glob(f"*/{PlanDocument.MANIFEST}")):
+            manifest = PlanManifest.from_file(manifest_path)
+            if not isinstance(manifest.content, dict):
+                continue
+            for item in manifest.items:
+                if item.branch:
+                    references.setdefault(item.branch, []).append(
+                        DependencyReference(
+                            item_identifier=item.identifier,
+                            plan_id=manifest.identifier,
+                        )
+                    )
+        return references
 
     def resolve(self, reference: DependencyReference) -> Dependency:
         """
