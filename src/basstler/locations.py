@@ -482,12 +482,6 @@ class WorkflowLocation(PathEnumeration):
     whenever a pull request merges.
     """
 
-    PLAN_MERGED_ITEMS = DIRECTORY / "plan-merged-items.yml"
-    """
-    basstler's reusable workflow that records the items of a notes branch's plans whose
-    pull requests merged, which :attr:`PLAN_SITE_MERGE` calls on every merge.
-    """
-
 
 class ClaudeCodeVariable(EnvironmentVariable):
     """

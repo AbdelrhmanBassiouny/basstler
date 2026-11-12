@@ -6,6 +6,7 @@ its pull request merged.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from http import HTTPStatus
 from datetime import datetime, UTC
 from pathlib import Path
 
@@ -15,13 +16,19 @@ from basstler.exit_codes import ManifestToolsExitCode
 from basstler.github.client import HttpMethod
 from basstler.github.exceptions import GitHubUnreachableError
 from basstler.locations import ProjectLocation
-from basstler.plan.merged_items import MergedItems, MergedItemsInEveryPlan
-from basstler.plan.model import ItemStatus, PlanDocument, PlanManifest
+from basstler.plan.merged_items import (
+    MergedItems,
+    MergedItemsInEveryPlan,
+    MergedItemsLine,
+    MergedItemsSummary,
+)
+from basstler.plan.model import ItemStatus, ManifestKey, PlanDocument, PlanManifest
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
 from basstler.repository import PullRequestReference, Repository
 
 from ..plan_dataset import LandedItemsPlan
+from ..github.pull_request_api import refusal
 from ..github.recorded_client import RecordedGitHubClient
 from ..recorded_pull_requests import RecordedPullRequestSource
 
@@ -216,43 +223,139 @@ def test_every_plan_whose_items_all_merged_is_removed(
     plan: LandedItemsPlan, tmp_path: Path
 ):
     manifest_path = notes_root_holding(plan, tmp_path)
-    plan.manifest.with_items_done(
-        {item.identifier for item in plan.manifest.items}
-    ).write(manifest_path)
+    plan_of_pull_requests = PlanManifest(
+        {
+            **plan.manifest.content,
+            ManifestKey.ITEMS.key: [
+                item.content
+                for item in plan.manifest.items
+                if item.pull_request_number is not None
+            ],
+        }
+    )
+    plan_of_pull_requests.write(manifest_path)
+    source = RecordedPullRequestSource(
+        records={reference_of(plan, ItemStatus.IN_PROGRESS): MERGED}
+    )
 
-    MergedItemsInEveryPlan(RecordedPullRequestSource()).apply(tmp_path)
+    MergedItemsInEveryPlan(source).apply(tmp_path)
 
     assert not manifest_path.parent.exists()
 
 
 def test_every_plan_regenerates_the_branch_index(plan: LandedItemsPlan, tmp_path: Path):
     """
-    The index names the branches of the items left, and no longer the landed one's.
+    The index names the branches of the items left, and no longer the landed ones'.
     """
-    notes_root_holding(plan, tmp_path)
-    in_progress = plan.item_with_status(ItemStatus.IN_PROGRESS)
+    manifest_path = notes_root_holding(plan, tmp_path)
+    queued = plan.item_with_status(ItemStatus.NOT_STARTED)
+    queued_branch = "queued-branch"
+    PlanManifest(
+        {
+            **plan.manifest.content,
+            ManifestKey.ITEMS.key: [
+                {**item.content, ManifestKey.BRANCH.key: queued_branch}
+                if item == queued
+                else item.content
+                for item in plan.manifest.items
+            ],
+        }
+    ).write(manifest_path)
     source = RecordedPullRequestSource(
-        records={reference_of(plan, ItemStatus.IN_PROGRESS): OPEN}
+        records={reference_of(plan, ItemStatus.IN_PROGRESS): MERGED}
     )
 
     MergedItemsInEveryPlan(source).apply(tmp_path)
 
     assert (tmp_path / ProjectLocation.PLAN_BRANCH_INDEX).read_text() == (
-        f"{in_progress.branch}\t{plan.manifest.identifier}\n"
+        f"{queued_branch}\t{plan.manifest.identifier}\n"
     )
 
 
-def test_every_plan_leaves_a_plan_it_could_not_read_as_it_was(
+def test_every_plan_leaves_the_branch_index_alone_when_nothing_landed(
+    plan: LandedItemsPlan, tmp_path: Path
+):
+    manifest_path = notes_root_holding(plan, tmp_path)
+    unlanded = PlanManifest(
+        {
+            **plan.manifest.content,
+            ManifestKey.ITEMS.key: [
+                item.content
+                for item in plan.manifest.items
+                if item.status is not ItemStatus.DONE
+            ],
+        }
+    )
+    unlanded.write(manifest_path)
+    index = tmp_path / ProjectLocation.PLAN_BRANCH_INDEX
+    index.write_text("some-branch\tsome-plan\n")
+
+    MergedItemsInEveryPlan(RecordedPullRequestSource()).apply(tmp_path)
+
+    assert index.read_text() == "some-branch\tsome-plan\n"
+
+
+def test_every_plan_changes_nothing_when_a_pull_request_cannot_be_read(
     plan: LandedItemsPlan, tmp_path: Path
 ):
     manifest_path = notes_root_holding(plan, tmp_path)
     written = manifest_path.read_text()
     failure = GitHubUnreachableError(HttpMethod.GET, "repos/owner/repo/pulls", "down")
-    recording = MergedItemsInEveryPlan(UnreachablePullRequestSource(failure))
+
+    with pytest.raises(GitHubUnreachableError):
+        MergedItemsInEveryPlan(UnreachablePullRequestSource(failure)).apply(tmp_path)
+
+    assert manifest_path.read_text() == written
+
+
+def test_every_plan_names_each_item_it_dropped(plan: LandedItemsPlan, tmp_path: Path):
+    notes_root_holding(plan, tmp_path)
+    landed = plan.item_with_status(ItemStatus.DONE)
+    in_progress = plan.item_with_status(ItemStatus.IN_PROGRESS)
+    recording = MergedItemsInEveryPlan(
+        RecordedPullRequestSource(
+            records={reference_of(plan, ItemStatus.IN_PROGRESS): MERGED}
+        )
+    )
 
     recording.apply(tmp_path)
 
-    assert (manifest_path.read_text(), recording.unread_plans) == (
-        written,
-        {plan.manifest.identifier: failure.exit_code},
+    assert recording.summary == MergedItemsSummary(
+        dropped_items=sorted(
+            f"{plan.manifest.identifier}/{item.identifier}"
+            for item in (landed, in_progress)
+        )
     )
+
+
+def test_every_plan_names_each_repository_it_cannot_read(
+    plan: LandedItemsPlan, tmp_path: Path
+):
+    notes_root_holding(plan, tmp_path)
+    repository = plan.manifest.default_repository
+    recording = MergedItemsInEveryPlan(
+        RecordedPullRequestSource(
+            read_failures={repository: refusal(repository, HTTPStatus.NOT_FOUND)}
+        )
+    )
+
+    recording.apply(tmp_path)
+
+    assert recording.summary.unreadable_repositories == {repository}
+
+
+# %% the summary line
+
+
+def test_the_summary_line_says_nothing_was_dropped():
+    assert MergedItemsSummary().line == MergedItemsLine.NONE
+
+
+def test_the_summary_line_names_the_dropped_items_and_unreadable_repositories():
+    repository = Repository.parse("owner/private")
+    summary = MergedItemsSummary(
+        dropped_items=["plan/item"], unreadable_repositories={repository}
+    )
+    assert summary.line == MergedItemsLine.DROPPED.format(
+        items="plan/item"
+    ) + MergedItemsLine.UNREADABLE.format(repositories=str(repository))

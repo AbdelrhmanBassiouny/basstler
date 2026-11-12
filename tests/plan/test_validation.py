@@ -360,20 +360,19 @@ def test_validation_accepts_a_plan_saved_from_its_own_repository_in_any_letter_c
     PlanValidator(plan, checkout_repository=checkout_repository).validate()
 
 
-# %% one plan per branch
+# %% one item per branch
 
 
-def test_validation_accepts_two_items_of_one_plan_naming_one_branch():
-    """
-    Items of one plan may ride on one branch; the index still names one plan for it.
-    """
+def test_validation_rejects_two_items_of_one_plan_naming_one_branch():
     items = [
         manifest_item("a", branch="shared"),
         manifest_item("b", branch="shared"),
     ]
-    PlanValidator(
-        minimal_plan(items=items), PlanDirectory(DatasetLocation.PLANS)
-    ).validate()
+    with pytest.raises(PlanValidationError) as error:
+        PlanValidator(
+            minimal_plan(items=items), PlanDirectory(DatasetLocation.PLANS)
+        ).validate()
+    assert error.value.problems == [SharedBranch("shared", ["a", "b"])]
 
 
 def test_validation_rejects_a_branch_an_item_of_another_plan_names():

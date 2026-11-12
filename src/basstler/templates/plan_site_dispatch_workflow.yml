@@ -18,7 +18,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-{% block further_jobs %}{% endblock %}  {{ job }}:
+  {{ job }}:
     name: Start the plan site build
     if: {% block condition %}github.repository == '{{ notes_repository }}'{% endblock %}
 

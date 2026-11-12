@@ -249,8 +249,8 @@ class DuplicateItemId(ValidationProblem):
 @dataclass
 class SharedBranch(ValidationProblem):
     """
-    Items of different plans name the same branch, so the branch index cannot tell which
-    plan a session on it works for.
+    More than one item names the same branch, though a branch carries the work of
+    exactly one item.
     """
 
     branch: str
@@ -271,8 +271,9 @@ class SharedBranch(ValidationProblem):
 
     def suggest_correction(self) -> str:
         return (
-            "Keep the branch on the item of one plan; leave it off the other plans' "
-            "items and say in their notes that they land on it."
+            "Keep the branch on the one item that owns it; fold each other item into "
+            "it, or leave the branch off that item and say in its notes that it lands "
+            "there."
         )
 
 

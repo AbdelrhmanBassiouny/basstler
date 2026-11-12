@@ -268,24 +268,26 @@ class BranchIndex:
     def render(self) -> str:
         """
         One ``"<branch>\\t<plan-id>"`` line per item branch; the first plan wins on a
-        branch several plans name.
+        duplicate branch.
 
         :raises YamlBooleanCoercionError: If a plan's ``id`` or an item's ``branch`` was
             parsed as a boolean.
         :return: The regenerated index content, ready to write to disk.
         """
-        plan_by_branch: dict[str, str] = {}
+        lines = []
+        seen_branches = set()
         for manifest in self.manifests:
+            plan_id = manifest.string_field(manifest.content["id"], "id")
             for branch in manifest.item_branches:
-                indexed_plan_id = plan_by_branch.setdefault(branch, manifest.identifier)
-                if indexed_plan_id == manifest.identifier:
+                if branch in seen_branches:
+                    logger.error(
+                        f"plan/manifest_tools.py: duplicate branch {branch!r} in "
+                        f"{manifest.path} - keeping the first plan it was seen "
+                        "under, dropping this one."
+                    )
                     continue
-                logger.error(
-                    f"plan/manifest_tools.py: duplicate branch {branch!r} in "
-                    f"{manifest.path} - keeping the first plan it was seen "
-                    "under, dropping this one."
-                )
-        lines = [f"{branch}\t{plan_id}" for branch, plan_id in plan_by_branch.items()]
+                seen_branches.add(branch)
+                lines.append(f"{branch}\t{plan_id}")
         return "\n".join(lines) + ("\n" if lines else "")
 
 
