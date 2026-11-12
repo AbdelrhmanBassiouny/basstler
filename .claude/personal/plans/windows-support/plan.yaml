@@ -75,11 +75,12 @@ items:
     are not an OS Path.'
 - id: hooks-msys-argument-conversion
   title: Stop Git Bash rewriting refs/...:path arguments in the hooks
-  branch: null
+  branch: claude/windows-hooks-msys-argument-conversion-bngagw
   track: fixes
+  session: https://claude.ai/code/session_01JxHGiLRG9cqiFfr9qsuA8k
   depends_on: []
-  status: not started
-  pull_request_number: null
+  status: in progress
+  pull_request_number: 205
   notes: 'Git Bash (MSYS) rewrites git show "${PERSONAL_NOTES_REFERENCE}:<path>" and the fetch
     refspec in resolve-personal-notes-config.sh as Windows paths before git sees them, so
     session-start.sh, check-setup.sh, plan-updates-since.sh and resolve-personal-notes-config.sh
