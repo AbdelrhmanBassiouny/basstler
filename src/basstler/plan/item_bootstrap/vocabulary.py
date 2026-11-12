@@ -186,9 +186,9 @@ class ReportKey(StrEnum):
     The item the operation acted on.
     """
 
-    ITEMS = "items"
+    TRACKED_ITEM = "tracked_item"
     """
-    Every item a branch carries, for an operation keyed on a branch.
+    The item a branch carries, for an operation keyed on a branch.
     """
 
     CREATED_ITEM = "created_item"
