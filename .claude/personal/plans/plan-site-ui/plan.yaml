@@ -43,7 +43,7 @@ items:
     on the repository index in a collapsed section; delete asks to confirm and stays recoverable from
     history.
 - id: promote-button
-  title: A Promote button on each promotable item opens the prefilled upstream compare-and-create page
+  title: An "Open in {upstream}" button on each promotable item opens the prefilled compare-and-create page
   track: display
   status: not started
   depends_on: []
@@ -75,12 +75,13 @@ items:
   title: Theme and colour options for the site and its chips, chosen on the page and set as site defaults
   track: display
   status: not started
-  depends_on: [site-redesign]
-  notes: A theme menu in the header picks light, dark or system and one of several palettes; the
-    choice is kept per viewer in localStorage and applied before first paint. The site owner sets
-    the default theme and may add palettes, including each chip tone's colours, in a theme section
-    of the hub file parsed into pydantic models. The build checks every palette's text and chip
-    contrast (WCAG AA) and reports a failing one in the health banner instead of publishing it.
+  depends_on: []
+  notes: Themes restyle colours, chip tones, borders, ornaments, type and motion via CSS tokens on
+    site.css; ship Classic, Rosé, Forge and an original high-fantasy one, plus /site-theme-create
+    and docs/themes.md. A header menu picks light, dark or system and a theme, kept per viewer in
+    localStorage and applied before first paint. The owner sets the default and adds themes in the
+    hub file (pydantic models). The build checks WCAG AA contrast and reports a failing theme in
+    the health banner instead of publishing it.
 
 - id: base-chip
   title: 'Each item card shows what its pull request is based on: the default branch, another item, or
@@ -118,3 +119,25 @@ items:
   status: not started
   session: https://claude.ai/code/session_018wfiv7jmDwVqQj2xLpXnwJ
   notes: 'Setup installs a launcher that runs plan-site open: a .desktop entry on Linux, an app in ~/Applications on macOS, a Start-menu and desktop shortcut on Windows (windows-support). It runs the latest release through uvx, so it needs no update; removing it is one command. No phone access (owner, 2026-11-09): phones cannot run it, and private hosting waits until phone access matters.'
+
+- id: model-recommendation
+  title: Each action button preselects the recommended Claude model for its task
+  track: display
+  status: not started
+  depends_on: []
+  notes: The model picker offers the Claude Code aliases opus, sonnet and haiku, which always resolve
+    to the newest models, replacing the stale ModelOption list and its Session default. Each action
+    kind declares its recommended alias; a committed TOML holds the per-task defaults and a personal
+    one overrides them, layered like plan-item-modes.toml. The copied command is /model <alias> then
+    the command.
+
+- id: rules-and-notes-comments
+  title: Highlight and comment on any rule or note on the site, then ask Claude or commit the change
+  track: display
+  status: not started
+  depends_on: []
+  notes: The plan page shows account rules and notes, repository rules and notes, plan rules (roadmap.md)
+    and plan and item notes, each labelled with where it lives. Selecting text offers a comment anchored
+    to the quote; drafts stay in localStorage. Ask Claude copies one command carrying every quote, comment
+    and source path, which a skill applies; Commit opens the file's GitHub editor on the notes branch
+    until basstler-service/site-actions makes it one click.
