@@ -12,6 +12,8 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from basstler.class_property import classproperty
+from basstler.repository import Repository
+from basstler.stack.promotability import PromotionBlocker
 
 if TYPE_CHECKING:
     from basstler.plan_site.plan import Item, Track, Wave
@@ -300,6 +302,46 @@ class ModelOption(StrEnum):
 
     FABLE_5 = ("claude-fable-5", "Fable 5")
     """Claude Fable 5."""
+
+
+# %% promotion button
+
+
+@dataclass(frozen=True)
+class PromotionButton:
+    """
+    The button on an item's card that opens its pull request's prefilled form on the
+    upstream, or says why it cannot.
+    """
+
+    upstream_repository: Repository
+    """
+    The repository the pull request would be opened in.
+    """
+
+    url: str | None
+    """
+    The compare-and-create page, ``None`` while something blocks the promotion.
+    """
+
+    blockers: list[PromotionBlocker]
+    """
+    Every reason the pull request may not be promoted yet.
+    """
+
+    @property
+    def label(self) -> str:
+        """
+        :return: The button's text.
+        """
+        return f"Open in {self.upstream_repository}"
+
+    @property
+    def reason(self) -> str:
+        """
+        :return: Why the button is disabled, empty when it is not.
+        """
+        return "; ".join(blocker.value for blocker in self.blockers)
 
 
 # %% track and wave sections
