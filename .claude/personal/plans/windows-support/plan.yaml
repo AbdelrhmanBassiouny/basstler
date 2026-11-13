@@ -18,14 +18,12 @@ items:
 - id: windows-interpreter-candidates
   title: Create the package environment on Windows without uv
   branch: null
-  status: not started
+  status: deferred
   track: fixes
   depends_on:
   - basstler-packages/uv-workspace
   pull_request_number: null
-  notes: 'Re-check once basstler-packages/uv-workspace (uv sync --frozen at session start)
-    lands: if every install runs through uv, drop this. BASSTLER_INTERPRETER_CANDIDATES names
-    python3.14/3.13/3.12, which Windows does not install, so without uv on PATH create_basstler_environment
-    always falls back to installing uv with pip. Also try py -3.14/-3.13/-3.12 (and a python
-    on PATH checked against BASSTLER_PYTHON_REQUIREMENT), each resolved to a full path before
-    it runs. Split out of windows-environment-interpreter as its own root cause.'
+  notes: >
+    Folded into basstler-packages/uv-workspace (owner, 2026-11-13): that item creates the
+    environment with uv sync --frozen and also covers creating it on Windows without uv on PATH (py
+    -3.x and a python on PATH as interpreter candidates). Nothing is left to do here.
