@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from basstler.code_rules.checker import CodeRuleChecker, CodeRuleViolation
+from basstler.json_model import ValidatedJSONModel
 from basstler.locations import PackageLocation
 from basstler.package_map import PACKAGE_MAP, PackageMap
 
@@ -31,6 +32,42 @@ class ModuleImport:
     """
     The import statement.
     """
+
+
+class BoundaryCrossing(ValidatedJSONModel):
+    """
+    A module importing a module of a distribution its own distribution does not list.
+    """
+
+    importing_module: str
+    """
+    The dotted name, within ``basstler``, of the module holding the import.
+    """
+
+    imported_module: str
+    """
+    The dotted name, within ``basstler``, of the module it imports.
+    """
+
+
+class PackageCrossings(ValidatedJSONModel):
+    """
+    Every boundary crossing of one checkout of the package.
+    """
+
+    crossings: tuple[BoundaryCrossing, ...]
+    """
+    The crossings, each once, ordered by importing and then imported module.
+    """
+
+    def added_since(self, base: PackageCrossings) -> tuple[BoundaryCrossing, ...]:
+        """
+        :param base: The crossings of the checkout this one is compared with.
+        :return: The crossings this checkout has and *base* does not.
+        """
+        return tuple(
+            crossing for crossing in self.crossings if crossing not in base.crossings
+        )
 
 
 # %% the checker
@@ -77,6 +114,31 @@ class PackageBoundaryChecker(CodeRuleChecker):
                 f"from {imported.distribution}, which it does not list in "
                 "basstler.package_map; move the code or the import",
             )
+
+    def package_crossings(self) -> PackageCrossings:
+        """
+        :return: The crossings of every module in :attr:`package_directory`.
+        """
+        crossings = {
+            BoundaryCrossing(
+                importing_module=module, imported_module=crossing.imported_module
+            )
+            for path in self.package_directory.rglob("*.py")
+            if (module := self.module_name(path))
+            and self.package_map.claiming(module) is not None
+            for crossing in self.crossings(path)
+        }
+        return PackageCrossings(
+            crossings=tuple(
+                sorted(
+                    crossings,
+                    key=lambda crossing: (
+                        crossing.importing_module,
+                        crossing.imported_module,
+                    ),
+                )
+            )
+        )
 
     def module_name(self, path: Path) -> str | None:
         """

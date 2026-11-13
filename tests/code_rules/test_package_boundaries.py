@@ -9,7 +9,11 @@ from pathlib import Path
 
 import pytest
 
-from basstler.code_rules.package_boundaries import PackageBoundaryChecker
+from basstler.code_rules.package_boundaries import (
+    BoundaryCrossing,
+    PackageBoundaryChecker,
+    PackageCrossings,
+)
 from basstler.package_map import (
     Distribution,
     DistributionDeclaration,
@@ -100,3 +104,35 @@ def test_a_file_outside_the_package_is_not_checked(checker):
     A test or a script belongs to no distribution.
     """
     assert violation_lines(checker, Path(__file__)) == []
+
+
+# %% the package's crossings
+
+
+def test_the_package_s_crossings_are_listed_by_module(checker):
+    """
+    The dataset's one crossing is the lower distribution's import of the higher one.
+    """
+    assert checker.package_crossings().crossings == (
+        BoundaryCrossing(importing_module="low.upward", imported_module="high.caller"),
+    )
+
+
+def test_a_crossing_the_base_does_not_hold_is_new(checker):
+    """
+    Against a base with no crossings, every crossing of the package is new.
+    """
+    crossings = checker.package_crossings()
+
+    assert crossings.added_since(PackageCrossings(crossings=())) == (
+        crossings.crossings
+    )
+
+
+def test_a_crossing_the_base_holds_is_not_new(checker):
+    """
+    A crossing the base already had is left for the item that moves its code.
+    """
+    crossings = checker.package_crossings()
+
+    assert crossings.added_since(crossings) == ()

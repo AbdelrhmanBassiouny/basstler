@@ -5,6 +5,7 @@ The ``basstler code-rules`` commands: checking code against the rules, and gener
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 from cyclopts import App
@@ -13,6 +14,10 @@ from basstler.code_rules import rules
 from basstler.code_rules.checker import CodeRulesCheck, StagedLines
 from basstler.code_rules.commands import CodeRulesCommand
 from basstler.code_rules.instructions import AgentsInstructions
+from basstler.code_rules.package_boundaries import (
+    PackageBoundaryChecker,
+    PackageCrossings,
+)
 from basstler.code_rules.rule_module import RuleModule
 from basstler.exit_codes import ExitCode
 from basstler.locations import ProjectLocation
@@ -37,7 +42,8 @@ class CodeRulesExitCode(ExitCode):
 
     CHANGES_NEEDED = 1
     """
-    Code breaks a rule, or ``AGENTS.md`` was rewritten or is out of date.
+    Code breaks a rule, a boundary crossing is new, or ``AGENTS.md`` was rewritten or
+    is out of date.
     """
 
 
@@ -68,6 +74,40 @@ def check(
     for violation in violations:
         logger.error(violation.render())
     if violations:
+        return CodeRulesExitCode.CHANGES_NEEDED
+    return CodeRulesExitCode.SUCCESS
+
+
+@code_rules_app.command(name=CodeRulesCommand.CROSSINGS)
+def list_crossings(output: Path) -> CodeRulesExitCode:
+    """
+    Write every import of the package that crosses a distribution boundary to *output*.
+
+    :param output: The JSON file to write the crossings to.
+    """
+    crossings = PackageBoundaryChecker().package_crossings()
+    output.write_text(json.dumps(crossings.to_json(), indent=2) + "\n")
+    logger.info("Wrote %d crossings to %s", len(crossings.crossings), output)
+    return CodeRulesExitCode.SUCCESS
+
+
+@code_rules_app.command(name=CodeRulesCommand.NEW_CROSSINGS)
+def report_new_crossings(base: Path) -> CodeRulesExitCode:
+    """
+    Report each boundary crossing of the package that the base checkout does not have.
+
+    :param base: The listing :func:`list_crossings` wrote in the base checkout.
+    """
+    base_crossings = PackageCrossings.from_json(json.loads(base.read_text()))
+    added = PackageBoundaryChecker().package_crossings().added_since(base_crossings)
+    for crossing in added:
+        logger.error(
+            "basstler.%s newly imports basstler.%s across a distribution boundary; "
+            "move the code or the import",
+            crossing.importing_module,
+            crossing.imported_module,
+        )
+    if added:
         return CodeRulesExitCode.CHANGES_NEEDED
     return CodeRulesExitCode.SUCCESS
 
