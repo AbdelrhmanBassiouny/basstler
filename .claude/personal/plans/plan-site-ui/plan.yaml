@@ -77,7 +77,10 @@ items:
 - id: site-themes
   title: Theme and colour options for the site and its chips, chosen on the page and set as site defaults
   track: display
-  status: not started
+  status: in progress
+  branch: claude/plan-site-ui-themes-8hqtdk
+  pull_request_number: 212
+  session: https://claude.ai/code/session_018wfiv8TNFzr6VY6TbNCbE6
   depends_on: []
   notes: Themes restyle colours, chip tones, borders, ornaments, type and motion via CSS tokens on
     site.css; ship Classic, Rosé, Forge and an original high-fantasy one, plus /site-theme-create
