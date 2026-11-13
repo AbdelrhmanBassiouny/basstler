@@ -15,6 +15,7 @@ from basstler.code_rules.instructions import AgentsInstructions
 from basstler.code_rules.rule import CodeReference, Section
 from basstler.code_rules.rule_module import RuleModule
 from basstler.code_rules.rules.code_quality import DocumentationRules
+from basstler.code_rules.rules.project import PackageAndPluginRules
 from basstler.exceptions import DataclassException
 
 from ..constants.paths import RepositoryLocation, RuleSectionsFile
@@ -94,6 +95,7 @@ def test_the_checkers_are_those_of_the_checked_rules():
     assert RuleModule(rules).checkers == (
         DocumentationRules.DOCUMENT_EVERY_CONSTRUCT.checker,
         DocumentationRules.SHORT_DOCSTRINGS.checker,
+        PackageAndPluginRules.IMPORT_ONLY_LISTED_PACKAGES.checker,
     )
 
 

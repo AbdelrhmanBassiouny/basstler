@@ -764,3 +764,34 @@ class RuleSectionsFile(PathEnumeration):
     The text of the sections in ``rule_sections.py``, with placeholders for the module's
     path and the commands' invocations.
     """
+
+
+class PackageBoundarySnippet(PathEnumeration):
+    """
+    A package of two distributions the package boundary check reads.
+    """
+
+    DIRECTORY = DatasetLocation.DIRECTORY / "package-boundaries"
+    """
+    The directory holding them.
+    """
+
+    PACKAGE = DIRECTORY / "basstler"
+    """
+    The package directory, claimed by a lower and a higher distribution.
+    """
+
+    LISTED_IMPORT = PACKAGE / "high" / "caller.py"
+    """
+    The higher distribution importing the lower one it lists, in both import forms.
+    """
+
+    UNLISTED_IMPORT = PACKAGE / "low" / "upward.py"
+    """
+    The lower distribution importing the higher one.
+    """
+
+    UNCLAIMED_MODULE = PACKAGE / "stray.py"
+    """
+    A module neither distribution claims.
+    """

@@ -10,6 +10,8 @@ from basstler.code_rules.command_line import (
     CodeRulesExitCode,
     check,
     generate_agents_instructions,
+    list_crossings,
+    report_new_crossings,
 )
 from basstler.code_rules.instructions import AgentsInstructions
 
@@ -34,6 +36,20 @@ def test_checking_passes_when_nothing_breaks_a_rule():
     assert check([DocstringSnippet.DOCUMENTED_MODULE], all_lines=True) == (
         CodeRulesExitCode.SUCCESS
     )
+
+
+# %% boundary crossings
+
+
+def test_a_package_compared_with_its_own_listing_has_no_new_crossing(tmp_path):
+    """
+    The listing the command writes holds every crossing the package has.
+    """
+    listing = tmp_path / "crossings.json"
+
+    list_crossings(listing)
+
+    assert report_new_crossings(listing) == CodeRulesExitCode.SUCCESS
 
 
 # %% generating AGENTS.md
