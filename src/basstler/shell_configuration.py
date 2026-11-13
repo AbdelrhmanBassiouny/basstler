@@ -12,7 +12,7 @@ from __future__ import annotations
 import os
 import subprocess
 from enum import StrEnum
-from pathlib import Path, PurePosixPath
+from pathlib import Path, PurePath, PurePosixPath
 
 from basstler.bash import Bash
 from basstler.locations import PluginLocation
@@ -32,12 +32,13 @@ class FetchedBranchReference(StrEnum):
     shell configuration's ``PERSONAL_NOTES_REFERENCE``.
     """
 
-    def file_at(self, path: str | PurePosixPath) -> str:
+    def file_at(self, path: str | PurePath) -> str:
         """
         :param path: A file's path relative to the branch's root.
-        :return: The git object name of that file on the fetched branch.
+        :return: The git object name of that file on the fetched branch, its path
+            ``/``-separated on every platform.
         """
-        return f"{self}:{path}"
+        return f"{self}:{PurePosixPath(path)}"
 
 
 class ShellConfigurationFunction(StrEnum):

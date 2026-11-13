@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath
 
 from basstler.class_property import classproperty
 from basstler.exceptions import UnresolvableReferenceError
@@ -264,14 +264,14 @@ class GitCommandRunner:
         :return: The commit it names."""
         return self.run("rev-parse", reference)
 
-    def file_at(self, commit: str, path: str | Path) -> str | None:
+    def file_at(self, commit: str, path: str | PurePath) -> str | None:
         """
         :param commit: The commit to read from.
         :param path: The file's path from the commit's root.
         :return: Its text without the final newline, or ``None`` when the commit has
             no such file.
         """
-        shown = self.attempt("show", f"{commit}:{Path(path).as_posix()}")
+        shown = self.attempt("show", f"{commit}:{PurePosixPath(path)}")
         return shown.output if shown.succeeded else None
 
     def commit_files(

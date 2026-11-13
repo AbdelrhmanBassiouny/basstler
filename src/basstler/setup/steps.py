@@ -260,7 +260,7 @@ class PersonalNotesSetting(PersonalNotesSettingSpecification, Enum):
     PATH = PersonalNotesSettingSpecification(
         git_config_key="claude.personalNotesPath",
         environment_variable="CLAUDE_PERSONAL_NOTES_PATH",
-        default=str(ProjectLocation.PERSONAL_NOTES_DOCUMENT),
+        default=ProjectLocation.PERSONAL_NOTES_DOCUMENT.as_posix(),
     )
     """
     Where on that branch the notes file sits.

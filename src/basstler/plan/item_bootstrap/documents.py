@@ -108,7 +108,7 @@ class ProjectCheckout:
             "-r",
             "--name-only",
             FetchedBranchReference.PERSONAL_NOTES,
-            str(ProjectLocation.PLANS),
+            ProjectLocation.PLANS.as_posix(),
         )
         for path in map(PurePosixPath, listing.splitlines()):
             if (
