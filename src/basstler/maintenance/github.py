@@ -15,7 +15,6 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum, StrEnum
-from pathlib import Path
 from typing import Any
 
 from basstler.github.issue import IssueComment
@@ -23,7 +22,6 @@ from basstler.github.label import LabelReplacement, NewLabel, RepositoryLabel
 from basstler.github.pull_request import PullRequestDescription
 from basstler.pull_request_state import PullRequestState
 from basstler.github_labels import GitHubLabel
-from basstler.locations import PathEnumeration
 from basstler.maintenance.board import (
     AccountField,
     CommitChecks,
@@ -126,33 +124,33 @@ class CredentialHolder(ABC):
         """:return: The login of the account the credential belongs to."""
 
 
-class GitHubPath(PathEnumeration):
+class GitHubPath(StrEnum):
     """
-    The API paths that are not below a repository.
+    The API routes that are not below a repository, ``/``-separated on every platform.
     """
 
-    AUTHENTICATED_USER = Path("/user")
+    AUTHENTICATED_USER = "/user"
     """
     The account the request's credential belongs to.
     """
 
 
-class RepositoryPath(PathEnumeration):
+class GitHubRepositoryPath(StrEnum):
     """
-    The API paths below a repository.
+    The API routes below a repository, ``/``-separated on every platform.
     """
 
-    PULL_REQUESTS = Path("/pulls")
+    PULL_REQUESTS = "/pulls"
     """
     The repository's pull requests.
     """
 
-    LABELS = Path("/labels")
+    LABELS = "/labels"
     """
     The labels defined on the repository.
     """
 
-    COMMITS = Path("/commits")
+    COMMITS = "/commits"
     """
     The repository's commits.
     """
@@ -160,7 +158,7 @@ class RepositoryPath(PathEnumeration):
 
 class CommitReport(StrEnum):
     """
-    The listings reported against one commit, below :attr:`RepositoryPath.COMMITS`.
+    The listings reported against one commit, below :attr:`GitHubRepositoryPath.COMMITS`.
     """
 
     CHECK_RUNS = "check-runs"
@@ -295,13 +293,13 @@ class GitHubRepository(
         :return: Them, oldest page first.
         """
         return self._every_entry(
-            RepositoryPath.PULL_REQUESTS, {ListingParameter.STATE: state.query}
+            GitHubRepositoryPath.PULL_REQUESTS, {ListingParameter.STATE: state.query}
         )
 
     def labels(self) -> set[str]:
         return {
             RepositoryLabel.from_json(label).name
-            for label in self._every_entry(RepositoryPath.LABELS, {})
+            for label in self._every_entry(GitHubRepositoryPath.LABELS, {})
         }
 
     def create_label(self, label: GitHubLabel) -> None:
@@ -332,14 +330,14 @@ class GitHubRepository(
         """:param commit: The commit reported against.
         :param report: Which of its listings to read.
         :return: The listing's path below the repository."""
-        return f"{RepositoryPath.COMMITS}/{commit}/{report}"
+        return f"{GitHubRepositoryPath.COMMITS}/{commit}/{report}"
 
     def authenticated_login(self) -> str:
         account = self.client.get(str(GitHubPath.AUTHENTICATED_USER))
         return str(account[AccountField.LOGIN])
 
     def _every_entry(
-        self, path: RepositoryPath, filters: Mapping[ListingParameter, str]
+        self, path: GitHubRepositoryPath, filters: Mapping[ListingParameter, str]
     ) -> list[Any]:
         """
         Read a listing below the repository whose pages are lists, to its end.
@@ -375,7 +373,9 @@ class GitHubRepository(
     def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
         :return: That pull request."""
-        return self.client.get(self._path(f"{RepositoryPath.PULL_REQUESTS}/{number}"))
+        return self.client.get(
+            self._path(f"{GitHubRepositoryPath.PULL_REQUESTS}/{number}")
+        )
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
         """

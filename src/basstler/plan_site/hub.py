@@ -375,7 +375,7 @@ class NotesBranch:
             "--format=%cI",
             "FETCH_HEAD",
             "--",
-            str(ProjectLocation.PLANS / plan_directory_name),
+            (ProjectLocation.PLANS / plan_directory_name).as_posix(),
         ).splitlines()
         if not dates:
             return None
@@ -389,7 +389,9 @@ class NotesBranch:
 
         :return: The plans directory, empty when the branch has none.
         """
-        self.git.attempt("checkout", "FETCH_HEAD", "--", str(ProjectLocation.PLANS))
+        self.git.attempt(
+            "checkout", "FETCH_HEAD", "--", ProjectLocation.PLANS.as_posix()
+        )
         plans_directory = self.git.working_directory / ProjectLocation.PLANS
         plans_directory.mkdir(parents=True, exist_ok=True)
         return plans_directory

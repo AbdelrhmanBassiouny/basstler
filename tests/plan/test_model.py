@@ -4,10 +4,14 @@ Tests for plan/model.py: the statuses a plan's items carry.
 
 from __future__ import annotations
 
+from pathlib import PureWindowsPath
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
 
+from basstler.locations import ProjectLocation
+from basstler.plan import model
 from basstler.plan.model import (
     ItemStatus,
     ManifestKey,
@@ -18,6 +22,7 @@ from basstler.plan.model import (
 from basstler.repository import Repository
 
 from ..constants.paths import DatasetLocation
+from .concurrent_edits import PLAN_IDENTIFIER
 from ..fixture_plans import ForeignItemId, FixturePlanId, fixture_item, fixture_manifest
 from ..manifest_builders import manifest_item, minimal_plan
 
@@ -169,3 +174,20 @@ def test_a_plan_with_nothing_landed_is_left_as_it_is():
     manifest = PlanManifest(minimal_plan())
 
     assert manifest.without_landed_items() == manifest
+
+
+# %% paths on the notes branch
+
+
+@pytest.mark.parametrize("document", list(PlanDocument))
+def test_a_plan_document_path_is_slash_separated_on_windows(document, monkeypatch):
+    """
+    The path names a file in the notes branch's tree, which git spells with ``/`` on
+    every platform; the plans directory is given as Windows would build it.
+    """
+    windows_plans = PureWindowsPath(*ProjectLocation.PLANS.parts)
+    monkeypatch.setattr(model, "ProjectLocation", SimpleNamespace(PLANS=windows_plans))
+
+    assert document.path_within_notes_branch(PLAN_IDENTIFIER) == (
+        f"{ProjectLocation.PLANS.as_posix()}/{PLAN_IDENTIFIER}/{document}"
+    )

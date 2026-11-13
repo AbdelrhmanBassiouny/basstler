@@ -37,6 +37,7 @@ from basstler.locations import (
     PluginSkillLocation,
 )
 from basstler.github.client import GitHubRestClient
+from basstler.maintenance.git_commands import TransientGitSetting
 from basstler.maintenance.github import GitHubRepository
 from basstler.plugin_root import PluginRoot
 from basstler.setup.exceptions import ForeignNotesRemoteError, HookScriptFailedError
@@ -258,8 +259,13 @@ class PersonalNotesSetup:
         :raises GitHubRequestFailed: If GitHub refuses a call a step depends on.
         """
         self.verify_notes_remote_owner()
+        requested_remote = TransientGitSetting(
+            PersonalNotesSetting.REMOTE.git_config_key, self.request.remote
+        )
+        initial_report = SetupReport.from_completed_process(
+            self.run_check_setup(requested_remote)
+        )
         self.point_notes_remote()
-        initial_report = SetupReport.from_completed_process(self.run_check_setup())
         self.create_notes_branch(initial_report)
         self.seed_notes(initial_report)
         self.record_identity()
@@ -387,19 +393,25 @@ class PersonalNotesSetup:
             self.github.create_label(label)
             logger.info(f"Created '{label}' on '{repository}'.")
 
-    def run_check_setup(self) -> subprocess.CompletedProcess[str]:
+    def run_check_setup(
+        self, setting: TransientGitSetting | None = None
+    ) -> subprocess.CompletedProcess[str]:
         """
         Run check-setup.sh, whose non-zero status means only that something still needs
         setting up.
 
+        :param setting: A git setting it sees in force on top of the clone's own.
         :return: The finished process, its report captured.
         """
+        environment = dict(self.environment)
+        if setting is not None:
+            environment |= setting.variables(environment)
         return subprocess.run(
             Bash.locate(self.environment).command(
                 self.plugin_root.path_of(PluginLocation.SETUP_CHECK_SCRIPT)
             ),
             cwd=self.project_root,
-            env=dict(self.environment),
+            env=environment,
             capture_output=True,
             text=True,
         )
