@@ -405,6 +405,11 @@ class DatasetLocation(PathEnumeration):
     session reaches the notes repository.
     """
 
+    REVIEW_TRIAGE = DIRECTORY / "review-triage"
+    """
+    The file versions, descriptions and pull request the review triage is tested on.
+    """
+
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"
     """
     The recorded GraphQL responses the upstream review reader is replayed against.

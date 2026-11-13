@@ -99,6 +99,11 @@ class Distribution(StrEnum):
     Reading an upstream pull request's checks and review threads.
     """
 
+    REVIEW_TRIAGE = "basstler-review-triage"
+    """
+    Telling a pull request's mechanical files from those a reviewer has to read.
+    """
+
     STACK = "basstler-stack"
     """
     Stacked pull request maintenance.
@@ -328,6 +333,12 @@ PACKAGE_MAP = PackageMap(
             (Distribution.CORE, Distribution.GIT, Distribution.GITHUB),
         ),
         DistributionDeclaration(
+            Distribution.REVIEW_TRIAGE,
+            Layer.COLLABORATION,
+            ("review_triage",),
+            (Distribution.CORE, Distribution.GIT, Distribution.GITHUB),
+        ),
+        DistributionDeclaration(
             Distribution.STACK,
             Layer.COLLABORATION,
             ("maintenance", "stack"),
@@ -380,6 +391,7 @@ PACKAGE_MAP = PackageMap(
                 Distribution.RULES,
                 Distribution.GITHUB,
                 Distribution.REVIEWS,
+                Distribution.REVIEW_TRIAGE,
                 Distribution.STACK,
                 Distribution.PLAN,
                 Distribution.NOTES,
