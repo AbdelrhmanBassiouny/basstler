@@ -76,8 +76,8 @@ items:
     each sdist pins siblings ==version. Committed uv.lock, uv sync --frozen at session start
     (absorbs locked-install); package_layout reads importlib.metadata. CI tests each package alone,
     all on any change. Each package's folder and pyproject
-    become the map's source: modules and dependencies are read, not declared in PACKAGE_MAP; check
-    third-party imports against each pyproject. Windows without uv: py -3.14/-3.13/-3.12, then python
+    become the map's source: modules and dependencies are read, not declared in PACKAGE_MAP.
+    Windows without uv: py -3.14/-3.13/-3.12, then python
     on PATH, as full paths (absorbs windows-interpreter-candidates). release:major.
 - id: pypi-release
   title: Publish every distribution to PyPI on each release with trusted publishing
@@ -195,3 +195,17 @@ items:
     basstler_playbook and verifies every step. Never changes repository settings: detects issues, Discussions, Actions
     or branch auto-delete being off and gives the link to turn them on. Builds on basstler-setup-ux''s checklist.
     release:minor.'
+
+- id: third-party-imports
+  title: A distribution imports only the third-party libraries its own pyproject requires
+  track: package-split
+  depends_on:
+  - uv-workspace
+  status: not started
+  notes: >
+    Extends PackageBoundaryChecker from basstler imports to third-party ones, as krrood's
+    CoreBoundary does (#546): map each imported top-level package to its distributions with
+    importlib.metadata.packages_distributions(), and allow the distribution's own requirements
+    plus the closure of what they require, without extras. Needs each distribution's own
+    pyproject.toml, so it follows uv-workspace. A crossing is reported by the same code-rules
+    check and CI comparison with the base. release:minor.
