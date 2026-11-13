@@ -1,9 +1,9 @@
-## Plan
-- Live recount of hub and repository cards; landed items kept in plan totals
+Plan
+- hub-live-states: hub and repository cards recount PR states live (PR #199).
 
-## Done
-- Review round 1 (441fb50): `from_item`, counts derived from counted items, `landed_item_count`, `field_name` StrEnum; all 5 threads replied and resolved
-- Merged main 3d92faa (ccdf5f9), test_model.py conflict resolved; 2644 passed; merges clean into d07e17f
+Done
+- Live recount, landed_item_count, review rounds 1-3 handled; field_name enum cached (625a249).
+- Merged main; merge-probe CLEAN against main d882ab9; full suite 2657 passed on the merge.
 
-## Next
-- Read CI on ccdf5f9
+Next
+- Read CI on 625a249.
