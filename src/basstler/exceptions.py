@@ -964,7 +964,7 @@ class PackageMapInconsistency(StrEnum):
 
     UNDECLARED_DISTRIBUTION = "has no declaration"
     """
-    The distribution is listed or looked up, but nothing declares it.
+    The distribution is listed as a dependency, but nothing declares it.
     """
 
     MODULE_CLAIMED_TWICE = "both claim the same module"

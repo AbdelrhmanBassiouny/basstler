@@ -84,14 +84,6 @@ class PackageLocation(PathEnumeration):
     The licence text of a source checkout.
     """
 
-    KNOWN_BOUNDARY_CROSSINGS = (
-        DIRECTORY / "code_rules" / "known-boundary-crossings.yaml"
-    )
-    """
-    The imports across a distribution boundary the package held when the boundaries
-    were declared, which the package boundary check does not report.
-    """
-
     TEMPLATES = DIRECTORY / "templates"
     """
     The templates the plan site's pages are rendered from.

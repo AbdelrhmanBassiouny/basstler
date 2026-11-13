@@ -768,8 +768,7 @@ class RuleSectionsFile(PathEnumeration):
 
 class PackageBoundarySnippet(PathEnumeration):
     """
-    A package of two distributions the package boundary check reads, and its known
-    crossings.
+    A package of two distributions the package boundary check reads.
     """
 
     DIRECTORY = DatasetLocation.DIRECTORY / "package-boundaries"
@@ -792,17 +791,7 @@ class PackageBoundarySnippet(PathEnumeration):
     The lower distribution importing the higher one.
     """
 
-    KNOWN_CROSSING = PACKAGE / "low" / "known.py"
-    """
-    The lower distribution importing the higher one, listed as a known crossing.
-    """
-
     UNCLAIMED_MODULE = PACKAGE / "stray.py"
     """
     A module neither distribution claims.
-    """
-
-    KNOWN_CROSSINGS = DIRECTORY / "known-boundary-crossings.yaml"
-    """
-    The known crossings, naming :attr:`KNOWN_CROSSING`'s import.
     """

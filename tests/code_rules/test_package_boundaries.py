@@ -9,12 +9,7 @@ from pathlib import Path
 
 import pytest
 
-from basstler.code_rules.package_boundaries import (
-    BoundaryCrossing,
-    KnownBoundaryCrossings,
-    PackageBoundaryChecker,
-)
-from basstler.locations import PackageLocation
+from basstler.code_rules.package_boundaries import PackageBoundaryChecker
 from basstler.package_map import (
     Distribution,
     DistributionDeclaration,
@@ -46,7 +41,6 @@ def checker() -> PackageBoundaryChecker:
             )
         ),
         PackageBoundarySnippet.PACKAGE.value,
-        KnownBoundaryCrossings.from_file(PackageBoundarySnippet.KNOWN_CROSSINGS),
     )
 
 
@@ -82,19 +76,9 @@ def test_a_from_import_of_a_module_names_that_module(checker):
     """
     ``from basstler.high import caller`` imports the module ``high.caller``.
     """
-    (crossing,) = (
-        crossing
-        for crossing, _ in checker.crossings(PackageBoundarySnippet.UNLISTED_IMPORT)
-    )
+    (crossing,) = checker.crossings(PackageBoundarySnippet.UNLISTED_IMPORT)
 
-    assert crossing == BoundaryCrossing("low.upward", "high.caller")
-
-
-def test_a_known_crossing_is_not_reported(checker):
-    """
-    The baseline lists the import, so it waits for the code to move.
-    """
-    assert violation_lines(checker, PackageBoundarySnippet.KNOWN_CROSSING) == []
+    assert crossing.imported_module == "high.caller"
 
 
 # %% modules
@@ -116,29 +100,3 @@ def test_a_file_outside_the_package_is_not_checked(checker):
     A test or a script belongs to no distribution.
     """
     assert violation_lines(checker, Path(__file__)) == []
-
-
-# %% this package
-
-
-def test_the_known_crossings_are_exactly_the_package_s_crossings():
-    """
-    A new crossing fails here as much as a stale entry does, so the baseline only
-    shrinks.
-    """
-    checker = PackageBoundaryChecker(
-        known_crossings=KnownBoundaryCrossings(frozenset())
-    )
-    crossings = {
-        crossing
-        for path in PackageLocation.DIRECTORY.value.rglob("*.py")
-        if checker.module_name(path)
-        for crossing, _ in checker.crossings(path)
-    }
-
-    assert (
-        crossings
-        == KnownBoundaryCrossings.from_file(
-            PackageLocation.KNOWN_BOUNDARY_CROSSINGS
-        ).crossings
-    )

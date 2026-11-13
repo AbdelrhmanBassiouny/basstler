@@ -33,6 +33,30 @@ def test_every_module_of_the_package_is_claimed():
     assert unclaimed == []
 
 
+# %% looking up a declaration
+
+
+def test_the_map_holds_each_declaration_under_its_distribution():
+    """
+    The map reads like the mapping it is, from a distribution to its declaration.
+    """
+    assert dict(PACKAGE_MAP) == {
+        declaration.distribution: declaration
+        for declaration in PACKAGE_MAP.declarations
+    }
+
+
+def test_an_undeclared_distribution_is_not_in_the_map():
+    """
+    A lookup of a distribution nothing declares finds no declaration.
+    """
+    package_map = PackageMap(
+        (DistributionDeclaration(Distribution.CORE, Layer.CORE, ("core",)),)
+    )
+
+    assert package_map.get(Distribution.GIT) is None
+
+
 # %% claiming
 
 

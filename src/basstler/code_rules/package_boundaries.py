@@ -6,62 +6,31 @@ from __future__ import annotations
 
 import ast
 from collections.abc import Iterator
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
-
-import yaml
 
 from basstler.code_rules.checker import CodeRuleChecker, CodeRuleViolation
 from basstler.locations import PackageLocation
 from basstler.package_map import PACKAGE_MAP, PackageMap
 
-# %% crossings
+# %% imports
 
 
 @dataclass(frozen=True)
-class BoundaryCrossing:
+class ModuleImport:
     """
-    A module importing a module of a distribution its own distribution does not list.
-    """
-
-    importing_module: str
-    """
-    The dotted name, within ``basstler``, of the module holding the import.
+    One module of the package that an import statement imports, with the statement.
     """
 
     imported_module: str
     """
-    The dotted name, within ``basstler``, of the module it imports.
+    The dotted name, within ``basstler``, of the module imported.
     """
 
-
-@dataclass(frozen=True)
-class KnownBoundaryCrossings:
+    statement: ast.Import | ast.ImportFrom
     """
-    The crossings the package held when the boundaries were declared, which are not
-    reported until the code is moved.
+    The import statement.
     """
-
-    crossings: frozenset[BoundaryCrossing]
-    """
-    The crossings not reported.
-    """
-
-    @classmethod
-    def from_file(cls, path: Path) -> KnownBoundaryCrossings:
-        """
-        :param path: A YAML mapping of each importing module to the modules it imports
-            across a boundary.
-        :return: The crossings it lists.
-        """
-        listed: dict[str, list[str]] = yaml.safe_load(path.read_text()) or {}
-        return cls(
-            frozenset(
-                BoundaryCrossing(importing_module, imported_module)
-                for importing_module, imported_modules in listed.items()
-                for imported_module in imported_modules
-            )
-        )
 
 
 # %% the checker
@@ -84,15 +53,6 @@ class PackageBoundaryChecker(CodeRuleChecker):
     The ``basstler`` package directory; files outside it are not checked.
     """
 
-    known_crossings: KnownBoundaryCrossings = field(
-        default_factory=lambda: KnownBoundaryCrossings.from_file(
-            PackageLocation.KNOWN_BOUNDARY_CROSSINGS
-        )
-    )
-    """
-    The crossings not reported.
-    """
-
     def violations(self, path: Path) -> Iterator[CodeRuleViolation]:
         module = self.module_name(path)
         if not module:
@@ -106,15 +66,13 @@ class PackageBoundaryChecker(CodeRuleChecker):
                 "the distribution owning its subject in basstler.package_map",
             )
             return
-        for crossing, statement in self.crossings(path):
-            if crossing in self.known_crossings.crossings:
-                continue
-            importing = self.package_map.claiming(crossing.importing_module)
+        importing = self.package_map.claiming(module)
+        for crossing in self.crossings(path):
             imported = self.package_map.claiming(crossing.imported_module)
             yield CodeRuleViolation(
                 path,
-                statement.lineno,
-                statement.end_lineno or statement.lineno,
+                crossing.statement.lineno,
+                crossing.statement.end_lineno or crossing.statement.lineno,
                 f"{importing.distribution} imports basstler.{crossing.imported_module} "
                 f"from {imported.distribution}, which it does not list in "
                 "basstler.package_map; move the code or the import",
@@ -133,38 +91,38 @@ class PackageBoundaryChecker(CodeRuleChecker):
         parts = source.relative_to(directory).with_suffix("").parts
         return ".".join(parts[:-1] if parts[-1] == "__init__" else parts)
 
-    def crossings(self, path: Path) -> Iterator[tuple[BoundaryCrossing, ast.stmt]]:
+    def crossings(self, path: Path) -> Iterator[ModuleImport]:
         """
         :param path: A source file of a module some distribution claims.
         :return: Every import in it of a module of a distribution the module's own
-            distribution does not list, with the statement holding the import.
+            distribution does not list.
         """
-        module = self.module_name(path)
-        importing = self.package_map.claiming(module)
+        importing = self.package_map.claiming(self.module_name(path))
         allowed = {importing.distribution, *importing.dependencies}
-        for imported_module, statement in self.imported_modules(path):
-            imported = self.package_map.claiming(imported_module)
+        for module_import in self.module_imports(path):
+            imported = self.package_map.claiming(module_import.imported_module)
             if imported is None or imported.distribution in allowed:
                 continue
-            yield BoundaryCrossing(module, imported_module), statement
+            yield module_import
 
-    def imported_modules(self, path: Path) -> Iterator[tuple[str, ast.stmt]]:
+    def module_imports(self, path: Path) -> Iterator[ModuleImport]:
         """
         :param path: A Python source file.
-        :return: The dotted name within ``basstler`` of every module of the package it
-            imports, with the statement importing it.
+        :return: Every import in it of a module of the package.
         """
         for statement in ast.walk(ast.parse(path.read_text())):
             if isinstance(statement, ast.Import):
                 for alias in statement.names:
                     root, _, module = alias.name.partition(".")
                     if root == PackageLocation.DIRECTORY.name and module:
-                        yield module, statement
+                        yield ModuleImport(module, statement)
             if isinstance(statement, ast.ImportFrom) and statement.level == 0:
                 root, _, package = (statement.module or "").partition(".")
                 if root == PackageLocation.DIRECTORY.name:
                     for alias in statement.names:
-                        yield self.imported_name(package, alias.name), statement
+                        yield ModuleImport(
+                            self.imported_name(package, alias.name), statement
+                        )
 
     def imported_name(self, package: str, name: str) -> str:
         """

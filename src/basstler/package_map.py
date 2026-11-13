@@ -5,6 +5,7 @@ each one ships.
 
 from __future__ import annotations
 
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from enum import IntEnum, StrEnum
 from functools import cached_property
@@ -168,9 +169,9 @@ class DistributionDeclaration:
 
 
 @dataclass(frozen=True)
-class PackageMap:
+class PackageMap(Mapping[Distribution, DistributionDeclaration]):
     """
-    The declarations of every distribution, checked to be layered and acyclic.
+    The declaration of each distribution, checked to be layered and acyclic.
     """
 
     declarations: tuple[DistributionDeclaration, ...]
@@ -191,6 +192,10 @@ class PackageMap:
                 )
         for declaration in self.declarations:
             for dependency in declaration.dependencies:
+                if dependency not in self:
+                    raise InconsistentPackageMap(
+                        PackageMapInconsistency.UNDECLARED_DISTRIBUTION, (dependency,)
+                    )
                 if self[dependency].layer > declaration.layer:
                     raise InconsistentPackageMap(
                         PackageMapInconsistency.DEPENDENCY_ON_A_HIGHER_LAYER,
@@ -204,16 +209,16 @@ class PackageMap:
             )
 
     def __getitem__(self, distribution: Distribution) -> DistributionDeclaration:
-        """
-        :param distribution: A declared distribution.
-        :return: Its declaration.
-        """
         for declaration in self.declarations:
             if declaration.distribution is distribution:
                 return declaration
-        raise InconsistentPackageMap(
-            PackageMapInconsistency.UNDECLARED_DISTRIBUTION, (distribution,)
-        )
+        raise KeyError(distribution)
+
+    def __iter__(self) -> Iterator[Distribution]:
+        return (declaration.distribution for declaration in self.declarations)
+
+    def __len__(self) -> int:
+        return len(self.declarations)
 
     @cached_property
     def dependency_graph(self) -> rustworkx.PyDiGraph:
