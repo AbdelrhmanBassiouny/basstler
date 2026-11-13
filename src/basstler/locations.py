@@ -412,6 +412,13 @@ class ProjectLocation(PathEnumeration):
     Mirrors ``PLAN_HUB_PATH`` in ``resolve-personal-notes-config.sh``.
     """
 
+    PLAN_BRANCH_INDEX = PLANS / "_generated" / "branch-index.tsv"
+    """
+    The generated index naming the plan each item branch belongs to.
+
+    Mirrors ``PLAN_BRANCH_INDEX_PATH`` in ``resolve-personal-notes-config.sh``.
+    """
+
     PLAN_RULES = PLANS / "_rules.yaml"
     """
     The rules every plan of the repository follows, one entry per rule.

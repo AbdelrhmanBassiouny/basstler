@@ -14,7 +14,11 @@ import pytest
 from basstler.github.states import CombinedCheckState
 from basstler.maintenance.board import PullRequestField, PullRequestHeadKey
 from basstler.github.exceptions import GitHubRequestFailed
-from basstler.maintenance.github import CommitReport, GitHubRepository, RepositoryPath
+from basstler.maintenance.github import (
+    CommitReport,
+    GitHubRepository,
+    GitHubRepositoryPath,
+)
 from basstler.plan.dependencies import DependencyResolver
 from basstler.pull_request_source import GitHubPullRequestSource
 from basstler.pull_request_state import PullRequestRecord, PullRequestState
@@ -82,7 +86,7 @@ def commit_report_path(report: CommitReport) -> str:
     :return: The path it is listed from.
     """
     return (
-        f"/{OPEN_PULL_REQUEST.repository.api_path}{RepositoryPath.COMMITS}/"
+        f"/{OPEN_PULL_REQUEST.repository.api_path}{GitHubRepositoryPath.COMMITS}/"
         f"{SiteSampleText.HEAD_COMMIT}/{report}?per_page={GitHubRepository.page_size}"
     )
 
@@ -138,6 +142,21 @@ def test_github_source_leaves_the_checks_of_a_closed_pull_request_unread():
                 ]
             },
         )
+    )
+    assert source.pull_request(OPEN_PULL_REQUEST).check_state is None
+
+
+def test_github_source_reading_no_check_states_leaves_an_open_pull_requests_unread():
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(
+            responses=details_of(OPEN_PULL_REQUEST.repository),
+            pages={
+                listing_path(OPEN_PULL_REQUEST.repository): [
+                    [api_pull_request_at_head(PullRequestState.OPEN)]
+                ]
+            },
+        ),
+        reads_check_states=False,
     )
     assert source.pull_request(OPEN_PULL_REQUEST).check_state is None
 

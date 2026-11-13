@@ -4,7 +4,7 @@ from the ``pr_data.json``-shaped file ``STUB_PULL_REQUESTS`` names instead of fr
 GitHub.
 
 With the variable unset, no pull request exists; naming a missing file, every read gets
-no answer.
+no answer. ``every-plan`` records on the notes branch of the working directory.
 """
 
 from __future__ import annotations
@@ -17,7 +17,11 @@ from pathlib import Path
 
 from basstler.github.client import HttpMethod
 from basstler.github.exceptions import GitHubUnreachableError
-from basstler.plan.merged_items import MergedItems
+from basstler.plan.merged_items.every_plan import (
+    MergedItemsCommand,
+    MergedItemsInEveryPlan,
+)
+from basstler.plan.merged_items.plan_items import MergedItems, logger
 from basstler.pull_request_source import PullRequestSource
 from basstler.pull_request_state import PullRequestRecord
 from basstler.repository import PullRequestReference, Repository
@@ -55,8 +59,10 @@ class RecordingPullRequestSource(PullRequestSource):
 # %% the command
 
 recording = os.environ.get("STUB_PULL_REQUESTS")
-sys.exit(
-    MergedItems.record(
-        Path(sys.argv[1]), RecordingPullRequestSource(recording and Path(recording))
+source = RecordingPullRequestSource(recording and Path(recording))
+if sys.argv[1] == MergedItemsCommand.EVERY_PLAN:
+    logger.info(
+        MergedItemsInEveryPlan(source).record_on_notes_branch(Path(), push_attempts=1)
     )
-)
+    sys.exit(0)
+sys.exit(MergedItems.record(Path(sys.argv[1]), source))

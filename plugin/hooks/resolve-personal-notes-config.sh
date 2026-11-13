@@ -13,6 +13,11 @@ PLUGIN_ROOT="$(cd "${HOOKS_DIR}/.." && pwd)"
 # too (see basstler.plugin_root.PluginRoot).
 export BASSTLER_PLUGIN_ROOT="${PLUGIN_ROOT}"
 
+# Git Bash rewrites an argument holding ":" and "/" as a Windows path before git
+# sees it, breaking "refs/...:<path>" object names and "+refs/...:refs/..." refspecs.
+# basstler.environment.GitBashVariable.ARGUMENT_CONVERSION_EXCLUSIONS; ignored elsewhere.
+export MSYS2_ARG_CONV_EXCL="refs/;+refs/"
+
 # PROJECT_ROOT: the project the session works in - CLAUDE_PROJECT_DIR, which
 # Claude Code sets for every hook, else the top of the git repository the caller
 # runs in, for a script run by hand. Never derived from this file's location: the
@@ -391,6 +396,8 @@ PLAN_SIZE_LIMITS_MODULE="basstler.plan.size_limits"
 # basstler.plan.merged_items: records a plan's items done whose pull requests GitHub
 # reports merged, so a save drops them - run by save-plan.sh and session-start.sh.
 PLAN_MERGED_ITEMS_MODULE="basstler.plan.merged_items"
+# Its subcommand recording every plan on the notes branch and pushing the result.
+PLAN_MERGED_ITEMS_EVERY_PLAN_COMMAND="every-plan"
 # basstler.document_references: names every module and skill a document cites
 # that this release no longer ships, and what replaced it.
 DOCUMENT_REFERENCES_MODULE="basstler.document_references"
