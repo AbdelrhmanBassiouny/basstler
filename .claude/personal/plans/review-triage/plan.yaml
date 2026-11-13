@@ -1,0 +1,26 @@
+schema_version: 1
+id: review-triage
+title: 'Review triage: mechanical files proven and marked viewed'
+description: A pull request's files whose change is provably only imports, a PR-wide rename
+  or docstring and comment formatting are classified as mechanical, listed in a CI summary,
+  and marked viewed for the reviewer, so review time goes to the files that changed behaviour.
+default_repository: KAOS-repositories/basstler
+waves:
+- id: triage
+  name: Triage
+tracks:
+- id: triage
+  name: Classify, report and mark viewed
+  wave: triage
+items:
+- id: mechanical-file-triage
+  title: Classify mechanical files, summarise them in CI and mark them viewed
+  track: triage
+  depends_on: []
+  status: in progress
+  branch: ccr-37402cb7-cls5ht
+  session: https://claude.ai/code/session_01JxHGiQ6QwrU1DCxnD3WaYc
+  notes: 'One PR: a deterministic classifier (AST and token comparison after undoing renames,
+    strict imports, whitespace-normalised docstrings and comments), renames auto-detected
+    with a PR-description override, a CI job summary, and a command marking mechanical files
+    viewed with the reviewer''s own credential.'
