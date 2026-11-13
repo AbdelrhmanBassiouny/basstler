@@ -52,6 +52,19 @@ def test_a_package_compared_with_its_own_listing_has_no_new_crossing(tmp_path):
     assert report_new_crossings(listing) == CodeRulesExitCode.SUCCESS
 
 
+def test_a_package_compared_with_its_own_commit_has_no_new_crossing(tmp_path):
+    """
+    Against the commit checked out, no module moved, so the listing holds every crossing
+    under its current name.
+    """
+    listing = tmp_path / "crossings.json"
+    list_crossings(listing)
+
+    assert report_new_crossings(listing, base_commit="HEAD") == (
+        CodeRulesExitCode.SUCCESS
+    )
+
+
 # %% generating AGENTS.md
 
 

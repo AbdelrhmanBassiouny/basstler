@@ -5,13 +5,14 @@ Finds imports that cross from one distribution into another it does not list.
 from __future__ import annotations
 
 import ast
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
 from basstler.code_rules.checker import CodeRuleChecker, CodeRuleViolation
 from basstler.json_model import ValidatedJSONModel
 from basstler.locations import PackageLocation
+from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.package_map import PACKAGE_MAP, PackageMap
 
 # %% imports
@@ -50,6 +51,26 @@ class BoundaryCrossing(ValidatedJSONModel):
     """
 
 
+@dataclass(frozen=True)
+class ModuleRenames:
+    """
+    The modules of the package a change moved.
+    """
+
+    new_name_by_old_name: Mapping[str, str]
+    """
+    Each moved module's dotted name within ``basstler`` before the change, and its name
+    after.
+    """
+
+    def current_name(self, module: str) -> str:
+        """
+        :param module: A module's dotted name within ``basstler`` before the change.
+        :return: Its name after the change; *module* itself when it did not move.
+        """
+        return self.new_name_by_old_name.get(module, module)
+
+
 class PackageCrossings(ValidatedJSONModel):
     """
     Every boundary crossing of one checkout of the package.
@@ -67,6 +88,21 @@ class PackageCrossings(ValidatedJSONModel):
         """
         return tuple(
             crossing for crossing in self.crossings if crossing not in base.crossings
+        )
+
+    def renamed(self, renames: ModuleRenames) -> PackageCrossings:
+        """
+        :param renames: The modules a change moved.
+        :return: These crossings, with each module named as it is after the change.
+        """
+        return PackageCrossings(
+            crossings=tuple(
+                BoundaryCrossing(
+                    importing_module=renames.current_name(crossing.importing_module),
+                    imported_module=renames.current_name(crossing.imported_module),
+                )
+                for crossing in self.crossings
+            )
         )
 
 
@@ -139,6 +175,33 @@ class PackageBoundaryChecker(CodeRuleChecker):
                 )
             )
         )
+
+    def module_renames(self, git: GitCommandRunner, base_commit: str) -> ModuleRenames:
+        """
+        :param git: The checkout of the package.
+        :param base_commit: The commit the checked out package is compared with.
+        :return: The modules of :attr:`package_directory` git detects as moved since
+            *base_commit*.
+        """
+        listing = git.run(
+            "diff",
+            "--name-status",
+            "--find-renames",
+            "--diff-filter=R",
+            "--relative",
+            base_commit,
+            "HEAD",
+            "--",
+            str(self.package_directory),
+        )
+        new_name_by_old_name = {}
+        for line in listing.splitlines():
+            _, old_path, new_path = line.split("\t")
+            old_module = self.module_name(git.working_directory / old_path)
+            new_module = self.module_name(git.working_directory / new_path)
+            if old_path.endswith(".py") and old_module and new_module:
+                new_name_by_old_name[old_module] = new_module
+        return ModuleRenames(new_name_by_old_name)
 
     def module_name(self, path: Path) -> str | None:
         """

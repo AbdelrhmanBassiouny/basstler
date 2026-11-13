@@ -93,7 +93,7 @@ jobs:
 
       - name: Fail on a crossing the base does not have
         if: steps.base.outputs.listed == 'true'
-        run: python -m basstler code-rules new-crossings "$RUNNER_TEMP/base-crossings.json"
+        run: python -m basstler code-rules new-crossings "$RUNNER_TEMP/base-crossings.json" --base-commit "$BASE_COMMIT"
 
   # Past a daily ceiling a pull request's matrix is skipped, unless it carries the
   # budget-override label. A push to main always runs it, since its pass is what releases.

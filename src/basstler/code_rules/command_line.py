@@ -92,14 +92,22 @@ def list_crossings(output: Path) -> CodeRulesExitCode:
 
 
 @code_rules_app.command(name=CodeRulesCommand.NEW_CROSSINGS)
-def report_new_crossings(base: Path) -> CodeRulesExitCode:
+def report_new_crossings(
+    base: Path, *, base_commit: str | None = None
+) -> CodeRulesExitCode:
     """
     Report each boundary crossing of the package that the base checkout does not have.
 
     :param base: The listing :func:`list_crossings` wrote in the base checkout.
+    :param base_commit: The base checkout's commit; a module moved since keeps the
+        crossings the listing holds under its old name.
     """
+    checker = PackageBoundaryChecker()
     base_crossings = PackageCrossings.from_json(json.loads(base.read_text()))
-    added = PackageBoundaryChecker().package_crossings().added_since(base_crossings)
+    if base_commit is not None:
+        renames = checker.module_renames(GitCommandRunner(Path.cwd()), base_commit)
+        base_crossings = base_crossings.renamed(renames)
+    added = checker.package_crossings().added_since(base_crossings)
     for crossing in added:
         logger.error(
             "basstler.%s newly imports basstler.%s across a distribution boundary; "

@@ -5,12 +5,14 @@ distribution the importing module's distribution does not list.
 
 from __future__ import annotations
 
+import shutil
 from pathlib import Path
 
 import pytest
 
 from basstler.code_rules.package_boundaries import (
     BoundaryCrossing,
+    ModuleRenames,
     PackageBoundaryChecker,
     PackageCrossings,
 )
@@ -27,25 +29,29 @@ from ..constants.paths import PackageBoundarySnippet
 
 
 @pytest.fixture
-def checker() -> PackageBoundaryChecker:
+def package_map() -> PackageMap:
     """
-    :return: A checker of the dataset's package, where a higher distribution lists a
-        lower one.
+    :return: The dataset's map, where a higher distribution lists a lower one.
     """
-    return PackageBoundaryChecker(
-        PackageMap(
-            (
-                DistributionDeclaration(Distribution.CORE, Layer.CORE, ("low",)),
-                DistributionDeclaration(
-                    Distribution.GIT,
-                    Layer.LOCAL_TOOLS,
-                    ("high",),
-                    (Distribution.CORE,),
-                ),
-            )
-        ),
-        PackageBoundarySnippet.PACKAGE.value,
+    return PackageMap(
+        (
+            DistributionDeclaration(Distribution.CORE, Layer.CORE, ("low",)),
+            DistributionDeclaration(
+                Distribution.GIT,
+                Layer.LOCAL_TOOLS,
+                ("high",),
+                (Distribution.CORE,),
+            ),
+        )
     )
+
+
+@pytest.fixture
+def checker(package_map) -> PackageBoundaryChecker:
+    """
+    :return: A checker of the dataset's package.
+    """
+    return PackageBoundaryChecker(package_map, PackageBoundarySnippet.PACKAGE.value)
 
 
 def violation_lines(checker: PackageBoundaryChecker, path: Path) -> list[int]:
@@ -136,3 +142,53 @@ def test_a_crossing_the_base_holds_is_not_new(checker):
     crossings = checker.package_crossings()
 
     assert crossings.added_since(crossings) == ()
+
+
+# %% renamed modules
+
+
+def test_a_crossing_the_base_holds_under_a_module_s_old_name_is_not_new(checker):
+    """
+    A module that moved keeps the crossings it had under its old name.
+    """
+    crossings = checker.package_crossings()
+    (crossing,) = crossings.crossings
+    renames = ModuleRenames({"low.before_the_move": crossing.importing_module})
+    base = PackageCrossings(
+        crossings=(
+            BoundaryCrossing(
+                importing_module="low.before_the_move",
+                imported_module=crossing.imported_module,
+            ),
+        )
+    )
+
+    assert crossings.added_since(base.renamed(renames)) == ()
+
+
+@pytest.fixture
+def moved_package(
+    scratch_repository, package_map
+) -> tuple[PackageBoundaryChecker, str]:
+    """
+    :return: A checker of the dataset's package committed in a scratch repository,
+        and the commit before its lower distribution's importing module was moved.
+    """
+    package = scratch_repository.project_root / PackageBoundarySnippet.PACKAGE.name
+    shutil.copytree(PackageBoundarySnippet.PACKAGE.value, package)
+    scratch_repository.commit_everything("add the package")
+    base_commit = scratch_repository.git.commit_at("HEAD")
+    scratch_repository.run_git("mv", "basstler/low/upward.py", "basstler/low/moved.py")
+    scratch_repository.commit_everything("move the importing module")
+    return PackageBoundaryChecker(package_map, package), base_commit
+
+
+def test_a_module_git_detects_as_moved_is_renamed(moved_package, scratch_repository):
+    """
+    The importing module's move is read as a rename from its old dotted name.
+    """
+    checker, base_commit = moved_package
+
+    assert checker.module_renames(scratch_repository.git, base_commit) == (
+        ModuleRenames({"low.upward": "low.moved"})
+    )
