@@ -69,3 +69,10 @@ items:
     and the request branch are retired. An on-demand run fails fast when it does not start.
 
     '
+
+- id: contribute-rename
+  title: "Rename promote to contribute everywhere, with the label migrated"
+  branch: null
+  track: stacks
+  depends_on: []
+  status: not started

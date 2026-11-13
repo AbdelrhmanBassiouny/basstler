@@ -8,3 +8,4 @@
 - basstler is for anyone: nothing names the owner, a repository or a branch outside configuration.
 - Every new workflow passes actions-budget's rules: no schedule, cancel superseded runs, job timeouts, skip on fork pushes.
 - An LLM runs only where judgment is needed: in a session through a skill, in an Action through claude-code-action or the Agent SDK. Deterministic work calls the core library directly, never through an LLM or MCP.
+- Name opening a fork branch's pull request on its upstream *contributing*, as GitHub does; new code never says promote or promotion.
