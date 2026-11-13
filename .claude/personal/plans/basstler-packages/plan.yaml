@@ -33,8 +33,11 @@ items:
 - id: git-and-github-domain
   title: Extract basstler.git and gather the GitHub domain model into basstler.github
   track: package-split
+  branch: claude/plan-item-kickoff-basstler-shw70p
+  pull_request_number: 210
+  session: https://claude.ai/code/session_018wfiv5RZHVt2MWL11udUn9
   depends_on: []
-  status: not started
+  status: in progress
   notes: 'GitCommandRunner, GitCommandFailed, branch, remote_branch, commit_move into basstler.git.
     Into basstler.github: repository, github_labels, pull_request_state, pull_request_source,
     maintenance github/board record/description/constants, ExternalCallFailed, upstream_reviews
