@@ -1,11 +1,12 @@
 ## Plan
-- Extract one promotability rule (reasons a branch is not promotable) shared by `Stack.promotion_order` and the site
-- Narrow `PromotionLink.build` to a target dataclass (upstream repository, base, fork owner)
-- Read fork parent + default branch, and PR base/title, into the site build
-- Render a new-tab link, or a disabled control with the reason as hover text
+- Shared promotability rule (done); PromotionLink built for a target (done)
+- Site reads the PR base/title and the fork's upstream (done)
+- Card button: new-tab link or disabled with reason (done, under full-suite check)
 
 ## Done
-- Bootstrapped branch, draft PR #211, item recorded in progress
+- `PromotionReadiness` / `PromotionBlocker` used by `Stack.promotion_order` and the site
+- `PromotionTarget` + `PromotionLink.for_target`; `build` keeps its signature
+- `ForkLineage` read from repository details; `PromotionButton` on `Item.promotion`
 
 ## Next
-- Tests first for the shared rule, then the code
+- Confirm the full suite, push, then document the button in the plan-site docs
