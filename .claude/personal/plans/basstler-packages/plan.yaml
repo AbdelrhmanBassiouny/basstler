@@ -37,8 +37,9 @@ items:
   notes: >
     Implemented in draft #154: basstler.package_map (Layer, Distribution, PACKAGE_MAP) and
     PackageBoundaryChecker on "a package imports only the basstler packages its pyproject lists",
-    with a 22-crossing baseline (code_rules/known-boundary-crossings.yaml) a test keeps exact. Next:
-    review of the module placement and dependency lists. Module paths never change.
+    with a 25-crossing baseline (code_rules/known-boundary-crossings.yaml) a test keeps exact.
+    Merged with main at 51bd1f03 (2026-11-13), placing the modules main added since. Next: review of
+    the module placement and dependency lists. Module paths never change.
 - id: git-and-github-domain
   title: Extract basstler.git and gather the GitHub domain model into basstler.github
   track: package-split
