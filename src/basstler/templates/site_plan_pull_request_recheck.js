@@ -1,5 +1,3 @@
-{% set chip_field = vocabulary.chip_display.field_name %}
-{% set done_field = vocabulary.done_status_display.field_name %}
 var planPageLiveStates = {{ vocabulary.live_state_display.state_chips | tojson }};
 var planPageDoneStatus = {{ vocabulary.live_state_display.done_status | tojson }};
 var planPageChipTones = {{ vocabulary.live_state_display.chip_tones | tojson }};
@@ -33,7 +31,7 @@ function planPageChangeCount(status, change) {
 
 function planPageMarkItemDone(card) {
   var status = card.getAttribute("{{ vocabulary.live_state_attribute.ITEM_STATUS }}");
-  if (status === planPageDoneStatus["{{ done_field.STATUS }}"]) {
+  if (status === planPageDoneStatus.status) {
     return;
   }
   Array.prototype.slice.call(card.classList).forEach(function (className) {
@@ -41,13 +39,13 @@ function planPageMarkItemDone(card) {
       card.classList.remove(className);
     }
   });
-  card.classList.add(planPageDoneStatus["{{ done_field.CSS_CLASS }}"]);
-  card.setAttribute("{{ vocabulary.live_state_attribute.ITEM_STATUS }}", planPageDoneStatus["{{ done_field.STATUS }}"]);
+  card.classList.add(planPageDoneStatus.css_class);
+  card.setAttribute("{{ vocabulary.live_state_attribute.ITEM_STATUS }}", planPageDoneStatus.status);
   var statusChip = card.querySelector("[{{ vocabulary.live_state_attribute.STATUS_CHIP }}]");
-  statusChip.className = "chip " + planPageDoneStatus["{{ done_field.TONE }}"];
-  statusChip.textContent = planPageDoneStatus["{{ done_field.LABEL }}"];
+  statusChip.className = "chip " + planPageDoneStatus.tone;
+  statusChip.textContent = planPageDoneStatus.label;
   planPageChangeCount(status, -1);
-  planPageChangeCount(planPageDoneStatus["{{ done_field.STATUS }}"], 1);
+  planPageChangeCount(planPageDoneStatus.status, 1);
 }
 
 function planPageShowLiveState(chip, stateName) {
@@ -55,8 +53,8 @@ function planPageShowLiveState(chip, stateName) {
   planPageChipTones.forEach(function (tone) {
     chip.classList.remove(tone);
   });
-  chip.classList.add(shown["{{ chip_field.TONE }}"]);
-  chip.textContent = chip.textContent.split(" · ")[0] + " · " + shown["{{ chip_field.LABEL }}"];
+  chip.classList.add(shown.tone);
+  chip.textContent = chip.textContent.split(" · ")[0] + " · " + shown.label;
   if (stateName === "{{ vocabulary.live_state.MERGED.value }}") {
     planPageMarkItemDone(chip.closest(".item"));
   }

@@ -4,7 +4,6 @@ Tests for plan_site/hub_page.py's cards: a plan's progress on its repository's i
 
 from __future__ import annotations
 
-import dataclasses
 
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.hub_page import CountedItem, PlanSummary, StageShare
@@ -128,16 +127,3 @@ def test_a_plan_s_card_counts_its_items_and_those_that_landed():
         plan.landed_item_count,
         len(plan.items) + plan.landed_item_count,
     )
-
-
-# %% the names a script reads counted items by
-
-
-def test_a_script_reads_each_field_of_a_counted_item_by_its_name():
-    assert [member.value for member in CountedItem.field_name] == [
-        data_field.name for data_field in dataclasses.fields(CountedItem)
-    ]
-
-
-def test_a_class_builds_its_field_names_once():
-    assert CountedItem.field_name is CountedItem.field_name

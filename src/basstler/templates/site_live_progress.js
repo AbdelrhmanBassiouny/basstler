@@ -1,4 +1,3 @@
-{% set item_field = vocabulary.counted_item.field_name %}
 var siteReachedStages = {{ vocabulary.live_state_display.reached_stages | tojson }};
 
 function siteListLiveStates(listingUrl, numbers) {
@@ -56,11 +55,11 @@ function siteShowProgress(card, items, statesByListing) {
     counts[stage] = 0;
   });
   items.forEach(function (item) {
-    var listingUrl = item["{{ item_field.LISTING_URL }}"];
-    var listed = listingUrl ? statesByListing[listingUrl][item["{{ item_field.NUMBER }}"]] : undefined;
+    var listingUrl = item.listing_url;
+    var listed = listingUrl ? statesByListing[listingUrl][item.number] : undefined;
     var reached = listed
-      ? siteReachedStages[item["{{ item_field.STATUS }}"]][listed]
-      : item["{{ item_field.REACHED_STAGES }}"];
+      ? siteReachedStages[item.status][listed]
+      : item.reached_stages;
     reached.forEach(function (stage) {
       counts[stage] += 1;
     });
@@ -98,9 +97,9 @@ function siteRecountProgress() {
   var numbersByListing = {};
   cards.forEach(function (card) {
     card.items.forEach(function (item) {
-      var listingUrl = item["{{ item_field.LISTING_URL }}"];
+      var listingUrl = item.listing_url;
       if (listingUrl) {
-        (numbersByListing[listingUrl] = numbersByListing[listingUrl] || []).push(item["{{ item_field.NUMBER }}"]);
+        (numbersByListing[listingUrl] = numbersByListing[listingUrl] || []).push(item.number);
       }
     });
   });

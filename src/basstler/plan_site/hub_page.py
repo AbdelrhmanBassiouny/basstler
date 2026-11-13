@@ -19,7 +19,7 @@ from basstler.github.client import PageParameter
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.plan import Item, Plan, ProgressStage
 from basstler.plan_site.site_vocabulary import LiveStateVocabulary
-from basstler.render_common import ScriptData, TemplatePage
+from basstler.render_common import TemplatePage
 from basstler.repository import GitHubAddress
 
 MAXIMUM_PULL_REQUESTS_PER_PAGE = 100
@@ -89,7 +89,7 @@ class LabelPlaceholder(StrEnum):
 
 
 @dataclass(frozen=True)
-class CountedItem(ScriptData):
+class CountedItem:
     """
     One item a card counts, as its script recounts it live.
     """
@@ -623,11 +623,6 @@ class HubPageVocabulary(LiveStateVocabulary):
     stage_share: type[StageShare] = field(default=StageShare, init=False)
     """
     The class whose decimal places a share is written with.
-    """
-
-    counted_item: type[CountedItem] = field(default=CountedItem, init=False)
-    """
-    The class whose fields the script reads each counted item by.
     """
 
     page_parameter: type[PageParameter] = field(default=PageParameter, init=False)

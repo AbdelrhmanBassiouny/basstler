@@ -113,28 +113,6 @@ def create_template_environment() -> jinja2.Environment:
     return environment
 
 
-class ScriptData:
-    """
-    A dataclass a page's script reads as JSON: ``tojson`` writes it as its fields, and a
-    template spells each key the script reads through :attr:`field_name`.
-    """
-
-    @classproperty
-    @cache
-    def field_name(cls) -> type[StrEnum]:
-        """
-        The class's field names, each a member named as its field in upper case, built
-        once per class.
-        """
-        return StrEnum(
-            f"{cls.__name__}FieldName",
-            {
-                data_field.name.upper(): data_field.name
-                for data_field in dataclasses.fields(cls)
-            },
-        )
-
-
 class TemplatePage(ABC):
     """
     A page rendered from one of the package's Jinja2 templates.
