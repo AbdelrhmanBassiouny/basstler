@@ -1,12 +1,10 @@
-## PR progress: claude/loving-gauss-7g1xt6 (#154, basstler-packages/package-map)
+## Plan
+- Keep #154 (package-map) mergeable with main and its baseline exact until review.
 
-Plan
-- review the module placement and dependency lists in basstler.package_map
+## Done
+- Merged main at 51bd1f03: took main's .pre-commit-config.yaml, kept both exceptions.
+- Placed json_model (core), main_failure and repository_attachment (github), document_references (notes); dropped upstream_reviews.vocabulary; baseline 22 -> 25.
+- Folded windows-support/windows-interpreter-candidates into uv-workspace (deferred there).
 
-Done
-- basstler.package_map (Layer, Distribution, DistributionDeclaration, PackageMap, PACKAGE_MAP)
-- PackageBoundaryChecker on IMPORT_ONLY_LISTED_PACKAGES, 22-crossing baseline kept exact by a test
-- AGENTS.md regenerated, rustworkx added to pre-commit hook deps, PR description written (e61ebb4e)
-
-Next
-- answer review (PR labelled release:minor)
+## Next
+- Owner reviews module placement and dependency lists; CI on 306142fa.
