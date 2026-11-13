@@ -9,6 +9,7 @@ github.exceptions:
 maintenance.git_commands:
   - maintenance.constants
   - maintenance.exceptions
+  - repository
   - stack.model
   - stack.settings
 maintenance.github:
@@ -24,6 +25,10 @@ plan.item_bootstrap.opening:
   - maintenance.board
 plan.item_brief:
   - plan_site.plan
+plan.merged_items.every_plan:
+  - personal_notes.branch
+plan.repository_rules_store:
+  - personal_notes.branch
 pull_request_source:
   - maintenance.board
   - plan.dependencies
