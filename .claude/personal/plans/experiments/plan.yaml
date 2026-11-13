@@ -60,6 +60,8 @@ items:
   notes: The hub page lists running and accepted experiments, each with its goal, sandbox link, stage,
     verdict and one link per allowed move (Split into a plan, Open upstream, Drop, ...), read from the
     same model as the session's prompt. Dropped and finished experiments sink into a collapsed section.
+    On the plan page an accepted experiment's chip offers its two finishing moves, Split into PRs and
+    Open in {upstream}, the latter reusing plan-site-ui/promote-button's link.
 - id: experiment-split
   title: One session splits an accepted experiment into a plan and implements it
   branch: null
