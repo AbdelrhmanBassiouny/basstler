@@ -13,6 +13,14 @@
 # Deliberately holds no logic. Deciding *which* message applies is
 # session-start.sh's business; this file only says how each one reads.
 
+# %% the personal notes line
+
+# notes_line_not_reached: the notes branch could not be fetched, and its
+# repository is one this session cannot reach; the next lines say how to attach it.
+notes_line_not_reached() {
+  printf 'not loaded - this session cannot reach the notes repository yet'
+}
+
 # %% the plan line
 
 # plan_line_not_applicable: for a branch no plan item could ever track - the
@@ -52,6 +60,19 @@ plan_line_tracked() {
   local plan_id="$1"
   local tracking_issue="$2"
   printf "'%s' (tracking issue: %s)" "${plan_id}" "${tracking_issue}"
+}
+
+# %% the merged items line
+
+# merged_items_line_no_plans: the notes branch holds no plans to record merged items in.
+merged_items_line_no_plans() {
+  printf 'not applicable (the notes branch holds no plans)'
+}
+
+# merged_items_line_not_checked: recording every plan's merged items failed, and
+# nothing was changed.
+merged_items_line_not_checked() {
+  printf 'not checked - recording the plans'"'"' merged items failed; the error is above'
 }
 
 # %% the hub line
@@ -137,6 +158,31 @@ setup_line_needs_setup() {
   printf '%s check(s) need setup or could not be verified - run /setup-personal-notes:' "${needs_setup_count}"
 }
 
+# %% the cited names line
+
+# cited_names_line_no_notes: there are no personal notes to read.
+cited_names_line_no_notes() {
+  printf 'not applicable (no personal notes)'
+}
+
+# cited_names_line_current: every module and skill the notes name is shipped.
+cited_names_line_current() {
+  printf 'every module and skill the notes name is shipped'
+}
+
+# cited_names_line_stale: the heading above the indented rows naming each
+# module or skill the notes cite that this release no longer ships.
+cited_names_line_stale() {
+  local stale_count="$1"
+  printf '%s name(s) in the notes are no longer shipped - correct them between the notes markers in CLAUDE.local.md, then run save-personal-notes.sh:' "${stale_count}"
+}
+
+# cited_names_line_not_checked: the module that reads the notes did not run.
+cited_names_line_not_checked() {
+  local module="$1"
+  printf 'not checked - %s did not run' "${module}"
+}
+
 # %% the dependencies line
 
 # dependencies_line_not_checked: nothing could be looked up - the interpreter or
@@ -201,6 +247,68 @@ dependencies_line_environment_not_created() {
     "${environment_directory}"
 }
 
+# dependencies_line_release_not_named: outside a checkout, the plugin names no
+# release, so no package was installed for it.
+dependencies_line_release_not_named() {
+  local plugin_root="$1"
+  printf 'not installed - the plugin at %s names no release in its plugin.json, so there is no package of its release to install; reinstall the plugin from the marketplace' \
+    "${plugin_root}"
+}
+
+# %% the release line
+
+# release_line_checkout: the plugin and the package are both the source of the
+# checkout the plugin sits in.
+release_line_checkout() {
+  local checkout="$1"
+  printf 'plugin and package both run from the checkout %s' "${checkout}"
+}
+
+# release_line_matching: the package is the plugin's own release.
+release_line_matching() {
+  local release="$1"
+  printf 'plugin and package both at %s' "${release}"
+}
+
+# release_line_mismatched: the package is another release than the plugin's,
+# so a hook may pass it what it does not accept.
+release_line_mismatched() {
+  local plugin_release="$1"
+  local package_version="$2"
+  local package_source="$3"
+  printf "the plugin is %s but the package is %s - its hooks may pass what this package does not accept; start a new session, or install '%s'" \
+    "${plugin_release}" "${package_version}" "${package_source}"
+}
+
+# release_line_not_named: the plugin names no release, so nothing pins the
+# package to it.
+release_line_not_named() {
+  local package_version="$1"
+  printf 'the plugin names no release, so nothing pins package %s to it - reinstall the plugin from the marketplace' \
+    "${package_version}"
+}
+
+# release_line_package_not_read: the installed package's version could not be
+# read, as when it is not installed.
+release_line_package_not_read() {
+  printf "could not read the installed package's version - see the dependencies line"
+}
+
+# %% the environments line
+
+# environments_line_none_removed: every other package environment still has
+# its project.
+environments_line_none_removed() {
+  printf 'none removed'
+}
+
+# environments_line_removed: the package environments of projects that are gone
+# were removed.
+environments_line_removed() {
+  local removed="$1"
+  printf 'removed %s - their projects are gone' "${removed}"
+}
+
 # %% the Actions usage line
 
 # actions_usage_line_not_checked: the usage could not be measured.
@@ -220,6 +328,23 @@ actions_usage_line_flagged() {
   printf 'near or over a daily ceiling:\n%s' "$(printf '%s\n' "${flagged}" | sed 's/^/    /')"
 }
 
+# %% the main tests line
+
+# main_tests_line_not_checked: the repository's issues could not be read.
+main_tests_line_not_checked() {
+  printf "not checked - could not read the repository's issues"
+}
+
+# main_tests_line_passing: no issue reports the default branch's tests failing.
+main_tests_line_passing() {
+  printf 'no open issue reports them failing'
+}
+
+# main_tests_line_failing: $1 is the open issue reporting them failing.
+main_tests_line_failing() {
+  printf 'failing - fix them first: %s' "$1"
+}
+
 # %% the upstream-reviews Action line
 
 # upstream_reviews_action_line_not_read: the fork's branches could not be read,
@@ -227,6 +352,12 @@ actions_usage_line_flagged() {
 upstream_reviews_action_line_not_read() {
   local remote="$1"
   printf "not checked - could not read the fork's branches on '%s'" "${remote}"
+}
+
+# upstream_reviews_action_line_release_not_named: the plugin names no release
+# for the Action to run, so it was not checked.
+upstream_reviews_action_line_release_not_named() {
+  printf 'not checked - the plugin names no release for it to run; see the dependencies line'
 }
 
 # upstream_reviews_action_line_not_installed: the fork has no Action branch.

@@ -1,5 +1,5 @@
 """
-The run on the fork's Action branch that answers the request a session pushed.
+The run on a request's branch that answers the request a session pushed there.
 """
 
 from __future__ import annotations
@@ -9,16 +9,19 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from basstler.maintenance.github import GitHubRepository
+from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.maintenance.upstream_action import (
     OpenPullRequestsAnswer,
     OpenPullRequestsRequest,
 )
+from basstler.upstream_reviews.action.branch import ActionBranch, ActionFile
 from basstler.upstream_reviews.action.exchange import (
     ActionAnswer,
     ActionRequest,
     ActionRequestKind,
 )
 from basstler.upstream_reviews.action.recording import ActionResult
+from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.upstream_reviews.clients import GitHubCommandLineClient
 from basstler.upstream_reviews.request import UpstreamReadRequest
 
@@ -28,7 +31,7 @@ from basstler.upstream_reviews.request import UpstreamReadRequest
 @dataclass(frozen=True)
 class ActionRun:
     """
-    One run answering the request pushed to the Action branch, with the runner's
+    One run answering the request pushed on its own branch, with the runner's
     credential.
     """
 
@@ -37,9 +40,14 @@ class ActionRun:
     The pushed request.
     """
 
-    result_file: Path
+    git: GitCommandRunner
     """
-    Where the answer is written for the run to commit.
+    The checkout of the request's branch.
+    """
+
+    remote: str
+    """
+    The fork's remote in :attr:`git`.
     """
 
     def answer(self) -> ActionAnswer:
@@ -56,8 +64,17 @@ class ActionRun:
             UpstreamReadRequest.from_json(data), GitHubCommandLineClient()
         )
 
-    def write_answer(self) -> None:
+    def publish_answer(self) -> str:
         """
-        Answer the pushed request and write the answer to :attr:`result_file`.
+        Answer the pushed request and commit the answer onto the request's branch.
+
+        :return: The pushed commit.
+        :raises GitCommandFailed: If the fork refuses the push.
         """
-        self.result_file.write_text(json.dumps(self.answer().to_json()) + "\n")
+        answer = self.answer()
+        return RemoteBranch(
+            ActionBranch.for_request(answer.request_identifier), self.git, self.remote
+        ).write(
+            {ActionFile.RESULT: answer},
+            ActionBranch.request_commit_message("Answer", answer.request_identifier),
+        )

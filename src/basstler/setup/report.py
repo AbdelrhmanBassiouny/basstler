@@ -9,9 +9,10 @@ from __future__ import annotations
 
 import subprocess
 from dataclasses import dataclass
-from enum import StrEnum
+from enum import IntEnum, StrEnum
 
 from basstler.exit_codes import SetupCheckExitCode
+from basstler.setup.exceptions import CheckSetupFailedError
 
 # %% what a report is made of
 
@@ -56,6 +57,11 @@ class SetupCheck(StrEnum):
     The notes file's path on that branch, and where that came from.
     """
 
+    NOTES_REPOSITORY_ACCESS = "notes_repository_access"
+    """
+    A cloud session reaching the repository the notes are kept in.
+    """
+
     NOTES_BRANCH = "notes_branch"
     """
     The notes branch existing on its remote.
@@ -81,6 +87,12 @@ class SetupCheck(StrEnum):
     Every repository on the plan site storing its token and starting the site's build.
     """
 
+    PLAN_SITE_ACCESS = "plan_site_access"
+    """
+    A cloud session reaching the plan site's repository, so a plan save can start the
+    build.
+    """
+
     GIT_IDENTITY = "git_identity"
     """
     The identity commits are authored with, against the recorded one.
@@ -93,7 +105,7 @@ class SetupCheck(StrEnum):
 
     BASSTLER_VERSION = "basstler_version"
     """
-    The installed package's version, against basstler's latest release.
+    The installed package's version, against the plugin's own release.
     """
 
     CLAUDE_LOCAL_MD = "claude_local_md"
@@ -139,6 +151,11 @@ class CheckStatus(StrEnum):
     Nothing the check could read decides it yet, so it is neither passed nor failed.
     """
 
+    MISMATCHED = "mismatched"
+    """
+    The plugin's hooks and the package they call are not one release.
+    """
+
     INFORMATIONAL = "info"
     """
     Context rather than a verdict.
@@ -153,6 +170,27 @@ class ReportRowField(StrEnum):
     SEPARATOR = "\t"
     """
     What separates a row's check, status and detail.
+    """
+
+
+class ReportRowPosition(IntEnum):
+    """
+    Where each field sits in one report row.
+    """
+
+    CHECK = 0
+    """
+    The check the row reports on.
+    """
+
+    STATUS = 1
+    """
+    The status it reports.
+    """
+
+    DETAIL = 2
+    """
+    The human-readable explanation.
     """
 
 
@@ -204,23 +242,59 @@ class SetupReport:
 
     @classmethod
     def from_completed_process(
-        cls, process: subprocess.CompletedProcess[str]
+        cls,
+        process: subprocess.CompletedProcess[str],
+        requested_checks: frozenset[SetupCheck] = frozenset(SetupCheck),
     ) -> SetupReport:
         """
         Parse a finished check-setup.sh run.
 
         :param process: The finished check-setup.sh subprocess, its output captured.
+        :param requested_checks: The checks the run was asked to report on.
         :return: The parsed report.
-        :raises ValueError: If a row names a check or a status, or the script exits
-            with a status, this module does not declare, so a new one cannot go unread.
+        :raises CheckSetupFailedError: If the script exits with a status that carries no
+            report, a requested check has no row, or a row cannot be read.
         """
         results = {}
         repository_results = []
+        unreadable_rows = []
         for line in process.stdout.splitlines():
-            check, status, detail = line.split(ReportRowField.SEPARATOR)
+            fields = line.split(ReportRowField.SEPARATOR)
+            if not cls.is_readable(fields):
+                unreadable_rows.append(line)
+                continue
+            check, status, detail = fields
             result = CheckResult(CheckStatus(status), detail)
             if check in RepositoryCheck:
                 repository_results.append(result)
             else:
                 results[SetupCheck(check)] = result
+        missing_checks = [
+            check
+            for check in SetupCheck
+            if check in requested_checks and check not in results
+        ]
+        if (
+            process.returncode not in SetupCheckExitCode.reporting_statuses
+            or missing_checks
+            or unreadable_rows
+        ):
+            raise CheckSetupFailedError(
+                process.returncode, process.stderr, missing_checks, unreadable_rows
+            )
         return cls(SetupCheckExitCode(process.returncode), results, repository_results)
+
+    @staticmethod
+    def is_readable(fields: list[str]) -> bool:
+        """
+        :param fields: One printed row, split at its separators.
+        :return: Whether the row holds a declared check, a declared status and a detail.
+        """
+        return (
+            len(fields) == len(ReportRowPosition)
+            and (
+                fields[ReportRowPosition.CHECK] in SetupCheck
+                or fields[ReportRowPosition.CHECK] in RepositoryCheck
+            )
+            and fields[ReportRowPosition.STATUS] in CheckStatus
+        )

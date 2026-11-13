@@ -110,9 +110,10 @@ class PlanDocument(StrEnum):
         Where this document lives for one plan.
 
         :param plan_identifier: The plan's id.
-        :return: The path, relative to the personal-notes branch's root.
+        :return: The path, relative to the personal-notes branch's root and
+            ``/``-separated on every platform.
         """
-        return str(ProjectLocation.PLANS / plan_identifier / self.value)
+        return (ProjectLocation.PLANS / plan_identifier / self.value).as_posix()
 
 
 class ItemLayout(StrEnum):
@@ -380,6 +381,11 @@ class ManifestKey(KeySpecification, Enum):
     The issue structural changes to the plan are recorded on.
     """
 
+    LANDED_ITEM_COUNT = ("landed_item_count",)
+    """
+    How many items landed and were dropped from the plan.
+    """
+
     SCHEMA_VERSION = ("schema_version",)
     """
     The version of the schema the manifest is written against.
@@ -530,9 +536,9 @@ class PlanItem:
     @property
     def identifier(self) -> str:
         """
-        :return: The item's id.
+        :return: The item's id, which defaults to its branch.
         """
-        return str(self.content[ManifestKey.IDENTIFIER.key])
+        return str(self.content.get(ManifestKey.IDENTIFIER.key, self.branch))
 
     @property
     def status(self) -> ItemStatus:
@@ -632,7 +638,15 @@ class PlanManifest:
         :param path: A ``plan.yaml`` file.
         :return: The manifest it holds.
         """
-        return cls(yaml.safe_load(path.read_text()) or {})
+        return cls.from_yaml(path.read_text())
+
+    @classmethod
+    def from_yaml(cls, text: str) -> PlanManifest:
+        """
+        :param text: The YAML text of a ``plan.yaml``.
+        :return: The manifest it holds, empty for an empty text.
+        """
+        return cls(yaml.safe_load(text) or {})
 
     def write(self, path: Path) -> None:
         """
@@ -670,6 +684,18 @@ class PlanManifest:
         return Repository.parse(own_repository)
 
     @property
+    def repositories(self) -> list[Repository]:
+        """
+        :return: Every repository the plan's pull requests are on, each once, the
+            default first.
+        """
+        return list(
+            dict.fromkeys(
+                [self.default_repository, *map(self.repository_of, self.items)]
+            )
+        )
+
+    @property
     def description(self) -> str:
         """
         :return: The plan's description with its line folding undone.
@@ -686,6 +712,13 @@ class PlanManifest:
         return [
             PlanItem(item) for item in self.content.get(ManifestKey.ITEMS.key) or []
         ]
+
+    @property
+    def landed_item_count(self) -> int:
+        """
+        :return: How many items landed and were dropped from the plan by earlier saves.
+        """
+        return self.content.get(ManifestKey.LANDED_ITEM_COUNT.key, 0)
 
     @property
     def landed_identifiers(self) -> set[str]:
@@ -771,21 +804,49 @@ class PlanManifest:
             }
         )
 
+    def with_items_done(self, identifiers: set[str]) -> PlanManifest:
+        """
+        :param identifiers: The ids of the items whose work has landed.
+        :return: This manifest with each of those items' status set to done.
+        """
+        return PlanManifest(
+            {
+                **self.content,
+                ManifestKey.ITEMS.key: [
+                    (
+                        {**item.content, ManifestKey.STATUS.key: ItemStatus.DONE.value}
+                        if item.identifier in identifiers
+                        else item.content
+                    )
+                    for item in self.items
+                ],
+            }
+        )
+
     def without_landed_items(self) -> PlanManifest:
         """
         A landed item tells a future session nothing it needs: its work is in the code
         and its history in git. Dropping it also drops every dependency on it, since a
         dependency that has landed is already satisfied.
 
-        :return: This manifest with every landed item removed.
+        :return: This manifest with every landed item removed, and counted in
+            :attr:`landed_item_count`.
         """
         landed = self.landed_identifiers
+        if not landed:
+            return self
         remaining = [
             item.without_dependencies(landed).content
             for item in self.items
             if item.identifier not in landed
         ]
-        return PlanManifest({**self.content, ManifestKey.ITEMS.key: remaining})
+        return PlanManifest(
+            {
+                **self.content,
+                ManifestKey.LANDED_ITEM_COUNT.key: self.landed_item_count + len(landed),
+                ManifestKey.ITEMS.key: remaining,
+            }
+        )
 
 
 @dataclass

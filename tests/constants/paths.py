@@ -25,6 +25,11 @@ class RepositoryLocation(PathEnumeration):
     The repository root.
     """
 
+    MARKETPLACE = ROOT / ".claude-plugin" / "marketplace.json"
+    """
+    The marketplace that lists the plugin and says where it is served from.
+    """
+
     PLUGIN = ROOT / "plugin"
     """
     The Claude Code plugin: its manifest, hooks and skills.
@@ -50,9 +55,25 @@ class RepositoryLocation(PathEnumeration):
     The workflow that tags a merge commit as a release.
     """
 
+    TESTS_WORKFLOW = WORKFLOWS / "tests.yml"
+    """
+    The workflow that lints and tests every pull request and every push to main.
+    """
+
     PLAN_SITE_BUILD_WORKFLOW = WORKFLOWS / "plan-site-build.yml"
     """
     The reusable workflow that builds the plan site and deploys a changed one.
+    """
+
+    WINDOWS_SETUP_WORKFLOW = WORKFLOWS / "windows-setup.yml"
+    """
+    The workflow that runs the personal-notes setup on Windows for a pull request
+    changing what the setup runs.
+    """
+
+    MAIN_FAILURE_WORKFLOW = WORKFLOWS / "main-failure.yml"
+    """
+    The workflow that records each run of the tests on main in its failure issue.
     """
 
 
@@ -64,6 +85,36 @@ class DatasetLocation(PathEnumeration):
     DIRECTORY = Path(__file__).parents[1] / "dataset"
     """
     The dataset directory itself.
+    """
+
+    NOTES_CITING_RETIRED_NAMES = (
+        DIRECTORY / "document-references" / "notes-citing-retired-names.md"
+    )
+    """
+    Personal notes written against an older release: moved modules, a source file
+    that moved with one, a retired skill and a module that never existed.
+    """
+
+    NOTES_CITING_SHIPPED_NAMES = (
+        DIRECTORY / "document-references" / "notes-citing-shipped-names.md"
+    )
+    """
+    Personal notes citing only what this release ships, beside names that merely look
+    like the package's: a branch, a file under the git directory, another skill.
+    """
+
+    WORKFLOW_NAMING_THE_REPOSITORY = (
+        DIRECTORY / "package-contract" / "names-the-repository.yml"
+    )
+    """
+    A workflow that names this repository and the package but runs none of its modules.
+    """
+
+    WORKFLOW_RUNNING_THE_PACKAGE = (
+        DIRECTORY / "package-contract" / "runs-the-package.yml"
+    )
+    """
+    A workflow that runs the package's own entry point.
     """
 
     BOOTSTRAP_PLAN = DIRECTORY / "bootstrap-plan.yaml"
@@ -104,23 +155,44 @@ class DatasetLocation(PathEnumeration):
     the push it runs for.
     """
 
+    REJECTING_PRE_COMMIT_HOOK = DIRECTORY / "rejecting-pre-commit.sh"
+    """
+    A pre-commit hook that rejects every commit, as a project's checks do on a branch
+    that does not carry their configuration.
+    """
+
+    RECORDING_GH = DIRECTORY / "recording-gh.sh"
+    """
+    A ``gh`` that records each call's arguments, ``GH_TOKEN`` and standard input, and
+    fails a workflow run when ``GH_WORKFLOW_RUN_STATUS`` is non-zero.
+    """
+
     PROTECTED_MAIN_HOOK = DIRECTORY / "refuse-main-pre-receive.sh"
     """
     A pre-receive hook that refuses every push updating ``main``, as a protected default
     branch does.
     """
 
+    WORKFLOW_SCOPE_REFUSING_HOOK = DIRECTORY / "refuse-workflow-scope-pre-receive.sh"
+    """
+    A pre-receive hook that refuses every push as GitHub refuses a token without the
+    ``workflow`` scope.
+    """
+
+    PUSH_REFUSED_WITHOUT_CREDENTIAL = DIRECTORY / "push-refusals" / "no-credential.txt"
+    """
+    What git prints when it has no credential to push to GitHub over HTTPS.
+    """
+
+    PUSH_DECLINED = DIRECTORY / "push-refusals" / "declined.txt"
+    """
+    What git prints when a push is declined for a reason it does not name.
+    """
+
     PULL_REQUEST_DATA_KEYED_BY_NUMBER = DIRECTORY / "pr-data-keyed-by-number.json"
     """
     A ``pr_data.json`` missing its repository level: one pull request keyed by its
     number alone.
-    """
-
-    ACTION_RESULT_WITHOUT_REQUEST_IDENTIFIER = (
-        DIRECTORY / "action-result-without-request-identifier.json"
-    )
-    """
-    A result an Action release from before results named their request committed.
     """
 
     PLAN_SITE_RUNS_SUCCEEDED = DIRECTORY / "plan-site-runs-succeeded.json"
@@ -162,6 +234,11 @@ class DatasetLocation(PathEnumeration):
     A notes repository's token secret, set after its recorded failed dispatch run.
     """
 
+    PLAN_SITE_READ_TOKEN_STORED = DIRECTORY / "plan-site-read-token-stored.json"
+    """
+    A site repository's notes token secret, as stored.
+    """
+
     WORKFLOW_RUNS_NONE = DIRECTORY / "workflow-runs-none.json"
     """
     A run listing with no runs at all.
@@ -174,7 +251,38 @@ class DatasetLocation(PathEnumeration):
 
     REPOSITORY_NOT_FORK = DIRECTORY / "repository-not-fork.json"
     """
-    A repository's REST response for a repository that is not a fork.
+    A repository's REST response for a public repository that is not a fork.
+    """
+
+    SESSION_PROXY_REFUSAL = DIRECTORY / "session-proxy-refusal.json"
+    """
+    What a Claude Code cloud session's proxy answers, in GitHub's place, for a
+    repository not attached to the session.
+    """
+
+    REPOSITORY_PRIVATE = DIRECTORY / "repository-private.json"
+    """
+    A repository's REST response for a private repository that is not a fork.
+    """
+
+    REPOSITORY_TRUNK_DEFAULT_BRANCH = DIRECTORY / "repository-trunk-default-branch.json"
+    """
+    A repository's REST response for one whose default branch is not ``main``.
+    """
+
+    MAIN_FAILURE_OPEN_ISSUE = DIRECTORY / "main-failure" / "open-issue.json"
+    """
+    The open issue reporting main's failing tests, as the issues API lists it.
+    """
+
+    MAIN_FAILURE_OPENED_ISSUE = DIRECTORY / "main-failure" / "opened-issue.json"
+    """
+    The issue reporting main's failing tests, as GitHub answers its opening.
+    """
+
+    MAIN_FAILURE_RUN_JOBS = DIRECTORY / "main-failure" / "failed-run-jobs.json"
+    """
+    The jobs of a failed run of the tests: one failed, one timed out, two passed.
     """
 
     MERGE_WORKFLOW_PULL_REQUEST = DIRECTORY / "merge-workflow-pull-request.json"
@@ -257,6 +365,46 @@ class DatasetLocation(PathEnumeration):
     A module standing in for :mod:`basstler.plan_site.build_start`, printing its name.
     """
 
+    BUILD_START_NEEDS_ACCESS_STUB = STUBS / "build_start_needs_access.py"
+    """
+    A module standing in for :mod:`basstler.plan_site.build_start`, saying this session
+    cannot start the build yet.
+    """
+
+    BUILD_START_HAS_ACCESS_STUB = STUBS / "build_start_has_access.py"
+    """
+    A module standing in for :mod:`basstler.plan_site.build_start`, saying nothing: the
+    session can start the build.
+    """
+
+    FAILING_CHECK_SETUP_STUB = STUBS / "check_setup_fails.sh"
+    """
+    A script standing in for check-setup.sh, failing before it prints a report.
+    """
+
+    MERGED_ITEMS_STUB = STUBS / "merged_items_from_recording.py"
+    """
+    A module standing in for :mod:`basstler.plan.merged_items`'s command, reading the
+    pull requests from a recording.
+    """
+
+    IN_PROGRESS_ITEM_MERGED = DIRECTORY / "pull-requests-in-progress-item-merged.json"
+    """
+    A recording in which the in-progress item of :attr:`PLAN_WITH_LANDED_ITEMS` has merged.
+    """
+
+    NOTES_ACCESS_STUB = STUBS / "notes_access_prints_its_name.py"
+    """
+    A module standing in for :mod:`basstler.personal_notes.access`, printing its name as
+    the missing access.
+    """
+
+    NOTES_ACCESS_REACHED_STUB = STUBS / "notes_access_has_access.py"
+    """
+    A module standing in for :mod:`basstler.personal_notes.access`, saying nothing: the
+    session reaches the notes repository.
+    """
+
     UPSTREAM_REVIEW_RESPONSES = DIRECTORY / "upstream-review-responses"
     """
     The recorded GraphQL responses the upstream review reader is replayed against.
@@ -271,6 +419,24 @@ class DatasetLocation(PathEnumeration):
     BRIEF_ROADMAP = DIRECTORY / "brief-roadmap.md"
     """
     The standing rules of :attr:`BRIEF_PLAN`, one of them wrapped across two lines.
+    """
+
+    REPOSITORY_RULES = DIRECTORY / "repository-rules.yaml"
+    """
+    A repository's plan rules file holding two rules.
+    """
+
+    REPOSITORY_RULES_IMPORT = DIRECTORY / "repository-rules-import.yaml"
+    """
+    Rules to import into :attr:`REPOSITORY_RULES`: one rewording a rule it holds, one
+    new.
+    """
+
+    REPOSITORY_RULES_DUPLICATE_IDENTIFIER = (
+        DIRECTORY / "repository-rules-duplicate-identifier.yaml"
+    )
+    """
+    A rules file in which two rules share an id.
     """
 
     SITE_PLANS = DIRECTORY / "site-plans"
@@ -435,9 +601,19 @@ class SkillDirectory(PathEnumeration):
     The instructions for reading a branch's upstream review threads.
     """
 
+    SETUP_PERSONAL_NOTES = DIRECTORY / "setup-personal-notes"
+    """
+    The one-time setup, which works through check-setup.sh's rows.
+    """
+
     RUNNING_COMMANDS_DOCUMENT = DIRECTORY / "running-commands.md"
     """
     How every skill runs its commands, which each skill's instructions link.
+    """
+
+    PULL_REQUEST_RULES_DOCUMENT = DIRECTORY / "pull-request-rules.md"
+    """
+    The rules a skill acting on pull requests links, so they hold only while it runs.
     """
 
     MANIFEST_STALENESS_DOCUMENT = PLAN_CREATE / "manifest-staleness.md"
@@ -501,7 +677,7 @@ class PersonalNotesPath(PathEnumeration):
     and writes its own permission grants into.
     """
 
-    BRANCH_INDEX = ProjectLocation.PLANS / "_generated" / "branch-index.tsv"
+    BRANCH_INDEX = ProjectLocation.PLAN_BRANCH_INDEX
     """
     The generated reverse index mapping an item's branch to the plan tracking it.
     """

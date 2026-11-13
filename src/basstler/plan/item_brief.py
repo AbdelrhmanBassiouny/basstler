@@ -25,6 +25,8 @@ from basstler.plan.check_dependency_readiness import DependencyReadiness
 from basstler.plan.dependencies import DependencyResolver
 from basstler.plan.item_bootstrap.documents import PlanDocuments, ProjectCheckout
 from basstler.plan.model import PlanItem, PlanManifest
+from basstler.plan.repository_rules import RepositoryRules
+from basstler.plan.repository_rules_store import RepositoryRulesStore
 from basstler.plan.size_limits import Roadmap
 from basstler.plan.validation import PlanValidator
 from basstler.pull_request_source import GitHubPullRequestSource, PullRequestSource
@@ -100,6 +102,11 @@ class ItemBriefKey(StrEnum):
     The plan's standing rules, one entry each.
     """
 
+    REPOSITORY_RULES = "repository_rules"
+    """
+    The rules every plan of the repository follows, one entry each.
+    """
+
 
 @dataclass(frozen=True)
 class ItemBrief:
@@ -125,6 +132,11 @@ class ItemBrief:
     standing_rules: list[str]
     """
     The plan's roadmap entries.
+    """
+
+    repository_rules: RepositoryRules
+    """
+    The rules every plan of the repository follows.
     """
 
     @classmethod
@@ -160,7 +172,7 @@ class ItemBrief:
             dependencies = DependencyReadiness.of_item(
                 plan,
                 item.identifier,
-                pull_request_source.pull_requests_of(
+                pull_request_source.live_pull_requests_of(
                     DependencyResolver(plan, plan_directory)
                 ),
                 plan_directory,
@@ -170,18 +182,24 @@ class ItemBrief:
             item=item,
             dependencies=dependencies,
             standing_rules=Roadmap.from_text(documents.roadmap_text).entries,
+            repository_rules=RepositoryRulesStore.from_project_root(
+                project_root
+            ).read_fetched(),
         )
 
     def render(self) -> str:
         """
-        :return: The brief as YAML: the item's summary, then its dependencies and the
-            plan's standing rules.
+        :return: The brief as YAML: the item's summary, then its dependencies, the
+            repository's rules and the plan's standing rules.
         """
         return PlanManifest.summary_text(
             {
                 **self.manifest.item_header(self.item),
                 ItemBriefKey.DEPENDENCIES.value: [
                     dependency.to_json() for dependency in self.dependencies
+                ],
+                ItemBriefKey.REPOSITORY_RULES.value: [
+                    rule.to_json() for rule in self.repository_rules.rules
                 ],
                 ItemBriefKey.STANDING_RULES.value: self.standing_rules,
             }

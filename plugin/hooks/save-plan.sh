@@ -2,8 +2,9 @@
 set -euo pipefail
 
 # Saves a plan's plan.yaml and roadmap.md to the personal-notes branch and
-# regenerates the branch index in the same commit. Landed items are pruned, an
-# emptied plan is removed, and a plan over basstler.plan.size_limits is refused.
+# regenerates the branch index in the same commit. Items GitHub reports merged are
+# recorded done, landed items are pruned, an emptied plan is removed, and a plan
+# over basstler.plan.size_limits is refused.
 #
 # The save carries only what the session changed since it read the plan: each
 # top-level field, item and the roadmap the session changed is applied onto the
@@ -25,6 +26,9 @@ source "${SCRIPT_DIR}/resolve-personal-notes-config.sh"
 
 require_basstler_python
 
+# The arguments as given, so a refused save names the command that repeats it.
+SAVE_ARGUMENTS=""
+[ $# -eq 0 ] || SAVE_ARGUMENTS="$(printf ' %q' "$@")"
 PLAN_ID=""
 MANIFEST_SOURCE_FILE=""
 ROADMAP_SOURCE_FILE=""
@@ -94,6 +98,19 @@ if [ "${BOOTSTRAP_FROM_FILES}" = "0" ]; then
     echo "--manifest/--roadmap file paths instead." >&2
     exit 1
   fi
+fi
+
+# In a cloud session, a notes repository it cannot reach refuses the push: say how to
+# attach it before anything is merged.
+NOTES_ACCESS="$("${BASSTLER_PYTHON}" -m "${NOTES_ACCESS_MODULE}" \
+  --retry "\"\${BASSTLER_PLUGIN_ROOT}/hooks/save-plan.sh\"${SAVE_ARGUMENTS}")" || {
+  echo "Checking that this session reaches the notes repository failed; the error is above. Nothing was saved." >&2
+  exit 1
+}
+if [ -n "${NOTES_ACCESS}" ]; then
+  echo "${NOTES_ACCESS}" >&2
+  echo "Nothing was saved." >&2
+  exit 1
 fi
 
 if ! fetch_personal_notes_branch; then
@@ -176,8 +193,8 @@ for document_path in "${MANIFEST_PATH}" "${ROADMAP_PATH}"; do
   fi
 done
 
-# A remote's name or a raw URL; its configured URL, not git's insteadOf rewrite of it.
-NOTES_REMOTE_URL="$(git config --get "remote.${ACTIVE_NOTES_REMOTE}.url" || printf '%s' "${ACTIVE_NOTES_REMOTE}")"
+# origin's configured URL, not git's insteadOf rewrite of it; empty without an origin.
+ORIGIN_URL="$(git config --get remote.origin.url || true)"
 
 ATTEMPT=1
 while :; do
@@ -192,12 +209,18 @@ while :; do
     --latest "${SCRATCH_DIR}/${PLAN_DIRECTORY_PATH}" \
     --output "${MERGED_PLAN_DIR}" || exit
 
+  # Recorded done here, so the staging below drops them; a failed read changes nothing.
+  if ! "${BASSTLER_PYTHON}" -m "${PLAN_MERGED_ITEMS_MODULE}" \
+    "${MERGED_PLAN_DIR}/${PLAN_MANIFEST_FILENAME}"; then
+    echo "Saving without recording merged items; the save records them once GitHub can be read." >&2
+  fi
+
   # Validated against the fetched notes branch, so a <plan-id>/<item-id> entry resolves,
-  # and against the notes remote, so a plan is saved only to its own repository's notes.
+  # and against origin, so a plan is saved only from a checkout of its own repository.
   if ! "${BASSTLER_PYTHON}" -m "${PLAN_MANIFEST_TOOLS_MODULE}" validate \
     "${MERGED_PLAN_DIR}/${PLAN_MANIFEST_FILENAME}" \
     --plans-dir "${SCRATCH_DIR}/${PLANS_DIR}" \
-    --notes-remote-url "${NOTES_REMOTE_URL}"; then
+    --origin-url "${ORIGIN_URL}"; then
     echo "Nothing was saved - fix the manifest and save again." >&2
     exit 1
   fi

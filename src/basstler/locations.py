@@ -201,12 +201,24 @@ class SiteTemplate(PathEnumeration):
     A plan page's behaviour: copying commands, choosing a model, revealing an item.
     """
 
-    PLAN_DRAFT_RECHECK_SCRIPT = (
-        PackageLocation.TEMPLATES.value / "site_plan_draft_recheck.js"
+    LIVE_STATE_SCRIPT = PackageLocation.TEMPLATES.value / "site_live_state.js"
+    """
+    The script every site page reads a pull request's live state from GitHub's answer
+    with, and re-checks with when the tab is shown again.
+    """
+
+    LIVE_PROGRESS_SCRIPT = PackageLocation.TEMPLATES.value / "site_live_progress.js"
+    """
+    The hub's and repository indexes' script that recounts every progress card from
+    each repository's pull request listing.
+    """
+
+    PLAN_PULL_REQUEST_RECHECK_SCRIPT = (
+        PackageLocation.TEMPLATES.value / "site_plan_pull_request_recheck.js"
     )
     """
-    The plan page's script that asks GitHub whether a blocking draft pull request is
-    now ready for review.
+    The plan page's script that reads every pull request's state from GitHub in the
+    browser, and shows when the page was last refreshed.
     """
 
 
@@ -223,6 +235,12 @@ class BasstlerVariable(EnvironmentVariable):
     PYTHON = "BASSTLER_PYTHON"
     """
     The interpreter whose environment holds this package, for running its modules.
+    """
+
+    ENVIRONMENT_DIRECTORY = "BASSTLER_ENVIRONMENT_DIRECTORY"
+    """
+    The package's environment of the session's project, which every command of the
+    session runs, whichever repository it runs in.
     """
 
 
@@ -302,6 +320,11 @@ class PluginLocation(PathEnumeration):
     Pushes an edited plan manifest and roadmap to the personal-notes branch.
     """
 
+    PULL_REQUEST_PROGRESS_SAVING_SCRIPT = HOOKS / "save-pr-progress.sh"
+    """
+    Saves a branch's pull-request progress notes to the personal-notes branch.
+    """
+
     PLAN_UPDATES_SINCE_SCRIPT = HOOKS / "plan-updates-since.sh"
     """
     Reports what changed in the plans since this clone last read them.
@@ -324,6 +347,29 @@ class PluginLocation(PathEnumeration):
         message that names it without knowing the root.
         """
         return f"${BasstlerVariable.PLUGIN_ROOT}/{self}"
+
+
+class BasstlerRepositoryLocation(PathEnumeration):
+    """
+    The directories of basstler's own repository a release reads, relative to its root.
+    """
+
+    PLUGIN = Path("plugin")
+    """
+    The Claude Code plugin.
+    """
+
+    PLUGIN_MANIFEST = PLUGIN / ".claude-plugin" / "plugin.json"
+    """
+    The plugin's manifest: its name, description and, once released, version.
+    """
+
+    @property
+    def path_in_plugin(self) -> Path:
+        """
+        :return: This file's path from the plugin's root, as the released plugin holds it.
+        """
+        return self.relative_to(BasstlerRepositoryLocation.PLUGIN)
 
 
 class PluginSkillLocation(PathEnumeration):
@@ -384,6 +430,18 @@ class ProjectLocation(PathEnumeration):
     The plan hub file: the site's address and every repository it publishes.
 
     Mirrors ``PLAN_HUB_PATH`` in ``resolve-personal-notes-config.sh``.
+    """
+
+    PLAN_BRANCH_INDEX = PLANS / "_generated" / "branch-index.tsv"
+    """
+    The generated index naming the plan each item branch belongs to.
+
+    Mirrors ``PLAN_BRANCH_INDEX_PATH`` in ``resolve-personal-notes-config.sh``.
+    """
+
+    PLAN_RULES = PLANS / "_rules.yaml"
+    """
+    The rules every plan of the repository follows, one entry per rule.
     """
 
     PERSONAL_STACK_CONFIGURATION = PERSONAL_NOTES / "stack.toml"

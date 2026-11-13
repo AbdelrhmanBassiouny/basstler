@@ -7,6 +7,7 @@ from __future__ import annotations
 import pytest
 
 from basstler.repository import (
+    GitHubAddress,
     MalformedRepositoryError,
     PullRequestReference,
     Repository,
@@ -63,11 +64,58 @@ def test_repository_rejects_a_remote_url_naming_no_repository(malformed: str):
         Repository.from_remote_url(malformed)
 
 
+# %% clone roots
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        f"git@{Host.GITHUB}:{REPOSITORY.full_name}.git",
+        REPOSITORY.clone_url_under(GitHubAddress.SSH),
+    ],
+)
+def test_an_ssh_remote_s_repositories_are_reached_over_ssh(url: str):
+    """
+    Both ways git writes an SSH address keep other repositories on SSH.
+    """
+    assert GitHubAddress.clone_root_for(url) is GitHubAddress.SSH
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        REPOSITORY.clone_url,
+        f"http://127.0.0.1:41729/git/{REPOSITORY.full_name}",
+    ],
+)
+def test_any_other_remote_s_repositories_are_reached_over_https(url: str):
+    """
+    A cloud session's local proxy keeps reaching other repositories over HTTPS.
+    """
+    assert GitHubAddress.clone_root_for(url) is GitHubAddress.WEB
+
+
 # %% pages
 
 
 def test_a_workflow_run_url_is_the_run_s_page_under_the_repository_s_actions():
     assert REPOSITORY.workflow_run_url(7) == f"{REPOSITORY.url}/actions/runs/7"
+
+
+def test_the_settings_url_is_the_settings_page_under_the_repository():
+    """
+    The settings page is under the repository's page.
+    """
+    assert REPOSITORY.settings_url == f"{REPOSITORY.url}/settings"
+
+
+def test_the_new_actions_secret_form_is_under_the_repository_s_settings():
+    """
+    The new Actions secret form is the repository's secrets settings page.
+    """
+    assert REPOSITORY.new_actions_secret_url == (
+        f"{REPOSITORY.settings_url}/secrets/actions/new"
+    )
 
 
 # %% REST paths

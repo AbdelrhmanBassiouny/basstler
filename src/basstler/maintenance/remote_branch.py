@@ -4,11 +4,15 @@ One branch of a remote, read and written without touching the working tree.
 
 from __future__ import annotations
 
+import json
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from basstler.branch import Branch
 from basstler.class_property import classproperty
+from basstler.json_model import JSONSerializable
 from basstler.maintenance.git_commands import (
     GitCommandResult,
     GitCommandRunner,
@@ -17,6 +21,11 @@ from basstler.maintenance.git_commands import (
 from basstler.repository import Repository
 
 # %% the branch
+
+FileContent = str | dict[str, Any] | JSONSerializable
+"""
+What a file is written from: its text, or a JSON object or a value written as one.
+"""
 
 
 @dataclass(frozen=True)
@@ -51,12 +60,19 @@ class RemoteBranch(Branch):
         return f"{self.local_reference_prefix}/{self.name}"
 
     @property
+    def url(self) -> str:
+        """
+        :return: The URL the remote points at.
+        """
+        return self.git.attempt("remote", "get-url", self.remote).output or self.remote
+
+    @property
     def repository(self) -> Repository | None:
         """
         :return: The repository the remote points at, ``None`` when it names none - a
             remote given as a local path.
         """
-        url = self.git.attempt("remote", "get-url", self.remote).output or self.remote
+        url = self.url
         if not Repository.names_a_repository(url):
             return None
         return Repository.from_remote_url(url)
@@ -98,8 +114,28 @@ class RemoteBranch(Branch):
         tip = self.fetch()
         return self.git.file_at(tip, path) if tip else None
 
+    def read_every_latest(self, directory: str | Path, file_name: str) -> list[str]:
+        """
+        :param directory: A directory from the branch's root.
+        :param file_name: The name of the files to read.
+        :return: The text of every file of that name anywhere under the directory at
+            the branch's current tip, in path order; empty when the remote has no such
+            branch.
+        """
+        tip = self.fetch()
+        if tip is None:
+            return []
+        listed = self.git.run(
+            "ls-tree", "-r", "--name-only", tip, "--", Path(directory).as_posix()
+        )
+        return [
+            self.git.file_at(tip, path)
+            for path in sorted(listed.splitlines())
+            if Path(path).name == file_name
+        ]
+
     def attempt_write(
-        self, files: dict[str, str], message: str, attempts: int = 3
+        self, files: Mapping[str, FileContent], message: str, attempts: int = 3
     ) -> FileWrite:
         """
         Commit files onto the branch's latest tip and push them, again on top of another
@@ -111,7 +147,7 @@ class RemoteBranch(Branch):
         :return: The last commit and its push, failed when every attempt was refused.
         """
         for _ in range(attempts):
-            commit = self.git.commit_files(self.fetch(), files, message)
+            commit = self.commit_on(self.fetch(), files, message)
             pushed = self.git.push(
                 ProposedPush(self.remote, f"{commit}:{self.reference}")
             )
@@ -119,7 +155,9 @@ class RemoteBranch(Branch):
                 break
         return FileWrite(commit, pushed)
 
-    def write(self, files: dict[str, str], message: str, attempts: int = 3) -> str:
+    def write(
+        self, files: Mapping[str, FileContent], message: str, attempts: int = 3
+    ) -> str:
         """
         Like :meth:`attempt_write`, but a refused push is an error.
 
@@ -129,6 +167,64 @@ class RemoteBranch(Branch):
         written = self.attempt_write(files, message, attempts)
         written.push.raise_if_failed()
         return written.commit
+
+    def attempt_create(
+        self, parent: str, files: Mapping[str, FileContent], message: str
+    ) -> FileWrite:
+        """
+        Commit files on top of another branch's commit and push them as this branch.
+
+        :param parent: The commit to build on.
+        :param files: What to write, by path, each without its final newline.
+        :param message: The commit message.
+        :return: The commit and its push, failed when the remote refused it.
+        """
+        commit = self.commit_on(parent, files, message)
+        return FileWrite(
+            commit,
+            self.git.push(ProposedPush(self.remote, f"{commit}:{self.reference}")),
+        )
+
+    def create(
+        self, parent: str, files: Mapping[str, FileContent], message: str
+    ) -> str:
+        """
+        Like :meth:`attempt_create`, but a refused push is an error.
+
+        :return: The pushed commit.
+        :raises GitCommandFailed: If the remote refuses the push.
+        """
+        written = self.attempt_create(parent, files, message)
+        written.push.raise_if_failed()
+        return written.commit
+
+    def commit_on(
+        self, parent: str | None, files: Mapping[str, FileContent], message: str
+    ) -> str:
+        """
+        Commit files on top of a commit, a JSON object as its indented JSON text.
+
+        :param parent: The commit to build on, ``None`` for a commit with no parent.
+        :param files: What to write, by path, each without its final newline.
+        :param message: The commit message.
+        :return: The new commit.
+        """
+        texts = {}
+        for path, content in files.items():
+            if isinstance(content, JSONSerializable):
+                content = content.to_json()
+            if isinstance(content, dict):
+                content = json.dumps(content, indent=2)
+            texts[path] = content
+        return self.git.commit_files(parent, texts, message)
+
+    def delete(self) -> GitCommandResult:
+        """
+        Delete the branch from the remote.
+
+        :return: The push deleting it, failed when the remote refused it.
+        """
+        return self.git.push(ProposedPush(self.remote, f":{self.reference}"))
 
 
 @dataclass(frozen=True)

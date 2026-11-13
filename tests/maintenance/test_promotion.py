@@ -31,6 +31,7 @@ from .fork import (
     StackPullRequestNumber,
     PromotionSampleText,
     make_configuration,
+    make_own_remote_configuration,
     ForkCheckout,
     a_stack,
     a_parent_and_child,
@@ -304,3 +305,24 @@ def test_a_branch_no_step_concludes_is_an_error_rather_than_a_silent_pass(
         )
 
     assert raised.value.branch in {StackBranch.PARENT, StackBranch.CHILD}
+
+
+# %% a repository naming no upstream
+
+
+def test_a_repository_naming_no_upstream_promotes_nothing(fork_checkout: ForkCheckout):
+    """
+    With no upstream to review a branch, an approved branch has nowhere to be promoted.
+    """
+    a_parent_and_child(fork_checkout)
+    fork = RecordingPullRequests()
+
+    promoted = promote(
+        a_stack(fork_checkout, the_board(), make_own_remote_configuration()),
+        fork,
+        PromotionSummaries(),
+    )
+
+    assert promoted == []
+    assert fork.description_writes == []
+    assert fork.label_writes == []

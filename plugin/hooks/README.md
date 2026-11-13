@@ -44,7 +44,7 @@ stopping to ask.
 To do the same without a session, one command performs every step the skill would:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.setup.personal_notes \
+"$BASSTLER_PYTHON" -m basstler.setup.personal_notes \
   --remote <your-fork-remote-or-url> --name "Your Name" --email "you@example.com" \
   [--starter-notes] [--create-labels]
 ```
@@ -63,11 +63,13 @@ are the hook scripts here, which also work one at a time:
 
 `check-setup.sh` prints one row per check and exits non-zero if anything still needs doing.
 
-Every session start also gives the `basstler` package its own environment,
-`~/.local/share/basstler/venv` (under `$BASSTLER_HOME` when set), with the package and its
-dependencies installed into it wherever any of that is missing or the plugin names a newer
+Every session start also gives the `basstler` package an environment of the project's own,
+under `~/.local/share/basstler/environments` (`$BASSTLER_HOME/environments` when set), with the package and its
+dependencies installed into it wherever any of that is missing or the plugin names another
 release, for a project whose personal-notes branch resolves — reported on its `dependencies:`
-line, never fatal, and described in the repository's `README.md`.
+line, never fatal, and described in the repository's `README.md`. Its `release:` line says
+whether the plugin and the package are one release, and its `environments:` line names the
+environments of projects that are gone, which it removes.
 
 Every session start prints its own summary, so none of the three things below has to be
 remembered. Its `setup:` line runs `check-setup.sh` and names any check that still needs setup;
@@ -171,7 +173,7 @@ Override only what you need:
 
 For Claude Code on the web, see <https://code.claude.com/docs/en/claude-code-on-the-web> for where
 either of those lives. [`src/basstler/setup/steps.py`](../../src/basstler/setup/steps.py), run as
-`~/.local/share/basstler/venv/bin/python -m basstler.setup.steps`, prints the exact variable lines your
+`"$BASSTLER_PYTHON" -m basstler.setup.steps`, prints the exact variable lines your
 clone needs — only the settings you have moved off their defaults — alongside the other two steps
 no script can perform for you.
 
@@ -210,7 +212,7 @@ Only a clone with no such remote gets a `not synced` line.
 Run it by hand to catch a long-running session's clone up mid-session:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.maintenance.default_branch_sync
+"$BASSTLER_PYTHON" -m basstler.maintenance.default_branch_sync
 ```
 
 ### The fork's upstream-reviews Action
@@ -240,7 +242,7 @@ the narrative that doesn't belong in structured data.
   `/plan-item-resolve <plan-id> <item-id>`. Kickoff opens the item's branch and draft PR and
   marks it `in progress` as soon as its plan is approved — via
   [`src/basstler/plan/item_bootstrap/__main__.py`](../../src/basstler/plan/item_bootstrap/__main__.py), which you can also
-  run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan.item_bootstrap` — so the
+  run by hand as `"$BASSTLER_PYTHON" -m basstler.plan.item_bootstrap` — so the
   manifest never says `not started` while the work is underway.
 - Decide where a new piece of work goes → `/add-plan-item <description>`. It runs the shared scope
   check in [`scope-decision.md`](../skills/add-plan-item/scope-decision.md) — the rule all four plan
@@ -248,7 +250,7 @@ the narrative that doesn't belong in structured data.
 - Choose whether either skill implements on its own, plans first, or asks → `/plan-item-mode
   <auto|plan|ask> [kickoff|resolve|both]`, or the
   [`src/basstler/plan/item_mode.py`](../../src/basstler/plan/item_mode.py) `resolve|set` it calls, which you
-  can also run by hand as `~/.local/share/basstler/venv/bin/python -m basstler.plan.item_mode`. Defaults in
+  can also run by hand as `"$BASSTLER_PYTHON" -m basstler.plan.item_mode`. Defaults in
   [`plan-item-modes.toml`](../../src/basstler/plan/plan-item-modes.toml) are `auto` for both; `set` pins a per-user
   override at `.claude/personal/plan-item-modes.toml` on the notes branch. What each mode obliges
   the skill to do, and when `auto` still stops to ask →

@@ -61,14 +61,46 @@ class OperatingSystemVariable(EnvironmentVariable):
     """
 
 
+class GitBashVariable(EnvironmentVariable):
+    """
+    The variables Git for Windows' bash (MSYS2) reads before it starts a program.
+    """
+
+    ARGUMENT_CONVERSION_EXCLUSIONS = "MSYS2_ARG_CONV_EXCL"
+    """
+    The ``;``-separated prefixes of the arguments it passes on as written rather than
+    rewriting them as Windows paths.
+    """
+
+
 class GitVariable(EnvironmentVariable):
     """
-    The variables git reads that this package sets for the commands it runs.
+    The variables git reads that this package, or its tests, set for the commands run.
     """
 
     INDEX_FILE = "GIT_INDEX_FILE"
     """
     The index git stages into, in place of the clone's own.
+    """
+
+    CONFIGURATION_COUNT = "GIT_CONFIG_COUNT"
+    """
+    How many configuration entries the environment passes to git.
+    """
+
+    CONFIGURATION_KEY_PREFIX = "GIT_CONFIG_KEY_"
+    """
+    Followed by an entry's index, names the variable holding that entry's key.
+    """
+
+    CONFIGURATION_VALUE_PREFIX = "GIT_CONFIG_VALUE_"
+    """
+    Followed by an entry's index, names the variable holding that entry's value.
+    """
+
+    COMMITTER_DATE = "GIT_COMMITTER_DATE"
+    """
+    The date git records as a new commit's committer date, in place of the clock's.
     """
 
 

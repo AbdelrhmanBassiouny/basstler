@@ -13,8 +13,8 @@ import yaml
 import basstler.plan.item_bootstrap
 from basstler.plan.item_bootstrap.exceptions import PullRequestRefusedError
 from basstler.plan.item_bootstrap.manifest_text import ManifestText
+from basstler.github.pull_request import NewPullRequest
 from basstler.plan.item_bootstrap.opening import (
-    NewPullRequest,
     PullRequestOpener,
     WorkOpenRequest,
 )
@@ -319,17 +319,6 @@ def publish_the_branch_index(repository: ScratchRepository) -> None:
     :param repository: The scratch repository to save within.
     """
     update_request().update(repository.project_root)
-
-
-def put_both_items_on_one_branch(repository: ScratchRepository) -> None:
-    """
-    Move the fixture's unstarted item onto the branch its underway one already rides on.
-
-    :param repository: The scratch repository to save within.
-    """
-    update_request(values_by_key={ManifestKey.BRANCH: second_item_branch()}).update(
-        repository.project_root
-    )
 
 
 def publish_new_branch(repository: ScratchRepository) -> None:

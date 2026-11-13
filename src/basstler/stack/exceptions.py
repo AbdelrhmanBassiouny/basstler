@@ -56,6 +56,37 @@ class ForkRemoteNotFoundError(StackError, LookupError):
 
 
 @dataclass
+class OwnRemoteNotFoundError(StackError, LookupError):
+    """
+    Raised when a project naming no upstream has no remote of the name its base is
+    followed on.
+    """
+
+    @classproperty
+    def exit_code(cls) -> StackExitCode:
+        """:return: The status this kind of error ends a command with."""
+        return StackExitCode.REMOTES_UNRESOLVED
+
+    remote_name: str
+    """
+    The remote the settings name as the clone's own.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"no upstream is named and the clone has no remote '{self.remote_name}' "
+            f"to follow instead"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            f"Add the remote '{self.remote_name}', set {StackSetting.FORK_REMOTE} in "
+            f"stack.toml to the clone's own remote, or name the upstream with "
+            f"{StackSetting.UPSTREAM_REPOSITORY}."
+        )
+
+
+@dataclass
 class AmbiguousForkRemoteError(StackError, LookupError):
     """
     Raised when several remotes could each be the fork.

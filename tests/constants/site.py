@@ -56,6 +56,11 @@ class SiteRepository(Enum):
     A listed repository with no notes branch to fetch.
     """
 
+    PROJECT = Repository("owner", "project")
+    """
+    A project repository whose notes are kept in :attr:`NOTES`.
+    """
+
 
 class SiteSampleText(StrEnum):
     """

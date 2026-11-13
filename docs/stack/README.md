@@ -43,23 +43,25 @@ next to the workflow it describes, because it is read rather than run.
   both (see `Configuration.load` in `stack/settings.py`), including a `fork_repository` to pick between
   remotes when more than one could be the fork.
 - **`board.json`** - the fork-PR snapshot (`number`, `head`, `base`, `draft`, `labels`, `check_state`,
-  `session`) that `basstler.stack` reads. Written from GitHub as scratch by whatever refreshes it,
-  to `basstler/board.json` under the repository's common git directory
+  `session`) that `basstler.stack` reads. Only `basstler.maintenance board --write` writes it, for a
+  person to inspect; every `basstler.maintenance` command that needs the stack exports its own,
+  in memory, so none depends on a file an earlier command left or a whole pass discarded. It is
+  written to `basstler/board.json` under the repository's common git directory
   (`git rev-parse --git-common-dir`): one file every worktree of the repository shares, which no
   checkout can commit and no install of the package holds. The maintenance pass's full report sits
   beside it as `basstler/maintenance-report.json`.
 - **`basstler.stack`** - read-only status tool (never mutates branches). Reads `board.json` + git:
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack status` - the whole stack, with ahead/behind drift per parent.
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack check` - would each branch integrate cleanly onto its parent
+  - `"$BASSTLER_PYTHON" -m basstler.stack status` - the whole stack, with ahead/behind drift per parent.
+  - `"$BASSTLER_PYTHON" -m basstler.stack check` - would each branch integrate cleanly onto its parent
     *now* (fast, non-mutating `git merge-tree` probe)?
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack next` - every branch ready to submit upstream next: approved,
-    parent landed, not withheld. **This is your "what goes upstream next" answer.**
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack next --porcelain` - machine-readable `next`: one
+  - `"$BASSTLER_PYTHON" -m basstler.stack next` - every branch ready to submit upstream next: approved,
+    parent merged (not merely in review), not withheld. **This is your "what goes upstream next" answer.**
+  - `"$BASSTLER_PYTHON" -m basstler.stack next --porcelain` - machine-readable `next`: one
     `name<TAB>pr` line per branch to promote (or nothing).
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack restack-plan` - the bottom-up restack plan as JSON (one
+  - `"$BASSTLER_PYTHON" -m basstler.stack restack-plan` - the bottom-up restack plan as JSON (one
     `{branch, parent, strategy}` per not-yet-`merged` branch, in-review ones included so they
     pick up a moved parent via a conflict-free `merge`).
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack configuration` - every resolved setting as `key<TAB>value`
+  - `"$BASSTLER_PYTHON" -m basstler.stack configuration` - every resolved setting as `key<TAB>value`
     lines, keyed by `Configuration`'s own field names: the labels, the upstream base, which
     remote is the fork and which is the upstream, and `upstream_location`, what the upstream is
     fetched from: its remote's name, or its URL when the clone has no remote for it. Either way
@@ -68,16 +70,18 @@ next to the workflow it describes, because it is read rather than run.
     exists. It takes `--fork`/`--upstream` for a caller that already knows the answer, and exits
     `4` rather than guessing when nothing does. This is the one surface shell tooling reads
     configuration through - parsing `stack.toml` directly would miss the personal override.
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack labels --current <label> --add <label> --remove <label>` - the
+  - `"$BASSTLER_PYTHON" -m basstler.stack labels --current <label> --add <label> --remove <label>` - the
     **complete** label set to write back, one per line. GitHub's label write replaces the whole set,
     so computing it from the intended change alone silently strips the rest; this is what the
     maintenance skill passes to every label write rather than working it out itself.
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack check-move --action push --source B --destination B
-    --destination-remote <remote>` - exits `0` when the move is safe and `5` with its reasons on
-    stderr when it is not: wrong branch checked out, a push naming different branches on each
+  - `"$BASSTLER_PYTHON" -m basstler.stack check-move --action push --source B --destination B
+    --destination-remote <remote>` - exits `0` when the move is safe; any other status means *not
+    cleared* - `5` with its reasons on stderr when it is unsafe, `3` when there is no `board.json`
+    to check it against. A push by hand uses `basstler.maintenance push` instead, which checks the
+    move against a fresh export and pushes only when it is clear. The checks refuse: wrong branch checked out, a push naming different branches on each
     side, a destination that is not the fork, or a push that would make a child an ancestor of its
     own parent (which GitHub reads as a merged pull request).
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack merge-probe --remote <remote> --base A --head B` - fetches
+  - `"$BASSTLER_PYTHON" -m basstler.stack merge-probe --remote <remote> --base A --head B` - fetches
     both branches and merges them with `git merge-tree`, touching no branch or work tree. In a
     project that names an upstream, a `--base` equal to the upstream base is read from the upstream
     itself, since the fork's copy can lag behind it. Prints one JSON object (`verdict`, the sorted
@@ -85,20 +89,21 @@ next to the workflow it describes, because it is read rather than run.
     `head_commit` it merged) and exits `0` (`success`) when clean and `13` (`merge-conflicts`) when
     conflicting, saying on stderr which commits conflict and where, so the answer never waits on
     GitHub's lazily computed `mergeable_state`.
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack promotion-link --branch B --title T --body ...` - the upstream
+  - `"$BASSTLER_PYTHON" -m basstler.stack promotion-link --branch B --title T --body ...` - the upstream
     compare-and-create URL, encoded and within the length limit, warning on stderr when the body had
     to be shortened.
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack reparents` - one `branch<TAB>pr<TAB>current base<TAB>target base`
+  - `"$BASSTLER_PYTHON" -m basstler.stack reparents` - one `branch<TAB>pr<TAB>current base<TAB>target base`
     line per open PR whose base has left the board and left its commits somewhere else, including a
     base whose own PR was *closed* and which is therefore absent from `board.json`. The target is the
     upstream base when the commits landed there, and another open branch when the base merged into
     that instead; a base whose commits reached nothing is not listed, since no target follows from it
     - the restack hands that branch back to its owner as `parent-gone`.
-  - `~/.local/share/basstler/venv/bin/python -m basstler.stack landed` - one `name<TAB>pr` line per open fork PR whose branch
+  - `"$BASSTLER_PYTHON" -m basstler.stack landed` - one `name<TAB>pr` line per open fork PR whose branch
     is already in the upstream base. Reporting only: fast-forwarding the fork's copy of the
     upstream base is what actually closes them.
 - **`basstler.maintenance`** - the executor: the half of a pass that moves commits, where `basstler.stack`
-  only derives and prints. `board --write`, `prepare` (the reparents and what each upstream
+  only derives and prints. `board --write`, `push` (publish the checked-out branch to the fork,
+  only once the move checks clear it), `prepare` (the reparents and what each upstream
   summary is written from, as JSON), `fast-forward`, `restack`, `promote`, `checks` (the verdict
   over every open branch's checks) and `run-report` (the whole pass, ending in a size-bounded
   finish summary with the full report in a file, or `--json` for tooling); see [Running a maintenance pass](#running-a-maintenance-pass). It is the
@@ -133,7 +138,7 @@ next to the workflow it describes, because it is read rather than run.
 
 1. Code at full speed on top of your stack tip; open each PR with **`base` = its parent branch**.
 2. **Self-review the bottom fork PR.** If good, **un-draft it** on GitHub. ← the gate.
-3. `~/.local/share/basstler/venv/bin/python -m basstler.stack next` → it names every approved, unblocked branch whose
+3. `"$BASSTLER_PYTHON" -m basstler.stack next` → it names every approved, unblocked branch whose
    checks have not failed. Open its upstream PR; the next maintenance pass labels the fork PR
    **`in-review`** and links the upstream PR in its description.
 4. When the upstream merges it: nothing to edit - it becomes `merged` automatically. Run a maintenance
@@ -186,8 +191,8 @@ merged onto the published tip as before.
 - **The branch is the durable state** - commit + push often; cloud containers are ephemeral.
 - **Restack only after the parent has landed/updated.** Restacking onto a still-conflicting,
   unmerged parent is premature - land the parent first.
-- **Refresh `board.json` before acting.** It's a snapshot; a pass exports a fresh one from
-  GitHub.
+- **Never act on an old `board.json`.** It's a snapshot; every maintenance command exports a fresh
+  one from GitHub for itself.
 - **CI is the validator.** A suite the cloud container cannot run (missing system
   dependencies, hardware, services) is never run locally - poll a PR's CI with the GitHub MCP and treat its
   red/green as the oracle (no session subscribes to a PR's activity - CI is learned by polling; see [maintenance-pass.md](maintenance-pass.md)). A

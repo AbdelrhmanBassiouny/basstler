@@ -1,6 +1,6 @@
 ---
 name: plan-item-resolve
-description: Resolve what stalls an underway plan item - conflicts, CI, review threads, tracking-issue discussion - on its existing branch, per the execution mode. Invoke as "/plan-item-resolve <plan-id> <item-id>" or "/plan-item-resolve <pull-request-number>". Use from a plan page's Resolve/Resume/Reconsider link or when asked to resolve, unblock or resume an item.
+description: Resolve what stalls an underway plan item - conflicts, CI, review threads, tracking-issue discussion - on its existing branch, per the execution mode. Invoke as "/plan-item-resolve {plan-id} {item-id}" or "/plan-item-resolve {pull-request-number}". Use from a plan page's Resolve/Resume/Reconsider link or when asked to resolve, unblock or resume an item.
 allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, EnterPlanMode, ExitPlanMode, mcp__github__list_pull_requests, mcp__github__pull_request_read, mcp__github__issue_read, mcp__github__get_file_contents, mcp__github__update_pull_request, mcp__claude-code-remote__subscribe_pr_activity
 ---
 
@@ -8,6 +8,9 @@ allowed-tools: Bash, Read, Grep, Glob, Edit, Write, AskUserQuestion, Skill, Ente
 
 Run commands as [`running-commands.md`](../running-commands.md) says, with
 `${CLAUDE_PLUGIN_ROOT}` as the `${BASSTLER_PLUGIN_ROOT}` it and every linked document name.
+
+Follow [`pull-request-rules.md`](../pull-request-rules.md) for every pull request it opens,
+pushes to or answers reviews on.
 
 Generic, plan-agnostic — nothing here may hardcode a specific plan id,
 item, or branch. Unlike `plan-item-kickoff` (for an item that hasn't
@@ -185,7 +188,12 @@ item is already underway rather than being started:
   - **Ready, and not promoted** — nothing recorded says who marked it ready.
     Leave it as it is and ask the user whether the item is finished before
     pushing anything; never flip it back on a guess.
-  - **Draft** — keep it a draft, per the user's own convention.
+  - **Draft** — keep it a draft.
+
+Push the item's branch, from its checkout, only with
+`"${CLAUDE_PLUGIN_ROOT}/hooks/basstler.sh" maintenance push`: it checks the move
+against a board it exports now and pushes only when that is clear. Any status
+but 0 means nothing was pushed - never follow it with a `git push` of your own.
 
 Once the fix is pushed, carry it into the pull requests stacked on this item's
 branch, which a resolve otherwise leaves holding the state it replaced — follow

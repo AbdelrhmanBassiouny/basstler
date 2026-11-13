@@ -88,6 +88,29 @@ class NotesBranchMissingError(DataclassException, RuntimeError):
 
 
 @dataclass
+class NotesPushRejectedError(DataclassException, RuntimeError):
+    """
+    Raised when the remote rejected every push of a write to the personal-notes branch.
+    """
+
+    branch: str
+    """
+    The personal-notes branch pushed to.
+    """
+
+    attempts: int
+    """
+    How many pushes were made.
+    """
+
+    def error_message(self) -> str:
+        return f"every one of {self.attempts} pushes to '{self.branch}' was rejected"
+
+    def suggest_correction(self) -> str:
+        return "check that this credential may push to the branch, then run it again"
+
+
+@dataclass
 class UnsafeNotesPathError(DataclassException, ValueError):
     """
     Raised when a path to write on the personal-notes branch could leave it.
@@ -210,6 +233,24 @@ class InvalidSchemaVersion(ValidationProblem):
 
 
 @dataclass
+class InvalidLandedItemCount(ValidationProblem):
+    """
+    The manifest's ``landed_item_count`` is not a whole number of at least zero.
+    """
+
+    actual_value: Any
+    """
+    Whatever ``landed_item_count`` actually held.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"landed_item_count must be a whole number of at least 0, "
+            f"got {self.actual_value!r}"
+        )
+
+
+@dataclass
 class DuplicateItemId(ValidationProblem):
     """
     Two or more items resolve to the same effective id.
@@ -222,6 +263,37 @@ class DuplicateItemId(ValidationProblem):
 
     def error_message(self) -> str:
         return f"duplicate item id(s): {sorted(self.duplicate_identifiers)}"
+
+
+@dataclass
+class SharedBranch(ValidationProblem):
+    """
+    More than one item names the same branch, though a branch carries the work of
+    exactly one item.
+    """
+
+    branch: str
+    """
+    The branch named more than once.
+    """
+
+    claiming_items: list[str]
+    """
+    Every item naming it: a bare id for an item of the validated plan, a ``<plan-
+    id>/<item- id>`` reference for one in another plan.
+    """
+
+    def error_message(self) -> str:
+        return (
+            f"branch {self.branch!r} is named by several items: {self.claiming_items}"
+        )
+
+    def suggest_correction(self) -> str:
+        return (
+            "Keep the branch on the one item that owns it; fold each other item into "
+            "it, or leave the branch off that item and say in its notes that it lands "
+            "there."
+        )
 
 
 @dataclass
@@ -442,7 +514,8 @@ class UnknownWave(ValidationProblem):
 @dataclass
 class PlanInAnotherRepository(ValidationProblem):
     """
-    The plan is saved to the notes of a repository other than the one its work is for.
+    The plan is saved from a checkout of a repository other than the one its work is
+    for.
     """
 
     plan_identifier: Any
@@ -455,15 +528,15 @@ class PlanInAnotherRepository(ValidationProblem):
     The repository the plan's work is for, its ``default_repository``.
     """
 
-    notes_repository: Repository
+    checkout_repository: Repository
     """
-    The repository whose notes branch the plan was to be saved to.
+    The repository the ``origin`` of the checkout saving the plan names.
     """
 
     def error_message(self) -> str:
         return (
             f"plan {self.plan_identifier!r} is for {self.default_repository} but was "
-            f"to be saved to the notes of {self.notes_repository}"
+            f"to be saved from a checkout of {self.checkout_repository}"
         )
 
     def suggest_correction(self) -> str:
@@ -471,34 +544,31 @@ class PlanInAnotherRepository(ValidationProblem):
         Unlike :meth:`ValidationProblem.suggest_correction`, names the checkout to save
         from.
         """
-        return (
-            f"Save the plan from a checkout of {self.default_repository}, so it lives "
-            "in that repository's notes."
-        )
+        return f"Save the plan from a checkout of {self.default_repository}."
 
 
 @dataclass
-class NotesRemoteNamesNoRepository(ValidationProblem):
+class OriginNamesNoRepository(ValidationProblem):
     """
-    The notes remote the plan is saved to names no ``owner/name``, so the repository
-    it is for cannot be compared against it.
+    The ``origin`` of the checkout saving the plan names no ``owner/name``, so the
+    repository the plan is for cannot be compared against it.
     """
 
-    notes_remote_url: str
+    origin_url: str
     """
-    The URL of the notes remote, as configured.
+    The URL of ``origin``, as configured; empty when the checkout has no ``origin``.
     """
 
     def error_message(self) -> str:
         return (
-            f"the notes remote {self.notes_remote_url!r} names no owner/name repository"
+            f"this checkout's origin {self.origin_url!r} names no owner/name repository"
         )
 
     def suggest_correction(self) -> str:
         """
         Unlike :meth:`ValidationProblem.suggest_correction`, names the remote to set.
         """
-        return "Set the notes remote to the GitHub URL of the plan's repository."
+        return "Set origin to the GitHub URL of the plan's repository."
 
 
 @dataclass
@@ -924,3 +994,32 @@ class InconsistentPackageMap(DataclassException, ValueError):
 
     def suggest_correction(self) -> str:
         return "correct the declarations in basstler.package_map.PACKAGE_MAP"
+
+
+@dataclass
+class DuplicateKeyError(DataclassException, TypeError):
+    """
+    Raised when two fields of a model read the same key of the object it mirrors.
+    """
+
+    model: str
+    """
+    The model's name.
+    """
+
+    key: str
+    """
+    The key both fields read.
+    """
+
+    fields: tuple[str, str]
+    """
+    The two fields reading it.
+    """
+
+    def error_message(self) -> str:
+        first, second = self.fields
+        return f"{self.model}.{first} and {self.model}.{second} both read {self.key!r}"
+
+    def suggest_correction(self) -> str:
+        return "Give one of the fields the key it should read instead as its alias."

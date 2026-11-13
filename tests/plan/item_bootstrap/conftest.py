@@ -47,10 +47,10 @@ def repository_publishing(
             ),
         }
     )
-    scratch_repository.serve_notes_remote_as(
+    scratch_repository.resolve_notes_remote_to()
+    scratch_repository.serve_origin_as(
         PlanManifest(yaml.safe_load(manifest)).default_repository
     )
-    scratch_repository.add_work_remote()
     return scratch_repository
 
 

@@ -11,14 +11,23 @@ import os
 import shutil
 import subprocess
 from enum import StrEnum
+from importlib.metadata import version
 from pathlib import Path
 
 import pytest
 
 import basstler
-from basstler.locations import PluginLocation, ProjectLocation, WorkflowLocation
+from basstler.locations import (
+    ClaudeCodeVariable,
+    PackageLocation,
+    PluginLocation,
+    ProjectLocation,
+    WorkflowLocation,
+)
+from basstler.environment import EnvironmentFlag
 from basstler.exit_codes import SetupCheckExitCode
-from basstler.plan_site import dispatch_check, publication
+from basstler.personal_notes import access
+from basstler.plan_site import build_start, dispatch_check, publication
 from basstler.plan_site.dispatch_check import UNVERIFIED_PREFIX
 from basstler.plan_site.hub import HubFileKey
 from basstler.setup.report import CheckResult, CheckStatus, SetupCheck, SetupReport
@@ -75,21 +84,39 @@ def check_setup_repository(scratch_repository: ScratchRepository) -> ScratchRepo
 
 
 def run_check_setup(
-    repository: ScratchRepository, *arguments: str, **environment_overrides: str
+    repository: ScratchRepository,
+    *arguments: str,
+    requested_checks: frozenset[SetupCheck] = frozenset(SetupCheck),
+    **environment_overrides: str,
 ) -> SetupReport:
     """
     Run the scratch layout's check-setup.sh and parse its report.
 
     :param repository: A fixture-built scratch repository.
-    :param arguments: The flags to pass.
+    :param arguments: The flags to pass besides :attr:`OnlyFlag.ONLY`.
+    :param requested_checks: The checks to report on, each passed after
+        :attr:`OnlyFlag.ONLY` unless every check is requested.
     :param environment_overrides: Environment variables to set for this run, for the
         tests that exercise resolution from the environment.
     :return: The parsed report.
     """
+    only_arguments = (
+        []
+        if requested_checks == frozenset(SetupCheck)
+        else [
+            argument
+            for check in sorted(requested_checks)
+            for argument in (OnlyFlag.ONLY, check)
+        ]
+    )
     return SetupReport.from_completed_process(
         repository.run_hook_script(
-            PluginLocation.SETUP_CHECK_SCRIPT.name, *arguments, **environment_overrides
-        )
+            PluginLocation.SETUP_CHECK_SCRIPT.name,
+            *arguments,
+            *only_arguments,
+            **environment_overrides,
+        ),
+        requested_checks,
     )
 
 
@@ -127,6 +154,18 @@ def test_reports_no_work_needed_when_everything_is_in_place(
 
 def test_reports_every_check_it_documents(check_setup_repository: ScratchRepository):
     report = run_check_setup(check_setup_repository)
+    assert set(report.results) == set(SetupCheck)
+
+
+def test_reports_every_check_it_documents_when_the_notes_branch_is_missing(
+    check_setup_repository: ScratchRepository, tmp_path: Path
+):
+    check_setup_repository.resolve_notes_remote_to(
+        initialize_bare_repository(tmp_path / "empty-remote.git")
+    )
+
+    report = run_check_setup(check_setup_repository)
+
     assert set(report.results) == set(SetupCheck)
 
 
@@ -216,6 +255,135 @@ def test_a_dispatch_workflow_whose_runs_cannot_be_read_is_not_verified(
     assert publication.__name__ in plan_site.detail
 
 
+# %% the notes repository
+
+
+def with_notes_access_stub(
+    repository: ScratchRepository, stub: DatasetLocation
+) -> ScratchRepository:
+    """
+    Make the scratch repository's notes access command print what a stand-in prints.
+
+    :param repository: The scratch repository, fully set up.
+    :param stub: The module whose output replaces the notes access command's.
+    :return: The same repository.
+    """
+    repository.replace_package_module(access, stub)
+    return repository
+
+
+def test_a_notes_repository_the_session_cannot_reach_needs_setup(
+    check_setup_repository: ScratchRepository,
+):
+    with_notes_access_stub(check_setup_repository, DatasetLocation.NOTES_ACCESS_STUB)
+
+    report = run_check_setup(check_setup_repository)
+
+    reached = report.results[SetupCheck.NOTES_REPOSITORY_ACCESS]
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+    assert reached.status == CheckStatus.NEEDS_SETUP
+    assert reached.detail == access.__name__
+
+
+def test_a_notes_repository_the_session_reaches_passes(
+    check_setup_repository: ScratchRepository,
+):
+    with_notes_access_stub(
+        check_setup_repository, DatasetLocation.NOTES_ACCESS_REACHED_STUB
+    )
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.results[SetupCheck.NOTES_REPOSITORY_ACCESS].status == CheckStatus.OK
+
+
+# %% the plan site access
+
+
+def with_build_start_stub(
+    repository: ScratchRepository, stub: DatasetLocation
+) -> ScratchRepository:
+    """
+    Make the scratch repository's build start command print what a stand-in prints,
+    and record a plan site for it.
+
+    :param repository: The scratch repository, fully set up.
+    :param stub: The module whose output replaces the build start command's.
+    :return: The same repository.
+    """
+    repository.update_notes_branch_file(
+        ProjectLocation.PLAN_HUB,
+        f"{HubFileKey.SITE_URL}: https://an-owner.github.io/plans/\n",
+    )
+    package_root = Path(basstler.__file__).parent.parent
+    shutil.copy(
+        stub,
+        repository.checkout_root
+        / PackageSourceFile.SOURCE
+        / Path(build_start.__file__).relative_to(package_root),
+    )
+    return repository
+
+
+def test_a_cloud_session_that_cannot_start_the_build_needs_setup(
+    check_setup_repository: ScratchRepository,
+):
+    with_build_start_stub(
+        check_setup_repository, DatasetLocation.BUILD_START_NEEDS_ACCESS_STUB
+    )
+
+    report = run_check_setup(
+        check_setup_repository, **{ClaudeCodeVariable.REMOTE: EnvironmentFlag.TRUE}
+    )
+
+    access = report.results[SetupCheck.PLAN_SITE_ACCESS]
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+    assert access.status == CheckStatus.NEEDS_SETUP
+    assert "\n" not in access.detail
+    assert "an-owner/the-site" in access.detail
+
+
+def test_a_cloud_session_that_can_start_the_build_passes(
+    check_setup_repository: ScratchRepository,
+):
+    with_build_start_stub(
+        check_setup_repository, DatasetLocation.BUILD_START_HAS_ACCESS_STUB
+    )
+
+    report = run_check_setup(
+        check_setup_repository, **{ClaudeCodeVariable.REMOTE: EnvironmentFlag.TRUE}
+    )
+
+    assert report.results[SetupCheck.PLAN_SITE_ACCESS].status == CheckStatus.OK
+
+
+def test_a_local_session_that_cannot_start_the_build_gets_the_issue_and_the_fix(
+    check_setup_repository: ScratchRepository,
+):
+    with_build_start_stub(
+        check_setup_repository, DatasetLocation.BUILD_START_NEEDS_ACCESS_STUB
+    )
+
+    report = run_check_setup(check_setup_repository)
+
+    access = report.results[SetupCheck.PLAN_SITE_ACCESS]
+    assert access.status == CheckStatus.INFORMATIONAL
+    assert "cannot start the build in an-owner/the-site" in access.detail
+    assert "Attach it" in access.detail
+
+
+def test_a_clone_no_plan_site_lists_reports_the_access_check_as_context(
+    check_setup_repository: ScratchRepository,
+):
+    report = run_check_setup(
+        check_setup_repository, **{ClaudeCodeVariable.REMOTE: EnvironmentFlag.TRUE}
+    )
+
+    assert (
+        report.results[SetupCheck.PLAN_SITE_ACCESS].status == CheckStatus.INFORMATIONAL
+    )
+
+
 def with_dispatch_check_stub(
     repository: ScratchRepository, stub: DatasetLocation
 ) -> ScratchRepository:
@@ -293,7 +461,8 @@ def test_a_repository_row_never_fails_the_run(
     dispatch_with_other_repository: ScratchRepository,
 ):
     report = run_check_setup(
-        dispatch_with_other_repository, OnlyFlag.ONLY, SetupCheck.PLAN_SITE
+        dispatch_with_other_repository,
+        requested_checks=frozenset({SetupCheck.PLAN_SITE}),
     )
 
     assert report.exit_code is SetupCheckExitCode.SUCCESS
@@ -303,7 +472,8 @@ def test_a_repository_row_is_not_printed_when_the_plan_site_is_not_requested(
     dispatch_with_other_repository: ScratchRepository,
 ):
     report = run_check_setup(
-        dispatch_with_other_repository, OnlyFlag.ONLY, SetupCheck.NOTES_FILE
+        dispatch_with_other_repository,
+        requested_checks=frozenset({SetupCheck.NOTES_FILE}),
     )
 
     assert report.repository_results == []
@@ -341,6 +511,65 @@ def test_a_latest_release_that_cannot_be_read_says_where_it_was_looked_for(
     version = report.results[SetupCheck.BASSTLER_VERSION]
     assert version.status == CheckStatus.INFORMATIONAL
     assert str(check_setup_repository.project_root) in version.detail
+
+
+def remove_checkout_around_plugin(repository: ScratchRepository) -> None:
+    """
+    Make the scratch plugin one installed on its own, outside a checkout.
+
+    :param repository: A fixture-built scratch repository.
+    """
+    (repository.checkout_root / PackageSourceFile.METADATA).unlink()
+
+
+def test_a_package_of_another_release_than_the_plugin_s_is_mismatched(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    Hooks of one release calling the package of another can pass options it no longer
+    accepts, so the pair being two releases is a status of its own, failing the run.
+    """
+    remove_checkout_around_plugin(check_setup_repository)
+    check_setup_repository.release_plugin_as("0.0.1")
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.results[SetupCheck.BASSTLER_VERSION].status == CheckStatus.MISMATCHED
+    assert report.exit_code is SetupCheckExitCode.SETUP_INCOMPLETE
+
+
+def test_a_plugin_naming_no_release_outside_a_checkout_is_mismatched(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    Nothing pins the package to a plugin that names no release, so the pair cannot be
+    told apart from two releases.
+    """
+    remove_checkout_around_plugin(check_setup_repository)
+
+    report = run_check_setup(check_setup_repository)
+
+    assert report.results[SetupCheck.BASSTLER_VERSION].status == CheckStatus.MISMATCHED
+
+
+def test_a_package_of_the_plugin_s_release_passes(
+    check_setup_repository: ScratchRepository,
+):
+    """
+    The package installed at the plugin's own release is what every hook expects.
+    """
+    remove_checkout_around_plugin(check_setup_repository)
+    check_setup_repository.release_plugin_as(
+        version(PackageLocation.DIRECTORY.value.name)
+    )
+
+    report = run_check_setup(
+        check_setup_repository,
+        requested_checks=frozenset({SetupCheck.BASSTLER_VERSION}),
+    )
+
+    assert report.results[SetupCheck.BASSTLER_VERSION].status == CheckStatus.OK
+    assert report.exit_code is SetupCheckExitCode.SUCCESS
 
 
 # %% who commits here would be authored as
@@ -680,10 +909,7 @@ def test_only_the_requested_checks_are_reported(
 ):
     report = run_check_setup(
         check_setup_repository,
-        OnlyFlag.ONLY,
-        SetupCheck.NOTES_BRANCH,
-        OnlyFlag.ONLY,
-        SetupCheck.NOTES_FILE,
+        requested_checks=frozenset({SetupCheck.NOTES_BRANCH, SetupCheck.NOTES_FILE}),
     )
 
     assert set(report.results) == {SetupCheck.NOTES_BRANCH, SetupCheck.NOTES_FILE}
@@ -700,8 +926,7 @@ def test_a_failing_unrequested_check_does_not_fail_the_requested_one(
     report = run_check_setup(
         dispatch_needing_setup,
         OnlyFlag.REQUIRE_UPSTREAM,
-        OnlyFlag.ONLY,
-        SetupCheck.STACK_UPSTREAM,
+        requested_checks=frozenset({SetupCheck.STACK_UPSTREAM}),
     )
 
     assert report.exit_code is SetupCheckExitCode.SUCCESS
@@ -712,7 +937,9 @@ def test_a_failing_unrequested_check_does_not_fail_the_requested_one(
 def test_every_documented_check_can_be_requested(
     check_setup_repository: ScratchRepository, check: SetupCheck
 ):
-    report = run_check_setup(check_setup_repository, OnlyFlag.ONLY, check)
+    report = run_check_setup(
+        check_setup_repository, requested_checks=frozenset({check})
+    )
 
     assert set(report.results) == {check}
 

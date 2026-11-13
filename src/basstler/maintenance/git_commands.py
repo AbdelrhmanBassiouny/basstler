@@ -13,7 +13,7 @@ import subprocess
 import tempfile
 from collections.abc import Mapping
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePath, PurePosixPath
 
 from basstler.class_property import classproperty
 from basstler.exceptions import UnresolvableReferenceError
@@ -22,6 +22,7 @@ from basstler.environment import GitVariable
 from basstler.locations import CommitScratchFile, RepositoryStateLocation
 from basstler.maintenance.constants import CommitTrailer
 from basstler.maintenance.exceptions import ExternalCallFailed
+from basstler.repository import GitHubAddress
 from basstler.stack.model import IntegrationStrategy
 from basstler.stack.settings import Configuration
 
@@ -243,6 +244,15 @@ class GitCommandRunner:
             f"+refs/heads/{branch}:refs/remotes/{tracking_remote}/{branch}",
         )
 
+    def configured_remote_url(self, remote: str) -> str | None:
+        """
+        :param remote: A remote's name.
+        :return: The URL the clone configures for it, not git's rewrite of it, ``None``
+            for no such remote.
+        """
+        read = self.attempt("config", "--get", f"remote.{remote}.url")
+        return read.output if read.succeeded else None
+
     def commit_or_none(self, reference: str) -> str | None:
         """:param reference: A ref that may not exist.
         :return: The commit it names, or ``None`` if it does not exist."""
@@ -254,18 +264,22 @@ class GitCommandRunner:
         :return: The commit it names."""
         return self.run("rev-parse", reference)
 
-    def file_at(self, commit: str, path: str | Path) -> str | None:
+    def file_at(self, commit: str, path: str | PurePath) -> str | None:
         """
         :param commit: The commit to read from.
         :param path: The file's path from the commit's root.
         :return: Its text without the final newline, or ``None`` when the commit has
             no such file.
         """
-        shown = self.attempt("show", f"{commit}:{Path(path).as_posix()}")
+        shown = self.attempt("show", f"{commit}:{PurePosixPath(path)}")
         return shown.output if shown.succeeded else None
 
     def commit_files(
-        self, parent: str | None, files: Mapping[str, str], message: str
+        self,
+        parent: str | None,
+        files: Mapping[str, str],
+        message: str,
+        merged_parents: tuple[str, ...] = (),
     ) -> str:
         """
         Commit files on top of a commit without touching the working tree or the index,
@@ -274,6 +288,8 @@ class GitCommandRunner:
         :param parent: The commit to build on, ``None`` for a commit with no parent.
         :param files: What to write, by path, each without its final newline.
         :param message: The commit message.
+        :param merged_parents: Further parents after *parent*, whose files the commit
+            does not keep.
         :return: The new commit.
         """
         with tempfile.TemporaryDirectory() as scratch:
@@ -293,7 +309,12 @@ class GitCommandRunner:
                     environment=index,
                 )
             tree = self.run("write-tree", environment=index)
-        parents = ["-p", parent] if parent else []
+        parents = [
+            argument
+            for commit in (parent, *merged_parents)
+            if commit
+            for argument in ("-p", commit)
+        ]
         return self.run("commit-tree", tree, *parents, "-m", message)
 
     def parents_of(self, commit: str) -> tuple[str, ...]:
@@ -412,6 +433,72 @@ class GitCommandRunner:
         return self.attempt(
             "merge-base", "--is-ancestor", candidate, descendant
         ).succeeded
+
+    def share_history(self, first: str, second: str) -> bool:
+        """
+        :param first: Any reference git can resolve to a commit.
+        :param second: Another one.
+        :return: Whether the two commits have a common ancestor.
+        """
+        return self.attempt("merge-base", first, second).succeeded
+
+
+@dataclass(frozen=True)
+class TransientGitSetting:
+    """
+    A git config setting in force for the processes given it, written to no config file
+    and taking precedence over every one.
+    """
+
+    key: str
+    """
+    The setting's key, such as ``user.name``.
+    """
+
+    value: str
+    """
+    The value it takes.
+    """
+
+    def variables(self, environment: Mapping[str, str]) -> dict[str, str]:
+        """
+        :param environment: The environment the setting is added to, whose own
+            transient settings stay in force.
+        :return: The variables that add it, to be merged over *environment*.
+        """
+        index = int(environment.get(GitVariable.CONFIGURATION_COUNT) or 0)
+        return {
+            GitVariable.CONFIGURATION_COUNT: str(index + 1),
+            f"{GitVariable.CONFIGURATION_KEY_PREFIX}{index}": self.key,
+            f"{GitVariable.CONFIGURATION_VALUE_PREFIX}{index}": self.value,
+        }
+
+
+@dataclass(frozen=True)
+class GitHubLoginLendingRunner(GitCommandRunner):
+    """
+    Runs git in one checkout, answering its request for a GitHub credential over HTTPS
+    with ``gh``'s login, without changing any git configuration.
+    """
+
+    @classproperty
+    def credential_helper(cls) -> str:
+        """
+        The credential helper that answers with ``gh``'s login.
+        """
+        return "!gh auth git-credential"
+
+    def attempt(
+        self, *arguments: str, environment: Mapping[str, str] | None = None
+    ) -> GitCommandResult:
+        """
+        :meth:`GitCommandRunner.attempt`, with :attr:`credential_helper` consulted for
+        GitHub after every helper git is already configured with.
+        """
+        lent = TransientGitSetting(
+            f"credential.{GitHubAddress.WEB}.helper", self.credential_helper
+        ).variables(os.environ)
+        return super().attempt(*arguments, environment={**lent, **(environment or {})})
 
 
 # %% asking git what contains what

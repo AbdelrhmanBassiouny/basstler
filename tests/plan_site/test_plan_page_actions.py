@@ -13,6 +13,7 @@ from basstler.pull_request_state import (
     PullRequestRecord,
     PullRequestState,
 )
+from basstler.pull_request_state import LivePullRequests
 
 from ..fixture_plans import (
     PLAN_UNDER_TEST_ID,
@@ -150,8 +151,7 @@ def test_render_shows_start_now_button_for_a_not_started_item():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
-        tracking_url=None,
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert 'data-action-command="/plan-item-kickoff test-plan a"' in output
@@ -176,8 +176,7 @@ def test_render_shows_resolve_resume_reconsider_buttons_for_underway_items():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
-        tracking_url=None,
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert 'data-action-command="/plan-item-resolve test-plan a"' in output
@@ -202,8 +201,7 @@ def test_render_omits_action_button_for_a_done_item():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
-        tracking_url=None,
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert 'data-action-command="' not in output
@@ -223,8 +221,7 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
-        tracking_url=None,
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     for model in ModelOption:

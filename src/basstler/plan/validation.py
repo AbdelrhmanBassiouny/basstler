@@ -18,12 +18,14 @@ from basstler.exceptions import (
     InvalidBlockers,
     InvalidDependsOn,
     InvalidManifestRoot,
+    InvalidLandedItemCount,
     InvalidSchemaVersion,
     MalformedDependencyReference,
     MissingPlanDirectory,
     PlanInAnotherRepository,
     PlanValidationError,
     SelfPlanReference,
+    SharedBranch,
     UnknownDependency,
     UnknownDependencyPlan,
     UnknownStatus,
@@ -238,10 +240,10 @@ class PlanValidator:
     this plan's own items are available - in which case a cross-plan entry is
     a problem rather than a free pass."""
 
-    notes_repository: Repository | None = None
+    checkout_repository: Repository | None = None
     """
-    The repository whose notes branch the plan is saved to, or ``None`` when it is not
-    known.
+    The repository the ``origin`` of the checkout saving the plan names, or ``None``
+    when no save is being checked.
     """
 
     def validate(self) -> None:
@@ -264,7 +266,9 @@ class PlanValidator:
             return [InvalidManifestRoot(self.manifest)]
         return [
             *self.schema_version_problems(),
+            *self.landed_item_count_problems(),
             *self.duplicate_identifier_problems(),
+            *self.shared_branch_problems(),
             *(problem for item in self.items for problem in self.item_problems(item)),
             *self.cycle_problems(),
             *self.wave_problems(),
@@ -329,6 +333,19 @@ class PlanValidator:
             return []
         return [InvalidSchemaVersion(schema_version)]
 
+    def landed_item_count_problems(self) -> list[ValidationProblem]:
+        """
+        The problem with the manifest's ``landed_item_count``, if any.
+        """
+        landed_item_count = self.manifest.get(ManifestKey.LANDED_ITEM_COUNT.key, 0)
+        if (
+            isinstance(landed_item_count, int)
+            and not isinstance(landed_item_count, bool)
+            and landed_item_count >= 0
+        ):
+            return []
+        return [InvalidLandedItemCount(landed_item_count)]
+
     def duplicate_identifier_problems(self) -> list[ValidationProblem]:
         """
         The problem of two items sharing an effective id, if any.
@@ -341,6 +358,32 @@ class PlanValidator:
         if not duplicate_identifiers:
             return []
         return [DuplicateItemId(duplicate_identifiers)]
+
+    def shared_branch_problems(self) -> list[ValidationProblem]:
+        """
+        One problem per branch that more than one item names, counting the items of the
+        other plans when they are available.
+        """
+        claiming_items: dict[str, list[str]] = {}
+        for item in self.items:
+            branch = item.get(ManifestKey.BRANCH.key)
+            if isinstance(branch, str) and branch:
+                claiming_items.setdefault(branch, []).append(self.identifier_of(item))
+        references_by_branch = (
+            self.plan_directory.references_by_branch if self.plan_directory else {}
+        )
+        problems: list[ValidationProblem] = []
+        for branch, identifiers in claiming_items.items():
+            other_plans_items = [
+                reference.text
+                for reference in references_by_branch.get(branch, [])
+                if reference.plan_id != self.plan_id
+            ]
+            if len(identifiers) + len(other_plans_items) > 1:
+                problems.append(
+                    SharedBranch(branch, [*identifiers, *other_plans_items])
+                )
+        return problems
 
     def item_problems(self, item: dict[str, Any]) -> list[ValidationProblem]:
         """
@@ -437,22 +480,25 @@ class PlanValidator:
 
     def repository_problems(self) -> list[ValidationProblem]:
         """
-        The problem of the plan being saved to another repository's notes than the one
-        its ``default_repository`` names, if it is.
+        The problem of the plan being saved from a checkout of another repository than
+        the one its ``default_repository`` names, if it is.
         """
         default_repository = self.manifest.get(ManifestKey.DEFAULT_REPOSITORY.key)
         if (
-            self.notes_repository is None
+            self.checkout_repository is None
             or not isinstance(default_repository, str)
             or not Repository.is_full_name(default_repository)
         ):
             return []
-        if default_repository.casefold() == self.notes_repository.full_name.casefold():
+        if (
+            default_repository.casefold()
+            == self.checkout_repository.full_name.casefold()
+        ):
             return []
         return [
             PlanInAnotherRepository(
                 self.plan_id,
                 Repository.parse(default_repository),
-                self.notes_repository,
+                self.checkout_repository,
             )
         ]

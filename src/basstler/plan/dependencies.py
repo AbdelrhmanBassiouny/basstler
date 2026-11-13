@@ -8,6 +8,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from functools import cached_property
 from pathlib import Path
 
 import yaml
@@ -15,8 +16,8 @@ import yaml
 from basstler.class_property import classproperty
 from basstler.plan_site.cards import DependencyChip
 from basstler.plan_site.plan import Item, Plan
-from basstler.plan.model import PlanDocument
-from basstler.pull_request_state import LiveState, PullRequestsByRepository
+from basstler.plan.model import PlanDocument, PlanManifest
+from basstler.pull_request_state import LivePullRequests, LiveState
 from basstler.repository import PullRequestReference, Repository
 
 
@@ -162,14 +163,14 @@ class Dependency(ABC):
 
     @abstractmethod
     def classify_live_state(
-        self, pull_requests_by_repository: PullRequestsByRepository
+        self,
+        live_pull_requests: LivePullRequests,
     ) -> None:
         """
         Fill in the live GitHub state of the item this dependency names, against the
         repository that item's own plan uses.
 
-        :param pull_requests_by_repository: Live pull request state, keyed by
-            repository.
+        :param live_pull_requests: What was read of the plans' repositories.
         """
 
 
@@ -240,15 +241,11 @@ class ResolvedDependency(Dependency):
         return DependencyChip.of_dependency(self, locate_plan_page)
 
     def classify_live_state(
-        self, pull_requests_by_repository: PullRequestsByRepository
+        self,
+        live_pull_requests: LivePullRequests,
     ) -> None:
-        """
-        See :meth:`Dependency.classify_live_state`.
-        """
         self.item.live_state = LiveState.classify(
-            self.item.pull_request_number,
-            self.repository,
-            pull_requests_by_repository,
+            self.item.pull_request_number, self.repository, live_pull_requests
         )
 
 
@@ -290,7 +287,8 @@ class UnresolvedDependency(Dependency):
         return DependencyChip.unresolved(self)
 
     def classify_live_state(
-        self, pull_requests_by_repository: PullRequestsByRepository
+        self,
+        live_pull_requests: LivePullRequests,
     ) -> None:
         """See :meth:`Dependency.classify_live_state` - nothing to classify,
         since this entry named no item."""
@@ -337,6 +335,27 @@ class PlanDirectory:
         plan = Plan.from_mapping(yaml.safe_load(manifest_path.read_text()))
         self.plans_by_id[plan_id] = plan
         return plan
+
+    @cached_property
+    def references_by_branch(self) -> dict[str, list[DependencyReference]]:
+        """
+        Every item of every plan in the directory that names a branch, keyed by that
+        branch; a manifest that is no mapping names none.
+        """
+        references: dict[str, list[DependencyReference]] = {}
+        for manifest_path in sorted(self.directory.glob(f"*/{PlanDocument.MANIFEST}")):
+            manifest = PlanManifest.from_file(manifest_path)
+            if not isinstance(manifest.content, dict):
+                continue
+            for item in manifest.items:
+                if item.branch:
+                    references.setdefault(item.branch, []).append(
+                        DependencyReference(
+                            item_identifier=item.identifier,
+                            plan_id=manifest.identifier,
+                        )
+                    )
+        return references
 
     def resolve(self, reference: DependencyReference) -> Dependency:
         """
@@ -447,14 +466,14 @@ class DependencyResolver:
         )
 
     def classify_live_states(
-        self, pull_requests_by_repository: PullRequestsByRepository
+        self,
+        live_pull_requests: LivePullRequests,
     ) -> None:
         """
         Fill in the live GitHub state of every item some entry here names, each against
         its own plan's repository.
 
-        :param pull_requests_by_repository: Live pull request state, keyed by
-            repository.
+        :param live_pull_requests: What was read of the plans' repositories.
         """
         for dependency in self.dependencies_by_reference.values():
-            dependency.classify_live_state(pull_requests_by_repository)
+            dependency.classify_live_state(live_pull_requests)

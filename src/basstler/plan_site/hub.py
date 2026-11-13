@@ -28,6 +28,7 @@ import json
 import sys
 import tempfile
 from dataclasses import dataclass, field
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -38,7 +39,9 @@ from basstler.class_property import classproperty
 from basstler.plan_site.plan import Item
 from basstler.locations import ProjectLocation
 from basstler.maintenance.git_commands import GitCommandRunner
+from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.plan_site.exceptions import RegistryUnreadableError
+from basstler.plan_site.workflows import PlanSiteSecret
 from basstler.repository import GitHubAddress, Repository
 from basstler.setup.steps import PersonalNotesSetting
 from basstler.standard_streams import StandardStreamHandler
@@ -196,7 +199,7 @@ class PlanHub:
         )
 
     @classmethod
-    def from_text(cls, text: str | None) -> PlanHub | None:
+    def from_yaml(cls, text: str | None) -> PlanHub | None:
         """
         :param text: The hub file's content, which may be absent.
         :return: The hub, or ``None`` when there is no file or it is empty.
@@ -210,7 +213,7 @@ class PlanHub:
         :param path: The hub file, which may not exist.
         :return: The hub, or ``None`` when the file is absent or empty.
         """
-        return cls.from_text(path.read_text()) if path.is_file() else None
+        return cls.from_yaml(path.read_text()) if path.is_file() else None
 
     @classmethod
     def from_registry(
@@ -232,9 +235,13 @@ class PlanHub:
                 registry, notes_branch, remote_root, Path(scratch)
             )
             if notes is None:
-                raise RegistryUnreadableError(registry, notes_branch)
+                raise RegistryUnreadableError(
+                    registry,
+                    notes_branch,
+                    PlanSiteSecret.private_repository_correction,
+                )
             text = notes.read(ProjectLocation.PLAN_HUB)
-        return cls.from_text(text)
+        return cls.from_yaml(text)
 
     def to_text(self) -> str:
         """
@@ -248,6 +255,32 @@ class PlanHub:
         }
         return self.file_header + yaml.safe_dump(data, sort_keys=False)
 
+    @classmethod
+    def published_repositories(
+        cls,
+        notes_branch: RemoteBranch,
+        notes_repository: Repository,
+        remote_root: str = GitHubAddress.WEB,
+    ) -> list[Repository]:
+        """
+        :param notes_branch: The notes branch of *notes_repository*.
+        :param notes_repository: The repository whose notes name the registry.
+        :param remote_root: Where the registry is fetched from, as
+            :meth:`Repository.clone_url_under` takes it.
+        :return: *notes_repository*, then every other repository the registry's hub
+            file lists.
+        """
+        # Only the registry's copy lists every repository; this one names the registry.
+        own_copy = cls.from_yaml(notes_branch.read_latest(ProjectLocation.PLAN_HUB))
+        if own_copy is None:
+            return [notes_repository]
+        hub = (
+            cls.from_registry(Repository.parse(own_copy.registry), remote_root)
+            or own_copy
+        )
+        listed = [Repository.parse(name) for name in hub.repositories]
+        return list(dict.fromkeys([notes_repository, *listed]))
+
     def register(self, repository: str) -> bool:
         """
         :param repository: The ``owner/repo`` to list.
@@ -257,6 +290,23 @@ class PlanHub:
             return False
         self.repositories.append(repository)
         return True
+
+
+@dataclass(frozen=True)
+class PlanHistory:
+    """
+    When a plan was created and last changed on its notes branch.
+    """
+
+    created_at: datetime
+    """
+    The commit time of the first commit that wrote the plan.
+    """
+
+    modified_at: datetime
+    """
+    The commit time of the latest commit that changed it.
+    """
 
 
 @dataclass(frozen=True)
@@ -277,7 +327,12 @@ class NotesBranch:
 
     @classmethod
     def fetch(
-        cls, repository: Repository, branch: str, remote_root: str, scratch: Path
+        cls,
+        repository: Repository,
+        branch: str,
+        remote_root: str,
+        scratch: Path,
+        remote: str = "origin",
     ) -> NotesBranch | None:
         """
         :param repository: The repository to fetch from.
@@ -285,22 +340,20 @@ class NotesBranch:
         :param remote_root: Where repositories are fetched from, as
             :meth:`Repository.clone_url_under` takes it.
         :param scratch: An empty directory of its own to fetch into.
+        :param remote: The name the scratch repository gives the repository.
         :return: The fetched branch, or ``None`` when it cannot be fetched.
         """
         scratch.mkdir(parents=True, exist_ok=True)
         git = GitCommandRunner(scratch)
         git.run("init", "--quiet")
-        fetched = git.attempt(
-            "fetch",
-            "--quiet",
-            "--depth",
-            "1",
-            repository.clone_url_under(remote_root),
-            branch,
-        )
+        git.run("remote", "add", remote, repository.clone_url_under(remote_root))
+        # The whole history without old file contents dates each plan; checking a file
+        # out downloads its content from the remote when it is needed.
+        fetched = git.attempt("fetch", "--quiet", "--filter=blob:none", remote, branch)
         if not fetched.succeeded:
             logger.warning(
-                f"{repository}: cannot fetch {branch}: {fetched.error_output}"
+                f"{repository}: cannot fetch {branch}: {fetched.error_output}; "
+                f"{PlanSiteSecret.private_repository_correction}"
             )
             return None
         return cls(repository, git)
@@ -312,13 +365,33 @@ class NotesBranch:
         """
         return self.git.file_at("FETCH_HEAD", path)
 
+    def history_of(self, plan_directory_name: str) -> PlanHistory | None:
+        """
+        :param plan_directory_name: A plan's directory under the plans directory.
+        :return: When the branch first and last changed it, ``None`` when it never did.
+        """
+        dates = self.git.run(
+            "log",
+            "--format=%cI",
+            "FETCH_HEAD",
+            "--",
+            (ProjectLocation.PLANS / plan_directory_name).as_posix(),
+        ).splitlines()
+        if not dates:
+            return None
+        return PlanHistory(
+            datetime.fromisoformat(dates[-1]), datetime.fromisoformat(dates[0])
+        )
+
     def check_out_plans(self) -> Path:
         """
         Write the branch's plans directory out as plain files.
 
         :return: The plans directory, empty when the branch has none.
         """
-        self.git.attempt("checkout", "FETCH_HEAD", "--", str(ProjectLocation.PLANS))
+        self.git.attempt(
+            "checkout", "FETCH_HEAD", "--", ProjectLocation.PLANS.as_posix()
+        )
         plans_directory = self.git.working_directory / ProjectLocation.PLANS
         plans_directory.mkdir(parents=True, exist_ok=True)
         return plans_directory

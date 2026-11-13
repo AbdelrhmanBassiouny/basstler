@@ -8,22 +8,48 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
+from urllib.parse import urlsplit
 
 
 class GitHubAddress(StrEnum):
     """
-    The base URLs every GitHub address this package builds is built on.
+    The GitHub URLs this package builds addresses on or points the user to.
     """
 
     WEB = "https://github.com"
     """
-    The root of every web and clone URL.
+    The root of every web URL and of every clone URL reached over HTTPS.
     """
 
     API = "https://api.github.com"
     """
     The root of every REST call.
     """
+
+    SSH = "ssh://git@github.com"
+    """
+    The root of every clone URL reached over SSH.
+    """
+
+    STATUS = "https://www.githubstatus.com"
+    """
+    The page where GitHub reports its incidents.
+    """
+
+    @classmethod
+    def clone_root_for(cls, remote_url: str) -> GitHubAddress:
+        """
+        :param remote_url: A git remote URL.
+        :return: The root other repositories are reached under over the same transport:
+            :attr:`SSH` for an SSH remote, :attr:`WEB` for any other.
+        """
+        before_path, colon, _ = remote_url.partition(":")
+        is_short_ssh_form = (
+            bool(colon) and "/" not in before_path and "@" in before_path
+        )
+        if is_short_ssh_form or urlsplit(remote_url).scheme == urlsplit(cls.SSH).scheme:
+            return cls.SSH
+        return cls.WEB
 
 
 @dataclass
@@ -155,6 +181,13 @@ class Repository:
         """
         return f"{root}/{self.full_name}.git"
 
+    @property
+    def settings_url(self) -> str:
+        """
+        The repository's settings page, where its visibility is changed.
+        """
+        return f"{self.url}/settings"
+
     def pull_request_url(self, number: int) -> str:
         """
         :param number: The pull request's number.
@@ -177,6 +210,13 @@ class Repository:
         return f"{self.url}/actions/runs/{run}"
 
     @property
+    def new_actions_secret_url(self) -> str:
+        """
+        The form on GitHub that adds an Actions secret to the repository.
+        """
+        return f"{self.settings_url}/secrets/actions/new"
+
+    @property
     def api_path(self) -> str:
         """
         The repository's REST path, relative to :attr:`GitHubAddress.API`, which is also
@@ -184,12 +224,62 @@ class Repository:
         """
         return f"repos/{self.full_name}"
 
+    @property
+    def issues_path(self) -> str:
+        """
+        The REST path of the repository's issues, which lists and opens them.
+        """
+        return f"{self.api_path}/issues"
+
+    def issue_path(self, number: int) -> str:
+        """
+        :param number: The issue's number.
+        :return: The REST path of that issue.
+        """
+        return f"{self.issues_path}/{number}"
+
+    def issue_labels_path(self, number: int) -> str:
+        """
+        :param number: The issue's or pull request's number.
+        :return: The REST path that sets that issue's labels.
+        """
+        return f"{self.issue_path(number)}/labels"
+
+    def issue_comments_path(self, number: int) -> str:
+        """
+        :param number: The issue's number.
+        :return: The REST path that lists and posts that issue's comments.
+        """
+        return f"{self.issue_path(number)}/comments"
+
+    @property
+    def labels_path(self) -> str:
+        """
+        The REST path of the labels defined on the repository, which lists and creates
+        them.
+        """
+        return f"{self.api_path}/labels"
+
+    @property
+    def pull_requests_path(self) -> str:
+        """
+        The REST path of the repository's pull requests, which lists and opens them.
+        """
+        return f"{self.api_path}/pulls"
+
     def pull_request_path(self, number: int) -> str:
         """
         :param number: The pull request's number.
         :return: The REST path of that pull request.
         """
-        return f"{self.api_path}/pulls/{number}"
+        return f"{self.pull_requests_path}/{number}"
+
+    def workflow_run_path(self, run: int) -> str:
+        """
+        :param run: The Actions workflow run's own number.
+        :return: The REST path of that run.
+        """
+        return f"{self.api_path}/actions/runs/{run}"
 
     def job_log_path(self, job: int) -> str:
         """

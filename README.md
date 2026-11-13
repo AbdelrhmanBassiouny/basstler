@@ -7,7 +7,8 @@ maintenance and an upstream review reader.
 The name is the German word for someone who builds things themselves, and shares its
 first letters with the surname of the person who wrote it, Bassiouny.
 
-Setting it up: [`docs/SETUP.md`](docs/SETUP.md).
+basstler is maintained in the [KAOS-repositories](https://github.com/KAOS-repositories)
+organization on GitHub. Setting it up: [`docs/SETUP.md`](docs/SETUP.md).
 
 ## What is in this repository
 
@@ -24,38 +25,52 @@ package at the plugin's own version, so the two are always one release.
 
 ## Releasing
 
-Every push to `main` that changes anything is a release, made by `release.yml`. An install
-takes the package from the latest release tag, so a change merged without one would reach
-some installs and not others: a plugin's hooks would call a package that predates them.
-Every change counts, not only those to the package, since a list of shipped paths would go
-stale.
+Every push to `main` that changes anything is a release once its Tests run passes, made by
+`release.yml`. A commit whose tests fail is never tagged, so installs stay on the latest
+release that passed, and the next passing commit releases everything merged since. An install
+takes the package from its plugin's release tag, so a change merged without one would reach
+no install at all. Every change counts, not only those to the package, since a list of
+shipped paths would go stale.
 
-- **A release is only a tag on the merge commit.** No file names the version - the build
-  reads it from the tag (`hatch-vcs`), and `plugin/.claude-plugin/plugin.json` names none -
-  so nothing is pushed to `main` after a merge. A plugin synced from the merge is already
-  the release; a version commit pushed seconds after the merge is what a synced plugin used
-  to miss, leaving it installing the release before.
+- **A release is only a tag on the merge commit.** No file on `main` names the version -
+  the build reads it from the tag (`hatch-vcs`), and `plugin/.claude-plugin/plugin.json`
+  names none - so nothing is pushed to `main` after a merge.
+- **The plugin is served from the `plugin-release` branch,** which the same atomic push
+  moves to the tag's `plugin/` directory alone, alongside the `release` branch it moves to
+  the tag (`.claude-plugin/marketplace.json` names it as the plugin's `ref`). Its
+  `plugin.json` gains the release's `version`, so claude.ai and Claude Code show which
+  release a synced plugin is. A synced plugin is therefore always a release, and its
+  session start installs that same release: a merge whose tests fail, or are still
+  running, reaches no install at all.
 - **The workflow increments the latest release's patch,** or its minor or major part when a
   pull request merged since is labelled `release:minor` or `release:major`. It then
   publishes a GitHub release with generated notes.
-- **A session start installs the highest `v<major>.<minor>.<patch>` tag** of this
-  repository. One that starts between a merge and its tag gets the release before, until
-  its next start.
+- **A session start installs the tag its plugin's `plugin.json` names,** and a hook
+  installs again once the plugin syncs to another release. Where the two still differ, as
+  after an install that failed, the session start's `release:` line and check-setup's
+  `basstler_version` row say so, the row with the status `mismatched`.
 
 ## The package's own environment
 
-**Every session start gives `basstler` an environment of its own, without asking:**
-`~/.local/share/basstler/venv` - `$BASSTLER_HOME/venv` when `BASSTLER_HOME` is set - from an
-interpreter the package supports, with the package installed into it. One per user rather
-than one per clone, so a fresh clone of any project the plugin serves needs no install of
-its own.
+**Every session start gives `basstler` an environment of its own, without asking:** one per
+project, under `~/.local/share/basstler/environments` (`$BASSTLER_HOME/environments` when
+`BASSTLER_HOME` is set), from an interpreter the package supports, with the package installed
+into it at that project's plugin release. Worktrees of a project share its environment, and a
+session runs its project's environment in every repository it has attached; the session start
+exports it as `$BASSTLER_ENVIRONMENT_DIRECTORY` and its interpreter as `$BASSTLER_PYTHON`. Its
+`environments:` line names any environment it removed because its project directory is gone.
+
+Releases before per-project environments shared one at `~/.local/share/basstler/venv`. Nothing
+here uses it or removes it, since a project still on an older plugin runs it: delete it once
+every project has updated its plugin.
 
 What it installs from depends on where the plugin is:
 
-- **A plugin installed on its own** installs `basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@<tag>`,
-  the tag being the latest release, read once per session start and again when a hook
-  finds the plugin synced at another commit since the install; offline, it keeps the one
-  it last read.
+- **A plugin installed on its own** installs `basstler @ git+https://github.com/KAOS-repositories/basstler@<tag>`,
+  the tag being the release its `plugin.json` names. A plugin naming none - a copy of the
+  source tree outside a clone - installs nothing: session start says so on its
+  `dependencies:` line, every hook stops with the same reason, and setup reports it as
+  `mismatched`. Reinstall the plugin from the marketplace.
 - **A plugin run from a clone of this repository** installs that clone editable, so
   `import basstler` is the clone's own source.
 
@@ -89,9 +104,9 @@ it does.
 Every entry point is run as a module, by the package's own interpreter:
 
 ```bash
-~/.local/share/basstler/venv/bin/python -m basstler.stack configuration
-~/.local/share/basstler/venv/bin/python -m basstler.maintenance run-report --json
-~/.local/share/basstler/venv/bin/python -m basstler.plan_site --help
+"$BASSTLER_PYTHON" -m basstler.stack configuration
+"$BASSTLER_PYTHON" -m basstler.maintenance run-report --json
+"$BASSTLER_PYTHON" -m basstler.plan_site --help
 ```
 
 The hooks and the skills that call them all use `"${BASSTLER_PYTHON}" -m "${SOME_MODULE}"`,
@@ -113,14 +128,19 @@ The hook tests run `python3`, so the environment has to be first on the path, an
 page's script is tested in the headless Chromium Playwright installs. `ruff check`
 enforces the mechanical code rules, configured in `pyproject.toml`. Python is formatted
 by `python scripts/format_docstrings.py <files>` (ruff format, then docformatter where ruff
-keeps its result), also run as a pre-commit hook. To try a
+keeps its result), also run as a pre-commit hook. The rule-check and AGENTS.md hooks
+run `.venv/bin/python`, so they need the environment set up above. To try a
 change in a real session, start Claude Code with `--plugin-dir plugin`: the plugin then
 sits in this clone, and installs the clone editable.
 
 ## Licence
 
-basstler is a personal project by Abdelrhman Bassiouny (<bido.bassuny@gmail.com>), developed
-independently of any employer or institution. It is licensed under the
-[Apache License 2.0](LICENSE); see [NOTICE](NOTICE) for attribution.
+basstler was written by Abdelrhman Bassiouny (<bido.bassuny@gmail.com>), independently of any
+employer or institution, and is maintained in the
+[KAOS-repositories](https://github.com/KAOS-repositories) organization, which Abdelrhman
+Bassiouny co-founded. It is licensed under
+the [Apache License 2.0](LICENSE). The few modules adapted from
+[krrood](https://github.com/cram2/cognitive_robot_abstract_machine/tree/main/krrood) keep
+krrood's licence, the LGPL-3.0; [NOTICE](NOTICE) names them.
 
 Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md).

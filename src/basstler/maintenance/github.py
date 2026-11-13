@@ -15,25 +15,27 @@ from abc import ABC, abstractmethod
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from enum import Enum, StrEnum
-from pathlib import Path
 from typing import Any
 
+from basstler.github.issue import IssueComment
+from basstler.github.label import LabelReplacement, NewLabel, RepositoryLabel
+from basstler.github.pull_request import PullRequestDescription
 from basstler.pull_request_state import PullRequestState
 from basstler.github_labels import GitHubLabel
-from basstler.locations import PathEnumeration
 from basstler.maintenance.board import (
     AccountField,
     CommitChecks,
     PullRequestRecord,
 )
-from basstler.github.client import GitHubClient, GitHubRestClient, HttpMethod
+from basstler.github.client import GitHubClient, GitHubRestClient
 from basstler.repository import Repository
 from basstler.upstream_reviews.pull_request_models import CheckStatus
 from basstler.upstream_reviews.rest_models import (
     RestCheckRunPage,
     RestCombinedStatusPage,
 )
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
+from basstler.github.web_page import WebPage
 
 
 # %% what a pass reads and writes
@@ -122,33 +124,33 @@ class CredentialHolder(ABC):
         """:return: The login of the account the credential belongs to."""
 
 
-class GitHubPath(PathEnumeration):
+class GitHubPath(StrEnum):
     """
-    The API paths that are not below a repository.
+    The API routes that are not below a repository, ``/``-separated on every platform.
     """
 
-    AUTHENTICATED_USER = Path("/user")
+    AUTHENTICATED_USER = "/user"
     """
     The account the request's credential belongs to.
     """
 
 
-class RepositoryPath(PathEnumeration):
+class GitHubRepositoryPath(StrEnum):
     """
-    The API paths below a repository.
+    The API routes below a repository, ``/``-separated on every platform.
     """
 
-    PULL_REQUESTS = Path("/pulls")
+    PULL_REQUESTS = "/pulls"
     """
     The repository's pull requests.
     """
 
-    LABELS = Path("/labels")
+    LABELS = "/labels"
     """
     The labels defined on the repository.
     """
 
-    COMMITS = Path("/commits")
+    COMMITS = "/commits"
     """
     The repository's commits.
     """
@@ -156,7 +158,7 @@ class RepositoryPath(PathEnumeration):
 
 class CommitReport(StrEnum):
     """
-    The listings reported against one commit, below :attr:`RepositoryPath.COMMITS`.
+    The listings reported against one commit, below :attr:`GitHubRepositoryPath.COMMITS`.
     """
 
     CHECK_RUNS = "check-runs"
@@ -183,22 +185,6 @@ class ListingParameter(StrEnum):
     PAGE_SIZE = "per_page"
     """
     How many entries one page holds.
-    """
-
-
-class LabelField(StrEnum):
-    """
-    The fields of a label the API reads and writes.
-    """
-
-    NAME = "name"
-    """
-    The label's name.
-    """
-
-    DESCRIPTION = "description"
-    """
-    What the label means.
     """
 
 
@@ -307,53 +293,51 @@ class GitHubRepository(
         :return: Them, oldest page first.
         """
         return self._every_entry(
-            RepositoryPath.PULL_REQUESTS, {ListingParameter.STATE: state.query}
+            GitHubRepositoryPath.PULL_REQUESTS, {ListingParameter.STATE: state.query}
         )
 
     def labels(self) -> set[str]:
         return {
-            label[LabelField.NAME]
-            for label in self._every_entry(RepositoryPath.LABELS, {})
+            RepositoryLabel.from_json(label).name
+            for label in self._every_entry(GitHubRepositoryPath.LABELS, {})
         }
 
     def create_label(self, label: GitHubLabel) -> None:
         self.client.send(
-            HttpMethod.POST,
-            self._path(str(RepositoryPath.LABELS)),
-            {LabelField.NAME: label, LabelField.DESCRIPTION: label.purpose},
+            NewLabel(self.repository, RepositoryLabel(label, label.purpose))
         )
 
-    def check_state(self, commit: str) -> RollupState:
+    def check_state(self, commit: str) -> CombinedCheckState:
         runs = [
-            run.result
+            run
             for page in self.client.get_pages(
                 self._listing(self._commit_report(commit, CommitReport.CHECK_RUNS), {})
             )
             for run in RestCheckRunPage.from_json(page).check_runs
         ]
         statuses = [
-            status.result
+            status
             for page in self.client.get_pages(
                 self._listing(self._commit_report(commit, CommitReport.STATUS), {})
             )
             for status in RestCombinedStatusPage.from_json(page).statuses
         ]
         checks = CheckStatus.over(runs + statuses)
-        return RollupState.NOT_REPORTED if checks is None else checks.state
+        return CombinedCheckState.NOT_REPORTED if checks is None else checks.state
 
     @staticmethod
     def _commit_report(commit: str, report: CommitReport) -> str:
         """:param commit: The commit reported against.
         :param report: Which of its listings to read.
         :return: The listing's path below the repository."""
-        return f"{RepositoryPath.COMMITS}/{commit}/{report}"
+        return f"{GitHubRepositoryPath.COMMITS}/{commit}/{report}"
 
     def authenticated_login(self) -> str:
         account = self.client.get(str(GitHubPath.AUTHENTICATED_USER))
         return str(account[AccountField.LOGIN])
 
     def _every_entry(
-        self, path: RepositoryPath, filters: Mapping[ListingParameter, str]
+        self, path: GitHubRepositoryPath, filters: Mapping[ListingParameter, str]
     ) -> list[Any]:
         """
         Read a listing below the repository whose pages are lists, to its end.
@@ -389,7 +373,9 @@ class GitHubRepository(
     def pull_request(self, number: int) -> PullRequestRecord:
         """:param number: The pull request to read.
         :return: That pull request."""
-        return self.client.get(self._path(f"{RepositoryPath.PULL_REQUESTS}/{number}"))
+        return self.client.get(
+            self._path(f"{GitHubRepositoryPath.PULL_REQUESTS}/{number}")
+        )
 
     def replace_labels(self, number: int, labels: Sequence[str]) -> None:
         """
@@ -399,20 +385,14 @@ class GitHubRepository(
         :param labels: The complete set it must end up with, computed by
             :meth:`stack.LabelWrite.replacing` - this call replaces rather than adds.
         """
-        self.client.send(
-            HttpMethod.PUT,
-            self._path(f"/issues/{number}/labels"),
-            {"labels": list(labels)},
-        )
+        self.client.send(LabelReplacement(self.repository, number, list(labels)))
 
     def add_comment(self, number: int, body: str) -> str:
         """:param number: The pull request to comment on.
         :param body: The comment.
         :return: The comment's URL."""
-        created = self.client.send(
-            HttpMethod.POST, self._path(f"/issues/{number}/comments"), {"body": body}
-        )
-        return str(created["html_url"])
+        created = self.client.send(IssueComment(self.repository, number, body))
+        return WebPage.from_json(created).page_url
 
     def set_description(self, number: int, body: str) -> None:
         """
@@ -421,8 +401,4 @@ class GitHubRepository(
         :param number: The pull request to write.
         :param body: The new description.
         """
-        self.client.send(
-            HttpMethod.PATCH,
-            self._path(f"{RepositoryPath.PULL_REQUESTS}/{number}"),
-            {"body": body},
-        )
+        self.client.send(PullRequestDescription(self.repository, number, body))

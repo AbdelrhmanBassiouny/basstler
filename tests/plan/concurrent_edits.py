@@ -26,7 +26,7 @@ PLAN_REPOSITORY = PlanManifest.from_file(
     DatasetLocation.BOOTSTRAP_PLAN
 ).default_repository
 """
-The repository the fixture plan's work is for, whose notes it is saved to.
+The repository the fixture plan's work is for, from whose checkout it is saved.
 """
 
 FIRST_ITEM = "an-existing-item"

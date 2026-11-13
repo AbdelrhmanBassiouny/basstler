@@ -27,21 +27,22 @@ from basstler.github.exceptions import (
     GitHubCredentialRejected,
     GitHubRequestFailed,
 )
-from basstler.locations import ClaudeCodeVariable, ProjectLocation
+from basstler.locations import ClaudeCodeVariable
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.personal_notes.branch import PersonalNotesLocation
 from basstler.plan_site import publication
 from basstler.plan_site.exceptions import NotesRepositoryUnresolvedError
 from basstler.plan_site.hub import PlanHub
-from basstler.plan_site.run_listing import ListedRun, RunListing
+from basstler.github.run_listing import ListedRun, RunListing
 from basstler.plan_site.site_repository import SiteRepository
 from basstler.plan_site.workflows import DispatchWorkflow, PlanSiteSecret
-from basstler.repository import GitHubAddress, Repository
+from basstler.repository import Repository
 from basstler.setup.report import CheckResult, CheckStatus
 from basstler.setup.steps import resolve_repository
 from basstler.standard_streams import StandardStreamHandler
-from basstler.upstream_reviews.vocabulary import CheckOutcome, JSONModel
+from basstler.github.states import CheckOutcome
+from basstler.json_model import JSONModel
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -79,17 +80,6 @@ class ReadRefusal:
 
 
 # %% the token each repository stores
-
-
-class SecretKey(StrEnum):
-    """
-    Every field read out of a repository secret's REST response.
-    """
-
-    UPDATED_AT = "updated_at"
-    """
-    When the secret's value was last set.
-    """
 
 
 class SecretState(StrEnum):
@@ -140,9 +130,7 @@ class TokenSecret(JSONModel):
         :param data: A repository secret's REST response.
         :return: The stored secret.
         """
-        return cls(
-            SecretState.STORED, datetime.fromisoformat(data[SecretKey.UPDATED_AT])
-        )
+        return cls(SecretState.STORED, datetime.fromisoformat(data["updated_at"]))
 
     @staticmethod
     def path(repository: Repository) -> str:
@@ -150,7 +138,7 @@ class TokenSecret(JSONModel):
         :param repository: The repository.
         :return: The REST path of its token secret.
         """
-        return f"{repository.api_path}/actions/secrets/{PlanSiteSecret.TOKEN}"
+        return PlanSiteSecret.TOKEN.path_on(repository)
 
     @classmethod
     def read(cls, client: GitHubAttemptReader, repository: Repository) -> TokenSecret:
@@ -415,9 +403,9 @@ class RepositoryDispatch(DispatchReading):
         if self.latest_run is None:
             return f"it has no dispatch run on '{self.notes_branch}'"
         return (
-            f"{self.runs.count(CheckOutcome.FAILURE)} of its {len(self.runs.runs)} "
+            f"{self.runs.count(CheckOutcome.FAILURE)} of its {len(self.runs.workflow_runs)} "
             f"latest dispatch runs failed, the latest is {self.latest_run.outcome} "
-            f"({self.latest_run.url})"
+            f"({self.latest_run.page_url})"
         )
 
     def describe(self) -> str:
@@ -437,14 +425,14 @@ class RepositoryDispatch(DispatchReading):
             case DispatchState.TOKEN_STORED_AFTER_FAILURE:
                 return (
                     f"{name}'s {PlanSiteSecret.TOKEN} was set after its latest "
-                    f"dispatch run ({self.latest_run.url}), and takes effect at the "
+                    f"dispatch run ({self.latest_run.page_url}), and takes effect at the "
                     f"next push to '{self.notes_branch}'; {self.run_history}"
                 )
             case DispatchState.STOPPED_STARTING_BUILD:
                 causes = "; or ".join(FailureAfterSuccessCause)
                 return (
                     f"{name}'s latest dispatch run is {self.latest_run.outcome} "
-                    f"({self.latest_run.url}), though {self.latest_success.url} "
+                    f"({self.latest_run.page_url}), though {self.latest_success.page_url} "
                     f"succeeded on {self.latest_success.created_at:%Y-%m-%d}; "
                     f"{self.run_history}; {self.token.describe(self.repository)}. "
                     f"Open the failed run's log to see which happened: {causes}"
@@ -452,7 +440,7 @@ class RepositoryDispatch(DispatchReading):
             case DispatchState.RUN_FAILED:
                 return (
                     f"{name}'s latest dispatch run is {self.latest_run.outcome} "
-                    f"({self.latest_run.url}); {self.run_history}; "
+                    f"({self.latest_run.page_url}); {self.run_history}; "
                     f"{self.token.describe(self.repository)}"
                 )
             case DispatchState.STARTS_BUILD:
@@ -539,37 +527,6 @@ class DispatchCheck:
 # %% the command
 
 
-def published_repositories(
-    project_root: Path,
-    location: PersonalNotesLocation,
-    notes_repository: Repository,
-    remote_root: str = GitHubAddress.WEB,
-) -> list[Repository]:
-    """
-    :param project_root: The clone to read the notes branch from.
-    :param location: Where its notes are kept.
-    :param notes_repository: The repository its notes branch is on.
-    :param remote_root: Where the registry is fetched from, as
-        :meth:`Repository.clone_url_under` takes it.
-    :return: The notes repository, then every other repository the registry's hub file
-        lists.
-    """
-    # Only the registry's copy lists every repository; this one names the registry.
-    own_copy = PlanHub.from_text(
-        RemoteBranch(
-            location.branch, GitCommandRunner(project_root), location.remote
-        ).read_latest(ProjectLocation.PLAN_HUB)
-    )
-    if own_copy is None:
-        return [notes_repository]
-    hub = (
-        PlanHub.from_registry(Repository.parse(own_copy.registry), remote_root)
-        or own_copy
-    )
-    listed = [Repository.parse(name) for name in hub.repositories]
-    return list(dict.fromkeys([notes_repository, *listed]))
-
-
 app = App(help=__doc__)
 """
 The command, which takes no arguments.
@@ -593,20 +550,19 @@ def report_dispatch() -> int:
     if notes_repository is None:
         raise NotesRepositoryUnresolvedError(location.remote)
     client = GitHubRestClient()
+    notes_branch = RemoteBranch(
+        location.branch, GitCommandRunner(project_root), location.remote
+    )
     check = DispatchCheck(
         DispatchReading.read(client, client, notes_repository, location.branch),
         [
             DispatchReading.read(client, client, repository, location.branch)
-            for repository in published_repositories(
-                project_root, location, notes_repository
+            for repository in PlanHub.published_repositories(
+                notes_branch, notes_repository
             )
             if repository != notes_repository
         ],
-        SiteRepository.recorded_on(
-            RemoteBranch(
-                location.branch, GitCommandRunner(project_root), location.remote
-            )
-        ),
+        SiteRepository.recorded_on(notes_branch),
     )
     for row in check.rows():
         logger.info(row.fields)

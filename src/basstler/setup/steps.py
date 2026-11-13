@@ -55,9 +55,7 @@ from basstler.stack.configuration import StackSetting
 from basstler.standard_streams import StandardStreamHandler
 from basstler.maintenance.remote_branch import RemoteBranch
 from basstler.upstream_reviews.action.branch import ActionInstallation
-from basstler.upstream_reviews.vocabulary import (
-    ActionBranch,
-)
+from basstler.upstream_reviews.action.branch import ActionBranch
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -262,7 +260,7 @@ class PersonalNotesSetting(PersonalNotesSettingSpecification, Enum):
     PATH = PersonalNotesSettingSpecification(
         git_config_key="claude.personalNotesPath",
         environment_variable="CLAUDE_PERSONAL_NOTES_PATH",
-        default=str(ProjectLocation.PERSONAL_NOTES_DOCUMENT),
+        default=ProjectLocation.PERSONAL_NOTES_DOCUMENT.as_posix(),
     )
     """
     Where on that branch the notes file sits.

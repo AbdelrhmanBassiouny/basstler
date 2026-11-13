@@ -18,9 +18,7 @@ from basstler.upstream_reviews.pull_request_models import (
     CheckResult,
     CheckStatus,
 )
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-)
+from basstler.github.states import CheckOutcome
 
 # %% the log behind a failed check
 
@@ -98,13 +96,13 @@ class FailedJob:
         """
         Find the job a check's output link points at.
 
-        A rollup also carries contexts posted by services that are not Actions at all,
+        A commit's checks also include statuses posted by services that are not Actions at all,
         and those link somewhere with no job behind them.
 
         :param result: The check to locate.
         :return: The job, or ``None`` where the link names none.
         """
-        match = cls.link_pattern.search(result.url)
+        match = cls.link_pattern.search(result.target_url)
         if match is None:
             return None
         return cls(int(match.group(cls.identifier_group)))

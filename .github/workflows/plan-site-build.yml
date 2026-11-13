@@ -17,6 +17,10 @@ on:
         required: false
         type: string
         default: ""
+    secrets:
+      read_token:
+        description: "A read-only token for the private repositories the build reads; the site repository's own token when not passed"
+        required: false
 
 # One build runs at a time and is never cancelled; of the builds started meanwhile, only
 # the newest waits, so a burst of starts ends in one build of the latest state.
@@ -43,20 +47,23 @@ jobs:
           python-version: "3.12"
 
       - name: Install basstler
-        run: pip install "basstler @ git+https://github.com/AbdelrhmanBassiouny/basstler@${{ inputs.basstler_branch_or_tag }}"
+        run: pip install "basstler @ git+https://github.com/KAOS-repositories/basstler@${{ inputs.basstler_branch_or_tag }}"
 
       - name: Configure Pages
         id: pages
         uses: actions/configure-pages@v5
 
+      # git fetches the notes with the same credential the API calls use.
       - name: Build the site
+        id: build
         env:
-          GH_TOKEN: ${{ github.token }}
-        run: >-
-          python -m basstler.plan_site
-          --registry "${{ inputs.registry || github.repository }}"
-          --site-url "${{ steps.pages.outputs.base_url }}"
-          --output _site
+          GH_TOKEN: ${{ secrets.read_token || github.token }}
+        run: |
+          gh auth setup-git
+          python -m basstler.plan_site \
+            --registry "${{ inputs.registry || github.repository }}" \
+            --site-url "${{ steps.pages.outputs.base_url }}" \
+            --output _site
 
       # The run number in the query keeps Pages' cache from answering with an older digest.
       - name: Compare with the published site

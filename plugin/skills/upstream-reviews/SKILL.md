@@ -1,6 +1,6 @@
 ---
 name: upstream-reviews
-description: Report a fork branch's upstream pull request: its CI checks, failure logs and unresolved review threads. Invoke as "/upstream-reviews [<pull-request-number>|<branch>]". Use when asked what upstream reviewers or CI said about a promoted branch.
+description: Report a fork branch's upstream pull request: its CI checks, failure logs and unresolved review threads. Invoke as "/upstream-reviews [{pull-request-number}|{branch}]". Use when asked what upstream reviewers or CI said about a promoted branch.
 allowed-tools: Bash, Read, Skill, mcp__claude-code-remote__add_repo, mcp__claude-code-remote__create_session, mcp__claude-code-remote__get_session, mcp__claude-code-remote__list_events, mcp__claude-code-remote__archive_session
 ---
 
@@ -24,9 +24,10 @@ Preferably through the fork's own Actions. Setup creates one extra branch on
 the user's fork, named `basstler/upstream-reviews`. Nothing is copied from
 basstler's repository: the branch starts with no history and holds only a short
 workflow file that calls basstler's reusable workflow by reference, so a fork of
-any repository can carry it. Pushing a request to it starts a run, which reads
-the upstream over GraphQL and commits everything it read back to the branch;
-`basstler.upstream_reviews.action` fetches that and
+any repository can carry it. Each read pushes a request on a branch of its own
+started from it, which starts a run that reads the upstream over GraphQL and
+commits everything it read onto that branch;
+`basstler.upstream_reviews.action` fetches that, deletes the branch and
 replays it through the same reader a direct read uses. It works the same from a
 cloud session, a terminal or a runner, and the fork's default branch never
 changes. Setup installs it (`basstler.setup.steps install-upstream-reviews-action`); the

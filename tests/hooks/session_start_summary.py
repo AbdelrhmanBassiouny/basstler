@@ -38,9 +38,20 @@ class SummaryLine(StrEnum):
     Whether the personal notes were loaded, and from where.
     """
 
+    CITED_NAMES = "cited names"
+    """
+    Whether every module and skill the personal notes name is still shipped.
+    """
+
     PLAN = "plan"
     """
     Which plan, if any, tracks the current branch.
+    """
+
+    MERGED_ITEMS = "merged items"
+    """
+    Which items of every plan were recorded done because their pull requests merged,
+    and dropped.
     """
 
     PLAN_SITE = "plan site"
@@ -58,6 +69,11 @@ class SummaryLine(StrEnum):
     Whether the package's environment exists and holds everything the package requires.
     """
 
+    RELEASE = "release"
+    """
+    Whether the plugin and the installed package are one release.
+    """
+
     SETUP = "setup"
     """
     check-setup.sh's verdict.
@@ -68,6 +84,11 @@ class SummaryLine(StrEnum):
     What became of the default branch every session starts from.
     """
 
+    ENVIRONMENTS = "environments"
+    """
+    Which package environments of projects that are gone were removed.
+    """
+
     UPSTREAM_REVIEWS_ACTION = "reviews Action"
     """
     What became of the fork's upstream-reviews Action branch.
@@ -76,6 +97,11 @@ class SummaryLine(StrEnum):
     ACTIONS_USAGE = "Actions usage"
     """
     How near the workflows' runs and jobs are to the budget's daily ceilings.
+    """
+
+    MAIN_TESTS = "main tests"
+    """
+    Whether an issue reports the default branch's tests failing.
     """
 
     PLAN_STATE_SHA = "plan state SHA"
@@ -117,6 +143,42 @@ class SummaryMessage(StrEnum):
     BRANCH_TRACKED_IN_PLAN = "plan_line_tracked"
     """
     The branch is a tracked item of a plan that resolved.
+    """
+
+    MERGED_ITEMS_NO_PLANS = "merged_items_line_no_plans"
+    """
+    The notes branch holds no plans, so there were no items to look up.
+    """
+
+    MERGED_ITEMS_NOT_CHECKED = "merged_items_line_not_checked"
+    """
+    Recording every plan's merged items failed, and nothing was changed.
+    """
+
+    CITED_NAMES_CURRENT = "cited_names_line_current"
+    """
+    Every module and skill the notes name is shipped.
+    """
+
+    CITED_NAMES_STALE = "cited_names_line_stale"
+    """
+    The heading above the indented rows naming each name the notes cite that is no
+    longer shipped.
+    """
+
+    CITED_NAMES_NOT_CHECKED = "cited_names_line_not_checked"
+    """
+    The module reading the notes did not run.
+    """
+
+    NO_NOTES_TO_CITE_NAMES = "cited_names_line_no_notes"
+    """
+    There are no personal notes to read names from.
+    """
+
+    NOTES_NOT_REACHED = "notes_line_not_reached"
+    """
+    The notes branch could not be fetched from a repository this session cannot reach.
     """
 
     HUB_NOT_REGISTERED = "hub_line_not_registered"
@@ -175,6 +237,16 @@ class SummaryMessage(StrEnum):
     missing.
     """
 
+    ENVIRONMENTS_NONE_REMOVED = "environments_line_none_removed"
+    """
+    Every other package environment still has its project.
+    """
+
+    ENVIRONMENTS_REMOVED = "environments_line_removed"
+    """
+    Package environments whose project directory is gone were removed.
+    """
+
     DEPENDENCIES_ALREADY_INSTALLED = "dependencies_line_already_installed"
     """
     The package's environment already had every requirement, so nothing was installed.
@@ -200,6 +272,36 @@ class SummaryMessage(StrEnum):
     DEPENDENCIES_INSTALL_FAILED = "dependencies_line_install_failed"
     """
     The install did not work, and the run carried on regardless.
+    """
+
+    DEPENDENCIES_RELEASE_NOT_NAMED = "dependencies_line_release_not_named"
+    """
+    The plugin names no release, so there is no package of its release to install.
+    """
+
+    RELEASE_MATCHING = "release_line_matching"
+    """
+    The installed package is the plugin's own release.
+    """
+
+    RELEASE_MISMATCHED = "release_line_mismatched"
+    """
+    The installed package is another release than the plugin's.
+    """
+
+    RELEASE_NOT_NAMED = "release_line_not_named"
+    """
+    The plugin names no release, so nothing pins the package to it.
+    """
+
+    RELEASE_FROM_CHECKOUT = "release_line_checkout"
+    """
+    The plugin and the package both run from the checkout the plugin sits in.
+    """
+
+    RELEASE_NOT_READ = "release_line_package_not_read"
+    """
+    The installed package's version could not be read.
     """
 
     ACTION_NOT_READ = "upstream_reviews_action_line_not_read"
@@ -235,6 +337,21 @@ class SummaryMessage(StrEnum):
     ACTIONS_USAGE_WITHIN_BUDGET = "actions_usage_line_within_budget"
     """
     No workflow is near a daily ceiling.
+    """
+
+    MAIN_TESTS_NOT_CHECKED = "main_tests_line_not_checked"
+    """
+    The repository's issues could not be read.
+    """
+
+    MAIN_TESTS_PASSING = "main_tests_line_passing"
+    """
+    No issue reports the default branch's tests failing.
+    """
+
+    MAIN_TESTS_FAILING = "main_tests_line_failing"
+    """
+    An open issue reports the default branch's tests failing.
     """
 
 

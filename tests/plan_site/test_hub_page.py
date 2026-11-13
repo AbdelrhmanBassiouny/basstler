@@ -4,27 +4,46 @@ Tests for plan_site/hub_page.py's cards: a plan's progress on its repository's i
 
 from __future__ import annotations
 
-from typing import Any
 
-from basstler.plan_site.hub_page import PlanSummary, ProgressStage, StageShare
+from basstler.plan.model import ItemStatus
+from basstler.plan_site.hub_page import CountedItem, PlanSummary, StageShare
+from basstler.plan_site.plan import Plan, ProgressStage
+
+from ..manifest_builders import minimal_plan
 
 
-def summary(**overrides: Any) -> PlanSummary:
+def summary(
+    done: int = 1, total: int = 4, started: int = 0, reviewed: int = 0
+) -> PlanSummary:
     """
-    Build one :class:`PlanSummary` for a test, with sensible defaults for every field.
+    Build one :class:`PlanSummary` for a test, counting items that reached each stage.
 
-    :param overrides: Fields to replace on the returned summary.
+    :param done: How many items are done.
+    :param total: How many items there are.
+    :param started: How many items have begun.
+    :param reviewed: How many items are past their author's review.
     """
-    fields = {
-        "id": "plan-a",
-        "title": "Plan A",
-        "description": "desc",
-        "done": 1,
-        "total": 4,
-        "page_url": None,
+    reached_counts = {
+        ProgressStage.STARTED: started,
+        ProgressStage.REVIEWED: reviewed,
+        ProgressStage.DONE: done,
     }
-    fields.update(overrides)
-    return PlanSummary(**fields)
+    return PlanSummary(
+        id="plan-a",
+        title="Plan A",
+        description="desc",
+        counted_items=[
+            CountedItem(
+                status=ItemStatus.DONE if position < done else ItemStatus.IN_PROGRESS,
+                reached_stages=[
+                    stage for stage in ProgressStage if position < reached_counts[stage]
+                ],
+                listing_url=None,
+                number=None,
+            )
+            for position in range(total)
+        ],
+    )
 
 
 # %% PlanSummary
@@ -89,3 +108,22 @@ def test_css_class_is_plain_for_an_incomplete_plan():
 
 def test_css_class_marks_a_complete_plan():
     assert summary(done=4, total=4).css_class == "plan-card complete"
+
+
+# %% what a plan's card counts
+
+
+def test_a_plan_s_card_counts_its_items_and_those_that_landed():
+    plan = Plan.from_mapping(minimal_plan(landed_item_count=2))
+
+    card = PlanSummary(
+        id=plan.id,
+        title=plan.title,
+        description=plan.description,
+        counted_items=CountedItem.from_plan(plan),
+    )
+
+    assert (card.done, card.total) == (
+        plan.landed_item_count,
+        len(plan.items) + plan.landed_item_count,
+    )

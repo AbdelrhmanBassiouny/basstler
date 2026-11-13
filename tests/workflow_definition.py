@@ -29,6 +29,9 @@ class WorkflowKey(StrEnum):
     CONCURRENCY = "concurrency"
     GROUP = "group"
     CANCEL_IN_PROGRESS = "cancel-in-progress"
+    SECRETS = "secrets"
+    REQUIRED = "required"
+    ENVIRONMENT = "env"
 
 
 class WorkflowTrigger(StrEnum):
@@ -164,6 +167,11 @@ class WorkflowStep:
     The condition it runs under, unset when it always runs.
     """
 
+    environment: dict[str, str]
+    """
+    The environment variables it sets, by variable.
+    """
+
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> WorkflowStep:
         """
@@ -176,6 +184,7 @@ class WorkflowStep:
             uses.partition(ActionVersionSeparator.AT)[0] if uses else None,
             data.get(WorkflowKey.RUN),
             data.get(WorkflowKey.CONDITION),
+            data.get(WorkflowKey.ENVIRONMENT, {}),
         )
 
 
@@ -294,6 +303,12 @@ class Workflow:
     How its runs wait for each other, unset when they run side by side.
     """
 
+    called_secrets: dict[str, bool]
+    """
+    Each secret a caller may pass it as a reusable workflow, by name, with whether the
+    caller has to pass it.
+    """
+
     @classmethod
     def from_json(cls, data: dict[Any, Any]) -> Workflow:
         """
@@ -302,6 +317,7 @@ class Workflow:
         :return: The parsed workflow.
         """
         concurrency = data.get(WorkflowKey.CONCURRENCY)
+        call = data[True].get(WorkflowTrigger.WORKFLOW_CALL) or {}
         return cls(
             set(data[True]),
             {
@@ -309,6 +325,10 @@ class Workflow:
                 for name, job in data[WorkflowKey.JOBS].items()
             },
             Concurrency.from_json(concurrency) if concurrency else None,
+            {
+                name: declaration.get(WorkflowKey.REQUIRED, False)
+                for name, declaration in call.get(WorkflowKey.SECRETS, {}).items()
+            },
         )
 
     @classmethod

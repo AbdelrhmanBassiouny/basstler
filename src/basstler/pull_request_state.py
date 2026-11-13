@@ -17,12 +17,13 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Any
 
+from basstler.github.exceptions import GitHubRequestFailed
 from basstler.github_labels import GitHubLabel
 from basstler.maintenance.board import PullRequestField, PullRequestHead
 from basstler.maintenance.board import PullRequestRecord as PullRequestAPIRecord
 from basstler.maintenance.description import PullRequestDescription
 from basstler.repository import Repository
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
 
 
 # %% classified state
@@ -44,6 +45,7 @@ class LiveState(StrEnum):
     OPEN_READY = "open_ready"
     CLOSED_UNMERGED = "closed_unmerged"
     NOT_FOUND = "not_found"
+    REPOSITORY_UNREADABLE = "repository_unreadable"
 
     @property
     def display_label(self) -> str:
@@ -63,13 +65,15 @@ class LiveState(StrEnum):
                 return "Closed (unmerged)"
             case LiveState.NOT_FOUND:
                 return "Not found on GitHub"
+            case LiveState.REPOSITORY_UNREADABLE:
+                return "Repository unreadable"
 
     @classmethod
     def classify(
         cls,
         pull_request_number: int | None,
         repository: str,
-        pull_requests_by_repository: PullRequestsByRepository,
+        live_pull_requests: LivePullRequests,
     ) -> LiveState:
         """
         Classify one item's live GitHub state from its pull request number and
@@ -78,13 +82,17 @@ class LiveState(StrEnum):
         :param pull_request_number: The item's tracked pull request number, or ``None``
             if it has no pull request yet.
         :param repository: The ``"owner/repo"`` to look the pull request up under.
-        :param pull_requests_by_repository: Live pull request state for every repository
-            referenced by the plan's items.
+        :param live_pull_requests: What was read of every repository referenced by the
+            plan's items.
         :return: The classified state.
         """
         if pull_request_number is None:
             return LiveState.NO_PULL_REQUEST
-        repository_pull_requests = pull_requests_by_repository.get(repository, {})
+        if Repository.parse(repository) in live_pull_requests.read_failures:
+            return LiveState.REPOSITORY_UNREADABLE
+        repository_pull_requests = live_pull_requests.pull_requests_by_repository.get(
+            repository, {}
+        )
         pull_request = repository_pull_requests.get(str(pull_request_number))
         if pull_request is None:
             return LiveState.NOT_FOUND
@@ -173,7 +181,7 @@ class PullRequestRecord:
     The logins of the accounts the pull request is assigned to.
     """
 
-    check_state: RollupState | None = None
+    check_state: CombinedCheckState | None = None
     """
     The verdict over the checks reported on :attr:`head_commit`, ``None`` while they
     were not read.
@@ -322,3 +330,25 @@ class MalformedPullRequestDataError(ValueError):
 
 
 PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
+
+
+# %% what was read of a plan's repositories
+
+
+@dataclass
+class LivePullRequests:
+    """
+    The live state of a plan's pull requests, and the refusal of each repository holding
+    them that the token is not granted.
+    """
+
+    pull_requests_by_repository: PullRequestsByRepository = field(default_factory=dict)
+    """
+    Live pull request state for every repository that could be read.
+    """
+
+    read_failures: dict[Repository, GitHubRequestFailed] = field(default_factory=dict)
+    """
+    The refusal of the token's access to each repository whose pull requests could not
+    be read.
+    """

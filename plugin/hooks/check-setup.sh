@@ -10,9 +10,9 @@ set -euo pipefail
 #   "${BASSTLER_PLUGIN_ROOT}"/hooks/check-setup.sh [--require-upstream]
 #
 # --require-upstream makes a project naming no upstream a needs-setup row
-# rather than info. Only /upstream-reviews and /stacked-pr-maintenance need
-# one, so they pass it; any other caller would otherwise fail every project
-# that simply has no upstream.
+# rather than info. Only /upstream-reviews needs one, so only it passes it;
+# /stacked-pr-maintenance follows the clone's own remote in a project that is
+# not a fork.
 #
 # --only <check>, repeatable, reports only the named checks, and the exit code
 # covers only them: a step gated on one check is never closed by an unrelated
@@ -27,15 +27,18 @@ set -euo pipefail
 #
 # Output is one tab-separated "<check>\t<status>\t<detail>" row per check, in
 # the order the checks have to be fixed in (a later one can depend on an
-# earlier one being satisfied). Five statuses:
+# earlier one being satisfied). Six statuses:
 #   ok           - nothing to do
 #   needs-setup  - something is missing; <detail> says what
 #   in-progress  - another process is setting it up right now; wait for it
 #                  rather than doing it again
 #   unverified   - nothing the check could read decides it yet; <detail> says
 #                  why and how to settle it. Never a pass
+#   mismatched   - the plugin's hooks and the package they call are not one
+#                  release; <detail> says which and how to bring them together
 #   info         - context for whoever is reading, never a pass/fail
-# Exit code is 0 when no row is needs-setup, in-progress or unverified, 1
+# Exit code is 0 when no row is needs-setup, in-progress, unverified or
+# mismatched, 1
 # otherwise - so a caller can take the fast path ("everything is already fine")
 # on the exit code alone, without parsing anything.
 #
@@ -58,7 +61,7 @@ EXIT_CODE=0
 
 # Every check this script reports, in the order it reports them; equal to
 # basstler.setup.report.SetupCheck.
-KNOWN_CHECKS=" tooling_files session_start_hook claude_local_md_ignored notes_remote notes_remote_url notes_branch_name notes_path notes_branch notes_file stack_upstream upstream_reviews_action plan_site git_identity package_dependencies basstler_version claude_local_md "
+KNOWN_CHECKS=" tooling_files session_start_hook claude_local_md_ignored notes_remote notes_remote_url notes_branch_name notes_path notes_repository_access notes_branch notes_file stack_upstream upstream_reviews_action plan_site plan_site_access git_identity package_dependencies basstler_version claude_local_md "
 
 REQUIRE_UPSTREAM=false
 REQUESTED_CHECKS=""
@@ -108,15 +111,15 @@ report_upstream() {
     report stack_upstream ok "named in ${PERSONAL_STACK_CONFIGURATION_PATH} on '${NOTES_BRANCH}'"
   elif [ "${REQUIRE_UPSTREAM}" = true ]; then
     report stack_upstream needs-setup \
-      "no upstream named, which /upstream-reviews and /stacked-pr-maintenance need - run: ${configure_command}"
+      "no upstream named, which /upstream-reviews needs - run: ${configure_command}"
   else
     report stack_upstream info \
-      "no upstream named - only /upstream-reviews and /stacked-pr-maintenance need one, set with: ${configure_command}"
+      "no upstream named - the stack pass follows the clone's own remote; only /upstream-reviews needs one, set with: ${configure_command}"
   fi
 }
 
 # report: prints one TSV row, and remembers that the overall run failed if the
-# status is needs-setup, in-progress or unverified, so the exit code never has to be
+# status is needs-setup, in-progress, unverified or mismatched, so the exit code never has to be
 # tracked by hand at each call site.
 # report_upstream_reviews_action: prints the upstream_reviews_action row,
 # checked only once an upstream is named, since only /upstream-reviews runs the
@@ -130,7 +133,10 @@ report_upstream_reviews_action() {
     return 0
   fi
   local branch_or_tag
-  branch_or_tag="$(basstler_branch_or_tag)"
+  if ! branch_or_tag="$(basstler_branch_or_tag)"; then
+    report upstream_reviews_action info "not checked - the plugin names no release for it to run; see basstler_version"
+    return 0
+  fi
   local install_command="${BASSTLER_PYTHON} -m ${SETUP_STEPS_MODULE} install-upstream-reviews-action --branch-or-tag ${branch_or_tag}"
   local state
   if ! state="$("${BASSTLER_PYTHON}" -m "${UPSTREAM_REVIEWS_ACTION_MODULE}" \
@@ -185,11 +191,33 @@ report_plan_site() {
     "'${NOTES_BRANCH}' does not start a plan site build - to publish this repository's plans, run: ${publish_command}"
 }
 
+# report_plan_site_access: whether this session reaches the plan site's repository, so a
+# plan save can start the build. Only a cloud session can fix it itself, by attaching the
+# repository, so only there is a gap setup that is needed; elsewhere it is context.
+# Context when no plan site lists this repository.
+report_plan_site_access() {
+  local access
+  if ! recorded_site_url >/dev/null 2>&1; then
+    report plan_site_access info "no plan site lists this repository, so no build is started"
+    return 0
+  fi
+  access="$("${BASSTLER_PYTHON}" -m "${PLAN_SITE_BUILD_START_MODULE}" check-access 2>/dev/null | tr '\n' ' ')" \
+    || access=""
+  access="${access% }"
+  if [ -z "${access}" ]; then
+    report plan_site_access ok "this session can start the plan site's build"
+  elif [ "${CLAUDE_CODE_REMOTE:-}" = true ]; then
+    report plan_site_access needs-setup "${access}"
+  else
+    report plan_site_access info "${access}"
+  fi
+}
+
 report() {
   local check="$1" status="$2" detail="$3"
   requested "${check}" || return 0
   case "${status}" in
-    needs-setup|in-progress|unverified) EXIT_CODE=1 ;;
+    needs-setup|in-progress|unverified|mismatched) EXIT_CODE=1 ;;
   esac
   printf '%s\t%s\t%s\n' "${check}" "${status}" "${detail}"
 }
@@ -267,6 +295,17 @@ report notes_remote_url info "$(git remote get-url "${NOTES_REMOTE}" 2>/dev/null
 report notes_branch_name info "${NOTES_BRANCH} (from $(resolution_source claude.personalNotesBranch CLAUDE_PERSONAL_NOTES_BRANCH))"
 report notes_path info "${NOTES_PATH} (from $(resolution_source claude.personalNotesPath CLAUDE_PERSONAL_NOTES_PATH))"
 
+# In a cloud session, a separate notes repository is reached only once it is attached;
+# the module prints how, and nothing when there is nothing to attach.
+NOTES_REPOSITORY_ACCESS="$("${BASSTLER_PYTHON}" -m "${NOTES_ACCESS_MODULE}" \
+  --retry "\"\${BASSTLER_PLUGIN_ROOT}/hooks/check-setup.sh\"" 2>/dev/null | tr '\n' ' ' || true)"
+NOTES_REPOSITORY_ACCESS="${NOTES_REPOSITORY_ACCESS% }"
+if [ -z "${NOTES_REPOSITORY_ACCESS}" ]; then
+  report notes_repository_access ok "the notes repository is the checkout's own, or this session reaches it"
+else
+  report notes_repository_access needs-setup "${NOTES_REPOSITORY_ACCESS}"
+fi
+
 # %% the personal-notes branch and its contents
 
 if fetch_personal_notes_branch; then
@@ -282,6 +321,7 @@ if fetch_personal_notes_branch; then
   report_upstream true
   if requested upstream_reviews_action; then report_upstream_reviews_action; fi
   if requested plan_site; then report_plan_site; fi
+  if requested plan_site_access; then report_plan_site_access; fi
 
   # %% who commits here would be authored as
 
@@ -316,6 +356,7 @@ else
   report_upstream false
   if requested upstream_reviews_action; then report_upstream_reviews_action; fi
   report plan_site info "not checked - the branch that would start the build doesn't exist yet"
+  report plan_site_access info "not checked - the branch that would list the plan site doesn't exist yet"
   report git_identity needs-setup "not checked - the branch that would record it doesn't exist yet"
 fi
 
@@ -349,27 +390,40 @@ fi
 
 # %% the package's version
 
-# Context, never a verdict: a session start installs the latest release by
-# itself, so this only answers which basstler the session runs.
+# latest_release_note: prints, after the installed version $1, how it stands
+# against basstler's latest release - context, never a verdict.
+latest_release_note() {
+  local installed_version="$1" latest_release
+  if ! latest_release="$(latest_basstler_release)"; then
+    printf '; the latest release could not be read from %s' "${BASSTLER_REPOSITORY_URL}"
+  elif [ "v${installed_version}" = "${latest_release}" ]; then
+    printf ', the latest release'
+  else
+    printf '; the latest release is %s' "${latest_release}"
+  fi
+}
+
+# The hooks and the package they call must be one release: a hook passing an
+# option another release renamed fails every time it runs.
 if requested basstler_version; then
-  if ! INSTALLED_VERSION="$("${BASSTLER_PYTHON}" -m "${BASSTLER_COMMAND_MODULE}" --version 2>/dev/null)"; then
-    INSTALLED_VERSION="of unknown version"
-  fi
-  if [ -n "${BASSTLER_CHECKOUT}" ]; then
-    INSTALLED_SOURCE="run from the checkout ${BASSTLER_CHECKOUT}"
-  else
-    INSTALLED_SOURCE="installed at $(basstler_branch_or_tag)"
-  fi
-  if ! LATEST_RELEASE="$(latest_basstler_release)"; then
-    report basstler_version info \
-      "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}); the latest release could not be read from ${BASSTLER_REPOSITORY_URL}"
-  elif [ "v${INSTALLED_VERSION}" = "${LATEST_RELEASE}" ]; then
-    report basstler_version info \
-      "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}), the latest release"
-  else
-    report basstler_version info \
-      "basstler ${INSTALLED_VERSION} (${INSTALLED_SOURCE}); the latest release is ${LATEST_RELEASE}"
-  fi
+  compare_plugin_and_package_releases
+  case "${BASSTLER_RELEASE_STATE}" in
+    checkout)
+      report basstler_version info \
+        "basstler ${BASSTLER_INSTALLED_VERSION} (run from the checkout ${BASSTLER_CHECKOUT})$(latest_release_note "${BASSTLER_INSTALLED_VERSION}")" ;;
+    matching)
+      report basstler_version ok \
+        "basstler ${BASSTLER_INSTALLED_VERSION}, the plugin's own release$(latest_release_note "${BASSTLER_INSTALLED_VERSION}")" ;;
+    mismatched)
+      report basstler_version mismatched \
+        "the plugin at ${PLUGIN_ROOT} is ${BASSTLER_PLUGIN_RELEASE} but the package is basstler ${BASSTLER_INSTALLED_VERSION} - start a new session, or run: pip --python ${BASSTLER_PYTHON} install '$(basstler_package_source)'" ;;
+    not-named)
+      report basstler_version mismatched \
+        "the plugin at ${PLUGIN_ROOT} names no release, so nothing pins basstler ${BASSTLER_INSTALLED_VERSION} to it - reinstall the plugin from the marketplace" ;;
+    *)
+      report basstler_version info \
+        "the installed package's version could not be read - see package_dependencies" ;;
+  esac
 fi
 
 # %% the result of it all working

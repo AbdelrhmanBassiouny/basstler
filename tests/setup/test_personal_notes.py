@@ -18,6 +18,7 @@ from typing import Any
 
 import pytest
 
+from basstler.github.label import NewLabel, RepositoryLabel
 from basstler.exceptions import MalformedEmailAddressError
 from basstler.exit_codes import PersonalNotesSetupExitCode
 from basstler.github_labels import GitHubLabel
@@ -27,16 +28,15 @@ from basstler.locations import (
     PluginSkillLocation,
     ProjectLocation,
 )
-from basstler.github.client import GitHubClient, GitHubResponse, HttpMethod
+from basstler.github.client import GitHubClient, GitHubResponse, GitHubWrite
 from basstler.maintenance.board import AccountField
 from basstler.maintenance.github import (
     GitHubPath,
     GitHubRepository,
-    LabelField,
 )
 from basstler.plugin_root import PluginRoot
 from basstler.repository import Repository
-from basstler.setup.exceptions import ForeignNotesRemoteError
+from basstler.setup.exceptions import CheckSetupFailedError, ForeignNotesRemoteError
 from basstler.setup.personal_notes import (
     PersonalNotesSetup,
     SetupOption,
@@ -45,9 +45,13 @@ from basstler.setup.personal_notes import (
 from basstler.setup.report import CheckStatus, SetupCheck, SetupReport
 from basstler.setup.steps import PersonalNotesSetting
 
-from ..constants.environment import BashStubVariable
+from ..constants.environment import (
+    BashStubVariable,
+    CheckSetupStubVariable,
+    ShellExitStatus,
+)
 from ..constants.notes import ScratchBranch
-from ..constants.paths import PersonalNotesPath, RepositoryLocation
+from ..constants.paths import DatasetLocation, PersonalNotesPath, RepositoryLocation
 from ..executable_stubs import ExecutableStubDirectory
 from ..scratch_repository import SCRATCH_IDENTITY, GitIdentity, ScratchRepository
 
@@ -99,9 +103,9 @@ class GitHubAnsweringFromMemory(GitHubClient):
     The labels the repository carries.
     """
 
-    created_labels: list[Mapping[str, Any]] = field(default_factory=list)
+    created_labels: list[GitHubWrite] = field(default_factory=list)
     """
-    Every label-creation payload sent, in order.
+    Every label creation sent, in order.
     """
 
     def get(self, path: str) -> Any:
@@ -109,14 +113,14 @@ class GitHubAnsweringFromMemory(GitHubClient):
         return {AccountField.LOGIN: self.login}
 
     def get_pages(self, path: str) -> list[Any]:
-        return [[{LabelField.NAME: label} for label in sorted(self.present_labels)]]
+        return [
+            [RepositoryLabel(label).to_json() for label in sorted(self.present_labels)]
+        ]
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
-    ) -> GitHubResponse:
-        self.created_labels.append(payload)
-        self.present_labels.add(payload[LabelField.NAME])
-        return GitHubResponse(payload)
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        self.created_labels.append(write)
+        self.present_labels.add(RepositoryLabel.from_json(write.to_json()).name)
+        return GitHubResponse(write.to_json())
 
     def as_repository(self) -> GitHubRepository:
         """
@@ -410,6 +414,65 @@ def test_finishes_everything_else_when_given_no_identity(
     assert report.results[SetupCheck.NOTES_FILE].status is CheckStatus.OK
 
 
+# %% a check-setup.sh run that fails
+
+
+def test_stops_with_check_setup_failed_when_check_setup_sh_reports_nothing(
+    setup_repository: ScratchRepository,
+):
+    standard_error = "check-setup.sh: a-missing-command: command not found"
+    status = ShellExitStatus.COMMAND_NOT_FOUND
+    setup = setup_for(
+        setup_repository,
+        environment=setup_repository.runner_environment(
+            **{
+                CheckSetupStubVariable.ERROR: standard_error,
+                CheckSetupStubVariable.STATUS: str(status),
+            }
+        ),
+    )
+    shutil.copy(
+        DatasetLocation.FAILING_CHECK_SETUP_STUB,
+        setup.plugin_root.path_of(PluginLocation.SETUP_CHECK_SCRIPT),
+    )
+
+    with pytest.raises(CheckSetupFailedError) as refusal:
+        setup.run()
+
+    assert refusal.value.exit_code is PersonalNotesSetupExitCode.CHECK_SETUP_FAILED
+    assert refusal.value.status == status
+    assert refusal.value.standard_error == f"{standard_error}\n"
+
+
+def test_a_failed_first_check_leaves_the_clone_s_git_config_unchanged(
+    setup_repository: ScratchRepository,
+):
+    """
+    The first check runs before any write, so a run it stops leaves nothing to undo.
+    """
+    setup = setup_for(
+        setup_repository,
+        environment=setup_repository.runner_environment(
+            **{
+                CheckSetupStubVariable.ERROR: "check-setup.sh: failed",
+                CheckSetupStubVariable.STATUS: str(ShellExitStatus.COMMAND_NOT_FOUND),
+            }
+        ),
+    )
+    shutil.copy(
+        DatasetLocation.FAILING_CHECK_SETUP_STUB,
+        setup.plugin_root.path_of(PluginLocation.SETUP_CHECK_SCRIPT),
+    )
+
+    with pytest.raises(CheckSetupFailedError):
+        setup.run()
+
+    unset = setup_repository.run_git_allowing_failure(
+        "config", "--get", PersonalNotesSetting.REMOTE.git_config_key
+    )
+    assert unset.returncode != 0
+
+
 # %% the remote's owner
 
 
@@ -454,6 +517,9 @@ def test_reports_missing_labels_without_creating_them():
 
 
 def test_creates_only_the_missing_labels_when_asked():
+    """
+    Setup creates the labels the repository lacks, and only those.
+    """
     github = GitHubAnsweringFromMemory(
         CREDENTIAL_OWNER, present_labels=set(GitHubLabel) - {GitHubLabel.IN_REVIEW}
     )
@@ -461,10 +527,10 @@ def test_creates_only_the_missing_labels_when_asked():
     labels_setup(SetupOption.CREATE_LABELS, github=github).check_labels()
 
     assert github.created_labels == [
-        {
-            LabelField.NAME: GitHubLabel.IN_REVIEW,
-            LabelField.DESCRIPTION: GitHubLabel.IN_REVIEW.purpose,
-        }
+        NewLabel(
+            github.repository,
+            RepositoryLabel(GitHubLabel.IN_REVIEW, GitHubLabel.IN_REVIEW.purpose),
+        )
     ]
 
 

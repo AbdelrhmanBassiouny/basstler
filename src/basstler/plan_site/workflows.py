@@ -5,6 +5,8 @@ written one.
 
 from __future__ import annotations
 
+import getpass
+import sys
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import StrEnum
@@ -15,9 +17,12 @@ import yaml
 from basstler.class_property import classproperty
 from basstler.environment import GitHubCredentialVariable
 from basstler.locations import WorkflowLocation
+from basstler.plan_site.exceptions import PlanSiteTokenNotEnteredError
 from basstler.render_common import create_template_environment
 from basstler.repository import Repository
-from basstler.upstream_reviews.vocabulary import BasstlerSource, JSONModel
+from basstler.json_model import JSONModel
+from basstler.upstream_reviews.action.branch import BasstlerSource
+from basstler.workflows import ActivityType
 
 if TYPE_CHECKING:
     from basstler.plan_site.site_repository import SiteRepository
@@ -35,6 +40,43 @@ class PlanSiteSecret(StrEnum):
     The user's fine-grained token, stored on each notes repository, that lets its
     dispatch workflow start the build in the site repository.
     """
+
+    READ_TOKEN = "PLAN_SITE_READ_TOKEN"
+    """
+    The user's read-only token, stored on the site repository, that lets the build
+    read private repositories.
+    """
+
+    @classproperty
+    def private_repository_correction(cls) -> str:
+        """
+        How the build comes to read a private repository, as a clause of a correction.
+        """
+        return (
+            f"for a private repository, store a read-only token as {cls.READ_TOKEN} on "
+            "the site repository and re-run plan_site.publication "
+            "(/setup-personal-notes), so the site workflow passes it to the build"
+        )
+
+    def path_on(self, repository: Repository) -> str:
+        """
+        :param repository: The repository that stores it.
+        :return: The REST path of its metadata there.
+        """
+        return f"{repository.api_path}/actions/secrets/{self}"
+
+    def read_value(self) -> str:
+        """
+        :return: The secret's value, typed at a hidden terminal prompt.
+        :raises PlanSiteTokenNotEnteredError: If no terminal is attached or nothing was
+            typed.
+        """
+        if not sys.stdin.isatty():
+            raise PlanSiteTokenNotEnteredError(self, terminal=False)
+        value = getpass.getpass(f"{self}: ").strip()
+        if not value:
+            raise PlanSiteTokenNotEnteredError(self, terminal=True)
+        return value
 
 
 class PlanSiteJob(StrEnum):
@@ -80,10 +122,22 @@ class BuildInput(StrEnum):
     """
 
 
+class BuildSecret(StrEnum):
+    """
+    The secrets basstler's reusable build, :attr:`WorkflowLocation.PLAN_SITE_BUILD`,
+    accepts.
+    """
+
+    READ_TOKEN = "read_token"
+    """
+    The token that reads the notes repositories in place of the site repository's own.
+    """
+
+
 class PlanSiteTemplate(StrEnum):
     """
-    The templates in :attr:`PackageLocation.TEMPLATES` the site's workflows are rendered
-    from.
+    The templates in :attr:`PackageLocation.TEMPLATES` the site's workflows and the
+    token's store command are rendered from.
     """
 
     SITE_WORKFLOW = "plan_site_workflow.yml"
@@ -99,6 +153,12 @@ class PlanSiteTemplate(StrEnum):
     MERGE_WORKFLOW = "plan_site_merge_workflow.yml"
     """
     The workflow on a notes repository's default branch.
+    """
+
+    STORE_TOKEN_COMMAND = "plan_site_store_token_command.sh"
+    """
+    The command a user runs on their own computer to prove the token by starting the
+    site's build with it, then store it in every repository the site publishes.
     """
 
     def render(self, **context: Any) -> str:
@@ -151,6 +211,11 @@ class WorkflowKey(StrEnum):
     INPUTS = "with"
     """
     The inputs a job passes to its called workflow, by input.
+    """
+
+    SECRETS = "secrets"
+    """
+    The secrets a job passes to its called workflow, by secret.
     """
 
     STEPS = "steps"
@@ -220,6 +285,11 @@ class WorkflowJob(JSONModel):
     The steps it runs, in order.
     """
 
+    secrets: dict[str, str] = field(default_factory=dict)
+    """
+    The secrets it passes to :attr:`called_workflow`, by secret.
+    """
+
     @classmethod
     def from_json(cls, data: dict[str, Any]) -> WorkflowJob:
         """
@@ -231,6 +301,7 @@ class WorkflowJob(JSONModel):
             data.get(WorkflowKey.CALLED_WORKFLOW),
             data.get(WorkflowKey.INPUTS, {}),
             [WorkflowStep.from_json(step) for step in data.get(WorkflowKey.STEPS, [])],
+            data.get(WorkflowKey.SECRETS, {}),
         )
 
 
@@ -251,7 +322,7 @@ class WorkflowFile(JSONModel):
     """
 
     @classmethod
-    def from_text(cls, workflow_text: str) -> WorkflowFile:
+    def from_yaml(cls, workflow_text: str) -> WorkflowFile:
         """
         :param workflow_text: The workflow file's text.
         :return: The parsed workflow, every value read as text.
@@ -335,12 +406,12 @@ class SiteWorkflow(PlanSiteWorkflow):
         return PlanSiteTemplate.SITE_WORKFLOW
 
     @classmethod
-    def from_text(cls, workflow_text: str) -> SiteWorkflow:
+    def from_yaml(cls, workflow_text: str) -> SiteWorkflow:
         """
         :param workflow_text: A site workflow as written on the site repository.
         :return: The workflow it is.
         """
-        inputs = WorkflowFile.from_text(workflow_text).jobs[PlanSiteJob.BUILD].inputs
+        inputs = WorkflowFile.from_yaml(workflow_text).jobs[PlanSiteJob.BUILD].inputs
         return cls(
             inputs[BuildInput.BRANCH_OR_TAG],
             Repository.parse(inputs[BuildInput.REGISTRY]),
@@ -357,6 +428,9 @@ class SiteWorkflow(PlanSiteWorkflow):
             "inputs": {
                 BuildInput.BRANCH_OR_TAG: self.branch_or_tag,
                 BuildInput.REGISTRY: self.registry.full_name,
+            },
+            "secrets": {
+                BuildSecret.READ_TOKEN: f"${{{{ secrets.{PlanSiteSecret.READ_TOKEN} }}}}"
             },
         }
 
@@ -401,6 +475,8 @@ class DispatchWorkflow(PlanSiteWorkflow):
             "site_workflow_name": SiteWorkflow.location.name,
             "token_variable": GitHubCredentialVariable.GH_TOKEN,
             "token_secret": PlanSiteSecret.TOKEN,
+            "token_form_url": self.site.token_form_url(),
+            "secrets_page": self.notes_repository.new_actions_secret_url,
         }
 
 
@@ -408,7 +484,7 @@ class DispatchWorkflow(PlanSiteWorkflow):
 class MergeWorkflow(PlanSiteWorkflow):
     """
     The notes repository's default-branch workflow that starts the site workflow
-    whenever a pull request merges into it.
+    whenever one of its pull requests changes state.
     """
 
     dispatch: DispatchWorkflow
@@ -425,6 +501,25 @@ class MergeWorkflow(PlanSiteWorkflow):
     def template(cls) -> PlanSiteTemplate:
         return PlanSiteTemplate.MERGE_WORKFLOW
 
+    @classproperty
+    def pull_request_activities(cls) -> tuple[ActivityType, ...]:
+        """
+        The pull request changes that start the build: every change of its draft, open,
+        merged or closed state.
+        """
+        return (
+            ActivityType.OPENED,
+            ActivityType.REOPENED,
+            ActivityType.READY_FOR_REVIEW,
+            ActivityType.CONVERTED_TO_DRAFT,
+            ActivityType.CLOSED,
+        )
+
     @property
     def template_values(self) -> dict[str, Any]:
-        return self.dispatch.template_values
+        return {
+            **self.dispatch.template_values,
+            "pull_request_activities": [
+                activity.value for activity in self.pull_request_activities
+            ],
+        }

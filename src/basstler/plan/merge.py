@@ -167,7 +167,8 @@ class PlanPart(ABC):
 @dataclass(frozen=True)
 class ManifestFieldPart(PlanPart):
     """
-    A top-level manifest key other than ``items``, with its whole value.
+    A top-level manifest key a session edits, with its whole value: every key but
+    ``items`` and ``landed_item_count``, which only the save writes.
     """
 
     key: str
@@ -178,7 +179,9 @@ class ManifestFieldPart(PlanPart):
     @classmethod
     def parts_of(cls, version: PlanVersion) -> list[PlanPart]:
         return [
-            cls(key) for key in version.manifest_content if key != ManifestKey.ITEMS.key
+            cls(key)
+            for key in version.manifest_content
+            if key not in (ManifestKey.ITEMS.key, ManifestKey.LANDED_ITEM_COUNT.key)
         ]
 
     @property

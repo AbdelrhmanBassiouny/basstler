@@ -16,16 +16,20 @@ import urllib.parse
 import urllib.request
 from abc import ABC, abstractmethod
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import timedelta
 from functools import cached_property
 from enum import StrEnum
 from http import HTTPStatus
 from http.client import HTTPResponse
-from typing import Any
+from typing import Annotated, Any
 
+from pydantic import Field
+
+from basstler.class_property import classproperty
 from basstler.environment import GitHubCredentialVariable
 from basstler.github.credential import CredentialProvider, GitHubCredential
+from basstler.json_model import ValidatedJSONModel
 from basstler.github.exceptions import (
     GitHubCredentialUnavailableError,
     GitHubCallFailed,
@@ -33,7 +37,7 @@ from basstler.github.exceptions import (
     GitHubUnreachableError,
 )
 from basstler.maintenance.constants import GitHubExecutable
-from basstler.repository import GitHubAddress
+from basstler.repository import GitHubAddress, Repository
 
 # %% the interface
 
@@ -85,30 +89,59 @@ class GitHubAttemptReader(ABC):
         """
 
 
+class GitHubWrite(ValidatedJSONModel, ABC):
+    """
+    A change sent to the REST API, carrying the resource it changes.
+
+    Its body is its fields, except those that only name the resource.
+    """
+
+    @classproperty
+    @abstractmethod
+    def method(cls) -> HttpMethod:
+        """
+        How the resource is written.
+        """
+
+    @property
+    @abstractmethod
+    def path(self) -> str:
+        """
+        The resource's path.
+        """
+
+
+class RepositoryWrite(GitHubWrite, ABC):
+    """
+    A change to a resource of one repository.
+    """
+
+    repository: Annotated[Repository, Field(exclude=True)]
+    """
+    The repository the resource belongs to.
+    """
+
+
 class GitHubWriter(ABC):
     """
     Writing REST resources.
     """
 
     @abstractmethod
-    def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
-    ) -> GitHubResponse:
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
         """
         Like :meth:`send`, but a refusal or a call that got no answer is returned on the
         answer instead of raised.
         """
 
-    def send(self, method: HttpMethod, path: str, payload: Mapping[str, Any]) -> Any:
+    def send(self, write: GitHubWrite) -> Any:
         """
-        :param method: How the resource is written.
-        :param path: The resource's path.
-        :param payload: The JSON body.
+        :param write: The change to send.
         :return: The parsed response, ``None`` when it has no body.
         :raises GitHubRequestFailed: If the API refuses the write.
         :raises GitHubUnreachableError: If the write gets no answer.
         """
-        return self.attempt_send(method, path, payload).raise_if_failed()
+        return self.attempt_send(write).raise_if_failed()
 
 
 class GitHubAttemptClient(GitHubAttemptReader, GitHubWriter, ABC):
@@ -120,6 +153,13 @@ class GitHubAttemptClient(GitHubAttemptReader, GitHubWriter, ABC):
 class GitHubClient(GitHubReader, GitHubWriter, ABC):
     """
     Reading and writing REST resources.
+    """
+
+
+class GitHubFullClient(GitHubClient, GitHubAttemptClient, ABC):
+    """
+    Reading and writing REST resources, with a refusal raised or returned on the answer
+    as the caller chooses.
     """
 
 
@@ -226,6 +266,11 @@ class GitHubResponse:
     Why the call failed, ``None`` when it succeeded.
     """
 
+    waits: tuple[timedelta, ...] = ()
+    """
+    The wait before each time the call was asked again, first first.
+    """
+
     @property
     def is_server_error(self) -> bool:
         """
@@ -234,6 +279,17 @@ class GitHubResponse:
         return (
             isinstance(self.failure, GitHubRequestFailed)
             and self.failure.status in SERVER_ERROR_STATUSES
+        )
+
+    @property
+    def is_not_found(self) -> bool:
+        """
+        :return: Whether GitHub answered 404: no such resource, or none this credential
+            may see.
+        """
+        return (
+            isinstance(self.failure, GitHubRequestFailed)
+            and self.failure.status == HTTPStatus.NOT_FOUND
         )
 
     def raise_if_failed(self) -> Any:
@@ -247,7 +303,7 @@ class GitHubResponse:
 
 
 @dataclass(frozen=True)
-class GitHubRestClient(GitHubClient, GitHubAttemptClient):
+class GitHubRestClient(GitHubFullClient):
     """
     Plain authenticated HTTPS requests, through the proxy the environment names.
 
@@ -311,10 +367,8 @@ class GitHubRestClient(GitHubClient, GitHubAttemptClient):
                 break
         return pages
 
-    def attempt_send(
-        self, method: HttpMethod, path: str, payload: Mapping[str, Any]
-    ) -> GitHubResponse:
-        return self._exchange(method, path, payload)
+    def attempt_send(self, write: GitHubWrite) -> GitHubResponse:
+        return self._exchange(write.method, write.path, write.to_json())
 
     @staticmethod
     def _page_path(path: str, page_number: int) -> str:
@@ -336,15 +390,17 @@ class GitHubRestClient(GitHubClient, GitHubAttemptClient):
         with a server error.
 
         :param path: The path below :attr:`api_root`.
-        :return: The last answer.
+        :return: The last answer, with the waits made before it.
         """
         response = self._exchange(HttpMethod.GET, path, None)
+        waits: list[timedelta] = []
         for delay in self.retry_policy.delays():
             if not response.is_server_error:
-                return response
+                break
             time.sleep(delay.total_seconds())
+            waits.append(delay)
             response = self._exchange(HttpMethod.GET, path, None)
-        return response
+        return replace(response, waits=tuple(waits))
 
     def _exchange(
         self, method: HttpMethod, path: str, payload: Mapping[str, Any] | None
@@ -379,7 +435,7 @@ class GitHubRestClient(GitHubClient, GitHubAttemptClient):
             return GitHubResponse(
                 None, failure=GitHubUnreachableError(method, path, str(error))
             )
-        if status >= HTTPStatus.BAD_REQUEST:
+        if status >= HTTPStatus.MULTIPLE_CHOICES:
             return GitHubResponse(
                 None,
                 failure=GitHubRequestFailed.for_status(

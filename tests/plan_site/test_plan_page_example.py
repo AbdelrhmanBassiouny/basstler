@@ -16,6 +16,7 @@ from basstler.plan_site.plan_page import PlanPage, RenderedPlanPage
 from basstler.pull_request_state import (
     PullRequestRecord,
 )
+from basstler.pull_request_state import LivePullRequests
 
 from .plan_page_builders import (
     EXAMPLE_DIRECTORY,
@@ -36,8 +37,7 @@ def _render_example_plan() -> RenderedPlanPage:
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text=(EXAMPLE_DIRECTORY / "roadmap.md").read_text(),
-        pull_requests_by_repository=pull_requests_by_repository,
-        tracking_url=None,
+        live_pull_requests=LivePullRequests(pull_requests_by_repository),
     )
     return renderer.render()
 

@@ -10,7 +10,7 @@ from pathlib import Path
 
 from basstler.exceptions import DataclassException
 from basstler.repository import Repository
-from basstler.upstream_reviews.vocabulary import ActionBranch, ActionFile
+from basstler.upstream_reviews.action.branch import ActionBranch, ActionFile
 
 # %% errors
 

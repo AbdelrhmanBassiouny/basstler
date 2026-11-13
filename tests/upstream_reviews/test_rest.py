@@ -31,11 +31,7 @@ from basstler.upstream_reviews.report import (
 from basstler.upstream_reviews.rest_models import (
     RestPullRequestSummary,
 )
-from basstler.upstream_reviews.vocabulary import (
-    CheckOutcome,
-    PullRequestState,
-    RollupState,
-)
+from basstler.github.states import CheckOutcome, PullRequestState, CombinedCheckState
 
 from .replay import (
     RecordedResponse,
@@ -196,25 +192,25 @@ def test_a_head_commit_nothing_reported_against_has_no_checks():
 @pytest.mark.parametrize(
     ("outcomes", "verdict"),
     [
-        ([CheckOutcome.SUCCESS, CheckOutcome.FAILURE], RollupState.FAILURE),
-        ([CheckOutcome.SUCCESS, CheckOutcome.TIMED_OUT], RollupState.FAILURE),
-        ([CheckOutcome.ERROR, CheckOutcome.PENDING], RollupState.ERROR),
-        ([CheckOutcome.SUCCESS, CheckOutcome.PENDING], RollupState.PENDING),
-        ([CheckOutcome.SUCCESS, CheckOutcome.EXPECTED], RollupState.EXPECTED),
+        ([CheckOutcome.SUCCESS, CheckOutcome.FAILURE], CombinedCheckState.FAILURE),
+        ([CheckOutcome.SUCCESS, CheckOutcome.TIMED_OUT], CombinedCheckState.FAILURE),
+        ([CheckOutcome.ERROR, CheckOutcome.PENDING], CombinedCheckState.ERROR),
+        ([CheckOutcome.SUCCESS, CheckOutcome.PENDING], CombinedCheckState.PENDING),
+        ([CheckOutcome.SUCCESS, CheckOutcome.EXPECTED], CombinedCheckState.EXPECTED),
         (
             [CheckOutcome.SUCCESS, CheckOutcome.NEUTRAL, CheckOutcome.SKIPPED],
-            RollupState.SUCCESS,
+            CombinedCheckState.SUCCESS,
         ),
     ],
 )
 def test_the_verdict_is_the_worst_outcome_reported(
-    outcomes: list[CheckOutcome], verdict: RollupState
+    outcomes: list[CheckOutcome], verdict: CombinedCheckState
 ):
     """
-    REST carries no rollup of its own, so the verdict GitHub computes is computed here,
+    REST carries no combined state of its own, so the verdict GitHub computes is computed here,
     the way GitHub does.
     """
-    assert RollupState.over(outcomes) is verdict
+    assert CombinedCheckState.over(outcomes) is verdict
 
 
 # %% finding the pull request a branch opened

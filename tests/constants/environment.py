@@ -7,6 +7,7 @@ from __future__ import annotations
 from enum import IntEnum, StrEnum
 
 from basstler.environment import EnvironmentVariable
+from basstler.locations import ClaudeCodeVariable
 
 
 class ScrubbedEnvironmentPrefix(StrEnum):
@@ -33,6 +34,11 @@ class ScrubbedEnvironmentPrefix(StrEnum):
     The file a SessionStart hook exports variables to the session through.
     """
 
+    CLOUD_SESSION = ClaudeCodeVariable.REMOTE.value
+    """
+    Whether the run is in a Claude Code cloud session, which makes the hooks read GitHub.
+    """
+
     BASSTLER = "BASSTLER_"
     """
     The plugin root, the package's home and anything else the configuration exports.
@@ -52,11 +58,6 @@ class ScrubbedEnvironmentPrefix(StrEnum):
 class ConfigurationVariable(StrEnum):
     """
     The variables of the shell configuration the tests read back, named once.
-    """
-
-    ENVIRONMENT_DIRECTORY = "BASSTLER_ENVIRONMENT_DIRECTORY"
-    """
-    The package's own environment.
     """
 
     ENVIRONMENT_INTERPRETER = "BASSTLER_ENVIRONMENT_INTERPRETER"
@@ -108,11 +109,6 @@ class ConfigurationVariable(StrEnum):
     REPOSITORY_URL = "BASSTLER_REPOSITORY_URL"
     """
     The repository an installed plugin's package is installed from.
-    """
-
-    RELEASE_FILE = "BASSTLER_RELEASE_FILE"
-    """
-    The file recording the latest release a session start read from that repository.
     """
 
     UV_DIRECTORY = "BASSTLER_UV_DIRECTORY"
@@ -167,4 +163,43 @@ class BashStubVariable(StrEnum):
     CALL_LOG = "STUB_BASH_CALL_LOG"
     """
     The file every script the stub is asked to run is recorded in, one per line.
+    """
+
+
+class ShellExitStatus(IntEnum):
+    """
+    Statuses bash itself exits with, rather than a script it runs.
+    """
+
+    COMMAND_NOT_FOUND = 127
+    """
+    A command bash was asked to run does not exist.
+    """
+
+
+class CheckSetupStubVariable(StrEnum):
+    """
+    The variables ``dataset/stubs/check_setup_fails.sh`` reads.
+    """
+
+    ERROR = "STUB_CHECK_SETUP_ERROR"
+    """
+    What the stub prints to standard error.
+    """
+
+    STATUS = "STUB_CHECK_SETUP_STATUS"
+    """
+    The status the stub exits with.
+    """
+
+
+class PullRequestStubVariable(StrEnum):
+    """
+    The variables ``dataset/stubs/merged_items_from_recording.py`` reads.
+    """
+
+    RECORDING = "STUB_PULL_REQUESTS"
+    """
+    The ``pr_data.json``-shaped file the pull requests are read from; unset, none exists,
+    and naming a missing file, every read gets no answer.
     """

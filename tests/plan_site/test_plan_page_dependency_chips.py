@@ -7,6 +7,7 @@ from __future__ import annotations
 from basstler.plan.model import ItemStatus
 from basstler.plan_site.plan import Item, Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
+from basstler.pull_request_state import LivePullRequests
 
 from ..fixture_plans import (
     PLAN_UNDER_TEST_ID,
@@ -50,8 +51,7 @@ def test_render_shows_dependency_chip_with_dependency_title_as_tooltip():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
-        tracking_url=None,
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert 'title="Item A"' in output
@@ -113,8 +113,7 @@ def test_render_marks_an_unmet_dependency_chip_with_the_chip_unmet_class():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
-        tracking_url=None,
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert 'class="chip chip-unmet"' in output
@@ -137,8 +136,7 @@ def test_render_does_not_mark_a_ready_dependency_chip_as_unmet():
         stylesheet_url=STYLESHEET_URL,
         plan=plan,
         roadmap_text="",
-        pull_requests_by_repository={},
-        tracking_url=None,
+        live_pull_requests=LivePullRequests(),
     )
     output = renderer.render().html
     assert 'class="chip"' in output

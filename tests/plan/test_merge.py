@@ -259,3 +259,34 @@ def test_a_version_reads_back_the_documents_it_wrote(tmp_path: Path):
 
 def test_a_directory_without_the_plan_reads_as_absent(tmp_path: Path):
     assert PlanVersion.from_directory(tmp_path) == PlanVersion.absent()
+
+
+# %% the count of landed items, which only the save writes
+
+
+def with_landed_item_count(version: PlanVersion, count: int) -> PlanVersion:
+    """
+    :return: *version* recording *count* landed items, as a save writes it.
+    """
+    return PlanVersion(
+        manifest_text=yaml.safe_dump(
+            {
+                **yaml.safe_load(version.manifest_text),
+                ManifestKey.LANDED_ITEM_COUNT.key: count,
+            },
+            sort_keys=False,
+        ),
+        roadmap_text=version.roadmap_text,
+    )
+
+
+def test_the_landed_item_count_is_the_latest_writer_s_whatever_the_session_holds():
+    session = with_landed_item_count(blocked(read_version(), FIRST_ITEM), 1)
+    latest = with_landed_item_count(read_version(), 2)
+
+    result = merged(session, latest)
+
+    assert (
+        yaml.safe_load(result.manifest_text)[ManifestKey.LANDED_ITEM_COUNT.key]
+        == yaml.safe_load(latest.manifest_text)[ManifestKey.LANDED_ITEM_COUNT.key]
+    )

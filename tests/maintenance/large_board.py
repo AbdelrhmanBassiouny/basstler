@@ -27,7 +27,7 @@ from basstler.stack.model import (
     Stack,
 )
 from basstler.stack.promotion_link import PromotionLink
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
 
 from .fork import (
     A_SESSION_LINK,
@@ -168,12 +168,12 @@ class LargeBoard:
                 title=self.title(index),
                 session=A_SESSION_LINK,
                 check_state=(
-                    RollupState.FAILURE
+                    CombinedCheckState.FAILURE
                     if linked_end <= index < failing_end
                     else (
-                        RollupState.PENDING
+                        CombinedCheckState.PENDING
                         if failing_end <= index < failing_end + self.pushed
-                        else RollupState.SUCCESS
+                        else CombinedCheckState.SUCCESS
                     )
                 ),
             )

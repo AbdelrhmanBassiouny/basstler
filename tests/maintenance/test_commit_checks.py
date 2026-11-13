@@ -5,13 +5,18 @@ maintenance pass calls GitHub with.
 
 from __future__ import annotations
 
+from pathlib import PurePath
+
+import pytest
+
 from basstler.maintenance.github import (
     CommitReport,
+    GitHubPath,
     GitHubRepository,
     ListingParameter,
-    RepositoryPath,
+    GitHubRepositoryPath,
 )
-from basstler.upstream_reviews.vocabulary import RollupState
+from basstler.github.states import CombinedCheckState
 
 from ..github.recorded_client import RecordedGitHubClient
 from ..upstream_reviews.replay import RecordedRestResponse
@@ -33,7 +38,7 @@ def commit_report_path(repository: GitHubRepository, report: CommitReport) -> st
     :return: The path it is listed from.
     """
     return (
-        f"/{repository.repository.api_path}{RepositoryPath.COMMITS}/{HEAD_SHA}/{report}"
+        f"/{repository.repository.api_path}{GitHubRepositoryPath.COMMITS}/{HEAD_SHA}/{report}"
         f"?{ListingParameter.PAGE_SIZE}={repository.page_size}"
     )
 
@@ -73,4 +78,24 @@ def test_a_commit_nothing_reported_on_is_not_reported():
         RecordedRestResponse.CHECK_RUNS_NONE, RecordedRestResponse.STATUS_NONE
     )
 
-    assert repository.check_state(HEAD_SHA) is RollupState.NOT_REPORTED
+    assert repository.check_state(HEAD_SHA) is CombinedCheckState.NOT_REPORTED
+
+
+# %% route types
+
+
+@pytest.mark.parametrize("route", [*GitHubPath, *GitHubRepositoryPath])
+def test_a_route_is_not_an_operating_system_path(
+    route: GitHubPath | GitHubRepositoryPath,
+):
+    """
+    An operating system path formats with the platform's separator, so a route built
+    from one reaches GitHub as ``repos/<owner>/<repo>\\commits`` on Windows.
+    """
+    assert not isinstance(route, PurePath)
+
+
+def test_a_commit_report_is_listed_below_the_commit_with_slashes():
+    assert GitHubRepository._commit_report(HEAD_SHA, CommitReport.CHECK_RUNS) == (
+        f"/commits/{HEAD_SHA}/check-runs"
+    )

@@ -12,6 +12,7 @@ job does not install - is never loaded for it.
 from __future__ import annotations
 
 import os
+import sys
 from collections.abc import Iterator
 from pathlib import Path
 
@@ -23,10 +24,38 @@ from playwright.sync_api import Browser, Page, sync_playwright
 # tests this checkout's plugin rather than whichever release that session synced.
 os.environ["BASSTLER_PLUGIN_ROOT"] = str(Path(__file__).resolve().parents[1] / "plugin")
 
+from .constants.environment import ConfigurationVariable, SearchPathVariable
 from .executable_stubs import ExecutableStubDirectory
 from .maintenance.fork import ForkCheckout
 from .scratch_repository import ScratchRepository
 from .upstream_reviews.replay import RecordedResponse, ReplayingClient
+
+
+# %% the package's environment, as CI has it
+
+
+@pytest.fixture(autouse=True)
+def package_environment_of_the_suite(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """
+    Give every test an empty package home and the suite's interpreter as ``python3``.
+
+    A hook then runs the package this suite imports, as in CI, and never reads or
+    removes the package environments of the machine running the suite.
+
+    :param tmp_path: pytest's per-test temporary directory.
+    :param monkeypatch: Sets both variables for this test only.
+    """
+    monkeypatch.setenv(ConfigurationVariable.HOME, str(tmp_path / "basstler-home"))
+    monkeypatch.setenv(
+        SearchPathVariable.EXECUTABLE_SEARCH_PATH,
+        f"{Path(sys.executable).parent}{os.pathsep}"
+        f"{os.environ[SearchPathVariable.EXECUTABLE_SEARCH_PATH]}",
+    )
+
+
+# %% scratch repositories and stubs
 
 
 @pytest.fixture

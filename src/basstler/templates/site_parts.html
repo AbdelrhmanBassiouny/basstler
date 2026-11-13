@@ -13,21 +13,44 @@
 {% endif %}
 {% endmacro %}
 
+{# What marks an element whose card the page's script recounts. #}
+{% macro counted_items_attribute(card) %} {{ vocabulary.progress_card_attribute.COUNTED_ITEMS }}='{{ card.counted_items | tojson }}'{% endmacro %}
+
+{# A card's progress label, marked for the page's script to rewrite. #}
+{% macro progress_text(card) %}<span {{ vocabulary.progress_card_attribute.PROGRESS }} {{ vocabulary.progress_card_attribute.LABEL_FORMAT }}="{{ card.progress_label_format }}">{{ card.progress_label }}</span>{% endmacro %}
+
+{# A card's started and reviewed share labels, marked for the page's script to rewrite. #}
+{% macro stage_text(card) %}{% for share in card.labelled_stage_shares %}{% if not loop.first %}{{ card.stage_label_separator }}{% endif %}<span {{ vocabulary.progress_card_attribute.STAGE_LABEL }}="{{ share.stage }}" {{ vocabulary.progress_card_attribute.LABEL_FORMAT }}="{{ share.label_format }}">{{ share.label }}</span>{% endfor %}{% endmacro %}
+
 {# A card with a heading, its progress and a bar layering the started, reviewed and
    done shares; a link when url is given. #}
 {% macro progress_card(card, heading, url=None, description=None, error=None) %}
-  {% if url %}<a class="progress-card {{ card.css_class }}" href="{{ url }}">{% else %}<div class="progress-card {{ card.css_class }}">{% endif %}
+  {% if url %}<a class="progress-card {{ card.css_class }}" href="{{ url }}"{{ counted_items_attribute(card) }}>{% else %}<div class="progress-card {{ card.css_class }}"{{ counted_items_attribute(card) }}>{% endif %}
     <h2>{{ heading }}</h2>
-    <p class="progress-label">{{ card.progress_label }}</p>
-    {% if card.stage_shares_label %}<p class="stage-label">{{ card.stage_shares_label }}</p>{% endif %}
+    <p class="progress-label">{{ progress_text(card) }}</p>
+    {% if card.labelled_stage_shares %}<p class="stage-label">{{ stage_text(card) }}</p>{% endif %}
     {% if description %}<p class="card-description">{{ description }}</p>{% endif %}
     {% if error %}<p class="card-error">{{ error }}</p>{% endif %}
-    <div class="bar">{% for share in card.stage_shares %}<div class="bar-fill bar-{{ share.stage }}" style="width: {{ share.width }}" title="{{ share.label }}"></div>{% endfor %}</div>
+    <div class="bar">{% for share in card.stage_shares %}<div class="bar-fill bar-{{ share.stage }}" {{ vocabulary.progress_card_attribute.STAGE_BAR }}="{{ share.stage }}" {{ vocabulary.progress_card_attribute.LABEL_FORMAT }}="{{ share.label_format }}" {{ vocabulary.progress_card_attribute.WIDTH_FORMAT }}="{{ share.width_format }}" style="width: {{ share.width }}" title="{{ share.label }}"></div>{% endfor %}</div>
   {% if url %}</a>{% else %}</div>{% endif %}
 {% endmacro %}
 
+{# A page's own progress line: its card's progress and share labels. #}
+{% macro progress_line(card) %}
+    <p class="meta-line mono"{{ counted_items_attribute(card) }}>{{ progress_text(card) }}{% if card.labelled_stage_shares %}{{ card.stage_label_separator }}{{ stage_text(card) }}{% endif %}</p>
+{% endmacro %}
+
+{# The scripts that recount every card from GitHub's live pull request states. #}
+{% macro live_progress_scripts() %}
+<script>
+{% include live_state_script_template %}
+{% include live_progress_script_template %}
+siteRecheckWhenShown(siteRecountProgress);
+</script>
+{% endmacro %}
+
 {# What a chip held back by a draft pull request carries for the page's script to re-check it. #}
-{% macro draft_recheck_attributes(chip) %}{% if chip.draft_pull_request %} {{ draft_recheck_attribute.PULL_REQUEST }}="{{ chip.draft_pull_request.api_url }}" {{ draft_recheck_attribute.READY_TITLE }}="{{ chip.tooltip }}"{% endif %}{% endmacro %}
+{% macro draft_recheck_attributes(chip) %}{% if chip.draft_pull_request %} {{ vocabulary.draft_recheck_attribute.PULL_REQUEST }}="{{ chip.draft_pull_request.api_url }}" {{ vocabulary.draft_recheck_attribute.READY_TITLE }}="{{ chip.tooltip }}"{% endif %}{% endmacro %}
 
 {# A chip links to its dependency's card: on this page it scrolls there and
    highlights it, and on another plan's page it opens that page in a new
@@ -43,7 +66,7 @@
 {# The action group is hidden, marked for the page's script to reveal, when hidden is true. #}
 {% macro action_button(action, hidden=False) %}
 {% if action %}
-<span class="action-group"{% if hidden %} hidden {{ draft_recheck_attribute.START_ACTION }}{% endif %}>
+<span class="action-group"{% if hidden %} hidden {{ vocabulary.draft_recheck_attribute.START_ACTION }}{% endif %}>
   <span class="model-picker" data-model="" aria-label="Model for {{ action.label }}">
     <button type="button" class="model-picker-toggle" onclick="planPageToggleModelPicker(event, this)">{{ available_models[0].label }} ▾</button>
     <ul class="model-picker-list" role="listbox">

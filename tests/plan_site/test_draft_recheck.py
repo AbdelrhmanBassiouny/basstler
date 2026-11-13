@@ -21,12 +21,9 @@ from basstler.pull_request_state import PullRequestRecord, PullRequestState
 
 from ..constants.site import SitePlan, SiteSampleText
 from ..recorded_pull_requests import RecordedPullRequestSource
-from .test_build_site import (
-    NOTES_REPOSITORY,
-    OPEN_PULL_REQUEST,
-    api_pull_request,
-    page_of,
-)
+from ..github.pull_request_api import api_pull_request
+from .first_plan import OPEN_PULL_REQUEST
+from .test_build_site import NOTES_REPOSITORY, page_of
 
 SECOND_PLAN = Plan.from_mapping(
     PlanSource.from_directory(SitePlan.SECOND.directory).manifest

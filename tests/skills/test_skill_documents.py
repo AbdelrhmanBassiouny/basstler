@@ -307,6 +307,26 @@ def test_every_skill_links_how_to_run_commands_with_its_plugin_root(
     assert len(mapping_paragraphs) == 1
 
 
+# %% rules scoped to a skill run
+
+
+def test_the_resolve_skill_links_the_pull_request_rules() -> None:
+    """
+    The pull-request rules hold only while a skill linking them runs.
+    """
+    document = (
+        RepositoryLocation.PLUGIN
+        / SkillDirectory.PLAN_ITEM_RESOLVE
+        / SkillDocumentName.SKILL
+    )
+    pull_request_rules = os.path.relpath(
+        RepositoryLocation.PLUGIN / SkillDirectory.PULL_REQUEST_RULES_DOCUMENT,
+        document.parent,
+    )
+
+    assert pull_request_rules in linked_files(document.read_text())
+
+
 # %% the interpreter a module is run with
 
 BARE_INTERPRETER_RUN = re.compile(r"(?<![\w/$\"{}-])python3? -m basstler\b")
@@ -338,3 +358,35 @@ def test_no_skill_document_writes_under_the_system_temporary_directory(
     document: Path,
 ):
     assert SYSTEM_TEMPORARY_PATH.findall(document.read_text()) == []
+
+
+# %% the description claude.ai stores
+
+SKILL_DESCRIPTION = re.compile(r"\A---\n(?:.*\n)*?description: (.*)\n", re.MULTILINE)
+"""
+Matches a skill's front matter up to its description, capturing the description.
+"""
+
+ANGLE_BRACKET = re.compile(r"[<>]")
+"""
+Matches a character claude.ai strips from a skill's description as part of an XML tag.
+"""
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        document
+        for document in skill_documents()
+        if document.name == SkillDocumentName.SKILL
+    ],
+    ids=document_identifier,
+)
+def test_no_skill_description_holds_an_angle_bracket(document: Path) -> None:
+    """
+    claude.ai warns about a description that holds an XML tag and stores it with its
+    angle brackets removed, so a placeholder such as ``<plan-id>`` loses its markers.
+    """
+    description = SKILL_DESCRIPTION.match(document.read_text())
+
+    assert ANGLE_BRACKET.findall(description.group(1)) == []
