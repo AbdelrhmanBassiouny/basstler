@@ -5,14 +5,16 @@ Finding the renames a pull request makes throughout from its diff alone.
 from __future__ import annotations
 
 import difflib
-from collections.abc import Iterable
 from dataclasses import dataclass
 from enum import IntEnum
 
+from basstler.class_property import classproperty
 from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.review_triage.comparison import FileChange, PythonComparison
+from basstler.review_triage.comparison import PythonComparison
+from basstler.review_triage.pull_request import PullRequestChanges
 from basstler.review_triage.python_source import PythonSource
-from basstler.review_triage.renames import RenameCandidates
+from basstler.review_triage.rename_sources import RenameSource
+from basstler.review_triage.renames import Rename, RenameCandidates, RenameDecisions
 
 # %% the tree search
 
@@ -72,48 +74,35 @@ class CommitTree:
 # %% detection
 
 
-@dataclass(frozen=True)
-class RenameDetection:
+class RenameDetection(RenameSource):
     """
     Detects a rename as an identifier the diff consistently replaces by another, where
     the old identifier is gone from the head commit and the new one absent from the
     base commit.
     """
 
-    base: CommitTree
-    """
-    The commit the pull request starts from.
-    """
+    @classproperty
+    def label(cls) -> str:
+        return "diff"
 
-    head: CommitTree
-    """
-    The commit the pull request ends at.
-    """
-
-    def detected(self, changes: Iterable[FileChange]) -> dict[str, str]:
-        """
-        :param changes: The files the pull request changes.
-        :return: The new identifier of each old identifier the pull request renames.
-        """
+    def decisions(self, changes: PullRequestChanges) -> RenameDecisions:
         candidates = RenameCandidates()
-        for change in changes:
-            if (
-                change.is_binary
-                or change.base_text is None
-                or change.head_text is None
-                or change.path.suffix not in PythonComparison.suffixes
-            ):
-                continue
-            self.collect(
-                PythonSource(change.base_text),
-                PythonSource(change.head_text),
-                candidates,
+        for change in changes.files:
+            if PythonComparison().applies_to(change):
+                self.collect(
+                    PythonSource(change.base_text),
+                    PythonSource(change.head_text),
+                    candidates,
+                )
+        base = CommitTree(changes.commits.git, changes.commits.base_commit)
+        head = CommitTree(changes.commits.git, changes.commits.head_commit)
+        return RenameDecisions(
+            tuple(
+                Rename(old, new, self.label)
+                for old, new in sorted(candidates.consistent().items())
+                if not head.mentions(old) and not base.mentions(new)
             )
-        return {
-            old: new
-            for old, new in sorted(candidates.consistent().items())
-            if not self.head.mentions(old) and not self.base.mentions(new)
-        }
+        )
 
     @staticmethod
     def collect(

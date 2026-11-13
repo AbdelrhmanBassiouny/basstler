@@ -15,10 +15,10 @@ from basstler.github.client import GitHubRestClient
 from basstler.locations import PackageLocation
 from basstler.maintenance.git_commands import GitCommandRunner
 from basstler.repository import Repository
-from basstler.review_triage.triage import PullRequestTriage, PullRequestTriageReader
-from basstler.review_triage.viewed import ViewedMarking
+from basstler.review_triage.outputs import MarkdownReport, TriageOutput, ViewedMarking
+from basstler.review_triage.pull_request import PullRequestReader
+from basstler.review_triage.triage import PullRequestTriager
 from basstler.standard_streams import StandardStreamHandler
-from basstler.upstream_reviews.clients import GitHubCommandLineClient
 
 logger = StandardStreamHandler.logger_for(__name__)
 """
@@ -76,12 +76,16 @@ The remote whose repository a pull request is looked up in when none is named.
 # %% reading the triage
 
 
-def triage_of(pull_request: int, repository: str | None) -> PullRequestTriage:
+def publish_triage(
+    pull_request: int, repository: str | None, outputs: tuple[TriageOutput, ...]
+) -> None:
     """
+    Triage a pull request in the current checkout and hand it to each output.
+
     :param pull_request: The pull request's number.
-    :param repository: Its repository as ``owner/name``, the current checkout's
-        ``origin`` when ``None``.
-    :return: The pull request triaged in the current checkout.
+    :param repository: Its repository as ``owner/name``, the checkout's ``origin`` when
+        ``None``.
+    :param outputs: Where the triage goes, in order.
     """
     git = GitCommandRunner(Path.cwd())
     resolved = (
@@ -89,7 +93,10 @@ def triage_of(pull_request: int, repository: str | None) -> PullRequestTriage:
         if repository
         else Repository.from_remote_url(git.run("remote", "get-url", ORIGIN_REMOTE))
     )
-    return PullRequestTriageReader(git, GitHubRestClient()).read(resolved, pull_request)
+    changes = PullRequestReader(git, GitHubRestClient()).read(resolved, pull_request)
+    triage = PullRequestTriager().triage(changes)
+    for output in outputs:
+        output.publish(triage)
 
 
 # %% the commands
@@ -112,7 +119,7 @@ def report(pull_request: int, *, repository: str | None = None) -> ReviewTriageE
     :param repository: Its repository as ``owner/name``; the checkout's ``origin`` by
         default.
     """
-    logger.info(triage_of(pull_request, repository).render())
+    publish_triage(pull_request, repository, (MarkdownReport(),))
     return ReviewTriageExitCode.SUCCESS
 
 
@@ -121,14 +128,14 @@ def mark_viewed(
     pull_request: int, *, repository: str | None = None
 ) -> ReviewTriageExitCode:
     """
-    Mark a pull request's mechanical files viewed for the account ``gh`` is logged in
-    as, and print the triage.
+    Mark a pull request's mechanical files viewed for the account whose GitHub
+    credential is configured, and print the triage.
 
     :param pull_request: The pull request's number.
     :param repository: Its repository as ``owner/name``; the checkout's ``origin`` by
         default.
     """
-    triage = triage_of(pull_request, repository)
-    ViewedMarking(GitHubCommandLineClient()).mark_mechanical_files(triage)
-    logger.info(triage.render())
+    publish_triage(
+        pull_request, repository, (ViewedMarking(GitHubRestClient()), MarkdownReport())
+    )
     return ReviewTriageExitCode.SUCCESS

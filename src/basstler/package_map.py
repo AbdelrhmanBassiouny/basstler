@@ -96,8 +96,12 @@ class Distribution(StrEnum):
 
     REVIEWS = "basstler-reviews"
     """
-    Reviewing pull requests: an upstream pull request's checks and review threads, and
-    which files of a pull request need review.
+    Reading an upstream pull request's checks and review threads.
+    """
+
+    REVIEW_TRIAGE = "basstler-review-triage"
+    """
+    Telling a pull request's mechanical files from those a reviewer has to read.
     """
 
     STACK = "basstler-stack"
@@ -325,7 +329,13 @@ PACKAGE_MAP = PackageMap(
         DistributionDeclaration(
             Distribution.REVIEWS,
             Layer.COLLABORATION,
-            ("review_triage", "upstream_reviews"),
+            ("upstream_reviews",),
+            (Distribution.CORE, Distribution.GIT, Distribution.GITHUB),
+        ),
+        DistributionDeclaration(
+            Distribution.REVIEW_TRIAGE,
+            Layer.COLLABORATION,
+            ("review_triage",),
             (Distribution.CORE, Distribution.GIT, Distribution.GITHUB),
         ),
         DistributionDeclaration(
@@ -381,6 +391,7 @@ PACKAGE_MAP = PackageMap(
                 Distribution.RULES,
                 Distribution.GITHUB,
                 Distribution.REVIEWS,
+                Distribution.REVIEW_TRIAGE,
                 Distribution.STACK,
                 Distribution.PLAN,
                 Distribution.NOTES,

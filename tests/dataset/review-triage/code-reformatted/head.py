@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 total = sum(
     [
         1,

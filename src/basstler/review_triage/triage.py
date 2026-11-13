@@ -6,32 +6,26 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from basstler.class_property import classproperty
-from basstler.github.client import GitHubReader
-from basstler.locations import ReviewTriageLocation
-from basstler.maintenance.git_commands import GitCommandRunner
-from basstler.render_common import TemplatePage
-from basstler.repository import Repository
 from basstler.review_triage.comparison import (
+    FileJudgment,
     FileNeedingReview,
     FileTriage,
     FileTriager,
     MechanicalFile,
+    ProseComparison,
+    PythonComparison,
 )
-from basstler.review_triage.detection import CommitTree, RenameDetection
-from basstler.review_triage.pull_request import (
-    DECLARATION_MARKER,
-    CommitRange,
-    TriageDeclaration,
-    TriagedPullRequest,
-)
+from basstler.review_triage.declaration import DescriptionDeclaration
+from basstler.review_triage.detection import RenameDetection
+from basstler.review_triage.pull_request import PullRequestChanges, TriagedPullRequest
+from basstler.review_triage.rename_sources import RenameSource
 from basstler.review_triage.renames import RenameMap
 
 # %% the triage
 
 
 @dataclass(frozen=True)
-class PullRequestTriage(TemplatePage):
+class PullRequestTriage:
     """
     Which of a pull request's files a reviewer has to read.
     """
@@ -51,31 +45,6 @@ class PullRequestTriage(TemplatePage):
     The verdict on each file it changes.
     """
 
-    @classmethod
-    def of(
-        cls, git: GitCommandRunner, pull_request: TriagedPullRequest
-    ) -> PullRequestTriage:
-        """
-        :param git: A checkout holding both ends of the pull request.
-        :param pull_request: The pull request.
-        :return: The verdict on each of its files.
-        """
-        commits = CommitRange.of(git, pull_request)
-        changes = commits.changes()
-        declaration = TriageDeclaration.of_description(pull_request.description)
-        detection = RenameDetection(
-            CommitTree(git, commits.base_commit), CommitTree(git, commits.head_commit)
-        )
-        renames = RenameMap.combined(
-            detection.detected(changes).items(),
-            declaration.renames,
-            declaration.rejected_renames,
-        )
-        triager = FileTriager(renames)
-        return cls(
-            pull_request, renames, tuple(triager.triage(change) for change in changes)
-        )
-
     @property
     def mechanical_files(self) -> tuple[MechanicalFile, ...]:
         """
@@ -90,53 +59,40 @@ class PullRequestTriage(TemplatePage):
         """
         return tuple(file for file in self.files if isinstance(file, FileNeedingReview))
 
-    @classproperty
-    def template(cls) -> str:
-        return ReviewTriageLocation.REPORT_TEMPLATE.name
 
-    def render(self) -> str:
-        """
-        :return: The triage as a Markdown report.
-        """
-        return self.render_template(triage=self, marker=DECLARATION_MARKER)
-
-
-# %% reading a pull request's triage
+# %% triaging
 
 
 @dataclass(frozen=True)
-class PullRequestTriageReader:
+class PullRequestTriager:
     """
-    Triages pull requests of GitHub in one checkout.
-    """
-
-    git: GitCommandRunner
-    """
-    The checkout the files are compared in.
+    Triages a pull request with a configurable set of rename sources and file judgments.
     """
 
-    github: GitHubReader
+    rename_sources: tuple[RenameSource, ...] = (
+        RenameDetection(),
+        DescriptionDeclaration(),
+    )
     """
-    Where the pull request is read from.
+    The sources of the pull request's renames, a later source outranking an earlier.
     """
 
-    def read(self, repository: Repository, number: int) -> PullRequestTriage:
+    judgments: tuple[FileJudgment, ...] = (PythonComparison(), ProseComparison())
+    """
+    The judgments of each file, the first one applying to a file deciding it.
+    """
+
+    def triage(self, changes: PullRequestChanges) -> PullRequestTriage:
         """
-        :param repository: The repository the pull request is opened on.
-        :param number: The pull request's number.
-        :return: The pull request triaged, its commits fetched first when the checkout
-            lacks either end.
+        :param changes: A pull request and the files it changes.
+        :return: The verdict on each of its files.
         """
-        pull_request = TriagedPullRequest.from_json(
-            self.github.get(repository.pull_request_path(number))
+        renames = RenameMap.of(
+            source.decisions(changes) for source in self.rename_sources
         )
-        if None in (
-            self.git.commit_or_none(pull_request.base.commit),
-            self.git.commit_or_none(pull_request.head.commit),
-        ):
-            self.git.fetch(
-                repository.clone_url,
-                pull_request.head_reference,
-                pull_request.base.branch,
-            )
-        return PullRequestTriage.of(self.git, pull_request)
+        triager = FileTriager(renames, self.judgments)
+        return PullRequestTriage(
+            changes.pull_request,
+            renames,
+            tuple(triager.triage(change) for change in changes.files),
+        )

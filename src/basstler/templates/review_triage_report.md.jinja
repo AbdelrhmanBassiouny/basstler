@@ -8,7 +8,7 @@ Renames applied - check them once here instead of in every file:
 | Old | New | Found by |
 | --- | --- | --- |
 {% for rename in triage.renames.renames %}
-| `{{ rename.old }}` | `{{ rename.new }}` | {{ rename.origin }} |
+| `{{ rename.old }}` | `{{ rename.new }}` | {{ rename.found_by }} |
 {% endfor %}
 
 {% endif %}

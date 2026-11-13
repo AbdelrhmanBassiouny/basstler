@@ -49,6 +49,9 @@ jobs:
     if: github.event_name != 'push' || !github.event.repository.fork
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
     env:
       BASE_COMMIT: ${{ github.event.pull_request.base.sha || github.event.before }}
     steps:
@@ -76,6 +79,16 @@ jobs:
 
       - name: Install basstler
         run: pip install --editable .
+
+      # Which files of the pull request need review, in the run's summary.
+      - name: Triage the files for review
+        if: github.event_name == 'pull_request'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >-
+          python -m basstler review-triage report
+          ${{ github.event.pull_request.number }}
+          --repository "${{ github.repository }}" >> "$GITHUB_STEP_SUMMARY"
 
       # The base is listed with its own code and its own package map, so a crossing that
       # only a change of the map creates is new as well.

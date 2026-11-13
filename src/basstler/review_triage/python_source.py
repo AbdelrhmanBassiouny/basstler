@@ -216,6 +216,19 @@ class PythonSource:
         return ImportBindings(frozenset(bindings))
 
     @cached_property
+    def import_statements(self) -> str:
+        """
+        The file's import statements, other than those of ``__future__``, dumped as text
+        in the order they occur.
+        """
+        return "\n".join(
+            ast.dump(node)
+            for node in ast.walk(self.tree)
+            if isinstance(node, ast.Import)
+            or (isinstance(node, ast.ImportFrom) and node.module != FUTURE_MODULE)
+        )
+
+    @cached_property
     def documentation(self) -> tuple[str, ...]:
         """
         The file's documentation strings, in the order they occur.

@@ -6,28 +6,11 @@ prose.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable
 from dataclasses import dataclass, field
-from enum import StrEnum
 from functools import cached_property
 
 # %% one rename
-
-
-class RenameOrigin(StrEnum):
-    """
-    How a rename became part of a pull request's renames.
-    """
-
-    DETECTED = "detected"
-    """
-    Found in the diff, with the old identifier gone from the head commit.
-    """
-
-    DECLARED = "declared"
-    """
-    Stated by the pull request's description.
-    """
 
 
 @dataclass(frozen=True)
@@ -46,9 +29,26 @@ class Rename:
     The identifier the head commit uses in its place.
     """
 
-    origin: RenameOrigin
+    found_by: str
     """
-    How the rename became known.
+    The label of the rename source that found it.
+    """
+
+
+@dataclass(frozen=True)
+class RenameDecisions:
+    """
+    What one rename source decides: renames it accepts and old identifiers it rejects.
+    """
+
+    accepted: tuple[Rename, ...] = ()
+    """
+    The renames the source finds.
+    """
+
+    rejected: frozenset[str] = frozenset()
+    """
+    Old identifiers whose rename, found by an earlier source, is not a rename.
     """
 
 
@@ -68,31 +68,21 @@ class RenameMap:
 
     renames: tuple[Rename, ...] = ()
     """
-    The renames, in the order they are reported.
+    The renames, ordered by their old identifier.
     """
 
     @classmethod
-    def combined(
-        cls,
-        detected: Iterable[tuple[str, str]],
-        declared: Mapping[str, str],
-        rejected: Iterable[str],
-    ) -> RenameMap:
+    def of(cls, decisions: Iterable[RenameDecisions]) -> RenameMap:
         """
-        :param detected: Each detected rename, as its old and new identifier.
-        :param declared: The replacement of each old identifier the description states,
-            which outranks a detected one.
-        :param rejected: Old identifiers whose detected rename the description rejects.
-        :return: The renames left once the description is applied.
+        :param decisions: The decisions of each rename source, a later source's
+            outranking an earlier one's.
+        :return: The renames left once every decision is applied.
         """
-        rejected_names = set(rejected)
-        renames = {
-            old: Rename(old, new, RenameOrigin.DETECTED)
-            for old, new in detected
-            if old not in rejected_names
-        }
-        for old, new in declared.items():
-            renames[old] = Rename(old, new, RenameOrigin.DECLARED)
+        renames: dict[str, Rename] = {}
+        for decision in decisions:
+            for old in decision.rejected:
+                renames.pop(old, None)
+            renames |= {rename.old: rename for rename in decision.accepted}
         return cls(tuple(renames[old] for old in sorted(renames)))
 
     @cached_property

@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from helpers import old_name
 
 
