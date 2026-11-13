@@ -69,11 +69,13 @@ items:
   depends_on:
   - break-remaining-cycles
   status: not started
-  notes: Pure-rename move (git diff -M shows only renames plus pyproject files). hatch-vcs per package
-    with root ../..; a custom hatch metadata hook, force-included in each sdist, pins siblings ==version.
-    Committed uv.lock and uv sync --frozen at session start (absorbs basstler-reliability/locked-install).
-    package_layout reads importlib.metadata. CI installs each package alone and runs its tests, every
-    package on each change (#55's change-based selection closed unmerged). release:major.
+  notes: >
+    Pure-rename move (git diff -M: renames plus pyproject files). hatch-vcs per package, root ../..;
+    a hatch metadata hook, force-included in each sdist, pins siblings ==version. Committed uv.lock,
+    uv sync --frozen at session start (absorbs basstler-reliability/locked-install). package_layout
+    reads importlib.metadata. CI tests each package alone, every package on each change.
+    release:major. Absorbs windows-support/windows-interpreter-candidates: without uv on PATH,
+    Windows also tries py -3.14/-3.13/-3.12 and a python on PATH, each resolved to a full path.
 - id: pypi-release
   title: Publish every distribution to PyPI on each release with trusted publishing
   track: package-split
