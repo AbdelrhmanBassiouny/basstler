@@ -137,6 +137,11 @@ class WorkflowKey(StrEnum):
     A trigger's branch filters.
     """
 
+    PATHS = "paths"
+    """
+    A trigger's path filters.
+    """
+
     CONCURRENCY = "concurrency"
     """
     The workflow's concurrency, a bare group or a mapping.
@@ -227,6 +232,12 @@ class Trigger:
     The branch filters named, or empty when the trigger names none.
     """
 
+    paths: frozenset[str] = frozenset()
+    """
+    The path filters a change has to match for the trigger to fire, or empty when the
+    trigger names none.
+    """
+
     @property
     def runs_on_every_pull_request_push(self) -> bool:
         """
@@ -270,6 +281,7 @@ class Trigger:
                 for activity_type in filters.get(WorkflowKey.TYPES, ())
             ),
             branches=frozenset(filters.get(WorkflowKey.BRANCHES, ())),
+            paths=frozenset(filters.get(WorkflowKey.PATHS, ())),
         )
 
 
