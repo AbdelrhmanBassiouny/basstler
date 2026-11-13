@@ -7,7 +7,11 @@ from __future__ import annotations
 
 import pytest
 
-from basstler.exceptions import InconsistentPackageMap, PackageMapInconsistency
+from basstler.exceptions import (
+    InconsistentPackageMap,
+    PackageMapInconsistency,
+    UndeclaredDistribution,
+)
 from basstler.package_layout import package_modules
 from basstler.package_map import (
     PACKAGE_MAP,
@@ -55,6 +59,21 @@ def test_an_undeclared_distribution_is_not_in_the_map():
     )
 
     assert package_map.get(Distribution.GIT) is None
+
+
+def test_a_lookup_of_an_undeclared_distribution_names_it():
+    """
+    Reading the declaration of a distribution nothing declares raises the error naming
+    it.
+    """
+    package_map = PackageMap(
+        (DistributionDeclaration(Distribution.CORE, Layer.CORE, ("core",)),)
+    )
+
+    with pytest.raises(UndeclaredDistribution) as raised:
+        package_map[Distribution.GIT]
+
+    assert raised.value.distribution is Distribution.GIT
 
 
 # %% claiming

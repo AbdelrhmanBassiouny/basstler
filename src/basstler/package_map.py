@@ -13,7 +13,11 @@ from itertools import combinations
 
 import rustworkx
 
-from basstler.exceptions import InconsistentPackageMap, PackageMapInconsistency
+from basstler.exceptions import (
+    InconsistentPackageMap,
+    PackageMapInconsistency,
+    UndeclaredDistribution,
+)
 
 # %% layers and distributions
 
@@ -212,7 +216,7 @@ class PackageMap(Mapping[Distribution, DistributionDeclaration]):
         for declaration in self.declarations:
             if declaration.distribution is distribution:
                 return declaration
-        raise KeyError(distribution)
+        raise UndeclaredDistribution(distribution)
 
     def __iter__(self) -> Iterator[Distribution]:
         return (declaration.distribution for declaration in self.declarations)

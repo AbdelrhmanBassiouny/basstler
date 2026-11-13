@@ -997,6 +997,26 @@ class InconsistentPackageMap(DataclassException, ValueError):
 
 
 @dataclass
+class UndeclaredDistribution(DataclassException, KeyError):
+    """
+    A declaration was looked up for a distribution the package map does not declare.
+    """
+
+    distribution: str
+    """
+    The package name of the distribution looked up.
+    """
+
+    def error_message(self) -> str:
+        return f"{self.distribution} {PackageMapInconsistency.UNDECLARED_DISTRIBUTION}"
+
+    def suggest_correction(self) -> str:
+        return (
+            "declare it in basstler.package_map.PACKAGE_MAP or look up a declared one"
+        )
+
+
+@dataclass
 class DuplicateKeyError(DataclassException, TypeError):
     """
     Raised when two fields of a model read the same key of the object it mirrors.
