@@ -19,24 +19,6 @@ tracks:
   name: Site rendering
   wave: fixes
 items:
-- id: merge-workflow-branch-history
-  title: The merge workflow branch starts from the default branch, so its pull request can
-    open
-  track: publication
-  branch: claude/site-publication-fixes-kickoff-osa630
-  pull_request_number: 195
-  depends_on: []
-  status: in progress
-  session: https://claude.ai/code/session_01JxHGiMVhKt3odsx8SMY1TS
-  notes: 'From Hesham87/Platform_maintainer: write_merge_workflow writes basstler/plan-site-merge
-    as a new RemoteBranch with no parent, so GitHub refused the pull request (422, no history
-    in common with main) and the printed gh pr create fallback fails the same way. Branch
-    from the default branch''s head. Own bug PR off main, failing test first.
-
-    Reported again in #189 (tomsch420, tomsch420/law_as_code_benchmarks, basstler 3.15.1,
-    worked around by cherry-picking onto main); this item''s PR closes #189.
-
-    '
 - id: merge-workflow-draft
   title: The merge workflow pull request opens as a draft
   track: publication
@@ -47,28 +29,10 @@ items:
   session: https://claude.ai/code/session_01JxHGiNFR7ot7gktfTzUrUg
   notes: 'Dropped (owner, 2026-11-11): the user merges this pull request right after setup,
     so a draft only adds a Ready for review step. #196 closed unmerged; superseded by merge-workflow-private-only.'
-- id: registration-holds-back-only-its-own-repositories
-  title: Publication holds back only for the private repositories its registration adds
-  branch: claude/jolly-hamilton-fwd4cw
-  track: publication
-  pull_request_number: 197
-  session: https://claude.ai/code/session_01JxHGiMoKjdHbyGAJpDz3gY
-  notes: 'From #188 (tomsch420): publish() checks repositories_read_by_build(registry), the
-    whole site, so a private repository already on the site without PLAN_SITE_READ_TOKEN blocks
-    registering an unrelated public one: nothing is written, exit 1. Hold back only for what
-    the registration adds (the registered repository, its notes repository, its own plans''
-    pull request repositories); warn with the same token step for the rest. Own bug PR off
-    main, failing test first, closes #188; shares tests/plan_site/test_publication.py with
-    #187.
-
-    '
-  depends_on: []
-  status: in progress
 - id: merge-workflow-private-only
   title: Publication offers the merge workflow only for private repositories
   track: publication
-  depends_on:
-  - team-basstler/hub-live-states
+  depends_on: []
   status: not started
   notes: 'Decided (owner, 2026-11-11): plan pages read pull request states live (#141), but
     only for public repositories. Install plan-site-merge.yml, its pull request and step only

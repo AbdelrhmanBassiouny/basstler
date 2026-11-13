@@ -1,9 +1,9 @@
 schema_version: 1
 id: team-basstler
 title: 'Plan site: drift, untracked work and live states on every page'
-description: 'Page features of the plan site: drift and size chips, untracked pull requests and live hub
-  states. Publishing, privacy, sign-in and reading several owners moved to basstler-service; the team
-  half is team-repository.'
+description: 'Page features of the plan site: drift and size chips, untracked pull requests
+  and live hub states. Publishing, privacy, sign-in and reading several owners moved to basstler-service;
+  the team half is team-repository.'
 default_repository: KAOS-repositories/basstler
 tracking_issue: 62
 waves:
@@ -49,17 +49,3 @@ items:
     #52.
 
     '
-- id: hub-live-states
-  title: Hub and repository pages read pull request states live, as plan pages do
-  track: site
-  branch: claude/tender-noether-tukuks
-  pull_request_number: 199
-  session: https://claude.ai/code/session_01JxHGiNe6swPYLvL9aCJvBU
-  depends_on: []
-  status: in progress
-  notes: 'From merge-workflow-private-only (owner, 2026-11-11): #141 made plan pages read pull request
-    states live; the hub and repository pages show the same progress counts only as of the last build.
-    Give their progress cards the same live read and LiveStateDisplay. Read each repository''s pull requests
-    with the list endpoint (state=all, 100 per request) rather than one request per pull request: a hub
-    covers every plan, and an unauthenticated browser gets 60 requests an hour. Public repositories only,
-    until basstler-service/github-sign-in.'
