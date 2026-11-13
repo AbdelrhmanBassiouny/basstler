@@ -99,6 +99,11 @@ class PackageLocation(PathEnumeration):
     The shipped plan-item execution modes.
     """
 
+    PLAN_ITEM_MODEL_DEFAULTS = DIRECTORY / "plan" / "plan-item-models.toml"
+    """
+    The Claude model each plan-item skill recommends.
+    """
+
 
 class RepositoryStateLocation(PathEnumeration):
     """
@@ -454,6 +459,11 @@ class ProjectLocation(PathEnumeration):
     PERSONAL_PLAN_ITEM_MODES = PERSONAL_NOTES / "plan-item-modes.toml"
     """
     The per-user override of :attr:`PackageLocation.PLAN_ITEM_MODE_DEFAULTS`.
+    """
+
+    PERSONAL_PLAN_ITEM_MODELS = PERSONAL_NOTES / "plan-item-models.toml"
+    """
+    The per-user override of :attr:`PackageLocation.PLAN_ITEM_MODEL_DEFAULTS`.
     """
 
     AGENTS_INSTRUCTIONS = Path("AGENTS.md")

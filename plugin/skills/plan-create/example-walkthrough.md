@@ -150,8 +150,9 @@ plus a model dropdown next to it:
 
 Clicking a button **copies the command** to your clipboard (a web page
 can't start a session itself) — paste it into a fresh session to run it. If
-you pick a model from the dropdown first, a `/model MODEL_ID` line is
-prepended so the pasted session starts on that model.
+you pick a model from the dropdown first, a `/model ALIAS` line (`opus`, `sonnet` or `haiku`) is
+prepended so the pasted session starts on that model. The task's recommended
+alias is preselected.
 
 - **Kick off a not-started item** — `retry-metrics`'s "Start now"
   button copies `/plan-item-kickoff notification-retry-overhaul

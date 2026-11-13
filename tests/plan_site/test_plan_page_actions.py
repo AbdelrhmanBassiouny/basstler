@@ -6,7 +6,9 @@ how the page renders it.
 from __future__ import annotations
 
 from basstler.plan.model import ItemStatus
-from basstler.plan_site.cards import ModelOption
+from basstler.plan.item_mode import PlanItemSkill
+from basstler.plan.item_model import ModelAlias, RecommendedModels
+from basstler.plan_site.cards import ResolveAction, StartNowAction
 from basstler.plan_site.plan import Plan, Track, Wave
 from basstler.plan_site.plan_page import PlanPage
 from basstler.pull_request_state import (
@@ -207,7 +209,9 @@ def test_render_omits_action_button_for_a_done_item():
     assert 'data-action-command="' not in output
 
 
-def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
+def render_not_started_item_page(
+    recommended_models: RecommendedModels | None = None,
+) -> str:
     plan = Plan(
         id=PLAN_UNDER_TEST_ID,
         title="Test Plan",
@@ -217,15 +221,49 @@ def test_render_offers_every_model_option_in_each_action_buttons_dropdown():
         tracks=[Track(id="track-1", name="Track One", wave="wave-1")],
         items=[item("a", ItemStatus.NOT_STARTED)],
     )
-    renderer = PlanPage(
-        stylesheet_url=STYLESHEET_URL,
-        plan=plan,
-        roadmap_text="",
-        live_pull_requests=LivePullRequests(),
+    arguments = {"recommended_models": recommended_models} if recommended_models else {}
+    return (
+        PlanPage(
+            stylesheet_url=STYLESHEET_URL,
+            plan=plan,
+            roadmap_text="",
+            live_pull_requests=LivePullRequests(),
+            **arguments,
+        )
+        .render()
+        .html
     )
-    output = renderer.render().html
-    for model in ModelOption:
-        assert f'data-value="{model.value}"' in output
-        assert f">{model.label}</li>" in output
-    assert 'class="model-picker-toggle"' in output
-    assert 'class="model-select"' not in output
+
+
+def test_each_action_kind_routes_to_the_skill_its_recommendation_is_keyed_by():
+    assert StartNowAction.skill == PlanItemSkill.KICKOFF
+    assert ResolveAction.skill == PlanItemSkill.RESOLVE
+
+
+def test_render_offers_every_model_alias_in_each_action_buttons_dropdown():
+    output = render_not_started_item_page()
+    for alias in ModelAlias:
+        assert f'data-value="{alias.value}"' in output
+        assert f">{alias.label}</li>" in output
+    assert 'data-value=""' not in output
+
+
+def test_render_preselects_the_recommended_alias_of_the_action():
+    recommended = RecommendedModels.layered(personal_text=None)
+    alias = recommended.of_skill(StartNowAction.skill)
+    output = render_not_started_item_page(recommended)
+    assert f'<span class="model-picker" data-model="{alias.value}"' in output
+    assert f"{alias.label} ▾</button>" in output
+    assert (
+        f'data-value="{alias.value}" onclick="planPageSelectModel(event, this)"'
+        ' class="model-picker-option-selected"'
+    ) in output
+
+
+def test_render_preselects_a_personal_override_over_the_committed_alias():
+    override = ModelAlias.HAIKU
+    recommended = RecommendedModels.layered(
+        personal_text=f'{StartNowAction.skill.model_setting_key} = "{override}"\n'
+    )
+    output = render_not_started_item_page(recommended)
+    assert f'<span class="model-picker" data-model="{override.value}"' in output

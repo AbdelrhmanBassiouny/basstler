@@ -1,6 +1,6 @@
 """
 What an item card and its sections show beyond the item itself: its dependency chips, its
-action button and model dropdown, and the track and wave sections it sits in.
+action button and its model picker, and the track and wave sections it sits in.
 """
 
 from __future__ import annotations
@@ -12,6 +12,7 @@ from enum import StrEnum
 from typing import TYPE_CHECKING
 
 from basstler.class_property import classproperty
+from basstler.plan.item_mode import PlanItemSkill
 
 if TYPE_CHECKING:
     from basstler.plan_site.plan import Item, Track, Wave
@@ -224,17 +225,17 @@ class ItemAction(ABC):
 
     @classproperty
     @abstractmethod
-    def skill_command_name(cls) -> str:
-        """The ``/plan-item-...`` skill this action invokes - fixed per
-        subclass, since which skill an action routes to never varies per
-        instance (only :attr:`label` does, e.g. ``"Resolve"`` vs. ``"Resume"``
-        for the same :class:`ResolveAction`)."""
+    def skill(cls) -> PlanItemSkill:
+        """The skill this action invokes - fixed per subclass, since which
+        skill an action routes to never varies per instance (only
+        :attr:`label` does, e.g. ``"Resolve"`` vs. ``"Resume"`` for the same
+        :class:`ResolveAction`)."""
 
     @property
     def command(self) -> str:
         """The full command copied to the clipboard when the button is
         clicked."""
-        return f"{self.skill_command_name} {self.plan_id} {self.item_identifier}"
+        return f"/plan-item-{self.skill} {self.plan_id} {self.item_identifier}"
 
 
 @dataclass(frozen=True)
@@ -243,9 +244,9 @@ class StartNowAction(ItemAction):
     ``plan-item-kickoff``."""
 
     @classproperty
-    def skill_command_name(cls) -> str:
+    def skill(cls) -> PlanItemSkill:
         """:return: The ``plan-item-kickoff`` skill."""
-        return "/plan-item-kickoff"
+        return PlanItemSkill.KICKOFF
 
 
 @dataclass(frozen=True)
@@ -255,51 +256,9 @@ class ResolveAction(ItemAction):
     which of those three it actually is."""
 
     @classproperty
-    def skill_command_name(cls) -> str:
+    def skill(cls) -> PlanItemSkill:
         """:return: The ``plan-item-resolve`` skill."""
-        return "/plan-item-resolve"
-
-
-class ModelOption(StrEnum):
-    """One choice in a action button's model dropdown, in the order the
-    dropdown lists them.
-
-    Every model is offered on every page - not plan-specific, so declared once
-    here rather than threaded through :class:`Plan`. A member is its own model
-    id, the one to prepend as ``/model <value>`` before the copied command, or
-    ``""`` to copy the command alone and inherit whatever model the
-    pasted-into session is already running.
-    """
-
-    label: str
-    """The human-readable label shown in the dropdown."""
-
-    def __new__(cls, model_identifier: str, label: str) -> ModelOption:
-        """Make a member that is its own model id and carries its dropdown label.
-
-        :param model_identifier: The model id, or ``""`` for the session default.
-        :param label: The human-readable label shown in the dropdown.
-        :return: The member.
-        """
-        member = str.__new__(cls, model_identifier)
-        member._value_ = model_identifier
-        member.label = label
-        return member
-
-    SESSION_DEFAULT = ("", "Session default")
-    """Inherit whatever model the pasted-into session is already running."""
-
-    OPUS_5 = ("claude-opus-5", "Opus 5")
-    """Claude Opus 5."""
-
-    SONNET_5 = ("claude-sonnet-5", "Sonnet 5")
-    """Claude Sonnet 5."""
-
-    HAIKU_4_5 = ("claude-haiku-4-5-20251001", "Haiku 4.5")
-    """Claude Haiku 4.5."""
-
-    FABLE_5 = ("claude-fable-5", "Fable 5")
-    """Claude Fable 5."""
+        return PlanItemSkill.RESOLVE
 
 
 # %% track and wave sections

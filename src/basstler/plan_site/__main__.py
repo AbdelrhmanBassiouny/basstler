@@ -57,6 +57,7 @@ from basstler.plan_site.cards import PlanTimeAttribute
 from basstler.plan_site.item_classifier import ItemClassifier
 from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.locations import ProjectLocation
+from basstler.plan.item_model import RecommendedModels
 from basstler.plan.model import PlanDocument
 from basstler.plan.repository_rules import RepositoryRules
 from basstler.repository import GitHubAddress, Repository
@@ -381,6 +382,9 @@ class RepositorySite(SiteSection[RepositorySummary]):
             roadmap_text=source.roadmap_text,
             repository_rules=self.repository_rules,
             live_pull_requests=live_pull_requests,
+            recommended_models=RecommendedModels.layered(
+                self.notes.read(ProjectLocation.PERSONAL_PLAN_ITEM_MODELS)
+            ),
             header=PlanPageHeader(
                 tracking_url=self.tracking_url_of(plan),
                 hub_url=self.address.hub_url,
