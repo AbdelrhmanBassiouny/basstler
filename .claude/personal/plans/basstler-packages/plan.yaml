@@ -72,9 +72,10 @@ items:
   - break-remaining-cycles
   status: not started
   notes: >
-    Pure-rename move (git diff -M). hatch-vcs per package, root ../..; a hatch metadata hook in
+    Pure renames. hatch-vcs per package, root ../..; a hatch metadata hook in
     each sdist pins siblings ==version. Committed uv.lock, uv sync --frozen at session start
-    (absorbs locked-install). CI tests each package alone. Each package's folder and pyproject
+    (absorbs locked-install); package_layout reads importlib.metadata. CI tests each package alone,
+    all on any change. Each package's folder and pyproject
     become the map's source: modules and dependencies are read, not declared in PACKAGE_MAP; check
     third-party imports against each pyproject. Windows without uv: py -3.14/-3.13/-3.12, then python
     on PATH, as full paths (absorbs windows-interpreter-candidates). release:major.
