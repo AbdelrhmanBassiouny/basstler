@@ -247,6 +247,26 @@ class InstructionsTemplate(PathEnumeration):
     """
 
 
+class ReviewTriageLocation(PathEnumeration):
+    """
+    The files the review triage reads beside its modules.
+    """
+
+    MARK_FILE_AS_VIEWED = (
+        PackageLocation.DIRECTORY.value
+        / "review_triage"
+        / "mark_file_as_viewed.graphql"
+    )
+    """
+    The GraphQL mutation marking one file of a pull request viewed.
+    """
+
+    REPORT_TEMPLATE = PackageLocation.TEMPLATES.value / "review_triage_report.md.jinja"
+    """
+    The Markdown report of which files of a pull request need review.
+    """
+
+
 class PluginLocation(PathEnumeration):
     """
     The plugin's files this package runs, relative to the plugin's root.

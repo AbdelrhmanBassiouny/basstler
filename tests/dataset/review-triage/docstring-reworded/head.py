@@ -1,0 +1,5 @@
+def area(width: float, height: float) -> float:
+    """
+    The area of a rectangle, in square feet.
+    """
+    return width * height

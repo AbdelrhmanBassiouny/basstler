@@ -1,0 +1,35 @@
+## Review triage
+
+**{{ triage.files_needing_review | length }} of {{ triage.files | length }} files need review**; the other {{ triage.mechanical_files | length }} change only mechanically.
+
+{% if triage.renames.renames %}
+Renames applied - check them once here instead of in every file:
+
+| Old | New | Found by |
+| --- | --- | --- |
+{% for rename in triage.renames.renames %}
+| `{{ rename.old }}` | `{{ rename.new }}` | {{ rename.origin }} |
+{% endfor %}
+
+{% endif %}
+### Needs review
+
+{% for file in triage.files_needing_review %}
+- `{{ file.change.path }}`
+{% else %}
+Nothing.
+{% endfor %}
+
+### Mechanical
+
+{% if triage.mechanical_files %}
+| File | Change |
+| --- | --- |
+{% for file in triage.mechanical_files %}
+| `{{ file.change.path }}`{% if file.change.previous_path %} (from `{{ file.change.previous_path }}`){% endif %} | {{ file.kinds | sort | join(", ") }} |
+{% endfor %}
+{% else %}
+Nothing.
+{% endif %}
+
+<sub>Declare a rename the triage missed, or reject one it found, in the description: `<!-- {{ marker }}` then YAML with `renames: {old: new}` or `rejected_renames: [old]`, then `-->`.</sub>

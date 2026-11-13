@@ -1,0 +1,1 @@
+COMMAND = "new_name"
