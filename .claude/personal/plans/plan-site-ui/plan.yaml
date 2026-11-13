@@ -123,7 +123,10 @@ items:
 - id: model-recommendation
   title: Each action button preselects the recommended Claude model for its task
   track: display
-  status: not started
+  status: in progress
+  branch: claude/plan-site-ui-model-recommendation-ra1w52
+  pull_request_number: 209
+  session: https://claude.ai/code/session_018wfiv8Ms8MFF2MJcxPWn2w
   depends_on: []
   notes: The model picker offers the Claude Code aliases opus, sonnet and haiku, which always resolve
     to the newest models, replacing the stale ModelOption list and its Session default. Each action
