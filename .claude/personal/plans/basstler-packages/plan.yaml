@@ -35,11 +35,12 @@ items:
   status: in progress
   session: https://claude.ai/code/session_018wfiv7Bw3TgQiQbiuneZDr
   notes: >
-    Implemented in draft #154: basstler.package_map (Layer, Distribution, PACKAGE_MAP) and
-    PackageBoundaryChecker on "a package imports only the basstler packages its pyproject lists",
-    with a 25-crossing baseline (code_rules/known-boundary-crossings.yaml) a test keeps exact.
-    Merged with main at 51bd1f03 (2026-11-13), placing the modules main added since. Next: review of
-    the module placement and dependency lists. Module paths never change.
+    Draft #154: basstler.package_map (Layer, Distribution, PACKAGE_MAP as a Mapping) and
+    PackageBoundaryChecker on "a package imports only the basstler packages its pyproject lists".
+    No crossings list (as krrood #546): pre-commit checks staged lines; CI's ruff job runs
+    code-rules crossings at the base commit and new-crossings on the change, failing on any
+    crossing the base lacks. 25 crossings left. Review of 2026-11-13 answered at ebad5657;
+    open: module placement, dependency lists, and the krrood comparison thread.
 - id: git-and-github-domain
   title: Extract basstler.git and gather the GitHub domain model into basstler.github
   track: package-split
@@ -58,11 +59,12 @@ items:
   depends_on:
   - git-and-github-domain
   status: not started
-  notes: Plan, Item, Track, Wave models from plan_site/plan.py into basstler.plan; the part of stack.configuration
+  notes: >
+    Plan, Item, Track, Wave models from plan_site/plan.py into basstler.plan; the part of stack.configuration
     upstream_reviews reads into github; maintenance->upstream_reviews.action inverted so only stack depends
-    on reviews; plugin_root into core, since core's shell_configuration imports it (#76 touches it). Split
-    locations, environment and exceptions per distribution, the project rule becoming "once, in its own
-    package's locations". The boundary checker then fails CI with an empty baseline.
+    on reviews; plugin_root into core (#76 touches it). Split locations, environment and exceptions per
+    distribution, the rule becoming "once, in its own package's locations". Ends with
+    `code-rules crossings` empty; CI's new-crossings then keeps it so.
 - id: uv-workspace
   title: Move each distribution into packages/<name> as a uv workspace with lockstep versions
   track: package-split
@@ -70,12 +72,12 @@ items:
   - break-remaining-cycles
   status: not started
   notes: >
-    Pure-rename move (git diff -M: renames plus pyproject files). hatch-vcs per package, root ../..;
-    a hatch metadata hook, force-included in each sdist, pins siblings ==version. Committed uv.lock,
-    uv sync --frozen at session start (absorbs basstler-reliability/locked-install). package_layout
-    reads importlib.metadata. CI tests each package alone, every package on each change.
-    release:major. Absorbs windows-support/windows-interpreter-candidates: without uv on PATH,
-    Windows also tries py -3.14/-3.13/-3.12 and a python on PATH, each resolved to a full path.
+    Pure-rename move (git diff -M). hatch-vcs per package, root ../..; a hatch metadata hook in
+    each sdist pins siblings ==version. Committed uv.lock, uv sync --frozen at session start
+    (absorbs locked-install). CI tests each package alone. Each package's folder and pyproject
+    become the map's source: modules and dependencies are read, not declared in PACKAGE_MAP; check
+    third-party imports against each pyproject. Windows without uv: py -3.14/-3.13/-3.12, then python
+    on PATH, as full paths (absorbs windows-interpreter-candidates). release:major.
 - id: pypi-release
   title: Publish every distribution to PyPI on each release with trusted publishing
   track: package-split
