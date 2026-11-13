@@ -25,6 +25,7 @@ from basstler.exceptions import (
     PlanInAnotherRepository,
     PlanValidationError,
     SelfPlanReference,
+    SharedBranch,
     UnknownDependency,
     UnknownDependencyPlan,
     UnknownStatus,
@@ -267,6 +268,7 @@ class PlanValidator:
             *self.schema_version_problems(),
             *self.landed_item_count_problems(),
             *self.duplicate_identifier_problems(),
+            *self.shared_branch_problems(),
             *(problem for item in self.items for problem in self.item_problems(item)),
             *self.cycle_problems(),
             *self.wave_problems(),
@@ -356,6 +358,32 @@ class PlanValidator:
         if not duplicate_identifiers:
             return []
         return [DuplicateItemId(duplicate_identifiers)]
+
+    def shared_branch_problems(self) -> list[ValidationProblem]:
+        """
+        One problem per branch that more than one item names, counting the items of the
+        other plans when they are available.
+        """
+        claiming_items: dict[str, list[str]] = {}
+        for item in self.items:
+            branch = item.get(ManifestKey.BRANCH.key)
+            if isinstance(branch, str) and branch:
+                claiming_items.setdefault(branch, []).append(self.identifier_of(item))
+        references_by_branch = (
+            self.plan_directory.references_by_branch if self.plan_directory else {}
+        )
+        problems: list[ValidationProblem] = []
+        for branch, identifiers in claiming_items.items():
+            other_plans_items = [
+                reference.text
+                for reference in references_by_branch.get(branch, [])
+                if reference.plan_id != self.plan_id
+            ]
+            if len(identifiers) + len(other_plans_items) > 1:
+                problems.append(
+                    SharedBranch(branch, [*identifiers, *other_plans_items])
+                )
+        return problems
 
     def item_problems(self, item: dict[str, Any]) -> list[ValidationProblem]:
         """

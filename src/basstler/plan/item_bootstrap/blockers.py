@@ -1,10 +1,10 @@
 """
-The items a branch carries, and the blockers one owner writes on them.
+The item a branch carries, and the blockers one owner writes on it.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any
 
@@ -19,13 +19,13 @@ from basstler.plan.model import (
     PlanManifest,
 )
 
-# %% the items a branch carries
+# %% the item a branch carries
 
 
 @dataclass(frozen=True)
 class TrackedItem:
     """
-    One item a branch carries, as the manifest records it right now.
+    The item a branch carries, as the manifest records it right now.
     """
 
     item_identifier: str
@@ -75,7 +75,7 @@ class ItemWrite(TrackedItem):
 @dataclass(frozen=True)
 class BranchReport(OperationReport):
     """
-    Every item a branch carries, as an operation keyed on that branch found or left it.
+    The item a branch carries, as an operation keyed on that branch found or left it.
     """
 
     branch: str
@@ -88,15 +88,15 @@ class BranchReport(OperationReport):
     The plan tracking it, or ``None`` when no plan claims the branch.
     """
 
-    items: tuple[TrackedItem, ...]
+    item: TrackedItem | None
     """
-    Every item recording that branch, in manifest order.
+    The item recording that branch, or ``None`` when no plan claims the branch.
     """
 
     @classmethod
     def of_branch(cls, branch: str, project_root: Path) -> BranchReport:
         """
-        Find the plan and every item a branch belongs to.
+        Find the plan and the item a branch belongs to.
 
         :param branch: The branch to resolve.
         :param project_root: The repository to run within.
@@ -105,26 +105,29 @@ class BranchReport(OperationReport):
         """
         plan_identifier = ProjectCheckout(project_root).plan_tracking(branch)
         if plan_identifier is None:
-            return cls(branch=branch, plan_identifier=None, items=())
+            return cls(branch=branch, plan_identifier=None, item=None)
         manifest = PlanManifest(
             PlanDocuments.load(plan_identifier, project_root).manifest
         )
-        items = tuple(
-            TrackedItem(
-                item_identifier=item.content[ManifestKey.IDENTIFIER.key],
-                status=item.status,
-                blockers=tuple(item.content.get(ManifestKey.BLOCKERS.key) or ()),
-            )
-            for item in manifest.items
-            if item.branch == branch
+        item = next(
+            (
+                TrackedItem(
+                    item_identifier=entry.content[ManifestKey.IDENTIFIER.key],
+                    status=entry.status,
+                    blockers=tuple(entry.content.get(ManifestKey.BLOCKERS.key) or ()),
+                )
+                for entry in manifest.items
+                if entry.branch == branch
+            ),
+            None,
         )
-        return cls(branch=branch, plan_identifier=plan_identifier, items=items)
+        return cls(branch=branch, plan_identifier=plan_identifier, item=item)
 
     @property
     def exit_code(self) -> PlanItemBootstrapExitCode:
-        if self.items:
-            return PlanItemBootstrapExitCode.SUCCESS
-        return PlanItemBootstrapExitCode.BRANCH_TRACKS_NO_ITEM
+        if self.item is None:
+            return PlanItemBootstrapExitCode.BRANCH_TRACKS_NO_ITEM
+        return PlanItemBootstrapExitCode.SUCCESS
 
     def to_json(self) -> dict[str, Any]:
         return {
@@ -132,14 +135,14 @@ class BranchReport(OperationReport):
             ReportKey.EXIT_CODE: int(self.exit_code),
             ManifestKey.BRANCH.key: self.branch,
             ReportKey.PLAN: self.plan_identifier,
-            ReportKey.ITEMS: [item.to_json() for item in self.items],
+            ReportKey.TRACKED_ITEM: None if self.item is None else self.item.to_json(),
         }
 
 
 @dataclass(frozen=True)
 class OwnedBlocker:
     """
-    One owner's blocker on every item a branch carries, set or withdrawn.
+    One owner's blocker on the item a branch carries, set or withdrawn.
 
     Written as ``<owner>: <reason>``, so the owner replaces and withdraws only its own
     entries and never one a person wrote.
@@ -147,7 +150,7 @@ class OwnedBlocker:
 
     branch: str
     """
-    The branch whose items are written.
+    The branch whose item is written.
     """
 
     owner: str
@@ -169,32 +172,19 @@ class OwnedBlocker:
 
     def write(self, project_root: Path) -> BranchReport:
         """
-        Rewrite every item on the branch with the owner's blocker set or withdrawn, then
-        derive each item's status from what is left blocking it.
+        Rewrite the branch's item with the owner's blocker set or withdrawn, then derive
+        its status from what is left blocking it.
 
-        Only fields that change are written, so withdrawing a blocker an item never
+        Only fields that change are written, so withdrawing a blocker the item never
         carried leaves it untouched.
 
         :param project_root: The repository to run within.
         :return: What was written.
         """
         resolution = BranchReport.of_branch(self.branch, project_root)
-        writes = tuple(
-            self.write_item(item, resolution, project_root) for item in resolution.items
-        )
-        return BranchReport(
-            branch=self.branch, plan_identifier=resolution.plan_identifier, items=writes
-        )
-
-    def write_item(
-        self, item: TrackedItem, resolution: BranchReport, project_root: Path
-    ) -> ItemWrite:
-        """
-        :param item: One item the branch carries.
-        :param resolution: The plan and items the branch resolved to.
-        :param project_root: The repository to run within.
-        :return: The item as written.
-        """
+        item = resolution.item
+        if item is None:
+            return resolution
         prefix = f"{self.owner}{self.owner_separator}"
         blockers = tuple(
             blocker for blocker in item.blockers if not blocker.startswith(prefix)
@@ -216,11 +206,14 @@ class OwnedBlocker:
                 item_identifier=item.item_identifier,
                 values_by_key=changed,
             ).update(project_root)
-        return ItemWrite(
-            item_identifier=item.item_identifier,
-            status=status,
-            blockers=blockers,
-            previous_status=item.status,
+        return replace(
+            resolution,
+            item=ItemWrite(
+                item_identifier=item.item_identifier,
+                status=status,
+                blockers=blockers,
+                previous_status=item.status,
+            ),
         )
 
     @staticmethod

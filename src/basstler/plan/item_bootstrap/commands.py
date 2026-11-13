@@ -224,12 +224,12 @@ class CheckCommand(BootstrapCommand):
 @dataclass(frozen=True)
 class ResolveCommand(BootstrapCommand):
     """
-    Names the plan and the items a branch belongs to.
+    Names the plan and the item a branch belongs to.
     """
 
     @classproperty
     def description(cls) -> str:
-        return "Name the plan and items a branch belongs to"
+        return "Name the plan and item a branch belongs to"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument("--branch", required=True)
@@ -241,12 +241,12 @@ class ResolveCommand(BootstrapCommand):
 @dataclass(frozen=True)
 class BlockCommand(BootstrapCommand):
     """
-    Records an owner's blocker on every item a branch carries.
+    Records an owner's blocker on the item a branch carries.
     """
 
     @classproperty
     def description(cls) -> str:
-        return "Record your own blocker on every item a branch carries"
+        return "Record your own blocker on the item a branch carries"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument("--branch", required=True)
@@ -269,12 +269,12 @@ class BlockCommand(BootstrapCommand):
 @dataclass(frozen=True)
 class UnblockCommand(BootstrapCommand):
     """
-    Withdraws an owner's blocker from every item a branch carries.
+    Withdraws an owner's blocker from the item a branch carries.
     """
 
     @classproperty
     def description(cls) -> str:
-        return "Clear your own blocker from every item a branch carries"
+        return "Clear your own blocker from the item a branch carries"
 
     def declare_arguments(self, parser: argparse.ArgumentParser) -> None:
         parser.add_argument("--branch", required=True)

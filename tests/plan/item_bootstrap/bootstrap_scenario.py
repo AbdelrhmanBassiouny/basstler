@@ -321,17 +321,6 @@ def publish_the_branch_index(repository: ScratchRepository) -> None:
     update_request().update(repository.project_root)
 
 
-def put_both_items_on_one_branch(repository: ScratchRepository) -> None:
-    """
-    Move the fixture's unstarted item onto the branch its underway one already rides on.
-
-    :param repository: The scratch repository to save within.
-    """
-    update_request(values_by_key={ManifestKey.BRANCH: second_item_branch()}).update(
-        repository.project_root
-    )
-
-
 def publish_new_branch(repository: ScratchRepository) -> None:
     """
     Create :data:`NEW_BRANCH` and push it to the work remote.
