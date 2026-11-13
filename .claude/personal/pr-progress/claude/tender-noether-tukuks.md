@@ -1,9 +1,9 @@
 ## Plan
-- Live recount of hub and repository cards from one pull request listing per repository
+- Live recount of hub and repository cards; landed items kept in plan totals
 
 ## Done
-- Live recount (b130a2f); review fixes (6f0f320): ScriptData field names, URLs off `pull_request_reference`, `ProgressStage` in plan.py, half-to-even formatting
-- Full suite 2584 passed at 6f0f320; ruff and code-rules pass
+- Review round 1 (441fb50): `from_item`, counts derived from counted items, `landed_item_count`, `field_name` StrEnum; all 5 threads replied and resolved
+- Merged main 3d92faa (ccdf5f9), test_model.py conflict resolved; 2644 passed; merges clean into d07e17f
 
 ## Next
-- Read CI on 6f0f320
+- Read CI on ccdf5f9
