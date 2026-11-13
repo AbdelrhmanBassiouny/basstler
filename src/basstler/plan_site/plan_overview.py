@@ -83,7 +83,7 @@ class PlanOverview:
 
     status_counts: dict[ItemStatus, int]
     """
-    How many items carry each :class:`ItemStatus`.
+    How many items carry each :class:`ItemStatus`, landed items counted as done.
     """
 
     drift_items: list[str]
@@ -106,17 +106,6 @@ class PlanOverview:
     Titles of :attr:`NextSteps.ready_to_review`.
     """
 
-    started_item_count: int
-    """
-    How many items have begun: see :attr:`Item.is_started`.
-    """
-
-    reviewed_item_count: int
-    """
-    How many items' pull requests are past their author's review: see
-    :attr:`Item.is_reviewed`.
-    """
-
     @classmethod
     def of_plan(cls, plan: Plan, next_steps: NextSteps) -> PlanOverview:
         """
@@ -125,6 +114,7 @@ class PlanOverview:
         :return: The plan's overview.
         """
         status_counts = {status: 0 for status in ItemStatus}
+        status_counts[ItemStatus.DONE] = plan.landed_item_count
         for item in plan.items:
             status_counts[item.status] += 1
         return cls(
@@ -135,6 +125,4 @@ class PlanOverview:
                 item.title for item in next_steps.blocker_maybe_cleared
             ],
             ready_to_review=[item.title for item in next_steps.ready_to_review],
-            started_item_count=sum(item.is_started for item in plan.items),
-            reviewed_item_count=sum(item.is_reviewed for item in plan.items),
         )

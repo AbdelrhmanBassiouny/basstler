@@ -5,40 +5,165 @@ the record of what a build left out.
 
 from __future__ import annotations
 
-import dataclasses
 from abc import ABC, abstractmethod
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import StrEnum
+from typing import Any
+from urllib.parse import urlencode
 
 from basstler.class_property import classproperty
 from basstler.locations import SiteTemplate
+from basstler.maintenance.github import ListingParameter, PullRequestListState
+from basstler.github.client import PageParameter
+from basstler.plan.model import ItemStatus
+from basstler.plan_site.plan import Item, Plan, ProgressStage
+from basstler.plan_site.site_vocabulary import LiveStateVocabulary
 from basstler.render_common import TemplatePage
+from basstler.repository import GitHubAddress
+
+MAXIMUM_PULL_REQUESTS_PER_PAGE = 100
+"""
+The most pull requests one page of GitHub's pull request listing holds.
+"""
+
+# %% what a card's script reads
+
+
+class ProgressCardAttribute(StrEnum):
+    """
+    The attributes that mark what a progress card's script recounts and rewrites.
+    """
+
+    COUNTED_ITEMS = "data-counted-items"
+    """
+    The :class:`CountedItem` entries a card counts.
+    """
+
+    PROGRESS = "data-progress-label"
+    """
+    The card's progress label.
+    """
+
+    STAGE_LABEL = "data-stage-label"
+    """
+    One stage's share label, naming the :class:`ProgressStage`.
+    """
+
+    STAGE_BAR = "data-stage-bar"
+    """
+    One stage's bar segment, naming the :class:`ProgressStage`.
+    """
+
+    LABEL_FORMAT = "data-label-format"
+    """
+    The label a count or share is written into, with a :class:`LabelPlaceholder`.
+    """
+
+    WIDTH_FORMAT = "data-width-format"
+    """
+    The CSS width a bar segment's share is written into, with a
+    :class:`LabelPlaceholder`.
+    """
+
+    FINISHED = "data-live-progress-finished"
+    """
+    Set on the page once every card is recounted.
+    """
+
+
+class LabelPlaceholder(StrEnum):
+    """
+    The placeholders a label format holds for the numbers a card counts.
+    """
+
+    DONE = "{done}"
+    """
+    How many items are done.
+    """
+
+    PERCENTAGE = "{percentage}"
+    """
+    A stage's share of the items, as a percentage.
+    """
+
+
+@dataclass(frozen=True)
+class CountedItem:
+    """
+    One item a card counts, as its script recounts it live.
+    """
+
+    status: ItemStatus
+    """
+    The item's status as built.
+    """
+
+    reached_stages: list[ProgressStage]
+    """
+    The stages the item reached as built, earliest first.
+    """
+
+    listing_url: str | None
+    """
+    The first page of every pull request of the repository the item's pull request is
+    in, or ``None`` without a pull request.
+    """
+
+    number: int | None
+    """
+    The item's pull request number, or ``None`` without a pull request.
+    """
+
+    @classmethod
+    def from_item(cls, item: Item) -> CountedItem:
+        """
+        :param item: A classified item.
+        :return: What a card counts of it.
+        """
+        reference = item.pull_request_reference
+        if reference is None:
+            return cls(
+                status=item.status,
+                reached_stages=item.reached_stages,
+                listing_url=None,
+                number=None,
+            )
+        query = urlencode(
+            {
+                ListingParameter.STATE: PullRequestListState.ALL.query,
+                ListingParameter.PAGE_SIZE: MAXIMUM_PULL_REQUESTS_PER_PAGE,
+            }
+        )
+        return cls(
+            status=item.status,
+            reached_stages=item.reached_stages,
+            listing_url=(
+                f"{GitHubAddress.API}/{reference.repository.pull_requests_path}?{query}"
+            ),
+            number=reference.number,
+        )
+
+    @classmethod
+    def from_plan(cls, plan: Plan) -> list[CountedItem]:
+        """
+        :param plan: A plan whose items are classified.
+        :return: What a card counts of the plan: every item it lists, and every item
+            that landed and was dropped from it, which reached every stage.
+        """
+        landed = cls(
+            status=ItemStatus.DONE,
+            reached_stages=list(ProgressStage),
+            listing_url=None,
+            number=None,
+        )
+        return [
+            *(cls.from_item(item) for item in plan.items),
+            *[landed] * plan.landed_item_count,
+        ]
 
 
 # %% the cards a page lists
-
-
-class ProgressStage(StrEnum):
-    """
-    The stages a card measures its items' progress by, earliest first; each value is
-    the word a card shows and the CSS class its bar segment carries.
-    """
-
-    STARTED = "started"
-    """
-    Work on the item has begun.
-    """
-
-    REVIEWED = "reviewed"
-    """
-    The item's pull request is past its author's review.
-    """
-
-    DONE = "done"
-    """
-    The item is done.
-    """
 
 
 @dataclass(frozen=True)
@@ -57,19 +182,53 @@ class StageShare:
     The share of items that reached :attr:`stage`, from 0 to 100.
     """
 
+    @classproperty
+    def label_decimal_places(cls) -> int:
+        """
+        How many decimal places :attr:`label` writes the percentage with.
+        """
+        return 0
+
+    @classproperty
+    def width_decimal_places(cls) -> int:
+        """
+        How many decimal places :attr:`width` writes the percentage with.
+        """
+        return 1
+
+    @property
+    def label_format(self) -> str:
+        """
+        :attr:`label` with :attr:`LabelPlaceholder.PERCENTAGE` for the percentage.
+        """
+        return f"{LabelPlaceholder.PERCENTAGE}% {self.stage}"
+
     @property
     def label(self) -> str:
         """
         The share as text, such as ``40% started``.
         """
-        return f"{self.percentage:.0f}% {self.stage}"
+        return self.label_format.replace(
+            LabelPlaceholder.PERCENTAGE,
+            f"{self.percentage:.{self.label_decimal_places}f}",
+        )
+
+    @classproperty
+    def width_format(cls) -> str:
+        """
+        :attr:`width` with :attr:`LabelPlaceholder.PERCENTAGE` for the percentage.
+        """
+        return f"{LabelPlaceholder.PERCENTAGE}%"
 
     @property
     def width(self) -> str:
         """
         The share as the CSS width of its bar segment.
         """
-        return f"{self.percentage:.1f}%"
+        return self.width_format.replace(
+            LabelPlaceholder.PERCENTAGE,
+            f"{self.percentage:.{self.width_decimal_places}f}",
+        )
 
 
 @dataclass(kw_only=True)
@@ -83,38 +242,54 @@ class ProgressCard(ABC):
     shared here.
     """
 
-    done: int
+    counted_items: list[CountedItem] = field(default_factory=list)
     """
-    How many items are done.
-    """
-
-    total: int
-    """
-    How many items there are.
-    """
-
-    started: int = 0
-    """
-    How many items have begun: see :attr:`Item.is_started`.
-    """
-
-    reviewed: int = 0
-    """
-    How many items' pull requests are past their author's review: see
-    :attr:`Item.is_reviewed`.
+    The items the card counts, which the page's script recounts live.
     """
 
     @staticmethod
-    def counts_over(cards: Sequence[ProgressCard]) -> dict[str, int]:
+    def items_over(cards: Sequence[ProgressCard]) -> list[CountedItem]:
         """
         :param cards: The cards a larger card stands for.
-        :return: Every count a card carries, summed over *cards*, by field name - ready
-            to pass to the larger card's constructor.
+        :return: Every item they count, in their order.
         """
-        return {
-            count.name: sum(getattr(card, count.name) for card in cards)
-            for count in dataclasses.fields(ProgressCard)
-        }
+        return [item for card in cards for item in card.counted_items]
+
+    def count_reaching(self, stage: ProgressStage) -> int:
+        """
+        :param stage: A progress stage.
+        :return: How many of the card's items reached *stage*.
+        """
+        return sum(stage in item.reached_stages for item in self.counted_items)
+
+    @property
+    def total(self) -> int:
+        """
+        How many items the card counts.
+        """
+        return len(self.counted_items)
+
+    @property
+    def done(self) -> int:
+        """
+        How many items are done.
+        """
+        return self.count_reaching(ProgressStage.DONE)
+
+    @property
+    def started(self) -> int:
+        """
+        How many items have begun: see :attr:`Item.is_started`.
+        """
+        return self.count_reaching(ProgressStage.STARTED)
+
+    @property
+    def reviewed(self) -> int:
+        """
+        How many items' pull requests are past their author's review: see
+        :attr:`Item.is_reviewed`.
+        """
+        return self.count_reaching(ProgressStage.REVIEWED)
 
     @classproperty
     def card_css_class(cls) -> str:
@@ -130,12 +305,26 @@ class ProgressCard(ABC):
         """
         return "complete"
 
+    @classproperty
+    def stage_label_separator(cls) -> str:
+        """
+        What separates the stage share labels.
+        """
+        return " · "
+
     @property
     @abstractmethod
+    def progress_label_format(self) -> str:
+        """
+        :attr:`progress_label` with :attr:`LabelPlaceholder.DONE` for the done count.
+        """
+
+    @property
     def progress_label(self) -> str:
         """
         The human-readable progress shown on the card.
         """
+        return self.progress_label_format.replace(LabelPlaceholder.DONE, str(self.done))
 
     @property
     def is_complete(self) -> bool:
@@ -157,28 +346,36 @@ class ProgressCard(ABC):
         The share of items that reached each :class:`ProgressStage`, earliest stage
         first.
         """
-        counts = {
-            ProgressStage.STARTED: self.started,
-            ProgressStage.REVIEWED: self.reviewed,
-            ProgressStage.DONE: self.done,
-        }
         return [
-            StageShare(stage=stage, percentage=self.percentage_of(counts[stage]))
+            StageShare(
+                stage=stage, percentage=self.percentage_of(self.count_reaching(stage))
+            )
             for stage in ProgressStage
+        ]
+
+    @property
+    def labelled_stage_shares(self) -> list[StageShare]:
+        """
+        The started and reviewed :attr:`stage_shares`, none when there are no items; the
+        done share is left to :attr:`progress_label`.
+        """
+        if not self.total:
+            return []
+        return [
+            share
+            for share in self.stage_shares
+            if share.stage is not ProgressStage.DONE
         ]
 
     @property
     def stage_shares_label(self) -> str | None:
         """
-        The started and reviewed :attr:`stage_shares` as text, or ``None`` when there are
-        no items; the done share is left to :attr:`progress_label`.
+        The :attr:`labelled_stage_shares` as text, or ``None`` when there are none.
         """
-        if not self.total:
+        if not self.labelled_stage_shares:
             return None
-        return " · ".join(
-            share.label
-            for share in self.stage_shares
-            if share.stage is not ProgressStage.DONE
+        return self.stage_label_separator.join(
+            share.label for share in self.labelled_stage_shares
         )
 
     @property
@@ -221,8 +418,10 @@ class PlanSummary(ProgressCard):
     """
 
     @property
-    def progress_label(self) -> str:
-        return f"{self.done} / {self.total} done" if self.total else "no items yet"
+    def progress_label_format(self) -> str:
+        if not self.total:
+            return "no items yet"
+        return f"{LabelPlaceholder.DONE} / {self.total} done"
 
 
 # %% the pages
@@ -297,7 +496,7 @@ class RepositorySummary(ProgressCard):
             index_url=index_url,
             plans=plans,
             skipped_plans=skipped_plans,
-            **cls.counts_over(plans),
+            counted_items=cls.items_over(plans),
         )
 
     @classmethod
@@ -307,14 +506,11 @@ class RepositorySummary(ProgressCard):
         :param error: Why its notes could not be read.
         :return: The repository's card, with no plans and no index to open.
         """
-        return cls(name=name, index_url=None, error=error, done=0, total=0)
+        return cls(name=name, index_url=None, error=error)
 
     @property
-    def progress_label(self) -> str:
-        """
-        How many plans the repository has, and how many of their items are done.
-        """
-        return f"{len(self.plans)} plans · {self.done} / {self.total} items done"
+    def progress_label_format(self) -> str:
+        return f"{len(self.plans)} plans · {LabelPlaceholder.DONE} / {self.total} items done"
 
     @property
     def skipped_pages(self) -> list[SkippedPage]:
@@ -344,7 +540,9 @@ class SiteSummary(ProgressCard):
         :param repositories: Every repository on the site.
         :return: The site's summary, counting every repository's items.
         """
-        return cls(repositories=repositories, **cls.counts_over(repositories))
+        return cls(
+            repositories=repositories, counted_items=cls.items_over(repositories)
+        )
 
     @property
     def plan_count(self) -> int:
@@ -365,13 +563,10 @@ class SiteSummary(ProgressCard):
         ]
 
     @property
-    def progress_label(self) -> str:
-        """
-        How many repositories and plans the site has, and how many items are done.
-        """
+    def progress_label_format(self) -> str:
         return (
             f"{len(self.repositories)} repositories · {self.plan_count} plans · "
-            f"{self.done} / {self.total} items done"
+            f"{LabelPlaceholder.DONE} / {self.total} items done"
         )
 
 
@@ -395,8 +590,76 @@ class SiteStylesheet(TemplatePage):
         return self.render_template()
 
 
+@dataclass(frozen=True)
+class HubPageVocabulary(LiveStateVocabulary):
+    """
+    The names the hub's and repository indexes' templates and scripts share.
+    """
+
+    progress_card_attribute: type[ProgressCardAttribute] = field(
+        default=ProgressCardAttribute, init=False
+    )
+    """
+    The attributes that mark what the script recounts and rewrites.
+    """
+
+    label_placeholder: type[LabelPlaceholder] = field(
+        default=LabelPlaceholder, init=False
+    )
+    """
+    The placeholders the script writes counts into.
+    """
+
+    progress_stage: type[ProgressStage] = field(default=ProgressStage, init=False)
+    """
+    The stages a card counts.
+    """
+
+    progress_card: type[ProgressCard] = field(default=ProgressCard, init=False)
+    """
+    The class whose CSS classes a card carries.
+    """
+
+    stage_share: type[StageShare] = field(default=StageShare, init=False)
+    """
+    The class whose decimal places a share is written with.
+    """
+
+    page_parameter: type[PageParameter] = field(default=PageParameter, init=False)
+    """
+    The query parameter a listing's page is asked for by.
+    """
+
+    pull_requests_per_page: int = field(
+        default=MAXIMUM_PULL_REQUESTS_PER_PAGE, init=False
+    )
+    """
+    How many pull requests a full page of a listing holds.
+    """
+
+
 @dataclass
-class HubPage(TemplatePage):
+class LiveProgressPage(TemplatePage, ABC):
+    """
+    A site page whose progress cards its script recounts from GitHub's live pull
+    request states.
+    """
+
+    def render_template(self, **context: Any) -> str:
+        """
+        :meth:`TemplatePage.render_template`, also passing the recounting scripts and
+        the :class:`HubPageVocabulary` they are written with.
+        """
+        return super().render_template(
+            vocabulary=HubPageVocabulary(),
+            live_state_script_template=SiteTemplate.LIVE_STATE_SCRIPT.name,
+            live_progress_script_template=SiteTemplate.LIVE_PROGRESS_SCRIPT.name,
+            **context,
+        )
+
+
+@dataclass
+class HubPage(LiveProgressPage):
     """
     The hub page: a card per registered repository.
     """
@@ -427,7 +690,7 @@ class HubPage(TemplatePage):
 
 
 @dataclass
-class RepositoryIndexPage(TemplatePage):
+class RepositoryIndexPage(LiveProgressPage):
     """
     One repository's index on the site: a card per published plan, and a banner naming
     every plan the build left out.

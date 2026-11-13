@@ -6,6 +6,7 @@ from __future__ import annotations
 
 from pathlib import PureWindowsPath
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
@@ -23,6 +24,7 @@ from basstler.repository import Repository
 from ..constants.paths import DatasetLocation
 from .concurrent_edits import PLAN_IDENTIFIER
 from ..fixture_plans import ForeignItemId, FixturePlanId, fixture_item, fixture_manifest
+from ..manifest_builders import manifest_item, minimal_plan
 
 # %% stored spelling
 
@@ -131,6 +133,47 @@ def test_an_item_without_an_id_is_identified_by_its_branch():
     item = PlanItem({ManifestKey.BRANCH.key: "a-branch"})
 
     assert item.identifier == item.branch
+
+
+# %% landed items
+
+
+def landed_plan(**overrides: Any) -> PlanManifest:
+    """
+    :param overrides: Top-level keys to replace in the plan.
+    :return: A plan with one landed item and one not started.
+    """
+    return PlanManifest(
+        minimal_plan(
+            items=[
+                manifest_item("landed", status=ItemStatus.DONE.value),
+                manifest_item("open"),
+            ],
+            **overrides,
+        )
+    )
+
+
+def test_dropping_landed_items_counts_them():
+    manifest = landed_plan()
+
+    assert manifest.without_landed_items().landed_item_count == len(
+        manifest.landed_identifiers
+    )
+
+
+def test_dropping_landed_items_adds_to_the_items_landed_before():
+    manifest = landed_plan(landed_item_count=3)
+
+    assert manifest.without_landed_items().landed_item_count == 3 + len(
+        manifest.landed_identifiers
+    )
+
+
+def test_a_plan_with_nothing_landed_is_left_as_it_is():
+    manifest = PlanManifest(minimal_plan())
+
+    assert manifest.without_landed_items() == manifest
 
 
 # %% paths on the notes branch

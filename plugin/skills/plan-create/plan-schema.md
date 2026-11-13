@@ -49,6 +49,7 @@ default_repository: <owner>/<repo>   # used by every item unless it sets its own
                                      # and the repository whose checkout saves the plan
                                        # (roadmap.md is a fixed sibling filename, not configurable)
 tracking_issue: <int, optional> # see "Proposing structural changes" below
+landed_item_count: <int, optional> # written by the save: items that landed and were dropped
 
 waves:                         # ordered phases, purely organizational
   - id: <wave-id>

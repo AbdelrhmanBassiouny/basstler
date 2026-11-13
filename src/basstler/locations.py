@@ -193,6 +193,18 @@ class SiteTemplate(PathEnumeration):
     A plan page's behaviour: copying commands, choosing a model, revealing an item.
     """
 
+    LIVE_STATE_SCRIPT = PackageLocation.TEMPLATES.value / "site_live_state.js"
+    """
+    The script every site page reads a pull request's live state from GitHub's answer
+    with, and re-checks with when the tab is shown again.
+    """
+
+    LIVE_PROGRESS_SCRIPT = PackageLocation.TEMPLATES.value / "site_live_progress.js"
+    """
+    The hub's and repository indexes' script that recounts every progress card from
+    each repository's pull request listing.
+    """
+
     PLAN_PULL_REQUEST_RECHECK_SCRIPT = (
         PackageLocation.TEMPLATES.value / "site_plan_pull_request_recheck.js"
     )

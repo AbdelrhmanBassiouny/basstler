@@ -5,6 +5,7 @@ page templates render through, and generic markdown turned into HTML.
 
 from __future__ import annotations
 
+import dataclasses
 import re
 from abc import ABC, abstractmethod
 from enum import IntEnum, StrEnum
@@ -105,6 +106,10 @@ def create_template_environment() -> jinja2.Environment:
         trim_blocks=True,
         lstrip_blocks=True,
     )
+    environment.policies["json.dumps_kwargs"] = {
+        "sort_keys": True,
+        "default": dataclasses.asdict,
+    }
     return environment
 
 

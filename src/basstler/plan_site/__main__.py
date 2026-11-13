@@ -42,6 +42,7 @@ from basstler.exceptions import PlanValidationError
 from basstler.plan.dependencies import DependencyResolver, PlanDirectory
 from basstler.plan.validation import PlanValidator
 from basstler.plan_site.hub_page import (
+    CountedItem,
     HubPage,
     PlanSummary,
     ProgressCard,
@@ -58,7 +59,6 @@ from basstler.plan_site.hub import NotesBranch, PlanHub, SiteAddress
 from basstler.locations import ProjectLocation
 from basstler.plan.model import PlanDocument
 from basstler.plan.repository_rules import RepositoryRules
-from basstler.plan.model import ItemStatus
 from basstler.repository import GitHubAddress, Repository
 from basstler.standard_streams import StandardStreamHandler
 
@@ -396,11 +396,8 @@ class RepositorySite(SiteSection[RepositorySummary]):
             id=plan.id,
             title=plan.title,
             description=plan.description,
-            done=page.overview.status_counts[ItemStatus.DONE],
-            started=page.overview.started_item_count,
-            reviewed=page.overview.reviewed_item_count,
-            total=len(plan.items),
             page_url=self.plan_url(source.directory_name),
+            counted_items=CountedItem.from_plan(plan),
         )
         return PublishedPlan(page=page, summary=summary)
 

@@ -260,6 +260,15 @@ def test_status_counts_cover_every_status_even_when_zero():
     assert summary.status_counts[ItemStatus.BLOCKED] == 0
 
 
+def test_items_that_landed_and_were_dropped_count_as_done():
+    renderer = make_renderer([item("a", ItemStatus.DONE)])
+    renderer.plan.landed_item_count = 2
+
+    summary = renderer.render().overview
+
+    assert summary.status_counts[ItemStatus.DONE] == 1 + renderer.plan.landed_item_count
+
+
 # %% track order
 
 

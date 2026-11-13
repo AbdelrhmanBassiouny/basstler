@@ -7,12 +7,13 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from functools import cached_property
+from enum import StrEnum
 from typing import TYPE_CHECKING, Any
 
 from basstler.plan.model import ItemStatus, ManifestKey
 from basstler.pull_request_state import LiveState, PullRequestRecord
 from basstler.render_common import sanitize_http_url
-from basstler.repository import GitHubAddress
+from basstler.repository import GitHubAddress, PullRequestReference
 
 if TYPE_CHECKING:
     from basstler.plan_site.cards import DependencyChip, ItemAction, StartNowAction
@@ -92,6 +93,28 @@ class Track:
 # %% items
 
 
+class ProgressStage(StrEnum):
+    """
+    The stages a card measures its items' progress by, earliest first; each value is the
+    word a card shows and the CSS class its bar segment carries.
+    """
+
+    STARTED = "started"
+    """
+    Work on the item has begun.
+    """
+
+    REVIEWED = "reviewed"
+    """
+    The item's pull request is past its author's review.
+    """
+
+    DONE = "done"
+    """
+    The item is done.
+    """
+
+
 @dataclass
 class Item:
     """
@@ -169,15 +192,11 @@ class Item:
     could not.
     """
 
-    pull_request_url: str | None = field(default=None, init=False)
+    pull_request_reference: PullRequestReference | None = field(
+        default=None, init=False
+    )
     """
-    This item's pull request on GitHub, if it has one.
-    """
-
-    pull_request_api_url: str | None = field(default=None, init=False)
-    """
-    The same pull request's address in GitHub's REST pulls API, which the page re-reads
-    in the browser.
+    This item's pull request, if it has one.
     """
 
     pull_request_record: PullRequestRecord | None = field(default=None, init=False)
@@ -239,6 +258,18 @@ class Item:
         merged.
         """
         return self.live_state in (LiveState.OPEN_READY, LiveState.MERGED)
+
+    @property
+    def reached_stages(self) -> list[ProgressStage]:
+        """
+        The progress stages this item has reached, earliest first.
+        """
+        reached = {
+            ProgressStage.STARTED: self.is_started,
+            ProgressStage.REVIEWED: self.is_reviewed,
+            ProgressStage.DONE: self.is_effectively_done(),
+        }
+        return [stage for stage in ProgressStage if reached[stage]]
 
     @property
     def identifier(self) -> str:
@@ -379,6 +410,11 @@ class Plan:
     any.
     """
 
+    landed_item_count: int = 0
+    """
+    How many items landed and were dropped from the plan, which still count as done.
+    """
+
     @cached_property
     def items_by_identifier(self) -> dict[str, Item]:
         """
@@ -420,4 +456,5 @@ class Plan:
                 Item.from_mapping(item) for item in data.get(ManifestKey.ITEMS.key, [])
             ],
             tracking_issue=data.get(ManifestKey.TRACKING_ISSUE.key),
+            landed_item_count=data.get(ManifestKey.LANDED_ITEM_COUNT.key, 0),
         )

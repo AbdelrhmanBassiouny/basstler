@@ -74,11 +74,9 @@ class ItemClassifier:
             item.status = ItemStatus.DONE
         item.pull_request_record = self._pull_request_record_of(item)
         if item.pull_request_number is not None:
-            reference = PullRequestReference(
+            item.pull_request_reference = PullRequestReference(
                 Repository.parse(self._repository_of(item)), item.pull_request_number
             )
-            item.pull_request_url = reference.url
-            item.pull_request_api_url = reference.api_url
         if item.pull_request_record is not None:
             item.upstream_pull_request_url = item.pull_request_record.upstream_link
         item.drift_description = self._drift_description_of(item)
