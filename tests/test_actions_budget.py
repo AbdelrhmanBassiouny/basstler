@@ -26,7 +26,7 @@ from basstler.exceptions import (
     TooManyJobsOnEveryPush,
     UncountableJobs,
 )
-from basstler.workflows import TriggerEvent, Workflow
+from basstler.workflows import Trigger, TriggerEvent, Workflow, WorkflowKey
 
 from .constants.paths import DatasetLocation
 
@@ -81,6 +81,19 @@ def test_a_trigger_list_is_read_as_triggers_with_no_filters():
         TriggerEvent.WORKFLOW_DISPATCH,
         TriggerEvent.WORKFLOW_CALL,
     ]
+
+
+def test_a_trigger_reads_the_path_filters_it_names():
+    """
+    A path filter narrows a trigger to the changes it matches.
+    """
+    paths = ["plugin/hooks/**", "pyproject.toml"]
+
+    trigger = Trigger.from_workflow(
+        TriggerEvent.PULL_REQUEST, {WorkflowKey.PATHS: paths}
+    )
+
+    assert trigger.paths == frozenset(paths)
 
 
 def test_a_bare_concurrency_group_does_not_cancel():
