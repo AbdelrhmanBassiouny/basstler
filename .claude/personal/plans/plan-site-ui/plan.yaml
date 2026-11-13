@@ -45,7 +45,10 @@ items:
 - id: promote-button
   title: An "Open in {upstream}" button on each promotable item opens the prefilled compare-and-create page
   track: display
-  status: not started
+  status: in progress
+  branch: claude/plan-site-ui-promote-button-i73glr
+  pull_request_number: 211
+  session: https://claude.ai/code/session_018wfiv4zLyYNu5dytDgvttM
   depends_on: []
   notes: A plain link, built at site build time, opening in a new tab; no command issue. Promotable
     is one shared rule with Stack.promotion_order (approved, parent landed, not withheld, checks
