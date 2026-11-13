@@ -21,9 +21,10 @@ from basstler.maintenance.github import (
 )
 from basstler.plan.dependencies import DependencyResolver
 from basstler.pull_request_source import GitHubPullRequestSource
-from basstler.pull_request_state import PullRequestRecord, PullRequestState
+from basstler.pull_request_state import ForkLineage, PullRequestRecord, PullRequestState
+from basstler.repository import Repository
 
-from .constants.paths import RecordedCommitChecks
+from .constants.paths import DatasetLocation, RecordedCommitChecks
 from .constants.site import SiteSampleText
 from .github.pull_request_api import (
     api_pull_request,
@@ -234,3 +235,39 @@ def test_github_source_reports_a_repository_it_cannot_read(
 def test_github_source_answers_no_issue_url_on_a_repository_it_cannot_read():
     source = GitHubPullRequestSource(RecordedGitHubClient(refusal=HTTPStatus.FORBIDDEN))
     assert source.issue_url(PLAN_REPOSITORY, FIRST_PLAN.tracking_issue) is None
+
+
+# %% reading a fork's upstream
+
+
+def test_github_source_reads_the_upstream_of_a_fork():
+    fork = json.loads(DatasetLocation.REPOSITORY_FORK.read_text())
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(responses={f"/{PLAN_REPOSITORY.api_path}": fork})
+    )
+    assert source.fork_lineage_of(PLAN_REPOSITORY) == ForkLineage(
+        upstream_repository=Repository.parse(fork["parent"]["full_name"]),
+        upstream_default_branch=fork["parent"]["default_branch"],
+        fork_default_branch=fork["default_branch"],
+    )
+
+
+def test_github_source_finds_no_upstream_for_a_repository_that_is_not_a_fork():
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(responses=details_of(PLAN_REPOSITORY))
+    )
+    assert source.fork_lineage_of(PLAN_REPOSITORY) is None
+
+
+def test_github_source_records_the_upstream_of_each_fork_it_read_pull_requests_of():
+    fork = json.loads(DatasetLocation.REPOSITORY_FORK.read_text())
+    source = GitHubPullRequestSource(
+        RecordedGitHubClient(
+            responses={f"/{PLAN_REPOSITORY.api_path}": fork},
+            pages={listing_path(PLAN_REPOSITORY): [[]]},
+        )
+    )
+    live_pull_requests = source.live_pull_requests_of(DependencyResolver(FIRST_PLAN))
+    assert live_pull_requests.fork_lineages == {
+        str(PLAN_REPOSITORY): source.fork_lineage_of(PLAN_REPOSITORY)
+    }

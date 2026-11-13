@@ -181,6 +181,17 @@ class PullRequestRecord:
     The logins of the accounts the pull request is assigned to.
     """
 
+    base: str | None = None
+    """
+    The branch the pull request merges into, ``None`` when the source it was read from
+    does not say.
+    """
+
+    title: str | None = None
+    """
+    The pull request's title, ``None`` when the source it was read from does not say.
+    """
+
     check_state: CombinedCheckState | None = None
     """
     The verdict over the checks reported on :attr:`head_commit`, ``None`` while they
@@ -255,6 +266,8 @@ class PullRequestRecord:
             record,
             head_commit=PullRequestHead.commit_in(api_record),
             assignees=PullRequestField.ASSIGNEES.read(api_record, number) or [],
+            base=PullRequestField.BASE.read(api_record, number),
+            title=PullRequestField.TITLE.read(api_record, number),
         )
 
     @property
@@ -335,6 +348,28 @@ PullRequestsByRepository = dict[str, dict[str, PullRequestRecord]]
 # %% what was read of a plan's repositories
 
 
+@dataclass(frozen=True)
+class ForkLineage:
+    """
+    The repository a fork was forked from, and the default branch of each.
+    """
+
+    upstream_repository: Repository
+    """
+    The repository the fork was forked from.
+    """
+
+    upstream_default_branch: str
+    """
+    The upstream's default branch.
+    """
+
+    fork_default_branch: str
+    """
+    The fork's own default branch.
+    """
+
+
 @dataclass
 class LivePullRequests:
     """
@@ -351,4 +386,9 @@ class LivePullRequests:
     """
     The refusal of the token's access to each repository whose pull requests could not
     be read.
+    """
+
+    fork_lineages: dict[str, ForkLineage] = field(default_factory=dict)
+    """
+    The upstream of each readable repository that is a fork, by ``"owner/repo"``.
     """
